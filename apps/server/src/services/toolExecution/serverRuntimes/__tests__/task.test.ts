@@ -80,6 +80,9 @@ describe('createTaskRuntime', () => {
         goal: { maxIterations: 3, maxTotalCost: 12, originTopicId: 'origin-topic' },
       });
       expect(taskCaller.run).toHaveBeenCalledWith({ id: 'task-db-1' });
+      expect(taskModel.updateTaskConfig.mock.invocationCallOrder[0]).toBeLessThan(
+        taskCaller.updateVerifyConfig.mock.invocationCallOrder[0],
+      );
       expect(result.state).toEqual(
         expect.objectContaining({ identifier: 'T-1', success: true, taskId: 'task-db-1' }),
       );

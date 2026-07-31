@@ -278,24 +278,24 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
         );
         const maxIterations = Math.min(10, Math.max(2, args.maxIterations ?? 3));
 
-        await Promise.all([
-          taskCaller().updateVerifyConfig({
-            id: created.taskId,
-            verify: {
-              enabled: true,
-              maxIterations,
-              requirement: args.name,
-              verifyCriteriaIds,
-            },
-          }),
-          taskModel().updateTaskConfig(created.taskId, {
-            goal: {
-              maxIterations: args.maxIterations ?? null,
-              maxTotalCost: args.maxTotalCost ?? null,
-              originTopicId: topicId ?? null,
-            },
-          }),
-        ]);
+        // Both operations merge into tasks.config. Running them concurrently
+        // can lose either the goal marker or verify config to last-write-wins.
+        await taskModel().updateTaskConfig(created.taskId, {
+          goal: {
+            maxIterations: args.maxIterations ?? null,
+            maxTotalCost: args.maxTotalCost ?? null,
+            originTopicId: topicId ?? null,
+          },
+        });
+        await taskCaller().updateVerifyConfig({
+          id: created.taskId,
+          verify: {
+            enabled: true,
+            maxIterations,
+            requirement: args.name,
+            verifyCriteriaIds,
+          },
+        });
 
         const run = await taskCaller().run({ id: created.taskId });
         const operationId = (run as { operationId?: string }).operationId;

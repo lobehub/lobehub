@@ -328,24 +328,24 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       );
       const maxIterations = Math.min(10, Math.max(2, params.maxIterations ?? 3));
 
-      await Promise.all([
-        taskService.updateVerifyConfig({
-          id: identifier,
-          verify: {
-            enabled: true,
-            maxIterations,
-            requirement: params.name,
-            verifyCriteriaIds,
-          },
-        }),
-        taskService.updateConfig(identifier, {
-          goal: {
-            maxIterations: params.maxIterations ?? null,
-            maxTotalCost: params.maxTotalCost ?? null,
-            originTopicId: ctx.topicId ?? null,
-          },
-        }),
-      ]);
+      // Both APIs merge into tasks.config with a read-modify-write cycle. Keep
+      // them sequential so the verify write cannot overwrite the goal metadata.
+      await taskService.updateConfig(identifier, {
+        goal: {
+          maxIterations: params.maxIterations ?? null,
+          maxTotalCost: params.maxTotalCost ?? null,
+          originTopicId: ctx.topicId ?? null,
+        },
+      });
+      await taskService.updateVerifyConfig({
+        id: identifier,
+        verify: {
+          enabled: true,
+          maxIterations,
+          requirement: params.name,
+          verifyCriteriaIds,
+        },
+      });
 
       const started = await this.runTask({ identifier }, ctx);
       if (!started.success) return started;
