@@ -1,8 +1,10 @@
-import { and, asc, count, desc, eq, ilike, inArray, isNull } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ilike, inArray, isNull, type SQL } from 'drizzle-orm';
 
+import { MessageModel } from '@/database/models/message';
 import { messages, messagesFiles } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { idGenerator } from '@/database/utils/idGenerator';
+import { buildMessageScopeWhere } from '@/database/utils/messageScope';
 import { FileService as CoreFileService } from '@/server/services/file';
 
 import { BaseService } from '../common/base.service';
@@ -37,6 +39,23 @@ export class MessageService extends BaseService {
     super(db, userId, workspaceId);
 
     this.coreFileService = new CoreFileService(db, userId!, workspaceId);
+  }
+
+  /**
+   * Derived-scope replacement for `buildWorkspaceWhere(messages)`:
+   * `messages.user_id` / `messages.workspace_id` are creation-time snapshots,
+   * so scope must be derived from the owning topic/session or transferred
+   * conversations disappear from (or wrongly stay in) OpenAPI reads.
+   */
+  private messageScopeWhere(): SQL {
+    return buildMessageScopeWhere({ userId: this.userId, workspaceId: this.workspaceId });
+  }
+
+  /** Derived-scope counterpart of {@link BaseService.buildPermissionWhere}. */
+  private messagePermissionScopeWhere(condition?: { userId?: string }): SQL | undefined {
+    if (this.workspaceId) return this.messageScopeWhere();
+    if (condition?.userId) return buildMessageScopeWhere({ userId: condition.userId });
+    return;
   }
 
   /**
@@ -93,12 +112,11 @@ export class MessageService extends BaseService {
         throw this.createAuthorizationError(permissionResult.message || '无权访问此用户的消息');
       }
 
-      const result = await this.db
-        .select({ count: count() })
-        .from(messages)
-        .where(this.buildPermissionWhere(messages, { userId: targetUserId }));
-
-      const messageCount = result[0]?.count || 0;
+      // Whole-scope count: MessageModel.count fans out over the derivation
+      // arms so each is index-bounded (a bare derived EXISTS would full-scan).
+      const messageCount = this.workspaceId
+        ? await new MessageModel(this.db, this.userId, this.workspaceId).count()
+        : await new MessageModel(this.db, targetUserId).count();
       this.log('info', '用户消息统计完成', { count: messageCount });
 
       return { count: messageCount };
@@ -128,7 +146,7 @@ export class MessageService extends BaseService {
       const result = await this.db
         .select({ count: count() })
         .from(messages)
-        .where(and(inArray(messages.topicId, topicIds), this.buildWorkspaceWhere(messages)));
+        .where(and(inArray(messages.topicId, topicIds), this.messageScopeWhere()));
 
       const messageCount = result[0]?.count || 0;
       this.log('info', '话题消息统计完成', { count: messageCount });
@@ -158,13 +176,9 @@ export class MessageService extends BaseService {
         return await this.countMessagesByTopicIds(query.topicIds);
       }
 
-      // Count all messages for the current user
-      const result = await this.db
-        .select({ count: count() })
-        .from(messages)
-        .where(this.buildWorkspaceWhere(messages));
-
-      const messageCount = result[0]?.count || 0;
+      // Count all messages for the current user — see countMessagesByUserId
+      // for why this goes through MessageModel.count (index-bounded arms).
+      const messageCount = await new MessageModel(this.db, this.userId, this.workspaceId).count();
       this.log('info', '当前用户消息统计完成', { count: messageCount });
 
       return { count: messageCount };
@@ -197,7 +211,7 @@ export class MessageService extends BaseService {
       const { keyword, limit = 20, offset = 0 } = searchRequest;
 
       // Build query conditions
-      const conditions = [this.buildWorkspaceWhere(messages)];
+      const conditions = [this.messageScopeWhere()];
 
       const contentMatchedMessages = await this.db
         .select({ id: messages.id })
@@ -267,7 +281,7 @@ export class MessageService extends BaseService {
           throw this.createAuthorizationError(permissionResult.message || '无权访问消息列表');
         }
 
-        conditions.push(this.buildPermissionWhere(messages, { userId: request.userId })!);
+        conditions.push(this.messagePermissionScopeWhere({ userId: request.userId })!);
       }
 
       // Verify topic ownership and whether the user has message read permission
@@ -281,7 +295,7 @@ export class MessageService extends BaseService {
         }
 
         conditions.push(eq(messages.topicId, request.topicId));
-        conditions.push(this.buildWorkspaceWhere(messages));
+        conditions.push(this.messageScopeWhere());
       }
 
       if (request.role) {
@@ -354,7 +368,7 @@ export class MessageService extends BaseService {
 
       // Build query conditions
       const conditions = [eq(messages.id, messageId)];
-      const permissionWhere = this.buildPermissionWhere(messages, permissionResult.condition);
+      const permissionWhere = this.messagePermissionScopeWhere(permissionResult.condition);
       if (permissionWhere) conditions.push(permissionWhere);
 
       const message = (await this.db.query.messages.findFirst({
@@ -456,7 +470,7 @@ export class MessageService extends BaseService {
 
       // Re-query the complete message including session and topic information
       const completeMessage = (await this.db.query.messages.findFirst({
-        where: and(eq(messages.id, newMessage.id), this.buildWorkspaceWhere(messages)),
+        where: and(eq(messages.id, newMessage.id), this.messageScopeWhere()),
         with: {
           filesToMessages: {
             with: {
@@ -591,7 +605,7 @@ export class MessageService extends BaseService {
         orderBy: desc(messages.createdAt),
         where: and(
           topicId === null ? isNull(messages.topicId) : eq(messages.topicId, topicId),
-          this.buildWorkspaceWhere(messages),
+          this.messageScopeWhere(),
         ),
       });
 
@@ -632,7 +646,7 @@ export class MessageService extends BaseService {
       const whereConditions = [eq(messages.id, messageId)];
 
       // Apply permission conditions
-      const permissionWhere = this.buildPermissionWhere(messages, permissionResult.condition);
+      const permissionWhere = this.messagePermissionScopeWhere(permissionResult.condition);
       if (permissionWhere) whereConditions.push(permissionWhere);
 
       // Use a transaction to delete messages and their associations with files
