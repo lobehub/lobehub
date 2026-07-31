@@ -98,6 +98,15 @@ export class WorkspaceModel {
 
   delete = async (id: string) => {
     return this.db.transaction(async (tx) => {
+      // Only the primary owner may delete — verify BEFORE the resnapshot
+      // below, so an unauthorized caller cannot trigger the scrub's writes.
+      const [owned] = await tx
+        .select({ id: workspaces.id })
+        .from(workspaces)
+        .where(and(eq(workspaces.id, id), eq(workspaces.primaryOwnerId, this.userId)))
+        .limit(1);
+      if (!owned) return;
+
       // Messages transferred OUT of this workspace still carry it in their
       // snapshot workspace_id (cascade FK) — re-snapshot them from their
       // anchor first, or the delete below would destroy transferred history.
