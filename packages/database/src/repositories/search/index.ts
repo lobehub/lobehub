@@ -229,8 +229,11 @@ const RECENCY_CANDIDATE_MULTIPLIER = 4;
  * `agent_id` is not a BM25 field either, so the agent-scoped variants of
  * `searchMessages` / `searchTopics` (the command menu passes the active agent)
  * lift it above the scan the same way, over-fetching through a dedicated
- * candidate pool (`AGENT_SCOPE_CANDIDATE_POOL`). Indexing the column instead
- * is tracked with the other missing fast fields in LOBE-12381.
+ * candidate pool (`AGENT_SCOPE_CANDIDATE_POOL`) — but only while the scan's
+ * score ordering is real (see `liftsAgentFilter`): trading the exact inline
+ * predicate for a score-ordered pool is unsound when the scores backing that
+ * order are NULL. Indexing the column instead is tracked with the other
+ * missing fast fields in LOBE-12381.
  *
  * @see https://linear.app/lobehub/issue/LOBE-12379
  * @see https://linear.app/lobehub/issue/LOBE-12575
@@ -312,6 +315,23 @@ export class SearchRepo {
    */
   private get liftsWorkspaceFilter() {
     return !WORKSPACE_ID_IN_BM25_INDEX && !this.workspaceId;
+  }
+
+  /**
+   * Whether the agent filter can be lifted above the BM25 scan.
+   *
+   * Lifting swaps the exact inline predicate for a score-ordered candidate
+   * pool, which is only sound while the scan's `ORDER BY paradedb.score()` is
+   * real. Personal mode qualifies: its scan keeps only pushdown-able quals, so
+   * scores are valid and the pool is genuinely the top-N matches. Workspace
+   * mode does not (until LOBE-12381 makes `workspace_id` a fast field): its
+   * inline `workspace_id` qual NULLs the whole score column on pg_search
+   * 0.15.26, so a pool cut on that ordering would be an arbitrary slice that
+   * silently drops agent rows. It keeps `agent_id` inline next to
+   * `workspace_id` instead — exact, on the already-degraded plan.
+   */
+  private get liftsAgentFilter() {
+    return WORKSPACE_ID_IN_BM25_INDEX || !this.workspaceId;
   }
 
   /** Ownership predicate that is safe to keep inside the BM25 scan. */
@@ -616,13 +636,19 @@ export class SearchRepo {
       .where(
         and(
           this.scanScopeWhere(topics),
+          agentId && !this.liftsAgentFilter ? eq(topics.agentId, agentId) : undefined,
           sql`(${topics.title} @@@ ${bm25Query} OR ${topics.content} @@@ ${bm25Query} OR ${topics.description} @@@ ${bm25Query})`,
         ),
       )
       .orderBy(sql`paradedb.score(${topics.id}) DESC`)
-      // `agent_id` is not a BM25 field, so its filter lives above the scan and
-      // the pool deepens to compensate. See the scan-shape invariant above.
-      .limit(agentId ? AGENT_SCOPE_CANDIDATE_POOL : this.scanCandidateLimit(candidateLimit))
+      // `agent_id` is not a BM25 field, so where the scan's score order is real
+      // its filter lives above the scan and the pool deepens to compensate. See
+      // the scan-shape invariant and `liftsAgentFilter` above.
+      .limit(
+        agentId && this.liftsAgentFilter
+          ? AGENT_SCOPE_CANDIDATE_POOL
+          : this.scanCandidateLimit(candidateLimit),
+      )
       .as('topic_hits');
 
     const rows = await this.db
@@ -720,13 +746,19 @@ export class SearchRepo {
         and(
           this.scanScopeWhere(messages),
           ne(messages.role, 'tool'),
+          agentId && !this.liftsAgentFilter ? eq(messages.agentId, agentId) : undefined,
           sql`${messages.content} @@@ ${bm25Query}`,
         ),
       )
       .orderBy(sql`paradedb.score(${messages.id}) DESC`)
-      // `agent_id` is not a BM25 field, so its filter lives above the scan and
-      // the pool deepens to compensate. See the scan-shape invariant above.
-      .limit(agentId ? AGENT_SCOPE_CANDIDATE_POOL : this.scanCandidateLimit(candidateLimit))
+      // `agent_id` is not a BM25 field, so where the scan's score order is real
+      // its filter lives above the scan and the pool deepens to compensate. See
+      // the scan-shape invariant and `liftsAgentFilter` above.
+      .limit(
+        agentId && this.liftsAgentFilter
+          ? AGENT_SCOPE_CANDIDATE_POOL
+          : this.scanCandidateLimit(candidateLimit),
+      )
       .as('message_hits');
 
     const rows = await this.db

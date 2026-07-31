@@ -1489,6 +1489,19 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
       expectEveryHitScopedTo(results, 'workspace');
     });
 
+    it('keeps agent-scoped search exact in workspace mode', async () => {
+      const results = await new SearchRepo(serverDB, userId, workspaceId).search({
+        agentId: workspaceAgentId,
+        query: 'Kubernetes',
+      });
+
+      const scoped = results.filter((r) => r.type === 'topic' || r.type === 'message');
+      expect(scoped.length).toBeGreaterThan(0);
+      for (const r of scoped) {
+        if (r.type === 'topic' || r.type === 'message') expect(r.agentId).toBe(workspaceAgentId);
+      }
+    });
+
     it('should keep joined agent metadata on topics and messages after the scan split', async () => {
       const results = await new SearchRepo(serverDB, userId).search({ query: 'Kubernetes' });
 
@@ -1727,7 +1740,10 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
     });
 
     it('keeps the ownership predicate exact and inline in workspace mode', async () => {
-      const statements = await captureScanSql({ workspaceId: 'search-test-workspace' });
+      const statements = await captureScanSql({
+        agentId: 'agent-under-test',
+        workspaceId: 'search-test-workspace',
+      });
 
       for (const alias of SCAN_ALIASES) {
         const where = whereClauseOf(scanOf(statements, alias));
@@ -1737,6 +1753,17 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
         // stays on the slower plan until the column is indexed.
         expect(where, `${alias}: workspace mode must not lift its own filter`).toContain(
           'workspace_id',
+        );
+      }
+
+      // With the workspace qual inline, paradedb.score() is NULL for the whole
+      // statement (pg_search 0.15.26), so a score-ordered pool cut would be an
+      // arbitrary slice. The agent filter must therefore stay inline too —
+      // exact, on the already-degraded plan.
+      for (const alias of ['message_hits', 'topic_hits']) {
+        const where = whereClauseOf(scanOf(statements, alias));
+        expect(where, `${alias}: workspace mode must keep the agent filter inline`).toContain(
+          'agent_id',
         );
       }
     });
