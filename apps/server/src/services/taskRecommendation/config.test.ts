@@ -17,17 +17,13 @@ describe('TaskRecommendationConfigurator', () => {
     expect(new TaskRecommendationConfigurator().recommendationsPerProvider(0)).toBe(0);
   });
 
-  /** @example Default guidance favors private background deliverables over external writes. */
-  it('keeps generated work autonomous and behind explicit write boundaries', () => {
-    const configurator = new TaskRecommendationConfigurator();
-    const writingGuidance = configurator.writing.instructionPrinciples.join('\n');
-    const githubGuidance = configurator.providers.github.principles.join('\n');
-    const gmailGuidance = configurator.providers.gmail.principles.join('\n');
+  /** @example Runtime collection limits remain paired with prompt-package provider guides. */
+  it('combines operational provider settings with prompt guides', () => {
+    const { providers, writing } = new TaskRecommendationConfigurator();
 
-    expect(writingGuidance).toContain('finish asynchronously');
-    expect(writingGuidance).toContain('require a later explicit user-approved action');
-    expect(githubGuidance).toContain('authored pull requests');
-    expect(githubGuidance).toContain('Never comment, submit a review, approve');
-    expect(gmailGuidance).toContain('Never unsubscribe, send, archive, or delete');
+    expect(providers.github).toMatchObject({ maxContextLength: 24_000, maxSignals: 24 });
+    expect(providers.github.examples.length).toBeGreaterThan(0);
+    expect(providers.gmail.queries).toHaveLength(3);
+    expect(writing.maxSourcesPerRecommendation).toBe(4);
   });
 });

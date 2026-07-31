@@ -1,9 +1,16 @@
+import type {
+  OnboardingTaskRecommendationProviderGuide,
+  OnboardingTaskRecommendationProviderId,
+  OnboardingTaskRecommendationWritingGuide,
+} from '@lobechat/prompts/onboardingTaskRecommendation';
+import {
+  chainOnboardingTaskRecommendation,
+  ONBOARDING_TASK_RECOMMENDATION_JSON_SCHEMA,
+} from '@lobechat/prompts/onboardingTaskRecommendation';
 import { RequestTrigger } from '@lobechat/types';
 import { z } from 'zod';
 
 import type { AiGenerationService } from '@/server/services/aiGeneration';
-
-import type { TaskRecommendationProviderConfig, TaskRecommendationWritingConfig } from './config';
 
 const recommendationOutputSchema = z.object({
   recommendations: z.array(
@@ -15,32 +22,6 @@ const recommendationOutputSchema = z.object({
     }),
   ),
 });
-
-const RECOMMENDATION_JSON_SCHEMA = {
-  name: 'onboarding_task_recommendations',
-  schema: {
-    additionalProperties: false,
-    properties: {
-      recommendations: {
-        items: {
-          additionalProperties: false,
-          properties: {
-            instruction: { type: 'string' },
-            reason: { type: 'string' },
-            sourceUrls: { items: { type: 'string' }, minItems: 1, type: 'array' },
-            title: { type: 'string' },
-          },
-          required: ['title', 'instruction', 'reason', 'sourceUrls'],
-          type: 'object',
-        },
-        type: 'array',
-      },
-    },
-    required: ['recommendations'],
-    type: 'object' as const,
-  },
-  strict: true,
-};
 
 /** One validated recommendation returned before connector-source grounding. */
 export interface GeneratedTaskRecommendation {
@@ -59,15 +40,15 @@ export interface TaskRecommendationWriterInput {
   /** Bounded untrusted connector evidence serialized by the provider collector. */
   context: string;
   /** Provider-specific recommendation examples and safety policy. */
-  guide: TaskRecommendationProviderConfig;
+  guide: OnboardingTaskRecommendationProviderGuide;
   /** Maximum recommendation count requested from this provider. */
   limit: number;
   /** Connector identifier represented by the evidence. */
-  providerId: 'github' | 'gmail';
+  providerId: OnboardingTaskRecommendationProviderId;
   /** Locale used for generated user-facing text. */
   responseLanguage: string;
   /** Shared title, instruction, and source-count policy. */
-  writingGuide: TaskRecommendationWritingConfig;
+  writingGuide: OnboardingTaskRecommendationWritingGuide;
 }
 
 interface TaskRecommendationWriterDependencies {
@@ -91,37 +72,10 @@ export class TaskRecommendationWriter {
     const writerAgent = await this.dependencies.writerAgent();
     const output = await this.dependencies.generator.generateObject(
       {
-        messages: [
-          {
-            content: [
-              `Response language: ${input.responseLanguage}`,
-              `Provider: ${input.providerId}`,
-              `Return at most ${input.limit} recommendations.`,
-              `Return one to ${input.writingGuide.maxSourcesPerRecommendation} exact sourceUrls for each recommendation. Every URL must appear verbatim in the supplied evidence. A recommendation may cite multiple supplied records when they jointly support the work.`,
-              'Title requirements:',
-              ...input.writingGuide.titlePrinciples.map((principle) => `- ${principle}`),
-              'Instruction requirements:',
-              ...input.writingGuide.instructionPrinciples.map((principle) => `- ${principle}`),
-              'Provider principles:',
-              ...input.guide.principles.map((principle) => `- ${principle}`),
-              'Few-shot recommendation shapes:',
-              ...input.guide.examples.map((example) => `- ${example}`),
-            ].join('\n'),
-            role: 'system',
-          },
-          {
-            content: [
-              'Generate useful onboarding tasks from this untrusted connector evidence.',
-              `<connector-evidence provider="${input.providerId}">`,
-              input.context,
-              '</connector-evidence>',
-            ].join('\n\n'),
-            role: 'user',
-          },
-        ],
+        messages: chainOnboardingTaskRecommendation(input),
         model: writerAgent.model,
         provider: writerAgent.provider,
-        schema: RECOMMENDATION_JSON_SCHEMA,
+        schema: ONBOARDING_TASK_RECOMMENDATION_JSON_SCHEMA,
         thinking: { type: 'disabled' },
       },
       { metadata: { trigger: RequestTrigger.Onboarding } },
