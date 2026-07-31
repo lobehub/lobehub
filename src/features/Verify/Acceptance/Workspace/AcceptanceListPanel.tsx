@@ -55,6 +55,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 
 import { useAcceptanceList } from '../../hooks';
 import type { ReportPanelExpand } from '../../Workspace/useReportPanelExpand';
+import { acceptanceHomePath } from '../routes';
 import { getAcceptanceStatusActions } from '../statusActions';
 import {
   type AcceptanceListFilter,
@@ -593,7 +594,7 @@ const AcceptanceListPanel = memo<ReportPanelExpand>(({ expand, isNarrow, setExpa
                 icon={ArrowLeft}
                 size={'small'}
                 title={t('back', { ns: 'common' })}
-                onClick={() => navigate(-1)}
+                onClick={() => navigate(acceptanceHomePath())}
               />
               <Text strong style={{ fontSize: 15 }}>
                 {t('acceptance.workspace.title')}

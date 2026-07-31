@@ -104,7 +104,7 @@ export default {
   'acceptance.checkWork.copied': 'Check-specific instruction copied',
   'acceptance.checkWork.copy': 'Copy check instruction',
   'acceptance.checkWork.description':
-    'Send this check, its evidence, and its feedback to the source conversation as one bounded work item.',
+    'Copy a focused prompt with this check, its evidence, and its feedback, then paste it to an AI agent.',
   'acceptance.checkWork.drafted': 'Check-specific instruction drafted',
   'acceptance.checkWork.sent': 'This check was sent to the source conversation',
   'acceptance.checkWork.title': 'Work on this check',
