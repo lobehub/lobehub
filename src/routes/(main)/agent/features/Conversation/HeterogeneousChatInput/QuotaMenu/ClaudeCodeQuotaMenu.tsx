@@ -14,12 +14,12 @@ import QuotaMenu, { createQuotaSourceKey } from './QuotaMenu';
 import { buildClaudeSnapshotFromWindows, isQuotaStale } from './quotaViewModel';
 
 /**
- * Only hit the live Anthropic usage API when the persisted data is this stale.
- * Kept low-frequency (1h) — the panel reads from our DB, so it stays instant and
- * fresh-enough without hammering the rate-limited usage endpoint. A manual
- * refresh always forces a live fetch.
+ * Hit the live Anthropic usage API when the newest persisted reading is this
+ * stale. Focus / popover revalidation and manual refresh bypass this gate; the
+ * main-process snapshot cache (5 min fresh window) is what actually protects
+ * the rate-limited usage endpoint.
  */
-const QUOTA_REFRESH_MS = 60 * 60 * 1000;
+const QUOTA_REFRESH_MS = 30 * 60 * 1000;
 
 const createErrorSnapshot = (error: unknown): ClaudeCodeQuotaSnapshot => ({
   error: error instanceof Error ? error.message : String(error),
@@ -56,29 +56,37 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ env }) => {
   const sourceKey = createQuotaSourceKey('claude-code', env);
 
   /**
-   * DB-first: render the persisted windows from our own database, and only fall
-   * back to the live Anthropic usage API to refresh + ingest when the newest
-   * persisted reading is older than QUOTA_REFRESH_MS (or the user forces it). So
-   * the panel shows data instantly and survives a failing live fetch.
+   * DB-first: render the persisted windows from our own database, and go to the
+   * live Anthropic usage API to refresh + ingest when the newest persisted
+   * reading is older than QUOTA_REFRESH_MS, the caller revalidates (focus /
+   * popover open), or the user forces it. The persisted snapshot paints first
+   * through onInterim, so the panel shows data instantly and survives a failing
+   * live fetch.
    */
   const fetchQuota = useCallback(
-    async (options?: FetchQuotaOptions): Promise<ClaudeCodeQuotaSnapshot> => {
+    async (
+      options?: FetchQuotaOptions<ClaudeCodeQuotaSnapshot>,
+    ): Promise<ClaudeCodeQuotaSnapshot> => {
       const force = !!options?.force;
 
       // 1) Resolve the account to display — pinned for this agent, else the first.
-      let accounts = await agentQuotaService.listAccounts().catch(() => []);
+      const [initialAccounts, bindings] = await Promise.all([
+        agentQuotaService.listAccounts().catch(() => []),
+        agentId ? agentQuotaService.listBindings(agentId).catch(() => []) : [],
+      ]);
+      let accounts = initialAccounts;
       let claude = accounts.filter((a) => a.provider === 'claude-code');
-      let pinnedId: string | undefined;
-      if (agentId) {
-        const bindings = await agentQuotaService.listBindings(agentId).catch(() => []);
-        pinnedId = bindings.find((b) => b.role === 'pinned')?.accountId;
-      }
+      const pinnedId = bindings.find((b) => b.role === 'pinned')?.accountId;
       let account = claude.find((a) => a.id === pinnedId) ?? claude[0];
       let windows = account ? await agentQuotaService.getWindows(account.id).catch(() => []) : [];
 
-      // 2) Throttled live refresh + ingest.
+      // 2) Throttled live refresh + ingest. Paint the persisted windows before
+      // awaiting the live fetch so the panel never blocks on it.
       let live: ClaudeCodeQuotaSnapshot | null = null;
-      if (force || isQuotaStale(windows, Date.now(), QUOTA_REFRESH_MS)) {
+      if (force || options?.revalidate || isQuotaStale(windows, Date.now(), QUOTA_REFRESH_MS)) {
+        if (account && windows.length > 0) {
+          options?.onInterim?.(buildClaudeSnapshotFromWindows(account, windows));
+        }
         live = await heterogeneousAgentService
           .getClaudeCodeQuota({ env, ...(force ? { force: true } : {}) })
           .catch(() => null);

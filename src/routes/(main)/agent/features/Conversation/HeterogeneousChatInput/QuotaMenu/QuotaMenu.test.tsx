@@ -190,6 +190,19 @@ const claudeSnapshot = (
   ...overrides,
 });
 
+const persistedAccount = { externalAccountId: 'ext-1', id: 'acc-1', provider: 'claude-code' };
+
+/** A persisted `agent_quota_windows` row whose newest reading is `lastSeenAt`. */
+const persistedSessionWindow = (lastSeenAt: number) => ({
+  lastSeenAt: new Date(lastSeenAt),
+  lastUtilization: 8,
+  limitType: 'session',
+  peakUtilization: 8,
+  resetsAt: null,
+  scopeKey: '',
+  windowSeconds: 300 * 60,
+});
+
 const codexSnapshot = (
   overrides: Partial<ElectronClientIpcModule.CodexQuotaSnapshot> = {},
 ): ElectronClientIpcModule.CodexQuotaSnapshot => ({
@@ -549,6 +562,100 @@ describe('ClaudeCodeQuotaMenu', () => {
     render(<ClaudeCodeQuotaMenu />);
 
     expect(await screen.findByText('heteroAgent.quota.noData')).toBeTruthy();
+  });
+
+  it('renders persisted windows without a live call while the newest reading is fresh', async () => {
+    mockQuotaService.listAccounts.mockResolvedValue([persistedAccount]);
+    mockQuotaService.getWindows.mockResolvedValue([
+      persistedSessionWindow(Date.now() - 5 * 60_000),
+    ]);
+
+    render(<ClaudeCodeQuotaMenu />);
+
+    expect(await screen.findByText('92%')).toBeTruthy();
+    expect(mockService.getClaudeCodeQuota).not.toHaveBeenCalled();
+  });
+
+  it('refreshes from the live API when the newest persisted reading is older than 30 minutes', async () => {
+    // Under the previous 1h policy a 31-minute-old reading skipped the live fetch.
+    mockQuotaService.listAccounts.mockResolvedValue([persistedAccount]);
+    mockQuotaService.getWindows.mockResolvedValue([
+      persistedSessionWindow(Date.now() - 31 * 60_000),
+    ]);
+    mockService.getClaudeCodeQuota.mockResolvedValue(claudeSnapshot());
+
+    render(<ClaudeCodeQuotaMenu />);
+
+    expect(await screen.findByText('92%')).toBeTruthy();
+    await waitFor(() =>
+      expect(mockService.getClaudeCodeQuota).toHaveBeenCalledWith({ env: undefined }),
+    );
+  });
+
+  it('paints persisted windows while a stale live refresh is still in flight', async () => {
+    mockQuotaService.listAccounts.mockResolvedValue([persistedAccount]);
+    mockQuotaService.getWindows.mockResolvedValue([
+      persistedSessionWindow(Date.now() - 31 * 60_000),
+    ]);
+    const requests: Array<(snapshot: ElectronClientIpcModule.ClaudeCodeQuotaSnapshot) => void> = [];
+    mockService.getClaudeCodeQuota.mockImplementation(
+      () =>
+        new Promise<ElectronClientIpcModule.ClaudeCodeQuotaSnapshot>((resolve) => {
+          requests.push(resolve);
+        }),
+    );
+
+    render(<ClaudeCodeQuotaMenu />);
+
+    // The persisted snapshot lands before the live promise resolves — no skeleton.
+    expect(await screen.findByText('92%')).toBeTruthy();
+    expect(screen.queryByTestId('skeleton')).toBeNull();
+    expect((screen.getByTestId('refresh') as HTMLButtonElement).disabled).toBe(true);
+
+    await act(async () => {
+      requests[0](claudeSnapshot());
+    });
+
+    expect(screen.getByText('92%')).toBeTruthy();
+    expect((screen.getByTestId('refresh') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('revalidates against the live API when the window regains focus', async () => {
+    mockQuotaService.listAccounts.mockResolvedValue([persistedAccount]);
+    mockQuotaService.getWindows.mockResolvedValue([
+      persistedSessionWindow(Date.now() - 5 * 60_000),
+    ]);
+    mockService.getClaudeCodeQuota.mockResolvedValue(claudeSnapshot());
+
+    render(<ClaudeCodeQuotaMenu />);
+
+    // Fresh persisted data: nothing hits the live API on mount…
+    expect(await screen.findByText('92%')).toBeTruthy();
+    expect(mockService.getClaudeCodeQuota).not.toHaveBeenCalled();
+
+    // …but regaining focus revalidates (the main-process cache rate-limits it).
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+    });
+
+    await waitFor(() => expect(mockService.getClaudeCodeQuota).toHaveBeenCalledTimes(1));
+    expect(mockService.getClaudeCodeQuota).toHaveBeenCalledWith({ env: undefined });
+  });
+
+  it('skips the focus revalidation while the snapshot is under a minute old', async () => {
+    mockService.getClaudeCodeQuota.mockResolvedValue(
+      claudeSnapshot({ session: { resetsAt: null, usedPercent: 8, windowMinutes: 300 } }),
+    );
+
+    render(<ClaudeCodeQuotaMenu />);
+
+    expect(await screen.findByText('92%')).toBeTruthy();
+
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+    });
+
+    expect(mockService.getClaudeCodeQuota).toHaveBeenCalledTimes(1);
   });
 });
 

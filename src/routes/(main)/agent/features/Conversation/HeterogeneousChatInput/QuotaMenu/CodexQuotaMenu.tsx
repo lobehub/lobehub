@@ -142,7 +142,7 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, env }) => {
   }, [sourceKey]);
 
   const fetchQuota = useCallback(
-    (options?: FetchQuotaOptions) =>
+    (options?: FetchQuotaOptions<CodexQuotaSnapshot>) =>
       heterogeneousAgentService.getCodexQuota({
         command,
         env,
