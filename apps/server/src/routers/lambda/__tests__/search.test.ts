@@ -95,12 +95,46 @@ describe('searchRouter', () => {
     expect(getUserSettings).not.toHaveBeenCalled();
   });
 
-  it('keeps the aggregate search DB-only: no marketplace calls, no market identity', async () => {
+  it('keeps untyped searches including the marketplace by default', async () => {
+    const localResult = { id: 'local-agent', title: 'Local Agent', type: 'agent' };
+    search.mockResolvedValue([localResult]);
+    getAssistantList.mockResolvedValue({ items: [] });
+    const caller = searchRouter.createCaller({ userId: 'test-user' } as any);
+
+    const result = await caller.query({ query: 'assistant' });
+
+    expect(result).toEqual([localResult]);
+    expect(getAssistantList).toHaveBeenCalled();
+    expect(getMcpList).toHaveBeenCalled();
+    expect(getPluginList).toHaveBeenCalled();
+  });
+
+  it('preserves untyped search results when the community agent search rejects', async () => {
+    const localResult = { id: 'local-agent', title: 'Local Agent', type: 'agent' };
+    search.mockResolvedValue([localResult]);
+    getAssistantList.mockRejectedValue(new Error('Market unavailable'));
+    const caller = searchRouter.createCaller({ userId: 'test-user' } as any);
+
+    const result = await caller.query({ query: 'assistant' });
+
+    expect(result).toEqual([localResult]);
+    expect(getAssistantList).toHaveBeenCalledWith(
+      {
+        includeAgentGroup: true,
+        locale: undefined,
+        pageSize: 5,
+        q: 'assistant',
+      },
+      { throwOnError: false },
+    );
+  });
+
+  it('keeps the opted-out aggregate search DB-only: no marketplace calls, no market identity', async () => {
     const localResult = { id: 'local-agent', title: 'Local Agent', type: 'agent' };
     search.mockResolvedValue([localResult]);
     const caller = searchRouter.createCaller({ userId: 'test-user' } as any);
 
-    const result = await caller.query({ query: 'assistant' });
+    const result = await caller.query({ includeMarketplace: false, query: 'assistant' });
 
     expect(result).toEqual([localResult]);
     expect(getAssistantList).not.toHaveBeenCalled();

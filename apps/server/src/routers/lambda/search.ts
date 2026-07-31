@@ -23,17 +23,28 @@ function calculateMarketplaceRelevance(query: string, title: string): number {
   return 4;
 }
 
+/**
+ * Whether a query input reaches the marketplace at all. Untyped searches
+ * include the marketplace by default (CLI and other callers rely on it);
+ * latency-sensitive callers such as the command menu opt out with
+ * `includeMarketplace: false` to keep the aggregate response DB-only.
+ */
+const wantsMarketplace = (input?: { includeMarketplace?: unknown; type?: unknown }) => {
+  const type = typeof input?.type === 'string' ? input.type : undefined;
+  if (type) return MARKETPLACE_SEARCH_TYPES.has(type);
+  return input?.includeMarketplace !== false;
+};
+
 const searchProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
-  const rawInput = (await opts.getRawInput()) as { type?: unknown } | undefined;
-  const type = typeof rawInput?.type === 'string' ? rawInput.type : undefined;
+  const rawInput = (await opts.getRawInput()) as
+    { includeMarketplace?: unknown; type?: unknown } | undefined;
   const wsId = ctx.workspaceId ?? undefined;
-  // Marketplace identity is only needed for explicit marketplace-type searches;
-  // the aggregate (untyped) search is DB-only, so skip the extra auth round-trip.
-  const marketContext =
-    type && MARKETPLACE_SEARCH_TYPES.has(type)
-      ? await resolveMarketUserContext(ctx)
-      : { marketAccessToken: undefined, marketUserInfo: undefined };
+  // Marketplace identity is only needed when the marketplace will be queried;
+  // DB-only searches skip the extra auth round-trip.
+  const marketContext = wantsMarketplace(rawInput)
+    ? await resolveMarketUserContext(ctx)
+    : { marketAccessToken: undefined, marketUserInfo: undefined };
 
   return opts.next({
     ctx: {
@@ -56,6 +67,14 @@ export const searchRouter = router({
     .input(
       z.object({
         agentId: z.string().optional(),
+        /**
+         * Whether an untyped search also queries the marketplace (default
+         * true). The command menu passes false: its aggregate response used to
+         * gate on the slowest of three remote marketplace round-trips on every
+         * keystroke. Ignored when `type` is set — an explicit marketplace type
+         * always queries the marketplace, other types never do.
+         */
+        includeMarketplace: z.boolean().optional(),
         limitPerType: z.number().optional(),
         locale: z.string().optional(),
         offset: z.number().optional(),
@@ -105,11 +124,11 @@ export const searchRouter = router({
         searchPromises.push(ctx.searchRepo.search(input));
       }
 
-      // Marketplace searches run only when their type is explicitly requested.
-      // The aggregate (untyped) command-menu search stays DB-only: the three
-      // remote marketplace calls used to gate the whole Promise.all response,
-      // adding their slowest round-trip to every keystroke.
-      if (type === 'mcp') {
+      // Marketplace searches: see `includeMarketplace` on the input schema —
+      // untyped searches include them by default, the command menu opts out.
+      const marketplaceEnabled = wantsMarketplace(input);
+
+      if (marketplaceEnabled && (!type || type === 'mcp')) {
         searchPromises.push(
           ctx.discoverService
             .getMcpList({
@@ -145,7 +164,7 @@ export const searchRouter = router({
         );
       }
 
-      if (type === 'plugin') {
+      if (marketplaceEnabled && (!type || type === 'plugin')) {
         searchPromises.push(
           ctx.discoverService
             .getPluginList({
@@ -177,7 +196,7 @@ export const searchRouter = router({
         );
       }
 
-      if (type === 'communityAgent') {
+      if (marketplaceEnabled && (!type || type === 'communityAgent')) {
         searchPromises.push(
           ctx.discoverService
             .getAssistantList(
@@ -187,7 +206,7 @@ export const searchRouter = router({
                 pageSize: limitPerType,
                 q: query,
               },
-              { throwOnError: true },
+              { throwOnError: type === 'communityAgent' },
             )
             .then((response) =>
               response.items.slice(0, limitPerType).map((item: any) => ({
@@ -210,6 +229,8 @@ export const searchRouter = router({
               })),
             )
             .catch((error) => {
+              if (type !== 'communityAgent') return [];
+
               console.error('[search:communityAgent]', error);
               throw new TRPCError({
                 cause: error,
