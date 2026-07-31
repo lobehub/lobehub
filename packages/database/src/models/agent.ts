@@ -1987,6 +1987,22 @@ export class AgentModel {
       // shared messages table costs minutes per heavy agent — every row update
       // maintains all 17 indexes including the multi-GB BM25 full-text index.
       // The rows' user_id/workspace_id stay as creation-time author snapshots.
+      //
+      // 7a. EXCEPT anchorless rows (no topic AND no session, e.g. created via
+      // the OpenAPI path with only an agentId): they have nothing to derive
+      // scope from — their snapshot IS authoritative — so they are the one
+      // message shape a transfer must still rewrite. Bounded by agent_id and
+      // rare by construction, so this stays cheap.
+      await trx
+        .update(messages)
+        .set(ownershipUpdate)
+        .where(
+          and(
+            inArray(messages.agentId, agentIds),
+            isNull(messages.topicId),
+            isNull(messages.sessionId),
+          ),
+        );
 
       // 8. Update threads (linked via agentId)
       await trx

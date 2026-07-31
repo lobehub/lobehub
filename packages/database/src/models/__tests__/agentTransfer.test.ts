@@ -257,6 +257,21 @@ describe('AgentModel.transferAgent', () => {
     expect(msg.userId).toBe(userId);
   });
 
+  it('should rewrite anchorless agent messages (no topic/session) on transfer', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Agent' });
+
+    // Anchorless: linked only via agentId — snapshot IS the authoritative scope
+    await serverDB
+      .insert(messages)
+      .values({ agentId: agent.id, id: 'anchorless-msg', role: 'assistant', userId });
+
+    await model.transferAgent(agent.id, wsId1, userId);
+
+    const [msg] = await serverDB.select().from(messages).where(eq(messages.id, 'anchorless-msg'));
+    expect(msg).toMatchObject({ userId, workspaceId: wsId1 });
+  });
+
   it('should preserve content timestamps while transferring ownership', async () => {
     const originalUpdatedAt = new Date('2024-01-02T03:04:05.000Z');
     const model = new AgentModel(serverDB, userId);
