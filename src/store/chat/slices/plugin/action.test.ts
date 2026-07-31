@@ -17,6 +17,10 @@ import { useToolStore } from '@/store/tool';
 
 vi.mock('@/utils/localStorage', () => {
   class AsyncLocalStorage<State> {
+    getFromLocalStorageSync(): State {
+      return {} as State;
+    }
+
     async getFromLocalStorage(): Promise<State> {
       return {} as State;
     }
