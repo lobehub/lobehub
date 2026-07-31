@@ -16,7 +16,7 @@ import HomeHeader from './HomeHeader';
 import HomeModeContent from './HomeModeContent';
 import HomePortrait from './HomePortrait';
 import InputArea from './InputArea';
-import RailToggle from './RailToggle';
+import PortraitBubble from './PortraitBubble';
 import type { HomeMode } from './types';
 
 /** Mirrors the row hover bleed in HomeModeContent; the viewport would clip it. */
@@ -39,7 +39,12 @@ const RAIL_COLUMN_GAP = 28;
 const MAIN_SCROLLBAR_OFFSET = RAIL_COLUMN_GAP / 2;
 const RAIL_EXIT_OFFSET = 24;
 const RAIL_TRANSITION_DURATION = 220;
-const COLLAPSED_CONTENT_OFFSET = (RAIL_CARD_WIDTH + RAIL_GUTTER + RAIL_COLUMN_GAP) / 2;
+const RAIL_RECLAIMED_WIDTH = RAIL_CARD_WIDTH + RAIL_GUTTER + RAIL_COLUMN_GAP;
+/** Share of the vacated rail track the content keeps; the rest is split as margin. */
+const COLLAPSED_CONTENT_GAIN = 140;
+const COLLAPSED_CONTENT_OFFSET = (RAIL_RECLAIMED_WIDTH - COLLAPSED_CONTENT_GAIN) / 2;
+/** Portrait width plus its inline inset and the gap the bubble keeps from it. */
+const PORTRAIT_LANE = 152 + 12 + 16;
 
 const MAIN_CONTENT_STYLE = { ...scrollContent, paddingInline: ROW_BLEED };
 const RAIL_CONTENT_STYLE = { ...scrollContent, paddingInlineEnd: RAIL_GUTTER };
@@ -64,15 +69,24 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
   content: css`
-    transition: transform ${RAIL_TRANSITION_DURATION}ms ease-out;
+    /* An explicit width is what makes the collapse animate: the stretched
+       default computes to "auto", which cannot interpolate against a length,
+       so the width would snap while the transform slid. */
+    width: 100%;
+    transition:
+      transform ${RAIL_TRANSITION_DURATION}ms ease-out,
+      width ${RAIL_TRANSITION_DURATION}ms ease-out;
 
     @media (prefers-reduced-motion: reduce) {
       transition: none;
     }
   `,
-  contentCentered: css`
+  // Collapsed, the content takes part of the vacated rail track and re-centers
+  // on what is left, so the page reads wider without going full-bleed.
+  contentCollapsed: css`
     @media (width > 1100px) {
       transform: translateX(${COLLAPSED_CONTENT_OFFSET}px);
+      width: calc(100% + ${COLLAPSED_CONTENT_GAIN}px);
 
       &:dir(rtl) {
         transform: translateX(-${COLLAPSED_CONTENT_OFFSET}px);
@@ -80,7 +94,43 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
   header: css`
+    position: relative;
     grid-area: 1 / 1;
+  `,
+  // Parks beside the portrait on desktop; below the greeting once the portrait
+  // is gone, where it is just another line and needs no anchoring.
+  bubbleSlot: css`
+    margin-block-start: 16px;
+
+    @media (width > 1100px) {
+      position: absolute;
+      inset-block-end: 4px;
+
+      /* Anchored to the header's trailing edge, which itself widens and slides
+         on collapse — so the slot only has to make up the difference, and it
+         makes it up with a transform, in step with the portrait it belongs to. */
+      inset-inline-end: ${PORTRAIT_LANE - RAIL_RECLAIMED_WIDTH}px;
+
+      display: flex;
+      justify-content: flex-end;
+
+      margin-block-start: 0;
+
+      transition: transform ${RAIL_TRANSITION_DURATION}ms ease-out;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
+  `,
+  bubbleSlotCollapsed: css`
+    @media (width > 1100px) {
+      transform: translateX(-${RAIL_RECLAIMED_WIDTH}px);
+
+      &:dir(rtl) {
+        transform: translateX(${RAIL_RECLAIMED_WIDTH}px);
+      }
+    }
   `,
   inputArea: css`
     position: relative;
@@ -91,17 +141,6 @@ const styles = createStaticStyles(({ css }) => ({
     grid-area: 2 / 1;
     min-width: 0;
     min-height: 0;
-  `,
-  railToggle: css`
-    position: absolute;
-    z-index: 3;
-    inset-block-start: 50%;
-    inset-inline-end: -23px;
-    transform: translateY(-50%);
-
-    @media (width <= 1100px) {
-      display: none;
-    }
   `,
   mainScroll: css`
     flex: 1;
@@ -123,9 +162,26 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   portrait: css`
     grid-area: 1 / 2;
+    transition: transform ${RAIL_TRANSITION_DURATION}ms ease-out;
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
 
     @media (width <= 1100px) {
       display: none;
+    }
+  `,
+  // With the rail gone the agent has nothing to lean into, so it slides over the
+  // composer instead of disappearing with the cards — keeping the same dip, so
+  // the same half of it stays behind the surface it leans on.
+  portraitCollapsed: css`
+    @media (width > 1100px) {
+      transform: translateX(-${COLLAPSED_CONTENT_OFFSET}px);
+
+      &:dir(rtl) {
+        transform: translateX(${COLLAPSED_CONTENT_OFFSET}px);
+      }
     }
   `,
   railSurface: css`
@@ -193,11 +249,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 const Home = memo(() => {
   const isLogin = useUserStore(authSelectors.isLogin);
-  const [showHomeRail, toggleHomeRail, isStatusInit] = useGlobalStore((s) => [
-    systemStatusSelectors.showHomeRail(s),
-    s.toggleHomeRail,
-    systemStatusSelectors.isStatusInit(s),
-  ]);
+  const showHomeRail = useGlobalStore(systemStatusSelectors.showHomeRail);
   const [mode, setMode] = useState<HomeMode>('chat');
   const [inputValue, setInputValue] = useState('');
   const railVisible = Boolean(isLogin && showHomeRail);
@@ -221,39 +273,28 @@ const Home = memo(() => {
 
   return (
     <Flexbox className={styles.grid}>
-      <div className={cx(styles.header, styles.content, railCollapsed && styles.contentCentered)}>
-        <HomeHeader
-          railVisible={railVisible}
-          onToggleRail={isStatusInit ? toggleHomeRail : undefined}
-        />
+      <div className={cx(styles.header, styles.content, railCollapsed && styles.contentCollapsed)}>
+        <HomeHeader />
+        {/* No portrait for signed-out visitors, so no one to speak the line. */}
+        {isLogin && (
+          <div className={cx(styles.bubbleSlot, railCollapsed && styles.bubbleSlotCollapsed)}>
+            <PortraitBubble />
+          </div>
+        )}
       </div>
 
       {isLogin && (
-        <div
-          aria-hidden={railCollapsed}
-          className={cx(styles.portrait, styles.railSurface)}
-          data-collapsed={railCollapsed}
-        >
+        <div className={cx(styles.portrait, railCollapsed && styles.portraitCollapsed)}>
           <HomePortrait />
         </div>
       )}
 
       <Flexbox
-        className={cx(styles.main, styles.content, railCollapsed && styles.contentCentered)}
+        className={cx(styles.main, styles.content, railCollapsed && styles.contentCollapsed)}
         data-testid={'home-main'}
         gap={24}
       >
         <div className={styles.inputArea}>
-          {isLogin && isStatusInit && (
-            <div className={styles.railToggle}>
-              <RailToggle
-                edge
-                railVisible={railVisible}
-                testId={'home-rail-toggle-desktop'}
-                onToggle={toggleHomeRail}
-              />
-            </div>
-          )}
           <InputArea
             inputValue={inputValue}
             mode={mode}
