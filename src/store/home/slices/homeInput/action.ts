@@ -28,6 +28,11 @@ interface SendMessageWithEditorParams {
   groupId?: string;
   message: string;
   pageSelections?: PageSelection[];
+  /**
+   * `private` keeps the created agent/group visible only to its creator inside
+   * the active workspace; omitted/`public` follows the server default.
+   */
+  visibility?: 'private' | 'public';
   workspaceSlug?: string | null;
 }
 
@@ -128,6 +133,7 @@ export class HomeInputActionImpl {
     groupId,
     message,
     pageSelections,
+    visibility,
     workspaceSlug,
   }: SendMessageWithEditorParams): Promise<string> => {
     this.#set({ homeInputLoading: true }, false, n('sendAsAgent/start'));
@@ -152,6 +158,7 @@ export class HomeInputActionImpl {
           title: markdownToTxt(message ?? '').slice(0, 50) || 'New Agent',
         },
         groupId,
+        visibility,
       });
 
       // Sync the editing target into the chat store BEFORE the builder message
@@ -219,6 +226,7 @@ export class HomeInputActionImpl {
     groupId,
     message,
     pageSelections,
+    visibility,
     workspaceSlug,
   }: SendMessageWithEditorParams): Promise<string> => {
     this.#set({ homeInputLoading: true }, false, n('sendAsGroup/start'));
@@ -241,6 +249,7 @@ export class HomeInputActionImpl {
         },
         groupId,
         title: markdownToTxt(message ?? '').slice(0, 50) || 'New Group',
+        visibility,
       });
 
       // 3. Load groups and refresh

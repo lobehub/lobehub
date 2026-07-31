@@ -114,12 +114,12 @@ const CreateModalRenderer = memo<CreateModalRendererProps>(
     const handleSubmit = useCallback(
       async (prompt: string) => {
         if (type === 'agent') {
-          await sendAsAgent({ groupId, message: prompt });
+          await sendAsAgent({ groupId, message: prompt, visibility });
         } else {
-          await sendAsGroup({ groupId, message: prompt });
+          await sendAsGroup({ groupId, message: prompt, visibility });
         }
       },
-      [type, sendAsAgent, sendAsGroup, groupId],
+      [type, sendAsAgent, sendAsGroup, groupId, visibility],
     );
 
     const handleCreateBlank = useCallback(async () => {
@@ -129,7 +129,7 @@ const CreateModalRenderer = memo<CreateModalRendererProps>(
         navigate(`/agent/${result.agentId}/profile`);
         await refreshAgentList();
       } else {
-        await sendAsGroup({ groupId, message: '' });
+        await sendAsGroup({ groupId, message: '', visibility });
       }
     }, [type, storeCreateAgent, navigate, refreshAgentList, sendAsGroup, groupId, visibility]);
 
