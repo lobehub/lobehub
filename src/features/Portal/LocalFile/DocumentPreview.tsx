@@ -29,12 +29,14 @@ const styles = createStaticStyles(({ css }) => ({
     height: 100%;
     background: ${cssVar.colorBgLayout};
 
-    /* docx-preview renders fixed-size "pages"; keep them centered with a gap. */
+    /* docx-preview renders fixed-size "pages"; keep them centered with a gap.
+       "safe center" falls back to flex-start when the page is wider than the
+       pane, so the left edge stays reachable by horizontal scroll. */
     .docx-wrapper {
       display: flex;
       flex-direction: column;
       gap: 12px;
-      align-items: center;
+      align-items: safe center;
 
       padding: 10px;
 
@@ -192,10 +194,11 @@ interface OfficePaneProps {
 
 const PptxPane = memo<OfficePaneProps>(({ blob, onError }) => {
   const [loading, setLoading] = useState(true);
+  const [scrollEl, setScrollEl] = useState<HTMLElement | null>(null);
   const [container, setContainer] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
-    if (!container) return;
+    if (!container || !scrollEl) return;
 
     const controller = new AbortController();
     let viewer: { destroy: () => void } | undefined;
@@ -206,7 +209,7 @@ const PptxPane = memo<OfficePaneProps>(({ blob, onError }) => {
         if (controller.signal.aborted) return;
         viewer = await PptxViewer.open(blob, container, {
           listOptions: { windowed: true },
-          scrollContainer: container,
+          scrollContainer: scrollEl,
           signal: controller.signal,
           // Local files are still untrusted input (agent/tool generated) — cap
           // the ZIP expansion to keep a hostile pptx from exhausting memory.
@@ -223,11 +226,14 @@ const PptxPane = memo<OfficePaneProps>(({ blob, onError }) => {
       controller.abort();
       viewer?.destroy();
     };
-  }, [blob, container, onError]);
+  }, [blob, container, scrollEl, onError]);
 
   return (
-    <div className={styles.officeContainer} ref={setContainer}>
+    <div className={styles.officeContainer} ref={setScrollEl}>
       {loading && <Loading />}
+      {/* The viewer owns this node's children — React must never render into it,
+          or its bookkeeping breaks when the library replaces the content. */}
+      <div ref={setContainer} />
     </div>
   );
 });
