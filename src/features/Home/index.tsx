@@ -45,6 +45,19 @@ const COLLAPSED_CONTENT_GAIN = 140;
 const COLLAPSED_CONTENT_OFFSET = (RAIL_RECLAIMED_WIDTH - COLLAPSED_CONTENT_GAIN) / 2;
 /** Portrait width plus its inline inset and the gap the bubble keeps from it. */
 const PORTRAIT_LANE = 152 + 12 + 16;
+const BUBBLE_MAX_WIDTH = 336;
+const BUBBLE_GAP = 16;
+/**
+ * What the greeting must leave alone so the bubble never lands on it, measured
+ * in the tighter of the two states: the collapsed content is inset by
+ * COLLAPSED_CONTENT_OFFSET on both sides, and the bubble occupies the portrait's
+ * lane plus its own width. Subtracted from the *container* width, because the
+ * bubble tracks the container's trailing edge while the greeting starts at its
+ * leading edge — a fixed measure only happens to clear it at full width.
+ */
+const GREETING_LANE = COLLAPSED_CONTENT_OFFSET * 2 + PORTRAIT_LANE + BUBBLE_MAX_WIDTH + BUBBLE_GAP;
+/** Under this the greeting, the bubble and the portrait cannot share a line. */
+const BUBBLE_INLINE_MIN = 1080;
 
 const MAIN_CONTENT_STYLE = { ...scrollContent, paddingInline: ROW_BLEED };
 const RAIL_CONTENT_STYLE = { ...scrollContent, paddingInlineEnd: RAIL_GUTTER };
@@ -53,6 +66,9 @@ const styles = createStaticStyles(({ css }) => ({
   // Row 1 (greeting + portrait) is fixed; row 2 gives each column its own
   // scroll viewport, so the rail and the task list scroll independently.
   grid: css`
+    /* The nav panel takes 240–400px out of the viewport, so viewport breakpoints
+       say nothing about the room this dashboard actually has. */
+    container: home / inline-size;
     display: grid;
     grid-template-columns: minmax(0, 1fr) ${RAIL_CARD_WIDTH + RAIL_GUTTER}px;
     grid-template-rows: auto minmax(0, 1fr);
@@ -94,15 +110,26 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
   header: css`
+    --home-greeting-measure: none;
+
     position: relative;
     grid-area: 1 / 1;
+
+    @container home (width >= ${BUBBLE_INLINE_MIN}px) {
+      --home-greeting-measure: calc(100cqw - ${GREETING_LANE}px);
+    }
   `,
-  // Parks beside the portrait on desktop; below the greeting once the portrait
-  // is gone, where it is just another line and needs no anchoring.
+  // Parks beside the portrait when the row is wide enough for the three of them;
+  // otherwise it drops below the greeting, where it is just another line and
+  // needs no anchoring.
   bubbleSlot: css`
+    --home-bubble-tail: none;
+
     margin-block-start: 16px;
 
-    @media (width > 1100px) {
+    @container home (width >= ${BUBBLE_INLINE_MIN}px) {
+      --home-bubble-tail: block;
+
       position: absolute;
       inset-block-end: 4px;
 
@@ -114,6 +141,7 @@ const styles = createStaticStyles(({ css }) => ({
       display: flex;
       justify-content: flex-end;
 
+      max-width: ${BUBBLE_MAX_WIDTH}px;
       margin-block-start: 0;
 
       transition: transform ${RAIL_TRANSITION_DURATION}ms ease-out;
@@ -124,7 +152,7 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
   bubbleSlotCollapsed: css`
-    @media (width > 1100px) {
+    @container home (width >= ${BUBBLE_INLINE_MIN}px) {
       transform: translateX(-${RAIL_RECLAIMED_WIDTH}px);
 
       &:dir(rtl) {

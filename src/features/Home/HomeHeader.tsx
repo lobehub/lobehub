@@ -9,26 +9,22 @@ import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/se
 import AgentSelect from './AgentSelect';
 
 const styles = createStaticStyles(({ css }) => ({
-  // A fixed measure, not a fluid one: collapsing the rail changes this column's
-  // width, and a headline that re-wraps on collapse would shove the composer
-  // and the whole task list down by a line. Wide enough that a long display
-  // name still fits, narrow enough to stay clear of the portrait's bubble.
+  // The measure comes from the layout (`--home-greeting-measure`), which derives
+  // it from the container width: it has to clear the portrait's bubble, and it
+  // must not depend on the rail, or collapsing would re-wrap the headline and
+  // shove the composer and the whole task list down by a line.
   greeting: css`
     overflow: hidden;
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
 
-    max-width: 440px;
+    max-width: var(--home-greeting-measure, none);
     margin: 0;
 
     font-size: 22px;
     line-height: 1.4;
     letter-spacing: -0.01em;
-
-    @media (width <= 1100px) {
-      max-width: none;
-    }
   `,
   toolbar: css`
     width: 100%;

@@ -18,7 +18,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     overflow: hidden;
     display: block;
 
-    max-width: 336px;
+    max-width: 100%;
     padding-block: 8px;
     padding-inline: 12px;
     border: 1px solid ${cssVar.colorBorderSecondary};
@@ -32,28 +32,29 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     box-shadow: ${cssVar.boxShadowTertiary};
 
     /* The tail is what makes this read as the agent's line rather than one more
-       toolbar chip, so it exists only where the portrait does. */
-    @media (width > 1100px) {
-      &::after {
-        content: '';
+       toolbar chip, so the layout switches it off via --home-bubble-tail wherever
+       it parks the bubble below the greeting instead of beside him. */
+    &::after {
+      content: '';
 
-        position: absolute;
-        inset-block-start: 50%;
-        inset-inline-end: -5px;
-        transform: translateY(-50%) rotate(45deg);
+      position: absolute;
+      inset-block-start: 50%;
+      inset-inline-end: -5px;
+      transform: translateY(-50%) rotate(45deg);
 
-        width: 9px;
-        height: 9px;
-        border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-        border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
+      display: var(--home-bubble-tail, none);
 
-        background: ${cssVar.colorBgContainer};
-      }
+      width: 9px;
+      height: 9px;
+      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+      border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
 
-      &:dir(rtl)::after {
-        inset-inline: -5px auto;
-        transform: translateY(-50%) rotate(225deg);
-      }
+      background: ${cssVar.colorBgContainer};
+    }
+
+    &:dir(rtl)::after {
+      inset-inline: -5px auto;
+      transform: translateY(-50%) rotate(225deg);
     }
   `,
   // The bubble is anchored by its bottom edge, so an unbounded line grows
