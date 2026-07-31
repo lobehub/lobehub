@@ -23,6 +23,7 @@ import { useGlobalStore } from '@/store/global';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
+import GoalRoundTimeline from './GoalRoundTimeline';
 import { resolveTaskAcceptanceRequirement } from './resolveTaskAcceptanceProjection';
 import { TaskAcceptanceHeader } from './TaskAcceptanceHeader';
 import TaskVerifyConfig from './TaskVerifyConfig';
@@ -199,6 +200,7 @@ const TaskAcceptance = memo(() => {
           {bundleError && <AcceptanceError onRetry={() => void mutateBundle()} />}
           {bundle && (
             <>
+              <GoalRoundTimeline rounds={bundle.rounds} />
               {requirement && (
                 <Flexbox gap={6}>
                   <Text fontSize={12} type={'secondary'}>

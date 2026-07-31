@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createTaskRuntime } from '../task';
 
+const verifyMocks = vi.hoisted(() => ({ createCriteriaFromDrafts: vi.fn() }));
+
 vi.mock('@/server/routers/lambda/task', () => ({
   taskRouter: { createCaller: () => ({}) },
 }));
@@ -21,7 +23,69 @@ vi.mock('@/server/services/task', () => ({
   TaskService: vi.fn(),
 }));
 
+vi.mock('@/server/services/verify/planGenerator', () => ({
+  VerifyPlanGeneratorService: vi.fn().mockImplementation(() => verifyMocks),
+}));
+
 describe('createTaskRuntime', () => {
+  describe('createGoal', () => {
+    it('creates, configures, and starts one verified task', async () => {
+      verifyMocks.createCriteriaFromDrafts.mockResolvedValueOnce(['criterion-1']);
+      const taskCaller = {
+        run: vi.fn().mockResolvedValue({ operationId: 'op-1', topicId: 'topic-1' }),
+        updateVerifyConfig: vi.fn().mockResolvedValue(undefined),
+      };
+      const taskModel = { updateTaskConfig: vi.fn().mockResolvedValue(undefined) };
+      const taskService = {
+        createTask: vi.fn().mockResolvedValue({
+          id: 'task-db-1',
+          identifier: 'T-1',
+          name: 'Ship homepage',
+          priority: 0,
+          status: 'backlog',
+        }),
+      };
+      const runtime = createTaskRuntime({
+        agentId: 'agt-1',
+        agentModel: { existsById: vi.fn().mockResolvedValue(true) } as any,
+        db: {} as any,
+        taskCaller: taskCaller as any,
+        taskModel: taskModel as any,
+        taskService: taskService as any,
+        topicId: 'origin-topic',
+        userId: 'user-1',
+      });
+
+      const result = await runtime.createGoal({
+        criteria: [{ title: 'LCP under two seconds' }],
+        instruction: 'Redesign and ship the homepage',
+        maxIterations: 3,
+        maxTotalCost: 12,
+        name: 'Ship homepage',
+      });
+
+      expect(result.success).toBe(true);
+      expect(verifyMocks.createCriteriaFromDrafts).toHaveBeenCalledWith([
+        expect.objectContaining({ onFail: 'auto_repair', required: true }),
+      ]);
+      expect(taskCaller.updateVerifyConfig).toHaveBeenCalledWith({
+        id: 'task-db-1',
+        verify: expect.objectContaining({
+          enabled: true,
+          maxIterations: 3,
+          verifyCriteriaIds: ['criterion-1'],
+        }),
+      });
+      expect(taskModel.updateTaskConfig).toHaveBeenCalledWith('task-db-1', {
+        goal: { maxIterations: 3, maxTotalCost: 12, originTopicId: 'origin-topic' },
+      });
+      expect(taskCaller.run).toHaveBeenCalledWith({ id: 'task-db-1' });
+      expect(result.state).toEqual(
+        expect.objectContaining({ identifier: 'T-1', success: true, taskId: 'task-db-1' }),
+      );
+    });
+  });
+
   describe('task comments', () => {
     it('adds a comment to the current task with agent attribution', async () => {
       const taskCaller = {

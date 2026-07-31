@@ -21,6 +21,7 @@ import debug from 'debug';
 
 import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { taskService } from '@/services/task';
+import { verifyService } from '@/services/verify';
 import { getChatStoreState } from '@/store/chat';
 import { getTaskStoreState } from '@/store/task';
 import { findSubtaskParentId } from '@/store/task/slices/detail/reducer';
@@ -58,6 +59,7 @@ const LIST_MUTATING_APIS = new Set<string>([
   TaskApiName.runTasks,
   TaskApiName.setTaskSchedule,
   TaskApiName.updateTaskStatus,
+  TaskApiName.createGoal,
 ]);
 
 const DETAIL_MUTATING_APIS = new Set<string>([
@@ -70,6 +72,7 @@ const DETAIL_MUTATING_APIS = new Set<string>([
   TaskApiName.updateTaskComment,
   TaskApiName.updateTaskStatus,
   TaskApiName.viewTask,
+  TaskApiName.createGoal,
 ]);
 
 const extractIdentifier = (params: unknown, result: BuiltinToolResult): string | undefined => {
@@ -263,6 +266,117 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
     },
     ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => this.#createTask(params, ctx);
+
+  createGoal = async (
+    params: {
+      criteria: Array<{
+        description?: string;
+        instruction?: string;
+        onFail?: 'auto_repair' | 'manual';
+        required?: boolean;
+        title: string;
+        verifierConfig?: Record<string, unknown>;
+        verifierType?: 'agent' | 'llm' | 'program';
+      }>;
+      instruction: string;
+      maxIterations?: number | null;
+      maxTotalCost?: number | null;
+      name: string;
+    },
+    ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    if (!ctx?.agentId) {
+      return {
+        content: 'A goal needs the current agent as its assignee.',
+        error: { message: 'agentId is required', type: 'MissingAgent' },
+        success: false,
+      };
+    }
+
+    const criteria = (params.criteria ?? []).filter((item) => item.title?.trim());
+    if (criteria.length === 0) {
+      return {
+        content: 'A goal needs at least one acceptance criterion.',
+        error: { message: 'criteria array is empty', type: 'EmptyCriteria' },
+        success: false,
+      };
+    }
+
+    const created = await this.#createTask(
+      {
+        assigneeAgentId: ctx.agentId,
+        instruction: params.instruction,
+        name: params.name,
+      },
+      ctx,
+    );
+    const identifier = (created.state as { identifier?: string } | undefined)?.identifier;
+    const taskId = (created.state as { taskId?: string } | undefined)?.taskId;
+    if (!created.success || !identifier) return created;
+
+    try {
+      const verifyCriteriaIds = await verifyService.createCriteria(
+        criteria.map((item) => ({
+          description: item.description,
+          instruction: item.verifierType === 'program' ? undefined : item.instruction,
+          onFail: item.onFail ?? 'auto_repair',
+          required: item.required ?? true,
+          title: item.title,
+          verifierConfig: item.verifierConfig,
+          verifierType: item.verifierType ?? 'agent',
+        })),
+      );
+      const maxIterations = Math.min(10, Math.max(2, params.maxIterations ?? 3));
+
+      await Promise.all([
+        taskService.updateVerifyConfig({
+          id: identifier,
+          verify: {
+            enabled: true,
+            maxIterations,
+            requirement: params.name,
+            verifyCriteriaIds,
+          },
+        }),
+        taskService.updateConfig(identifier, {
+          goal: {
+            maxIterations: params.maxIterations ?? null,
+            maxTotalCost: params.maxTotalCost ?? null,
+            originTopicId: ctx.topicId ?? null,
+          },
+        }),
+      ]);
+
+      const started = await this.runTask({ identifier }, ctx);
+      if (!started.success) return started;
+      const state = started.state as {
+        operationId?: string;
+        topicId?: string;
+      };
+
+      return {
+        content: `Goal task ${identifier} created and started with ${criteria.length} acceptance criteria.`,
+        state: {
+          identifier,
+          name: params.name,
+          operationId: state.operationId,
+          startedAt: new Date().toISOString(),
+          success: true,
+          taskId,
+          topicId: state.topicId,
+        },
+        success: true,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to start goal';
+      return {
+        content: `Goal task ${identifier} was created but could not be started: ${message}`,
+        error: { message, type: 'CreateGoalFailed' },
+        state: { identifier, name: params.name, success: false },
+        success: false,
+      };
+    }
+  };
 
   createTasks = async (
     params: { tasks: CreateTaskParams[] },

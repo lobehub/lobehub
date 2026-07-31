@@ -125,7 +125,12 @@ import {
   SkillsManifest,
   SkillsRenders,
 } from '@lobechat/builtin-tool-skills/client';
-import { TaskInspectors, TaskManifest, TaskRenders } from '@lobechat/builtin-tool-task/client';
+import {
+  TaskInspectors,
+  TaskInterventions,
+  TaskManifest,
+  TaskRenders,
+} from '@lobechat/builtin-tool-task/client';
 import {
   UserInteractionIdentifier,
   UserInteractionInspectors,
@@ -317,6 +322,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     [LocalSystemIdentifier]: LocalSystemInterventions as Record<string, BuiltinIntervention>,
     [MemoryManifest.identifier]: MemoryInterventions as Record<string, BuiltinIntervention>,
     [MessageManifest.identifier]: MessageInterventions as Record<string, BuiltinIntervention>,
+    [TaskManifest.identifier]: TaskInterventions as Record<string, BuiltinIntervention>,
     [UserInteractionIdentifier]: UserInteractionInterventions as Record<
       string,
       BuiltinIntervention
