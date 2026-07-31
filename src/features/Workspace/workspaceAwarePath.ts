@@ -33,7 +33,6 @@ export const WORKSPACE_SETTINGS_TABS: ReadonlySet<string> = new Set([
   'apikey',
   'audit-log',
   'billing',
-  'budget',
   'connector',
   'credential',
   // Legacy alias for `credential` — the routers keep a redirect, so prefixed

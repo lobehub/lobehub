@@ -9,7 +9,6 @@ import {
   Coins,
   CreditCard,
   Database,
-  HandCoins,
   KeyIcon,
   KeyRound,
   Map,
@@ -107,13 +106,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               icon: Coins,
               key: WorkspaceSettingsTabs.Credits,
               label: tSubscription('tab.credits'),
-            },
-            // Spend governance (budget pools + member caps) — admin task,
-            // same visibility gate as the other money pages.
-            canViewBilling && {
-              icon: HandCoins,
-              key: WorkspaceSettingsTabs.Budget,
-              label: tSubscription('tab.budget'),
             },
             canViewBilling && {
               icon: CreditCard,

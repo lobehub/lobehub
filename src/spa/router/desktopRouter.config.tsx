@@ -972,13 +972,6 @@ export const createMainAreaChildren = (): RouteObject[] => [
               },
               {
                 element: dynamicElement(
-                  () => import('@/routes/(main)/[workspaceSlug]/settings/budget'),
-                  'Desktop > Workspace > Settings > Budget',
-                ),
-                path: 'budget',
-              },
-              {
-                element: dynamicElement(
                   () => import('@/routes/(main)/[workspaceSlug]/settings/credits'),
                   'Desktop > Workspace > Settings > Credits',
                 ),
