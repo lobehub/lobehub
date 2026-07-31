@@ -1416,6 +1416,8 @@
   "upload.clientMode.fileNotSupported": "浏览器模式暂不支持上传文件。仅支持图片",
   "upload.clientMode.visionNotSupported": "当前模型不支持视觉识别。请切换模型后使用",
   "upload.preview.prepareTasks": "正在准备分块…",
+  "upload.preview.status.cancelled": "已取消上传",
+  "upload.preview.status.error": "上传失败",
   "upload.preview.status.pending": "准备上传…",
   "upload.preview.status.processing": "文件处理中…",
   "upload.validation.unsupportedFileType": "不支持的文件类型：{{files}}。支持的图片格式：JPG、PNG、GIF、WebP。支持的文档包括PDF、Word、Excel、PowerPoint、Markdown、文本、CSV、JSON和代码文件。",

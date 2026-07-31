@@ -144,7 +144,10 @@ describe('useToolStore:customPlugin', () => {
         await result.current.reinstallCustomPlugin(pluginId);
       });
 
-      expect(result.current.pluginInstallErrors[pluginId]).toBe('Connection refused');
+      expect(result.current.pluginInstallErrors[pluginId]).toEqual({
+        cause: 'Connection refused',
+        message: 'connectionError',
+      });
       expect(result.current.pluginInstallLoading[pluginId]).toBe(false);
     });
   });

@@ -7,10 +7,10 @@ import { Loader2Icon, PencilIcon } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import InlineActionError from '@/components/InlineActionError';
 import UserAvatar from '@/features/User/UserAvatar';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
+import { saveToast } from '@/store/utils/saveToast';
 import { imageToBase64 } from '@/utils/imageToBase64';
 import { createUploadImageHandler } from '@/utils/uploadFIle';
 
@@ -52,15 +52,11 @@ const AvatarRow = () => {
   const isLogin = useUserStore(authSelectors.isLogin);
   const updateAvatar = useUserStore((s) => s.updateAvatar);
   const [uploading, setUploading] = useState(false);
-  const [hasError, setHasError] = useState(false);
-  const [retryAvatar, setRetryAvatar] = useState<string>();
 
   const saveAvatar = useCallback(
     async (avatar: string) => {
       try {
         setUploading(true);
-        setHasError(false);
-        setRetryAvatar(avatar);
         const img = new Image();
         img.src = avatar;
 
@@ -71,15 +67,17 @@ const AvatarRow = () => {
 
         const webpBase64 = imageToBase64({ img, size: 256 });
         await updateAvatar(webpBase64);
-        setRetryAvatar(undefined);
-      } catch (cause) {
-        console.error('Failed to upload avatar:', cause);
-        setHasError(true);
+      } catch (error) {
+        console.error('Failed to upload avatar:', error);
+        saveToast(error, {
+          retry: () => void saveAvatar(avatar),
+          title: t('profile.avatarUploadError'),
+        });
       } finally {
         setUploading(false);
       }
     },
-    [updateAvatar],
+    [updateAvatar, t],
   );
 
   const handleUploadAvatar = useMemo(() => createUploadImageHandler(saveAvatar), [saveAvatar]);
@@ -108,15 +106,7 @@ const AvatarRow = () => {
   );
 
   return (
-    <ProfileRow action={avatarContent} anchor={'profile-avatar'} label={t('profile.avatar')}>
-      {hasError && (
-        <InlineActionError
-          retrying={uploading}
-          title={t('profile.avatarUploadError')}
-          onRetry={retryAvatar ? () => saveAvatar(retryAvatar) : undefined}
-        />
-      )}
-    </ProfileRow>
+    <ProfileRow action={avatarContent} anchor={'profile-avatar'} label={t('profile.avatar')} />
   );
 };
 

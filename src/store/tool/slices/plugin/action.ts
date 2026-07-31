@@ -7,6 +7,7 @@ import { useClientDataSWR } from '@/libs/swr';
 import { toolKeys } from '@/libs/swr/keys';
 import { pluginService } from '@/services/plugin';
 import { type StoreSetter } from '@/store/types';
+import { type PluginInstallError } from '@/types/tool/plugin';
 import { merge } from '@/utils/merge';
 
 import { type ToolStore } from '../../store';
@@ -50,7 +51,7 @@ export class PluginActionImpl {
     );
   };
 
-  updateInstallError = (id: string, error: string | undefined): void => {
+  updateInstallError = (id: string, error: PluginInstallError | undefined): void => {
     this.#set(
       { pluginInstallErrors: { ...this.#get().pluginInstallErrors, [id]: error } },
       false,

@@ -76,7 +76,11 @@ const PluginStatus = memo<PluginStatusProps>(({ title, id, deprecated }) => {
         </Flexbox>
         {installError ? (
           <Text fontSize={12} type={'danger'}>
-            {installError}
+            {t(`error.${installError.message}`, {
+              defaultValue: installError.cause,
+              error: installError.cause,
+              ns: 'plugin',
+            })}
           </Text>
         ) : null}
       </Flexbox>

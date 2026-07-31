@@ -4,7 +4,7 @@ import {
   sanitizeFolderName,
   topologicalSortFolders,
 } from '@lobechat/utils';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast, type ToastInstance } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 import pMap from 'p-map';
 import { type SWRResponse } from 'swr';
@@ -581,10 +581,13 @@ export class FileManageActionImpl {
     const sortedFolderPaths = topologicalSortFolders(folders);
 
     // Show toast notification if there are folders to create
-    const loadingToast =
-      sortedFolderPaths.length > 0
-        ? toast.loading(t('header.actions.uploadFolder.creatingFolders', { ns: 'file' }))
-        : undefined;
+    let creatingFoldersToast: ToastInstance | undefined;
+    if (sortedFolderPaths.length > 0) {
+      creatingFoldersToast = toast.loading({
+        duration: Infinity, // Don't auto-dismiss
+        title: t('header.actions.uploadFolder.creatingFolders', { ns: 'file' }),
+      });
+    }
 
     try {
       // Map to store created folder IDs: relative path -> folder ID
@@ -637,7 +640,7 @@ export class FileManageActionImpl {
       }
 
       // Dismiss the toast after folders are created
-      loadingToast?.close();
+      creatingFoldersToast?.close();
 
       // Refresh file list to show the new folders
       await this.#get().refreshFileList();
@@ -741,7 +744,7 @@ export class FileManageActionImpl {
       }
     } catch (error) {
       // Dismiss toast on error
-      loadingToast?.close();
+      creatingFoldersToast?.close();
       throw error;
     }
   };

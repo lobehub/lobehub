@@ -1,5 +1,4 @@
 import { merge } from 'es-toolkit/compat';
-import { t } from 'i18next';
 
 import { mcpService } from '@/services/mcp';
 import { pluginService } from '@/services/plugin';
@@ -61,10 +60,7 @@ export class CustomPluginActionImpl {
     } catch (error) {
       console.error(error);
       const err = error as PluginInstallError;
-      updateInstallError(
-        id,
-        t(`error.${err.message}`, { defaultValue: err.cause, error: err.cause, ns: 'plugin' }),
-      );
+      updateInstallError(id, { cause: err.cause, message: err.message });
     } finally {
       updateInstallLoadingState(id, false);
     }

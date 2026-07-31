@@ -325,10 +325,13 @@ export const useSignIn = () => {
     if (sending) return false;
     setSending(true);
     try {
-      await requestPasswordReset({
+      // The better-auth client resolves with `{ data, error }` instead of
+      // throwing, so a failed send would otherwise land on the "email sent" screen.
+      const { error } = await requestPasswordReset({
         email: targetEmail,
         redirectTo: `/reset-password?email=${encodeURIComponent(targetEmail)}`,
       });
+      if (error) throw error;
       return true;
     } catch {
       toast.error(t('betterAuth.signin.forgotPasswordError'));

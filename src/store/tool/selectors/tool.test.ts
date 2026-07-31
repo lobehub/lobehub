@@ -98,11 +98,16 @@ describe('toolSelectors', () => {
     it('should return "error" when a refresh failed even if an old manifest remains', () => {
       const state = {
         ...mockState,
-        pluginInstallErrors: { 'plugin-1': 'Connection refused' },
-      } as ToolStoreState;
+        pluginInstallErrors: {
+          'plugin-1': { cause: 'Connection refused', message: 'fetchError' },
+        },
+      } as unknown as ToolStoreState;
 
       expect(toolSelectors.getManifestLoadingStatus('plugin-1')(state)).toBe('error');
-      expect(toolSelectors.getPluginInstallError('plugin-1')(state)).toBe('Connection refused');
+      expect(toolSelectors.getPluginInstallError('plugin-1')(state)).toEqual({
+        cause: 'Connection refused',
+        message: 'fetchError',
+      });
     });
   });
 

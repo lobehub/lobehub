@@ -1,50 +1,30 @@
 'use client';
 
-import { Alert, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
-import { useCallback, useState } from 'react';
+import { cssVar } from 'antd-style';
+import { CheckCircle2Icon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-import InlineActionError from '@/components/InlineActionError';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
 
 import ProfileRow from './ProfileRow';
+import { usePasswordReset } from './usePasswordReset';
 
 const PasswordRow = () => {
   const { t } = useTranslation('auth');
   const userProfile = useUserStore(userProfileSelectors.userProfile);
   const hasPasswordAccount = useUserStore(authSelectors.hasPasswordAccount);
-  const [sending, setSending] = useState(false);
-  const [status, setStatus] = useState<'error' | 'idle' | 'sent'>('idle');
-
-  const handleChangePassword = useCallback(async () => {
-    if (!userProfile?.email) return;
-
-    try {
-      setSending(true);
-      setStatus('idle');
-      const { requestPasswordReset } = await import('@/libs/better-auth/auth-client');
-      await requestPasswordReset({
-        email: userProfile.email,
-        redirectTo: `/reset-password?email=${encodeURIComponent(userProfile.email)}`,
-      });
-      setStatus('sent');
-    } catch (error) {
-      console.error('Failed to send reset password email:', error);
-      setStatus('error');
-    } finally {
-      setSending(false);
-    }
-  }, [userProfile?.email]);
+  const { requestReset, sending, sent } = usePasswordReset(userProfile?.email);
 
   return (
     <ProfileRow
       anchor={'profile-password'}
       label={t('profile.password')}
       action={
-        <Button loading={sending} size="small" onClick={handleChangePassword}>
-          {status === 'sent'
+        <Button loading={sending} size="small" onClick={requestReset}>
+          {sent
             ? t('betterAuth.signin.emailSent.resend')
             : hasPasswordAccount
               ? t('profile.changePassword')
@@ -52,27 +32,14 @@ const PasswordRow = () => {
         </Button>
       }
     >
-      <Flexbox flex={1} gap={8}>
-        {status === 'sent' && (
-          <Alert
-            title={t('profile.resetPasswordSent')}
-            type="success"
-            variant="filled"
-            description={
-              <Text fontSize={12} type="secondary">
-                {userProfile?.email}
-              </Text>
-            }
-          />
-        )}
-        {status === 'error' && (
-          <InlineActionError
-            retrying={sending}
-            title={t('profile.resetPasswordError')}
-            onRetry={handleChangePassword}
-          />
-        )}
-      </Flexbox>
+      {sent && (
+        <Flexbox horizontal align={'center'} gap={6}>
+          <Icon color={cssVar.colorSuccess} icon={CheckCircle2Icon} size={14} />
+          <Text fontSize={12} type={'secondary'}>
+            {t('profile.resetPasswordSent', { email: userProfile?.email })}
+          </Text>
+        </Flexbox>
+      )}
     </ProfileRow>
   );
 };

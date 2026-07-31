@@ -259,7 +259,7 @@ export default {
   'profile.interests': 'Interests',
   'profile.password': 'Password',
   'profile.resetPasswordError': 'Failed to send password reset link',
-  'profile.resetPasswordSent': 'Password reset link sent, please check your email',
+  'profile.resetPasswordSent': 'Reset link sent to {{email}}',
   'profile.save': 'Save',
   'profile.saveError': 'Changes could not be saved',
   'profile.setPassword': 'Set password',
