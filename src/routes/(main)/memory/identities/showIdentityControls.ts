@@ -4,7 +4,7 @@ interface IdentityControlsParams {
   /** `true` once the first page has come back — before that nothing is known. */
   init: boolean;
   /** A reset / refetch is in flight, so `total` still describes the old query. */
-  searchLoading: boolean;
+  searchLoading?: boolean;
   /** Row count for the *current* query, not the whole collection. */
   total: number;
 }
@@ -25,4 +25,4 @@ export const showIdentityControls = ({
   hasFilters,
   searchLoading,
   total,
-}: IdentityControlsParams): boolean => init && (hasFilters || searchLoading || total > 0);
+}: IdentityControlsParams): boolean => init && (hasFilters || !!searchLoading || total > 0);
