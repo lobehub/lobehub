@@ -2742,9 +2742,13 @@ export class MessageModel {
   };
 
   updatePluginState = async (id: string, state: Record<string, any>): Promise<void> => {
-    const item = await this.db.query.messagePlugins.findFirst({
-      where: and(eq(messagePlugins.id, id), this.pluginsOwnership()),
-    });
+    // Plain select instead of RQB findFirst: RQB aliases the table, which
+    // breaks the correlated EXISTS inside pluginsOwnership().
+    const [item] = await this.db
+      .select()
+      .from(messagePlugins)
+      .where(and(eq(messagePlugins.id, id), this.pluginsOwnership()))
+      .limit(1);
     if (!item) throw new Error('Plugin not found');
 
     await this.db
@@ -2754,9 +2758,11 @@ export class MessageModel {
   };
 
   updateMessagePlugin = async (id: string, value: Partial<MessagePluginItem>) => {
-    const item = await this.db.query.messagePlugins.findFirst({
-      where: and(eq(messagePlugins.id, id), this.pluginsOwnership()),
-    });
+    const [item] = await this.db
+      .select()
+      .from(messagePlugins)
+      .where(and(eq(messagePlugins.id, id), this.pluginsOwnership()))
+      .limit(1);
     if (!item) throw new Error('Plugin not found');
 
     return this.db
@@ -2777,9 +2783,11 @@ export class MessageModel {
    * `undefined`.
    */
   findMessagePlugin = async (messageId: string): Promise<MessagePluginItem | undefined> => {
-    const row = await this.db.query.messagePlugins.findFirst({
-      where: and(eq(messagePlugins.id, messageId), this.pluginsOwnership()),
-    });
+    const [row] = await this.db
+      .select()
+      .from(messagePlugins)
+      .where(and(eq(messagePlugins.id, messageId), this.pluginsOwnership()))
+      .limit(1);
     if (!row) return undefined;
     return {
       apiName: row.apiName ?? undefined,
@@ -3017,9 +3025,11 @@ export class MessageModel {
 
         // Update messagePlugins table (pluginState, pluginError)
         if (pluginState !== undefined || pluginError !== undefined) {
-          const pluginItem = await trx.query.messagePlugins.findFirst({
-            where: and(eq(messagePlugins.id, id), this.pluginsOwnership()),
-          });
+          const [pluginItem] = await trx
+            .select()
+            .from(messagePlugins)
+            .where(and(eq(messagePlugins.id, id), this.pluginsOwnership()))
+            .limit(1);
 
           // A plugin-only patch never touches `messages`, so the plugin row is
           // the only evidence the tool message exists.
@@ -3260,9 +3270,11 @@ export class MessageModel {
   };
 
   updateTranslate = async (id: string, translate: Partial<ChatTranslate>) => {
-    const result = await this.db.query.messageTranslates.findFirst({
-      where: and(eq(messageTranslates.id, id), this.translatesOwnership()),
-    });
+    const [result] = await this.db
+      .select()
+      .from(messageTranslates)
+      .where(and(eq(messageTranslates.id, id), this.translatesOwnership()))
+      .limit(1);
 
     // If the message does not exist in the translate table, insert it
     if (!result) {
@@ -3286,9 +3298,11 @@ export class MessageModel {
     // Older clients sent an empty payload when starting TTS, so keep this backward-compatible.
     if ([contentMd5, file, voice].every((value) => value === undefined)) return;
 
-    const result = await this.db.query.messageTTS.findFirst({
-      where: and(eq(messageTTS.id, id), this.ttsOwnership()),
-    });
+    const [result] = await this.db
+      .select()
+      .from(messageTTS)
+      .where(and(eq(messageTTS.id, id), this.ttsOwnership()))
+      .limit(1);
 
     // If the message does not exist in the TTS table, insert it
     if (!result) {

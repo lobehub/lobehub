@@ -1,7 +1,19 @@
-import { and, eq, exists, isNull, or, type SQL, type SQLWrapper } from 'drizzle-orm';
+import { and, eq, exists, isNull, or, type SQL, sql, type SQLWrapper } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
-import { messages, sessions, topics } from '../schemas';
+import {
+  messageChunks,
+  messageGroups,
+  messagePlugins,
+  messageQueries,
+  messageQueryChunks,
+  messages,
+  messagesFiles,
+  messageTranslates,
+  messageTTS,
+  sessions,
+  topics,
+} from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from './workspace';
 
@@ -124,3 +136,90 @@ export const buildMessageChildScopeWhere = (
       .from(messages)
       .where(and(eq(messages.id, messageIdColumn), buildMessageScopeWhere(db, ctx))),
   ) as SQL;
+
+/**
+ * Re-materialize stale scope snapshots BEFORE deleting a snapshot FK target
+ * (a workspace, or a user).
+ *
+ * Because transfers leave `messages` (and message child tables /
+ * `message_groups`) with their creation-time `user_id` / `workspace_id`, those
+ * columns can keep pointing at an owner the rows no longer belong to — and
+ * they carry `ON DELETE cascade` FKs, so deleting that old owner would
+ * silently destroy history that was transferred away.
+ *
+ * This scrub restores the pre-derivation invariant for exactly the rows a
+ * transfer used to rewrite: rows whose snapshot `workspace_id` disagrees with
+ * their anchor's current `workspace_id` (the workspace axis only ever changes
+ * via a transfer, so this is a precise stale marker; author snapshots inside
+ * an untouched scope are intentionally left alone to preserve the existing
+ * "deleting a user removes what they authored" cascade semantics).
+ *
+ * Owner deletion is rare and already heavyweight, so paying the targeted
+ * UPDATEs here — instead of on every transfer — is the whole point of the
+ * derived-scope design. Call it inside the same transaction as the owner
+ * DELETE.
+ */
+export const resnapshotTransferredMessagesBeforeOwnerDelete = async (
+  // `Pick` so both the base database and a transaction executor are accepted
+  db: Pick<LobeChatDatabase, 'execute'>,
+  owner: { userId: string } | { workspaceId: string },
+): Promise<void> => {
+  const ownedBy = (table: { userId: AnyPgColumn; workspaceId: AnyPgColumn }) =>
+    'userId' in owner ? eq(table.userId, owner.userId) : eq(table.workspaceId, owner.workspaceId);
+
+  // 1. Messages anchored to a topic follow the topic's current scope.
+  await db.execute(sql`
+    UPDATE ${messages} SET user_id = ${topics.userId}, workspace_id = ${topics.workspaceId}
+    FROM ${topics}
+    WHERE ${and(
+      eq(messages.topicId, topics.id),
+      ownedBy(messages),
+      sql`${messages.workspaceId} IS DISTINCT FROM ${topics.workspaceId}`,
+    )}
+  `);
+
+  // 2. Messages without a topic follow their session's current scope.
+  await db.execute(sql`
+    UPDATE ${messages} SET user_id = ${sessions.userId}, workspace_id = ${sessions.workspaceId}
+    FROM ${sessions}
+    WHERE ${and(
+      isNull(messages.topicId),
+      eq(messages.sessionId, sessions.id),
+      ownedBy(messages),
+      sql`${messages.workspaceId} IS DISTINCT FROM ${sessions.workspaceId}`,
+    )}
+  `);
+
+  // 3. message_groups are topic-anchored.
+  await db.execute(sql`
+    UPDATE ${messageGroups} SET user_id = ${topics.userId}, workspace_id = ${topics.workspaceId}
+    FROM ${topics}
+    WHERE ${and(
+      eq(messageGroups.topicId, topics.id),
+      ownedBy(messageGroups),
+      sql`${messageGroups.workspaceId} IS DISTINCT FROM ${topics.workspaceId}`,
+    )}
+  `);
+
+  // 4. Message child tables inherit the (now re-snapshotted) parent message.
+  const childAnchors = [
+    [messagePlugins, messagePlugins.id],
+    [messageTranslates, messageTranslates.id],
+    [messageTTS, messageTTS.id],
+    [messagesFiles, messagesFiles.messageId],
+    [messageQueries, messageQueries.messageId],
+    [messageQueryChunks, messageQueryChunks.messageId],
+    [messageChunks, messageChunks.messageId],
+  ] as const;
+  for (const [child, messageIdColumn] of childAnchors) {
+    await db.execute(sql`
+      UPDATE ${child} SET user_id = ${messages.userId}, workspace_id = ${messages.workspaceId}
+      FROM ${messages}
+      WHERE ${and(
+        eq(messageIdColumn, messages.id),
+        ownedBy(child),
+        sql`${child.workspaceId} IS DISTINCT FROM ${messages.workspaceId}`,
+      )}
+    `);
+  }
+};

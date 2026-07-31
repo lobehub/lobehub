@@ -17,6 +17,7 @@ import { today } from '@/utils/time';
 import type { NewUser, UserItem, UserSettingsItem } from '../schemas';
 import { messages, nextauthAccounts, topics, users, userSettings } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { resnapshotTransferredMessagesBeforeOwnerDelete } from '../utils/messageScope';
 
 type DecryptUserKeyVaults = (
   encryptKeyVaultsStr: string | null,
@@ -343,7 +344,13 @@ export class UserModel {
   };
 
   static deleteUser = async (db: LobeChatDatabase, id: string) => {
-    return db.delete(users).where(eq(users.id, id));
+    return db.transaction(async (tx) => {
+      // Messages transferred out of this user's scope still carry the user in
+      // their snapshot user_id (cascade FK) — re-snapshot them from their
+      // anchor first, or the delete below would destroy transferred history.
+      await resnapshotTransferredMessagesBeforeOwnerDelete(tx, { userId: id });
+      return tx.delete(users).where(eq(users.id, id));
+    });
   };
 
   static findById = async (db: LobeChatDatabase, id: string) => {

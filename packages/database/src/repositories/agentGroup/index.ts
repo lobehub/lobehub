@@ -29,7 +29,7 @@ import {
 import type { LobeChatDatabase } from '../../type';
 import { idGenerator } from '../../utils/idGenerator';
 import { normalizeInboxAgentMeta } from '../../utils/inboxAgent';
-import { buildMessageScopeWhere } from '../../utils/messageScope';
+import { buildMessageChildScopeWhere, buildMessageScopeWhere } from '../../utils/messageScope';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
 interface CopyAgentGroupToWorkspaceOptions {
@@ -113,8 +113,14 @@ export class AgentGroupRepository {
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, threads);
   private messageOwnership = () =>
     buildMessageScopeWhere(this.db, { userId: this.userId, workspaceId: this.workspaceId });
+  // Child snapshots drift after agent transfer — derive from the parent
+  // message instead of trusting the row's own user_id/workspace_id.
   private messagePluginOwnership = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messagePlugins);
+    buildMessageChildScopeWhere(
+      this.db,
+      { userId: this.userId, workspaceId: this.workspaceId },
+      messagePlugins.id,
+    );
 
   private buildCopiedAgent = (
     source: AgentItem | undefined,
@@ -266,9 +272,12 @@ export class AgentGroupRepository {
     if (sourceMessages.length === 0) return;
 
     const sourceMessageIds = sourceMessages.map((message) => message.id);
-    const sourcePlugins = await executor.query.messagePlugins.findMany({
-      where: and(this.messagePluginOwnership(), inArray(messagePlugins.id, sourceMessageIds)),
-    });
+    // Plain select instead of RQB findMany: RQB aliases the table, which
+    // breaks the correlated EXISTS inside messagePluginOwnership().
+    const sourcePlugins = await executor
+      .select()
+      .from(messagePlugins)
+      .where(and(this.messagePluginOwnership(), inArray(messagePlugins.id, sourceMessageIds)));
 
     const messageRows = sourceMessages.map((message) => {
       const newMessageId = messageIdMap.get(message.id)!;

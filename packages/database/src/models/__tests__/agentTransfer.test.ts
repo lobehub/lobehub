@@ -30,6 +30,7 @@ import {
   topicComments,
   topics,
   users,
+  workspaceMembers,
   workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
@@ -41,6 +42,8 @@ import {
   TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS,
   TopicCommentModel,
 } from '../topicComment';
+import { UserModel } from '../user';
+import { WorkspaceModel } from '../workspace';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 const isServerDB = process.env.TEST_SERVER_DB === '1';
@@ -879,6 +882,97 @@ describe('AgentModel.transferAgent', () => {
     await expect(model.transferAgent('nonexistent', wsId1, userId)).rejects.toThrow(
       'Agent not found',
     );
+  });
+});
+
+describe('owner deletion after transfer (snapshot re-materialization)', () => {
+  it('deleting the source workspace must not cascade away transferred messages', async () => {
+    const wsModel = new AgentModel(serverDB, userId, wsId1);
+    const agent = await wsModel.create({ title: 'WS Agent' });
+
+    await serverDB
+      .insert(topics)
+      .values({ id: 'del-ws-topic', agentId: agent.id, userId, workspaceId: wsId1 });
+    await serverDB.insert(messages).values([
+      {
+        agentId: agent.id,
+        id: 'del-ws-msg',
+        role: 'tool',
+        topicId: 'del-ws-topic',
+        userId,
+        workspaceId: wsId1,
+      },
+      // control: stays anchored in ws1 and must die with the workspace
+      { id: 'del-ws-stay', role: 'user', userId, workspaceId: wsId1 },
+    ]);
+    await serverDB.insert(messagePlugins).values({
+      id: 'del-ws-msg',
+      identifier: 'test-plugin',
+      toolCallId: 'call-del',
+      userId,
+      workspaceId: wsId1,
+    });
+
+    await wsModel.transferAgent(agent.id, null, userId);
+    await new WorkspaceModel(serverDB, userId).delete(wsId1);
+
+    // Transferred message + child row survive, re-snapshotted to the anchor's
+    // current (personal) scope…
+    const [msg] = await serverDB.select().from(messages).where(eq(messages.id, 'del-ws-msg'));
+    expect(msg).toMatchObject({ userId, workspaceId: null });
+    const [plugin] = await serverDB
+      .select()
+      .from(messagePlugins)
+      .where(eq(messagePlugins.id, 'del-ws-msg'));
+    expect(plugin).toMatchObject({ userId, workspaceId: null });
+
+    // …and stay readable through scope derivation.
+    const personalMessages = new MessageModel(serverDB, userId);
+    expect(await personalMessages.query({ topicId: 'del-ws-topic' })).toHaveLength(1);
+
+    // The orphan row that still belonged to the workspace is gone.
+    const stay = await serverDB.select().from(messages).where(eq(messages.id, 'del-ws-stay'));
+    expect(stay).toHaveLength(0);
+  });
+
+  it('deleting the old author must not cascade away messages transferred to another scope', async () => {
+    await serverDB
+      .insert(workspaceMembers)
+      .values({ role: 'member', userId: targetUserId, workspaceId: wsId1 });
+
+    const wsModel = new AgentModel(serverDB, userId, wsId1);
+    const agent = await wsModel.create({ title: 'WS Agent' });
+
+    await serverDB
+      .insert(topics)
+      .values({ id: 'del-user-topic', agentId: agent.id, userId, workspaceId: wsId1 });
+    await serverDB.insert(messages).values([
+      // authored by the teammate inside the workspace
+      {
+        agentId: agent.id,
+        id: 'del-user-msg',
+        role: 'user',
+        topicId: 'del-user-topic',
+        userId: targetUserId,
+        workspaceId: wsId1,
+      },
+      // control: the teammate's own personal message still cascades away
+      { id: 'del-user-personal', role: 'user', userId: targetUserId },
+    ]);
+
+    // Move the agent (and its topic) into the OTHER user's personal scope,
+    // then delete the teammate who authored part of the history.
+    await wsModel.transferAgent(agent.id, null, userId);
+    await UserModel.deleteUser(serverDB, targetUserId);
+
+    const [msg] = await serverDB.select().from(messages).where(eq(messages.id, 'del-user-msg'));
+    expect(msg).toMatchObject({ userId, workspaceId: null });
+
+    const personalMessages = new MessageModel(serverDB, userId);
+    expect(await personalMessages.query({ topicId: 'del-user-topic' })).toHaveLength(1);
+
+    const gone = await serverDB.select().from(messages).where(eq(messages.id, 'del-user-personal'));
+    expect(gone).toHaveLength(0);
   });
 });
 
