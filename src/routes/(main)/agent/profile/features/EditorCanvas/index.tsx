@@ -39,13 +39,6 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorBgContainer};
   `,
-  header: css`
-    max-width: 820px;
-  `,
-  modeSwitch: css`
-    padding-inline-start: 4px;
-    border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
   root: css`
     padding-block-end: 16px;
   `,
@@ -434,7 +427,7 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
 
   return (
     <Flexbox className={styles.root} gap={16}>
-      <Flexbox className={styles.header} gap={4}>
+      <Flexbox gap={4}>
         <Flexbox horizontal align={'center'} distribution={'space-between'} gap={8}>
           <Flexbox horizontal align={'center'} gap={6}>
             <div className={styles.title}>{t('settingAgent.prompt.title')}</div>
@@ -454,7 +447,6 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
             )}
             <Flexbox
               horizontal
-              className={styles.modeSwitch}
               gap={2}
               // The profile content wrapper focuses the prompt editor on any
               // bubbled click, and Lexical's focus() moves the caret to the

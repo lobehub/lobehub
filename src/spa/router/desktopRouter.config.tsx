@@ -31,7 +31,7 @@ import {
   agentChannelRouteMeta,
   agentProfileRouteMeta,
   agentRouteMeta,
-  agentStatsRouteMeta,
+  agentStatisticsRouteMeta,
   topicsRouteMeta,
 } from '@/routes/(main)/agent/features/routeMeta';
 import { groupProfileRouteMeta, groupRouteMeta } from '@/routes/(main)/group/features/routeMeta';
@@ -150,10 +150,15 @@ export const sharedMainAreaChildren: RouteObject[] = [
           },
           {
             element: dynamicElement(
-              () => import('@/routes/(main)/agent/stats'),
-              'Desktop > Chat > Stats',
+              () => import('@/routes/(main)/agent/statistics'),
+              'Desktop > Chat > Statistics',
             ),
-            handle: { meta: agentStatsRouteMeta },
+            handle: { meta: agentStatisticsRouteMeta },
+            path: 'statistics',
+          },
+          // Legacy `/agent/:aid/stats` URLs — kept for deep-links.
+          {
+            element: redirectElement('../statistics'),
             path: 'stats',
           },
           {

@@ -73,11 +73,11 @@ import {
   agentChannelRouteMeta,
   agentProfileRouteMeta,
   agentRouteMeta,
-  agentStatsRouteMeta,
+  agentStatisticsRouteMeta,
   topicsRouteMeta,
 } from '@/routes/(main)/agent/features/routeMeta';
 import AgentProfilePage from '@/routes/(main)/agent/profile';
-import AgentStatsPage from '@/routes/(main)/agent/stats';
+import AgentStatisticsPage from '@/routes/(main)/agent/statistics';
 import AgentTaskDetailRoute from '@/routes/(main)/agent/task/[taskId]';
 import AgentScopedTasksRoute from '@/routes/(main)/agent/tasks';
 import AgentTopicsPage from '@/routes/(main)/agent/topics';
@@ -222,10 +222,12 @@ export const sharedMainAreaChildren: RouteObject[] = [
             path: 'topics',
           },
           {
-            element: <AgentStatsPage />,
-            handle: { meta: agentStatsRouteMeta },
-            path: 'stats',
+            element: <AgentStatisticsPage />,
+            handle: { meta: agentStatisticsRouteMeta },
+            path: 'statistics',
           },
+          // Legacy `/agent/:aid/stats` URLs — kept for deep-links.
+          { element: redirectElement('../statistics'), path: 'stats' },
           {
             element: <AgentScopedTasksRoute />,
             handle: { meta: tasksRouteMeta },

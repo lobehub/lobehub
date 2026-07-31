@@ -2226,6 +2226,7 @@
   "workspace.general.transferAgents.modal.failed": "移动助理失败",
   "workspace.general.transferAgents.modal.goToTarget": "前往 {{target}}",
   "workspace.general.transferAgents.modal.loadFailed": "加载助理失败",
+  "workspace.general.transferAgents.modal.moveAgent": "移动助理",
   "workspace.general.transferAgents.modal.noAgents": "此工作区中没有助理",
   "workspace.general.transferAgents.modal.selectAgents": "选择要移动到 {{target}} 的助理。",
   "workspace.general.transferAgents.modal.selectPlaceholder": "选择工作区或个人账户...",

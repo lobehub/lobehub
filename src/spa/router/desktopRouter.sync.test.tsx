@@ -105,7 +105,7 @@ describe('desktopRouter config sync', () => {
     '/agent/agent-1/profile',
     '/agent/agent-1/channel',
     '/agent/agent-1/channel/slack',
-    '/agent/agent-1/stats',
+    '/agent/agent-1/statistics',
     '/group/group-1/profile',
   ])('%s declares route meta so the tab title is not bare branding', (pathname) => {
     const matches = matchRoutes(desktopRoutes, pathname);
@@ -116,6 +116,14 @@ describe('desktopRouter config sync', () => {
       .map((match) => (match.route.handle as { meta?: unknown } | undefined)?.meta)
       .findLast(Boolean);
     expect(meta, `${pathname} must declare handle.meta`).toBeDefined();
+  });
+
+  // `/agent/:aid/stats` was renamed to `statistics`; bookmarks, shared links and
+  // restored Electron tabs still carry the old segment and must not 404.
+  it('keeps the legacy agent stats path matching so deep-links still resolve', () => {
+    const matches = matchRoutes(desktopRoutes, '/agent/agent-1/stats');
+
+    expect(matches?.at(-1)?.route.path).toBe('stats');
   });
 
   it('personal memory settings route is not shadowed by workspace memory route', () => {

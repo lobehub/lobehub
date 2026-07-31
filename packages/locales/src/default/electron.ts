@@ -33,7 +33,7 @@ export default {
   'navigation.recentView': 'Recent pages',
   'navigation.resources': 'Resources',
   'navigation.settings': 'Settings',
-  'navigation.stats': 'Usage & Cost',
+  'navigation.stats': 'Statistics',
   'navigation.task': 'Task',
   'navigation.tasks': 'Tasks',
   'navigation.topics': 'Topics',

@@ -70,8 +70,8 @@
   "usageStats.chart.title": "Agent 用量趋势",
   "usageStats.chart.tokens": "Token",
   "usageStats.dimension": "维度",
-  "usageStats.entry": "用量与成本",
+  "usageStats.entry": "统计",
   "usageStats.range": "时间范围",
   "usageStats.rangeSuffix": "近 {{count}} 天",
-  "usageStats.title": "用量与成本"
+  "usageStats.title": "统计"
 }

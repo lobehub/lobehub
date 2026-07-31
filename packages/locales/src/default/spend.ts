@@ -70,8 +70,8 @@ export default {
   'usageStats.chart.title': 'Usage over time',
   'usageStats.chart.tokens': 'Token',
   'usageStats.dimension': 'Dimension',
-  'usageStats.entry': 'Usage & Cost',
+  'usageStats.entry': 'Statistics',
   'usageStats.range': 'Time range',
   'usageStats.rangeSuffix': 'Last {{count}}d',
-  'usageStats.title': 'Usage & Cost',
+  'usageStats.title': 'Statistics',
 };

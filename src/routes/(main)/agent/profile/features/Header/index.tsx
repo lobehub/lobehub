@@ -242,7 +242,7 @@ const Header = memo(() => {
         key: 'usage-stats',
         label: t('usageStats.entry', { ns: 'spend' }),
         onClick: () => {
-          if (activeAgentId) navigate(`/agent/${activeAgentId}/stats`);
+          if (activeAgentId) navigate(`/agent/${activeAgentId}/statistics`);
         },
       },
       memberPermissionMenuItem,
