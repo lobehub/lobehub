@@ -1,7 +1,5 @@
-import { isDesktop } from '@lobechat/const';
 import type { SFSymbol } from '@lobechat/electron-client-ipc';
-import { HETEROGENEOUS_AGENT_CLIENT_CONFIGS } from '@lobechat/heterogeneous-agents/client';
-import { Icon } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { GroupBotSquareIcon } from '@lobehub/ui/icons';
 import { App } from 'antd';
 import type { ItemType } from 'antd/es/menu/interface';
@@ -21,8 +19,8 @@ import useSWRMutation from 'swr/mutation';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useGroupTemplates } from '@/components/ChatGroupWizard/templates';
 import { DEFAULT_CHAT_GROUP_CHAT_CONFIG } from '@/const/settings';
+import { openConnectAgentModal } from '@/features/ConnectAgent';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useCreateHeteroAgent } from '@/hooks/useCreateHeteroAgent';
 import { usePermission } from '@/hooks/usePermission';
 import { useOptionalAgentModal } from '@/routes/(main)/home/_layout/Body/Agent/ModalProvider';
 import type { CreateAgentParams } from '@/services/agent';
@@ -32,8 +30,6 @@ import { useAgentStore } from '@/store/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useHomeStore } from '@/store/home';
 import { usePageStore } from '@/store/page';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 
 type MenuItem = NonNullable<ItemType> & { sfSymbol?: SFSymbol };
 
@@ -70,7 +66,6 @@ export const useCreateMenuItems = () => {
   ]);
   const [createGroup, loadGroups] = useAgentGroupStore((s) => [s.createGroup, s.loadGroups]);
   const createNewPage = usePageStore((s) => s.createNewPage);
-  const createHeterogeneousAgent = useCreateHeteroAgent();
 
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   const [isCreatingSessionGroup, setIsCreatingSessionGroup] = useState(false);
@@ -237,7 +232,6 @@ export const useCreateMenuItems = () => {
   const agentModal = useOptionalAgentModal();
   const openCreateModal = agentModal?.openCreateModal;
   const openCreateGroupModal = agentModal?.openCreateGroupModal;
-  const enablePlatformAgent = useUserStore(labPreferSelectors.enablePlatformAgent);
 
   /**
    * Create agent menu item
@@ -308,47 +302,28 @@ export const useCreateMenuItems = () => {
   );
 
   /**
-   * Create heterogeneous agent menu items (Desktop only)
+   * Connect Agent menu item — the unified device-first wizard for external
+   * agents installed on a local or connected machine.
    */
-  const createHeterogeneousAgentMenuItems = useCallback(
-    (options?: CreateAgentOptions): ItemType[] => {
-      if (!isDesktop) return [];
-
-      return HETEROGENEOUS_AGENT_CLIENT_CONFIGS.map((definition) => {
-        const AgentIcon = definition.icon;
-
-        return {
-          icon: <AgentIcon size={'1em'} />,
-          disabled: !canCreate,
-          key: definition.menuKey,
-          label: t(definition.menuLabelKey),
-          onClick: async (info) => {
-            info.domEvent?.stopPropagation();
-            if (!canCreate) return;
-
-            await createHeterogeneousAgent(definition, options);
-          },
-        };
-      });
-    },
-    [canCreate, t, createHeterogeneousAgent],
-  );
-
-  /**
-   * Create platform agent menu item (openclaw / hermes — remote device agents)
-   * Opens the 3-step creation modal
-   */
-  const createPlatformAgentMenuItem = useCallback(
+  const createConnectAgentMenuItem = useCallback(
     (options?: CreateAgentOptions): MenuItem | null => {
-      if (!enablePlatformAgent) return null;
       return {
         icon: <Icon icon={MonitorSmartphone} />,
+        disabled: !canCreate,
         key: 'newPlatformAgent',
-        label: t('newPlatformAgent'),
+        label: (
+          <Flexbox gap={1}>
+            <Text>{t('newPlatformAgent')}</Text>
+            <Text fontSize={12} type={'secondary'}>
+              {t('newPlatformAgentDesc')}
+            </Text>
+          </Flexbox>
+        ),
         sfSymbol: 'laptopcomputer.and.iphone',
         onClick: (info) => {
           info.domEvent?.stopPropagation();
-          agentModal?.openCreatePlatformAgentModal(
+          if (!canCreate) return;
+          openConnectAgentModal(
             options?.groupId || options?.visibility
               ? { groupId: options?.groupId, visibility: options?.visibility }
               : undefined,
@@ -356,7 +331,7 @@ export const useCreateMenuItems = () => {
         },
       };
     },
-    [t, agentModal, enablePlatformAgent],
+    [t, canCreate],
   );
 
   /**
@@ -479,16 +454,12 @@ export const useCreateMenuItems = () => {
    * so users had no visible entry to `/community/agent`.
    */
   const createTopLevelMenuItems = useCallback((): ItemType[] => {
-    const heterogeneousItems = createHeterogeneousAgentMenuItems();
-    const platformItem = createPlatformAgentMenuItem();
+    const connectItem = createConnectAgentMenuItem();
 
     return [
       createAgentMenuItem(),
       createGroupChatMenuItem(),
-      ...(heterogeneousItems.length > 0
-        ? [{ type: 'divider' as const }, ...heterogeneousItems]
-        : []),
-      ...(platformItem ? [{ type: 'divider' as const }, platformItem] : []),
+      ...(connectItem ? [{ type: 'divider' as const }, connectItem] : []),
       { type: 'divider' as const },
       createAgentListMenuItem(),
       createMarketAgentMenuItem(),
@@ -496,10 +467,9 @@ export const useCreateMenuItems = () => {
   }, [
     createAgentListMenuItem,
     createAgentMenuItem,
+    createConnectAgentMenuItem,
     createGroupChatMenuItem,
-    createHeterogeneousAgentMenuItems,
     createMarketAgentMenuItem,
-    createPlatformAgentMenuItem,
   ]);
 
   return {
@@ -507,16 +477,14 @@ export const useCreateMenuItems = () => {
     createAgent,
     createAgentListMenuItem,
     createAgentMenuItem,
+    createConnectAgentMenuItem,
     createEmptyGroup,
     createGroupChatMenuItem,
     createGroupFromTemplate,
-    createHeterogeneousAgent,
-    createHeterogeneousAgentMenuItems,
     createGroupWithMembers,
     createMarketAgentMenuItem,
     createPage,
     createPageMenuItem,
-    createPlatformAgentMenuItem,
     createSessionGroupMenuItem,
     createTopLevelMenuItems,
     openCreateModal,
