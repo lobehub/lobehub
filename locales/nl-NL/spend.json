@@ -70,8 +70,8 @@
   "usageStats.chart.title": "Wanneer deze agent uitgaf",
   "usageStats.chart.tokens": "Token",
   "usageStats.dimension": "Dimensie",
-  "usageStats.entry": "Gebruik & Kosten",
+  "usageStats.entry": "Statistieken",
   "usageStats.range": "Tijdsbereik",
   "usageStats.rangeSuffix": "Laatste {{count}}d",
-  "usageStats.title": "Gebruik & Kosten"
+  "usageStats.title": "Statistieken"
 }

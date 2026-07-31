@@ -70,8 +70,8 @@
   "usageStats.chart.title": "Когда этот агент потратил",
   "usageStats.chart.tokens": "Токен",
   "usageStats.dimension": "Размерность",
-  "usageStats.entry": "Использование и стоимость",
+  "usageStats.entry": "Статистика",
   "usageStats.range": "Диапазон времени",
   "usageStats.rangeSuffix": "Последние {{count}} дн.",
-  "usageStats.title": "Использование и стоимость"
+  "usageStats.title": "Статистика"
 }

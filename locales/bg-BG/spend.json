@@ -70,8 +70,8 @@
   "usageStats.chart.title": "Кога този агент е изразходвал",
   "usageStats.chart.tokens": "Токен",
   "usageStats.dimension": "Измерение",
-  "usageStats.entry": "Използване и разход",
+  "usageStats.entry": "Статистика",
   "usageStats.range": "Времеви обхват",
   "usageStats.rangeSuffix": "Последни {{count}} дни",
-  "usageStats.title": "Използване и разход"
+  "usageStats.title": "Статистика"
 }

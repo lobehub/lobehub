@@ -70,8 +70,8 @@
   "usageStats.chart.title": "Bu ajan harcama yaptığında",
   "usageStats.chart.tokens": "Jeton",
   "usageStats.dimension": "Boyut",
-  "usageStats.entry": "Kullanım ve Maliyet",
+  "usageStats.entry": "İstatistikler",
   "usageStats.range": "Zaman aralığı",
   "usageStats.rangeSuffix": "Son {{count}}g",
-  "usageStats.title": "Kullanım ve Maliyet"
+  "usageStats.title": "İstatistikler"
 }

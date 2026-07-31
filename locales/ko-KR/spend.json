@@ -70,8 +70,8 @@
   "usageStats.chart.title": "이 에이전트가 소비한 시간",
   "usageStats.chart.tokens": "토큰",
   "usageStats.dimension": "차원",
-  "usageStats.entry": "사용량 및 비용",
+  "usageStats.entry": "통계",
   "usageStats.range": "시간 범위",
   "usageStats.rangeSuffix": "최근 {{count}}일",
-  "usageStats.title": "사용량 및 비용"
+  "usageStats.title": "통계"
 }

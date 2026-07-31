@@ -70,8 +70,8 @@
   "usageStats.chart.title": "Quand cet agent a dépensé",
   "usageStats.chart.tokens": "Jeton",
   "usageStats.dimension": "Dimension",
-  "usageStats.entry": "Utilisation et coût",
+  "usageStats.entry": "Statistiques",
   "usageStats.range": "Plage de temps",
   "usageStats.rangeSuffix": "Derniers {{count}}j",
-  "usageStats.title": "Utilisation et coût"
+  "usageStats.title": "Statistiques"
 }

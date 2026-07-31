@@ -70,8 +70,8 @@
   "usageStats.chart.title": "このエージェントが費用を使った時",
   "usageStats.chart.tokens": "トークン",
   "usageStats.dimension": "次元",
-  "usageStats.entry": "使用状況とコスト",
+  "usageStats.entry": "統計",
   "usageStats.range": "期間",
   "usageStats.rangeSuffix": "過去 {{count}}日間",
-  "usageStats.title": "使用状況とコスト"
+  "usageStats.title": "統計"
 }

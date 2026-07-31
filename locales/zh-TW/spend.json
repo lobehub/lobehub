@@ -70,8 +70,8 @@
   "usageStats.chart.title": "此代理的支出時間",
   "usageStats.chart.tokens": "代幣",
   "usageStats.dimension": "維度",
-  "usageStats.entry": "使用與成本",
+  "usageStats.entry": "統計",
   "usageStats.range": "時間範圍",
   "usageStats.rangeSuffix": "過去 {{count}} 天",
-  "usageStats.title": "使用與成本"
+  "usageStats.title": "統計"
 }

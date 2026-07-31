@@ -70,8 +70,8 @@
   "usageStats.chart.title": "وقت إنفاق هذا الوكيل",
   "usageStats.chart.tokens": "الرمز",
   "usageStats.dimension": "البُعد",
-  "usageStats.entry": "الاستخدام والتكلفة",
+  "usageStats.entry": "الإحصائيات",
   "usageStats.range": "النطاق الزمني",
   "usageStats.rangeSuffix": "آخر {{count}} يوم",
-  "usageStats.title": "الاستخدام والتكلفة"
+  "usageStats.title": "الإحصائيات"
 }

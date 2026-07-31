@@ -70,8 +70,8 @@
   "usageStats.chart.title": "Cuándo este agente gastó",
   "usageStats.chart.tokens": "Token",
   "usageStats.dimension": "Dimensión",
-  "usageStats.entry": "Uso y Costo",
+  "usageStats.entry": "Estadísticas",
   "usageStats.range": "Rango de tiempo",
   "usageStats.rangeSuffix": "Últimos {{count}}d",
-  "usageStats.title": "Uso y Costo"
+  "usageStats.title": "Estadísticas"
 }
