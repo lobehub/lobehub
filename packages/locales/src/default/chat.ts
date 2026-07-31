@@ -812,7 +812,8 @@ export default {
   'newClaudeCodeAgent': 'Add Claude Code',
   'newCodexAgent': 'Add Codex',
   'newOpenCodeAgent': 'Add OpenCode',
-  'newPlatformAgent': 'Connect Agent',
+  'newPlatformAgent': 'Connect Local Agent',
+  'newPlatformAgentDesc': 'Connect to Claude Code, Codex, and other local agents',
   'newGroupChat': 'Create Group',
   'agent.publishToWorkspace': 'Publish to Workspace',
   'agent.publishToWorkspaceErrorFixedPrivateDevice':
@@ -856,10 +857,14 @@ export default {
   'connectAgent.create.online': 'Online',
   'connectAgent.create.offline': 'Offline',
   'connectAgent.create.noDevices': 'No devices connected',
+  'connectAgent.create.noDevicesDesc':
+    'Connect a computer to discover and run the agents installed on it.',
   'connectAgent.create.noDevicesDesktopHint':
     'Install the Desktop App — it connects automatically after login',
   'connectAgent.create.downloadDesktop': 'Download Desktop App',
-  'connectAgent.create.noDevicesCliHint': 'Or connect any machine via CLI, then click Refresh:',
+  'connectAgent.create.download': 'Download',
+  'connectAgent.create.connectCli': 'Connect with CLI',
+  'connectAgent.create.noDevicesCliHint': 'Run this command on the computer you want to connect',
   'connectAgent.create.noDevicesCmd': 'lh connect',
   'connectAgent.create.refresh': 'Refresh',
   'connectAgent.create.scanning': 'Scanning agents on this device…',

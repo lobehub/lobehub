@@ -8,12 +8,20 @@ import type {
 } from '@lobechat/heterogeneous-agents';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import type { DeviceListItem } from '@lobechat/types';
-import { Alert, Flexbox, Icon, Input, Text, TextArea, Tooltip } from '@lobehub/ui';
+import { Alert, CopyButton, Flexbox, Icon, Input, Text, TextArea, Tooltip } from '@lobehub/ui';
 import { Button, createModal, type ModalInstance, useModalContext } from '@lobehub/ui/base-ui';
 import { Checkbox, Typography } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { t as i18nT } from 'i18next';
-import { ArrowLeft, CheckCircle2, Download, LaptopIcon, RefreshCw, ScanSearch } from 'lucide-react';
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Download,
+  LaptopIcon,
+  RefreshCw,
+  ScanSearch,
+  TerminalIcon,
+} from 'lucide-react';
 import { memo, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -25,8 +33,6 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { deviceService } from '@/services/device';
 import { useAgentStore } from '@/store/agent';
 import { useHomeStore } from '@/store/home';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 
 import { CONNECTABLE_PROVIDERS, type ConnectableProvider } from './providers';
 import { type ScanTarget, useAgentScan } from './useAgentScan';
@@ -61,6 +67,92 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: 50%;
 
     background: ${cssVar.colorTextQuaternary};
+  `,
+  emptyCard: css`
+    overflow: hidden;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+    background: ${cssVar.colorBgContainer};
+  `,
+  emptyHero: css`
+    padding-block: 24px;
+    padding-inline: 24px;
+    text-align: center;
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  emptyOption: css`
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+
+    min-width: 0;
+    min-height: 152px;
+    padding: 18px;
+
+    background: ${cssVar.colorBgContainer};
+  `,
+  emptyOptionAction: css`
+    display: flex;
+    align-items: center;
+
+    width: 100%;
+    min-height: 28px;
+    margin-block-start: auto;
+
+    > a {
+      width: 100%;
+    }
+  `,
+  emptyOptionCode: css`
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: space-between;
+
+    box-sizing: border-box;
+    width: 100%;
+    height: 32px;
+    padding-inline: 10px 4px;
+    border-radius: ${cssVar.borderRadius};
+
+    background: ${cssVar.colorFillTertiary};
+  `,
+  emptyOptions: css`
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+
+    background: ${cssVar.colorBorderSecondary};
+  `,
+  emptyOptionIcon: css`
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+
+    width: 40px;
+    height: 40px;
+    border-radius: ${cssVar.borderRadius};
+
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorFillTertiary};
+  `,
+  heroIcon: css`
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 52px;
+    height: 52px;
+    border-radius: ${cssVar.borderRadiusLG};
+
+    color: ${cssVar.colorText};
+
+    background: ${cssVar.colorFillSecondary};
   `,
   groupList: css`
     overflow: hidden;
@@ -262,7 +354,6 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
     const navigate = useWorkspaceAwareNavigate();
     const storeCreateAgent = useAgentStore((s) => s.createAgent);
     const refreshAgentList = useHomeStore((s) => s.refreshAgentList);
-    const enablePlatformAgent = useUserStore(labPreferSelectors.enablePlatformAgent);
 
     // Workspace agents must bind workspace devices: a workspace agent on a
     // personal device is unreachable to other members and rejected server-side.
@@ -309,15 +400,14 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
       target?.kind === 'device' ? deviceLabel(target.device) : t('connectAgent.create.localDevice');
 
     // Providers listed for the current target: local targets only run CLI
-    // subprocess agents; platform agents stay behind the labs flag.
+    // subprocess agents. Device targets expose every remotely scannable agent.
     const visibleProviders = useMemo(
       () =>
         CONNECTABLE_PROVIDERS.filter((provider) => {
           if (target?.kind === 'local' && provider.kind === 'platform') return false;
-          if (provider.kind === 'platform' && !enablePlatformAgent) return false;
           return true;
         }),
-      [enablePlatformAgent, target?.kind],
+      [target?.kind],
     );
 
     const inventory = useMemo(() => {
@@ -548,44 +638,71 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
         <Flexbox gap={16} paddingBlock={'16px 8px'}>
           <SectionLabel>{t('connectAgent.create.stepDevice')}</SectionLabel>
           {showEmpty ? (
-            <Flexbox gap={12}>
-              <Alert
-                showIcon
-                message={t('connectAgent.create.noDevices')}
-                type={'info'}
-                description={
-                  <Flexbox gap={12}>
-                    <Flexbox gap={6}>
-                      <span>{t('connectAgent.create.noDevicesDesktopHint')}</span>
-                      <a href={DOWNLOAD_URL.default} rel={'noreferrer'} target={'_blank'}>
-                        <Button
-                          icon={<Icon icon={Download} size={13} />}
-                          size={'small'}
-                          type={'primary'}
-                        >
-                          {t('connectAgent.create.downloadDesktop')}
-                        </Button>
-                      </a>
-                    </Flexbox>
-                    <Flexbox gap={4}>
-                      <span>{t('connectAgent.create.noDevicesCliHint')}</span>
-                      <Typography.Text code copyable>
-                        {t('connectAgent.create.noDevicesCmd')}
-                      </Typography.Text>
-                    </Flexbox>
+            <div className={styles.emptyCard}>
+              <Flexbox align={'center'} className={styles.emptyHero} gap={10}>
+                <span className={styles.heroIcon}>
+                  <Icon icon={LaptopIcon} size={26} />
+                </span>
+                <Text fontSize={17} weight={600}>
+                  {t('connectAgent.create.noDevices')}
+                </Text>
+                <Text style={{ maxWidth: 400 }} type={'secondary'}>
+                  {t('connectAgent.create.noDevicesDesc')}
+                </Text>
+              </Flexbox>
+              <div className={styles.emptyOptions}>
+                <div className={styles.emptyOption}>
+                  <span className={styles.emptyOptionIcon}>
+                    <Icon icon={Download} size={20} />
+                  </span>
+                  <Flexbox gap={3}>
+                    <Text weight={500}>{t('connectAgent.create.downloadDesktop')}</Text>
+                    <Text fontSize={12} type={'secondary'}>
+                      {t('connectAgent.create.noDevicesDesktopHint')}
+                    </Text>
                   </Flexbox>
-                }
-              />
-              <Button
-                icon={<Icon icon={RefreshCw} size={13} />}
-                loading={isRefreshing}
-                size={'small'}
-                type={'text'}
-                onClick={() => void refetchDevices()}
-              >
-                {t('connectAgent.create.refresh')}
-              </Button>
-            </Flexbox>
+                  <div className={styles.emptyOptionAction}>
+                    <a href={DOWNLOAD_URL.default} rel={'noreferrer'} target={'_blank'}>
+                      <Button
+                        icon={<Icon icon={Download} size={14} />}
+                        style={{ width: '100%' }}
+                        type={'primary'}
+                      >
+                        {t('connectAgent.create.download')}
+                      </Button>
+                    </a>
+                  </div>
+                </div>
+                <div className={styles.emptyOption}>
+                  <span className={styles.emptyOptionIcon}>
+                    <Icon icon={TerminalIcon} size={20} />
+                  </span>
+                  <Flexbox gap={3}>
+                    <Text weight={500}>{t('connectAgent.create.connectCli')}</Text>
+                    <Text fontSize={12} type={'secondary'}>
+                      {t('connectAgent.create.noDevicesCliHint')}
+                    </Text>
+                  </Flexbox>
+                  <div className={styles.emptyOptionAction}>
+                    <div className={styles.emptyOptionCode}>
+                      <code>{t('connectAgent.create.noDevicesCmd')}</code>
+                      <CopyButton content={t('connectAgent.create.noDevicesCmd')} size={'small'} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <Flexbox horizontal justify={'flex-end'} padding={8}>
+                <Button
+                  icon={<Icon icon={RefreshCw} size={13} />}
+                  loading={isRefreshing}
+                  size={'small'}
+                  type={'text'}
+                  onClick={() => void refetchDevices()}
+                >
+                  {t('connectAgent.create.refresh')}
+                </Button>
+              </Flexbox>
+            </div>
           ) : (
             <Flexbox gap={16}>
               {isDesktop && (
@@ -654,7 +771,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
       const scanning = scanState.status === 'scanning';
 
       return (
-        <Flexbox gap={16} paddingBlock={'16px 8px'}>
+        <Flexbox gap={8} paddingBlock={'0 8px'}>
           {/* Rescan stays mounted (disabled while scanning) and the row reserves
               its height — no jump when the scan settles */}
           <Flexbox horizontal align={'center'} justify={'space-between'} style={{ minHeight: 28 }}>
@@ -885,6 +1002,7 @@ export const openConnectAgentModal = (options?: OpenConnectAgentModalOptions): M
     ),
     footer: null,
     maskClosable: true,
+    styles: { content: { paddingBlockStart: 0 } },
     title: i18nT('connectAgent.create.title', { ns: 'chat' }),
     width: 520,
   });
