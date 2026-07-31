@@ -181,11 +181,22 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
       if (!stored) return new Map();
       const entries: [string, CacheEntry][] = JSON.parse(stored);
       const now = Date.now();
-      return new Map(
-        entries
-          .filter(([, e]) => now - e.timestamp <= ttl && e.version === version)
-          .map(([key, e]) => [key, e.data] as [string, unknown]),
+      const valid = entries.filter(
+        ([key, entry]) =>
+          now - entry.timestamp <= ttl &&
+          entry.version === version &&
+          matchesPattern(key, localPatterns),
       );
+      if (valid.length !== entries.length) {
+        try {
+          if (valid.length === 0) localStorage.removeItem(getScopedCacheKey(getScope()));
+          else localStorage.setItem(getScopedCacheKey(getScope()), JSON.stringify(valid));
+        } catch (error) {
+          // Cleanup must not discard otherwise valid warm-start data.
+          onError(error as Error);
+        }
+      }
+      return new Map(valid.map(([key, entry]) => [key, entry.data] as [string, unknown]));
     } catch (error) {
       onError(error as Error);
       return new Map();
@@ -274,7 +285,22 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
       // so legacy/unversioned rows (which the age check used to bound) are dropped
       // and a version bump still evicts everyone. TTL governs the localStorage
       // tier only (see `loadLocal`).
-      const valid = migratedEntries.filter((e) => e.version === version);
+      const valid = migratedEntries.filter(
+        (entry) => entry.version === version && matchesPattern(entry.key, idbPatterns),
+      );
+      const obsolete = migratedEntries.filter(
+        (entry) => entry.version !== version || !matchesPattern(entry.key, idbPatterns),
+      );
+      if (obsolete.length > 0) {
+        void localDataCache
+          .applyBatch({
+            deleteKeys: obsolete.map((entry) => buildLocalDataKey(scope, entry.key)),
+            putEntries: [],
+          })
+          // Cleanup is best-effort; a retired row must not delay valid cache
+          // hydration or the application first paint.
+          .catch((error) => onError(error as Error));
+      }
       // Map may have changed scope while we awaited; only apply if still current.
       if (cacheMapInstance && getScope() === scope && hydrationEpoch === epoch) {
         cacheMapInstance.hydrate(valid.map((e) => [e.key, e.data]));
@@ -482,21 +508,19 @@ export const CACHE_TIERS = {
   idb: [
     'message:', // chat messages (conversation + legacy stores)
     'topic:', // topic lists / agent view / search
-    'agent:', // sidebar agent list + agent documents
+    'agent:available', // reusable agent picker data
+    'agent:config', // individual agent configuration
+    'agent:search', // agent search results
+    'agent:document', // agent document lists + editors
     'group:detail', // group detail (group list stays in localStorage)
     'task:', // task lists + detail
     'document:', // editor document content
     'page:', // page detail / list / meta
     'notebook:', // notebook documents
-    'brief:', // briefs
   ],
   /** Small, frequently-changing list shells → localStorage (sync first paint). */
   local: [
     'recent:list',
-    // Home's chat-mode recents. Matching is substring-based, so `recent:list`
-    // does not cover this sibling key — without its own entry the list is
-    // memory-only and every cold boot pays a skeleton for data we already had.
-    'recent:topicList',
     'fetchRecentTopics',
     'fetchRecentResources',
     'fetchRecentPages',

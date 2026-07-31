@@ -1,7 +1,16 @@
 import { unstable_serialize } from 'swr';
 import { describe, expect, it } from 'vitest';
 
-import { agentBuilderKeys, recentKeys, resourceKeys, taskKeys, workKeys } from './keys';
+import {
+  agentBuilderKeys,
+  agentKeys,
+  entityDataKeys,
+  homeKeys,
+  recentKeys,
+  resourceKeys,
+  taskKeys,
+  workKeys,
+} from './keys';
 import { CACHE_TIERS } from './localStorageProvider';
 
 describe('recentKeys', () => {
@@ -24,33 +33,6 @@ describe('recentKeys', () => {
     expect(recentKeys.allDrawer(true, 'user-1:workspace-1')).not.toEqual(
       recentKeys.allDrawer(true, 'user-1:workspace-2'),
     );
-  });
-
-  it('keys the Home topic-only list independently from mixed recents', () => {
-    expect(recentKeys.topicList(9, 'user-1:workspace-1', 'mine')).toEqual([
-      'recent:topicList',
-      9,
-      'user-1:workspace-1',
-      'mine',
-    ]);
-  });
-
-  it('keeps the mine and team views of the Home topic list isolated', () => {
-    expect(recentKeys.topicList(9, 'user-1:workspace-1', 'mine')).not.toEqual(
-      recentKeys.topicList(9, 'user-1:workspace-1', 'team'),
-    );
-  });
-
-  // Regression: `recent:topicList` had no CACHE_TIERS entry of its own, and the
-  // provider matches patterns as substrings — so `recent:list` never covered it.
-  // The Home recents list was memory-only and flashed a skeleton on every boot.
-  it('routes the Home topic-only recents key to a persisted cache tier', () => {
-    const serialized = unstable_serialize(recentKeys.topicList(9, 'user-1:workspace-1', 'mine'));
-    const persisted = [...CACHE_TIERS.idb, ...CACHE_TIERS.local].some((pattern) =>
-      serialized.includes(pattern),
-    );
-
-    expect(persisted).toBe(true);
   });
 });
 
@@ -126,5 +108,50 @@ describe('taskKeys', () => {
       serialized.includes(pattern),
     );
     expect(persisted).toBe(true);
+  });
+});
+
+describe('homeKeys', () => {
+  it('isolates daily briefs by user without changing the original request identity', () => {
+    expect(homeKeys.dailyBrief('user-1')).toEqual(['home:dailyBrief', 'user-1']);
+    expect(homeKeys.dailyBrief('user-1')).not.toEqual(homeKeys.dailyBrief('user-2'));
+  });
+});
+
+describe('entityDataKeys', () => {
+  it('isolates normalized Home requests by entity scope', () => {
+    expect(entityDataKeys.sidebar('user-1:workspace-1')).not.toEqual(
+      entityDataKeys.sidebar('user-1:workspace-2'),
+    );
+  });
+
+  it('keeps the mine and team views of the Home recent topics feed isolated', () => {
+    expect(entityDataKeys.recentTopics('user-1:workspace-1', 9, 'mine')).not.toEqual(
+      entityDataKeys.recentTopics('user-1:workspace-1', 9, 'team'),
+    );
+  });
+
+  it('retires the legacy full sidebar response from SWR persistence', () => {
+    const serialized = unstable_serialize(agentKeys.list(true));
+
+    expect(
+      [...CACHE_TIERS.idb, ...CACHE_TIERS.local].some((pattern) => serialized.includes(pattern)),
+    ).toBe(false);
+  });
+
+  it('keeps request markers outside every SWR persistence tier', () => {
+    const serializedKeys = [
+      entityDataKeys.sidebar('scope-1'),
+      entityDataKeys.recentTopics('scope-1', 9, 'mine'),
+      entityDataKeys.inboxTopics('scope-1'),
+      entityDataKeys.tasks('scope-1'),
+      entityDataKeys.briefs('scope-1'),
+    ].map(unstable_serialize);
+
+    for (const serialized of serializedKeys) {
+      expect(
+        [...CACHE_TIERS.idb, ...CACHE_TIERS.local].some((pattern) => serialized.includes(pattern)),
+      ).toBe(false);
+    }
   });
 });

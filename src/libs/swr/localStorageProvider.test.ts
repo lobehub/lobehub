@@ -1,11 +1,12 @@
 /**
  * @vitest-environment happy-dom
  */
+import { unstable_serialize } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { bootTiming } from '@/libs/bootTiming';
 
-import { taskTemplateKeys } from './keys';
+import { entityDataKeys, homeKeys, taskTemplateKeys } from './keys';
 import { buildLocalDataKey, localDataCache } from './localDataCache';
 import {
   CACHE_TIERS,
@@ -114,6 +115,37 @@ describe('createCacheProvider — tiering', () => {
     expect(await localDataCache.entriesByScope('s1')).toEqual([]);
   });
 
+  it('keeps normalized Home request markers out of every SWR persistence tier', async () => {
+    const scope = { value: 's1' };
+    const { provider } = buildProvider(scope, {
+      idbPatterns: [...CACHE_TIERS.idb],
+      localPatterns: [...CACHE_TIERS.local],
+    });
+    const map = provider();
+    const keys = [
+      unstable_serialize(entityDataKeys.sidebar('s1')),
+      unstable_serialize(entityDataKeys.recentTopics('s1', 9, 'mine')),
+      unstable_serialize(entityDataKeys.inboxTopics('s1')),
+      unstable_serialize(entityDataKeys.tasks('s1')),
+      unstable_serialize(entityDataKeys.briefs('s1')),
+      unstable_serialize(homeKeys.dailyBrief('u1')),
+    ];
+
+    for (const key of keys) map.set(key, { observedAt: 1 });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    const localRaw = localStorage.getItem(getScopedCacheKey('s1'));
+    const localKeys = localRaw
+      ? (JSON.parse(localRaw) as [string, unknown][]).map(([key]) => key)
+      : [];
+    const idbKeys = (await localDataCache.entriesByScope('s1')).map(({ key }) => key);
+
+    for (const key of keys) {
+      expect(localKeys).not.toContain(key);
+      expect(idbKeys).not.toContain(key);
+    }
+  });
+
   it('routes idb-tier keys to IndexedDB and reloads them on a fresh provider', async () => {
     const scope = { value: 's1' };
     const { provider } = buildProvider(scope);
@@ -215,6 +247,23 @@ describe('createCacheProvider — tiering', () => {
     expect(map.has('recents-v')).toBe(false);
   });
 
+  it('purges local rows whose domain is no longer configured for persistence', () => {
+    const key = getScopedCacheKey('s1');
+    localStorage.setItem(
+      key,
+      JSON.stringify([
+        ['home:dailyBrief', { data: { pairs: [] }, timestamp: Date.now(), version: '1.0.0' }],
+      ]),
+    );
+
+    const scope = { value: 's1' };
+    const { provider } = buildProvider(scope, { localPatterns: ['recents'] });
+    const map = provider();
+
+    expect(map.has('home:dailyBrief')).toBe(false);
+    expect(localStorage.getItem(key)).toBeNull();
+  });
+
   it('hydrates idb-tier entries regardless of age (never expires)', async () => {
     // seed an idb entry via a throwaway provider
     const seedScope = { value: 's1' };
@@ -246,6 +295,26 @@ describe('createCacheProvider — tiering', () => {
     // give async hydration a chance, then assert it never lands
     await new Promise((r) => setTimeout(r, 40));
     expect(map.has('MSGS:stale')).toBe(false);
+  });
+
+  it('purges rows whose domain is no longer configured for SWR persistence', async () => {
+    const scope = { value: 's1' };
+    const { provider: legacyProvider } = buildProvider(scope, {
+      idbPatterns: ['brief:'],
+      localPatterns: [],
+    });
+    legacyProvider().set('brief:list', { data: [{ id: 'brief-1' }] });
+    await until(async () => (await localDataCache.entriesByScope('s1')).length > 0);
+
+    const { hydrated, provider } = buildProvider(scope, {
+      idbPatterns: ['MSGS'],
+      localPatterns: [],
+    });
+    const map = provider();
+    await hydrated;
+
+    expect(map.has('brief:list')).toBe(false);
+    await until(async () => (await localDataCache.entriesByScope('s1')).length === 0);
   });
 
   it('drops legacy idb rows that carry no cache version', async () => {

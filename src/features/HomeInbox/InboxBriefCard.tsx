@@ -11,10 +11,10 @@ import BriefCardActions from '@/features/DailyBrief/BriefCardActions';
 import BriefCardArtifacts from '@/features/DailyBrief/BriefCardArtifacts';
 import BriefCardSummary from '@/features/DailyBrief/BriefCardSummary';
 import { styles as briefStyles } from '@/features/DailyBrief/style';
-import { type BriefItem } from '@/features/DailyBrief/types';
 import { homeType } from '@/features/Home/components/homeType';
 import Time from '@/features/Home/components/Time';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useHomeBrief } from '@/store/entity';
 
 import StatusGlyph from './StatusGlyph';
 
@@ -36,7 +36,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 interface InboxBriefCardProps {
   /** Rendered inside a rail card, which already draws the shell. */
   bare?: boolean;
-  brief: BriefItem;
+  briefId: string;
 }
 
 /**
@@ -44,9 +44,12 @@ interface InboxBriefCardProps {
  * top spanning the full width; the agent avatar sits next to the *content* it
  * produced, not next to the metadata.
  */
-const InboxBriefCard = memo<InboxBriefCardProps>(({ bare, brief }) => {
+const InboxBriefCard = memo<InboxBriefCardProps>(({ bare, briefId }) => {
   const { t } = useTranslation('common');
   const navigate = useWorkspaceAwareNavigate();
+  const brief = useHomeBrief(briefId);
+
+  if (!brief) return null;
 
   const agent = brief.agent;
   const isInbox = agent?.id === INBOX_SESSION_ID;

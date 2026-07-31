@@ -111,6 +111,15 @@ vi.mock('@/layout/AuthProvider/MarketAuth', async () => {
   };
 });
 
+vi.mock('@/layout/GlobalProvider/AppBootstrapGate', async () => {
+  const React = await import('react');
+
+  return {
+    default: ({ children }: { children?: ReactNode }) =>
+      React.createElement(React.Fragment, null, children),
+  };
+});
+
 vi.mock('@/layout/GlobalProvider/AppTheme', async () => {
   const React = await import('react');
 
@@ -126,6 +135,15 @@ vi.mock('@/layout/GlobalProvider/CacheHydrationGate', async () => {
   return {
     default: ({ children }: { children?: ReactNode }) =>
       cacheGateReleased.current ? React.createElement(React.Fragment, null, children) : null,
+  };
+});
+
+vi.mock('@/layout/GlobalProvider/EntityDataHydrationGate', async () => {
+  const React = await import('react');
+
+  return {
+    default: ({ children }: { children?: ReactNode }) =>
+      React.createElement(React.Fragment, null, children),
   };
 });
 

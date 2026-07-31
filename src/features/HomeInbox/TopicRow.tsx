@@ -7,9 +7,10 @@ import { memo, type ReactNode } from 'react';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import Time from '@/features/Home/components/Time';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useHomeInboxTopic } from '@/store/entity';
 
+import AuthorChip from './AuthorChip';
 import { resolveTopicTriggerTime, RunningElapsedTime } from './RunningElapsedTime';
-import { type InboxTopic } from './useHomeInboxTopics';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   row: css`
@@ -30,18 +31,21 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 interface TopicRowProps {
   /** Status glyph or live spinner — supplied by the caller so a running row can spin. */
   leading: ReactNode;
-  topic: InboxTopic;
-  trailing?: ReactNode;
+  showAuthor?: boolean;
+  topicId: string;
 }
 
-const TopicRow = memo<TopicRowProps>(({ topic, leading, trailing }) => {
+const TopicRow = memo<TopicRowProps>(({ topicId, leading, showAuthor }) => {
+  const topic = useHomeInboxTopic(topicId);
   const navigate = useWorkspaceAwareNavigate();
-  const agent = useAgentDisplayMeta(topic.agentId);
+  const agent = useAgentDisplayMeta(topic?.agentId);
 
   const open = () => {
-    if (!topic.agentId) return;
+    if (!topic?.agentId) return;
     navigate(AGENT_CHAT_TOPIC_URL(topic.agentId, topic.id));
   };
+
+  if (!topic) return null;
 
   return (
     <Flexbox horizontal align={'center'} className={styles.row} gap={10} onClick={open}>
@@ -62,7 +66,7 @@ const TopicRow = memo<TopicRowProps>(({ topic, leading, trailing }) => {
         </Text>
         <RunningElapsedTime startTime={topic.runStartedAt} />
       </Flexbox>
-      {trailing}
+      {showAuthor && <AuthorChip trigger={topic.trigger} userId={topic.userId} />}
       <Time
         date={resolveTopicTriggerTime(topic.runStartedAt, topic.updatedAt ?? topic.createdAt)}
       />

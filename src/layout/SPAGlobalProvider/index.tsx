@@ -12,8 +12,10 @@ import { isDesktop } from '@/const/version';
 import { useDevDockMounted } from '@/hooks/useDevDockMounted';
 import AuthProvider from '@/layout/AuthProvider';
 import { MarketAuthProvider } from '@/layout/AuthProvider/MarketAuth';
+import AppBootstrapGate from '@/layout/GlobalProvider/AppBootstrapGate';
 import AppTheme from '@/layout/GlobalProvider/AppTheme';
 import CacheHydrationGate from '@/layout/GlobalProvider/CacheHydrationGate';
+import EntityDataHydrationGate from '@/layout/GlobalProvider/EntityDataHydrationGate';
 import { FaviconProvider } from '@/layout/GlobalProvider/FaviconProvider';
 import { GroupWizardProvider } from '@/layout/GlobalProvider/GroupWizardProvider';
 import QueryProvider from '@/layout/GlobalProvider/Query';
@@ -97,9 +99,13 @@ const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
                 <TooltipGroup layoutAnimation={false}>
                   <StyleProvider speedy={import.meta.env.PROD}>
                     <LobeAnalyticsProviderWrapper>
-                      <CacheHydrationGate>
-                        <DevDockLayout>{children}</DevDockLayout>
-                      </CacheHydrationGate>
+                      <AppBootstrapGate>
+                        <EntityDataHydrationGate>
+                          <CacheHydrationGate>
+                            <DevDockLayout>{children}</DevDockLayout>
+                          </CacheHydrationGate>
+                        </EntityDataHydrationGate>
+                      </AppBootstrapGate>
                     </LobeAnalyticsProviderWrapper>
                   </StyleProvider>
                 </TooltipGroup>

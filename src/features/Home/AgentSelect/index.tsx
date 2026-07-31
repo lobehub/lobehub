@@ -5,7 +5,7 @@ import { Avatar, Text } from '@lobehub/ui';
 import { Button, Popover } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ChevronsUpDownIcon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
@@ -13,9 +13,8 @@ import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { agentService } from '@/services/agent';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
+import { useHomeAgentIdentity } from '@/store/entity';
 import { useGlobalStore } from '@/store/global';
-import { useHomeStore } from '@/store/home';
-import { homeAgentListSelectors } from '@/store/home/selectors';
 
 import AgentList from './AgentList';
 import { useResolvedHomeAgentId } from './useResolvedHomeAgentId';
@@ -64,10 +63,10 @@ const AgentSelect = memo(() => {
   const { agentId: resolvedAgentId, isInbox } = useResolvedHomeAgentId();
   const displayAgentId = resolvedAgentId ?? '';
   const inboxMeta = useAgentStore(agentSelectors.getAgentMetaById(inboxAgentId ?? ''));
-  const sidebarItem = useHomeStore(homeAgentListSelectors.getAgentById(displayAgentId));
+  const entityIdentity = useHomeAgentIdentity(isInbox ? undefined : displayAgentId);
   const agentMapMeta = useAgentStore(agentSelectors.getAgentMetaById(displayAgentId));
   const showInboxFallback = isInbox || !resolvedAgentId;
-  const displayMeta = showInboxFallback ? inboxMeta : (sidebarItem ?? agentMapMeta);
+  const displayMeta = showInboxFallback ? inboxMeta : (entityIdentity ?? agentMapMeta);
   const displayTitle = agentDisplayName(
     displayMeta,
     showInboxFallback ? 'Lobe AI' : t('defaultSession', { ns: 'common' }),
@@ -76,20 +75,23 @@ const AgentSelect = memo(() => {
     (typeof displayMeta?.avatar === 'string' ? displayMeta.avatar : undefined) ||
     (showInboxFallback ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR);
 
-  const handleSelect = (agentId: string) => {
-    updateSystemStatus({ homeSelectedAgentId: agentId });
-    setOpen(false);
+  const handleSelect = useCallback(
+    (agentId: string) => {
+      updateSystemStatus({ homeSelectedAgentId: agentId });
+      setOpen(false);
 
-    const agentState = useAgentStore.getState();
-    if (agentState.agentMap[agentId]) return;
+      const agentState = useAgentStore.getState();
+      if (agentState.agentMap[agentId]) return;
 
-    agentService
-      .getAgentConfigById(agentId)
-      .then((config) => {
-        if (config) agentState.internal_dispatchAgentMap(agentId, config);
-      })
-      .catch((error) => console.error('[AgentSelect] failed to prefetch agent config', error));
-  };
+      agentService
+        .getAgentConfigById(agentId)
+        .then((config) => {
+          if (config) agentState.internal_dispatchAgentMap(agentId, config);
+        })
+        .catch((error) => console.error('[AgentSelect] failed to prefetch agent config', error));
+    },
+    [updateSystemStatus],
+  );
 
   return (
     <Popover

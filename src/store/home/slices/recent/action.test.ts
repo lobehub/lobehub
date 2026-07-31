@@ -2,14 +2,20 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as swr from '@/libs/swr';
-import { recentKeys } from '@/libs/swr/keys';
+import { entityDataKeys, recentKeys } from '@/libs/swr/keys';
 import * as cacheScope from '@/libs/swr/useCacheScope';
 import { type RecentItem } from '@/server/routers/lambda/recent';
 import { recentService } from '@/services/recent';
+import * as entityStore from '@/store/entity';
 import { useHomeStore } from '@/store/home';
 import { initialRecentState } from '@/store/home/slices/recent/initialState';
 
-const item = (id: string, title: string): RecentItem => ({ id, title }) as unknown as RecentItem;
+const item = (id: string, title: string, type: 'task' | 'topic' = 'topic'): RecentItem =>
+  ({ id, title, type }) as unknown as RecentItem;
+
+const entityActions = {
+  updateTopicEntityTitle: vi.fn(),
+};
 
 /**
  * Render `useFetchRecents` with `useClientDataSWRWithSync` stubbed so we can grab
@@ -31,7 +37,9 @@ const captureOnData = (scope: string) => {
 };
 
 beforeEach(() => {
+  vi.clearAllMocks();
   useHomeStore.setState({ ...initialRecentState });
+  vi.spyOn(entityStore, 'getEntityStoreState').mockReturnValue(entityActions as never);
 });
 
 afterEach(() => {
@@ -120,43 +128,33 @@ describe('RecentActionImpl', () => {
   });
 
   describe('updateRecentTitle', () => {
-    it('renames in the store mirror and patches the scoped SWR caches', () => {
+    it('renames the legacy projection and commits the canonical Topic entity', () => {
       useHomeStore.setState({ recents: [item('a', 'old'), item('b', 'keep')] });
       const mutateSpy = vi.spyOn(swr, 'mutate').mockResolvedValue(undefined as any);
+      vi.spyOn(cacheScope, 'getCacheScope').mockReturnValue('user-1:workspace-1');
 
       act(() => {
         useHomeStore.getState().updateRecentTitle('a', 'new');
       });
 
       expect(useHomeStore.getState().recents).toEqual([item('a', 'new'), item('b', 'keep')]);
-      // both the list and the drawer SWR caches get a non-revalidating patch
-      expect(mutateSpy).toHaveBeenCalledTimes(2);
-      expect(mutateSpy).toHaveBeenCalledWith(expect.any(Function), expect.any(Function), {
-        revalidate: false,
-      });
+      expect(entityActions.updateTopicEntityTitle).toHaveBeenCalledWith(
+        'user-1:workspace-1',
+        'a',
+        'new',
+      );
+      expect(mutateSpy).not.toHaveBeenCalled();
     });
 
-    it('SWR cache updater matches keys by root and renames the target item only', () => {
-      useHomeStore.setState({ recents: [] });
-      let updater: (items?: RecentItem[]) => RecentItem[] | undefined = () => undefined;
-      const matchers: Array<(key: unknown) => boolean> = [];
-      vi.spyOn(swr, 'mutate').mockImplementation(((match: any, fn: any) => {
-        matchers.push(match);
-        updater = fn;
-        return Promise.resolve(undefined);
-      }) as any);
+    it('does not reinterpret a Task recent as a Topic entity mutation', () => {
+      useHomeStore.setState({ recents: [item('task-1', 'old', 'task')] });
 
       act(() => {
-        useHomeStore.getState().updateRecentTitle('a', 'new');
+        useHomeStore.getState().updateRecentTitle('task-1', 'new');
       });
 
-      expect(matchers[0](recentKeys.list(true, 10, 's'))).toBe(true);
-      expect(matchers[0](['other:key'])).toBe(false);
-      expect(updater([item('a', 'old'), item('b', 'keep')])).toEqual([
-        item('a', 'new'),
-        item('b', 'keep'),
-      ]);
-      expect(updater(undefined)).toBeUndefined();
+      expect(useHomeStore.getState().recents).toEqual([item('task-1', 'new', 'task')]);
+      expect(entityActions.updateTopicEntityTitle).not.toHaveBeenCalled();
     });
   });
 
@@ -168,9 +166,11 @@ describe('RecentActionImpl', () => {
         await useHomeStore.getState().refreshRecents();
       });
 
-      expect(mutateSpy).toHaveBeenCalledTimes(2);
+      expect(mutateSpy).toHaveBeenCalledTimes(3);
       const matcher = mutateSpy.mock.calls[0][0] as (key: unknown) => boolean;
       expect(matcher(recentKeys.list(true, 10, 's'))).toBe(true);
+      const entityMatcher = mutateSpy.mock.calls[2][0] as (key: unknown) => boolean;
+      expect(entityMatcher(entityDataKeys.recentTopics('s', 9, 'mine'))).toBe(true);
     });
   });
 

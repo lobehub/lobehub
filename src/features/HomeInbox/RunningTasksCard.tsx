@@ -9,10 +9,9 @@ import { useTranslation } from 'react-i18next';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import { homeType } from '@/features/Home/components/homeType';
 import RunningGlyph from '@/features/Home/components/RunningGlyph';
+import { useHomeInboxAgentIds } from '@/store/entity';
 
-import AuthorChip from './AuthorChip';
 import TopicRow from './TopicRow';
-import { type InboxTopic } from './useHomeInboxTopics';
 
 const AVATAR_SIZE = 20;
 /** Past this the stack turns into a smudge; the rest are counted instead. */
@@ -103,10 +102,10 @@ const StackedAgentAvatar = memo<{ agentId: string }>(({ agentId }) => {
  * says how much is in flight but not *whose* — and which agents are busy is the
  * thing the user actually recognises at a glance.
  */
-const RunningAgentAvatars = memo<{ running: InboxTopic[] }>(({ running }) => {
+const RunningAgentAvatars = memo<{ topicIds: string[] }>(({ topicIds }) => {
   // One avatar per agent, not per topic: an agent running three topics is still
   // one face, and the count next to it already carries the volume.
-  const agentIds = [...new Set(running.map((topic) => topic.agentId).filter(Boolean))] as string[];
+  const agentIds = useHomeInboxAgentIds(topicIds);
   const shown = agentIds.slice(0, MAX_AVATARS);
   const overflow = agentIds.length - shown.length;
 
@@ -126,9 +125,9 @@ interface RunningTasksCardProps {
   action?: ReactNode;
   /** Rendered inside a rail card, which already draws the shell. */
   bare?: boolean;
-  running: InboxTopic[];
   /** Team view: tag each expanded row with whose run it is. */
   showAuthor?: boolean;
+  topicIds: string[];
 }
 
 /**
@@ -136,11 +135,11 @@ interface RunningTasksCardProps {
  * single line by default and only opens on demand. Nothing here is actionable;
  * it exists so the user knows work is in flight.
  */
-const RunningTasksCard = memo<RunningTasksCardProps>(({ action, bare, running, showAuthor }) => {
+const RunningTasksCard = memo<RunningTasksCardProps>(({ action, bare, showAuthor, topicIds }) => {
   const { t } = useTranslation('home');
   const [open, setOpen] = useState(false);
 
-  if (running.length === 0) return null;
+  if (topicIds.length === 0) return null;
 
   return (
     <Flexbox className={bare ? styles.bareRoot : styles.card}>
@@ -153,9 +152,9 @@ const RunningTasksCard = memo<RunningTasksCardProps>(({ action, bare, running, s
           <Flexbox horizontal align={'center'} gap={10} style={{ width: '100%' }}>
             <RunningGlyph />
             <Text className={homeType.itemTitle} style={{ flex: 1 }}>
-              {t('inbox.running.title', { count: running.length })}
+              {t('inbox.running.title', { count: topicIds.length })}
             </Text>
-            <RunningAgentAvatars running={running} />
+            <RunningAgentAvatars topicIds={topicIds} />
             <Icon
               color={cssVar.colorTextQuaternary}
               icon={open ? ChevronDownIcon : ChevronRightIcon}
@@ -168,16 +167,12 @@ const RunningTasksCard = memo<RunningTasksCardProps>(({ action, bare, running, s
 
       {open && (
         <Flexbox className={cx(styles.body, bare && styles.bareBody)}>
-          {running.map((topic) => (
+          {topicIds.map((topicId) => (
             <TopicRow
-              key={topic.id}
+              key={topicId}
               leading={<RunningGlyph size={14} />}
-              topic={topic}
-              trailing={
-                showAuthor ? (
-                  <AuthorChip trigger={topic.trigger} userId={topic.userId} />
-                ) : undefined
-              }
+              showAuthor={showAuthor}
+              topicId={topicId}
             />
           ))}
         </Flexbox>

@@ -1,12 +1,11 @@
 // @vitest-environment node
-import type { ScopedMutator } from 'swr/_internal';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { setScopedMutate } from '@/libs/swr';
-import { briefKeys } from '@/libs/swr/keys';
+import * as cacheScope from '@/libs/swr/useCacheScope';
 import { briefService } from '@/services/brief';
 import type { BriefStore } from '@/store/brief/store';
 import type { BriefItem } from '@/store/brief/types';
+import * as entityStore from '@/store/entity';
 
 import { BriefListActionImpl } from './action';
 
@@ -32,15 +31,18 @@ const createBrief = (id: string): BriefItem => ({
 });
 
 describe('BriefListActionImpl', () => {
-  const cache = new Map<string, BriefItem[]>();
+  const entityActions = {
+    deleteBriefEntity: vi.fn(),
+    resolveBriefEntitiesAsRead: vi.fn(),
+    updateBriefReadState: vi.fn(),
+    updateBriefResolution: vi.fn(),
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
-    cache.clear();
-    setScopedMutate((async (key, data) => {
-      if (Array.isArray(data)) cache.set(JSON.stringify(key), data);
-      return data;
-    }) as ScopedMutator);
+    vi.spyOn(Date, 'now').mockReturnValue(100);
+    vi.spyOn(cacheScope, 'getCacheScope').mockReturnValue('user-1:workspace-1');
+    vi.spyOn(entityStore, 'getEntityStoreState').mockReturnValue(entityActions as never);
   });
 
   afterEach(() => {
@@ -49,32 +51,102 @@ describe('BriefListActionImpl', () => {
 
   const SCOPE = 'user-1:workspace-1';
 
-  it('should remove resolved briefs from the SWR snapshot used on route remount', async () => {
+  it('removes resolved briefs from the legacy projection and canonical Home index', async () => {
     const resolvedBrief = createBrief('brief-resolved');
     const remainingBrief = createBrief('brief-remaining');
-    const initialBriefs = [resolvedBrief, remainingBrief];
-    const cacheKey = JSON.stringify(briefKeys.list(true, SCOPE));
-    cache.set(cacheKey, initialBriefs);
-
-    const state = { briefs: initialBriefs, briefsScope: SCOPE, isBriefsInit: true };
+    const state = {
+      briefs: [resolvedBrief, remainingBrief],
+      briefsScope: SCOPE,
+      isBriefsInit: true,
+    };
     const set = vi.fn((patch: Partial<typeof state>) => Object.assign(state, patch));
     const action = new BriefListActionImpl(set as never, () => state as BriefStore);
     vi.spyOn(briefService, 'resolveManyAsRead').mockResolvedValue({
       data: [resolvedBrief.id],
     } as never);
 
-    await action.resolveBriefsAsRead(initialBriefs.map((brief) => brief.id));
+    await action.resolveBriefsAsRead([resolvedBrief.id, remainingBrief.id]);
 
     expect(state.briefs).toEqual([remainingBrief]);
-    expect(cache.get(cacheKey)).toEqual([remainingBrief]);
-
-    state.briefs = cache.get(cacheKey) ?? [];
-    expect(state.briefs).not.toContainEqual(expect.objectContaining({ id: resolvedBrief.id }));
+    expect(entityActions.resolveBriefEntitiesAsRead).toHaveBeenCalledWith(
+      'user-1:workspace-1',
+      [resolvedBrief.id],
+      expect.any(String),
+      100,
+    );
   });
 
-  // The write-back must land on the entry the list came from. Keying it off the
-  // live scope instead would, on a mid-flight workspace switch, seed the new
-  // workspace's bucket and cache key with the previous workspace's briefs.
+  it('writes read state through the canonical entity mutation path', async () => {
+    const brief = createBrief('brief-1');
+    const state = { briefs: [brief], isBriefsInit: true };
+    const set = vi.fn((patch: Partial<typeof state>) => Object.assign(state, patch));
+    const action = new BriefListActionImpl(set as never, () => state as BriefStore);
+    vi.spyOn(briefService, 'markRead').mockResolvedValue({
+      data: { readAt: '2026-07-31T01:00:00.000Z' },
+    } as never);
+
+    await action.markBriefRead(brief.id);
+
+    expect(state.briefs[0].readAt).toBe('2026-07-31T01:00:00.000Z');
+    expect(entityActions.updateBriefReadState).toHaveBeenCalledWith(
+      'user-1:workspace-1',
+      brief.id,
+      state.briefs[0].readAt,
+      100,
+    );
+  });
+
+  it('uses the request-start observation for an authoritative Brief resolution', async () => {
+    const brief = createBrief('brief-1');
+    const state = { briefs: [brief], isBriefsInit: true };
+    const set = vi.fn((patch: Partial<typeof state>) => Object.assign(state, patch));
+    const action = new BriefListActionImpl(set as never, () => state as BriefStore);
+    vi.spyOn(briefService, 'resolve').mockResolvedValue({
+      data: {
+        resolvedAction: 'approve',
+        resolvedAt: '2026-07-31T02:00:00.000Z',
+        resolvedComment: null,
+      },
+    } as never);
+
+    await action.resolveBrief(brief.id, 'approve');
+
+    const resolution = {
+      resolvedAction: 'approve',
+      resolvedAt: '2026-07-31T02:00:00.000Z',
+      resolvedComment: null,
+    };
+    expect(state.briefs[0]).toMatchObject(resolution);
+    expect(entityActions.updateBriefResolution).toHaveBeenCalledWith(
+      'user-1:workspace-1',
+      brief.id,
+      resolution,
+      100,
+    );
+  });
+
+  it('tombstones a deleted brief in the canonical entity graph', async () => {
+    const deleted = createBrief('brief-deleted');
+    const remaining = createBrief('brief-remaining');
+    const state = { briefs: [deleted, remaining], isBriefsInit: true };
+    const set = vi.fn((patch: Partial<typeof state>) => Object.assign(state, patch));
+    const action = new BriefListActionImpl(set as never, () => state as BriefStore);
+    vi.spyOn(briefService, 'delete').mockResolvedValue(undefined as never);
+
+    await action.deleteBrief(deleted.id);
+
+    expect(state.briefs).toEqual([remaining]);
+    expect(entityActions.deleteBriefEntity).toHaveBeenCalledWith(
+      'user-1:workspace-1',
+      deleted.id,
+      100,
+    );
+  });
+
+  // The legacy-projection patch must land on the list the ids came from. On a
+  // mid-flight workspace switch the bucket already belongs to the next
+  // partition, so splicing it would leak the previous workspace's briefs —
+  // while the canonical entity resolution still lands in the captured scope.
   it('should abandon the write when the workspace changed while the request was in flight', async () => {
     const brief = createBrief('brief-1');
     const nextScopeBrief = createBrief('brief-from-next-workspace');
@@ -90,7 +162,13 @@ describe('BriefListActionImpl', () => {
     await action.resolveBriefsAsRead([brief.id]);
 
     expect(state.briefs).toEqual([nextScopeBrief]);
-    expect(cache.size).toBe(0);
+    expect(set).not.toHaveBeenCalled();
+    expect(entityActions.resolveBriefEntitiesAsRead).toHaveBeenCalledWith(
+      SCOPE,
+      [brief.id],
+      expect.any(String),
+      100,
+    );
   });
 
   it('should not write an unstamped brief list into any scope entry', async () => {
@@ -103,7 +181,6 @@ describe('BriefListActionImpl', () => {
     await action.resolveBriefsAsRead([brief.id]);
 
     expect(set).not.toHaveBeenCalled();
-    expect(cache.size).toBe(0);
   });
 
   it('should skip the store write when deleting a brief the list no longer holds', async () => {

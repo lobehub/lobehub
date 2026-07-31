@@ -10,6 +10,7 @@
  * before hydration is permanently orphaned — so if the gate paints early, the
  * cold-open skeleton returns. This exercises that end to end.
  */
+import type * as LobeConst from '@lobechat/const';
 import { act, render, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { createElement } from 'react';
@@ -19,14 +20,34 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cacheHydration } from '@/libs/swr/cacheHydration';
 import { localDataCache } from '@/libs/swr/localDataCache';
 import { createCacheProvider, type ScopedSWRProvider } from '@/libs/swr/localStorageProvider';
+import { homeEntityRepository } from '@/store/entity/repository';
+import { selectHomeDailyBrief } from '@/store/entity/selectors';
+import { useEntityStore } from '@/store/entity/store';
+import { useUserStore } from '@/store/user';
 
+import AppBootstrapGate, { isAppBootstrapReady } from './AppBootstrapGate';
 import CacheHydrationGate from './CacheHydrationGate';
+import EntityDataHydrationGate from './EntityDataHydrationGate';
 
 let mockScope = 'anon:personal';
-vi.mock('@/libs/swr/useCacheScope', () => ({ useCacheScope: () => mockScope }));
+vi.mock('@lobechat/const', async (importOriginal) => {
+  const actual = await importOriginal<typeof LobeConst>();
+  return { ...actual, isDesktop: false };
+});
+vi.mock('@/libs/swr/useCacheScope', () => ({
+  buildCacheScope: (userId?: string, workspaceId?: string) =>
+    `${userId || 'anon'}:${workspaceId || 'personal'}`,
+  getCacheScope: () => mockScope,
+  isAnonymousScope: (scope: string) => scope.startsWith('anon:'),
+  isScopeTrusted: () => true,
+  useCacheScope: () => mockScope,
+}));
 vi.mock('@/libs/bootTiming', () => ({ bootTiming: { mark: vi.fn(), recordSpan: vi.fn() } }));
 
 const SCOPE = 'u1:personal';
+const ACCOUNT_SCOPE = 'u1:account';
+const SECOND_SCOPE = 'u2:personal';
+const SECOND_ACCOUNT_SCOPE = 'u2:account';
 const KEY = ['MSGS', 'topic-cold'];
 const CACHED = [{ id: 'm1', text: 'cached on disk' }];
 const never = () => new Promise<never>(() => {}); // never resolves — only cache can serve
@@ -36,6 +57,14 @@ let probed: unknown;
 const Probe = () => {
   const { data } = useSWR(KEY, never);
   probed = data;
+  return null;
+};
+
+let entityProbed: unknown;
+const EntityProbe = () => {
+  const userId = useUserStore((state) => state.user?.id);
+  const accountScope = userId ? `${userId}:account` : mockScope;
+  entityProbed = useEntityStore((state) => selectHomeDailyBrief(state.scopes[accountScope]));
   return null;
 };
 
@@ -69,10 +98,26 @@ describe('CacheHydrationGate + provider + consumer', () => {
   beforeEach(() => {
     mockScope = SCOPE;
     probed = undefined;
+    entityProbed = undefined;
+    useEntityStore.setState({ scopes: {} });
+    useUserStore.setState({
+      isLoaded: false,
+      isSignedIn: false,
+      isUserStateInit: false,
+      user: undefined,
+    });
     cacheHydration.markPending(SCOPE);
   });
   afterEach(async () => {
+    vi.restoreAllMocks();
     cacheHydration.markPending(SCOPE);
+    useUserStore.setState({
+      isLoaded: false,
+      isSignedIn: false,
+      isUserStateInit: false,
+      user: undefined,
+    });
+    useEntityStore.setState({ scopes: {} });
     await localDataCache.clearScope(SCOPE);
   });
 
@@ -91,6 +136,134 @@ describe('CacheHydrationGate + provider + consumer', () => {
     // The gate blocks the consumer until hydration completes; once it releases,
     // the consumer must already see the cached data — never undefined-then-network.
     await waitFor(() => expect(probed).toEqual(CACHED));
+  });
+
+  it('keeps private consumers unmounted until auth settles, then serves hydrated cache on their first render', async () => {
+    await seedDisk();
+    const provider = makeProvider();
+
+    render(
+      createElement(
+        SWRConfig,
+        { value: { provider: asProvider(provider) } },
+        createElement(
+          AppBootstrapGate,
+          null,
+          createElement(CacheHydrationGate, null, createElement(Probe)),
+        ),
+      ),
+    );
+
+    await waitFor(() => expect(cacheHydration.isReady(SCOPE)).toBe(true));
+    expect(probed).toBeUndefined();
+    expect(document.getElementById('loading-screen')).not.toBeNull();
+
+    act(() => {
+      useUserStore.setState({ isLoaded: true, isSignedIn: true });
+    });
+
+    await waitFor(() => expect(probed).toEqual(CACHED));
+    expect(document.getElementById('loading-screen')).toBeNull();
+
+    // The identity gate is a one-way latch: a focus-triggered session refresh
+    // must not blank an app that has already rendered.
+    act(() => {
+      useUserStore.setState({ isLoaded: false });
+    });
+    expect(probed).toEqual(CACHED);
+  });
+
+  it('hydrates the trusted Entity scope before its first private consumer render', async () => {
+    const snapshot = {
+      data: { pairs: [{ hint: 'Cached hint', welcome: 'Cached welcome' }] },
+      key: 'home.dailyBrief' as const,
+      observedAt: 100,
+      source: 'network' as const,
+    };
+    const hydrate = vi
+      .spyOn(homeEntityRepository, 'hydrateScope')
+      .mockImplementation(async (scope) => ({
+        entities: [],
+        indexes: [],
+        snapshots: scope === ACCOUNT_SCOPE ? [snapshot] : [],
+      }));
+
+    render(
+      createElement(
+        AppBootstrapGate,
+        null,
+        createElement(EntityDataHydrationGate, null, createElement(EntityProbe)),
+      ),
+    );
+
+    expect(hydrate).not.toHaveBeenCalled();
+    expect(entityProbed).toBeUndefined();
+
+    act(() => {
+      useUserStore.setState({ isLoaded: true, isSignedIn: true, user: { id: 'u1' } as never });
+    });
+
+    await waitFor(() => expect(entityProbed).toEqual(snapshot.data));
+    expect(hydrate).toHaveBeenCalledWith(SCOPE);
+    expect(hydrate).toHaveBeenCalledWith(ACCOUNT_SCOPE);
+  });
+
+  it('never exposes the previous account snapshot while a new account scope hydrates', async () => {
+    const firstSnapshot = {
+      data: { pairs: [{ hint: 'User one hint', welcome: 'User one welcome' }] },
+      key: 'home.dailyBrief' as const,
+      observedAt: 100,
+      source: 'network' as const,
+    };
+    const secondSnapshot = {
+      data: { pairs: [{ hint: 'User two hint', welcome: 'User two welcome' }] },
+      key: 'home.dailyBrief' as const,
+      observedAt: 200,
+      source: 'network' as const,
+    };
+    let releaseSecondAccount!: () => void;
+    const secondAccountReady = new Promise<void>((resolve) => {
+      releaseSecondAccount = resolve;
+    });
+    const hydrate = vi
+      .spyOn(homeEntityRepository, 'hydrateScope')
+      .mockImplementation(async (scope) => {
+        if (scope === SECOND_ACCOUNT_SCOPE) await secondAccountReady;
+        return {
+          entities: [],
+          indexes: [],
+          snapshots:
+            scope === ACCOUNT_SCOPE
+              ? [firstSnapshot]
+              : scope === SECOND_ACCOUNT_SCOPE
+                ? [secondSnapshot]
+                : [],
+        };
+      });
+
+    act(() => {
+      useUserStore.setState({ isLoaded: true, isSignedIn: true, user: { id: 'u1' } as never });
+    });
+    render(
+      createElement(
+        AppBootstrapGate,
+        null,
+        createElement(EntityDataHydrationGate, null, createElement(EntityProbe)),
+      ),
+    );
+    await waitFor(() => expect(entityProbed).toEqual(firstSnapshot.data));
+
+    act(() => {
+      mockScope = SECOND_SCOPE;
+      useUserStore.setState({ user: { id: 'u2' } as never });
+    });
+
+    expect(entityProbed).toBeUndefined();
+    expect(hydrate).toHaveBeenCalledWith(SECOND_SCOPE);
+    expect(hydrate).toHaveBeenCalledWith(SECOND_ACCOUNT_SCOPE);
+
+    releaseSecondAccount();
+    await waitFor(() => expect(entityProbed).toEqual(secondSnapshot.data));
   });
 
   it('DECISIVE: an early orphaned subscriber does NOT poison the key for a later one', async () => {
@@ -159,4 +332,52 @@ describe('CacheHydrationGate + provider + consumer', () => {
   // serves it locally on reload", then the fresh server value flows through). The
   // gate fix only changes release *timing*, not the revalidation/onData path, so
   // that reconciliation is unchanged from a warm navigation.
+});
+
+describe('isAppBootstrapReady', () => {
+  it('waits for Better Auth on web', () => {
+    expect(
+      isAppBootstrapReady({
+        authLoaded: false,
+        desktop: false,
+        desktopOnboarding: false,
+        userStateInitialized: false,
+      }),
+    ).toBe(false);
+    expect(
+      isAppBootstrapReady({
+        authLoaded: true,
+        desktop: false,
+        desktopOnboarding: false,
+        userStateInitialized: false,
+      }),
+    ).toBe(true);
+  });
+
+  it('waits for the desktop user state while preserving desktop onboarding', () => {
+    expect(
+      isAppBootstrapReady({
+        authLoaded: true,
+        desktop: true,
+        desktopOnboarding: false,
+        userStateInitialized: false,
+      }),
+    ).toBe(false);
+    expect(
+      isAppBootstrapReady({
+        authLoaded: true,
+        desktop: true,
+        desktopOnboarding: false,
+        userStateInitialized: true,
+      }),
+    ).toBe(true);
+    expect(
+      isAppBootstrapReady({
+        authLoaded: true,
+        desktop: true,
+        desktopOnboarding: true,
+        userStateInitialized: false,
+      }),
+    ).toBe(true);
+  });
 });

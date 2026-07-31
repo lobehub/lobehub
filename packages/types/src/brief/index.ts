@@ -1,3 +1,5 @@
+import type { TaskStatus } from '../task';
+
 export interface BriefAction {
   /** Action identifier, e.g. 'approve', 'reject', 'feedback' */
   key: string;
@@ -71,4 +73,40 @@ export interface BriefMetadata {
   [key: string]: unknown;
   /** Agent Signal extension metadata. */
   agentSignal?: BriefAgentSignalMetadata;
+}
+
+export interface AgentAvatarInfo {
+  avatar: string | null;
+  backgroundColor: string | null;
+  id: string;
+  /** Personal name; renderers resolve the label with `agentDisplayName(agent, fallback)`. */
+  name?: string | null;
+  title: string | null;
+}
+
+/** Enriched unresolved Brief view returned to the client Home surface. */
+export interface BriefItem {
+  actions: BriefAction[] | null;
+  agent: AgentAvatarInfo | null;
+  agentId: string | null;
+  artifacts: BriefArtifacts | null;
+  createdAt: Date | string;
+  cronJobId: string | null;
+  id: string;
+  priority: string | null;
+  readAt: Date | string | null;
+  resolvedAction: string | null;
+  resolvedAt: Date | string | null;
+  resolvedComment: string | null;
+  summary: string;
+  taskId: string | null;
+  /** Parent task's workspace-scoped ref (`T-12`). Populated by server enrichment; absent on locally-constructed BriefItems. */
+  taskIdentifier?: string | null;
+  taskName?: string | null;
+  /** Parent task's runtime status — `scheduled` means the task is parked between automated runs and approving the brief should NOT complete it. Populated by server enrichment; optional on locally-constructed BriefItems (e.g. from activity rows). */
+  taskStatus?: TaskStatus | null;
+  title: string;
+  topicId: string | null;
+  type: BriefType;
+  userId: string;
 }

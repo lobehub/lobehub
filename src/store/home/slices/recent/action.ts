@@ -2,18 +2,16 @@ import isEqual from 'fast-deep-equal';
 import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
-import { recentKeys } from '@/libs/swr/keys';
+import { entityDataKeys, recentKeys } from '@/libs/swr/keys';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
 import { type RecentItem } from '@/server/routers/lambda/recent';
 import { RECENT_SIDEBAR_TYPES, recentService } from '@/services/recent';
+import { getEntityStoreState } from '@/store/entity';
 import { type HomeStore } from '@/store/home/store';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 const n = setNamespace('recent');
-
-const updateRecentTitleInList = (id: string, title: string) => (items?: RecentItem[]) =>
-  items?.map((item) => (item.id === id ? { ...item, title } : item));
 
 type Setter = StoreSetter<HomeStore>;
 export const createRecentSlice = (set: Setter, get: () => HomeStore, _api?: unknown) =>
@@ -38,26 +36,19 @@ export class RecentActionImpl {
   };
 
   updateRecentTitle = (id: string, title: string): void => {
+    const current = this.#get().recents.find((item) => item.id === id);
     const recents = this.#get().recents.map((item) => (item.id === id ? { ...item, title } : item));
     this.#set({ recents }, false, n('updateRecentTitle'));
-
-    const updater = updateRecentTitleInList(id, title);
-    void Promise.all([
-      mutate((key: unknown) => Array.isArray(key) && key[0] === recentKeys.list.root, updater, {
-        revalidate: false,
-      }),
-      mutate(
-        (key: unknown) => Array.isArray(key) && key[0] === recentKeys.allDrawer.root,
-        updater,
-        { revalidate: false },
-      ),
-    ]);
+    if (current?.type === 'topic') {
+      getEntityStoreState().updateTopicEntityTitle(getCacheScope(), id, title);
+    }
   };
 
   refreshRecents = async (): Promise<void> => {
     await Promise.all([
       mutate((key: unknown) => Array.isArray(key) && key[0] === recentKeys.list.root),
       mutate((key: unknown) => Array.isArray(key) && key[0] === recentKeys.allDrawer.root),
+      mutate((key: unknown) => Array.isArray(key) && key[0] === entityDataKeys.recentTopics.root),
     ]);
   };
 
