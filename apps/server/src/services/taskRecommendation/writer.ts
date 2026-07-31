@@ -2,11 +2,11 @@ import type {
   OnboardingTaskRecommendationProviderGuide,
   OnboardingTaskRecommendationProviderId,
   OnboardingTaskRecommendationWritingGuide,
-} from '@lobechat/prompts/onboardingTaskRecommendation';
+} from '@lobechat/prompts';
 import {
   chainOnboardingTaskRecommendation,
   ONBOARDING_TASK_RECOMMENDATION_JSON_SCHEMA,
-} from '@lobechat/prompts/onboardingTaskRecommendation';
+} from '@lobechat/prompts';
 import { RequestTrigger } from '@lobechat/types';
 import { z } from 'zod';
 

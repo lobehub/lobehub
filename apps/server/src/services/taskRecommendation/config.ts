@@ -1,8 +1,8 @@
 import type {
   OnboardingTaskRecommendationProviderGuide,
   OnboardingTaskRecommendationWritingGuide,
-} from '@lobechat/prompts/onboardingTaskRecommendation';
-import { DEFAULT_ONBOARDING_TASK_RECOMMENDATION_PROMPT_CONFIG } from '@lobechat/prompts/onboardingTaskRecommendation';
+} from '@lobechat/prompts';
+import { DEFAULT_ONBOARDING_TASK_RECOMMENDATION_PROMPT_CONFIG } from '@lobechat/prompts';
 
 /** Allocation settings for distributing generated tasks across connected providers. */
 export interface TaskRecommendationAllocationConfig {

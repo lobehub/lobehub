@@ -11,10 +11,7 @@ import {
   UnderstandingResourceNotFoundError,
   UnderstandingSessionNotFoundError,
 } from '@lobechat/database';
-import {
-  chainUnderstandingPersona,
-  UNDERSTANDING_ANALYSIS_JSON_SCHEMA,
-} from '@lobechat/prompts/understanding';
+import { chainUnderstandingPersona, UNDERSTANDING_ANALYSIS_JSON_SCHEMA } from '@lobechat/prompts';
 import type {
   CollectionDiagnostics,
   ConfirmOnboardingUnderstandingInput,
