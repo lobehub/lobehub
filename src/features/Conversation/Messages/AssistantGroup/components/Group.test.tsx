@@ -407,6 +407,7 @@ describe('Group', () => {
     // sibling for every turn, latest or not — never swallowed into the fold.
     expect(fold.contains(answer)).toBe(false);
     expect(fold.contains(screen.getByTestId('workflow-segment'))).toBe(true);
+    expect(fold).toHaveAttribute('data-step-count', '2');
   });
 
   it('keeps the latest finished turn’s final answer visible outside the fold', () => {
