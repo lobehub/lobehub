@@ -50,6 +50,14 @@ export class PluginActionImpl {
     );
   };
 
+  updateInstallError = (id: string, error: string | undefined): void => {
+    this.#set(
+      { pluginInstallErrors: { ...this.#get().pluginInstallErrors, [id]: error } },
+      false,
+      'updateInstallError',
+    );
+  };
+
   updateInstallMcpPlugin = async (id: string, value: any): Promise<void> => {
     const installedPlugin = pluginSelectors.getInstalledPluginById(id)(this.#get());
 

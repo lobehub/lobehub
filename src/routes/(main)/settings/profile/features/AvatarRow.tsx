@@ -4,10 +4,10 @@ import { Icon } from '@lobehub/ui';
 import { Upload } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Loader2Icon, PencilIcon } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { fetchErrorNotification } from '@/components/Error/fetchErrorNotification';
+import InlineActionError from '@/components/InlineActionError';
 import UserAvatar from '@/features/User/UserAvatar';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
@@ -52,35 +52,37 @@ const AvatarRow = () => {
   const isLogin = useUserStore(authSelectors.isLogin);
   const updateAvatar = useUserStore((s) => s.updateAvatar);
   const [uploading, setUploading] = useState(false);
+  const [hasError, setHasError] = useState(false);
+  const [retryAvatar, setRetryAvatar] = useState<string>();
 
-  const handleUploadAvatar = useMemo(
-    () =>
-      createUploadImageHandler(async (avatar) => {
-        try {
-          setUploading(true);
-          const img = new Image();
-          img.src = avatar;
+  const saveAvatar = useCallback(
+    async (avatar: string) => {
+      try {
+        setUploading(true);
+        setHasError(false);
+        setRetryAvatar(avatar);
+        const img = new Image();
+        img.src = avatar;
 
-          await new Promise((resolve, reject) => {
-            img.addEventListener('load', resolve);
-            img.addEventListener('error', reject);
-          });
+        await new Promise((resolve, reject) => {
+          img.addEventListener('load', resolve);
+          img.addEventListener('error', reject);
+        });
 
-          const webpBase64 = imageToBase64({ img, size: 256 });
-          await updateAvatar(webpBase64);
-          setUploading(false);
-        } catch (error) {
-          console.error('Failed to upload avatar:', error);
-          setUploading(false);
-
-          fetchErrorNotification.error({
-            errorMessage: error instanceof Error ? error.message : String(error),
-            status: 500,
-          });
-        }
-      }),
+        const webpBase64 = imageToBase64({ img, size: 256 });
+        await updateAvatar(webpBase64);
+        setRetryAvatar(undefined);
+      } catch (cause) {
+        console.error('Failed to upload avatar:', cause);
+        setHasError(true);
+      } finally {
+        setUploading(false);
+      }
+    },
     [updateAvatar],
   );
+
+  const handleUploadAvatar = useMemo(() => createUploadImageHandler(saveAvatar), [saveAvatar]);
 
   const canUpload = isLogin;
 
@@ -106,7 +108,15 @@ const AvatarRow = () => {
   );
 
   return (
-    <ProfileRow action={avatarContent} anchor={'profile-avatar'} label={t('profile.avatar')} />
+    <ProfileRow action={avatarContent} anchor={'profile-avatar'} label={t('profile.avatar')}>
+      {hasError && (
+        <InlineActionError
+          retrying={uploading}
+          title={t('profile.avatarUploadError')}
+          onRetry={retryAvatar ? () => saveAvatar(retryAvatar) : undefined}
+        />
+      )}
+    </ProfileRow>
   );
 };
 

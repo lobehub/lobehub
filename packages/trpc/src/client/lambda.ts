@@ -75,11 +75,14 @@ const errorHandlingLink: TRPCLink<LambdaRouter> = () => {
                       // If user is still marked as signed in but got 401,
                       // session is invalid - clear client state first
                       if (isSignedIn) {
-                        await logout();
+                        const params = new URLSearchParams({ callbackUrl: location.toString() });
+                        params.set('reason', 'sessionExpired');
+                        await logout({ redirectTo: `/signin?${params.toString()}` });
+                      } else {
+                        const { loginRequired } =
+                          await import('@/components/Error/loginRequiredNotification');
+                        loginRequired.redirect({ reason: 'sessionExpired' });
                       }
-                      const { loginRequired } =
-                        await import('@/components/Error/loginRequiredNotification');
-                      loginRequired.redirect();
                     }
                   }
                 }

@@ -385,6 +385,8 @@ export default {
   'importData': 'Import Data',
   'importModal.error.desc':
     'Sorry, an error occurred during the data import process. Please try importing again, or <1>submit a request</1>, and we will help you troubleshoot the issue as soon as possible.',
+  'importModal.error.invalidConfig': 'This configuration file could not be read',
+  'importModal.error.selectAnotherFile': 'Choose another file',
   'importModal.error.title': 'Data Import Failed',
   'importModal.finish.onlySettings': 'System settings imported successfully',
   'importModal.finish.start': 'Start using',

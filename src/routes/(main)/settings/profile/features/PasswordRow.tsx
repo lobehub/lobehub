@@ -1,10 +1,11 @@
 'use client';
 
+import { Alert, Flexbox, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { notification } from '@/components/AntdStaticMethods';
+import InlineActionError from '@/components/InlineActionError';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
 
@@ -15,29 +16,27 @@ const PasswordRow = () => {
   const userProfile = useUserStore(userProfileSelectors.userProfile);
   const hasPasswordAccount = useUserStore(authSelectors.hasPasswordAccount);
   const [sending, setSending] = useState(false);
+  const [status, setStatus] = useState<'error' | 'idle' | 'sent'>('idle');
 
   const handleChangePassword = useCallback(async () => {
     if (!userProfile?.email) return;
 
     try {
       setSending(true);
+      setStatus('idle');
       const { requestPasswordReset } = await import('@/libs/better-auth/auth-client');
       await requestPasswordReset({
         email: userProfile.email,
         redirectTo: `/reset-password?email=${encodeURIComponent(userProfile.email)}`,
       });
-      notification.success({
-        message: t('profile.resetPasswordSent'),
-      });
+      setStatus('sent');
     } catch (error) {
       console.error('Failed to send reset password email:', error);
-      notification.error({
-        message: t('profile.resetPasswordError'),
-      });
+      setStatus('error');
     } finally {
       setSending(false);
     }
-  }, [userProfile?.email, t]);
+  }, [userProfile?.email]);
 
   return (
     <ProfileRow
@@ -45,10 +44,36 @@ const PasswordRow = () => {
       label={t('profile.password')}
       action={
         <Button loading={sending} size="small" onClick={handleChangePassword}>
-          {hasPasswordAccount ? t('profile.changePassword') : t('profile.setPassword')}
+          {status === 'sent'
+            ? t('betterAuth.signin.emailSent.resend')
+            : hasPasswordAccount
+              ? t('profile.changePassword')
+              : t('profile.setPassword')}
         </Button>
       }
-    />
+    >
+      <Flexbox flex={1} gap={8}>
+        {status === 'sent' && (
+          <Alert
+            title={t('profile.resetPasswordSent')}
+            type="success"
+            variant="filled"
+            description={
+              <Text fontSize={12} type="secondary">
+                {userProfile?.email}
+              </Text>
+            }
+          />
+        )}
+        {status === 'error' && (
+          <InlineActionError
+            retrying={sending}
+            title={t('profile.resetPasswordError')}
+            onRetry={handleChangePassword}
+          />
+        )}
+      </Flexbox>
+    </ProfileRow>
   );
 };
 

@@ -163,6 +163,51 @@ export class FileManageActionImpl {
     });
   };
 
+  retryDockUpload = async (id: string): Promise<void> => {
+    const { dispatchDockFileList, dockUploadFileList } = this.#get();
+    const item = dockUploadFileList.find((file) => file.id === id);
+    if (!item || item.status !== 'error' || item.errorCode) return;
+
+    const abortController = new AbortController();
+    dispatchDockFileList({
+      id,
+      type: 'updateFile',
+      value: {
+        abortController,
+        error: undefined,
+        errorCode: undefined,
+        status: 'pending',
+        uploadState: undefined,
+      },
+    });
+
+    try {
+      const result = await this.#get().uploadWithProgress({
+        abortController,
+        file: item.file,
+        knowledgeBaseId: item.knowledgeBaseId,
+        onStatusUpdate: dispatchDockFileList,
+        parentId: item.parentId,
+        uploadId: id,
+        visibility: item.visibility,
+      });
+
+      if (!result) return;
+      await this.#get().refreshFileList({ revalidateResources: true });
+
+      if (!isChunkingUnsupported(item.file.type)) {
+        await this.#get().parseFilesToChunks([result.id], { skipExist: false });
+      }
+    } catch (error) {
+      console.error(error);
+      dispatchDockFileList({
+        id,
+        type: 'updateFile',
+        value: { error: t('upload.uploadFailed', { ns: 'error' }), status: 'error' },
+      });
+    }
+  };
+
   dispatchDockFileList = (payload: UploadFileListDispatch): void => {
     const nextValue = uploadFileListReducer(this.#get().dockUploadFileList, payload);
     if (nextValue === this.#get().dockUploadFileList) return;
@@ -299,7 +344,10 @@ export class FileManageActionImpl {
         abortController,
         file,
         id: `upload_${generateUploadId()}`,
+        knowledgeBaseId,
+        parentId,
         status: 'pending' as const,
+        visibility,
       };
     });
 
@@ -625,10 +673,12 @@ export class FileManageActionImpl {
       // 7. Add all files to dock
       dispatchDockFileList({
         atStart: true,
-        files: uploadItems.map(({ abortController, file, id }) => ({
+        files: uploadItems.map(({ abortController, file, id, parentId }) => ({
           abortController,
           file,
           id,
+          knowledgeBaseId,
+          parentId,
           status: 'pending' as const,
         })),
         type: 'addFiles',

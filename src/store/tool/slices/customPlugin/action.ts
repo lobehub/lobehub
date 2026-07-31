@@ -1,10 +1,8 @@
 import { merge } from 'es-toolkit/compat';
 import { t } from 'i18next';
 
-import { notification } from '@/components/AntdStaticMethods';
 import { mcpService } from '@/services/mcp';
 import { pluginService } from '@/services/plugin';
-import { pluginHelpers } from '@/store/tool/helpers';
 import { type StoreSetter } from '@/store/types';
 import { type LobeToolCustomPlugin, type PluginInstallError } from '@/types/tool/plugin';
 import { setNamespace } from '@/utils/storeDebug';
@@ -40,12 +38,13 @@ export class CustomPluginActionImpl {
     const plugin = pluginSelectors.getCustomPluginById(id)(this.#get());
     if (!plugin) return;
 
-    const { refreshPlugins, updateInstallLoadingState } = this.#get();
+    const { refreshPlugins, updateInstallError, updateInstallLoadingState } = this.#get();
 
     const url = plugin.customParams?.mcp?.url;
     if (!plugin.customParams?.mcp || !url) return;
 
     try {
+      updateInstallError(id, undefined);
       updateInstallLoadingState(id, true);
       const manifest = await mcpService.getStreamableMcpServerManifest({
         auth: plugin.customParams.mcp.auth,
@@ -57,23 +56,17 @@ export class CustomPluginActionImpl {
         },
         url,
       });
-      updateInstallLoadingState(id, false);
-
       await pluginService.updatePluginManifest(id, manifest);
       await refreshPlugins();
     } catch (error) {
-      updateInstallLoadingState(id, false);
-
       console.error(error);
       const err = error as PluginInstallError;
-
-      const meta = pluginSelectors.getPluginMetaById(id)(this.#get());
-      const name = pluginHelpers.getPluginTitle(meta);
-
-      notification.error({
-        description: t(`error.${err.message}`, { error: err.cause, ns: 'plugin' }),
-        message: t('error.reinstallError', { name, ns: 'plugin' }),
-      });
+      updateInstallError(
+        id,
+        t(`error.${err.message}`, { defaultValue: err.cause, error: err.cause, ns: 'plugin' }),
+      );
+    } finally {
+      updateInstallLoadingState(id, false);
     }
   };
 

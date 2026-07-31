@@ -2,12 +2,13 @@
 
 import { type ErrorShape, type ImportFileUploadState } from '@lobechat/types';
 import { ImportStage } from '@lobechat/types';
-import { Center } from '@lobehub/ui';
+import { Alert, Center, Flexbox } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { Upload } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { ImportIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
-import React, { memo, useMemo, useState } from 'react';
+import React, { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import DataStyleModal from '@/components/DataStyleModal';
@@ -70,6 +71,7 @@ const DataImporter = memo<DataImporterProps>(({ children, onFinishImport }) => {
   const [importResults, setImportResults] = useState<ImportResults | undefined>();
   const [showImportModal, setShowImportModal] = useState(false);
   const [importPgData, setImportPgData] = useState<ImportPgDataStructure | undefined>(undefined);
+  const [configError, setConfigError] = useState<string>();
 
   const dataSource = useMemo(() => {
     if (!importResults) return;
@@ -91,14 +93,14 @@ const DataImporter = memo<DataImporterProps>(({ children, onFinishImport }) => {
 
   const isFinished = importState === ImportStage.Success || importState === ImportStage.Error;
 
-  const closeModal = () => {
+  const closeModal = useCallback(() => {
     setImportState(ImportStage.Finished);
     setImportResults(undefined);
     setImportError(undefined);
     setUploadingState(undefined);
 
     onFinishImport?.();
-  };
+  }, [onFinishImport]);
 
   const content = useMemo(() => {
     switch (importState) {
@@ -151,17 +153,36 @@ const DataImporter = memo<DataImporterProps>(({ children, onFinishImport }) => {
         return undefined;
       }
     }
-  }, [importState, fileUploadingState]);
+  }, [closeModal, dataSource, duration, fileUploadingState, importError, importState, t]);
 
   return (
     <>
       <DataStyleModal
         icon={ImportIcon}
-        open={importState !== ImportStage.Start && importState !== ImportStage.Finished}
         title={t('importModal.title')}
-        width={isFinished ? 600 : 400}
+        width={isFinished || configError ? 600 : 400}
+        open={
+          !!configError ||
+          (importState !== ImportStage.Start && importState !== ImportStage.Finished)
+        }
       >
-        {content}
+        {configError ? (
+          <Center padding={32}>
+            <Flexbox gap={16} width={'100%'}>
+              <Alert
+                description={configError}
+                title={t('importModal.error.invalidConfig')}
+                type="error"
+                variant="filled"
+              />
+              <Button onClick={() => setConfigError(undefined)}>
+                {t('importModal.error.selectAnotherFile')}
+              </Button>
+            </Flexbox>
+          </Center>
+        ) : (
+          content
+        )}
       </DataStyleModal>
       <Upload
         accept={'application/json'}
@@ -169,10 +190,14 @@ const DataImporter = memo<DataImporterProps>(({ children, onFinishImport }) => {
         maxCount={1}
         showUploadList={false}
         beforeUpload={async (file) => {
-          const config = await parseConfigFile(file);
-          if (!config) return false;
+          const result = await parseConfigFile(file);
+          if (!result.success) {
+            setConfigError(result.error);
+            return false;
+          }
 
-          setImportPgData(config);
+          setConfigError(undefined);
+          setImportPgData(result.data);
           setShowImportModal(true);
 
           return false;

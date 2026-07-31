@@ -5,6 +5,7 @@ export type PluginsSettings = Record<string, any>;
 export interface PluginState {
   installedPlugins: LobeTool[];
   loadingInstallPlugins: boolean;
+  pluginInstallErrors: Record<string, string | undefined>;
   pluginInstallLoading: Record<string, boolean | undefined>;
   pluginsSettings: PluginsSettings;
   updatePluginSettingsSignal?: AbortController;
@@ -13,6 +14,7 @@ export interface PluginState {
 export const initialPluginState: PluginState = {
   installedPlugins: [],
   loadingInstallPlugins: true,
+  pluginInstallErrors: {},
   pluginInstallLoading: {},
   pluginsSettings: {},
 };

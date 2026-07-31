@@ -32,7 +32,14 @@ vi.mock('react-i18next', () => ({
   useTranslation: (namespace: string) => ({
     t: (key: string) => {
       if (namespace === 'auth') {
-        return ({ 'profile.interests': 'Interests' } as Record<string, string>)[key] ?? key;
+        return (
+          (
+            {
+              'profile.interests': 'Interests',
+              'profile.saveError': 'Could not save interests',
+            } as Record<string, string>
+          )[key] ?? key
+        );
       }
 
       return (
@@ -48,10 +55,8 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/components/Error/fetchErrorNotification', () => ({
-  fetchErrorNotification: {
-    error: vi.fn(),
-  },
+vi.mock('@/components/InlineActionError', () => ({
+  default: ({ title }: { title: ReactNode }) => <div role="alert">{title}</div>,
 }));
 
 vi.mock('@/store/user', () => ({
@@ -108,5 +113,17 @@ describe('InterestsRow', () => {
     await waitFor(() => {
       expect(mocks.updateInterests).toHaveBeenCalledWith(['自定义']);
     });
+  });
+
+  it('keeps a failed save visible in the profile row', async () => {
+    const user = userEvent.setup();
+    mocks.updateInterests.mockRejectedValueOnce(new Error('network detail'));
+
+    render(<InterestsRow />);
+
+    await user.click(screen.getByRole('button', { name: '编程与开发' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not save interests');
+    expect(screen.queryByText('network detail')).not.toBeInTheDocument();
   });
 });

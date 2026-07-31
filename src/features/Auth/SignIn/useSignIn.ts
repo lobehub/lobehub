@@ -40,6 +40,7 @@ export const useSignIn = () => {
   const { t } = useTranslation('auth');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const sessionExpired = searchParams.get('reason') === 'sessionExpired';
   const enableMagicLink = useAuthServerConfigStore((s) => s.serverConfig.enableMagicLink || false);
   const disableEmailPassword = useAuthServerConfigStore(
     (s) => s.serverConfig.disableEmailPassword || false,
@@ -387,6 +388,7 @@ export const useSignIn = () => {
     loading,
     oAuthSSOProviders: sortedProviders,
     sending,
+    sessionExpired,
     sentInfo,
     serverConfigInit: enableBusinessFeatures ? true : serverConfigInit,
     socialLoading,

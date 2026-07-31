@@ -1615,6 +1615,8 @@ export default {
   'upload.clientMode.visionNotSupported':
     'The current model does not support visual recognition. Please switch to a different model to use this feature.',
   'upload.preview.prepareTasks': 'Preparing chunks...',
+  'upload.preview.status.cancelled': 'Upload cancelled',
+  'upload.preview.status.error': 'Upload failed',
   'upload.preview.status.pending': 'Preparing to upload...',
   'upload.preview.status.processing': 'Processing file...',
   'upload.validation.unsupportedFileType':

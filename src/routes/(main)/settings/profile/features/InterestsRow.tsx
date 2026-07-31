@@ -8,7 +8,7 @@ import { BriefcaseIcon } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { fetchErrorNotification } from '@/components/Error/fetchErrorNotification';
+import InlineActionError from '@/components/InlineActionError';
 import { INTEREST_AREAS } from '@/routes/onboarding/config';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -22,18 +22,20 @@ const InterestsRow = () => {
   const updateInterests = useUserStore((s) => s.updateInterests);
   const [customInput, setCustomInput] = useState('');
   const [showCustomInput, setShowCustomInput] = useState(false);
+  const [saveError, setSaveError] = useState(false);
+  const [retryInterests, setRetryInterests] = useState<string[]>();
   const normalizedInterests = useMemo(() => normalizeInterestsForStorage(interests), [interests]);
 
   const saveInterests = useCallback(
     async (updated: string[]) => {
       try {
+        setSaveError(false);
+        setRetryInterests(updated);
         await updateInterests(updated);
-      } catch (error) {
-        console.error('Failed to update interests:', error);
-        fetchErrorNotification.error({
-          errorMessage: error instanceof Error ? error.message : String(error),
-          status: 500,
-        });
+        setRetryInterests(undefined);
+      } catch (cause) {
+        console.error('Failed to update interests:', cause);
+        setSaveError(true);
       }
     },
     [updateInterests],
@@ -147,6 +149,12 @@ const InterestsRow = () => {
             </Text>
           </Block>
         </Flexbox>
+        {saveError && (
+          <InlineActionError
+            title={t('profile.saveError')}
+            onRetry={retryInterests ? () => saveInterests(retryInterests) : undefined}
+          />
+        )}
         {showCustomInput && (
           <Input
             placeholder={tOnboarding('interests.placeholder')}
