@@ -34,6 +34,8 @@ const scrollContent = {
 const RAIL_GUTTER = 14;
 const RAIL_CARD_WIDTH = 380;
 const RAIL_COLUMN_GAP = 28;
+/** Keep the main scrollbar off the content edge and centered in the column gap. */
+const MAIN_SCROLLBAR_OFFSET = RAIL_COLUMN_GAP / 2;
 const RAIL_EXIT_OFFSET = 24;
 const RAIL_TRANSITION_DURATION = 220;
 const COLLAPSED_CONTENT_OFFSET = (RAIL_CARD_WIDTH + RAIL_GUTTER + RAIL_COLUMN_GAP) / 2;
@@ -91,6 +93,15 @@ const styles = createStaticStyles(({ css }) => ({
 
     @media (width <= 1100px) {
       flex: none;
+    }
+  `,
+  mainScrollbar: css`
+    @media (width > 1100px) {
+      transform: translateX(${MAIN_SCROLLBAR_OFFSET}px);
+
+      &:dir(rtl) {
+        transform: translateX(-${MAIN_SCROLLBAR_OFFSET}px);
+      }
     }
   `,
   portrait: css`
@@ -212,6 +223,7 @@ const Home = memo(() => {
 
       <Flexbox
         className={cx(styles.main, styles.content, railCollapsed && styles.contentCentered)}
+        data-testid={'home-main'}
         gap={24}
       >
         <InputArea
@@ -225,6 +237,7 @@ const Home = memo(() => {
           scrollFade
           className={styles.mainScroll}
           contentProps={{ style: MAIN_CONTENT_STYLE }}
+          scrollbarProps={{ className: styles.mainScrollbar }}
         >
           <HomeModeContent mode={mode} onSuggestionSelect={handleSuggestionSelect} />
         </ScrollArea>

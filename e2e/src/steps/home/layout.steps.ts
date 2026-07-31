@@ -15,6 +15,31 @@ Given('用户在受限宽度下打开 Home 页面', async function (this: Custom
   });
 });
 
+Then('Home 主列滚动条应位于双列间距中央', async function (this: CustomWorld) {
+  const main = this.page.locator('[data-testid="home-main"]:visible');
+  const rail = this.page.locator('[data-testid="home-rail"]:visible');
+  const scrollbar = main.locator('[data-orientation="vertical"]').first();
+
+  const [mainBox, railBox, scrollbarBox] = await Promise.all([
+    main.boundingBox(),
+    rail.boundingBox(),
+    scrollbar.boundingBox(),
+  ]);
+
+  expect(mainBox).not.toBeNull();
+  expect(railBox).not.toBeNull();
+  expect(scrollbarBox).not.toBeNull();
+
+  const mainRight = mainBox!.x + mainBox!.width;
+  const railLeft = railBox!.x;
+  const scrollbarCenter = scrollbarBox!.x + scrollbarBox!.width / 2;
+  const columnGapCenter = mainRight + (railLeft - mainRight) / 2;
+
+  expect(scrollbarBox!.x).toBeGreaterThanOrEqual(mainRight);
+  expect(scrollbarBox!.x + scrollbarBox!.width).toBeLessThanOrEqual(railLeft);
+  expect(scrollbarCenter).toBeCloseTo(columnGapCenter, 0);
+});
+
 Then('Home 右栏应保持卡片、滚动条轨道与页面边缘的分层间距', async function (this: CustomWorld) {
   const rail = this.page.locator('[data-testid="home-rail"]:visible');
   const card = rail.getByTestId('home-rail-card').first();
