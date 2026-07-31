@@ -95,24 +95,19 @@ describe('searchRouter', () => {
     expect(getUserSettings).not.toHaveBeenCalled();
   });
 
-  it('preserves global search results when the community agent search rejects', async () => {
+  it('keeps the aggregate search DB-only: no marketplace calls, no market identity', async () => {
     const localResult = { id: 'local-agent', title: 'Local Agent', type: 'agent' };
     search.mockResolvedValue([localResult]);
-    getAssistantList.mockRejectedValue(new Error('Market unavailable'));
     const caller = searchRouter.createCaller({ userId: 'test-user' } as any);
 
     const result = await caller.query({ query: 'assistant' });
 
     expect(result).toEqual([localResult]);
-    expect(getAssistantList).toHaveBeenCalledWith(
-      {
-        includeAgentGroup: true,
-        locale: undefined,
-        pageSize: 5,
-        q: 'assistant',
-      },
-      { throwOnError: false },
-    );
+    expect(getAssistantList).not.toHaveBeenCalled();
+    expect(getMcpList).not.toHaveBeenCalled();
+    expect(getPluginList).not.toHaveBeenCalled();
+    expect(UserModel.findById).not.toHaveBeenCalled();
+    expect(getUserSettings).not.toHaveBeenCalled();
   });
 
   it('returns a typed error when the community agent market search fails', async () => {

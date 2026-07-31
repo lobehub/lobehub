@@ -28,8 +28,10 @@ const searchProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =
   const rawInput = (await opts.getRawInput()) as { type?: unknown } | undefined;
   const type = typeof rawInput?.type === 'string' ? rawInput.type : undefined;
   const wsId = ctx.workspaceId ?? undefined;
+  // Marketplace identity is only needed for explicit marketplace-type searches;
+  // the aggregate (untyped) search is DB-only, so skip the extra auth round-trip.
   const marketContext =
-    !type || MARKETPLACE_SEARCH_TYPES.has(type)
+    type && MARKETPLACE_SEARCH_TYPES.has(type)
       ? await resolveMarketUserContext(ctx)
       : { marketAccessToken: undefined, marketUserInfo: undefined };
 
@@ -103,8 +105,11 @@ export const searchRouter = router({
         searchPromises.push(ctx.searchRepo.search(input));
       }
 
-      // Marketplace searches (mcp, plugin)
-      if (!type || type === 'mcp') {
+      // Marketplace searches run only when their type is explicitly requested.
+      // The aggregate (untyped) command-menu search stays DB-only: the three
+      // remote marketplace calls used to gate the whole Promise.all response,
+      // adding their slowest round-trip to every keystroke.
+      if (type === 'mcp') {
         searchPromises.push(
           ctx.discoverService
             .getMcpList({
@@ -140,7 +145,7 @@ export const searchRouter = router({
         );
       }
 
-      if (!type || type === 'plugin') {
+      if (type === 'plugin') {
         searchPromises.push(
           ctx.discoverService
             .getPluginList({
@@ -172,7 +177,7 @@ export const searchRouter = router({
         );
       }
 
-      if (!type || type === 'communityAgent') {
+      if (type === 'communityAgent') {
         searchPromises.push(
           ctx.discoverService
             .getAssistantList(
@@ -182,7 +187,7 @@ export const searchRouter = router({
                 pageSize: limitPerType,
                 q: query,
               },
-              { throwOnError: type === 'communityAgent' },
+              { throwOnError: true },
             )
             .then((response) =>
               response.items.slice(0, limitPerType).map((item: any) => ({
@@ -205,8 +210,6 @@ export const searchRouter = router({
               })),
             )
             .catch((error) => {
-              if (type !== 'communityAgent') return [];
-
               console.error('[search:communityAgent]', error);
               throw new TRPCError({
                 cause: error,
