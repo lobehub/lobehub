@@ -46,6 +46,7 @@ import type { LobeChatDatabase } from '../type';
 import { sanitizeBm25Query } from '../utils/bm25';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
+import { buildMessageScopeWhere } from '../utils/messageScope';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { recomputeTopicUsage } from './topicUsage';
 
@@ -249,7 +250,7 @@ export class TopicModel {
   private mine = () => and(this.ownership(), eq(topics.userId, this.userId));
 
   private messageOwnership = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messages);
+    buildMessageScopeWhere(this.db, { userId: this.userId, workspaceId: this.workspaceId });
   // **************** Query *************** //
 
   query = async ({
@@ -384,7 +385,7 @@ export class TopicModel {
                 // display `updatedAt` above matches the client-side sort key to the server
                 // order (otherwise the two disagree and the list visibly jumps) while a
                 // rename/favorite edit still shows its real edit time. See rankTopics for
-                // the same activity-time pattern. 
+                // the same activity-time pattern.
                 sortUpdatedAt: topicActivityAt,
                 // Workspace sidebars filter maintenance actions client-side by
                 // ownership (own vs workspace scope) — the filter needs the row
@@ -460,7 +461,7 @@ export class TopicModel {
                 // display `updatedAt` above matches the client-side sort key to the server
                 // order (otherwise the two disagree and the list visibly jumps) while a
                 // rename/favorite edit still shows its real edit time. See rankTopics for
-                // the same activity-time pattern. 
+                // the same activity-time pattern.
                 sortUpdatedAt: topicActivityAt,
                 // Workspace sidebars filter maintenance actions client-side by
                 // ownership (own vs workspace scope) — the filter needs the row
@@ -532,7 +533,7 @@ export class TopicModel {
               // display `updatedAt` above matches the client-side sort key to the server
               // order (otherwise the two disagree and the list visibly jumps) while a
               // rename/favorite edit still shows its real edit time. See rankTopics for
-              // the same activity-time pattern. 
+              // the same activity-time pattern.
               sortUpdatedAt: topicActivityAt,
               // Workspace sidebars filter maintenance actions client-side by
               // ownership (own vs workspace scope) — the filter needs the row
@@ -748,19 +749,15 @@ export class TopicModel {
         .from(topics)
         .where(and(this.ownership(), scopeCondition, sql`${topics.title} @@@ ${bm25Query}`))
         .orderBy(desc(topics.updatedAt)),
-      // Query topic IDs matching by message content (BM25)
+      // Query topic IDs matching by message content (BM25). Scope comes from
+      // the joined, ownership-filtered topics — message rows carry only
+      // creation-time snapshots, and ParadeDB can't plan the derived EXISTS
+      // predicate together with `@@@` anyway.
       this.db
         .select({ topicId: messages.topicId })
         .from(messages)
         .innerJoin(topics, eq(messages.topicId, topics.id))
-        .where(
-          and(
-            this.messageOwnership(),
-            sql`${messages.content} @@@ ${bm25Query}`,
-            this.ownership(),
-            scopeCondition,
-          ),
-        )
+        .where(and(sql`${messages.content} @@@ ${bm25Query}`, this.ownership(), scopeCondition))
         .groupBy(messages.topicId),
     ]);
     // If no topics found by message content, return topics matching by title

@@ -3,6 +3,7 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import { agents, agentsToSessions, messages, sessions, topics } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { buildMessageScopeWhere } from '../../utils/messageScope';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
 type MigrateBySessionParams = { agentId: string; sessionId: string };
@@ -28,6 +29,12 @@ export class AgentMigrationRepo {
 
   private ws = (cols: { userId: AnyPgColumn; workspaceId: AnyPgColumn }) =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, cols);
+
+  // messages.user_id/workspace_id are creation-time snapshots — the ownership
+  // guard on message writes derives from the owning topic/session instead, so
+  // legacy rows stay reachable after their agent was transferred across scopes.
+  private messagesWs = (db: LobeChatDatabase) =>
+    buildMessageScopeWhere(db, { userId: this.userId, workspaceId: this.workspaceId });
 
   /**
    * Runtime migration: backfill agentId for all legacy topics and messages
@@ -92,7 +99,9 @@ export class AgentMigrationRepo {
     await tx
       .update(messages)
       .set({ agentId, updatedAt: messages.updatedAt })
-      .where(and(this.ws(messages), inArray(messages.topicId, topicIds), isNull(messages.agentId)));
+      .where(
+        and(this.messagesWs(tx), inArray(messages.topicId, topicIds), isNull(messages.agentId)),
+      );
 
     // 4. Also update messages without topicId but in inbox (sessionId IS NULL) - preserve original updatedAt
     await tx
@@ -100,7 +109,7 @@ export class AgentMigrationRepo {
       .set({ agentId, updatedAt: messages.updatedAt })
       .where(
         and(
-          this.ws(messages),
+          this.messagesWs(tx),
           isNull(messages.sessionId),
           isNull(messages.topicId),
           isNull(messages.agentId),
@@ -135,7 +144,7 @@ export class AgentMigrationRepo {
         .update(messages)
         .set({ agentId, updatedAt: messages.updatedAt })
         .where(
-          and(this.ws(messages), inArray(messages.topicId, topicIds), isNull(messages.agentId)),
+          and(this.messagesWs(tx), inArray(messages.topicId, topicIds), isNull(messages.agentId)),
         );
     }
 
@@ -145,7 +154,7 @@ export class AgentMigrationRepo {
       .set({ agentId, updatedAt: messages.updatedAt })
       .where(
         and(
-          this.ws(messages),
+          this.messagesWs(tx),
           eq(messages.sessionId, sessionId),
           isNull(messages.topicId),
           isNull(messages.agentId),

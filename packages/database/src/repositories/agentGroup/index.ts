@@ -29,6 +29,7 @@ import {
 import type { LobeChatDatabase } from '../../type';
 import { idGenerator } from '../../utils/idGenerator';
 import { normalizeInboxAgentMeta } from '../../utils/inboxAgent';
+import { buildMessageScopeWhere } from '../../utils/messageScope';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
 interface CopyAgentGroupToWorkspaceOptions {
@@ -111,7 +112,7 @@ export class AgentGroupRepository {
   private threadOwnership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, threads);
   private messageOwnership = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messages);
+    buildMessageScopeWhere(this.db, { userId: this.userId, workspaceId: this.workspaceId });
   private messagePluginOwnership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messagePlugins);
 

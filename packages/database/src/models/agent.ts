@@ -1722,9 +1722,13 @@ export class AgentModel {
 
   /**
    * Batch variant of {@link transferAgent}: moves several agents (and their
-   * cascaded topics / messages / threads / tasks / …) in ONE transaction, with
-   * every large-table UPDATE issued once via `inArray` instead of once per
-   * agent. All-or-nothing: a failure on any agent rolls back the whole batch.
+   * cascaded topics / threads / tasks / …) in ONE transaction, with every
+   * large-table UPDATE issued once via `inArray` instead of once per agent.
+   * All-or-nothing: a failure on any agent rolls back the whole batch.
+   *
+   * `messages` rows are deliberately left untouched — their scope is derived
+   * from the owning topic/session at read time (see buildMessageScopeWhere),
+   * which keeps the transfer seconds-fast regardless of history size.
    */
   transferAgents = async (
     agentIds: string[],
@@ -1977,15 +1981,12 @@ export class AgentModel {
         targetWorkspaceId,
       );
 
-      // 7. Update messages (linked via sessionId or agentId)
-      const messageCondition =
-        sessionIds.length > 0
-          ? or(inArray(messages.sessionId, sessionIds), inArray(messages.agentId, agentIds))
-          : inArray(messages.agentId, agentIds);
-      await trx
-        .update(messages)
-        .set({ ...ownershipUpdate, updatedAt: messages.updatedAt })
-        .where(messageCondition!);
+      // 7. messages (and their child tables) are intentionally NOT rewritten:
+      // their scope is derived from the owning topic/session (see
+      // buildMessageScopeWhere), and rewriting user_id/workspace_id on the
+      // shared messages table costs minutes per heavy agent — every row update
+      // maintains all 17 indexes including the multi-GB BM25 full-text index.
+      // The rows' user_id/workspace_id stay as creation-time author snapshots.
 
       // 8. Update threads (linked via agentId)
       await trx

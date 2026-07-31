@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -16,6 +16,7 @@ import {
   documents,
   files,
   knowledgeBases,
+  messagePlugins,
   messages,
   sessionGroups,
   sessions,
@@ -32,7 +33,9 @@ import {
   workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { buildMessageChildScopeWhere } from '../../utils/messageScope';
 import { AgentModel } from '../agent';
+import { MessageModel } from '../message';
 import {
   TOPIC_COMMENT_TOPIC_NOT_FOUND,
   TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS,
@@ -171,22 +174,84 @@ describe('AgentModel.transferAgent', () => {
     expect(session.groupId).toBeNull();
   });
 
-  it('should update topics and messages', async () => {
+  it('should update topics and keep messages as untouched snapshots visible via derivation', async () => {
     const model = new AgentModel(serverDB, userId);
     const agent = await model.create({ title: 'Agent' });
 
     await serverDB.insert(topics).values({ id: 'topic-1', agentId: agent.id, userId });
     await serverDB
       .insert(messages)
-      .values({ id: 'msg-1', agentId: agent.id, userId, role: 'assistant' });
+      .values({ id: 'msg-1', agentId: agent.id, topicId: 'topic-1', userId, role: 'assistant' });
 
     await model.transferAgent(agent.id, wsId1, userId);
 
     const [topic] = await serverDB.select().from(topics).where(eq(topics.id, 'topic-1'));
     expect(topic.workspaceId).toBe(wsId1);
 
+    // The message row itself is NOT rewritten: user_id/workspace_id stay as
+    // creation-time snapshots (avoids the minutes-long BM25/index write
+    // amplification on heavy agents)…
     const [msg] = await serverDB.select().from(messages).where(eq(messages.id, 'msg-1'));
-    expect(msg.workspaceId).toBe(wsId1);
+    expect(msg.workspaceId).toBeNull();
+    expect(msg.userId).toBe(userId);
+
+    // …while scope derivation makes it immediately visible in the target
+    // workspace, and no longer visible in the source personal scope.
+    const wsMessages = new MessageModel(serverDB, userId, wsId1);
+    expect(await wsMessages.query({ topicId: 'topic-1' })).toHaveLength(1);
+
+    const personalMessages = new MessageModel(serverDB, userId);
+    expect(await personalMessages.query({ topicId: 'topic-1' })).toHaveLength(0);
+  });
+
+  it('should keep message child tables (plugins) visible after transfer and round-trip cleanly', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Agent' });
+
+    await serverDB.insert(topics).values({ id: 'rt-topic', agentId: agent.id, userId });
+    await serverDB.insert(messages).values({
+      agentId: agent.id,
+      id: 'rt-msg-tool',
+      role: 'tool',
+      topicId: 'rt-topic',
+      userId,
+    });
+    await serverDB.insert(messagePlugins).values({
+      id: 'rt-msg-tool',
+      identifier: 'test-plugin',
+      toolCallId: 'call-1',
+      userId,
+    });
+
+    const pluginVisibleIn = async (workspaceId?: string) =>
+      serverDB
+        .select({ id: messagePlugins.id })
+        .from(messagePlugins)
+        .where(
+          and(
+            eq(messagePlugins.id, 'rt-msg-tool'),
+            buildMessageChildScopeWhere(serverDB, { userId, workspaceId }, messagePlugins.id),
+          ),
+        );
+
+    // personal → workspace: message and plugin payload reachable in the
+    // workspace scope even though neither row was rewritten
+    await model.transferAgent(agent.id, wsId1, userId);
+    const wsMessages = new MessageModel(serverDB, userId, wsId1);
+    expect(await wsMessages.query({ topicId: 'rt-topic' })).toHaveLength(1);
+    expect(await pluginVisibleIn(wsId1)).toHaveLength(1);
+    expect(await pluginVisibleIn(undefined)).toHaveLength(0);
+
+    // workspace → personal round-trip: everything visible again in personal scope
+    const wsModel = new AgentModel(serverDB, userId, wsId1);
+    await wsModel.transferAgent(agent.id, null, userId);
+    const personalMessages = new MessageModel(serverDB, userId);
+    expect(await personalMessages.query({ topicId: 'rt-topic' })).toHaveLength(1);
+    expect(await pluginVisibleIn(undefined)).toHaveLength(1);
+
+    // author snapshot is never rewritten
+    const [msg] = await serverDB.select().from(messages).where(eq(messages.id, 'rt-msg-tool'));
+    expect(msg.userId).toBe(userId);
   });
 
   it('should preserve content timestamps while transferring ownership', async () => {
@@ -828,8 +893,20 @@ describe('AgentModel.transferAgents (batch)', () => {
       { id: 'batch-topic-2', agentId: agent2.id, userId },
     ]);
     await serverDB.insert(messages).values([
-      { id: 'batch-msg-1', agentId: agent1.id, userId, role: 'assistant' },
-      { id: 'batch-msg-2', agentId: agent2.id, userId, role: 'assistant' },
+      {
+        id: 'batch-msg-1',
+        agentId: agent1.id,
+        topicId: 'batch-topic-1',
+        userId,
+        role: 'assistant',
+      },
+      {
+        id: 'batch-msg-2',
+        agentId: agent2.id,
+        topicId: 'batch-topic-2',
+        userId,
+        role: 'assistant',
+      },
     ]);
 
     const results = await model.transferAgents([agent1.id, agent2.id], wsId1, userId);
@@ -845,9 +922,15 @@ describe('AgentModel.transferAgents (batch)', () => {
       const [topic] = await serverDB.select().from(topics).where(eq(topics.id, topicId));
       expect(topic.workspaceId).toBe(wsId1);
     }
-    for (const msgId of ['batch-msg-1', 'batch-msg-2']) {
+    // Message rows stay untouched snapshots; visibility follows the topic.
+    const wsMessages = new MessageModel(serverDB, userId, wsId1);
+    for (const [msgId, topicId] of [
+      ['batch-msg-1', 'batch-topic-1'],
+      ['batch-msg-2', 'batch-topic-2'],
+    ] as const) {
       const [msg] = await serverDB.select().from(messages).where(eq(messages.id, msgId));
-      expect(msg.workspaceId).toBe(wsId1);
+      expect(msg.workspaceId).toBeNull();
+      expect(await wsMessages.query({ topicId })).toHaveLength(1);
     }
   });
 
