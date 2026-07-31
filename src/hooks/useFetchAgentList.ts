@@ -3,8 +3,8 @@
 import isEqual from 'fast-deep-equal';
 import { useLayoutEffect } from 'react';
 
-import { useEntityStore, useHomeSidebarRequest } from '@/store/entity';
-import { selectHomeSidebar } from '@/store/entity/selectors';
+import { useClientDataStore, useHomeSidebarRequest } from '@/client-data';
+import { selectHomeSidebar } from '@/client-data/modules/home/selectors';
 import { useHomeStore } from '@/store/home';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
@@ -25,7 +25,7 @@ export const useFetchAgentList = () => {
   // request hook never become React subscribers to the aggregate EntityView.
   useLayoutEffect(
     () =>
-      useEntityStore.subscribe(
+      useClientDataStore.subscribe(
         (state) => selectHomeSidebar(state.scopes[scope]),
         (data) => syncLegacyProjection(data, scope),
         { equalityFn: isEqual, fireImmediately: true },

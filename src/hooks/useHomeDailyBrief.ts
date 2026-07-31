@@ -1,6 +1,6 @@
 import type { HomeDailyBriefPair } from '@lobechat/types';
 
-import { useHomeDailyBriefData } from '@/store/entity';
+import { useHomeDailyBriefData } from '@/client-data';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
 

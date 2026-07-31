@@ -1,9 +1,9 @@
+import { getClientDataStoreState } from '@/client-data';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
 import { briefService } from '@/services/brief';
 import { taskService } from '@/services/task';
 import { type BriefStore } from '@/store/brief/store';
 import { type BriefItem } from '@/store/brief/types';
-import { getEntityStoreState } from '@/store/entity';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
@@ -40,7 +40,7 @@ export class BriefListActionImpl {
     await briefService.delete(id);
     const briefs = this.#get().briefs.filter((b) => b.id !== id);
     this.#set({ briefs }, false, n('deleteBrief'));
-    getEntityStoreState().deleteBriefEntity(scope, id, observedAt);
+    getClientDataStoreState().deleteBriefEntity(scope, id, observedAt);
   };
 
   markBriefRead = async (id: string) => {
@@ -49,7 +49,7 @@ export class BriefListActionImpl {
     const result = await briefService.markRead(id);
     const readAt = result.data.readAt ?? new Date().toISOString();
     this.internal_updateBrief(id, { readAt });
-    getEntityStoreState().updateBriefReadState(scope, id, readAt, observedAt);
+    getClientDataStoreState().updateBriefReadState(scope, id, readAt, observedAt);
   };
 
   /**
@@ -67,7 +67,7 @@ export class BriefListActionImpl {
 
     const briefs = this.#get().briefs.filter((b) => !resolvedIds.has(b.id));
     this.#set({ briefs }, false, n('resolveBriefsAsRead'));
-    getEntityStoreState().resolveBriefEntitiesAsRead(
+    getClientDataStoreState().resolveBriefEntitiesAsRead(
       scope,
       [...resolvedIds],
       new Date().toISOString(),
@@ -87,7 +87,7 @@ export class BriefListActionImpl {
       resolvedAt,
       resolvedComment,
     });
-    getEntityStoreState().updateBriefResolution(
+    getClientDataStoreState().updateBriefResolution(
       scope,
       id,
       {

@@ -1021,9 +1021,9 @@ export const homeKeys = {
 
 /**
  * Non-persistent request identities for the normalized Home entity graph.
- * Fetchers cache only a completion marker; all domain data lives in EntityStore.
+ * Fetchers cache only a completion marker; all domain data lives in ClientDataStore.
  */
-export const entityDataKeys = {
+export const clientDataKeys = {
   briefs: def('request:entity:home:briefs', (scope: string) => [
     'request:entity:home:briefs',
     scope,

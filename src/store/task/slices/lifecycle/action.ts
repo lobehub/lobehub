@@ -1,9 +1,9 @@
 import type { TaskDetailData, TaskStatus } from '@lobechat/types';
 import debug from 'debug';
 
+import { getClientDataStoreState } from '@/client-data';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
 import { taskService } from '@/services/task';
-import { getEntityStoreState } from '@/store/entity';
 import type { StoreSetter } from '@/store/types';
 import { runMutation } from '@/store/utils/runMutation';
 import { saveToast } from '@/store/utils/saveToast';
@@ -49,7 +49,7 @@ export class TaskLifecycleSliceActionImpl {
       type: 'updateTaskDetail',
       value: { error: null, status: 'running' },
     });
-    getEntityStoreState().updateTaskEntityStatus(getCacheScope(), id, 'running');
+    getClientDataStoreState().updateTaskEntityStatus(getCacheScope(), id, 'running');
 
     let result: Awaited<ReturnType<typeof taskService.run>>;
     try {
@@ -127,7 +127,7 @@ export class TaskLifecycleSliceActionImpl {
       type: 'updateTaskDetail',
       value: { status, ...extraUpdate },
     });
-    getEntityStoreState().updateTaskEntityStatus(getCacheScope(), id, status);
+    getClientDataStoreState().updateTaskEntityStatus(getCacheScope(), id, status);
     await runMutation(this.#set, this.#get, {
       mutate: async () => {
         await taskService.updateStatus(id, status, error);

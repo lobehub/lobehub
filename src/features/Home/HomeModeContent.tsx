@@ -5,11 +5,6 @@ import { HashIcon, ListTodoIcon } from 'lucide-react';
 import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import AsyncError from '@/components/AsyncError';
-import TaskStatusIcon from '@/features/AgentTasks/features/TaskStatusIcon';
-import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
-import { useHomeInboxTopics } from '@/features/HomeInbox/useHomeInboxTopics';
-import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import {
   useHomeInboxTopic,
   useHomeRecentTopic,
@@ -18,7 +13,12 @@ import {
   useHomeTask,
   useHomeTaskIds,
   useHomeTasksRequest,
-} from '@/store/entity';
+} from '@/client-data';
+import AsyncError from '@/components/AsyncError';
+import TaskStatusIcon from '@/features/AgentTasks/features/TaskStatusIcon';
+import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
+import { useHomeInboxTopics } from '@/features/HomeInbox/useHomeInboxTopics';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 

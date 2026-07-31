@@ -4,10 +4,10 @@ import type { HomeSidebarEntityRef, HomeSidebarIndex } from '@lobechat/types';
 import { useMemo } from 'react';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { useHomeSidebarIndex } from '@/client-data';
 import { useSidebarItemVisibility } from '@/routes/(main)/home/_layout/Body/Agent/useSidebarItemVisibility';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
-import { useHomeSidebarIndex } from '@/store/entity';
 
 export type AgentRowRef =
   | { id: string; pinned: false; source: 'builtin' }

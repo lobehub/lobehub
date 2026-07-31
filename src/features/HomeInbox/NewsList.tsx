@@ -5,12 +5,12 @@ import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useHomeBrief } from '@/client-data';
 import BriefCardArtifacts from '@/features/DailyBrief/BriefCardArtifacts';
 import BriefIcon from '@/features/DailyBrief/BriefIcon';
 import { homeType } from '@/features/Home/components/homeType';
 import Time from '@/features/Home/components/Time';
 import { useBriefStore } from '@/store/brief';
-import { useHomeBrief } from '@/store/entity';
 
 const AVATAR_SIZE = 20;
 const ROW_GAP = 10;
