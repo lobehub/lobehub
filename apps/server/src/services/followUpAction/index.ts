@@ -2,8 +2,11 @@ import { TRACING_SCENARIOS } from '@lobechat/const';
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
 import type { FollowUpChip, FollowUpExtractInput, FollowUpExtractResult } from '@lobechat/types';
 import debug from 'debug';
+import { and, eq, isNotNull, isNull, ne } from 'drizzle-orm';
 
+import { messages } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { buildMessageScopeWhere } from '@/database/utils/messageScope';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 
 import { buildSuggestionPrompt, FOLLOW_UP_PROMPT_VERSION } from './prompts';
@@ -35,19 +38,19 @@ export class FollowUpActionService {
     const row = await this.db.query.messages.findFirst({
       columns: { content: true, id: true },
       orderBy: (m, { desc }) => desc(m.createdAt),
-      where: (m, { and, eq, isNotNull, isNull, ne }) =>
-        and(
-          this.workspaceId
-            ? eq(m.workspaceId, this.workspaceId)
-            : and(eq(m.userId, this.userId), isNull(m.workspaceId)),
-          eq(m.topicId, topicId),
-          // Discriminate thread vs main topic: an absent threadId must NOT
-          // surface a thread reply that lives under the same topicId.
-          threadId ? eq(m.threadId, threadId) : isNull(m.threadId),
-          eq(m.role, 'assistant'),
-          isNotNull(m.content),
-          ne(m.content, ''),
-        ),
+      // Scope is derived from the owning topic/session — the row's
+      // user_id/workspace_id are creation-time snapshots that go stale after
+      // agent transfers.
+      where: and(
+        buildMessageScopeWhere({ userId: this.userId, workspaceId: this.workspaceId }),
+        eq(messages.topicId, topicId),
+        // Discriminate thread vs main topic: an absent threadId must NOT
+        // surface a thread reply that lives under the same topicId.
+        threadId ? eq(messages.threadId, threadId) : isNull(messages.threadId),
+        eq(messages.role, 'assistant'),
+        isNotNull(messages.content),
+        ne(messages.content, ''),
+      ),
     });
 
     if (!row) return EMPTY_RESULT('');
