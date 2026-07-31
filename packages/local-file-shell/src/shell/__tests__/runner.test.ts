@@ -105,6 +105,19 @@ describe('runCommand', () => {
       expect(result.stdout).toContain('/tmp');
     });
 
+    it('should report the real spawn error when cwd does not exist', async () => {
+      const missingCwd = path.join(tmpDir, 'missing-worktree');
+      const result = await runCommand(
+        { command: 'echo unreachable', cwd: missingCwd },
+        { processManager },
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.exit_code).toBeUndefined();
+      expect(result.error).toContain(`working directory: ${missingCwd}`);
+      expect(result.error).toContain('ENOENT');
+    });
+
     it('should merge env into child process environment', async () => {
       const result = await runCommand(
         {

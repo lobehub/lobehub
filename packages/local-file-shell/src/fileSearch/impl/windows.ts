@@ -265,7 +265,7 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
 
   private async globWithFd(params: GlobFilesParams): Promise<GlobFilesResult> {
     const searchPath = params.scope || params.cwd || os.homedir() || process.cwd();
-    const limit = this.normalizePositiveLimit(params.limit);
+    const limit = this.normalizeGlobLimit(params.limit);
     const logPrefix = `[glob:fd: ${params.pattern}]`;
 
     logger.debug(`${logPrefix} Starting fd glob`, { searchPath });
@@ -282,11 +282,9 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
         'node_modules',
         '--exclude',
         '.git',
+        '--max-results',
+        String(limit),
       ];
-
-      if (limit) {
-        args.push('--max-results', String(limit));
-      }
 
       const { stdout, exitCode } = await execa('fd', args, {
         reject: false,
@@ -302,7 +300,7 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
         .trim()
         .split('\r\n')
         .filter((line) => line.trim());
-      const limitedFiles = limit ? files.slice(0, limit) : files;
+      const limitedFiles = files.slice(0, limit);
 
       const filesWithStats = await this.getFilesWithStats(limitedFiles);
       const sortedFiles = filesWithStats.sort((a, b) => b.mtime - a.mtime).map((f) => f.path);
@@ -324,7 +322,7 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
 
   private async globWithFastGlob(params: GlobFilesParams): Promise<GlobFilesResult> {
     const searchPath = params.scope || params.cwd || os.homedir() || process.cwd();
-    const limit = this.normalizePositiveLimit(params.limit);
+    const limit = this.normalizeGlobLimit(params.limit);
     const logPrefix = `[glob:fast-glob: ${params.pattern}]`;
 
     logger.debug(`${logPrefix} Starting fast-glob`, { searchPath });
@@ -340,9 +338,7 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
         stats: true,
       };
 
-      const files = limit
-        ? await this.collectLimitedFastGlobEntries(params.pattern, options, limit)
-        : ((await fg(params.pattern, options)) as unknown as FastGlobStatsEntry[]);
+      const files = await this.collectLimitedFastGlobEntries(params.pattern, options, limit);
 
       const sortedFiles = files
         .sort((a, b) => b.stats.mtime.getTime() - a.stats.mtime.getTime())

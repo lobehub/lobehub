@@ -64,6 +64,8 @@ const CONTENT_TYPE_MAP: Record<string, string> = {
   'zip': 'archive',
 };
 
+export const MAX_GLOB_RESULTS = 1000;
+
 /**
  * File Search Service Implementation Abstract Class
  * Defines the interface that different platform file search implementations need to implement
@@ -156,6 +158,15 @@ export abstract class BaseFileSearch {
   protected normalizePositiveLimit(limit?: number): number | undefined {
     if (!Number.isFinite(limit) || !limit || limit < 1) return undefined;
     return Math.floor(limit);
+  }
+
+  /**
+   * Glob output is sent back through the agent queue, so an unbounded directory walk can make a
+   * single tool result exceed the queue payload limit. Always apply a default and hard ceiling,
+   * including when a caller explicitly requests a larger value.
+   */
+  protected normalizeGlobLimit(limit?: number): number {
+    return Math.min(this.normalizePositiveLimit(limit) ?? MAX_GLOB_RESULTS, MAX_GLOB_RESULTS);
   }
 
   abstract search(options: SearchFilesParams): Promise<FileResult[]>;

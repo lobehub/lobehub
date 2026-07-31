@@ -43,7 +43,9 @@ vi.mock('node:fs/promises', () => ({
 describe('UnixFileSearch glob fallback root', () => {
   beforeEach(() => {
     fgMock.mockReset();
-    (fgMock as unknown as { stream: ReturnType<typeof vi.fn> }).stream = vi.fn();
+    (fgMock as unknown as { stream: ReturnType<typeof vi.fn> }).stream = vi
+      .fn()
+      .mockReturnValue((async function* () {})());
     execaMock.mockReset();
     // Force the Unix tool selection to fall through to fast-glob so we
     // don't have to mock fd/find availability checks.
@@ -58,8 +60,8 @@ describe('UnixFileSearch glob fallback root', () => {
     const impl = new LinuxSearchServiceImpl();
     await impl.glob({ pattern: '**/*report*' });
 
-    expect(fgMock).toHaveBeenCalledTimes(1);
-    const [pattern, options] = fgMock.mock.calls[0] as [string, { cwd: string }];
+    expect(fgStreamMock()).toHaveBeenCalledTimes(1);
+    const [pattern, options] = fgStreamMock().mock.calls[0] as [string, { cwd: string }];
     expect(pattern).toBe('**/*report*');
     expect(options.cwd).toBe('/Users/test-home');
   });
@@ -68,7 +70,7 @@ describe('UnixFileSearch glob fallback root', () => {
     const impl = new LinuxSearchServiceImpl();
     await impl.glob({ pattern: '**/*.ts', scope: '/Users/test-home/Downloads' });
 
-    const [, options] = fgMock.mock.calls[0] as [string, { cwd: string }];
+    const [, options] = fgStreamMock().mock.calls[0] as [string, { cwd: string }];
     expect(options.cwd).toBe('/Users/test-home/Downloads');
   });
 
@@ -80,10 +82,13 @@ describe('UnixFileSearch glob fallback root', () => {
 
     await impl.glob({ pattern: '**/*skill*', scope: '/repo/packages' });
 
-    expect(fgMock).toHaveBeenCalledTimes(1);
+    expect(fgStreamMock()).toHaveBeenCalledTimes(1);
     expect(execaMock).not.toHaveBeenCalledWith('find', expect.anything(), expect.anything());
 
-    const [pattern, options] = fgMock.mock.calls[0] as [string, { cwd: string; ignore: string[] }];
+    const [pattern, options] = fgStreamMock().mock.calls[0] as [
+      string,
+      { cwd: string; ignore: string[] },
+    ];
     expect(pattern).toBe('**/*skill*');
     expect(options.cwd).toBe('/repo/packages');
     expect(options.ignore).toContain('**/node_modules/**');
@@ -109,7 +114,7 @@ describe('UnixFileSearch glob fallback root', () => {
     );
   });
 
-  it('does not force a glob execution limit when the caller omits it', async () => {
+  it('applies the default hard glob limit when the caller omits it', async () => {
     const toolDetector: ToolDetector = {
       getBestTool: vi.fn().mockResolvedValue('fd'),
     };
@@ -122,7 +127,20 @@ describe('UnixFileSearch glob fallback root', () => {
     await impl.glob({ pattern: '**/*.ts', scope: '/repo/packages' });
 
     const [, args] = execaMock.mock.calls[0] as [string, string[]];
-    expect(args).not.toContain('--max-results');
+    expect(args).toEqual(expect.arrayContaining(['--max-results', '1000']));
+  });
+
+  it('caps an explicit glob limit at the hard maximum', async () => {
+    const toolDetector: ToolDetector = {
+      getBestTool: vi.fn().mockResolvedValue('fd'),
+    };
+    execaMock.mockResolvedValue({ exitCode: 0, stdout: '/repo/packages/a.ts\n' });
+
+    const impl = new LinuxSearchServiceImpl(toolDetector);
+    await impl.glob({ limit: 50_000, pattern: '**/*.ts', scope: '/repo/packages' });
+
+    const [, args] = execaMock.mock.calls[0] as [string, string[]];
+    expect(args).toEqual(expect.arrayContaining(['--max-results', '1000']));
   });
 
   it('streams fast-glob results when the caller provides a glob limit', async () => {
