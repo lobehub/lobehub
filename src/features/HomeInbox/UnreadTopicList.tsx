@@ -13,9 +13,9 @@ import { homeType } from '@/features/Home/components/homeType';
 import Time from '@/features/Home/components/Time';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useChatStore } from '@/store/chat';
+import { useHomeInboxTopic } from '@/store/entity';
 
 import AuthorChip from './AuthorChip';
-import { type InboxTopic } from './useHomeInboxTopics';
 
 const DOT_WIDTH = 14;
 const ROW_GAP = 8;
@@ -88,7 +88,7 @@ interface UnreadTopicItemProps {
   onFollowUpSent?: (topicId: string) => void;
   /** Team view: show who triggered the run, right of the title. */
   showAuthor?: boolean;
-  topic: InboxTopic;
+  topicId: string;
 }
 
 /**
@@ -99,9 +99,10 @@ interface UnreadTopicItemProps {
  * the topic itself.
  */
 const UnreadTopicItem = memo<UnreadTopicItemProps>(
-  ({ bare, topic, onFollowUpSent, showAuthor }) => {
+  ({ bare, topicId, onFollowUpSent, showAuthor }) => {
     const { t } = useTranslation('home');
-    const agent = useAgentDisplayMeta(topic.agentId);
+    const topic = useHomeInboxTopic(topicId);
+    const agent = useAgentDisplayMeta(topic?.agentId);
     const navigate = useWorkspaceAwareNavigate();
     const updateTopicStatus = useChatStore((s) => s.updateTopicStatus);
     const sendMessage = useChatStore((s) => s.sendMessage);
@@ -111,17 +112,17 @@ const UnreadTopicItem = memo<UnreadTopicItemProps>(
     const [read, setRead] = useState(false);
     const [replying, setReplying] = useState(false);
 
-    const agentId = topic.agentId ?? undefined;
+    const agentId = topic?.agentId ?? undefined;
 
     // Engaging with the row IS the read: this is an inbox, not a topic list — a row
     // the user has answered or opened has been triaged. The persisted status drops
     // it from the next inbox fetch; locally the row stays put so it doesn't yank
     // out from under the reader.
     const markRead = useCallback(() => {
-      if (read) return;
+      if (read || !topic) return;
       setRead(true);
       void updateTopicStatus({ agentId, status: 'active', topicId: topic.id });
-    }, [agentId, read, topic.id, updateTopicStatus]);
+    }, [agentId, read, topic, updateTopicStatus]);
 
     const toggle = useCallback(() => {
       setExpanded((prev) => {
@@ -134,10 +135,10 @@ const UnreadTopicItem = memo<UnreadTopicItemProps>(
     // destination the running-topics rows go to, rather than surfacing it in a
     // drawer stacked over the home page.
     const viewChat = useCallback(() => {
-      if (!agentId) return;
+      if (!agentId || !topic) return;
       markRead();
       navigate(AGENT_CHAT_TOPIC_URL(agentId, topic.id));
-    }, [agentId, markRead, navigate, topic.id]);
+    }, [agentId, markRead, navigate, topic]);
 
     // Reply in place, continuing the topic exactly like the chat drawer does:
     // hydrate the topic's messages into the store first so the reply threads onto
@@ -146,7 +147,7 @@ const UnreadTopicItem = memo<UnreadTopicItemProps>(
     // going server-side. No navigation.
     const submitFollowUp = useCallback(
       async (text: string) => {
-        if (!agentId) return;
+        if (!agentId || !topic) return;
         markRead();
         const context: ConversationContext = {
           agentId,
@@ -161,8 +162,10 @@ const UnreadTopicItem = memo<UnreadTopicItemProps>(
         // something; the hook reconciles with the server a beat later.
         onFollowUpSent?.(topic.id);
       },
-      [agentId, markRead, onFollowUpSent, prefetchMessages, sendMessage, topic.id],
+      [agentId, markRead, onFollowUpSent, prefetchMessages, sendMessage, topic],
     );
+
+    if (!topic) return null;
 
     return (
       <Flexbox className={bare ? undefined : styles.section}>
@@ -249,7 +252,7 @@ interface UnreadTopicListProps {
   onFollowUpSent?: (topicId: string) => void;
   /** Team view: tag each row with who triggered it. */
   showAuthor?: boolean;
-  topics: InboxTopic[];
+  topicIds: string[];
 }
 
 /**
@@ -257,14 +260,14 @@ interface UnreadTopicListProps {
  * a week of finished runs still fits on screen, and the reply is one click deep.
  */
 const UnreadTopicList = memo<UnreadTopicListProps>(
-  ({ bare, topics, onFollowUpSent, showAuthor }) => (
+  ({ bare, topicIds, onFollowUpSent, showAuthor }) => (
     <Flexbox className={bare ? styles.bareList : styles.list}>
-      {topics.map((topic) => (
+      {topicIds.map((topicId) => (
         <UnreadTopicItem
           bare={bare}
-          key={topic.id}
+          key={topicId}
           showAuthor={showAuthor}
-          topic={topic}
+          topicId={topicId}
           onFollowUpSent={onFollowUpSent}
         />
       ))}

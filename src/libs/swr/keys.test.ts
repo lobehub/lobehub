@@ -1,7 +1,7 @@
 import { unstable_serialize } from 'swr';
 import { describe, expect, it } from 'vitest';
 
-import { recentKeys, taskKeys } from './keys';
+import { agentKeys, entityDataKeys, homeKeys, recentKeys, taskKeys } from './keys';
 import { CACHE_TIERS } from './localStorageProvider';
 
 describe('recentKeys', () => {
@@ -25,14 +25,6 @@ describe('recentKeys', () => {
       recentKeys.allDrawer(true, 'user-1:workspace-2'),
     );
   });
-
-  it('keys the Home topic-only list independently from mixed recents', () => {
-    expect(recentKeys.topicList(9, 'user-1:workspace-1')).toEqual([
-      'recent:topicList',
-      9,
-      'user-1:workspace-1',
-    ]);
-  });
 });
 
 describe('taskKeys', () => {
@@ -46,5 +38,44 @@ describe('taskKeys', () => {
       serialized.includes(pattern),
     );
     expect(persisted).toBe(true);
+  });
+});
+
+describe('homeKeys', () => {
+  it('isolates daily briefs by user without changing the original request identity', () => {
+    expect(homeKeys.dailyBrief('user-1')).toEqual(['home:dailyBrief', 'user-1']);
+    expect(homeKeys.dailyBrief('user-1')).not.toEqual(homeKeys.dailyBrief('user-2'));
+  });
+});
+
+describe('entityDataKeys', () => {
+  it('isolates normalized Home requests by entity scope', () => {
+    expect(entityDataKeys.sidebar('user-1:workspace-1')).not.toEqual(
+      entityDataKeys.sidebar('user-1:workspace-2'),
+    );
+  });
+
+  it('retires the legacy full sidebar response from SWR persistence', () => {
+    const serialized = unstable_serialize(agentKeys.list(true));
+
+    expect(
+      [...CACHE_TIERS.idb, ...CACHE_TIERS.local].some((pattern) => serialized.includes(pattern)),
+    ).toBe(false);
+  });
+
+  it('keeps request markers outside every SWR persistence tier', () => {
+    const serializedKeys = [
+      entityDataKeys.sidebar('scope-1'),
+      entityDataKeys.recentTopics('scope-1', 9),
+      entityDataKeys.inboxTopics('scope-1'),
+      entityDataKeys.tasks('scope-1'),
+      entityDataKeys.briefs('scope-1'),
+    ].map(unstable_serialize);
+
+    for (const serialized of serializedKeys) {
+      expect(
+        [...CACHE_TIERS.idb, ...CACHE_TIERS.local].some((pattern) => serialized.includes(pattern)),
+      ).toBe(false);
+    }
   });
 });

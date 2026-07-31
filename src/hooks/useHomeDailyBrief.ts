@@ -1,13 +1,8 @@
-import { useClientDataSWR } from '@/libs/swr';
-import { homeKeys } from '@/libs/swr/keys';
-import { homeService } from '@/services/home';
+import type { HomeDailyBriefPair } from '@lobechat/types';
+
+import { useHomeDailyBriefData } from '@/store/entity';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
-
-interface HomeDailyBriefPair {
-  hint: string;
-  welcome: string;
-}
 
 interface UseHomeDailyBriefResult {
   /** First pair selected for this daily brief. `undefined` when no data. */
@@ -21,11 +16,10 @@ export const useHomeDailyBrief = (): UseHomeDailyBriefResult => {
   const userId = useUserStore(userProfileSelectors.userId);
 
   // Scope the SWR key by userId so an account switch within the same SPA
-  // session (or signing in as a different user after sign-out) refetches
-  // and never serves the previous user's cached pairs from this slot.
-  const { data } = useClientDataSWR(isLogin && userId ? homeKeys.dailyBrief(userId) : null, () =>
-    homeService.getDailyBrief(),
-  );
+  // session never serves the previous user's pairs. The server remains the
+  // owner of Daily Brief date semantics; the entity layer preserves that data
+  // as a typed snapshot without adding a client-side date partition.
+  const { data } = useHomeDailyBriefData(isLogin, userId);
 
   const pairs = data?.pairs ?? [];
 

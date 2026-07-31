@@ -45,23 +45,30 @@ export const useRecentItemDropdownMenu = (
       // Optimistic update
       updateRecentTitle(item.id, newTitle);
 
-      // Persist to server
-      switch (item.type) {
-        case 'document': {
-          await documentService.updateDocument({ id: item.id, title: newTitle });
-          break;
+      try {
+        // Persist to server
+        switch (item.type) {
+          case 'document': {
+            await documentService.updateDocument({ id: item.id, title: newTitle });
+            break;
+          }
+          case 'task': {
+            await taskService.update(item.id, { name: newTitle });
+            break;
+          }
+          case 'topic': {
+            await topicService.updateTopic(item.id, { title: newTitle });
+            break;
+          }
         }
-        case 'task': {
-          await taskService.update(item.id, { name: newTitle });
-          break;
-        }
-        case 'topic': {
-          await topicService.updateTopic(item.id, { title: newTitle });
-          break;
-        }
+      } catch (error) {
+        // Re-read both the legacy list projection and the canonical Topic
+        // fragment so a rejected optimistic rename cannot remain authoritative.
+        await refreshRecents();
+        throw error;
       }
     },
-    [item, updateRecentTitle],
+    [item, refreshRecents, updateRecentTitle],
   );
 
   const handleDelete = useCallback(() => {

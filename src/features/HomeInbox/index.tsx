@@ -1,7 +1,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { Segmented } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
-import { Fragment, memo, type ReactNode, useMemo, useState } from 'react';
+import { Fragment, memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceMemberProfiles } from '@/business/client/hooks/useWorkspaceMemberProfiles';
@@ -11,8 +11,7 @@ import GroupBlock from '@/features/Home/components/GroupBlock';
 import { homeType } from '@/features/Home/components/homeType';
 import RailCard from '@/features/Home/components/RailCard';
 import Recommendations, { useRecommendationsVisible } from '@/features/Recommendations';
-import { useBriefStore } from '@/store/brief';
-import { briefListSelectors } from '@/store/brief/selectors';
+import { useHomeBriefIds, useHomeBriefsRequest } from '@/store/entity';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
@@ -22,7 +21,6 @@ import NeedsYouRailCard from './NeedsYouRailCard';
 import NewsList from './NewsList';
 import RunningTasksCard from './RunningTasksCard';
 import { resolveScopeToggleSection } from './scopeTogglePlacement';
-import { splitBriefs } from './splitBriefs';
 import UnreadTopicList from './UnreadTopicList';
 import { useHomeInboxTopics } from './useHomeInboxTopics';
 
@@ -87,12 +85,10 @@ const HomeInbox = memo<HomeInboxProps>(({ variant = 'default' }) => {
   const isLogin = useUserStore(authSelectors.isLogin);
   const myId = useUserStore(userProfileSelectors.userId);
 
-  const useFetchBriefs = useBriefStore((s) => s.useFetchBriefs);
-  const briefsSWR = useFetchBriefs(isLogin);
-  const briefs = useBriefStore(briefListSelectors.briefs);
-  const isBriefsInit = useBriefStore(briefListSelectors.isBriefsInit);
-
-  const topics = useHomeInboxTopics(isLogin);
+  const briefsQuery = useHomeBriefsRequest(isLogin);
+  const needsYouIds = useHomeBriefIds('needsYou');
+  const newsIds = useHomeBriefIds('news');
+  const isBriefsInit = briefsQuery.isInitialized;
   const recommendationsVisible = useRecommendationsVisible();
 
   // A team context is a workspace with more than the viewer in it. In personal
@@ -103,32 +99,21 @@ const HomeInbox = memo<HomeInboxProps>(({ variant = 'default' }) => {
 
   const [scope, setScope] = useState<'mine' | 'team'>('mine');
   const teamView = isTeam && scope === 'team';
-
-  const { needsYou, news } = useMemo(() => splitBriefs(briefs), [briefs]);
-
-  // Topics are already workspace-wide from the server; "mine" is the viewer's
-  // own runs, "team" is everyone's. Personal mode has only the viewer's, so the
-  // filter is a no-op there.
-  const unreadTopics = useMemo(
-    () => (teamView ? topics.unread : topics.unread.filter((topic) => topic.userId === myId)),
-    [teamView, topics.unread, myId],
-  );
-  const runningTopics = useMemo(
-    () => (teamView ? topics.running : topics.running.filter((topic) => topic.userId === myId)),
-    [teamView, topics.running, myId],
-  );
+  // Topics are workspace-wide. The selector returns only IDs and performs the
+  // mine/team filter without assembling a collection of Topic views here.
+  const topics = useHomeInboxTopics(isLogin, teamView ? null : myId);
 
   if (!isLogin) return null;
 
   // The brief feed is the primary content; a first-load failure blocks the whole
   // surface. No fabricated section heading — we don't know what's under it yet.
-  if (briefsSWR.error && !isBriefsInit && !briefsSWR.isLoading) {
+  if (briefsQuery.error && !isBriefsInit && !briefsQuery.isLoading) {
     return (
       <AsyncError
-        error={briefsSWR.error}
+        error={briefsQuery.error}
         variant={'block'}
         onRetry={() => {
-          void briefsSWR.mutate();
+          void briefsQuery.mutate();
         }}
       />
     );
@@ -162,9 +147,9 @@ const HomeInbox = memo<HomeInboxProps>(({ variant = 'default' }) => {
   ) : undefined;
   const toggleSectionKey = scopeToggle
     ? resolveScopeToggleSection({
-        hasNeedsYou: needsYou.length > 0,
-        hasRunning: runningTopics.length > 0,
-        hasUnread: unreadTopics.length > 0,
+        hasNeedsYou: needsYouIds.length > 0,
+        hasRunning: topics.runningIds.length > 0,
+        hasUnread: topics.unreadIds.length > 0,
       })
     : null;
   const placeToggle = (key: typeof toggleSectionKey): ReactNode =>
@@ -172,25 +157,27 @@ const HomeInbox = memo<HomeInboxProps>(({ variant = 'default' }) => {
 
   const sections: InboxSection[] = [];
 
-  if (needsYou.length > 0)
+  if (needsYouIds.length > 0)
     sections.push(
       // The rail paginates instead of stacking and owns its header. Keep the
       // page-level scope control in that header alongside the pager.
       isRail
         ? {
             key: 'needsYou',
-            node: <NeedsYouRailCard briefs={needsYou} scopeControl={placeToggle('needsYou')} />,
+            node: (
+              <NeedsYouRailCard briefIds={needsYouIds} scopeControl={placeToggle('needsYou')} />
+            ),
             selfShelled: true,
           }
         : {
             action: placeToggle('needsYou'),
-            count: needsYou.length,
+            count: needsYouIds.length,
             key: 'needsYou',
             label: t('inbox.needsYou.title'),
             node: (
               <Flexbox gap={12}>
-                {needsYou.map((brief) => (
-                  <InboxBriefCard brief={brief} key={brief.id} />
+                {needsYouIds.map((briefId) => (
+                  <InboxBriefCard briefId={briefId} key={briefId} />
                 ))}
               </Flexbox>
             ),
@@ -206,48 +193,48 @@ const HomeInbox = memo<HomeInboxProps>(({ variant = 'default' }) => {
       node: <AsyncError error={topics.error} variant={'inline'} onRetry={topics.reload} />,
     });
 
-  if (unreadTopics.length > 0)
+  if (topics.unreadIds.length > 0)
     sections.push({
       action: placeToggle('unread'),
-      count: unreadTopics.length,
+      count: topics.unreadIds.length,
       key: 'unread',
       label: t('inbox.unread.title'),
       node: (
         <UnreadTopicList
           bare={isRail}
           showAuthor={teamView}
-          topics={unreadTopics}
+          topicIds={topics.unreadIds}
           onFollowUpSent={topics.promoteToRunning}
         />
       ),
     });
 
   // No title: the card already says "3 tasks running" on its own head.
-  if (runningTopics.length > 0)
+  if (topics.runningIds.length > 0)
     sections.push({
       key: 'running',
       node: (
         <RunningTasksCard
           action={placeToggle('running')}
           bare={isRail}
-          running={runningTopics}
           showAuthor={teamView}
+          topicIds={topics.runningIds}
         />
       ),
     });
 
-  if (news.length > 0)
+  if (newsIds.length > 0)
     sections.push({
-      action: <MarkAllReadButton news={news} />,
+      action: <MarkAllReadButton briefIds={newsIds} />,
       // Team view: News is still only mine (briefs are per-user), so say so
       // rather than let a team-scoped page imply it spans the team.
       badge: teamView && (
         <span className={cx(homeType.meta, styles.onlyMe)}>{t('inbox.scope.onlyMe')}</span>
       ),
-      count: news.length,
+      count: newsIds.length,
       key: 'news',
       label: t('inbox.news.title'),
-      node: <NewsList bare={isRail} news={news} />,
+      node: <NewsList bare={isRail} briefIds={newsIds} />,
       subtitle: t('inbox.news.subtitle'),
     });
 

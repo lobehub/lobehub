@@ -7,10 +7,10 @@ import { useTranslation } from 'react-i18next';
 
 import BriefCardArtifacts from '@/features/DailyBrief/BriefCardArtifacts';
 import BriefIcon from '@/features/DailyBrief/BriefIcon';
-import { type BriefItem } from '@/features/DailyBrief/types';
 import { homeType } from '@/features/Home/components/homeType';
 import Time from '@/features/Home/components/Time';
 import { useBriefStore } from '@/store/brief';
+import { useHomeBrief } from '@/store/entity';
 
 const AVATAR_SIZE = 20;
 const ROW_GAP = 10;
@@ -71,7 +71,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 interface NewsItemProps {
   bare?: boolean;
-  brief: BriefItem;
+  briefId: string;
 }
 
 /**
@@ -79,13 +79,15 @@ interface NewsItemProps {
  * it leads the row; opening it reads it (there is nothing to decide) and drops
  * the finding's detail inline.
  */
-const NewsItem = memo<NewsItemProps>(({ bare, brief }) => {
+const NewsItem = memo<NewsItemProps>(({ bare, briefId }) => {
   const markBriefRead = useBriefStore((s) => s.markBriefRead);
+  const brief = useHomeBrief(briefId);
 
   const [expanded, setExpanded] = useState(false);
-  const [read, setRead] = useState(Boolean(brief.readAt));
+  const [read, setRead] = useState(Boolean(brief?.readAt));
 
   const toggle = useCallback(() => {
+    if (!brief) return;
     setExpanded((prev) => {
       if (!prev && !read) {
         setRead(true);
@@ -93,7 +95,9 @@ const NewsItem = memo<NewsItemProps>(({ bare, brief }) => {
       }
       return !prev;
     });
-  }, [brief.id, markBriefRead, read]);
+  }, [brief, markBriefRead, read]);
+
+  if (!brief) return null;
 
   return (
     <Flexbox className={bare ? undefined : styles.section}>
@@ -151,7 +155,7 @@ const NewsItem = memo<NewsItemProps>(({ bare, brief }) => {
 interface NewsListProps {
   /** Rendered inside a rail card, which already draws the shell. */
   bare?: boolean;
-  news: BriefItem[];
+  briefIds: string[];
 }
 
 /**
@@ -159,21 +163,21 @@ interface NewsListProps {
  * recurring run, but there is nothing to decide. One line each — the detail
  * lives behind the click, so a week of findings still fits on screen.
  */
-const NewsList = memo<NewsListProps>(({ bare, news }) => {
+const NewsList = memo<NewsListProps>(({ bare, briefIds }) => {
   const { t } = useTranslation('home');
   const [expanded, setExpanded] = useState(false);
 
-  if (news.length === 0) return null;
+  if (briefIds.length === 0) return null;
 
   // In the rail a long feed would push every card below it off screen, so the
   // card stays a card and the tail is one click away.
-  const collapsed = bare && !expanded && news.length > RAIL_COLLAPSED_COUNT;
-  const shown = collapsed ? news.slice(0, RAIL_COLLAPSED_COUNT) : news;
+  const collapsed = bare && !expanded && briefIds.length > RAIL_COLLAPSED_COUNT;
+  const shown = collapsed ? briefIds.slice(0, RAIL_COLLAPSED_COUNT) : briefIds;
 
   return (
     <Flexbox className={bare ? styles.bareList : styles.list}>
-      {shown.map((brief) => (
-        <NewsItem bare={bare} brief={brief} key={brief.id} />
+      {shown.map((briefId) => (
+        <NewsItem bare={bare} briefId={briefId} key={briefId} />
       ))}
       {collapsed && (
         <Button
@@ -181,7 +185,7 @@ const NewsList = memo<NewsListProps>(({ bare, news }) => {
           type={'text'}
           onClick={() => setExpanded(true)}
         >
-          {t('inbox.news.showAll', { count: news.length })}
+          {t('inbox.news.showAll', { count: briefIds.length })}
         </Button>
       )}
     </Flexbox>

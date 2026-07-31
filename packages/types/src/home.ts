@@ -1,3 +1,6 @@
+import type { TaskStatus } from './task';
+import type { ChatTopicMetadata, ChatTopicStatus } from './topic/topic';
+
 /**
  * Sidebar item type - can be an agent or a chat group
  */
@@ -116,4 +119,40 @@ export interface SidebarAgentListResponse {
    */
   privateUngrouped: SidebarAgentItem[];
   ungrouped: SidebarAgentItem[];
+}
+
+export interface HomeRecentItem {
+  agentId?: string | null;
+  icon: string;
+  id: string;
+  metadata?: ChatTopicMetadata;
+  routePath: string;
+  status: TaskStatus | null;
+  title: string;
+  type: 'document' | 'task' | 'topic';
+  updatedAt: Date | number | string;
+}
+
+/** Minimal complete Topic view required by Home Dashboard and Home Inbox. */
+export interface HomeTopicView {
+  agentId?: string | null;
+  createdAt?: Date | number | string;
+  id: string;
+  lastAssistantMessage?: string | null;
+  routePath?: string;
+  runStartedAt?: Date | null;
+  status?: ChatTopicStatus | null;
+  title: string;
+  trigger?: string | null;
+  updatedAt: Date | number | string;
+  userId?: string;
+}
+
+export interface HomeDailyBriefPair {
+  hint: string;
+  welcome: string;
+}
+
+export interface HomeDailyBriefResponse {
+  pairs: HomeDailyBriefPair[];
 }

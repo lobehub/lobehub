@@ -1,14 +1,10 @@
-import { type SidebarAgentItem, type SidebarAgentListResponse } from '@/database/repositories/home';
+import type {
+  HomeDailyBriefResponse,
+  SidebarAgentItem,
+  SidebarAgentListResponse,
+} from '@lobechat/types';
+
 import { lambdaClient } from '@/libs/trpc/client';
-
-export interface HomeDailyBriefPair {
-  hint: string;
-  welcome: string;
-}
-
-export interface HomeDailyBriefResponse {
-  pairs: HomeDailyBriefPair[];
-}
 
 export class HomeService {
   /**

@@ -232,12 +232,6 @@ export const recentKeys = {
     limit,
     scope,
   ]),
-  /** Home chat-only list; filtering happens before the server-side limit. */
-  topicList: def('recent:topicList', (limit: number, scope: string) => [
-    'recent:topicList',
-    limit,
-    scope,
-  ]),
 };
 
 // ---- task ---------------------------------------------------------------
@@ -1023,6 +1017,31 @@ export const topicActionKeys = {
 // ---- misc remaining domains ---------------------------------------------
 export const homeKeys = {
   dailyBrief: def('home:dailyBrief', (userId: string) => ['home:dailyBrief', userId]),
+};
+
+/**
+ * Non-persistent request identities for the normalized Home entity graph.
+ * Fetchers cache only a completion marker; all domain data lives in EntityStore.
+ */
+export const entityDataKeys = {
+  briefs: def('request:entity:home:briefs', (scope: string) => [
+    'request:entity:home:briefs',
+    scope,
+  ]),
+  inboxTopics: def('request:entity:home:inboxTopics', (scope: string) => [
+    'request:entity:home:inboxTopics',
+    scope,
+  ]),
+  recentTopics: def('request:entity:home:recentTopics', (scope: string, limit: number) => [
+    'request:entity:home:recentTopics',
+    scope,
+    limit,
+  ]),
+  sidebar: def('request:entity:home:sidebar', (scope: string) => [
+    'request:entity:home:sidebar',
+    scope,
+  ]),
+  tasks: def('request:entity:home:tasks', (scope: string) => ['request:entity:home:tasks', scope]),
 };
 
 /**

@@ -17,7 +17,7 @@ import {
 const {
   mockMutate,
   mockSetRefreshSeed,
-  mockUseFetchBriefs,
+  mockUseHomeBriefsRequest,
   mockUseFetchLobehubConnectorConnections,
   mockUseFetchUserComposioConnections,
   mockUseResolvedInterestKeys,
@@ -25,7 +25,7 @@ const {
 } = vi.hoisted(() => ({
   mockMutate: vi.fn(),
   mockSetRefreshSeed: vi.fn(),
-  mockUseFetchBriefs: vi.fn(),
+  mockUseHomeBriefsRequest: vi.fn(() => ({ isInitialized: true })),
   mockUseFetchLobehubConnectorConnections: vi.fn(),
   mockUseFetchUserComposioConnections: vi.fn(),
   mockUseResolvedInterestKeys: vi.fn(),
@@ -53,12 +53,8 @@ vi.mock('swr', () => ({
   default: mockUseSWR,
 }));
 
-vi.mock('@/store/brief', () => ({
-  useBriefStore: (selector: (state: any) => unknown) =>
-    selector({
-      isBriefsInit: true,
-      useFetchBriefs: mockUseFetchBriefs,
-    }),
+vi.mock('@/store/entity', () => ({
+  useHomeBriefsRequest: mockUseHomeBriefsRequest,
 }));
 
 vi.mock('@/store/tool', () => ({

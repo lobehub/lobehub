@@ -1,12 +1,9 @@
-import isEqual from 'fast-deep-equal';
-import { type SWRResponse } from 'swr';
-
-import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
-import { briefKeys } from '@/libs/swr/keys';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
 import { briefService } from '@/services/brief';
 import { taskService } from '@/services/task';
 import { type BriefStore } from '@/store/brief/store';
 import { type BriefItem } from '@/store/brief/types';
+import { getEntityStoreState } from '@/store/entity';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
@@ -38,40 +35,68 @@ export class BriefListActionImpl {
   };
 
   deleteBrief = async (id: string) => {
+    const scope = getCacheScope();
+    const observedAt = Date.now();
     await briefService.delete(id);
     const briefs = this.#get().briefs.filter((b) => b.id !== id);
     this.#set({ briefs }, false, n('deleteBrief'));
+    getEntityStoreState().deleteBriefEntity(scope, id, observedAt);
   };
 
   markBriefRead = async (id: string) => {
-    await briefService.markRead(id);
-    this.internal_updateBrief(id, { readAt: new Date().toISOString() });
+    const scope = getCacheScope();
+    const observedAt = Date.now();
+    const result = await briefService.markRead(id);
+    const readAt = result.data.readAt ?? new Date().toISOString();
+    this.internal_updateBrief(id, { readAt });
+    getEntityStoreState().updateBriefReadState(scope, id, readAt, observedAt);
   };
 
   /**
    * "Mark all read" resolves news briefs with the neutral `read` action and drops
-   * them from both Zustand and its backing SWR snapshot. Route remounts hydrate
-   * Zustand from SWR before revalidation, so the cache write prevents stale briefs
-   * from reappearing after navigation.
+   * them from both the legacy Zustand projection and the canonical Home index.
    */
   resolveBriefsAsRead = async (ids: string[]) => {
     if (ids.length === 0) return;
 
+    const scope = getCacheScope();
+    const observedAt = Date.now();
     const result = await briefService.resolveManyAsRead(ids);
     const resolvedIds = new Set(result.data);
     if (resolvedIds.size === 0) return;
 
     const briefs = this.#get().briefs.filter((b) => !resolvedIds.has(b.id));
     this.#set({ briefs }, false, n('resolveBriefsAsRead'));
-    void mutate(briefKeys.list(true), briefs, { revalidate: false });
+    getEntityStoreState().resolveBriefEntitiesAsRead(
+      scope,
+      [...resolvedIds],
+      new Date().toISOString(),
+      observedAt,
+    );
   };
 
   resolveBrief = async (id: string, action?: string, comment?: string) => {
-    await briefService.resolve(id, { action, comment });
+    const scope = getCacheScope();
+    const observedAt = Date.now();
+    const result = await briefService.resolve(id, { action, comment });
+    const resolvedAction = result.data.resolvedAction ?? action ?? null;
+    const resolvedAt = result.data.resolvedAt ?? new Date().toISOString();
+    const resolvedComment = result.data.resolvedComment ?? comment ?? null;
     this.internal_updateBrief(id, {
-      resolvedAction: action,
-      resolvedAt: new Date().toISOString(),
+      resolvedAction,
+      resolvedAt,
+      resolvedComment,
     });
+    getEntityStoreState().updateBriefResolution(
+      scope,
+      id,
+      {
+        resolvedAction,
+        resolvedAt,
+        resolvedComment,
+      },
+      observedAt,
+    );
   };
 
   // Free-form feedback from the brief card: resolve the brief with the
@@ -89,23 +114,6 @@ export class BriefListActionImpl {
       // resolved comment, so the resolve still does its job.
       console.warn('[BriefStore] submitFeedback: task.run failed', error);
     }
-  };
-
-  useFetchBriefs = (isLogin: boolean | undefined): SWRResponse<BriefItem[]> => {
-    return useClientDataSWRWithSync<BriefItem[]>(
-      isLogin === true ? briefKeys.list(isLogin) : null,
-      async () => {
-        const result = await briefService.listUnresolved();
-        return result.data as BriefItem[];
-      },
-      {
-        onData: (data) => {
-          if (this.#get().isBriefsInit && isEqual(this.#get().briefs, data)) return;
-
-          this.#set({ briefs: data, isBriefsInit: true }, false, n('useFetchBriefs/onData'));
-        },
-      },
-    );
   };
 }
 

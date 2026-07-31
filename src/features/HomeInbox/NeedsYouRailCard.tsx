@@ -4,7 +4,6 @@ import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type BriefItem } from '@/features/DailyBrief/types';
 import RailCard from '@/features/Home/components/RailCard';
 
 import InboxBriefCard from './InboxBriefCard';
@@ -23,23 +22,25 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
  * a pager, so a pile of five decisions still costs the same vertical space as
  * one and the rail below it stays reachable.
  */
-const NeedsYouRailCard = memo<{ briefs: BriefItem[]; scopeControl?: ReactNode }>(
-  ({ briefs, scopeControl }) => {
+const NeedsYouRailCard = memo<{ briefIds: string[]; scopeControl?: ReactNode }>(
+  ({ briefIds, scopeControl }) => {
     const { t } = useTranslation('home');
     const [index, setIndex] = useState(0);
 
     // Resolving a brief drops it from the list, so the held index can outrun it.
-    const current = Math.min(index, briefs.length - 1);
-    const brief = briefs[current];
+    const current = Math.min(index, briefIds.length - 1);
+    const briefId = briefIds[current];
+
+    if (!briefId) return null;
 
     return (
       <RailCard
         title={t('inbox.needsYou.title')}
         action={
-          scopeControl || briefs.length > 1 ? (
+          scopeControl || briefIds.length > 1 ? (
             <Flexbox horizontal align={'center'} gap={4}>
               {scopeControl}
-              {briefs.length > 1 && (
+              {briefIds.length > 1 && (
                 <>
                   <ActionIcon
                     disabled={current === 0}
@@ -48,10 +49,10 @@ const NeedsYouRailCard = memo<{ briefs: BriefItem[]; scopeControl?: ReactNode }>
                     onClick={() => setIndex(current - 1)}
                   />
                   <span className={styles.pager}>
-                    {current + 1}/{briefs.length}
+                    {current + 1}/{briefIds.length}
                   </span>
                   <ActionIcon
-                    disabled={current === briefs.length - 1}
+                    disabled={current === briefIds.length - 1}
                     icon={ChevronRightIcon}
                     size={'small'}
                     onClick={() => setIndex(current + 1)}
@@ -62,7 +63,7 @@ const NeedsYouRailCard = memo<{ briefs: BriefItem[]; scopeControl?: ReactNode }>
           ) : null
         }
       >
-        <InboxBriefCard bare brief={brief} key={brief.id} />
+        <InboxBriefCard bare briefId={briefId} key={briefId} />
       </RailCard>
     );
   },

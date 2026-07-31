@@ -1,79 +1,57 @@
-import { useMemo } from 'react';
+import { useCallback } from 'react';
 
-import { useClientDataSWR } from '@/libs/swr';
-import { homeInboxKeys } from '@/libs/swr/keys';
-import { type TopicListItem, topicService } from '@/services/topic';
+import {
+  getEntityStoreState,
+  useHomeInboxTopicIds,
+  useHomeInboxTopicsRequest,
+} from '@/store/entity';
 import { type ChatTopicStatus } from '@/types/topic';
-
-/**
- * Everything the home inbox needs from topics, in one round trip. `queryTopics`
- * filters server-side by status, so widening this list costs nothing extra.
- */
-const INBOX_STATUSES: ChatTopicStatus[] = ['running', 'unread'];
-
-export type InboxTopic = TopicListItem;
 
 export interface HomeInboxTopics {
   error: unknown;
   isInit: boolean;
-  /**
-   * Optimistically flip a just-replied topic to `running` so it moves out of
-   * "unread" and into the running card the instant the user hits send — then
-   * reconcile with the server once its status write has landed.
-   */
+  /** Optimistically move a replied topic into the running index view. */
   promoteToRunning: (topicId: string) => void;
   reload: () => void;
-  /** Topics still executing — the collapsed "N running" card. */
-  running: InboxTopic[];
-  /** Topics that finished while the user was away and haven't been opened yet. */
-  unread: InboxTopic[];
+  runningIds: string[];
+  unreadIds: string[];
 }
 
 /**
- * Account-wide topic feed for the home inbox. Deliberately NOT reusing
- * `HomeRepository.getUnreadCounts()` — that one excludes cron/task-triggered
- * topics (it powers a sidebar badge), which are exactly the ones an agent
- * inbox must surface.
+ * Request state plus index-derived IDs. The topic records themselves are read
+ * only by the rows that render them.
+ *
+ * `userIdFilter === null` selects all workspace owners; other values preserve
+ * the existing strict `topic.userId === userId` mine filter.
  */
-export const useHomeInboxTopics = (isLogin: boolean | undefined): HomeInboxTopics => {
-  const { data, error, isLoading, mutate } = useClientDataSWR(
-    isLogin ? homeInboxKeys.topics(isLogin) : null,
-    // `withLastMessage` is what makes an unread row readable: the card shows what
-    // the agent actually said, not just the topic title it was filed under.
-    () => topicService.queryTopics({ statuses: INBOX_STATUSES, withLastMessage: true }),
-    // A live overview: refetch on focus almost immediately (default throttle is
-    // 5min) so a run that just finished shows up the instant the user looks.
-    { focusThrottleInterval: 1000 },
-  );
+export const useHomeInboxTopics = (
+  isLogin: boolean | undefined,
+  userIdFilter: string | null | undefined = null,
+  requireAgentId = false,
+): HomeInboxTopics => {
+  const request = useHomeInboxTopicsRequest(isLogin);
+  const runningIds = useHomeInboxTopicIds('running', userIdFilter, requireAgentId);
+  const unreadIds = useHomeInboxTopicIds('unread', userIdFilter);
 
-  // Only a first-load failure is a hard error. A background poll error while we
-  // still hold rows keeps the stale list instead of flapping to "nothing here".
-  const hasHardError = Boolean(error) && data === undefined;
-  const topics = useMemo(() => (data ?? []) as InboxTopic[], [data]);
-
-  return useMemo(
-    () => ({
-      error: hasHardError ? error : undefined,
-      isInit: !isLoading && !hasHardError,
-      promoteToRunning: (topicId: string) => {
-        // Instant: patch the cached row to `running` with no refetch, so the UI
-        // responds on the same tick as the send. The server's own status write
-        // lands a beat later, so reconcile after a short delay rather than
-        // revalidating now and reading the row still `unread` (which would snap
-        // it back to unread and look like the send did nothing).
-        void mutate(
-          (rows) =>
-            (rows ?? []).map((row) =>
-              row.id === topicId ? { ...row, status: 'running' as ChatTopicStatus } : row,
-            ),
-          { revalidate: false },
-        );
-        setTimeout(() => void mutate(), 1000);
-      },
-      reload: mutate,
-      running: topics.filter((t) => t.status === 'running'),
-      unread: topics.filter((t) => t.status === 'unread'),
-    }),
-    [topics, error, hasHardError, isLoading, mutate],
+  const promoteToRunning = useCallback(
+    (topicId: string) => {
+      getEntityStoreState().updateTopicEntityStatus(
+        request.scope,
+        topicId,
+        'running' as ChatTopicStatus,
+      );
+      setTimeout(() => void request.mutate(), 1000);
+    },
+    [request.mutate, request.scope],
   );
+  const reload = useCallback(() => void request.mutate(), [request.mutate]);
+
+  return {
+    error: request.error && !request.isInitialized ? request.error : undefined,
+    isInit: request.isInitialized,
+    promoteToRunning,
+    reload,
+    runningIds,
+    unreadIds,
+  };
 };

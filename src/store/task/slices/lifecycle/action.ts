@@ -1,7 +1,9 @@
 import type { TaskDetailData, TaskStatus } from '@lobechat/types';
 import debug from 'debug';
 
+import { getCacheScope } from '@/libs/swr/useCacheScope';
 import { taskService } from '@/services/task';
+import { getEntityStoreState } from '@/store/entity';
 import type { StoreSetter } from '@/store/types';
 import { runMutation } from '@/store/utils/runMutation';
 import { saveToast } from '@/store/utils/saveToast';
@@ -47,16 +49,21 @@ export class TaskLifecycleSliceActionImpl {
       type: 'updateTaskDetail',
       value: { error: null, status: 'running' },
     });
+    getEntityStoreState().updateTaskEntityStatus(getCacheScope(), id, 'running');
 
     let result: Awaited<ReturnType<typeof taskService.run>>;
     try {
       result = await taskService.run(id, params);
     } catch (error) {
       log('Failed to run task %s: %O', id, error);
-      try {
-        await this.#get().internal_refreshTaskDetail(id);
-      } catch (refreshError) {
-        log('Failed to refresh task %s after run failure: %O', id, refreshError);
+      const refreshResults = await Promise.allSettled([
+        this.#get().internal_refreshTaskDetail(id),
+        this.#get().refreshTaskList(),
+      ]);
+      for (const refreshResult of refreshResults) {
+        if (refreshResult.status === 'rejected') {
+          log('Failed to refresh task %s after run failure: %O', id, refreshResult.reason);
+        }
       }
       if (options?.throwOnError) throw error;
       return null;
@@ -120,6 +127,7 @@ export class TaskLifecycleSliceActionImpl {
       type: 'updateTaskDetail',
       value: { status, ...extraUpdate },
     });
+    getEntityStoreState().updateTaskEntityStatus(getCacheScope(), id, status);
     await runMutation(this.#set, this.#get, {
       mutate: async () => {
         await taskService.updateStatus(id, status, error);
@@ -129,7 +137,10 @@ export class TaskLifecycleSliceActionImpl {
       name: 'transitionStatus',
       onError: async (err) => {
         console.error(`[TaskStore] Failed to transition task to ${status}:`, err);
-        await this.#get().internal_refreshTaskDetail(id);
+        await Promise.allSettled([
+          this.#get().internal_refreshTaskDetail(id),
+          this.#get().refreshTaskList(),
+        ]);
         saveToast(err, {
           retry: () => void this.#transitionStatus(id, status, extraUpdate, error),
         });

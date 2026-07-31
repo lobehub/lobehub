@@ -1,3 +1,10 @@
+'use client';
+
+import isEqual from 'fast-deep-equal';
+import { useLayoutEffect } from 'react';
+
+import { useEntityStore, useHomeSidebarRequest } from '@/store/entity';
+import { selectHomeSidebar } from '@/store/entity/selectors';
 import { useHomeStore } from '@/store/home';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
@@ -10,14 +17,27 @@ import { authSelectors } from '@/store/user/slices/auth/selectors';
  */
 export const useFetchAgentList = () => {
   const isLogin = useUserStore(authSelectors.isLogin);
-  const useFetchAgentListHook = useHomeStore((s) => s.useFetchAgentList);
+  const { isInitialized, isValidating, error, mutate, scope } = useHomeSidebarRequest(isLogin);
+  const syncLegacyProjection = useHomeStore((state) => state.internal_syncAgentListProjection);
 
-  const { isValidating, data, error, mutate } = useFetchAgentListHook(isLogin);
+  // Existing non-Home consumers still select the old HomeStore list. Drive
+  // that projection through an imperative subscription so callers of this
+  // request hook never become React subscribers to the aggregate EntityView.
+  useLayoutEffect(
+    () =>
+      useEntityStore.subscribe(
+        (state) => selectHomeSidebar(state.scopes[scope]),
+        (data) => syncLegacyProjection(data, scope),
+        { equalityFn: isEqual, fireImmediately: true },
+      ),
+    [scope, syncLegacyProjection],
+  );
 
   return {
     error,
-    // isRevalidating: has cached data, updating in background
-    isRevalidating: isValidating && !!data,
+    isInitialized,
+    // isRevalidating: a complete EntityView exists while SWR schedules a refresh
+    isRevalidating: isValidating && isInitialized,
     mutate,
   };
 };

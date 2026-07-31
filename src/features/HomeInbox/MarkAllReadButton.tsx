@@ -3,11 +3,10 @@ import { CheckCheckIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type BriefItem } from '@/features/DailyBrief/types';
 import { useBriefStore } from '@/store/brief';
 
 interface MarkAllReadButtonProps {
-  news: BriefItem[];
+  briefIds: string[];
 }
 
 /**
@@ -15,7 +14,7 @@ interface MarkAllReadButtonProps {
  * `read` action — reports are knowledge, so dismissing them wholesale must
  * never accept a delivery or complete a task.
  */
-const MarkAllReadButton = memo<MarkAllReadButtonProps>(({ news }) => {
+const MarkAllReadButton = memo<MarkAllReadButtonProps>(({ briefIds }) => {
   const { t } = useTranslation('home');
   const resolveBriefsAsRead = useBriefStore((s) => s.resolveBriefsAsRead);
   const [loading, setLoading] = useState(false);
@@ -23,11 +22,11 @@ const MarkAllReadButton = memo<MarkAllReadButtonProps>(({ news }) => {
   const handleClick = useCallback(async () => {
     setLoading(true);
     try {
-      await resolveBriefsAsRead(news.map((brief) => brief.id));
+      await resolveBriefsAsRead(briefIds);
     } finally {
       setLoading(false);
     }
-  }, [news, resolveBriefsAsRead]);
+  }, [briefIds, resolveBriefsAsRead]);
 
   return (
     <Button
