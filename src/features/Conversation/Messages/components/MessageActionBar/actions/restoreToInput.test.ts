@@ -28,6 +28,10 @@ vi.mock('@/store/file', () => ({
 }));
 
 const messageSuccess = vi.fn();
+vi.mock('@lobehub/ui/base-ui', () => ({
+  toast: { success: messageSuccess },
+}));
+
 vi.mock('antd', () => ({
   App: { useApp: () => ({ message: { success: messageSuccess } }) },
 }));

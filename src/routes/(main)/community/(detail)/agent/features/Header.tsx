@@ -2,8 +2,7 @@
 
 import { MCP } from '@lobehub/icons';
 import { ActionIcon, Avatar, Flexbox, Icon, Tag, Text, Tooltip, TooltipGroup } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { Button, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
 import {
   BookmarkCheckIcon,
@@ -39,7 +38,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
   const { t } = useTranslation('discover');
-  const { message } = App.useApp();
+
   const {
     author,
     identifier,
@@ -84,15 +83,15 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
     try {
       if (isFavorited) {
         await socialService.removeFavorite('agent', identifier);
-        message.success(t('assistant.unfavoriteSuccess'));
+        toast.success(t('assistant.unfavoriteSuccess'));
       } else {
         await socialService.addFavorite('agent', identifier);
-        message.success(t('assistant.favoriteSuccess'));
+        toast.success(t('assistant.favoriteSuccess'));
       }
       await mutateFavorite();
     } catch (error) {
       console.error('Favorite action failed:', error);
-      message.error(t('assistant.favoriteFailed'));
+      toast.error(t('assistant.favoriteFailed'));
     } finally {
       setFavoriteLoading(false);
     }

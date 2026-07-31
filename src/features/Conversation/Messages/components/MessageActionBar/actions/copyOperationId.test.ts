@@ -27,6 +27,10 @@ vi.mock('@lobehub/ui', () => ({
   copyToClipboard: mocks.copyToClipboard,
 }));
 
+vi.mock('@lobehub/ui/base-ui', () => ({
+  toast: { success: mocks.messageSuccess },
+}));
+
 vi.mock('antd', () => ({
   App: { useApp: () => ({ message: { success: mocks.messageSuccess } }) },
 }));

@@ -2,13 +2,12 @@
 
 import { AGENT_CHAT_URL, DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 import { Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button, useModalContext } from '@lobehub/ui/base-ui';
+import { Button, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CircleCheck } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { message } from '@/components/AntdStaticMethods';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import AgentItem from '@/features/PageEditor/Copilot/AgentSelector/AgentItem';
@@ -114,7 +113,7 @@ const MoveTopicsContent = memo<MoveTopicsContentProps>(({ onMoved, sourceAgentId
       setStep('done');
     } catch (error) {
       console.error('[MoveTopics] move failed:', error);
-      message.error(t('management.moveModal.error'));
+      toast.error(t('management.moveModal.error'));
       setStep('confirm');
     } finally {
       setCanDismissByClickOutside?.(true);

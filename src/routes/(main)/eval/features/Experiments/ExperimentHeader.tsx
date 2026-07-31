@@ -3,6 +3,7 @@
 import type { AgentEvalExperimentDetail } from '@lobechat/types';
 import { Flexbox, Text } from '@lobehub/ui';
 import { Button, type DropdownItem, DropdownMenu } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Ellipsis, Pencil, Trash2 } from 'lucide-react';
@@ -27,7 +28,7 @@ interface ExperimentHeaderProps {
 
 const ExperimentHeader = memo<ExperimentHeaderProps>(({ experiment }) => {
   const { t } = useTranslation('eval');
-  const { message, modal } = App.useApp();
+  const { modal } = App.useApp();
   const navigate = useWorkspaceAwareNavigate();
   const deleteExperiment = useEvalStore((s) => s.deleteExperiment);
 
@@ -49,7 +50,7 @@ const ExperimentHeader = memo<ExperimentHeaderProps>(({ experiment }) => {
             } catch {
               // Optimistic removal surfaces its failure here (ux Act) — stay
               // on the page and let the user retry instead of navigating away.
-              message.error(t('experiment.delete.error'));
+              toast.error(t('experiment.delete.error'));
             }
           },
           title: t('experiment.actions.delete'),

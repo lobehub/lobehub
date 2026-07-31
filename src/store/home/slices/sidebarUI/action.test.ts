@@ -1,3 +1,4 @@
+import { toast } from '@lobehub/ui/base-ui';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -15,11 +16,10 @@ import { getSessionStoreState } from '@/store/session';
 import { useUserStore } from '@/store/user';
 
 // Mock dependencies
-vi.mock('@/components/AntdStaticMethods', () => ({
-  message: {
-    destroy: vi.fn(),
+vi.mock('@lobehub/ui/base-ui', () => ({
+  toast: {
     error: vi.fn(),
-    loading: vi.fn(),
+    loading: vi.fn(() => ({ close: vi.fn() })),
     success: vi.fn(),
   },
 }));
@@ -235,9 +235,8 @@ describe('createSidebarUISlice', () => {
       expect(mockSetActiveAgentId).toHaveBeenCalledWith(mockNewAgentId);
     });
 
-    it('should show error message when duplication fails', async () => {
+    it('should show an error toast when duplication fails', async () => {
       const mockAgentId = 'agent-123';
-      const { message } = await import('@/components/AntdStaticMethods');
 
       vi.spyOn(agentService, 'duplicateAgent').mockResolvedValueOnce(null);
       vi.spyOn(useHomeStore.getState(), 'refreshAgentList');
@@ -248,7 +247,7 @@ describe('createSidebarUISlice', () => {
         await result.current.duplicateAgent(mockAgentId, 'Test');
       });
 
-      expect(message.error).toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalled();
     });
 
     it('should use provided title when duplicating', async () => {

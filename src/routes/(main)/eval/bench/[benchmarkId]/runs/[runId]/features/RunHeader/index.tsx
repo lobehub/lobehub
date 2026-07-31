@@ -3,8 +3,8 @@
 import { AGENT_PROFILE_URL } from '@lobechat/const';
 import type { AgentEvalRunDetail } from '@lobechat/types';
 import { ActionIcon, Avatar, copyToClipboard, Flexbox, Highlighter, Markdown } from '@lobehub/ui';
-import { Button, confirmModal } from '@lobehub/ui/base-ui';
-import { App, Tag } from 'antd';
+import { Button, confirmModal, toast } from '@lobehub/ui/base-ui';
+import { Tag } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   ArrowLeft,
@@ -180,7 +180,7 @@ interface RunHeaderProps {
 
 const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
   const { t } = useTranslation('eval');
-  const { message } = App.useApp();
+
   const navigate = useWorkspaceAwareNavigate();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const abortRun = useEvalStore((s) => s.abortRun);
@@ -229,7 +229,7 @@ const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
           setStarting(true);
           await startRun(run.id, run.status !== 'idle');
         } catch (error: any) {
-          message.error(error?.message || 'Failed to start run');
+          toast.error(error?.message || 'Failed to start run');
         } finally {
           setStarting(false);
         }
@@ -249,9 +249,9 @@ const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
   const handleCopyRunId = async () => {
     try {
       await copyToClipboard(run.id);
-      message.success(t('run.detail.copyRunIdSuccess'));
+      toast.success(t('run.detail.copyRunIdSuccess'));
     } catch {
-      message.error(t('run.detail.copyRunIdFailed'));
+      toast.error(t('run.detail.copyRunIdFailed'));
     }
   };
 

@@ -1,7 +1,8 @@
 'use client';
 
 import { Flexbox, Text } from '@lobehub/ui';
-import { App, Checkbox, List } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
+import { Checkbox, List } from 'antd';
 import { cssVar } from 'antd-style';
 import { Package, Wrench } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
@@ -23,7 +24,7 @@ interface ClaimResourcesModalProps {
 export const ClaimResourcesModal = memo<ClaimResourcesModalProps>(
   ({ open, onClose, resources, onSuccess }) => {
     const { t } = useTranslation('marketAuth');
-    const { message } = App.useApp();
+
     const { allowed: canCreate } = usePermission('create_content');
 
     const [selectedPlugins, setSelectedPlugins] = useState<Set<string>>(() => new Set());
@@ -83,7 +84,7 @@ export const ClaimResourcesModal = memo<ClaimResourcesModalProps>(
         });
 
         const totalClaimed = pluginIds.length + skillIds.length;
-        message.success(
+        toast.success(
           t('claimResources.success', {
             count: totalClaimed,
             defaultValue: `Successfully claimed ${totalClaimed} resource(s)`,
@@ -93,7 +94,7 @@ export const ClaimResourcesModal = memo<ClaimResourcesModalProps>(
         onClose();
       } catch (error) {
         console.error('[ClaimResources] Failed to claim:', error);
-        message.error(
+        toast.error(
           t('claimResources.error', {
             defaultValue: 'Failed to claim resources. Please try again.',
           }),
@@ -101,7 +102,7 @@ export const ClaimResourcesModal = memo<ClaimResourcesModalProps>(
       } finally {
         setIsClaiming(false);
       }
-    }, [canCreate, selectedPlugins, selectedSkills, message, t, onSuccess, onClose]);
+    }, [canCreate, selectedPlugins, selectedSkills, t, onSuccess, onClose]);
 
     const totalSelected = selectedPlugins.size + selectedSkills.size;
 

@@ -1,6 +1,5 @@
 import { ActionIcon, copyToClipboard, type DropdownItem, DropdownMenu, Icon } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { CopyIcon, EyeOffIcon, LinkIcon, MoreHorizontal, Trash, UsersIcon } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,7 +21,7 @@ import { taskDetailPath } from '../shared/taskDetailPath';
 
 const TaskDetailHeaderActions = memo(() => {
   const { t } = useTranslation(['chat', 'common']);
-  const { message } = App.useApp();
+
   const navigate = useWorkspaceAwareNavigate();
   const appOrigin = useAppOrigin();
   const activeWorkspaceId = useActiveWorkspaceId();
@@ -89,7 +88,7 @@ const TaskDetailHeaderActions = memo(() => {
       onOk: async () => {
         try {
           await updateTaskVisibility(taskId, 'private');
-          message.success(t('makePrivate.success', { ns: 'common' }));
+          toast.success(t('makePrivate.success', { ns: 'common' }));
         } catch {
           // store action already surfaced a targeted toast; swallow so the
           // confirm modal doesn't bubble a second error to base-ui.
@@ -97,7 +96,7 @@ const TaskDetailHeaderActions = memo(() => {
       },
       title: t('makePrivate.confirm.title', { ns: 'common' }),
     });
-  }, [canEditTask, taskId, t, message, updateTaskVisibility]);
+  }, [canEditTask, taskId, t, updateTaskVisibility]);
 
   const menuItems = useMemo<DropdownItem[]>(() => {
     if (!taskId) return [];
@@ -114,7 +113,7 @@ const TaskDetailHeaderActions = memo(() => {
         label: t('taskList.contextMenu.copyId'),
         onClick: async () => {
           await copyToClipboard(taskId);
-          message.success(t('taskList.contextMenu.copyIdSuccess'));
+          toast.success(t('taskList.contextMenu.copyIdSuccess'));
         },
       },
       {
@@ -123,7 +122,7 @@ const TaskDetailHeaderActions = memo(() => {
         label: t('taskList.contextMenu.copyLink'),
         onClick: async () => {
           await copyToClipboard(taskUrl);
-          message.success(t('taskList.contextMenu.copyLinkSuccess'));
+          toast.success(t('taskList.contextMenu.copyLinkSuccess'));
         },
       },
       { type: 'divider' },
@@ -189,7 +188,6 @@ const TaskDetailHeaderActions = memo(() => {
     createdByUserId,
     currentUserId,
     t,
-    message,
     triggerDelete,
     triggerPublish,
     triggerMakePrivate,

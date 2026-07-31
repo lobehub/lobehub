@@ -2,7 +2,7 @@
 
 import { Empty, Flexbox, Text } from '@lobehub/ui';
 import { Button, confirmModal, type ModalInstance } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import { ArrowLeftIcon, Clock3Icon } from 'lucide-react';
@@ -81,7 +81,6 @@ const styles = createStaticStyles(({ css }) => ({
 
 const HistoryPanel = memo(() => {
   const { t } = useTranslation(['common', 'file']);
-  const { message } = App.useApp();
 
   const documentId = usePageEditorStore(selectors.documentId);
   const editor = usePageEditorStore(selectors.editor);
@@ -189,7 +188,7 @@ const HistoryPanel = memo(() => {
           onSuccess?.();
         } catch (error) {
           console.error('[PageEditor] Failed to restore history item:', error);
-          message.error(t('pageEditor.history.restoreError', { ns: 'file' }));
+          toast.error(t('pageEditor.history.restoreError', { ns: 'file' }));
           throw error;
         } finally {
           setRestoringHistoryId(null);

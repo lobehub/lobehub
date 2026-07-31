@@ -1,8 +1,7 @@
 'use client';
 
 import { Alert, Block, Flexbox, Icon, Input, Skeleton, Tag, Text } from '@lobehub/ui';
-import { Button, Select } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { Button, Select, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { CheckCircle2Icon, ClockIcon, MoonIcon, RefreshCwIcon, SendIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
@@ -73,7 +72,6 @@ interface MessengerPushSectionProps {
 export const MessengerPushSection = memo<MessengerPushSectionProps>(
   ({ name, platform, targets }) => {
     const { t } = useTranslation('messenger');
-    const { message } = App.useApp();
     const [content, setContent] = useState('');
     const [sending, setSending] = useState(false);
     const [tenantId, setTenantId] = useState(targets?.[0]?.tenantId);
@@ -114,7 +112,7 @@ export const MessengerPushSection = memo<MessengerPushSectionProps>(
         });
         switch (result.status) {
           case 'sent': {
-            message.success(
+            toast.success(
               result.remaining === undefined
                 ? t('messenger.push.sentToast', { platform: name })
                 : t('messenger.push.sentWindowedToast', {
@@ -126,21 +124,21 @@ export const MessengerPushSection = memo<MessengerPushSectionProps>(
             break;
           }
           case 'queued': {
-            message.info(t('messenger.push.queuedToast', { platform: name }));
+            toast.info(t('messenger.push.queuedToast', { platform: name }));
             setContent('');
             break;
           }
           case 'unlinked': {
-            message.warning(t('messenger.push.unlinkedToast', { platform: name }));
+            toast.warning(t('messenger.push.unlinkedToast', { platform: name }));
             break;
           }
           default: {
-            message.warning(t('messenger.push.unavailableToast'));
+            toast.warning(t('messenger.push.unavailableToast'));
           }
         }
         await windowSWR.mutate();
       } catch (error) {
-        message.error(getMessengerErrorMessage(error, t, 'messenger.push.unavailableToast'));
+        toast.error(getMessengerErrorMessage(error, t, 'messenger.push.unavailableToast'));
       } finally {
         setSending(false);
       }

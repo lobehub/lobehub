@@ -8,10 +8,10 @@ import type {
   HeterogeneousProviderConfig,
 } from '@lobechat/types';
 import { resolveAgentAgencyConfig } from '@lobechat/types';
+import { toast } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 import { type StateCreator } from 'zustand';
 
-import { message as antdMessage } from '@/components/AntdStaticMethods';
 import { MESSAGE_CANCEL_FLAT } from '@/const/index';
 import { saveDraft } from '@/features/ChatInput/draftStorage';
 import { isHeterogeneousAgentStatusGuideError } from '@/features/Conversation/Error/heterogeneous';
@@ -195,7 +195,7 @@ const runHeterogeneousFromExistingMessage = async (
     context,
     agentId,
   );
-  if (cwdChanged) antdMessage.info(t('heteroAgent.resumeReset.cwdChanged', { ns: 'chat' }));
+  if (cwdChanged) toast.info(t('heteroAgent.resumeReset.cwdChanged', { ns: 'chat' }));
 
   const assistantMsg = await messageService.createMessage({
     agentId,
@@ -561,7 +561,7 @@ export const generationSlice: StateCreator<
     // may have been switched to/from a prefill-capable model independently.
     const continueModel = getEffectiveConversationModel(context);
     if (continueModel && shouldDropUnsupportedClaudeAssistantPrefill(continueModel)) {
-      antdMessage.warning(t('messageAction.continueGenerationUnsupported', { ns: 'chat' }));
+      toast.warning(t('messageAction.continueGenerationUnsupported', { ns: 'chat' }));
       return;
     }
 

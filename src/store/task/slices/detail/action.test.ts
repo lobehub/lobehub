@@ -1,3 +1,4 @@
+import { toast } from '@lobehub/ui/base-ui';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { taskService } from '@/services/task';
@@ -33,7 +34,6 @@ vi.mock('@/libs/swr', () => ({
 }));
 
 vi.mock('@/components/AntdStaticMethods', () => ({
-  message: { error: vi.fn(), success: vi.fn() },
   modal: { confirm: vi.fn() },
   notification: { error: vi.fn() },
 }));
@@ -345,7 +345,6 @@ describe('TaskDetailSliceAction', () => {
 
     it('should not show error when update succeeds but cache refresh fails', async () => {
       const { mutate } = await import('@/libs/swr');
-      const { message } = await import('@/components/AntdStaticMethods');
       useTaskStore.setState({
         activeTaskId: 'T-1',
         taskDetailMap: {
@@ -359,7 +358,7 @@ describe('TaskDetailSliceAction', () => {
       await useTaskStore.getState().updateTask('T-1', { assigneeAgentId: 'agent-x' });
 
       expect(useTaskStore.getState().taskSaveStatusMap['T-1']).toBe('saved');
-      expect(message.error).not.toHaveBeenCalled();
+      expect(toast.error).not.toHaveBeenCalled();
     });
 
     it('should refresh list and affected details when reparenting', async () => {

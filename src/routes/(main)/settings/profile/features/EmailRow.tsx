@@ -1,12 +1,11 @@
 'use client';
 
 import { Flexbox, Input, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, toast } from '@lobehub/ui/base-ui';
 import { AnimatePresence, m } from 'motion/react';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { message } from '@/components/AntdStaticMethods';
 import { changeEmail } from '@/libs/better-auth/auth-client';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -53,7 +52,7 @@ const EmailRow = () => {
         return;
       }
       setIsEditing(false);
-      message.success(t('profile.emailChangeSuccess'));
+      toast.success(t('profile.emailChangeSuccess'));
     } catch (err) {
       console.error('Failed to change email:', err);
       setError(err instanceof Error ? err.message : String(err));

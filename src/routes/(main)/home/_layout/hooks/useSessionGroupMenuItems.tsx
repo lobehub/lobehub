@@ -1,7 +1,6 @@
 import type { SFSymbol } from '@lobechat/electron-client-ipc';
 import { Icon } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { type ItemType } from 'antd/es/menu/interface';
 import { FolderCogIcon, FolderPenIcon, Trash } from 'lucide-react';
 import { useCallback, useState } from 'react';
@@ -23,7 +22,7 @@ type MenuItem = NonNullable<ItemType> & { sfSymbol?: SFSymbol };
  */
 export const useSessionGroupMenuItems = () => {
   const { t } = useTranslation(['chat', 'common']);
-  const { message } = App.useApp();
+
   const groupTemplates = useGroupTemplates();
   const { allowed: canCreate } = usePermission('create_content');
   const { allowed: canEdit } = usePermission('edit_own_content');
@@ -132,19 +131,18 @@ export const useSessionGroupMenuItems = () => {
           info.domEvent?.stopPropagation();
           if (!canCreate) return;
 
-          const key = 'createNewAgent';
-          message.loading({ content: t('sessionGroup.creatingAgent'), duration: 0, key });
+          const creatingToast = toast.loading(t('sessionGroup.creatingAgent'));
           setIsCreatingAgent(true);
 
           try {
             await storeCreateAgent({ groupId });
             await refreshAgentList();
 
-            message.destroy(key);
-            message.success({ content: t('sessionGroup.createAgentSuccess') });
+            creatingToast.close();
+            toast.success(t('sessionGroup.createAgentSuccess'));
           } catch (error) {
-            message.destroy(key);
-            message.error({ content: t('sessionGroup.createGroupFailed') });
+            creatingToast.close();
+            toast.error(t('sessionGroup.createGroupFailed'));
             throw error;
           } finally {
             setIsCreatingAgent(false);
@@ -152,7 +150,7 @@ export const useSessionGroupMenuItems = () => {
         },
       };
     },
-    [canCreate, t, message, storeCreateAgent, refreshAgentList],
+    [canCreate, t, storeCreateAgent, refreshAgentList],
   );
 
   /**
@@ -192,7 +190,7 @@ export const useSessionGroupMenuItems = () => {
                 );
               } catch (error) {
                 console.error('Failed to create group:', error);
-                message.error({ content: t('sessionGroup.createGroupFailed') });
+                toast.error(t('sessionGroup.createGroupFailed'));
               } finally {
                 setIsCreatingGroup(false);
               }
@@ -201,7 +199,7 @@ export const useSessionGroupMenuItems = () => {
         },
       };
     },
-    [canCreate, t, message, createGroup],
+    [canCreate, t, createGroup],
   );
 
   /**
@@ -265,13 +263,13 @@ export const useSessionGroupMenuItems = () => {
         return true;
       } catch (error) {
         console.error('Failed to create group from template:', error);
-        message.error({ content: t('sessionGroup.createGroupFailed') });
+        toast.error(t('sessionGroup.createGroupFailed'));
         return false;
       } finally {
         setIsCreatingGroup(false);
       }
     },
-    [canCreate, groupTemplates, storeCreateAgent, refreshAgentList, createGroup, message, t],
+    [canCreate, groupTemplates, storeCreateAgent, refreshAgentList, createGroup, t],
   );
 
   /**
@@ -297,13 +295,13 @@ export const useSessionGroupMenuItems = () => {
         return true;
       } catch (error) {
         console.error('Failed to create group:', error);
-        message.error({ content: t('sessionGroup.createGroupFailed') });
+        toast.error(t('sessionGroup.createGroupFailed'));
         return false;
       } finally {
         setIsCreatingGroup(false);
       }
     },
-    [canCreate, createGroup, message, t],
+    [canCreate, createGroup, t],
   );
 
   return {
