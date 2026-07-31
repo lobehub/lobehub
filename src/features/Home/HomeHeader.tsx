@@ -1,6 +1,5 @@
-import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { PanelRightCloseIcon, PanelRightOpenIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,6 +10,7 @@ import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/se
 
 import AgentSelect from './AgentSelect';
 import GreetingLine from './GreetingLine';
+import RailToggle from './RailToggle';
 import { parseGreetingLine } from './welcomeText';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -35,6 +35,13 @@ const styles = createStaticStyles(({ css }) => ({
 
     @container (width <= 620px) {
       display: none;
+    }
+  `,
+  railToggle: css`
+    display: none;
+
+    @media (width <= 1100px) {
+      display: block;
     }
   `,
   toolbar: css`
@@ -73,8 +80,6 @@ const HomeHeader = memo<HomeHeaderProps>(({ onToggleRail, railVisible }) => {
   // Falls back to the static line until the daily brief lands — or forever, for
   // an account the generator has not run for yet.
   const parsed = currentPair?.welcome ? parseGreetingLine(currentPair.welcome) : undefined;
-  const railToggleLabel = railVisible ? t('dashboard.rail.hide') : t('dashboard.rail.show');
-
   return (
     <Flexbox gap={16} justify={'center'}>
       <Flexbox
@@ -90,13 +95,13 @@ const HomeHeader = memo<HomeHeaderProps>(({ onToggleRail, railVisible }) => {
             <HomePromoBanner />
           </div>
           {isLogin && onToggleRail && (
-            <ActionIcon
-              aria-label={railToggleLabel}
-              icon={railVisible ? PanelRightCloseIcon : PanelRightOpenIcon}
-              size={'small'}
-              title={railToggleLabel}
-              onClick={onToggleRail}
-            />
+            <div className={styles.railToggle}>
+              <RailToggle
+                railVisible={railVisible}
+                testId={'home-rail-toggle-mobile'}
+                onToggle={onToggleRail}
+              />
+            </div>
           )}
         </Flexbox>
       </Flexbox>

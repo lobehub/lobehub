@@ -16,6 +16,7 @@ import HomeHeader from './HomeHeader';
 import HomeModeContent from './HomeModeContent';
 import HomePortrait from './HomePortrait';
 import InputArea from './InputArea';
+import RailToggle from './RailToggle';
 import type { HomeMode } from './types';
 
 /** Mirrors the row hover bleed in HomeModeContent; the viewport would clip it. */
@@ -81,10 +82,26 @@ const styles = createStaticStyles(({ css }) => ({
   header: css`
     grid-area: 1 / 1;
   `,
+  inputArea: css`
+    position: relative;
+    min-width: 0;
+  `,
   main: css`
+    position: relative;
     grid-area: 2 / 1;
     min-width: 0;
     min-height: 0;
+  `,
+  railToggle: css`
+    position: absolute;
+    z-index: 3;
+    inset-block-start: 50%;
+    inset-inline-end: -23px;
+    transform: translateY(-50%);
+
+    @media (width <= 1100px) {
+      display: none;
+    }
   `,
   mainScroll: css`
     flex: 1;
@@ -226,12 +243,24 @@ const Home = memo(() => {
         data-testid={'home-main'}
         gap={24}
       >
-        <InputArea
-          inputValue={inputValue}
-          mode={mode}
-          onInputValueChange={handleInputValueChange}
-          onModeChange={setMode}
-        />
+        <div className={styles.inputArea}>
+          {isLogin && isStatusInit && (
+            <div className={styles.railToggle}>
+              <RailToggle
+                edge
+                railVisible={railVisible}
+                testId={'home-rail-toggle-desktop'}
+                onToggle={toggleHomeRail}
+              />
+            </div>
+          )}
+          <InputArea
+            inputValue={inputValue}
+            mode={mode}
+            onInputValueChange={handleInputValueChange}
+            onModeChange={setMode}
+          />
+        </div>
         <ScrollArea
           disableContentFit
           scrollFade
@@ -249,6 +278,7 @@ const Home = memo(() => {
           className={cx(styles.rail, styles.railSurface)}
           data-collapsed={railCollapsed}
           data-testid={'home-rail'}
+          id={'home-rail'}
           inert={railCollapsed}
         >
           {/* No scrollFade: its mask would make the viewport a backdrop root

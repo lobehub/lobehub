@@ -40,6 +40,35 @@ Then('Home 主列滚动条应位于双列间距中央', async function (this: Cu
   expect(scrollbarCenter).toBeCloseTo(columnGapCenter, 0);
 });
 
+Then('Home 右栏折叠控制应贴合双列边界', async function (this: CustomWorld) {
+  const main = this.page.locator('[data-testid="home-main"]:visible');
+  const rail = this.page.locator('[data-testid="home-rail"]:visible');
+  const desktopToggle = this.page.getByTestId('home-rail-toggle-desktop');
+  const mobileToggle = this.page.getByTestId('home-rail-toggle-mobile');
+
+  await expect(desktopToggle).toBeVisible({ timeout: WAIT_TIMEOUT });
+  await expect(mobileToggle).toBeHidden();
+
+  const [mainBox, railBox, toggleBox] = await Promise.all([
+    main.boundingBox(),
+    rail.boundingBox(),
+    desktopToggle.boundingBox(),
+  ]);
+
+  expect(mainBox).not.toBeNull();
+  expect(railBox).not.toBeNull();
+  expect(toggleBox).not.toBeNull();
+
+  const mainRight = mainBox!.x + mainBox!.width;
+  const railLeft = railBox!.x;
+  const toggleCenter = toggleBox!.x + toggleBox!.width / 2;
+  const columnGapCenter = mainRight + (railLeft - mainRight) / 2;
+
+  expect(toggleBox!.x).toBeGreaterThanOrEqual(mainRight);
+  expect(toggleBox!.x + toggleBox!.width).toBeLessThanOrEqual(railLeft);
+  expect(toggleCenter).toBeCloseTo(columnGapCenter, 0);
+});
+
 Then('Home 右栏应保持卡片、滚动条轨道与页面边缘的分层间距', async function (this: CustomWorld) {
   const rail = this.page.locator('[data-testid="home-rail"]:visible');
   const card = rail.getByTestId('home-rail-card').first();
