@@ -107,11 +107,13 @@ export const allocateTabWidths = ({
   }
 
   const budget = Math.max(MIN_TAB_WIDTH + TAB_GAP, usableWidth - OVERFLOW_CONTROL_WIDTH);
-  const start = Math.min(count - 1, Math.max(1, Math.floor(budget / (MIN_TAB_WIDTH + TAB_GAP))));
+  // Overflow implies at least one hidden tab, hence the `count - 1` ceiling — but a single tab
+  // is shown at any width, so the floor of 1 wins over it.
+  const start = Math.max(1, Math.min(count - 1, Math.floor(budget / (MIN_TAB_WIDTH + TAB_GAP))));
 
-  for (let visibleCount = start; visibleCount >= 1; visibleCount -= 1) {
+  for (let visibleCount = start; visibleCount > 1; visibleCount -= 1) {
     const attempt = attemptLayout(visibleCount, budget, count, activeIndex);
-    if (attempt.total <= budget || visibleCount === 1) {
+    if (attempt.total <= budget) {
       return {
         hiddenCount: count - visibleCount,
         visibleIndices: attempt.indices,
@@ -120,5 +122,6 @@ export const allocateTabWidths = ({
     }
   }
 
-  return { hiddenCount: count - 1, visibleIndices: [activeIndex], widths: [MIN_TAB_WIDTH] };
+  const last = attemptLayout(1, budget, count, activeIndex);
+  return { hiddenCount: count - 1, visibleIndices: last.indices, widths: last.widths };
 };

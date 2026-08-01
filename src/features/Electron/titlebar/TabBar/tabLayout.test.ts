@@ -129,6 +129,35 @@ describe('allocateTabWidths', () => {
     expect(widths.every((width) => Math.abs(width - widths[0]) <= 1)).toBe(true);
   });
 
+  // An active pinned tab leaves the flow list with no active index. Callers index straight
+  // into the flow list with what comes back, so a lone flow tab must still resolve to a real
+  // index — including before the strip is measured, when usableWidth is still 0.
+  it('shows the lone flow tab when the active tab is pinned out of the list', () => {
+    expect(allocateTabWidths({ activeIndex: -1, count: 1, usableWidth: 0 })).toEqual({
+      hiddenCount: 0,
+      visibleIndices: [0],
+      widths: [MIN_TAB_WIDTH],
+    });
+  });
+
+  it('never emits an index outside the flow list', () => {
+    const offenders: string[] = [];
+
+    for (const count of [1, 2, 3, 8, 30])
+      for (const usableWidth of [0, 20, 29, 42, 76, 120, 600, 900])
+        for (const activeIndex of [-1, 0, count - 1]) {
+          const { visibleIndices, widths } = allocateTabWidths({ activeIndex, count, usableWidth });
+          const invalid = visibleIndices.some((index) => index < 0 || index >= count);
+
+          if (invalid || visibleIndices.length !== widths.length)
+            offenders.push(
+              `count=${count} width=${usableWidth} active=${activeIndex} → [${visibleIndices}]`,
+            );
+        }
+
+    expect(offenders).toEqual([]);
+  });
+
   // The trailing "+" button sits right after the last tab, so any width the split leaves
   // unspent moves it. Flooring alone leaves a different remainder per tab count, which
   // makes the button drift sideways on every added tab even when the strip is full.
