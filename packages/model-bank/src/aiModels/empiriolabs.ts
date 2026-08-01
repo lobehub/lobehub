@@ -83,6 +83,25 @@ const empiriolabsChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_000_000,
     description:
+      'Fast 284B MoE reasoning model with 13B active parameters, a 1M context window, strong agentic coding, function calling, and hybrid thinking.',
+    displayName: 'DeepSeek V4 Flash 0731',
+    id: 'deepseek-v4-flash-0731',
+    maxOutput: 393_216,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.14, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.28, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
       'Flagship MoE LLM with 1.6T total / 49B active parameters and native 1M context for advanced math, logical inference, and specialized coding.',
     displayName: 'DeepSeek V4 Pro',
     id: 'deepseek-v4-pro',
