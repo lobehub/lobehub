@@ -271,6 +271,13 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   row: css`
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+
+    /* The card already draws the outer border — a first row's separator would
+       stack on it and read as a 2px top edge. Grouped lists are unaffected:
+       their first child is the group header, so rows are never first. */
+    &:first-child {
+      border-block-start: none;
+    }
   `,
   /** Stable check label ("C3") — referenced by feedback and annotations. */
   seqChip: css`

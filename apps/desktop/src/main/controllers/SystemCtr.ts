@@ -19,6 +19,7 @@ import {
   requestMicrophoneAccess,
   requestScreenCaptureAccess,
 } from '@/utils/permissions';
+import { getSystemLanguage, resolveUILocale } from '@/utils/system-language';
 
 import { ControllerModule, IpcMethod } from './index';
 
@@ -219,7 +220,7 @@ export default class SystemController extends ControllerModule {
 
   @IpcMethod()
   getSystemLocale(): string {
-    return app.getLocale();
+    return getSystemLanguage();
   }
 
   @IpcMethod()
@@ -256,7 +257,7 @@ export default class SystemController extends ControllerModule {
   async updateLocale(locale: string) {
     this.app.storeManager.set('locale', locale);
 
-    await this.app.i18n.changeLanguage(locale === 'auto' ? app.getLocale() : locale);
+    await this.app.i18n.changeLanguage(resolveUILocale(locale));
     this.app.browserManager.broadcastToAllWindows('localeChanged', { locale });
 
     return { success: true };

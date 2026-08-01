@@ -12,6 +12,8 @@ import RemoteServerConfigCtr from '@/controllers/RemoteServerConfigCtr';
 import { backendProxyProtocolManager } from '@/core/infrastructure/BackendProxyProtocolManager';
 import { appendVercelCookie, setResponseHeader } from '@/utils/http-headers';
 import { createLogger } from '@/utils/logger';
+import { getSystemLanguage, resolveUILocale } from '@/utils/system-language';
+import { SYSTEM_LANGUAGE_ARG_PREFIX } from '~common/systemLanguage';
 
 import type { App } from '../App';
 import { WindowStateManager } from './WindowStateManager';
@@ -177,6 +179,7 @@ export default class Browser {
       show: false,
       title,
       webPreferences: {
+        additionalArguments: [`${SYSTEM_LANGUAGE_ARG_PREFIX}${getSystemLanguage()}`],
         backgroundThrottling: false,
         contextIsolation: true,
         preload: path.join(preloadDir, 'index.js'),
@@ -529,11 +532,12 @@ export default class Browser {
   };
 
   private buildUrlWithLocale(initUrl: string): string {
-    const storedLocale = this.app.storeManager.get('locale', 'auto');
-    if (storedLocale && storedLocale !== 'auto') {
-      return `${initUrl}${initUrl.includes('?') ? '&' : '?'}lng=${storedLocale}`;
-    }
-    return initUrl;
+    // Always inject `lng` — including for `auto`, where the main process is the
+    // only side that can resolve the real OS language (the renderer's
+    // `navigator.language` reports English once packaging prunes the app's locales).
+    const locale = resolveUILocale(this.app.storeManager.get('locale', 'auto'));
+
+    return `${initUrl}${initUrl.includes('?') ? '&' : '?'}lng=${locale}`;
   }
 
   private async handleLoadError(urlWithLocale: string): Promise<void> {

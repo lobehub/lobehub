@@ -159,6 +159,55 @@ describe('AgentRuntimeService', () => {
   let mockDb: any;
   const mockUserId = 'test-user-id';
 
+  const buildPersistedToolChain = (
+    finalContent: string,
+    finalMetadata?: Record<string, unknown>,
+  ) => [
+    {
+      content: 'question',
+      createdAt: 1,
+      id: 'user-1',
+      role: 'user',
+      updatedAt: 1,
+    },
+    {
+      content: '',
+      createdAt: 2,
+      id: 'assistant-tools',
+      parentId: 'user-1',
+      role: 'assistant',
+      tools: [
+        {
+          apiName: 'command_execution',
+          arguments: '{}',
+          id: 'tool-call-1',
+          identifier: 'codex',
+          result_msg_id: 'tool-result-1',
+          type: 'default',
+        },
+      ],
+      updatedAt: 2,
+    },
+    {
+      content: 'tool result',
+      createdAt: 3,
+      id: 'tool-result-1',
+      parentId: 'assistant-tools',
+      role: 'tool',
+      tool_call_id: 'tool-call-1',
+      updatedAt: 3,
+    },
+    {
+      content: finalContent,
+      createdAt: 4,
+      id: 'assistant-final',
+      metadata: finalMetadata,
+      parentId: 'tool-result-1',
+      role: 'assistant',
+      updatedAt: 4,
+    },
+  ];
+
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.AGENT_RUNTIME_BASE_URL = 'http://localhost:3010';
@@ -2060,6 +2109,80 @@ describe('AgentRuntimeService', () => {
       );
     });
 
+    it('single isolated member: extracts the final answer from an assistantGroup', async () => {
+      await service.completeGroupActionMember({
+        anchorMessageId: 'grp-tool-1',
+        expectedMembers: 1,
+        finalState: {
+          ...memberState,
+          messages: [
+            { content: 'question', role: 'user' },
+            {
+              children: [
+                {
+                  content: '',
+                  id: 'assistant-tools',
+                  tools: [
+                    {
+                      id: 'tool-call-1',
+                      result: { content: 'tool result', id: 'tool-result-1' },
+                    },
+                  ],
+                },
+                { content: 'grouped member answer', id: 'assistant-final' },
+              ],
+              content: '',
+              id: 'assistant-group',
+              role: 'assistantGroup',
+            },
+          ],
+        } as any,
+        groupToolMessageId: 'grp-tool-1',
+        mode: 'isolated',
+        onComplete: 'resume',
+        operationId: 'child-1',
+        parentOperationId: 'parent-1',
+        reason: 'done',
+      });
+
+      expect(updateToolMessage).toHaveBeenCalledWith(
+        'grp-tool-1',
+        expect.objectContaining({ content: 'grouped member answer' }),
+      );
+    });
+
+    it('single isolated member: extracts serialized multimodal text after DB rehydration', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        ...memberState,
+        messages: undefined,
+      });
+      (service as any).messageModel.query.mockResolvedValue(
+        buildPersistedToolChain(
+          JSON.stringify([
+            { text: 'persisted member answer', type: 'text' },
+            { image: 'https://example.com/image.png', type: 'image' },
+          ]),
+          { isMultimodal: true },
+        ),
+      );
+
+      await service.completeGroupActionMember({
+        anchorMessageId: 'grp-tool-1',
+        expectedMembers: 1,
+        groupToolMessageId: 'grp-tool-1',
+        mode: 'isolated',
+        onComplete: 'resume',
+        operationId: 'child-1',
+        parentOperationId: 'parent-1',
+        reason: 'done',
+      });
+
+      expect(updateToolMessage).toHaveBeenCalledWith(
+        'grp-tool-1',
+        expect.objectContaining({ content: 'persisted member answer' }),
+      );
+    });
+
     it('multi-member: holds (no group-tool backfill, no resume) until the barrier is met', async () => {
       (service as any).serverDB.query = {
         messagePlugins: { findFirst: vi.fn() },
@@ -2208,6 +2331,120 @@ describe('AgentRuntimeService', () => {
       expect(updateToolMessage).toHaveBeenCalledWith(
         'tool-msg-1',
         expect.objectContaining({ content: 'final answer' }),
+      );
+    });
+
+    it('extracts a grouped final answer after webhook state is rehydrated from the DB', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        ...childState,
+        messages: undefined,
+      });
+      (service as any).messageModel.query.mockResolvedValue(
+        buildPersistedToolChain('final answer after tool use'),
+      );
+
+      await service.completeSubAgentBridge(bridgeParams);
+
+      expect(updateToolMessage).toHaveBeenCalledWith(
+        'tool-msg-1',
+        expect.objectContaining({ content: 'final answer after tool use' }),
+      );
+    });
+
+    it('extracts text from serialized multimodal content after DB query and group parsing', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        ...childState,
+        messages: undefined,
+      });
+      (service as any).messageModel.query.mockResolvedValue(
+        buildPersistedToolChain(
+          JSON.stringify([
+            { text: 'persisted multimodal answer', type: 'text' },
+            { image: 'https://example.com/image.png', type: 'image' },
+          ]),
+          { isMultimodal: true },
+        ),
+      );
+
+      await service.completeSubAgentBridge(bridgeParams);
+
+      expect(updateToolMessage).toHaveBeenCalledWith(
+        'tool-msg-1',
+        expect.objectContaining({ content: 'persisted multimodal answer' }),
+      );
+    });
+
+    it('uses the no-text fallback for an image-only serialized final assistant', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        ...childState,
+        messages: undefined,
+      });
+      (service as any).messageModel.query.mockResolvedValue(
+        buildPersistedToolChain(
+          JSON.stringify([{ image: 'https://example.com/image.png', type: 'image' }]),
+          { isMultimodal: true },
+        ),
+      );
+
+      await service.completeSubAgentBridge(bridgeParams);
+
+      expect(updateToolMessage).toHaveBeenCalledWith(
+        'tool-msg-1',
+        expect.objectContaining({ content: 'Sub-agent completed without a textual answer.' }),
+      );
+    });
+
+    it('extracts text parts from the grouped final assistant content', async () => {
+      await service.completeSubAgentBridge({
+        ...bridgeParams,
+        finalState: {
+          ...childState,
+          messages: [
+            {
+              children: [
+                {
+                  content: [
+                    { text: 'final answer', type: 'text' },
+                    { image_url: { url: 'https://example.com/image.png' }, type: 'image_url' },
+                  ],
+                  id: 'assistant-final',
+                },
+              ],
+              content: '',
+              id: 'assistant-group',
+              role: 'assistantGroup',
+            },
+          ],
+        } as any,
+      });
+
+      expect(updateToolMessage).toHaveBeenCalledWith(
+        'tool-msg-1',
+        expect.objectContaining({ content: 'final answer' }),
+      );
+    });
+
+    it('does not fall back to stale text when the grouped final assistant is empty', async () => {
+      await service.completeSubAgentBridge({
+        ...bridgeParams,
+        finalState: {
+          ...childState,
+          messages: [
+            { content: 'stale answer', id: 'assistant-stale', role: 'assistant' },
+            { content: 'follow-up', id: 'user-follow-up', role: 'user' },
+            {
+              children: [{ content: '', id: 'assistant-final' }],
+              content: '',
+              id: 'assistant-group',
+              role: 'assistantGroup',
+            },
+          ],
+        } as any,
+      });
+
+      expect(updateToolMessage).toHaveBeenCalledWith(
+        'tool-msg-1',
+        expect.objectContaining({ content: 'Sub-agent completed without a textual answer.' }),
       );
     });
 

@@ -129,6 +129,37 @@ observed behavior may belong to a fallback model.
 provider/model configuration and the first completed assistant message metadata.
 Attach the runtime identity to the Acceptance round before judging quality.
 
+### L-E11 — Declaring an ingest done without reconciling its evidence count
+
+**Wrong approach:** read `acceptance run ingest`'s success JSON, see an
+`acceptanceId` and a round index, and stop — treating a `[WARN] evidence upload
+failed, skipping <file>` line above it as noise because the command still exited 0.
+
+**Why it fails:** a transient storage error skips exactly one artifact and the run
+publishes anyway. When the casualty is one half of a `comparison` pair, the
+surviving half renders alone under its role band — a lone `before` screenshot reads
+as "the fix never landed", inverting the round's verdict.
+
+**Correct approach:** count the evidence items in `result.json` before publishing
+and compare against the ingest JSON's `evidence` field; treat any WARN line as a
+failure of the publish step. Do not retro-attach the missing file with
+`acceptance run evidence upload` — that path carries no `comparison` metadata, so
+the image lands unpaired and unlabeled. Publish a fresh round carrying the complete
+evidence set instead, and say in `report.md` that it re-publishes the same
+observations rather than re-running the cases.
+
+### L-E12 — Expressing multimodal disclosure through the `verifier` enum
+
+**Wrong approach:** write a value such as `"verifier": "multimodal LLM"` in a plan
+item to satisfy the requirement that screenshot checks disclose multimodal review.
+
+**Why it fails:** `verifier` is a closed set (`program` / `agent` / `llm`) that the
+ingest validator rejects outside those values, so the whole payload fails. The
+disclosure is not expressible in that field.
+
+**Correct approach:** set `"verifier": "llm"` and carry the multimodal disclosure in
+the plan item's `method` prose alongside `"requiredEvidence": ["screenshot"]`.
+
 ## Product and interaction contracts
 
 ### L-D1 — Rebuilding a canonical surface from visual impression
@@ -259,6 +290,30 @@ the user's LobeHub instance may expose no debugging port at all.
 **Correct approach:** verify the owning process path and probe a LobeHub-specific
 renderer marker before collecting evidence. If needed, start an isolated pool
 instance on a distinct port rather than guessing.
+
+### L-S6 — Reading or writing the url from a portal'd sidebar on desktop
+
+**Wrong approach:** use `useSearchParams`, `useQueryState`, `useParams`,
+`useLocation`, `useNavigate`, or a bare `<Link>` inside a component that a route
+layout registers through `NavPanelPortal`, and verify it only on web.
+
+**Why it fails:** the desktop shell renders every registered sidebar outside the
+per-tab routers, so React context binds those hooks to the root router, whose
+location never moves. A write lands on a router no page reads and a read resolves
+the boot url. Both are silent: the sidebar renders normally and web is unaffected,
+so the defect looks like unrelated page logic. Verified twice in this catalogue's
+lifetime — as a topic-switch failure that made the generation page ignore its own
+send button, and as a library tree that never expanded to the open folder.
+
+**Correct approach:** in any shell-rendered tree, read through the active-tab
+facades (`useActiveLocation`, `useActiveRouteParams`) and navigate through
+`useWorkspaceAwareNavigate` / `appNavigate`, keeping `<Link>` only for its href
+with the click handled by the facade. Note that no active-tab twin exists for
+search params: express a param write as a facade navigation rather than
+`setSearchParams`. When the state is a url ⇄ store sync owned by the page, mount
+it in the route layout instead, and cover it with a test that asserts which router
+received the write — a test that only asserts a write happened passes on the
+broken topology too.
 
 ## Historical source
 

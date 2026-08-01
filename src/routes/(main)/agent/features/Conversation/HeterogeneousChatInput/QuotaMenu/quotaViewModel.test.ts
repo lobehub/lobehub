@@ -12,6 +12,7 @@ const account = {
   externalAccountId: '48bfd5c6',
   planTier: 'max',
   rateLimitTier: 'default_claude_max_20x',
+  updatedAt: new Date('2026-07-18T08:01:00Z'),
 };
 
 const windows: QuotaWindowRow[] = [
@@ -108,27 +109,27 @@ describe('buildClaudeSnapshotFromWindows', () => {
 
 describe('isQuotaStale', () => {
   const now = Date.parse('2026-07-18T09:00:00Z');
-  const fresh: QuotaWindowRow = {
-    lastSeenAt: new Date('2026-07-18T08:57:00Z'),
-    lastUtilization: 10,
-    limitType: 'session',
-    peakUtilization: 10,
-    resetsAt: reset,
-    scopeKey: '',
-    windowSeconds: 18_000,
-  };
 
-  it('is stale with no windows', () => {
-    expect(isQuotaStale([], now, 5 * 60_000)).toBe(true);
+  it('is stale with no receipt time', () => {
+    expect(isQuotaStale(undefined, now, 5 * 60_000)).toBe(true);
   });
 
-  it('is fresh when newest reading is within maxAge', () => {
-    expect(isQuotaStale([fresh], now, 5 * 60_000)).toBe(false);
+  it('is fresh when the server receipt is within maxAge', () => {
+    expect(isQuotaStale(new Date('2026-07-18T08:57:00Z'), now, 5 * 60_000)).toBe(false);
   });
 
-  it('is stale when newest reading is older than maxAge', () => {
-    expect(
-      isQuotaStale([{ ...fresh, lastSeenAt: new Date('2026-07-18T08:50:00Z') }], now, 5 * 60_000),
-    ).toBe(true);
+  it('is stale when the server receipt is older than maxAge', () => {
+    expect(isQuotaStale(new Date('2026-07-18T08:50:00Z'), now, 5 * 60_000)).toBe(true);
+  });
+
+  it('ignores device clock skew when building display freshness', () => {
+    const deviceClockAhead = [{ ...windows[0], lastSeenAt: new Date('2026-07-19T09:00:00Z') }];
+    const snap = buildClaudeSnapshotFromWindows(
+      { ...account, updatedAt: new Date('2026-07-18T08:50:00Z') },
+      deviceClockAhead,
+    );
+
+    expect(snap.updatedAt).toBe(Date.parse('2026-07-18T08:50:00Z'));
+    expect(isQuotaStale(new Date(snap.updatedAt), now, 5 * 60_000)).toBe(true);
   });
 });

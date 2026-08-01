@@ -284,6 +284,48 @@ Measured this way, still-hidden slots produced **0** mutations in 6/6 switches: 
 changes (visible/hidden, active/inactive, mounted/unmounted), capture the classification on both sides
 and use the intersection. Otherwise the action's own effect lands in the wrong bucket.
 
+### Agent Mock playback leaves `pluginState` empty — backfill it before capturing pluginState-driven renders
+
+**Situation:** verifying a builtin-tool Render/Inspector (lobe-agent todos, plans —
+anything reading `message.pluginState`) with DevDock → Agent Mock case playback as
+the deterministic driver (no LLM).
+
+**Doesn't work:** capturing right after playback. The mock pipeline writes each
+tool step's `result` into the tool message `content` only and never sets
+`pluginState`, so a Render keyed off `pluginState` mounts empty (expanded rows
+show nothing) and inspectors fall to their no-data fallback. Reads as "the new
+rendering is broken" when the components are fine. Also note: consecutive todo
+tool rows are folded into the latest by the conversation UI, so early-state rows
+may never mount.
+
+**Works:** after playback completes, backfill in-memory from each message's own
+result JSON, at the layer the Render actually reads:
+
+```js
+const c = window.__LOBE_STORES.chat();
+const msgs = c.dbMessagesMap['main_<agentId>_<topicId>'];
+for (const m of msgs.filter((m) => m.role === 'tool' && m.plugin)) {
+  const parsed = JSON.parse(m.content);
+  if (parsed?.todos)
+    c.internal_dispatchMessage({
+      type: 'updatePluginState',
+      id: m.id,
+      key: 'todos',
+      value: parsed.todos,
+    });
+}
+```
+
+To render a payload the case doesn't cover (another builtin tool, a specific
+state), payload-swap an already-MOUNTED mock row in place — update BOTH the
+assistant's `tools[]` entry (`updateMessageTools`, keyed by `tool_call_id`; this
+is what selects the Render component) and the tool message (`updateMessagePlugin`
+
+- `replaceMessagePluginState`). Dispatching brand-new messages at the end of the
+  list may never mount. Claude Code builtin payloads use `identifier: 'claude-code'`
+  (NOT `lobe-claude-code`) and PascalCase `apiName` (`TodoWrite`). All of this is
+  in-memory only — a reload clears it; delete the temp topic at teardown.
+
 ### `eval` declarations persist in the page global scope
 
 **Situation:** running several `agent-browser eval` payloads against one renderer.
@@ -379,6 +421,51 @@ LOBE_DESKTOP_VITE_PORT=5175 \
 Keep that command session open for the run. Confirm the CDP endpoint, project
 process path, `app-probe.sh ready`, renderer auth, server auth, and a raw-CDP
 screenshot before collecting evidence.
+
+### `app-probe.sh goto /` cannot reach the desktop Home route — seed the tab first
+
+**Situation:** driving the Electron shell to the Home route (`/`) to check the nav
+panel there.
+
+**Doesn't work:** `app-probe.sh goto /` prints `"/"` but the renderer stays on the
+previous route. `goto` is a full reload, and the desktop shell restores the active
+tab's persisted url on boot — every non-root route survives that restore, so `goto`
+appears to work for `/tasks`, `/agents`, `/settings` and silently fails only for
+`/`. The follow-up probe then describes the old page with no error anywhere.
+
+**Works:** create and activate a Home tab first, then navigate:
+
+```js
+window.__LOBE_STORES.electron().addTab('/'); // addTab also activates it
+```
+
+```bash
+.agents/acceptance/scripts/app-probe.sh goto /
+```
+
+Assert `location.pathname` after the reload rather than trusting `goto`'s echo.
+
+### Anchor nav-panel assertions on `#nav-panel-drawer`, not a `data-insp-path` match
+
+**Situation:** asserting what the left nav panel renders on a given route.
+
+**Doesn't work:** `document.querySelector('[data-insp-path*="NavPanelDraggable"]')`.
+It resolves during a settled render but returns `null` in the seconds after a full
+reload, and the usual `|| document.body` fallback then reads
+`document.body.innerText === ''` (generic C4) — which looks exactly like an empty
+panel and turns a normal loading window into a false regression.
+
+**Works:** the panel is the `<aside>` sibling of the stable drawer anchor:
+
+```js
+const drawer = document.getElementById('nav-panel-drawer');
+const aside = drawer && [...drawer.parentElement.children].find((c) => c.tagName === 'ASIDE');
+```
+
+Then assert on `aside.innerText` line count plus a count of text-free rounded boxes
+(the skeleton rows). Distinguish the two skeleton states explicitly: the whole panel
+collapsing to \~8 text-free rows is the nav-panel fallback, while fixed items present
+with only the list area shimmering is ordinary data loading.
 
 ## Detailed references
 

@@ -232,10 +232,9 @@ const AgentViewAllPage = memo(() => {
   const { allowed: canCreate, reason: createBlockedReason } = usePermission('create_content');
   const {
     createAgentMenuItem,
+    createConnectAgentMenuItem,
     createGroupChatMenuItem,
-    createHeterogeneousAgentMenuItems,
     createMarketAgentMenuItem,
-    createPlatformAgentMenuItem,
     isMutatingAgent,
   } = useCreateMenuItems();
 
@@ -252,22 +251,19 @@ const AgentViewAllPage = memo(() => {
   // sidebar's "add from Agent list" entry is omitted — it navigates to this
   // very page.
   const createMenuItems = useMemo(() => {
-    const heteroItems = createHeterogeneousAgentMenuItems(createOptions);
-    const platformItem = createPlatformAgentMenuItem(createOptions);
+    const connectItem = createConnectAgentMenuItem(createOptions);
     return [
       createAgentMenuItem(createOptions),
       createGroupChatMenuItem(createOptions),
-      ...(heteroItems.length > 0 ? [{ type: 'divider' as const }, ...heteroItems] : []),
-      ...(platformItem ? [{ type: 'divider' as const }, platformItem] : []),
+      ...(connectItem ? [{ type: 'divider' as const }, connectItem] : []),
       { type: 'divider' as const },
       createMarketAgentMenuItem(),
     ];
   }, [
     createAgentMenuItem,
+    createConnectAgentMenuItem,
     createGroupChatMenuItem,
-    createHeterogeneousAgentMenuItems,
     createMarketAgentMenuItem,
-    createPlatformAgentMenuItem,
     createOptions,
   ]);
 

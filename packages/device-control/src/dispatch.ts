@@ -22,6 +22,7 @@ import {
   writeLocalFile,
 } from '@lobechat/local-file-shell';
 
+import { getClaudeCodeQuota, type GetClaudeCodeQuotaParams } from './claudeCodeQuota';
 import { prepareSkillDirectory } from './skillDirectory';
 import type {
   DeviceControlDeps,
@@ -48,6 +49,7 @@ export const DEVICE_RPC_METHODS = [
   'unenrollWorkspace',
   'initWorkspace',
   'listHeterogeneousAgentModels',
+  'getClaudeCodeQuota',
   'listProjectSkills',
   'prepareSkillDirectory',
   'statPath',
@@ -120,6 +122,10 @@ export const executeDeviceRpc = async (
         throw new Error('This device client does not support heterogeneous agent model discovery');
       }
       return deps.listHeterogeneousAgentModels(params as ListHeterogeneousAgentModelsParams);
+    }
+
+    case 'getClaudeCodeQuota': {
+      return getClaudeCodeQuota(params as GetClaudeCodeQuotaParams);
     }
 
     case 'listProjectSkills': {

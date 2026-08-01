@@ -5,6 +5,7 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "dependencies": {
+    "@lobechat/heterogeneous-agents": "workspace:*",
     "sf-symbols-typescript": "^2.2.0"
   },
   "devDependencies": {

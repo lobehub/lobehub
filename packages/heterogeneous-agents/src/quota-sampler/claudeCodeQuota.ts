@@ -3,16 +3,22 @@ import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
+import { parseClaudeAccountIdentity } from '../quota/identity';
 import type {
   ClaudeCodeQuotaSnapshot,
   ClaudeCodeQuotaUnavailableReason,
   ClaudeCodeScopedWeekly,
   HeteroQuotaWindow,
-} from '@lobechat/electron-client-ipc';
-import {
-  mapClaudeUsageToReadings,
-  parseClaudeAccountIdentity,
-} from '@lobechat/heterogeneous-agents/quota';
+} from '../quota/snapshot';
+import { mapClaudeUsageToReadings } from '../quota/usageApi';
+
+/**
+ * How long a sampler host's snapshot cache may serve a Claude quota reading
+ * without re-hitting the usage API. Kept just under the UI's 2-minute
+ * auto-refresh cadence so every scheduled poll observes fresh data, while
+ * bursts (multiple renderers / rapid re-mounts) still coalesce.
+ */
+export const CLAUDE_CODE_QUOTA_FRESH_MS = 90_000;
 
 const OAUTH_USAGE_URL = 'https://api.anthropic.com/api/oauth/usage';
 // The usage endpoint is the Claude Code `/usage` API; it requires the CLI's
@@ -60,7 +66,12 @@ const effectiveRoutingFlag = (
 
 export interface FetchClaudeCodeQuotaOptions {
   claudeConfigDirPath?: string | null;
-  env?: NodeJS.ProcessEnv;
+  /**
+   * Agent-configured env overrides. A plain record rather than
+   * `NodeJS.ProcessEnv`: the root app augments `ProcessEnv` with required
+   * keys, which would make callers' partial env objects unassignable.
+   */
+  env?: Record<string, string | undefined>;
 }
 
 interface ClaudeOAuthCredentials {

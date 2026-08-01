@@ -4,6 +4,27 @@ import { expect } from '@playwright/test';
 import type { CustomWorld } from '../../support/world';
 import { WAIT_TIMEOUT } from '../../support/world';
 
+/**
+ * The rail slides 24px on its way in and out. `toBeVisible` resolves the moment
+ * visibility flips, well before the transform lands, so any step that toggles
+ * the rail must settle it before the next step measures anything.
+ */
+const settleRail = async (world: CustomWorld) => {
+  const rail = world.page.locator('[data-testid="home-rail"]:visible');
+
+  await expect
+    .poll(
+      async () => {
+        const before = await rail.boundingBox();
+        await world.page.waitForTimeout(80);
+        const after = await rail.boundingBox();
+        return before?.x === after?.x;
+      },
+      { timeout: WAIT_TIMEOUT },
+    )
+    .toBe(true);
+};
+
 Given('用户在受限宽度下打开 Home 页面', async function (this: CustomWorld) {
   // Keep the desktop width while constraining the height so a fresh E2E account's
   // single rail card still overflows and exposes the real ScrollArea scrollbar.
@@ -40,33 +61,58 @@ Then('Home 主列滚动条应位于双列间距中央', async function (this: Cu
   expect(scrollbarCenter).toBeCloseTo(columnGapCenter, 0);
 });
 
-Then('Home 右栏折叠控制应贴合双列边界', async function (this: CustomWorld) {
+Then('Home 右栏折叠控制应固定在页面右上角', async function (this: CustomWorld) {
   const main = this.page.locator('[data-testid="home-main"]:visible');
   const rail = this.page.locator('[data-testid="home-rail"]:visible');
-  const desktopToggle = this.page.getByTestId('home-rail-toggle-desktop');
-  const mobileToggle = this.page.getByTestId('home-rail-toggle-mobile');
+  const toggle = this.page.locator('[data-testid="home-rail-toggle"]:visible');
 
-  await expect(desktopToggle).toBeVisible({ timeout: WAIT_TIMEOUT });
-  await expect(mobileToggle).toBeHidden();
+  await expect(toggle).toBeVisible({ timeout: WAIT_TIMEOUT });
 
-  const [mainBox, railBox, toggleBox] = await Promise.all([
+  const [mainBox, expandedBox, viewportWidth] = await Promise.all([
     main.boundingBox(),
-    rail.boundingBox(),
-    desktopToggle.boundingBox(),
+    toggle.boundingBox(),
+    this.page.evaluate(() => window.innerWidth),
   ]);
 
   expect(mainBox).not.toBeNull();
-  expect(railBox).not.toBeNull();
-  expect(toggleBox).not.toBeNull();
+  expect(expandedBox).not.toBeNull();
+  expect(expandedBox!.y + expandedBox!.height).toBeLessThanOrEqual(mainBox!.y);
+  expect(viewportWidth - (expandedBox!.x + expandedBox!.width)).toBeLessThanOrEqual(24);
 
-  const mainRight = mainBox!.x + mainBox!.width;
-  const railLeft = railBox!.x;
-  const toggleCenter = toggleBox!.x + toggleBox!.width / 2;
-  const columnGapCenter = mainRight + (railLeft - mainRight) / 2;
+  await toggle.click();
+  await expect(rail).toHaveCount(0);
 
-  expect(toggleBox!.x).toBeGreaterThanOrEqual(mainRight);
-  expect(toggleBox!.x + toggleBox!.width).toBeLessThanOrEqual(railLeft);
-  expect(toggleCenter).toBeCloseTo(columnGapCenter, 0);
+  const collapsedBox = await toggle.boundingBox();
+  expect(collapsedBox).not.toBeNull();
+  expect(collapsedBox!.x).toBeCloseTo(expandedBox!.x, 0);
+  expect(collapsedBox!.y).toBeCloseTo(expandedBox!.y, 0);
+
+  await toggle.click();
+  await expect(rail).toBeVisible({ timeout: WAIT_TIMEOUT });
+  await settleRail(this);
+});
+
+Then('Home 开合右栏不应改变主列纵向位置', async function (this: CustomWorld) {
+  const main = this.page.locator('[data-testid="home-main"]:visible');
+  const rail = this.page.locator('[data-testid="home-rail"]:visible');
+  const toggle = this.page.locator('[data-testid="home-rail-toggle"]:visible');
+
+  const expandedBox = await main.boundingBox();
+  expect(expandedBox).not.toBeNull();
+
+  await toggle.click();
+  await expect(rail).toHaveCount(0);
+
+  // Measured mid-collapse on purpose: the greeting wraps against a fixed width,
+  // so no frame of the transition may re-wrap it and push the composer plus the
+  // whole task list down a line.
+  const collapsedBox = await main.boundingBox();
+  expect(collapsedBox).not.toBeNull();
+  expect(collapsedBox!.y).toBeCloseTo(expandedBox!.y, 0);
+
+  await toggle.click();
+  await expect(rail).toBeVisible({ timeout: WAIT_TIMEOUT });
+  await settleRail(this);
 });
 
 Then('Home 右栏应保持卡片、滚动条轨道与页面边缘的分层间距', async function (this: CustomWorld) {

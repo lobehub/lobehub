@@ -21,6 +21,7 @@ import type {
   RunCommandParams,
   WriteLocalFileParams,
 } from '@lobechat/electron-client-ipc';
+import { scanHeterogeneousAgentsOnHost } from '@lobechat/heterogeneous-agents/scanHost';
 import { type ILocalSystemService, LocalSystemExecutionRuntime } from '@lobechat/tool-runtime';
 
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
@@ -567,6 +568,12 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
       case 'getAgentProfile': {
         const result = await this.getAgentProfile(args as { agentId?: string; platform: string });
+        return { content: JSON.stringify(result), state: result, success: true };
+      }
+
+      case 'scanHeterogeneousAgents': {
+        const agents = await scanHeterogeneousAgentsOnHost();
+        const result = { agents };
         return { content: JSON.stringify(result), state: result, success: true };
       }
 

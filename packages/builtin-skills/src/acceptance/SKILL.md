@@ -35,7 +35,9 @@ no local report directory.
   means authed; an auth error means stop and surface it).
 - **You know your operation id.** It is provided as `$LOBE_OPERATION_ID` in the
   environment (or named in your task prompt). Every command below keys off it.
-  If it is unset, there is no plan to satisfy — skip this skill.
+  If it is unset, there is no plan to satisfy — author the checks yourself and
+  publish a **structured report round** instead:
+  [references/report.md](references/report.md).
 - **For UI evidence, `agent-browser` is installed.** `npm i -g agent-browser`
   then `agent-browser install` (downloads Chrome). Full reference:
   [references/agent-browser.md](references/agent-browser.md).
@@ -197,5 +199,6 @@ verify/
     ├── agent-browser.md          # full agent-browser CLI reference (any Chromium app)
     ├── computer-use.md           # macOS Computer Use toolkit (osascript + screencapture)
     ├── recording.md              # GIF / MP4 recording for time-based evidence
+    ├── report.md                 # structured report rounds: result.json schema + `lh acceptance run ingest`
     └── auth.md                   # portable auth: session/state/vault/cookie injection + boundaries
 ```

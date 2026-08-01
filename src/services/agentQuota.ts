@@ -13,10 +13,12 @@ import { lambdaClient } from '@/libs/trpc/client';
 class AgentQuotaService {
   /** Persist a live Claude snapshot (identity + readings) captured over IPC. */
   ingestClaudeSnapshot = async (params: {
+    deviceId?: string;
     identity: ClaudeCodeAccountIdentity;
     readings: ClaudeCodeQuotaReading[];
   }) =>
     lambdaClient.agentQuota.ingestSnapshot.mutate({
+      deviceId: params.deviceId,
       identity: params.identity,
       provider: 'claude-code',
       readings: params.readings.map((r) => ({ ...r, scopeKey: r.scopeKey ?? '' })),

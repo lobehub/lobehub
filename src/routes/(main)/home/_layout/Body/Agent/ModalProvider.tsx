@@ -13,7 +13,6 @@ import {
   useState,
 } from 'react';
 
-import { openCreatePlatformAgentModal } from '@/features/CreatePlatformAgent';
 import EditingPopover from '@/features/EditingPopover';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useAgentStore } from '@/store/agent';
@@ -63,7 +62,6 @@ interface AgentModalContextValue {
   openConfigGroupModal: (scope?: 'private' | 'public') => void;
   openCreateGroupModal: (sessionId?: string, visibility?: 'private' | 'public') => void;
   openCreateModal: (type: 'agent' | 'group', options?: OpenCreateModalOptions) => void;
-  openCreatePlatformAgentModal: (options?: OpenCreateModalOptions) => void;
   openGroupWizardModal: (callbacks: GroupWizardCallbacks) => void;
   openMemberSelectionModal: (callbacks: MemberSelectionCallbacks) => void;
   setGroupWizardLoading: (loading: boolean) => void;
@@ -225,12 +223,6 @@ export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) =
         setCreateModalGroupId(options?.groupId);
         setCreateModalVisibility(options?.visibility);
         setCreateModalOpen(true);
-      },
-      openCreatePlatformAgentModal: (options?: OpenCreateModalOptions) => {
-        openCreatePlatformAgentModal({
-          groupId: options?.groupId,
-          visibility: options?.visibility,
-        });
       },
       openGroupWizardModal: (callbacks: GroupWizardCallbacks) => {
         setGroupWizardCallbacks(callbacks);

@@ -187,14 +187,31 @@ export interface QuotaMenuHelpers<S> {
   now: number;
 }
 
-export interface FetchQuotaOptions {
+export interface FetchQuotaOptions<S = unknown> {
   force?: boolean;
+  /**
+   * Paint an intermediate snapshot (e.g. persisted DB data) immediately while
+   * a slower live refresh keeps running; the promise result stays authoritative.
+   */
+  onInterim?: (quota: S) => void;
+  /**
+   * Check the live source even when the local staleness gate would skip it
+   * (focus / popover revalidation). Unlike `force`, upstream snapshot caches
+   * may still answer from their fresh window.
+   */
+  revalidate?: boolean;
 }
 
 interface QuotaMenuProps<S extends QuotaSnapshotBase> {
+  /**
+   * Revalidate on this cadence while the tab is visible, so the badge stays
+   * near-live without user interaction. Upstream sampler caches must keep
+   * their fresh window below this for each poll to observe new data.
+   */
+  autoRefreshMs?: number;
   contentWidth?: number;
   createErrorSnapshot: (error: unknown) => S;
-  fetchQuota: (options?: FetchQuotaOptions) => Promise<S>;
+  fetchQuota: (options?: FetchQuotaOptions<S>) => Promise<S>;
   /** Localized explanation for `status: 'error'`; falls back to `error`. */
   getErrorText?: (quota: S) => string | undefined;
   /** Localized explanation for a manual refresh error when stale data is preserved. */
@@ -214,6 +231,7 @@ interface QuotaMenuProps<S extends QuotaSnapshotBase> {
 
 interface LoadQuotaOptions {
   manual?: boolean;
+  revalidate?: boolean;
 }
 
 /**
@@ -222,6 +240,7 @@ interface LoadQuotaOptions {
  * reset countdowns. Agent specifics come in through the props.
  */
 const QuotaMenu = <S extends QuotaSnapshotBase>({
+  autoRefreshMs,
   contentWidth,
   createErrorSnapshot,
   fetchQuota,
@@ -317,7 +336,16 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
       setLoading(true);
 
       try {
-        const nextQuota = await fetchQuota(options.manual ? { force: true } : undefined);
+        const nextQuota = await fetchQuota({
+          ...(options.manual ? { force: true } : {}),
+          ...(options.revalidate ? { revalidate: true } : {}),
+          onInterim: (interimQuota) => {
+            // Progressive paint: show the fast (persisted) snapshot while the
+            // live refresh continues; requestId still guards stale sources.
+            if (!isCurrentRequest(requestId, requestSourceKey)) return;
+            setQuotaSnapshot(interimQuota);
+          },
+        });
         applyQuotaResult(nextQuota, options, requestId, requestSourceKey);
       } catch (error) {
         console.error('Failed to fetch agent quota:', error);
@@ -328,7 +356,7 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
         }
       }
     },
-    [applyQuotaResult, createErrorSnapshot, fetchQuota, isCurrentRequest],
+    [applyQuotaResult, createErrorSnapshot, fetchQuota, isCurrentRequest, setQuotaSnapshot],
   );
 
   useEffect(() => {
@@ -350,6 +378,60 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
       window.clearInterval(interval);
     };
   }, []);
+
+  // Scheduled auto-refresh: quota burns down while the user just watches the
+  // agent work, so poll on the configured cadence whenever the tab is visible.
+  // Each tick re-checks staleness and the transient-error cooldown, and the
+  // sampler-side snapshot cache still coalesces concurrent pollers.
+  useEffect(() => {
+    if (!autoRefreshMs) return;
+
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === 'hidden' || loading) return;
+
+      const currentTime = Date.now();
+      const recentlyFailed =
+        lastTransientErrorAtRef.current > 0 &&
+        currentTime - lastTransientErrorAtRef.current < QUOTA_RETRY_COOLDOWN_MS;
+
+      if (recentlyFailed) return;
+      if (quota && currentTime - quota.updatedAt < autoRefreshMs) return;
+
+      void loadQuota({ revalidate: true });
+    }, autoRefreshMs);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [autoRefreshMs, loadQuota, loading, quota]);
+
+  // Revalidate when the window regains focus: the user may have burned quota
+  // elsewhere (another device, a terminal CLI session) meanwhile. Upstream
+  // snapshot caches (90 s fresh window + error cooldown in the sampler host)
+  // keep this from hammering the rate-limited live endpoints.
+  useEffect(() => {
+    const revalidateOnFocus = () => {
+      if (document.visibilityState === 'hidden' || loading) return;
+
+      const currentTime = Date.now();
+      const recentlyFailed =
+        lastTransientErrorAtRef.current > 0 &&
+        currentTime - lastTransientErrorAtRef.current < QUOTA_RETRY_COOLDOWN_MS;
+
+      if (recentlyFailed) return;
+      if (quota && currentTime - quota.updatedAt <= QUOTA_STALE_MS) return;
+
+      void loadQuota({ revalidate: true });
+    };
+
+    window.addEventListener('focus', revalidateOnFocus);
+    document.addEventListener('visibilitychange', revalidateOnFocus);
+
+    return () => {
+      window.removeEventListener('focus', revalidateOnFocus);
+      document.removeEventListener('visibilitychange', revalidateOnFocus);
+    };
+  }, [loadQuota, loading, quota]);
 
   const formatDuration = useCallback(
     (ms: number) => {
@@ -421,7 +503,7 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
         currentTime - lastTransientErrorAtRef.current < QUOTA_RETRY_COOLDOWN_MS;
 
       if ((!quota || currentTime - quota.updatedAt > QUOTA_STALE_MS) && !recentlyFailed) {
-        void loadQuota();
+        void loadQuota({ revalidate: true });
       }
     },
     [loadQuota, loading, quota],

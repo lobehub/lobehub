@@ -37,6 +37,7 @@ export interface ShellProcess {
   exitCode: number | null;
   outputFiles: ShellOutputFiles;
   process: ChildProcess;
+  spawnError?: Error;
   startedAt?: number;
 }
 
@@ -234,7 +235,8 @@ export class ShellProcessManager {
 
     return {
       duration_ms: durationMs,
-      exit_code: exitCode ?? undefined,
+      error: shellProcess.spawnError?.message,
+      exit_code: shellProcess.spawnError ? undefined : (exitCode ?? undefined),
       output: stdout + stderr,
       output_files: {
         stderr: {
@@ -250,7 +252,7 @@ export class ShellProcessManager {
       },
       stderr,
       stdout,
-      success: true,
+      success: !shellProcess.spawnError,
     };
   }
 

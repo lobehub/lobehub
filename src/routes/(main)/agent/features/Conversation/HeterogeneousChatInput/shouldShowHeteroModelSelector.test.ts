@@ -22,33 +22,33 @@ describe('shouldShowHeteroModelSelector', () => {
     ).toBe(true);
   });
 
-  it('hides for explicit device runs because connected devices do not advertise selector args yet', () => {
+  it('shows for explicit device runs because dispatch forwards --model/--effort to the device', () => {
     expect(
       shouldShowHeteroModelSelector({
         boundDeviceId: 'remote-device',
         executionTarget: 'device',
         isDesktopClient: false,
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
-  it('hides for desktop-local selections opened from web because they dispatch to the bound device', () => {
+  it('shows for desktop-local selections opened from web (device dispatch forwards selector args)', () => {
     expect(
       shouldShowHeteroModelSelector({
         boundDeviceId: 'desktop-device',
         executionTarget: 'local',
         isDesktopClient: false,
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
-  it('hides for auto device routing because selector args are not forwarded there', () => {
+  it('shows for auto device routing because the auto-resolved device dispatch carries selector args', () => {
     expect(
       shouldShowHeteroModelSelector({
         executionTarget: 'auto',
         isDesktopClient: false,
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it('shows OpenCode models for desktop-local execution', () => {

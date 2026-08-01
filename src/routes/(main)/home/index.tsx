@@ -3,14 +3,14 @@ import { type FC } from 'react';
 
 import HomePageTracker from '@/components/Analytics/HomePageTracker';
 import HomeContent from '@/features/Home';
-import NavHeader from '@/features/NavHeader';
+import HomeNavHeader from '@/features/Home/HomeNavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 
 const Home: FC = () => {
   return (
     <>
       <HomePageTracker />
-      <NavHeader />
+      <HomeNavHeader />
       <Flexbox
         height={'100%'}
         style={{ overflow: 'hidden', paddingBlockStart: 32, paddingInline: 24 }}

@@ -9,5 +9,6 @@ Feature: Home Dashboard 双列布局
   Scenario: 受限桌面宽度下双列滚动条不覆盖内容
     Given 用户在受限宽度下打开 Home 页面
     Then Home 主列滚动条应位于双列间距中央
-    And Home 右栏折叠控制应贴合双列边界
+    And Home 右栏折叠控制应固定在页面右上角
+    And Home 开合右栏不应改变主列纵向位置
     And Home 右栏应保持卡片、滚动条轨道与页面边缘的分层间距

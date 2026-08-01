@@ -14,6 +14,7 @@
     "test:coverage": "bunx vitest run --coverage"
   },
   "dependencies": {
+    "@lobechat/heterogeneous-agents": "workspace:*",
     "@lobechat/local-file-shell": "workspace:*",
     "@lobechat/utils": "workspace:*",
     "fast-glob": "^3.3.3",

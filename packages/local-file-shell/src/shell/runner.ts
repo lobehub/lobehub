@@ -96,6 +96,13 @@ export async function runCommand(
 
     childProcess.on('error', (error) => {
       logger?.error(`${logPrefix} Command failed:`, error);
+      const cwdContext = cwd ? ` (working directory: ${cwd})` : '';
+      shellProcess.spawnError = new Error(
+        `Failed to start command${cwdContext}: ${error.message}`,
+        {
+          cause: error,
+        },
+      );
       shellProcess.exitCode = 1;
     });
     childProcess.once('close', () => releaseSandbox?.());
