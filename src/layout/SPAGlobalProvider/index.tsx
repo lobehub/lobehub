@@ -4,7 +4,7 @@ import { ContextMenuHost, ModalHost, TooltipGroup } from '@lobehub/ui';
 import { ModalHost as BaseModalHost, ToastHost } from '@lobehub/ui/base-ui';
 import { StyleProvider } from 'antd-style';
 import { domMax, LazyMotion } from 'motion/react';
-import { type CSSProperties, lazy, memo, type PropsWithChildren, Suspense } from 'react';
+import { Component, type CSSProperties, lazy, memo, type PropsWithChildren, Suspense } from 'react';
 
 import { LobeAnalyticsProviderWrapper } from '@/components/Analytics/LobeAnalyticsProviderWrapper';
 import { DragUploadProvider } from '@/components/DragUploadZone/DragUploadProvider';
@@ -40,6 +40,18 @@ const devDockLayoutStyle: CSSProperties = {
   width: '100%',
 };
 
+class DevDockBoundary extends Component<PropsWithChildren, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    return this.state.failed ? null : this.props.children;
+  }
+}
+
 export const DevDockLayout = memo<PropsWithChildren>(({ children }) => {
   const mounted = useDevDockMounted();
 
@@ -47,9 +59,11 @@ export const DevDockLayout = memo<PropsWithChildren>(({ children }) => {
     <>
       <div style={devDockLayoutStyle}>{children}</div>
       {mounted && (
-        <Suspense>
-          <DevDock />
-        </Suspense>
+        <DevDockBoundary>
+          <Suspense>
+            <DevDock />
+          </Suspense>
+        </DevDockBoundary>
       )}
     </>
   );

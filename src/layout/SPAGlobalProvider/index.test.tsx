@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { type ReactNode, useEffect } from 'react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,8 +13,9 @@ import { type DevDockLayout as DevDockLayoutComponent } from './index';
 
 let SPAGlobalProvider: typeof SPAGlobalProviderComponent;
 let DevDockLayout: typeof DevDockLayoutComponent;
-const { canAccessDevDock } = vi.hoisted(() => ({
+const { canAccessDevDock, devDockRenderError } = vi.hoisted(() => ({
   canAccessDevDock: vi.fn(() => false),
+  devDockRenderError: { current: null as Error | null },
 }));
 
 vi.mock('@lobehub/ui', async () => {
@@ -84,7 +85,10 @@ vi.mock('@/features/DevDock', async () => {
   const React = await import('react');
 
   return {
-    default: () => React.createElement('div', { 'data-testid': 'dev-dock' }),
+    default: () => {
+      if (devDockRenderError.current) throw devDockRenderError.current;
+      return React.createElement('div', { 'data-testid': 'dev-dock' });
+    },
   };
 });
 
@@ -195,6 +199,7 @@ describe('SPAGlobalProvider', () => {
 
   beforeEach(() => {
     canAccessDevDock.mockReturnValue(false);
+    devDockRenderError.current = null;
     setDevDockUnlocked(false);
     Reflect.deleteProperty(window, '__SERVER_CONFIG__');
     setPostRenderReady(false);
@@ -263,6 +268,27 @@ describe('SPAGlobalProvider', () => {
     );
 
     expect(await screen.findByTestId('dev-dock')).toBeInTheDocument();
+  });
+
+  it('keeps the app alive when DevDock fails to load', async () => {
+    vi.stubEnv('PROD', true);
+    canAccessDevDock.mockReturnValue(true);
+    setDevDockUnlocked(true);
+    devDockRenderError.current = new TypeError(
+      "Cannot read properties of undefined (reading 'default')",
+    );
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    render(
+      <DevDockLayout>
+        <div data-testid="spa-route-content" />
+      </DevDockLayout>,
+    );
+
+    await waitFor(() => expect(consoleError).toHaveBeenCalled());
+    expect(screen.getByTestId('spa-route-content')).toBeInTheDocument();
+    expect(screen.queryByTestId('dev-dock')).toBeNull();
+    consoleError.mockRestore();
   });
 
   it('does not remount application providers when DevDock becomes available', async () => {
