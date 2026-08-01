@@ -164,7 +164,7 @@ interface StartSessionParams {
   useClaudeCodeSdk?: boolean;
 }
 
-interface StartSessionResult {
+export interface StartSessionResult {
   sessionId: string;
 }
 
@@ -253,7 +253,7 @@ interface GetClaudeCodeQuotaParams {
   force?: boolean;
 }
 
-interface SessionInfo {
+export interface SessionInfo {
   agentSessionId?: string;
 }
 

@@ -6,7 +6,7 @@ import { refreshShellPath } from './shellPath';
 
 vi.mock('node:child_process', () => ({ execFile: vi.fn() }));
 
-const execFileMock = vi.mocked(execFile);
+const execFileMock = vi.mocked(execFile) as unknown as ReturnType<typeof vi.fn>;
 
 describe('refreshShellPath', () => {
   const originalPath = process.env.PATH;
@@ -24,14 +24,13 @@ describe('refreshShellPath', () => {
   });
 
   it('updates PATH from the login shell output', async () => {
-    execFileMock.mockImplementation(((_file, _args, _options, callback) => {
+    execFileMock.mockImplementation((_file, _args, _options, callback) => {
       callback(
         null,
         'shell startup output\n__LOBE_SHELL_PATH__/opt/homebrew/bin:/usr/bin__LOBE_SHELL_PATH__',
         '',
       );
-      return undefined as never;
-    }) as typeof execFile);
+    });
 
     await refreshShellPath();
 
@@ -45,10 +44,9 @@ describe('refreshShellPath', () => {
   });
 
   it('preserves PATH when the login shell returns no delimited value', async () => {
-    execFileMock.mockImplementation(((_file, _args, _options, callback) => {
+    execFileMock.mockImplementation((_file, _args, _options, callback) => {
       callback(null, 'shell startup output only', '');
-      return undefined as never;
-    }) as typeof execFile);
+    });
 
     await refreshShellPath();
 
@@ -56,10 +54,9 @@ describe('refreshShellPath', () => {
   });
 
   it('rejects without replacing PATH when shell startup fails', async () => {
-    execFileMock.mockImplementation(((_file, _args, _options, callback) => {
+    execFileMock.mockImplementation((_file, _args, _options, callback) => {
       callback(new Error('shell failed'), '', '');
-      return undefined as never;
-    }) as typeof execFile);
+    });
 
     await expect(refreshShellPath()).rejects.toThrow('shell failed');
     expect(process.env.PATH).toBe('/usr/bin:/bin');

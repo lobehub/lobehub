@@ -7,7 +7,7 @@ import HeterogeneousAgentCtr from '../HeterogeneousAgentCtr';
 const implementationMocks = vi.hoisted(() => ({
   afterAppReady: vi.fn(),
   constructor: vi.fn(),
-  startSession: vi.fn(async () => ({ sessionId: 'session-1' })),
+  startSession: vi.fn(async (..._args: unknown[]) => ({ sessionId: 'session-1' })),
 }));
 
 vi.mock('../HeterogeneousAgentImpl', () => ({
