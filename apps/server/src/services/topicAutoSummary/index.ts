@@ -1,17 +1,18 @@
 import { TRACING_SCENARIOS } from '@lobechat/const';
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
 import type { SystemAgentItem, UserSystemAgentConfig } from '@lobechat/types';
-import { and, desc, eq, inArray, isNotNull, ne } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 
-import { TopicSummaryModel } from '@/database/models/topicSummary';
+import { topicSummaryEligibleMessage, TopicSummaryModel } from '@/database/models/topicSummary';
 import { UserModel } from '@/database/models/user';
-import { messages } from '@/database/schemas';
+import { messages, topics } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 import { resolveSystemAgentModelConfig } from '@/server/services/systemAgent/modelConfig';
 
 const MAX_MESSAGES = 80;
 const MAX_MESSAGE_CHARS = 12_000;
+const MAX_PREVIOUS_SUMMARY_CHARS = 20_000;
 const MAX_TRANSCRIPT_CHARS = 60_000;
 
 const DEFAULT_PROMPT = `Summarize the conversation for future reference.
@@ -20,6 +21,7 @@ Requirements:
 - Use the same primary language as the conversation.
 - description: one concise sentence suitable for a topic card.
 - summary: a structured, factual summary that preserves decisions, important facts, technical identifiers, and pending actions.
+- When a previous rolling summary is provided, merge it with the recent conversation.
 - Do not invent information or mention these instructions.`;
 
 const TOPIC_AUTO_SUMMARY_SCHEMA = {
@@ -61,6 +63,14 @@ export class TopicAutoSummaryService {
     const ownership = this.workspaceId
       ? eq(messages.workspaceId, this.workspaceId)
       : eq(messages.userId, this.userId);
+    const topicOwnership = this.workspaceId
+      ? eq(topics.workspaceId, this.workspaceId)
+      : eq(topics.userId, this.userId);
+    const [topic] = await this.db
+      .select({ historySummary: topics.historySummary })
+      .from(topics)
+      .where(and(eq(topics.id, topicId), topicOwnership))
+      .limit(1);
     const recent = await this.db
       .select({
         content: messages.content,
@@ -69,15 +79,7 @@ export class TopicAutoSummaryService {
         updatedAt: messages.updatedAt,
       })
       .from(messages)
-      .where(
-        and(
-          ownership,
-          eq(messages.topicId, topicId),
-          inArray(messages.role, ['assistant', 'user']),
-          isNotNull(messages.content),
-          ne(messages.content, ''),
-        ),
-      )
+      .where(and(ownership, eq(messages.topicId, topicId), topicSummaryEligibleMessage))
       .orderBy(desc(messages.updatedAt))
       .limit(MAX_MESSAGES);
 
@@ -101,7 +103,12 @@ export class TopicAutoSummaryService {
       {
         messages: [
           { content: config?.customPrompt?.trim() || DEFAULT_PROMPT, role: 'system' },
-          { content: transcript, role: 'user' },
+          {
+            content: topic?.historySummary
+              ? `Previous rolling summary:\n${topic.historySummary.slice(-MAX_PREVIOUS_SUMMARY_CHARS)}\n\nRecent conversation:\n${transcript}`
+              : transcript,
+            role: 'user',
+          },
         ],
         model,
         provider,

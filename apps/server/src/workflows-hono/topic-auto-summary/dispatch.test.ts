@@ -51,6 +51,54 @@ describe('dispatchTopicAutoSummary', () => {
     expect(mocks.triggerExecute).not.toHaveBeenCalled();
   });
 
+  it('counts every eligible dry-run page up to the operator limit', async () => {
+    const createCandidates = (start: number, count: number) =>
+      Array.from({ length: count }, (_, index) => ({
+        id: `topic-${start + index}`,
+        lastMessageUpdatedAt: new Date(
+          `2026-07-31T10:${String(start + index).padStart(2, '0')}:00Z`,
+        ),
+        userId: 'user-1',
+        workspaceId: null,
+      }));
+    mocks.listCandidates
+      .mockResolvedValueOnce(createCandidates(0, 2))
+      .mockResolvedValueOnce(createCandidates(2, 2))
+      .mockResolvedValueOnce(createCandidates(4, 1));
+
+    const result = await dispatchTopicAutoSummary(
+      createContext({ dryRun: true, maxTopics: 10, pageSize: 2 }),
+    );
+
+    expect(result).toMatchObject({ candidates: 5, dryRun: true, truncated: false });
+    expect(mocks.listCandidates).toHaveBeenCalledTimes(3);
+    expect(mocks.listCandidates.mock.calls[1][0].cursor).toEqual({
+      id: 'topic-1',
+      lastMessageUpdatedAt: new Date('2026-07-31T10:01:00.000Z'),
+    });
+    expect(mocks.triggerDispatch).not.toHaveBeenCalled();
+    expect(mocks.triggerExecute).not.toHaveBeenCalled();
+  });
+
+  it('reports when a dry run is truncated by maxTopics', async () => {
+    const candidate = (id: string, minute: number) => ({
+      id,
+      lastMessageUpdatedAt: new Date(`2026-07-31T10:0${minute}:00Z`),
+      userId: 'user-1',
+      workspaceId: null,
+    });
+    mocks.listCandidates
+      .mockResolvedValueOnce([candidate('topic-1', 0), candidate('topic-2', 1)])
+      .mockResolvedValueOnce([candidate('topic-3', 2)]);
+
+    const result = await dispatchTopicAutoSummary(
+      createContext({ dryRun: true, maxTopics: 2, pageSize: 2 }),
+    );
+
+    expect(result).toMatchObject({ candidates: 2, dryRun: true, truncated: true });
+    expect(mocks.listCandidates).toHaveBeenCalledTimes(2);
+  });
+
   it('honors operator parameters and schedules a cursor continuation', async () => {
     const candidates = [
       {

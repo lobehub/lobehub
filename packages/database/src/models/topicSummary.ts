@@ -12,6 +12,7 @@ import {
   lte,
   max,
   ne,
+  not,
   notExists,
   notInArray,
   or,
@@ -42,6 +43,13 @@ export interface TopicSummaryCandidate {
 }
 
 const isTopicAutoSummaryEnabled = sql<boolean>`COALESCE((${userSettings.systemAgent}->'topicAutoSummary'->>'enabled')::boolean, true) = true`;
+const SYSTEM_TOPIC_TRIGGERS = ['cron', 'eval', 'task_manager', 'task', 'document'];
+
+export const topicSummaryEligibleMessage = and(
+  isNotNull(messages.content),
+  ne(messages.content, ''),
+  inArray(messages.role, ['assistant', 'user']),
+);
 
 const getAutoSummaryWatermark = () =>
   sql<Date>`COALESCE(NULLIF(COALESCE(${topics.metadata}->'autoSummary'->>'lastMessageUpdatedAt', ''), '')::timestamptz, 'epoch'::timestamptz)`.mapWith(
@@ -83,9 +91,8 @@ export class TopicSummaryModel {
       .where(
         and(
           gte(topics.createdAt, topicCreatedAfter),
-          isNotNull(messages.content),
-          ne(messages.content, ''),
-          inArray(messages.role, ['assistant', 'user']),
+          topicSummaryEligibleMessage,
+          or(isNull(topics.trigger), not(inArray(topics.trigger, SYSTEM_TOPIC_TRIGGERS))),
           or(isNull(topics.status), notInArray(topics.status, ['running', 'scheduled'])),
           force ? undefined : isTopicAutoSummaryEnabled,
         ),
@@ -121,6 +128,7 @@ export class TopicSummaryModel {
       .where(
         and(
           eq(messages.topicId, input.topicId),
+          topicSummaryEligibleMessage,
           eq(messages.id, input.lastMessageId),
           eq(messages.updatedAt, input.lastMessageUpdatedAt),
         ),
@@ -131,6 +139,7 @@ export class TopicSummaryModel {
       .where(
         and(
           eq(messages.topicId, input.topicId),
+          topicSummaryEligibleMessage,
           or(
             gt(messages.updatedAt, input.lastMessageUpdatedAt),
             and(

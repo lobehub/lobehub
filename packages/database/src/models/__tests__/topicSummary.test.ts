@@ -111,6 +111,44 @@ describe('TopicSummaryModel', () => {
     expect(result).toEqual([]);
   });
 
+  it('excludes system-generated topics from candidates', async () => {
+    await db.insert(topics).values([
+      { createdAt: new Date('2026-07-31T00:00:00Z'), id: 'regular', userId },
+      {
+        createdAt: new Date('2026-07-31T00:00:00Z'),
+        id: 'evaluation',
+        trigger: 'eval',
+        userId,
+      },
+    ]);
+    await db.insert(messages).values([
+      {
+        content: 'regular message',
+        id: 'm-regular',
+        role: 'user',
+        topicId: 'regular',
+        updatedAt: new Date('2026-07-31T10:00:00Z'),
+        userId,
+      },
+      {
+        content: 'evaluation message',
+        id: 'm-evaluation',
+        role: 'user',
+        topicId: 'evaluation',
+        updatedAt: new Date('2026-07-31T10:00:00Z'),
+        userId,
+      },
+    ]);
+
+    const result = await model.listCandidates({
+      idleBefore: new Date('2026-07-31T11:00:00Z'),
+      limit: 20,
+      topicCreatedAfter: new Date('2026-07-30T12:00:00Z'),
+    });
+
+    expect(result.map(({ id }) => id)).toEqual(['regular']);
+  });
+
   it('does not overwrite the summary when a newer message arrives', async () => {
     await db.insert(topics).values({ id: 'racing', userId });
     await db.insert(messages).values([
@@ -144,5 +182,40 @@ describe('TopicSummaryModel', () => {
     expect(updated).toBe(false);
     expect(topic.description).toBeNull();
     expect(topic.historySummary).toBeNull();
+  });
+
+  it('ignores newer ineligible messages when checking the write fence', async () => {
+    await db.insert(topics).values({ id: 'tool-followup', userId });
+    await db.insert(messages).values([
+      {
+        content: 'answer',
+        id: 'm-answer',
+        role: 'assistant',
+        topicId: 'tool-followup',
+        updatedAt: new Date('2026-07-31T10:00:00Z'),
+        userId,
+      },
+      {
+        content: 'tool result',
+        id: 'm-tool',
+        role: 'tool',
+        topicId: 'tool-followup',
+        updatedAt: new Date('2026-07-31T10:01:00Z'),
+        userId,
+      },
+    ]);
+
+    const updated = await model.updateSummaryIfCurrent({
+      description: 'Description',
+      lastMessageId: 'm-answer',
+      lastMessageUpdatedAt: new Date('2026-07-31T10:00:00Z'),
+      summary: 'Summary',
+      topicId: 'tool-followup',
+    });
+    const [topic] = await db.select().from(topics).where(eq(topics.id, 'tool-followup'));
+
+    expect(updated).toBe(true);
+    expect(topic.description).toBe('Description');
+    expect(topic.historySummary).toBe('Summary');
   });
 });

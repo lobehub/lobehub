@@ -36,28 +36,57 @@ export const dispatchTopicAutoSummary = async (
   const remaining = Math.max(maxTopics - processed, 0);
   if (remaining === 0) return { processed, scheduled: 0, truncated: true };
 
-  const candidates = await context.run(
-    `topic-auto-summary:list:${payload.cursor?.id ?? 'root'}`,
-    async () => {
+  const listCandidates = async (cursor: DispatchTopicAutoSummaryPayload['cursor'], limit: number) =>
+    context.run(`topic-auto-summary:list:${cursor?.id ?? 'root'}`, async () => {
       const db = await getServerDB();
       return new TopicSummaryModel(db).listCandidates({
-        cursor: payload.cursor
+        cursor: cursor
           ? {
-              id: payload.cursor.id,
-              lastMessageUpdatedAt: new Date(payload.cursor.lastMessageUpdatedAt),
+              id: cursor.id,
+              lastMessageUpdatedAt: new Date(cursor.lastMessageUpdatedAt),
             }
           : undefined,
         force: payload.force,
         idleBefore: new Date(now - idleMinutes * 60_000),
-        limit: Math.min(pageSize, remaining),
+        limit,
         topicCreatedAfter: new Date(now - lookbackHours * 3_600_000),
       });
-    },
-  );
+    });
 
   if (payload.dryRun) {
-    return { candidates: candidates.length, dryRun: true, processed, scheduled: 0 };
+    let candidates = 0;
+    let cursor = payload.cursor;
+    let hasNextPage = false;
+
+    while (candidates < remaining) {
+      const limit = Math.min(pageSize, remaining - candidates);
+      const page = await listCandidates(cursor, limit);
+      candidates += page.length;
+      hasNextPage = page.length === limit;
+      const last = page.at(-1);
+      if (last && hasNextPage)
+        cursor = {
+          id: last.id,
+          lastMessageUpdatedAt: last.lastMessageUpdatedAt.toISOString(),
+        };
+      if (!last || !hasNextPage || candidates === remaining) break;
+    }
+
+    const truncated =
+      candidates === remaining && hasNextPage
+        ? (await listCandidates(cursor, 1)).length > 0
+        : false;
+
+    return {
+      candidates,
+      dryRun: true,
+      processed,
+      scheduled: 0,
+      truncated,
+    };
   }
+
+  const candidates = await listCandidates(payload.cursor, Math.min(pageSize, remaining));
 
   await Promise.all(
     candidates.map((candidate) =>
