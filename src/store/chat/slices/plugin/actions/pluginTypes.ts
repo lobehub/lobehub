@@ -221,6 +221,7 @@ export class PluginTypesActionImpl {
           workingDirectory: resolveEffectiveWorkingDirectory(
             this.#get(),
             topicId ?? rootRuntimeOperationContext?.topicId,
+            agentId ?? rootRuntimeOperationContext?.agentId,
           ),
         });
 
