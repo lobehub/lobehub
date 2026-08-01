@@ -3,12 +3,16 @@ import {
   and,
   asc,
   eq,
+  exists,
+  gt,
   gte,
   inArray,
   isNotNull,
   isNull,
   lte,
+  max,
   ne,
+  notExists,
   notInArray,
   or,
   sql,
@@ -37,6 +41,16 @@ export interface TopicSummaryCandidate {
   workspaceId: string | null;
 }
 
+const isTopicAutoSummaryEnabled = sql<boolean>`COALESCE((${userSettings.systemAgent}->'topicAutoSummary'->>'enabled')::boolean, true) = true`;
+
+const getAutoSummaryWatermark = () =>
+  sql<Date>`COALESCE(NULLIF(COALESCE(${topics.metadata}->'autoSummary'->>'lastMessageUpdatedAt', ''), '')::timestamptz, 'epoch'::timestamptz)`.mapWith(
+    topics.updatedAt,
+  );
+
+const mergeAutoSummaryMetadata = (marker: NonNullable<ChatTopicMetadata['autoSummary']>) =>
+  sql`COALESCE(${topics.metadata}, '{}'::jsonb) || ${JSON.stringify({ autoSummary: marker })}::jsonb`;
+
 /** System-scoped queries used only by the authenticated background summary workflow. */
 export class TopicSummaryModel {
   constructor(private readonly db: LobeChatDatabase) {}
@@ -48,14 +62,11 @@ export class TopicSummaryModel {
     limit,
     topicCreatedAfter,
   }: ListTopicSummaryCandidatesOptions): Promise<TopicSummaryCandidate[]> => {
-    const lastMessageUpdatedAt = sql<Date>`max(${messages.updatedAt})`.mapWith(messages.updatedAt);
+    const lastMessageUpdatedAt = max(messages.updatedAt).mapWith(messages.updatedAt);
     const cursorCondition = cursor
       ? or(
-          sql`${lastMessageUpdatedAt} > ${cursor.lastMessageUpdatedAt}`,
-          and(
-            sql`${lastMessageUpdatedAt} = ${cursor.lastMessageUpdatedAt}`,
-            sql`${topics.id} > ${cursor.id}`,
-          ),
+          gt(lastMessageUpdatedAt, cursor.lastMessageUpdatedAt),
+          and(eq(lastMessageUpdatedAt, cursor.lastMessageUpdatedAt), gt(topics.id, cursor.id)),
         )
       : undefined;
 
@@ -76,24 +87,14 @@ export class TopicSummaryModel {
           ne(messages.content, ''),
           inArray(messages.role, ['assistant', 'user']),
           or(isNull(topics.status), notInArray(topics.status, ['running', 'scheduled'])),
-          force
-            ? undefined
-            : sql`COALESCE((${userSettings.systemAgent}->'topicAutoSummary'->>'enabled')::boolean, true) = true`,
+          force ? undefined : isTopicAutoSummaryEnabled,
         ),
       )
-      .groupBy(
-        topics.id,
-        topics.userId,
-        topics.workspaceId,
-        topics.metadata,
-        userSettings.systemAgent,
-      )
+      .groupBy(topics.id, topics.userId, topics.workspaceId, topics.metadata)
       .having(
         and(
           lte(lastMessageUpdatedAt, idleBefore),
-          force
-            ? undefined
-            : sql`COALESCE(NULLIF(COALESCE(${topics.metadata}->'autoSummary'->>'lastMessageUpdatedAt', ''), '')::timestamptz, 'epoch'::timestamptz) <> ${lastMessageUpdatedAt}`,
+          force ? undefined : ne(getAutoSummaryWatermark(), lastMessageUpdatedAt),
           cursorCondition,
         ),
       )
@@ -114,37 +115,41 @@ export class TopicSummaryModel {
       summarizedAt: new Date().toISOString(),
       version: 1,
     };
+    const snapshotMessage = this.db
+      .select({ id: messages.id })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.topicId, input.topicId),
+          eq(messages.id, input.lastMessageId),
+          eq(messages.updatedAt, input.lastMessageUpdatedAt),
+        ),
+      );
+    const newerMessage = this.db
+      .select({ id: messages.id })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.topicId, input.topicId),
+          or(
+            gt(messages.updatedAt, input.lastMessageUpdatedAt),
+            and(
+              eq(messages.updatedAt, input.lastMessageUpdatedAt),
+              gt(messages.id, input.lastMessageId),
+            ),
+          ),
+        ),
+      );
 
     const rows = await this.db
       .update(topics)
       .set({
         description: input.description,
         historySummary: input.summary,
-        metadata: sql`COALESCE(${topics.metadata}, '{}'::jsonb) || ${JSON.stringify({ autoSummary: marker })}::jsonb`,
+        metadata: mergeAutoSummaryMetadata(marker),
         updatedAt: new Date(),
       })
-      .where(
-        and(
-          eq(topics.id, input.topicId),
-          sql`EXISTS (
-            SELECT 1 FROM ${messages}
-            WHERE ${messages.topicId} = ${input.topicId}
-              AND ${messages.id} = ${input.lastMessageId}
-              AND ${messages.updatedAt} = ${input.lastMessageUpdatedAt}
-          )`,
-          sql`NOT EXISTS (
-            SELECT 1 FROM ${messages}
-            WHERE ${messages.topicId} = ${input.topicId}
-              AND (
-                ${messages.updatedAt} > ${input.lastMessageUpdatedAt}
-                OR (
-                  ${messages.updatedAt} = ${input.lastMessageUpdatedAt}
-                  AND ${messages.id} > ${input.lastMessageId}
-                )
-              )
-          )`,
-        ),
-      )
+      .where(and(eq(topics.id, input.topicId), exists(snapshotMessage), notExists(newerMessage)))
       .returning({ id: topics.id });
 
     return rows.length > 0;
