@@ -111,6 +111,13 @@ export interface OnboardingSessionSnapshot {
 }
 
 export interface ChatTopicMetadata {
+  /** Watermark written by the background topic-summary workflow. */
+  autoSummary?: {
+    lastMessageId: string;
+    lastMessageUpdatedAt: string;
+    summarizedAt: string;
+    version: number;
+  };
   bot?: ChatTopicBotContext;
   boundDeviceId?: string;
   cronJobId?: string;

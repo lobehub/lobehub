@@ -1075,6 +1075,8 @@ export default {
   'serviceModel.contextLimit.placeholder': 'Context limit',
   'serviceModel.memoryModels.title': 'Memory',
   'serviceModel.optionalFeatures.title': 'Optional Features',
+  'serviceModel.topicAutoSummary.desc':
+    'Summarizes topics created in the rolling 24-hour window after one hour without message activity.',
   'settingSystemTools.appEnvironment.chromium.desc': 'Chromium browser engine version',
   'settingSystemTools.appEnvironment.desc': 'Built-in runtime versions in the desktop app',
   'settingSystemTools.appEnvironment.electron.desc': 'Electron framework version',
@@ -1350,6 +1352,11 @@ When I am ___, I need ___
   'systemAgent.topic.label': 'Model',
   'systemAgent.topic.modelDesc': 'Model used to rename topics',
   'systemAgent.topic.title': 'Topic Auto-Naming',
+  'systemAgent.topicAutoSummary.modelDesc':
+    'Writes a short description and a reusable conversation summary after a topic becomes inactive.',
+  'systemAgent.topicAutoSummary.promptPlaceholder':
+    'Optional custom instructions. The conversation and required JSON output schema are added automatically.',
+  'systemAgent.topicAutoSummary.title': 'Automatic Topic Summary',
   'systemAgent.translation.label': 'Model',
   'systemAgent.translation.modelDesc': 'Model used to translate messages',
   'systemAgent.translation.title': 'Message Translation',
