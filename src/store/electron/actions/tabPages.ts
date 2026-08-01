@@ -167,6 +167,9 @@ export class TabPagesActionImpl {
     const { tabs } = this.#get();
     if (fromIndex < 0 || fromIndex >= tabs.length) return;
     if (toIndex < 0 || toIndex >= tabs.length) return;
+    // Pinned tabs form a run at the head of the list; a drag across that boundary would
+    // interleave the two groups and desync array order from render order.
+    if (!!tabs[fromIndex].pinned !== !!tabs[toIndex].pinned) return;
 
     const newTabs = [...tabs];
     const [moved] = newTabs.splice(fromIndex, 1);
@@ -174,6 +177,14 @@ export class TabPagesActionImpl {
 
     this.#set({ tabs: newTabs }, false, 'reorderTabs');
     this.#persist();
+  };
+
+  pinTab = (id: string): void => {
+    this.#setPinned(id, true);
+  };
+
+  unpinTab = (id: string): void => {
+    this.#setPinned(id, false);
   };
 
   updateTab = (id: string, url: string): string => {
@@ -244,6 +255,27 @@ export class TabPagesActionImpl {
     newTabs[index] = { ...newTabs[index], cached: merged };
 
     this.#set({ tabs: newTabs }, false, 'updateTabCache');
+    this.#persist();
+  };
+
+  // Pinning moves the tab to the end of the pinned run, unpinning to the first slot
+  // after it. Array order must equal render order, or Mod+1–9, Ctrl+Tab cycling and drag
+  // reorder would each describe a different sequence.
+  #setPinned = (id: string, pinned: boolean): void => {
+    const { tabs } = this.#get();
+    const index = tabs.findIndex((t) => t.id === id);
+    if (index < 0 || !!tabs[index].pinned === pinned) return;
+
+    const target: TabItem = { ...tabs[index], pinned };
+    const rest = tabs.filter((_, i) => i !== index);
+    const firstUnpinned = rest.findIndex((t) => !t.pinned);
+    const position = firstUnpinned < 0 ? rest.length : firstUnpinned;
+
+    this.#set(
+      { tabs: [...rest.slice(0, position), target, ...rest.slice(position)] },
+      false,
+      pinned ? 'pinTab' : 'unpinTab',
+    );
     this.#persist();
   };
 

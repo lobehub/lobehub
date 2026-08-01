@@ -1,6 +1,7 @@
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { Flexbox } from '@lobehub/ui';
 import { Divider } from 'antd';
+import { createStaticStyles, cx } from 'antd-style';
 import { memo } from 'react';
 
 import { electronStylish } from '@/styles/electron';
@@ -17,6 +18,20 @@ import WinControl from './WinControl';
 
 const platform = getPlatform();
 
+// A translucent tint rather than a solid color: the desktop body is deliberately
+// semi-transparent for vibrancy, and an opaque titlebar would kill it. The tint only
+// needs to push the bar a step away from the opaque content card so the attached
+// active tab reads as part of the card.
+const styles = createStaticStyles(({ css }) => ({
+  bar: css`
+    background-color: rgb(0 0 0 / 4%);
+
+    html[data-theme='dark'] & {
+      background-color: rgb(0 0 0 / 20%);
+    }
+  `,
+}));
+
 const TitleBar = memo(() => {
   useWatchThemeUpdate();
 
@@ -26,7 +41,7 @@ const TitleBar = memo(() => {
     <Flexbox
       horizontal
       align={'center'}
-      className={electronStylish.draggable}
+      className={cx(electronStylish.draggable, styles.bar)}
       height={TITLE_BAR_HEIGHT}
       justify={'space-between'}
       style={{ minHeight: TITLE_BAR_HEIGHT, padding }}

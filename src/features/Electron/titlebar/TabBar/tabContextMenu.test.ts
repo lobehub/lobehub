@@ -5,7 +5,7 @@ import { toNativeTemplate } from '@/libs/contextMenu/toNativeTemplate';
 
 import { buildTabContextMenuItems } from './tabContextMenu';
 
-const build = (index: number, totalCount: number) =>
+const build = (index: number, totalCount: number, pinned = false) =>
   buildTabContextMenuItems({
     id: 'tab-1',
     index,
@@ -13,6 +13,8 @@ const build = (index: number, totalCount: number) =>
     onCloseLeft: vi.fn(),
     onCloseOthers: vi.fn(),
     onCloseRight: vi.fn(),
+    onTogglePin: vi.fn(),
+    pinned,
     t: (key) => key,
     totalCount,
   });
@@ -27,5 +29,26 @@ describe('tab context menu ownership', () => {
 
   it('stays native-eligible in the fully disabled single-tab state', () => {
     expect(canGoNative(build(0, 1))).toBe(true);
+  });
+});
+
+describe('pin entry', () => {
+  it('offers pinning for an unpinned tab and unpinning for a pinned one', () => {
+    const labelOf = (pinned: boolean) => {
+      const entry = build(1, 3, pinned).find(
+        (item) => !!item && 'key' in item && item.key === 'togglePin',
+      );
+      return entry && 'label' in entry ? entry.label : undefined;
+    };
+
+    expect(labelOf(false)).toBe('tab.pin');
+    expect(labelOf(true)).toBe('tab.unpin');
+  });
+
+  it('stays available when closing is not — a lone tab can still be pinned', () => {
+    const items = build(0, 1);
+    const pin = items.find((item) => !!item && 'key' in item && item.key === 'togglePin');
+
+    expect(pin && 'disabled' in pin ? pin.disabled : undefined).toBeFalsy();
   });
 });

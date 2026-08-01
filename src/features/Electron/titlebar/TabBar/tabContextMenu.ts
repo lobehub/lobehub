@@ -1,7 +1,12 @@
 import type { GenericItemType } from '@lobehub/ui';
 
 type TabContextMenuLabelKey =
-  'tab.closeCurrentTab' | 'tab.closeLeftTabs' | 'tab.closeOtherTabs' | 'tab.closeRightTabs';
+  | 'tab.closeCurrentTab'
+  | 'tab.closeLeftTabs'
+  | 'tab.closeOtherTabs'
+  | 'tab.closeRightTabs'
+  | 'tab.pin'
+  | 'tab.unpin';
 
 interface TabContextMenuParams {
   id: string;
@@ -10,6 +15,8 @@ interface TabContextMenuParams {
   onCloseLeft: (id: string) => void;
   onCloseOthers: (id: string) => void;
   onCloseRight: (id: string) => void;
+  onTogglePin: (id: string) => void;
+  pinned: boolean;
   t: (key: TabContextMenuLabelKey) => string;
   totalCount: number;
 }
@@ -21,9 +28,17 @@ export const buildTabContextMenuItems = ({
   onCloseLeft,
   onCloseOthers,
   onCloseRight,
+  onTogglePin,
+  pinned,
   t,
   totalCount,
 }: TabContextMenuParams): GenericItemType[] => [
+  {
+    key: 'togglePin',
+    label: pinned ? t('tab.unpin') : t('tab.pin'),
+    onClick: () => onTogglePin(id),
+  },
+  { type: 'divider' },
   {
     disabled: totalCount === 1,
     key: 'closeCurrentTab',
