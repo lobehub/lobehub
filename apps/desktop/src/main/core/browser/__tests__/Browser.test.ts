@@ -60,6 +60,8 @@ const {
         setBadge: vi.fn(),
         show: vi.fn(),
       },
+      getLocale: vi.fn(() => 'en-US'),
+      getPreferredSystemLanguages: vi.fn(() => ['en-US']),
       getVersion: vi.fn(() => '1.2.3'),
       setActivationPolicy: vi.fn(),
       setBadgeCount: vi.fn(),
@@ -504,7 +506,51 @@ describe('Browser', () => {
       autoLoadUrlSpy?.mockRestore();
       await browser.loadUrl('/test-path');
 
-      expect(mockBrowserWindow.loadURL).toHaveBeenCalledWith('http://localhost:3000/test-path');
+      expect(mockBrowserWindow.loadURL).toHaveBeenCalledWith(
+        'http://localhost:3000/test-path?lng=en-US',
+      );
+    });
+
+    it('injects the OS language when the stored locale is auto', async () => {
+      autoLoadUrlSpy?.mockRestore();
+      mockStoreManagerGet.mockImplementation((key: string) =>
+        key === 'locale' ? 'auto' : undefined,
+      );
+      mockAppModule.getPreferredSystemLanguages.mockReturnValue(['zh-Hans-CN']);
+
+      await browser.loadUrl('/test-path');
+
+      expect(mockBrowserWindow.loadURL).toHaveBeenCalledWith(
+        'http://localhost:3000/test-path?lng=zh-CN',
+      );
+    });
+
+    it('injects an explicit locale choice ahead of the OS language', async () => {
+      autoLoadUrlSpy?.mockRestore();
+      mockStoreManagerGet.mockImplementation((key: string) =>
+        key === 'locale' ? 'ja-JP' : undefined,
+      );
+      mockAppModule.getPreferredSystemLanguages.mockReturnValue(['zh-Hans-CN']);
+
+      await browser.loadUrl('/test-path');
+
+      expect(mockBrowserWindow.loadURL).toHaveBeenCalledWith(
+        'http://localhost:3000/test-path?lng=ja-JP',
+      );
+    });
+
+    it('appends lng to a URL that already carries a query string', async () => {
+      autoLoadUrlSpy?.mockRestore();
+      mockAppModule.getPreferredSystemLanguages.mockReturnValue(['en-US']);
+      (mockApp.buildRendererUrl as any).mockResolvedValueOnce(
+        'http://localhost:3000/test-path?foo=1',
+      );
+
+      await browser.loadUrl('/test-path');
+
+      expect(mockBrowserWindow.loadURL).toHaveBeenCalledWith(
+        'http://localhost:3000/test-path?foo=1&lng=en-US',
+      );
     });
 
     it('should load error page on failure', async () => {

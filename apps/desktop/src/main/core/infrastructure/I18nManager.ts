@@ -1,9 +1,9 @@
-import { app } from 'electron';
 import i18next from 'i18next';
 
 import type { App } from '@/core/App';
 import { loadResources } from '@/locales/resources';
 import { createLogger } from '@/utils/logger';
+import { resolveUILocale } from '@/utils/system-language';
 
 // Create logger
 const logger = createLogger('core:I18nManager');
@@ -30,8 +30,7 @@ export class I18nManager {
 
     // Priority: parameter language > stored locale > system language
     const storedLocale = this.app.storeManager.get('locale', 'auto') as string;
-    const defaultLanguage =
-      lang || (storedLocale !== 'auto' ? storedLocale : app.getLocale()) || 'en';
+    const defaultLanguage = lang || resolveUILocale(storedLocale);
 
     logger.info(
       `Initializing i18n, app locale: ${defaultLanguage}, stored locale: ${storedLocale}`,
@@ -89,7 +88,7 @@ export class I18nManager {
   createNamespacedT(namespace: string) {
     return (key: string, options: any = {}) => {
       // Copy options to avoid modifying the original object
-      const mergedOptions = { ...options , ns: namespace,};
+      const mergedOptions = { ...options, ns: namespace };
       // Set namespace
 
       return this.t(key, mergedOptions);

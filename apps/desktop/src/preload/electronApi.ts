@@ -2,6 +2,8 @@ import { electronAPI } from '@electron-toolkit/preload';
 import type { ScreenCaptureSession } from '@lobechat/electron-client-ipc';
 import { contextBridge, ipcRenderer } from 'electron';
 
+import { readSystemLanguageArg } from '~common/systemLanguage';
+
 import { invoke } from './invoke';
 import { onStreamInvoke } from './streamer';
 
@@ -55,6 +57,7 @@ export const setupElectronApi = () => {
     isMacTahoe: process.platform === 'darwin' && darwinMajorVersion >= 25,
     nodeVersion: process.versions.node,
     platform: process.platform,
+    systemLanguage: readSystemLanguageArg(process.argv),
   });
 };
 

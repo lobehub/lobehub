@@ -66,6 +66,7 @@ vi.mock('electron', () => ({
     getAppPath: vi.fn(() => '/mock/app/path'),
     getLocale: vi.fn(() => 'en-US'),
     getPath: vi.fn((name: string) => `/mock/path/${name}`),
+    getPreferredSystemLanguages: vi.fn(() => ['en-US']),
   },
   desktopCapturer: {
     getSources: vi.fn(async () => []),
