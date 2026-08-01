@@ -1,7 +1,6 @@
 import type { SFSymbol } from '@lobechat/electron-client-ipc';
-import { HETEROGENEOUS_AGENT_CLIENT_CONFIGS } from '@lobechat/heterogeneous-agents/client';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { toast } from '@lobehub/ui/base-ui';
-import { Icon, Flexbox, Icon, Text } from '@lobehub/ui';
 import { GroupBotSquareIcon } from '@lobehub/ui/icons';
 import type { ItemType } from 'antd/es/menu/interface';
 import {
