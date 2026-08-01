@@ -10,8 +10,10 @@ import type { ChatTopicMetadata } from '@/types/topic';
 
 export interface RecentItem {
   agentId?: string | null;
+  description?: string | null;
   icon: string;
   id: string;
+  lastAssistantMessage?: string | null;
   metadata?: ChatTopicMetadata;
   routePath: string;
   /** Task lifecycle status when `type === 'task'`; null for topic/document. */
@@ -37,13 +39,14 @@ export const recentRouter = router({
         .object({
           limit: z.number().optional(),
           types: z.array(z.enum(['topic', 'document', 'task'])).optional(),
+          withTopicPreview: z.boolean().optional(),
         })
         .optional(),
     )
     .query(async ({ ctx, input }): Promise<RecentItem[]> => {
       const limit = input?.limit ?? 10;
 
-      const items = await ctx.recentModel.queryRecent(limit, input?.types);
+      const items = await ctx.recentModel.queryRecent(limit, input?.types, input?.withTopicPreview);
 
       return items.map((item) => {
         let routePath: string;
@@ -73,8 +76,10 @@ export const recentRouter = router({
 
         return {
           agentId: item.routeId,
+          description: item.description,
           icon: item.type,
           id: item.id,
+          lastAssistantMessage: item.lastAssistantMessage,
           metadata: item.metadata as ChatTopicMetadata | undefined,
           routePath,
           status: item.status,

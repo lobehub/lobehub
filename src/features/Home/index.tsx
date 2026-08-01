@@ -357,7 +357,7 @@ const Home = memo(() => {
             className={styles.railScroll}
             contentProps={{ style: RAIL_CONTENT_STYLE }}
           >
-            <HomeInbox variant={'rail'} />
+            <HomeInbox hideNeedsYou hideUnread variant={'rail'} />
           </ScrollArea>
         </aside>
       )}
