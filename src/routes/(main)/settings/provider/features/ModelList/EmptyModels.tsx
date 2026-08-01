@@ -56,7 +56,14 @@ const EmptyState = memo<{ provider: string }>(({ provider }) => {
   const [fetchRemoteModelList] = useAiInfraStore((s) => [s.fetchRemoteModelList]);
 
   const [fetchRemoteModelsLoading, setFetchRemoteModelsLoading] = useState(false);
-  const { showDeployName } = use(ProviderSettingsContext);
+  // Providers with showModelFetcher / showAddNewModel disabled (e.g. lobehub) can't
+  // fetch or hand-add models, so the empty state must not offer those actions either
+  // (same gating as ModelTitle)
+  const {
+    showAddNewModel = true,
+    showDeployName,
+    showModelFetcher = true,
+  } = use(ProviderSettingsContext);
 
   return (
     <Center className={styles.container} gap={24} paddingBlock={40}>
@@ -69,57 +76,61 @@ const EmptyState = memo<{ provider: string }>(({ provider }) => {
       </Flexbox>
 
       <Flexbox horizontal gap={8}>
-        <Tooltip title={canManageProvider ? undefined : reason}>
-          <Button
-            disabled={!canManageProvider}
-            icon={PlusIcon}
-            onClick={() => {
-              if (!canManageProvider) return;
-              createCreateNewModelModal({
-                existingModelIds: useAiInfraStore
-                  .getState()
-                  .aiProviderModelList.map((model) => model.id),
-                showDeployName,
-              });
-            }}
-          >
-            {t('providerModels.list.addNew')}
-          </Button>
-        </Tooltip>
-        <Tooltip title={canManageProvider ? undefined : reason}>
-          <Button
-            disabled={!canManageProvider}
-            icon={<Icon icon={LucideRefreshCcwDot} />}
-            loading={fetchRemoteModelsLoading}
-            type={'primary'}
-            onClick={async () => {
-              if (!canManageProvider) return;
-              setFetchRemoteModelsLoading(true);
-              try {
-                await fetchRemoteModelList(provider);
-              } catch (error) {
-                console.error(error);
+        {showAddNewModel && (
+          <Tooltip title={canManageProvider ? undefined : reason}>
+            <Button
+              disabled={!canManageProvider}
+              icon={PlusIcon}
+              onClick={() => {
+                if (!canManageProvider) return;
+                createCreateNewModelModal({
+                  existingModelIds: useAiInfraStore
+                    .getState()
+                    .aiProviderModelList.map((model) => model.id),
+                  showDeployName,
+                });
+              }}
+            >
+              {t('providerModels.list.addNew')}
+            </Button>
+          </Tooltip>
+        )}
+        {showModelFetcher && (
+          <Tooltip title={canManageProvider ? undefined : reason}>
+            <Button
+              disabled={!canManageProvider}
+              icon={<Icon icon={LucideRefreshCcwDot} />}
+              loading={fetchRemoteModelsLoading}
+              type={'primary'}
+              onClick={async () => {
+                if (!canManageProvider) return;
+                setFetchRemoteModelsLoading(true);
+                try {
+                  await fetchRemoteModelList(provider);
+                } catch (error) {
+                  console.error(error);
 
-                const errorMessage =
-                  error instanceof Error
-                    ? error.message
-                    : t('providerModels.list.fetcher.errorFallback');
+                  const errorMessage =
+                    error instanceof Error
+                      ? error.message
+                      : t('providerModels.list.fetcher.errorFallback');
 
-                message.error(
-                  t('providerModels.list.fetcher.error', {
-                    message: errorMessage,
-                  }),
-                );
-              } finally {
-                setFetchRemoteModelsLoading(false);
-              }
-            }}
-          >
-            {fetchRemoteModelsLoading
-              ? t('providerModels.list.fetcher.fetching')
-              : t('providerModels.list.fetcher.fetch')}
-          </Button>
-        </Tooltip>
+                  message.error(
+                    t('providerModels.list.fetcher.error', {
+                      message: errorMessage,
+                    }),
+                  );
+                } finally {
+                  setFetchRemoteModelsLoading(false);
+                }
+              }}
+            >
+              {fetchRemoteModelsLoading
+                ? t('providerModels.list.fetcher.fetching')
+                : t('providerModels.list.fetcher.fetch')}
+            </Button>
+          </Tooltip>
+        )}
       </Flexbox>
     </Center>
   );
