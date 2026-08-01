@@ -27,7 +27,8 @@ vi.mock('@/store/file', () => ({
   },
 }));
 
-const messageSuccess = vi.fn();
+const { messageSuccess } = vi.hoisted(() => ({ messageSuccess: vi.fn() }));
+
 vi.mock('@lobehub/ui/base-ui', () => ({
   toast: { success: messageSuccess },
 }));
