@@ -50,6 +50,8 @@ export const config = {
     '/org(.*)',
     '/platform',
     '/platform(.*)',
+    '/panel',
+    '/panel(.*)',
     '/invite(.*)',
     '/wallet',
     '/wallet(.*)',

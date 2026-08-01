@@ -1,6 +1,7 @@
-import { and, count, desc, eq, ilike, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 
 import {
+  aicoUserPublicIds,
   memberBudgets,
   modelAccessRules,
   type NewOrganization,
@@ -133,7 +134,16 @@ export class OrganizationModel {
     });
   };
 
-  listForUser = async (userId: string) => {
+  /**
+   * Orgs a user is an active member of. Suspended orgs are excluded by default —
+   * a suspended org must not grant chat/budget access via membership lookups.
+   * Pass `includeSuspended` for management/dashboard views that need to surface
+   * the suspended state itself (e.g. platform admins, or the org's own "my orgs" list).
+   */
+  listForUser = async (
+    userId: string,
+    options: { includeSuspended?: boolean } = {},
+  ): Promise<Array<OrganizationItem & { myRole: OrgMemberRole }>> => {
     const memberships = await this.db.query.organizationMembers.findMany({
       where: and(eq(organizationMembers.userId, userId), eq(organizationMembers.status, 'active')),
     });
@@ -144,6 +154,7 @@ export class OrganizationModel {
       .map((m, i) => {
         const org = orgs[i];
         if (!org) return null;
+        if (!options.includeSuspended && org.status === 'suspended') return null;
         return { ...org, myRole: m.role as OrgMemberRole };
       })
       .filter(Boolean) as Array<OrganizationItem & { myRole: OrgMemberRole }>;
@@ -194,6 +205,14 @@ export class OrganizationModel {
       pageSize,
       total: Number(totalRow[0]?.value ?? 0),
     };
+  };
+
+  /** Sum of every org's `wallet_balance_usd` — used for platform financial reporting. */
+  getTotalWalletBalanceUsd = async (): Promise<number> => {
+    const [row] = await this.db
+      .select({ total: sql<number>`COALESCE(SUM(${organizations.walletBalanceUsd}), 0)` })
+      .from(organizations);
+    return Number(row?.total ?? 0);
   };
 
   setOrganizationStatus = async (orgId: string, status: 'active' | 'suspended') => {
@@ -325,6 +344,23 @@ export class OrganizationModel {
       where: eq(organizationMembers.orgId, orgId),
       orderBy: [desc(organizationMembers.createdAt)],
     });
+  };
+
+  /** Same as {@link listMembers}, joined with each member's public short code. */
+  listMembersWithPublicCodes = async (
+    orgId: string,
+  ): Promise<Array<OrganizationMemberItem & { publicCode: string | null }>> => {
+    const rows = await this.db
+      .select({
+        member: organizationMembers,
+        publicCode: aicoUserPublicIds.publicCode,
+      })
+      .from(organizationMembers)
+      .leftJoin(aicoUserPublicIds, eq(aicoUserPublicIds.userId, organizationMembers.userId))
+      .where(eq(organizationMembers.orgId, orgId))
+      .orderBy(desc(organizationMembers.createdAt));
+
+    return rows.map((r) => ({ ...r.member, publicCode: r.publicCode ?? null }));
   };
 
   updateMemberRole = async (params: { memberId: string; orgId: string; role: OrgMemberRole }) => {
@@ -703,6 +739,10 @@ export class OrganizationModel {
   /**
    * Allocate USD credit from org wallet to a member budget.
    * Does not call OpenRouter — caller provisions/updates the key.
+   *
+   * Money-safety: the debit is a compare-and-swap `UPDATE ... WHERE wallet_balance_usd >= amount`
+   * so concurrent allocations can never overspend the org wallet, even under stale JS-level reads —
+   * Postgres serializes concurrent writers on the row and re-evaluates the WHERE clause each time.
    */
   allocateMemberCredit = async (params: {
     amountUsd: number;
@@ -710,16 +750,16 @@ export class OrganizationModel {
     orgId: string;
     orgMemberId: string;
   }) => {
-    if (params.amountUsd <= 0) throw new Error('amountUsd must be positive');
+    if (!Number.isFinite(params.amountUsd) || params.amountUsd <= 0) {
+      throw new Error('amountUsd must be a positive finite number');
+    }
 
     return this.db.transaction(async (tx) => {
       const org = await tx.query.organizations.findFirst({
         where: eq(organizations.id, params.orgId),
       });
       if (!org) throw new Error('ORG_NOT_FOUND');
-      if (Number(org.walletBalanceUsd) < params.amountUsd) {
-        throw new Error('INSUFFICIENT_ORG_BALANCE');
-      }
+      if (org.status !== 'active') throw new Error('ORG_NOT_ACTIVE');
 
       const member = await tx.query.organizationMembers.findFirst({
         where: and(
@@ -734,8 +774,14 @@ export class OrganizationModel {
         .set({
           walletBalanceUsd: sql`${organizations.walletBalanceUsd} - ${params.amountUsd}`,
         })
-        .where(eq(organizations.id, params.orgId))
+        .where(
+          and(
+            eq(organizations.id, params.orgId),
+            sql`${organizations.walletBalanceUsd} >= ${params.amountUsd}`,
+          ),
+        )
         .returning();
+      if (!updatedOrg) throw new Error('INSUFFICIENT_ORG_BALANCE');
 
       const existing = await tx.query.memberBudgets.findFirst({
         where: eq(memberBudgets.orgMemberId, params.orgMemberId),
@@ -779,6 +825,73 @@ export class OrganizationModel {
     });
   };
 
+  /**
+   * Reclaim a member's remaining OpenRouter credit back to the org wallet on
+   * revoke/remove. Only the OpenRouter-reported `limit_remaining` is returned —
+   * the caller (key service) computes it and passes it in; this method never
+   * re-derives it from `limitUsd - usedUsd` to avoid double-crediting drift.
+   */
+  reclaimMemberRemainingCredit = async (params: {
+    createdByUserId: string;
+    orgId: string;
+    orgMemberId: string;
+    remainingUsd: number;
+  }) => {
+    const remaining = Number.isFinite(params.remainingUsd) ? Math.max(0, params.remainingUsd) : 0;
+
+    return this.db.transaction(async (tx) => {
+      const member = await tx.query.organizationMembers.findFirst({
+        where: and(
+          eq(organizationMembers.id, params.orgMemberId),
+          eq(organizationMembers.orgId, params.orgId),
+        ),
+      });
+      if (!member) throw new Error('MEMBER_NOT_FOUND');
+
+      const existingBudget = await tx.query.memberBudgets.findFirst({
+        where: eq(memberBudgets.orgMemberId, params.orgMemberId),
+      });
+
+      let budget = null as (typeof existingBudget & object) | null;
+      if (existingBudget) {
+        [budget] = await tx
+          .update(memberBudgets)
+          .set({
+            isActive: false,
+            limitUsd: existingBudget.usedUsd,
+            openrouterKeyHash: null,
+            openrouterKeyId: null,
+          })
+          .where(eq(memberBudgets.id, existingBudget.id))
+          .returning();
+      }
+
+      const [organization] = await tx
+        .update(organizations)
+        .set({
+          walletBalanceUsd: sql`${organizations.walletBalanceUsd} + ${remaining}`,
+        })
+        .where(eq(organizations.id, params.orgId))
+        .returning();
+      if (!organization) throw new Error('ORG_NOT_FOUND');
+
+      const [transaction] = await tx
+        .insert(walletTransactions)
+        .values({
+          amountToman: 0,
+          amountUsd: remaining,
+          createdByUserId: params.createdByUserId,
+          description: `Reclaim remaining credit from member ${params.orgMemberId}`,
+          orgId: params.orgId,
+          type: 'reclaim',
+          userId: member.userId,
+        })
+        .returning();
+
+      return { budget, organization, transaction };
+    });
+  };
+
   updateMemberOpenRouterKey = async (params: {
     encryptedKey: string;
     keyId: string;
@@ -805,5 +918,99 @@ export class OrganizationModel {
       .where(eq(memberBudgets.orgMemberId, params.orgMemberId))
       .returning();
     return row;
+  };
+
+  // ─── Public short codes ─────────────────────────────────────────────
+
+  getUserPublicCode = async (userId: string): Promise<string | null> => {
+    const row = await this.db.query.aicoUserPublicIds.findFirst({
+      where: eq(aicoUserPublicIds.userId, userId),
+    });
+    return row?.publicCode ?? null;
+  };
+
+  /** Idempotently assigns a public short code to a user (e.g. `USR8F3K2Q`). */
+  ensureUserPublicCode = async (userId: string): Promise<string> => {
+    const existing = await this.getUserPublicCode(userId);
+    if (existing) return existing;
+
+    const [created] = await this.db
+      .insert(aicoUserPublicIds)
+      .values({ userId })
+      .onConflictDoNothing({ target: aicoUserPublicIds.userId })
+      .returning();
+    if (created) return created.publicCode;
+
+    return (await this.getUserPublicCode(userId))!;
+  };
+
+  getUserIdByPublicCode = async (publicCode: string): Promise<string | null> => {
+    const row = await this.db.query.aicoUserPublicIds.findFirst({
+      where: eq(aicoUserPublicIds.publicCode, publicCode.trim().toUpperCase()),
+    });
+    return row?.userId ?? null;
+  };
+
+  getOrgByPublicCode = async (publicCode: string) => {
+    return this.db.query.organizations.findFirst({
+      where: eq(organizations.publicCode, publicCode.trim().toUpperCase()),
+    });
+  };
+
+  /** Batch lookup for listings (e.g. platform admin wallet table) — returns a userId → code map. */
+  getUserPublicCodesByIds = async (userIds: string[]): Promise<Map<string, string>> => {
+    if (userIds.length === 0) return new Map();
+    const rows = await this.db
+      .select({ publicCode: aicoUserPublicIds.publicCode, userId: aicoUserPublicIds.userId })
+      .from(aicoUserPublicIds)
+      .where(inArray(aicoUserPublicIds.userId, userIds));
+    return new Map(rows.map((r) => [r.userId, r.publicCode]));
+  };
+
+  // ─── Dashboard ───────────────────────────────────────────────────────
+
+  getOrgDashboardStats = async (orgId: string) => {
+    const org = await this.getById(orgId);
+    if (!org) throw new Error('ORG_NOT_FOUND');
+
+    const members = await this.listMembersWithPublicCodes(orgId);
+    const activeMembers = members.filter((m) => m.status !== 'disabled');
+
+    const memberStats = await Promise.all(
+      activeMembers.map(async (m) => {
+        const [budget, team] = await Promise.all([
+          this.getMemberBudget(m.id),
+          this.getMemberTeam(m.id),
+        ]);
+        const limitUsd = Number(budget?.limitUsd ?? 0);
+        const usedUsd = Number(budget?.usedUsd ?? 0);
+        return {
+          limitUsd,
+          memberId: m.id,
+          publicCode: m.publicCode,
+          remainingUsd: Math.max(0, limitUsd - usedUsd),
+          role: m.role as OrgMemberRole,
+          status: m.status as OrgMemberStatus,
+          teamName: team?.name ?? null,
+          usedUsd,
+          userId: m.userId,
+        };
+      }),
+    );
+
+    const allocatedUsd = memberStats.reduce((sum, m) => sum + m.limitUsd, 0);
+    const usedUsd = memberStats.reduce((sum, m) => sum + m.usedUsd, 0);
+    const balanceUsd = Number(org.walletBalanceUsd);
+
+    return {
+      allocatedUsd,
+      balanceToman: org.walletBalanceToman,
+      balanceUsd,
+      memberCount: activeMembers.length,
+      members: memberStats,
+      publicCode: org.publicCode,
+      unallocatedUsd: balanceUsd,
+      usedUsd,
+    };
   };
 }

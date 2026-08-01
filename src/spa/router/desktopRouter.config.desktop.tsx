@@ -674,6 +674,11 @@ export const createMainAreaChildren = (): RouteObject[] => [
     errorElement: <ErrorBoundary />,
     path: 'platform',
   },
+  // Alias — people often try /panel for the super-admin console
+  {
+    element: redirectElement('/platform'),
+    path: 'panel',
+  },
   {
     element: <WalletPage />,
     errorElement: <ErrorBoundary />,

@@ -25,7 +25,7 @@ import { getBusinessModelRuntimeHooks } from '@/business/server/model-runtime';
 import { AiProviderModel } from '@/database/models/aiProvider';
 import { type LobeChatDatabase } from '@/database/type';
 import { getLLMConfig } from '@/envs/llm';
-import { AicoChatGuard } from '@/server/services/aico/chatGuard';
+import { AicoChatGuard, AicoChatGuardError } from '@/server/services/aico/chatGuard';
 import { createLLMGenerationTracingHook } from '@/server/services/llmGenerationTracing/hook';
 import { ensureFreshOAuthToken } from '@/server/services/oauthDeviceFlow/refresh';
 
@@ -494,13 +494,17 @@ export const initModelRuntimeFromDB = async (
     keyVaults = { ...keyVaults, ...freshKeyVaults } as ProviderKeyVaults;
   }
 
-  // Aico: inject per-user managed OpenRouter key (never from client).
+  // Aico: inject per-user managed OpenRouter key (never from client / env / BYOK).
+  // Managed providers must never fall through to a shared env key or a leftover
+  // client vault secret — that would bypass wallet/trial limits.
   if (managed) {
     const guard = new AicoChatGuard(db);
+    // Throws for an active trial with no provisioned key (fail closed).
     const managedKey = await guard.resolveManagedApiKey(userId);
-    if (managedKey) {
-      keyVaults = { ...keyVaults, apiKey: managedKey };
+    if (!managedKey) {
+      throw new AicoChatGuardError('MANAGED_KEY_UNAVAILABLE');
     }
+    keyVaults = { ...keyVaults, apiKey: managedKey };
   }
 
   const payload = buildPayloadFromKeyVaults(keyVaults, runtimeProvider);

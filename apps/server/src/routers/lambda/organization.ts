@@ -4,16 +4,27 @@ import { z } from 'zod';
 
 import { OrganizationModel } from '@/database/models/organization';
 import { users } from '@/database/schemas';
-import { aicoEnv, tomanToUsd } from '@/envs/aico';
+import type { LobeChatDatabase } from '@/database/type';
+import { tomanToUsd } from '@/envs/aico';
 import { appEnv } from '@/envs/app';
 import { normalizeIranianPhoneNumber } from '@/libs/better-auth/phone';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { getTomanPerUsd } from '@/server/services/aico/fxService';
+import { assertMockTopupAllowed } from '@/server/services/aico/mockTopupGate';
 import { EmailService } from '@/server/services/email';
 import { AicoOpenRouterKeyService } from '@/server/services/openrouter/keyService';
 import { SmsService } from '@/server/services/sms';
 
 const INVITE_EXPIRY_DAYS = 3;
+
+const requireVerifiedPhone = async (serverDB: LobeChatDatabase, userId: string) => {
+  const user = await serverDB.query.users.findFirst({ where: eq(users.id, userId) });
+  if (!user?.phone || !user.phoneNumberVerified) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'PHONE_VERIFICATION_REQUIRED' });
+  }
+  return user;
+};
 
 const orgProcedure = authedProcedure.use(serverDatabase).use(async ({ ctx, next }) => {
   return next({
@@ -54,16 +65,41 @@ export const organizationRouter = router({
       z.object({ name: z.string().min(1).max(120), slug: z.string().min(1).max(80).optional() }),
     )
     .mutation(async ({ ctx, input }) => {
+      await requireVerifiedPhone(ctx.serverDB, ctx.userId);
+
       const org = await ctx.organizationModel.createOrganization({
         name: input.name,
         ownerUserId: ctx.userId,
         slug: input.slug,
       });
-      return { id: org.id, name: org.name, slug: org.slug };
+      return { id: org.id, name: org.name, publicCode: org.publicCode, slug: org.slug };
+    }),
+
+  /**
+   * B2C → B2B upgrade: create the caller's first organization from their personal
+   * account. Requires a verified phone (org managers must be reachable/accountable).
+   */
+  convertToManagement: orgProcedure
+    .input(z.object({ name: z.string().min(1).max(120) }))
+    .mutation(async ({ ctx, input }) => {
+      await requireVerifiedPhone(ctx.serverDB, ctx.userId);
+
+      const existing = await ctx.organizationModel.listForUser(ctx.userId, {
+        includeSuspended: true,
+      });
+      if (existing.some((o) => o.myRole === 'owner')) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'ALREADY_HAS_ORGANIZATION' });
+      }
+
+      const org = await ctx.organizationModel.createOrganization({
+        name: input.name,
+        ownerUserId: ctx.userId,
+      });
+      return { id: org.id, name: org.name, publicCode: org.publicCode, slug: org.slug };
     }),
 
   getMine: orgProcedure.query(async ({ ctx }) => {
-    return ctx.organizationModel.listForUser(ctx.userId);
+    return ctx.organizationModel.listForUser(ctx.userId, { includeSuspended: true });
   }),
 
   listMembers: orgProcedure
@@ -71,10 +107,21 @@ export const organizationRouter = router({
     .query(async ({ ctx, input }) => {
       await requireOrgManager(ctx.organizationModel, ctx.userId, input.orgId);
       const [members, invites] = await Promise.all([
-        ctx.organizationModel.listMembers(input.orgId),
+        ctx.organizationModel.listMembersWithPublicCodes(input.orgId),
         ctx.organizationModel.listPendingInvites(input.orgId),
       ]);
-      return { invites, members };
+      return {
+        // Never leak raw invite tokens through a list endpoint — only the
+        // `inviteMember` mutation response carries the token, for the inviter to share.
+        invites: invites.map((i) => ({
+          expiresAt: i.expiresAt.toISOString(),
+          id: i.id,
+          identifierType: i.identifierType,
+          identifierValue: i.identifierValue,
+          role: i.role,
+        })),
+        members,
+      };
     }),
 
   inviteMember: orgProcedure
@@ -195,10 +242,10 @@ export const organizationRouter = router({
     .input(z.object({ memberId: z.string().min(1), orgId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       await requireOrgManager(ctx.organizationModel, ctx.userId, input.orgId);
+      let updated;
       try {
-        const updated = await ctx.organizationModel.removeMember(input);
+        updated = await ctx.organizationModel.removeMember(input);
         if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Member not found' });
-        return updated;
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({
@@ -206,6 +253,51 @@ export const organizationRouter = router({
           message: error instanceof Error ? error.message : 'Failed to remove member',
         });
       }
+
+      // Reclaim only the OpenRouter-reported remaining credit back to the org
+      // wallet; the member is already disabled above, so a reclaim failure here
+      // never re-grants access — it can be retried via `revokeMemberBudget`.
+      try {
+        const keyService = new AicoOpenRouterKeyService(ctx.serverDB);
+        const reclaimed = await keyService.reclaimMemberKey(input.memberId);
+        if (reclaimed) {
+          await ctx.organizationModel.reclaimMemberRemainingCredit({
+            createdByUserId: ctx.userId,
+            orgId: input.orgId,
+            orgMemberId: input.memberId,
+            remainingUsd: reclaimed.remainingUsd,
+          });
+        }
+      } catch (error) {
+        console.error('[organization] failed to reclaim member key on removeMember', error);
+      }
+
+      return updated;
+    }),
+
+  /** Explicit credit reclaim without removing the member — e.g. pausing an active member's budget. */
+  revokeMemberBudget: orgProcedure
+    .input(z.object({ orgId: z.string().min(1), orgMemberId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      await requireOrgManager(ctx.organizationModel, ctx.userId, input.orgId);
+
+      const keyService = new AicoOpenRouterKeyService(ctx.serverDB);
+      const reclaimed = await keyService.reclaimMemberKey(input.orgMemberId);
+      if (!reclaimed) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'No managed key to reclaim' });
+      }
+
+      const result = await ctx.organizationModel.reclaimMemberRemainingCredit({
+        createdByUserId: ctx.userId,
+        orgId: input.orgId,
+        orgMemberId: input.orgMemberId,
+        remainingUsd: reclaimed.remainingUsd,
+      });
+
+      return {
+        orgBalanceUsd: Number(result.organization.walletBalanceUsd),
+        reclaimedUsd: reclaimed.remainingUsd,
+      };
     }),
 
   revokeInvite: orgProcedure
@@ -254,7 +346,9 @@ export const organizationRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       await requireOrgManager(ctx.organizationModel, ctx.userId, input.orgId);
-      const fxRate = aicoEnv.AICO_TOMAN_PER_USD;
+      assertMockTopupAllowed();
+
+      const { rate: fxRate } = await getTomanPerUsd();
       const amountUsd = tomanToUsd(input.amountToman, fxRate);
       const result = await ctx.organizationModel.addManualCredit({
         amountToman: input.amountToman,
@@ -271,6 +365,26 @@ export const organizationRouter = router({
         balanceUsd: Number(result.organization.walletBalanceUsd),
         fxRate,
       };
+    }),
+
+  /** Org manager dashboard: wallet + per-member allocation/usage, with best-effort OR usage sync. */
+  getDashboard: orgProcedure
+    .input(z.object({ orgId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      await requireOrgManager(ctx.organizationModel, ctx.userId, input.orgId);
+
+      const keyService = new AicoOpenRouterKeyService(ctx.serverDB);
+      const members = await ctx.organizationModel.listMembers(input.orgId);
+      await Promise.allSettled(
+        members
+          .filter((m) => m.status === 'active')
+          .map(async (m) => {
+            const budget = await ctx.organizationModel.getMemberBudget(m.id);
+            if (budget?.openrouterKeyId) await keyService.syncMemberUsage(m.id);
+          }),
+      );
+
+      return ctx.organizationModel.getOrgDashboardStats(input.orgId);
     }),
 
   listTeams: orgProcedure

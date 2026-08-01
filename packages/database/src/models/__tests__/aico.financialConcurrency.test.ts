@@ -6,7 +6,7 @@ import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { organizations, walletTransactions } from '../../schemas/aicoOrganization';
+import { walletTransactions } from '../../schemas/aicoOrganization';
 import type { LobeChatDatabase } from '../../type';
 import { OrganizationModel } from '../organization';
 import { cleanupAicoTables, isServerDb, seedUsers } from './aico.phase2.helpers';
@@ -330,6 +330,69 @@ describe('Aico financial concurrency & money invariants (Phase 2)', () => {
       expect(results.filter((r) => r.status === 'fulfilled').length).toBeLessThanOrEqual(1);
     },
   );
+});
+
+describe('Aico reclaim-on-revoke money invariants', () => {
+  it('reclaimMemberRemainingCredit credits only the passed remainingUsd, never re-derives from usage', async () => {
+    const { memberA, org } = await setupOrgWithUsd(100);
+    await orgModel.allocateMemberCredit({
+      amountUsd: 40,
+      createdByUserId: ownerId,
+      orgId: org.id,
+      orgMemberId: memberA.id,
+    });
+    // Simulate partial spend the caller (key service) observed on OpenRouter.
+    await orgModel.syncMemberBudgetUsage({ orgMemberId: memberA.id, usedUsd: 15 });
+
+    const beforeOrg = await orgModel.getById(org.id);
+    const beforeBalance = Number(beforeOrg?.walletBalanceUsd);
+
+    // Caller passes the OpenRouter-reported remaining credit (25), not (limit - used).
+    const result = await orgModel.reclaimMemberRemainingCredit({
+      createdByUserId: ownerId,
+      orgId: org.id,
+      orgMemberId: memberA.id,
+      remainingUsd: 25,
+    });
+
+    expect(Number(result.organization.walletBalanceUsd)).toBeCloseTo(beforeBalance + 25, 6);
+
+    const budget = await orgModel.getMemberBudget(memberA.id);
+    expect(budget?.isActive).toBe(false);
+    // Budget's limit collapses to usedUsd so it can never be re-spent via the old key.
+    expect(Number(budget?.limitUsd)).toBeCloseTo(15, 6);
+    expect(budget?.openrouterKeyId).toBeNull();
+    expect(budget?.openrouterKeyHash).toBeNull();
+
+    const txs = await serverDB.query.walletTransactions.findMany({
+      where: eq(walletTransactions.orgId, org.id),
+    });
+    const reclaim = txs.find((t) => t.type === 'reclaim');
+    expect(Number(reclaim?.amountUsd)).toBeCloseTo(25, 6);
+  });
+
+  it('reclaimMemberRemainingCredit clamps negative/non-finite remaining to 0 (never debits the org)', async () => {
+    const { memberA, org } = await setupOrgWithUsd(50);
+    await orgModel.allocateMemberCredit({
+      amountUsd: 10,
+      createdByUserId: ownerId,
+      orgId: org.id,
+      orgMemberId: memberA.id,
+    });
+    const before = await orgModel.getById(org.id);
+
+    const result = await orgModel.reclaimMemberRemainingCredit({
+      createdByUserId: ownerId,
+      orgId: org.id,
+      orgMemberId: memberA.id,
+      remainingUsd: Number.NaN,
+    });
+
+    expect(Number(result.organization.walletBalanceUsd)).toBeCloseTo(
+      Number(before?.walletBalanceUsd),
+      6,
+    );
+  });
 });
 
 describe('Aico money wire contract probes (Phase 2)', () => {

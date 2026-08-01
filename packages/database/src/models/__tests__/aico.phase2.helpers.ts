@@ -3,6 +3,7 @@
  * Finding coverage: AICO-P1-* suite scaffolding.
  */
 import {
+  aicoUserPublicIds,
   memberBudgets,
   modelAccessRules,
   organizationInvites,
@@ -36,6 +37,7 @@ export const cleanupAicoTables = async (db: LobeChatDatabase) => {
   await db.delete(organizations);
   await db.delete(userWallets);
   await db.delete(platformAdmins);
+  await db.delete(aicoUserPublicIds);
   await db.delete(users);
 };
 

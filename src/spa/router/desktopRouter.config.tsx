@@ -802,6 +802,11 @@ export const createMainAreaChildren = (): RouteObject[] => [
     errorElement: <ErrorBoundary />,
     path: 'platform',
   },
+  // Alias — people often try /panel for the super-admin console
+  {
+    element: redirectElement('/platform'),
+    path: 'panel',
+  },
   {
     element: dynamicElement(() => import('@/routes/(main)/wallet'), 'Desktop > Wallet'),
     errorElement: <ErrorBoundary />,

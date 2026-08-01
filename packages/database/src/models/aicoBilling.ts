@@ -180,6 +180,7 @@ export class AicoBillingModel {
     durationDays?: number;
     enabled?: boolean;
     maxRequests?: number | null;
+    trialBudgetUsd?: number;
     updatedByUserId: string;
   }) => {
     await this.getTrialConfig();
@@ -192,6 +193,7 @@ export class AicoBillingModel {
           ? { allowedModelIds: JSON.stringify(params.allowedModelIds) }
           : {}),
         ...(params.maxRequests !== undefined ? { maxRequests: params.maxRequests } : {}),
+        ...(params.trialBudgetUsd !== undefined ? { trialBudgetUsd: params.trialBudgetUsd } : {}),
         updatedByUserId: params.updatedByUserId,
       })
       .where(eq(platformTrialConfig.id, 'default'))
@@ -308,5 +310,13 @@ export class AicoBillingModel {
       orderBy: [desc(walletTransactions.createdAt)],
       limit,
     });
+  };
+
+  /** Sum of `usage_logs.cost_usd` across all B2C + B2B traffic — real OpenRouter spend. */
+  sumUsageCostUsd = async (): Promise<number> => {
+    const [row] = await this.db
+      .select({ total: sql<number>`COALESCE(SUM(${usageLogs.costUsd}), 0)` })
+      .from(usageLogs);
+    return Number(row?.total ?? 0);
   };
 }

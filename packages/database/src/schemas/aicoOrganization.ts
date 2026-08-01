@@ -10,7 +10,7 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
-import { createNanoId, idGenerator } from '../utils/idGenerator';
+import { createNanoId, generatePublicCode, idGenerator } from '../utils/idGenerator';
 import { createdAt, timestamptz, updatedAt } from './_helpers';
 import { users } from './user';
 
@@ -28,6 +28,10 @@ export const organizations = pgTable(
       .primaryKey(),
     name: text('name').notNull(),
     slug: text('slug').notNull(),
+    /** Short, user-facing identifier (e.g. `ORGAB12CD`) — safe to share in support/UI. */
+    publicCode: text('public_code')
+      .$defaultFn(() => generatePublicCode('ORG'))
+      .notNull(),
     ownerUserId: text('owner_user_id')
       .references(() => users.id, { onDelete: 'restrict' })
       .notNull(),
@@ -44,6 +48,7 @@ export const organizations = pgTable(
   },
   (t) => [
     uniqueIndex('organizations_slug_idx').on(t.slug),
+    uniqueIndex('organizations_public_code_uidx').on(t.publicCode),
     index('organizations_owner_user_id_idx').on(t.ownerUserId),
     index('organizations_status_idx').on(t.status),
   ],
@@ -356,6 +361,10 @@ export const platformTrialConfig = pgTable('platform_trial_config', {
   /** JSON array of model ids; empty = all models. */
   allowedModelIds: text('allowed_model_ids').notNull().default('[]'),
   maxRequests: integer('max_requests'),
+  /** USD limit granted to a trial OpenRouter key — never added to paid wallet balance. */
+  trialBudgetUsd: numeric('trial_budget_usd', { mode: 'number', precision: 10, scale: 6 })
+    .notNull()
+    .default(1),
   updatedByUserId: text('updated_by_user_id').references(() => users.id, {
     onDelete: 'set null',
   }),
@@ -416,3 +425,29 @@ export const trialAbuseBlocklist = pgTable(
 
 export type TrialAbuseBlocklistItem = typeof trialAbuseBlocklist.$inferSelect;
 export type NewTrialAbuseBlocklist = typeof trialAbuseBlocklist.$inferInsert;
+
+/** Short, user-facing identifiers for B2C users (e.g. `USR8F3K2Q`) — safe to share in support/UI. */
+export const aicoUserPublicIds = pgTable(
+  'aico_user_public_ids',
+  {
+    id: text('id')
+      .$defaultFn(() => idGenerator('userPublicIds'))
+      .notNull()
+      .primaryKey(),
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    publicCode: text('public_code')
+      .$defaultFn(() => generatePublicCode('USR'))
+      .notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('aico_user_public_ids_user_id_uidx').on(t.userId),
+    uniqueIndex('aico_user_public_ids_public_code_uidx').on(t.publicCode),
+  ],
+);
+
+export type AicoUserPublicIdItem = typeof aicoUserPublicIds.$inferSelect;
+export type NewAicoUserPublicId = typeof aicoUserPublicIds.$inferInsert;

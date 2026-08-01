@@ -3,16 +3,14 @@
  * Product code unmodified; failing assertions = release blockers.
  */
 // @vitest-environment node
-import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeChatDatabase } from '@lobechat/database';
 import { getTestDB } from '@lobechat/database/test-utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AicoBillingModel } from '@/database/models/aicoBilling';
-import { OrganizationModel } from '@/database/models/organization';
 import { users } from '@/database/schemas';
 import {
   memberBudgets,
@@ -23,18 +21,19 @@ import {
   userWallets,
   walletTransactions,
 } from '@/database/schemas/aicoOrganization';
+import { tomanToUsd } from '@/envs/aico';
+
+import { createTestContext } from '../../routers/lambda/__tests__/integration/setup';
 import { aicoBillingRouter } from '../../routers/lambda/aicoBilling';
 import { organizationRouter } from '../../routers/lambda/organization';
-import { createTestContext } from '../../routers/lambda/__tests__/integration/setup';
-import { AicoChatGuard } from './chatGuard';
-import { createSmsServiceImpl } from '../sms/impls';
 import { AicoOpenRouterKeyService } from '../openrouter/keyService';
 import type { OpenRouterManagementClient } from '../openrouter/management';
 import {
   __resetOpenRouterManagementClientForTests,
   createOpenRouterManagementClient,
 } from '../openrouter/management';
-import { tomanToUsd } from '@/envs/aico';
+import { createSmsServiceImpl } from '../sms/impls';
+import { AicoChatGuard } from './chatGuard';
 
 process.env.KEY_VAULTS_SECRET = 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=';
 
@@ -157,9 +156,23 @@ describe('Phase 3 Env C — unsafe production configuration (fail-closed)', () =
   });
 
   it('AICO-P3-ENV-C: AICO_OPENROUTER_MOCK=1 must be rejected when NODE_ENV=production', () => {
-    // Current factory ignores NODE_ENV — release requires fail-closed.
-    const productionBlocksMockFlag = false;
-    expect(productionBlocksMockFlag).toBe(true);
+    const prevKey = process.env.OPENROUTER_MANAGEMENT_API_KEY;
+    const prevMock = process.env.AICO_OPENROUTER_MOCK;
+    const prevNode = process.env.NODE_ENV;
+    try {
+      delete process.env.OPENROUTER_MANAGEMENT_API_KEY;
+      process.env.AICO_OPENROUTER_MOCK = '1';
+      (process.env as any).NODE_ENV = 'production';
+      __resetOpenRouterManagementClientForTests();
+      // `AICO_OPENROUTER_MOCK` is a non-production QA convenience only — production
+      // must ignore it and fail closed rather than serving a mock client.
+      expect(() => createOpenRouterManagementClient({})).toThrow(/OPENROUTER_MANAGEMENT_API_KEY/);
+    } finally {
+      process.env.OPENROUTER_MANAGEMENT_API_KEY = prevKey;
+      process.env.AICO_OPENROUTER_MOCK = prevMock;
+      (process.env as any).NODE_ENV = prevNode;
+      __resetOpenRouterManagementClientForTests();
+    }
   });
 
   it('AICO-P3-ENV-C: missing Kavenegar must not select Debug SMS in production', () => {
@@ -181,16 +194,21 @@ describe('Phase 3 Env C — unsafe production configuration (fail-closed)', () =
     expect(() => tomanToUsd(1000, -1)).toThrow(/Invalid FX/);
   });
 
-  it('AICO-P3-ENV-C: mockTopup must be forbidden in production-like gate', async () => {
-    const caller = aicoBillingRouter.createCaller(createTestContext(strangerId));
-    let forbidden = false;
+  it('AICO-P3-ENV-C: mockTopup must be forbidden in production unless explicitly allowlisted', async () => {
+    const prevNode = process.env.NODE_ENV;
+    const prevAllow = process.env.AICO_ALLOW_MOCK_TOPUP;
     try {
-      await caller.mockTopup({ amountToman: 100_000 });
-    } catch (e: any) {
-      forbidden = e?.code === 'FORBIDDEN' || /FORBIDDEN|NOT_AVAILABLE/.test(String(e?.message));
+      (process.env as any).NODE_ENV = 'production';
+      delete process.env.AICO_ALLOW_MOCK_TOPUP;
+
+      const caller = aicoBillingRouter.createCaller(createTestContext(strangerId));
+      await expect(caller.mockTopup({ amountToman: 100_000 })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+    } finally {
+      (process.env as any).NODE_ENV = prevNode;
+      process.env.AICO_ALLOW_MOCK_TOPUP = prevAllow;
     }
-    // Release invariant: must be forbidden. Actual product credits.
-    expect(forbidden).toBe(true);
   });
 });
 
@@ -278,7 +296,7 @@ describe('Phase 3 Journey 6 — alternate model execution paths', () => {
         const p = join(dir, name);
         const st = statSync(p);
         if (st.isDirectory()) collect(p, acc);
-        else if (/\.(ts|tsx)$/.test(name) && !name.includes('.test.')) acc.push(p);
+        else if (/\.(?:ts|tsx)$/.test(name) && !name.includes('.test.')) acc.push(p);
       }
       return acc;
     };
@@ -300,7 +318,7 @@ describe('Phase 3 Journey 6 — alternate model execution paths', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('AICO-P3-J6: trial without managed key must not fall through (resolve null forbidden)', async () => {
+  it('AICO-P3-J6: trial without managed key must not fall through (denies via throw)', async () => {
     const billing = new AicoBillingModel(testDB);
     await billing.updateTrialConfig({
       allowedModelIds: ['openrouter/auto'],
@@ -311,10 +329,8 @@ describe('Phase 3 Journey 6 — alternate model execution paths', () => {
     });
     await billing.activateTrial({ phone: '+989131000001', userId: ownerId });
     const guard = new AicoChatGuard(testDB);
-    const key = await guard.resolveManagedApiKey(ownerId);
-    // Release: must not be null (would fall through to env key) — either limited key or throw path.
-    // Current: null → env fallthrough (P0).
-    expect(key).not.toBeNull();
+    // Release: must not resolve null (would fall through to env key) — throws instead.
+    await expect(guard.resolveManagedApiKey(ownerId)).rejects.toThrow();
   });
 });
 
@@ -360,8 +376,16 @@ describe('Phase 3 Journey 7 — operational recovery probes', () => {
 
 describe('Phase 3 UI / route / secret static probes', () => {
   it('SPA routes exist for wallet/org/platform/invite', () => {
-    const desktop = readFileSync(join(REPO_ROOT, 'src/spa/router/desktopRouter.config.tsx'), 'utf8');
-    for (const path of ["path: 'wallet'", "path: 'platform'", "path: 'invite/:token'", "path: 'org'"]) {
+    const desktop = readFileSync(
+      join(REPO_ROOT, 'src/spa/router/desktopRouter.config.tsx'),
+      'utf8',
+    );
+    for (const path of [
+      "path: 'wallet'",
+      "path: 'platform'",
+      "path: 'invite/:token'",
+      "path: 'org'",
+    ]) {
       expect(desktop.includes(path)).toBe(true);
     }
     const twin = readFileSync(

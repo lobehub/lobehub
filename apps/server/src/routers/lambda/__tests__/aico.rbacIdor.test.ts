@@ -3,10 +3,9 @@
  * Maps: AICO-P1-001, AICO-P1-002, AICO-P1-014, AICO-P1-023, AICO-P1-026, AICO-P1-027
  */
 // @vitest-environment node
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
 import type { LobeChatDatabase } from '@lobechat/database';
 import { getTestDB } from '@lobechat/database/test-utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { aicoBillingRouter } from '../aicoBilling';
 import { organizationRouter } from '../organization';
@@ -32,10 +31,18 @@ vi.mock('@/server/services/sms', () => ({
   },
 }));
 
+const { disableAllOrgMemberKeysMock } = vi.hoisted(() => ({
+  disableAllOrgMemberKeysMock: vi.fn().mockResolvedValue([]),
+}));
+
 vi.mock('@/server/services/openrouter/keyService', () => ({
   AicoOpenRouterKeyService: class {
     ensureUserKey = vi.fn().mockResolvedValue({ created: false, keyId: null });
     ensureMemberKey = vi.fn().mockResolvedValue({ created: false, keyId: null });
+    disableMemberKey = vi.fn().mockResolvedValue(null);
+    disableAllOrgMemberKeys = disableAllOrgMemberKeysMock;
+    reclaimMemberKey = vi.fn().mockResolvedValue(null);
+    syncMemberUsage = vi.fn().mockResolvedValue(null);
   },
 }));
 
@@ -78,11 +85,17 @@ const cleanup = async () => {
 };
 
 beforeEach(async () => {
+  disableAllOrgMemberKeysMock.mockClear();
   testDB = await getTestDB();
   await cleanup();
   const { users } = await import('@/database/schemas');
   await testDB.insert(users).values([
-    { email: 'owner@rbac.test', id: ownerId, phoneNumberVerified: false },
+    {
+      email: 'owner@rbac.test',
+      id: ownerId,
+      phone: '+989120000001',
+      phoneNumberVerified: true,
+    },
     { email: 'member@rbac.test', id: memberId },
     { email: 'stranger@rbac.test', id: strangerId },
     { email: 'platform@rbac.test', id: platformId },
@@ -163,12 +176,12 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
   it('non-platform user cannot call platformAdmin mutations', async () => {
     const caller = platformAdminRouter.createCaller(createTestContext(strangerId));
     await expect(caller.listOrganizations({})).rejects.toMatchObject({ code: 'FORBIDDEN' });
-    await expect(
-      caller.suspendOrganization({ orgId: 'any' }),
-    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
-    await expect(
-      caller.addManualCredit({ amountToman: 1000, orgId: 'any' }),
-    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(caller.suspendOrganization({ orgId: 'any' })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    await expect(caller.addManualCredit({ amountToman: 1000, orgId: 'any' })).rejects.toMatchObject(
+      { code: 'FORBIDDEN' },
+    );
     await expect(caller.listUserWallets()).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 
@@ -178,17 +191,45 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
     const platformCaller = platformAdminRouter.createCaller(createTestContext(platformId));
     const row = await platformCaller.suspendOrganization({ orgId: created.id });
     expect(row.status).toBe('suspended');
+    // Suspend must disable every member's OpenRouter key immediately (fail closed).
+    expect(disableAllOrgMemberKeysMock).toHaveBeenCalledWith(created.id);
   });
 
-  it('AICO-P1-023: unverified phone can still create organization', async () => {
-    const caller = organizationRouter.createCaller(createTestContext(ownerId));
-    // owner has phoneNumberVerified: false
-    const org = await caller.create({ name: 'No Phone Org' });
-    // PRD requires phone verify for managers — create must reject.
-    expect(org.id).toBeUndefined();
+  it('platform admin updateTrialConfig round-trips trialBudgetUsd', async () => {
+    const platformCaller = platformAdminRouter.createCaller(createTestContext(platformId));
+    const updated = await platformCaller.updateTrialConfig({ trialBudgetUsd: 2.5 });
+    expect(updated.trialBudgetUsd).toBe(2.5);
+    const fetched = await platformCaller.getTrialConfig();
+    expect(fetched.trialBudgetUsd).toBe(2.5);
   });
 
-  it('AICO-P1-026: inviteMember response includes raw token', async () => {
+  it('platform admin listUserWallets and listOrganizations include publicCode', async () => {
+    const strangerCaller = aicoBillingRouter.createCaller(createTestContext(strangerId));
+    await strangerCaller.mockTopup({ amountToman: 50_000 });
+    // Public code is assigned lazily on first wallet view.
+    await strangerCaller.getMyWallet();
+
+    const ownerCaller = organizationRouter.createCaller(createTestContext(ownerId));
+    await ownerCaller.create({ name: 'PublicCode Org' });
+
+    const platformCaller = platformAdminRouter.createCaller(createTestContext(platformId));
+    const wallets = await platformCaller.listUserWallets();
+    const strangerWallet = wallets.find((w: any) => w.userId === strangerId);
+    expect(strangerWallet?.publicCode).toMatch(/^USR/);
+
+    const orgs = await platformCaller.listOrganizations({});
+    expect(orgs.items.every((o: any) => typeof o.publicCode === 'string')).toBe(true);
+  });
+
+  it('AICO-P1-023: unverified phone cannot create organization', async () => {
+    const caller = organizationRouter.createCaller(createTestContext(strangerId));
+    // stranger has no verified phone — PRD requires phone verify for managers.
+    await expect(caller.create({ name: 'No Phone Org' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+  });
+
+  it('AICO-P1-026: inviteMember mutation returns the raw token, but listMembers never leaks it', async () => {
     const ownerCaller = organizationRouter.createCaller(createTestContext(ownerId));
     const created = await ownerCaller.create({ name: 'Token Leak Org' });
     const invite = await ownerCaller.inviteMember({
@@ -196,11 +237,13 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
       identifierValue: 'member@rbac.test',
       orgId: created.id,
     });
+    // The inviter needs the token once, from the mutation response, to share it.
     expect(invite.token).toBeTruthy();
+
+    // But a list endpoint must never leak raw invite tokens.
     const listed = await ownerCaller.listMembers({ orgId: created.id });
-    expect(listed.invites.some((i: any) => i.token)).toBe(true);
-    // Safety: list must omit raw tokens
-    expect(listed.invites.every((i: any) => !i.token)).toBe(true);
+    expect(listed.invites.length).toBeGreaterThan(0);
+    expect(listed.invites.every((i: any) => !('token' in i))).toBe(true);
   });
 
   it('AICO-P1-018: getMyWallet returns number balances (contract expects strings)', async () => {
@@ -208,6 +251,23 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
     const wallet = await caller.getMyWallet();
     expect(typeof wallet.balanceUsd).toBe('string');
     expect(typeof wallet.balanceToman).toBe('string');
+  });
+
+  it('convertToManagement requires a verified phone and rejects a second organization', async () => {
+    const strangerCaller = organizationRouter.createCaller(createTestContext(strangerId));
+    await expect(strangerCaller.convertToManagement({ name: 'No Phone Co' })).rejects.toMatchObject(
+      { code: 'BAD_REQUEST', message: 'PHONE_VERIFICATION_REQUIRED' },
+    );
+
+    const ownerCaller = organizationRouter.createCaller(createTestContext(ownerId));
+    const org = await ownerCaller.convertToManagement({ name: 'Verified Co' });
+    expect(org.publicCode).toMatch(/^ORG/);
+
+    // Owner already owns an org (created above) — a second upgrade must be rejected.
+    await expect(ownerCaller.convertToManagement({ name: 'Second Co' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'ALREADY_HAS_ORGANIZATION',
+    });
   });
 
   it('removed member cannot manage org after disable', async () => {

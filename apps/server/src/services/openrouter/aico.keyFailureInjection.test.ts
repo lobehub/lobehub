@@ -3,12 +3,12 @@
  * Maps: AICO-P1-004, AICO-P1-011, AICO-P1-016, split-brain states
  */
 // @vitest-environment node
+import type { LobeChatDatabase } from '@lobechat/database';
+import { getTestDB } from '@lobechat/database/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getTestDB } from '@lobechat/database/test-utils';
-import type { LobeChatDatabase } from '@lobechat/database';
-
 import { AicoBillingModel } from '@/database/models/aicoBilling';
+import { users } from '@/database/schemas';
 import {
   memberBudgets,
   organizationMembers,
@@ -18,7 +18,6 @@ import {
   userWallets,
   walletTransactions,
 } from '@/database/schemas/aicoOrganization';
-import { users } from '@/database/schemas';
 import { AicoOpenRouterKeyService } from '@/server/services/openrouter/keyService';
 import type { OpenRouterManagementClient } from '@/server/services/openrouter/management';
 import {
@@ -133,7 +132,7 @@ afterEach(async () => {
 });
 
 describe('Aico OpenRouter failure injection (Phase 2)', () => {
-  it('AICO-P1-004: missing management key silently selects Mock client (production fail-open)', () => {
+  it('AICO-P1-004: missing management key fails closed in production (never silently mocks)', () => {
     const prevMock = process.env.AICO_OPENROUTER_MOCK;
     const prevKey = process.env.OPENROUTER_MANAGEMENT_API_KEY;
     const prevNode = process.env.NODE_ENV;
@@ -144,11 +143,9 @@ describe('Aico OpenRouter failure injection (Phase 2)', () => {
       (process.env as any).NODE_ENV = 'production';
       __resetOpenRouterManagementClientForTests();
 
-      // Module caches aicoEnv at import — forceMock path still documents API:
-      const client = createOpenRouterManagementClient({});
-      // Without key, factory returns Mock. Production must throw instead.
-      const isMock = client.constructor.name.includes('Mock');
-      expect(isMock).toBe(false);
+      // Without a management key, production must refuse to serve mock OpenRouter
+      // credentials — throw rather than silently returning a Mock client.
+      expect(() => createOpenRouterManagementClient({})).toThrow(/OPENROUTER_MANAGEMENT_API_KEY/);
     } finally {
       process.env.AICO_OPENROUTER_MOCK = prevMock;
       process.env.OPENROUTER_MANAGEMENT_API_KEY = prevKey;
@@ -281,6 +278,75 @@ describe('Aico OpenRouter failure injection (Phase 2)', () => {
     }
     expect(threw || resolved === null).toBe(true);
     if (resolved) expect(resolved.startsWith('sk-')).toBe(false);
+  });
+
+  it('reclaimMemberKey returns limitRemaining and disables the key (never leaves it spendable)', async () => {
+    const { OrganizationModel } = await import('@/database/models/organization');
+    const orgModel = new OrganizationModel(db);
+    const org = await orgModel.createOrganization({ name: 'Reclaim Org', ownerUserId: userId });
+    const members = await orgModel.listMembers(org.id);
+    const ownerMember = members[0];
+
+    const client = new ControllableOpenRouterClient();
+    const keys = new AicoOpenRouterKeyService(db, client);
+
+    await db.insert(memberBudgets).values({
+      isActive: true,
+      limitUsd: 20,
+      orgMemberId: ownerMember.id,
+      period: 'total',
+    });
+    await keys.ensureMemberKey(ownerMember.id);
+    const budget = await orgModel.getMemberBudget(ownerMember.id);
+    const keyHash = budget!.openrouterKeyId!;
+    // Simulate partial spend as OpenRouter would report it.
+    const key = client.keys.get(keyHash);
+    key.usage = 8;
+    key.limitRemaining = 12;
+
+    const reclaimed = await keys.reclaimMemberKey(ownerMember.id);
+    expect(reclaimed).toEqual({ remainingUsd: 12, usageUsd: 8 });
+    expect(client.keys.get(keyHash).disabled).toBe(true);
+
+    // Reclaiming again after disable must not throw or double-count.
+    const reclaimedAgain = await keys.reclaimMemberKey(ownerMember.id);
+    expect(reclaimedAgain?.remainingUsd).toBe(12);
+  });
+
+  it('disableAllOrgMemberKeys disables every member key in the org (suspend safety)', async () => {
+    const { OrganizationModel } = await import('@/database/models/organization');
+    const orgModel = new OrganizationModel(db);
+    const org = await orgModel.createOrganization({ name: 'Suspend Org', ownerUserId: userId });
+    const members = await orgModel.listMembers(org.id);
+    const ownerMember = members[0];
+
+    const client = new ControllableOpenRouterClient();
+    const keys = new AicoOpenRouterKeyService(db, client);
+    await db.insert(memberBudgets).values({
+      isActive: true,
+      limitUsd: 10,
+      orgMemberId: ownerMember.id,
+      period: 'total',
+    });
+    await keys.ensureMemberKey(ownerMember.id);
+    const budget = await orgModel.getMemberBudget(ownerMember.id);
+    expect(client.keys.get(budget!.openrouterKeyId!).disabled).toBe(false);
+
+    await keys.disableAllOrgMemberKeys(org.id);
+
+    expect(client.keys.get(budget!.openrouterKeyId!).disabled).toBe(true);
+  });
+
+  it('reclaimMemberKey returns null when the member has no managed key', async () => {
+    const { OrganizationModel } = await import('@/database/models/organization');
+    const orgModel = new OrganizationModel(db);
+    const org = await orgModel.createOrganization({ name: 'No Key Org', ownerUserId: userId });
+    const members = await orgModel.listMembers(org.id);
+    const client = new ControllableOpenRouterClient();
+    const keys = new AicoOpenRouterKeyService(db, client);
+
+    const reclaimed = await keys.reclaimMemberKey(members[0].id);
+    expect(reclaimed).toBeNull();
   });
 
   it('AICO-P1 secret: ensureUserKey never returns plaintext key to caller', async () => {

@@ -154,16 +154,33 @@ let singleton: OpenRouterManagementClient | null = null;
 export const createOpenRouterManagementClient = (
   options: { forceMock?: boolean; managementKey?: string } = {},
 ): OpenRouterManagementClient => {
+  // `forceMock` is for tests only — callers must never set it from request-driven code.
   if (options.forceMock) {
     return new MockOpenRouterManagementClient();
   }
   if (options.managementKey) {
     return new HttpOpenRouterManagementClient(options.managementKey);
   }
-  if (aicoEnv.AICO_OPENROUTER_MOCK || !aicoEnv.OPENROUTER_MANAGEMENT_API_KEY) {
+
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  // `AICO_OPENROUTER_MOCK` is a non-production QA convenience only — ignored in production.
+  if (!isProduction && aicoEnv.AICO_OPENROUTER_MOCK) {
     return new MockOpenRouterManagementClient();
   }
-  return new HttpOpenRouterManagementClient(aicoEnv.OPENROUTER_MANAGEMENT_API_KEY);
+
+  if (aicoEnv.OPENROUTER_MANAGEMENT_API_KEY) {
+    return new HttpOpenRouterManagementClient(aicoEnv.OPENROUTER_MANAGEMENT_API_KEY);
+  }
+
+  if (isProduction) {
+    // Fail closed: never silently serve mock OpenRouter keys in production.
+    throw new Error(
+      'OPENROUTER_MANAGEMENT_API_KEY is required in production — refusing to mock OpenRouter management calls.',
+    );
+  }
+
+  return new MockOpenRouterManagementClient();
 };
 
 export const getOpenRouterManagementClient = (): OpenRouterManagementClient => {

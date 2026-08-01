@@ -3,10 +3,13 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { AicoBillingModel } from '@/database/models/aicoBilling';
+import { OrganizationModel } from '@/database/models/organization';
 import { users } from '@/database/schemas';
-import { aicoEnv, tomanToUsd } from '@/envs/aico';
+import { tomanToUsd } from '@/envs/aico';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { getTomanPerUsd } from '@/server/services/aico/fxService';
+import { assertMockTopupAllowed } from '@/server/services/aico/mockTopupGate';
 import { AicoOpenRouterKeyService } from '@/server/services/openrouter/keyService';
 
 const billingProcedure = authedProcedure.use(serverDatabase).use(async ({ ctx, next }) => {
@@ -14,24 +17,34 @@ const billingProcedure = authedProcedure.use(serverDatabase).use(async ({ ctx, n
     ctx: {
       billingModel: new AicoBillingModel(ctx.serverDB),
       keyService: new AicoOpenRouterKeyService(ctx.serverDB),
+      organizationModel: new OrganizationModel(ctx.serverDB),
     },
   });
 });
 
 export const aicoBillingRouter = router({
-  getFxRate: billingProcedure.query(() => ({
-    tomanPerUsd: aicoEnv.AICO_TOMAN_PER_USD,
-  })),
+  getFxRate: billingProcedure.query(async () => {
+    const { rate, source } = await getTomanPerUsd();
+    return { source, tomanPerUsd: rate };
+  }),
 
   getMyWallet: billingProcedure.query(async ({ ctx }) => {
-    const wallet = await ctx.billingModel.getOrCreateUserWallet(ctx.userId);
+    const [wallet, publicCode] = await Promise.all([
+      ctx.billingModel.getOrCreateUserWallet(ctx.userId),
+      ctx.organizationModel.ensureUserPublicCode(ctx.userId),
+    ]);
     return {
       balanceToman: wallet.balanceToman,
       balanceUsd: Number(wallet.balanceUsd),
       hasManagedKey: Boolean(wallet.openrouterKeyId),
       isActive: wallet.isActive,
+      publicCode,
       // Never expose key material
     };
+  }),
+
+  getMyPublicCode: billingProcedure.query(async ({ ctx }) => {
+    return { publicCode: await ctx.organizationModel.ensureUserPublicCode(ctx.userId) };
   }),
 
   getMyUsage: billingProcedure
@@ -49,7 +62,9 @@ export const aicoBillingRouter = router({
   mockTopup: billingProcedure
     .input(z.object({ amountToman: z.number().int().positive().max(100_000_000) }))
     .mutation(async ({ ctx, input }) => {
-      const fxRate = aicoEnv.AICO_TOMAN_PER_USD;
+      assertMockTopupAllowed();
+
+      const { rate: fxRate } = await getTomanPerUsd();
       const amountUsd = tomanToUsd(input.amountToman, fxRate);
 
       const { wallet, transaction } = await ctx.billingModel.mockTopupUser({
@@ -84,6 +99,7 @@ export const aicoBillingRouter = router({
         durationDays: config.durationDays,
         enabled: config.enabled,
         maxRequests: config.maxRequests,
+        trialBudgetUsd: Number(config.trialBudgetUsd),
       },
       trial: trial
         ? {
@@ -112,6 +128,16 @@ export const aicoBillingRouter = router({
         phone: user.phone,
         userId: ctx.userId,
       });
+
+      const config = await ctx.billingModel.getTrialConfig();
+      try {
+        await ctx.keyService.ensureTrialKey(ctx.userId, Number(config.trialBudgetUsd));
+      } catch (error) {
+        // Trial row is already created — surface the failure via resolveManagedApiKey
+        // at chat time (fail closed) rather than rolling back trial activation here.
+        console.error('[aicoBilling] failed to provision trial OpenRouter key', error);
+      }
+
       return {
         expiresAt: trial.expiresAt.toISOString(),
         startedAt: trial.startedAt.toISOString(),
@@ -135,9 +161,10 @@ export const aicoBillingRouter = router({
   getManagedProviderStatus: billingProcedure.query(async ({ ctx }) => {
     const wallet = await ctx.billingModel.getUserWallet(ctx.userId);
     const trialActive = await ctx.billingModel.isTrialActive(ctx.userId);
+    const hasOrgKey = Boolean(await ctx.keyService.resolveUserApiKey(ctx.userId));
     return {
       brandName: 'Aico',
-      managed: Boolean(wallet?.openrouterKeyId) || trialActive,
+      managed: Boolean(wallet?.openrouterKeyId) || trialActive || hasOrgKey,
       providerId: 'aico',
     };
   }),

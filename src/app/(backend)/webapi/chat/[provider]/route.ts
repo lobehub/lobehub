@@ -49,7 +49,15 @@ export const POST = checkAuth(async (req: Request, { params, userId, serverDB })
 
     if (AicoChatGuard.isManagedProvider(provider)) {
       const guard = new AicoChatGuard(serverDB);
-      void guard.recordTrialRequest(userId);
+
+      // Best-effort, non-blocking: bumps trial usage, syncs the active org member's
+      // real OpenRouter spend (budget source of truth), and always records a
+      // usage_logs row (cost 0 when unknown) — see `AicoChatGuard.afterManagedChat`.
+      void guard
+        .afterManagedChat(userId, { modelId: data.model || provider })
+        .catch((err) =>
+          console.error(`[aico] post-chat usage recording failed for [${provider}]:`, err),
+        );
     }
 
     return response;

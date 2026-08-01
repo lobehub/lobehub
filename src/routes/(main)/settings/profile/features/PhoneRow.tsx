@@ -3,7 +3,6 @@
 import { Flexbox, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router';
 
 import { buildTrialPhoneVerifyUrl } from '@/libs/better-auth/phone';
 import { useUserStore } from '@/store/user';
@@ -13,13 +12,15 @@ import ProfileRow from './ProfileRow';
 
 const PhoneRow = () => {
   const { t } = useTranslation('auth');
-  const navigate = useNavigate();
   const user = useUserStore(userProfileSelectors.userProfile);
   const phone = user?.phoneNumber;
   const verified = Boolean(user?.phoneNumberVerified);
 
   const handleVerify = () => {
-    navigate(buildTrialPhoneVerifyUrl('/settings/profile'));
+    // Hard navigation: `/verify-phone` lives on the auth SPA (`spa-auth`), not the
+    // main app router. Client-side `navigate()` stays in the main SPA and hits the
+    // catch-all ("Entered Unknown Territory?").
+    window.location.assign(buildTrialPhoneVerifyUrl('/settings/profile'));
   };
 
   return (

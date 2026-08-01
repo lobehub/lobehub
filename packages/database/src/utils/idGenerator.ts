@@ -45,6 +45,7 @@ const prefixes = {
   trialAbuseBlocklist: 'tab',
   usageLogs: 'ulog',
   user: 'user',
+  userPublicIds: 'upid',
   userTrials: 'utrl',
   userWallets: 'uwlt',
   walletTransactions: 'wtx',
@@ -65,3 +66,10 @@ export const idGenerator = (namespace: keyof typeof prefixes, size = 12) => {
 export const randomSlug = (count = 2) => (generate(count) as string[]).join('-');
 
 export const inboxSessionId = (userId: string) => `ssn_inbox_${userId}`;
+
+/** Uppercase alnum public-facing code generator (never starts with `0`/`O` confusion — full charset is fine for internal use). */
+const createPublicCodeSuffix = customAlphabet('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ', 6);
+
+/** Short, user-facing identifiers (e.g. `ORGAB12CD`, `USR8F3K2Q`) — distinct from internal `idGenerator` ids. */
+export const generatePublicCode = (prefix: string): string =>
+  `${prefix}${createPublicCodeSuffix()}`;

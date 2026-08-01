@@ -5,9 +5,11 @@ import { z } from 'zod';
 import { AicoBillingModel } from '@/database/models/aicoBilling';
 import { OrganizationModel } from '@/database/models/organization';
 import { users } from '@/database/schemas';
-import { aicoEnv, tomanToUsd } from '@/envs/aico';
+import { tomanToUsd } from '@/envs/aico';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { getTomanPerUsd } from '@/server/services/aico/fxService';
+import { AicoOpenRouterKeyService } from '@/server/services/openrouter/keyService';
 
 const platformProcedure = authedProcedure.use(serverDatabase).use(async ({ ctx, next }) => {
   const organizationModel = new OrganizationModel(ctx.serverDB);
@@ -65,7 +67,7 @@ export const platformAdminRouter = router({
         ownerUserId,
         slug: input.slug,
       });
-      return { id: org.id, name: org.name, slug: org.slug };
+      return { id: org.id, name: org.name, publicCode: org.publicCode, slug: org.slug };
     }),
 
   assignManager: platformProcedure
@@ -104,6 +106,12 @@ export const platformAdminRouter = router({
     .mutation(async ({ ctx, input }) => {
       const row = await ctx.organizationModel.setOrganizationStatus(input.orgId, 'suspended');
       if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: 'Organization not found' });
+
+      // Fail closed: a suspended org's members must lose OpenRouter access immediately,
+      // not just at the next usage-sync poll.
+      const keyService = new AicoOpenRouterKeyService(ctx.serverDB);
+      await keyService.disableAllOrgMemberKeys(input.orgId);
+
       return row;
     }),
 
@@ -125,7 +133,7 @@ export const platformAdminRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        const fxRate = aicoEnv.AICO_TOMAN_PER_USD;
+        const { rate: fxRate } = await getTomanPerUsd();
         const amountUsd = tomanToUsd(input.amountToman, fxRate);
         return await ctx.organizationModel.addManualCredit({
           amountToman: input.amountToman,
@@ -176,6 +184,7 @@ export const platformAdminRouter = router({
       durationDays: config.durationDays,
       enabled: config.enabled,
       maxRequests: config.maxRequests,
+      trialBudgetUsd: Number(config.trialBudgetUsd),
     };
   }),
 
@@ -186,6 +195,7 @@ export const platformAdminRouter = router({
         durationDays: z.number().int().min(1).max(90).optional(),
         enabled: z.boolean().optional(),
         maxRequests: z.number().int().positive().nullable().optional(),
+        trialBudgetUsd: z.number().positive().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -198,6 +208,7 @@ export const platformAdminRouter = router({
         durationDays: row.durationDays,
         enabled: row.enabled,
         maxRequests: row.maxRequests,
+        trialBudgetUsd: Number(row.trialBudgetUsd),
       };
     }),
 
@@ -211,20 +222,27 @@ export const platformAdminRouter = router({
         .optional(),
     )
     .query(async ({ ctx }) => {
-      const [txs, wallets] = await Promise.all([
+      const [txs, wallets, orgBalanceUsd, totalOpenRouterCostUsd, fx] = await Promise.all([
         ctx.billingModel.listRecentTransactions(200),
         ctx.billingModel.listAllWallets(),
+        ctx.organizationModel.getTotalWalletBalanceUsd(),
+        ctx.billingModel.sumUsageCostUsd(),
+        getTomanPerUsd(),
       ]);
       const topups = txs.filter((t) => t.type === 'topup' || t.type === 'manual_credit');
       const totalRevenueToman = topups.reduce((sum, t) => sum + Number(t.amountToman || 0), 0);
       const totalUsdCredited = topups.reduce((sum, t) => sum + Number(t.amountUsd || 0), 0);
       const b2cBalanceUsd = wallets.reduce((sum, w) => sum + Number(w.balanceUsd || 0), 0);
+      // Approximate margin: revenue collected minus observed OpenRouter spend, converted
+      // at the current live rate (individual topups may have used a different historical rate).
+      const marginToman = totalRevenueToman - totalOpenRouterCostUsd * fx.rate;
 
       return {
+        b2bBalanceUsd: String(orgBalanceUsd),
         b2cBalanceUsd: String(b2cBalanceUsd),
         b2cWalletCount: wallets.length,
         from: null as string | null,
-        marginToman: '0',
+        marginToman: String(Math.round(marginToman)),
         recentTransactions: txs.slice(0, 50).map((t) => ({
           amountToman: t.amountToman,
           amountUsd: t.amountUsd == null ? null : Number(t.amountUsd),
@@ -235,27 +253,38 @@ export const platformAdminRouter = router({
           userId: t.userId,
         })),
         to: null as string | null,
-        totalOpenRouterCostUsd: '0',
+        totalOpenRouterCostUsd: String(totalOpenRouterCostUsd),
         totalRevenueToman: String(totalRevenueToman),
         totalUsdCredited: String(totalUsdCredited),
       };
     }),
 
-  getMasterAccountStatus: platformProcedure.query(async () => {
+  getMasterAccountStatus: platformProcedure.query(async ({ ctx }) => {
+    // OpenRouter's management API has no "account balance" endpoint for the master key,
+    // so this can't report the real remaining prepaid credit — only observed spend from
+    // our own usage logs. `balanceUsd`/`belowThreshold` stay stubbed until OpenRouter
+    // ships an account-credits endpoint.
+    const usageUsd = await ctx.billingModel.sumUsageCostUsd();
     return {
       balanceUsd: '0',
       belowThreshold: false,
+      isStub: true,
       thresholdUsd: '100',
+      totalObservedUsageUsd: String(usageUsd),
     };
   }),
 
   listUserWallets: platformProcedure.query(async ({ ctx }) => {
     const wallets = await ctx.billingModel.listAllWallets();
+    const publicCodes = await ctx.organizationModel.getUserPublicCodesByIds(
+      wallets.map((w) => w.userId),
+    );
     return wallets.map((w) => ({
       balanceToman: w.balanceToman,
       balanceUsd: Number(w.balanceUsd),
       hasManagedKey: Boolean(w.openrouterKeyId),
       isActive: w.isActive,
+      publicCode: publicCodes.get(w.userId) ?? null,
       userId: w.userId,
     }));
   }),
