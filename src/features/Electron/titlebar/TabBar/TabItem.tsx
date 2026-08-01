@@ -56,6 +56,7 @@ interface TabItemProps {
   onCloseOthers: (id: string) => void;
   onCloseRight: (id: string) => void;
   onTogglePin: (id: string) => void;
+  pinnedCount: number;
   tier: TabTier;
   totalCount: number;
   width: number;
@@ -66,6 +67,7 @@ const TabItem = memo<TabItemProps>(
     item,
     isActive,
     index,
+    pinnedCount,
     tier,
     totalCount,
     width,
@@ -139,6 +141,7 @@ const TabItem = memo<TabItemProps>(
           onCloseRight,
           onTogglePin,
           pinned,
+          pinnedCount,
           t,
           totalCount,
         }),
@@ -148,6 +151,7 @@ const TabItem = memo<TabItemProps>(
         index,
         totalCount,
         pinned,
+        pinnedCount,
         onClose,
         onCloseOthers,
         onCloseLeft,

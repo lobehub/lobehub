@@ -5,7 +5,7 @@ import { toNativeTemplate } from '@/libs/contextMenu/toNativeTemplate';
 
 import { buildTabContextMenuItems } from './tabContextMenu';
 
-const build = (index: number, totalCount: number, pinned = false) =>
+const build = (index: number, totalCount: number, pinned = false, pinnedCount = 0) =>
   buildTabContextMenuItems({
     id: 'tab-1',
     index,
@@ -15,9 +15,15 @@ const build = (index: number, totalCount: number, pinned = false) =>
     onCloseRight: vi.fn(),
     onTogglePin: vi.fn(),
     pinned,
+    pinnedCount,
     t: (key) => key,
     totalCount,
   });
+
+const isDisabled = (items: ReturnType<typeof build>, key: string) => {
+  const entry = items.find((item) => !!item && 'key' in item && item.key === key);
+  return entry && 'disabled' in entry ? !!entry.disabled : false;
+};
 
 describe('tab context menu ownership', () => {
   it('goes native on macOS desktop (plain string labels, no web-only capabilities)', () => {
@@ -50,5 +56,31 @@ describe('pin entry', () => {
     const pin = items.find((item) => !!item && 'key' in item && item.key === 'togglePin');
 
     expect(pin && 'disabled' in pin ? pin.disabled : undefined).toBeFalsy();
+  });
+});
+
+describe('bulk close entries reflect what pinning spares', () => {
+  it('disables closing others when every other tab is pinned', () => {
+    expect(isDisabled(build(2, 3, false, 2), 'closeOtherTabs')).toBe(true);
+  });
+
+  it('keeps closing others available while an unpinned neighbour remains', () => {
+    expect(isDisabled(build(2, 4, false, 2), 'closeOtherTabs')).toBe(false);
+  });
+
+  it('disables closing left when only pinned tabs lie to the left', () => {
+    expect(isDisabled(build(1, 3, false, 1), 'closeLeftTabs')).toBe(true);
+  });
+
+  it('keeps closing left available once an unpinned tab lies to the left', () => {
+    expect(isDisabled(build(2, 3, false, 1), 'closeLeftTabs')).toBe(false);
+  });
+
+  it('disables closing right when only pinned tabs lie to the right', () => {
+    expect(isDisabled(build(0, 2, true, 2), 'closeRightTabs')).toBe(true);
+  });
+
+  it('keeps closing right available for a pinned tab with unpinned tabs after the run', () => {
+    expect(isDisabled(build(0, 3, true, 2), 'closeRightTabs')).toBe(false);
   });
 });

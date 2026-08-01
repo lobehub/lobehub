@@ -194,6 +194,7 @@ const TabBar = () => {
       isActive={tab.tab.id === activeTabId}
       item={tab}
       key={tab.tab.id}
+      pinnedCount={pinnedTabs.length}
       tier={resolveTabTier(width)}
       totalCount={tabs.length}
       width={width}

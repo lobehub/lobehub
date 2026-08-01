@@ -537,4 +537,97 @@ describe('tabPages actions', () => {
       expect(restored.tabs[0].pinned).toBeUndefined();
     });
   });
+
+  describe('bulk closes spare the pinned run', () => {
+    const urls = (tabs: TabItem[]) => tabs.map((tab) => tab.url);
+
+    const seed = (pins: string[], activeTabId = '/c') => {
+      const { result } = renderHook(() => useElectronStore());
+
+      act(() => {
+        useElectronStore.setState({
+          activeTabId,
+          tabs: [buildTab('/a'), buildTab('/b'), buildTab('/c'), buildTab('/d')],
+        });
+      });
+      for (const url of pins) {
+        act(() => {
+          result.current.pinTab(url);
+        });
+      }
+
+      return result;
+    };
+
+    it('keeps pinned tabs when closing the others', () => {
+      const result = seed(['/a', '/b']);
+
+      act(() => {
+        result.current.closeOtherTabs('/c');
+      });
+
+      expect(urls(result.current.tabs)).toEqual(['/a', '/b', '/c']);
+    });
+
+    it('keeps pinned tabs when closing to the left', () => {
+      const result = seed(['/a']);
+
+      act(() => {
+        result.current.closeLeftTabs('/c');
+      });
+
+      expect(urls(result.current.tabs)).toEqual(['/a', '/c', '/d']);
+    });
+
+    it('keeps the rest of the pinned run when closing to the right of a pinned tab', () => {
+      const result = seed(['/a', '/b']);
+
+      act(() => {
+        result.current.closeRightTabs('/a');
+      });
+
+      expect(urls(result.current.tabs)).toEqual(['/a', '/b']);
+    });
+
+    it('still closes a pinned tab that was targeted on its own', () => {
+      const result = seed(['/a']);
+
+      act(() => {
+        result.current.removeTab('/a');
+      });
+
+      expect(urls(result.current.tabs)).toEqual(['/b', '/c', '/d']);
+    });
+
+    it('does nothing when every tab the bulk close would reach is pinned', () => {
+      const result = seed(['/a', '/b']);
+      const before = result.current.tabs;
+
+      act(() => {
+        result.current.closeLeftTabs('/c');
+      });
+
+      expect(result.current.tabs).toBe(before);
+    });
+
+    it('leaves focus on a pinned tab that survived the close', () => {
+      const result = seed(['/a'], '/a');
+
+      act(() => {
+        result.current.closeOtherTabs('/c');
+      });
+
+      expect(result.current.activeTabId).toBe('/a');
+    });
+
+    it('moves focus to the target when the active tab was closed', () => {
+      const result = seed(['/a'], '/d');
+
+      act(() => {
+        result.current.closeOtherTabs('/c');
+      });
+
+      expect(result.current.activeTabId).toBe('/c');
+    });
+  });
 });

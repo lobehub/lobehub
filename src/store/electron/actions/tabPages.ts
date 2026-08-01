@@ -123,44 +123,26 @@ export class TabPagesActionImpl {
   };
 
   closeLeftTabs = (id: string): void => {
-    const { tabs, activeTabId } = this.#get();
+    const { tabs } = this.#get();
     const index = tabs.findIndex((t) => t.id === id);
     if (index <= 0) return;
 
-    const newTabs = tabs.slice(index);
-    const newActiveId = newTabs.some((t) => t.id === activeTabId) ? activeTabId : id;
-
-    this.#set(
-      { activeTabId: newActiveId, tabs: this.#touch(newTabs, newActiveId) },
-      false,
-      'closeLeftTabs',
-    );
-    this.#persist();
+    this.#closeExcept((_, i) => i >= index, id, 'closeLeftTabs');
   };
 
   closeOtherTabs = (id: string): void => {
     const { tabs } = this.#get();
-    const target = tabs.find((t) => t.id === id);
-    if (!target) return;
+    if (!tabs.some((t) => t.id === id)) return;
 
-    this.#set({ activeTabId: id, tabs: this.#touch([target], id) }, false, 'closeOtherTabs');
-    this.#persist();
+    this.#closeExcept((tab) => tab.id === id, id, 'closeOtherTabs');
   };
 
   closeRightTabs = (id: string): void => {
-    const { tabs, activeTabId } = this.#get();
+    const { tabs } = this.#get();
     const index = tabs.findIndex((t) => t.id === id);
     if (index < 0 || index >= tabs.length - 1) return;
 
-    const newTabs = tabs.slice(0, index + 1);
-    const newActiveId = newTabs.some((t) => t.id === activeTabId) ? activeTabId : id;
-
-    this.#set(
-      { activeTabId: newActiveId, tabs: this.#touch(newTabs, newActiveId) },
-      false,
-      'closeRightTabs',
-    );
-    this.#persist();
+    this.#closeExcept((_, i) => i <= index, id, 'closeRightTabs');
   };
 
   reorderTabs = (fromIndex: number, toIndex: number): void => {
@@ -255,6 +237,24 @@ export class TabPagesActionImpl {
     newTabs[index] = { ...newTabs[index], cached: merged };
 
     this.#set({ tabs: newTabs }, false, 'updateTabCache');
+    this.#persist();
+  };
+
+  // Pinning is a retention promise, so a bulk close only ever narrows the unpinned run —
+  // a pinned tab leaves solely through removeTab, where the user named that one tab.
+  // Focus therefore stays put unless the close actually took the active tab.
+  #closeExcept = (
+    keep: (tab: TabItem, index: number) => boolean,
+    targetId: string,
+    action: string,
+  ): void => {
+    const { tabs, activeTabId } = this.#get();
+    const newTabs = tabs.filter((tab, index) => tab.pinned || keep(tab, index));
+    if (newTabs.length === tabs.length) return;
+
+    const newActiveId = newTabs.some((t) => t.id === activeTabId) ? activeTabId : targetId;
+
+    this.#set({ activeTabId: newActiveId, tabs: this.#touch(newTabs, newActiveId) }, false, action);
     this.#persist();
   };
 
