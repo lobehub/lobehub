@@ -440,6 +440,8 @@ export interface TaskDetailData {
   heartbeat?: {
     interval?: number | null;
     lastAt?: string | null;
+    /** When the currently pending heartbeat tick was enqueued. */
+    scheduledAt?: string | null;
     timeout?: number | null;
   };
   /** Stable database identity used by subject-bound aggregates such as Acceptance. */

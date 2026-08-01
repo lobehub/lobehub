@@ -6,6 +6,7 @@ import type {
   TaskDetailSubtask,
   TaskDetailWorkspaceNode,
   TaskItem,
+  TaskSchedulerContext,
   TaskStatus,
   TaskTopicHandoff,
   WorkspaceData,
@@ -25,6 +26,7 @@ import { resolveAttachmentMetadata } from '../file/resolveAttachments';
 import { type SubtaskGraphPlan, TaskGraphService } from '../taskGraph';
 import { type ReviewResult, TaskReviewService } from '../taskReview';
 import { TaskRunnerService } from '../taskRunner';
+import { createTaskSchedulerModule } from '../taskScheduler';
 
 const emptyWorkspace: WorkspaceData = { nodeMap: {}, tree: [] };
 const UNTITLED_TOPIC_TITLE = 'Untitled';
@@ -378,6 +380,41 @@ export class TaskService {
     ) {
       await this.taskModel.updateContext(task.id, {
         scheduler: { scheduleStartedAt: new Date().toISOString() },
+      });
+    }
+
+    // Heartbeat ticks are one-shot delayed messages that re-arm themselves
+    // after each run. Seed the very first message when a user starts/restarts
+    // the schedule; otherwise a fresh heartbeat task has no event capable of
+    // reaching the lifecycle re-arm path.
+    if (
+      status === 'scheduled' &&
+      task.automationMode === 'heartbeat' &&
+      task.heartbeatInterval &&
+      task.heartbeatInterval > 0 &&
+      resolved.status !== 'running' &&
+      resolved.status !== 'scheduled'
+    ) {
+      const scheduler = createTaskSchedulerModule();
+      const schedulerContext = (resolved.context as TaskContext | null)?.scheduler as
+        TaskSchedulerContext | undefined;
+      const previousTickMessageId = schedulerContext?.tickMessageId;
+      const tickMessageId = await scheduler.scheduleNextTopic({
+        delay: task.heartbeatInterval,
+        taskId: task.id,
+        userId: this.userId,
+      });
+
+      if (previousTickMessageId) {
+        await scheduler.cancelScheduled(previousTickMessageId).catch(() => undefined);
+      }
+
+      await this.taskModel.updateContext(task.id, {
+        scheduler: {
+          consecutiveFailures: schedulerContext?.consecutiveFailures ?? 0,
+          scheduledAt: new Date().toISOString(),
+          tickMessageId,
+        },
       });
     }
 
@@ -780,6 +817,7 @@ export class TaskService {
     });
 
     const taskConfig = task.config ? (task.config as Record<string, unknown>) : undefined;
+    const taskContext = task.context ? (task.context as TaskContext) : undefined;
     const scheduleConfig = (taskConfig?.schedule ?? {}) as { maxExecutions?: number | null };
 
     return {
@@ -806,6 +844,7 @@ export class TaskService {
           ? {
               interval: task.heartbeatInterval,
               lastAt: task.lastHeartbeatAt ? new Date(task.lastHeartbeatAt).toISOString() : null,
+              scheduledAt: taskContext?.scheduler?.scheduledAt,
               timeout: task.heartbeatTimeout,
             }
           : undefined,

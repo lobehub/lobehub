@@ -95,14 +95,20 @@ export const driveTaskFromVerify = async (
     if (!task || TERMINAL_TASK_STATUS.has(task.status)) return; // task already settled
 
     if (run.status === 'passed') {
-      // Complete + cascade (checkpoint / sibling rollup / unlock downstream).
-      // The verify → TaskService → aiAgent → agentRuntime completion → verify
-      // cycle is safe statically since every use is call-time (inside this fn).
-      await new TaskService(db, userId, workspaceId).updateStatus({
-        id: taskOperation.taskId,
-        status: 'completed',
-      });
-      log('verify passed → task %s completed', taskOperation.taskId);
+      if (task.automationMode) {
+        // Recurring tasks are parked back at `scheduled` and re-armed by the
+        // task lifecycle. Verify accepts this run, not the lifetime schedule.
+        log('verify passed → recurring task %s remains scheduled', taskOperation.taskId);
+      } else {
+        // Complete + cascade (checkpoint / sibling rollup / unlock downstream).
+        // The verify → TaskService → aiAgent → agentRuntime completion → verify
+        // cycle is safe statically since every use is call-time (inside this fn).
+        await new TaskService(db, userId, workspaceId).updateStatus({
+          id: taskOperation.taskId,
+          status: 'completed',
+        });
+        log('verify passed → task %s completed', taskOperation.taskId);
+      }
     } else {
       // Two non-pass outcomes, kept distinct so an infra error never reads as a
       // rejected delivery:
