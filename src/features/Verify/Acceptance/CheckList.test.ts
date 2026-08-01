@@ -5,11 +5,13 @@ import {
   checkFilterState,
   focusedCheckStates,
   groupChecks,
+  hasAnnotatableEvidence,
   hasVisualEvidence,
   isCheckWorkActionable,
   shouldGroupChecks,
   userReviewState,
 } from './CheckList';
+import { mergeRejectComments } from './CheckRejectModal';
 
 const check = (id: string, category: string | null, surface: AcceptanceCheck['surface']) =>
   ({ category, id, surface }) as AcceptanceCheck;
@@ -76,6 +78,40 @@ describe('hasVisualEvidence', () => {
         evidence: [{ content: 'details', type: 'markdown' }],
       } as AcceptanceCheck),
     ).toBe(false);
+  });
+});
+
+describe('hasAnnotatableEvidence', () => {
+  it('offers region comments for image evidence', () => {
+    expect(
+      hasAnnotatableEvidence({
+        evidence: [{ fileUrl: 'https://example.com/evidence.png', type: 'screenshot' }],
+      } as AcceptanceCheck),
+    ).toBe(true);
+  });
+
+  it('does not offer region comments for video-only evidence', () => {
+    expect(
+      hasAnnotatableEvidence({
+        evidence: [{ fileUrl: 'https://example.com/evidence.mp4', type: 'video' }],
+      } as AcceptanceCheck),
+    ).toBe(false);
+  });
+});
+
+describe('mergeRejectComments', () => {
+  it('carries the focused-detail draft into the annotation modal', () => {
+    expect(mergeRejectComments('Inline feedback', '')).toBe('Inline feedback');
+  });
+
+  it('preserves both the inline and persisted annotation drafts', () => {
+    expect(mergeRejectComments('Inline feedback', 'Saved annotation feedback')).toBe(
+      'Inline feedback\n\nSaved annotation feedback',
+    );
+  });
+
+  it('does not duplicate the same draft', () => {
+    expect(mergeRejectComments('Same feedback', 'Same feedback')).toBe('Same feedback');
   });
 });
 
