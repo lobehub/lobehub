@@ -5,7 +5,11 @@ import { useCallback } from 'react';
 import { isDesktop } from '@/const/version';
 import { onboardingSelectors } from '@/store/user/selectors';
 import { type UserInitializationState } from '@/types/user';
-import { buildOnboardingRedirectUrl } from '@/utils/onboardingRedirect';
+import {
+  buildOnboardingRedirectUrl,
+  peekOnboardingCallbackUrl,
+  sanitizeRedirectPath,
+} from '@/utils/onboardingRedirect';
 
 const DEFER_REDIRECT_PREFIXES = ['/invite'];
 
@@ -70,6 +74,16 @@ const redirectToOnboarding = (currentPath: string, search: string) => {
   }
 };
 
+/** Where finished users should leave `/onboarding` (null = stay put). */
+export const getFinishedOnboardingBounceTarget = (
+  pathname: string,
+  search: string,
+): string | null => {
+  if (!pathname.startsWith('/onboarding')) return null;
+  const fromQuery = new URLSearchParams(search).get('callbackUrl');
+  return sanitizeRedirectPath(fromQuery || peekOnboardingCallbackUrl(), '/');
+};
+
 export const useDesktopUserStateRedirect = () => {
   // Desktop onboarding redirect is now handled by main process (BrowserManager)
   // No need to check localStorage here
@@ -83,10 +97,17 @@ export const useWebUserStateRedirect = () =>
     // Phone verify is NOT a login gate — only required when claiming trial credits.
     // Call sites should send users to `/verify-phone` at that moment.
 
-    if (!onboardingSelectors.needsOnboarding(state)) return;
-    if (shouldDeferOnboardingRedirect(pathname)) return;
+    if (onboardingSelectors.needsOnboarding(state)) {
+      if (shouldDeferOnboardingRedirect(pathname)) return;
+      redirectToOnboarding(pathname, search);
+      return;
+    }
 
-    redirectToOnboarding(pathname, search);
+    // Phone OTP (and similar flows) always target `/onboarding` for new-user
+    // safety. Finished users who land there should continue to their destination
+    // instead of re-entering the flow.
+    const bounceTarget = getFinishedOnboardingBounceTarget(pathname, search);
+    if (bounceTarget) window.location.replace(bounceTarget);
   }, []);
 
 export const useUserStateRedirect = () => {

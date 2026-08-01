@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest';
-
 import {
   buildPhoneVerifyRedirectUrl,
+  isPhoneLikeDisplayName,
   isValidIranianPhoneNumber,
   normalizeIranianPhoneNumber,
+  resolveOnboardingFullNameSeed,
 } from './phone';
 
 describe('normalizeIranianPhoneNumber', () => {
@@ -31,6 +31,24 @@ describe('isValidIranianPhoneNumber', () => {
   it('mirrors normalize success', () => {
     expect(isValidIranianPhoneNumber('09121234567')).toBe(true);
     expect(isValidIranianPhoneNumber('abc')).toBe(false);
+  });
+});
+
+describe('isPhoneLikeDisplayName / resolveOnboardingFullNameSeed', () => {
+  it('treats IR mobiles as phone-like so the name step stays empty', () => {
+    expect(isPhoneLikeDisplayName('+989121234567')).toBe(true);
+    expect(isPhoneLikeDisplayName('09121234567')).toBe(true);
+    expect(resolveOnboardingFullNameSeed('+989121234567')).toBe('');
+  });
+
+  it('keeps real names', () => {
+    expect(isPhoneLikeDisplayName('Sara')).toBe(false);
+    expect(resolveOnboardingFullNameSeed('Sara')).toBe('Sara');
+  });
+
+  it('treats empty as empty seed', () => {
+    expect(resolveOnboardingFullNameSeed('')).toBe('');
+    expect(resolveOnboardingFullNameSeed(undefined)).toBe('');
   });
 });
 

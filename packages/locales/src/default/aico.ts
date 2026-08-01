@@ -1,4 +1,8 @@
 export default {
+  'nav.org': 'Organization',
+  'nav.platform': 'Platform admin',
+  'nav.wallet': 'Wallet',
+
   'invite.accept': 'Accept invitation',
   'invite.accepted': 'You joined the organization',
   'invite.description': 'Join {{org}} as {{role}}',

@@ -3,9 +3,7 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { type IconProps } from '@lobehub/ui';
 import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
-import { TypewriterEffect } from '@lobehub/ui/awesome';
 import { Button, Switch } from '@lobehub/ui/base-ui';
-import { LoadingDots } from '@lobehub/ui/chat';
 import { Steps } from 'antd';
 import { cssVar } from 'antd-style';
 import { BrainIcon, HeartHandshakeIcon, PencilRulerIcon, ShieldCheck } from 'lucide-react';
@@ -13,6 +11,7 @@ import { memo, useCallback, useRef, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { ProductLogo } from '@/components/Branding';
+import ScriptAwareTypewriter from '@/components/ScriptAwareTypewriter';
 import { PRIVACY_URL, TERMS_URL } from '@/const/url';
 import { useUserStore } from '@/store/user';
 
@@ -21,8 +20,7 @@ interface TelemetryStepProps {
 }
 
 const TelemetryStep = memo<TelemetryStepProps>(({ onNext }) => {
-  const { t, i18n } = useTranslation('onboarding');
-  const locale = i18n.language;
+  const { t } = useTranslation('onboarding');
   const [check, setCheck] = useState(true);
   const [isNavigating, setIsNavigating] = useState(false);
   const isNavigatingRef = useRef(false);
@@ -61,13 +59,10 @@ const TelemetryStep = memo<TelemetryStepProps>(({ onNext }) => {
       <ProductLogo size={64} />
       <Flexbox style={{ marginBottom: 16 }}>
         <Text as={'h1'} fontSize={28} weight={'bold'}>
-          <TypewriterEffect
-            cursorCharacter={<LoadingDots size={28} variant={'pulse'} />}
-            cursorFade={false}
+          <ScriptAwareTypewriter
             deletePauseDuration={1000}
             deletingSpeed={32}
-            hideCursorWhileTyping={'afterTyping'}
-            key={locale}
+            fontSize={28}
             pauseDuration={16_000}
             typingSpeed={64}
             sentences={[

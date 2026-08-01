@@ -172,4 +172,17 @@ describe('defineConfig', () => {
 
     expect(mergeLocalNoProxy('*')).toBe('*');
   });
+
+  it('should leave phone signup temp name empty so onboarding name is blank', async () => {
+    const { phoneNumber } = await import('better-auth/plugins');
+    const { defineConfig } = await import('./define-config');
+
+    defineConfig({ plugins: [] });
+
+    expect(phoneNumber).toHaveBeenCalled();
+    const phoneOpts = vi.mocked(phoneNumber).mock.calls.at(-1)?.[0] as {
+      signUpOnVerification?: { getTempName?: (phone: string) => string };
+    };
+    expect(phoneOpts.signUpOnVerification?.getTempName?.('+989121234567')).toBe('');
+  });
 });

@@ -72,6 +72,12 @@ describe('buildWorkspaceAwarePath', () => {
     // `/:workspaceSlug` mirror), so notifications linking to it must not be
     // prefixed while the recipient sits inside another workspace.
     expect(buildWorkspaceAwarePath('/invite/tok-123', 'acme')).toBe('/invite/tok-123');
+    // Aico personal billing / org admin surfaces (no workspace mirror).
+    expect(buildWorkspaceAwarePath('/wallet', 'acme')).toBe('/wallet');
+    expect(buildWorkspaceAwarePath('/org', 'acme')).toBe('/org');
+    expect(buildWorkspaceAwarePath('/org/org-1/members', 'acme')).toBe('/org/org-1/members');
+    expect(buildWorkspaceAwarePath('/platform', 'acme')).toBe('/platform');
+    expect(buildWorkspaceAwarePath('/panel', 'acme')).toBe('/panel');
   });
 
   it('prefixes settings sub-paths that have a workspace mirror', () => {

@@ -76,8 +76,9 @@ const styles = createStaticStyles(({ css }) => ({
   fullscreenNavigation: css`
     position: fixed;
     z-index: 1001;
+    /* stylelint-disable-next-line liberty/use-logical-spec -- physical left + translateX centers in RTL */
+    left: 50%;
     inset-block-end: 20px;
-    inset-inline-start: 50%;
     transform: translateX(-50%);
 
     padding-block: 12px;

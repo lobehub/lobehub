@@ -8,6 +8,7 @@ import { SignatureIcon, Undo2Icon } from 'lucide-react';
 import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { resolveOnboardingFullNameSeed } from '@/libs/better-auth/phone';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
@@ -23,7 +24,7 @@ const FullNameStep = memo<FullNameStepProps>(({ onBack, onNext }) => {
   const existingFullName = useUserStore(userProfileSelectors.fullName);
   const updateFullName = useUserStore((s) => s.updateFullName);
 
-  const [value, setValue] = useState(existingFullName || '');
+  const [value, setValue] = useState(() => resolveOnboardingFullNameSeed(existingFullName));
   const [isNavigating, setIsNavigating] = useState(false);
   const isNavigatingRef = useRef(false);
 

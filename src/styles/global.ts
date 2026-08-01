@@ -73,6 +73,38 @@ const genGlobalStyle = ({ token }: { prefixCls: string; token: Theme }) => css`
   ) {
     opacity: 1;
   }
+
+  /*
+   * RTL fixes for @lobehub/ui base-ui Switch / Tabs / Segmented.
+   *
+   * Switch: page dir=rtl mirrors the flex track AND multiplies thumb travel by
+   * --switch-dir:-1, so the knob/background animate the wrong way. Keep the
+   * control LTR (standard toggle UX) under RTL documents.
+   *
+   * Tabs / Segmented indicators (e.g. Settings → Appearance → Response Animation):
+   * JS writes physical offsetLeft into --active-tab-left / --active-item-left, but
+   * component CSS binds logical inset-inline-start. Under RTL the selection pill
+   * shifts away from the active option. Force physical \`left\` to match the JS.
+   */
+  html[dir='rtl'] [role='switch'] {
+    --switch-dir: 1;
+
+    direction: ltr;
+  }
+
+  /* stylelint-disable liberty/use-logical-spec -- indicator offsets are physical */
+  html[dir='rtl'] [role='tablist'] > [role='presentation'] {
+    left: var(--active-tab-left) !important;
+    inset-inline-start: unset !important;
+    transition-property: left, inset-block-start, width, height, transform;
+  }
+
+  html[dir='rtl'] [data-orientation] > [aria-hidden='true']:first-of-type {
+    left: var(--active-item-left) !important;
+    inset-inline-start: unset !important;
+    transition-property: left, inset-block-start, width, height;
+  }
+  /* stylelint-enable liberty/use-logical-spec */
 `;
 
 export default genGlobalStyle;

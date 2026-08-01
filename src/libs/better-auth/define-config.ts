@@ -323,7 +323,9 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
             const digits = phone.replaceAll(/\D/g, '');
             return `${digits}@phone.local`;
           },
-          getTempName: (phone) => phone,
+          // Leave fullName empty so onboarding "What's your name?" is blank
+          // (default Better Auth behavior would store the phone number as name).
+          getTempName: () => '',
         },
         // Map Better Auth logical field → users.phone (column already exists)
         schema: {

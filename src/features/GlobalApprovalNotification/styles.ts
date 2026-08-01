@@ -154,8 +154,9 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
 
     position: fixed;
     z-index: 1000;
+    /* stylelint-disable-next-line liberty/use-logical-spec -- physical left + translateX centers in RTL */
+    left: 50%;
     inset-block-start: var(--global-approval-top, 16px);
-    inset-inline-start: 50%;
     transform: translateX(-50%);
 
     display: flex;

@@ -418,9 +418,10 @@ export const useSignIn = () => {
         // Ignore localStorage errors
       }
 
-      // New phone accounts still go through onboarding via the redirect hook;
-      // existing users land on their callback (or onboarding if unfinished).
-      window.location.href = sanitizeRedirectPath(callbackUrl, '/');
+      // Phone OTP is both sign-in and sign-up. Always land on onboarding first so
+      // new users never flash the chat home; finished users are bounced home by
+      // useUserStateRedirect once user state loads.
+      window.location.href = buildOnboardingRedirectUrl(callbackUrl);
     } finally {
       setLoading(false);
     }

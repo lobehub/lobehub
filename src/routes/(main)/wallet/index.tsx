@@ -1,13 +1,18 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-
 import AicoWallet from '@/features/AicoWallet';
+import SettingContainer from '@/features/Setting/SettingContainer';
 
 const WalletPage = () => (
-  <Flexbox padding={24} style={{ maxWidth: 960, width: '100%' }}>
+  <SettingContainer
+    flex={1}
+    maxWidth={960}
+    paddingBlock={'24px 48px'}
+    paddingInline={24}
+    style={{ minHeight: 0 }}
+  >
     <AicoWallet />
-  </Flexbox>
+  </SettingContainer>
 );
 
 export default WalletPage;

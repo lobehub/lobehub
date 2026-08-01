@@ -5,6 +5,8 @@ import { useSignIn } from './useSignIn';
 
 const mockNavigate = vi.hoisted(() => vi.fn());
 const mockSearchParamsGet = vi.hoisted(() => vi.fn().mockReturnValue(null));
+const mockPhoneSendOtp = vi.hoisted(() => vi.fn());
+const mockPhoneVerify = vi.hoisted(() => vi.fn());
 const mockMessageError = vi.hoisted(() => vi.fn());
 const mockMessageSuccess = vi.hoisted(() => vi.fn());
 const mockSignInSocial = vi.hoisted(() => vi.fn());
@@ -39,8 +41,8 @@ vi.mock('@/components/AntdStaticMethods', () => ({
 
 vi.mock('@/libs/better-auth/auth-client', () => ({
   phoneNumber: {
-    sendOtp: vi.fn(),
-    verify: vi.fn(),
+    sendOtp: mockPhoneSendOtp,
+    verify: mockPhoneVerify,
   },
   requestPasswordReset: mockRequestPasswordReset,
   signIn: {
@@ -659,6 +661,48 @@ describe('useSignIn', () => {
       const { result } = renderHook(() => useSignIn());
 
       expect(result.current.oAuthSSOProviders).toEqual(['saml']);
+    });
+  });
+
+  describe('handleVerifyPhoneOtp', () => {
+    it('should redirect to onboarding after successful phone OTP (avoids chat-home flash)', async () => {
+      mockPhoneSendOtp.mockResolvedValue({ error: null });
+      mockPhoneVerify.mockResolvedValue({ error: null });
+
+      const { result } = renderHook(() => useSignIn());
+
+      await act(async () => {
+        await result.current.handleSendPhoneOtp({ phoneNumber: '09121234567' });
+      });
+
+      await act(async () => {
+        await result.current.handleVerifyPhoneOtp({ code: '123456' });
+      });
+
+      expect(mockPhoneVerify).toHaveBeenCalledWith({
+        code: '123456',
+        phoneNumber: '+989121234567',
+      });
+      expect(window.location.href).toBe('/onboarding');
+    });
+
+    it('should thread callbackUrl through the onboarding redirect', async () => {
+      mockSearchParamsGet.mockImplementation((key: string) =>
+        key === 'callbackUrl' ? '/agent/abc' : null,
+      );
+      mockPhoneSendOtp.mockResolvedValue({ error: null });
+      mockPhoneVerify.mockResolvedValue({ error: null });
+
+      const { result } = renderHook(() => useSignIn());
+
+      await act(async () => {
+        await result.current.handleSendPhoneOtp({ phoneNumber: '09121234567' });
+      });
+      await act(async () => {
+        await result.current.handleVerifyPhoneOtp({ code: '123456' });
+      });
+
+      expect(window.location.href).toBe('/onboarding?callbackUrl=%2Fagent%2Fabc');
     });
   });
 });

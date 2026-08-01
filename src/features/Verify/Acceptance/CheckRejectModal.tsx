@@ -117,8 +117,9 @@ const styles = createStaticStyles(({ css }) => ({
   zoomBar: css`
     position: absolute;
     z-index: 5;
+    /* stylelint-disable-next-line liberty/use-logical-spec -- physical left + translateX centers in RTL */
+    left: 50%;
     inset-block-end: 16px;
-    inset-inline-start: 50%;
     transform: translateX(-50%);
 
     display: flex;

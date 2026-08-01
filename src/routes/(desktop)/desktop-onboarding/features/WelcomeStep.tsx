@@ -2,9 +2,7 @@
 
 import { type IconProps } from '@lobehub/ui';
 import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
-import { TypewriterEffect } from '@lobehub/ui/awesome';
 import { Button } from '@lobehub/ui/base-ui';
-import { LoadingDots } from '@lobehub/ui/chat';
 import { Steps } from 'antd';
 import { cssVar } from 'antd-style';
 import { BrainIcon, HeartHandshakeIcon, PencilRulerIcon } from 'lucide-react';
@@ -12,6 +10,7 @@ import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ProductLogo } from '@/components/Branding';
+import ScriptAwareTypewriter from '@/components/ScriptAwareTypewriter';
 import { useUserStore } from '@/store/user';
 
 interface WelcomeStepProps {
@@ -19,8 +18,7 @@ interface WelcomeStepProps {
 }
 
 const WelcomeStep = memo<WelcomeStepProps>(({ onNext }) => {
-  const { t, i18n } = useTranslation('onboarding');
-  const locale = i18n.language;
+  const { t } = useTranslation('onboarding');
   const updateGeneralConfig = useUserStore((s) => s.updateGeneralConfig);
 
   const handleNext = () => {
@@ -51,13 +49,10 @@ const WelcomeStep = memo<WelcomeStepProps>(({ onNext }) => {
       <ProductLogo size={64} />
       <Flexbox align="center" gap={16} justify="center" style={{ marginBottom: 16 }}>
         <Text as={'h1'} fontSize={28} weight={'bold'}>
-          <TypewriterEffect
-            cursorCharacter={<LoadingDots size={28} variant={'pulse'} />}
-            cursorFade={false}
+          <ScriptAwareTypewriter
             deletePauseDuration={1000}
             deletingSpeed={32}
-            hideCursorWhileTyping={'afterTyping'}
-            key={locale}
+            fontSize={28}
             pauseDuration={16_000}
             typingSpeed={64}
             sentences={[

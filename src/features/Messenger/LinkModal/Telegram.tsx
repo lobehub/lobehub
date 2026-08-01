@@ -16,8 +16,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     position: absolute;
     z-index: 1;
-    inset-block-start: 50%;
-    inset-inline-start: 50%;
+    /* stylelint-disable liberty/use-logical-spec -- physical top/left + translate centers in RTL */
+    top: 50%;
+    left: 50%;
+    /* stylelint-enable liberty/use-logical-spec */
     transform: translate(-50%, -50%);
 
     border: 3px solid ${cssVar.colorBgContainer};

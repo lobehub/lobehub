@@ -301,6 +301,46 @@ export const mobileRoutes: RouteObject[] = [
         path: 'downloads',
       },
 
+      // Aico personal billing / org admin (never mirrored under /:workspaceSlug)
+      {
+        element: dynamicElement(() => import('@/routes/(main)/wallet'), 'Mobile > Wallet'),
+        errorElement: <ErrorBoundary />,
+        path: 'wallet',
+      },
+      {
+        element: dynamicElement(() => import('@/routes/(main)/org'), 'Mobile > Org'),
+        errorElement: <ErrorBoundary />,
+        path: 'org',
+      },
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/org/[orgId]/members'),
+          'Mobile > Org > Members',
+        ),
+        errorElement: <ErrorBoundary />,
+        path: 'org/:orgId/members',
+      },
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/invite/[token]'),
+          'Mobile > Invite Accept',
+        ),
+        errorElement: <ErrorBoundary />,
+        path: 'invite/:token',
+      },
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/platform'),
+          'Mobile > Platform Admin',
+        ),
+        errorElement: <ErrorBoundary />,
+        path: 'platform',
+      },
+      {
+        element: redirectElement('/platform'),
+        path: 'panel',
+      },
+
       // Settings routes (personal-only — never mirrored under /:workspaceSlug)
       {
         children: [

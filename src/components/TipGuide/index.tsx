@@ -25,7 +25,8 @@ const styles = createStaticStyles(({ css }) => {
     `,
     tip: css`
       position: absolute;
-      inset-inline-start: 50%;
+      /* stylelint-disable-next-line liberty/use-logical-spec -- physical left + translate centers in RTL */
+      left: 50%;
       transform: translate(-50%);
     `,
   };

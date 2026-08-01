@@ -1,12 +1,10 @@
 import { Avatar, type FlexboxProps } from '@lobehub/ui';
 import { Flexbox, Text } from '@lobehub/ui';
 import { type TypewriterEffectProps } from '@lobehub/ui/awesome';
-import { TypewriterEffect } from '@lobehub/ui/awesome';
-import { LoadingDots } from '@lobehub/ui/chat';
 import { memo } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import { ProductLogo } from '@/components/Branding';
+import ScriptAwareTypewriter from '@/components/ScriptAwareTypewriter';
 
 interface LobeMessageProps extends Omit<FlexboxProps, 'children'> {
   avatar?: string;
@@ -30,8 +28,6 @@ const LobeMessage = memo<LobeMessageProps>(
     fontSize = 24,
     ...rest
   }) => {
-    const { i18n } = useTranslation();
-    const locale = i18n.language;
     const resolvedAlign = align ?? 'flex-start';
     const textCentered = resolvedAlign === 'center';
 
@@ -55,13 +51,10 @@ const LobeMessage = memo<LobeMessageProps>(
           {disableTypewriter ? (
             (sentences[0] ?? '')
           ) : (
-            <TypewriterEffect
-              cursorCharacter={<LoadingDots size={fontSize} variant={'pulse'} />}
-              cursorFade={false}
+            <ScriptAwareTypewriter
               deletePauseDuration={1000}
               deletingSpeed={16}
-              hideCursorWhileTyping={'afterTyping'}
-              key={locale}
+              fontSize={fontSize}
               pauseDuration={16_000}
               sentences={sentences}
               typingSpeed={32}

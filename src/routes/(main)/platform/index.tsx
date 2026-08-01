@@ -1,13 +1,18 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-
 import { PlatformAdminPanel } from '@/features/PlatformAdmin';
+import SettingContainer from '@/features/Setting/SettingContainer';
 
 const PlatformAdminPage = () => (
-  <Flexbox padding={24} style={{ maxWidth: 1100, width: '100%' }}>
+  <SettingContainer
+    flex={1}
+    maxWidth={1100}
+    paddingBlock={'24px 48px'}
+    paddingInline={24}
+    style={{ minHeight: 0 }}
+  >
     <PlatformAdminPanel />
-  </Flexbox>
+  </SettingContainer>
 );
 
 export default PlatformAdminPage;

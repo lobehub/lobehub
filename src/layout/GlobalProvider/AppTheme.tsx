@@ -26,7 +26,10 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 import { GlobalStyle } from '@/styles';
-import { getDocumentDirection } from '@/utils/client/applyDocumentDirection';
+import {
+  applyDocumentDirection,
+  getDocumentDirection,
+} from '@/utils/client/applyDocumentDirection';
 import { setCookie } from '@/utils/client/cookie';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -121,6 +124,10 @@ const AppTheme = memo<AppThemeProps>(
 
     const [uiResources, setUIResources] = useState<UILocaleResources>();
     const [uiLocale, setUILocale] = useState(() => resolveUILocale(language).uiLocale);
+
+    useEffect(() => {
+      applyDocumentDirection(language);
+    }, [language]);
 
     useEffect(() => {
       let mounted = true;
