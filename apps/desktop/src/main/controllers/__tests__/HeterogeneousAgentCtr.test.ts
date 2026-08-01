@@ -12,7 +12,7 @@ import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ip
 import { app as electronAppMock } from 'electron';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import HeterogeneousAgentCtr from '../HeterogeneousAgentCtr';
+import HeterogeneousAgentCtr from '../HeterogeneousAgentImpl';
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof os>('node:os');

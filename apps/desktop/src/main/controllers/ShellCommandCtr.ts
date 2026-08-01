@@ -14,7 +14,7 @@ import {
   runCommand,
   setWindowsShellPreference,
   ShellProcessManager,
-} from '@lobechat/local-file-shell';
+} from '@lobechat/local-file-shell/shell';
 
 import { createLogger } from '@/utils/logger';
 

@@ -3,10 +3,10 @@ import type {
   ShowDesktopNotificationParams,
 } from '@lobechat/electron-client-ipc';
 import { app, Notification } from 'electron';
-import * as electronIs from 'electron-is';
 
 import { getIpcContext } from '@/utils/ipc';
 import { createLogger } from '@/utils/logger';
+import * as electronIs from '@/utils/platform';
 
 import { ControllerModule, IpcMethod } from './index';
 

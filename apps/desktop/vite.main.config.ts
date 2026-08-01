@@ -53,18 +53,24 @@ export default defineConfig(async (env) => {
         ],
         output: {
           assetFileNames: 'chunks/[name]-[hash].[ext]',
-          // Prevent shared deps from being bundled into index.js to avoid side-effect pollution.
-          // Pattern: when a module is imported by both the main bundle (statically) and a
-          // dynamic-import chunk (lazy loader), rolldown places it in main and makes the
-          // chunk back-reference `require("./index.js")`. Electron's main entry isn't in
-          // Node's CJS cache, so that require recompiles `index.js` from scratch — which
-          // re-runs `new App()` at top-level and triggers `protocol.registerSchemesAsPrivileged`
-          // *after* the app is ready → throw.
+          // Keep Electron's side-effectful entry as a tiny bootstrap and put the
+          // application graph in a normal CommonJS chunk. Electron evaluates its entry
+          // outside the usual CJS cache path; when a deferred chunk back-references
+          // `index.js`, the entry can otherwise run again after app.ready. A regular
+          // `main-app` chunk is cached by Node, so lazy features can safely reuse any
+          // module from the eager graph without re-running `new App()`.
           //
-          // Same root cause as the original `debug` regression fixed in #11827. Isolate
-          // each shared module into its own vendor chunk so both ends reference the vendor
-          // chunk instead of back-referencing main.
+          // This is intentionally one architectural boundary rather than a growing list
+          // of shared vendor packages. Forcing Ajv, semver, env schemas, and similar
+          // dependencies into manual chunks de-optimizes tree-shaking and increases the
+          // amount of JavaScript parsed before renderer navigation.
           manualChunks(id: string) {
+            const normalizedId = id.replaceAll('\\', '/').split('?')[0];
+
+            if (/apps\/desktop\/src\/main\/core\/App\.ts$/.test(normalizedId)) {
+              return 'main-app';
+            }
+
             if (id.includes('node_modules/debug')) {
               return 'vendor-debug';
             }
@@ -89,7 +95,6 @@ export default defineConfig(async (env) => {
 
             // Split i18n json resources by namespace (ns), not by locale.
             // Example: ".../resources/locales/zh-CN/common.json?import" -> "locales-common"
-            const normalizedId = id.replaceAll('\\', '/').split('?')[0];
             const match = normalizedId.match(/\/locales\/[^/]+\/([^/]+)\.json$/);
 
             if (match?.[1]) return `locales-${match[1]}`;

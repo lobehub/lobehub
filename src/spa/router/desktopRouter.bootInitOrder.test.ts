@@ -1,7 +1,7 @@
 // Import ORDER is load-bearing and must not be reshuffled: the desktop boot
 // evaluates the navigation facade (`NavigatorRegistrar.desktop` → `appNavigate`
 // → `activeTabNavigate`) before the router config. If any of those statically
-// pull `desktopRouter.config` back in, the config twin runs its top-level
+// pull `desktopRouter.config` back in, the Electron adapter runs its top-level
 // `redirectElement(...)` while `@/utils/router` is still initializing and hits
 // a jsx-runtime TDZ ("Cannot access '_jsxDEV' before initialization"), leaving
 // the renderer white-screened. This test wires that order up so a regression in

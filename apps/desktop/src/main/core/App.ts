@@ -1,16 +1,17 @@
 import os from 'node:os';
 import path from 'node:path';
 
+import type { DesktopBootProfilePayload } from '@lobechat/electron-client-ipc';
 import type { ElectronIPCEventHandler } from '@lobechat/electron-server-ipc';
 import { ElectronIPCServer } from '@lobechat/electron-server-ipc';
-import { app, nativeTheme, protocol } from 'electron';
-import * as electronIs from 'electron-is';
+import { app, ipcMain, nativeTheme, protocol } from 'electron';
 
 import { name } from '@/../../package.json';
 import { binDir, buildDir } from '@/const/dir';
 import { isDev } from '@/const/env';
 import type { IControlModule } from '@/controllers';
 import AuthCtr from '@/controllers/AuthCtr';
+import RemoteServerConfigCtr from '@/controllers/RemoteServerConfigCtr';
 import {
   astSearchBinaries,
   type BinaryCategory,
@@ -25,6 +26,8 @@ import { generateCliWrapper, getCliWrapperDir } from '@/modules/cliEmbedding';
 import { ScreenCaptureManager } from '@/modules/screenCapture/ScreenCaptureManager';
 import type { IServiceModule, ServiceLifecycle, ServiceModule } from '@/services';
 import { createLogger } from '@/utils/logger';
+import * as electronIs from '@/utils/platform';
+import { refreshShellPath } from '@/utils/shellPath';
 
 import { BrowserManager } from './browser/BrowserManager';
 import { backendProxyProtocolManager } from './infrastructure/BackendProxyProtocolManager';
@@ -36,12 +39,13 @@ import { ProtocolManager } from './infrastructure/ProtocolManager';
 import { RendererUrlManager } from './infrastructure/RendererUrlManager';
 import { StaticFileServerManager } from './infrastructure/StaticFileServerManager';
 import { StoreManager } from './infrastructure/StoreManager';
-import { UpdaterManager } from './infrastructure/UpdaterManager';
+import type { UpdaterManager } from './infrastructure/UpdaterManager';
 import { MenuManager } from './ui/MenuManager';
 import { ShortcutManager } from './ui/ShortcutManager';
 import { TrayManager } from './ui/TrayManager';
 
 const logger = createLogger('core:App');
+const mainProcessStartedAt = Date.now() - process.uptime() * 1000;
 
 export type IPCEventMap = Map<string, { controller: any; methodName: string }>;
 export type ShortcutMethodMap = Map<string, () => Promise<void>>;
@@ -56,7 +60,7 @@ export class App {
   menuManager: MenuManager;
   i18n: I18nManager;
   storeManager: StoreManager;
-  updaterManager: UpdaterManager;
+  updaterManager!: UpdaterManager;
   shortcutManager: ShortcutManager;
   trayManager: TrayManager;
   staticFileServerManager: StaticFileServerManager;
@@ -127,6 +131,8 @@ export class App {
 
     logger.debug(`Loading ${controllers.length} controllers`);
     controllers.forEach((controller) => this.addController(controller));
+    this.initializeBootstrapIpc();
+    this.initializeBootProfileIpc();
 
     // load services
     const services: IServiceModule[] = importAll(
@@ -141,7 +147,6 @@ export class App {
     this.i18n = new I18nManager(this);
     this.browserManager = new BrowserManager(this);
     this.menuManager = new MenuManager(this);
-    this.updaterManager = new UpdaterManager(this);
     this.shortcutManager = new ShortcutManager(this);
     this.trayManager = new TrayManager(this);
     this.staticFileServerManager = new StaticFileServerManager(this);
@@ -231,12 +236,72 @@ export class App {
 
     this.initDevBranding();
 
-    //  ==============
-    await this.ipcServer.start();
-    logger.debug('IPC server started');
+    // The CLI socket is independent from renderer navigation. Start it in
+    // parallel instead of placing it on the first-window critical path.
+    const ipcServerPromise = this.ipcServer
+      .start()
+      .then(() => {
+        logger.debug('IPC server started');
+      })
+      .catch((error) => {
+        logger.error('Failed to start IPC server:', error);
+      });
 
-    // Initialize app
+    // Reach Electron ready state, then create the main BrowserWindow before
+    // native menus, local-file services, tray and updater initialization.
     await this.makeAppReady();
+    await this.browserManager.initializeBrowsers();
+    await this.runControllerHooks('afterAppReady');
+
+    const initializeNativeShell = async () => {
+      await Promise.all([
+        this.i18n.init(),
+        this.staticFileServerManager.initialize(),
+        ipcServerPromise,
+        this.getUpdaterManager(),
+      ]);
+      this.menuManager.initialize();
+    };
+
+    // Set global application exit state and lifecycle listeners immediately.
+    this.isQuiting = false;
+
+    app.on('window-all-closed', () => {
+      if (electronIs.windows() || process.platform === 'linux') {
+        logger.info(`All windows closed, quitting application (${process.platform})`);
+        app.quit();
+      }
+    });
+
+    app.on('activate', this.onActivate);
+
+    // Deep links should be actionable as soon as the main window exists.
+    void this.protocolManager.processPendingUrls().catch((error) => {
+      logger.error('Failed to process pending protocol URLs:', error);
+    });
+
+    // Work that can trigger disk, network, native permission, or UI setup is
+    // delayed until Chromium presents its first frame, preventing contention
+    // with bundle parsing and the first React commit.
+    void this.initializeAfterFirstFrame(initializeNativeShell).catch((error) => {
+      logger.error('Post-first-frame initialization failed:', error);
+    });
+
+    logger.info('Application bootstrap scheduled');
+  };
+
+  private initializeAfterFirstFrame = async (initializeNativeShell: () => Promise<void>) => {
+    await this.browserManager.waitForMainWindowFirstFrame();
+
+    // GUI-launched apps do not inherit the user's login-shell PATH. Resolve it
+    // asynchronously after the first frame so shell startup never blocks the
+    // main process -> renderer navigation critical path.
+    void refreshShellPath().catch((error) => {
+      logger.warn('Failed to refresh PATH from the login shell:', error);
+    });
+
+    await Promise.all([initializeNativeShell(), this.runControllerHooks('afterFirstFrame')]);
+    this.shortcutManager.initialize();
 
     // Generate CLI wrapper for terminal usage
     generateCliWrapper().catch((error) => {
@@ -257,40 +322,14 @@ export class App {
       logger.warn('[agent-browser] background ensure failed:', error);
     });
 
-    // Initialize i18n. Note: app.getLocale() must be called after app.whenReady() to get the correct value
-    await this.i18n.init();
-    this.menuManager.initialize();
-
-    // Initialize static file manager
-    await this.staticFileServerManager.initialize();
-
-    // Initialize global shortcuts: globalShortcut must be called after app.whenReady()
-    this.shortcutManager.initialize();
-
-    await this.browserManager.initializeBrowsers();
-
     // Initialize tray manager on all platforms (macOS menu bar, Windows / Linux tray).
     this.trayManager.initializeTrays();
 
     // Initialize updater manager
     await this.updaterManager.initialize();
+    this.screenCaptureManager.prewarmPermissionCheck();
 
-    // Set global application exit state
-    this.isQuiting = false;
-
-    app.on('window-all-closed', () => {
-      if (electronIs.windows() || process.platform === 'linux') {
-        logger.info(`All windows closed, quitting application (${process.platform})`);
-        app.quit();
-      }
-    });
-
-    app.on('activate', this.onActivate);
-
-    // Process any pending protocol URLs after everything is ready
-    await this.protocolManager.processPendingUrls();
-
-    logger.info('Application bootstrap completed');
+    logger.info('Post-first-frame initialization completed');
   };
 
   getService<T>(serviceClass: Class<T>): T {
@@ -300,6 +339,21 @@ export class App {
   getController<T>(controllerClass: Class<T>): T {
     return this.controllers.get(controllerClass);
   }
+
+  private updaterManagerPromise?: Promise<UpdaterManager>;
+
+  getUpdaterManager = async (): Promise<UpdaterManager> => {
+    if (this.updaterManager) return this.updaterManager;
+
+    this.updaterManagerPromise ??= import('./infrastructure/UpdaterManager').then(
+      ({ UpdaterManager }) => {
+        this.updaterManager = new UpdaterManager(this);
+        return this.updaterManager;
+      },
+    );
+
+    return this.updaterManagerPromise;
+  };
 
   /**
    * Handle protocol request by dispatching to registered handlers
@@ -345,16 +399,18 @@ export class App {
    */
   private makeAppReady = async () => {
     logger.debug('Preparing application ready state');
-    this.controllers.forEach((controller) => {
-      if (typeof controller.beforeAppReady === 'function') {
+    await Promise.all(
+      [...this.controllers.values()].map(async (controller) => {
+        if (typeof controller.beforeAppReady !== 'function') return;
+
         try {
-          controller.beforeAppReady();
+          await controller.beforeAppReady();
         } catch (error) {
           logger.error(`Error in controller.beforeAppReady:`, error);
           console.error(`[App] Error in controller.beforeAppReady:`, error);
         }
-      }
-    });
+      }),
+    );
 
     // refs: https://github.com/lobehub/lobe-chat/pull/7883
     // https://github.com/electron/electron/issues/46538#issuecomment-2808806722
@@ -366,19 +422,23 @@ export class App {
     await app.whenReady();
     logger.debug('Application ready');
 
-    this.controllers.forEach((controller) => {
-      if (typeof controller.afterAppReady === 'function') {
-        try {
-          controller.afterAppReady();
-        } catch (error) {
-          logger.error(`Error in controller.afterAppReady:`, error);
-          console.error(`[App] Error in controller.beforeAppReady:`, error);
-        }
-      }
-    });
-    this.screenCaptureManager.prewarmPermissionCheck();
-
     logger.info('Application ready state completed');
+  };
+
+  private runControllerHooks = async (hookName: 'afterAppReady' | 'afterFirstFrame') => {
+    await Promise.all(
+      [...this.controllers.values()].map(async (controller) => {
+        const hook = controller[hookName];
+        if (typeof hook !== 'function') return;
+
+        try {
+          await hook.call(controller);
+        } catch (error) {
+          logger.error(`Error in controller.${hookName}:`, error);
+          console.error(`[App] Error in controller.${hookName}:`, error);
+        }
+      }),
+    );
   };
 
   // ============= helper ============= //
@@ -458,6 +518,46 @@ export class App {
     // instances get distinct sockets instead of the last one hijacking the path.
     const ipcId = process.env.LOBE_IPC_ID || name;
     this.ipcServer = new ElectronIPCServer(ipcId, ipcServerEvents);
+  }
+
+  private initializeBootstrapIpc() {
+    ipcMain.on('desktop:get-bootstrap-identity', (event) => {
+      const controller = this.getController(RemoteServerConfigCtr);
+      event.returnValue = controller?.getDesktopBootstrapIdentity() ?? {
+        isIdentityResolved: false,
+      };
+    });
+  }
+
+  private initializeBootProfileIpc() {
+    ipcMain.on('desktop:boot-profile-ready', (_event, payload: DesktopBootProfilePayload) => {
+      if (process.env.LOBE_DESKTOP_BOOT_PROFILE !== '1') return;
+
+      const values = [
+        payload?.navigationStartedAt,
+        payload?.domContentLoadedMs,
+        payload?.loadingScreenRemovedMs,
+        payload?.firstVisibleFrameMs,
+      ];
+      if (!values.every((value) => Number.isFinite(value) && value >= 0)) return;
+
+      const processToNavigationMs = payload.navigationStartedAt - mainProcessStartedAt;
+      const navigationToDomContentLoadedMs = payload.domContentLoadedMs;
+      const domContentLoadedToLoadingRemovedMs =
+        payload.loadingScreenRemovedMs - payload.domContentLoadedMs;
+      const loadingRemovedToVisibleFrameMs =
+        payload.firstVisibleFrameMs - payload.loadingScreenRemovedMs;
+
+      console.info(
+        `__LOBE_DESKTOP_BOOT_PROFILE__${JSON.stringify({
+          domContentLoadedToLoadingRemovedMs,
+          loadingRemovedToVisibleFrameMs,
+          navigationToDomContentLoadedMs,
+          processToNavigationMs,
+          totalMs: processToNavigationMs + payload.firstVisibleFrameMs,
+        })}`,
+      );
+    });
   }
 
   // Add before-quit handler function

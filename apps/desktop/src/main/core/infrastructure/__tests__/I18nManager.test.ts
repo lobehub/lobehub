@@ -93,8 +93,8 @@ describe('I18nManager', () => {
   });
 
   describe('constructor', () => {
-    it('should create i18next instance', () => {
-      expect(mockCreateInstance).toHaveBeenCalled();
+    it('should defer creating the i18next instance until initialization', () => {
+      expect(mockCreateInstance).not.toHaveBeenCalled();
     });
   });
 

@@ -50,6 +50,10 @@ export class BrowserManager {
     window.focus();
   }
 
+  waitForMainWindowFirstFrame(timeoutMs?: number): Promise<void> {
+    return this.getMainWindow().waitForFirstFrame(timeoutMs);
+  }
+
   broadcastToAllWindows = <T extends MainBroadcastEventKey>(
     event: T,
     data: MainBroadcastParams<T>,

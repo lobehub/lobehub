@@ -31,6 +31,7 @@ export const setupElectronApi = () => {
   }
 
   contextBridge.exposeInMainWorld('electronAPI', {
+    getDesktopBootstrapIdentity: () => ipcRenderer.sendSync('desktop:get-bootstrap-identity'),
     invoke,
     onScreenCaptureSession: (listener: (session: ScreenCaptureSession) => void) => {
       screenCaptureSessionListeners.add(listener);

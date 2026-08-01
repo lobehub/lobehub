@@ -84,6 +84,11 @@ export default class Browser {
   private readonly themeManager: WindowThemeManager;
 
   private _browserWindow?: BrowserWindow;
+  private hasPresentedFirstFrame = false;
+  private resolveFirstFrame!: () => void;
+  private readonly firstFramePromise = new Promise<void>((resolve) => {
+    this.resolveFirstFrame = resolve;
+  });
 
   readonly identifier: string;
   readonly options: BrowserWindowOpts;
@@ -250,14 +255,12 @@ export default class Browser {
   }
 
   private initiateContentLoading(): void {
-    logger.debug(`[${this.identifier}] Initiating placeholder and URL loading sequence.`);
-    this.loadPlaceholder().then(() => {
-      this.loadUrl(this.options.path).catch((e) => {
-        logger.error(
-          `[${this.identifier}] Initial loadUrl error for path '${this.options.path}':`,
-          e,
-        );
-      });
+    logger.debug(`[${this.identifier}] Loading initial renderer URL directly.`);
+    this.loadUrl(this.options.path).catch((e) => {
+      logger.error(
+        `[${this.identifier}] Initial loadUrl error for path '${this.options.path}':`,
+        e,
+      );
     });
   }
 
@@ -330,6 +333,8 @@ export default class Browser {
     logger.debug(`[${this.identifier}] Setting up 'ready-to-show' event listener.`);
     browserWindow.once('ready-to-show', () => {
       logger.debug(`[${this.identifier}] Window 'ready-to-show' event fired.`);
+      this.hasPresentedFirstFrame = true;
+      this.resolveFirstFrame();
       if (this.options.showOnInit) {
         logger.debug(`Showing window ${this.identifier} because showOnInit is true.`);
         this.show();
@@ -513,6 +518,21 @@ export default class Browser {
     logger.debug(`[${this.identifier}] Loading splash screen placeholder`);
     await this._browserWindow!.loadFile(path.join(resourcesDir, 'splash.html'));
     logger.debug(`[${this.identifier}] Splash screen placeholder loaded.`);
+  };
+
+  /** Wait until Chromium has produced a presentable frame, with a safety timeout. */
+  waitForFirstFrame = async (timeoutMs: number = 5000): Promise<void> => {
+    if (this.hasPresentedFirstFrame) return;
+
+    let timeout: NodeJS.Timeout | undefined;
+    await Promise.race([
+      this.firstFramePromise,
+      new Promise<void>((resolve) => {
+        timeout = setTimeout(resolve, timeoutMs);
+        timeout.unref?.();
+      }),
+    ]);
+    if (timeout) clearTimeout(timeout);
   };
 
   loadUrl = async (path: string): Promise<void> => {

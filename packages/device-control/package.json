@@ -5,6 +5,8 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
+    "./project-file-index": "./src/projectFileIndex.ts",
+    "./skill-directory": "./src/skillDirectory.ts",
     "./workspace": "./src/workspace.ts"
   },
   "main": "./src/index.ts",

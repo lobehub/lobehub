@@ -1,3 +1,4 @@
+import { moveLocalFiles, renameLocalFile, writeLocalFile } from '@lobechat/local-file-shell/file';
 import {
   addGitWorktree,
   checkoutGitBranch,
@@ -12,15 +13,12 @@ import {
   listGitBranches,
   listGitRemoteBranches,
   listGitWorktrees,
-  moveLocalFiles,
   pullGitBranch,
   pushGitBranch,
   removeGitWorktree,
   renameGitBranch,
-  renameLocalFile,
   revertGitFile,
-  writeLocalFile,
-} from '@lobechat/local-file-shell';
+} from '@lobechat/local-file-shell/git';
 
 import { getClaudeCodeQuota, type GetClaudeCodeQuotaParams } from './claudeCodeQuota';
 import { prepareSkillDirectory } from './skillDirectory';

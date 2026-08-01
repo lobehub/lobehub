@@ -6,6 +6,7 @@ import type { SetupElectronApiFunction } from './electronApi';
 const mockElectronAPI = { someAPI: 'mock-electron-api' };
 const mockContextBridgeExposeInMainWorld = vi.fn();
 const mockIpcRendererOn = vi.fn();
+const mockIpcRendererSendSync = vi.fn();
 
 vi.mock('electron', () => ({
   contextBridge: {
@@ -13,6 +14,7 @@ vi.mock('electron', () => ({
   },
   ipcRenderer: {
     on: mockIpcRendererOn,
+    sendSync: mockIpcRendererSendSync,
   },
 }));
 
@@ -57,9 +59,21 @@ describe('setupElectronApi', () => {
     expect(call).toBeTruthy();
     expect(call?.[1]).toMatchObject({
       invoke: mockInvoke,
+      getDesktopBootstrapIdentity: expect.any(Function),
       onScreenCaptureSession: expect.any(Function),
       onStreamInvoke: mockOnStreamInvoke,
     });
+  });
+
+  it('reads the bootstrap identity synchronously before renderer initialization', () => {
+    const identity = { isIdentityResolved: true, userId: 'user-1' };
+    mockIpcRendererSendSync.mockReturnValue(identity);
+    setupElectronApi();
+
+    const exposedAPI = mockContextBridgeExposeInMainWorld.mock.calls[1][1];
+
+    expect(exposedAPI.getDesktopBootstrapIdentity()).toEqual(identity);
+    expect(mockIpcRendererSendSync).toHaveBeenCalledWith('desktop:get-bootstrap-identity');
   });
 
   it('should expose lobeEnv with darwinMajorVersion, isMacTahoe, platform and version info', () => {

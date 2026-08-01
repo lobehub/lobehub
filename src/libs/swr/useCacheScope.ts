@@ -85,17 +85,15 @@ export const isAnonymousScope = (scope: string): boolean => scope.startsWith(`${
  *
  * - Web (Better-Auth): `isLoaded` flips when the session request settles, at
  *   which point `user` is populated (or confirmed empty). It is the signal.
- * - Desktop: `DesktopAuthProvider` hardcodes `isLoaded` to `true` on mount
- *   because the server trusts `DESKTOP_USER_ID`, but `userId` only lands when
- *   the async `useInitUserState` fetch resolves. `isUserStateInit` is the
- *   signal there; using `isLoaded` would declare the anonymous boot scope
- *   trustworthy and let that window's writes orphan into the `anon` partition.
+ * - Desktop: preload derives the OIDC subject from safe storage before React
+ *   mounts. `isIdentityResolved` therefore selects the trusted cache partition
+ *   without serializing first paint behind the full `getUserState()` request.
  * - No-auth self-host: `isLoaded` is `true` on mount and `useInitUserState`
  *   never runs, so `userId` stays undefined forever and `anon` is the real,
  *   durable scope. `isDesktop` is false there, so `isLoaded` applies.
  */
 const isIdentityResolved = (s: UserStore): boolean =>
-  isDesktop ? s.isUserStateInit : Boolean(authSelectors.isLoaded(s));
+  isDesktop ? Boolean(s.isIdentityResolved) : Boolean(authSelectors.isLoaded(s));
 
 /**
  * The effective cache scope for the *current* moment.

@@ -236,7 +236,7 @@ describe('Browser', () => {
     } as unknown as AppCore;
 
     browser = new Browser(defaultOptions, mockApp);
-    // The constructor triggers an async placeholder->loadUrl chain; stub it to avoid cross-test flakiness.
+    // The constructor starts the initial renderer navigation asynchronously.
     autoLoadUrlSpy = vi.spyOn(browser, 'loadUrl').mockResolvedValue(undefined as any);
   });
 
@@ -292,6 +292,17 @@ describe('Browser', () => {
 
     it('should create BrowserWindow on construction', () => {
       expect(MockBrowserWindow).toHaveBeenCalled();
+    });
+
+    it('loads the renderer directly without a splash-page navigation', async () => {
+      await vi.waitFor(() => {
+        expect(mockBrowserWindow.loadURL).toHaveBeenCalledWith(
+          'http://localhost:3000/test?lng=en-US',
+        );
+      });
+
+      expect(mockBrowserWindow.loadURL).toHaveBeenCalledTimes(1);
+      expect(mockBrowserWindow.loadFile).not.toHaveBeenCalledWith('/mock/resources/splash.html');
     });
   });
 

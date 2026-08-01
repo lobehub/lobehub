@@ -77,15 +77,15 @@ describe('UpdaterCtr', () => {
   });
 
   describe('quitAndInstallUpdate', () => {
-    it('should call updaterManager.installNow', () => {
-      updaterCtr.quitAndInstallUpdate();
+    it('should call updaterManager.installNow', async () => {
+      await updaterCtr.quitAndInstallUpdate();
       expect(mockInstallNow).toHaveBeenCalled();
     });
   });
 
   describe('installLater', () => {
-    it('should call updaterManager.installLater', () => {
-      updaterCtr.installLater();
+    it('should call updaterManager.installLater', async () => {
+      await updaterCtr.installLater();
       expect(mockInstallLater).toHaveBeenCalled();
     });
   });

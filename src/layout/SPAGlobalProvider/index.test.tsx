@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  */
 import { render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect } from 'react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { setPostRenderReady } from '@/spa/atoms/app';
@@ -263,6 +263,38 @@ describe('SPAGlobalProvider', () => {
     );
 
     expect(await screen.findByTestId('dev-dock')).toBeInTheDocument();
+  });
+
+  it('does not remount application providers when DevDock becomes available', async () => {
+    vi.stubEnv('PROD', true);
+    const mounted = vi.fn();
+    const unmounted = vi.fn();
+    const ProviderProbe = () => {
+      useEffect(() => {
+        mounted();
+        return unmounted;
+      }, []);
+      return <div data-testid="provider-probe" />;
+    };
+
+    const view = render(
+      <DevDockLayout>
+        <ProviderProbe />
+      </DevDockLayout>,
+    );
+    expect(mounted).toHaveBeenCalledOnce();
+
+    canAccessDevDock.mockReturnValue(true);
+    setDevDockUnlocked(true);
+    view.rerender(
+      <DevDockLayout>
+        <ProviderProbe />
+      </DevDockLayout>,
+    );
+
+    expect(await screen.findByTestId('dev-dock')).toBeInTheDocument();
+    expect(mounted).toHaveBeenCalledOnce();
+    expect(unmounted).not.toHaveBeenCalled();
   });
 
   it('mounts global interaction hosts with the application shell', () => {

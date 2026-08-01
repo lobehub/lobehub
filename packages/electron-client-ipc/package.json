@@ -2,6 +2,11 @@
   "name": "@lobechat/electron-client-ipc",
   "version": "1.0.0",
   "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types/index.ts",
+    "./types/heterogeneous-agent": "./src/types/heterogeneousAgent.ts"
+  },
   "main": "src/index.ts",
   "types": "src/index.ts",
   "dependencies": {
