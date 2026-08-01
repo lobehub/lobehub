@@ -59,7 +59,9 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
 
     position: relative;
 
+    display: flex;
     flex-shrink: 0;
+    align-items: center;
 
     height: ${TAB_HEIGHT}px;
     padding-inline: 8px 6px;
@@ -76,19 +78,20 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
       background-color: ${cssVar.colorFillQuaternary};
     }
 
-    /* The close button is persistent only when the tab is wide enough to spare the room;
-       otherwise it appears on the active tab and on hover, and the title fades out
-       underneath it instead of being shortened for a button that is usually absent. */
+    /* Persistent on a full tab, hover-only on a compact one. Narrower tiers carry no
+       close button at all — see TabItem. */
     &[data-tier='full'] [data-tab-close],
-    &[data-active='true'] [data-tab-close],
     &:hover [data-tab-close] {
       opacity: 1;
     }
 
+    /* Reserve the button's footprint whether or not it is currently visible, so the
+       title's ellipsis lands before it. Fading the title out under the button instead
+       leaves half-opaque glyphs inside the gradient, which reads as an overlap. Keeping
+       the reservation constant also stops the text reflowing on hover. */
     &[data-tier='full'] [data-tab-title],
-    &[data-active='true'] [data-tab-title],
-    &:hover [data-tab-title] {
-      mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+    &[data-tier='compact'] [data-tab-title] {
+      padding-inline-end: 22px;
     }
   `,
   pinnedDivider: css`

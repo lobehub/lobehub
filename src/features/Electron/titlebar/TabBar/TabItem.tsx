@@ -6,14 +6,15 @@ import {
   ActionIcon,
   Avatar,
   ContextMenuTrigger,
-  Flexbox,
   type GenericItemType,
   Icon,
   Tooltip,
 } from '@lobehub/ui';
-import { cssVar, cx } from 'antd-style';
+import { cx } from 'antd-style';
 import { X } from 'lucide-react';
-import { memo, useCallback } from 'react';
+import { useMotionValue, useSpring } from 'motion/react';
+import * as m from 'motion/react-m';
+import { memo, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { electronStylish } from '@/styles/electron';
@@ -25,11 +26,25 @@ import { useStyles } from './styles';
 import { buildTabContextMenuItems } from './tabContextMenu';
 import { type TabTier } from './tabLayout';
 
-// dnd-kit puts its drag transition in the inline style, which beats any `transition`
-// declared in a class — so the tab's own width/background transitions have to be
-// composed here or they never run. Width is what makes reactivating a squeezed tab
-// (40px → 150px) read as a resize instead of a jump.
-const TAB_MOTION = `background-color 0.15s ${cssVar.motionEaseInOut}, width 0.18s ${cssVar.motionEaseInOut}`;
+// Width is driven by a spring rather than a CSS transition: tab widths are a layout
+// response — several tabs resize at once whenever one is activated, added or closed —
+// and a spring both settles more naturally and is interruptible, so rapid switching
+// redirects the motion instead of restarting a fixed 180ms ramp.
+//
+// Only `width` is animated here. dnd-kit owns `transform`/`transition` on the same
+// element (and inline style beats any class-level declaration), so background-color
+// keeps its own CSS transition composed alongside dnd-kit's below.
+// restDelta of half a pixel: without it the spring keeps ticking rAF long after the
+// motion is visually over (measured still 0.1px short at 425ms), which costs a frame
+// callback per tab for nothing.
+const WIDTH_SPRING = {
+  damping: 26,
+  mass: 0.4,
+  restDelta: 0.5,
+  restSpeed: 2,
+  stiffness: 380,
+} as const;
+const BACKGROUND_MOTION = 'background-color 0.15s var(--ant-motion-ease-in-out)';
 
 interface TabItemProps {
   index: number;
@@ -70,14 +85,25 @@ const TabItem = memo<TabItemProps>(
     const showUnreadDot = !isRunning && isUnread;
     const pinned = !!tab.pinned;
     const iconOnly = tier === 'icon';
-    // Below the narrow tier the icon is the only thing left to identify a tab by. An
-    // overlay close button there would both hide it and turn a click meant to switch
-    // tabs into a click that closes one.
-    const closable = !pinned && !iconOnly && totalCount > 1;
+    // The close button needs 22px of its own, and below the compact tier the tab cannot
+    // spare them: the title would be cut to a couple of glyphs to make room for a button
+    // that is usually not even shown. Narrower tabs close by middle-click or the context
+    // menu instead. At icon width there is the further problem that the icon is the only
+    // identity signal left, so overlaying it would also change what a click does.
+    const closable = !pinned && totalCount > 1 && (tier === 'full' || tier === 'compact');
 
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
       id,
     });
+
+    // A newly opened tab springs out from zero rather than popping in at full width; the
+    // motion value starts collapsed and is set to the real width on mount.
+    const targetWidth = useMotionValue(0);
+    const springWidth = useSpring(targetWidth, WIDTH_SPRING);
+
+    useEffect(() => {
+      targetWidth.set(width);
+    }, [width, targetWidth]);
 
     const handleClick = useCallback(() => {
       if (!isActive) {
@@ -149,13 +175,9 @@ const TabItem = memo<TabItemProps>(
     );
 
     const face = (
-      <Flexbox
-        horizontal
-        align="center"
+      <m.div
         data-active={isActive ? 'true' : undefined}
         data-tier={tier}
-        gap={iconOnly ? 0 : 6}
-        justify={iconOnly ? 'center' : undefined}
         ref={setNodeRef}
         className={cx(
           electronStylish.nodrag,
@@ -164,9 +186,11 @@ const TabItem = memo<TabItemProps>(
           isDragging && styles.tabDragging,
         )}
         style={{
+          gap: iconOnly ? 0 : 6,
+          justifyContent: iconOnly ? 'center' : undefined,
           transform: CSS.Translate.toString(transform),
-          transition: transition ? `${transition}, ${TAB_MOTION}` : TAB_MOTION,
-          width,
+          transition: transition ? `${transition}, ${BACKGROUND_MOTION}` : BACKGROUND_MOTION,
+          width: springWidth,
           zIndex: isDragging ? 1 : undefined,
         }}
         onAuxClick={handleAuxClick}
@@ -189,7 +213,7 @@ const TabItem = memo<TabItemProps>(
             onClick={handleClose}
           />
         )}
-      </Flexbox>
+      </m.div>
     );
 
     // The Tooltip wraps unconditionally and opts out via an empty title. Swapping between
