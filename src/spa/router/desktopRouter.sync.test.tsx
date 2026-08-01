@@ -23,11 +23,6 @@ const mainAreaVariants: Array<[string, MainAreaFactory]> = [
   ['Electron', createElectronMainAreaChildren],
 ];
 
-const desktopRouteVariants: Array<[string, RouteObject[]]> = [
-  ['Web', webDesktopRoutes],
-  ['Electron', electronDesktopRoutes],
-];
-
 const createMainAreaRoutes = (factory: MainAreaFactory): RouteObject[] => [
   { children: factory(), path: '/' },
 ];
@@ -62,14 +57,15 @@ async function readRouterSources() {
 }
 
 describe('desktop router shared definition', () => {
-  it.each(desktopRouteVariants)('%s matches the nested acceptance check route', (_, routes) => {
-    const matches = matchRoutes(routes, '/acceptance/acceptance-1/check/check-1');
+  it('matches the nested acceptance check route on Web only', () => {
+    const matches = matchRoutes(webDesktopRoutes, '/acceptance/acceptance-1/check/check-1');
 
     expect(matches?.at(-1)?.route.path).toBe(':acceptanceId/check/:checkId');
     expect(matches?.at(-1)?.params).toMatchObject({
       acceptanceId: 'acceptance-1',
       checkId: 'check-1',
     });
+    expect(electronDesktopRoutes.some((route) => route.path === '/acceptance')).toBe(false);
   });
 
   it.each(mainAreaVariants)(
@@ -166,9 +162,17 @@ describe('desktop router shared definition', () => {
       { element: null, path: '*' },
     ]);
     expect(webPaths).toContain('/verify-im');
+    expect(webPaths).toContain('/share/t');
+    expect(webPaths).toContain('/share/page');
+    expect(webPaths).toContain('/verify');
+    expect(webPaths).toContain('/acceptance');
     expect(webPaths).toContain('/onboarding');
     expect(webPaths).not.toContain('/desktop-onboarding');
     expect(electronPaths).not.toContain('/verify-im');
+    expect(electronPaths).not.toContain('/share/t');
+    expect(electronPaths).not.toContain('/share/page');
+    expect(electronPaths).not.toContain('/verify');
+    expect(electronPaths).not.toContain('/acceptance');
     expect(electronPaths).not.toContain('/onboarding');
     expect(electronPaths).toContain('/desktop-onboarding');
   });

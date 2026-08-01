@@ -22,11 +22,6 @@ import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import { agentsRouteMeta } from '@/features/AgentViewAll/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
-import {
-  acceptanceRouteMeta,
-  verifyReportsRouteMeta,
-  verifyRouteMeta,
-} from '@/features/Verify/routeMeta';
 import { workspaceHomeRouteMeta } from '@/features/Workspace/routeMeta';
 import {
   agentChannelRouteMeta,
@@ -38,8 +33,6 @@ import {
 } from '@/routes/(main)/agent/features/routeMeta';
 import { groupProfileRouteMeta, groupRouteMeta } from '@/routes/(main)/group/features/routeMeta';
 import { settingsRouteMeta } from '@/routes/(main)/settings/features/routeMeta';
-import { sharePageRouteMeta } from '@/routes/share/page/[id]/routeMeta';
-import { shareTopicRouteMeta } from '@/routes/share/t/[id]/routeMeta';
 import { loadRouteWithBuiltinToolSurfaces } from '@/spa/initialize/toolSurfaces';
 import { routeMeta } from '@/spa/router/routeMeta';
 import { SettingsTabs } from '@/store/global/initialState';
@@ -1149,94 +1142,6 @@ export const createSharedDesktopRoutes = ({
     path: '/',
   },
   ...BusinessDesktopRoutesWithoutMainLayout,
-
-  // Share topic route (outside main layout)
-  {
-    children: [
-      {
-        element: dynamicElement(
-          () => loadRouteWithBuiltinToolSurfaces(() => import('@/routes/share/t/[id]')),
-          'Desktop > Share > Topic',
-        ),
-        handle: { meta: shareTopicRouteMeta },
-        path: ':id',
-      },
-    ],
-    element: dynamicElement(
-      () => import('@/routes/share/t/[id]/_layout'),
-      'Desktop > Share > Topic > Layout',
-    ),
-    path: '/share/t',
-  },
-
-  // Share page route (outside main layout)
-  {
-    children: [
-      {
-        element: dynamicElement(() => import('@/routes/share/page/[id]'), 'Desktop > Share > Page'),
-        handle: { meta: sharePageRouteMeta },
-        path: ':id',
-      },
-    ],
-    path: '/share/page',
-  },
-
   ...platformRoutes,
-
-  // Verify report workspace — standalone master-detail (outside main layout)
-  {
-    children: [
-      {
-        element: dynamicElement(
-          () => import('@/routes/(main)/verify/empty'),
-          'Desktop > Verify Empty',
-        ),
-        index: true,
-      },
-      {
-        element: dynamicElement(() => import('@/routes/verify/[runId]'), 'Desktop > VerifyReport'),
-        handle: { meta: verifyRouteMeta },
-        path: ':runId',
-      },
-    ],
-    element: dynamicElement(() => import('@/routes/(main)/verify'), 'Desktop > Verify'),
-    errorElement: <ErrorBoundary />,
-    handle: { meta: verifyReportsRouteMeta },
-    path: '/verify',
-  },
-
-  // Subject-level delivery acceptance — the verify workspace's twin: a
-  // master-detail with the acceptance list on the left.
-  {
-    children: [
-      {
-        element: dynamicElement(
-          () => import('@/routes/(main)/acceptance/empty'),
-          'Desktop > Acceptance Empty',
-        ),
-        index: true,
-      },
-      {
-        element: dynamicElement(
-          () => import('@/routes/acceptance/[acceptanceId]'),
-          'Desktop > AcceptanceReport',
-        ),
-        handle: { meta: acceptanceRouteMeta },
-        path: ':acceptanceId',
-      },
-      {
-        element: dynamicElement(
-          () => import('@/routes/acceptance/[acceptanceId]'),
-          'Desktop > AcceptanceCheck',
-        ),
-        handle: { meta: acceptanceRouteMeta },
-        path: ':acceptanceId/check/:checkId',
-      },
-    ],
-    element: dynamicElement(() => import('@/routes/(main)/acceptance'), 'Desktop > Acceptance'),
-    errorElement: <ErrorBoundary />,
-    handle: { meta: acceptanceRouteMeta },
-    path: '/acceptance',
-  },
   onboardingRoute,
 ];
