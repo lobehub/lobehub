@@ -22,6 +22,10 @@ import { chatPortalSelectors } from '@/store/chat/selectors';
 const styles = createStaticStyles(({ css }) => ({
   body: css`
     overflow-y: auto;
+    flex: 1;
+
+    height: 100%;
+    min-height: 0;
     padding-block: 0 24px;
     padding-inline: 24px;
   `,

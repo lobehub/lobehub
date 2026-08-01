@@ -1212,6 +1212,19 @@ const CheckRow = memo<{
             !activeReview &&
             (detailMode ? (
               <Flexbox gap={10} style={{ marginBlockStart: 6 }}>
+                {hasVisualEvidence(check) && (
+                  <Button
+                    icon={<Icon icon={Images} />}
+                    style={{ alignSelf: 'flex-start' }}
+                    type={'text'}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openReject();
+                    }}
+                  >
+                    {t('acceptance.review.annotate')}
+                  </Button>
+                )}
                 <TextArea
                   autoSize={{ maxRows: 8, minRows: 3 }}
                   placeholder={t('acceptance.review.detailPlaceholder')}

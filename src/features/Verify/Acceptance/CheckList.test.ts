@@ -5,6 +5,7 @@ import {
   checkFilterState,
   focusedCheckStates,
   groupChecks,
+  hasVisualEvidence,
   isCheckWorkActionable,
   shouldGroupChecks,
   userReviewState,
@@ -57,6 +58,24 @@ describe('shouldGroupChecks', () => {
 
   it('groups checklists only after they exceed 10 items', () => {
     expect(shouldGroupChecks(11)).toBe(true);
+  });
+});
+
+describe('hasVisualEvidence', () => {
+  it('offers region comments for file-backed screenshots in focused check details', () => {
+    expect(
+      hasVisualEvidence({
+        evidence: [{ fileUrl: 'https://example.com/evidence.png', type: 'screenshot' }],
+      } as AcceptanceCheck),
+    ).toBe(true);
+  });
+
+  it('does not offer region comments when the check has no annotatable evidence', () => {
+    expect(
+      hasVisualEvidence({
+        evidence: [{ content: 'details', type: 'markdown' }],
+      } as AcceptanceCheck),
+    ).toBe(false);
   });
 });
 
