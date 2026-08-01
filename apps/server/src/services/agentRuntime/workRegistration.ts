@@ -38,10 +38,11 @@ interface FileProvenance {
 
 export interface RegisterWorksForOperationParams {
   /**
-   * The round's final assistant message. When the shell Work scan registers a
-   * Work, the anchor stamp (`metadata.work.rootOperationId`) is merged onto this
-   * message so the Works chip renders — heterogeneous runs never pass
-   * `callLlmFinalizer`, which stamps the anchor for in-process runs.
+   * The round's final assistant message. When this completion registers any
+   * Work (shell scan or file scan), the anchor stamp
+   * (`metadata.work.rootOperationId`) is merged onto this message so the Works
+   * card renders — see {@link stampWorkAnchor} for why the completion scan, not
+   * `callLlmFinalizer`, is the reliable place to stamp it.
    */
   assistantMessageId?: string | null;
   /**
@@ -438,6 +439,75 @@ const collectOperationRecords = async (
  * whole-function rejection so Work registration can never affect operation
  * completion.
  */
+/**
+ * Stamp the Work display anchor (`metadata.work.rootOperationId`) onto the
+ * round's final assistant message so the Works registered by this completion
+ * render under it.
+ *
+ * The completion scan — not `callLlmFinalizer` — is the reliable stamping site
+ * for BOTH scan families:
+ * - Heterogeneous shell runs (codex / claude-code / device) never pass
+ *   `callLlmFinalizer` at all.
+ * - In-process gateway runs DO pass it, but its `buildWorkAnchor` reads
+ *   `state.messages`, which the per-step DB rehydrate rebuilds in the
+ *   conversation-flow FOLDED shape (tool rows collapsed into `assistantGroup`
+ *   nodes, no `tool_calls`) since #16112 — so its prior-tool-interaction scan
+ *   finds nothing and the finalizer never stamps.
+ *
+ * `messageModel.update` deep-merges metadata, so re-stamping an anchor that
+ * was already written (same rootOperationId) is a no-op.
+ *
+ * Returns `true` when the anchor was stamped. The caller counts a `false`
+ * into `failed` so the completion backstop withholds its idempotency marker
+ * and retries the (idempotent) scan + stamp next round.
+ */
+const stampWorkAnchor = async ({
+  assistantMessageId,
+  fallbackToolMessageId,
+  messageModel,
+  operationId,
+}: {
+  assistantMessageId?: string | null;
+  fallbackToolMessageId?: string | null;
+  messageModel: MessageModel;
+  operationId: string;
+}): Promise<boolean> => {
+  let anchorMessageId = assistantMessageId ?? null;
+  if (!anchorMessageId && fallbackToolMessageId) {
+    // Runs can finish without a final-assistant pointer (hetero SINGLE-STEP
+    // runs: `heteroFinish` finds neither `heteroCurrentMsgId` nor
+    // `runningOperation.assistantMessageId`). Fall back to the assistant that
+    // OWNS the last registered tool call — every tool message keeps
+    // `parentId` = its owning assistant — so the Work still renders in the
+    // round instead of being persisted invisibly.
+    try {
+      const toolMessage = await messageModel.findById(fallbackToolMessageId);
+      anchorMessageId = toolMessage?.parentId ?? null;
+    } catch (error) {
+      log('[%s] Failed to resolve fallback work anchor (non-fatal): %O', operationId, error);
+    }
+  }
+
+  if (!anchorMessageId) {
+    // No resolvable anchor at all: the Work row exists but nothing would ever
+    // render it.
+    log('[%s] No anchor message available for registered Works', operationId);
+    return false;
+  }
+
+  // `messageModel.update` reports DB errors / no-matched-row as
+  // `{ success: false }` instead of throwing — a failed stamp must count as a
+  // failure so the scan is retried.
+  const stamp = await messageModel.update(anchorMessageId, {
+    metadata: { work: { rootOperationId: operationId } },
+  });
+  if (!stamp.success) {
+    log('[%s] Failed to stamp work anchor on %s', operationId, anchorMessageId);
+    return false;
+  }
+  return true;
+};
+
 export const registerWorksForOperation = async (
   params: RegisterWorksForOperationParams,
 ): Promise<WorksRegistrationOutcome> => {
@@ -571,47 +641,19 @@ export const registerWorksForOperation = async (
     workModel,
   });
 
-  // Heterogeneous runs never pass `callLlmFinalizer`, the executor that stamps
-  // the Work display anchor (`metadata.work.rootOperationId`) for in-process
-  // runs — without the stamp a registered Work never renders below the message.
-  // `messageModel.update` deep-merges metadata, so re-stamping an anchor the
-  // finalizer already wrote (same rootOperationId) is a no-op.
+  // Stamp the display anchor as soon as the shell scan registered anything;
+  // the file scan below stamps too (at most once per completion). See
+  // `stampWorkAnchor` for why the completion scan — not `callLlmFinalizer` —
+  // is the reliable stamping site for BOTH scan families.
+  let anchorStamped = false;
   if (shellOutcome.registered > 0) {
-    let anchorMessageId = params.assistantMessageId ?? null;
-    if (!anchorMessageId && shellOutcome.anchorCandidateMessageId) {
-      // Hetero SINGLE-STEP runs can finish without a final-assistant pointer
-      // (`heteroFinish` finds neither `heteroCurrentMsgId` nor
-      // `runningOperation.assistantMessageId`). Fall back to the assistant
-      // that OWNS the last registered shell tool call — every tool message
-      // keeps `parentId` = its owning assistant — so the Work still renders
-      // in the round instead of being persisted invisibly.
-      try {
-        const toolMessage = await messageModel.findById(shellOutcome.anchorCandidateMessageId);
-        anchorMessageId = toolMessage?.parentId ?? null;
-      } catch (error) {
-        log('[%s] Failed to resolve fallback work anchor (non-fatal): %O', operationId, error);
-      }
-    }
-
-    if (anchorMessageId) {
-      // `messageModel.update` reports DB errors / no-matched-row as
-      // `{ success: false }` instead of throwing — a failed stamp must count as
-      // a failure so the completion backstop withholds its idempotency marker
-      // and retries the (idempotent) scan + stamp next round.
-      const stamp = await messageModel.update(anchorMessageId, {
-        metadata: { work: { rootOperationId: operationId } },
-      });
-      if (!stamp.success) {
-        shellOutcome.failed += 1;
-        log('[%s] Failed to stamp work anchor on %s', operationId, anchorMessageId);
-      }
-    } else {
-      // No resolvable anchor at all: the Work row exists but nothing would
-      // ever render it. Withhold the completion marker so a later completion
-      // retries the (idempotent) scan + stamp.
-      shellOutcome.failed += 1;
-      log('[%s] No anchor message available for registered shell Works', operationId);
-    }
+    anchorStamped = await stampWorkAnchor({
+      assistantMessageId: params.assistantMessageId,
+      fallbackToolMessageId: shellOutcome.anchorCandidateMessageId,
+      messageModel,
+      operationId,
+    });
+    if (!anchorStamped) shellOutcome.failed += 1;
   }
 
   const scannedEntities = scanOperationFileEdits(records).filter(
@@ -814,8 +856,35 @@ export const registerWorksForOperation = async (
   const failed = settled.filter(
     (result) => result.status === 'rejected' || result.value === 'failed',
   ).length;
+
+  // File Works need the anchor stamp exactly like shell Works (the finalizer
+  // never stamps on the gateway runtime — see `stampWorkAnchor`). Stamp when
+  // any file version is in place this round, including idempotent probe skips:
+  // a retry round typically re-runs BECAUSE a previous stamp failed, so the
+  // already-registered version still needs its anchor. Skipped when the shell
+  // branch above already stamped this completion (same value, deep-merge no-op
+  // anyway — just avoids a redundant write).
+  let anchorFailed = 0;
+  const registeredFiles = settled.filter(
+    (result) => result.status === 'fulfilled' && result.value === 'ok',
+  ).length;
+  if (registeredFiles > 0 && !anchorStamped) {
+    // Fallback: the tool message that last touched the last candidate file —
+    // its `parentId` is the owning assistant, mirroring the shell fallback.
+    const fallbackToolMessageId = resolveProvenance(
+      entities.at(-1)?.sourceToolCallIds ?? [],
+    )?.messageId;
+    const stamped = await stampWorkAnchor({
+      assistantMessageId: params.assistantMessageId,
+      fallbackToolMessageId,
+      messageModel,
+      operationId,
+    });
+    if (!stamped) anchorFailed = 1;
+  }
+
   return {
     attempted: entities.length + shellOutcome.attempted,
-    failed: failed + shellOutcome.failed,
+    failed: failed + shellOutcome.failed + anchorFailed,
   };
 };

@@ -540,9 +540,13 @@ export class CompletionLifecycle {
     if (state?.metadata?._fileWorksRegistered) return;
     try {
       const outcome = await registerWorksForOperation({
-        // The round's final assistant message — the shell github scan stamps the
-        // Work display anchor onto it for hetero runs (see registerWorksForOperation).
-        assistantMessageId: state?.metadata?.assistantMessageId ?? null,
+        // The round's final assistant message — the scan stamps the Work display
+        // anchor onto it (see registerWorksForOperation). Operation metadata only
+        // carries `assistantMessageId` on the hetero/client paths; the server
+        // in-process path resolves it from the terminal state's final assistant
+        // turn instead.
+        assistantMessageId:
+          state?.metadata?.assistantMessageId ?? resolveFinalAssistantMessageId(state),
         // Live terminal totals: on the pre-snapshot path the op row's cost/usage
         // columns are not persisted yet (recordCompletion runs later), so the
         // registration must not rely on reading them back from the DB.
@@ -971,6 +975,24 @@ const extractTextFromMessageContent = (content: unknown): string | undefined => 
  * the persisted leaf turns rather than that virtual wrapper, otherwise they
  * lose both the final text and the message id used by DB recovery.
  */
+/**
+ * Resolve the persisted id of the round's FINAL assistant turn from terminal
+ * state, unfolding display-only groups first (the per-step DB rehydrate stores
+ * `state.messages` in the conversation-flow folded shape). Used to anchor the
+ * Work display stamp when operation metadata carries no `assistantMessageId`
+ * (the server in-process path).
+ */
+const resolveFinalAssistantMessageId = (state: any): string | null => {
+  const messages = normalizeCompletionMessages(
+    Array.isArray(state?.messages) ? state.messages : [],
+  );
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const message = messages[i];
+    if (message.role === 'assistant' && typeof message.id === 'string') return message.id;
+  }
+  return null;
+};
+
 const normalizeCompletionMessages = (messages: unknown[]): Record<PropertyKey, unknown>[] => {
   const normalized: Record<PropertyKey, unknown>[] = [];
 

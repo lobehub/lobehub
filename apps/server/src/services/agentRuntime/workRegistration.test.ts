@@ -145,7 +145,10 @@ beforeEach(() => {
   mockFindFileVersionByToolCall.mockResolvedValue(null);
   mockRegisterShellGithubResult.mockResolvedValue({ id: 'work-github' });
   mockUpdateMessage.mockResolvedValue({ success: true });
-  mockFindMessageById.mockResolvedValue(undefined);
+  // Default: the anchor fallback (tool message → owning assistant) resolves, so
+  // registrations without an explicit assistantMessageId still stamp cleanly.
+  // Tests exercising the missing-anchor path override this to undefined.
+  mockFindMessageById.mockResolvedValue({ id: 'tool-msg', parentId: 'msg-owner-assistant' });
   mockCreateSandboxService.mockReturnValue({ exportAndUploadFile: mockExportAndUploadFile });
   mockRegisterFile.mockImplementation(async (params: any) => ({
     currentVersionId: `ver-${params.filePath}`,
@@ -306,6 +309,67 @@ describe('registerWorksForOperation', () => {
 
     expect(mockExportAndUploadFile).not.toHaveBeenCalled();
     expect(mockRegisterFile).not.toHaveBeenCalled();
+    expect(outcome).toEqual({ attempted: 1, failed: 0 });
+  });
+
+  it('stamps the work anchor on the final assistant message when file Works register', async () => {
+    // The gateway runtime's per-step rehydrate folds tool rows out of
+    // state.messages, so callLlmFinalizer's buildWorkAnchor never stamps — the
+    // completion scan is the reliable stamping site for file Works too.
+    mockListPlugins.mockResolvedValue([writeRow('a', '/mnt/data/deck.pptx')]);
+
+    const outcome = await registerWorksForOperation({
+      ...baseParams,
+      assistantMessageId: 'msg-final-assistant',
+    });
+
+    expect(mockUpdateMessage).toHaveBeenCalledWith('msg-final-assistant', {
+      metadata: { work: { rootOperationId: 'op-1' } },
+    });
+    expect(outcome).toEqual({ attempted: 1, failed: 0 });
+  });
+
+  it('anchors file Works on the owning assistant when no assistantMessageId is available', async () => {
+    mockFindMessageById.mockResolvedValue({ id: 'a', parentId: 'msg-owner-assistant' });
+    mockListPlugins.mockResolvedValue([writeRow('a', '/mnt/data/deck.pptx')]);
+
+    const outcome = await registerWorksForOperation(baseParams);
+
+    // Fallback walks provenance: the last edit's tool message → its parent.
+    expect(mockFindMessageById).toHaveBeenCalledWith('a');
+    expect(mockUpdateMessage).toHaveBeenCalledWith('msg-owner-assistant', {
+      metadata: { work: { rootOperationId: 'op-1' } },
+    });
+    expect(outcome).toEqual({ attempted: 1, failed: 0 });
+  });
+
+  it('counts a failed file-work anchor stamp so the completion backstop retries', async () => {
+    mockUpdateMessage.mockResolvedValue({ success: false });
+    mockListPlugins.mockResolvedValue([writeRow('a', '/mnt/data/deck.pptx')]);
+
+    const outcome = await registerWorksForOperation({
+      ...baseParams,
+      assistantMessageId: 'msg-final-assistant',
+    });
+
+    // The version registered, but nothing would render it — withhold the marker.
+    expect(outcome).toEqual({ attempted: 1, failed: 1 });
+  });
+
+  it('re-stamps the anchor on a retry round whose versions all short-circuit', async () => {
+    // A retry typically re-runs BECAUSE the previous stamp failed: versions are
+    // already registered (probe skip), yet the anchor must still be written.
+    mockListPlugins.mockResolvedValue([writeRow('a', '/mnt/data/deck.pptx')]);
+    mockFindFileVersionByToolCall.mockResolvedValue({ id: 'ver-existing' });
+
+    const outcome = await registerWorksForOperation({
+      ...baseParams,
+      assistantMessageId: 'msg-final-assistant',
+    });
+
+    expect(mockUpdateMessage).toHaveBeenCalledWith('msg-final-assistant', {
+      metadata: { work: { rootOperationId: 'op-1' } },
+    });
     expect(outcome).toEqual({ attempted: 1, failed: 0 });
   });
 

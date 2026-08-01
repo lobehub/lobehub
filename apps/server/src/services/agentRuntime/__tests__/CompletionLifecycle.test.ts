@@ -1085,6 +1085,49 @@ describe('CompletionLifecycle.registerFileWorks', () => {
     expect(mockRegister).toHaveBeenCalledTimes(1);
   });
 
+  it('resolves the anchor from the terminal final assistant turn on the server path', async () => {
+    // Server in-process runs carry no metadata.assistantMessageId — the anchor
+    // must come from the final assistant turn in state, unfolding the
+    // conversation-flow grouped shape the per-step DB rehydrate stores.
+    mockRegister.mockClear();
+    mockRegister.mockResolvedValue({ attempted: 1, failed: 0 });
+    const lifecycle = buildLifecycle();
+    const state = {
+      messages: [
+        { content: 'q', id: 'msg-user', role: 'user' },
+        {
+          children: [{ content: '', id: 'msg-mid', role: 'assistant', tools: [] }],
+          id: 'msg-group',
+          role: 'assistantGroup',
+        },
+        { content: 'done', id: 'msg-final', role: 'assistant' },
+      ],
+      metadata: {},
+    } as any;
+
+    await lifecycle.registerFileWorks('op-1', state);
+
+    expect(mockRegister).toHaveBeenCalledWith(
+      expect.objectContaining({ assistantMessageId: 'msg-final' }),
+    );
+  });
+
+  it('prefers metadata.assistantMessageId over the state-resolved anchor', async () => {
+    mockRegister.mockClear();
+    mockRegister.mockResolvedValue({ attempted: 1, failed: 0 });
+    const lifecycle = buildLifecycle();
+    const state = {
+      messages: [{ content: 'done', id: 'msg-final', role: 'assistant' }],
+      metadata: { assistantMessageId: 'msg-from-metadata' },
+    } as any;
+
+    await lifecycle.registerFileWorks('op-1', state);
+
+    expect(mockRegister).toHaveBeenCalledWith(
+      expect.objectContaining({ assistantMessageId: 'msg-from-metadata' }),
+    );
+  });
+
   it('never throws and leaves the marker unset on failure so a later call retries', async () => {
     mockRegister.mockClear();
     mockRegister.mockRejectedValueOnce(new Error('sandbox export failed'));
