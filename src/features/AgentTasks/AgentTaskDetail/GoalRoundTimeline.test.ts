@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatGoalDuration } from './GoalRoundTimeline';
+import { formatGoalDuration, shouldShowGoalRoundTimeline } from './GoalRoundTimeline';
 
 describe('formatGoalDuration', () => {
   it('uses minutes before a full hour', () => {
@@ -15,5 +15,13 @@ describe('formatGoalDuration', () => {
 
   it('switches to days after 24 hours', () => {
     expect(formatGoalDuration(34 * 3_600_000)).toBe('1.4d');
+  });
+});
+
+describe('shouldShowGoalRoundTimeline', () => {
+  it('hides progress until there is more than one round', () => {
+    expect(shouldShowGoalRoundTimeline(0)).toBe(false);
+    expect(shouldShowGoalRoundTimeline(1)).toBe(false);
+    expect(shouldShowGoalRoundTimeline(2)).toBe(true);
   });
 });

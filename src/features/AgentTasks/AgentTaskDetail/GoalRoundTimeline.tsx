@@ -49,9 +49,11 @@ export const formatGoalDuration = (milliseconds: number) => {
   return `${Number((hours / 24).toFixed(1))}d`;
 };
 
+export const shouldShowGoalRoundTimeline = (roundCount: number) => roundCount > 1;
+
 const GoalRoundTimeline = memo<{ rounds?: GoalRound[] }>(({ rounds = [] }) => {
   const { t } = useTranslation('chat');
-  if (rounds.length === 0) return null;
+  if (!shouldShowGoalRoundTimeline(rounds.length)) return null;
 
   const start = new Date(rounds[0].run.createdAt).getTime();
   const elapsed = Math.max(1, Date.now() - start);
