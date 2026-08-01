@@ -62,6 +62,46 @@ export type {
 const log = debug('lobe-server:agent-tools-engine');
 
 /**
+ * A manifest is usable by ToolsEngine only if it has an `api` array.
+ * ToolsEngine.convertManifestsToTools calls `manifest.api.map(...)`
+ * unconditionally, so any entry with `api` missing / non-array crashes the
+ * whole tools build — and with it every execAgent call of the affected user.
+ * Installed-plugin manifests come straight from a DB jsonb column with no
+ * schema validation, so guard defensively at the merge point. Mirrors the
+ * frontend `dropInvalidManifests` in `src/helpers/toolEngineering`.
+ */
+const isValidToolManifest = (m: LobeToolManifest | undefined): m is LobeToolManifest =>
+  !!m && typeof m === 'object' && Array.isArray((m as LobeToolManifest).api);
+
+const dropInvalidManifests = (
+  manifests: (LobeToolManifest | undefined)[],
+  source: string,
+): LobeToolManifest[] => {
+  const valid: LobeToolManifest[] = [];
+  const dropped: Array<{ identifier?: string; reason: string }> = [];
+
+  for (const m of manifests) {
+    if (isValidToolManifest(m)) {
+      valid.push(m);
+    } else if (m) {
+      dropped.push({
+        identifier: (m as { identifier?: string }).identifier,
+        reason: 'missing `api` field (expected array)',
+      });
+    }
+  }
+
+  if (dropped.length > 0) {
+    console.warn(
+      `[AgentToolsEngine] Dropped ${dropped.length} invalid manifest(s) from ${source}:`,
+      dropped,
+    );
+  }
+
+  return valid;
+};
+
+/**
  * Initialize ToolsEngine with server-side context
  *
  * This is the server-side equivalent of frontend's `createToolsEngine`
@@ -84,9 +124,10 @@ export const createServerToolsEngine = (
   } = config;
 
   // Get plugin manifests from installed plugins (from database)
-  const pluginManifests = context.installedPlugins
-    .map((plugin) => plugin.manifest as LobeToolManifest)
-    .filter(Boolean);
+  const pluginManifests = dropInvalidManifests(
+    context.installedPlugins.map((plugin) => plugin.manifest as LobeToolManifest | undefined),
+    'installedPlugins',
+  );
 
   // Get builtin tool manifests from the (possibly pre-filtered) list. The
   // filter is one half of the hard wall keeping device tools out of an
@@ -116,7 +157,11 @@ export const createServerToolsEngine = (
   // Skill/Composio manifest claiming `lobe-remote-device` would otherwise
   // slip through `buildAllowedBuiltinTools` (which only touches the
   // builtin source).
-  const combinedManifests = [...pluginManifests, ...builtinManifests, ...additionalManifests];
+  const combinedManifests = [
+    ...pluginManifests,
+    ...builtinManifests,
+    ...dropInvalidManifests(additionalManifests, 'additionalManifests'),
+  ];
   const allManifests = excludeIdentifiers
     ? combinedManifests.filter((m) => !excludeIdentifiers.has(m.identifier))
     : combinedManifests;
