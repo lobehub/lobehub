@@ -1,15 +1,20 @@
 'use client';
 
 import { Block, Flexbox, Tag, Text } from '@lobehub/ui';
-import { Button, Select, Switch, Tabs } from '@lobehub/ui/base-ui';
+import { Button, Select, Switch, Tabs, toast } from '@lobehub/ui/base-ui';
 import { Form, Input, InputNumber, Table } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { Building2Icon, CircleDollarSignIcon, ShieldIcon, WalletIcon } from 'lucide-react';
+import {
+  Building2Icon,
+  CircleDollarSignIcon,
+  RefreshCwIcon,
+  ShieldIcon,
+  WalletIcon,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { toastAicoError } from '@/business/client/resolveAicoErrorMessage';
-import { message } from '@/components/AntdStaticMethods';
 import StatisticCard from '@/components/StatisticCard';
 import { useClientDataSWR } from '@/libs/swr';
 import { lambdaClient } from '@/libs/trpc/client';
@@ -69,6 +74,10 @@ export const PlatformAdminPanel = () => {
   );
   const { data: userWallets } = useClientDataSWR('aico-user-wallets', () =>
     lambdaClient.platformAdmin.listUserWallets.query(),
+  );
+  const { data: modelSync, mutate: mutateModelSync } = useClientDataSWR(
+    'aico-openrouter-model-sync',
+    () => lambdaClient.platformAdmin.getOpenRouterModelSyncStatus.query(),
   );
 
   useEffect(() => {
@@ -142,6 +151,7 @@ export const PlatformAdminPanel = () => {
         items={[
           { key: 'overview', label: t('platform.tabs.overview') },
           { key: 'orgs', label: t('platform.tabs.orgs') },
+          { key: 'models', label: t('platform.tabs.models') },
           { key: 'trial', label: t('platform.tabs.trial') },
           { key: 'wallets', label: t('platform.tabs.wallets') },
           { key: 'credits', label: t('platform.tabs.credits') },
@@ -206,7 +216,7 @@ export const PlatformAdminPanel = () => {
                   setBusy(true);
                   try {
                     await lambdaClient.platformAdmin.createOrganization.mutate(values);
-                    message.success(t('platform.created'));
+                    toast.success(t('platform.created'));
                     createForm.resetFields();
                     await mutate();
                   } catch (err) {
@@ -252,7 +262,7 @@ export const PlatformAdminPanel = () => {
                   setBusy(true);
                   try {
                     await lambdaClient.platformAdmin.assignManager.mutate(values);
-                    message.success(t('platform.assigned'));
+                    toast.success(t('platform.assigned'));
                     await mutate();
                   } catch (err) {
                     toastAicoError(err, t, 'platform.assignFailed');
@@ -372,6 +382,61 @@ export const PlatformAdminPanel = () => {
         </Flexbox>
       )}
 
+      {tab === 'models' && (
+        <Block className={styles.section} variant="outlined">
+          <Flexbox gap={16}>
+            <Flexbox horizontal align="center" gap={8}>
+              <RefreshCwIcon size={18} />
+              <Text strong>{t('platform.modelsTitle')}</Text>
+            </Flexbox>
+            <Text type="secondary">{t('platform.modelsHint')}</Text>
+            <div className={styles.grid}>
+              <StatisticCard
+                statistic={{ value: modelSync?.modelCount ?? 0 }}
+                title={t('platform.modelsCount')}
+              />
+              <StatisticCard
+                title={t('platform.modelsLastSync')}
+                statistic={{
+                  value: modelSync?.lastSyncedAt
+                    ? new Date(modelSync.lastSyncedAt).toLocaleString()
+                    : t('platform.modelsNeverSynced'),
+                }}
+              />
+              <StatisticCard
+                title={t('platform.modelsStatus')}
+                statistic={{
+                  value: modelSync?.lastStatus ?? 'never',
+                }}
+              />
+            </div>
+            {modelSync?.lastError ? (
+              <Text type="danger">
+                {t('platform.modelsLastError', { message: modelSync.lastError })}
+              </Text>
+            ) : null}
+            <Button
+              loading={busy}
+              type="primary"
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  await lambdaClient.platformAdmin.syncOpenRouterModels.mutate();
+                  toast.success(t('platform.modelsSynced'));
+                  await mutateModelSync();
+                } catch (err) {
+                  toastAicoError(err, t, 'platform.modelsSyncFailed');
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              {t('platform.modelsFetchNow')}
+            </Button>
+          </Flexbox>
+        </Block>
+      )}
+
       {tab === 'trial' && (
         <Block className={styles.section} variant="outlined">
           <Flexbox gap={16}>
@@ -393,7 +458,7 @@ export const PlatformAdminPanel = () => {
                     maxRequests: values.maxRequests ?? null,
                     trialBudgetUsd: values.trialBudgetUsd,
                   });
-                  message.success(t('platform.trialSaved'));
+                  toast.success(t('platform.trialSaved'));
                   await mutateTrial();
                 } catch (err) {
                   toastAicoError(err, t, 'platform.trialFailed');
@@ -487,7 +552,7 @@ export const PlatformAdminPanel = () => {
                 setBusy(true);
                 try {
                   await lambdaClient.platformAdmin.addManualCredit.mutate(values);
-                  message.success(t('platform.credited'));
+                  toast.success(t('platform.credited'));
                   await Promise.all([mutate(), mutateFinancials()]);
                 } catch (err) {
                   toastAicoError(err, t, 'platform.creditFailed');

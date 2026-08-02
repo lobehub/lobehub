@@ -360,13 +360,13 @@ export const useSignIn = () => {
   const sendPhoneOtp = async (rawPhone: string): Promise<boolean> => {
     const normalized = normalizeIranianPhoneNumber(rawPhone);
     if (!normalized) {
-      message.error(t('betterAuth.verifyPhone.phone.invalid'));
+      toast.error(t('betterAuth.verifyPhone.phone.invalid'));
       return false;
     }
 
     const { error } = await phoneNumberApi.sendOtp({ phoneNumber: normalized });
     if (error) {
-      message.error(mapPhoneOtpError(error.code, error.message || '', t));
+      toast.error(mapPhoneOtpError(error.code, error.message || '', t));
       return false;
     }
 
@@ -390,7 +390,7 @@ export const useSignIn = () => {
     setResending(true);
     try {
       const ok = await sendPhoneOtp(phoneE164);
-      if (ok) message.success(t('betterAuth.verifyPhone.otp.resent'));
+      if (ok) toast.success(t('betterAuth.verifyPhone.otp.resent'));
     } finally {
       setResending(false);
     }
@@ -408,7 +408,7 @@ export const useSignIn = () => {
       });
 
       if (error) {
-        message.error(mapPhoneOtpError(error.code, error.message || '', t));
+        toast.error(mapPhoneOtpError(error.code, error.message || '', t));
         return;
       }
 

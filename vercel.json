@@ -1,5 +1,11 @@
 {
   "buildCommand": "bun run build:vercel",
+  "crons": [
+    {
+      "path": "/api/aico/cron/sync-openrouter-models",
+      "schedule": "0 3 * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/_spa/(.*)",

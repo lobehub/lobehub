@@ -66,7 +66,7 @@ export { LobeOllamaAI } from './providers/ollama';
 export { LobeOllamaCloudAI } from './providers/ollamacloud';
 export { LobeOpenAI } from './providers/openai';
 export * from './providers/openai/modelId';
-export { LobeOpenRouterAI } from './providers/openrouter';
+export { fetchOpenRouterModels, LobeOpenRouterAI } from './providers/openrouter';
 export { LobePerplexityAI } from './providers/perplexity';
 export { LobeQwenAI } from './providers/qwen';
 export { LobeStepfunAI } from './providers/stepfun';

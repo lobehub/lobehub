@@ -1,7 +1,7 @@
+import { toast } from '@lobehub/ui/base-ui';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { message } from '@/components/AntdStaticMethods';
 import { phoneNumber as phoneNumberApi, useSession } from '@/libs/better-auth/auth-client';
 import { normalizeIranianPhoneNumber } from '@/libs/better-auth/phone';
 import { sanitizeRedirectPath } from '@/utils/onboardingRedirect';
@@ -50,13 +50,13 @@ export const useVerifyPhone = ({ callbackUrl }: UseVerifyPhoneParams) => {
   const sendOtp = async (rawPhone: string): Promise<boolean> => {
     const normalized = normalizeIranianPhoneNumber(rawPhone);
     if (!normalized) {
-      message.error(t('betterAuth.verifyPhone.phone.invalid'));
+      toast.error(t('betterAuth.verifyPhone.phone.invalid'));
       return false;
     }
 
     const { error } = await phoneNumberApi.sendOtp({ phoneNumber: normalized });
     if (error) {
-      message.error(mapOtpError(error.code, error.message || '', t));
+      toast.error(mapOtpError(error.code, error.message || '', t));
       return false;
     }
 
@@ -79,7 +79,7 @@ export const useVerifyPhone = ({ callbackUrl }: UseVerifyPhoneParams) => {
     setResending(true);
     try {
       const ok = await sendOtp(phoneE164);
-      if (ok) message.success(t('betterAuth.verifyPhone.otp.resent'));
+      if (ok) toast.success(t('betterAuth.verifyPhone.otp.resent'));
     } finally {
       setResending(false);
     }
@@ -97,12 +97,12 @@ export const useVerifyPhone = ({ callbackUrl }: UseVerifyPhoneParams) => {
       });
 
       if (error) {
-        message.error(mapOtpError(error.code, error.message || '', t));
+        toast.error(mapOtpError(error.code, error.message || '', t));
         return;
       }
 
       await refetch?.();
-      message.success(t('betterAuth.verifyPhone.success'));
+      toast.success(t('betterAuth.verifyPhone.success'));
       window.location.href = sanitizeRedirectPath(callbackUrl, '/');
     } finally {
       setLoading(false);

@@ -1,12 +1,11 @@
 'use client';
 
 import { Flexbox, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, toast } from '@lobehub/ui/base-ui';
 import { Input } from 'antd';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { message } from '@/components/AntdStaticMethods';
 import { lambdaClient } from '@/libs/trpc/client';
 
 export default function AccountDeletion() {
@@ -34,10 +33,10 @@ export default function AccountDeletion() {
             await lambdaClient.accountDeletion.requestDeletion.mutate({
               confirmEmail: email || undefined,
             });
-            message.success('Account deleted');
+            toast.success('Account deleted');
             window.location.href = '/signin';
           } catch (err) {
-            message.error(err instanceof Error ? err.message : 'Deletion failed');
+            toast.error(err instanceof Error ? err.message : 'Deletion failed');
           } finally {
             setBusy(false);
           }

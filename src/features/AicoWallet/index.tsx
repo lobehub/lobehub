@@ -1,7 +1,7 @@
 'use client';
 
 import { Block, Flexbox, Tag, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, toast } from '@lobehub/ui/base-ui';
 import { Form, InputNumber, Table } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { useState } from 'react';
@@ -9,7 +9,6 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
 import { toastAicoError } from '@/business/client/resolveAicoErrorMessage';
-import { message } from '@/components/AntdStaticMethods';
 import StatisticCard from '@/components/StatisticCard';
 import { useClientDataSWR } from '@/libs/swr';
 import { lambdaClient } from '@/libs/trpc/client';
@@ -99,7 +98,7 @@ export const AicoWallet = () => {
               setBusy(true);
               try {
                 const result = await lambdaClient.aicoBilling.mockTopup.mutate(values);
-                message.success(
+                toast.success(
                   t('wallet.topupSuccess', {
                     toman: values.amountToman.toLocaleString(),
                     usd: result.amountUsd,
@@ -154,7 +153,7 @@ export const AicoWallet = () => {
                   setBusy(true);
                   try {
                     await lambdaClient.aicoBilling.activateTrial.mutate();
-                    message.success(t('wallet.trialActivated'));
+                    toast.success(t('wallet.trialActivated'));
                     await mutateTrial();
                   } catch (err) {
                     toastAicoError(err, t, 'wallet.trialFailed');

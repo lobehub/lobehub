@@ -3,8 +3,7 @@ import {
   type AicoErrorCode,
   resolveAicoErrorCode,
 } from '@lobechat/business-const';
-
-import { message } from '@/components/AntdStaticMethods';
+import { toast } from '@lobehub/ui/base-ui';
 
 type LooseT = (key: string, options?: { defaultValue?: string }) => string;
 
@@ -45,5 +44,5 @@ export const resolveAicoErrorMessage = (errorOrCode: unknown, t?: LooseT): strin
 
 /** Toast a known Aico code, otherwise the caller's fallback key. */
 export const toastAicoError = (error: unknown, t: LooseT, fallbackKey: string): void => {
-  message.error(resolveAicoErrorMessage(error, t) ?? t(fallbackKey));
+  toast.error(resolveAicoErrorMessage(error, t) ?? t(fallbackKey));
 };

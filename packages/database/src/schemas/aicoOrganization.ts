@@ -4,10 +4,12 @@ import {
   boolean,
   index,
   integer,
+  jsonb,
   numeric,
   pgTable,
   text,
   uniqueIndex,
+  varchar,
 } from 'drizzle-orm/pg-core';
 
 import { createNanoId, generatePublicCode, idGenerator } from '../utils/idGenerator';
@@ -451,3 +453,50 @@ export const aicoUserPublicIds = pgTable(
 
 export type AicoUserPublicIdItem = typeof aicoUserPublicIds.$inferSelect;
 export type NewAicoUserPublicId = typeof aicoUserPublicIds.$inferInsert;
+
+/**
+ * Platform-wide OpenRouter model catalog (Aico managed provider).
+ * Synced daily via cron and on-demand from the platform admin panel.
+ * Model `id` matches OpenRouter's public model id (e.g. `openai/gpt-4o`).
+ */
+export const openrouterModelCatalog = pgTable(
+  'openrouter_model_catalog',
+  {
+    id: text('id').notNull().primaryKey(),
+    displayName: text('display_name'),
+    description: text('description'),
+    enabled: boolean('enabled').notNull().default(true),
+    type: varchar('type', { length: 20 }).notNull().default('chat'),
+    contextWindowTokens: integer('context_window_tokens'),
+    pricing: jsonb('pricing'),
+    abilities: jsonb('abilities').default({}),
+    settings: jsonb('settings').default({}),
+    releasedAt: varchar('released_at', { length: 10 }),
+    /** Full normalized card payload for forward-compatible fields. */
+    payload: jsonb('payload').notNull().default({}),
+    syncedAt: timestamptz('synced_at').notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index('openrouter_model_catalog_enabled_idx').on(t.enabled)],
+);
+
+export type OpenrouterModelCatalogItem = typeof openrouterModelCatalog.$inferSelect;
+export type NewOpenrouterModelCatalog = typeof openrouterModelCatalog.$inferInsert;
+
+/** Singleton sync metadata for the OpenRouter catalog (id = `default`). */
+export const openrouterModelSyncState = pgTable('openrouter_model_sync_state', {
+  id: text('id').notNull().primaryKey().default('default'),
+  lastSyncedAt: timestamptz('last_synced_at'),
+  /** success | error | never */
+  lastStatus: text('last_status').notNull().default('never'),
+  lastError: text('last_error'),
+  modelCount: integer('model_count').notNull().default(0),
+  /** cron | manual:<userId> */
+  lastTriggeredBy: text('last_triggered_by'),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+export type OpenrouterModelSyncStateItem = typeof openrouterModelSyncState.$inferSelect;
+export type NewOpenrouterModelSyncState = typeof openrouterModelSyncState.$inferInsert;

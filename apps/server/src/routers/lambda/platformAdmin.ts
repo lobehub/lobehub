@@ -10,6 +10,7 @@ import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getTomanPerUsd } from '@/server/services/aico/fxService';
 import { AicoOpenRouterKeyService } from '@/server/services/openrouter/keyService';
+import { OpenRouterModelCatalogSyncService } from '@/server/services/openrouter/modelCatalogSync';
 
 const platformProcedure = authedProcedure.use(serverDatabase).use(async ({ ctx, next }) => {
   const organizationModel = new OrganizationModel(ctx.serverDB);
@@ -20,6 +21,7 @@ const platformProcedure = authedProcedure.use(serverDatabase).use(async ({ ctx, 
   return next({
     ctx: {
       billingModel: new AicoBillingModel(ctx.serverDB),
+      modelCatalogSync: new OpenRouterModelCatalogSyncService(ctx.serverDB),
       organizationModel,
     },
   });
@@ -287,6 +289,21 @@ export const platformAdminRouter = router({
       publicCode: publicCodes.get(w.userId) ?? null,
       userId: w.userId,
     }));
+  }),
+
+  getOpenRouterModelSyncStatus: platformProcedure.query(async ({ ctx }) => {
+    return ctx.modelCatalogSync.getStatus();
+  }),
+
+  syncOpenRouterModels: platformProcedure.mutation(async ({ ctx }) => {
+    const status = await ctx.modelCatalogSync.sync(`manual:${ctx.userId}`);
+    if (status.lastStatus !== 'success') {
+      throw new TRPCError({
+        code: 'BAD_GATEWAY',
+        message: status.lastError || 'OpenRouter model sync failed',
+      });
+    }
+    return status;
   }),
 });
 

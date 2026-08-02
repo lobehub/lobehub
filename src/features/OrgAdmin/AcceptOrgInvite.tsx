@@ -1,14 +1,13 @@
 'use client';
 
 import { Flexbox, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router';
 
 import { toastAicoError } from '@/business/client/resolveAicoErrorMessage';
-import { message } from '@/components/AntdStaticMethods';
 import { useClientDataSWR } from '@/libs/swr';
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -40,7 +39,7 @@ export const AcceptOrgInvite = () => {
     setAccepting(true);
     try {
       const result = await lambdaClient.organization.acceptInvite.mutate({ token });
-      message.success(t('invite.accepted'));
+      toast.success(t('invite.accepted'));
       navigate(`/org/${result.orgId}/members`);
     } catch (err) {
       toastAicoError(err, t, 'invite.failed');

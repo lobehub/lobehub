@@ -945,6 +945,13 @@
       "when": 1785657510456,
       "tag": "0134_agents_add_name_column",
       "breakpoints": true
+    },
+    {
+      "idx": 135,
+      "version": "7",
+      "when": 1785659889771,
+      "tag": "0135_aico_openrouter_model_catalog",
+      "breakpoints": true
     }
   ],
   "version": "6"

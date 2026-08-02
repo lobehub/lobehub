@@ -2,7 +2,7 @@
 
 import { BarList } from '@lobehub/charts';
 import { Block, Flexbox, Tag, Text } from '@lobehub/ui';
-import { Button, Select, Tabs } from '@lobehub/ui/base-ui';
+import { Button, Select, Tabs, toast } from '@lobehub/ui/base-ui';
 import { Form, Input, InputNumber, Table } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Building2Icon, CircleDollarSignIcon, UsersIcon, WalletIcon } from 'lucide-react';
@@ -11,7 +11,6 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router';
 
 import { toastAicoError } from '@/business/client/resolveAicoErrorMessage';
-import { message } from '@/components/AntdStaticMethods';
 import StatisticCard from '@/components/StatisticCard';
 import { isValidIranianPhoneNumber } from '@/libs/better-auth/phone';
 import { useClientDataSWR } from '@/libs/swr';
@@ -120,7 +119,7 @@ export const OrgAdminMembers = () => {
   const handleInvite = async (values: InviteForm) => {
     if (!selectedOrgId) return;
     if (values.identifierType === 'phone' && !isValidIranianPhoneNumber(values.identifierValue)) {
-      message.error(t('org.invite.invalidPhone'));
+      toast.error(t('org.invite.invalidPhone'));
       return;
     }
     setInviting(true);
@@ -131,7 +130,7 @@ export const OrgAdminMembers = () => {
         orgId: selectedOrgId,
         role: values.role,
       });
-      message.success(t('org.invite.sent'));
+      toast.success(t('org.invite.sent'));
       form.resetFields(['identifierValue']);
       await mutate();
     } catch (error) {
@@ -161,7 +160,7 @@ export const OrgAdminMembers = () => {
                 setBusy(true);
                 try {
                   const org = await lambdaClient.organization.convertToManagement.mutate(values);
-                  message.success(t('org.upgradeSuccess', { code: org.publicCode }));
+                  toast.success(t('org.upgradeSuccess', { code: org.publicCode }));
                   await mutateMine();
                   setSelectedOrgId(org.id);
                   navigate(`/org/${org.id}/members`);
@@ -376,7 +375,7 @@ export const OrgAdminMembers = () => {
                       orgId: selectedOrgId,
                       orgMemberId: values.orgMemberId,
                     });
-                    message.success(t('org.allocateSuccess'));
+                    toast.success(t('org.allocateSuccess'));
                     allocForm.resetFields(['amountUsd']);
                     await refreshAll();
                   } catch (err) {
@@ -451,7 +450,7 @@ export const OrgAdminMembers = () => {
                             orgMemberId: row.id,
                             teamId,
                           });
-                          message.success(t('org.teamAssigned'));
+                          toast.success(t('org.teamAssigned'));
                           await refreshAll();
                         }}
                       />
@@ -474,7 +473,7 @@ export const OrgAdminMembers = () => {
                                     orgId: selectedOrgId,
                                     orgMemberId: row.id,
                                   });
-                                message.success(
+                                toast.success(
                                   t('org.reclaimSuccess', {
                                     usd: Number(result.reclaimedUsd).toFixed(2),
                                   }),
@@ -497,7 +496,7 @@ export const OrgAdminMembers = () => {
                                   memberId: row.id,
                                   orgId: selectedOrgId,
                                 });
-                                message.success(t('org.removeSuccess'));
+                                toast.success(t('org.removeSuccess'));
                                 await refreshAll();
                               } catch (error) {
                                 toastAicoError(error, t, 'org.removeFailed');
@@ -641,7 +640,7 @@ export const OrgAdminMembers = () => {
                       orgId: selectedOrgId,
                       teamId: values.teamId,
                     });
-                    message.success(t('org.modelsSaved'));
+                    toast.success(t('org.modelsSaved'));
                     await mutateTeams();
                   } catch (err) {
                     toastAicoError(err, t, 'org.modelsFailed');
@@ -699,7 +698,7 @@ export const OrgAdminMembers = () => {
                       amountToman: values.amountToman,
                       orgId: selectedOrgId,
                     });
-                    message.success(t('org.topupSuccess'));
+                    toast.success(t('org.topupSuccess'));
                     topupForm.resetFields();
                     await refreshAll();
                   } catch (err) {

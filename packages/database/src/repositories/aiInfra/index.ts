@@ -22,6 +22,7 @@ import { merge, mergeArrayById } from '@/utils/merge';
 
 import { AiModelModel } from '../../models/aiModel';
 import { AiProviderModel } from '../../models/aiProvider';
+import { OpenRouterModelCatalogModel } from '../../models/openrouterModelCatalog';
 import type { LobeChatDatabase } from '../../type';
 
 type DecryptUserKeyVaults = (encryptKeyVaultsStr: string | null) => Promise<any>;
@@ -424,6 +425,15 @@ export class AiInfraRepos {
     providerId: string,
   ): Promise<AiProviderModelListItem[] | undefined> => {
     try {
+      // Aico platform catalog: when OpenRouter models have been synced, prefer
+      // them over the static model-bank snapshot so pricing/abilities stay fresh.
+      if (providerId === 'openrouter') {
+        const catalog = new OpenRouterModelCatalogModel(this.db);
+        if ((await catalog.count()) > 0) {
+          return catalog.listAsProviderModels();
+        }
+      }
+
       // use the serverModelLists as the defined server model list
       // fallback to empty array for custom provider
       const presetList =
