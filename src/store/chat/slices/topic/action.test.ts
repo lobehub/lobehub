@@ -58,12 +58,11 @@ vi.mock('@/services/message', () => ({
   },
 }));
 
-vi.mock('@/components/AntdStaticMethods', () => ({
-  message: {
-    loading: vi.fn(),
-    success: vi.fn(),
+vi.mock('@lobehub/ui/base-ui', () => ({
+  toast: {
     error: vi.fn(),
-    destroy: vi.fn(),
+    loading: vi.fn(() => ({ close: vi.fn() })),
+    success: vi.fn(),
   },
 }));
 

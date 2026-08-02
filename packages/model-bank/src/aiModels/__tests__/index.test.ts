@@ -123,6 +123,31 @@ describe('Moonshot models', () => {
   });
 });
 
+describe('Hunyuan models', () => {
+  it('registers Hy3 with agent capabilities', () => {
+    const hy3 = LOBE_DEFAULT_MODEL_LIST.find(
+      (model) => model.providerId === ModelProvider.Hunyuan && model.id === 'hy3',
+    );
+
+    expect(hy3).toEqual(
+      expect.objectContaining({
+        abilities: expect.objectContaining({
+          functionCall: true,
+          reasoning: true,
+          structuredOutput: true,
+        }),
+        contextWindowTokens: 256_000,
+        enabled: true,
+        maxOutput: 128_000,
+        settings: {
+          extendParams: ['hy3ReasoningEffort'],
+        },
+        type: 'chat',
+      }),
+    );
+  });
+});
+
 describe('Google rolling model aliases', () => {
   it('tracks the current Flash and Flash-Lite model versions', () => {
     const googleModels = LOBE_DEFAULT_MODEL_LIST.filter((model) => model.providerId === 'google');

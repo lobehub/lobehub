@@ -917,6 +917,13 @@
       "when": 1785044468256,
       "tag": "0130_notifications_add_context",
       "breakpoints": true
+    },
+    {
+      "idx": 131,
+      "version": "7",
+      "when": 1785648308270,
+      "tag": "0131_agents_add_name_column",
+      "breakpoints": true
     }
   ],
   "version": "6"

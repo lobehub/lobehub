@@ -1,5 +1,5 @@
 import { copyToClipboard } from '@lobehub/ui';
-import { App } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
 import { Copy } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,7 +13,6 @@ export const copyAction = defineAction({
   key: 'copy',
   useBuild: (ctx) => {
     const { t } = useTranslation('common');
-    const { message } = App.useApp();
 
     return useMemo(() => {
       const raw =
@@ -23,12 +22,12 @@ export const copyAction = defineAction({
       return {
         handleClick: async () => {
           await copyToClipboard(content);
-          message.success(t('copySuccess'));
+          toast.success(t('copySuccess'));
         },
         icon: Copy,
         key: 'copy',
         label: t('copy'),
       };
-    }, [t, message, ctx.role, ctx.data.content, ctx.contentBlock?.content]);
+    }, [t, ctx.role, ctx.data.content, ctx.contentBlock?.content]);
   },
 });

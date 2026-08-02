@@ -2,7 +2,7 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 import * as os from 'node:os';
 import path from 'node:path';
 
-import { detectRepoType } from '@lobechat/local-file-shell';
+import { detectRepoType } from '@lobechat/local-file-shell/git';
 import matter from 'gray-matter';
 
 import type {

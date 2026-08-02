@@ -1,9 +1,9 @@
 'use client';
 
+import { toast } from '@lobehub/ui/base-ui';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { message } from '@/components/AntdStaticMethods';
 import { usePermission } from '@/hooks/usePermission';
 import type { UploadData } from '@/routes/(main)/(create)/features/GenerationInput/UploadCard';
 import {
@@ -88,7 +88,7 @@ export const useImageReferenceUpload = () => {
 
   const onLimitExceeded = useCallback(
     (maxCount: number) => {
-      message.warning(t('config.imageUpload.maxCountReached', { count: maxCount }));
+      toast.warning(t('config.imageUpload.maxCountReached', { count: maxCount }));
     },
     [t],
   );

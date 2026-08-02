@@ -2,7 +2,7 @@
 
 import type { TopicIssue } from '@lobechat/conversation-flow';
 import { Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button, useModalContext } from '@lobehub/ui/base-ui';
+import { Button, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { Skeleton } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CircleAlert, CircleCheck, EyeOff, Stethoscope } from 'lucide-react';
@@ -10,7 +10,6 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
-import { message } from '@/components/AntdStaticMethods';
 import { messageService } from '@/services/message';
 import { useChatStore } from '@/store/chat';
 
@@ -93,10 +92,10 @@ const TopicDoctorContent = memo<TopicDoctorContentProps>(({ agentId, topicId }) 
     try {
       const { restoredMessageIds } = await messageService.repairTopic({ agentId, topicId });
       await refreshMessages({ agentId: agentId ?? undefined, topicId });
-      message.success(t('doctor.repaired', { count: restoredMessageIds.length }));
+      toast.success(t('doctor.repaired', { count: restoredMessageIds.length }));
       close();
     } catch {
-      message.error(t('doctor.repairFailed'));
+      toast.error(t('doctor.repairFailed'));
     } finally {
       setRepairing(false);
     }

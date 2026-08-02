@@ -2,8 +2,7 @@ import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { SessionDefaultGroup, type SidebarVisibility } from '@lobechat/types';
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import {
   Check,
@@ -72,7 +71,6 @@ export const useAgentDropdownMenu = ({
   visibility,
 }: UseAgentDropdownMenuParams): (() => MenuProps['items']) => {
   const { t } = useTranslation(['chat', 'common', 'setting']);
-  const { message } = App.useApp();
   const navigate = useWorkspaceAwareNavigate();
 
   const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);
@@ -96,7 +94,7 @@ export const useAgentDropdownMenu = ({
 
   // Visibility actions are only meaningful inside a workspace: in personal
   // mode every row is implicitly owner-private. "Publish to Workspace"
-  // appears on private agents; the inverse "Make private" 
+  // appears on private agents; the inverse "Make private"
   // appears on published agents, but only for the creator ( —
   // owners demoting another member's agent would appropriate it), and never
   // on builtin agents (LobeAI etc.). The server enforces the same rules as
@@ -172,7 +170,7 @@ export const useAgentDropdownMenu = ({
                     await setSidebarItemVisible(id, false);
                   } catch (error) {
                     console.error('Failed to hide Agent from sidebar:', error);
-                    message.error(t('operationFailed', { ns: 'common' }));
+                    toast.error(t('operationFailed', { ns: 'common' }));
                   }
                 },
                 sfSymbol: 'sidebar.left',
@@ -300,7 +298,7 @@ export const useAgentDropdownMenu = ({
                               await agentService.publishAgentToWorkspace(id);
                               await refreshAgentList();
                               revealSidebarSection('agent');
-                              message.success(
+                              toast.success(
                                 t('agent.publishToWorkspaceSuccess', {
                                   defaultValue: 'Published to workspace',
                                 }),
@@ -308,7 +306,7 @@ export const useAgentDropdownMenu = ({
                             } catch (error) {
                               console.error('Failed to publish agent:', error);
                               const publishErrorKey = getAgentPublishErrorKey(error);
-                              message.error(
+                              toast.error(
                                 publishErrorKey
                                   ? t(publishErrorKey)
                                   : t('error', {
@@ -345,10 +343,10 @@ export const useAgentDropdownMenu = ({
                               await agentService.setAgentVisibility(id, 'private');
                               await refreshAgentList();
                               revealSidebarSection('private');
-                              message.success(t('makePrivate.success', { ns: 'common' }));
+                              toast.success(t('makePrivate.success', { ns: 'common' }));
                             } catch (error) {
                               console.error('Failed to make agent private:', error);
-                              message.error(t('makePrivate.error', { ns: 'common' }));
+                              toast.error(t('makePrivate.error', { ns: 'common' }));
                             }
                           },
                           title: t('makePrivate.confirm.title', { ns: 'common' }),
@@ -376,9 +374,9 @@ export const useAgentDropdownMenu = ({
                           onOk: async () => {
                             try {
                               await removeAgent(id);
-                              message.success(t('confirmRemoveSessionSuccess'));
+                              toast.success(t('confirmRemoveSessionSuccess'));
                             } catch (error) {
-                              message.error(
+                              toast.error(
                                 isOwnerOnlyForbiddenError(error)
                                   ? t('deleteSharedOwnerOnly', { ns: 'common' })
                                   : isForbiddenError(error)
@@ -418,7 +416,6 @@ export const useAgentDropdownMenu = ({
       group,
       isDefault,
       openCreateGroupModal,
-      message,
       transferMenuItems,
       showPublishAction,
       showMakePrivateAction,

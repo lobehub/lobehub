@@ -1,7 +1,8 @@
 'use client';
 
 import { ActionIcon } from '@lobehub/ui';
-import { App, Flex } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
+import { Flex } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Copy } from 'lucide-react';
 import { type FC } from 'react';
@@ -24,14 +25,13 @@ interface ClientIdDisplayProps {
 
 const ClientIdDisplay: FC<ClientIdDisplayProps> = ({ clientId }) => {
   const { t } = useTranslation('auth');
-  const { message } = App.useApp();
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(clientId);
-      message.success(t('oauthApp.copy.success'));
+      toast.success(t('oauthApp.copy.success'));
     } catch {
-      message.error(t('oauthApp.copy.error'));
+      toast.error(t('oauthApp.copy.error'));
     }
   };
 

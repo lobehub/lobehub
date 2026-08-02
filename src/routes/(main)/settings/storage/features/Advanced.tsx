@@ -3,8 +3,7 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import type { FormGroupItemType } from '@lobehub/ui';
 import { Form, Icon } from '@lobehub/ui';
-import { Button, confirmModal, Switch } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { Button, confirmModal, Switch, toast } from '@lobehub/ui/base-ui';
 import { HardDriveDownload, HardDriveUpload } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,7 +21,7 @@ import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 const AdvancedActions = () => {
   const { t } = useTranslation(['setting', 'common']);
-  const { message } = App.useApp();
+
   const { hideDocs } = useServerConfigStore(featureFlagsSelectors);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const checked = useUserStore(userGeneralSettingsSelectors.telemetry);
@@ -38,11 +37,11 @@ const AdvancedActions = () => {
       okText: t('danger.reset.action'),
       onOk: () => {
         resetSettings();
-        message.success(t('danger.reset.success'));
+        toast.success(t('danger.reset.success'));
       },
       title: t('danger.reset.title'),
     });
-  }, [message, resetSettings, t]);
+  }, [resetSettings, t]);
 
   const renderExportButtonFormItem = () => {
     return {

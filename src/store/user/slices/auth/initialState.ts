@@ -8,7 +8,10 @@ export interface UserAuthState {
    * Whether user registered with email/password (credential login)
    */
   hasPasswordAccount?: boolean;
+  /** Whether the current local cache identity has been authoritatively selected. */
+  isIdentityResolved?: boolean;
   isLoaded?: boolean;
+
   isLoadedAuthProviders?: boolean;
 
   isSignedIn?: boolean;

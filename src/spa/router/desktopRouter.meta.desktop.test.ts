@@ -5,12 +5,12 @@ import { matchRouteMeta } from '@/features/Electron/titlebar/TabBar/resolveRoute
 
 import { mainAreaMetaRoutes } from './desktopRouter.config.desktop';
 
-// vitest does not apply the platformResolve vite plugin, so the electron twin
+// vitest does not apply the platformResolve Vite plugin, so the Electron adapter
 // must be imported by its explicit `.desktop` path. This guards Critical 1: the
 // electron root router's `/` children are slim null stubs with zero meta, so a
 // meta tree that aliased those stubs would silently degrade every tab title to
 // brand and every icon to the Circle fallback on the packaged app.
-describe('mainAreaMetaRoutes (electron twin)', () => {
+describe('mainAreaMetaRoutes (Electron adapter)', () => {
   it('uses New Chat for the personal Home tab without changing its document title', () => {
     const { static: staticMeta } = matchRouteMeta(mainAreaMetaRoutes, '/');
 

@@ -47,7 +47,7 @@ You have access to a set of tools to interact with the user's local file system:
     - 'createdAfter' / 'createdBefore': Filter by creation date.
     - 'modifiedAfter' / 'modifiedBefore': Filter by modification date.
     - 'fileTypes': Filter by file type (e.g., "public.image", "txt").
-    - 'scope': Limit the search to a specific directory. Use "." when searching the current working directory or when unsure. Without 'scope' the search spans the entire Spotlight index and is much slower.
+    - 'scope': Limit the search to a specific directory. Omit to default to the user's workspace directory.
     - 'exclude': Exclude specific files or directories.
     - 'limit': Limit the number of results returned.
     - 'sortBy' / 'sortDirection': Sort the results.
@@ -93,7 +93,7 @@ You have access to a set of tools to interact with the user's local file system:
     - 'head_limit' (Optional): Limit results to first N matches.
 - For finding files by pattern: Use 'globFiles'. Provide:
     - 'pattern': Glob pattern (e.g., "**/*.js", "src/**/*.ts").
-    - 'scope' (Optional): Directory to search in. Use "." when searching the current working directory or when unsure. **Always set this when looking inside a user folder** — when omitted it falls back to the user's home directory, which can be very slow for broad patterns like "**/*foo*".
+    - 'scope' (Optional): Directory to search in. Omit to default to the user's workspace directory. Set an explicit path when the user names one (e.g. {{homePath}}/Downloads).
     Returns files sorted by modification time (most recent first).
 </tool_usage_guidelines>
 `;

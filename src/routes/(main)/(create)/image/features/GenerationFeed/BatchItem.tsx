@@ -3,7 +3,7 @@
 import { useAutoAnimate } from '@formkit/auto-animate/react';
 import { ModelTag } from '@lobehub/icons';
 import { ActionIconGroup, Block, Flexbox, Grid, Image, Markdown, Tag, Text } from '@lobehub/ui';
-import { App } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
 import { omit } from 'es-toolkit/compat';
@@ -60,7 +60,6 @@ interface GenerationBatchItemProps {
 
 export const GenerationBatchItem = memo<GenerationBatchItemProps>(({ batch }) => {
   const { t } = useTranslation('image');
-  const { message } = App.useApp();
 
   const [imageGridRef] = useAutoAnimate();
 
@@ -81,10 +80,10 @@ export const GenerationBatchItem = memo<GenerationBatchItemProps>(({ batch }) =>
   const handleCopyPrompt = async () => {
     try {
       await navigator.clipboard.writeText(batch.prompt);
-      message.success(t('generation.actions.promptCopied'));
+      toast.success(t('generation.actions.promptCopied'));
     } catch (error) {
       console.error('Failed to copy prompt:', error);
-      message.error(t('generation.actions.promptCopyFailed'));
+      toast.error(t('generation.actions.promptCopyFailed'));
     }
   };
 

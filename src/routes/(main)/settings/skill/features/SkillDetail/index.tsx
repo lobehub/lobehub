@@ -2,8 +2,7 @@
 
 import { getLobehubSkillProviderById } from '@lobechat/const';
 import { Avatar, Markdown, Skeleton, Tooltip } from '@lobehub/ui';
-import { Button, confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { Button, confirmModal, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { Plus, SquareArrowOutUpRight, Trash2, Unplug, Wrench } from 'lucide-react';
@@ -174,7 +173,7 @@ LobehubConnectorAction.displayName = 'LobehubConnectorAction';
 const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
   const { t } = useTranslation('plugin');
   const { t: ts } = useTranslation('setting');
-  const { message } = App.useApp();
+
   const [syncing, setSyncing] = useState(false);
   const [noManifest, setNoManifest] = useState(false);
   const [migrateOpen, setMigrateOpen] = useState(false);
@@ -217,7 +216,7 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
   const notifyUninstallError = useCallback(
     (error: unknown) => {
       const httpStatus = (error as { data?: { httpStatus?: number } })?.data?.httpStatus;
-      message.error(
+      toast.error(
         httpStatus === 403
           ? t(
               'store.actions.manageOnlyCreator',
@@ -226,7 +225,7 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
           : t('store.actions.uninstallFailed', 'Uninstall failed, please try again'),
       );
     },
-    [message, t],
+    [t],
   );
 
   // Legacy `user_installed_plugins` custom MCP that was never migrated to a

@@ -1,8 +1,7 @@
 import { CUSTOM_FOLDER_FILE_TYPE, DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
 import type { SFSymbol } from '@lobechat/electron-client-ipc';
 import { copyToClipboard, Icon, Tooltip } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { type ItemType } from 'antd/es/menu/interface';
 import {
   BookMinusIcon,
@@ -71,7 +70,7 @@ export const useFileItemDropdown = ({
   visibility,
 }: UseFileItemDropdownParams): UseFileItemDropdownReturn => {
   const { t } = useTranslation(['components', 'common', 'knowledgeBase', 'chat']);
-  const { message } = App.useApp();
+
   const appOrigin = useAppOrigin();
   const { allowed: canEditResources } = usePermission('edit_own_content');
   const currentUserId = useUserStore(userProfileSelectors.userId);
@@ -141,7 +140,7 @@ export const useFileItemDropdown = ({
         domEvent.stopPropagation();
         try {
           await addFilesToKnowledgeBase(kb.id, [id]);
-          message.success(
+          toast.success(
             t('addToKnowledgeBase.addSuccess', {
               count: 1,
               ns: 'knowledgeBase',
@@ -154,9 +153,9 @@ export const useFileItemDropdown = ({
           const isDuplicateError =
             e?.data?.code === 'CONFLICT' || e?.message === 'FILE_ALREADY_IN_KNOWLEDGE_BASE';
           if (isDuplicateError) {
-            message.warning(t('addToKnowledgeBase.alreadyExists', { ns: 'knowledgeBase' }));
+            toast.warning(t('addToKnowledgeBase.alreadyExists', { ns: 'knowledgeBase' }));
           } else {
-            message.error(t('addToKnowledgeBase.error', { ns: 'knowledgeBase' }));
+            toast.error(t('addToKnowledgeBase.error', { ns: 'knowledgeBase' }));
           }
         }
       },
@@ -179,15 +178,15 @@ export const useFileItemDropdown = ({
           await moveResource(id, null);
           // Then add to target library
           await addFilesToKnowledgeBase(kb.id, [id]);
-          message.success(t('moveToKnowledgeBase.success', { ns: 'knowledgeBase' }));
+          toast.success(t('moveToKnowledgeBase.success', { ns: 'knowledgeBase' }));
         } catch (e: any) {
           console.error(e);
           const isDuplicateError =
             e?.data?.code === 'CONFLICT' || e?.message === 'FILE_ALREADY_IN_KNOWLEDGE_BASE';
           if (isDuplicateError) {
-            message.warning(t('addToKnowledgeBase.alreadyExists', { ns: 'knowledgeBase' }));
+            toast.warning(t('addToKnowledgeBase.alreadyExists', { ns: 'knowledgeBase' }));
           } else {
-            message.error(t('moveToKnowledgeBase.error', { ns: 'knowledgeBase' }));
+            toast.error(t('moveToKnowledgeBase.error', { ns: 'knowledgeBase' }));
           }
         }
       },
@@ -223,7 +222,7 @@ export const useFileItemDropdown = ({
                     onOk: async () => {
                       await removeFilesFromKnowledgeBase(libraryId, [id]);
 
-                      message.success(t('FileManager.actions.removeFromLibrarySuccess'));
+                      toast.success(t('FileManager.actions.removeFromLibrarySuccess'));
                     },
                     title: t('FileManager.actions.removeFromLibrary'),
                   });
@@ -277,10 +276,10 @@ export const useFileItemDropdown = ({
                 onOk: async () => {
                   try {
                     await publishFileToWorkspace(id);
-                    message.success(t('resources.publishToWorkspace.success', { ns: 'chat' }));
+                    toast.success(t('resources.publishToWorkspace.success', { ns: 'chat' }));
                   } catch (error) {
                     console.error(error);
-                    message.error(t('resources.publishToWorkspace.error', { ns: 'chat' }));
+                    toast.error(t('resources.publishToWorkspace.error', { ns: 'chat' }));
                   }
                 },
               });
@@ -303,10 +302,10 @@ export const useFileItemDropdown = ({
                 onOk: async () => {
                   try {
                     await setFileVisibility(id, 'private');
-                    message.success(t('makePrivate.success', { ns: 'common' }));
+                    toast.success(t('makePrivate.success', { ns: 'common' }));
                   } catch (error) {
                     console.error(error);
-                    message.error(t('makePrivate.error', { ns: 'common' }));
+                    toast.error(t('makePrivate.error', { ns: 'common' }));
                   }
                 },
               });
@@ -368,7 +367,7 @@ export const useFileItemDropdown = ({
             }
 
             await copyToClipboard(urlToCopy);
-            message.success(t('FileManager.actions.copyUrlSuccess'));
+            toast.success(t('FileManager.actions.copyUrlSuccess'));
           },
           sfSymbol: 'doc.on.doc',
         },
@@ -379,12 +378,7 @@ export const useFileItemDropdown = ({
           sfSymbol: 'square.and.arrow.down',
           onClick: async ({ domEvent }) => {
             domEvent.stopPropagation();
-            const key = 'file-downloading';
-            message.loading({
-              content: t('FileManager.actions.downloading'),
-              duration: 0,
-              key,
-            });
+            const downloadingToast = toast.loading(t('FileManager.actions.downloading'));
 
             if (isPage) {
               // For pages, download as markdown
@@ -405,18 +399,18 @@ export const useFileItemDropdown = ({
                   await downloadFile(blobUrl, mdFilename);
                   URL.revokeObjectURL(blobUrl);
                 } else {
-                  message.error('Failed to download page: no content available');
+                  toast.error('Failed to download page: no content available');
                 }
               } catch (error) {
                 console.error('Failed to download page:', error);
-                message.error('Failed to download page');
+                toast.error('Failed to download page');
               }
             } else {
               // For regular files, download from URL
               await downloadFile(url, filename);
             }
 
-            message.destroy(key);
+            downloadingToast.close();
           },
         },
         canEditResources && {
@@ -454,9 +448,9 @@ export const useFileItemDropdown = ({
                   void useTreeStore.getState().revalidate(parentId);
                   await refreshFileList({ revalidateResources: false });
 
-                  message.success(t('FileManager.actions.deleteSuccess'));
+                  toast.success(t('FileManager.actions.deleteSuccess'));
                 } catch (error) {
-                  message.error(
+                  toast.error(
                     isForbiddenError(error)
                       ? t('manageOnlyCreator', { ns: 'common' })
                       : t('operationFailed', { ns: 'common' }),
@@ -483,7 +477,6 @@ export const useFileItemDropdown = ({
     isPage,
     libraries,
     libraryId,
-    message,
     moveResource,
     onRenameStart,
     publishFileToWorkspace,

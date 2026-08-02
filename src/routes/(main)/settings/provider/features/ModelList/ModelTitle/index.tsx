@@ -1,6 +1,5 @@
 import { ActionIcon, DropdownMenu, Flexbox, Skeleton, Text, Tooltip } from '@lobehub/ui';
-import { Button, confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { Button, confirmModal, toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { CircleX, EllipsisVertical, LucideRefreshCcwDot, PlusIcon } from 'lucide-react';
 import { memo, use, useEffect, useState } from 'react';
@@ -24,7 +23,7 @@ interface ModelFetcherProps {
 const ModelTitle = memo<ModelFetcherProps>(
   ({ provider, showAddNewModel = true, showModelFetcher = true }) => {
     const { t } = useTranslation('modelProvider');
-    const { message } = App.useApp();
+
     const { allowed: canManageProvider, reason } = usePermission('manage_provider_key');
     const [
       searchKeyword,
@@ -126,7 +125,7 @@ const ModelTitle = memo<ModelFetcherProps>(
                               ? error.message
                               : t('providerModels.list.fetcher.errorFallback');
 
-                          message.error(
+                          toast.error(
                             t('providerModels.list.fetcher.error', {
                               message: errorMessage,
                             }),
@@ -172,7 +171,7 @@ const ModelTitle = memo<ModelFetcherProps>(
                           content: t('providerModels.list.resetAll.conform'),
                           onOk: async () => {
                             await clearModelsByProvider(provider);
-                            message.success(t('providerModels.list.resetAll.success'));
+                            toast.success(t('providerModels.list.resetAll.success'));
                           },
                           title: t('providerModels.list.resetAll.title'),
                         });

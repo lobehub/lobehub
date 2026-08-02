@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 
-import { detectWindowsShell } from '@lobechat/local-file-shell';
+import { detectWindowsShell } from '@lobechat/local-file-shell/shell';
 import type { IPty } from '@lydell/node-pty';
 import { spawn } from '@lydell/node-pty';
 

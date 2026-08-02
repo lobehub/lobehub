@@ -128,8 +128,8 @@ vi.mock('@/components/InfoTooltip', () => ({
   ),
 }));
 
-vi.mock('@/components/AntdStaticMethods', () => ({
-  message: {
+vi.mock('@lobehub/ui/base-ui', () => ({
+  toast: {
     error: (...args: unknown[]) => messageError(...args),
   },
 }));

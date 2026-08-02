@@ -1,8 +1,7 @@
 'use client';
 
 import { ActionIcon, Icon, Tooltip } from '@lobehub/ui';
-import { Button, confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { Button, confirmModal, toast } from '@lobehub/ui/base-ui';
 import { Trash2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -24,7 +23,6 @@ interface Props {
 }
 
 const PurgeButton = memo<Props>(({ iconOnly }) => {
-  const { message } = App.useApp();
   const { t } = useTranslation(['common', 'memory']);
   const translate = t as (key: string, options?: Record<string, unknown>) => string;
   const purgeAllMemories = useUserMemoryStore((s) => s.purgeAllMemories);
@@ -48,9 +46,9 @@ const PurgeButton = memo<Props>(({ iconOnly }) => {
           }
 
           setSearchParams(nextSearchParams, { replace: true });
-          message.success(translate('purge.success', { ns: 'memory' }));
+          toast.success(translate('purge.success', { ns: 'memory' }));
         } catch {
-          message.error(translate('purge.error', { ns: 'memory' }));
+          toast.error(translate('purge.error', { ns: 'memory' }));
           throw new Error('Failed to purge memories');
         } finally {
           setLoading(false);

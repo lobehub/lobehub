@@ -1,5 +1,5 @@
 import { copyToClipboard } from '@lobehub/ui';
-import { App } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
 import { Hash } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -27,7 +27,7 @@ export const copyOperationIdAction = defineAction({
   key: 'copyOperationId',
   useBuild: (ctx) => {
     const { t } = useTranslation('chat');
-    const { message } = App.useApp();
+
     const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
 
     // For group messages the operation is associated with the underlying
@@ -54,12 +54,12 @@ export const copyOperationIdAction = defineAction({
       return {
         handleClick: async () => {
           await copyToClipboard(operationId);
-          message.success(t('copySuccess', { ns: 'common' }));
+          toast.success(t('copySuccess', { ns: 'common' }));
         },
         icon: Hash,
         key: 'copyOperationId',
         label: t('messageAction.copyOperationId'),
       };
-    }, [t, message, isDevMode, operationId]);
+    }, [t, isDevMode, operationId]);
   },
 });

@@ -2,6 +2,7 @@ import { isDesktop } from '@lobechat/const';
 import { getActivePluginIds } from '@lobechat/types';
 import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { confirmModal, type ModalInstance } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import type { TFunction } from 'i18next';
@@ -22,7 +23,6 @@ import { useAgentTransferMenuItem } from '@/business/client/hooks/useAgentTransf
 import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
 import { useBusinessAgentImportMenuItem } from '@/business/client/hooks/useBusinessAgentImportMenuItem';
 import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
-import { message } from '@/components/AntdStaticMethods';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import NavHeader from '@/features/NavHeader';
@@ -152,7 +152,7 @@ const Header = memo(() => {
       okButtonProps: { danger: true },
       onOk: async () => {
         await removeAgent(activeAgentId);
-        message.success(t('confirmRemoveSessionSuccess', { ns: 'chat' }));
+        toast.success(t('confirmRemoveSessionSuccess', { ns: 'chat' }));
         navigate('/');
       },
       title: t('confirmRemoveSessionItemAlert', { ns: 'chat' }),
@@ -200,11 +200,11 @@ const Header = memo(() => {
         a.click();
         a.remove();
         URL.revokeObjectURL(url);
-        message.success(t('settingAgent.export.success', { ns: 'setting' }));
+        toast.success(t('settingAgent.export.success', { ns: 'setting' }));
       }
     } catch (error) {
       console.error('Failed to export agent profile markdown:', error);
-      message.error(t('settingAgent.export.error', { ns: 'setting' }));
+      toast.error(t('settingAgent.export.error', { ns: 'setting' }));
     }
   }, [config.model, config.plugins, config.provider, editor, isHeterogeneous, meta, systemRole, t]);
 

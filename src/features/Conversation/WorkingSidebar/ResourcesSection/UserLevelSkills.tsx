@@ -1,5 +1,4 @@
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { EyeIcon, PencilIcon, Trash2Icon } from 'lucide-react';
 import { lazy, memo, Suspense, useMemo, useState } from 'react';
@@ -60,7 +59,7 @@ interface UserLevelSkillsProps {
 const UserLevelSkills = memo<UserLevelSkillsProps>(({ hideHeader }) => {
   const { t } = useTranslation('chat');
   const { t: tCommon } = useTranslation('common');
-  const { message } = App.useApp();
+
   const items = useUserSkills();
   // The row shape keys off `identifier`, but the store mutations key off the DB
   // id — resolve one from the other through the raw skill list.
@@ -126,9 +125,9 @@ const UserLevelSkills = memo<UserLevelSkillsProps>(({ hideHeader }) => {
           onOk: async () => {
             try {
               await deleteAgentSkill(skill.id);
-              message.success(t('workingPanel.skills.delete.success'));
+              toast.success(t('workingPanel.skills.delete.success'));
             } catch (error) {
-              message.error(
+              toast.error(
                 error instanceof Error ? error.message : t('workingPanel.skills.delete.error'),
               );
             }

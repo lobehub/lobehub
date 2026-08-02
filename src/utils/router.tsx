@@ -147,7 +147,7 @@ export const ErrorBoundary = ({ resetPath }: ErrorBoundaryProps) => {
   const appearance = isDark ? 'dark' : 'light';
 
   if (typeof window !== 'undefined' && isChunkLoadError(error)) {
-    notifyChunkError();
+    notifyChunkError(error);
   }
 
   return (

@@ -88,6 +88,7 @@ vi.mock('@lobehub/ui', () => ({
 
 vi.mock('@lobehub/ui/base-ui', () => ({
   confirmModal: vi.fn(),
+  toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
 }));
 
 vi.mock('antd', async (importOriginal) => {

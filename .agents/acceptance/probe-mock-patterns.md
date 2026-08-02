@@ -284,6 +284,82 @@ Measured this way, still-hidden slots produced **0** mutations in 6/6 switches: 
 changes (visible/hidden, active/inactive, mounted/unmounted), capture the classification on both sides
 and use the intersection. Otherwise the action's own effect lands in the wrong bucket.
 
+### Agent Mock playback leaves `pluginState` empty — backfill it before capturing pluginState-driven renders
+
+**Situation:** verifying a builtin-tool Render/Inspector (lobe-agent todos, plans —
+anything reading `message.pluginState`) with DevDock → Agent Mock case playback as
+the deterministic driver (no LLM).
+
+**Doesn't work:** capturing right after playback. The mock pipeline writes each
+tool step's `result` into the tool message `content` only and never sets
+`pluginState`, so a Render keyed off `pluginState` mounts empty (expanded rows
+show nothing) and inspectors fall to their no-data fallback. Reads as "the new
+rendering is broken" when the components are fine. Also note: consecutive todo
+tool rows are folded into the latest by the conversation UI, so early-state rows
+may never mount.
+
+**Works:** after playback completes, backfill in-memory from each message's own
+result JSON, at the layer the Render actually reads:
+
+```js
+const c = window.__LOBE_STORES.chat();
+const msgs = c.dbMessagesMap['main_<agentId>_<topicId>'];
+for (const m of msgs.filter((m) => m.role === 'tool' && m.plugin)) {
+  const parsed = JSON.parse(m.content);
+  if (parsed?.todos)
+    c.internal_dispatchMessage({
+      type: 'updatePluginState',
+      id: m.id,
+      key: 'todos',
+      value: parsed.todos,
+    });
+}
+```
+
+To render a payload the case doesn't cover (another builtin tool, a specific
+state), payload-swap an already-MOUNTED mock row in place — update BOTH the
+assistant's `tools[]` entry (`updateMessageTools`, keyed by `tool_call_id`; this
+is what selects the Render component) and the tool message (`updateMessagePlugin`
+
+- `replaceMessagePluginState`). Dispatching brand-new messages at the end of the
+  list may never mount. Claude Code builtin payloads use `identifier: 'claude-code'`
+  (NOT `lobe-claude-code`) and PascalCase `apiName` (`TodoWrite`). All of this is
+  in-memory only — a reload clears it; delete the temp topic at teardown.
+
+### Desktop theme follows the system appearance, not `settings.general.themeMode`
+
+**Situation:** capturing dark-mode evidence for a desktop UI change.
+
+**Doesn't work:** `window.__LOBE_STORES.user().updateGeneralConfig({ themeMode: 'dark' })`.
+The setting persists (reading it back returns `dark`, and it survives a restart),
+but `document.documentElement.dataset.theme` stays `light` and every token keeps its
+light value. Restarting the instance does not apply it either. Treating the stored
+setting as proof of the rendered theme yields evidence captured in the wrong theme.
+
+**Works:** assert `document.documentElement.dataset.theme` — never the stored
+setting — before capturing any theme-dependent evidence. The renderer tracks the OS
+appearance, so switching it means changing the user's macOS system setting, which is
+outside the harness's remit: mark the dark case untested and say why, rather than
+flipping a device-level preference. Note the setting write is not free — it syncs to
+the account and affects other surfaces; restore it (`auto`) at teardown if you set it.
+
+### A node reference captured before a re-render is silently dead — re-query per assertion
+
+**Situation:** asserting several tab-strip interactions (close, pin, switch) in one
+`agent-browser eval` payload, reusing the element list collected at the top.
+
+**Doesn't work:** collecting `roots` once and then acting on `roots[0]`, `roots[1]`, …
+in sequence. Each action that mutates the tab list re-renders the strip, so every
+reference collected earlier now points at a detached node. Dispatching to a detached
+node throws nothing and changes nothing — React never sees it — so the assertion reads
+as "this interaction does not work". In this catalogue's first occurrence it produced a
+confident "middle-click does not close a pinned tab" that was purely an artefact of the
+stale reference, and it survived review because the number looked plausible.
+
+**Works:** one assertion per `eval`, re-querying the strip each time. When several must
+share a payload, re-query between actions and assert `el.isConnected` before dispatch.
+The same applies to any probe whose own action re-renders the tree it is measuring.
+
 ### `eval` declarations persist in the page global scope
 
 **Situation:** running several `agent-browser eval` payloads against one renderer.

@@ -4,7 +4,7 @@ import { ContextMenuHost, ModalHost, TooltipGroup } from '@lobehub/ui';
 import { ModalHost as BaseModalHost, ToastHost } from '@lobehub/ui/base-ui';
 import { StyleProvider } from 'antd-style';
 import { domMax, LazyMotion } from 'motion/react';
-import { type CSSProperties, lazy, memo, type PropsWithChildren, Suspense } from 'react';
+import { Component, type CSSProperties, lazy, memo, type PropsWithChildren, Suspense } from 'react';
 
 import { LobeAnalyticsProviderWrapper } from '@/components/Analytics/LobeAnalyticsProviderWrapper';
 import { DragUploadProvider } from '@/components/DragUploadZone/DragUploadProvider';
@@ -40,17 +40,31 @@ const devDockLayoutStyle: CSSProperties = {
   width: '100%',
 };
 
+class DevDockBoundary extends Component<PropsWithChildren, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    return this.state.failed ? null : this.props.children;
+  }
+}
+
 export const DevDockLayout = memo<PropsWithChildren>(({ children }) => {
   const mounted = useDevDockMounted();
-
-  if (!mounted) return children;
 
   return (
     <>
       <div style={devDockLayoutStyle}>{children}</div>
-      <Suspense>
-        <DevDock />
-      </Suspense>
+      {mounted && (
+        <DevDockBoundary>
+          <Suspense>
+            <DevDock />
+          </Suspense>
+        </DevDockBoundary>
+      )}
     </>
   );
 });
@@ -66,42 +80,40 @@ const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
     (serverConfig?.isMobile ?? typeof __MOBILE__ !== 'undefined') ? __MOBILE__ : false;
 
   const content = (
-    <QueryProvider>
-      <AuthProvider>
-        <MarketAuthProvider isDesktop={isDesktop}>
-          <StoreInitialization />
+    <AuthProvider>
+      <MarketAuthProvider isDesktop={isDesktop}>
+        <StoreInitialization />
 
-          {isDesktop && <ServerVersionOutdatedAlert />}
-          <FaviconProvider>
-            {postRenderReady && (
-              <Suspense>
-                <DynamicFavicon />
-              </Suspense>
-            )}
-            <GroupWizardProvider>
-              <DragUploadProvider>
-                <LazyMotion features={domMax}>
-                  <TooltipGroup layoutAnimation={false}>
-                    <StyleProvider speedy={import.meta.env.PROD}>
-                      <LobeAnalyticsProviderWrapper>
-                        <CacheHydrationGate>{children}</CacheHydrationGate>
-                      </LobeAnalyticsProviderWrapper>
-                    </StyleProvider>
-                  </TooltipGroup>
-                  <ModalHost />
-                  <BaseModalHost />
-                  <ToastHost />
-                  <ContextMenuHost />
-                  <Suspense>
-                    <ImperativeMountHost />
-                  </Suspense>
-                </LazyMotion>
-              </DragUploadProvider>
-            </GroupWizardProvider>
-          </FaviconProvider>
-        </MarketAuthProvider>
-      </AuthProvider>
-    </QueryProvider>
+        {isDesktop && <ServerVersionOutdatedAlert />}
+        <FaviconProvider>
+          {postRenderReady && (
+            <Suspense>
+              <DynamicFavicon />
+            </Suspense>
+          )}
+          <GroupWizardProvider>
+            <DragUploadProvider>
+              <LazyMotion features={domMax}>
+                <TooltipGroup layoutAnimation={false}>
+                  <StyleProvider speedy={import.meta.env.PROD}>
+                    <LobeAnalyticsProviderWrapper>
+                      <CacheHydrationGate>{children}</CacheHydrationGate>
+                    </LobeAnalyticsProviderWrapper>
+                  </StyleProvider>
+                </TooltipGroup>
+                <ModalHost />
+                <BaseModalHost />
+                <ToastHost />
+                <ContextMenuHost />
+                <Suspense>
+                  <ImperativeMountHost />
+                </Suspense>
+              </LazyMotion>
+            </DragUploadProvider>
+          </GroupWizardProvider>
+        </FaviconProvider>
+      </MarketAuthProvider>
+    </AuthProvider>
   );
 
   return (
@@ -112,7 +124,9 @@ const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
           isMobile={isMobile}
           serverConfig={serverConfig?.config}
         >
-          <DevDockLayout>{content}</DevDockLayout>
+          <QueryProvider>
+            <DevDockLayout>{content}</DevDockLayout>
+          </QueryProvider>
         </ServerConfigStoreProvider>
       </AppTheme>
     </Locale>

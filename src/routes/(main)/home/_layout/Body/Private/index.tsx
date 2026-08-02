@@ -37,10 +37,9 @@ const Private = memo<PrivateProps>(({ itemKey }) => {
   const {
     createAgentListMenuItem,
     createAgentMenuItem,
+    createConnectAgentMenuItem,
     createGroupChatMenuItem,
-    createHeterogeneousAgentMenuItems,
     createMarketAgentMenuItem,
-    createPlatformAgentMenuItem,
     isLoading,
   } = useCreateMenuItems();
 
@@ -48,16 +47,12 @@ const Private = memo<PrivateProps>(({ itemKey }) => {
   // across both buckets — heterogeneous and platform agents are hard-pinned
   // to private here. Session-group creation lives in the "More" dropdown.
   const addMenuItems = useMemo(() => {
-    const heterogeneousItems = createHeterogeneousAgentMenuItems({ visibility: 'private' });
-    const platformItem = createPlatformAgentMenuItem({ visibility: 'private' });
+    const connectItem = createConnectAgentMenuItem({ visibility: 'private' });
 
     return [
       createAgentMenuItem({ visibility: 'private' }),
       createGroupChatMenuItem({ visibility: 'private' }),
-      ...(heterogeneousItems.length > 0
-        ? [{ type: 'divider' as const }, ...heterogeneousItems]
-        : []),
-      ...(platformItem ? [{ type: 'divider' as const }, platformItem] : []),
+      ...(connectItem ? [{ type: 'divider' as const }, connectItem] : []),
       // Same discovery entries as the workspace-public section — the agent
       // list opens on the Private tab so the surface matches this bucket.
       { type: 'divider' as const },
@@ -67,10 +62,9 @@ const Private = memo<PrivateProps>(({ itemKey }) => {
   }, [
     createAgentListMenuItem,
     createAgentMenuItem,
+    createConnectAgentMenuItem,
     createGroupChatMenuItem,
-    createHeterogeneousAgentMenuItems,
     createMarketAgentMenuItem,
-    createPlatformAgentMenuItem,
   ]);
 
   const handleOpenConfigGroupModal = useCallback(() => {

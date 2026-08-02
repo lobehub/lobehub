@@ -2,7 +2,7 @@ import { type ModelProviderCard } from '../types';
 
 const LongCat: ModelProviderCard = {
   chatModels: [],
-  checkModel: 'LongCat-2.0-Preview',
+  checkModel: 'LongCat-2.0',
   description:
     'LongCat is a series of generative AI large models independently developed by Meituan. It is designed to enhance internal enterprise productivity and enable innovative applications through an efficient computational architecture and strong multimodal capabilities.',
   id: 'longcat',

@@ -35,6 +35,7 @@ declare global {
       isMacTahoe?: boolean;
       nodeVersion?: string;
       platform?: NodeJS.Platform;
+      systemLanguage?: string;
     };
   }
 

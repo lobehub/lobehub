@@ -23,6 +23,11 @@ export const normalizePathForScope = (input: string): string => {
   return normalized.length > 1 && normalized.endsWith('/') ? normalized.slice(0, -1) : normalized;
 };
 
+const isAbsolutePath = (input: string): boolean => {
+  if (path.isAbsolute(input)) return true;
+  return /^[A-Z]:[/\\]/i.test(input) || input.startsWith('\\\\') || input.startsWith('\\');
+};
+
 /**
  * Resolve a path against a scope (CWD).
  * - No path provided → use scope as default
@@ -36,7 +41,7 @@ export const resolvePathWithScope = (
 ): string | undefined => {
   if (!scope) return inputPath;
   if (!inputPath) return scope;
-  if (path.isAbsolute(inputPath)) return inputPath;
+  if (isAbsolutePath(inputPath)) return inputPath;
   return path.join(scope, inputPath);
 };
 
@@ -85,7 +90,8 @@ export const resolveArgsWithScope = <T extends { scope?: string }>(
   pathField: string,
   fallbackScope?: string,
 ): T => {
-  const scope = args.scope || fallbackScope;
+  const resolvedScope = resolvePathWithScope(args.scope, fallbackScope);
+  const scope = resolvedScope ?? args.scope ?? fallbackScope;
   const currentPath = (args as Record<string, any>)[pathField] as string | undefined;
   const resolved = resolvePathWithScope(currentPath, scope);
   if (resolved === currentPath) return args;

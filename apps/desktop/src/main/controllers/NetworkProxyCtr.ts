@@ -4,12 +4,8 @@ import { isEqual, merge } from 'es-toolkit/compat';
 import { defaultProxySettings } from '@/const/store';
 import { createLogger } from '@/utils/logger';
 
-import type { ProxyTestResult } from '../modules/networkProxy';
-import {
-  ProxyConfigValidator,
-  ProxyConnectionTester,
-  ProxyDispatcherManager,
-} from '../modules/networkProxy';
+import type { ProxyTestResult } from '../modules/networkProxy/tester';
+import { ProxyConfigValidator } from '../modules/networkProxy/validator';
 import { ControllerModule, IpcMethod } from './index';
 
 // Create logger
@@ -70,6 +66,7 @@ export default class NetworkProxyCtr extends ControllerModule {
       }
 
       // Apply proxy settings
+      const { ProxyDispatcherManager } = await import('../modules/networkProxy/dispatcher');
       await ProxyDispatcherManager.applyProxySettings(newConfig);
 
       // Save to storage
@@ -93,6 +90,7 @@ export default class NetworkProxyCtr extends ControllerModule {
   @IpcMethod()
   async testProxyConnection(url: string): Promise<{ message?: string; success: boolean }> {
     try {
+      const { ProxyConnectionTester } = await import('../modules/networkProxy/tester');
       const result = await ProxyConnectionTester.testConnection(url);
 
       if (result.success) {
@@ -119,6 +117,7 @@ export default class NetworkProxyCtr extends ControllerModule {
     testUrl?: string;
   }): Promise<ProxyTestResult> {
     try {
+      const { ProxyConnectionTester } = await import('../modules/networkProxy/tester');
       return await ProxyConnectionTester.testProxyConfig(config, testUrl);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -145,11 +144,23 @@ export default class NetworkProxyCtr extends ControllerModule {
       const validation = ProxyConfigValidator.validate(networkProxy);
       if (!validation.isValid) {
         logger.warn('Invalid stored proxy configuration, using defaults:', validation.errors);
+        const { ProxyDispatcherManager } = await import('../modules/networkProxy/dispatcher');
         await ProxyDispatcherManager.applyProxySettings(defaultProxySettings);
         return;
       }
 
+      // A fresh Electron process already uses direct connections. Avoid loading
+      // the full undici proxy implementation on the default startup path.
+      if (!networkProxy.enableProxy) {
+        logger.info('Initial proxy settings applied successfully', {
+          enableProxy: false,
+          proxyType: networkProxy.proxyType,
+        });
+        return;
+      }
+
       // Apply proxy settings
+      const { ProxyDispatcherManager } = await import('../modules/networkProxy/dispatcher');
       await ProxyDispatcherManager.applyProxySettings(networkProxy);
 
       logger.info('Initial proxy settings applied successfully', {
@@ -160,6 +171,7 @@ export default class NetworkProxyCtr extends ControllerModule {
       logger.error('Failed to apply initial proxy settings:', error);
       // Use default settings on error
       try {
+        const { ProxyDispatcherManager } = await import('../modules/networkProxy/dispatcher');
         await ProxyDispatcherManager.applyProxySettings(defaultProxySettings);
         logger.info('Fallback to default proxy settings');
       } catch (fallbackError) {

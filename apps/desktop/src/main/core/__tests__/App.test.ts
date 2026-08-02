@@ -1,4 +1,4 @@
-import { app as electronApp } from 'electron';
+import { app as electronApp, ipcMain } from 'electron';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Import after mocks are set up
@@ -68,7 +68,7 @@ vi.mock('~common/routes', () => ({
 }));
 
 // Mock other dependencies
-vi.mock('electron-is', () => ({
+vi.mock('@/utils/platform', () => ({
   macOS: vi.fn(() => false),
   windows: vi.fn(() => false),
 }));
@@ -206,6 +206,21 @@ describe('App', () => {
       beforeQuitHandler();
 
       expect(destroy).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe('desktop bootstrap identity', () => {
+    it('responds through the registered controller without an elided runtime symbol', () => {
+      appInstance = new App();
+      const listener = vi
+        .mocked(ipcMain.on)
+        .mock.calls.findLast(
+          ([channel]) => channel === 'desktop:get-bootstrap-identity',
+        )?.[1] as (event: { returnValue?: unknown }) => void;
+      const event: { returnValue?: unknown } = {};
+
+      expect(() => listener(event)).not.toThrow();
+      expect(event.returnValue).toEqual({ isIdentityResolved: true });
     });
   });
 });

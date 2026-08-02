@@ -1,6 +1,6 @@
 import { Block, Flexbox, Tag, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { App, Divider } from 'antd';
+import { Button, toast } from '@lobehub/ui/base-ui';
+import { Divider } from 'antd';
 import { cssVar, cx } from 'antd-style';
 import { memo, type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -27,7 +27,7 @@ interface RecommendationCardProps {
 export const RecommendationCard = memo<RecommendationCardProps>(
   ({ compact, ctaKey, descriptionKey, i18nValues, icon, onAction, tagKey, titleKey }) => {
     const { t } = useTranslation('home');
-    const { message } = App.useApp();
+
     const [loading, setLoading] = useState(false);
 
     const title = t(titleKey, { defaultValue: '', ...i18nValues });
@@ -42,11 +42,11 @@ export const RecommendationCard = memo<RecommendationCardProps>(
         await onAction();
       } catch (error) {
         console.error('[recommendations] action failed:', error);
-        message.error(t('common.error', { defaultValue: 'Something went wrong' }));
+        toast.error(t('common.error', { defaultValue: 'Something went wrong' }));
       } finally {
         setLoading(false);
       }
-    }, [loading, message, onAction, t]);
+    }, [loading, onAction, t]);
 
     if (compact)
       return (

@@ -432,4 +432,202 @@ describe('tabPages actions', () => {
       });
     });
   });
+
+  describe('pinning keeps array order equal to render order', () => {
+    const urls = (tabs: TabItem[]) => tabs.map((tab) => tab.url);
+
+    const seed = () => {
+      const { result } = renderHook(() => useElectronStore());
+      const tabs = [buildTab('/a'), buildTab('/b'), buildTab('/c')];
+
+      act(() => {
+        useElectronStore.setState({ activeTabId: '/a', tabs });
+      });
+
+      return result;
+    };
+
+    it('moves a pinned tab to the head so Mod+1 still means the leftmost tab', () => {
+      const result = seed();
+
+      act(() => {
+        result.current.pinTab('/c');
+      });
+
+      expect(urls(result.current.tabs)).toEqual(['/c', '/a', '/b']);
+      expect(result.current.tabs[0].pinned).toBe(true);
+    });
+
+    it('appends to the pinned run rather than jumping ahead of earlier pins', () => {
+      const result = seed();
+
+      act(() => {
+        result.current.pinTab('/c');
+      });
+      act(() => {
+        result.current.pinTab('/b');
+      });
+
+      expect(urls(result.current.tabs)).toEqual(['/c', '/b', '/a']);
+    });
+
+    it('returns an unpinned tab to the first slot after the pinned run', () => {
+      const result = seed();
+
+      act(() => {
+        result.current.pinTab('/c');
+      });
+      act(() => {
+        result.current.pinTab('/b');
+      });
+      act(() => {
+        result.current.unpinTab('/c');
+      });
+
+      expect(urls(result.current.tabs)).toEqual(['/b', '/c', '/a']);
+      expect(result.current.tabs[1].pinned).toBe(false);
+    });
+
+    it('ignores a repeated pin', () => {
+      const result = seed();
+
+      act(() => {
+        result.current.pinTab('/b');
+      });
+      act(() => {
+        result.current.pinTab('/b');
+      });
+
+      expect(urls(result.current.tabs)).toEqual(['/b', '/a', '/c']);
+    });
+
+    it('refuses a drag that would interleave pinned and unpinned tabs', () => {
+      const result = seed();
+
+      act(() => {
+        result.current.pinTab('/c');
+      });
+      act(() => {
+        result.current.reorderTabs(2, 0);
+      });
+
+      expect(urls(result.current.tabs)).toEqual(['/c', '/a', '/b']);
+    });
+
+    it('still reorders within the unpinned run', () => {
+      const result = seed();
+
+      act(() => {
+        result.current.pinTab('/c');
+      });
+      act(() => {
+        result.current.reorderTabs(2, 1);
+      });
+
+      expect(urls(result.current.tabs)).toEqual(['/c', '/b', '/a']);
+    });
+
+    it('survives a storage round-trip written before the field existed', () => {
+      const legacy = [{ id: '/a', lastVisited: 1, url: '/a' }] as TabItem[];
+      saveTabPages(PERSONAL_TAB_SCOPE, legacy, '/a');
+
+      const restored = getTabPages(PERSONAL_TAB_SCOPE);
+
+      expect(restored.tabs).toHaveLength(1);
+      expect(restored.tabs[0].pinned).toBeUndefined();
+    });
+  });
+
+  describe('bulk closes spare the pinned run', () => {
+    const urls = (tabs: TabItem[]) => tabs.map((tab) => tab.url);
+
+    const seed = (pins: string[], activeTabId = '/c') => {
+      const { result } = renderHook(() => useElectronStore());
+
+      act(() => {
+        useElectronStore.setState({
+          activeTabId,
+          tabs: [buildTab('/a'), buildTab('/b'), buildTab('/c'), buildTab('/d')],
+        });
+      });
+      for (const url of pins) {
+        act(() => {
+          result.current.pinTab(url);
+        });
+      }
+
+      return result;
+    };
+
+    it('keeps pinned tabs when closing the others', () => {
+      const result = seed(['/a', '/b']);
+
+      act(() => {
+        result.current.closeOtherTabs('/c');
+      });
+
+      expect(urls(result.current.tabs)).toEqual(['/a', '/b', '/c']);
+    });
+
+    it('keeps pinned tabs when closing to the left', () => {
+      const result = seed(['/a']);
+
+      act(() => {
+        result.current.closeLeftTabs('/c');
+      });
+
+      expect(urls(result.current.tabs)).toEqual(['/a', '/c', '/d']);
+    });
+
+    it('keeps the rest of the pinned run when closing to the right of a pinned tab', () => {
+      const result = seed(['/a', '/b']);
+
+      act(() => {
+        result.current.closeRightTabs('/a');
+      });
+
+      expect(urls(result.current.tabs)).toEqual(['/a', '/b']);
+    });
+
+    it('still closes a pinned tab that was targeted on its own', () => {
+      const result = seed(['/a']);
+
+      act(() => {
+        result.current.removeTab('/a');
+      });
+
+      expect(urls(result.current.tabs)).toEqual(['/b', '/c', '/d']);
+    });
+
+    it('does nothing when every tab the bulk close would reach is pinned', () => {
+      const result = seed(['/a', '/b']);
+      const before = result.current.tabs;
+
+      act(() => {
+        result.current.closeLeftTabs('/c');
+      });
+
+      expect(result.current.tabs).toBe(before);
+    });
+
+    it('leaves focus on a pinned tab that survived the close', () => {
+      const result = seed(['/a'], '/a');
+
+      act(() => {
+        result.current.closeOtherTabs('/c');
+      });
+
+      expect(result.current.activeTabId).toBe('/a');
+    });
+
+    it('moves focus to the target when the active tab was closed', () => {
+      const result = seed(['/a'], '/d');
+
+      act(() => {
+        result.current.closeOtherTabs('/c');
+      });
+
+      expect(result.current.activeTabId).toBe('/c');
+    });
+  });
 });

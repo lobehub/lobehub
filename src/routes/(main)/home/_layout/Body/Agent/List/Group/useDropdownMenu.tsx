@@ -2,8 +2,7 @@ import type { SFSymbol } from '@lobechat/electron-client-ipc';
 import { type SidebarVisibility } from '@lobechat/types';
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { GlobeIcon } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -35,7 +34,7 @@ export const useGroupDropdownMenu = ({
   visibility,
 }: GroupDropdownMenuProps): MenuProps['items'] => {
   const { t } = useTranslation(['common', 'chat']);
-  const { message } = App.useApp();
+
   const { allowed: canEdit } = usePermission('edit_own_content');
   const refreshAgentList = useHomeStore((s) => s.refreshAgentList);
 
@@ -90,7 +89,7 @@ export const useGroupDropdownMenu = ({
                 try {
                   await lambdaClient.sessionGroup.publishSessionGroupToWorkspace.mutate({ id });
                   await refreshAgentList();
-                  message.success(
+                  toast.success(
                     t('sessionGroup.publishToWorkspaceSuccess', {
                       defaultValue: 'Published to workspace',
                       ns: 'chat',
@@ -98,7 +97,7 @@ export const useGroupDropdownMenu = ({
                   );
                 } catch (error) {
                   console.error('Failed to publish group:', error);
-                  message.error(t('error', { defaultValue: 'Operation failed' }));
+                  toast.error(t('error', { defaultValue: 'Operation failed' }));
                 }
               },
               title: t('sessionGroup.publishToWorkspace', {
@@ -139,7 +138,6 @@ export const useGroupDropdownMenu = ({
     openConfigGroupModal,
     showPublishAction,
     canEdit,
-    message,
     refreshAgentList,
     t,
   ]);

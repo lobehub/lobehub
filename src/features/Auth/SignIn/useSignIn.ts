@@ -1,3 +1,4 @@
+import { toast } from '@lobehub/ui/base-ui';
 import { Form } from 'antd';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,7 +7,6 @@ import { useNavigate, useSearchParams } from 'react-router';
 import type { CheckUserResponseData } from '@/app/(backend)/api/auth/check-user/route';
 import type { ResolveUsernameResponseData } from '@/app/(backend)/api/auth/resolve-username/route';
 import { useBusinessSignin } from '@/business/client/hooks/useBusinessSignin';
-import { message } from '@/components/AntdStaticMethods';
 import { useAuthServerConfigStore } from '@/features/AuthShell';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 import { requestPasswordReset, signIn } from '@/libs/better-auth/auth-client';
@@ -93,7 +93,7 @@ export const useSignIn = () => {
         newUserCallbackURL: buildOnboardingRedirectUrl(callbackUrl),
       });
       if (error) {
-        message.error(error.message || t('betterAuth.signin.magicLinkError'));
+        toast.error(error.message || t('betterAuth.signin.magicLinkError'));
         return false;
       }
       // Success is a forward step, not a fleeting toast: land on a persistent
@@ -104,7 +104,7 @@ export const useSignIn = () => {
     } catch (error) {
       if (!(error as any)?.errorFields) {
         console.error('Magic link error:', error);
-        message.error(t('betterAuth.signin.magicLinkError'));
+        toast.error(t('betterAuth.signin.magicLinkError'));
       }
       return false;
     } finally {
@@ -123,7 +123,7 @@ export const useSignIn = () => {
       return { email: trimmedIdentifier.toLowerCase(), identifierType: 'email' };
 
     if (!USERNAME_REGEX.test(trimmedIdentifier)) {
-      message.error(t('betterAuth.errors.emailInvalid'));
+      toast.error(t('betterAuth.errors.emailInvalid'));
       return null;
     }
 
@@ -135,13 +135,13 @@ export const useSignIn = () => {
       });
       const data: ResolveUsernameResponseData = await response.json();
       if (!response.ok || !data.exists || !data.email) {
-        message.error(t('betterAuth.errors.usernameNotRegistered'));
+        toast.error(t('betterAuth.errors.usernameNotRegistered'));
         return null;
       }
       return { email: data.email, identifierType: 'username' };
     } catch (error) {
       console.error('Error resolving username:', error);
-      message.error(t('betterAuth.signin.error'));
+      toast.error(t('betterAuth.signin.error'));
       return null;
     }
   };
@@ -164,7 +164,7 @@ export const useSignIn = () => {
 
       if (!data.exists) {
         if (identifierType === 'username') {
-          message.error(t('betterAuth.errors.usernameNotRegistered'));
+          toast.error(t('betterAuth.errors.usernameNotRegistered'));
           return;
         }
         const callbackUrl = searchParams.get('callbackUrl') || '/';
@@ -194,7 +194,7 @@ export const useSignIn = () => {
       setIsSocialOnly(true);
     } catch (error) {
       console.error('Error checking user:', error);
-      message.error(t('betterAuth.signin.error'));
+      toast.error(t('betterAuth.signin.error'));
     } finally {
       setLoading(false);
     }
@@ -237,7 +237,7 @@ export const useSignIn = () => {
       }
     } catch (error) {
       console.error('Sign in error:', error);
-      message.error(t('betterAuth.signin.error'));
+      toast.error(t('betterAuth.signin.error'));
     } finally {
       setLoading(false);
     }
@@ -287,7 +287,7 @@ export const useSignIn = () => {
       if (result && 'error' in result && result.error) throw result.error;
     } catch (error) {
       console.error(`${normalizedProvider} sign in error:`, error);
-      message.error(t('betterAuth.signin.socialError'));
+      toast.error(t('betterAuth.signin.socialError'));
     } finally {
       setSocialLoading(null);
     }
@@ -330,7 +330,7 @@ export const useSignIn = () => {
       });
       return true;
     } catch {
-      message.error(t('betterAuth.signin.forgotPasswordError'));
+      toast.error(t('betterAuth.signin.forgotPasswordError'));
       return false;
     } finally {
       setSending(false);
@@ -351,7 +351,7 @@ export const useSignIn = () => {
       sentInfo.type === 'magicLink'
         ? await handleSendMagicLink(sentInfo.email)
         : await dispatchPasswordReset(sentInfo.email);
-    if (ok) message.success(t('betterAuth.signin.emailSent.resent'));
+    if (ok) toast.success(t('betterAuth.signin.emailSent.resent'));
   };
 
   // "Use a different email" — always drop back to the email entry so the label

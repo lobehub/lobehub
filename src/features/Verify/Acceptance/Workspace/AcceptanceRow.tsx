@@ -3,8 +3,7 @@
 import type { AcceptanceStatus } from '@lobechat/types';
 import { ActionIcon, Flexbox, Icon } from '@lobehub/ui';
 import type { DropdownItem } from '@lobehub/ui/base-ui';
-import { confirmModal, DropdownMenu } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { confirmModal, DropdownMenu, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import {
@@ -121,7 +120,6 @@ const AcceptanceRow = memo<{
   onChanged: () => Promise<unknown> | unknown;
 }>(({ active, item, onChanged }) => {
   const { t } = useTranslation(['verify', 'common']);
-  const { message } = App.useApp();
   const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
   const [mutating, setMutating] = useState(false);
@@ -150,7 +148,7 @@ const AcceptanceRow = memo<{
     if (isSavingRef.current) return;
     const next = draftTitle.trim();
     if (!next) {
-      message.error(t('verify:acceptance.workspace.renameEmpty'));
+      toast.error(t('verify:acceptance.workspace.renameEmpty'));
       setDraftTitle(title);
       setEditing(false);
       return;
@@ -164,11 +162,11 @@ const AcceptanceRow = memo<{
     try {
       await verifyService.renameAcceptance(item.id, next);
       await refresh();
-      message.success(t('verify:acceptance.workspace.renameSuccess'));
+      toast.success(t('verify:acceptance.workspace.renameSuccess'));
       setEditing(false);
     } catch (error) {
       console.error('[acceptance:rename]', error);
-      message.error(t('verify:acceptance.workspace.renameError'));
+      toast.error(t('verify:acceptance.workspace.renameError'));
     } finally {
       isSavingRef.current = false;
       setMutating(false);
@@ -180,10 +178,10 @@ const AcceptanceRow = memo<{
     try {
       await verifyService.updateAcceptanceStatus(item.id, status);
       await refresh();
-      message.success(t('verify:acceptance.workspace.statusSuccess'));
+      toast.success(t('verify:acceptance.workspace.statusSuccess'));
     } catch (error) {
       console.error('[acceptance:status]', error);
-      message.error(t('verify:acceptance.workspace.statusError'));
+      toast.error(t('verify:acceptance.workspace.statusError'));
     } finally {
       setMutating(false);
     }
@@ -201,10 +199,10 @@ const AcceptanceRow = memo<{
           await verifyService.deleteAcceptance(item.id);
           if (active) navigate('/acceptance', { replace: true });
           await onChanged();
-          message.success(t('verify:acceptance.workspace.deleteSuccess'));
+          toast.success(t('verify:acceptance.workspace.deleteSuccess'));
         } catch (error) {
           console.error('[acceptance:delete]', error);
-          message.error(t('verify:acceptance.workspace.deleteError'));
+          toast.error(t('verify:acceptance.workspace.deleteError'));
         } finally {
           setMutating(false);
         }

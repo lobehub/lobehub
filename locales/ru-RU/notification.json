@@ -77,5 +77,7 @@
   "workspace_primary_ownership_transferred": "Теперь вы являетесь основным владельцем рабочей области \"{{workspaceName}}\". Биллинг и основные привилегии были переданы вам.",
   "workspace_primary_ownership_transferred_title": "Теперь вы основной владелец {{workspaceName}}",
   "workspace_subscription_expired": "Подписка на рабочую область \"{{workspaceName}}\" завершилась. Продлите подписку в течение {{days}} дней, чтобы восстановить полный доступ до понижения уровня рабочей области.",
-  "workspace_subscription_expired_title": "Подписка завершилась для {{workspaceName}}"
+  "workspace_subscription_expired_title": "Подписка завершилась для {{workspaceName}}",
+  "workspace_waitlist_approved": "Ваш доступ к бета-версии Workspace готов. Перейдите в LobeHub, чтобы создать первое рабочее пространство и пригласить свою команду.",
+  "workspace_waitlist_approved_title": "Доступ к бета-версии Workspace одобрен"
 }

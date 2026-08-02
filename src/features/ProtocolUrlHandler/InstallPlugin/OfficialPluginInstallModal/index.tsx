@@ -1,7 +1,7 @@
 'use client';
 
 import { Block, Text } from '@lobehub/ui';
-import { App } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -23,7 +23,6 @@ interface OfficialPluginInstallModalProps {
 
 const OfficialPluginInstallModal = memo<OfficialPluginInstallModalProps>(
   ({ installRequest, onComplete }) => {
-    const { message } = App.useApp();
     const { t } = useTranslation(['plugin', 'common']);
     const [loading, setLoading] = useState(false);
     const { allowed: canCreate } = usePermission('create_content');
@@ -52,11 +51,11 @@ const OfficialPluginInstallModal = memo<OfficialPluginInstallModalProps>(
         await togglePlugin(identifier);
         setLoading(false);
 
-        message.success(t('protocolInstall.messages.installSuccess', { name: data.name }));
+        toast.success(t('protocolInstall.messages.installSuccess', { name: data.name }));
         onComplete();
       } catch (error) {
         console.error('Official plugin installation error:', error);
-        message.error(t('protocolInstall.messages.installError'));
+        toast.error(t('protocolInstall.messages.installError'));
         setLoading(false);
       }
     }, [
@@ -67,7 +66,6 @@ const OfficialPluginInstallModal = memo<OfficialPluginInstallModalProps>(
       installMCPPlugin,
       identifier,
       togglePlugin,
-      message,
       t,
       onComplete,
     ]);

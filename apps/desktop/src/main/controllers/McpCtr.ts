@@ -8,7 +8,7 @@ import superjson from 'superjson';
 import FileService from '@/services/fileSrv';
 import { createLogger } from '@/utils/logger';
 
-import { MCPClient, MCPConnectionError } from '../libs/mcp/client';
+import type { MCPClient } from '../libs/mcp/client';
 import type {
   AudioContent,
   ImageContent,
@@ -21,6 +21,7 @@ import { ControllerModule, IpcMethod } from './index';
 
 const execPromise = promisify(exec);
 const logger = createLogger('controllers:McpCtr');
+const loadMcpClient = () => import('../libs/mcp/client');
 
 /**
  * Desktop-only copy of `@lobechat/types`'s `CheckMcpInstallResult`.
@@ -232,6 +233,7 @@ export default class McpCtr extends ControllerModule {
   }
 
   private async createClient(params: MCPClientParams) {
+    const { MCPClient } = await loadMcpClient();
     const client = new MCPClient(params);
     await client.initialize();
     return client;
@@ -334,6 +336,7 @@ export default class McpCtr extends ControllerModule {
       });
     } catch (error) {
       // If it's an MCPConnectionError with stderr logs, enhance the error message
+      const { MCPConnectionError } = await loadMcpClient();
       if (error instanceof MCPConnectionError && error.stderrLogs.length > 0) {
         const stderrOutput = error.stderrLogs.join('\n');
         const enhancedError = new Error(
@@ -473,6 +476,7 @@ export default class McpCtr extends ControllerModule {
       };
     } catch (error) {
       // If it's an MCPConnectionError with stderr logs, enhance the error message
+      const { MCPConnectionError } = await loadMcpClient();
       if (error instanceof MCPConnectionError && error.stderrLogs.length > 0) {
         const stderrOutput = error.stderrLogs.join('\n');
         const enhancedError = new Error(

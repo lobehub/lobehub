@@ -1,7 +1,7 @@
 import type { TaskDetailSubtask } from '@lobechat/types';
 import { ActionIcon, Block, Flexbox, Icon, Text } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App, ConfigProvider, Tree } from 'antd';
+import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { ConfigProvider, Tree } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import { cssVar } from 'antd-style';
 import { ChevronDown, ListTodoIcon, PlayCircle, Plus } from 'lucide-react';
@@ -134,7 +134,7 @@ const toTreeData = (tree: TaskTreeNode[]): DataNode[] => {
 
 const TaskSubtasks = memo(() => {
   const { t } = useTranslation('chat');
-  const { message } = App.useApp();
+
   const navigate = useWorkspaceAwareNavigate();
   const { allowed: canEditTask, reason } = usePermission('create_content');
   const agentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
@@ -218,7 +218,7 @@ const TaskSubtasks = memo(() => {
         plan.blockedByCycle.length > 0 ||
         plan.cycles.length > 0;
       if (plan.totalRunnable === 0 && !hasInformativeState) {
-        message.info(t('taskDetail.runAll.empty'));
+        toast.info(t('taskDetail.runAll.empty'));
         return;
       }
 
@@ -234,7 +234,7 @@ const TaskSubtasks = memo(() => {
           const kicked = res.data.kickedOff.length;
           const failed = res.data.failed?.length ?? 0;
           if (failed > 0) {
-            message.warning(
+            toast.warning(
               t('taskDetail.runAll.partialFailure', {
                 failed,
                 ok: kicked,
@@ -242,18 +242,18 @@ const TaskSubtasks = memo(() => {
               }),
             );
           } else {
-            message.success(t('taskDetail.runAll.kickedOff', { count: kicked }));
+            toast.success(t('taskDetail.runAll.kickedOff', { count: kicked }));
           }
         },
         title: t('taskDetail.runAll.title'),
       });
     } catch (error) {
       console.error('[TaskSubtasks] Failed to plan subtasks:', error);
-      message.error(t('taskDetail.updateFailed'));
+      toast.error(t('taskDetail.updateFailed'));
     } finally {
       setIsPlanning(false);
     }
-  }, [canEditTask, taskId, isPlanning, message, t, runReadySubtasks]);
+  }, [canEditTask, taskId, isPlanning, t, runReadySubtasks]);
 
   if (!taskId) return null;
 

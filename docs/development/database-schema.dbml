@@ -2,6 +2,7 @@ table agents {
   id text [pk, not null]
   slug varchar(100)
   title varchar(255)
+  name varchar(255)
   description varchar(1000)
   tags jsonb [default: `[]`]
   editor_data jsonb

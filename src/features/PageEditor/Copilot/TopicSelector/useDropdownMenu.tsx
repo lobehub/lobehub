@@ -2,7 +2,7 @@ import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import type { ChatTopicStatus } from '@lobechat/types';
 import type { MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
-import { App } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
 import {
   Archive,
   ArchiveRestore,
@@ -53,7 +53,7 @@ export const useDropdownMenu = ({
   topicTitle,
 }: UseDropdownMenuProps): (() => MenuProps['items']) => {
   const { t } = useTranslation(['common', 'topic']);
-  const { message } = App.useApp();
+
   const appOrigin = useAppOrigin();
   const navigate = useWorkspaceAwareNavigate();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
@@ -193,7 +193,7 @@ export const useDropdownMenu = ({
           label: t('actions.copySessionId', { ns: 'topic' }),
           onClick: () => {
             void navigator.clipboard.writeText(topicId);
-            message.success(t('actions.copySessionIdSuccess', { ns: 'topic' }));
+            toast.success(t('actions.copySessionIdSuccess', { ns: 'topic' }));
           },
         },
         {
@@ -205,7 +205,7 @@ export const useDropdownMenu = ({
             if (!agentId) return;
             const url = `${appOrigin}${AGENT_CHAT_TOPIC_URL(agentId, topicId)}`;
             void navigator.clipboard.writeText(url);
-            message.success(t('actions.copyLinkSuccess', { ns: 'topic' }));
+            toast.success(t('actions.copyLinkSuccess', { ns: 'topic' }));
           },
         },
         {
@@ -264,7 +264,6 @@ export const useDropdownMenu = ({
       handleOpenShareModal,
       isCompleted,
       markTopicCompleted,
-      message,
       navigate,
       onClose,
       onDelete,

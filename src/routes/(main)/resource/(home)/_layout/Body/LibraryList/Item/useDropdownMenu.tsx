@@ -1,7 +1,6 @@
 import { type MenuProps } from '@lobehub/ui';
 import { Icon, Tooltip } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { EyeOffIcon, FileText, GlobeIcon, PencilLine, Trash } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -34,7 +33,7 @@ export const useDropdownMenu = ({
   visibility,
 }: ActionProps): (() => MenuProps['items']) => {
   const { t } = useTranslation(['file', 'common', 'chat']);
-  const { message } = App.useApp();
+
   const removeKnowledgeBase = useKnowledgeBaseStore((s) => s.removeKnowledgeBase);
   const publishKnowledgeBaseToWorkspace = useKnowledgeBaseStore(
     (s) => s.publishKnowledgeBaseToWorkspace,
@@ -71,7 +70,7 @@ export const useDropdownMenu = ({
         try {
           await removeKnowledgeBase(id);
         } catch (error) {
-          message.error(
+          toast.error(
             isForbiddenError(error)
               ? t('manageOnlyCreator', { ns: 'common' })
               : t('operationFailed', { ns: 'common' }),
@@ -80,7 +79,7 @@ export const useDropdownMenu = ({
       },
       title: t('header.actions.deleteLibrary'),
     });
-  }, [canEdit, canManage, id, message, removeKnowledgeBase, t]);
+  }, [canEdit, canManage, id, removeKnowledgeBase, t]);
 
   const handleEditDescription = useCallback(() => {
     if (!canEdit || !canManage) return;
@@ -99,15 +98,15 @@ export const useDropdownMenu = ({
       onOk: async () => {
         try {
           await publishKnowledgeBaseToWorkspace(id);
-          message.success(t('resources.publishToWorkspace.success', { ns: 'chat' }));
+          toast.success(t('resources.publishToWorkspace.success', { ns: 'chat' }));
         } catch (error) {
           console.error(error);
-          message.error(t('resources.publishToWorkspace.error', { ns: 'chat' }));
+          toast.error(t('resources.publishToWorkspace.error', { ns: 'chat' }));
         }
       },
       title: t('library.publishConfirm.title'),
     });
-  }, [isOwnPrivateKb, id, publishKnowledgeBaseToWorkspace, t, message]);
+  }, [isOwnPrivateKb, id, publishKnowledgeBaseToWorkspace, t]);
 
   const handleMakePrivate = useCallback(() => {
     if (!isOwnPublicKb) return;
@@ -119,15 +118,15 @@ export const useDropdownMenu = ({
       onOk: async () => {
         try {
           await setKnowledgeBaseVisibility(id, 'private');
-          message.success(t('makePrivate.success', { ns: 'common' }));
+          toast.success(t('makePrivate.success', { ns: 'common' }));
         } catch (error) {
           console.error(error);
-          message.error(t('makePrivate.error', { ns: 'common' }));
+          toast.error(t('makePrivate.error', { ns: 'common' }));
         }
       },
       title: t('makePrivate.confirm.title', { ns: 'common' }),
     });
-  }, [isOwnPublicKb, id, setKnowledgeBaseVisibility, t, message]);
+  }, [isOwnPublicKb, id, setKnowledgeBaseVisibility, t]);
 
   return useCallback(
     () =>

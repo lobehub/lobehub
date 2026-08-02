@@ -162,6 +162,29 @@ describe('processUnderstandingProviders', () => {
     );
   });
 
+  /**
+   * @example A diagnostic run writes Understanding without implicitly starting task generation.
+   */
+  it('can suppress automatic task recommendations while preserving Understanding writing', async () => {
+    const service = { processProvider: vi.fn(async () => completed('github', 'github@1')) };
+    const diagnostic = createContext({
+      ...payload,
+      providers: [{ id: 'github', revision: 1 }],
+      triggerTaskRecommendations: false,
+    });
+    const triggerTaskRecommendations = vi.fn<TriggerTaskRecommendations>(async () => undefined);
+
+    await processUnderstandingProviders(diagnostic.context as never, {
+      createService: async () => service as never,
+      processCollectedWorkflow: workflow as never,
+      triggerTaskRecommendations,
+    });
+
+    expect(diagnostic.invocations).toHaveLength(1);
+    expect(diagnostic.invocations[0].settings.body.sourceFingerprint).toBe('github@1');
+    expect(triggerTaskRecommendations).not.toHaveBeenCalled();
+  });
+
   it('does not invoke writing for terminal failure and lets transient errors retry', async () => {
     const terminal = createContext({
       ...payload,

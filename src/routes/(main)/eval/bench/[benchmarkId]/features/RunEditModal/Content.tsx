@@ -3,8 +3,8 @@
 import { AGENT_PROFILE_URL, DEFAULT_INBOX_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
 import type { AgentEvalRunStatus, EvalRunInputConfig } from '@lobechat/types';
 import { Accordion, AccordionItem, ActionIcon, Avatar, Flexbox } from '@lobehub/ui';
-import { Select, useModalContext } from '@lobehub/ui/base-ui';
-import { App, Form, Input, InputNumber, Space } from 'antd';
+import { Select, toast, useModalContext } from '@lobehub/ui/base-ui';
+import { Form, Input, InputNumber, Space } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import { type FC, useCallback, useEffect, useMemo, useState } from 'react';
@@ -58,7 +58,7 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
   const { t } = useTranslation('eval');
   const { t: tChat } = useTranslation('chat');
   const { close } = useModalContext();
-  const { message } = App.useApp();
+
   const navigate = useWorkspaceAwareNavigate();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const { benchmarkId } = useParams<{ benchmarkId: string }>();
@@ -159,10 +159,10 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
         name: values.name,
         targetAgentId: canChangeConfig ? values.targetAgentId : undefined,
       });
-      message.success(t('run.edit.success'));
+      toast.success(t('run.edit.success'));
       close();
     } catch {
-      message.error(t('run.edit.error'));
+      toast.error(t('run.edit.error'));
     } finally {
       onLoadingChange?.(false);
     }

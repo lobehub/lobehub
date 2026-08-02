@@ -6,6 +6,12 @@ import { createVolcengineImage } from './createImage';
 import { createVolcengineVideo } from './video/createVideo';
 import { handleVolcengineVideoWebhook } from './video/handleCreateVideoWebhook';
 
+const isVolcengineReasoningEffortModel = (model: string) => {
+  const normalizedModel = model.toLowerCase();
+
+  return normalizedModel.includes('deepseek-v4') || normalizedModel.includes('glm-5-2');
+};
+
 const resolveVolcengineReasoningParams = (
   model: string,
   thinking: any,
@@ -15,7 +21,7 @@ const resolveVolcengineReasoningParams = (
   let targetThinking = thinking;
   let targetReasoningEffort = reasoning_effort;
 
-  if (model?.includes('deepseek-v4')) {
+  if (isVolcengineReasoningEffortModel(model)) {
     if (thinking?.type === 'disabled') {
       targetThinking = { type: 'disabled' };
       targetReasoningEffort = 'minimal';

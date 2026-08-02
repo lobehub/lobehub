@@ -1,10 +1,10 @@
 import { AGENT_CHAT_TOPIC_URL, AGENT_CHAT_URL } from '@lobechat/const';
+import { toast } from '@lobehub/ui/base-ui';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import { message as antdMessage } from '@/components/AntdStaticMethods';
 import { buildTaskHandoffPath } from '@/features/AgentTaskManager/taskHandoff';
 import type { SendButtonHandler } from '@/features/ChatInput/store/initialState';
 import { buildMessageContextSelections } from '@/features/ChatInput/utils/contextSelections';
@@ -127,7 +127,7 @@ export const useSend = (mode: HomeMode = 'chat') => {
       // this before the empty-message guard so an attachment-only submission
       // explains why it cannot proceed instead of appearing inert.
       if (mode === 'task' && (fileList.length > 0 || contextList.length > 0)) {
-        antdMessage.error(t('dashboard.task.unsupportedContext'));
+        toast.error(t('dashboard.task.unsupportedContext'));
         return;
       }
 
@@ -250,7 +250,7 @@ export const useSend = (mode: HomeMode = 'chat') => {
         }
       } catch (error) {
         console.error('[home:send]', error);
-        antdMessage.error(t('dashboard.submitFailed'));
+        toast.error(t('dashboard.submitFailed'));
       } finally {
         // Preserve the complete draft when creation or execution fails. The
         // editor, files and context are one unit from the user's perspective.

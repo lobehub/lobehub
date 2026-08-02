@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import { act, renderHook } from '@testing-library/react';
+import { act, render, renderHook, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useCreateMenuItems } from './useCreateMenuItems';
@@ -15,6 +15,7 @@ const loadGroupsMock = vi.hoisted(() => vi.fn());
 const createNewPageMock = vi.hoisted(() => vi.fn());
 const messageErrorMock = vi.hoisted(() => vi.fn());
 const navigateMock = vi.hoisted(() => vi.fn());
+const openConnectAgentModalMock = vi.hoisted(() => vi.fn());
 const openCreateGroupModalMock = vi.hoisted(() => vi.fn());
 const agentModalMock = vi.hoisted(() => ({
   current: undefined as { openCreateGroupModal: (id?: string, v?: string) => void } | undefined,
@@ -24,53 +25,10 @@ vi.mock('@lobechat/const', () => ({
   isDesktop: true,
 }));
 
-vi.mock('@lobechat/heterogeneous-agents/client', () => ({
-  HETEROGENEOUS_AGENT_CLIENT_CONFIGS: [
-    {
-      avatar: 'claude-avatar',
-      command: 'claude',
-      icon: () => null,
-      iconId: 'ClaudeCode',
-      menuKey: 'newClaudeCodeAgent',
-      menuLabelKey: 'newClaudeCodeAgent',
-      title: 'Claude Code',
-      type: 'claude-code',
-    },
-    {
-      avatar: 'avatar',
-      command: 'codex',
-      icon: () => null,
-      iconId: 'Codex',
-      menuKey: 'newCodexAgent',
-      menuLabelKey: 'newCodexAgent',
-      title: 'Codex',
-      type: 'codex',
-    },
-    {
-      avatar: 'amp-avatar',
-      command: 'amp',
-      icon: () => null,
-      iconId: 'Amp',
-      menuKey: 'newAmpAgent',
-      menuLabelKey: 'newAmpAgent',
-      title: 'Amp',
-      type: 'amp',
-    },
-    {
-      avatar: 'opencode-avatar',
-      command: 'opencode',
-      icon: () => null,
-      iconId: 'OpenCode',
-      menuKey: 'newOpenCodeAgent',
-      menuLabelKey: 'newOpenCodeAgent',
-      title: 'OpenCode',
-      type: 'opencode',
-    },
-  ],
-}));
-
 vi.mock('@lobehub/ui', () => ({
+  Flexbox: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
   Icon: () => null,
+  Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
 }));
 
 vi.mock('@lobehub/ui/icons', () => ({
@@ -105,6 +63,10 @@ vi.mock('swr/mutation', () => ({
 
 vi.mock('@/components/ChatGroupWizard/templates', () => ({
   useGroupTemplates: () => [],
+}));
+
+vi.mock('@/features/ConnectAgent', () => ({
+  openConnectAgentModal: openConnectAgentModalMock,
 }));
 
 vi.mock('@/routes/(main)/home/_layout/Body/Agent/ModalProvider', () => ({
@@ -148,17 +110,6 @@ vi.mock('@/store/page', () => ({
     }),
 }));
 
-vi.mock('@/store/user', () => ({
-  useUserStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ preference: { lab: {} } }),
-}));
-
-vi.mock('@/store/user/selectors', () => ({
-  labPreferSelectors: {
-    enablePlatformAgent: () => false,
-  },
-}));
-
 const isActionItem = (
   item: unknown,
 ): item is {
@@ -189,10 +140,7 @@ describe('useCreateMenuItems', () => {
       'newAgent',
       'newGroupChat',
       'divider',
-      'newClaudeCodeAgent',
-      'newCodexAgent',
-      'newAmpAgent',
-      'newOpenCodeAgent',
+      'newPlatformAgent',
       'divider',
       'addAgentFromList',
       'addAgentFromMarket',
@@ -301,123 +249,37 @@ describe('useCreateMenuItems', () => {
     expect(configItem.label).toBe('sessionGroup.manageCategory');
   });
 
-  it('creates the Claude Code agent normally when the CLI is available', async () => {
+  it('opens the connect wizard and renders its explanatory label', async () => {
     const { result } = renderHook(() => useCreateMenuItems());
+    const connectItem = result.current.createConnectAgentMenuItem();
 
-    const claudeItem = result.current
-      .createHeterogeneousAgentMenuItems()
-      .find((item) => isActionItem(item) && item.key === 'newClaudeCodeAgent');
+    if (!isActionItem(connectItem)) throw new Error('Expected Connect Agent menu item');
 
-    if (!isActionItem(claudeItem)) {
-      throw new Error('Expected Claude Code menu item');
-    }
+    render(<>{connectItem.label}</>);
+    expect(screen.getByText('newPlatformAgent')).toBeTruthy();
+    expect(screen.getByText('newPlatformAgentDesc')).toBeTruthy();
 
     await act(async () => {
-      await claudeItem.onClick?.({ domEvent: { stopPropagation: vi.fn() } });
+      await connectItem.onClick?.({ domEvent: { stopPropagation: vi.fn() } });
     });
-
-    expect(createAgentMock).toHaveBeenCalledWith({
-      config: {
-        agencyConfig: {
-          heterogeneousProvider: {
-            command: 'claude',
-            type: 'claude-code',
-          },
-        },
-        avatar: 'claude-avatar',
-        provider: 'claude-code',
-        systemRole: '',
-        title: 'Claude Code',
-      },
-      groupId: undefined,
-    });
-    expect(refreshAgentListMock).toHaveBeenCalled();
-    expect(navigateMock).toHaveBeenCalledWith('/agent/agent-codex');
+    expect(openConnectAgentModalMock).toHaveBeenCalledWith(undefined);
   });
 
-  it('creates the Codex agent normally without preflight interception', async () => {
+  it('threads groupId and visibility into the connect wizard', async () => {
     const { result } = renderHook(() => useCreateMenuItems());
+    const connectItem = result.current.createConnectAgentMenuItem({
+      groupId: 'group-1',
+      visibility: 'private',
+    });
 
-    const codexItem = result.current
-      .createHeterogeneousAgentMenuItems()
-      .find((item) => isActionItem(item) && item.key === 'newCodexAgent');
-
-    if (!isActionItem(codexItem)) {
-      throw new Error('Expected Codex menu item');
-    }
+    if (!isActionItem(connectItem)) throw new Error('Expected Connect Agent menu item');
 
     await act(async () => {
-      await codexItem.onClick?.({ domEvent: { stopPropagation: vi.fn() } });
+      await connectItem.onClick?.({ domEvent: { stopPropagation: vi.fn() } });
     });
-
-    expect(createAgentMock).toHaveBeenCalledWith({
-      config: {
-        agencyConfig: {
-          heterogeneousProvider: {
-            command: 'codex',
-            type: 'codex',
-          },
-        },
-        avatar: 'avatar',
-        provider: 'codex',
-        systemRole: '',
-        title: 'Codex',
-      },
-      groupId: undefined,
-    });
-    expect(refreshAgentListMock).toHaveBeenCalled();
-    expect(navigateMock).toHaveBeenCalledWith('/agent/agent-codex');
-  });
-
-  it('creates AMP as an independent local CLI agent', async () => {
-    const { result } = renderHook(() => useCreateMenuItems());
-
-    const ampItem = result.current
-      .createHeterogeneousAgentMenuItems()
-      .find((item) => isActionItem(item) && item.key === 'newAmpAgent');
-
-    if (!isActionItem(ampItem)) throw new Error('Expected AMP menu item');
-
-    await act(async () => {
-      await ampItem.onClick?.({ domEvent: { stopPropagation: vi.fn() } });
-    });
-
-    expect(createAgentMock).toHaveBeenCalledWith({
-      config: {
-        agencyConfig: { heterogeneousProvider: { command: 'amp', type: 'amp' } },
-        avatar: 'amp-avatar',
-        provider: 'amp',
-        systemRole: '',
-        title: 'Amp',
-      },
-      groupId: undefined,
-    });
-  });
-
-  it('creates OpenCode as an independent local CLI agent', async () => {
-    const { result } = renderHook(() => useCreateMenuItems());
-
-    const openCodeItem = result.current
-      .createHeterogeneousAgentMenuItems()
-      .find((item) => isActionItem(item) && item.key === 'newOpenCodeAgent');
-
-    if (!isActionItem(openCodeItem)) throw new Error('Expected OpenCode menu item');
-
-    await act(async () => {
-      await openCodeItem.onClick?.({ domEvent: { stopPropagation: vi.fn() } });
-    });
-
-    expect(createAgentMock).toHaveBeenCalledWith({
-      config: {
-        agencyConfig: {
-          heterogeneousProvider: { command: 'opencode', type: 'opencode' },
-        },
-        avatar: 'opencode-avatar',
-        provider: 'opencode',
-        systemRole: '',
-        title: 'OpenCode',
-      },
-      groupId: undefined,
+    expect(openConnectAgentModalMock).toHaveBeenCalledWith({
+      groupId: 'group-1',
+      visibility: 'private',
     });
   });
 });

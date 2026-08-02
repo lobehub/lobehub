@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createQuotaCacheKey, QuotaSnapshotCache } from './quotaSnapshotCache';
+import { createQuotaCacheKey, QuotaSnapshotCache } from './snapshotCache';
 
 interface TestQuotaSnapshot {
   error: string | null;

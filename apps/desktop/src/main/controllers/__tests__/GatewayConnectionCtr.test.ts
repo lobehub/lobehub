@@ -165,7 +165,7 @@ vi.mock('@/utils/logger', () => ({
   }),
 }));
 
-vi.mock('electron-is', () => ({
+vi.mock('@/utils/platform', () => ({
   macOS: vi.fn(() => false),
   windows: vi.fn(() => false),
   linux: vi.fn(() => false),
@@ -324,7 +324,7 @@ describe('GatewayConnectionCtr', () => {
       });
 
       ctr = new GatewayConnectionCtr(mockApp);
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
 
       const options = MockGatewayClient.lastOptions;
@@ -344,7 +344,7 @@ describe('GatewayConnectionCtr', () => {
       });
 
       ctr = new GatewayConnectionCtr(mockApp);
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
 
       expect(MockGatewayClient.lastOptions.gatewayUrl).toBe('http://localhost:8787');
@@ -353,7 +353,7 @@ describe('GatewayConnectionCtr', () => {
     it('should return success:false when no access token', async () => {
       // Prevent auto-connect, then set up providers manually
       vi.mocked(mockRemoteServerConfigCtr.isRemoteServerConfigured).mockResolvedValueOnce(false);
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
 
       vi.mocked(mockRemoteServerConfigCtr.getAccessToken).mockResolvedValueOnce(null);
@@ -365,7 +365,7 @@ describe('GatewayConnectionCtr', () => {
 
     it('should persist gatewayEnabled=true on connect', async () => {
       vi.mocked(mockRemoteServerConfigCtr.isRemoteServerConfigured).mockResolvedValueOnce(false);
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       mockStoreSet.mockClear();
 
@@ -374,7 +374,7 @@ describe('GatewayConnectionCtr', () => {
     });
 
     it('should no-op when already connected', async () => {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const firstClient = MockGatewayClient.lastInstance;
       firstClient!.simulateConnected();
@@ -386,7 +386,7 @@ describe('GatewayConnectionCtr', () => {
     });
 
     it('should broadcast status changes: disconnected → connecting → connected', async () => {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       expect(mockBroadcast).toHaveBeenCalledWith('gatewayConnectionStatusChanged', {
         status: 'connecting',
@@ -403,7 +403,7 @@ describe('GatewayConnectionCtr', () => {
 
   describe('disconnect', () => {
     it('should disconnect client and set status to disconnected', async () => {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
       client.simulateConnected();
@@ -418,7 +418,7 @@ describe('GatewayConnectionCtr', () => {
     });
 
     it('should persist gatewayEnabled=false on disconnect', async () => {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       MockGatewayClient.lastInstance!.simulateConnected();
       mockStoreSet.mockClear();
@@ -428,7 +428,7 @@ describe('GatewayConnectionCtr', () => {
     });
 
     it('should not trigger reconnect after intentional disconnect', async () => {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
       client.simulateConnected();
@@ -446,9 +446,9 @@ describe('GatewayConnectionCtr', () => {
 
   // ─── Auto-Connect ───
 
-  describe('afterAppReady (auto-connect)', () => {
+  describe('afterFirstFrame (auto-connect)', () => {
     it('should auto-connect when server is configured and token exists', async () => {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
 
       expect(MockGatewayClient.lastInstance).not.toBeNull();
@@ -462,7 +462,7 @@ describe('GatewayConnectionCtr', () => {
       });
 
       ctr = new GatewayConnectionCtr(mockApp);
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
 
       expect(MockGatewayClient.lastInstance).toBeNull();
@@ -471,7 +471,7 @@ describe('GatewayConnectionCtr', () => {
     it('should skip auto-connect when remote server not configured', async () => {
       vi.mocked(mockRemoteServerConfigCtr.isRemoteServerConfigured).mockResolvedValueOnce(false);
 
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
 
       expect(MockGatewayClient.lastInstance).toBeNull();
@@ -480,7 +480,7 @@ describe('GatewayConnectionCtr', () => {
     it('should skip auto-connect when no access token', async () => {
       vi.mocked(mockRemoteServerConfigCtr.getAccessToken).mockResolvedValueOnce(null);
 
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
 
       expect(MockGatewayClient.lastInstance).toBeNull();
@@ -488,7 +488,7 @@ describe('GatewayConnectionCtr', () => {
 
     it('should create device ID on first launch and persist it', () => {
       mockStoreGet.mockReturnValue(undefined);
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
 
       expect(mockStoreSet).toHaveBeenCalledWith('gatewayDeviceId', 'mock-device-uuid');
     });
@@ -500,7 +500,7 @@ describe('GatewayConnectionCtr', () => {
         return undefined;
       });
       ctr = new GatewayConnectionCtr(mockApp);
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
 
       expect(mockStoreSet).not.toHaveBeenCalledWith('gatewayDeviceId', expect.anything());
     });
@@ -510,7 +510,7 @@ describe('GatewayConnectionCtr', () => {
 
   describe('reconnection', () => {
     it('should broadcast reconnecting status when client emits reconnecting', async () => {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
       client.simulateConnected();
@@ -528,7 +528,7 @@ describe('GatewayConnectionCtr', () => {
 
   describe('tool call routing', () => {
     async function connectAndOpen() {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
       client.simulateConnected();
@@ -722,7 +722,7 @@ describe('GatewayConnectionCtr', () => {
 
   describe('message API routing', () => {
     async function connectAndOpen() {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
       client.simulateConnected();
@@ -784,7 +784,7 @@ describe('GatewayConnectionCtr', () => {
 
   describe('auth_expired handling', () => {
     it('should refresh token and reconnect on auth_expired', async () => {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const client1 = MockGatewayClient.lastInstance!;
       client1.simulateConnected();
@@ -804,7 +804,7 @@ describe('GatewayConnectionCtr', () => {
         success: false,
       });
 
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
       client.simulateConnected();
@@ -823,7 +823,7 @@ describe('GatewayConnectionCtr', () => {
 
   describe('agent run routing', () => {
     async function connectAndOpen() {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
       client.simulateConnected();
@@ -995,7 +995,7 @@ describe('GatewayConnectionCtr', () => {
     }
 
     async function connectAndOpen() {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
       client.simulateConnected();
@@ -1118,7 +1118,7 @@ describe('GatewayConnectionCtr', () => {
 
   describe('platform capability probing', () => {
     async function connectAndOpen() {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
       client.simulateConnected();
@@ -1250,7 +1250,7 @@ describe('GatewayConnectionCtr', () => {
     it('should return current status', async () => {
       expect(await ctr.getConnectionStatus()).toEqual({ status: 'disconnected' });
 
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       expect(await ctr.getConnectionStatus()).toEqual({ status: 'connecting' });
 
@@ -1267,7 +1267,7 @@ describe('GatewayConnectionCtr', () => {
         return undefined;
       });
       ctr = new GatewayConnectionCtr(mockApp);
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
 
       const info = await ctr.getDeviceInfo();
       expect(info).toEqual({

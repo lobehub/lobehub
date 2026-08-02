@@ -1,4 +1,3 @@
-import { fileTypeFromBuffer } from 'file-type';
 import mime from 'mime';
 
 // Extensions where mime-db has no entry (or a wrong one) but a specific
@@ -98,6 +97,7 @@ export const tryGetMimeType = (filePath: string): string | undefined => {
  * 3. No extension mapping → sniff-based fallback.
  */
 export const resolveMimeType = async (filePath: string, buffer: Uint8Array): Promise<string> => {
+  const { fileTypeFromBuffer } = await import('file-type');
   const detected = await fileTypeFromBuffer(buffer);
   if (detected?.mime) return detected.mime;
 

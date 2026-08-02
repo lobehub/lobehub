@@ -10,6 +10,7 @@ import {
   type GatewayMcpParams,
 } from '@lobechat/device-gateway-client';
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
+import type { ClaudeCodeQuotaSnapshot } from '@lobechat/heterogeneous-agents/quota';
 import type {
   DeviceGitAddWorktreeResult,
   DeviceGitAheadBehind,
@@ -352,11 +353,12 @@ export class DeviceGateway {
   }
 
   /**
-   * Generic helper for the granular git read RPCs (branch / PR / working-tree /
-   * ahead-behind). Returns `undefined` when the gateway is unconfigured, the
-   * device is offline, or the call fails — callers treat that as "unknown".
+   * Generic helper for granular device read RPCs (git branch / PR /
+   * working-tree / ahead-behind / Claude quota). Returns `undefined` when the
+   * gateway is unconfigured, the device is offline, or the call fails —
+   * callers treat that as "unknown".
    */
-  private async invokeGitRead<T>(
+  private async invokeDeviceRead<T>(
     method: string,
     params: { deviceId: string; timeout?: number; userId: string; workspaceId?: string },
     rpcParams: Record<string, unknown>,
@@ -385,7 +387,9 @@ export class DeviceGateway {
 
   /** Branch name + detached flag for a directory on a remote device. */
   gitBranch(params: { deviceId: string; path: string; userId: string; workspaceId?: string }) {
-    return this.invokeGitRead<DeviceGitBranchInfo>('getGitBranch', params, { path: params.path });
+    return this.invokeDeviceRead<DeviceGitBranchInfo>('getGitBranch', params, {
+      path: params.path,
+    });
   }
 
   /** The GitHub PR linked to a branch in a directory on a remote device. */
@@ -397,7 +401,7 @@ export class DeviceGateway {
     userId: string;
     workspaceId?: string;
   }) {
-    return this.invokeGitRead<DeviceGitLinkedPullRequestResult>('getLinkedPullRequest', params, {
+    return this.invokeDeviceRead<DeviceGitLinkedPullRequestResult>('getLinkedPullRequest', params, {
       branch: params.branch,
       path: params.path,
       pullRequestNumber: params.pullRequestNumber,
@@ -411,15 +415,34 @@ export class DeviceGateway {
     userId: string;
     workspaceId?: string;
   }) {
-    return this.invokeGitRead<DeviceGitWorkingTreeStatus>('getGitWorkingTreeStatus', params, {
+    return this.invokeDeviceRead<DeviceGitWorkingTreeStatus>('getGitWorkingTreeStatus', params, {
       path: params.path,
     });
   }
 
   /** Ahead/behind commit counts for a directory on a remote device. */
   gitAheadBehind(params: { deviceId: string; path: string; userId: string; workspaceId?: string }) {
-    return this.invokeGitRead<DeviceGitAheadBehind>('getGitAheadBehind', params, {
+    return this.invokeDeviceRead<DeviceGitAheadBehind>('getGitAheadBehind', params, {
       path: params.path,
+    });
+  }
+
+  /**
+   * Claude Code subscription quota of the login on a remote device. The device
+   * samples the Anthropic usage API with its local credentials — same sampler
+   * as the desktop IPC path. `undefined` also covers older device clients that
+   * don't know this RPC yet.
+   */
+  claudeCodeQuota(params: {
+    deviceId: string;
+    env?: Record<string, string>;
+    force?: boolean;
+    userId: string;
+    workspaceId?: string;
+  }) {
+    return this.invokeDeviceRead<ClaudeCodeQuotaSnapshot>('getClaudeCodeQuota', params, {
+      env: params.env,
+      force: params.force,
     });
   }
 
@@ -430,7 +453,7 @@ export class DeviceGateway {
     userId: string;
     workspaceId?: string;
   }) {
-    return this.invokeGitRead<DeviceGitWorktreeListItem[]>('listGitWorktrees', params, {
+    return this.invokeDeviceRead<DeviceGitWorktreeListItem[]>('listGitWorktrees', params, {
       path: params.path,
     });
   }

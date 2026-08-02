@@ -4,9 +4,8 @@ import {
   buildAgentSkillIdentifier,
 } from '@lobechat/const';
 import { ActionIcon, Center, Empty, Flexbox, Text } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { App } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -141,7 +140,7 @@ const DocumentItem = memo<DocumentItemProps>(
     onOpenDocument,
   }) => {
     const { t } = useTranslation(['chat', 'common']);
-    const { message } = App.useApp();
+
     const [deleting, setDeleting] = useState(false);
 
     const title = document.title || document.filename || '';
@@ -179,9 +178,9 @@ const DocumentItem = memo<DocumentItemProps>(
             });
             await mutate();
             if (isActive) onCurrentDeleted?.();
-            message.success(t('workingPanel.resources.deleteSuccess', { ns: 'chat' }));
+            toast.success(t('workingPanel.resources.deleteSuccess', { ns: 'chat' }));
           } catch (error) {
-            message.error(
+            toast.error(
               error instanceof Error
                 ? error.message
                 : t('workingPanel.resources.deleteError', { ns: 'chat' }),
@@ -303,7 +302,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
   }) => {
     const { t } = useTranslation('chat');
     const { t: tCommon } = useTranslation('common');
-    const { message } = App.useApp();
+
     const agentId = useAgentStore((s) => s.activeAgentId);
     const { docId } = useParams<{ docId?: string }>();
     const navigate = useWorkspaceAwareNavigate();
@@ -486,9 +485,9 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
                 try {
                   await agentDocumentService.removeDocument({ agentId: agentId!, id: rowId });
                   await mutate();
-                  message.success(t('workingPanel.skills.delete.success'));
+                  toast.success(t('workingPanel.skills.delete.success'));
                 } catch (error) {
-                  message.error(
+                  toast.error(
                     error instanceof Error ? error.message : t('workingPanel.skills.delete.error'),
                   );
                 }

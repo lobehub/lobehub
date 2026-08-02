@@ -1,8 +1,8 @@
 import { CHAT_GROUP_SESSION_ID_PREFIX } from '@lobechat/types';
+import { toast } from '@lobehub/ui/base-ui';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { message } from '@/components/AntdStaticMethods';
 import { setScopedMutate } from '@/libs/swr';
 import { agentConfigKeys } from '@/libs/swr/keys';
 import { agentService } from '@/services/agent';
@@ -39,10 +39,8 @@ vi.mock('@/services/agentDocument', () => ({
   resolveAgentDocumentsContext: vi.fn(),
 }));
 
-vi.mock('@/components/AntdStaticMethods', () => ({
-  message: {
-    error: vi.fn(),
-  },
+vi.mock('@lobehub/ui/base-ui', () => ({
+  toast: { error: vi.fn() },
 }));
 
 // Mock sessionStore
@@ -535,7 +533,7 @@ describe('AgentSlice Actions', () => {
         });
       });
 
-      expect(message.error).toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalled();
       // Optimistic value must not survive a rejected write — refetch server truth.
       expect(refreshSpy).toHaveBeenCalledWith('agent-1');
       expect(result.current.saveStatus).toBe('idle');
@@ -557,7 +555,7 @@ describe('AgentSlice Actions', () => {
         ).rejects.toThrow('save failed');
       });
 
-      expect(message.error).not.toHaveBeenCalled();
+      expect(toast.error).not.toHaveBeenCalled();
       expect(result.current.saveStatus).toBe('idle');
     });
   });
@@ -713,7 +711,7 @@ describe('AgentSlice Actions', () => {
         );
       });
 
-      expect(message.error).not.toHaveBeenCalled();
+      expect(toast.error).not.toHaveBeenCalled();
     });
   });
 

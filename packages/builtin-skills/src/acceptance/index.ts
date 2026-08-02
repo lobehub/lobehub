@@ -7,6 +7,7 @@ import computerUse from './references/computer-use.md';
 import evidence from './references/evidence.md';
 import planFormat from './references/plan-format.md';
 import recording from './references/recording.md';
+import report from './references/report.md';
 import content from './SKILL.md';
 import cli from './surfaces/cli.md';
 import electron from './surfaces/electron.md';
@@ -45,6 +46,7 @@ export const AcceptanceSkill: BuiltinSkill = {
     'references/evidence.md': evidence,
     'references/plan-format.md': planFormat,
     'references/recording.md': recording,
+    'references/report.md': report,
     'surfaces/cli.md': cli,
     'surfaces/electron.md': electron,
     'surfaces/native.md': native,

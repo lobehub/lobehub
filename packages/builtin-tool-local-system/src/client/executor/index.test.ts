@@ -2,13 +2,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { localSystemExecutor } from './index';
 
-const { globFilesMock } = vi.hoisted(() => ({
+const { globFilesMock, searchFilesMock } = vi.hoisted(() => ({
   globFilesMock: vi.fn(),
+  searchFilesMock: vi.fn(),
 }));
 
 vi.mock('@/services/electron/localFileService', () => ({
   localFileService: {
     globFiles: globFilesMock,
+    searchLocalFiles: searchFilesMock,
   },
 }));
 
@@ -31,6 +33,7 @@ describe('LocalSystemExecutor', () => {
       });
 
       expect(globFilesMock).toHaveBeenCalledWith({
+        limit: 100,
         pattern: '**/*.{png,jpg,jpeg,gif,webp}',
         scope: '/tmp/images',
       });
@@ -111,6 +114,109 @@ describe('LocalSystemExecutor', () => {
         files: [],
         pattern: '**/*Financial*Statement*',
         totalCount: 0,
+      });
+    });
+
+    it('resolves omitted scope to ctx.workingDirectory', async () => {
+      globFilesMock.mockResolvedValue({
+        files: [],
+        success: true,
+        total_files: 0,
+      });
+
+      await localSystemExecutor.globFiles(
+        { pattern: '**/*.ts' },
+        { workingDirectory: '/home/user/project', messageId: 'msg-1' },
+      );
+
+      expect(globFilesMock).toHaveBeenCalledWith({
+        limit: 100,
+        pattern: '**/*.ts',
+        scope: '/home/user/project',
+      });
+    });
+
+    it('resolves scope "." to ctx.workingDirectory', async () => {
+      globFilesMock.mockResolvedValue({
+        files: [],
+        success: true,
+        total_files: 0,
+      });
+
+      await localSystemExecutor.globFiles(
+        { pattern: '**/*.ts', scope: '.' },
+        { workingDirectory: '/home/user/project', messageId: 'msg-1' },
+      );
+
+      expect(globFilesMock).toHaveBeenCalledWith({
+        limit: 100,
+        pattern: '**/*.ts',
+        scope: '/home/user/project',
+      });
+    });
+
+    it('preserves explicit absolute scope', async () => {
+      globFilesMock.mockResolvedValue({
+        files: [],
+        success: true,
+        total_files: 0,
+      });
+
+      await localSystemExecutor.globFiles(
+        { pattern: '**/*.ts', scope: '/explicit/path' },
+        { workingDirectory: '/home/user/project', messageId: 'msg-1' },
+      );
+
+      expect(globFilesMock).toHaveBeenCalledWith({
+        limit: 100,
+        pattern: '**/*.ts',
+        scope: '/explicit/path',
+      });
+    });
+  });
+
+  describe('searchFiles', () => {
+    it('resolves omitted scope to ctx.workingDirectory', async () => {
+      searchFilesMock.mockResolvedValue([]);
+
+      await localSystemExecutor.searchFiles(
+        { keywords: 'test' },
+        { workingDirectory: '/home/user/project', messageId: 'msg-1' },
+      );
+
+      expect(searchFilesMock).toHaveBeenCalledWith({
+        keywords: 'test',
+        directory: '/home/user/project',
+      });
+    });
+
+    it('resolves scope "." to ctx.workingDirectory', async () => {
+      searchFilesMock.mockResolvedValue([]);
+
+      await localSystemExecutor.searchFiles(
+        { keywords: 'test', scope: '.' },
+        { workingDirectory: '/home/user/project', messageId: 'msg-1' },
+      );
+
+      expect(searchFilesMock).toHaveBeenCalledWith({
+        keywords: 'test',
+        scope: '.',
+        directory: '/home/user/project',
+      });
+    });
+
+    it('preserves explicit absolute scope', async () => {
+      searchFilesMock.mockResolvedValue([]);
+
+      await localSystemExecutor.searchFiles(
+        { keywords: 'test', scope: '/explicit/path' },
+        { workingDirectory: '/home/user/project', messageId: 'msg-1' },
+      );
+
+      expect(searchFilesMock).toHaveBeenCalledWith({
+        keywords: 'test',
+        scope: '/explicit/path',
+        directory: '/explicit/path',
       });
     });
   });

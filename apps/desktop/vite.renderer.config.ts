@@ -8,6 +8,8 @@ import { defineConfig } from 'vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
 import {
+  createSharedRolldownOutput,
+  sharedModulePreload,
   sharedOptimizeDeps,
   sharedRendererDefine,
   sharedRendererPlugins,
@@ -220,7 +222,7 @@ export default defineConfig(async (env) => {
     base: '/',
     build: {
       minify: true,
-      modulePreload: { polyfill: false },
+      modulePreload: { ...sharedModulePreload, polyfill: false },
       outDir: RENDERER_OUT_DIR,
       reportCompressedSize: false,
       rolldownOptions: {
@@ -229,6 +231,7 @@ export default defineConfig(async (env) => {
           overlay: path.resolve(__dirname, 'overlay.html'),
           popup: path.resolve(__dirname, 'popup.html'),
         },
+        output: createSharedRolldownOutput({ strictExecutionOrder: true }),
       },
       sourcemap: false,
       target: RENDERER_CHROME_TARGET,

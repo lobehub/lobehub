@@ -18,7 +18,7 @@ describe('copySpaBuild', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'copy-spa-build-'));
     testRoots.push(root);
 
-    for (const dir of ['assets', 'i18n', 'model-bank', 'shiki', 'vendor']) {
+    for (const dir of ['assets', 'devtools', 'i18n', 'model-bank', 'shiki', 'vendor']) {
       const sourceDir = path.join(root, 'dist/desktop', dir);
       mkdirSync(sourceDir, { recursive: true });
       writeFileSync(path.join(sourceDir, `${dir}.js`), `export default '${dir}';`);
@@ -26,7 +26,7 @@ describe('copySpaBuild', () => {
 
     copySpaBuild(root);
 
-    for (const dir of ['assets', 'i18n', 'model-bank', 'shiki', 'vendor']) {
+    for (const dir of ['assets', 'devtools', 'i18n', 'model-bank', 'shiki', 'vendor']) {
       expect(existsSync(path.join(root, 'public/_spa', dir, `${dir}.js`))).toBe(true);
     }
   });

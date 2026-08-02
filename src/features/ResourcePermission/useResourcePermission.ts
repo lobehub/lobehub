@@ -1,4 +1,4 @@
-import { App } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,7 +17,7 @@ export const useResourcePermission = (
   resourceId: string | undefined,
 ) => {
   const { t } = useTranslation('setting');
-  const { message } = App.useApp();
+
   const [updating, setUpdating] = useState(false);
 
   const { data, error, isLoading, mutate } = useClientDataSWR(
@@ -39,12 +39,12 @@ export const useResourcePermission = (
       } catch (e) {
         await mutate(previousData, false);
         console.error('[ResourcePermission]', e);
-        message.error((e as Error)?.message || t('permission.updateError'));
+        toast.error((e as Error)?.message || t('permission.updateError'));
       } finally {
         setUpdating(false);
       }
     },
-    [data, mutate, message, t],
+    [data, mutate, t],
   );
 
   const setAccessLevel = useCallback(

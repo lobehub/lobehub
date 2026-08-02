@@ -1,8 +1,8 @@
 'use client';
 
 import { ActionIcon, Input } from '@lobehub/ui';
+import { toast } from '@lobehub/ui/base-ui';
 import { type InputRef } from 'antd';
-import { App } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { type Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
@@ -81,7 +81,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const EditableCell = memo<EditableCellProps>(
   ({ value, type, onSubmit, placeholder, disabled = false }) => {
     const { t } = useTranslation('auth');
-    const { message } = App.useApp();
 
     // Edit state management
     const [isEditing, setIsEditing] = useState(false);
@@ -113,7 +112,7 @@ const EditableCell = memo<EditableCellProps>(
         const inputValue = inputRef.current?.input?.value;
 
         if (!inputValue) {
-          message.warning(t('apikey.validation.required'));
+          toast.warning(t('apikey.validation.required'));
           return;
         }
 

@@ -27,10 +27,10 @@ import {
   resolveAgentAgencyConfig,
 } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
+import { toast } from '@lobehub/ui/base-ui';
 import { TRPCClientError } from '@trpc/client';
 import { t } from 'i18next';
 
-import { message as antdMessage } from '@/components/AntdStaticMethods';
 import { type ChatInputEditor } from '@/features/ChatInput';
 import {
   resolveAgentWorkingDirectory,
@@ -1051,7 +1051,7 @@ export class ConversationLifecycleActionImpl {
           workingDirectory,
         );
         if (cwdChanged) {
-          antdMessage.info(t('heteroAgent.resumeReset.cwdChanged', { ns: 'chat' }));
+          toast.info(t('heteroAgent.resumeReset.cwdChanged', { ns: 'chat' }));
         }
 
         await executeHeterogeneousAgent(() => this.#get(), {
@@ -1314,7 +1314,7 @@ export class ConversationLifecycleActionImpl {
         // Optimistically bump the sort key (`sortUpdatedAt`, the sidebar's activity-time
         // sort/group key) so the topic jumps to the top immediately, before the SWR
         // refetch returns the server's fresh `topicActivityAt`. Bumping `updatedAt` here
-        // would no longer reorder anything — the sidebar sorts by `sortUpdatedAt`. 
+        // would no longer reorder anything — the sidebar sorts by `sortUpdatedAt`.
         this.#get().internal_dispatchTopic({
           type: 'updateTopic',
           id: operationContext.topicId,
