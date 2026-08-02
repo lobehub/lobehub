@@ -6,8 +6,11 @@ import type { RouteObject } from 'react-router';
 import { matchRoutes } from 'react-router';
 import { describe, expect, it } from 'vitest';
 
+import BrandTextLoading from '@/components/Loading/BrandTextLoading';
+import ContentLoading from '@/components/Loading/ContentLoading';
 import { WORKSPACE_SETTINGS_TABS } from '@/features/Workspace/workspaceAwarePath';
 import AppShellSkeleton from '@/spa/BootShell/AppShellSkeleton';
+import { createTabRouter } from '@/spa/router/tabRouter';
 
 import {
   createMainAreaChildren as createWebMainAreaChildren,
@@ -187,6 +190,36 @@ describe('desktop router shared definition', () => {
     const { fallback } = (root?.element as ReactElement<{ fallback: ReactElement }>).props;
 
     expect(fallback.type).toBe(AppShellSkeleton);
+  });
+
+  // `dynamicElement` / `dynamicLayout` wrap each route element in their own
+  // Suspense, which always beats an outlet-level boundary — so without the
+  // rewrite the brand wordmark reappears inside the container for 1–2s on a
+  // cold deep link, right after the boot shell hands over.
+  const collectFallbacks = (list: RouteObject[]): unknown[] => {
+    const fallbacks: unknown[] = [];
+    const walk = (routes: RouteObject[]) => {
+      for (const route of routes) {
+        const element = route.element as ReactElement<{ fallback?: ReactElement }> | undefined;
+        if (element?.props?.fallback) fallbacks.push(element.props.fallback.type);
+        if (route.children) walk(route.children);
+      }
+    };
+    walk(list);
+    return fallbacks;
+  };
+
+  it.each([
+    // Electron's root tree holds only TabHost stubs — its real content routes
+    // live in the per-tab memory routers, which build their own tree.
+    ['Web', () => webDesktopRoutes.find((route) => route.path === '/')?.children ?? []],
+    ['Electron', () => createTabRouter('/').routes[0]?.children ?? []],
+  ])('%s main-area routes load behind the content fallback, not the brand logo', (_, getRoutes) => {
+    const fallbacks = collectFallbacks(getRoutes());
+
+    expect(fallbacks.length).toBeGreaterThan(0);
+    expect(fallbacks).not.toContain(BrandTextLoading);
+    expect(new Set(fallbacks)).toEqual(new Set([ContentLoading]));
   });
 
   it('injects Home only into Electron per-tab content routes', () => {
