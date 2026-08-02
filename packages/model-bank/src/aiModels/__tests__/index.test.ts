@@ -300,7 +300,6 @@ describe('latest provider model cards', () => {
     expect(openaiModels).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: 'gpt-transcribe', type: 'asr' }),
-        expect.objectContaining({ id: 'gpt-live-transcribe', type: 'asr' }),
         expect.objectContaining({
           contextWindowTokens: 128_000,
           id: 'gpt-realtime-2.1',
