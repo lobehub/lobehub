@@ -424,6 +424,13 @@ export class AgentDocumentsService {
     return this.agentDocumentModel.findByDocumentId(agentId, documentId);
   }
 
+  /** Read-only page projection addressed by the public `(agentId, documentId)` route. */
+  async getReaderDocument(agentId: string, documentId: string) {
+    const doc = await this.agentDocumentModel.findByDocumentId(agentId, documentId);
+
+    return this.projectDocumentContent(doc);
+  }
+
   async getDocumentSnapshotById(id: string, expectedAgentId?: string) {
     const doc = await this.findReadableDocumentById(id, expectedAgentId);
     if (!doc) return undefined;

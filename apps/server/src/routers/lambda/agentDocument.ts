@@ -22,6 +22,7 @@ import { emitAgentDocumentToolOutcomeSafely } from '@/server/services/agentDocum
 import { AgentDocumentVfsService } from '@/server/services/agentDocumentVfs';
 import { AgentDocumentVfsError } from '@/server/services/agentDocumentVfs/errors';
 import { getUnifiedSkillNamespaceRootPath } from '@/server/services/agentDocumentVfs/mounts/skills/path';
+import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 import { SkillManagementDocumentService } from '@/server/services/skillManagement';
 import { SystemAgentService } from '@/server/services/systemAgent';
 
@@ -1083,6 +1084,62 @@ export const agentDocumentRouter = router({
 
         throw error;
       }
+    }),
+
+  /** Read-only document payload for the standalone Agent Document page. */
+  getReaderDocument: agentDocumentProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        documentId: z.string(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const grantedPermissions = (ctx as { workspacePermissionCodes?: string[] })
+        .workspacePermissionCodes;
+
+      if (ctx.workspaceId) {
+        await assertCanPerformResourceAction({
+          action: 'view',
+          db: ctx.serverDB,
+          grantedPermissions,
+          resourceId: input.agentId,
+          resourceType: 'agent',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+      }
+
+      const document = await ctx.agentDocumentService.getReaderDocument(
+        input.agentId,
+        input.documentId,
+      );
+
+      if (!document) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent document not found' });
+      }
+
+      if (ctx.workspaceId) {
+        await assertCanPerformResourceAction({
+          action: 'view',
+          db: ctx.serverDB,
+          grantedPermissions,
+          resourceId: input.documentId,
+          resourceType: 'document',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+      }
+
+      return {
+        content: document.content,
+        documentId: document.documentId,
+        filename: document.filename,
+        fileType: document.fileType,
+        sourceType: document.sourceType,
+        title: document.title,
+        updatedAt: document.updatedAt,
+      };
     }),
 
   /**

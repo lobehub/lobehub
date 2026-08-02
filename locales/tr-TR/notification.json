@@ -77,5 +77,7 @@
   "workspace_primary_ownership_transferred": "Artık \"{{workspaceName}}\" çalışma alanının birincil sahibi sizsiniz. Faturalandırma ve birincil ayrıcalıklar size devredildi.",
   "workspace_primary_ownership_transferred_title": "Artık {{workspaceName}} çalışma alanının birincil sahibisiniz",
   "workspace_subscription_expired": "\"{{workspaceName}}\" çalışma alanı için abonelik sona erdi. Çalışma alanı düşürülmeden önce tam erişimi geri yüklemek için {{days}} gün içinde yenileyin.",
-  "workspace_subscription_expired_title": "{{workspaceName}} için abonelik sona erdi"
+  "workspace_subscription_expired_title": "{{workspaceName}} için abonelik sona erdi",
+  "workspace_waitlist_approved": "Workspace beta erişiminiz hazır. İlk workspace'inizi oluşturmak ve ekibinizi davet etmek için LobeHub'a gidin.",
+  "workspace_waitlist_approved_title": "Workspace beta erişimi onaylandı"
 }

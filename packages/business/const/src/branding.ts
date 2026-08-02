@@ -57,5 +57,7 @@ export const BRANDING_PROVIDER = readBrandingEnv('BRANDING_PROVIDER', 'official'
 
 export const APPLE_APP_STORE_ID = '';
 
+export const APPLE_APP_STORE_ID = '';
+
 export const COPYRIGHT = `© ${new Date().getFullYear()} ${ORG_NAME}`;
 export const COPYRIGHT_FULL = `${COPYRIGHT}. All rights reserved.`;
