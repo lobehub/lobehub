@@ -75,6 +75,10 @@ export const processCollectedUnderstanding = async (
           .update(payload.sessionId)
           .update('\0')
           .update(payload.sourceFingerprint)
+          .update('\0')
+          .update(String(result.generationRevision))
+          .update('\0')
+          .update(String(result.feedbackRevision))
           .digest('hex')
           .slice(0, 32)}`,
       }),

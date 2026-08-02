@@ -324,13 +324,34 @@ export const UnderstandingPersonaProposalSchema = z
   })
   .strict() satisfies z.ZodType<UnderstandingPersonaProposal>;
 
-export const UnderstandingCompositionItemSchema = z
-  .object({
-    description: DescriptionStringSchema,
-    rank: z.number().int().min(0).max(100),
-    title: ShortDisplayStringSchema,
-  })
-  .strict() satisfies z.ZodType<UnderstandingCompositionItem>;
+/**
+ * Normalizes composition items written before `rank` replaced `salience`.
+ *
+ * Before:
+ * - `{ title: "Builder", description: "Ships systems.", salience: 90 }`
+ *
+ * After:
+ * - `{ title: "Builder", description: "Ships systems.", rank: 90 }`
+ */
+const normalizeCompositionRank = (value: unknown): unknown => {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !('salience' in value)) {
+    return value;
+  }
+
+  const { salience, ...item } = value as Record<string, unknown>;
+  return { ...item, rank: item.rank ?? salience };
+};
+
+export const UnderstandingCompositionItemSchema = z.preprocess(
+  normalizeCompositionRank,
+  z
+    .object({
+      description: DescriptionStringSchema,
+      rank: z.number().int().min(0).max(100),
+      title: ShortDisplayStringSchema,
+    })
+    .strict(),
+) satisfies z.ZodType<UnderstandingCompositionItem>;
 
 const compositionVectorSchema = (maxItems: number) =>
   z

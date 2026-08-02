@@ -45,6 +45,8 @@ describe('processCollectedUnderstanding', () => {
   it('uses one idempotent durable operation with the expected fingerprint', async () => {
     const service = {
       processCollected: vi.fn(async () => ({
+        feedbackRevision: 0,
+        generationRevision: 1,
         personaVersion: 3,
         published: true,
         resultId: 'message-1',
@@ -70,6 +72,8 @@ describe('processCollectedUnderstanding', () => {
     const triggerDetailedPersona = vi.fn(async () => ({ workflowRunId: 'detailed-1' }));
     const service = {
       processCollected: vi.fn(async () => ({
+        feedbackRevision: 0,
+        generationRevision: 2,
         published: true,
         resultId: 'message-1',
         sourceFingerprint: 'github@1',
@@ -91,8 +95,49 @@ describe('processCollectedUnderstanding', () => {
     );
   });
 
+  it('uses a distinct detailed workflow id for each generated proposal revision', async () => {
+    const triggerDetailedPersona = vi.fn(async () => ({ workflowRunId: 'detailed-1' }));
+    const service = {
+      processCollected: vi
+        .fn()
+        .mockResolvedValueOnce({
+          feedbackRevision: 0,
+          generationRevision: 1,
+          published: true,
+          resultId: 'message-1',
+          sourceFingerprint: 'github@1',
+        })
+        .mockResolvedValueOnce({
+          feedbackRevision: 1,
+          generationRevision: 2,
+          published: true,
+          resultId: 'message-2',
+          sourceFingerprint: 'github@1',
+        }),
+    };
+
+    await processCollectedUnderstanding(createContext().context as never, {
+      createService: async () => service as never,
+      triggerDetailedPersona,
+    });
+    await processCollectedUnderstanding(createContext().context as never, {
+      createService: async () => service as never,
+      triggerDetailedPersona,
+    });
+
+    expect(triggerDetailedPersona.mock.calls[0][1].workflowRunId).not.toBe(
+      triggerDetailedPersona.mock.calls[1][1].workflowRunId,
+    );
+  });
+
   it('replays commit-before-ack without adding workflow state and lets transient errors retry', async () => {
-    const result = { published: true, resultId: 'message-1', sourceFingerprint: 'github@1' };
+    const result = {
+      feedbackRevision: 0,
+      generationRevision: 1,
+      published: true,
+      resultId: 'message-1',
+      sourceFingerprint: 'github@1',
+    };
     const service = { processCollected: vi.fn(async () => result) };
     const dependencies = {
       createService: async () => service as never,

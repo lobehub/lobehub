@@ -645,6 +645,8 @@ export class UnderstandingService {
       session.writing.status === 'completed'
     ) {
       return {
+        feedbackRevision: session.writing.feedbackRevision ?? 0,
+        generationRevision: session.writing.generationRevision ?? 0,
         published: true as const,
         resultId: session.writing.resultMessageId,
         sourceFingerprint: expectedSourceFingerprint,
@@ -729,6 +731,8 @@ export class UnderstandingService {
       return { published: false as const, sourceFingerprint: expectedSourceFingerprint };
     }
     return {
+      feedbackRevision: prepared.feedbackRevision,
+      generationRevision: prepared.generationRevision,
       ...(committed.personaVersion === undefined
         ? {}
         : { personaVersion: committed.personaVersion }),
