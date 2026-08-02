@@ -71,7 +71,10 @@ import {
   consumeCodexRateLimitResetCredit as consumeCodexRateLimitResetCreditRequest,
   fetchCodexQuota,
 } from '@/modules/heterogeneousAgent/codexQuota';
-import { createLambdaFileStorePort } from '@/modules/heterogeneousAgent/fileStorePort';
+import {
+  createLambdaFileStorePort,
+  type RemoteServerAuth,
+} from '@/modules/heterogeneousAgent/fileStorePort';
 import type {
   HeterogeneousAgentBuildPlan,
   HeterogeneousAgentImageAttachment,
@@ -331,7 +334,27 @@ interface InterventionSlot {
 }
 
 export default class HeterogeneousAgentCtr {
-  constructor(public app: App) {}
+  /**
+   * Remote-server credentials for the tool_result image upload.
+   *
+   * Injected by the eager `HeterogeneousAgentCtr` wrapper rather than resolved
+   * here: this file is a deferred chunk, and reaching back into the App's
+   * controller registry from it is exactly what broke — the lookup resolved to
+   * `undefined`, and the resulting TypeError escaped as an unhandled rejection
+   * that killed the main process. The fallback keeps standalone construction
+   * (tests, future call sites) working and never throws.
+   */
+  private readonly remoteServerAuth: RemoteServerAuth;
+
+  constructor(
+    public app: App,
+    remoteServerAuth?: RemoteServerAuth,
+  ) {
+    this.remoteServerAuth = remoteServerAuth ?? {
+      getAccessToken: async () => (await this.remoteServerConfigCtr?.getAccessToken()) ?? null,
+      getServerUrl: async () => (await this.remoteServerConfigCtr?.getRemoteServerUrl()) ?? null,
+    };
+  }
 
   private sessions = new Map<string, AgentSession>();
   /**
@@ -357,7 +380,11 @@ export default class HeterogeneousAgentCtr {
   });
   private readonly codexQuotaCache = new QuotaSnapshotCache<CodexQuotaSnapshot>();
 
-  private get remoteServerConfigCtr() {
+  /**
+   * Typed as optional on purpose: a deferred chunk cannot assume the registry
+   * hands back the controller it asks for.
+   */
+  private get remoteServerConfigCtr(): RemoteServerConfigCtr | undefined {
     return this.app.getController(RemoteServerConfigCtr);
   }
 
@@ -367,10 +394,7 @@ export default class HeterogeneousAgentCtr {
    * of heavy base64. Mirrors what `lh hetero exec` does for the gateway path.
    */
   private uploadResultImage = createFileStoreImageUploader(() =>
-    createLambdaFileStorePort({
-      getAccessToken: () => this.remoteServerConfigCtr.getAccessToken(),
-      getServerUrl: async () => (await this.remoteServerConfigCtr.getRemoteServerUrl()) ?? null,
-    }),
+    createLambdaFileStorePort(this.remoteServerAuth),
   );
 
   private resolveSessionCommand(session: AgentSession): string {
