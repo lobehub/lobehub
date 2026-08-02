@@ -171,7 +171,7 @@ export default {
   'betterAuth.verifyEmail.resend.noEmail': 'Email address is missing',
   'betterAuth.verifyEmail.resend.success': 'Verification email resent. Please check your inbox.',
   'betterAuth.verifyEmail.title': 'Verify Your Email',
-  'betterAuth.verifyPhone.backToSignIn': 'Back to Sign In',
+  'betterAuth.verifyPhone.back': 'Back',
   'betterAuth.verifyPhone.description':
     'Verify your mobile number to activate trial credits and prevent abuse.',
   'betterAuth.verifyPhone.errors.generic': 'Phone verification failed. Please try again.',

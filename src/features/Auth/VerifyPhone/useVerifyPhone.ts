@@ -124,3 +124,12 @@ export const useVerifyPhone = ({ callbackUrl }: UseVerifyPhoneParams) => {
     step,
   };
 };
+
+/**
+ * Leave the trial verify flow without going through Sign In.
+ * Hard navigation is required: `/verify-phone` lives on the auth SPA
+ * while `callbackUrl` is usually a main-app path (e.g. `/settings/profile`).
+ */
+export const exitVerifyPhoneFlow = (callbackUrl: string) => {
+  window.location.assign(sanitizeRedirectPath(callbackUrl, '/'));
+};
