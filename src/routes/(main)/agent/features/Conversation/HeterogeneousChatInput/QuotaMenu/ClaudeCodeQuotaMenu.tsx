@@ -11,7 +11,12 @@ import { fetchClaudeCodeQuotaSnapshot } from '@/services/heteroAgentQuota';
 import QuotaAccountSwitcher from './QuotaAccountSwitcher';
 import type { FetchQuotaOptions, QuotaWindowItem } from './QuotaMenu';
 import QuotaMenu, { createQuotaSourceKey } from './QuotaMenu';
-import { buildClaudeSnapshotFromWindows, isQuotaStale, newestSeenAt } from './quotaViewModel';
+import {
+  buildClaudeSnapshotFromWindows,
+  hasRenderableWindow,
+  isQuotaStale,
+  newestSeenAt,
+} from './quotaViewModel';
 
 /**
  * Hit the live Anthropic usage API when the newest persisted reading is this
@@ -103,7 +108,8 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
         isQuotaStale(account?.updatedAt, Date.now(), QUOTA_REFRESH_MS)
       ) {
         if (account && windows.length > 0) {
-          options?.onInterim?.(buildClaudeSnapshotFromWindows(account, windows));
+          const interim = buildClaudeSnapshotFromWindows(account, windows);
+          if (hasRenderableWindow(interim)) options?.onInterim?.(interim);
         }
         live = await fetchClaudeCodeQuotaSnapshot({ deviceId, env, force }).catch(() => null);
 
@@ -148,10 +154,15 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
       // 3) Persisted view wins — it survives a failed live fetch. Otherwise fall
       // back to the live snapshot: identity may be unresolvable (no
       // oauthAccount.accountUuid in ~/.claude.json, while the quota itself comes
-      // from the keychain), or every reading may lack a usable reset and project
-      // to zero windows. Either way real readings beat an empty panel.
-      if (account && windows.length > 0) return buildClaudeSnapshotFromWindows(account, windows);
-      return live ?? unavailableSnapshot();
+      // from the keychain), every reading may lack a usable reset and project to
+      // zero windows, or every persisted window may have already reset (a device
+      // offline since yesterday). Note the last case is invisible in the row
+      // count — ask the built snapshot, not `windows.length`, or a live sample
+      // that failed to persist loses to an empty panel.
+      const persisted =
+        account && windows.length > 0 ? buildClaudeSnapshotFromWindows(account, windows) : null;
+      if (persisted && hasRenderableWindow(persisted)) return persisted;
+      return live ?? persisted ?? unavailableSnapshot();
     },
     [deviceId, env, agentId],
   );

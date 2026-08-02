@@ -108,6 +108,16 @@ export const buildClaudeSnapshotFromWindows = (
 export const newestSeenAt = (windows: QuotaWindowRow[]): number =>
   windows.reduce((max, w) => Math.max(max, toMs(w.lastSeenAt) ?? 0), 0);
 
+/**
+ * Whether a built snapshot carries at least one window worth rendering. Callers
+ * cannot infer this from the persisted row count: every row may describe a
+ * window that has already reset, which {@link buildClaudeSnapshotFromWindows}
+ * drops. Treating a non-empty row array as "we have data" would discard a live
+ * sample in favour of an empty panel.
+ */
+export const hasRenderableWindow = (snapshot: ClaudeCodeQuotaSnapshot): boolean =>
+  !!snapshot.session || !!snapshot.weekly || !!snapshot.scopedWeekly;
+
 /** Whether the server receipt time is older than `maxAgeMs`. */
 export const isQuotaStale = (
   receivedAt: Date | string | null | undefined,

@@ -61,12 +61,18 @@ export const agentQuotaRouter = router({
       // raw gateway id fails the uuid/foreign-key check and would take the
       // whole ingest down with it, silently stranding the reading. An
       // unresolvable device only costs attribution, so keep the reading.
+      //
+      // A workspace device's identity is `(workspaceId, deviceId)` — `userId`
+      // only records the first enroller — so the personal `(userId, deviceId)`
+      // lookup misses a machine any other member enrolled. Try the
+      // workspace-scoped lookup first when the request carries a workspace
+      // (it also applies the device's visibility rules), then fall back to the
+      // caller's own devices.
+      const deviceModel = new DeviceModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
       const deviceRow = input.deviceId
-        ? await new DeviceModel(
-            ctx.serverDB,
-            ctx.userId,
-            ctx.workspaceId ?? undefined,
-          ).findByDeviceId(input.deviceId)
+        ? ((ctx.workspaceId
+            ? await deviceModel.findWorkspaceDeviceById(input.deviceId)
+            : undefined) ?? (await deviceModel.findByDeviceId(input.deviceId)))
         : undefined;
 
       return ctx.quotaService.ingestSnapshot({

@@ -588,6 +588,31 @@ describe('ClaudeCodeQuotaMenu', () => {
     expect(await screen.findByText('heteroAgent.quota.noData')).toBeTruthy();
   });
 
+  it('shows the live sample when every persisted window has already reset', async () => {
+    // A device offline since yesterday leaves rows behind whose windows have
+    // reset. The row count still looks like "we have data", so a live sample
+    // that could not be persisted (identity without an external account id here)
+    // must not lose to that empty persisted view.
+    mockQuotaService.listAccounts.mockResolvedValue([persistedAccount(Date.now() - 60 * 60_000)]);
+    mockQuotaService.getWindows.mockResolvedValue([
+      {
+        ...persistedSessionWindow(Date.now() - 24 * 60 * 60_000),
+        lastUtilization: 100,
+        peakUtilization: 100,
+        resetsAt: new Date(Date.now() - 60 * 60_000),
+      },
+    ]);
+    mockService.getClaudeCodeQuota.mockResolvedValue(
+      claudeSnapshot({ session: { resetsAt: null, usedPercent: 4, windowMinutes: 300 } }),
+    );
+
+    render(<ClaudeCodeQuotaMenu />);
+
+    // 96% left from the live sample — not the expired row's 0%, and not empty.
+    expect(await screen.findByText('96%')).toBeTruthy();
+    expect(screen.queryByText('heteroAgent.quota.noData')).toBeNull();
+  });
+
   it('renders persisted windows without a live call while the newest reading is fresh', async () => {
     mockQuotaService.listAccounts.mockResolvedValue([persistedAccount(Date.now() - 60_000)]);
     mockQuotaService.getWindows.mockResolvedValue([persistedSessionWindow(Date.now() - 60_000)]);
