@@ -6,9 +6,9 @@ import { useIsDark } from '@/hooks/useIsDark';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
-import { getInnerCssVariables, getOuterCssVariables } from './DesktopLayoutContainer/cssVariables';
-import { LayoutContainerContext } from './DesktopLayoutContainer/LayoutContainerContext';
-import { styles } from './DesktopLayoutContainer/style';
+import { getInnerCssVariables, getOuterCssVariables } from './cssVariables';
+import { LayoutContainerContext } from './LayoutContainerContext';
+import { styles } from './style';
 
 const DesktopLayoutContainer: FC<PropsWithChildren> = ({ children }) => {
   const innerContainerRef = useRef<HTMLDivElement>(null);

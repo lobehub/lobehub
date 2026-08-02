@@ -9,8 +9,8 @@ import { isDesktop } from '@/const/version';
 import {
   getInnerCssVariables,
   getOuterCssVariables,
-} from '@/routes/(main)/_layout/DesktopLayoutContainer/cssVariables';
-import { styles as containerStyles } from '@/routes/(main)/_layout/DesktopLayoutContainer/style';
+} from '@/features/DesktopLayoutContainer/cssVariables';
+import { styles as containerStyles } from '@/features/DesktopLayoutContainer/style';
 
 import { readBootShellGeometry } from './geometry';
 
