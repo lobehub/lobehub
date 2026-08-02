@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { acceptanceSubjectTypes } from '@lobechat/const/verify';
@@ -52,6 +52,15 @@ interface InstallOptions {
   skill: string;
 }
 
+const listMaterializedFiles = (directory: string): string[] => {
+  if (!existsSync(directory)) return [];
+
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const entryPath = path.join(directory, entry.name);
+    return entry.isDirectory() ? listMaterializedFiles(entryPath) : [entryPath];
+  });
+};
+
 async function installAction(options: InstallOptions): Promise<void> {
   const client = await getTrpcClient();
   // Pulled live from the server's deployed builtin-skills — always the latest.
@@ -82,13 +91,36 @@ async function installAction(options: InstallOptions): Promise<void> {
     written.push(rel);
   }
 
+  // `acceptance update` is an explicit force-refresh of a materialized skill,
+  // not a merge into a hand-maintained directory. Remove files that belonged to
+  // an older bundle so renamed/split references cannot remain discoverable.
+  const removed: string[] = [];
+  if (options.force) {
+    const currentEntries = new Set(entries.map(([rel]) => path.normalize(rel)));
+    for (const file of listMaterializedFiles(skillDir)) {
+      const relativePath = path.relative(skillDir, file);
+      if (currentEntries.has(path.normalize(relativePath))) continue;
+
+      rmSync(file, { force: true });
+      removed.push(relativePath.split(path.sep).join('/'));
+    }
+  }
+
   const link = linkHarnessSkills(baseDir, bundle.identifier);
   const ignored =
     options.gitignore === false
       ? []
       : ensureSkillIgnored(baseDir, bundle.identifier, link.kind === 'linked');
 
-  const result = { dir: skillDir, ignored, link, skill: bundle.identifier, skipped, written };
+  const result = {
+    dir: skillDir,
+    ignored,
+    link,
+    removed,
+    skill: bundle.identifier,
+    skipped,
+    written,
+  };
   if (options.json !== undefined) {
     outputJson(result, typeof options.json === 'string' ? options.json : undefined);
     return;
@@ -96,7 +128,9 @@ async function installAction(options: InstallOptions): Promise<void> {
   console.log(
     `${pc.green('✓')} ${pc.bold(bundle.name)} skill → ${pc.dim(path.relative(process.cwd(), skillDir) || skillDir)}`,
   );
-  console.log(`  ${written.length} written${skipped.length ? `, ${skipped.length} skipped` : ''}`);
+  console.log(
+    `  ${written.length} written${skipped.length ? `, ${skipped.length} skipped` : ''}${removed.length ? `, ${removed.length} stale removed` : ''}`,
+  );
   if (skipped.length > 0) console.log(pc.dim(`  (skipped existing — pass --force to overwrite)`));
   printWiring(link, ignored);
 }
@@ -933,7 +967,9 @@ export function attachAcceptanceRunCommands(acceptance: Command): void {
   withInstallOptions(
     acceptance
       .command('update')
-      .description('Re-pull the acceptance skill, overwriting local files and re-wiring harnesses'),
+      .description(
+        'Re-pull the acceptance skill, replacing its materialized files and re-wiring harnesses',
+      ),
   ).action((options: InstallOptions) => installAction({ ...options, force: true }));
 
   const run = acceptance

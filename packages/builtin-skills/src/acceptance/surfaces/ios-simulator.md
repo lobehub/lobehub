@@ -186,7 +186,7 @@ xcrun simctl io "$UDID" screenshot --type=png ./proof/after-simctl.png
 
 For transitions and multi-step behavior, record the Simulator framebuffer and
 derive every-frame or sampled contact sheets using
-[../references/recording.md](../references/recording.md#path-2--ios-simulator-framebuffer--mp4--frames).
+[../references/recording-ios-simulator.md](../references/recording-ios-simulator.md).
 Keep the original MP4; a contact sheet is an index for review, not a replacement
 for temporal evidence. Treat requested recording FPS as a target only: Simulator
 movies may be variable-frame-rate, so verify actual duration, rate, and frame count

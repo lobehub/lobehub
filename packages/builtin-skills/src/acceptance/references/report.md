@@ -11,6 +11,15 @@ its evidence inline — **images render as figures, before/after pairs render
 under tinted comparison bands**. A chat-only summary or a bare markdown report
 never gets that rendering; the structured round does.
 
+## Contents
+
+- [No operation ID needed](#no-operation-id-needed)
+- [Immutable rounds](#rounds-are-immutable)
+- [Directory layout](#directory-layout)
+- [Workflow](#workflow)
+- [result.json schema](#resultjson-schema)
+- [Rules](#rules)
+
 Rule of thumb: **plan exists → per-criterion submit; you author the checks →
 structured round ingest.** Never mix both for the same delivery round.
 

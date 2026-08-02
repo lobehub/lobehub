@@ -149,22 +149,24 @@ Rules of thumb:
   CLI cannot express the planned touch sequence, mark the case `blocked`.
 - **Auth is a gate, scoped to the surface.** If the state under test is behind a
   login, authenticate that surface first or every capture lands on the sign-in
-  page. Recipes and boundaries: [references/auth.md](references/auth.md).
+  page. Follow the selected surface's Auth section; load
+  [references/auth-web.md](references/auth-web.md) only for a Web session.
 
 ## Step 3 — Capture, then submit each artifact
 
-Capture each required `type` (recipes per surface in
-[references/evidence.md](references/evidence.md)), then submit one artifact per
-call with the criterion's `checkItemId`. `lh acceptance run result submit` resolves your session
-from the operation id, lazily creates/updates the result row, and attaches the
-evidence — one call, no `checkResultId` needed:
+Capture each required `type` with the selected surface guide, then apply the
+shared artifact rules in [references/evidence.md](references/evidence.md) and
+submit one artifact per call with the criterion's `checkItemId`.
+`lh acceptance run result submit` resolves your session from the operation id,
+lazily creates/updates the result row, and attaches the evidence — one call, no
+`checkResultId` needed:
 
 ```bash
 # CHECK_ITEM_ID is the plan item id for this criterion (from Step 1).
-# file artifact (screenshot / dom / video)
+# file artifact already captured by the selected surface
 lh acceptance run result submit --operation "$LOBE_OPERATION_ID" --item "$CHECK_ITEM_ID" \
-  --type screenshot --file ./proof/login.png --by agent-browser \
-  --desc "Logged-in home renders the workspace switcher"
+  --type "$EVIDENCE_TYPE" --file "$ARTIFACT_PATH" --by "$PROVENANCE" \
+  --desc "Observed state after the planned action"
 
 # inline text artifact (stdout / computed value) — no file
 lh acceptance run result submit --operation "$LOBE_OPERATION_ID" --item "$CHECK_ITEM_ID" \
@@ -213,33 +215,6 @@ This round:   https://app.lobehub.com/verify/<verifyRunId>
 Coverage: 2/2 criteria, all required evidence uploaded
 ```
 
-## Worked example (web criterion, one screenshot)
-
-Plan item: _"Settings page shows the new 'Beta features' toggle"_,
-`requiredEvidence: [{ type: screenshot }]`, `required: true`.
-
-```bash
-OP="$LOBE_OPERATION_ID"
-
-# 1. discover: find this item's checkItemId + required evidence
-lh verify plan state "$OP" --json # → item id vci_settings, requires screenshot
-
-# 2. surface = web (frontend change). Auth the session if needed (see references/auth.md).
-agent-browser --session app open "http://localhost:3000/settings"
-agent-browser --session app wait --text "Beta features"
-agent-browser --session app screenshot ./proof/settings-beta.png
-
-# 3. submit: creates the result row + attaches the screenshot in one call
-lh acceptance run result submit --operation "$OP" --item vci_settings --type screenshot \
-  --file ./proof/settings-beta.png --by agent-browser \
-  --desc "Settings page renders the new Beta features toggle"
-# → report: https://app.lobehub.com/verify/<verifyRunId>
-
-# 4. self-check
-lh acceptance run result list --operation "$OP" --json # → { checkItemId: vci_settings, id: vcr_77 }
-lh acceptance run evidence list vcr_77 --json          # → one screenshot present → 1/1 covered
-```
-
 ## Portability rules
 
 - **Prefer engine-level capture over OS capture.** `agent-browser screenshot` /
@@ -253,21 +228,16 @@ lh acceptance run evidence list vcr_77 --json          # → one screenshot pres
 
 ## Reference map
 
-```
-verify/
-├── SKILL.md                      # this router: the loop + surface decision + example
-├── surfaces/                     # per-surface acceptance recipes — pick one per criterion
-│   ├── cli.md                    # backend / CLI surface → text evidence from command output
-│   ├── web.md                    # web surface (frontend / full-stack) via agent-browser
-│   ├── electron.md               # desktop surface (Electron) via agent-browser --cdp
-│   ├── native.md                 # native macOS app / OS-level surface via Computer Use
-│   └── ios-simulator.md          # native iOS build, interaction, framebuffer, and gesture proof
-└── references/                   # cross-surface shared knowledge
-    ├── plan-format.md            # verify contract: plan shape + checkItemId↔checkResultId join
-    ├── evidence.md               # evidence type → capture recipe; upload; coverage; portability
-    ├── agent-browser.md          # full agent-browser CLI reference (any Chromium app)
-    ├── computer-use.md           # macOS Computer Use toolkit (osascript + screencapture)
-    ├── recording.md              # GIF / MP4 recording for time-based evidence
-    ├── report.md                 # structured report rounds: result.json schema + `lh acceptance run ingest`
-    └── auth.md                   # portable auth: session/state/vault/cookie injection + boundaries
-```
+Load detailed references only after selecting the applicable path:
+
+| Need                                                   | Reference                                                           |
+| ------------------------------------------------------ | ------------------------------------------------------------------- |
+| Existing verify-plan schema and join keys              | [plan-format.md](references/plan-format.md)                         |
+| Shared media, provenance, submission, and safety rules | [evidence.md](references/evidence.md)                               |
+| Authored structured rounds and `result.json`           | [report.md](references/report.md)                                   |
+| Web/Electron Chromium CLI commands                     | [agent-browser.md](references/agent-browser.md)                     |
+| Authenticated Web session                              | [auth-web.md](references/auth-web.md)                               |
+| Native macOS or OS-owned step                          | [computer-use.md](references/computer-use.md)                       |
+| Web/Electron temporal evidence                         | [recording-cdp.md](references/recording-cdp.md)                     |
+| iOS Simulator temporal/frame evidence                  | [recording-ios-simulator.md](references/recording-ios-simulator.md) |
+| Native macOS temporal evidence                         | [recording-native-macos.md](references/recording-native-macos.md)   |

@@ -1067,6 +1067,38 @@ describe('lh acceptance — canonical run tree', () => {
     rmSync(dir, { force: true, recursive: true });
   });
 
+  it('removes stale materialized resources on `acceptance update`', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'acceptance-update-'));
+    mockTrpcClient.verify.getSkillBundle.query.mockReset().mockResolvedValueOnce({
+      content: '# Acceptance SKILL',
+      files: {
+        'references/auth.md': '# Mixed auth',
+        'references/recording.md': '# Mixed recording',
+      },
+      identifier: 'acceptance',
+      name: 'acceptance',
+    });
+    await run(['install', '--dir', dir]);
+
+    mockTrpcClient.verify.getSkillBundle.query.mockResolvedValueOnce({
+      content: '# Acceptance SKILL v2',
+      files: {
+        'references/auth-web.md': '# Web auth',
+        'references/recording-cdp.md': '# CDP recording',
+      },
+      identifier: 'acceptance',
+      name: 'acceptance',
+    });
+    await run(['update', '--dir', dir]);
+
+    const skillDir = path.join(dir, '.agents', 'skills', 'acceptance');
+    expect(existsSync(path.join(skillDir, 'references', 'auth.md'))).toBe(false);
+    expect(existsSync(path.join(skillDir, 'references', 'recording.md'))).toBe(false);
+    expect(existsSync(path.join(skillDir, 'references', 'auth-web.md'))).toBe(true);
+    expect(existsSync(path.join(skillDir, 'references', 'recording-cdp.md'))).toBe(true);
+    rmSync(dir, { force: true, recursive: true });
+  });
+
   it('does NOT attach the run subtree to the deprecated `verify acceptance` alias', async () => {
     const program = new Command();
     program.exitOverride();

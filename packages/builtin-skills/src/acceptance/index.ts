@@ -2,11 +2,13 @@ import type { BuiltinSkill } from '@lobechat/types';
 
 import { toResourceMeta } from '../lobehub/helpers';
 import agentBrowser from './references/agent-browser.md';
-import auth from './references/auth.md';
+import authWeb from './references/auth-web.md';
 import computerUse from './references/computer-use.md';
 import evidence from './references/evidence.md';
 import planFormat from './references/plan-format.md';
-import recording from './references/recording.md';
+import recordingCdp from './references/recording-cdp.md';
+import recordingIosSimulator from './references/recording-ios-simulator.md';
+import recordingNativeMacos from './references/recording-native-macos.md';
 import report from './references/report.md';
 import content from './SKILL.md';
 import cli from './surfaces/cli.md';
@@ -28,9 +30,9 @@ export const AcceptanceIdentifier = 'acceptance';
  * Web/Electron, shell-level native automation for macOS, and an installed
  * Simulator HID/Accessibility CLI plus Xcode/simctl for iOS.
  *
- * The references carry the full operating manual (agent-browser CLI, web vs
- * Electron decision + setup, auth recipes, capture recipes), with all
- * LobeHub-only coupling generalized away.
+ * The references carry the shared contracts and surface-scoped operating
+ * manuals. Authentication and recording resources are split by runtime so a
+ * selected surface never needs to load another platform's instructions.
  *
  * Resource keys keep the `.md` extension so a disk pull
  * (`.agents/skills/acceptance/references/*.md`) maps 1:1 to real files and the
@@ -45,11 +47,13 @@ export const AcceptanceSkill: BuiltinSkill = {
   name: 'acceptance',
   resources: toResourceMeta({
     'references/agent-browser.md': agentBrowser,
-    'references/auth.md': auth,
+    'references/auth-web.md': authWeb,
     'references/computer-use.md': computerUse,
     'references/evidence.md': evidence,
     'references/plan-format.md': planFormat,
-    'references/recording.md': recording,
+    'references/recording-cdp.md': recordingCdp,
+    'references/recording-ios-simulator.md': recordingIosSimulator,
+    'references/recording-native-macos.md': recordingNativeMacos,
     'references/report.md': report,
     'surfaces/cli.md': cli,
     'surfaces/electron.md': electron,
