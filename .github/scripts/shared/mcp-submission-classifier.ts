@@ -97,7 +97,7 @@ export function classify(title: string, body: string): Classification {
       text,
     ) ||
       (/\b(?:listing|marketplace)\b|市场/.test(text) &&
-        /\bstale\b|\bscoring\b|\bstuck (?:at|on) v?\d/.test(text)));
+        /\bstale\b|\bstuck (?:at|on) v?\d/.test(text)));
 
   const isPublishingFlowFeedback =
     /publish-mcp|publishing skill/.test(text) &&
@@ -110,13 +110,13 @@ export function classify(title: string, body: string): Classification {
   // and re-point them at the same broken CLI path).
   const isCliFeedback =
     isPublishingFlowFeedback ||
-    /\b(?:market-)?cli\b.+(?:fail|error|issue|problem|bug|not work|can'?t|cannot|unable|reject)/.test(
+    /\b(?:market-)?cli\b.+(?:fail|error|issue|problem|bug|not work|can'?t|cannot|unable|reject)/s.test(
       text,
     ) ||
-    /(?:fail|error|unable|can'?t|cannot|reject).*(?:submit|publish|login|connect|claim|verify ownership)/.test(
+    /(?:fail|error|unable|can'?t|cannot|reject).*(?:add|list|submit|publish|login|connect|claim|verify ownership)/s.test(
       text,
     ) ||
-    /(?:submit|publish|login|connect|claim|verify ownership).*(?:fail|error|unable|can'?t|cannot|reject)/.test(
+    /(?:add|list|submit|publish|login|connect|claim|verify ownership).*(?:fail|error|unable|can'?t|cannot|reject)/s.test(
       text,
     );
 

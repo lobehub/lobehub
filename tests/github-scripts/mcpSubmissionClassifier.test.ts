@@ -45,6 +45,41 @@ The publishing skill points me at the wrong command sequence for this server.`,
     expect(classification.isSubmission).toBe(false);
   });
 
+  it('does not classify inability to add an MCP server as a submission', () => {
+    const classification = classify('[Bug] Cannot add MCP server to marketplace', '');
+
+    expect(classification).toMatchObject({
+      isSubmission: false,
+      reason: 'looks like CLI/publishing feedback',
+    });
+  });
+
+  it('does not classify multiline CLI failures as rescan requests', () => {
+    const classification = classify(
+      'Please rescan my MCP marketplace listing',
+      `I ran:
+
+market-cli plugin claim foo
+Error: permission denied
+
+Please rescan the listing.`,
+    );
+
+    expect(classification).toMatchObject({
+      isSubmission: false,
+      reason: 'looks like CLI/publishing feedback',
+    });
+  });
+
+  it('does not classify marketplace scoring bugs as rescan requests', () => {
+    const classification = classify(
+      '[Bug] MCP marketplace scoring is incorrect',
+      'The score shown for my server seems wrong compared to similar servers.',
+    );
+
+    expect(classification.isSubmission).toBe(false);
+  });
+
   it('still treats a plain rescan (no CLI failure) as a listing request', () => {
     const classification = classify(
       '[Request] Rescan elecz MCP listing to v1.9.6',
