@@ -18,7 +18,7 @@ describe('copySpaBuild', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'copy-spa-build-'));
     testRoots.push(root);
 
-    for (const dir of ['assets', 'devtools', 'i18n', 'model-bank', 'shiki', 'vendor']) {
+    for (const dir of ['assets', 'devtools', 'i18n', 'icons', 'model-bank', 'shiki', 'vendor']) {
       const sourceDir = path.join(root, 'dist/desktop', dir);
       mkdirSync(sourceDir, { recursive: true });
       writeFileSync(path.join(sourceDir, `${dir}.js`), `export default '${dir}';`);
@@ -26,9 +26,22 @@ describe('copySpaBuild', () => {
 
     copySpaBuild(root);
 
-    for (const dir of ['assets', 'devtools', 'i18n', 'model-bank', 'shiki', 'vendor']) {
+    for (const dir of ['assets', 'devtools', 'i18n', 'icons', 'model-bank', 'shiki', 'vendor']) {
       expect(existsSync(path.join(root, 'public/_spa', dir, `${dir}.js`))).toBe(true);
     }
+  });
+
+  it('publishes icons for the static loading-screen brand image', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'copy-spa-build-icons-'));
+    testRoots.push(root);
+
+    const sourceDir = path.join(root, 'dist/desktop/icons');
+    mkdirSync(sourceDir, { recursive: true });
+    writeFileSync(path.join(sourceDir, 'icon-192x192.png'), 'png');
+
+    copySpaBuild(root);
+
+    expect(existsSync(path.join(root, 'public/_spa/icons/icon-192x192.png'))).toBe(true);
   });
 
   it('runs through the production Node entrypoint', () => {

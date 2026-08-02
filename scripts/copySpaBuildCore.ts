@@ -1,7 +1,8 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
-const copyDirs = ['assets', 'devtools', 'i18n', 'model-bank', 'shiki', 'vendor'] as const;
+// Splash #loading-screen references /icons/...; Vite rewrites that to /_spa/icons/...
+const copyDirs = ['assets', 'devtools', 'i18n', 'icons', 'model-bank', 'shiki', 'vendor'] as const;
 const copyRootFilePatterns = [/^favicon.*\.ico$/, /^apple-touch-icon\.png$/] as const;
 const targets = [
   { distDir: 'desktop', publicDir: 'public/_spa' },
