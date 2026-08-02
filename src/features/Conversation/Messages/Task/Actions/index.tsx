@@ -14,6 +14,7 @@ const DEFAULT_BAR: MessageActionSlot[] = ['edit', 'copy'];
 const DEFAULT_MENU: MessageActionSlot[] = [
   'edit',
   'copy',
+  'copyOperationId',
   'comments',
   'collapse',
   'divider',
@@ -23,7 +24,15 @@ const DEFAULT_MENU: MessageActionSlot[] = [
   'del',
 ];
 const ERROR_BAR: MessageActionSlot[] = ['regenerate', 'del'];
-const ERROR_MENU: MessageActionSlot[] = ['edit', 'copy', 'comments', 'divider', 'del'];
+const EMPTY_ERROR_MENU: MessageActionSlot[] = ['copyOperationId'];
+const ERROR_MENU: MessageActionSlot[] = [
+  'edit',
+  'copy',
+  'copyOperationId',
+  'comments',
+  'divider',
+  'del',
+];
 
 interface AssistantActionsBarProps {
   actionsConfig?: MessageActionsConfig;
@@ -42,12 +51,18 @@ export const AssistantActionsBar = memo<AssistantActionsBarProps>(({ actionsConf
   const { content, error, tools } = data;
 
   // Empty error messages render only an interception card — nothing to edit
-  // or copy, so no overflow menu. When the turn streamed content before
-  // erroring, keep edit/copy so the partial reply stays salvageable.
+  // or copy, so only the dev-mode operation-id action remains menu-worthy
+  // (failed runs are exactly what it traces; the menu collapses away when the
+  // action opts out). When the turn streamed content before erroring, keep
+  // edit/copy so the partial reply stays salvageable.
   if (error) {
     const hasContent = !!content && content !== LOADING_FLAT && String(content).trim() !== '';
     return (
-      <MessageActionBar bar={ERROR_BAR} ctx={ctx} menu={hasContent ? ERROR_MENU : undefined} />
+      <MessageActionBar
+        bar={ERROR_BAR}
+        ctx={ctx}
+        menu={hasContent ? ERROR_MENU : EMPTY_ERROR_MENU}
+      />
     );
   }
 

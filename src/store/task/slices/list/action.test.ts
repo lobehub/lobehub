@@ -20,6 +20,7 @@ beforeEach(() => {
   useTaskStore.setState({
     isTaskListInit: false,
     listAgentId: undefined,
+    listQueryVisibility: 'all',
     tasks: [],
     tasksTotal: 0,
     viewMode: 'list',
@@ -56,11 +57,49 @@ describe('TaskListSliceAction', () => {
   describe('refreshTaskList', () => {
     it('should call mutate with correct key including visibility filter', async () => {
       const { mutate } = await import('@/libs/swr');
-      useTaskStore.setState({ listAgentId: 'agt_1', listVisibility: 'private' });
+      useTaskStore.setState({
+        listAgentId: 'agt_1',
+        listQueryVisibility: 'private',
+        listVisibility: 'private',
+      });
 
       await useTaskStore.getState().refreshTaskList();
 
       expect(mutate).toHaveBeenCalledWith(['task:list', 'agt_1', 'private']);
+    });
+  });
+
+  describe('useFetchTaskList', () => {
+    it('allows embedded overviews to ignore the Task page visibility filter', async () => {
+      const { useClientDataSWR } = await import('@/libs/swr');
+      useTaskStore.setState({ listVisibility: 'private' });
+
+      useTaskStore.getState().useFetchTaskList({ allAgents: true, visibility: 'all' });
+
+      expect(useClientDataSWR).toHaveBeenCalledWith(
+        ['task:list', '__all__', 'all'],
+        expect.any(Function),
+        expect.any(Object),
+      );
+    });
+
+    it('resets stale task data when an embedded visibility override changes the query scope', () => {
+      useTaskStore.setState({
+        isTaskListInit: true,
+        listAgentId: '__all__',
+        listQueryVisibility: 'private',
+        listVisibility: 'private',
+        tasks: [{ id: 'private-task' }] as any,
+        tasksTotal: 1,
+      });
+
+      useTaskStore.getState().useFetchTaskList({ allAgents: true, visibility: 'all' });
+
+      const state = useTaskStore.getState();
+      expect(state.listQueryVisibility).toBe('all');
+      expect(state.tasks).toEqual([]);
+      expect(state.tasksTotal).toBe(0);
+      expect(state.isTaskListInit).toBe(false);
     });
   });
 

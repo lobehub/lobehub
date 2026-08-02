@@ -123,50 +123,35 @@ export class TabPagesActionImpl {
   };
 
   closeLeftTabs = (id: string): void => {
-    const { tabs, activeTabId } = this.#get();
+    const { tabs } = this.#get();
     const index = tabs.findIndex((t) => t.id === id);
     if (index <= 0) return;
 
-    const newTabs = tabs.slice(index);
-    const newActiveId = newTabs.some((t) => t.id === activeTabId) ? activeTabId : id;
-
-    this.#set(
-      { activeTabId: newActiveId, tabs: this.#touch(newTabs, newActiveId) },
-      false,
-      'closeLeftTabs',
-    );
-    this.#persist();
+    this.#closeExcept((_, i) => i >= index, id, 'closeLeftTabs');
   };
 
   closeOtherTabs = (id: string): void => {
     const { tabs } = this.#get();
-    const target = tabs.find((t) => t.id === id);
-    if (!target) return;
+    if (!tabs.some((t) => t.id === id)) return;
 
-    this.#set({ activeTabId: id, tabs: this.#touch([target], id) }, false, 'closeOtherTabs');
-    this.#persist();
+    this.#closeExcept((tab) => tab.id === id, id, 'closeOtherTabs');
   };
 
   closeRightTabs = (id: string): void => {
-    const { tabs, activeTabId } = this.#get();
+    const { tabs } = this.#get();
     const index = tabs.findIndex((t) => t.id === id);
     if (index < 0 || index >= tabs.length - 1) return;
 
-    const newTabs = tabs.slice(0, index + 1);
-    const newActiveId = newTabs.some((t) => t.id === activeTabId) ? activeTabId : id;
-
-    this.#set(
-      { activeTabId: newActiveId, tabs: this.#touch(newTabs, newActiveId) },
-      false,
-      'closeRightTabs',
-    );
-    this.#persist();
+    this.#closeExcept((_, i) => i <= index, id, 'closeRightTabs');
   };
 
   reorderTabs = (fromIndex: number, toIndex: number): void => {
     const { tabs } = this.#get();
     if (fromIndex < 0 || fromIndex >= tabs.length) return;
     if (toIndex < 0 || toIndex >= tabs.length) return;
+    // Pinned tabs form a run at the head of the list; a drag across that boundary would
+    // interleave the two groups and desync array order from render order.
+    if (!!tabs[fromIndex].pinned !== !!tabs[toIndex].pinned) return;
 
     const newTabs = [...tabs];
     const [moved] = newTabs.splice(fromIndex, 1);
@@ -174,6 +159,14 @@ export class TabPagesActionImpl {
 
     this.#set({ tabs: newTabs }, false, 'reorderTabs');
     this.#persist();
+  };
+
+  pinTab = (id: string): void => {
+    this.#setPinned(id, true);
+  };
+
+  unpinTab = (id: string): void => {
+    this.#setPinned(id, false);
   };
 
   updateTab = (id: string, url: string): string => {
@@ -244,6 +237,45 @@ export class TabPagesActionImpl {
     newTabs[index] = { ...newTabs[index], cached: merged };
 
     this.#set({ tabs: newTabs }, false, 'updateTabCache');
+    this.#persist();
+  };
+
+  // Pinning is a retention promise, so a bulk close only ever narrows the unpinned run —
+  // a pinned tab leaves solely through removeTab, where the user named that one tab.
+  // Focus therefore stays put unless the close actually took the active tab.
+  #closeExcept = (
+    keep: (tab: TabItem, index: number) => boolean,
+    targetId: string,
+    action: string,
+  ): void => {
+    const { tabs, activeTabId } = this.#get();
+    const newTabs = tabs.filter((tab, index) => tab.pinned || keep(tab, index));
+    if (newTabs.length === tabs.length) return;
+
+    const newActiveId = newTabs.some((t) => t.id === activeTabId) ? activeTabId : targetId;
+
+    this.#set({ activeTabId: newActiveId, tabs: this.#touch(newTabs, newActiveId) }, false, action);
+    this.#persist();
+  };
+
+  // Pinning moves the tab to the end of the pinned run, unpinning to the first slot
+  // after it. Array order must equal render order, or Mod+1–9, Ctrl+Tab cycling and drag
+  // reorder would each describe a different sequence.
+  #setPinned = (id: string, pinned: boolean): void => {
+    const { tabs } = this.#get();
+    const index = tabs.findIndex((t) => t.id === id);
+    if (index < 0 || !!tabs[index].pinned === pinned) return;
+
+    const target: TabItem = { ...tabs[index], pinned };
+    const rest = tabs.filter((_, i) => i !== index);
+    const firstUnpinned = rest.findIndex((t) => !t.pinned);
+    const position = firstUnpinned < 0 ? rest.length : firstUnpinned;
+
+    this.#set(
+      { tabs: [...rest.slice(0, position), target, ...rest.slice(position)] },
+      false,
+      pinned ? 'pinTab' : 'unpinTab',
+    );
     this.#persist();
   };
 

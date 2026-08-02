@@ -278,6 +278,11 @@ export interface SystemStatus {
   showAgentBuilderPanel?: boolean;
   showCommandMenu?: boolean;
   showFilePanel?: boolean;
+  /**
+   * Visibility of the Home dashboard's activity and recommendations rail.
+   * Independent from `showRightPanel` so Home preferences do not affect chat pages.
+   */
+  showHomeRail?: boolean;
   showHotkeyHelper?: boolean;
   showImagePanel?: boolean;
   showImageTopicPanel?: boolean;
@@ -507,6 +512,7 @@ export const INITIAL_STATUS = {
   showCommandMenu: false,
   showFilePanel: true,
   showHotkeyHelper: false,
+  showHomeRail: true,
   showImagePanel: true,
   showImageTopicPanel: true,
   showAgentBuilderPanel: false,
@@ -531,12 +537,32 @@ export const INITIAL_STATUS = {
   workingSidebarWidth: 360,
 } satisfies SystemStatus;
 
+const statusStorage = new AsyncLocalStorage<SystemStatus>('LOBE_SYSTEM_STATUS');
+
+/**
+ * Restore the Home rail before React's first render. The remaining system
+ * status still follows the existing async initialization path, but this
+ * layout-affecting preference must not briefly render its default value after
+ * a page reload.
+ */
+export const createInitialSystemStatus = (): SystemStatus => {
+  const persistedStatus = statusStorage.getFromLocalStorageSync();
+
+  return {
+    ...INITIAL_STATUS,
+    showHomeRail:
+      typeof persistedStatus.showHomeRail === 'boolean'
+        ? persistedStatus.showHomeRail
+        : INITIAL_STATUS.showHomeRail,
+  };
+};
+
 export const initialState: GlobalState = {
   initClientDBStage: DatabaseLoadingState.Idle,
   isMobile: false,
   isStatusInit: false,
   navigationRef: createNavigationRef(),
   sidebarKey: SidebarTabKey.Chat,
-  status: INITIAL_STATUS,
-  statusStorage: new AsyncLocalStorage('LOBE_SYSTEM_STATUS'),
+  status: createInitialSystemStatus(),
+  statusStorage,
 };

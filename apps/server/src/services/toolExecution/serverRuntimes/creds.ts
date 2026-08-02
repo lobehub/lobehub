@@ -24,7 +24,7 @@ class ServerCredsService implements ICredsService {
 
   /**
    * Inside a workspace, reads/writes must hit the workspace's shared organization
-   * credentials, never the operator's personal creds (LOBE-10978). Falls back to
+   * credentials, never the operator's personal creds. Falls back to
    * the personal `market.creds` namespace outside a workspace.
    */
   private credsAccessor() {

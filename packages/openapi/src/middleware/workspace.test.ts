@@ -246,7 +246,7 @@ describe('OpenAPI workspace middleware', () => {
   });
 
   it('gates on membership.role alone — stale RBAC rows have no effect', async () => {
-    // membership.role is the single source of truth (LOBE-12329): an Admin
+    // membership.role is the single source of truth: an Admin
     // membership passes regardless of whatever legacy rbac_user_roles claim.
     mockWorkspaceMembersFindFirst.mockResolvedValueOnce({ role: 'admin' });
     const app = createApp({ apiKeyWorkspaceId: 'workspace-1', authType: 'apikey' });

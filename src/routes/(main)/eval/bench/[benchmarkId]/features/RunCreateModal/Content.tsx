@@ -2,8 +2,8 @@
 
 import { AGENT_PROFILE_URL, DEFAULT_INBOX_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
 import { Accordion, AccordionItem, ActionIcon, Avatar, Flexbox, Text } from '@lobehub/ui';
-import { Select, useModalContext } from '@lobehub/ui/base-ui';
-import { App, Form, Input, InputNumber, Space } from 'antd';
+import { Select, toast, useModalContext } from '@lobehub/ui/base-ui';
+import { Form, Input, InputNumber, Space } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import { type FC, useCallback, useEffect, useMemo, useState } from 'react';
@@ -81,7 +81,7 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
 }) => {
   const { t } = useTranslation('eval');
   const { t: tChat } = useTranslation('chat');
-  const { message } = App.useApp();
+
   const { close } = useModalContext();
   const navigate = useWorkspaceAwareNavigate();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
@@ -186,14 +186,14 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
           } catch {
             // Run was created — surface the start failure (ux Act) but keep
             // going to the run page so the user can retry there.
-            message.error(t('run.error.start'));
+            toast.error(t('run.error.start'));
           }
           navigate(`/eval/bench/${benchmarkId}/runs/${run.id}`);
         }
         close();
       } catch (error) {
         // createRun failure: toast and keep the modal open for retry (ux Act).
-        message.error(
+        toast.error(
           error instanceof Error && error.message ? error.message : t('run.create.error'),
         );
       } finally {
@@ -208,7 +208,6 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
       experimentId,
       form,
       isDatasetMode,
-      message,
       navigate,
       onLoadingChange,
       startRun,

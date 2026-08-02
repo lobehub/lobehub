@@ -156,6 +156,7 @@
   "upload.networkError": "لطفاً اتصال شبکه خود را بررسی کرده و مطمئن شوید پیکربندی CORS سرویس ذخیره‌سازی فایل صحیح است.",
   "upload.permissionDenied": "شما اجازه آپلود فایل‌ها در این فضای کاری را ندارید.",
   "upload.storageBlock.billingUnavailable": "وضعیت صورتحساب اشتراک شما قابل تأیید نیست. لطفاً بعداً دوباره امتحان کنید یا جزئیات صورتحساب خود را به‌روزرسانی کنید.",
+  "upload.storageBlock.cleanupFiles": "فضا را آزاد کنید",
   "upload.storageBlock.monthlyCapReached": "سقف هزینه ماهانه ذخیره‌سازی شما به پایان رسیده است.",
   "upload.storageBlock.noPaymentMethod": "لطفاً یک روش پرداخت اضافه کنید تا بتوانید به آپلود ادامه دهید.",
   "upload.storageBlock.overageNotEnabled": "فضای ذخیره‌سازی شما پر شده است. صورتحساب پرداخت به‌ازای‌مصرف را فعال کنید تا بتوانید به آپلود ادامه دهید.",

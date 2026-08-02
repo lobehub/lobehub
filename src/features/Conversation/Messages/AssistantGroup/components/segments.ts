@@ -6,9 +6,8 @@ import type { RenderableAssistantContentBlock } from './types';
 
 export type GroupRenderSegment = AssistantGroupSegment<RenderableAssistantContentBlock>;
 
-export const countFoldedProcessSteps = (segments: GroupRenderSegment[]): number => {
+export const countAssistantLlmCalls = (segments: GroupRenderSegment[]): number => {
   const assistantBlockIds = new Set<string>();
-  let toolCount = 0;
 
   for (const segment of segments) {
     if (segment.kind === 'answer') {
@@ -18,11 +17,10 @@ export const countFoldedProcessSteps = (segments: GroupRenderSegment[]): number 
 
     for (const block of segment.blocks) {
       assistantBlockIds.add(block.id);
-      toolCount += block.tools?.length ?? 0;
     }
   }
 
-  return assistantBlockIds.size + toolCount;
+  return assistantBlockIds.size;
 };
 
 export const hasRenderableFinalAnswer = (segments: GroupRenderSegment[]): boolean =>

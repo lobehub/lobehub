@@ -86,6 +86,8 @@ export const resolveBlockedTools =
     const topicId = operation.topicId ?? state.metadata?.topicId;
     const events: AgentEvent[] = [];
     const newState = structuredClone(state);
+    const blockedContent = payload.blockedContent ?? BLOCKED_TOOL_CONTENT;
+    const blockedReason = payload.blockedReason ?? BLOCKED_TOOL_ERROR;
     const toolResults: Array<{ data: ToolRunResult; toolCallId: string }> = [];
     const toolMessageIds: string[] = [];
 
@@ -97,10 +99,13 @@ export const resolveBlockedTools =
 
     for (const toolPayload of payload.toolsCalling) {
       const result: ToolRunResult = {
-        content: BLOCKED_TOOL_CONTENT,
-        error: BLOCKED_TOOL_ERROR,
+        content: blockedContent,
+        error: blockedReason,
         executionTime: 0,
-        state: { type: 'blocked' },
+        state: {
+          ...(payload.blockedReason && { reason: blockedReason }),
+          type: 'blocked',
+        },
         success: false,
       };
 
@@ -128,7 +133,7 @@ export const resolveBlockedTools =
           plugin: toolPayload as any,
           pluginError: result.error,
           pluginIntervention: {
-            rejectedReason: BLOCKED_TOOL_ERROR,
+            rejectedReason: blockedReason,
             status: 'rejected',
           },
           pluginState: result.state,

@@ -12,6 +12,7 @@ export const BUILTIN_AGENT_SLUGS = {
   inbox: 'inbox',
   nightlyReview: 'nightly-review',
   onboardingUnderstanding: 'onboarding-understanding',
+  onboardingTaskRecommender: 'onboarding-task-recommender',
   pageAgent: 'page-agent',
   selfFeedbackIntent: 'self-feedback-intent',
   selfReflection: 'self-reflection',

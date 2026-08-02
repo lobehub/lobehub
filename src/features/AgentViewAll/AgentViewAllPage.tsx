@@ -18,13 +18,13 @@ import WideScreenContainer from '@/features/WideScreenContainer';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { usePermission } from '@/hooks/usePermission';
 import { AgentModalProvider } from '@/routes/(main)/home/_layout/Body/Agent/ModalProvider';
+import { useSidebarItemVisibility } from '@/routes/(main)/home/_layout/Body/Agent/useSidebarItemVisibility';
 import { useCreateMenuItems } from '@/routes/(main)/home/_layout/hooks';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 import { useUserStore } from '@/store/user';
-import { workspaceUserSettingsSelectors } from '@/store/user/selectors';
 
 import AgentCard, { cardStyles } from './AgentCard';
 import AgentRow, { type AgentRowAuthor } from './AgentRow';
@@ -94,17 +94,7 @@ const AgentViewAllPage = memo(() => {
     isEqual,
   );
 
-  // "In my sidebar" membership — workspace mode persists per-member in
-  // workspace_user_settings; personal mode persists in users.preference.
-  const sidebarHiddenAgentIds = useUserStore(
-    (s) =>
-      activeWorkspaceId
-        ? workspaceUserSettingsSelectors.sidebarHiddenAgentIds(s)
-        : (s.preference.sidebarHiddenAgentIds ?? []),
-    isEqual,
-  );
-  const updateWorkspaceUserPreference = useUserStore((s) => s.updateWorkspaceUserPreference);
-  const updatePreference = useUserStore((s) => s.updatePreference);
+  const { isSidebarItemVisible, setSidebarItemVisible } = useSidebarItemVisibility();
 
   const workspaceItems = useMemo(
     () => flattenAgentBuckets(pinnedAgents, agentGroups, ungroupedAgents),
@@ -160,7 +150,7 @@ const AgentViewAllPage = memo(() => {
       : items;
 
     if (!showSidebarHidden) {
-      matched = matched.filter((item) => !sidebarHiddenAgentIds.includes(item.id));
+      matched = matched.filter(isSidebarItemVisible);
     }
 
     const authorName = (item: SidebarAgentItem) =>
@@ -178,7 +168,7 @@ const AgentViewAllPage = memo(() => {
     orderBy,
     orderDirection,
     showSidebarHidden,
-    sidebarHiddenAgentIds,
+    isSidebarItemVisible,
     authorByUserId,
   ]);
 
@@ -206,16 +196,9 @@ const AgentViewAllPage = memo(() => {
 
   const handleToggleSidebar = useCallback(
     (item: SidebarAgentItem) => {
-      const next = sidebarHiddenAgentIds.includes(item.id)
-        ? sidebarHiddenAgentIds.filter((id) => id !== item.id)
-        : [...sidebarHiddenAgentIds, item.id];
-      if (activeWorkspaceId) {
-        void updateWorkspaceUserPreference({ sidebarHiddenAgentIds: next });
-      } else {
-        void updatePreference({ sidebarHiddenAgentIds: next });
-      }
+      void setSidebarItemVisible(item.id, !isSidebarItemVisible(item));
     },
-    [activeWorkspaceId, sidebarHiddenAgentIds, updatePreference, updateWorkspaceUserPreference],
+    [isSidebarItemVisible, setSidebarItemVisible],
   );
 
   const renderCard = useCallback(
@@ -225,11 +208,11 @@ const AgentViewAllPage = memo(() => {
         item={item}
         key={item.id}
         showAuthor={showAuthor}
-        sidebarHidden={sidebarHiddenAgentIds.includes(item.id)}
+        sidebarHidden={!isSidebarItemVisible(item)}
         onToggleSidebar={handleToggleSidebar}
       />
     ),
-    [showAuthor, authorByUserId, handleToggleSidebar, sidebarHiddenAgentIds],
+    [showAuthor, authorByUserId, handleToggleSidebar, isSidebarItemVisible],
   );
 
   const renderRow = useCallback(
@@ -239,19 +222,19 @@ const AgentViewAllPage = memo(() => {
         item={item}
         key={item.id}
         showAuthor={showAuthor}
-        sidebarHidden={sidebarHiddenAgentIds.includes(item.id)}
+        sidebarHidden={!isSidebarItemVisible(item)}
         onToggleSidebar={handleToggleSidebar}
       />
     ),
-    [showAuthor, authorByUserId, handleToggleSidebar, sidebarHiddenAgentIds],
+    [showAuthor, authorByUserId, handleToggleSidebar, isSidebarItemVisible],
   );
 
   const { allowed: canCreate, reason: createBlockedReason } = usePermission('create_content');
   const {
     createAgentMenuItem,
+    createConnectAgentMenuItem,
     createGroupChatMenuItem,
-    createHeterogeneousAgentMenuItems,
-    createPlatformAgentMenuItem,
+    createMarketAgentMenuItem,
     isMutatingAgent,
   } = useCreateMenuItems();
 
@@ -264,21 +247,23 @@ const AgentViewAllPage = memo(() => {
   );
 
   // Same menu as the sidebar's create button: agent / group chat / external
-  // CLI agents / platform agent, all inheriting the segment's visibility.
+  // CLI agents / platform agent, all inheriting the segment's visibility. The
+  // sidebar's "add from Agent list" entry is omitted — it navigates to this
+  // very page.
   const createMenuItems = useMemo(() => {
-    const heteroItems = createHeterogeneousAgentMenuItems(createOptions);
-    const platformItem = createPlatformAgentMenuItem(createOptions);
+    const connectItem = createConnectAgentMenuItem(createOptions);
     return [
       createAgentMenuItem(createOptions),
       createGroupChatMenuItem(createOptions),
-      ...(heteroItems.length > 0 ? [{ type: 'divider' as const }, ...heteroItems] : []),
-      ...(platformItem ? [{ type: 'divider' as const }, platformItem] : []),
+      ...(connectItem ? [{ type: 'divider' as const }, connectItem] : []),
+      { type: 'divider' as const },
+      createMarketAgentMenuItem(),
     ];
   }, [
     createAgentMenuItem,
+    createConnectAgentMenuItem,
     createGroupChatMenuItem,
-    createHeterogeneousAgentMenuItems,
-    createPlatformAgentMenuItem,
+    createMarketAgentMenuItem,
     createOptions,
   ]);
 

@@ -83,7 +83,7 @@ export const workspaceAuthMiddleware = async (c: Context, next: Next) => {
 
   if (c.get('authType') === 'apikey') {
     // `workspace_members.role` is the single source of truth for built-in
-    // workspace roles (LOBE-12329).
+    // workspace roles.
     const isWorkspaceAdmin = membership.role === 'owner' || membership.role === 'admin';
 
     if (!isWorkspaceAdmin) {

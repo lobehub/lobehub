@@ -439,7 +439,7 @@ describe('MessageModel Query Tests', () => {
       expect(result3).toHaveLength(0);
     });
 
-    describe('newest-first pagination (LOBE-12011)', () => {
+    describe('newest-first pagination ', () => {
       // A topic whose mainline exceeds pageSize must keep its LATEST turns
       // (including the final answer) rather than the oldest, and the returned
       // slice must be a single contiguous parentId chain so the renderer — which
@@ -1233,7 +1233,7 @@ describe('MessageModel Query Tests', () => {
           current: 0,
           pageSize: 2,
         });
-        // Page 0 returns the NEWEST page (LOBE-12011), re-sorted ascending: the
+        // Page 0 returns the NEWEST page, re-sorted ascending: the
         // two most recent messages, not the two oldest.
         expect(result1).toHaveLength(2);
         expect(result1[0].id).toBe('msg-page-2');
@@ -3299,7 +3299,7 @@ describe('MessageModel Query Tests', () => {
 
   // Fallback anchor used when `getLatestSpineMessageId` comes back empty. Without
   // it a new user turn is persisted as a second root and the renderer emits the
-  // newest reply above older messages (LOBE-11489).
+  // newest reply above older messages.
   describe('getLatestNonToolMessageId', () => {
     it('returns a toolless signal turn that the spine query skips', async () => {
       await serverDB.insert(sessions).values([{ id: 'session1', userId }]);

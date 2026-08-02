@@ -3,6 +3,7 @@ import type { WorkflowContext } from '@upstash/workflow';
 import { createWorkflow, serveMany } from '@upstash/workflow/hono';
 import { Hono } from 'hono';
 
+import { OnboardingTaskRecommendationWorkflow } from '@/server/workflows/onboardingTaskRecommendation';
 import {
   type ProcessCollectedUnderstandingPayload,
   type ProcessUnderstandingProvidersPayload,
@@ -38,6 +39,8 @@ export const processProvidersWorkflow = createWorkflow<
     (context: WorkflowContext<ProcessUnderstandingProvidersPayload>) =>
       processUnderstandingProviders(context, {
         processCollectedWorkflow,
+        triggerTaskRecommendations: (input, options) =>
+          OnboardingTaskRecommendationWorkflow.trigger(input, options),
       }),
     { url: '/api/workflows/onboarding/understanding/process-providers' },
   ),

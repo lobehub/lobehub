@@ -2,6 +2,7 @@ import { isDesktop } from '@lobechat/const';
 import { getActivePluginIds } from '@lobechat/types';
 import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { confirmModal, type ModalInstance } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import type { TFunction } from 'i18next';
@@ -13,6 +14,7 @@ import {
   Settings2Icon,
   Trash,
   UserRound,
+  UsersIcon,
 } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -21,14 +23,12 @@ import { useAgentTransferMenuItem } from '@/business/client/hooks/useAgentTransf
 import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
 import { useBusinessAgentImportMenuItem } from '@/business/client/hooks/useBusinessAgentImportMenuItem';
 import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
-import { message } from '@/components/AntdStaticMethods';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import NavHeader from '@/features/NavHeader';
 import { formatPageEditorInfoTime } from '@/features/PageEditor/formatPageEditorInfoTime';
 import AccessLevelTag from '@/features/ResourcePermission/AccessLevelTag';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
-import { useResourcePermissionMenuItem } from '@/features/ResourcePermission/useResourcePermissionMenuItem';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
@@ -119,6 +119,10 @@ const Header = memo(() => {
   // workspace-scoped LobeAI row. Builtin restrictions only prevent visibility
   // changes; they must not hide the independent General-access control.
   const showPermissionsEntry = hasActiveWorkspace && !!activeAgentId && visibility !== 'private';
+  // The Permission page also hosts the model / execution-environment policies,
+  // which a private workspace agent configures ahead of sharing — so its entry
+  // is wider than the member-access controls alone.
+  const showPermissionPageEntry = hasActiveWorkspace && !!activeAgentId;
   const [showAgentBuilderPanel, toggleAgentBuilderPanel, isStatusInit] = useGlobalStore((s) => [
     systemStatusSelectors.showAgentBuilderPanel(s),
     s.toggleAgentBuilderPanel,
@@ -148,7 +152,7 @@ const Header = memo(() => {
       okButtonProps: { danger: true },
       onOk: async () => {
         await removeAgent(activeAgentId);
-        message.success(t('confirmRemoveSessionSuccess', { ns: 'chat' }));
+        toast.success(t('confirmRemoveSessionSuccess', { ns: 'chat' }));
         navigate('/');
       },
       title: t('confirmRemoveSessionItemAlert', { ns: 'chat' }),
@@ -196,20 +200,16 @@ const Header = memo(() => {
         a.click();
         a.remove();
         URL.revokeObjectURL(url);
-        message.success(t('settingAgent.export.success', { ns: 'setting' }));
+        toast.success(t('settingAgent.export.success', { ns: 'setting' }));
       }
     } catch (error) {
       console.error('Failed to export agent profile markdown:', error);
-      message.error(t('settingAgent.export.error', { ns: 'setting' }));
+      toast.error(t('settingAgent.export.error', { ns: 'setting' }));
     }
   }, [config.model, config.plugins, config.provider, editor, isHeterogeneous, meta, systemRole, t]);
 
   const importMenuItem = useBusinessAgentImportMenuItem(activeAgentId ?? undefined);
   const transferMenuItems = useAgentTransferMenuItem(activeAgentId ?? undefined, meta);
-  const memberPermissionMenuItem = useResourcePermissionMenuItem(
-    'agent',
-    showPermissionsEntry ? activeAgentId : undefined,
-  );
 
   const settingsModalRef = useRef<ModalInstance | null>(null);
   useEffect(
@@ -242,10 +242,19 @@ const Header = memo(() => {
         key: 'usage-stats',
         label: t('usageStats.entry', { ns: 'spend' }),
         onClick: () => {
-          if (activeAgentId) navigate(`/agent/${activeAgentId}/stats`);
+          if (activeAgentId) navigate(`/agent/${activeAgentId}/statistics`);
         },
       },
-      memberPermissionMenuItem,
+      showPermissionPageEntry
+        ? {
+            icon: <Icon icon={UsersIcon} />,
+            key: 'permission',
+            label: t('permission.page.entry', { ns: 'setting' }),
+            onClick: () => {
+              if (activeAgentId) navigate(`/agent/${activeAgentId}/permission`);
+            },
+          }
+        : null,
       { type: 'divider' as const },
       {
         children: [
@@ -310,8 +319,8 @@ const Header = memo(() => {
     handleExportMarkdown,
     handleDelete,
     isInbox,
-    memberPermissionMenuItem,
     navigate,
+    showPermissionPageEntry,
     t,
     importMenuItem,
     transferMenuItems,

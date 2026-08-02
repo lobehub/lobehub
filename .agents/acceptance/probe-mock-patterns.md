@@ -284,6 +284,82 @@ Measured this way, still-hidden slots produced **0** mutations in 6/6 switches: 
 changes (visible/hidden, active/inactive, mounted/unmounted), capture the classification on both sides
 and use the intersection. Otherwise the action's own effect lands in the wrong bucket.
 
+### Agent Mock playback leaves `pluginState` empty — backfill it before capturing pluginState-driven renders
+
+**Situation:** verifying a builtin-tool Render/Inspector (lobe-agent todos, plans —
+anything reading `message.pluginState`) with DevDock → Agent Mock case playback as
+the deterministic driver (no LLM).
+
+**Doesn't work:** capturing right after playback. The mock pipeline writes each
+tool step's `result` into the tool message `content` only and never sets
+`pluginState`, so a Render keyed off `pluginState` mounts empty (expanded rows
+show nothing) and inspectors fall to their no-data fallback. Reads as "the new
+rendering is broken" when the components are fine. Also note: consecutive todo
+tool rows are folded into the latest by the conversation UI, so early-state rows
+may never mount.
+
+**Works:** after playback completes, backfill in-memory from each message's own
+result JSON, at the layer the Render actually reads:
+
+```js
+const c = window.__LOBE_STORES.chat();
+const msgs = c.dbMessagesMap['main_<agentId>_<topicId>'];
+for (const m of msgs.filter((m) => m.role === 'tool' && m.plugin)) {
+  const parsed = JSON.parse(m.content);
+  if (parsed?.todos)
+    c.internal_dispatchMessage({
+      type: 'updatePluginState',
+      id: m.id,
+      key: 'todos',
+      value: parsed.todos,
+    });
+}
+```
+
+To render a payload the case doesn't cover (another builtin tool, a specific
+state), payload-swap an already-MOUNTED mock row in place — update BOTH the
+assistant's `tools[]` entry (`updateMessageTools`, keyed by `tool_call_id`; this
+is what selects the Render component) and the tool message (`updateMessagePlugin`
+
+- `replaceMessagePluginState`). Dispatching brand-new messages at the end of the
+  list may never mount. Claude Code builtin payloads use `identifier: 'claude-code'`
+  (NOT `lobe-claude-code`) and PascalCase `apiName` (`TodoWrite`). All of this is
+  in-memory only — a reload clears it; delete the temp topic at teardown.
+
+### Desktop theme follows the system appearance, not `settings.general.themeMode`
+
+**Situation:** capturing dark-mode evidence for a desktop UI change.
+
+**Doesn't work:** `window.__LOBE_STORES.user().updateGeneralConfig({ themeMode: 'dark' })`.
+The setting persists (reading it back returns `dark`, and it survives a restart),
+but `document.documentElement.dataset.theme` stays `light` and every token keeps its
+light value. Restarting the instance does not apply it either. Treating the stored
+setting as proof of the rendered theme yields evidence captured in the wrong theme.
+
+**Works:** assert `document.documentElement.dataset.theme` — never the stored
+setting — before capturing any theme-dependent evidence. The renderer tracks the OS
+appearance, so switching it means changing the user's macOS system setting, which is
+outside the harness's remit: mark the dark case untested and say why, rather than
+flipping a device-level preference. Note the setting write is not free — it syncs to
+the account and affects other surfaces; restore it (`auto`) at teardown if you set it.
+
+### A node reference captured before a re-render is silently dead — re-query per assertion
+
+**Situation:** asserting several tab-strip interactions (close, pin, switch) in one
+`agent-browser eval` payload, reusing the element list collected at the top.
+
+**Doesn't work:** collecting `roots` once and then acting on `roots[0]`, `roots[1]`, …
+in sequence. Each action that mutates the tab list re-renders the strip, so every
+reference collected earlier now points at a detached node. Dispatching to a detached
+node throws nothing and changes nothing — React never sees it — so the assertion reads
+as "this interaction does not work". In this catalogue's first occurrence it produced a
+confident "middle-click does not close a pinned tab" that was purely an artefact of the
+stale reference, and it survived review because the number looked plausible.
+
+**Works:** one assertion per `eval`, re-querying the strip each time. When several must
+share a payload, re-query between actions and assert `el.isConnected` before dispatch.
+The same applies to any probe whose own action re-renders the tree it is measuring.
+
 ### `eval` declarations persist in the page global scope
 
 **Situation:** running several `agent-browser eval` payloads against one renderer.
@@ -315,6 +391,115 @@ agent-browser --session "$RUN_SESSION" \
 
 Then assert `get url` and `app-probe.sh auth` on that exact session before
 capturing evidence.
+
+### Leftover React Scan instrumentation poisons every screenshot
+
+**Situation:** capturing UI evidence in a dev instance the user (or an earlier
+round) had DevTools / the DevDock open on.
+
+**Doesn't work:** deleting the overlay canvas (`html > canvas`) once and
+screenshotting. React Scan re-creates it on the next render pass, so a probe that
+reports `0 canvases` a few seconds later is only measuring that nothing
+re-rendered in that window — the outlines return the moment the app updates.
+`localStorage` is also not a reliable read: `react-scan-options.enabled` and
+`LOBE_DEV_DOCK_UI.reactScan` can both say `false` while the instrumentation is
+live, because it was enabled at runtime and never written back.
+
+**Works:** inject a capture-time style rule instead of removing nodes —
+`html > canvas { display: none !important; }` appended to `documentElement`. It
+survives re-creation, touches no product code or styles, and disappears on
+reload. Remove it at teardown. Disclose it in the report: it suppresses a dev
+overlay, which is a capture-time adjustment a reviewer should know about.
+
+### Production-backend web runs have no seeded agent-browser session
+
+**Situation:** verifying frontend-only work against real production data through
+`bun run dev:spa`'s `_dangerous_local_dev_proxy` URL.
+
+**Doesn't work:** the adapter's Web evidence path (`agent-browser --session
+lobehub-dev` seeded by `setup-auth.sh web-seed`) authenticates against the LOCAL
+server. There is no sanctioned way to give that session a production login —
+`setup-auth.sh web`'s Chrome-cookie injection is explicitly forbidden against
+production.
+
+**Works:** drive the proxy in the user's already-authenticated Chrome (the
+`claude-in-chrome` tooling), and compensate for the weaker evidence channel with
+DOM measurements (`getBoundingClientRect` / `getComputedStyle`) alongside every
+screenshot, plus an independent server-side check through `lh` in a clean env.
+Prove the working-tree bundle is actually live first — read back a string that
+exists only in the working tree (e.g. a changed placeholder), never assume HMR
+applied.
+
+### Managed command runners can reap `electron-dev.sh start` children after the helper returns
+
+**Situation:** `electron-dev.sh start` (legacy and pool forms) reports that CDP
+and the renderer are ready, but the CDP port closes immediately after the helper
+command returns. The Electron log contains a normal renderer mount and no crash;
+changing from the saved login snapshot to the fresh golden profile does not alter
+the exit. The cause is not established.
+
+**Doesn't work:** retrying the helper with another pool id or changing the auth
+seed. Both instances become interactive during the helper's readiness loop and
+are gone before the next command can connect.
+
+**Works:** use the documented multi-instance Model B command in a long-lived PTY
+with the same isolated userData, Vite port, IPC id, and CDP port:
+
+```bash
+LOBE_DESKTOP_VITE_PORT=5175 \
+  LOBE_DESKTOP_USER_DATA_DIR=/tmp/lobe-electron-pool/ud-2 \
+  LOBE_IPC_ID=lobehub-desktop-dev-2 \
+  pnpm -C apps/desktop dev -- --remote-debugging-port=9224
+```
+
+Keep that command session open for the run. Confirm the CDP endpoint, project
+process path, `app-probe.sh ready`, renderer auth, server auth, and a raw-CDP
+screenshot before collecting evidence.
+
+### `app-probe.sh goto /` cannot reach the desktop Home route — seed the tab first
+
+**Situation:** driving the Electron shell to the Home route (`/`) to check the nav
+panel there.
+
+**Doesn't work:** `app-probe.sh goto /` prints `"/"` but the renderer stays on the
+previous route. `goto` is a full reload, and the desktop shell restores the active
+tab's persisted url on boot — every non-root route survives that restore, so `goto`
+appears to work for `/tasks`, `/agents`, `/settings` and silently fails only for
+`/`. The follow-up probe then describes the old page with no error anywhere.
+
+**Works:** create and activate a Home tab first, then navigate:
+
+```js
+window.__LOBE_STORES.electron().addTab('/'); // addTab also activates it
+```
+
+```bash
+.agents/acceptance/scripts/app-probe.sh goto /
+```
+
+Assert `location.pathname` after the reload rather than trusting `goto`'s echo.
+
+### Anchor nav-panel assertions on `#nav-panel-drawer`, not a `data-insp-path` match
+
+**Situation:** asserting what the left nav panel renders on a given route.
+
+**Doesn't work:** `document.querySelector('[data-insp-path*="NavPanelDraggable"]')`.
+It resolves during a settled render but returns `null` in the seconds after a full
+reload, and the usual `|| document.body` fallback then reads
+`document.body.innerText === ''` (generic C4) — which looks exactly like an empty
+panel and turns a normal loading window into a false regression.
+
+**Works:** the panel is the `<aside>` sibling of the stable drawer anchor:
+
+```js
+const drawer = document.getElementById('nav-panel-drawer');
+const aside = drawer && [...drawer.parentElement.children].find((c) => c.tagName === 'ASIDE');
+```
+
+Then assert on `aside.innerText` line count plus a count of text-free rounded boxes
+(the skeleton rows). Distinguish the two skeleton states explicitly: the whole panel
+collapsing to \~8 text-free rows is the nav-panel fallback, while fixed items present
+with only the list area shimmering is ordinary data loading.
 
 ## Detailed references
 

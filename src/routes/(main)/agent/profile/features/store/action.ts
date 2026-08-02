@@ -33,6 +33,7 @@ export interface Action {
     agentId: string,
     updateConfigById: UpdateConfigById,
     sourceEditor?: State['editor'],
+    markdownSource?: string,
   ) => void;
   /** Retry the latest failed Prompt autosave. */
   retryPromptSave: () => Promise<void>;
@@ -178,12 +179,13 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
         await saveQueue;
       },
 
-      handleContentChange: (agentId, updateConfigById, sourceEditor) => {
+      handleContentChange: (agentId, updateConfigById, sourceEditor, markdownSource) => {
         const editor = sourceEditor ?? get().editor;
         if (!agentId || !editor) return;
 
         try {
-          const markdownContent = (editor.getDocument('markdown') as unknown as string) || '';
+          const markdownContent =
+            markdownSource ?? (editor.getDocument('markdown') as unknown as string) ?? '';
           const jsonContent = editor.getDocument('json') as unknown as Record<string, unknown>;
 
           getDebouncedSave(agentId)(

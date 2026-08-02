@@ -269,6 +269,10 @@ export const applyModelExtendParams = (ctx: ApplyModelExtendParamsContext): Mode
     extendParams.reasoning_effort = chatConfig.hy3ReasoningEffort;
   }
 
+  if (modelExtendParams.includes('kimiK3ReasoningEffort') && chatConfig.kimiK3ReasoningEffort) {
+    extendParams.reasoning_effort = chatConfig.kimiK3ReasoningEffort;
+  }
+
   if (modelExtendParams.includes('ring2_6ReasoningEffort') && chatConfig.ring2_6ReasoningEffort) {
     extendParams.reasoning_effort = chatConfig.ring2_6ReasoningEffort;
   }

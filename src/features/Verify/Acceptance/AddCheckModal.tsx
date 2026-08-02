@@ -6,7 +6,6 @@ import {
   Button,
   createModal,
   type ModalInstance,
-  Segmented,
   Select,
   useModalContext,
 } from '@lobehub/ui/base-ui';
@@ -66,15 +65,6 @@ const AddCheckContent = memo<AddCheckContentProps>(({ existingIds, onSubmit }) =
 
   return (
     <Flexbox gap={16}>
-      <Segmented
-        block
-        value={mode}
-        options={[
-          { label: tv('acceptance.checkCreate.manual'), value: 'manual' },
-          { label: tv('acceptance.checkCreate.rubric'), value: 'rubric' },
-        ]}
-        onChange={(value) => setMode(value as 'manual' | 'rubric')}
-      />
       {mode === 'manual' ? (
         <>
           <Flexbox gap={6}>
@@ -98,9 +88,25 @@ const AddCheckContent = memo<AddCheckContentProps>(({ existingIds, onSubmit }) =
               onChange={(event) => setMethod(event.target.value)}
             />
           </Flexbox>
+          <Flexbox horizontal align={'center'} gap={2}>
+            <Text fontSize={12} type={'secondary'}>
+              {tv('or', { ns: 'common' })}
+            </Text>
+            <Button size={'small'} type={'text'} onClick={() => setMode('rubric')}>
+              {tv('acceptance.checkCreate.rubric')}
+            </Button>
+          </Flexbox>
         </>
       ) : (
         <Flexbox gap={12}>
+          <Button
+            size={'small'}
+            style={{ alignSelf: 'flex-start' }}
+            type={'text'}
+            onClick={() => setMode('manual')}
+          >
+            {tv('acceptance.checkCreate.manual')}
+          </Button>
           <Select
             loading={rubricsLoading}
             options={(rubrics ?? []).map((rubric) => ({ label: rubric.title, value: rubric.id }))}

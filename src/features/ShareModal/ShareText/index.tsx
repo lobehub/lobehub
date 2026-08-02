@@ -2,8 +2,7 @@ import { FORM_STYLE } from '@lobechat/const';
 import { exportFile } from '@lobechat/utils/client';
 import { type FormItemProps } from '@lobehub/ui';
 import { copyToClipboard, Flexbox, Form } from '@lobehub/ui';
-import { Button, Switch } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { Button, Switch, toast } from '@lobehub/ui/base-ui';
 import { CopyIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -26,7 +25,7 @@ const DEFAULT_FIELD_VALUE: FieldType = {
 const ShareText = memo(() => {
   const [fieldValue, setFieldValue] = useState(DEFAULT_FIELD_VALUE);
   const { t } = useTranslation(['chat', 'common']);
-  const { message } = App.useApp();
+
   const settings: FormItemProps[] = [
     {
       children: <Switch />,
@@ -81,7 +80,7 @@ const ShareText = memo(() => {
         type={'primary'}
         onClick={async () => {
           await copyToClipboard(content);
-          message.success(t('copySuccess', { ns: 'common' }));
+          toast.success(t('copySuccess', { ns: 'common' }));
         }}
       >
         {t('copy', { ns: 'common' })}

@@ -28,6 +28,11 @@ interface SendMessageWithEditorParams {
   groupId?: string;
   message: string;
   pageSelections?: PageSelection[];
+  /**
+   * `private` keeps the created agent/group visible only to its creator inside
+   * the active workspace; omitted/`public` follows the server default.
+   */
+  visibility?: 'private' | 'public';
   workspaceSlug?: string | null;
 }
 
@@ -60,7 +65,7 @@ const ensureBuiltinAgentHydrated = async (slug: string): Promise<string | undefi
  *
  * The workspace-scoped row of the same slug is shared by every member, so a
  * personal preference must not repoint it — that write both broke for
- * non-creators and silently changed the model for everyone else (LOBE-12374).
+ * non-creators and silently changed the model for everyone else.
  * The single exception is a shared row whose own model cannot be invoked in this
  * deployment; leaving it would fail the request outright, so it is repaired once.
  *
@@ -128,6 +133,7 @@ export class HomeInputActionImpl {
     groupId,
     message,
     pageSelections,
+    visibility,
     workspaceSlug,
   }: SendMessageWithEditorParams): Promise<string> => {
     this.#set({ homeInputLoading: true }, false, n('sendAsAgent/start'));
@@ -152,6 +158,7 @@ export class HomeInputActionImpl {
           title: markdownToTxt(message ?? '').slice(0, 50) || 'New Agent',
         },
         groupId,
+        visibility,
       });
 
       // Sync the editing target into the chat store BEFORE the builder message
@@ -219,6 +226,7 @@ export class HomeInputActionImpl {
     groupId,
     message,
     pageSelections,
+    visibility,
     workspaceSlug,
   }: SendMessageWithEditorParams): Promise<string> => {
     this.#set({ homeInputLoading: true }, false, n('sendAsGroup/start'));
@@ -241,6 +249,7 @@ export class HomeInputActionImpl {
         },
         groupId,
         title: markdownToTxt(message ?? '').slice(0, 50) || 'New Group',
+        visibility,
       });
 
       // 3. Load groups and refresh

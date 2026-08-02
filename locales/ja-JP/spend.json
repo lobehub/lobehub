@@ -10,7 +10,7 @@
   "table.columns.duration": "所要時間",
   "table.columns.model": "モデル",
   "table.columns.spend": "クレジット",
-  "table.columns.startTime": "作成日時",
+  "table.columns.time": "時間",
   "table.columns.totalTokens": "トークン使用量",
   "table.columns.trigger.enums.agent_signal": "エージェント信号",
   "table.columns.trigger.enums.api": "APIコール",
@@ -43,6 +43,10 @@
   "table.filters.reset": "リセット",
   "table.filters.searchModel": "モデルを検索",
   "table.filters.startDate": "開始日",
+  "table.pagination.next": "次のページ",
+  "table.pagination.perPage": "{{size}} 件 / ページ",
+  "table.pagination.prev": "前のページ",
+  "table.pagination.range": "{{from}}-{{to}} 件 / {{total}} 件",
   "table.title": "コンピューティングクレジット使用状況の詳細",
   "table.totalToken.input": "入力",
   "table.totalToken.output": "出力",
@@ -66,8 +70,8 @@
   "usageStats.chart.title": "このエージェントが費用を使った時",
   "usageStats.chart.tokens": "トークン",
   "usageStats.dimension": "次元",
-  "usageStats.entry": "使用状況とコスト",
+  "usageStats.entry": "統計",
   "usageStats.range": "期間",
   "usageStats.rangeSuffix": "過去 {{count}}日間",
-  "usageStats.title": "使用状況とコスト"
+  "usageStats.title": "統計"
 }

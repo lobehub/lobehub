@@ -1,8 +1,7 @@
 'use client';
 
 import { Block, Flexbox, Icon, Skeleton, Tag, Text } from '@lobehub/ui';
-import { Button, confirmModal, Select } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { Button, confirmModal, Select, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ArrowLeftIcon, CheckCircle2Icon, Trash2Icon, UserIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -457,7 +456,7 @@ export const useLinkActions = ({
   platform,
 }: UseLinkActionsArgs) => {
   const { t } = useTranslation('messenger');
-  const { message } = App.useApp();
+
   const { allowed: canEdit } = usePermission('edit_own_content');
 
   // Returns whether the update succeeded so the caller can roll back its
@@ -472,10 +471,10 @@ export const useLinkActions = ({
         tenantId: tenantId || undefined,
       });
       await linksMutate();
-      message.success(t('messenger.setActiveSuccess'));
+      toast.success(t('messenger.setActiveSuccess'));
       return true;
     } catch (error) {
-      message.error(getMessengerErrorMessage(error, t, 'messenger.setActiveFailed'));
+      toast.error(getMessengerErrorMessage(error, t, 'messenger.setActiveFailed'));
       return false;
     }
   };
@@ -495,9 +494,9 @@ export const useLinkActions = ({
         try {
           await messengerService.unlink({ platform, tenantId: tenantId || undefined });
           await Promise.all([linksMutate(), installationsMutate()]);
-          message.success(t('messenger.unlinkSuccess'));
+          toast.success(t('messenger.unlinkSuccess'));
         } catch (error) {
-          message.error(getMessengerErrorMessage(error, t, 'messenger.unlinkFailed'));
+          toast.error(getMessengerErrorMessage(error, t, 'messenger.unlinkFailed'));
         }
       },
       title: t('messenger.unlinkTitle'),
@@ -536,7 +535,7 @@ export const useDisconnectInstallation = ({
   linksMutate,
 }: UseDisconnectInstallationArgs) => {
   const { t } = useTranslation('messenger');
-  const { message } = App.useApp();
+
   const { allowed: canEdit } = usePermission('edit_own_content');
 
   return (id: string, copy: DisconnectInstallationCopy) => {
@@ -550,9 +549,9 @@ export const useDisconnectInstallation = ({
           await messengerService.uninstallInstallation({ installationId: id });
           await installationsMutate();
           await linksMutate();
-          message.success(copy.success);
+          toast.success(copy.success);
         } catch (error) {
-          message.error(getMessengerErrorMessage(error, t, copy.failedKey));
+          toast.error(getMessengerErrorMessage(error, t, copy.failedKey));
         }
       },
       title: copy.title,

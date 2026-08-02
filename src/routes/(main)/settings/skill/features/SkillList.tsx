@@ -150,7 +150,7 @@ const SkillList = memo<SkillListProps>(
     }, [isConnectorsInit, fetchConnectors]);
 
     // Load agent-owned connectors (across all agents) for the Agent Connectors
-    // section — connector view only (LOBE-11682).
+    // section — connector view only.
     const isConnectorView = viewMode === 'connector';
     useEffect(() => {
       if (isConnectorView && !isAgentBoundInit) fetchAgentBoundConnectors();

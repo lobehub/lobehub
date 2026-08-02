@@ -2,8 +2,7 @@
 
 import type { VerifyAgentPlanConfig } from '@lobechat/types';
 import { Center, Empty, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { Button, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,6 +21,10 @@ import { chatPortalSelectors } from '@/store/chat/selectors';
 const styles = createStaticStyles(({ css }) => ({
   body: css`
     overflow-y: auto;
+    flex: 1;
+
+    height: 100%;
+    min-height: 0;
     padding-block: 0 24px;
     padding-inline: 24px;
   `,
@@ -29,7 +32,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 const Body = memo(() => {
   const { t } = useTranslation(['chat', 'verify']);
-  const { message } = App.useApp();
+
   const portal = useChatStore(chatPortalSelectors.acceptanceCheckPortal);
   const openAcceptance = useChatStore((state) => state.openAcceptance);
   const { data, error, isLoading, mutate } = useAcceptanceBundle(portal?.acceptanceId ?? null);
@@ -45,9 +48,7 @@ const Body = memo(() => {
       await mutate();
       return true;
     } catch (cause) {
-      message.error(
-        cause instanceof Error ? cause.message : t('taskDetail.acceptance.reviewError'),
-      );
+      toast.error(cause instanceof Error ? cause.message : t('taskDetail.acceptance.reviewError'));
       return false;
     } finally {
       setReviewPending(false);

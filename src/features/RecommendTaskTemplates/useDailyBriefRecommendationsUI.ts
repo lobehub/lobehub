@@ -5,8 +5,8 @@ import type {
 } from '@lobechat/const';
 import { TASK_TEMPLATE_RECOMMEND_COUNT } from '@lobechat/const';
 import { createNanoId } from '@lobechat/utils';
+import { toast } from '@lobehub/ui/base-ui';
 import { useSessionStorageState } from 'ahooks';
-import { App } from 'antd';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
@@ -29,6 +29,7 @@ export type DailyBriefRecommendationsUIState =
   | { mode: 'hidden' }
   | { mode: 'skeleton'; skeletonCount: number }
   | {
+      isValidating: boolean;
       mode: 'cards';
       onCreated: (templateId: number) => void;
       onDismiss: (templateId: number) => void;
@@ -160,7 +161,7 @@ export function useDailyBriefRecommendationsUI(
   const recommendationCount = count ?? TASK_TEMPLATE_RECOMMEND_COUNT;
   const { i18n, t } = useTranslation('common');
   const locale = i18n.resolvedLanguage || i18n.language;
-  const { message } = App.useApp();
+
   const isLogin = useUserStore(authSelectors.isLogin);
   const useFetchBriefs = useBriefStore((s) => s.useFetchBriefs);
   useFetchBriefs(isLogin);
@@ -262,11 +263,11 @@ export function useDailyBriefRecommendationsUI(
         await taskTemplateService.dismiss(templateId);
       } catch (error) {
         console.error('[taskTemplate:dismiss]', error);
-        message.error(t('taskTemplate.action.dismiss.error'));
+        toast.error(t('taskTemplate.action.dismiss.error'));
         mutate();
       }
     },
-    [message, mutate, removeTemplateFromList, t],
+    [mutate, removeTemplateFromList, t],
   );
 
   const templates = useMemo(() => normalizeTaskTemplateRecommendations(data?.data ?? []), [data]);
@@ -298,6 +299,7 @@ export function useDailyBriefRecommendationsUI(
   if (displayMode === 'skeleton') return { mode: 'skeleton', skeletonCount: recommendationCount };
 
   return {
+    isValidating,
     mode: 'cards',
     onCreated: handleCreated,
     onDismiss: handleDismiss,

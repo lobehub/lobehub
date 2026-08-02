@@ -1,6 +1,10 @@
-import type { AiProviderModelListItem, AiProviderRuntimeState } from 'model-bank';
+import type {
+  AiProviderModelListItem,
+  AiProviderRuntimeState,
+  BuiltinModelIdentifier,
+} from 'model-bank';
 
-import { getHiddenBuiltinModelsForUser } from '@/business/server/aiProvider';
+import { getHiddenBuiltinModelsForUser, getModelRedirects } from '@/business/server/aiProvider';
 import {
   filterEnabledProvidersByModelType,
   filterHiddenBuiltinModels,
@@ -52,6 +56,27 @@ export const getUserScopedAiProviderModelList = async (
 };
 
 /**
+ * Drops redirect entries whose successor is hidden from the current user, so the client
+ * never offers a one-click update to a model the user cannot see or use. Keys are
+ * `${providerId}/${modelId}`; the successor lives under the same provider as its key.
+ */
+const filterHiddenModelRedirects = (
+  modelRedirects: Record<string, string>,
+  hiddenBuiltinModels: BuiltinModelIdentifier[],
+): Record<string, string> => {
+  if (hiddenBuiltinModels.length === 0) return modelRedirects;
+
+  return Object.fromEntries(
+    Object.entries(modelRedirects).filter(([key, successorId]) => {
+      const providerId = key.split('/')[0];
+      return !hiddenBuiltinModels.some(
+        (hidden) => hidden.providerId === providerId && hidden.id === successorId,
+      );
+    }),
+  );
+};
+
+/**
  * Resolves a user-scoped runtime state for server consumers that select or expose builtin models.
  * The repository state stays complete and cacheable; access filtering is applied to the returned copy.
  */
@@ -60,9 +85,10 @@ export const getUserScopedAiProviderRuntimeState = async (
   loadRuntimeState: () => Promise<AiProviderRuntimeState>,
   options: UserScopedRuntimeStateOptions = {},
 ): Promise<AiProviderRuntimeState> => {
-  const [runtimeState, hiddenBuiltinModels] = await Promise.all([
+  const [runtimeState, hiddenBuiltinModels, modelRedirects] = await Promise.all([
     loadRuntimeState(),
     getHiddenBuiltinModelsForUser(userId),
+    getModelRedirects(),
   ]);
   const isHiddenBuiltinModelsResolved = hiddenBuiltinModels !== undefined;
   if (!isHiddenBuiltinModelsResolved && options.throwOnUnresolvedAccess) {
@@ -94,6 +120,12 @@ export const getUserScopedAiProviderRuntimeState = async (
     ...(isHiddenBuiltinModelsResolved
       ? { hiddenBuiltinModels }
       : { hiddenBuiltinModelsResolved: false }),
+    // Redirects follow the same fail-closed policy as hidden models: an unresolved
+    // access policy must not advertise successor ids, and a successor hidden from
+    // this user must not be offered as a remedy target.
+    modelRedirects: isHiddenBuiltinModelsResolved
+      ? filterHiddenModelRedirects(modelRedirects, hiddenBuiltinModels)
+      : {},
     runtimeConfig: isHiddenBuiltinModelsResolved ? runtimeState.runtimeConfig : {},
   };
 };

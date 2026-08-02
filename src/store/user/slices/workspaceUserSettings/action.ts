@@ -120,6 +120,14 @@ export class WorkspaceUserSettingsActionImpl {
             },
           }
         : {}),
+      ...(patch.sidebarAgentVisibilityOverrides
+        ? {
+            sidebarAgentVisibilityOverrides: {
+              ...previous.sidebarAgentVisibilityOverrides,
+              ...patch.sidebarAgentVisibilityOverrides,
+            },
+          }
+        : {}),
       ...(patch.sidebarPinnedOverrides
         ? {
             sidebarPinnedOverrides: {

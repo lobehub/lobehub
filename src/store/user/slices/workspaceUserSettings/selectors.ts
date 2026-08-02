@@ -20,6 +20,11 @@ const agentModelOverrideById =
     s.workspaceUserPreference.agentModelOverrides?.[agentId];
 
 const EMPTY_HIDDEN: string[] = [];
+const EMPTY_VISIBILITY_OVERRIDES: Record<string, boolean> = {};
+
+/** Explicit per-member workspace sidebar membership overrides. */
+const sidebarAgentVisibilityOverrides = (s: UserStore): Record<string, boolean> =>
+  s.workspaceUserPreference.sidebarAgentVisibilityOverrides ?? EMPTY_VISIBILITY_OVERRIDES;
 
 /**
  * Sidebar items the caller removed from their sidebar in the active
@@ -46,6 +51,7 @@ export const workspaceUserSettingsSelectors = {
   agentModelOverrideById,
   isAgentHiddenFromSidebar,
   preferenceWorkspaceId,
+  sidebarAgentVisibilityOverrides,
   sidebarHiddenAgentIds,
   sidebarLayout,
 };

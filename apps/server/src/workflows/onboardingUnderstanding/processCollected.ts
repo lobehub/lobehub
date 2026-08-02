@@ -43,7 +43,7 @@ export const processCollectedUnderstanding = async (
 ) => {
   const payload = ProcessCollectedUnderstandingPayloadSchema.parse(context.requestPayload);
   const service = await (dependencies.createService ?? createService)(payload.userId);
-  return context.run('collected:process', async () => {
+  const result = await context.run('collected:process', async () => {
     try {
       return await service.processCollected({
         expectedSourceFingerprint: payload.sourceFingerprint,
@@ -58,6 +58,7 @@ export const processCollectedUnderstanding = async (
       throw error;
     }
   });
+  return result;
 };
 
 export const failRunningUnderstandingWriting = async (

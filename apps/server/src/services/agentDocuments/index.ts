@@ -25,6 +25,7 @@ import {
   extractMarkdownH1Title,
 } from '@/database/models/agentDocuments';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
+import { isUuid } from '@/database/utils/uuid';
 
 import { AgentDocumentVfsError } from '../agentDocumentVfs/errors';
 import { isManagedSkillDocument } from '../agentDocumentVfs/mounts/skills/providers/providerSkillsAgentDocumentUtils';
@@ -407,7 +408,10 @@ export class AgentDocumentsService {
   }
 
   async getDocumentById(id: string, expectedAgentId?: string) {
-    return this.getDocumentByIdInAgent(id, expectedAgentId);
+    const doc = await this.findReadableDocumentById(id, expectedAgentId);
+    if (!doc) return undefined;
+
+    return this.projectDocumentContent(doc);
   }
 
   /**
@@ -421,10 +425,8 @@ export class AgentDocumentsService {
   }
 
   async getDocumentSnapshotById(id: string, expectedAgentId?: string) {
-    const doc = await this.agentDocumentModel.findById(id);
-
+    const doc = await this.findReadableDocumentById(id, expectedAgentId);
     if (!doc) return undefined;
-    if (expectedAgentId && doc.agentId !== expectedAgentId) return undefined;
 
     return this.attachLiteXML(doc);
   }
@@ -434,6 +436,25 @@ export class AgentDocumentsService {
     if (!doc) return undefined;
 
     return this.attachLiteXML(doc);
+  }
+
+  /**
+   * Resolve either the agent-document binding id exposed as `id` or the backing
+   * `documents.id` exposed as `documentId`. Both identifiers appear in document
+   * discovery results, and older callers may pass the latter back to read APIs.
+   * Branch before querying the UUID column so a backing id cannot trigger a
+   * PostgreSQL 22P02 error.
+   */
+  private async findReadableDocumentById(id: string, expectedAgentId?: string) {
+    const doc = isUuid(id)
+      ? await this.agentDocumentModel.findById(id)
+      : expectedAgentId
+        ? await this.agentDocumentModel.findByDocumentId(expectedAgentId, id)
+        : undefined;
+    if (!doc) return undefined;
+    if (expectedAgentId && doc.agentId !== expectedAgentId) return undefined;
+
+    return doc;
   }
 
   private async getDocumentByIdInAgent(documentId: string, expectedAgentId?: string) {

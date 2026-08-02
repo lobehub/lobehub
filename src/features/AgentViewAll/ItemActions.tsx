@@ -1,7 +1,9 @@
 'use client';
 
 import { type SidebarAgentItem } from '@lobechat/types';
-import { ActionIcon, DropdownMenu, Icon, type MenuProps } from '@lobehub/ui';
+import type { MenuProps } from '@lobehub/ui';
+import { ActionIcon, Icon } from '@lobehub/ui';
+import { DropdownMenu } from '@lobehub/ui/base-ui';
 import { EllipsisIcon, EyeIcon, EyeOffIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -58,7 +60,8 @@ const ActionsDropdown = memo<ActionsDropdownProps>(
         // this flat view-all list, so drop them (and any dividers left over).
         const menu = collapseDividers(
           (getMenuItems() ?? []).filter(
-            (menuItem) => !menuItem || !['moveGroup', 'pin'].includes(String(menuItem.key)),
+            (menuItem) =>
+              !menuItem || !['hideFromSidebar', 'moveGroup', 'pin'].includes(String(menuItem.key)),
           ),
         );
         if (!includeSidebarToggle || !onToggleSidebar) return menu;

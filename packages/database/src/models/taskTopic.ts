@@ -221,7 +221,7 @@ export class TaskTopicModel {
    * source.
    *
    * `triggers` filters on the `trigger` column so the maxExecutions quota can
-   * count only automation ticks and ignore ad-hoc manual runs (LOBE-11391).
+   * count only automation ticks and ignore ad-hoc manual runs.
    * Legacy rows have a NULL trigger; they are excluded whenever `triggers` is
    * passed (they predate the column and can't be attributed to a schedule).
    */

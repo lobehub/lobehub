@@ -2,11 +2,7 @@ import { constants } from 'node:fs';
 import { access, readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 
-import {
-  defaultSearchProjectFiles,
-  prepareSkillDirectory,
-  type SkillDirectoryDeps,
-} from '@lobechat/device-control';
+import type { SkillDirectoryDeps } from '@lobechat/device-control';
 import {
   type AuditSafePathsParams,
   type AuditSafePathsResult,
@@ -49,18 +45,16 @@ import {
 import {
   editLocalFile,
   expandTilde,
-  type FileResult,
   listLocalFiles,
   moveLocalFiles,
   readLocalFile,
   renameLocalFile,
   resolveAgainstCwd,
-  type SearchOptions,
   writeLocalFile,
-} from '@lobechat/local-file-shell';
+} from '@lobechat/local-file-shell/file';
+import type { FileResult, SearchOptions } from '@lobechat/local-file-shell/types';
 import { resolveMimeType } from '@lobechat/utils/mimeType';
 import { dialog, shell } from 'electron';
-import { execa } from 'execa';
 
 import ContentSearchService from '@/services/contentSearchSrv';
 import FileSearchService from '@/services/fileSearchSrv';
@@ -607,6 +601,7 @@ export default class LocalFileCtr extends ControllerModule {
   async handlePrepareSkillDirectory(
     params: PrepareSkillDirectoryParams,
   ): Promise<PrepareSkillDirectoryResult> {
+    const { prepareSkillDirectory } = await import('@lobechat/device-control/skill-directory');
     return prepareSkillDirectory(params, this.getSkillDirectoryDeps());
   }
 
@@ -642,6 +637,7 @@ export default class LocalFileCtr extends ControllerModule {
 
   @IpcMethod()
   async getProjectFileIndex(params: ProjectFileIndexParams = {}): Promise<ProjectFileIndexResult> {
+    const { execa } = await import('execa');
     const requestedScope = params.scope || process.cwd();
     const startedAt = Date.now();
 
@@ -799,6 +795,8 @@ export default class LocalFileCtr extends ControllerModule {
   @IpcMethod()
   async searchProjectFiles(params: ProjectFileSearchParams): Promise<ProjectFileSearchResult> {
     const startedAt = Date.now();
+    const { defaultSearchProjectFiles } =
+      await import('@lobechat/device-control/project-file-index');
     const result = await defaultSearchProjectFiles(params);
 
     logger.debug('Project file search completed', {

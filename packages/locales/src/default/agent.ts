@@ -1,12 +1,16 @@
 export default {
   'channel.applicationId': 'Application ID / Bot Username',
   'channel.applicationIdHint': 'Unique identifier for your bot application.',
+  'channel.applicationIdInvalid.discord':
+    "Application ID must be the 17–20 digit ID on your Discord app's General Information page.",
   'channel.applicationIdPlaceholder': 'e.g. 1234567890',
   'channel.appSecret': 'App Secret',
   'channel.appSecretPlaceholder': 'Paste your app secret here',
   'channel.botToken': 'Bot Token / API Key',
   'channel.botTokenEncryptedHint': 'Token will be encrypted and stored securely.',
   'channel.botTokenHowToGet': 'How to get?',
+  'channel.botTokenInvalid.discord':
+    'This does not look like a Discord bot token. Reset and copy it from the Bot tab of your Discord app — it is three segments separated by dots.',
   'channel.botTokenPlaceholderExisting': 'Token is hidden for security',
   'channel.botTokenPlaceholderNew': 'Paste your bot token here',
   'channel.connectionConfig': 'Connection Configuration',
@@ -193,8 +197,11 @@ export default {
   'channel.openPlatform': 'Open Platform',
   'channel.platforms': 'Platforms',
   'channel.publicKey': 'Public Key',
-  'channel.publicKeyHint': 'Optional. Used to verify interaction requests from Discord.',
-  'channel.publicKeyPlaceholder': 'Required for interaction verification',
+  'channel.publicKeyHint':
+    "Used to verify interaction requests from Discord. A 64-character hex string on your app's General Information page.",
+  'channel.publicKeyInvalid':
+    "Public Key must be a 64-character hex string. Copy it from the Discord app's General Information page — not the OAuth URL, and not an API key.",
+  'channel.publicKeyPlaceholder': '64-character hex string',
   'channel.qq.appIdHint': 'Your QQ Bot App ID from QQ Open Platform',
   'channel.qq.description': 'Connect this agent to QQ for group chats and direct messages.',
   'channel.qq.webhookMigrationTitle': 'Consider migrating to WebSocket mode',

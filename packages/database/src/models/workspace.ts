@@ -34,7 +34,7 @@ const getActiveMembershipRole = async (
 /**
  * Whether `userId` currently holds owner status in `workspaceId`.
  * `workspace_members.role` is the single source of truth for built-in roles
- * (LOBE-12329). Used by the workspace-API-key owner gates on both the OpenAPI
+ *. Used by the workspace-API-key owner gates on both the OpenAPI
  * and lambda TRPC surfaces.
  */
 export const hasWorkspaceOwnerAccess = async (
@@ -84,7 +84,7 @@ export class WorkspaceModel {
         .returning();
 
       // `workspace_members.role` is the single source of truth for built-in
-      // workspace roles (LOBE-12329) — no RBAC rows are seeded per workspace.
+      // workspace roles — no RBAC rows are seeded per workspace.
       await tx.insert(workspaceMembers).values({
         role: 'owner',
         userId: this.userId,

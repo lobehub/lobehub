@@ -23,6 +23,7 @@ const useParamsMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@lobehub/ui/base-ui', () => ({
   confirmModal: modalConfirm,
+  toast: { error: messageError, success: messageSuccess },
 }));
 
 vi.mock('@lobehub/ui', () => ({
@@ -54,14 +55,6 @@ vi.mock('@lobehub/ui', () => ({
     </div>
   ),
   Text: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-}));
-
-vi.mock('antd', () => ({
-  App: {
-    useApp: () => ({
-      message: { error: messageError, success: messageSuccess },
-    }),
-  },
 }));
 
 vi.mock('@/components/NeuralNetworkLoading', () => ({

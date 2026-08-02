@@ -18,7 +18,7 @@ export type RevealableSidebarSection = 'agent' | 'private';
  * user-applied section hide. Returns `null` when the section is already
  * fully visible so callers can skip the store write.
  *
- * Why this exists (LOBE-11758): `sidebarExpandedKeys` is persisted, so
+ * Why this exists: `sidebarExpandedKeys` is persisted, so
  * accounts whose keys were saved before a section shipped (e.g. `private`,
  * added with workspace private agents) never include the new key — the
  * section stays collapsed forever. "Make private" then moves the agent into

@@ -1,7 +1,6 @@
 import { CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
 import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, createModal, ModalFooter, useModalContext } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { Button, createModal, ModalFooter, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { t as translate } from 'i18next';
 import { FolderIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
@@ -22,7 +21,6 @@ const MoveToFolderModalContent = memo<MoveToFolderModalContentProps>(
   ({ fileId, knowledgeBaseId }) => {
     const { t } = useTranslation('components');
     const { close } = useModalContext();
-    const { message } = App.useApp();
 
     const [folders, setFolders] = useState<FolderTreeItem[]>([]);
     const [loading, setLoading] = useState(false);
@@ -205,7 +203,7 @@ const MoveToFolderModalContent = memo<MoveToFolderModalContentProps>(
         setSelectedFolderId(newFolderId);
       } catch (error) {
         console.error('Failed to create folder:', error);
-        message.error(t('FileManager.actions.renameError'));
+        toast.error(t('FileManager.actions.renameError'));
       } finally {
         setIsCreatingFolder(false);
       }
@@ -216,7 +214,6 @@ const MoveToFolderModalContent = memo<MoveToFolderModalContentProps>(
       reloadFolderChildren,
       fetchRootFolders,
       t,
-      message,
     ]);
 
     const handleMove = () => {
@@ -231,9 +228,9 @@ const MoveToFolderModalContent = memo<MoveToFolderModalContentProps>(
       }
 
       void moveItem(fileId, fromParent, selectedFolderId).catch(() => {
-        message.error(t('FileManager.actions.moveError'));
+        toast.error(t('FileManager.actions.moveError'));
       });
-      message.success(t('FileManager.actions.moveSuccess'));
+      toast.success(t('FileManager.actions.moveSuccess'));
       close();
     };
 
@@ -248,9 +245,9 @@ const MoveToFolderModalContent = memo<MoveToFolderModalContentProps>(
       }
 
       void moveItem(fileId, fromParent, '').catch(() => {
-        message.error(t('FileManager.actions.moveError'));
+        toast.error(t('FileManager.actions.moveError'));
       });
-      message.success(t('FileManager.actions.moveSuccess'));
+      toast.success(t('FileManager.actions.moveSuccess'));
       close();
     };
 

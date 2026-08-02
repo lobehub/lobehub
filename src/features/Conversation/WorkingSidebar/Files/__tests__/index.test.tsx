@@ -213,9 +213,14 @@ vi.mock('@lobehub/ui', () => ({
   stopPropagation: vi.fn(),
 }));
 
-vi.mock('antd-style', () => ({
-  createStaticStyles: () => () => ({}),
-}));
+vi.mock('antd-style', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+
+  return {
+    ...actual,
+    createStaticStyles: () => () => ({}),
+  };
+});
 
 vi.mock('@/components/NeuralNetworkLoading', () => ({
   default: () => <div />,

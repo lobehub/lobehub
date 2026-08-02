@@ -136,6 +136,16 @@ describe('WorkspaceUserSettingsModel', () => {
     expect(preference.sidebarPinnedOverrides).toEqual({ agentX: true, groupY: false });
   });
 
+  it('deep-merges sidebarAgentVisibilityOverrides across single-item patches', async () => {
+    const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
+    await model.updatePreference({ sidebarAgentVisibilityOverrides: { agentX: true } });
+
+    await model.updatePreference({ sidebarAgentVisibilityOverrides: { agentY: false } });
+
+    const preference = await model.getPreference();
+    expect(preference.sidebarAgentVisibilityOverrides).toEqual({ agentX: true, agentY: false });
+  });
+
   it('setSidebarGroupAssignment records a create-in-folder placement without dropping siblings', async () => {
     const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
     await model.updatePreference({ sidebarGroupAssignments: { agentX: 'folder-1' } });

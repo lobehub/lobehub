@@ -13,6 +13,12 @@ export interface ProcessUnderstandingProvidersPayload {
   responseLanguage: string;
   sessionId: string;
   topicId: string;
+  /**
+   * Whether completed sources should also start task recommendation generation.
+   *
+   * @default true
+   */
+  triggerTaskRecommendations?: boolean;
   userId: string;
 }
 
@@ -53,6 +59,7 @@ export const ProcessUnderstandingProvidersPayloadSchema = z
       .max(64)
       .regex(/^[A-Z]{2,3}(?:-[A-Z0-9]{2,8})*$/i),
     sessionId: identifierSchema,
+    triggerTaskRecommendations: z.boolean().optional(),
     topicId: identifierSchema,
     userId: identifierSchema,
   })

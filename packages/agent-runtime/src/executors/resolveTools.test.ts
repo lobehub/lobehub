@@ -126,6 +126,43 @@ describe('resolveTools executors', () => {
     });
   });
 
+  it('persists a caller-provided blocked reason and content', async () => {
+    const instruction: Extract<AgentInstruction, { type: 'resolve_blocked_tools' }> = {
+      payload: {
+        blockedContent: 'Tool is outside the current execution scope.',
+        blockedReason: 'tool_not_allowed',
+        parentMessageId: 'assistant-msg-1',
+        toolsCalling: [createToolCall()],
+      },
+      type: 'resolve_blocked_tools',
+    };
+
+    const result = await resolveBlockedTools(host)(instruction, createState());
+
+    expect(createToolMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: 'Tool is outside the current execution scope.',
+        pluginError: 'tool_not_allowed',
+        pluginIntervention: {
+          rejectedReason: 'tool_not_allowed',
+          status: 'rejected',
+        },
+        pluginState: { reason: 'tool_not_allowed', type: 'blocked' },
+      }),
+    );
+    expect(result.events).toContainEqual({
+      id: 'tool-call-1',
+      result: {
+        content: 'Tool is outside the current execution scope.',
+        error: 'tool_not_allowed',
+        executionTime: 0,
+        state: { reason: 'tool_not_allowed', type: 'blocked' },
+        success: false,
+      },
+      type: 'tool_result',
+    });
+  });
+
   it('persists aborted tools and completes the operation as user_aborted', async () => {
     const instruction: Extract<AgentInstruction, { type: 'resolve_aborted_tools' }> = {
       payload: {

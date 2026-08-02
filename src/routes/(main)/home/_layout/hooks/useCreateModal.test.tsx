@@ -223,7 +223,7 @@ vi.mock('@/features/ChatInput', () => ({
   ),
 }));
 
-vi.mock('@/routes/(main)/home/features/SuggestQuestions/useRandomQuestions', () => ({
+vi.mock('@/features/Home/SuggestQuestions/useRandomQuestions', () => ({
   useRandomQuestions: () => ({
     questions: [
       {

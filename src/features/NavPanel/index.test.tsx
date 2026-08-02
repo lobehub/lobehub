@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import NavPanel from './index';
 import { NavPanelPortal } from './NavPanelPortal';
 import { clearNavPanelRegistry } from './registry';
+import NavPanelShell from './Shell';
 
 let pathname = '/lobe-team/settings/general';
 
@@ -45,6 +46,10 @@ vi.mock('./components/NavPanelDraggable', () => ({
 
 vi.mock('./components/SkeletonList', () => ({
   default: () => <div>Nav panel loading</div>,
+}));
+
+vi.mock('@/features/HomeSidebar/Content', () => ({
+  default: () => <div>Home sidebar</div>,
 }));
 
 describe('NavPanel', () => {
@@ -138,5 +143,34 @@ describe('NavPanel', () => {
       expect(screen.getByText('New Home sidebar')).toBeInTheDocument();
     });
     expect(screen.queryByText('Nav panel loading')).not.toBeInTheDocument();
+  });
+});
+
+describe('NavPanelShell', () => {
+  beforeEach(() => {
+    clearNavPanelRegistry();
+  });
+
+  it('provides the Home entry on routes that never mount the Home layout', async () => {
+    pathname = '/tasks';
+
+    render(<NavPanelShell />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Home sidebar')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('nav-panel')).toHaveAttribute('data-nav-key', 'home');
+    expect(screen.queryByText('Nav panel loading')).not.toBeInTheDocument();
+  });
+
+  it('still yields to a dedicated route panel', async () => {
+    pathname = '/community';
+
+    render(<NavPanelShell />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Nav panel loading')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Home sidebar')).not.toBeInTheDocument();
   });
 });

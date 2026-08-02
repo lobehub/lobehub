@@ -60,11 +60,7 @@ export interface OpenAIChatMessage {
   model?: string;
   name?: string;
   provider?: string;
-  reasoning?: {
-    content?: string;
-    duration?: number;
-    signature?: string;
-  };
+  reasoning?: ModelReasoning;
   reasoning_content?: string;
   role: LLMRoleType;
   tool_call_id?: string;

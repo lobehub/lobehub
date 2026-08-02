@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslation } from 'react-i18next';
+
 import type { DynamicRouteMetaProps } from '@/spa/router/routeMeta';
 import { useChatStore } from '@/store/chat';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
@@ -37,6 +39,24 @@ const GroupDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
   usePublishDynamicRouteMeta(
     {
       title: topicTitle || group?.name || undefined,
+    },
+    onResolve,
+  );
+
+  return null;
+};
+
+export const GroupProfileDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
+  const { t } = useTranslation('electron');
+  const routeWorkspaceId = useRouteWorkspaceId(params);
+  const group = useSessionStore((state) => {
+    const item = sessionGroupSelectors.getGroupById(params.gid ?? '')(state);
+    return matchesRouteWorkspace(getWorkspaceId(item), routeWorkspaceId) ? item : undefined;
+  });
+
+  usePublishDynamicRouteMeta(
+    {
+      title: [t('navigation.groupProfile'), group?.name].filter(Boolean).join(' · ') || undefined,
     },
     onResolve,
   );

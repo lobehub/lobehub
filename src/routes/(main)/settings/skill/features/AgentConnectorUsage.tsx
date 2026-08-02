@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigateToAgent } from '@/hooks/useNavigateToAgent';
 
 /**
- * Shown inside ConnectorDetail for agent-owned connectors (LOBE-11682), between
+ * Shown inside ConnectorDetail for agent-owned connectors, between
  * the description and the tool-permission list: which agent owns this connector,
  * plus a one-click jump to go use that agent.
  */

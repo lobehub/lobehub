@@ -57,7 +57,6 @@ const headerStyles = createStaticStyles(({ css }) => ({
     ${FLOATING_HEADER_QUERY} {
       flex-grow: 0;
       border-radius: ${cssVar.borderRadius};
-      box-shadow: ${cssVar.boxShadowTertiary};
     }
   `,
   rightContent: css`
@@ -65,7 +64,6 @@ const headerStyles = createStaticStyles(({ css }) => ({
 
     ${FLOATING_HEADER_QUERY} {
       border-radius: ${cssVar.borderRadius};
-      box-shadow: ${cssVar.boxShadowTertiary};
     }
   `,
   slotLeft: css`
@@ -79,6 +77,7 @@ const headerStyles = createStaticStyles(({ css }) => ({
 
       /* Hug the title pill so the transparent middle stays click-through */
       flex-grow: 0;
+      max-width: 300px;
     }
   `,
   slotRight: css`

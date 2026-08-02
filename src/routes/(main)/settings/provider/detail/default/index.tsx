@@ -45,7 +45,8 @@ const ProviderDetail = memo<ProviderDetailProps>(({ showConfig = true, ...card }
   useFetchAiProviderItem(card.id);
 
   return (
-    <Flexbox gap={24} paddingBlock={8}>
+    // No block padding of its own — SettingContainer already insets the page.
+    <Flexbox gap={24}>
       {showConfig &&
         (isManagedAico ? (
           <AicoManagedProviderHeader />

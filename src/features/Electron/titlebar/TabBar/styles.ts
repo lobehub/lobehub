@@ -1,5 +1,7 @@
 import { createStaticStyles } from 'antd-style';
 
+const TAB_HEIGHT = 26;
+
 export const useStyles = createStaticStyles(({ css, cssVar }) => ({
   avatarWrapper: css`
     position: relative;
@@ -7,8 +9,16 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
     line-height: 0;
   `,
   closeIcon: css`
+    position: absolute;
+    inset-inline-end: 4px;
+
     flex-shrink: 0;
+
     color: ${cssVar.colorTextTertiary};
+
+    opacity: 0;
+
+    transition: opacity 0.15s ${cssVar.motionEaseInOut};
 
     &:hover {
       color: ${cssVar.colorText};
@@ -42,8 +52,6 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     flex: 1;
     min-width: 0;
-    border-radius: 0;
-    background: transparent;
   `,
   tab: css`
     cursor: default;
@@ -51,45 +59,65 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
 
     position: relative;
 
-    overflow: hidden;
+    display: flex;
     flex-shrink: 0;
+    align-items: center;
 
-    width: 180px;
-    padding-block: 2px;
-    padding-inline: 10px 2px;
-    border-radius: ${cssVar.borderRadiusSM};
+    height: ${TAB_HEIGHT}px;
+    padding-inline: 8px 6px;
+    border-radius: ${cssVar.borderRadius};
 
     font-size: 12px;
 
     background-color: transparent;
 
-    transition: background-color 0.15s ${cssVar.motionEaseInOut};
+    /* No transition here: dnd-kit writes its own into the inline style, which would win
+       over anything declared in this class. TabItem composes both. */
 
     &:hover {
+      background-color: ${cssVar.colorFillQuaternary};
+    }
+
+    /* Persistent on a full tab, hover-only on a compact one. Narrower tiers carry no
+       close button at all — see TabItem. */
+    &[data-tier='full'] [data-tab-close],
+    &:hover [data-tab-close] {
+      opacity: 1;
+    }
+
+    /* Reserve the button's footprint whether or not it is currently visible, so the
+       title's ellipsis lands before it. Fading the title out under the button instead
+       leaves half-opaque glyphs inside the gradient, which reads as an overlap. Keeping
+       the reservation constant also stops the text reflowing on hover. */
+    &[data-tier='full'] [data-tab-title],
+    &[data-tier='compact'] [data-tab-title] {
+      padding-inline-end: 22px;
+    }
+  `,
+  pinnedDivider: css`
+    align-self: center;
+
+    width: 1px;
+    height: 18px;
+    margin-inline: 6px;
+
+    background-color: ${cssVar.colorBorder};
+  `,
+  overflowButton: css`
+    cursor: default;
+
+    flex-shrink: 0;
+    justify-content: center;
+
+    height: 22px;
+    border-radius: ${cssVar.borderRadiusSM};
+
+    font-size: 11px;
+    color: ${cssVar.colorTextSecondary};
+
+    &:hover {
+      color: ${cssVar.colorText};
       background-color: ${cssVar.colorFillTertiary};
-    }
-
-    & + &::before {
-      content: '';
-
-      position: absolute;
-      inset-block-start: 50%;
-      inset-inline-start: 0;
-      transform: translateY(-50%);
-
-      width: 1px;
-      height: 16px;
-
-      background-color: ${cssVar.colorBorderSecondary};
-
-      transition: opacity 0.15s ${cssVar.motionEaseInOut};
-    }
-
-    &:hover::before,
-    &[data-active='true']::before,
-    &:hover + &::before,
-    &[data-active='true'] + &::before {
-      opacity: 0;
     }
   `,
   tabDragging: css`
@@ -97,14 +125,13 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
     z-index: 1;
     background-color: ${cssVar.colorBgElevated};
     box-shadow: ${cssVar.boxShadowSecondary};
-
-    &::before,
-    & + &::before {
-      opacity: 0;
-    }
   `,
+  // The active tab floats above the titlebar rather than merging into the content card.
+  // An attached (Chrome-style) treatment was built and tried on the real desktop app and
+  // rejected: the seam it produced read worse than the separation it replaced.
   tabActive: css`
     background-color: ${cssVar.colorBgElevated};
+    box-shadow: ${cssVar.boxShadowTertiary};
 
     &:hover {
       background-color: ${cssVar.colorBgElevated};
@@ -126,6 +153,8 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
   tabTitle: css`
     overflow: hidden;
     flex: 1;
+
+    min-width: 0;
 
     font-size: 12px;
     color: ${cssVar.colorText};

@@ -140,7 +140,7 @@ export class BuiltinToolsExecutor implements IToolExecutor {
 
     // Route Composio tools to ComposioService. Build it request-scoped: agentId
     // and workspaceId live on the per-call context (not known at construction),
-    // so a workspace run resolves workspace connectors (LOBE-10891) and a
+    // so a workspace run resolves workspace connectors and a
     // service-account agent runs off its own Composio account
     // (Agent > Workspace/Personal).
     if (source === 'composio') {

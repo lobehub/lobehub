@@ -24,6 +24,7 @@ const {
 
 vi.mock('@/business/server/aiProvider', () => ({
   getHiddenBuiltinModelsForUser: mockGetHiddenBuiltinModelsForUser,
+  getModelRedirects: vi.fn(async () => ({})),
 }));
 
 vi.mock('@/database/models/agent', () => ({

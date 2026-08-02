@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import BriefCardSummary from '@/features/DailyBrief/BriefCardSummary';
 import { styles as briefStyles } from '@/features/DailyBrief/style';
+import { homeType } from '@/features/Home/components/homeType';
 
 import { ConnectorAuthRow } from './ConnectorAuthRow';
 import { resolveTemplateIcon } from './resolveTemplateIcon';
@@ -20,13 +21,15 @@ import { useTaskTemplateCreate } from './useTaskTemplateCreate';
 import { useVisibleAuthSpecs } from './useVisibleAuthSpecs';
 
 interface TaskTemplateCardProps {
+  /** Rail rendering: one scannable line per suggestion, detail lives in the modal. */
+  compact?: boolean;
   onCreated: (templateId: number) => void;
   onDismiss: (templateId: number) => void;
   template: TaskTemplate;
 }
 
 export const TaskTemplateCard = memo<TaskTemplateCardProps>(
-  ({ template, onCreated, onDismiss }) => {
+  ({ compact, template, onCreated, onDismiss }) => {
     const { t } = useTranslation('common');
 
     const iconSpec = useMemo(() => resolveTemplateIcon(template, INTEREST_ICON_MAP), [template]);
@@ -66,6 +69,37 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
       },
       [handleAddTask],
     );
+
+    if (compact)
+      return (
+        <Flexbox horizontal align={'center'} className={styles.compactRow} gap={4}>
+          <Button
+            className={styles.compactMain}
+            disabled={loading || pendingCreate}
+            type={'text'}
+            onClick={handleOpenDetail}
+          >
+            <Flexbox horizontal align={'flex-start'} gap={10} style={{ width: '100%' }}>
+              <Flexbox flex={'none'} paddingBlock={2}>
+                <TemplateBriefIcon spec={iconSpec} tileSize={20} />
+              </Flexbox>
+              <Text
+                className={cx(homeType.itemTitleProse, styles.compactTitle)}
+                style={{ flex: 1 }}
+              >
+                {title}
+              </Text>
+            </Flexbox>
+          </Button>
+          <ActionIcon
+            className={`${styles.dismissBtn} task-template-dismiss`}
+            icon={X}
+            size={'small'}
+            title={t('taskTemplate.action.dismiss.tooltip')}
+            onClick={handleDismiss}
+          />
+        </Flexbox>
+      );
 
     const primaryButton = (
       <Button

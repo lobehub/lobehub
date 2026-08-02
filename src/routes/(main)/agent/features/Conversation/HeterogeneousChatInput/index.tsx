@@ -93,7 +93,7 @@ const HeterogeneousChatInput = memo(() => {
   const navigate = useWorkspaceAwareNavigate();
 
   // Effective config = shared row + this member's per-agent device override
-  // (LOBE-11689) — the raw shared `agencyConfig` may carry another member's
+  // — the raw shared `agencyConfig` may carry another member's
   // device pick, which would drive the guard/model-selector gates off the
   // wrong machine.
   // While the preference is loading, the merged config may still reflect only
@@ -113,7 +113,8 @@ const HeterogeneousChatInput = memo(() => {
     executionTarget === 'none';
 
   // OpenCode can discover models on an explicit bound device; Claude Code and
-  // Codex retain their existing local/sandbox-only selector behavior.
+  // Codex show the selector on every execution path (local / sandbox / device)
+  // since dispatch forwards --model/--effort everywhere.
   const isSelectableHeteroProvider =
     providerType === 'claude-code' || providerType === 'codex' || providerType === 'opencode';
   const showHeteroModel =

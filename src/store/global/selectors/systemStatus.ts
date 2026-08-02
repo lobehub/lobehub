@@ -367,6 +367,7 @@ const showSystemRole = (s: GlobalState) => s.status.showSystemRole;
 const mobileShowTopic = (s: GlobalState) => s.status.mobileShowTopic;
 const mobileShowPortal = (s: GlobalState) => s.status.mobileShowPortal;
 const showAgentBuilderPanel = (s: GlobalState) => s.status.showAgentBuilderPanel;
+const showHomeRail = (s: GlobalState) => s.status.showHomeRail ?? true;
 const showRightPanel = (s: GlobalState) => s.status.showRightPanel;
 const showLeftPanel = (s: GlobalState) => s.status.showLeftPanel;
 const showPageAgentPanel = (s: GlobalState) => s.status.showPageAgentPanel;
@@ -486,6 +487,7 @@ export const systemStatusSelectors = {
   sessionGroupKeys,
   showAgentBuilderPanel,
   showFilePanel,
+  showHomeRail,
   showImagePanel,
   showImageTopicPanel,
   showLeftPanel,

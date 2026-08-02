@@ -78,6 +78,7 @@ import CheckList, {
   shouldGroupChecks,
   userReviewState,
 } from './CheckList';
+import { buildRepairPrompt, copyCheckRepairPrompt } from './checkWork';
 import DecisionBar from './DecisionBar';
 import { EMPTY_ID_SET, setAggregateEntry } from './expandState';
 import FeedbackDrawer, { type FeedbackListEntry } from './FeedbackDrawer';
@@ -88,25 +89,6 @@ import { acceptanceCheckPath, acceptanceOverviewPath } from './routes';
 import { getAcceptanceStatusActions } from './statusActions';
 import TopicPanel from './TopicPanel';
 import { canViewAcceptanceHistory, resolveAcceptanceHistoryNavigation } from './visibility';
-
-/**
- * The hardcoded repair prompt (复制 review 建议 / 打回重跑 share it): points the
- * agent at the CLI as the source of truth for this acceptance's feedback, so
- * nobody has to hand-summarize review notes into an instruction.
- */
-const buildRepairPrompt = (acceptanceId: string) =>
-  `Use the LobeHub CLI to read the latest review feedback for acceptance ${acceptanceId}:
-
-lh acceptance feedback ${acceptanceId} --actionable
-
-Every entry it prints (per-check comments, circled-region annotations on the evidence screenshots, and attachments) is the full set of feedback to handle this round. Fix the code item by item; then re-run verification and ingest the new result back into the SAME acceptance (reuse the existing check ids, and use supersedes for any check whose meaning changed). Keep the final report in the same language the previous rounds used.`;
-
-const buildCheckRepairPrompt = (
-  acceptanceId: string,
-  check: { id: string; seq: number; title: string },
-) => `${buildRepairPrompt(acceptanceId)}
-
-For this pass, focus on check C${check.seq} "${check.title}" (check id: ${check.id}). Treat it as the bounded work item: read its evidence and feedback, make the necessary change, and re-verify it without disturbing unrelated accepted or ignored checks.`;
 
 const styles = createStaticStyles(({ css }) => ({
   banner: css`
@@ -466,7 +448,6 @@ const AcceptancePage = memo<AcceptancePageProps>(
     }, [isEmbedded, data, urlRoundRaw]);
     const [pending, setPending] = useState(false);
     const [rerunPending, setRerunPending] = useState(false);
-    const [checkWorkPending, setCheckWorkPending] = useState(false);
     const [actionError, setActionError] = useState<string>();
     const [feedbackOpen, setFeedbackOpen] = useState(false);
 
@@ -1030,34 +1011,8 @@ const AcceptancePage = memo<AcceptancePageProps>(
 
     const handleCheckWork = async () => {
       if (!focusedCheck) return;
-      const prompt = buildCheckRepairPrompt(acceptance.id, focusedCheck);
-      if (isEmbedded) {
-        if (onDraftToComposer?.(prompt)) {
-          toast.success({ title: t('acceptance.checkWork.drafted') });
-        }
-        return;
-      }
-      if (!origin?.topic) {
-        await copyToClipboard(prompt);
-        toast.success({ title: t('acceptance.checkWork.copied') });
-        return;
-      }
-      setCheckWorkPending(true);
-      try {
-        await verifyService.dispatchAcceptanceRepair({
-          agentId: origin.agent?.id,
-          content: prompt,
-          topicId: origin.topic.id,
-        });
-        await verifyService.markAcceptanceRepairing(acceptance.id);
-        await mutate();
-        void globalMutate(verifyKeys.acceptances());
-        toast.success({ title: t('acceptance.checkWork.sent') });
-      } catch (cause) {
-        toast.error(cause instanceof Error ? cause.message : t('acceptance.actionError'));
-      } finally {
-        setCheckWorkPending(false);
-      }
+      await copyCheckRepairPrompt(acceptance.id, focusedCheck, copyToClipboard);
+      toast.success({ title: t('acceptance.checkWork.copied') });
     };
 
     const saveStandingChecklist = async (checklist: AcceptanceChecklistItem[]) => {
@@ -1622,14 +1577,8 @@ const AcceptancePage = memo<AcceptancePageProps>(
                               {t('acceptance.checkWork.description')}
                             </Text>
                           </Flexbox>
-                          <Button
-                            loading={checkWorkPending}
-                            type={'primary'}
-                            onClick={handleCheckWork}
-                          >
-                            {origin?.topic || isEmbedded
-                              ? t('acceptance.checkWork.action')
-                              : t('acceptance.checkWork.copy')}
+                          <Button type={'primary'} onClick={handleCheckWork}>
+                            {t('acceptance.checkWork.copy')}
                           </Button>
                         </Flexbox>
                       )}

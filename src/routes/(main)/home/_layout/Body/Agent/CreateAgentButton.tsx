@@ -1,6 +1,7 @@
 'use client';
 
-import { ActionIcon, Block, Center, DropdownMenu, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Block, Center, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { DropdownMenu } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDownIcon, PlusIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -48,10 +49,11 @@ const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className, vi
   const { allowed: canCreate, reason } = usePermission('create_content');
   const {
     createAgent,
+    createAgentListMenuItem,
     createAgentMenuItem,
+    createConnectAgentMenuItem,
     createGroupChatMenuItem,
-    createHeterogeneousAgentMenuItems,
-    createPlatformAgentMenuItem,
+    createMarketAgentMenuItem,
     isMutatingAgent,
     openCreateModal,
   } = useCreateMenuItems();
@@ -70,20 +72,32 @@ const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className, vi
   );
 
   const dropdownItems = useMemo(() => {
-    const heteroItems = createHeterogeneousAgentMenuItems(menuOptions);
-    const platformItem = createPlatformAgentMenuItem(menuOptions);
+    const connectItem = createConnectAgentMenuItem(menuOptions);
+    // Discovery entries stay available for the private bucket too — they only
+    // navigate (list / market), so the bucket merely decides which tab the
+    // agent-list page opens on.
+    const showDiscoveryItems = !isCustomGroup;
     return [
       createAgentMenuItem(menuOptions),
       createGroupChatMenuItem(menuOptions),
-      ...(heteroItems.length > 0 ? [{ type: 'divider' as const }, ...heteroItems] : []),
-      ...(platformItem ? [{ type: 'divider' as const }, platformItem] : []),
+      ...(connectItem ? [{ type: 'divider' as const }, connectItem] : []),
+      ...(showDiscoveryItems
+        ? [
+            { type: 'divider' as const },
+            createAgentListMenuItem(visibility ? { visibility } : undefined),
+            createMarketAgentMenuItem(),
+          ]
+        : []),
     ];
   }, [
+    createAgentListMenuItem,
     createAgentMenuItem,
+    createConnectAgentMenuItem,
     createGroupChatMenuItem,
-    createHeterogeneousAgentMenuItems,
-    createPlatformAgentMenuItem,
+    createMarketAgentMenuItem,
+    isCustomGroup,
     menuOptions,
+    visibility,
   ]);
 
   const handleClick = () => {
@@ -116,7 +130,7 @@ const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className, vi
         )}
       </Center>
       <Text style={{ flex: 1 }} type={'secondary'}>
-        {t('newAgent')}
+        {t('addAgent')}
       </Text>
       {canCreate && (
         <Flexbox

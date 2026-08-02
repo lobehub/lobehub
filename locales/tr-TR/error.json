@@ -156,6 +156,7 @@
   "upload.networkError": "Lütfen ağ bağlantınızı ve dosya depolama hizmetinin çapraz kaynak yapılandırmasının doğru olduğundan emin olun.",
   "upload.permissionDenied": "Bu çalışma alanına dosya yükleme izniniz yok.",
   "upload.storageBlock.billingUnavailable": "Abonelik faturalandırma durumunuz doğrulanamıyor. Lütfen daha sonra tekrar deneyin veya fatura bilgilerinizi güncelleyin.",
+  "upload.storageBlock.cleanupFiles": "Alan aç",
   "upload.storageBlock.monthlyCapReached": "Aylık depolama harcama sınırınıza ulaşıldı.",
   "upload.storageBlock.noPaymentMethod": "Devam etmek için lütfen bir ödeme yöntemi ekleyin.",
   "upload.storageBlock.overageNotEnabled": "Depolama alanınız dolu. Yüklemeye devam etmek için kullanım başına ödeme faturalandırmasını etkinleştirin.",

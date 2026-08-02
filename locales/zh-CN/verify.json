@@ -49,7 +49,7 @@
   "acceptance.checkWork.action": "让 AI 处理此项",
   "acceptance.checkWork.copied": "已复制单项处理指令",
   "acceptance.checkWork.copy": "复制单项处理指令",
-  "acceptance.checkWork.description": "把这一项的标准、证据和反馈作为一个边界明确的工作项发送到来源会话。",
+  "acceptance.checkWork.description": "复制包含这一项标准、证据和反馈的专属提示词，再粘贴给 AI 处理。",
   "acceptance.checkWork.drafted": "单项处理指令已写入输入框",
   "acceptance.checkWork.sent": "已将这一项发送到来源会话",
   "acceptance.checkWork.title": "处理此项",

@@ -1,4 +1,4 @@
-import { UNDERSTANDING_ANALYSIS_JSON_SCHEMA } from '@lobechat/prompts/understanding';
+import { UNDERSTANDING_ANALYSIS_JSON_SCHEMA } from '@lobechat/prompts';
 import {
   type CollectionDiagnostics,
   type OnboardingUnderstandingMessageMetadata,

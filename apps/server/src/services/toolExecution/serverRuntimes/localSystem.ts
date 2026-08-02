@@ -63,10 +63,14 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
     for (const api of LocalSystemManifest.api) {
       const workingDirArg = WORKING_DIR_ARG[api.name];
       proxy[api.name] = async (args: any) => {
-        // Inject the device-bound cwd/scope when the model didn't supply one.
-        // `??=` leaves an explicit per-call override possible for the future.
+        // Inject the device-bound cwd/scope when the model didn't supply one
+        // or explicitly passed `.` (a relative reference that resolves to
+        // process.cwd() on the device side — the LobeHub install directory on
+        // packaged desktop instead of the user's actual workspace).
+        const scopeValue: unknown = workingDirArg ? args?.[workingDirArg] : undefined;
+        const needsInjection = scopeValue == null || scopeValue === '.';
         const finalArgs =
-          workingDirArg && context.workingDirectory && args?.[workingDirArg] == null
+          workingDirArg && context.workingDirectory && needsInjection
             ? { ...args, [workingDirArg]: context.workingDirectory }
             : args;
 

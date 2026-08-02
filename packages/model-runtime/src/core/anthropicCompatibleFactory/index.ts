@@ -1,16 +1,13 @@
 import Anthropic, { type ClientOptions } from '@anthropic-ai/sdk';
 import type { Stream } from '@anthropic-ai/sdk/streaming';
-import { BRANDING_NAME } from '@lobechat/const';
-import { CURRENT_VERSION } from '@lobechat/const';
+import { BRANDING_NAME, CURRENT_VERSION } from '@lobechat/const';
 import type { ChatModelCard } from '@lobechat/types';
 import debug from 'debug';
 import type { Pricing } from 'model-bank';
 
 import { ErrorClassifier } from '../../errors';
-import {
-  rejectsDisabledThinkingAtEffort,
-  shouldDropUnsupportedClaudeAssistantPrefill,
-} from '../../providers/anthropic/modelId';
+import { stripUnsupportedClaudeAssistantPrefill } from '../../providers/anthropic/claudePrefill';
+import { rejectsDisabledThinkingAtEffort } from '../../providers/anthropic/modelId';
 import type {
   ChatCompletionErrorPayload,
   ChatMethodOptions,
@@ -187,14 +184,10 @@ export const buildDefaultAnthropicPayload = async (
       ] as Anthropic.TextBlockParam[])
     : undefined;
 
-  const postMessages = await buildAnthropicMessages(userMessages, { enabledContextCaching });
-
-  if (
-    shouldDropUnsupportedClaudeAssistantPrefill(model) &&
-    postMessages.at(-1)?.role === 'assistant'
-  ) {
-    postMessages.pop();
-  }
+  const postMessages = stripUnsupportedClaudeAssistantPrefill(
+    model,
+    await buildAnthropicMessages(userMessages, { enabledContextCaching }),
+  );
 
   let postTools = buildAnthropicTools(tools, { enabledContextCaching }) as
     AnthropicTools[] | undefined;
@@ -553,6 +546,17 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
         const shouldStream = postPayload.stream ?? payload.stream ?? true;
         const finalPayload = { ...postPayload, stream: shouldStream };
         const requestPayload = this.withMappedRequestModel(finalPayload, payload.model);
+
+        // Re-apply the prefill guard against the ACTUAL request model:
+        // handlePayload stripped by the logical id, but a custom logical id the
+        // parser doesn't recognize can map to a Claude 4.6+/5 request model
+        // here. The strip is idempotent, so this is a no-op otherwise.
+        if (requestPayload.model && Array.isArray(requestPayload.messages)) {
+          requestPayload.messages = stripUnsupportedClaudeAssistantPrefill(
+            requestPayload.model,
+            requestPayload.messages,
+          );
+        }
 
         if (debugParams?.chatCompletion?.()) {
           debugPayload(requestPayload);

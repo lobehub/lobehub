@@ -124,6 +124,48 @@ describe('LobeHunyuanAI - custom features', () => {
       ]);
     });
 
+    it('should add empty reasoning_content for hy3 assistant tool-call history', () => {
+      const toolCall = {
+        function: {
+          arguments: '{"city":"Shenzhen"}',
+          name: 'get_weather',
+        },
+        id: 'call_1',
+        type: 'function',
+      };
+      const payload = {
+        model: 'hy3',
+        messages: [
+          {
+            content: null,
+            role: 'assistant',
+            tool_calls: [toolCall],
+          },
+          {
+            content: 'Sunny',
+            role: 'tool',
+            tool_call_id: 'call_1',
+          },
+        ],
+      } as any;
+
+      const result = handlePayload(payload);
+
+      expect(result.messages).toEqual([
+        {
+          content: null,
+          reasoning_content: '',
+          role: 'assistant',
+          tool_calls: [toolCall],
+        },
+        {
+          content: 'Sunny',
+          role: 'tool',
+          tool_call_id: 'call_1',
+        },
+      ]);
+    });
+
     it('should add search fields when enabledSearch is true', () => {
       const payload = {
         model: 'hunyuan-2.0-thinking-20251109',

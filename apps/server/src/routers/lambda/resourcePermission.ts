@@ -140,12 +140,12 @@ export const resourcePermissionRouter = router({
         });
       }
 
-      if (meta.visibility === 'private') {
-        throw new TRPCError({
-          code: 'PRECONDITION_FAILED',
-          message: 'Private resources do not have Workspace access',
-        });
-      }
+      // A private resource may carry a level too: it is the creator deciding
+      // what members get the moment they publish, and the publish paths read it
+      // back instead of overwriting with the default. It grants nothing while
+      // private — visibility, not this row, is what lets a member in — and
+      // demoting to private clears the row again (`removeAll`). The
+      // creator-only guard above already keeps other members out.
 
       const accessLevel =
         input.accessLevel ??
@@ -185,7 +185,7 @@ export const resourcePermissionRouter = router({
         accessLevel,
         canManage: true,
         creatorId: meta.userId,
-        visibility: 'public',
+        visibility: (meta.visibility ?? 'public') as 'private' | 'public',
       });
     }),
 });

@@ -3,14 +3,13 @@
 import { isDesktop } from '@lobechat/const';
 import type { DeviceListItem, DeviceWorkspaceShare } from '@lobechat/types';
 import { ActionIcon, Avatar, Flexbox, Icon, Input, SortableList, Tag, Text } from '@lobehub/ui';
-import { Button, confirmModal } from '@lobehub/ui/base-ui';
+import { Button, confirmModal, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import { FolderOpenIcon, FolderPlusIcon, LockIcon, XIcon } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { message } from '@/components/AntdStaticMethods';
 import DirIcon from '@/features/ChatInput/ControlBar/DirIcon';
 import { openAddWorkingDirModal } from '@/features/WorkingDirectory';
 import { createWorkspaceLambdaClient, lambdaQuery } from '@/libs/trpc/client';
@@ -189,7 +188,7 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
     });
   };
 
-  // Revoke one workspace share of a personal device (LOBE-11699). The share
+  // Revoke one workspace share of a personal device. The share
   // entry's `deviceId` is the workspace-scoped twin, removed via the
   // workspace-scoped mutation under an explicitly pinned workspace client —
   // the personal settings page has no active workspace context to inherit.
@@ -205,7 +204,7 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
           });
           refreshDeviceList();
         } catch (error) {
-          message.error((error as Error).message);
+          toast.error((error as Error).message);
           throw error;
         }
       },

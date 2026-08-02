@@ -177,6 +177,14 @@ vi.mock('@/database/models/file', () => ({
   })),
 }));
 
+const mockKnowledgeBaseFindById = vi.fn();
+
+vi.mock('@/database/models/knowledgeBase', () => ({
+  KnowledgeBaseModel: vi.fn(() => ({
+    findById: mockKnowledgeBaseFindById,
+  })),
+}));
+
 const mockFileServiceGetFullFileUrl = vi.fn();
 const mockFileServiceGetFileAccessUrl = vi.fn();
 const mockFileServiceGetFileMetadata = vi.fn();
@@ -237,6 +245,7 @@ describe('fileRouter', () => {
     routerMocks.businessFileUploadCheck.mockResolvedValue(undefined);
     routerMocks.businessFileTransferStorageCheck.mockResolvedValue(undefined);
     routerMocks.hasWorkspaceScopedPermission.mockResolvedValue(true);
+    mockKnowledgeBaseFindById.mockResolvedValue({ id: 'kb-1', visibility: 'public' });
 
     mockFile = {
       id: 'test-id',
@@ -462,6 +471,53 @@ describe('fileRouter', () => {
           workspaceId: 'workspace-1',
         }),
       );
+    });
+
+    it('should use workspace knowledge-base visibility over an explicit value', async () => {
+      ({ caller } = createCallerWithCtx({ workspaceId: 'workspace-1' }));
+      mockFileModelCheckHash.mockResolvedValue({ isExist: false });
+      mockFileModelCreate.mockResolvedValue({ id: 'new-file-id' });
+
+      await caller.createFile({
+        hash: 'test-hash',
+        fileType: 'text',
+        knowledgeBaseId: 'kb-1',
+        name: 'test.txt',
+        size: 100,
+        url: 'files/test.txt',
+        visibility: 'private',
+        metadata: {},
+      });
+
+      expect(mockKnowledgeBaseFindById).toHaveBeenCalledWith('kb-1');
+      expect(mockFileModelCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          knowledgeBaseId: 'kb-1',
+          visibility: 'public',
+        }),
+        true,
+        routerMocks.transactionClient,
+      );
+    });
+
+    it('should reject a workspace upload when the knowledge base is not accessible', async () => {
+      ({ caller } = createCallerWithCtx({ workspaceId: 'workspace-1' }));
+      mockFileModelCheckHash.mockResolvedValue({ isExist: false });
+      mockKnowledgeBaseFindById.mockResolvedValue(undefined);
+
+      await expect(
+        caller.createFile({
+          hash: 'test-hash',
+          fileType: 'text',
+          knowledgeBaseId: 'missing-kb',
+          name: 'test.txt',
+          size: 100,
+          url: 'files/test.txt',
+          metadata: {},
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      expect(mockFileModelCreate).not.toHaveBeenCalled();
     });
 
     it('should use actual file size from S3 instead of client-provided size (security fix)', async () => {

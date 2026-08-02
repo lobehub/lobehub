@@ -36,7 +36,7 @@ export interface ComposioServiceOptions {
   /**
    * Workspace scope. When set, connector/plugin rows resolve within the team
    * workspace instead of the caller's personal scope (fixes workspace-installed
-   * Composio connectors being invisible at runtime — LOBE-10891).
+   * Composio connectors being invisible at runtime).
    */
   workspaceId?: string;
 }

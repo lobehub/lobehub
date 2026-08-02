@@ -218,7 +218,7 @@ const Intervention = memo<InterventionProps>(
       );
 
       return (
-        <Flexbox gap={12}>
+        <Flexbox data-pending-hotkey-scope gap={12}>
           <SecurityBlacklistWarning args={parsedArgs} />
           <BuiltinToolInterventionRender
             apiName={apiName}

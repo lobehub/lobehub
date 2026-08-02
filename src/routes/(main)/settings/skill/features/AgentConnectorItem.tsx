@@ -10,7 +10,7 @@ import NavItem from '@/features/NavPanel/components/NavItem';
 import type { AgentBoundConnector } from '@/store/tool/slices/connector/types';
 
 /**
- * A row in the unified settings' "Agent Connectors" section (LOBE-11682).
+ * A row in the unified settings' "Agent Connectors" section.
  *
  * Rendered identically to the base connector rows (same NavItem + the same brand
  * icon a base Composio/LobeHub connector of this identifier would show), so the

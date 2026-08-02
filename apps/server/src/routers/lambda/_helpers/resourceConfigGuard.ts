@@ -93,7 +93,7 @@ export const getResourceConfigAccess = async (
   // Collaborative builtins (Lobe AI, the builders, the page agent) are workspace
   // infrastructure that happens to be `virtual: true`, so linking one into a group
   // would otherwise cap its config access at that group's level — reinstating the
-  // lockout this whole change removes (LOBE-12374). They are not group-owned
+  // lockout this whole change removes. They are not group-owned
   // content, so the parent cap does not apply to them.
   if (isCollaborativeBuiltinAgent(resourceType, meta)) return ownAccess;
 

@@ -10,7 +10,7 @@
   "table.columns.duration": "Durée",
   "table.columns.model": "Modèle",
   "table.columns.spend": "Crédits",
-  "table.columns.startTime": "Créé le",
+  "table.columns.time": "Temps",
   "table.columns.totalTokens": "Utilisation des jetons",
   "table.columns.trigger.enums.agent_signal": "Signal de l'agent",
   "table.columns.trigger.enums.api": "Appel API",
@@ -43,6 +43,10 @@
   "table.filters.reset": "Réinitialiser",
   "table.filters.searchModel": "Rechercher un modèle",
   "table.filters.startDate": "Date de début",
+  "table.pagination.next": "Page suivante",
+  "table.pagination.perPage": "{{size}} / page",
+  "table.pagination.prev": "Page précédente",
+  "table.pagination.range": "{{from}}-{{to}} sur {{total}} articles",
   "table.title": "Détails de l’utilisation des crédits de calcul",
   "table.totalToken.input": "Entrée",
   "table.totalToken.output": "Sortie",
@@ -66,8 +70,8 @@
   "usageStats.chart.title": "Quand cet agent a dépensé",
   "usageStats.chart.tokens": "Jeton",
   "usageStats.dimension": "Dimension",
-  "usageStats.entry": "Utilisation et coût",
+  "usageStats.entry": "Statistiques",
   "usageStats.range": "Plage de temps",
   "usageStats.rangeSuffix": "Derniers {{count}}j",
-  "usageStats.title": "Utilisation et coût"
+  "usageStats.title": "Statistiques"
 }

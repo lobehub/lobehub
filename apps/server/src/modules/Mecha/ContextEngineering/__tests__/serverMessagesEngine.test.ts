@@ -121,7 +121,7 @@ describe('serverMessagesEngine', () => {
       expect(result[0].content).toBe(systemRole + '\n\n' + getCurrentDateContent());
     });
 
-    it('renders {{workingDirectory}} to a fallback instead of leaking the literal (LOBE-11473)', async () => {
+    it('renders {{workingDirectory}} to a fallback instead of leaking the literal ', async () => {
       const messages = createBasicMessages();
       const systemRole = '<working-directory>{{workingDirectory}}</working-directory>';
 

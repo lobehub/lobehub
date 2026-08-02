@@ -5,6 +5,7 @@ import { collapseAction } from './actions/collapse';
 import { commentsAction } from './actions/comments';
 import { continueGenerationAction } from './actions/continueGeneration';
 import { copyAction } from './actions/copy';
+import { copyOperationIdAction } from './actions/copyOperationId';
 import { delAction } from './actions/del';
 import { delAndRegenerateAction } from './actions/delAndRegenerate';
 import { editAction } from './actions/edit';
@@ -39,6 +40,7 @@ export const useBuildActions = (
     comments: commentsAction.useBuild(ctx),
     continueGeneration: continueGenerationAction.useBuild(ctx),
     copy: copyAction.useBuild(ctx),
+    copyOperationId: copyOperationIdAction.useBuild(ctx),
     del: delAction.useBuild(ctx),
     delAndRegenerate: delAndRegenerateAction.useBuild(ctx),
     edit: editAction.useBuild(ctx),

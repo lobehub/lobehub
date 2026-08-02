@@ -43,9 +43,9 @@ import {
   ThreadType,
 } from '@lobechat/types';
 import { createNanoId } from '@lobechat/utils';
+import { toast } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 
-import { message as antdMessage } from '@/components/AntdStaticMethods';
 import {
   removeHeteroSessionIdForWorkingDirectory,
   setHeteroSessionIdForWorkingDirectory,
@@ -1125,7 +1125,7 @@ export const executeHeterogeneousAgent = async (
     completed = true;
     fallbackPromise = (async () => {
       await clearStaleResumeMetadata().catch(console.error);
-      antdMessage?.info?.(t('heteroAgent.resumeReset.resumeFailed', { ns: 'chat' }));
+      toast?.info?.(t('heteroAgent.resumeReset.resumeFailed', { ns: 'chat' }));
       await executeHeterogeneousAgent(get, { ...params, resumeSessionId: undefined });
     })();
 

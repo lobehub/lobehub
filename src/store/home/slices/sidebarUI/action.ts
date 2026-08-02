@@ -1,7 +1,7 @@
+import { toast } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 
 import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import { message } from '@/components/AntdStaticMethods';
 import { agentService } from '@/services/agent';
 import { chatGroupService } from '@/services/chatGroup';
 import { homeService } from '@/services/home';
@@ -30,25 +30,19 @@ export class SidebarUIActionImpl {
   }
 
   duplicateAgent = async (agentId: string, newTitle?: string): Promise<void> => {
-    const messageLoadingKey = 'duplicateAgent.loading';
-
-    message.loading({
-      content: t('duplicateSession.loading', { ns: 'chat' }),
-      duration: 0,
-      key: messageLoadingKey,
-    });
+    const loadingToast = toast.loading(t('duplicateSession.loading', { ns: 'chat' }));
 
     const result = await agentService.duplicateAgent(agentId, newTitle);
 
     if (!result) {
-      message.destroy(messageLoadingKey);
-      message.error(t('copyFail', { ns: 'common' }));
+      loadingToast.close();
+      toast.error(t('copyFail', { ns: 'common' }));
       return;
     }
 
     await this.#get().refreshAgentList();
-    message.destroy(messageLoadingKey);
-    message.success(t('duplicateSession.success', { ns: 'chat' }));
+    loadingToast.close();
+    toast.success(t('duplicateSession.success', { ns: 'chat' }));
 
     // Switch to the new agent
     const agentStore = getAgentStoreState();
@@ -56,25 +50,19 @@ export class SidebarUIActionImpl {
   };
 
   duplicateAgentGroup = async (groupId: string, newTitle?: string): Promise<void> => {
-    const messageLoadingKey = 'duplicateAgentGroup.loading';
-
-    message.loading({
-      content: t('duplicateSession.loading', { ns: 'chat' }),
-      duration: 0,
-      key: messageLoadingKey,
-    });
+    const loadingToast = toast.loading(t('duplicateSession.loading', { ns: 'chat' }));
 
     const result = await chatGroupService.duplicateGroup(groupId, newTitle);
 
     if (!result) {
-      message.destroy(messageLoadingKey);
-      message.error(t('copyFail', { ns: 'common' }));
+      loadingToast.close();
+      toast.error(t('copyFail', { ns: 'common' }));
       return;
     }
 
     await this.#get().refreshAgentList();
-    message.destroy(messageLoadingKey);
-    message.success(t('duplicateSession.success', { ns: 'chat' }));
+    loadingToast.close();
+    toast.success(t('duplicateSession.success', { ns: 'chat' }));
 
     // Switch to the new group (using supervisor agent id)
     const agentStore = getAgentStoreState();
@@ -179,15 +167,11 @@ export class SidebarUIActionImpl {
   updateGroupSort = async (items: SessionGroupItemBase[]): Promise<void> => {
     const sortMap = items.map((item, index) => ({ id: item.id, sort: index }));
 
-    message.loading({
-      content: t('sessionGroup.sorting', { ns: 'chat' }),
-      duration: 0,
-      key: 'updateGroupSort',
-    });
+    const loadingToast = toast.loading(t('sessionGroup.sorting', { ns: 'chat' }));
 
     await sessionService.updateSessionGroupOrder(sortMap);
-    message.destroy('updateGroupSort');
-    message.success(t('sessionGroup.sortSuccess', { ns: 'chat' }));
+    loadingToast.close();
+    toast.success(t('sessionGroup.sortSuccess', { ns: 'chat' }));
 
     await this.#get().refreshAgentList();
   };

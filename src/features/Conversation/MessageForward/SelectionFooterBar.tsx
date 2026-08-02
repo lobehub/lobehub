@@ -1,8 +1,7 @@
 'use client';
 
 import { Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button, confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { Button, confirmModal, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Forward, Trash2, X } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
@@ -41,7 +40,7 @@ const styles = createStaticStyles(({ css }) => ({
  */
 const SelectionFooterBar = memo(() => {
   const { t } = useTranslation('chat');
-  const { message } = App.useApp();
+
   const [forwardOpen, setForwardOpen] = useState(false);
   const selectedCount = useConversationStore(messageStateSelectors.selectedMessageCount);
   const selectedMessageIds = useConversationStore((s) => s.selectedMessageIds);
@@ -70,7 +69,7 @@ const SelectionFooterBar = memo(() => {
       onOk: async () => {
         await deleteMessages([...selectedMessageIds]);
         exitSelectionMode();
-        message.success(t('messageForward.deleteConfirm.success', { count: selectedCount }));
+        toast.success(t('messageForward.deleteConfirm.success', { count: selectedCount }));
       },
       title: t('messageForward.deleteConfirm.title'),
     });

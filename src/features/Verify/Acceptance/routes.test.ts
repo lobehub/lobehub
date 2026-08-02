@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { acceptanceCheckPath, acceptanceOverviewPath } from './routes';
+import { acceptanceCheckPath, acceptanceHomePath, acceptanceOverviewPath } from './routes';
 
 describe('acceptance routes', () => {
+  it('returns from the acceptance workspace to home', () => {
+    expect(acceptanceHomePath()).toBe('/');
+  });
+
   it('builds the overview route', () => {
     expect(acceptanceOverviewPath('acceptance-1')).toBe('/acceptance/acceptance-1');
   });

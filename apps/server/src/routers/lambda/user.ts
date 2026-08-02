@@ -3,17 +3,13 @@ import {
   formatWebOnboardingStateMessage,
 } from '@lobechat/builtin-tool-web-onboarding/utils';
 import { isDesktop } from '@lobechat/const';
-import {
-  StaleUnderstandingRevisionError,
-  StaleUnderstandingSessionError,
-  UnderstandingPreconditionError,
-  UnderstandingResourceNotFoundError,
-  UnderstandingSessionNotFoundError,
-} from '@lobechat/database';
 import { applyMarkdownPatch, formatMarkdownPatchError } from '@lobechat/markdown-patch';
 import type {
   ConfirmOnboardingUnderstandingInput,
   ConfirmOnboardingUnderstandingResult,
+  CreateOnboardingTasksInput,
+  OnboardingTaskRecommendationPollingResult,
+  OnboardingTaskRecommendationTopicInput,
   OnboardingUnderstandingPollingResult,
   OnboardingUnderstandingTopicInput,
   RetryOnboardingUnderstandingProviderInput,
@@ -34,6 +30,7 @@ import {
   UserPreferenceSchema,
   UserSettingsSchema,
 } from '@lobechat/types';
+import { errorCauseFrom } from '@lobechat/utils';
 import { TRPCError } from '@trpc/server';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
@@ -52,62 +49,17 @@ import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { FileS3 } from '@/server/modules/S3';
+import {
+  mapTaskRecommendationTRPCError,
+  mapUnderstandingTRPCError,
+} from '@/server/routers/lambda/_helpers/onboardingError';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { FileService } from '@/server/services/file';
 import { OnboardingService } from '@/server/services/onboarding';
+import { createTaskRecommendationService } from '@/server/services/taskRecommendation/service';
 import { understandingProviders } from '@/server/services/understanding/providers';
-import {
-  createUnderstandingService,
-  type UnderstandingService,
-} from '@/server/services/understanding/service';
+import { createUnderstandingService } from '@/server/services/understanding/service';
 import { after } from '@/server/utils/scheduleAfterResponse';
-import { UnderstandingWorkflowUnavailableError } from '@/server/workflows/onboardingUnderstanding';
-
-const throwUnderstandingApiError = (error: unknown): never => {
-  if (error instanceof TRPCError) throw error;
-
-  if (
-    error instanceof UnderstandingResourceNotFoundError ||
-    error instanceof UnderstandingSessionNotFoundError
-  ) {
-    throw new TRPCError({
-      code: 'NOT_FOUND',
-      message: 'Onboarding understanding was not found',
-    });
-  }
-
-  if (
-    error instanceof StaleUnderstandingRevisionError ||
-    error instanceof StaleUnderstandingSessionError
-  ) {
-    throw new TRPCError({
-      code: 'CONFLICT',
-      message: 'Onboarding understanding is no longer current',
-    });
-  }
-
-  if (error instanceof UnderstandingPreconditionError) {
-    throw new TRPCError({
-      code: 'PRECONDITION_FAILED',
-      message: 'Onboarding understanding action is not currently available',
-    });
-  }
-
-  if (error instanceof UnderstandingWorkflowUnavailableError) {
-    throw new TRPCError({
-      code: 'PRECONDITION_FAILED',
-      message: 'Onboarding understanding workflow is unavailable',
-    });
-  }
-
-  console.error('[user:onboardingUnderstanding]', {
-    errorName: error instanceof Error ? error.name : 'UnknownError',
-  });
-  throw new TRPCError({
-    code: 'INTERNAL_SERVER_ERROR',
-    message: 'Unable to process onboarding understanding request',
-  });
-};
 
 const usernameSchema = z
   .string()
@@ -186,6 +138,16 @@ const reviseOnboardingUnderstandingInputSchema = z
     topicId: understandingIdSchema,
   })
   .strict() satisfies z.ZodType<ReviseOnboardingUnderstandingInput>;
+const onboardingTaskRecommendationTopicInputSchema = z
+  .object({ topicId: understandingIdSchema })
+  .strict() satisfies z.ZodType<OnboardingTaskRecommendationTopicInput>;
+const createOnboardingTasksInputSchema = z
+  .object({
+    recommendationIds: z.array(z.string().trim().min(1).max(128)).max(48),
+    sessionId: understandingIdSchema,
+    topicId: understandingIdSchema,
+  })
+  .strict() satisfies z.ZodType<CreateOnboardingTasksInput>;
 
 const AVATAR_WEBAPI_PREFIX = '/webapi/';
 const OWNER_SETTING_KEYS = ['defaultAgent', 'image', 'memory', 'systemAgent', 'tts'] as const;
@@ -235,30 +197,44 @@ const userProcedure = authedProcedure.use(serverDatabase).use(async ({ ctx, next
   });
 });
 
-const personalUnderstandingProcedure = authedProcedure
-  .use(serverDatabase)
-  .use(async ({ ctx, next }) => {
-    if (ctx.workspaceId) {
-      throw new TRPCError({
-        code: 'FORBIDDEN',
-        message: 'Onboarding understanding is available only in personal scope',
-      });
-    }
-    return next();
-  })
+const personalOnboardingProcedure = userProcedure.use(async ({ ctx, next }) => {
+  if (ctx.workspaceId) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'Onboarding is available only in personal scope',
+    });
+  }
+  return next();
+});
+const understandingServiceProcedure = personalOnboardingProcedure
   .use(async ({ next }) => {
     const result = await next();
-    if (!result.ok) throwUnderstandingApiError(result.error.cause ?? result.error);
+    if (!result.ok) {
+      throw mapUnderstandingTRPCError(errorCauseFrom(result.error) ?? result.error);
+    }
     return result;
-  });
-const understandingServiceProcedure = personalUnderstandingProcedure.use(async ({ ctx, next }) => {
-  const understandingService: UnderstandingService = await createUnderstandingService({
-    db: ctx.serverDB,
-    userId: ctx.userId,
-  });
+  })
+  .use(async ({ ctx, next }) => {
+    const understandingService = await createUnderstandingService({
+      db: ctx.serverDB,
+      userId: ctx.userId,
+    });
 
-  return next({ ctx: { understandingService } });
-});
+    return next({ ctx: { understandingService } });
+  });
+const taskRecommendationServiceProcedure = personalOnboardingProcedure.use(
+  async ({ ctx, next }) => {
+    const taskRecommendationService = await createTaskRecommendationService({
+      db: ctx.serverDB,
+      userId: ctx.userId,
+    });
+    const result = await next({ ctx: { taskRecommendationService } });
+    if (!result.ok) {
+      throw mapTaskRecommendationTRPCError(errorCauseFrom(result.error) ?? result.error);
+    }
+    return result;
+  },
+);
 
 export const userRouter = router({
   getUserActivitySummary: userProcedure.query(async ({ ctx }) => {
@@ -278,10 +254,22 @@ export const userRouter = router({
       } satisfies ConfirmOnboardingUnderstandingResult;
     }),
 
+  createOnboardingTasks: taskRecommendationServiceProcedure
+    .input(createOnboardingTasksInputSchema)
+    .mutation(async ({ ctx, input }): Promise<Record<string, string>> => {
+      return ctx.taskRecommendationService.createTasks(input);
+    }),
+
   getOnboardingUnderstanding: understandingServiceProcedure
     .input(onboardingUnderstandingTopicInputSchema)
     .query(async ({ ctx, input }): Promise<OnboardingUnderstandingPollingResult> => {
       return ctx.understandingService.get(input.topicId);
+    }),
+
+  getOnboardingTaskRecommendations: taskRecommendationServiceProcedure
+    .input(onboardingTaskRecommendationTopicInputSchema)
+    .query(async ({ ctx, input }): Promise<OnboardingTaskRecommendationPollingResult> => {
+      return ctx.taskRecommendationService.get(input.topicId);
     }),
 
   getSupportedUnderstandingProviders: understandingServiceProcedure.query(

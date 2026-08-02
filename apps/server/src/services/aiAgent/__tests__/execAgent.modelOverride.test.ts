@@ -9,12 +9,14 @@ const {
   mockGetAgentConfig,
   mockGetPreference,
   mockMessageCreate,
+  mockTopicFindById,
 } = vi.hoisted(() => ({
   mockIsResourceAuthorOrAdmin: vi.fn(),
   mockCreateOperation: vi.fn(),
   mockGetAgentConfig: vi.fn(),
   mockGetPreference: vi.fn(),
   mockMessageCreate: vi.fn(),
+  mockTopicFindById: vi.fn(),
 }));
 
 vi.mock('@/server/services/resourcePermission', () => ({
@@ -65,7 +67,7 @@ vi.mock('@/database/models/plugin', () => ({
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(() => ({
     create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
-    findById: vi.fn().mockResolvedValue(null),
+    findById: mockTopicFindById,
   })),
 }));
 
@@ -161,6 +163,7 @@ describe('AiAgentService.execAgent - model/provider override', () => {
     });
     mockGetPreference.mockResolvedValue({});
     mockIsResourceAuthorOrAdmin.mockResolvedValue(false);
+    mockTopicFindById.mockResolvedValue(null);
     service = new AiAgentService(mockDb, userId);
   });
 
@@ -222,6 +225,39 @@ describe('AiAgentService.execAgent - model/provider override', () => {
     const callArgs = mockCreateOperation.mock.calls[0][0];
     expect(callArgs.agentConfig.model).toBe('claude-sonnet-4-6');
     expect(callArgs.agentConfig.provider).toBe('anthropic');
+  });
+
+  it('keeps an explicit model override over the topic model', async () => {
+    mockGetAgentConfig.mockResolvedValue({ ...defaultAgentConfig });
+    mockTopicFindById.mockResolvedValue({ model: 'gpt-5.6-terra', provider: 'openai' });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      model: 'step-3.7-flash',
+      prompt: 'Hello',
+      provider: 'stepfun',
+    });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.agentConfig.model).toBe('step-3.7-flash');
+    expect(callArgs.agentConfig.provider).toBe('stepfun');
+    expect(callArgs.modelRuntimeConfig).toEqual({ model: 'step-3.7-flash', provider: 'stepfun' });
+  });
+
+  it('keeps the topic provider when only the model is overridden', async () => {
+    mockGetAgentConfig.mockResolvedValue({ ...defaultAgentConfig });
+    mockTopicFindById.mockResolvedValue({ model: 'gpt-5.6-terra', provider: 'stepfun' });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      model: 'step-3.7-flash',
+      prompt: 'Hello',
+    });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.modelRuntimeConfig).toEqual({ model: 'step-3.7-flash', provider: 'stepfun' });
   });
 
   it('uses the caller model preference when the workspace Agent allows member selection', async () => {

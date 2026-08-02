@@ -1,14 +1,14 @@
 'use client';
 
 import { CheckCircleFilled } from '@ant-design/icons';
-import { ProviderIcon } from '@lobehub/icons';
-import { CopyButton, Flexbox, Icon } from '@lobehub/ui';
-import { Button, confirmModal } from '@lobehub/ui/base-ui';
-import { Avatar, Typography } from 'antd';
+import { MAX_WIDTH } from '@lobechat/const';
+import { Avatar, CopyButton, Flexbox, Icon } from '@lobehub/ui';
+import { Button, confirmModal, Modal } from '@lobehub/ui/base-ui';
+import { Typography } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ExternalLinkIcon, Loader2Icon, LogOutIcon, UnplugIcon } from 'lucide-react';
+import { Loader2Icon, LogOutIcon, UnplugIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
@@ -22,8 +22,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
     overflow: hidden;
 
+    /* matches the borderless form below so both boxes end on the same edge */
     width: 100%;
-    margin-block-end: 24px;
+    max-width: ${MAX_WIDTH}px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 12px;
   `,
@@ -47,34 +48,32 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   content: css`
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 16px;
     align-items: center;
 
-    margin-block: 0 40px;
-    padding-inline: 48px;
+    padding-block: 8px 4px;
   `,
   errorText: css`
     color: ${cssVar.colorError};
   `,
   header: css`
     display: flex;
+    gap: 12px;
     align-items: center;
     justify-content: space-between;
 
-    padding-block: 16px;
-    padding-inline: 24px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+    padding-block: 12px;
+    padding-inline: 16px;
   `,
-  hero: css`
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    align-items: center;
-    justify-content: center;
+  // Prose, so it reads from the left edge rather than being centred with the
+  // code box below it.
+  hint: css`
+    width: 100%;
 
-    padding-block: 48px 32px;
-    padding-inline: 24px;
-    border-radius: 16px 16px 0 0;
+    font-size: 13px;
+    line-height: 1.6;
+    color: ${cssVar.colorTextSecondary};
+    text-align: start;
   `,
   pollingHint: css`
     display: flex;
@@ -91,11 +90,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     background: ${cssVar.colorFillQuaternary};
   `,
-  serviceNote: css`
-    font-size: 13px;
-    color: ${cssVar.colorTextDescription};
-    text-align: center;
-  `,
   successBadge: css`
     display: flex;
     gap: 6px;
@@ -104,37 +98,29 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 13px;
     color: ${cssVar.colorSuccess};
   `,
-  userAvatar: css`
-    border: 2px solid ${cssVar.colorBorderSecondary};
-    box-shadow: 0 4px 12px ${cssVar.colorFillSecondary};
-  `,
-  userInfo: css`
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    align-items: center;
-  `,
   username: css`
-    font-size: 16px;
-    font-weight: 600;
-    color: ${cssVar.colorText};
+    font-size: 13px;
+    color: ${cssVar.colorTextSecondary};
   `,
 }));
 
 export interface OAuthDeviceFlowAuthProps {
+  /**
+   * Whether the provider is switched on. The connect action only shows up once
+   * the provider is enabled, so the row stays a single toggle until then.
+   */
+  enabled?: boolean;
   extra?: ReactNode;
-  name: string;
   onAuthChange?: () => void;
   providerId: string;
   title?: ReactNode;
 }
 
 const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
-  ({ providerId, name, onAuthChange, title, extra }) => {
+  ({ providerId, onAuthChange, title, extra, enabled }) => {
     const { t } = useTranslation('modelProvider');
     const { allowed: canManageProvider } = usePermission('manage_provider_key');
     const [isAuthenticating, setIsAuthenticating] = useState(false);
-    const hasAutoClosedRef = useRef(false);
 
     const utils = lambdaQuery.useUtils();
 
@@ -182,8 +168,10 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
 
     const handleStartAuth = useCallback(async () => {
       if (!canManageProvider) return;
+      // Retry re-enters from the dialog's error state, where isAuthenticating
+      // is still true — so only a genuinely in-flight attempt blocks a restart.
+      if (isAuthenticating && state !== 'error') return;
 
-      hasAutoClosedRef.current = false;
       setIsAuthenticating(true);
       const info = await startAuth();
 
@@ -192,202 +180,146 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
       // it. The manual "open browser" button stays as a fallback when blocked.
       const uri = info?.verificationUriComplete || info?.verificationUri;
       if (uri) window.open(uri, '_blank');
-    }, [canManageProvider, startAuth]);
+    }, [canManageProvider, isAuthenticating, startAuth, state]);
 
     const handleCancelAuth = useCallback(() => {
       setIsAuthenticating(false);
       cancelAuth();
     }, [cancelAuth]);
 
-    const handleOpenBrowser = useCallback(() => {
-      // Prefer the code-prefilled URI so the user doesn't need to type the code
-      const uri = deviceCodeInfo?.verificationUriComplete || deviceCodeInfo?.verificationUri;
-      if (uri) {
-        window.open(uri, '_blank');
-      }
-    }, [deviceCodeInfo?.verificationUri, deviceCodeInfo?.verificationUriComplete]);
+    // The inline action that trails the enable switch in the header row. The
+    // device-code flow runs in a dialog, so the button stays put and spins
+    // rather than being swapped out while pairing is in flight.
+    const renderAction = () => {
+      if (!enabled) return null;
 
-    // Reset hasAutoClosedRef when starting new auth
-    useEffect(() => {
-      if (state === 'success' && !hasAutoClosedRef.current) {
-        hasAutoClosedRef.current = true;
-      }
-    }, [state]);
-
-    // Render Hero section with provider logo
-    const renderHero = () => (
-      <div className={styles.hero}>
-        <ProviderIcon provider={providerId} size={72} type={'avatar'} />
-      </div>
-    );
-
-    // Render content based on authentication state
-    const renderContent = () => {
-      // Authenticated state - show user info
-      // Show when authenticated and not in the middle of authenticating process
-      if (isAuthenticated && !isAuthenticating) {
+      if (isAuthenticated)
         return (
-          <div className={styles.content}>
-            <Flexbox align="center" gap={16}>
-              {avatarUrl && <Avatar className={styles.userAvatar} size={56} src={avatarUrl} />}
-              <div className={styles.userInfo}>
-                {username && <span className={styles.username}>{username}</span>}
-                <div className={styles.successBadge}>
-                  <CheckCircleFilled />
-                  <span>{t('providerModels.config.oauth.connected')}</span>
-                </div>
-              </div>
-            </Flexbox>
+          <>
+            {username && (
+              <Flexbox horizontal align={'center'} gap={6}>
+                {avatarUrl && <Avatar avatar={avatarUrl} size={20} title={username} />}
+                <span className={styles.username}>{username}</span>
+              </Flexbox>
+            )}
             <Button
               disabled={!canManageProvider}
-              icon={<Icon icon={LogOutIcon} />}
+              icon={LogOutIcon}
               loading={revokeAuth.isPending}
+              size={'small'}
               onClick={handleDisconnect}
             >
               {t('providerModels.config.oauth.disconnect')}
             </Button>
-            <div className={styles.serviceNote}>
-              {t('providerModels.config.oauth.serviceNote', { name })}
-            </div>
-          </div>
+          </>
         );
-      }
 
-      // Authenticating state - show device code
-      if (isAuthenticating) {
-        // Loading state
-        if (state === 'requesting' || !deviceCodeInfo) {
-          return (
-            <div className={styles.content}>
-              <Icon spin icon={Loader2Icon} size={24} />
-              <Text type="secondary">{t('providerModels.config.oauth.connecting')}</Text>
-            </div>
-          );
-        }
+      return (
+        <Button
+          disabled={!canManageProvider}
+          loading={isAuthenticating}
+          size={'small'}
+          type={'primary'}
+          onClick={handleStartAuth}
+        >
+          {t('providerModels.config.oauth.connect')}
+        </Button>
+      );
+    };
 
-        // Error state
-        if (state === 'error' && error) {
-          const errorKey = `providerModels.config.oauth.${error}`;
-          return (
-            <div className={styles.content}>
-              <Flexbox horizontal align="center" gap={8}>
-                <Icon color={cssVar.colorError} icon={UnplugIcon} size={20} />
-                <Text className={styles.errorText}>{t(errorKey as any)}</Text>
-              </Flexbox>
-              <Flexbox gap={12} style={{ width: '100%' }} width={280}>
-                <Button
-                  block
-                  disabled={!canManageProvider}
-                  type="primary"
-                  onClick={handleStartAuth}
-                >
-                  {t('providerModels.config.oauth.retry')}
-                </Button>
-                <Button block type="text" onClick={handleCancelAuth}>
-                  {t('providerModels.config.oauth.cancel')}
-                </Button>
-              </Flexbox>
-            </div>
-          );
-        }
-
-        // Device code display
+    // Dialog body for the device-code flow. The dialog itself owns dismissal,
+    // so only the error branch needs an explicit way out.
+    const renderAuthPanel = () => {
+      // Loading state
+      if (state === 'requesting' || !deviceCodeInfo)
         return (
           <div className={styles.content}>
-            <Flexbox align="center" gap={12} style={{ width: '100%' }} width={320}>
-              <Text type="secondary">{t('providerModels.config.oauth.enterCode')}</Text>
-              <Flexbox horizontal align="center" gap={12} style={{ width: '100%' }}>
-                <div className={styles.codeBox}>{deviceCodeInfo.userCode}</div>
-                <CopyButton content={deviceCodeInfo.userCode} />
-              </Flexbox>
-            </Flexbox>
-
-            <Flexbox gap={12} style={{ width: '100%' }} width={280}>
-              <Button
-                block
-                icon={<Icon icon={ExternalLinkIcon} />}
-                size="large"
-                type="primary"
-                onClick={handleOpenBrowser}
-              >
-                {t('providerModels.config.oauth.openBrowser')}
-              </Button>
-            </Flexbox>
-
-            <Link
-              href={deviceCodeInfo.verificationUri}
-              style={{ fontSize: 13 }}
-              target="_blank"
-              type="secondary"
-            >
-              {deviceCodeInfo.verificationUri}
-            </Link>
-
-            <div className={styles.pollingHint}>
-              <Icon spin icon={Loader2Icon} />
-              <span>{t('providerModels.config.oauth.polling')}</span>
-            </div>
-
-            <Button type="text" onClick={handleCancelAuth}>
-              {t('providerModels.config.oauth.cancel')}
-            </Button>
+            <Icon spin icon={Loader2Icon} size={24} />
+            <Text type="secondary">{t('providerModels.config.oauth.connecting')}</Text>
           </div>
         );
-      }
 
-      // Error state (not authenticating)
+      // Error state
       if (state === 'error' && error) {
         const errorKey = `providerModels.config.oauth.${error}`;
         return (
           <div className={styles.content}>
             <Flexbox horizontal align="center" gap={8}>
-              <Icon color={cssVar.colorError} icon={UnplugIcon} size={18} />
+              <Icon color={cssVar.colorError} icon={UnplugIcon} size={20} />
               <Text className={styles.errorText}>{t(errorKey as any)}</Text>
             </Flexbox>
-            <Button
-              disabled={!canManageProvider}
-              size="large"
-              type="primary"
-              onClick={handleStartAuth}
-            >
-              {t('providerModels.config.oauth.connect', { name })}
-            </Button>
-            <div className={styles.serviceNote}>
-              {t('providerModels.config.oauth.serviceNote', { name })}
-            </div>
+            <Flexbox gap={12} style={{ width: '100%' }}>
+              <Button block disabled={!canManageProvider} type="primary" onClick={handleStartAuth}>
+                {t('providerModels.config.oauth.retry')}
+              </Button>
+              <Button block type="text" onClick={handleCancelAuth}>
+                {t('providerModels.config.oauth.cancel')}
+              </Button>
+            </Flexbox>
           </div>
         );
       }
 
-      // Default state - show connect button
+      // Device code display. The authorization page is opened for the user on
+      // Connect, so the link is the fallback for when a popup blocker ate it —
+      // and the only route when authorizing on a second device.
       return (
         <div className={styles.content}>
-          <Button
-            disabled={!canManageProvider}
-            size="large"
-            type="primary"
-            onClick={handleStartAuth}
-          >
-            {t('providerModels.config.oauth.connect', { name })}
-          </Button>
-          <div className={styles.serviceNote}>
-            {t('providerModels.config.oauth.serviceNote', { name })}
+          <div className={styles.hint}>
+            {t('providerModels.config.oauth.enterCode')}{' '}
+            <Link href={deviceCodeInfo.verificationUri} target="_blank">
+              {deviceCodeInfo.verificationUri}
+            </Link>
+          </div>
+
+          <Flexbox horizontal align="center" gap={12} style={{ width: '100%' }}>
+            <div className={styles.codeBox}>{deviceCodeInfo.userCode}</div>
+            <CopyButton content={deviceCodeInfo.userCode} />
+          </Flexbox>
+
+          <div className={styles.pollingHint}>
+            <Icon spin icon={Loader2Icon} />
+            <span>{t('providerModels.config.oauth.polling')}</span>
           </div>
         </div>
       );
     };
 
     return (
-      <div className={styles.card}>
-        {(title || extra) && (
+      <>
+        <div className={styles.card}>
           <div className={styles.header}>
-            <div>{title}</div>
-            <div>{extra}</div>
+            {/* The badge is a property of the provider, not an action on it, so
+                it sits with the name rather than among the controls. */}
+            <Flexbox horizontal align={'center'} gap={8}>
+              {title}
+              {enabled && isAuthenticated && (
+                <div className={styles.successBadge}>
+                  <CheckCircleFilled />
+                  <span>{t('providerModels.config.oauth.connected')}</span>
+                </div>
+              )}
+            </Flexbox>
+            <Flexbox horizontal align={'center'} gap={8}>
+              {extra}
+              {renderAction()}
+            </Flexbox>
           </div>
-        )}
-        {renderHero()}
-        {renderContent()}
-      </div>
+        </div>
+        {/* Dismissing the dialog abandons the pairing, which is what a user
+            closing it means — the code is dead once we stop polling for it. */}
+        <Modal
+          centered
+          destroyOnHidden
+          footer={null}
+          open={isAuthenticating}
+          title={t('providerModels.config.oauth.title')}
+          width={420}
+          onCancel={handleCancelAuth}
+        >
+          {renderAuthPanel()}
+        </Modal>
+      </>
     );
   },
 );

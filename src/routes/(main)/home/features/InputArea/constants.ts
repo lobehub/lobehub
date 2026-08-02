@@ -1,6 +1,0 @@
-export const HOME_INPUT_BODY_HEIGHT = 88;
-export const HOME_INPUT_ACTION_BAR_HEIGHT = 40;
-// The rich ChatInput adds a one-pixel border on both block edges.
-export const HOME_INPUT_FRAME_HEIGHT = HOME_INPUT_BODY_HEIGHT + HOME_INPUT_ACTION_BAR_HEIGHT + 2;
-export const HOME_INPUT_BOTTOM_PADDING = 8;
-export const HOME_INPUT_RESERVED_HEIGHT = HOME_INPUT_FRAME_HEIGHT + HOME_INPUT_BOTTOM_PADDING;

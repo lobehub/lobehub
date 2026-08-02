@@ -2,7 +2,7 @@
 
 import { CUSTOM_DOCUMENT_FILE_TYPE, CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
 import { Icon, useAppElement } from '@lobehub/ui';
-import { App } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { FileText, FolderIcon } from 'lucide-react';
 import { type PropsWithChildren } from 'react';
@@ -74,7 +74,7 @@ export const useSetCurrentDrag = () => {
  */
 export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
   const { t } = useTranslation('components');
-  const { message } = App.useApp();
+
   const { allowed: canEditResources } = usePermission('edit_own_content');
   const [currentDrag, setCurrentDrag] = useState<DragState | null>(null);
   const currentDragRef = useRef<DragState | null>(null);
@@ -161,10 +161,10 @@ export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
         : treeState.moveItem(drag.id, fromParent, toParent);
 
       movePromise.catch(() => {
-        message.error(t('FileManager.actions.moveError'));
+        toast.error(t('FileManager.actions.moveError'));
       });
 
-      message.success(t('FileManager.actions.moveSuccess'));
+      toast.success(t('FileManager.actions.moveSuccess'));
 
       if (isDraggingSelection) {
         setSelectedFileIds([]);
@@ -196,7 +196,7 @@ export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
       document.removeEventListener('dragover', handleDragOver);
       document.removeEventListener('dragend', handleDragEnd);
     };
-  }, [canEditResources, setCurrentDrag, setSelectedFileIds, message, t]);
+  }, [canEditResources, setCurrentDrag, setSelectedFileIds, t]);
 
   const appElement = useAppElement();
 

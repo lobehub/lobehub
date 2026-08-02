@@ -32,6 +32,10 @@ const agentSignalBridgeMock = vi.hoisted(() => ({
 
 vi.mock('@/utils/localStorage', () => {
   class AsyncLocalStorage<State> {
+    getFromLocalStorageSync(): State {
+      return {} as State;
+    }
+
     async getFromLocalStorage(): Promise<State> {
       return {} as State;
     }

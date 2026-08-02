@@ -135,6 +135,14 @@ export class WorkspaceUserSettingsModel {
             },
           }
         : {}),
+      ...(patch.sidebarAgentVisibilityOverrides
+        ? {
+            sidebarAgentVisibilityOverrides: {
+              ...current.sidebarAgentVisibilityOverrides,
+              ...patch.sidebarAgentVisibilityOverrides,
+            },
+          }
+        : {}),
       ...(patch.sidebarPinnedOverrides
         ? {
             sidebarPinnedOverrides: {

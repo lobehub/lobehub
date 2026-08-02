@@ -184,6 +184,37 @@ describe('createServerToolsEngine', () => {
     // Non-device plugins survive.
     expect(availablePlugins).toContain('test-plugin');
   });
+
+  it('drops manifests without an api array instead of crashing the tools build (LOBE-12528)', () => {
+    // A DB plugin row whose manifest jsonb lacks `api` used to crash
+    // ToolsEngine.convertManifestsToTools (`manifest.api.map`) and with it
+    // every execAgent call of the affected user.
+    const brokenPlugin: InstalledPlugin = {
+      identifier: 'broken-plugin',
+      type: 'plugin',
+      runtimeType: 'mcp',
+      manifest: { identifier: 'broken-plugin', meta: { title: 'Broken' } } as any,
+    };
+    const brokenAdditional = { identifier: 'broken-additional', meta: { title: 'Broken' } } as any;
+
+    const context = createMockContext({
+      installedPlugins: [...mockInstalledPlugins, brokenPlugin],
+    });
+    const engine = createServerToolsEngine(context, {
+      additionalManifests: [brokenAdditional],
+    });
+
+    const result = engine.generateTools({
+      toolIds: ['broken-plugin', 'broken-additional', 'test-plugin'],
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    // Valid plugin still produces its tool; broken sources are dropped.
+    expect(result).toHaveLength(1);
+    expect(engine.getAvailablePlugins()).not.toContain('broken-plugin');
+    expect(engine.getAvailablePlugins()).not.toContain('broken-additional');
+  });
 });
 
 describe('createServerAgentToolsEngine', () => {

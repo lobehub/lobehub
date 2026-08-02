@@ -230,6 +230,32 @@ export default {
   'permission.generalAccess.viewableDocumentDesc': 'Members can view, but cannot edit',
   'permission.loadFailed': 'Failed to load permission settings',
   'permission.noManagePermission': 'Only the creator or a workspace owner can change permissions',
+  'permission.page.accessLevelLabel': 'Access level',
+  'permission.page.accessLevelPrivateHint':
+    'Members get this level once the agent is published to the workspace. It can be changed after publishing.',
+  'permission.page.configGroup': 'Editable settings',
+  'permission.page.devicePolicyDesc':
+    'Whether members can switch the execution environment for their own runs.',
+  'permission.page.devicePolicyFixedDesc': 'Members can only use the environment you set',
+  'permission.page.devicePolicyMemberDesc': 'Members can set their own execution environment',
+  'permission.page.devicePolicyUnset':
+    'Pick an execution environment in Agent Profile first, then you can fix it here.',
+  'permission.page.editableWhenShared': 'Can edit when shared',
+  'permission.page.entry': 'Member Permissions',
+  'permission.page.generalAccessDesc':
+    'What every workspace member can do with this agent. The creator and workspace owners always keep full access.',
+  'permission.page.memberGroup': 'Access',
+  'permission.page.modelPolicyFixedDesc': 'Members can only use the model you set',
+  'permission.page.modelPolicyMemberDesc': 'Members can use a model they set themselves',
+  'permission.page.modelPolicyDesc':
+    'Whether members can switch the model for their own conversations.',
+  'permission.page.personalDesc':
+    'This agent only belongs to you, so there is nothing to share yet. Publish it to a workspace to set member permissions.',
+  'permission.page.personalTitle': 'Permissions apply to workspace agents',
+  'permission.page.privateNotice':
+    'This agent is still private. Everything here takes effect once you publish it to the workspace.',
+  'permission.page.title': 'Member Permissions',
+  'permission.page.usableWhenShared': 'Can use when shared',
   'permission.saveNoEditPermission':
     'You have view-only access to this page, so your changes were not saved',
   'permission.updateError': 'Failed to update permission',
@@ -710,6 +736,8 @@ export default {
     'Defines who this agent is, what it is responsible for, and how it works and responds. It serves as a core instruction in every conversation.',
   'settingAgent.prompt.editorPlaceholder':
     'Enter core instructions, press / to open the Slash Menu',
+  'settingAgent.prompt.mode.source': 'Markdown source',
+  'settingAgent.prompt.mode.visual': 'Visual editor',
   'settingAgent.prompt.placeholder': 'Enter agent instructions',
   'settingAgent.prompt.title': 'Core Instructions',
   'settingAgent.agentTools.add': 'Add Tool',
@@ -749,10 +777,10 @@ export default {
     'The model is fixed in Agent Profile and cannot be switched while chatting.',
   'settingAgent.modelPolicy.title': 'Model',
   'settingAgent.runtimeConfig.title': 'Model & Tools',
-  'settingAgent.selectionPolicy.membersCannotSwitch': "Members can't switch",
-  'settingAgent.selectionPolicy.membersCannotSwitchWhenShared': "Members can't switch when shared",
-  'settingAgent.selectionPolicy.membersCanSwitch': 'Members can switch',
-  'settingAgent.selectionPolicy.membersCanSwitchWhenShared': 'Members can switch when shared',
+  'settingAgent.selectionPolicy.membersCannotSwitch': 'Locked',
+  'settingAgent.selectionPolicy.membersCannotSwitchWhenShared': 'Locked when shared',
+  'settingAgent.selectionPolicy.membersCanSwitch': 'Can switch',
+  'settingAgent.selectionPolicy.membersCanSwitchWhenShared': 'Can switch when shared',
   'settingAgent.toolsConfig.title': 'Tools',
   'settingAgent.submit': 'Update Agent',
   'settingAgent.tag.desc': 'Agent tags will be displayed in the Agent Community',
@@ -923,7 +951,7 @@ export default {
   'settingImage.defaultCount.desc':
     'Set the default number of images generated when creating a new task in the image generation panel.',
   'settingImage.defaultCount.label': 'Default Image Count',
-  'settingImage.defaultCount.title': 'AI Image',
+  'settingImage.defaultCount.title': 'Generation',
   'settingModel.enableContextCompression.desc':
     'Automatically compress historical messages into summaries when conversation exceeds 64,000 tokens, saving 60-80% token usage',
   'settingModel.enableContextCompression.title': 'Enable Auto Context Compression',
@@ -1043,9 +1071,9 @@ export default {
   'settingSystem.oauth.signout.confirm': 'Confirm sign out?',
   'settingSystem.oauth.signout.success': 'Sign out successful',
   'settingSystem.title': 'System Settings',
-  'serviceModel.modelAssignments.title': 'Model Assignments',
+  'serviceModel.modelAssignments.title': 'General',
   'serviceModel.contextLimit.placeholder': 'Context limit',
-  'serviceModel.memoryModels.title': 'Memory Models',
+  'serviceModel.memoryModels.title': 'Memory',
   'serviceModel.optionalFeatures.title': 'Optional Features',
   'settingSystemTools.appEnvironment.chromium.desc': 'Chromium browser engine version',
   'settingSystemTools.appEnvironment.desc': 'Built-in runtime versions in the desktop app',
@@ -1090,7 +1118,8 @@ export default {
   'settingSystemTools.tools.grep.desc': 'GNU grep - standard text search tool',
   'settingSystemTools.tools.kimi.desc': 'Kimi CLI - Moonshot AI agentic coding CLI',
   'settingSystemTools.tools.mdfind.desc': 'macOS Spotlight search (fast indexed search)',
-  'settingSystemTools.tools.lobehub.desc': '{{appName}} CLI - manage and connect to {{appName}} services',
+  'settingSystemTools.tools.lobehub.desc':
+    '{{appName}} CLI - manage and connect to {{appName}} services',
   'settingSystemTools.tools.bun.desc': 'Bun - fast JavaScript runtime and package manager',
   'settingSystemTools.tools.bunx.desc': 'bunx - Bun package runner for executing npm packages',
   'settingSystemTools.tools.node.desc': 'Node.js - JavaScript runtime for executing JS/TS',
@@ -1965,6 +1994,9 @@ When I am ___, I need ___
   'workspace.auditLog.actions.budget.member_override_created': 'Member budget override created',
   'workspace.auditLog.actions.budget.member_override_removed': 'Member budget override removed',
   'workspace.auditLog.actions.budget.member_override_updated': 'Member budget override updated',
+  'workspace.auditLog.actions.budget.pool_created': 'Dedicated budget created',
+  'workspace.auditLog.actions.budget.pool_deleted': 'Dedicated budget deleted',
+  'workspace.auditLog.actions.budget.pool_updated': 'Dedicated budget updated',
   'workspace.auditLog.actions.api_key.created': 'API key created',
   'workspace.auditLog.actions.api_key.renamed': 'API key renamed',
   'workspace.auditLog.actions.api_key.revoked': 'API key revoked',
@@ -2242,6 +2274,10 @@ When I am ___, I need ___
   'workspace.general.transferAgents.modal.failed': 'Failed to move agents',
   'workspace.general.transferAgents.modal.goToTarget': 'Go to {{target}}',
   'workspace.general.transferAgents.modal.loadFailed': 'Failed to load agents',
+  'workspace.general.transferAgents.modal.moveAgent': 'Move Agent',
+  'workspace.general.transferAgents.modal.moveAgentDesc':
+    'You can move to personal or workspaces that have permission to create an agent. All associated data moves with the agent: topics, file and knowledge base links, scheduled jobs, and related tasks. Custom plugins may not be available and multi-agent group associations will be removed.',
+  'workspace.general.transferAgents.modal.moveTitle': 'Move',
   'workspace.general.transferAgents.modal.noAgents': 'No agents in this workspace',
   'workspace.general.transferAgents.modal.selectAgents': 'Select Agents to move to {{target}}.',
   'workspace.general.transferAgents.modal.selectPlaceholder':
@@ -2249,8 +2285,6 @@ When I am ___, I need ___
   'workspace.general.transferAgents.modal.selectTarget':
     'You can move to personal or workspaces that have permission to create an agent.',
   'workspace.general.transferAgents.modal.selected': 'selected',
-  'workspace.general.transferAgents.modal.selectedAgent':
-    'This Agent will move to {{target}} and leave the current space. All associated data moves with it: sessions, topics and messages, file and knowledge base links, scheduled jobs, and related tasks — including every member’s conversations with this Agent.',
   'workspace.general.transferAgents.modal.success': '{{count}} agent(s) moved',
   'workspace.general.transferAgents.modal.title': 'Move Agents',
   'workspace.general.transferAgents.modal.transfer': 'Move {{count}} agent(s)',
@@ -2559,10 +2593,14 @@ When I am ___, I need ___
   'workspace.members.pending.revokeFailed': 'Failed to revoke invitation',
   'workspace.members.seatChange.memberJoinBlocked':
     'Current members have reached the scheduled seat limit, so new paid members may not be able to join this workspace',
+  'workspace.members.seatUsage_one': '{{used}} / {{capacity}} seat',
+  'workspace.members.seatUsage_other': '{{used}} / {{capacity}} seats',
   'workspace.members.subtitle': 'Manage workspace members and invitations',
   'workspace.members.tabs.members': 'Team Members',
   'workspace.members.tabs.pending': 'Pending Invitations',
   'workspace.members.title': 'Members',
+  'workspace.members.totalCount_one': '{{total}} member',
+  'workspace.members.totalCount_other': '{{total}} members',
   'workspace.name.placeholder': 'Workspace name',
   'workspace.name.title': 'Name',
   'workspace.newWorkspace': 'New Workspace',

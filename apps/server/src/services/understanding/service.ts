@@ -11,10 +11,7 @@ import {
   UnderstandingResourceNotFoundError,
   UnderstandingSessionNotFoundError,
 } from '@lobechat/database';
-import {
-  chainUnderstandingPersona,
-  UNDERSTANDING_ANALYSIS_JSON_SCHEMA,
-} from '@lobechat/prompts/understanding';
+import { chainUnderstandingPersona, UNDERSTANDING_ANALYSIS_JSON_SCHEMA } from '@lobechat/prompts';
 import type {
   CollectionDiagnostics,
   ConfirmOnboardingUnderstandingInput,
@@ -86,6 +83,16 @@ type UnderstandingRepository = Pick<
 >;
 
 type UnderstandingContexts = Pick<UnderstandingSourceStore, 'get' | 'put'>;
+
+/** Controls optional downstream work started with an Understanding collection run. */
+export interface UnderstandingStartOptions {
+  /**
+   * Starts task recommendations as soon as the first source completes.
+   *
+   * @default true
+   */
+  triggerTaskRecommendations?: boolean;
+}
 
 export interface UnderstandingServiceDependencies {
   connectorData: ConnectorDataService;
@@ -260,6 +267,7 @@ export class UnderstandingService {
     topicId: string,
     responseLanguage: string,
     selectedProviderIds?: string[],
+    options: UnderstandingStartOptions = {},
   ): Promise<OnboardingUnderstandingPollingResult> => {
     const { OnboardingUnderstandingWorkflow } =
       await import('@/server/workflows/onboardingUnderstanding');
@@ -275,6 +283,7 @@ export class UnderstandingService {
           providers,
           responseLanguage,
           sessionId: session.id,
+          triggerTaskRecommendations: options.triggerTaskRecommendations,
           topicId,
           userId: this.dependencies.userId,
         },

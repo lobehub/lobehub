@@ -6,6 +6,7 @@ import { LinuxContentSearchImpl } from './impl/linux';
 import { MacOSContentSearchImpl } from './impl/macOS';
 import { WindowsContentSearchImpl } from './impl/windows';
 
+export type { GrepContentParams, GrepContentResult } from '../types';
 export { BaseContentSearch } from './base';
 export { LinuxContentSearchImpl } from './impl/linux';
 export { MacOSContentSearchImpl } from './impl/macOS';

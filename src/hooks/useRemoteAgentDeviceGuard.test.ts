@@ -22,7 +22,7 @@ describe('useRemoteAgentDeviceGuard', () => {
   it('checks the EFFECTIVE bound device (with the caller override merged)', async () => {
     // The workspace-shared row points at the creator's (offline) machine; the
     // caller's override picks their own online device — the guard must probe
-    // the override device, not the shared one (LOBE-11904).
+    // the override device, not the shared one.
     mockedUseEffectiveAgencyConfig.mockReturnValue({
       agencyConfig: {
         boundDeviceId: 'my-device',

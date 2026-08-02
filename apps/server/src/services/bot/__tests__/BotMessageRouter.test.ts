@@ -1967,7 +1967,7 @@ describe('BotMessageRouter', () => {
 
   describe('rejection notice visibility (ensureThreadMember)', () => {
     /**
-     * LOBE-12191: on Discord a channel @mention auto-creates a reply
+     * on Discord a channel @mention auto-creates a reply
      * thread and rejection notices are posted there — but the rejected
      * sender was never added to the thread, so they got no notification
      * and perceived the bot as silently ignoring them. Every group-scope

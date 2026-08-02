@@ -1,8 +1,7 @@
 import { SOCIAL_URL } from '@lobechat/business-const';
 import { copyToClipboard, Icon } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, toast } from '@lobehub/ui/base-ui';
 import { DiscordIcon } from '@lobehub/ui/icons';
-import { message } from 'antd';
 import { cssVar } from 'antd-style';
 import { AlertTriangle, Copy, RotateCw } from 'lucide-react';
 import { memo, useCallback } from 'react';
@@ -27,7 +26,7 @@ const TraceIdError = memo<TraceIdErrorProps>(({ id, onRetry, traceId }) => {
 
     try {
       await copyToClipboard(traceId);
-      message.success(t('unknownError.copyTraceId'));
+      toast.success(t('unknownError.copyTraceId'));
     } catch {
       /* noop */
     }

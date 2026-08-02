@@ -170,7 +170,7 @@ describe('builtinAgentSelectors', () => {
     });
   });
 
-  // LOBE-12374: workspace members may now *configure* the collaborative builtin
+  // workspace members may now *configure* the collaborative builtin
   // rows, so ownership affordances (delete / transfer) have to be suppressed for
   // them explicitly — the server still rejects those actions.
   describe('isBuiltinAgent', () => {

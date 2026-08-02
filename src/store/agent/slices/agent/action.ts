@@ -6,13 +6,13 @@ import {
   pruneWorkingDirByDeviceDeletes,
 } from '@lobechat/types';
 import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
+import { toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
 import { produce } from 'immer';
 import type { SWRResponse } from 'swr';
 import type { PartialDeep } from 'type-fest';
 
-import { message } from '@/components/AntdStaticMethods';
 import { MESSAGE_CANCEL_FLAT } from '@/const/message';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { agentConfigKeys } from '@/libs/swr/keys';
@@ -250,29 +250,36 @@ export class AgentSliceActionImpl {
     await updateAgentConfig({ plugins: newPlugins });
   };
 
-  updateAgentChatConfig = async (config: Partial<LobeAgentChatConfig>): Promise<void> => {
+  updateAgentChatConfig = async (
+    config: Partial<LobeAgentChatConfig>,
+    options?: AgentConfigUpdateOptions,
+  ): Promise<void> => {
     const { activeAgentId } = this.#get();
 
     if (!activeAgentId) return;
 
-    await this.#get().updateAgentConfig({ chatConfig: config });
+    await this.#get().updateAgentConfig({ chatConfig: config }, options);
   };
 
   updateAgentChatConfigById = async (
     agentId: string,
     config: Partial<LobeAgentChatConfig>,
+    options?: AgentConfigUpdateOptions,
   ): Promise<void> => {
     if (!agentId) return;
 
-    await this.#get().updateAgentConfigById(agentId, { chatConfig: config });
+    await this.#get().updateAgentConfigById(agentId, { chatConfig: config }, options);
   };
 
-  updateAgentConfig = async (config: PartialDeep<LobeAgentConfig>): Promise<void> => {
+  updateAgentConfig = async (
+    config: PartialDeep<LobeAgentConfig>,
+    options?: AgentConfigUpdateOptions,
+  ): Promise<void> => {
     const { activeAgentId } = this.#get();
 
     if (!activeAgentId) return;
 
-    await this.#get().updateAgentConfigById(activeAgentId, config);
+    await this.#get().updateAgentConfigById(activeAgentId, config, options);
   };
 
   updateAgentConfigById = async (
@@ -641,7 +648,7 @@ export class AgentSliceActionImpl {
         // data loss (the next refetch reverts the optimistic value) — tell the
         // user right away.
         if (options?.showErrorMessage !== false) {
-          message.error(t('saveAgentConfigFail', { ns: 'common' }));
+          toast.error(t('saveAgentConfigFail', { ns: 'common' }));
         }
         // Roll back only agencyConfig patches: those are discrete picks the
         // server actively validates (e.g. a workspace agent binding a

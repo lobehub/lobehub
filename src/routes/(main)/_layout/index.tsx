@@ -24,7 +24,7 @@ import ZoomHUD from '@/features/Electron/system/ZoomHUD';
 import TabCacheBridges from '@/features/Electron/titlebar/TabBar/TabCacheBridges';
 import TitleBar from '@/features/Electron/titlebar/TitleBar';
 import HotkeyHelperPanel from '@/features/HotkeyHelperPanel';
-import NavPanel from '@/features/NavPanel';
+import NavPanelShell from '@/features/NavPanel/Shell';
 import { RouteMetaBridge } from '@/features/RouteMeta';
 import { usePlatform } from '@/hooks/usePlatform';
 import CmdkLazy from '@/layout/GlobalProvider/CmdkLazy';
@@ -78,7 +78,7 @@ const Layout: FC = () => {
                   : '100%'
             }
           >
-            <NavPanel />
+            <NavPanelShell />
             <DesktopLayoutContainer>
               <DesktopHomeLayout>
                 <DesktopHome />

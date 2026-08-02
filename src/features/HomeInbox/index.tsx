@@ -1,14 +1,16 @@
 import { Flexbox } from '@lobehub/ui';
 import { Segmented } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
-import { memo, type ReactNode, useMemo, useState } from 'react';
+import { createStaticStyles, cx } from 'antd-style';
+import { Fragment, memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceMemberProfiles } from '@/business/client/hooks/useWorkspaceMemberProfiles';
 import AsyncError from '@/components/AsyncError';
 import { BriefCardSkeleton } from '@/features/DailyBrief/BriefCardSkeleton';
+import GroupBlock from '@/features/Home/components/GroupBlock';
+import { homeType } from '@/features/Home/components/homeType';
+import RailCard from '@/features/Home/components/RailCard';
 import Recommendations, { useRecommendationsVisible } from '@/features/Recommendations';
-import GroupBlock from '@/routes/(main)/home/features/components/GroupBlock';
 import { useBriefStore } from '@/store/brief';
 import { briefListSelectors } from '@/store/brief/selectors';
 import { useUserStore } from '@/store/user';
@@ -16,53 +18,40 @@ import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/se
 
 import InboxBriefCard from './InboxBriefCard';
 import MarkAllReadButton from './MarkAllReadButton';
+import NeedsYouRailCard from './NeedsYouRailCard';
 import NewsList from './NewsList';
 import RunningTasksCard from './RunningTasksCard';
+import { filterTopicsForInboxScope, resolveScopeToggleSection } from './scopeTogglePlacement';
 import { splitBriefs } from './splitBriefs';
 import UnreadTopicList from './UnreadTopicList';
 import { useHomeInboxTopics } from './useHomeInboxTopics';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  count: css`
-    margin-inline-start: 6px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextQuaternary};
-  `,
   onlyMe: css`
     margin-inline-start: 8px;
     padding-inline: 5px;
     border-radius: 3px;
-
-    font-size: 11px;
-    color: ${cssVar.colorTextTertiary};
-
     background: ${cssVar.colorFillQuaternary};
   `,
   subtitle: css`
     margin-inline-start: 8px;
-    font-size: 12px;
-    font-weight: 400;
-    color: ${cssVar.colorTextQuaternary};
   `,
 }));
 
 interface InboxSection {
   /** Header action revealed on hover (GroupBlock's action slot). */
   action?: ReactNode;
+  /** Trailing marker on the heading, e.g. the team-view "only mine" chip. */
+  badge?: ReactNode;
+  count?: number;
   key: string;
-  node: ReactNode;
   /** Omitted when the section labels itself (the running card names its own count). */
-  title?: ReactNode;
+  label?: string;
+  node: ReactNode;
+  /** Section carries its own card shell — the rail renders it verbatim. */
+  selfShelled?: boolean;
+  subtitle?: string;
 }
-
-/** How many are in the pile, next to what the pile is. */
-const titleWithCount = (label: string, count: number, subtitle?: string): ReactNode => (
-  <>
-    {label}
-    <span className={styles.count}>{count}</span>
-    {subtitle && <span className={styles.subtitle}>· {subtitle}</span>}
-  </>
-);
 
 /**
  * The home inbox: everything the agents did while you were away, sorted by
@@ -88,7 +77,15 @@ const titleWithCount = (label: string, count: number, subtitle?: string): ReactN
  * Sections are siblings, never nested: each names itself and carries its own
  * count, and one absent section never hides another's heading.
  */
-const HomeInbox = memo(() => {
+interface HomeInboxProps {
+  hideNeedsYou?: boolean;
+  hideUnread?: boolean;
+  variant?: 'default' | 'main' | 'rail';
+}
+
+const HomeInbox = memo<HomeInboxProps>(({ hideNeedsYou, hideUnread, variant = 'default' }) => {
+  const isRail = variant === 'rail';
+  const isMain = variant === 'main';
   const { t } = useTranslation('home');
   const isLogin = useUserStore(authSelectors.isLogin);
   const myId = useUserStore(userProfileSelectors.userId);
@@ -116,11 +113,11 @@ const HomeInbox = memo(() => {
   // own runs, "team" is everyone's. Personal mode has only the viewer's, so the
   // filter is a no-op there.
   const unreadTopics = useMemo(
-    () => (teamView ? topics.unread : topics.unread.filter((topic) => topic.userId === myId)),
+    () => filterTopicsForInboxScope(topics.unread, myId, teamView),
     [teamView, topics.unread, myId],
   );
   const runningTopics = useMemo(
-    () => (teamView ? topics.running : topics.running.filter((topic) => topic.userId === myId)),
+    () => filterTopicsForInboxScope(topics.running, myId, teamView),
     [teamView, topics.running, myId],
   );
 
@@ -128,7 +125,7 @@ const HomeInbox = memo(() => {
 
   // The brief feed is the primary content; a first-load failure blocks the whole
   // surface. No fabricated section heading — we don't know what's under it yet.
-  if (briefsSWR.error && !isBriefsInit && !briefsSWR.isLoading) {
+  if (!isMain && briefsSWR.error && !isBriefsInit && !briefsSWR.isLoading) {
     return (
       <AsyncError
         error={briefsSWR.error}
@@ -142,12 +139,12 @@ const HomeInbox = memo(() => {
 
   // First load: bare skeletons, no group heading (loading must not assert a
   // "Needs you" section that may turn out empty). Recommendations keep their own.
-  if (!isBriefsInit) {
+  if (!isMain && !isBriefsInit) {
     return (
       <Flexbox gap={12}>
         <BriefCardSkeleton />
         <BriefCardSkeleton />
-        <Recommendations />
+        <Recommendations variant={variant} />
       </Flexbox>
     );
   }
@@ -166,75 +163,140 @@ const HomeInbox = memo(() => {
       onChange={(value) => setScope(value as 'mine' | 'team')}
     />
   ) : undefined;
-  let toggleSectionKey: string | undefined;
-  const placeToggle = (key: string): ReactNode => {
-    if (!scopeToggle || toggleSectionKey) return undefined;
-    toggleSectionKey = key;
-    return scopeToggle;
-  };
+  const toggleSectionKey = scopeToggle
+    ? resolveScopeToggleSection({
+        hasNeedsYou: !hideNeedsYou && needsYou.length > 0,
+        hasRunning: runningTopics.length > 0,
+        hasUnread: !hideUnread && unreadTopics.length > 0,
+        preferUnread: isMain,
+      })
+    : null;
+  const placeToggle = (key: typeof toggleSectionKey): ReactNode =>
+    key === toggleSectionKey ? scopeToggle : undefined;
 
   const sections: InboxSection[] = [];
 
-  if (needsYou.length > 0)
-    sections.push({
-      action: placeToggle('needsYou'),
-      key: 'needsYou',
-      node: (
-        <Flexbox gap={12}>
-          {needsYou.map((brief) => (
-            <InboxBriefCard brief={brief} key={brief.id} />
-          ))}
-        </Flexbox>
-      ),
-      title: titleWithCount(t('inbox.needsYou.title'), needsYou.length),
-    });
+  if (!isMain && !hideNeedsYou && needsYou.length > 0)
+    sections.push(
+      // The rail paginates instead of stacking and owns its header. Keep the
+      // page-level scope control in that header alongside the pager.
+      isRail
+        ? {
+            key: 'needsYou',
+            node: <NeedsYouRailCard briefs={needsYou} scopeControl={placeToggle('needsYou')} />,
+            selfShelled: true,
+          }
+        : {
+            action: placeToggle('needsYou'),
+            count: needsYou.length,
+            key: 'needsYou',
+            label: t('inbox.needsYou.title'),
+            node: (
+              <Flexbox gap={12}>
+                {needsYou.map((brief) => (
+                  <InboxBriefCard brief={brief} key={brief.id} />
+                ))}
+              </Flexbox>
+            ),
+          },
+    );
 
   // A topic-feed failure must not be silent: without this the unread / running
   // sections would just vanish and the inbox would look empty-but-fine.
   if (topics.error)
     sections.push({
       key: 'topics-error',
+      label: t('inbox.unread.title'),
       node: <AsyncError error={topics.error} variant={'inline'} onRetry={topics.reload} />,
-      title: t('inbox.unread.title'),
     });
 
-  if (unreadTopics.length > 0)
+  if (!hideUnread && unreadTopics.length > 0)
     sections.push({
       action: placeToggle('unread'),
+      count: unreadTopics.length,
       key: 'unread',
+      label: t('inbox.unread.title'),
       node: (
         <UnreadTopicList
+          bare={isRail}
           showAuthor={teamView}
           topics={unreadTopics}
           onFollowUpSent={topics.promoteToRunning}
         />
       ),
-      title: titleWithCount(t('inbox.unread.title'), unreadTopics.length),
     });
+
+  if (isMain) {
+    if (briefsSWR.error && !isBriefsInit && !briefsSWR.isLoading) {
+      sections.push({
+        key: 'needsYou-error',
+        label: t('inbox.needsYou.title'),
+        node: (
+          <AsyncError
+            error={briefsSWR.error}
+            variant={'inline'}
+            onRetry={() => void briefsSWR.mutate()}
+          />
+        ),
+      });
+    } else if (!isBriefsInit) {
+      sections.push({ key: 'needsYou-loading', node: <BriefCardSkeleton /> });
+    } else if (!hideNeedsYou && needsYou.length > 0) {
+      sections.push({
+        action: placeToggle('needsYou'),
+        count: needsYou.length,
+        key: 'needsYou',
+        label: t('inbox.needsYou.title'),
+        node: (
+          <Flexbox gap={12}>
+            {needsYou.map((brief) => (
+              <InboxBriefCard brief={brief} key={brief.id} />
+            ))}
+          </Flexbox>
+        ),
+      });
+    }
+  }
 
   // No title: the card already says "3 tasks running" on its own head.
-  if (runningTopics.length > 0)
+  if (!isMain && runningTopics.length > 0)
     sections.push({
       key: 'running',
-      node: <RunningTasksCard running={runningTopics} showAuthor={teamView} />,
-    });
-
-  if (news.length > 0)
-    sections.push({
-      action: <MarkAllReadButton news={news} />,
-      key: 'news',
-      node: <NewsList news={news} />,
-      // Team view: News is still only mine (briefs are per-user), so say so
-      // rather than let a team-scoped page imply it spans the team.
-      title: (
-        <>
-          {titleWithCount(t('inbox.news.title'), news.length, t('inbox.news.subtitle'))}
-          {teamView && <span className={styles.onlyMe}>{t('inbox.scope.onlyMe')}</span>}
-        </>
+      node: (
+        <RunningTasksCard
+          action={placeToggle('running')}
+          bare={isRail}
+          running={runningTopics}
+          showAuthor={teamView}
+        />
       ),
     });
 
+  if (!isMain && news.length > 0)
+    sections.push({
+      action: <MarkAllReadButton news={news} />,
+      // Team view: News is still only mine (briefs are per-user), so say so
+      // rather than let a team-scoped page imply it spans the team.
+      badge: teamView && (
+        <span className={cx(homeType.meta, styles.onlyMe)}>{t('inbox.scope.onlyMe')}</span>
+      ),
+      count: news.length,
+      key: 'news',
+      label: t('inbox.news.title'),
+      node: <NewsList bare={isRail} news={news} />,
+      subtitle: t('inbox.news.subtitle'),
+    });
+
   if (sections.length === 0) {
+    if (isMain) return null;
+
+    if (isRail)
+      return (
+        <Flexbox gap={12}>
+          <Recommendations variant={'rail'} />
+        </Flexbox>
+      );
+
     // With no titled block above it, the bare recommendations list doesn't need
     // the full section gap below the input area — offset the parent's gap so it
     // sits closer to the input.
@@ -250,23 +312,53 @@ const HomeInbox = memo(() => {
   }
 
   return (
-    <Flexbox gap={32}>
-      {sections.map(({ action, key, node, title }) =>
-        title ? (
+    <Flexbox gap={isRail ? 12 : 32}>
+      {sections.map(({ action, badge, count, key, label, node, selfShelled, subtitle }) => {
+        if (selfShelled) return <Fragment key={key}>{node}</Fragment>;
+
+        if (isRail)
+          return (
+            <RailCard
+              action={action}
+              count={count}
+              key={key}
+              title={
+                label && (
+                  <>
+                    {label}
+                    {badge}
+                  </>
+                )
+              }
+            >
+              {node}
+            </RailCard>
+          );
+
+        if (!label) return <Flexbox key={key}>{node}</Flexbox>;
+
+        return (
           <GroupBlock
             action={action}
             actionAlwaysVisible={key === toggleSectionKey}
+            count={count}
             key={key}
-            title={title}
+            title={
+              <>
+                {label}
+                {subtitle && (
+                  <span className={cx(homeType.meta, styles.subtitle)}>· {subtitle}</span>
+                )}
+                {badge}
+              </>
+            }
           >
             {node}
           </GroupBlock>
-        ) : (
-          <Flexbox key={key}>{node}</Flexbox>
-        ),
-      )}
+        );
+      })}
 
-      <Recommendations />
+      {!isMain && <Recommendations variant={variant} />}
     </Flexbox>
   );
 });

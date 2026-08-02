@@ -1,8 +1,8 @@
 import { CHAT_GROUP_SESSION_ID_PREFIX } from '@lobechat/types';
+import { toast } from '@lobehub/ui/base-ui';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { message } from '@/components/AntdStaticMethods';
 import { setScopedMutate } from '@/libs/swr';
 import { agentConfigKeys } from '@/libs/swr/keys';
 import { agentService } from '@/services/agent';
@@ -39,10 +39,8 @@ vi.mock('@/services/agentDocument', () => ({
   resolveAgentDocumentsContext: vi.fn(),
 }));
 
-vi.mock('@/components/AntdStaticMethods', () => ({
-  message: {
-    error: vi.fn(),
-  },
+vi.mock('@lobehub/ui/base-ui', () => ({
+  toast: { error: vi.fn() },
 }));
 
 // Mock sessionStore
@@ -535,7 +533,7 @@ describe('AgentSlice Actions', () => {
         });
       });
 
-      expect(message.error).toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalled();
       // Optimistic value must not survive a rejected write — refetch server truth.
       expect(refreshSpy).toHaveBeenCalledWith('agent-1');
       expect(result.current.saveStatus).toBe('idle');
@@ -557,7 +555,7 @@ describe('AgentSlice Actions', () => {
         ).rejects.toThrow('save failed');
       });
 
-      expect(message.error).not.toHaveBeenCalled();
+      expect(toast.error).not.toHaveBeenCalled();
       expect(result.current.saveStatus).toBe('idle');
     });
   });
@@ -690,6 +688,30 @@ describe('AgentSlice Actions', () => {
         { chatConfig: { historyCount: 10 } },
         expect.any(AbortSignal),
       );
+    });
+
+    // automatic corrections must not trigger phantom save-error toasts: some chatConfig writes are automatic corrections (e.g. forcing
+    // `searchMode: 'auto'` for a model whose builtin search can't be turned off).
+    // A rejected correction must not toast "your change was not applied" for a
+    // change the user never made, so the option has to reach the write funnel.
+    it('should forward update options through the chatConfig wrapper', async () => {
+      const { result } = renderHook(() => useAgentStore());
+
+      vi.mocked(agentService.updateAgentConfig).mockRejectedValue(new Error('save failed'));
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      act(() => {
+        useAgentStore.setState({ activeAgentId: 'agent-1' });
+      });
+
+      await act(async () => {
+        await result.current.updateAgentChatConfig(
+          { searchMode: 'auto' },
+          { showErrorMessage: false },
+        );
+      });
+
+      expect(toast.error).not.toHaveBeenCalled();
     });
   });
 

@@ -319,7 +319,7 @@ export const buildServerCallLlmContext = async ({
     try {
       const marketService = new MarketService({ userInfo: { userId: ctx.userId } });
       // Inside a workspace, the agent must only see the workspace's shared
-      // organization credentials — personal creds are not visible here (LOBE-10978).
+      // organization credentials — personal creds are not visible here.
       const credsResult = ctx.workspaceId
         ? await marketService.market.organizations.creds({ workspaceId: ctx.workspaceId }).list()
         : await marketService.market.creds.list();

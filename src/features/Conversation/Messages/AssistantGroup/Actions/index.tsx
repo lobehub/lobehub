@@ -15,6 +15,7 @@ const DEFAULT_BAR: MessageActionSlot[] = ['edit', 'copy'];
 const DEFAULT_MENU: MessageActionSlot[] = [
   'edit',
   'copy',
+  'copyOperationId',
   'comments',
   'branching',
   'collapse',
@@ -32,7 +33,15 @@ const IN_PROGRESS_BAR: MessageActionSlot[] = ['del'];
 // shared and multi-selected/forwarded as one aggregated assistant reply. The
 // forward serializer keeps child text while excluding child tool payloads.
 const NO_TEXT_BLOCK_BAR: MessageActionSlot[] = ['delAndRegenerate'];
-const NO_TEXT_BLOCK_MENU: MessageActionSlot[] = ['comments', 'share', 'select', 'divider', 'del'];
+const NO_TEXT_BLOCK_MENU: MessageActionSlot[] = [
+  'comments',
+  'share',
+  'select',
+  'divider',
+  'del',
+  'divider',
+  'copyOperationId',
+];
 
 interface GroupActionsProps {
   actionsConfig?: MessageActionsConfig;

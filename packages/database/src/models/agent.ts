@@ -1010,7 +1010,7 @@ export class AgentModel {
    * `visibility = 'private'` guards lock the operation to the creator's own
    * still-private agent. The inverse transition (public → private) goes
    * through {@link setVisibility}, which the router gates to the creator or
-   * a workspace owner (LOBE-11551).
+   * a workspace owner.
    *
    * Use the existing `update` to change other fields; visibility is the only
    * one with these authorization rules.
@@ -1078,7 +1078,7 @@ export class AgentModel {
   };
 
   /**
-   * Bidirectional visibility switch (LOBE-11551). Authorization (creator OR
+   * Bidirectional visibility switch. Authorization (creator OR
    * workspace owner, builtin agents excluded) is the router's responsibility —
    * this method only applies the ownership-scoped write.
    *

@@ -58,25 +58,25 @@ const forbiddenImports = [
   ],
   [
     'home cold-path ChatInput static import',
-    'src/routes/(main)/home/features/lint-fixture.tsx',
+    'src/features/Home/lint-fixture.tsx',
     `import { ChatInput } from '@/features/ChatInput';\nvoid ChatInput;`,
     'Home cold-path modules must not statically import ChatInput',
   ],
   [
     'home cold-path ChatInput subpath import',
-    'src/routes/(main)/home/features/lint-fixture.tsx',
+    'src/features/Home/lint-fixture.tsx',
     `import ChatInputDesktop from '@/features/ChatInput/Desktop';\nvoid ChatInputDesktop;`,
     'Home cold-path modules must not statically import ChatInput',
   ],
   [
     'home cold-path Conversation root barrel',
-    'src/routes/(main)/home/features/lint-fixture.tsx',
+    'src/features/Home/lint-fixture.tsx',
     `import { ChatInput } from '@/features/Conversation';\nvoid ChatInput;`,
     'Home cold-path modules must use stable Conversation subpaths',
   ],
   [
     'home input direct EditorInput import',
-    'src/routes/(main)/home/features/InputArea/index.tsx',
+    'src/features/Home/InputArea/index.tsx',
     `import EditorInput from './EditorInput';\nvoid EditorInput;`,
     'load EditorInput through useProgressiveEditor',
   ],
@@ -117,22 +117,22 @@ const allowedImports = [
   ],
   [
     'home interaction-triggered ChatInput import',
-    'src/routes/(main)/home/features/lint-fixture.tsx',
+    'src/features/Home/lint-fixture.tsx',
     `void import('@/features/ChatInput');`,
   ],
   [
     'home lightweight ChatInput initial-state utility',
-    'src/routes/(main)/home/features/lint-fixture.tsx',
+    'src/features/Home/lint-fixture.tsx',
     `import { initialState } from '@/features/ChatInput/store/initialState';\nvoid initialState;`,
   ],
   [
     'home lightweight ChatInput context-selection utility',
-    'src/routes/(main)/home/features/lint-fixture.tsx',
+    'src/features/Home/lint-fixture.tsx',
     `import { resolveContextSelections } from '@/features/ChatInput/utils/contextSelections';\nvoid resolveContextSelections;`,
   ],
   [
     'isolated home EditorInput entry',
-    'src/routes/(main)/home/features/InputArea/EditorInput.tsx',
+    'src/features/Home/InputArea/EditorInput.tsx',
     `import { ChatInput } from '@/features/ChatInput';\nvoid ChatInput;`,
   ],
   [

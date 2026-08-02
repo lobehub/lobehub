@@ -23,7 +23,7 @@ import { TabHost, useSeedTabsOnBoot } from '@/features/Electron/TabHost';
 import TabCacheBridges from '@/features/Electron/titlebar/TabBar/TabCacheBridges';
 import TitleBar from '@/features/Electron/titlebar/TitleBar';
 import HotkeyHelperPanel from '@/features/HotkeyHelperPanel';
-import NavPanel from '@/features/NavPanel';
+import NavPanelShell from '@/features/NavPanel/Shell';
 import { usePlatform } from '@/hooks/usePlatform';
 import CmdkLazy from '@/layout/GlobalProvider/CmdkLazy';
 import dynamic from '@/libs/next/dynamic';
@@ -76,7 +76,7 @@ const Layout: FC = () => {
             height={`calc(100% - ${TITLE_BAR_HEIGHT}px)`}
             width={'100%'}
           >
-            <NavPanel />
+            <NavPanelShell />
             <DesktopLayoutContainer>
               <Flexbox height={'100%'} style={tabHostContainer} width={'100%'}>
                 <TabHost />

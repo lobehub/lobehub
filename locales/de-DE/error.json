@@ -156,6 +156,7 @@
   "upload.networkError": "Bitte überprüfen Sie Ihre Netzwerkverbindung und die CORS-Konfiguration des Speicherdienstes.",
   "upload.permissionDenied": "Sie haben keine Berechtigung, Dateien in diesem Workspace hochzuladen.",
   "upload.storageBlock.billingUnavailable": "Der Abrechnungsstatus Ihres Abonnements kann nicht überprüft werden. Bitte versuchen Sie es später erneut oder aktualisieren Sie Ihre Abrechnungsdaten.",
+  "upload.storageBlock.cleanupFiles": "Speicherplatz freigeben",
   "upload.storageBlock.monthlyCapReached": "Ihr monatliches Speicherlimit wurde erreicht.",
   "upload.storageBlock.noPaymentMethod": "Bitte fügen Sie eine Zahlungsmethode hinzu, um mit dem Hochladen fortzufahren.",
   "upload.storageBlock.overageNotEnabled": "Ihr Speicherplatz ist voll. Aktivieren Sie die Abrechnung nach Verbrauch, um mit dem Hochladen fortzufahren.",

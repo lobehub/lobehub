@@ -2,7 +2,7 @@
 
 import { useEditor } from '@lobehub/editor/react';
 import { ActionIcon, Block, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { $getRoot } from 'lexical';
 import { ChevronUp, Paperclip, UserCircle2 } from 'lucide-react';
@@ -10,7 +10,6 @@ import { type KeyboardEvent, memo, useCallback, useEffect, useMemo, useRef, useS
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import { message } from '@/components/AntdStaticMethods';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import {
   getAttachmentFileIdsFromEditor,
@@ -253,7 +252,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
         });
       }
     } catch {
-      message.error(t('createTask.createFailed'));
+      toast.error(t('createTask.createFailed'));
     }
   }, [
     t,

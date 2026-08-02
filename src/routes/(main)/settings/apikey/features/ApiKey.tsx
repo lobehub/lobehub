@@ -1,9 +1,9 @@
 'use client';
 
 import { Center, Empty, Text } from '@lobehub/ui';
-import { Button, Switch } from '@lobehub/ui/base-ui';
+import { Button, Switch, toast } from '@lobehub/ui/base-ui';
 import { useMutation } from '@tanstack/react-query';
-import { App, Popconfirm } from 'antd';
+import { Popconfirm } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Trash } from 'lucide-react';
 import { type FC } from 'react';
@@ -43,7 +43,7 @@ const ApiKey: FC = () => {
   const { t } = useTranslation('auth');
   const { t: tc } = useTranslation('common');
   const activeWorkspaceId = useActiveWorkspaceId();
-  const { message } = App.useApp();
+
   const { allowed: canEdit, reason } = usePermission('create_content');
   // Workspace API keys are shared admin config: the server gates every
   // mutation (create included) at Admin-or-higher
@@ -63,7 +63,7 @@ const ApiKey: FC = () => {
   );
 
   const notifyMutationError = (error: unknown) => {
-    message.error(
+    toast.error(
       isForbiddenError(error)
         ? manageTooltip
         : tc('operationFailed', 'Operation failed, please try again'),

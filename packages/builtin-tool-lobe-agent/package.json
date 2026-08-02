@@ -18,6 +18,7 @@
     "@lobechat/builtin-tool-user-interaction": "workspace:*",
     "@lobechat/const": "workspace:*",
     "@lobechat/prompts": "workspace:*",
+    "@lobechat/shared-tool-ui": "workspace:*",
     "@lobechat/utils": "workspace:*"
   },
   "devDependencies": {

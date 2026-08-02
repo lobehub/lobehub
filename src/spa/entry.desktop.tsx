@@ -9,10 +9,12 @@ import { createElectronLocalDatabaseAdapter } from '@/libs/localDatabase/electro
 import { createAppRouter } from '@/utils/router';
 
 import { startAppInitialization } from './initialize/bootstrap';
+import { applyDesktopBootstrapIdentity } from './initialize/desktopIdentity';
 import { desktopRoutes } from './router/desktopRouter.config';
 import { createSPARoot } from './runtime';
 
 registerLocalDatabaseAdapter(createElectronLocalDatabaseAdapter());
+applyDesktopBootstrapIdentity();
 bootTiming.mark('bundle-eval');
 startAppInitialization();
 

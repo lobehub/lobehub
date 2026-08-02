@@ -8,12 +8,10 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-vi.mock('@/components/AntdStaticMethods', () => ({
-  message: {
-    loading: vi.fn(),
+vi.mock('@lobehub/ui/base-ui', () => ({
+  toast: {
+    loading: vi.fn(() => ({ close: vi.fn() })),
     success: vi.fn(),
-    error: vi.fn(),
-    destroy: vi.fn(),
   },
 }));
 

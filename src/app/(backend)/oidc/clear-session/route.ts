@@ -1,10 +1,11 @@
 import { serverDB } from '@lobechat/database';
-import { oidcSessions } from '@lobechat/database/schemas';
 import { getUserAuth } from '@lobechat/utils/server';
 import debug from 'debug';
-import { eq } from 'drizzle-orm';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
+
+import type { OIDCSessionCookieContext } from '@/libs/oidc-provider/session-cleanup';
+import { clearCurrentOIDCSession } from '@/libs/oidc-provider/session-cleanup';
 
 const log = debug('lobe-oidc:clear-session');
 
@@ -18,12 +19,7 @@ const log = debug('lobe-oidc:clear-session');
  * the provider won't silently reuse the stale session that still points to
  * the old accountId.
  *
- * How it works:
- * 1. Read the `_session` cookie that `oidc-provider` sets in the browser.
- *    This cookie value is the primary key of the `oidc_sessions` table.
- * 2. Delete that single row from the database.
- * 3. Remove the `_session` and `_session.sig` cookies from the response so
- *    the browser no longer presents them.
+ * Session verification and cleanup are delegated to the shared OIDC session service.
  */
 export async function POST() {
   try {
@@ -34,32 +30,18 @@ export async function POST() {
     }
 
     const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get('_session');
+    const cookieWrites: Parameters<OIDCSessionCookieContext['setCookie']>[] = [];
+    const cleared = await clearCurrentOIDCSession(serverDB, {
+      getCookie: (name) => cookieStore.get(name)?.value ?? null,
+      setCookie: (...args) => cookieWrites.push(args),
+    });
+    const response = NextResponse.json({ ok: true, cleared });
 
-    if (!sessionCookie?.value) {
-      log('No _session cookie found, nothing to clear');
-      return NextResponse.json({ ok: true, cleared: false });
+    for (const cookieWrite of cookieWrites) {
+      response.cookies.set(...cookieWrite);
     }
 
-    const sessionId = sessionCookie.value;
-    log('Clearing OIDC session %s for user %s', sessionId, userId);
-
-    // Delete the OIDC session row from the database
-    await serverDB.delete(oidcSessions).where(eq(oidcSessions.id, sessionId));
-
-    // Build a response that also expires the browser cookies
-    const response = NextResponse.json({ ok: true, cleared: true });
-
-    // Clear both the session cookie and its signature cookie
-    for (const name of ['_session', '_session.sig', '_session.legacy', '_session.legacy.sig']) {
-      response.cookies.set(name, '', {
-        expires: new Date(0),
-        httpOnly: true,
-        path: '/',
-      });
-    }
-
-    log('OIDC session cleared successfully');
+    log('OIDC session cleanup completed: cleared=%s', cleared);
     return response;
   } catch (error) {
     log('Error clearing OIDC session: %O', error);

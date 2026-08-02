@@ -303,7 +303,7 @@ export const createRoutePreloadScheduler = (
 let routePreloadStarted = false;
 
 export const startRoutePreload = () => {
-  if (routePreloadStarted || typeof window === 'undefined' || __ELECTRON__) return;
+  if (routePreloadStarted || typeof window === 'undefined') return;
   routePreloadStarted = true;
 
   const tasks = __MOBILE__ ? createMobileRoutePreloadTasks() : createWebRoutePreloadTasks();

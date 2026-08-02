@@ -2,7 +2,7 @@
 
 import { type FormGroupItemType } from '@lobehub/ui';
 import { Form, HotkeyInput, Icon, Skeleton } from '@lobehub/ui';
-import { App } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { Loader2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -20,7 +20,6 @@ import { hotkeyFormStyles } from './styles';
 const HotkeySetting = memo(() => {
   const { t } = useTranslation(['setting', 'hotkey']);
   const [form] = Form.useForm();
-  const { message } = App.useApp();
 
   const hotkeys = useElectronStore(desktopHotkeysSelectors.hotkeys, isEqual);
 
@@ -41,13 +40,13 @@ const HotkeySetting = memo(() => {
     try {
       const result = await updateDesktopHotkey(id, value);
       if (result.success) {
-        message.success(t('hotkey.updateSuccess', { ns: 'setting' }));
+        toast.success(t('hotkey.updateSuccess', { ns: 'setting' }));
       } else {
         // Show the appropriate error message based on error type
-        message.error(t(`hotkey.errors.${result.errorType}` as any, { ns: 'setting' }));
+        toast.error(t(`hotkey.errors.${result.errorType}` as any, { ns: 'setting' }));
       }
     } catch {
-      message.error(t('hotkey.updateError', { ns: 'setting' }));
+      toast.error(t('hotkey.updateError', { ns: 'setting' }));
     } finally {
       setLoading(false);
     }

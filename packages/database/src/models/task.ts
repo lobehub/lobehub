@@ -252,7 +252,7 @@ export class TaskModel {
    * lifecycle is driven by the deleteTask tool call at the tool-execution
    * dispatch layer (which calls `WorkModel.deleteTaskWork`), so non-tool deletes
    * (UI / CLI / deleteAll) deliberately leave the Work as an orphan for the UI
-   * to render as "resource deleted" from its version snapshot. See LOBE-11606.
+   * to render as "resource deleted" from its version snapshot. See.
    */
   async delete(id: string): Promise<boolean> {
     const deleted = await this.db
@@ -265,7 +265,7 @@ export class TaskModel {
 
   /**
    * Move a task and its full subtree to a new visibility (both directions —
-   * LOBE-11551 added the `public → private` demotion; the router gates who
+   * added the `public → private` demotion; the router gates who
    * may call it).
    *
    * Cascades inside a single transaction:

@@ -816,11 +816,17 @@ export const messengerRouter = router({
    * Read-only; used by the messenger settings UI.
    */
   getMessengerPushWindow: messengerProcedure
-    .input(z.object({ platform: z.enum(MESSENGER_PUSH_PLATFORMS) }))
+    .input(
+      z.object({
+        platform: z.enum(MESSENGER_PUSH_PLATFORMS),
+        tenantId: z.string().optional(),
+      }),
+    )
     .query(async ({ input, ctx }) => {
       return getMessengerPushWindow({
         platform: input.platform,
         serverDB: ctx.serverDB,
+        tenantId: input.tenantId,
         userId: ctx.userId,
       });
     }),
@@ -838,6 +844,7 @@ export const messengerRouter = router({
       z.object({
         content: z.string().trim().min(1).max(2000),
         platform: z.enum(MESSENGER_PUSH_PLATFORMS),
+        tenantId: z.string().optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -845,6 +852,7 @@ export const messengerRouter = router({
         content: input.content,
         platform: input.platform,
         serverDB: ctx.serverDB,
+        tenantId: input.tenantId,
         userId: ctx.userId,
       });
     }),

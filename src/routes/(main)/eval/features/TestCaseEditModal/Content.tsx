@@ -1,8 +1,8 @@
 'use client';
 
 import { Accordion, AccordionItem, Flexbox, Input, Text, TextArea } from '@lobehub/ui';
-import { Select, useModalContext } from '@lobehub/ui/base-ui';
-import { App, Form } from 'antd';
+import { Select, toast, useModalContext } from '@lobehub/ui/base-ui';
+import { Form } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { type FC, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,7 +12,6 @@ import { agentEvalService } from '@/services/agentEval';
 const styles = createStaticStyles(({ css }) => ({
   sectionLabel: css`
     margin-block-end: 12px;
-
     font-size: ${cssVar.fontSizeSM};
     font-weight: 500;
     color: ${cssVar.colorTextSecondary};
@@ -34,7 +33,7 @@ const TestCaseEditContent: FC<TestCaseEditContentProps> = ({
 }) => {
   const { t } = useTranslation('eval');
   const { close } = useModalContext();
-  const { message } = App.useApp();
+
   const [form] = Form.useForm();
   const evalModeValue = Form.useWatch('evalMode', form);
 
@@ -78,10 +77,10 @@ const TestCaseEditContent: FC<TestCaseEditContentProps> = ({
       });
 
       await onSuccess?.(testCase.datasetId);
-      message.success(t('testCase.edit.success'));
+      toast.success(t('testCase.edit.success'));
       close();
     } catch {
-      message.error(t('testCase.edit.error'));
+      toast.error(t('testCase.edit.error'));
     } finally {
       onLoadingChange?.(false);
     }

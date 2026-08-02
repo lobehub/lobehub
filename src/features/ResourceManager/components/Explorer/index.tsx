@@ -7,7 +7,10 @@ import AsyncBoundary from '@/components/AsyncBoundary';
 import { useFolderPath } from '@/routes/(main)/resource/features/hooks/useFolderPath';
 import { useResourceManagerUrlSync } from '@/routes/(main)/resource/features/hooks/useResourceManagerUrlSync';
 import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
-import { sortFileList } from '@/routes/(main)/resource/features/store/selectors';
+import {
+  getResourceQueryVisibility,
+  sortFileList,
+} from '@/routes/(main)/resource/features/store/selectors';
 import { useFetchResources, useResourceStore } from '@/store/file/slices/resource/hooks';
 
 import { KnowledgeBaseListProvider } from '../KnowledgeBaseListProvider';
@@ -57,10 +60,10 @@ const ResourceExplorer = memo(() => {
       showFilesInKnowledgeBase: false,
       sortType,
       sorter,
-      // Two-mode narrowing: `'private'` shows own private rows, `'workspace'`
-      // shows public rows. Personal mode ignores the value server-side so
-      // sending it there is a harmless no-op.
-      visibility: listVisibility === 'private' ? ('private' as const) : ('public' as const),
+      // The two-mode narrowing belongs to the resource home. A concrete
+      // library supplies its own visibility boundary and must not inherit the
+      // user's last home filter.
+      visibility: getResourceQueryVisibility(libraryId, listVisibility),
     }),
     [category, libraryId, currentFolderSlug, sortType, sorter, listVisibility],
   );

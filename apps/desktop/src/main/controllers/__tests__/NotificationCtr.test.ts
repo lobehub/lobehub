@@ -42,8 +42,8 @@ vi.mock('electron', () => {
   };
 });
 
-// Mock electron-is
-vi.mock('electron-is', () => ({
+// Mock platform detection
+vi.mock('@/utils/platform', () => ({
   linux: vi.fn(() => false),
   macOS: vi.fn(() => false),
   windows: vi.fn(() => false),
@@ -108,7 +108,7 @@ describe('NotificationCtr', () => {
     });
 
     it('should set app user model ID on Windows', async () => {
-      const { windows } = await import('electron-is');
+      const { windows } = await import('@/utils/platform');
       const { app, Notification } = await import('electron');
       vi.mocked(windows).mockReturnValue(true);
       vi.mocked(Notification.isSupported).mockReturnValue(true);
@@ -121,7 +121,7 @@ describe('NotificationCtr', () => {
     });
 
     it('should handle macOS platform', async () => {
-      const { macOS } = await import('electron-is');
+      const { macOS } = await import('@/utils/platform');
       const { Notification } = await import('electron');
       vi.mocked(macOS).mockReturnValue(true);
       vi.mocked(Notification.isSupported).mockReturnValue(true);
@@ -206,7 +206,7 @@ describe('NotificationCtr', () => {
     });
 
     it('should use low urgency on Linux to prevent GNOME Shell freeze', async () => {
-      const { linux } = await import('electron-is');
+      const { linux } = await import('@/utils/platform');
       const { Notification } = await import('electron');
       vi.mocked(linux).mockReturnValue(true);
       vi.mocked(Notification.isSupported).mockReturnValue(true);
@@ -293,7 +293,7 @@ describe('NotificationCtr', () => {
 
     it('should bounce dock on macOS when attention is requested', async () => {
       const { app, Notification } = await import('electron');
-      const { macOS } = await import('electron-is');
+      const { macOS } = await import('@/utils/platform');
       vi.mocked(macOS).mockReturnValue(true);
       vi.mocked(Notification.isSupported).mockReturnValue(true);
       mockBrowserWindow.isVisible.mockReturnValue(false);

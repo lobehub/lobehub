@@ -424,5 +424,12 @@ export interface AiProviderRuntimeState {
   hiddenBuiltinModels?: BuiltinModelIdentifier[];
   /** False when the server could not resolve the current user's hidden-model policy. */
   hiddenBuiltinModelsResolved?: boolean;
+  /**
+   * Retired `${providerId}/${modelId}` → successor model id (same provider).
+   * Requests for a key are transparently served by its successor, so clients can
+   * render "superseded by X" instead of "removed". Keys are provider-scoped so a
+   * same-named model under an unrelated provider is never treated as redirected.
+   */
+  modelRedirects?: Record<string, string>;
   runtimeConfig: Record<string, AiProviderRuntimeConfig>;
 }

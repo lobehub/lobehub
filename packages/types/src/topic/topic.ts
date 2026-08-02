@@ -6,6 +6,7 @@ import type { WorkingDirConfig } from '../device';
 import { workingDirConfigSchema } from '../device';
 import type { BaseDataModel } from '../meta';
 import type { OnboardingUnderstandingSession } from '../understanding';
+import type { OnboardingTaskRecommendationSession } from '../user/onboardingTasks';
 
 // Type definitions
 export type ShareVisibility = 'private' | 'link';
@@ -103,6 +104,7 @@ export interface OnboardingSessionSnapshot {
   lastActiveAt: string;
   phase: 'agent_identity' | 'user_identity' | 'discovery' | 'summary';
   startedAt: string;
+  taskRecommendations?: OnboardingTaskRecommendationSession;
   understanding?: OnboardingUnderstandingSession;
   userIdentityCompletedAt?: string;
   version: number;
@@ -498,7 +500,7 @@ export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
    * (server `topicActivityAt`), falling back to `updatedAt`. Kept separate from
    * `updatedAt` so the client sort matches the server ORDER BY (no list jumping)
    * while `updatedAt` still reflects real row edits like rename/favorite.
-   * (LOBE-11543)
+   *
    */
   sortUpdatedAt?: number;
   status?: ChatTopicStatus | null;

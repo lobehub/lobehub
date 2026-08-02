@@ -43,9 +43,9 @@ export class ConnectorActionImpl {
 
   /**
    * Fetch every agent-owned connector across all agents (the flat aggregate for
-   * the unified connector-settings page, LOBE-11682). Each row is enriched
+   * the unified connector-settings page). Each row is enriched
    * server-side with the owning agent's title/avatar. Scope-correct: a workspace
-   * context only returns that workspace's agent connectors (LOBE-11681).
+   * context only returns that workspace's agent connectors.
    */
   fetchAgentBoundConnectors = async (): Promise<void> => {
     const data = await lambdaClient.connector.listAgentBound.query();

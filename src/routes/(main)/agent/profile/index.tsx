@@ -21,6 +21,7 @@ import ProfileEditor from './features/ProfileEditor';
 import ProfileHydration from './features/ProfileHydration';
 import ProfileProvider from './features/ProfileProvider';
 import { selectors as profileSelectors, useProfileStore } from './features/store';
+import { useClickToFocusEditor } from './features/useClickToFocusEditor';
 
 const styles = StyleSheet.create({
   contentWrapper: {
@@ -44,6 +45,7 @@ const ProfileArea = memo(() => {
   const configError = useAgentStore(agentSelectors.currentAgentConfigError);
   const retryAgentConfigFetch = useAgentStore((s) => s.retryAgentConfigFetch);
   const { allowed: canEdit } = usePermission('edit_own_content');
+  const handleContentClick = useClickToFocusEditor(editor, canEdit);
 
   return (
     <>
@@ -69,14 +71,7 @@ const ProfileArea = memo(() => {
             height={'100%'}
             style={{ ...styles.contentWrapper, cursor: canEdit ? 'text' : 'default' }}
             width={'100%'}
-            onClick={(e) => {
-              if (!canEdit) return;
-              // Only focus editor for clicks within this DOM element,
-              // not from React portal (e.g. Modal) whose DOM is outside this tree
-              if (e.currentTarget.contains(e.target as Node)) {
-                editor?.focus();
-              }
-            }}
+            onClick={handleContentClick}
           >
             <WideScreenContainer>
               <ProfileEditor />

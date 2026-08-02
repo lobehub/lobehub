@@ -9,8 +9,8 @@ import {
   Text,
   usePopoverContext,
 } from '@lobehub/ui';
-import { Button, confirmModal, Select } from '@lobehub/ui/base-ui';
-import { App, Divider } from 'antd';
+import { Button, confirmModal, Select, toast } from '@lobehub/ui/base-ui';
+import { Divider } from 'antd';
 import {
   FileOutputIcon,
   ImageIcon,
@@ -52,7 +52,7 @@ interface SharePopoverContentProps {
 
 const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal, topicId }) => {
   const { t } = useTranslation('chat');
-  const { message } = App.useApp();
+
   const [updating, setUpdating] = useState(false);
   const { close } = usePopoverContext();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -97,17 +97,17 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal, topic
         // Auto-copy the share link the moment link sharing is enabled
         if (visibility === 'link' && shareUrl) {
           await copyToClipboard(shareUrl);
-          message.success(t('shareModal.copyLinkSuccess'));
+          toast.success(t('shareModal.copyLinkSuccess'));
         } else {
-          message.success(t('shareModal.link.visibilityUpdated'));
+          toast.success(t('shareModal.link.visibilityUpdated'));
         }
       } catch {
-        message.error(t('shareModal.link.updateError'));
+        toast.error(t('shareModal.link.updateError'));
       } finally {
         setUpdating(false);
       }
     },
-    [activeTopicId, mutate, message, t, shareUrl],
+    [activeTopicId, mutate, t, shareUrl],
   );
 
   const handleVisibilityChange = useCallback(
@@ -162,8 +162,8 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal, topic
   const handleCopyLink = useCallback(async () => {
     if (!shareUrl) return;
     await copyToClipboard(shareUrl);
-    message.success(t('shareModal.copyLinkSuccess'));
-  }, [shareUrl, message, t]);
+    toast.success(t('shareModal.copyLinkSuccess'));
+  }, [shareUrl, t]);
 
   const handleOpenModal = useCallback(() => {
     close();

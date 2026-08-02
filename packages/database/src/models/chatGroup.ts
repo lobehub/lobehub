@@ -38,7 +38,7 @@ export class ChatGroupModel {
    * (the junction row) does not grant access to the agent: when a member agent
    * is switched back to private by its owner, every roster read must drop it
    * for other members — otherwise the join would keep leaking the agent's
-   * config/meta through group surfaces (LOBE-11772).
+   * config/meta through group surfaces.
    */
   private memberAgentVisibility = () =>
     buildWorkspaceWhere(

@@ -1,4 +1,4 @@
-import { App } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
 import { Undo2 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,7 +23,7 @@ export const restoreToInputAction = defineAction({
   key: 'restoreToInput',
   useBuild: (ctx) => {
     const { t } = useTranslation('common');
-    const { message } = App.useApp();
+
     const editor = useConversationStore((s) => s.editor);
     const updateInputMessage = useConversationStore((s) => s.updateInputMessage);
 
@@ -99,12 +99,12 @@ export const restoreToInputAction = defineAction({
           }
 
           editor.focus();
-          message.success(t('restoreToInputSuccess'));
+          toast.success(t('restoreToInputSuccess'));
         },
         icon: Undo2,
         key: 'restoreToInput',
         label: t('restoreToInput'),
       };
-    }, [t, message, ctx.role, ctx.data, editor, updateInputMessage]);
+    }, [t, ctx.role, ctx.data, editor, updateInputMessage]);
   },
 });

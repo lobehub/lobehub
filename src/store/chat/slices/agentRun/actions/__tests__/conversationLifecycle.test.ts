@@ -2037,6 +2037,81 @@ describe('ConversationLifecycle actions', () => {
         );
       });
 
+      it('should clear isNew on the runtime operation after a new thread is persisted', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const topicId = 'topic-existing';
+        const createdThreadId = 'thread-created';
+        const draftContext = {
+          agentId: TEST_IDS.SESSION_ID,
+          isNew: true,
+          scope: 'thread' as const,
+          sourceMessageId: 'source-message',
+          threadId: null,
+          threadType: 'continuation' as const,
+          topicId,
+        };
+        const userMessage = createMockMessage({
+          id: TEST_IDS.USER_MESSAGE_ID,
+          role: 'user',
+        });
+        const assistantMessage = createMockMessage({
+          id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          role: 'assistant',
+        });
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          createdThreadId,
+          messages: [userMessage, assistantMessage],
+          topicId,
+          topics: [],
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+        useChatStore.setState({
+          executeClientAgent: vi.fn(async ({ context, parentMessageId, parentOperationId }) => {
+            useChatStore.getState().startOperation({
+              context: { ...context, messageId: parentMessageId },
+              parentOperationId,
+              type: 'execAgentRuntime',
+            });
+          }),
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: draftContext,
+            message: 'create thread and keep streaming',
+          });
+        });
+
+        const runtimeOperation = Object.values(result.current.operations).find(
+          (operation) => operation.type === 'execAgentRuntime',
+        );
+        expect(runtimeOperation?.context).toEqual(
+          expect.objectContaining({
+            agentId: TEST_IDS.SESSION_ID,
+            isNew: false,
+            scope: 'thread',
+            threadId: createdThreadId,
+            topicId,
+          }),
+        );
+
+        act(() => {
+          const cancelled = result.current.cancelOperations({
+            agentId: TEST_IDS.SESSION_ID,
+            isNew: false,
+            scope: 'thread',
+            status: 'running',
+            threadId: createdThreadId,
+            topicId,
+            type: 'execAgentRuntime',
+          });
+          expect(cancelled).toEqual([runtimeOperation!.id]);
+        });
+        expect(result.current.operations[runtimeOperation!.id].status).toBe('cancelled');
+      });
+
       it('should recover heterogeneous context selections from the persisted user message metadata', async () => {
         mockConstEnv.isDesktop = true;
         setupMockSelectors({

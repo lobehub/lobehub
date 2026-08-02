@@ -178,6 +178,18 @@ describe('HomeInputActionImpl', () => {
   });
 
   describe('sendAsAgent', () => {
+    // Regression: the Private sidebar create entries pass `visibility: 'private'`;
+    // dropping it here published the new agent to the whole workspace.
+    it('forwards visibility to the agent creation request', async () => {
+      const action = createAction();
+
+      await action.sendAsAgent({ message: 'build a support agent', visibility: 'private' });
+
+      expect(createAgentMock).toHaveBeenCalledWith(
+        expect.objectContaining({ visibility: 'private' }),
+      );
+    });
+
     it('opens the agent builder panel without touching the generic right panel', async () => {
       const action = createAction();
 
@@ -228,7 +240,7 @@ describe('HomeInputActionImpl', () => {
       );
     });
 
-    // LOBE-12374: a personal builtin is the user's own row, so it keeps following
+    // a personal builtin is the user's own row, so it keeps following
     // the inbox model; the workspace-scoped row of the same slug is shared by
     // every member and must never be repointed.
     it('keeps syncing model/provider onto a personal agent builder', async () => {
@@ -287,6 +299,18 @@ describe('HomeInputActionImpl', () => {
   });
 
   describe('sendAsGroup', () => {
+    // Regression: the Private sidebar create entries pass `visibility: 'private'`;
+    // dropping it here published the new group to the whole workspace.
+    it('forwards visibility to the group creation request', async () => {
+      const action = createAction();
+
+      await action.sendAsGroup({ message: 'build a research group', visibility: 'private' });
+
+      expect(createGroupMock).toHaveBeenCalledWith(
+        expect.objectContaining({ visibility: 'private' }),
+      );
+    });
+
     it('opens the existing group agent builder panel for prompt-based group creation', async () => {
       const action = createAction();
 

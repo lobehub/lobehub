@@ -30,7 +30,7 @@ const createServerVariableGenerators = (params: {
     // resolves) and overrides this through the spread order below. Without this
     // fallback, a device-run whose cwd can't be resolved (e.g. a web-originated
     // session with no bound directory) leaves `{{workingDirectory}}` unmatched and
-    // leaks the literal into the local-system system prompt (LOBE-11473).
+    // leaks the literal into the local-system system prompt.
     workingDirectory: () => '(not specified, use user Home directory as default)',
     // Same leak-guard as workingDirectory: the real value arrives via
     // `additionalVariables` (deviceSystemInfo.defaultShell) and overrides this.

@@ -16,7 +16,7 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { openDocumentModal } from '@/features/DocumentModal/loader';
-import Time from '@/routes/(main)/home/features/components/Time';
+import Time from '@/features/Home/components/Time';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 

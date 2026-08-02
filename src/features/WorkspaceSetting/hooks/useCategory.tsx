@@ -9,6 +9,7 @@ import {
   Coins,
   CreditCard,
   Database,
+  HandCoins,
   KeyIcon,
   KeyRound,
   Map,
@@ -107,6 +108,13 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Credits,
               label: tSubscription('tab.credits'),
             },
+            // Spend governance (budget pools + member caps) — admin task,
+            // same visibility gate as the other money pages.
+            canViewBilling && {
+              icon: HandCoins,
+              key: WorkspaceSettingsTabs.Budget,
+              label: tSubscription('tab.budget'),
+            },
             canViewBilling && {
               icon: CreditCard,
               key: WorkspaceSettingsTabs.Billing,
@@ -119,7 +127,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
         {
           items: [
             // AI provider config (keys/endpoints) is shared workspace infra —
-            // Admin-or-higher, hidden from members entirely (LOBE-11834).
+            // Admin-or-higher, hidden from members entirely.
             canManageWorkspace && {
               icon: Brain,
               key: WorkspaceSettingsTabs.Provider,

@@ -246,19 +246,63 @@ export const convertOpenAIResponseInputs = async (
     messages.map(async (message) => {
       const items: OpenAI.Responses.ResponseInputItem[] = [];
       const reasoning = message.reasoning;
-      const encryptedContent = resolveScopedSignature(
-        reasoning?.signature,
-        options?.reasoningSignatureScope,
-        'reasoning',
-      );
 
-      // Preserve encrypted reasoning state for stateless Responses API requests.
-      if (reasoning?.content || encryptedContent) {
-        items.push({
-          encrypted_content: encryptedContent,
-          summary: reasoning?.content ? [{ text: reasoning.content, type: 'summary_text' }] : [],
-          type: 'reasoning',
-        } as OpenAI.Responses.ResponseReasoningItem);
+      /**
+       * Resolve persisted Responses reasoning items for stateless replay. Encrypted
+       * items must all match the current signature scope — a single foreign-scope item
+       * would make OpenAI reject the whole request, so fail closed to the legacy path.
+       */
+      const resolveResponseItems = (): OpenAI.Responses.ResponseReasoningItem[] | undefined => {
+        const responseItems = reasoning?.responseItems;
+        if (!responseItems?.length) return undefined;
+
+        const resolved: OpenAI.Responses.ResponseReasoningItem[] = [];
+        for (const item of responseItems) {
+          if (item.encrypted_content) {
+            const encryptedContent = resolveScopedSignature(
+              item.encrypted_content,
+              options?.reasoningSignatureScope,
+              'reasoning',
+            );
+            if (!encryptedContent) return undefined;
+
+            resolved.push({
+              ...item,
+              encrypted_content: encryptedContent,
+            } as OpenAI.Responses.ResponseReasoningItem);
+          } else {
+            /**
+             * Without encrypted content the server cannot look the item up by id in a
+             * stateless request, so drop the id and replay the visible summary only.
+             */
+            const { id: _id, ...rest } = item;
+            resolved.push(rest as unknown as OpenAI.Responses.ResponseReasoningItem);
+          }
+        }
+
+        return resolved;
+      };
+
+      const replayableResponseItems = resolveResponseItems();
+
+      if (replayableResponseItems) {
+        // Replay complete reasoning items verbatim and in original stream order.
+        items.push(...replayableResponseItems);
+      } else {
+        const encryptedContent = resolveScopedSignature(
+          reasoning?.signature,
+          options?.reasoningSignatureScope,
+          'reasoning',
+        );
+
+        // Preserve encrypted reasoning state for stateless Responses API requests.
+        if (reasoning?.content || encryptedContent) {
+          items.push({
+            encrypted_content: encryptedContent,
+            summary: reasoning?.content ? [{ text: reasoning.content, type: 'summary_text' }] : [],
+            type: 'reasoning',
+          } as OpenAI.Responses.ResponseReasoningItem);
+        }
       }
 
       // if message is assistant messages with tool calls , transform it to function type item

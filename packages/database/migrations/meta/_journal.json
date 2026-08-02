@@ -938,6 +938,13 @@
       "when": 1785408828375,
       "tag": "0133_aico_public_ids_trial_budget",
       "breakpoints": true
+    },
+    {
+      "idx": 134,
+      "version": "7",
+      "when": 1785657510456,
+      "tag": "0134_agents_add_name_column",
+      "breakpoints": true
     }
   ],
   "version": "6"

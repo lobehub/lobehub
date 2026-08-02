@@ -10,7 +10,7 @@
   "table.columns.duration": "Czas trwania",
   "table.columns.model": "Model",
   "table.columns.spend": "Kredyty",
-  "table.columns.startTime": "Utworzono",
+  "table.columns.time": "Czas",
   "table.columns.totalTokens": "Zużycie tokenów",
   "table.columns.trigger.enums.agent_signal": "Sygnał agenta",
   "table.columns.trigger.enums.api": "Wywołanie API",
@@ -43,6 +43,10 @@
   "table.filters.reset": "Resetuj",
   "table.filters.searchModel": "Szukaj modelu",
   "table.filters.startDate": "Data rozpoczęcia",
+  "table.pagination.next": "Następna strona",
+  "table.pagination.perPage": "{{size}} / strona",
+  "table.pagination.prev": "Poprzednia strona",
+  "table.pagination.range": "{{from}}-{{to}} z {{total}} elementów",
   "table.title": "Szczegóły wykorzystania kredytów obliczeniowych",
   "table.totalToken.input": "Wejście",
   "table.totalToken.output": "Wyjście",
@@ -66,8 +70,8 @@
   "usageStats.chart.title": "Kiedy ten agent wydawał",
   "usageStats.chart.tokens": "Token",
   "usageStats.dimension": "Wymiar",
-  "usageStats.entry": "Użycie i koszt",
+  "usageStats.entry": "Statystyki",
   "usageStats.range": "Zakres czasu",
   "usageStats.rangeSuffix": "Ostatnie {{count}} dni",
-  "usageStats.title": "Użycie i koszt"
+  "usageStats.title": "Statystyki"
 }

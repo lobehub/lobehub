@@ -3,7 +3,7 @@
 import type { DropdownItem } from '@lobehub/ui';
 import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { confirmModal, type ModalInstance } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
 import {
   Clock3Icon,
   Copy,
@@ -67,7 +67,7 @@ const TopicInfoHeader = ({ authorName, title, updatedAtLabel }: TopicInfoHeaderP
 
 export const useMenu = (): { menuHeader?: ReactNode; menuItems: () => DropdownItem[] } => {
   const { t } = useTranslation(['chat', 'topic', 'common', 'file']);
-  const { message } = App.useApp();
+
   const { pathname } = useLocation();
 
   const [wideScreen, toggleWideScreen] = useGlobalStore((s) => [
@@ -106,7 +106,7 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: () => DropdownIt
 
       const { editor, markDirty, performSave } = useDocumentStore.getState();
       if (!editor) {
-        message.error(t('pageEditor.history.restoreError', { ns: 'file' }));
+        toast.error(t('pageEditor.history.restoreError', { ns: 'file' }));
         return;
       }
 
@@ -133,14 +133,14 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: () => DropdownIt
             onSuccess?.();
           } catch (error) {
             console.error('[HeaderActions] Failed to restore history item:', error);
-            message.error(t('pageEditor.history.restoreError', { ns: 'file' }));
+            toast.error(t('pageEditor.history.restoreError', { ns: 'file' }));
             throw error;
           }
         },
         title: t('pageEditor.history.restoreConfirm.title', { ns: 'file' }),
       });
     },
-    [docId, message, t],
+    [docId, t],
   );
 
   const openCompareModal = useCallback(async (): Promise<void> => {
@@ -155,7 +155,7 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: () => DropdownIt
       const items = result.items ?? [];
 
       if (items.length === 0) {
-        message.info(t('pageEditor.history.empty', { ns: 'file' }));
+        toast.info(t('pageEditor.history.empty', { ns: 'file' }));
         return;
       }
 
@@ -174,9 +174,9 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: () => DropdownIt
       compareInstanceRef.current = instance;
     } catch (error) {
       console.error('[HeaderActions] Failed to open document compare modal:', error);
-      message.error(t('pageEditor.history.compareError', { ns: 'file' }));
+      toast.error(t('pageEditor.history.compareError', { ns: 'file' }));
     }
-  }, [docId, handleRestoreHistory, message, saveSourceLabels, t]);
+  }, [docId, handleRestoreHistory, saveSourceLabels, t]);
 
   const authorInfo = useAuthorInfo(activeTopic?.userId);
 
@@ -256,7 +256,7 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: () => DropdownIt
           label: t('actions.copyWorkingDirectory', { ns: 'topic' }),
           onClick: () => {
             void navigator.clipboard.writeText(workingDirectory);
-            message.success(t('actions.copyWorkingDirectorySuccess', { ns: 'topic' }));
+            toast.success(t('actions.copyWorkingDirectorySuccess', { ns: 'topic' }));
           },
         });
       }
@@ -279,7 +279,7 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: () => DropdownIt
           label: t('actions.copySessionId', { ns: 'topic' }),
           onClick: () => {
             void navigator.clipboard.writeText(topicId);
-            message.success(t('actions.copySessionIdSuccess', { ns: 'topic' }));
+            toast.success(t('actions.copySessionIdSuccess', { ns: 'topic' }));
           },
         },
         { type: 'divider' as const },
@@ -347,7 +347,6 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: () => DropdownIt
     toggleWideScreen,
     openCompareModal,
     t,
-    message,
   ]);
 
   return { menuHeader, menuItems };

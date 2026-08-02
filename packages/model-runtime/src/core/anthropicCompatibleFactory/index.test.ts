@@ -213,6 +213,52 @@ describe('createAnthropicCompatibleRuntime', () => {
     expect(createClient.mock.calls[0][0]).not.toHaveProperty('modelIdMapping');
   });
 
+  it('should strip trailing assistant prefill when a logical id maps to a Claude 5 model', async () => {
+    // The prefill strip inside handlePayload sees the logical id; when the
+    // mapping only later resolves to a Claude 4.6+/5 upstream id, chat() must
+    // re-strip against the model actually sent (LOBE-12572).
+    const messagesCreate = vi.fn().mockResolvedValue({ content: [] });
+    const Runtime = createAnthropicCompatibleRuntime({
+      chatCompletion: {
+        handlePayload: (payload) => ({
+          max_tokens: 1024,
+          messages: [
+            { content: 'hi', role: 'user' },
+            { content: '...', role: 'assistant' },
+          ],
+          model: payload.model,
+        }),
+      },
+      customClient: {
+        createClient: () =>
+          ({
+            baseURL: 'https://aihubmix.com',
+            messages: { create: messagesCreate },
+          }) as unknown as Anthropic,
+      },
+      provider: 'test-provider',
+    });
+    const runtime = new Runtime({
+      apiKey: 'test-key',
+      modelIdMapping: { 'logical-model': 'claude-opus-5' },
+    });
+
+    await runtime.chat({
+      messages: [{ content: 'hi', role: 'user' }],
+      model: 'logical-model',
+      responseMode: 'json',
+      stream: false,
+    } as any);
+
+    expect(messagesCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messages: [{ content: 'hi', role: 'user' }],
+        model: 'claude-opus-5',
+      }),
+      expect.anything(),
+    );
+  });
+
   it('should keep logical model for generateObject and pass mapped id as request config', async () => {
     const generateObject = vi.fn().mockResolvedValue({ ok: true });
     const Runtime = createAnthropicCompatibleRuntime({

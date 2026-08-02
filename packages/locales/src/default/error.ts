@@ -271,6 +271,7 @@ export default {
     "Please check your network connection and ensure that the file storage service's cross-origin configuration is correct.",
   'upload.storageBlock.billingUnavailable':
     'Your subscription billing status cannot be verified. Please try again later or update your billing details.',
+  'upload.storageBlock.cleanupFiles': 'Free up space',
   'upload.storageBlock.monthlyCapReached': 'Your monthly storage spending cap has been reached.',
   'upload.storageBlock.noPaymentMethod': 'Please add a payment method to continue uploading.',
   'upload.storageBlock.viewUsage': 'View storage usage',

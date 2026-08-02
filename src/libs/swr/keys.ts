@@ -232,6 +232,12 @@ export const recentKeys = {
     limit,
     scope,
   ]),
+  /** Home chat-only list; filtering happens before the server-side limit. */
+  topicList: def('recent:topicList', (limit: number, scope: string) => [
+    'recent:topicList',
+    limit,
+    scope,
+  ]),
 };
 
 // ---- task ---------------------------------------------------------------
@@ -809,7 +815,11 @@ export const messengerKeys = {
     tokenScopeKey,
   ]),
   peek: def('messenger:peek', (randomId: string) => ['messenger:peek', randomId]),
-  pushWindow: def('messenger:pushWindow', (platform: string) => ['messenger:pushWindow', platform]),
+  pushWindow: def('messenger:pushWindow', (platform: string, tenantId?: string) => [
+    'messenger:pushWindow',
+    platform,
+    tenantId ?? null,
+  ]),
 };
 
 // ---- verify (deliverable judging) ---------------------------------------

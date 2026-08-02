@@ -1,4 +1,5 @@
-import { and, eq, inArray, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, ne, type SQL, sql, type SQLWrapper } from 'drizzle-orm';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import {
   agents,
@@ -198,6 +199,91 @@ export interface SearchOptions {
 const RECENCY_CANDIDATE_MULTIPLIER = 4;
 
 /**
+ * Every query here is shaped as "inner single-table BM25 scan → outer enrichment",
+ * because ParadeDB only picks its TopN custom scan (`TopNScanExecState`, which
+ * visits a handful of heap rows) when the scan node itself carries the whole
+ * `ORDER BY paradedb.score() LIMIT n`. Two things break that:
+ *
+ * 1. A qual over a column that is not in the BM25 index — `workspace_id` is the
+ *    one that matters here. The plan degrades to a plain index scan that scores
+ *    and sorts the *entire* match set — on an account with a long message
+ *    history that turns a sub-second query into a multi-minute one, fetching
+ *    tens of thousands of heap rows instead of 10.
+ * 2. A JOIN sitting between the scan and the `ORDER BY … LIMIT` — that alone
+ *    downgrades messages/topics/files to `NormalScanExecState` even without any
+ *    workspace qual.
+ *
+ * So joins always live outside the scan, and the ownership predicate is split by
+ * `liftsWorkspaceFilter` below.
+ *
+ * On top of the plan degradation, production pg_search (0.15.26) has a scoring
+ * defect that makes any non-indexed qual inside the scan strictly worse than
+ * slow: `paradedb.score()` returns NULL for *every* row of the statement
+ * (fixed in v0.17.0, see neondatabase/neon#12853). `ORDER BY score DESC` over
+ * an all-NULL column is an arbitrary order, and `mapScoresToRelevance` maps it
+ * to a flat relevance of 3. So a non-indexed qual inside the scan does not
+ * merely cost TopN — it silently breaks ranking. That is why no such qual is
+ * ever allowed back inside, and why falling back to the inline-exact query is
+ * not an option: the "exact" query is the broken one.
+ *
+ * `agent_id` is not a BM25 field either, so the agent-scoped variants of
+ * `searchMessages` / `searchTopics` (the command menu passes the active agent)
+ * lift it above the scan the same way, over-fetching through a dedicated
+ * candidate pool (`AGENT_SCOPE_CANDIDATE_POOL`) — but only while the scan's
+ * score ordering is real (see `liftsAgentFilter`): trading the exact inline
+ * predicate for a score-ordered pool is unsound when the scores backing that
+ * order are NULL. Indexing the column instead is tracked with the other
+ * missing fast fields in LOBE-12381.
+ *
+ * @see https://linear.app/lobehub/issue/LOBE-12379
+ * @see https://linear.app/lobehub/issue/LOBE-12575
+ */
+const WORKSPACE_FILTER_CANDIDATE_MULTIPLIER = 5;
+
+/**
+ * Candidate pool for the inner scan when the agent filter is lifted above it.
+ *
+ * `agent_id` is far more selective than the ownership predicate — a single
+ * agent can hold well under 1% of an account's matches — so the pool has to be
+ * much deeper than the workspace one for small agents to survive the cut. The
+ * agent-scoped caller needs ≥ 24 rows to fill its per-type limit (limit 6 ×
+ * `RECENCY_CANDIDATE_MULTIPLIER`); measured on a 60k-match account, a pool of
+ * 20k keeps ~50 rows for an agent holding 0.32% of matches, while the TopN
+ * scan's cost stays nearly flat as the pool grows (6ms at 500 → 11ms at 20k).
+ */
+const AGENT_SCOPE_CANDIDATE_POOL = 20_000;
+
+/**
+ * Floor for the personal-mode candidate pool. Rows dropped by the lifted
+ * `workspace_id IS NULL` check eat into the per-type limit, so an account with
+ * many workspace rows could otherwise come up short — with a pool of 60 an
+ * adversarial mix (5k high-scoring workspace rows vs 20 low-scoring personal
+ * ones) returned 0 of 12 rows.
+ *
+ * A generous pool is what makes that a non-issue, and it is measurably free:
+ * once the scan is TopN, the pool size barely registers (same dataset, full
+ * payload: 60 rows → 0.53s, 1000 → 0.46s, 2000 → 0.46s). The tantivy scan
+ * dominates; the extra heap fetches do not.
+ */
+const WORKSPACE_FILTER_MIN_CANDIDATES = 500;
+
+/**
+ * Flip to `true` once every BM25 index used by this repo carries `workspace_id`
+ * as a fast keyword field (LOBE-12381). pg_search then pushes `workspace_id IS
+ * NULL` down as `must_not: exists(workspace_id)` and `workspace_id = ?` as a
+ * `term`, so the ownership predicate can stay inline and personal search becomes
+ * exact again (no candidate over-fetch, no dropped rows) while workspace-mode
+ * search gets TopN for free.
+ */
+const WORKSPACE_ID_IN_BM25_INDEX = false;
+
+interface WorkspaceScopedColumns {
+  userId: AnyPgColumn;
+  visibility?: AnyPgColumn;
+  workspaceId: AnyPgColumn;
+}
+
+/**
  * Search Repository - provides unified search across Agents, Topics, and Files
  */
 export class SearchRepo {
@@ -213,6 +299,63 @@ export class SearchRepo {
 
   private get scope() {
     return { userId: this.userId, workspaceId: this.workspaceId };
+  }
+
+  /**
+   * Whether the `workspace_id IS NULL` half of the personal-mode ownership
+   * predicate has to be evaluated above the BM25 scan.
+   *
+   * Only personal mode gets this treatment: it still keeps `user_id = ?` inside
+   * the scan (a fast field, so ParadeDB pushes it down), which bounds the
+   * candidate pool to the caller's own rows and makes over-fetching a sound
+   * approximation. Workspace mode has no such pushdown-able owner column — its
+   * rows are a tiny slice of a global TopN — so lifting the filter there would
+   * silently return nothing. It keeps the exact inline predicate and stays on
+   * the slow plan until LOBE-12381 lands.
+   */
+  private get liftsWorkspaceFilter() {
+    return !WORKSPACE_ID_IN_BM25_INDEX && !this.workspaceId;
+  }
+
+  /**
+   * Whether the agent filter can be lifted above the BM25 scan.
+   *
+   * Lifting swaps the exact inline predicate for a score-ordered candidate
+   * pool, which is only sound while the scan's `ORDER BY paradedb.score()` is
+   * real. Personal mode qualifies: its scan keeps only pushdown-able quals, so
+   * scores are valid and the pool is genuinely the top-N matches. Workspace
+   * mode does not (until LOBE-12381 makes `workspace_id` a fast field): its
+   * inline `workspace_id` qual NULLs the whole score column on pg_search
+   * 0.15.26, so a pool cut on that ordering would be an arbitrary slice that
+   * silently drops agent rows. It keeps `agent_id` inline next to
+   * `workspace_id` instead — exact, on the already-degraded plan.
+   */
+  private get liftsAgentFilter() {
+    return WORKSPACE_ID_IN_BM25_INDEX || !this.workspaceId;
+  }
+
+  /** Ownership predicate that is safe to keep inside the BM25 scan. */
+  private scanScopeWhere(cols: WorkspaceScopedColumns): SQL {
+    if (!this.liftsWorkspaceFilter) return buildWorkspaceWhere(this.scope, cols);
+
+    return eq(cols.userId, this.userId) as SQL;
+  }
+
+  /** Remainder of the ownership predicate, applied above the BM25 scan. */
+  private liftedScopeWhere(workspaceIdColumn: SQLWrapper): SQL | undefined {
+    return this.liftsWorkspaceFilter ? (isNull(workspaceIdColumn) as SQL) : undefined;
+  }
+
+  /**
+   * Candidate pool for the inner scan. When the workspace filter is lifted, rows
+   * dropped above the scan would otherwise shrink the result set, so over-fetch.
+   * Personal search stays exact unless more than `WORKSPACE_FILTER_MIN_CANDIDATES`
+   * of the account's workspace rows outscore its personal matches.
+   */
+  private scanCandidateLimit(limit: number) {
+    if (!this.liftsWorkspaceFilter) return limit;
+
+    return Math.max(limit * WORKSPACE_FILTER_CANDIDATE_MULTIPLIER, WORKSPACE_FILTER_MIN_CANDIDATES);
   }
 
   /**
@@ -398,27 +541,47 @@ export class SearchRepo {
   private async searchAgents(query: string, limit: number): Promise<AgentSearchResult[]> {
     const bm25Query = sanitizeBm25Query(query);
 
-    const rows = await this.db
+    const hits = this.db
       .select({
         avatar: agents.avatar,
         backgroundColor: agents.backgroundColor,
         createdAt: agents.createdAt,
         description: agents.description,
         id: agents.id,
-        score: sql<number>`paradedb.score(${agents.id})`,
+        score: sql<number>`paradedb.score(${agents.id})`.as('score'),
         slug: agents.slug,
         tags: agents.tags,
         title: agents.title,
         updatedAt: agents.updatedAt,
+        workspaceId: agents.workspaceId,
       })
       .from(agents)
       .where(
         and(
-          buildWorkspaceWhere(this.scope, agents),
+          this.scanScopeWhere(agents),
           sql`(${agents.title} @@@ ${bm25Query} OR ${agents.description} @@@ ${bm25Query} OR ${agents.slug} @@@ ${bm25Query} OR ${agents.tags} @@@ ${bm25Query} OR ${agents.systemRole} @@@ ${bm25Query})`,
         ),
       )
       .orderBy(sql`paradedb.score(${agents.id}) DESC`)
+      .limit(this.scanCandidateLimit(limit))
+      .as('agent_hits');
+
+    const rows = await this.db
+      .select({
+        avatar: hits.avatar,
+        backgroundColor: hits.backgroundColor,
+        createdAt: hits.createdAt,
+        description: hits.description,
+        id: hits.id,
+        score: hits.score,
+        slug: hits.slug,
+        tags: hits.tags,
+        title: hits.title,
+        updatedAt: hits.updatedAt,
+      })
+      .from(hits)
+      .where(this.liftedScopeWhere(hits.workspaceId))
+      .orderBy(desc(hits.score))
       .limit(limit);
 
     return this.mapScoresToRelevance(rows).map((row) => {
@@ -453,6 +616,41 @@ export class SearchRepo {
   ): Promise<TopicSearchResult[]> {
     const bm25Query = sanitizeBm25Query(query);
 
+    const candidateLimit = limit * RECENCY_CANDIDATE_MULTIPLIER;
+
+    const hits = this.db
+      .select({
+        agentId: topics.agentId,
+        content: topics.content,
+        createdAt: topics.createdAt,
+        favorite: topics.favorite,
+        groupId: topics.groupId,
+        id: topics.id,
+        score: sql<number>`paradedb.score(${topics.id})`.as('score'),
+        sessionId: topics.sessionId,
+        title: topics.title,
+        updatedAt: topics.updatedAt,
+        workspaceId: topics.workspaceId,
+      })
+      .from(topics)
+      .where(
+        and(
+          this.scanScopeWhere(topics),
+          agentId && !this.liftsAgentFilter ? eq(topics.agentId, agentId) : undefined,
+          sql`(${topics.title} @@@ ${bm25Query} OR ${topics.content} @@@ ${bm25Query} OR ${topics.description} @@@ ${bm25Query})`,
+        ),
+      )
+      .orderBy(sql`paradedb.score(${topics.id}) DESC`)
+      // `agent_id` is not a BM25 field, so where the scan's score order is real
+      // its filter lives above the scan and the pool deepens to compensate. See
+      // the scan-shape invariant and `liftsAgentFilter` above.
+      .limit(
+        agentId && this.liftsAgentFilter
+          ? AGENT_SCOPE_CANDIDATE_POOL
+          : this.scanCandidateLimit(candidateLimit),
+      )
+      .as('topic_hits');
+
     const rows = await this.db
       .select({
         // agents.id is selected as a sentinel: non-null only when the JOIN
@@ -462,31 +660,30 @@ export class SearchRepo {
         // agent-less subtitle and never surfaces foreign metadata.
         agentAvatar: agents.avatar,
         agentBackgroundColor: agents.backgroundColor,
-        agentId: topics.agentId,
+        agentId: hits.agentId,
         agentMatchedId: agents.id,
         agentSlug: agents.slug,
         agentTitle: agents.title,
-        content: topics.content,
-        createdAt: topics.createdAt,
-        favorite: topics.favorite,
-        groupId: topics.groupId,
-        id: topics.id,
-        score: sql<number>`paradedb.score(${topics.id})`,
-        sessionId: topics.sessionId,
-        title: topics.title,
-        updatedAt: topics.updatedAt,
+        content: hits.content,
+        createdAt: hits.createdAt,
+        favorite: hits.favorite,
+        groupId: hits.groupId,
+        id: hits.id,
+        score: hits.score,
+        sessionId: hits.sessionId,
+        title: hits.title,
+        updatedAt: hits.updatedAt,
       })
-      .from(topics)
-      .leftJoin(agents, and(eq(topics.agentId, agents.id), buildWorkspaceWhere(this.scope, agents)))
+      .from(hits)
+      .leftJoin(agents, and(eq(hits.agentId, agents.id), buildWorkspaceWhere(this.scope, agents)))
       .where(
         and(
-          buildWorkspaceWhere(this.scope, topics),
-          agentId ? eq(topics.agentId, agentId) : undefined,
-          sql`(${topics.title} @@@ ${bm25Query} OR ${topics.content} @@@ ${bm25Query} OR ${topics.description} @@@ ${bm25Query})`,
+          this.liftedScopeWhere(hits.workspaceId),
+          agentId ? eq(hits.agentId, agentId) : undefined,
         ),
       )
-      .orderBy(sql`paradedb.score(${topics.id}) DESC`)
-      .limit(limit * RECENCY_CANDIDATE_MULTIPLIER);
+      .orderBy(desc(hits.score))
+      .limit(candidateLimit);
 
     return this.mapScoresToRelevance(rows)
       .map((row) => ({
@@ -528,33 +725,67 @@ export class SearchRepo {
   ): Promise<MessageSearchResult[]> {
     const bm25Query = sanitizeBm25Query(query);
 
-    const rows = await this.db
+    const candidateLimit = limit * RECENCY_CANDIDATE_MULTIPLIER;
+
+    const hits = this.db
       .select({
         agentId: messages.agentId,
-        agentSlug: agents.slug,
-        agentTitle: agents.title,
         content: messages.content,
         createdAt: messages.createdAt,
         groupId: messages.groupId,
         id: messages.id,
         model: messages.model,
         role: messages.role,
-        score: sql<number>`paradedb.score(${messages.id})`,
+        score: sql<number>`paradedb.score(${messages.id})`.as('score'),
         topicId: messages.topicId,
         updatedAt: messages.updatedAt,
+        workspaceId: messages.workspaceId,
       })
       .from(messages)
-      .leftJoin(agents, eq(messages.agentId, agents.id))
       .where(
         and(
-          buildWorkspaceWhere(this.scope, messages),
+          this.scanScopeWhere(messages),
           ne(messages.role, 'tool'),
-          agentId ? eq(messages.agentId, agentId) : undefined,
+          agentId && !this.liftsAgentFilter ? eq(messages.agentId, agentId) : undefined,
           sql`${messages.content} @@@ ${bm25Query}`,
         ),
       )
       .orderBy(sql`paradedb.score(${messages.id}) DESC`)
-      .limit(limit * RECENCY_CANDIDATE_MULTIPLIER);
+      // `agent_id` is not a BM25 field, so where the scan's score order is real
+      // its filter lives above the scan and the pool deepens to compensate. See
+      // the scan-shape invariant and `liftsAgentFilter` above.
+      .limit(
+        agentId && this.liftsAgentFilter
+          ? AGENT_SCOPE_CANDIDATE_POOL
+          : this.scanCandidateLimit(candidateLimit),
+      )
+      .as('message_hits');
+
+    const rows = await this.db
+      .select({
+        agentId: hits.agentId,
+        agentSlug: agents.slug,
+        agentTitle: agents.title,
+        content: hits.content,
+        createdAt: hits.createdAt,
+        groupId: hits.groupId,
+        id: hits.id,
+        model: hits.model,
+        role: hits.role,
+        score: hits.score,
+        topicId: hits.topicId,
+        updatedAt: hits.updatedAt,
+      })
+      .from(hits)
+      .leftJoin(agents, eq(hits.agentId, agents.id))
+      .where(
+        and(
+          this.liftedScopeWhere(hits.workspaceId),
+          agentId ? eq(hits.agentId, agentId) : undefined,
+        ),
+      )
+      .orderBy(desc(hits.score))
+      .limit(candidateLimit);
 
     return this.mapScoresToRelevance(rows)
       .map((row) => ({
@@ -587,30 +818,48 @@ export class SearchRepo {
   private async searchFiles(query: string, limit: number): Promise<FileSearchResult[]> {
     const bm25Query = sanitizeBm25Query(query);
 
-    const rows = await this.db
+    const hits = this.db
       .select({
-        content: documents.content,
         createdAt: files.createdAt,
         fileType: files.fileType,
         id: files.id,
-        knowledgeBaseId: knowledgeBaseFiles.knowledgeBaseId,
         name: files.name,
-        score: sql<number>`paradedb.score(${files.id})`,
+        score: sql<number>`paradedb.score(${files.id})`.as('score'),
         size: files.size,
         updatedAt: files.updatedAt,
         url: files.url,
+        workspaceId: files.workspaceId,
       })
       .from(files)
-      .leftJoin(documents, eq(files.id, documents.fileId))
-      .leftJoin(knowledgeBaseFiles, eq(files.id, knowledgeBaseFiles.fileId))
       .where(
         and(
-          buildWorkspaceWhere(this.scope, files),
+          this.scanScopeWhere(files),
           ne(files.fileType, 'custom/document'),
           sql`${files.name} @@@ ${bm25Query}`,
         ),
       )
       .orderBy(sql`paradedb.score(${files.id}) DESC`)
+      .limit(this.scanCandidateLimit(limit))
+      .as('file_hits');
+
+    const rows = await this.db
+      .select({
+        content: documents.content,
+        createdAt: hits.createdAt,
+        fileType: hits.fileType,
+        id: hits.id,
+        knowledgeBaseId: knowledgeBaseFiles.knowledgeBaseId,
+        name: hits.name,
+        score: hits.score,
+        size: hits.size,
+        updatedAt: hits.updatedAt,
+        url: hits.url,
+      })
+      .from(hits)
+      .leftJoin(documents, eq(hits.id, documents.fileId))
+      .leftJoin(knowledgeBaseFiles, eq(hits.id, knowledgeBaseFiles.fileId))
+      .where(this.liftedScopeWhere(hits.workspaceId))
+      .orderBy(desc(hits.score))
       .limit(limit);
 
     return this.mapScoresToRelevance(rows).map((row) => ({
@@ -635,27 +884,46 @@ export class SearchRepo {
   private async searchFolders(query: string, limit: number): Promise<FolderSearchResult[]> {
     const bm25Query = sanitizeBm25Query(query);
 
-    const rows = await this.db
+    const hits = this.db
       .select({
         createdAt: documents.createdAt,
         description: documents.description,
         filename: documents.filename,
         id: documents.id,
         knowledgeBaseId: documents.knowledgeBaseId,
-        score: sql<number>`paradedb.score(${documents.id})`,
+        score: sql<number>`paradedb.score(${documents.id})`.as('score'),
         slug: documents.slug,
         title: documents.title,
         updatedAt: documents.updatedAt,
+        workspaceId: documents.workspaceId,
       })
       .from(documents)
       .where(
         and(
-          buildWorkspaceWhere(this.scope, documents),
+          this.scanScopeWhere(documents),
           eq(documents.fileType, DOCUMENT_FOLDER_TYPE),
           sql`(${documents.title} @@@ ${bm25Query} OR ${documents.slug} @@@ ${bm25Query} OR ${documents.description} @@@ ${bm25Query})`,
         ),
       )
       .orderBy(sql`paradedb.score(${documents.id}) DESC`)
+      .limit(this.scanCandidateLimit(limit))
+      .as('folder_hits');
+
+    const rows = await this.db
+      .select({
+        createdAt: hits.createdAt,
+        description: hits.description,
+        filename: hits.filename,
+        id: hits.id,
+        knowledgeBaseId: hits.knowledgeBaseId,
+        score: hits.score,
+        slug: hits.slug,
+        title: hits.title,
+        updatedAt: hits.updatedAt,
+      })
+      .from(hits)
+      .where(this.liftedScopeWhere(hits.workspaceId))
+      .orderBy(desc(hits.score))
       .limit(limit);
 
     return this.mapScoresToRelevance(rows).map((row) => {
@@ -680,24 +948,40 @@ export class SearchRepo {
   private async searchPages(query: string, limit: number): Promise<PageSearchResult[]> {
     const bm25Query = sanitizeBm25Query(query);
 
-    const rows = await this.db
+    const hits = this.db
       .select({
         createdAt: documents.createdAt,
         filename: documents.filename,
         id: documents.id,
-        score: sql<number>`paradedb.score(${documents.id})`,
+        score: sql<number>`paradedb.score(${documents.id})`.as('score'),
         title: documents.title,
         updatedAt: documents.updatedAt,
+        workspaceId: documents.workspaceId,
       })
       .from(documents)
       .where(
         and(
-          buildWorkspaceWhere(this.scope, documents),
+          this.scanScopeWhere(documents),
           eq(documents.fileType, 'custom/document'),
           sql`(${documents.title} @@@ ${bm25Query} OR ${documents.slug} @@@ ${bm25Query} OR ${documents.content} @@@ ${bm25Query})`,
         ),
       )
       .orderBy(sql`paradedb.score(${documents.id}) DESC`)
+      .limit(this.scanCandidateLimit(limit))
+      .as('page_hits');
+
+    const rows = await this.db
+      .select({
+        createdAt: hits.createdAt,
+        filename: hits.filename,
+        id: hits.id,
+        score: hits.score,
+        title: hits.title,
+        updatedAt: hits.updatedAt,
+      })
+      .from(hits)
+      .where(this.liftedScopeWhere(hits.workspaceId))
+      .orderBy(desc(hits.score))
       .limit(limit);
 
     return this.mapScoresToRelevance(rows).map((row) => {
@@ -728,6 +1012,12 @@ export class SearchRepo {
    * spanning bm25 and non-bm25 predicates ("Unsupported query shape").
    *
    * Folder rows (DOCUMENT_FOLDER_TYPE) are excluded — they carry no content.
+   *
+   * Unlike the command-palette searches above, this one is deliberately left on
+   * the plain index-scan plan: `knowledge_base_id` is not in the BM25 index
+   * either, so isolating the scan would not buy TopN. The KB filter does bound
+   * the match set to one knowledge base (via its btree index), which keeps it
+   * workable until LOBE-12381 adds the missing fast fields.
    */
   async searchKnowledgeBaseDocuments(
     query: string,
@@ -817,6 +1107,10 @@ export class SearchRepo {
 
   /**
    * Search memories by title, summary, details (BM25)
+   *
+   * Memories are user-scoped only (no workspace column) and this query joins
+   * nothing, so `user_id` is pushed into the tantivy query as-is and the scan
+   * already runs as TopN — no subquery isolation needed.
    */
   private async searchMemories(query: string, limit: number): Promise<MemorySearchResult[]> {
     const bm25Query = sanitizeBm25Query(query);
@@ -859,25 +1153,43 @@ export class SearchRepo {
   private async searchChatGroups(query: string, limit: number): Promise<ChatGroupSearchResult[]> {
     const bm25Query = sanitizeBm25Query(query);
 
-    const rows = await this.db
+    const hits = this.db
       .select({
         avatar: chatGroups.avatar,
         backgroundColor: chatGroups.backgroundColor,
         createdAt: chatGroups.createdAt,
         description: chatGroups.description,
         id: chatGroups.id,
-        score: sql<number>`paradedb.score(${chatGroups.id})`,
+        score: sql<number>`paradedb.score(${chatGroups.id})`.as('score'),
         title: chatGroups.title,
         updatedAt: chatGroups.updatedAt,
+        workspaceId: chatGroups.workspaceId,
       })
       .from(chatGroups)
       .where(
         and(
-          buildWorkspaceWhere(this.scope, chatGroups),
+          this.scanScopeWhere(chatGroups),
           sql`(${chatGroups.title} @@@ ${bm25Query} OR ${chatGroups.description} @@@ ${bm25Query})`,
         ),
       )
       .orderBy(sql`paradedb.score(${chatGroups.id}) DESC`)
+      .limit(this.scanCandidateLimit(limit))
+      .as('chat_group_hits');
+
+    const rows = await this.db
+      .select({
+        avatar: hits.avatar,
+        backgroundColor: hits.backgroundColor,
+        createdAt: hits.createdAt,
+        description: hits.description,
+        id: hits.id,
+        score: hits.score,
+        title: hits.title,
+        updatedAt: hits.updatedAt,
+      })
+      .from(hits)
+      .where(this.liftedScopeWhere(hits.workspaceId))
+      .orderBy(desc(hits.score))
       .limit(limit);
 
     return this.mapScoresToRelevance(rows).map((row) => ({
@@ -902,24 +1214,41 @@ export class SearchRepo {
   ): Promise<KnowledgeBaseSearchResult[]> {
     const bm25Query = sanitizeBm25Query(query);
 
-    const rows = await this.db
+    const hits = this.db
       .select({
         avatar: knowledgeBases.avatar,
         createdAt: knowledgeBases.createdAt,
         description: knowledgeBases.description,
         id: knowledgeBases.id,
         name: knowledgeBases.name,
-        score: sql<number>`paradedb.score(${knowledgeBases.id})`,
+        score: sql<number>`paradedb.score(${knowledgeBases.id})`.as('score'),
         updatedAt: knowledgeBases.updatedAt,
+        workspaceId: knowledgeBases.workspaceId,
       })
       .from(knowledgeBases)
       .where(
         and(
-          buildWorkspaceWhere(this.scope, knowledgeBases),
+          this.scanScopeWhere(knowledgeBases),
           sql`(${knowledgeBases.name} @@@ ${bm25Query} OR ${knowledgeBases.description} @@@ ${bm25Query})`,
         ),
       )
       .orderBy(sql`paradedb.score(${knowledgeBases.id}) DESC`)
+      .limit(this.scanCandidateLimit(limit))
+      .as('knowledge_base_hits');
+
+    const rows = await this.db
+      .select({
+        avatar: hits.avatar,
+        createdAt: hits.createdAt,
+        description: hits.description,
+        id: hits.id,
+        name: hits.name,
+        score: hits.score,
+        updatedAt: hits.updatedAt,
+      })
+      .from(hits)
+      .where(this.liftedScopeWhere(hits.workspaceId))
+      .orderBy(desc(hits.score))
       .limit(limit);
 
     return this.mapScoresToRelevance(rows).map((row) => ({

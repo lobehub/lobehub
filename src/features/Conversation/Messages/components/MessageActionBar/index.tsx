@@ -47,6 +47,14 @@ const buildActionsMap = (items: MessageActionItemOrDivider[]): Map<string, Messa
   return map;
 };
 
+const isDivider = (item: MessageActionItemOrDivider) => 'type' in item && item.type === 'divider';
+
+/**
+ * Resolves slot keys against the built actions. Dividers are declarative
+ * group boundaries, not literal items: when the actions around one opt out
+ * (return null), leading/trailing/consecutive dividers are dropped so a
+ * conditionally hidden group never leaves a dangling separator.
+ */
 const resolveSlots = (
   slots: MessageActionSlot[],
   built: Record<string, MessageActionItem | null>,
@@ -54,12 +62,13 @@ const resolveSlots = (
   const out: MessageActionItemOrDivider[] = [];
   for (const slot of slots) {
     if (slot === DIVIDER_KEY) {
-      out.push(DIVIDER);
+      if (out.length > 0 && !isDivider(out.at(-1)!)) out.push(DIVIDER);
       continue;
     }
     const item = built[slot];
     if (item) out.push(item);
   }
+  while (out.length > 0 && isDivider(out.at(-1)!)) out.pop();
   return out;
 };
 
@@ -106,7 +115,12 @@ export const MessageActionBar = memo<MessageActionBarProps>(({ ctx, bar, leading
     () => barItems.filter((item) => !('disabled' in item && item.disabled)).map(stripHandleClick),
     [barItems],
   );
-  const menuStripped = useMemo(() => menuItems?.map(stripHandleClick), [menuItems]);
+  // An all-null menu (every slot's action opted out) must collapse to no menu —
+  // ActionIconGroup renders the overflow trigger for any truthy array, even [].
+  const menuStripped = useMemo(
+    () => (menuItems?.length ? menuItems.map(stripHandleClick) : undefined),
+    [menuItems],
+  );
 
   const allActions = useMemo(
     () => buildActionsMap([...barItems, ...(menuItems ?? [])]),

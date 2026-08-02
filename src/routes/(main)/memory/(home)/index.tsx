@@ -38,15 +38,20 @@ const Home: FC = () => {
   // have no memories when the load merely errored. Branch error before empty.
   const hasData = !!persona || roles?.length > 0;
   const error = tagsError ?? personaError;
+  // Nothing to purge, analyse or widen when the onboarding empty state is the
+  // whole page — and it already offers the analyse action inline.
+  const isEmpty = !hasData && !error;
 
   return (
     <Flexbox flex={1} height={'100%'}>
       <NavHeader
         right={
-          <ActionBar showAnalysis showPurge>
-            {/* <ActionIcon icon={PencilLineIcon} onClick={openEditor} /> */}
-            <WideScreenButton />
-          </ActionBar>
+          isEmpty ? undefined : (
+            <ActionBar showAnalysis showPurge>
+              {/* <ActionIcon icon={PencilLineIcon} onClick={openEditor} /> */}
+              <WideScreenButton />
+            </ActionBar>
+          )
         }
         style={{
           zIndex: 1,

@@ -1,11 +1,13 @@
 import { Avatar, Flexbox, Icon, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Button } from '@lobehub/ui/base-ui';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import RingLoadingIcon from '@/components/RingLoading';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
+import { homeType } from '@/features/Home/components/homeType';
+import RunningGlyph from '@/features/Home/components/RunningGlyph';
 
 import AuthorChip from './AuthorChip';
 import TopicRow from './TopicRow';
@@ -22,6 +24,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       margin-inline-start: -6px;
     }
   `,
+  // Inside a rail card the shell is already drawn; only the hover bleed remains.
+  bareHead: css`
+    padding-block: 7px;
+    padding-inline: 8px;
+    border-radius: ${cssVar.borderRadius};
+  `,
+  bareRoot: css`
+    margin-inline: -8px;
+  `,
   body: css`
     padding-block: 4px 8px;
     padding-inline: 8px;
@@ -34,9 +45,18 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorBgContainer};
   `,
   head: css`
-    cursor: pointer;
+    flex: 1;
+    justify-content: flex-start;
+
+    width: auto;
+    min-width: 0;
+    height: auto;
     padding-block: 11px;
     padding-inline: 14px;
+    border: 0;
+
+    text-align: start;
+
     transition: background ${cssVar.motionDurationFast};
 
     &:hover {
@@ -97,13 +117,10 @@ const RunningAgentAvatars = memo<{ running: InboxTopic[] }>(({ running }) => {
   );
 });
 
-/**
- * The ring track is a translucent wash of the same warning color, so the
- * spinner reads as one glyph rather than a colored arc on a grey donut.
- */
-const RING_COLOR = `color-mix(in srgb, ${cssVar.colorWarning} 45%, transparent)`;
-
 interface RunningTasksCardProps {
+  action?: ReactNode;
+  /** Rendered inside a rail card, which already draws the shell. */
+  bare?: boolean;
   running: InboxTopic[];
   /** Team view: tag each expanded row with whose run it is. */
   showAuthor?: boolean;
@@ -114,31 +131,34 @@ interface RunningTasksCardProps {
  * single line by default and only opens on demand. Nothing here is actionable;
  * it exists so the user knows work is in flight.
  */
-const RunningTasksCard = memo<RunningTasksCardProps>(({ running, showAuthor }) => {
+const RunningTasksCard = memo<RunningTasksCardProps>(({ action, bare, running, showAuthor }) => {
   const { t } = useTranslation('home');
   const [open, setOpen] = useState(false);
 
   if (running.length === 0) return null;
 
   return (
-    <Flexbox className={styles.card}>
-      <Flexbox
-        horizontal
-        align={'center'}
-        className={styles.head}
-        gap={10}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <RingLoadingIcon ringColor={RING_COLOR} size={16} style={{ color: cssVar.colorWarning }} />
-        <Text fontSize={13} style={{ flex: 1 }} weight={500}>
-          {t('inbox.running.title', { count: running.length })}
-        </Text>
-        <RunningAgentAvatars running={running} />
-        <Icon
-          color={cssVar.colorTextQuaternary}
-          icon={open ? ChevronDownIcon : ChevronRightIcon}
-          size={14}
-        />
+    <Flexbox className={bare ? styles.bareRoot : styles.card}>
+      <Flexbox horizontal align={'center'}>
+        <Button
+          className={cx(styles.head, bare && styles.bareHead)}
+          type={'text'}
+          onClick={() => setOpen((v) => !v)}
+        >
+          <Flexbox horizontal align={'center'} gap={10} style={{ width: '100%' }}>
+            <RunningGlyph />
+            <Text className={homeType.itemTitle} style={{ flex: 1 }}>
+              {t('inbox.running.title', { count: running.length })}
+            </Text>
+            <RunningAgentAvatars running={running} />
+            <Icon
+              color={cssVar.colorTextQuaternary}
+              icon={open ? ChevronDownIcon : ChevronRightIcon}
+              size={14}
+            />
+          </Flexbox>
+        </Button>
+        {action}
       </Flexbox>
 
       {open && (
@@ -146,14 +166,8 @@ const RunningTasksCard = memo<RunningTasksCardProps>(({ running, showAuthor }) =
           {running.map((topic) => (
             <TopicRow
               key={topic.id}
+              leading={<RunningGlyph size={14} />}
               topic={topic}
-              leading={
-                <RingLoadingIcon
-                  ringColor={RING_COLOR}
-                  size={14}
-                  style={{ color: cssVar.colorWarning }}
-                />
-              }
               trailing={
                 showAuthor ? (
                   <AuthorChip trigger={topic.trigger} userId={topic.userId} />

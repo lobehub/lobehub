@@ -21,7 +21,7 @@ import { describe, expect, it } from 'vitest';
  *   (metadata ->> 'x') IS NOT NULL          → COALESCE(metadata ->> 'x', '') <> ''
  *   (metadata ->> 'x') IS DISTINCT FROM 'y' → COALESCE(metadata ->> 'x', '') <> 'y'
  *
- * Prior casualties: `getLatestSpineMessageId` (LOBE-11376, #16693),
+ * Prior casualties: `getLatestSpineMessageId` (#16693),
  * `getDueScheduledTopics` (#17077).
  */
 const FORBIDDEN = /(?:->>?|#>>?)[^\n]*?\b(?:IS\s+(?:NOT\s+)?NULL|IS\s+DISTINCT\s+FROM)\b/i;

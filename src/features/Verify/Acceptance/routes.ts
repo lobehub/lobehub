@@ -1,3 +1,5 @@
+export const acceptanceHomePath = () => '/';
+
 export const acceptanceOverviewPath = (acceptanceId: string) =>
   `/acceptance/${encodeURIComponent(acceptanceId)}`;
 

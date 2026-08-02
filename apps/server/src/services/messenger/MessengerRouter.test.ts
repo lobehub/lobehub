@@ -299,6 +299,23 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+describe('MessengerRouter.sendDirectMessage', () => {
+  it('opens a platform DM and posts proactive content', async () => {
+    const post = vi.fn().mockResolvedValue(undefined);
+    mockOpenDM.mockResolvedValue({ post });
+
+    const router = new MessengerRouter();
+    await router.sendDirectMessage({
+      content: 'deployment complete',
+      credentials: slackCreds('T_ACME'),
+      platformUserId: 'U_ALICE',
+    });
+
+    expect(mockOpenDM).toHaveBeenCalledWith('U_ALICE');
+    expect(post).toHaveBeenCalledWith('deployment complete');
+  });
+});
+
 describe('MessengerRouter.getWebhookHandler', () => {
   it('rejects unknown platforms with 404', async () => {
     const router = new MessengerRouter();

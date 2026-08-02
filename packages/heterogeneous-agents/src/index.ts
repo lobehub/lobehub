@@ -27,6 +27,7 @@ export type {
 } from './mainAgentCoordinator';
 export { createMainAgentRunState, reduceMainAgent } from './mainAgentCoordinator';
 export { createAdapter, listAgentTypes } from './registry';
+export type { HeterogeneousAgentScanMap, HeterogeneousAgentScanStatus } from './scan/types';
 export { isHeteroStatusGuideErrorData } from './spawn/classifyProcessFailure';
 export type {
   CreateMessageIntent,

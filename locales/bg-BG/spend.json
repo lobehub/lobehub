@@ -10,7 +10,7 @@
   "table.columns.duration": "Продължителност",
   "table.columns.model": "Модел",
   "table.columns.spend": "Кредити",
-  "table.columns.startTime": "Създадено на",
+  "table.columns.time": "Време",
   "table.columns.totalTokens": "Използвани токени",
   "table.columns.trigger.enums.agent_signal": "Сигнал от агент",
   "table.columns.trigger.enums.api": "API Обаждане",
@@ -43,6 +43,10 @@
   "table.filters.reset": "Нулиране",
   "table.filters.searchModel": "Търсене на модел",
   "table.filters.startDate": "Начална дата",
+  "table.pagination.next": "Следваща страница",
+  "table.pagination.perPage": "{{size}} / страница",
+  "table.pagination.prev": "Предишна страница",
+  "table.pagination.range": "{{from}}-{{to}} от {{total}} елементи",
   "table.title": "Подробности за използването на изчислителни кредити",
   "table.totalToken.input": "Вход",
   "table.totalToken.output": "Изход",
@@ -66,8 +70,8 @@
   "usageStats.chart.title": "Кога този агент е изразходвал",
   "usageStats.chart.tokens": "Токен",
   "usageStats.dimension": "Измерение",
-  "usageStats.entry": "Използване и разход",
+  "usageStats.entry": "Статистика",
   "usageStats.range": "Времеви обхват",
   "usageStats.rangeSuffix": "Последни {{count}} дни",
-  "usageStats.title": "Използване и разход"
+  "usageStats.title": "Статистика"
 }

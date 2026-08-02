@@ -143,6 +143,14 @@ export const createNodeResponse = (resolvePromise: () => void): ResponseCollecto
       state.responseHeaders[lowerName] = value;
     },
 
+    get statusCode() {
+      return state.responseStatus;
+    },
+
+    set statusCode(status: number) {
+      state.responseStatus = status;
+    },
+
     write: (chunk: string | Buffer) => {
       log('NodeResponse.write called with chunk');
       // @ts-ignore

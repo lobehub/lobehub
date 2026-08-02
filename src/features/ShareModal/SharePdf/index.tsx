@@ -1,8 +1,7 @@
 import { type UIChatMessage } from '@lobechat/types';
 import { type FormItemProps } from '@lobehub/ui';
 import { Flexbox, Form } from '@lobehub/ui';
-import { Button, Switch } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { Button, Switch, toast } from '@lobehub/ui/base-ui';
 import { cx } from 'antd-style';
 import { DownloadIcon, FileText } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -31,7 +30,6 @@ const DEFAULT_FIELD_VALUE: FieldType = {
 const SharePdf = memo((props: { message?: UIChatMessage }) => {
   const [fieldValue, setFieldValue] = useState(DEFAULT_FIELD_VALUE);
   const { t } = useTranslation(['chat', 'common']);
-  const { message } = App.useApp();
 
   const { message: outerMessage } = props;
   const isMobile = useIsMobile();
@@ -108,9 +106,9 @@ const SharePdf = memo((props: { message?: UIChatMessage }) => {
     if (pdfData) {
       try {
         await downloadPdf();
-        message.success(t('shareModal.downloadSuccess'));
+        toast.success(t('shareModal.downloadSuccess'));
       } catch {
-        message.error(t('shareModal.downloadError'));
+        toast.error(t('shareModal.downloadError'));
       }
     }
   };

@@ -73,13 +73,8 @@ const isViteWatchRelativePathIgnored = (relativePath: string) => {
  */
 export const createViteWatchOptions = (sourceRoots: string[]) => {
   const normalizedRoots = sourceRoots.map(normalizeWatchedPath);
-  const usePolling =
-    process.env.CHOKIDAR_USEPOLLING === '1' ||
-    process.env.CHOKIDAR_USEPOLLING === 'true' ||
-    process.env.VITE_USE_POLLING === '1';
 
   return {
-    ...(usePolling ? { usePolling: true, interval: 300 } : {}),
     ignored: (filePath: string) => {
       const normalizedPath = normalizeWatchedPath(filePath);
 

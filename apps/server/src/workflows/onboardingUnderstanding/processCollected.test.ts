@@ -52,7 +52,6 @@ describe('processCollectedUnderstanding', () => {
       })),
     };
     const { context, steps } = createContext();
-
     await expect(
       processCollectedUnderstanding(context as never, {
         createService: async () => service as never,
@@ -70,7 +69,9 @@ describe('processCollectedUnderstanding', () => {
   it('replays commit-before-ack without adding workflow state and lets transient errors retry', async () => {
     const result = { published: true, resultId: 'message-1', sourceFingerprint: 'github@1' };
     const service = { processCollected: vi.fn(async () => result) };
-    const dependencies = { createService: async () => service as never };
+    const dependencies = {
+      createService: async () => service as never,
+    };
 
     await processCollectedUnderstanding(createContext().context as never, dependencies);
     await processCollectedUnderstanding(createContext().context as never, dependencies);

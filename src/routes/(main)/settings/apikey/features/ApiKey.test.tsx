@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { SWRConfig } from 'swr';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -9,7 +10,6 @@ import ApiKey from './ApiKey';
 
 const hoisted = vi.hoisted(() => ({
   createApiKeyModal: vi.fn(),
-  message: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
   state: {
     activeWorkspaceId: null as string | null,
     allowed: true,
@@ -22,17 +22,37 @@ const hoisted = vi.hoisted(() => ({
     getApiKeys: vi.fn(),
     updateApiKey: vi.fn(),
   },
+  toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
 }));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock('antd', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
+vi.mock('@lobehub/ui/base-ui', () => {
   return {
-    ...actual,
-    App: { useApp: () => ({ message: hoisted.message }) },
+    Button: ({ children, ...props }: ButtonHTMLAttributes<HTMLButtonElement>) => (
+      <button {...props}>{children}</button>
+    ),
+    Switch: ({
+      checked,
+      disabled,
+      onChange,
+    }: {
+      checked?: boolean;
+      disabled?: boolean;
+      onChange?: (checked: boolean) => void;
+      children?: ReactNode;
+    }) => (
+      <input
+        checked={checked}
+        disabled={disabled}
+        role="switch"
+        type="checkbox"
+        onChange={(event) => onChange?.(event.currentTarget.checked)}
+      />
+    ),
+    toast: hoisted.toast,
   };
 });
 
@@ -222,7 +242,7 @@ describe('ApiKey', () => {
 
     fireEvent.click(screen.getByRole('switch'));
 
-    await waitFor(() => expect(hoisted.message.error).toHaveBeenCalledWith('manageOnlyCreator'));
+    await waitFor(() => expect(hoisted.toast.error).toHaveBeenCalledWith('manageOnlyCreator'));
     expect(hoisted.trpc.getApiKeys).toHaveBeenCalledTimes(1);
   });
 
@@ -233,7 +253,7 @@ describe('ApiKey', () => {
 
     fireEvent.click(screen.getByRole('switch'));
 
-    await waitFor(() => expect(hoisted.message.error).toHaveBeenCalledWith('operationFailed'));
+    await waitFor(() => expect(hoisted.toast.error).toHaveBeenCalledWith('operationFailed'));
     expect(hoisted.trpc.getApiKeys).toHaveBeenCalledTimes(1);
   });
 
