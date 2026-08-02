@@ -2,7 +2,7 @@ import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { cacheHydration } from '@/libs/swr/cacheHydration';
-import { getAppPainted, setAppPainted } from '@/spa/atoms/app';
+import { getAppPainted, setAppPainted, setAppReady } from '@/spa/atoms/app';
 
 // Import after mocks are registered.
 import CacheHydrationGate from './CacheHydrationGate';
@@ -34,12 +34,14 @@ beforeEach(() => {
   mockScope = 'anon:personal';
   resetHydration();
   setAppPainted(false);
+  setAppReady(true);
 });
 
 afterEach(() => {
   window.history.replaceState(null, '', '/');
   resetHydration();
   setAppPainted(false);
+  setAppReady(false);
   vi.useRealTimers();
 });
 
@@ -127,6 +129,30 @@ describe('CacheHydrationGate', () => {
 
     act(() => {
       cacheHydration.markReady('anon:personal');
+    });
+
+    expect(document.getElementById('loading-screen')).toBeNull();
+  });
+
+  it('holds the static loading screen until the app can actually paint', () => {
+    // Hydration can finish before initialization. In that window `AppLayer`
+    // renders null and the boot shell's phase is still `hidden` (it needs BOTH
+    // signals, and the 200ms timer has not fired), so tearing the splash down on
+    // release alone leaves the window blank.
+    setAppReady(false);
+    const loadingScreen = document.createElement('div');
+    loadingScreen.id = 'loading-screen';
+    document.body.append(loadingScreen);
+
+    renderGate();
+    act(() => {
+      cacheHydration.markReady('anon:personal');
+    });
+
+    expect(document.getElementById('loading-screen')).not.toBeNull();
+
+    act(() => {
+      setAppReady(true);
     });
 
     expect(document.getElementById('loading-screen')).toBeNull();
