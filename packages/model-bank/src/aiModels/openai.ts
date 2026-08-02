@@ -1415,24 +1415,6 @@ export const openaiASRModels: AIASRModelCard[] = [
   },
   {
     description:
-      'GPT Live Transcribe is a low-latency streaming speech-to-text model with tunable latency plus context, keyword, and language hints for live audio.',
-    displayName: 'GPT Live Transcribe',
-    id: 'gpt-live-transcribe',
-    pricing: {
-      units: [
-        {
-          name: 'audioInput',
-          rate: 0.000_283_333, // $0.017 per minute
-          strategy: 'fixed',
-          unit: 'second',
-        },
-      ],
-    },
-    releasedAt: '2026-07-28',
-    type: 'asr',
-  },
-  {
-    description:
       'A general speech recognition model supporting multilingual ASR, speech translation, and language identification.',
     displayName: 'Whisper',
     id: 'whisper-1',
