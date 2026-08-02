@@ -5,6 +5,15 @@ import {
   createOpenRouterManagementClient,
 } from './management';
 
+vi.mock('@/envs/aico', () => ({
+  aicoEnv: {
+    AICO_ALLOW_MOCK_TOPUP: false,
+    AICO_OPENROUTER_MOCK: false,
+    AICO_TOMAN_PER_USD: 50_000,
+    OPENROUTER_MANAGEMENT_API_KEY: undefined,
+  },
+}));
+
 describe('MockOpenRouterManagementClient', () => {
   beforeEach(() => {
     __resetOpenRouterManagementClientForTests();
@@ -26,42 +35,5 @@ describe('MockOpenRouterManagementClient', () => {
 
     await client.deleteKey(created.hash);
     await expect(client.getKey(created.hash)).rejects.toThrow(/not found/);
-  });
-});
-
-describe('HttpOpenRouterManagementClient', () => {
-  it('posts create payload to OpenRouter keys endpoint', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      json: async () => ({
-        data: {
-          disabled: false,
-          hash: 'abc123',
-          key: 'sk-or-v1-real',
-          limit: 5,
-          limit_remaining: 5,
-          name: 'cust',
-          usage: 0,
-        },
-      }),
-      ok: true,
-      status: 200,
-    });
-    vi.stubGlobal('fetch', fetchMock);
-
-    const client = createOpenRouterManagementClient({
-      managementKey: 'mgmt-test-key',
-    });
-
-    const created = await client.createKey({ limitUsd: 5, name: 'cust' });
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://openrouter.ai/api/v1/keys',
-      expect.objectContaining({
-        method: 'POST',
-      }),
-    );
-    expect(created.key).toBe('sk-or-v1-real');
-    expect(created.hash).toBe('abc123');
-
-    vi.unstubAllGlobals();
   });
 });

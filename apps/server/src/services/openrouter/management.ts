@@ -1,22 +1,18 @@
 import { aicoEnv } from '@/envs/aico';
 
+import {
+  type CreateOpenRouterKeyResult,
+  mapOpenRouterKeyInfo,
+  type OpenRouterKeyInfo,
+  parseCreateKeyResponse,
+} from './createKeyResponse';
+
+export type { CreateOpenRouterKeyResult, OpenRouterKeyInfo };
+export { parseCreateKeyResponse };
+
 const BASE_URL = 'https://openrouter.ai/api/v1/keys';
 
 export type OpenRouterKeyLimitReset = 'daily' | 'weekly' | 'monthly' | null;
-
-export interface OpenRouterKeyInfo {
-  disabled: boolean;
-  hash: string;
-  limit: number | null;
-  limitRemaining: number | null;
-  name: string;
-  usage: number;
-}
-
-export interface CreateOpenRouterKeyResult extends OpenRouterKeyInfo {
-  /** Plaintext key — only available at creation time. Encrypt before persist. */
-  key: string;
-}
 
 export interface OpenRouterManagementClient {
   createKey: (params: {
@@ -33,15 +29,6 @@ export interface OpenRouterManagementClient {
     name?: string;
   }) => Promise<OpenRouterKeyInfo>;
 }
-
-const mapKey = (data: Record<string, unknown>): OpenRouterKeyInfo => ({
-  disabled: Boolean(data.disabled),
-  hash: String(data.hash),
-  limit: data.limit == null ? null : Number(data.limit),
-  limitRemaining: data.limit_remaining == null ? null : Number(data.limit_remaining),
-  name: String(data.name ?? ''),
-  usage: Number(data.usage ?? 0),
-});
 
 class HttpOpenRouterManagementClient implements OpenRouterManagementClient {
   constructor(private readonly apiKey: string) {}
@@ -74,17 +61,14 @@ class HttpOpenRouterManagementClient implements OpenRouterManagementClient {
       }),
       method: 'POST',
     });
-    const data = (json.data as Record<string, unknown> | undefined) ?? json;
-    const key = String(data.key ?? '');
-    if (!key) throw new Error('OpenRouter createKey response missing key');
-    return { ...mapKey(data), key };
+    return parseCreateKeyResponse(json);
   };
 
   getKey: OpenRouterManagementClient['getKey'] = async (hash) => {
     const json = await this.request<{ data: Record<string, unknown> }>(`/${hash}`, {
       method: 'GET',
     });
-    return mapKey(json.data ?? (json as unknown as Record<string, unknown>));
+    return mapOpenRouterKeyInfo(json.data ?? (json as unknown as Record<string, unknown>));
   };
 
   updateKey: OpenRouterManagementClient['updateKey'] = async (params) => {
@@ -96,7 +80,7 @@ class HttpOpenRouterManagementClient implements OpenRouterManagementClient {
       }),
       method: 'PATCH',
     });
-    return mapKey(json.data ?? (json as unknown as Record<string, unknown>));
+    return mapOpenRouterKeyInfo(json.data ?? (json as unknown as Record<string, unknown>));
   };
 
   deleteKey: OpenRouterManagementClient['deleteKey'] = async (hash) => {
