@@ -3,6 +3,7 @@ import type {
   ConfirmOnboardingUnderstandingInput,
   OnboardingUnderstandingMessageMetadata,
   OnboardingUnderstandingSession,
+  UnderstandingPersonaProposal,
   UnderstandingProviderState,
 } from '@lobechat/types';
 import {
@@ -71,6 +72,7 @@ export class UnderstandingPreconditionError extends Error {
       | 'result_not_confirmable'
       | 'session_confirmed'
       | 'source_not_retryable'
+      | 'detailed_writing_not_active'
       | 'writing_not_active',
   ) {
     super(`Onboarding Understanding precondition failed: ${reason}`);
@@ -124,6 +126,24 @@ interface CommitWritingInput {
 }
 
 interface FailWritingInput {
+  error: CollectionError;
+  feedbackRevision: number;
+  generationRevision: number;
+  sessionId: string;
+  sourceFingerprint: string;
+  topicId: string;
+}
+
+interface CommitDetailedWritingInput {
+  detailedPersona: UnderstandingPersonaProposal;
+  feedbackRevision: number;
+  generationRevision: number;
+  sessionId: string;
+  sourceFingerprint: string;
+  topicId: string;
+}
+
+interface FailDetailedWritingInput {
   error: CollectionError;
   feedbackRevision: number;
   generationRevision: number;
@@ -623,6 +643,7 @@ export class OnboardingUnderstandingRepository {
         const nextSession = parseSession({
           ...session,
           writing: {
+            detailed: { status: 'running', updatedAt: new Date().toISOString() },
             feedbackRevision,
             generationRevision,
             resultMessageId: assistantMessageId,
@@ -676,6 +697,116 @@ export class OnboardingUnderstandingRepository {
       }),
     );
 
+  commitDetailedWriting = async ({
+    detailedPersona,
+    feedbackRevision,
+    generationRevision,
+    sessionId,
+    sourceFingerprint,
+    topicId,
+  }: CommitDetailedWritingInput): Promise<{ published: boolean }> =>
+    this.db.transaction((tx) =>
+      mutateTopicSession(tx, this.userId, topicId, async (persisted) => {
+        const session = requireSession(topicId, sessionId, persisted);
+        const writing = session.writing;
+        if (
+          session.confirmedAt ||
+          getUnderstandingSourceFingerprint(session) !== sourceFingerprint ||
+          writing?.status !== 'completed' ||
+          writing.sourceFingerprint !== sourceFingerprint ||
+          writing.feedbackRevision !== feedbackRevision ||
+          writing.generationRevision !== generationRevision
+        ) {
+          return {
+            nextSession: session,
+            result: { published: false as boolean },
+            write: false,
+          };
+        }
+        if (writing.detailed?.status === 'completed') {
+          return {
+            nextSession: session,
+            result: { published: true as boolean },
+            write: false,
+          };
+        }
+        if (writing.detailed?.status !== 'running') {
+          throw new UnderstandingPreconditionError('detailed_writing_not_active');
+        }
+
+        const [message] = await tx
+          .select()
+          .from(messages)
+          .where(and(eq(messages.id, writing.resultMessageId), messageOwnership(this.userId)))
+          .for('update');
+        const proposal = getStoredProposal(message?.metadata);
+        if (
+          !message ||
+          !proposal ||
+          proposal.resultId !== writing.resultMessageId ||
+          proposal.sourceFingerprint !== sourceFingerprint ||
+          proposal.feedbackRevision !== feedbackRevision ||
+          proposal.generationRevision !== generationRevision
+        ) {
+          throw new UnderstandingResourceNotFoundError('result');
+        }
+        const enriched = OnboardingUnderstandingMessageMetadataSchema.parse({
+          ...proposal,
+          detailedPersona,
+        });
+        const messageMetadata = isPlainRecord(message.metadata) ? message.metadata : {};
+        await tx
+          .update(messages)
+          .set({
+            metadata: { ...messageMetadata, onboardingUnderstanding: enriched },
+            updatedAt: new Date(),
+          })
+          .where(and(eq(messages.id, writing.resultMessageId), messageOwnership(this.userId)));
+
+        const nextSession = parseSession({
+          ...session,
+          writing: {
+            ...writing,
+            detailed: { status: 'completed', updatedAt: new Date().toISOString() },
+          },
+        });
+        return { nextSession, result: { published: true as boolean }, write: true };
+      }),
+    );
+
+  failDetailedWriting = async ({
+    error,
+    feedbackRevision,
+    generationRevision,
+    sessionId,
+    sourceFingerprint,
+    topicId,
+  }: FailDetailedWritingInput): Promise<OnboardingUnderstandingSession> =>
+    this.db.transaction((tx) =>
+      mutateTopicSession(tx, this.userId, topicId, (persisted) => {
+        const session = requireSession(topicId, sessionId, persisted);
+        const writing = session.writing;
+        if (
+          getUnderstandingSourceFingerprint(session) !== sourceFingerprint ||
+          writing?.status !== 'completed' ||
+          writing.sourceFingerprint !== sourceFingerprint ||
+          writing.feedbackRevision !== feedbackRevision ||
+          writing.generationRevision !== generationRevision ||
+          writing.detailed?.status !== 'running'
+        ) {
+          return { nextSession: session, result: session, write: false };
+        }
+        const nextSession = parseSession({
+          ...session,
+          writing: {
+            ...writing,
+            detailed: { error, status: 'failed', updatedAt: new Date().toISOString() },
+          },
+        });
+        return { nextSession, result: nextSession, write: true };
+      }),
+    );
+
   confirm = async (
     input: ConfirmOnboardingUnderstandingInput,
   ): Promise<{ personaVersion: number }> =>
@@ -689,6 +820,7 @@ export class OnboardingUnderstandingRepository {
           Object.values(session.sources).some(
             (source) => source.status === 'pending' || source.status === 'running',
           ) ||
+          session.writing.detailed?.status === 'running' ||
           getUnderstandingSourceFingerprint(session) !== session.writing.sourceFingerprint ||
           (session.writing.feedbackRevision ?? 0) !== (session.feedback?.revision ?? 0) ||
           (session.writing.generationRevision ?? 0) !== (session.generationRevision ?? 0)
@@ -825,9 +957,9 @@ export class OnboardingUnderstandingRepository {
           sourceFingerprint,
         },
       },
-      persona: analysis.personaProposal.content,
-      reasoning: analysis.personaProposal.reasoning,
-      tagline: analysis.personaProposal.tagline,
+      persona: proposal.detailedPersona?.content ?? analysis.personaProposal.content,
+      reasoning: proposal.detailedPersona?.reasoning ?? analysis.personaProposal.reasoning,
+      tagline: proposal.detailedPersona?.tagline ?? analysis.personaProposal.tagline,
     });
     return result.document.version;
   };

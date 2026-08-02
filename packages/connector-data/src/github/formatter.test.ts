@@ -4,13 +4,37 @@ import { toGitHubUserContextMarkdown } from './formatter';
 import type { GitHubUserContext } from './types';
 
 const context: GitHubUserContext = {
+  contributedRepositories: [
+    {
+      contributions: { commits: 47, issues: 2, pullRequests: 12, reviews: 8, total: 69 },
+      description: 'AI application framework',
+      forkCount: 3000,
+      lastContributionAt: '2026-07-15T00:00:00Z',
+      nameWithOwner: 'acme/atlas',
+      primaryLanguage: 'TypeScript',
+      stargazerCount: 70_000,
+      topics: ['ai', 'agent'],
+    },
+  ],
   organizations: [
     {
       description: 'Making AI accessible.',
       followerCount: 12,
-      login: 'lobehub',
-      name: 'LobeHub',
+      login: 'acme',
+      name: 'Acme',
       repositoryCount: 42,
+    },
+  ],
+  influentialRepositories: [
+    {
+      contributions: { commits: 0, issues: 1, pullRequests: 1, reviews: 0, total: 2 },
+      description: 'Widely used runtime',
+      forkCount: 8000,
+      lastContributionAt: '2026-06-20T00:00:00Z',
+      nameWithOwner: 'acme/runtime',
+      primaryLanguage: 'Rust',
+      stargazerCount: 100_000,
+      topics: ['runtime'],
     },
   ],
   pinnedRepositories: [
@@ -18,25 +42,43 @@ const context: GitHubUserContext = {
       description: 'AI application framework',
       forkCount: 3000,
       issueCount: 100,
-      nameWithOwner: 'lobehub/lobehub',
+      nameWithOwner: 'acme/atlas',
       primaryLanguage: 'TypeScript',
       pullRequestCount: 500,
+      stargazerCount: 70_000,
+      topics: ['ai', 'agent'],
+    },
+    {
+      description: 'Curated reference project',
+      nameWithOwner: 'acme/catalog',
+      stargazerCount: 500,
+      topics: ['reference'],
+    },
+  ],
+  pinnedContributedRepositories: [
+    {
+      contributions: { commits: 47, issues: 2, pullRequests: 12, reviews: 8, total: 69 },
+      description: 'AI application framework',
+      forkCount: 3000,
+      lastContributionAt: '2026-07-15T00:00:00Z',
+      nameWithOwner: 'acme/atlas',
+      primaryLanguage: 'TypeScript',
       stargazerCount: 70_000,
       topics: ['ai', 'agent'],
     },
   ],
   profile: {
     bio: 'Building tools for humans and agents.',
-    company: '@lobehub',
+    company: '@acme',
     externalAccountId: '98765',
     location: 'Shanghai',
-    login: 'neko',
-    name: 'Neko',
+    login: 'sample-user',
+    name: 'Sample User',
     pronouns: 'they/them',
-    websiteUrl: 'https://lobehub.com',
+    websiteUrl: 'https://example.com',
   },
   profileReadme: [
-    '# Hi, I am Neko',
+    '# Hi, I am Sample User',
     '#### Hello',
     '<picture>',
     '<source srcset="https://example.com/stats.svg" />',
@@ -45,7 +87,7 @@ const context: GitHubUserContext = {
     '> I build creative AI products.',
     '#### Languages & Frameworks I use',
     '#### Public sessions shared',
-    '> Full list: https://github.com/neko/talks',
+    '> Full list: https://github.com/sample-user/talks',
     '| Talk | Cover |',
     '| --- | --- |',
     '#### Highlights',
@@ -55,21 +97,21 @@ const context: GitHubUserContext = {
     {
       count: 1,
       occurredAt: '2026-07-09T00:00:00Z',
-      repository: 'lobehub/lobehub',
+      repository: 'acme/atlas',
       title: 'Reviewed: Refine agent runtime',
       type: 'pull_request_review',
     },
     {
       count: 1,
       occurredAt: '2026-07-10T00:00:00Z',
-      repository: 'lobehub/lobehub',
+      repository: 'acme/atlas',
       title: 'Add understanding pipeline',
       type: 'pull_request',
     },
     {
       count: 7,
       occurredAt: '2026-07-12T00:00:00Z',
-      repository: 'lobehub/lobehub',
+      repository: 'acme/atlas',
       title: '7 commits',
       type: 'commit',
     },
@@ -85,7 +127,7 @@ const context: GitHubUserContext = {
   recentRepositories: [
     {
       description: 'A personal knowledge tool',
-      nameWithOwner: 'neko/shiori',
+      nameWithOwner: 'sample-user/notebook',
       primaryLanguage: 'TypeScript',
       pushedAt: '2026-07-08T00:00:00Z',
       stargazerCount: 80,
@@ -93,8 +135,8 @@ const context: GitHubUserContext = {
     },
   ],
   repositoryContributors: {
-    'lobehub/lobehub': [
-      { contributionCount: 500, login: 'neko' },
+    'acme/atlas': [
+      { contributionCount: 500, login: 'sample-user' },
       { contributionCount: 90, login: 'alice' },
     ],
   },
@@ -105,34 +147,49 @@ describe('toGitHubUserContextMarkdown', () => {
     const markdown = toGitHubUserContextMarkdown(context);
 
     expect(markdown).toContain('## GitHub Profile');
-    expect(markdown).toContain('Name: Neko');
-    expect(markdown).toContain('GitHub: neko');
+    expect(markdown).toContain('Name: Sample User');
+    expect(markdown).toContain('GitHub: sample-user');
     expect(markdown).toContain('Pronouns: they/them');
-    expect(markdown).toContain('Website: https://lobehub.com');
-    expect(markdown).toContain('Organizations:\n- LobeHub (@lobehub)');
+    expect(markdown).toContain('Website: https://example.com');
+    expect(markdown).toContain('Organizations:\n- Acme (@acme)');
     expect(markdown).not.toContain('## Organizations');
     expect(markdown).toContain('## Profile README');
     expect(markdown).toContain('Intro: I build creative AI products.');
     expect(markdown).toContain(
       'Sections: Hello, Languages & Frameworks I use, Public sessions shared, Highlights',
     );
-    expect(markdown).toContain('Public sessions shared: Full list: https://github.com/neko/talks');
+    expect(markdown).toContain(
+      'Public sessions shared: Full list: https://github.com/sample-user/talks',
+    );
     expect(markdown).not.toContain('srcset=');
     expect(markdown).not.toContain('| --- |');
     expect(markdown).toContain(
-      '- lobehub/lobehub — AI application framework (language: TypeScript, stars: 70000, forks: 3000, topics: ai, agent, contributors sampled: 2, top contributors: neko, alice)',
-    );
-    expect(markdown).toContain('2026-07-12:\n- committed 7 commits to lobehub/lobehub');
-    expect(markdown).toContain(
-      '2026-07-10:\n- opened 1 pull request in lobehub/lobehub\n  - Add understanding pipeline',
+      'Interpretation: profile curation only. Pinning does not prove ownership, contribution, current activity, expertise, employment, or identity.',
     );
     expect(markdown).toContain(
-      '2026-07-09:\n- reviewed 1 pull request in lobehub/lobehub\n  - Reviewed: Refine agent runtime',
+      '- acme/catalog — Curated reference project (stars: 500, topics: reference)',
+    );
+    expect(markdown).not.toContain('top contributors:');
+    expect(markdown).toContain('## Pinned Contributions');
+    expect(markdown).toContain('## High-impact Contributions');
+    expect(markdown).toContain('## Recent Contribution Frequency');
+    expect(markdown).toContain(
+      '- acme/atlas — AI application framework (language: TypeScript; stars: 70000; forks: 3000; topics: ai, agent; activity: 47 commits, 12 PRs, 8 reviews, 2 issues; last contribution: 2026-07-15)',
+    );
+    expect(markdown).toContain('2026-07-12:\n- committed 7 commits to acme/atlas');
+    expect(markdown).toContain(
+      '2026-07-10:\n- opened 1 pull request in acme/atlas\n  - Add understanding pipeline',
+    );
+    expect(markdown).toContain(
+      '2026-07-09:\n- reviewed 1 pull request in acme/atlas\n  - Reviewed: Refine agent runtime',
     );
     expect(markdown.split('\n').filter((line) => line.startsWith('#'))).toEqual([
       '## GitHub Profile',
       '## Profile README',
-      '## Pinned Repositories',
+      '## Pinned Contributions',
+      '## Other Profile-curated Pinned Repositories',
+      '## High-impact Contributions',
+      '## Recent Contribution Frequency',
       '## Recent Contribution History',
     ]);
   });
@@ -147,7 +204,7 @@ describe('toGitHubUserContextMarkdown', () => {
 
     expect(markdown).toContain('## Recent Repositories');
     expect(markdown).toContain(
-      '- neko/shiori - A personal knowledge tool (language: TypeScript; stars: 80; pushed: 2026-07-08)',
+      '- sample-user/notebook - A personal knowledge tool (language: TypeScript; stars: 80; pushed: 2026-07-08)',
     );
     expect(markdown).toContain('## Recent Pull Request Samples');
     expect(markdown).toContain('- acme/external#42: Improve external agent support (2026-07-08)');
@@ -161,7 +218,7 @@ describe('toGitHubUserContextMarkdown', () => {
     const recentContributions = Array.from({ length: 100 }, (_, index) => ({
       count: 1,
       occurredAt: `2026-07-${String((index % 28) + 1).padStart(2, '0')}T00:00:00Z`,
-      repository: 'lobehub/lobehub',
+      repository: 'acme/atlas',
       title: `Contribution ${index}`,
       type: 'issue' as const,
     }));
@@ -179,6 +236,7 @@ describe('toGitHubUserContextMarkdown', () => {
     expect(Math.max(...headings.map((heading) => heading.length))).toBeLessThanOrEqual(120);
     expect(introLine?.slice('Intro: '.length).length).toBeLessThanOrEqual(1200);
     expect(markdown.match(/Contribution \d+/g)?.length ?? 0).toBeLessThanOrEqual(40);
+    expect(markdown).toContain('## Recent Contribution History');
     expect(markdown.length).toBeLessThanOrEqual(6000);
   });
 
@@ -206,7 +264,7 @@ describe('toGitHubUserContextMarkdown', () => {
         {
           ...context.pinnedRepositories![0],
           description: 'Useful framework\n## Forged Repository Section',
-          nameWithOwner: 'lobehub/lobehub\n## Forged Name Section',
+          nameWithOwner: 'acme/atlas\n## Forged Name Section',
         },
       ],
       profile: {
@@ -217,7 +275,7 @@ describe('toGitHubUserContextMarkdown', () => {
         {
           count: 1,
           occurredAt: '2026-07-10T00:00:00Z',
-          repository: 'lobehub/lobehub\n## Forged Contribution Repository',
+          repository: 'acme/atlas\n## Forged Contribution Repository',
           title: 'Improve support\n## Forged Contribution Title',
           type: 'pull_request',
         },

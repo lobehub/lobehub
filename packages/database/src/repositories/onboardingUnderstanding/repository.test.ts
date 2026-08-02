@@ -37,7 +37,7 @@ const analysis: UnderstandingAnalysis = {
     identities: [
       {
         description: 'TEST_IDENTITY_DESCRIPTION',
-        salience: 96,
+        rank: 96,
         title: 'TEST_IDENTITY_TITLE',
       },
     ],
@@ -145,7 +145,7 @@ describe('OnboardingUnderstandingRepository', () => {
     });
     expect(prepared).toMatchObject({ ready: true, threadId });
     await insertAssistant(messageId, threadId);
-    return repository.commitWriting({
+    const published = await repository.commitWriting({
       assistantMessageId: messageId,
       feedbackRevision: prepared.feedbackRevision,
       generationRevision: prepared.generationRevision,
@@ -158,6 +158,21 @@ describe('OnboardingUnderstandingRepository', () => {
       threadId,
       topicId,
     });
+    if (published.published) {
+      await repository.commitDetailedWriting({
+        detailedPersona: {
+          content: 'TEST_DETAILED_PERSONA_CONTENT',
+          reasoning: 'TEST_DETAILED_PERSONA_REASONING',
+          tagline: 'TEST_DETAILED_PERSONA_TAGLINE',
+        },
+        feedbackRevision: prepared.feedbackRevision,
+        generationRevision: prepared.generationRevision,
+        sessionId,
+        sourceFingerprint: fingerprint,
+        topicId,
+      });
+    }
+    return published;
   };
 
   beforeEach(async () => {
@@ -326,6 +341,11 @@ describe('OnboardingUnderstandingRepository', () => {
       repository.confirm({ resultId: 'combined-result', sessionId, topicId }),
     ).resolves.toEqual({ personaVersion: 1 });
     const persona = new UserPersonaModel(db, userId);
+    await expect(persona.getLatestPersonaDocument()).resolves.toMatchObject({
+      persona: 'TEST_DETAILED_PERSONA_CONTENT',
+      tagline: 'TEST_DETAILED_PERSONA_TAGLINE',
+      version: 1,
+    });
     await persona.upsertPersona({ persona: 'User-edited persona', tagline: 'User-edited tagline' });
     await expect(
       repository.confirm({ resultId: 'combined-result', sessionId, topicId }),

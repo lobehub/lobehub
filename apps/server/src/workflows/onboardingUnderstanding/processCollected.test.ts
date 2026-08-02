@@ -66,6 +66,31 @@ describe('processCollectedUnderstanding', () => {
     });
   });
 
+  it('starts the full persona workflow only after the quick proposal is published', async () => {
+    const triggerDetailedPersona = vi.fn(async () => ({ workflowRunId: 'detailed-1' }));
+    const service = {
+      processCollected: vi.fn(async () => ({
+        published: true,
+        resultId: 'message-1',
+        sourceFingerprint: 'github@1',
+      })),
+    };
+    const { context, steps } = createContext();
+
+    await processCollectedUnderstanding(context as never, {
+      createService: async () => service as never,
+      triggerDetailedPersona,
+    });
+
+    expect(steps).toEqual(['collected:process', 'collected:trigger-detailed-persona']);
+    expect(triggerDetailedPersona).toHaveBeenCalledWith(
+      payload,
+      expect.objectContaining({
+        workflowRunId: expect.stringMatching(/^onboarding-understanding-detailed-/),
+      }),
+    );
+  });
+
   it('replays commit-before-ack without adding workflow state and lets transient errors retry', async () => {
     const result = { published: true, resultId: 'message-1', sourceFingerprint: 'github@1' };
     const service = { processCollected: vi.fn(async () => result) };
@@ -103,12 +128,16 @@ describe('failRunningUnderstandingWriting', () => {
   });
 
   it('treats stale fingerprint and reset races as safe no-ops', async () => {
-    const stale = { failWriting: vi.fn(async () => undefined) };
+    const stale = {
+      failDetailedPersona: vi.fn(async () => undefined),
+      failWriting: vi.fn(async () => undefined),
+    };
     await expect(
       failRunningUnderstandingWriting(payload, { createService: async () => stale as never }),
     ).resolves.toEqual({ failed: false });
 
     const reset = {
+      failDetailedPersona: vi.fn(async () => undefined),
       failWriting: vi.fn(async () => {
         throw new errors.DomainError();
       }),

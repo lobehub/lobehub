@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto';
-
 import {
   StaleUnderstandingRevisionError,
   StaleUnderstandingSessionError,
@@ -19,22 +17,18 @@ import {
   ProcessCollectedUnderstandingPayloadSchema,
 } from './types';
 
-type CollectedService = Pick<
+type DetailedPersonaService = Pick<
   UnderstandingService,
-  'failDetailedPersona' | 'failWriting' | 'processCollected'
+  'failDetailedPersona' | 'processDetailedPersona'
 >;
 
-type CollectedWorkflowContext = Pick<
+type DetailedPersonaWorkflowContext = Pick<
   WorkflowContext<ProcessCollectedUnderstandingPayload>,
   'requestPayload' | 'run'
 >;
 
-interface CollectedWorkflowDependencies {
-  createService?: (userId: string) => Promise<CollectedService>;
-  triggerDetailedPersona?: (
-    input: ProcessCollectedUnderstandingPayload,
-    options: { workflowRunId: string },
-  ) => Promise<unknown>;
+interface DetailedPersonaWorkflowDependencies {
+  createService?: (userId: string) => Promise<DetailedPersonaService>;
 }
 
 const createService = async (userId: string) =>
@@ -46,15 +40,33 @@ const isStaleSession = (error: unknown) =>
   error instanceof StaleUnderstandingRevisionError ||
   error instanceof StaleUnderstandingSessionError;
 
-export const processCollectedUnderstanding = async (
-  context: CollectedWorkflowContext,
-  dependencies: CollectedWorkflowDependencies = {},
+/**
+ * Runs the full persona pass after the quick Understanding proposal has been published.
+ *
+ * Use when:
+ * - The quick writer has committed a current source-fingerprint proposal
+ *
+ * Expects:
+ * - A validated workflow payload owned by one personal user
+ *
+ * Returns:
+ * - Whether the detailed persona was published for the current fingerprint
+ *
+ * Call stack:
+ *
+ * processDetailedPersonaWorkflow
+ *   -> {@link processDetailedUnderstandingPersona}
+ *     -> UnderstandingService.processDetailedPersona
+ */
+export const processDetailedUnderstandingPersona = async (
+  context: DetailedPersonaWorkflowContext,
+  dependencies: DetailedPersonaWorkflowDependencies = {},
 ) => {
   const payload = ProcessCollectedUnderstandingPayloadSchema.parse(context.requestPayload);
   const service = await (dependencies.createService ?? createService)(payload.userId);
-  const result = await context.run('collected:process', async () => {
+  return context.run('detailed-persona:process', async () => {
     try {
-      return await service.processCollected({
+      return await service.processDetailedPersona({
         expectedSourceFingerprint: payload.sourceFingerprint,
         responseLanguage: payload.responseLanguage,
         sessionId: payload.sessionId,
@@ -67,53 +79,52 @@ export const processCollectedUnderstanding = async (
       throw error;
     }
   });
-  const triggerDetailedPersona = dependencies.triggerDetailedPersona;
-  if (result.published && triggerDetailedPersona) {
-    await context.run('collected:trigger-detailed-persona', () =>
-      triggerDetailedPersona(payload, {
-        workflowRunId: `onboarding-understanding-detailed-${createHash('sha256')
-          .update(payload.sessionId)
-          .update('\0')
-          .update(payload.sourceFingerprint)
-          .digest('hex')
-          .slice(0, 32)}`,
-      }),
-    );
-  }
-  return result;
 };
 
-export const failRunningUnderstandingWriting = async (
+/**
+ * Marks only the current detailed persona pass failed when its workflow exhausts retries.
+ *
+ * Use when:
+ * - Upstash invokes the detailed writer failure callback
+ *
+ * Expects:
+ * - Unknown input that must match the collected Understanding payload
+ *
+ * Returns:
+ * - Whether the current detailed pass was terminalized
+ */
+export const failRunningDetailedUnderstandingPersona = async (
   input: unknown,
-  dependencies: CollectedWorkflowDependencies = {},
+  dependencies: DetailedPersonaWorkflowDependencies = {},
 ) => {
   const payload = ProcessCollectedUnderstandingPayloadSchema.parse(input);
   const service = await (dependencies.createService ?? createService)(payload.userId);
   try {
-    const failed = await service.failWriting({
+    const failed = await service.failDetailedPersona({
       sessionId: payload.sessionId,
       sourceFingerprint: payload.sourceFingerprint,
       topicId: payload.topicId,
     });
-    if (!failed) {
-      const detailedFailed = await service.failDetailedPersona({
-        sessionId: payload.sessionId,
-        sourceFingerprint: payload.sourceFingerprint,
-        topicId: payload.topicId,
-      });
-      return { failed: Boolean(detailedFailed) };
-    }
+    return { failed: Boolean(failed) };
   } catch (error) {
-    if (isStaleSession(error)) return { failed: false as const };
+    if (isStaleSession(error)) return { failed: false };
     throw error;
   }
-  return {
-    failed: true as const,
-    sourceFingerprint: payload.sourceFingerprint,
-  };
 };
 
-export const processCollectedWorkflowOptions = {
+/**
+ * Supplies payload validation and failure terminalization for the detailed persona workflow.
+ *
+ * Use when:
+ * - Registering the detailed persona handler with Upstash Workflow
+ *
+ * Expects:
+ * - JSON request bodies matching the collected Understanding payload
+ *
+ * Returns:
+ * - Public workflow serve options with a bounded failure callback
+ */
+export const processDetailedPersonaWorkflowOptions = {
   failureFunction: async ({
     context: { requestPayload },
   }: {
@@ -121,8 +132,8 @@ export const processCollectedWorkflowOptions = {
   }) => {
     const parsed = ProcessCollectedUnderstandingPayloadSchema.safeParse(requestPayload);
     if (!parsed.success) return 'invalid-payload';
-    const result = await failRunningUnderstandingWriting(parsed.data);
-    return result.failed ? 'writing-failed' : 'writing-not-current';
+    const result = await failRunningDetailedUnderstandingPersona(parsed.data);
+    return result.failed ? 'detailed-writing-failed' : 'detailed-writing-not-current';
   },
   initialPayloadParser: (input: string) =>
     ProcessCollectedUnderstandingPayloadSchema.parse(JSON.parse(input)),
