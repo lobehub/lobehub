@@ -175,3 +175,72 @@ describe('Google rolling model aliases', () => {
     expect(flashLiteLatest?.settings?.disabledParams).toEqual(['temperature', 'top_p']);
   });
 });
+
+describe('latest provider model cards', () => {
+  it('registers GLM-5.2 for the first-party Zhipu provider', () => {
+    const model = LOBE_DEFAULT_MODEL_LIST.find(
+      (item) => item.providerId === ModelProvider.ZhiPu && item.id === 'glm-5.2',
+    );
+
+    expect(model).toEqual(
+      expect.objectContaining({
+        abilities: expect.objectContaining({ functionCall: true, reasoning: true }),
+        contextWindowTokens: 1_000_000,
+        maxOutput: 131_072,
+        settings: expect.objectContaining({
+          extendParams: ['enableReasoning', 'glm5_2ReasoningEffort'],
+        }),
+      }),
+    );
+  });
+
+  it('uses the stable Gemini image model ids for Google', () => {
+    const googleModels = LOBE_DEFAULT_MODEL_LIST.filter(
+      (model) => model.providerId === ModelProvider.Google,
+    );
+
+    expect(googleModels).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'gemini-3.1-flash-image', type: 'chat' }),
+        expect.objectContaining({ id: 'gemini-3.1-flash-image:image', type: 'image' }),
+        expect.objectContaining({ id: 'gemini-3-pro-image', type: 'chat' }),
+        expect.objectContaining({ id: 'gemini-3-pro-image:image', type: 'image' }),
+      ]),
+    );
+    expect(
+      googleModels.some((model) =>
+        [
+          'gemini-3.1-flash-image-preview',
+          'gemini-3.1-flash-image-preview:image',
+          'gemini-3-pro-image-preview',
+          'gemini-3-pro-image-preview:image',
+        ].includes(model.id),
+      ),
+    ).toBe(false);
+  });
+
+  it('registers the latest OpenAI transcription and realtime models', () => {
+    const openaiModels = LOBE_DEFAULT_MODEL_LIST.filter(
+      (model) => model.providerId === ModelProvider.OpenAI,
+    );
+
+    expect(openaiModels).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'gpt-transcribe', type: 'asr' }),
+        expect.objectContaining({ id: 'gpt-live-transcribe', type: 'asr' }),
+        expect.objectContaining({
+          contextWindowTokens: 128_000,
+          id: 'gpt-realtime-2.1',
+          maxOutput: 32_000,
+          type: 'realtime',
+        }),
+        expect.objectContaining({
+          contextWindowTokens: 128_000,
+          id: 'gpt-realtime-2.1-mini',
+          maxOutput: 32_000,
+          type: 'realtime',
+        }),
+      ]),
+    );
+  });
+});
