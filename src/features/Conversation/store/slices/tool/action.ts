@@ -44,6 +44,41 @@ export class ToolActionImpl {
     }
   };
 
+  /**
+   * Approve every pending tool of a parallel batch in one action.
+   *
+   * Args edits are flushed for all cards first: the intervention UI debounces
+   * `updatePluginArguments`, so approving without waiting would ship the
+   * pre-edit arguments for any card the user had just typed in.
+   */
+  approveAllToolCalls = async (toolMessageIds: string[]): Promise<void> => {
+    const { hooks, context, waitForPendingArgsUpdate } = this.#get();
+
+    await Promise.all(toolMessageIds.map((id) => waitForPendingArgsUpdate(id)));
+
+    // ===== Hook: onToolApproved =====
+    // Per tool, so a host that vetoes one card drops only that card from the
+    // batch rather than cancelling the whole approval.
+    const approved: string[] = [];
+    for (const toolMessageId of toolMessageIds) {
+      if (hooks.onToolApproved) {
+        const shouldProceed = await hooks.onToolApproved(toolMessageId);
+        if (shouldProceed === false) continue;
+      }
+      approved.push(toolMessageId);
+    }
+
+    if (approved.length === 0) return;
+
+    const chatStore = useChatStore.getState();
+    await chatStore.approveAllToolCalls(approved, context);
+
+    // ===== Hook: onToolCallComplete =====
+    if (hooks.onToolCallComplete) {
+      for (const toolMessageId of approved) hooks.onToolCallComplete(toolMessageId, undefined);
+    }
+  };
+
   cancelToolInteraction = async (toolMessageId: string): Promise<void> => {
     const { context } = this.#get();
     const chatStore = useChatStore.getState();

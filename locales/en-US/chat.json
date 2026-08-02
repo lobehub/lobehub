@@ -1293,6 +1293,8 @@
   "tokenTag.used": "Used",
   "tool.intervention.approvalMode": "Approval Mode",
   "tool.intervention.approve": "Approve",
+  "tool.intervention.approveAll": "Approve all {{count}}",
+  "tool.intervention.approveAllTooltip": "Run all {{count}} pending tool calls together, then continue",
   "tool.intervention.mode.allowList": "Allow List",
   "tool.intervention.mode.allowListDesc": "Only automatically execute approved tools",
   "tool.intervention.mode.autoRun": "Auto Approve",

@@ -530,6 +530,114 @@ export class ConversationControlActionImpl {
     }
   };
 
+  /**
+   * Approve every pending tool of a parallel batch in ONE action.
+   *
+   * Server mode resolves the whole batch through a single Gateway op carrying
+   * `resumeApprovals`, so the run executes all approved tools as one
+   * `call_tools_batch` and continues the LLM exactly once with the complete
+   * result set. Looping `approveToolCalling` instead would start one op per
+   * tool, and each op continues the run while its siblings are still empty
+   * pending rows — which is what forks the parent chain and shows the model
+   * blank tool results.
+   *
+   * Client mode has no batch resume: the local runtime re-parks on the
+   * remaining pending tools after each approval, so sequential approvals are
+   * already correct there. Approvals are issued in order and awaited so the
+   * runtime never sees two resumes racing on the same assistant turn.
+   */
+  approveAllToolCalls = async (
+    toolMessageIds: string[],
+    context?: ConversationContext,
+  ): Promise<void> => {
+    if (toolMessageIds.length === 0) return;
+
+    const effectiveContext: ConversationContext = context ?? {
+      agentId: this.#get().activeAgentId,
+      topicId: this.#get().activeTopicId,
+      threadId: this.#get().activeThreadId,
+    };
+
+    if (!this.#shouldUseGatewayResume(effectiveContext)) {
+      for (const toolMessageId of toolMessageIds) {
+        await this.approveToolCalling(toolMessageId, '', effectiveContext);
+      }
+      return;
+    }
+
+    const { completeOperation, startOperation } = this.#get();
+
+    // Drop anything that can't be addressed: an optimistic row (`tmp_`) has no
+    // server identity yet, and a tool message without `tool_call_id` can't be
+    // matched to its pending call.
+    const decisions = toolMessageIds
+      .map((toolMessageId) => {
+        const toolMessage = dbMessageSelectors.getDbMessageById(toolMessageId)(this.#get());
+        const toolCallId = toolMessage?.tool_call_id;
+        return toolCallId && !toolMessageId.startsWith('tmp_')
+          ? { decision: 'approved' as const, parentMessageId: toolMessageId, toolCallId }
+          : undefined;
+      })
+      .filter((decision) => !!decision);
+
+    if (decisions.length === 0) {
+      console.warn('[approveAllToolCalls][server] no addressable pending tools; skipping resume');
+      return;
+    }
+
+    // The op-level anchor. The server re-derives the spine anchor from the
+    // batch itself, so this only has to be one of the batch's own rows.
+    const anchorMessageId = decisions.at(-1)!.parentMessageId;
+
+    const { operationId } = startOperation({
+      type: 'approveToolCalling',
+      context: { ...effectiveContext, messageId: anchorMessageId },
+    });
+
+    const optimisticContext = { operationId };
+
+    this.#emitRunResumed(effectiveContext, {
+      operationId,
+      parentMessageId: anchorMessageId,
+      runtimeType: 'gateway',
+    });
+
+    // Mark every card approved up front so the whole intervention bar settles in
+    // one paint instead of clearing card-by-card as the server catches up.
+    await Promise.all(
+      decisions.map((decision) =>
+        this.#get().optimisticUpdateMessagePlugin(
+          decision.parentMessageId,
+          { intervention: { status: 'approved' } },
+          optimisticContext,
+        ),
+      ),
+    );
+
+    const requestMetadata = this.#getRequestMetadataFromMessageChain(anchorMessageId);
+    const pausedOpIds = this.#getRunningServerOps(effectiveContext).map((op) => op.id);
+
+    try {
+      await this.#get().executeGatewayAgent({
+        context: effectiveContext,
+        message: '',
+        metadata: requestMetadata,
+        parentMessageId: anchorMessageId,
+        resumeApprovals: decisions,
+      });
+      this.#writeTopicStatus(effectiveContext, 'active');
+      this.#completeOpsById(pausedOpIds);
+      completeOperation(operationId);
+    } catch (error) {
+      const err = error as Error;
+      console.error('[approveAllToolCalls][server] Gateway resume failed:', err);
+      this.#get().failOperation(operationId, {
+        type: 'approveToolCalling',
+        message: err.message || 'Unknown error',
+      });
+    }
+  };
+
   submitToolInteraction = async (
     toolMessageId: string,
     response: Record<string, unknown>,

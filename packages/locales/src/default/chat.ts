@@ -1476,6 +1476,9 @@ export default {
   'tokenTag.used': 'Used',
   'tool.intervention.approvalMode': 'Approval Mode',
   'tool.intervention.approve': 'Approve',
+  'tool.intervention.approveAll': 'Approve all {{count}}',
+  'tool.intervention.approveAllTooltip':
+    'Run all {{count}} pending tool calls together, then continue',
   'tool.intervention.optionApprove': 'Approve',
   'tool.intervention.optionApproveRemember': "Approve, and don't ask again for similar actions",
   'tool.intervention.rememberSimilar': "Don't ask again for similar actions",

@@ -72,6 +72,12 @@ export interface ExecAgentTaskParams {
   prompt: string;
   /** Resume a previous op paused on `human_approve_required` instead of starting from a fresh user prompt. */
   resumeApproval?: ResumeApprovalParam;
+  /**
+   * Batch form of `resumeApproval` — one entry per pending tool resolved in a
+   * single "approve all" action. The server applies every decision, runs all
+   * approved tools as ONE `call_tools_batch`, and continues the LLM once.
+   */
+  resumeApprovals?: ResumeApprovalParam[];
   /** Resume a previous op paused on a human-intervention tool by carrying the human answer as the tool result. */
   resumeToolResult?: ResumeToolResultParam;
   /** Tool identifiers the user @-mentioned in this message; the server enables them for this run. */

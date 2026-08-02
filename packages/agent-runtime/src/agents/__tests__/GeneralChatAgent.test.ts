@@ -3611,4 +3611,172 @@ describe('GeneralChatAgent', () => {
       ]);
     });
   });
+  describe('pending approval guard across message shapes', () => {
+    // `AgentRuntimeService` rebuilds `state.messages` from the DB through
+    // conversation-flow's `parse()` on every server-runtime step, and
+    // `FlatListBuilder` folds an assistant plus its tool rows into ONE
+    // `role: 'assistantGroup'` message. Matching only the raw shape made this
+    // guard a permanent no-op there: approving one tool of a parallel batch
+    // resumed the LLM while the siblings were still pending empty rows.
+    const groupedToolEntry = (id: string, status: 'pending' | 'approved') => ({
+      apiName: 'calculate',
+      arguments: `{"expression":"${id}"}`,
+      id,
+      identifier: 'lobe-calculator',
+      intervention: { status },
+      result: { content: '', id: `tool-msg-${id}` },
+      result_msg_id: `tool-msg-${id}`,
+      type: 'builtin',
+    });
+
+    const parsedStateWith = (entries: any[]) =>
+      createMockState({
+        messages: [
+          { id: 'msg-user', role: 'user', content: 'calc' },
+          {
+            children: [{ content: '', id: 'msg-assistant', tools: entries }],
+            content: '',
+            id: 'msg-assistant',
+            role: 'assistantGroup',
+          },
+        ] as any,
+      });
+
+    it('re-parks on the parsed assistantGroup shape while siblings are still pending', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const state = parsedStateWith([
+        groupedToolEntry('call-a', 'approved'),
+        groupedToolEntry('call-b', 'pending'),
+        groupedToolEntry('call-c', 'pending'),
+      ]);
+
+      const result = await agent.runner(
+        createMockContext('tools_batch_result', { parentMessageId: 'tool-msg-call-a' }),
+        state,
+      );
+
+      expect(result).toMatchObject({
+        skipCreateToolMessage: true,
+        type: 'request_human_approve',
+      });
+      // The payload must be plain ChatToolPayloads — the display-only fields
+      // FlatListBuilder merges on (intervention/result/result_msg_id) would
+      // otherwise ride into `pendingToolsCalling` and back out to the client.
+      expect((result as any).pendingToolsCalling).toEqual([
+        {
+          apiName: 'calculate',
+          arguments: '{"expression":"call-b"}',
+          id: 'call-b',
+          identifier: 'lobe-calculator',
+          type: 'builtin',
+        },
+        {
+          apiName: 'calculate',
+          arguments: '{"expression":"call-c"}',
+          id: 'call-c',
+          identifier: 'lobe-calculator',
+          type: 'builtin',
+        },
+      ]);
+    });
+
+    it('continues to the LLM once every tool in the parsed group is resolved', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const state = parsedStateWith([
+        groupedToolEntry('call-a', 'approved'),
+        groupedToolEntry('call-b', 'approved'),
+      ]);
+
+      const result = await agent.runner(
+        createMockContext('tools_batch_result', { parentMessageId: 'tool-msg-call-b' }),
+        state,
+      );
+
+      expect((result as any).type).toBe('call_llm');
+    });
+
+    it('still re-parks on the raw assistant + tool-row shape', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const plugin = {
+        apiName: 'calculate',
+        arguments: '{"expression":"1+1"}',
+        id: 'call-b',
+        identifier: 'lobe-calculator',
+        type: 'builtin',
+      };
+
+      const state = createMockState({
+        messages: [
+          { id: 'msg-assistant', role: 'assistant', content: '', tools: [plugin] },
+          {
+            content: '',
+            id: 'tool-msg-b',
+            parentId: 'msg-assistant',
+            plugin,
+            pluginIntervention: { status: 'pending' },
+            role: 'tool',
+          },
+        ] as any,
+      });
+
+      const result = await agent.runner(
+        createMockContext('tools_batch_result', { parentMessageId: 'tool-msg-b' }),
+        state,
+      );
+
+      expect(result).toMatchObject({ type: 'request_human_approve' });
+      expect((result as any).pendingToolsCalling).toEqual([plugin]);
+    });
+
+    it('ignores a stale pending row from an earlier turn', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const state = createMockState({
+        messages: [
+          {
+            children: [
+              { content: '', id: 'msg-old', tools: [groupedToolEntry('stale', 'pending')] },
+            ],
+            content: '',
+            id: 'msg-old',
+            role: 'assistantGroup',
+          },
+          {
+            children: [
+              { content: '', id: 'msg-new', tools: [groupedToolEntry('call-new', 'approved')] },
+            ],
+            content: '',
+            id: 'msg-new',
+            role: 'assistantGroup',
+          },
+        ] as any,
+      });
+
+      const result = await agent.runner(
+        createMockContext('tools_batch_result', { parentMessageId: 'tool-msg-call-new' }),
+        state,
+      );
+
+      expect((result as any).type).toBe('call_llm');
+    });
+  });
 });

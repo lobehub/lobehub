@@ -253,6 +253,31 @@ const ExecAgentSchema = z
       })
       .optional(),
     /**
+     * Batch form of `resumeApproval` — one entry per pending tool the user
+     * resolved in a single action ("approve all" on a parallel tool batch).
+     * The op applies every decision, then runs all approved tools in ONE
+     * `call_tools_batch` and continues the LLM once with the full result set.
+     *
+     * Prefer this over firing N `resumeApproval` ops for a parallel batch: each
+     * of those continues the LLM while the not-yet-approved tools are still
+     * empty rows, which forks the parent chain and shows the model blank
+     * results. Mutually exclusive with `resumeApproval`.
+     */
+    resumeApprovals: z
+      .array(
+        z.object({
+          decision: z.enum(['approved', 'rejected', 'rejected_continue']),
+          /** ID of the pending `role='tool'` message this decision targets. */
+          parentMessageId: z.string(),
+          /** Optional user-supplied rejection reason (only meaningful for rejected variants). */
+          rejectionReason: z.string().optional(),
+          /** tool_call_id of the pending tool call being approved/rejected. */
+          toolCallId: z.string(),
+        }),
+      )
+      .min(1)
+      .optional(),
+    /**
      * Resume a previous op paused on a `humanIntervention: 'always'` tool (e.g.
      * lobe-agent `askUserQuestion`). When set, the new op writes the
      * human-provided answer as the target tool message's result and resumes from
@@ -846,6 +871,7 @@ export const aiAgentRouter = router({
       mentionedAgents,
       parentMessageId,
       resumeApproval,
+      resumeApprovals,
       resumeToolResult,
       selectedToolIds,
       trigger,
@@ -869,6 +895,9 @@ export const aiAgentRouter = router({
           ...existingMessageIds,
           parentMessageId,
           resumeApproval?.parentMessageId,
+          // Every batch target is authorized too — a caller must not be able to
+          // slip a message it doesn't own into the list behind an owned anchor.
+          ...(resumeApprovals ?? []).map((decision) => decision.parentMessageId),
           resumeToolResult?.parentMessageId,
         ],
         topicId: appContext?.topicId,
@@ -894,6 +923,7 @@ export const aiAgentRouter = router({
         // human-approval resume — either way, skip user message creation.
         resume: !!parentMessageId,
         resumeApproval,
+        resumeApprovals,
         resumeToolResult,
         selectedToolIds,
         slug,

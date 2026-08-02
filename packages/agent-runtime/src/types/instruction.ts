@@ -258,6 +258,14 @@ export interface AgentInstructionCallTool extends AgentInstructionBase {
 
 export interface AgentInstructionCallToolsBatch extends AgentInstructionBase {
   payload: {
+    /**
+     * `tool_call_id → existing tool message id`, for tools whose row already
+     * exists as a pending placeholder (batch human approval: the approval pause
+     * created one row per pending tool). The executor UPDATES those rows instead
+     * of inserting new ones — without this, resuming an approved batch would
+     * duplicate every tool message and orphan the pending originals.
+     */
+    existingToolMessageIds?: Record<string, string>;
     parentMessageId: string;
     toolsCalling: ChatToolPayload[];
   } & any;

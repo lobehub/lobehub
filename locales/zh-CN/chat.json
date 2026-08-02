@@ -1293,6 +1293,8 @@
   "tokenTag.used": "已使用",
   "tool.intervention.approvalMode": "审批模式",
   "tool.intervention.approve": "批准",
+  "tool.intervention.approveAll": "全部通过（{{count}}）",
+  "tool.intervention.approveAllTooltip": "一次性执行全部 {{count}} 个待确认工具调用，然后继续",
   "tool.intervention.mode.allowList": "白名单",
   "tool.intervention.mode.allowListDesc": "仅自动执行已批准的技能",
   "tool.intervention.mode.autoRun": "自动批准",
