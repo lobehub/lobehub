@@ -1,10 +1,9 @@
 import { useEffect, useLayoutEffect, useState } from 'react';
 
 import { useAppPainted, useAppReady } from '@/spa/atoms/app';
+import { removeStaticLoadingScreen } from '@/spa/loadingScreen';
 
 import { BOOT_SHELL_DELAY, type BootShellPhase, resolveBootShellPhase } from './phase';
-
-const removeStaticLoadingScreen = () => document.getElementById('loading-screen')?.remove();
 
 export const useBootShell = (): BootShellPhase => {
   const appReady = useAppReady();

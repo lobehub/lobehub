@@ -7,6 +7,7 @@ import { bootTiming } from '@/libs/bootTiming';
 import { cacheHydration } from '@/libs/swr/cacheHydration';
 import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { setAppPainted } from '@/spa/atoms/app';
+import { removeStaticLoadingScreen } from '@/spa/loadingScreen';
 
 // first-write-wins: only the very first paint records the boot timing mark.
 let firstPaintMarked = false;
@@ -85,6 +86,12 @@ const CacheHydrationGate = ({ children }: PropsWithChildren) => {
     // Runs after `children` have committed, so the boot shell only tears down
     // once the real app is already in the DOM.
     setAppPainted(true);
+    // Backstop for entries that mount no `BootShell` (the Electron popup window,
+    // whose `popup.html` ships a z-index 99999 scrim with `pointer-events: auto`):
+    // the shell is what normally removes this, so without it the popup stays dimmed
+    // AND swallows every click — the app renders underneath but is unusable.
+    // Idempotent — a boot-shell entry has already removed it here.
+    removeStaticLoadingScreen();
   }, [released]);
 
   if (!released) return null;

@@ -113,6 +113,25 @@ describe('CacheHydrationGate', () => {
     expect(screen.queryByTestId('app')).not.toBeNull();
   });
 
+  it('tears down the static loading screen for entries that mount no boot shell', () => {
+    // The Electron popup entry renders no `BootShell`, and `popup.html` ships an
+    // opaque z-index 99999 `#loading-screen`. `useBootShell` is what normally
+    // removes it, so the gate has to be the backstop or the popup stays covered
+    // forever after hydration.
+    const loadingScreen = document.createElement('div');
+    loadingScreen.id = 'loading-screen';
+    document.body.append(loadingScreen);
+
+    renderGate();
+    expect(document.getElementById('loading-screen')).not.toBeNull();
+
+    act(() => {
+      cacheHydration.markReady('anon:personal');
+    });
+
+    expect(document.getElementById('loading-screen')).toBeNull();
+  });
+
   it('hung-hydration backstop still releases if ready never fires', () => {
     vi.useFakeTimers();
     renderGate();

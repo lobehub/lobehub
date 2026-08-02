@@ -172,6 +172,54 @@ Acceptance fixture through the local CLI, and capture the same route in separate
 authenticated and storage-empty browser contexts. This proves both owner and
 shared-viewer rendering without depending on production browser cookies.
 
+### The dev Electron main window runs the WEB entry — desktop-entry boot code is unverifiable in dev
+
+**Situation:** verifying anything that lives in `src/spa/entry.desktop.tsx` (bootstrap
+identity, adapter registration, boot marks) on an `electron-dev.sh` instance.
+
+**Doesn't work:** assuming the desktop instance loads the desktop entry. Measured on a
+live dev instance, the **main window's entry script is `app://renderer/src/spa/entry.web.tsx`**,
+while the **topicPopup window in the same instance correctly loads `entry.popup.tsx`**.
+So Vite dev does resolve some MPA paths but the main window falls through to the root
+`index.html`. (Mechanism not established — do not repeat the plausible-sounding
+"`ViteRendererFallback` is a dumb proxy so everything falls back" explanation; the popup
+result falsifies it.) Consequence: desktop-entry boot code never executes in dev, and a
+deletion there passes every dev smoke test — which is exactly how one such call was lost
+for a whole release.
+
+**Works:** before claiming anything about a desktop entry, read the loaded entry script
+and branch on it:
+
+```js
+[...document.querySelectorAll('script')].map((s) => s.src).find((s) => s.includes('entry.'));
+```
+
+If it is not the entry you are testing, the surface cannot prove your claim — fall back to
+a source-order regression test, and say in the report that the runtime path needs a
+packaged build (`DESKTOP_RENDERER_STATIC` / `resolveRendererFilePath` maps
+`apps/desktop/index.html`, `popup.html`, `overlay.html`).
+
+### Driving and probing a real Electron popup window
+
+**Situation:** verifying `entry.popup.tsx` behavior (its own HTML shell, no `BootShell`).
+
+**Works:** open the real window from the renderer store, then attach raw CDP to the
+popup's own target — the agent-browser daemon holds the main window's target, and one
+page target accepts only one websocket:
+
+```bash
+agent-browser --cdp 9222 eval '(async () => {
+  await window.__LOBE_STORES.global().openTopicInNewWindow("inbox","verify-popup");
+  return "requested"; })()'
+curl -s http://127.0.0.1:9222/json/list # pick the target whose url contains /popup/
+```
+
+Any `(agentId, topicId)` pair works — the popup boots regardless of whether the route
+resolves data, which is what makes this usable on a signed-out instance. For overlay
+claims, measure rather than eyeball: `getComputedStyle` for `pointer-events` / background
+alpha plus `document.elementFromPoint(x, y)` — a 50%-alpha scrim looks like a cosmetic
+tint in a screenshot while actually swallowing every click.
+
 ### The debug proxy cannot reach a settled app — workspace `packages/*` dynamic imports fail cross-origin
 
 **Situation:** verifying frontend work through `/_dangerous_local_dev_proxy` (production
