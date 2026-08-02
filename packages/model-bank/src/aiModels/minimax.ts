@@ -397,7 +397,13 @@ const minimaxVideoModels: AIVideoModelCard[] = [
       },
       imageUrls: {
         default: [],
-        maxCount: 9,
+        // The v2 API accepts at most 9 images total across the first-frame
+        // (imageUrl), reference-list (imageUrls), and last-frame (endImageUrl)
+        // slots, which all normalize into a single reference pool at runtime.
+        // Cap the reference array at 7 so the combined upload capacity
+        // (1 + 7 + 1) never exceeds 9 — otherwise the UI could assemble a
+        // payload that createVideo rejects.
+        maxCount: 7,
       },
       prompt: { default: '' },
       resolution: {
