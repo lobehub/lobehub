@@ -367,6 +367,8 @@ table agent_labels {
   indexes {
     user_id [name: 'agent_labels_user_id_idx']
     workspace_id [name: 'agent_labels_workspace_id_idx']
+    (user_id, name) [name: 'agent_labels_user_id_name_unique', unique]
+    (workspace_id, name) [name: 'agent_labels_workspace_id_name_unique', unique]
   }
 }
 

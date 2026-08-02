@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "d4d06564-df44-4bb8-ae31-f9f3d7909924",
+  "id": "af1f956e-2d18-416b-8fe9-71b9f55d7c7f",
   "policies": {},
   "prevId": "5a333ec6-5c77-42a5-bfb5-54801d512f7c",
   "roles": {},
@@ -3298,6 +3298,50 @@
             }
           ],
           "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "agent_labels_user_id_name_unique": {
+          "name": "agent_labels_user_id_name_unique",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"agent_labels\".\"workspace_id\" IS NULL AND \"agent_labels\".\"archived\" = false",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "agent_labels_workspace_id_name_unique": {
+          "name": "agent_labels_workspace_id_name_unique",
+          "columns": [
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"agent_labels\".\"workspace_id\" IS NOT NULL AND \"agent_labels\".\"archived\" = false",
           "concurrently": false,
           "method": "btree",
           "with": {}

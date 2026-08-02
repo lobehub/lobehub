@@ -38,4 +38,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS "agent_label_assignments_label_id_agent_id_uni
 CREATE INDEX IF NOT EXISTS "agent_label_assignments_agent_id_idx" ON "agent_label_assignments" USING btree ("agent_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "agent_label_assignments_workspace_id_idx" ON "agent_label_assignments" USING btree ("workspace_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "agent_labels_user_id_idx" ON "agent_labels" USING btree ("user_id");--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "agent_labels_workspace_id_idx" ON "agent_labels" USING btree ("workspace_id");
+CREATE INDEX IF NOT EXISTS "agent_labels_workspace_id_idx" ON "agent_labels" USING btree ("workspace_id");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "agent_labels_user_id_name_unique" ON "agent_labels" USING btree ("user_id","name") WHERE "agent_labels"."workspace_id" IS NULL AND "agent_labels"."archived" = false;--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "agent_labels_workspace_id_name_unique" ON "agent_labels" USING btree ("workspace_id","name") WHERE "agent_labels"."workspace_id" IS NOT NULL AND "agent_labels"."archived" = false;
