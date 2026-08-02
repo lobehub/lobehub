@@ -489,14 +489,14 @@ describe('cliAgentBinaries', () => {
         callExecFileError(new Error('not found'));
         callExecFile('/opt/homebrew/bin:/Users/Hanam/.local/share/mise/shims:/usr/bin:/bin');
         callExecFile('/Users/Hanam/.local/share/mise/shims/agy\n');
-        callExecFile('1.0.7');
+        callExecFile('1.0.7-beta.1+build.5');
 
         const { antigravityCliBinary } = await import('../cliAgentBinaries');
         const status = await antigravityCliBinary.detect();
 
         expect(status.available).toBe(true);
         expect(status.path).toBe('/Users/Hanam/.local/share/mise/shims/agy');
-        expect(status.version).toBe('1.0.7');
+        expect(status.version).toBe('1.0.7-beta.1+build.5');
         // The login-shell PATH that resolved the shim must be surfaced so the
         // spawn site can carry it into the child env (mise/nvm `node` lives
         // there, not on the leaner inherited PATH).
