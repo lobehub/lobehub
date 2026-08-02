@@ -17,7 +17,7 @@ display + Accessibility permission), so reach for it only when CDP can't.
    clicks — see the toolkit).
 2. Drive the action that exercises your change.
 3. Capture proof: a `screencapture` PNG, a screen recording for time-based behavior
-   ([../references/recording.md](../references/recording.md#path-2--os-screen-recording-macos-local-only)),
+   ([../references/recording.md](../references/recording.md#path-3--os-screen-recording-macos-local-only)),
    or screen text via select-all-copy + `pbpaste`.
 
 ```bash

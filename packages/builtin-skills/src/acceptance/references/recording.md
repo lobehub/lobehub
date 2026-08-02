@@ -6,8 +6,16 @@ screenshot can't prove it. Record a clip and upload it as `gif` or `video`
 evidence. This is a first-class capability, not a nice-to-have: time-based claims
 are unverifiable without it.
 
-Two ways to record. **Prefer the CDP frame-sequence path** — it's headless/
-cloud-portable; OS screen recording is macOS-only.
+Choose the recorder owned by the surface. Prefer CDP frames for Web/Electron,
+the Simulator framebuffer for iOS, and host screen recording only for native
+macOS windows that expose neither.
+
+## Contents
+
+- [CDP frame sequence](#path-1--cdp-frame-sequence--mp4gif-portable-recommended)
+- [iOS Simulator framebuffer](#path-2--ios-simulator-framebuffer--mp4--frames)
+- [macOS screen recording](#path-3--os-screen-recording-macos-local-only)
+- [GIF vs MP4](#gif-vs-mp4--which-to-upload)
 
 ## Path 1 — CDP frame sequence → MP4/GIF (portable, recommended)
 
@@ -46,7 +54,75 @@ Tune the frame interval to the behavior: faster (`0.25s`) for quick animations,
 slower (`1s`) for long flows. Keep the clip scoped — a few seconds of the actual
 behavior, not the whole session.
 
-## Path 2 — OS screen recording (macOS, local only)
+## Path 2 — iOS Simulator framebuffer → MP4 + frames
+
+Record device pixels directly with `simctl`; this excludes Simulator window chrome
+and is stronger UI evidence than a host-screen crop. Use an explicit UDID when
+more than one device is booted.
+
+```bash
+# Start in a persistent terminal/session and wait until stderr says
+# "Recording started" before driving the scenario.
+xcrun simctl io "$UDID" recordVideo --codec=h264 ./proof/ios-flow.mp4 \
+  2> ./proof/ios-recording.log
+
+# Drive the scenario with AXe or the repository's existing native CLI/UI tests in
+# parallel. Stop the recorder with SIGINT (Ctrl-C), then wait for finalization.
+```
+
+Do not use SIGKILL: `simctl` must flush in-flight frames and finalize the movie.
+An interrupted recorder command may return a non-zero shell status even after a
+successful SIGINT finalization; judge the artifact with `ffprobe`, not that status
+alone.
+
+AXe also exposes `record-video --fps <1-30> --quality <1-100>`, but some terminal
+wrappers may intercept SIGINT before AXe writes the MP4 metadata. Use it only after
+confirming a short probe file passes `ffprobe`; otherwise retain AXe for input/AX
+and use `simctl` for recording.
+
+Verify the artifact before judging it:
+
+```bash
+ffprobe -v error \
+  -show_entries format=duration:stream=codec_name,width,height,r_frame_rate,avg_frame_rate,nb_frames \
+  -of json ./proof/ios-flow.mp4
+```
+
+Simulator recordings can be variable-frame-rate. Treat a requested rate as a
+target, not a guarantee; use `avg_frame_rate` and `nb_frames` as the observed
+values.
+
+Extract **every encoded frame** when the criterion concerns one-frame flashes,
+flicker, or exact transition continuity:
+
+```bash
+FRAME_DIR=$(mktemp -d)
+ffmpeg -i ./proof/ios-flow.mp4 -map 0:v:0 -fps_mode passthrough \
+  "$FRAME_DIR/frame_%06d.png"
+```
+
+Count the generated PNGs and compare the total with `ffprobe`'s `nb_frames`.
+Variable timestamps may produce non-monotonic-DTS warnings from the image muxer;
+the count check determines whether every decoded frame was retained.
+
+For ordinary UI review, sample at a declared rate and generate paginated contact
+sheets. Keep the raw video alongside these derived artifacts:
+
+```bash
+ffmpeg -i ./proof/ios-flow.mp4 -vf "fps=10" \
+  ./proof/review-frame_%06d.png
+
+ffmpeg -i ./proof/ios-flow.mp4 \
+  -vf "fps=2,scale=360:-1,tile=4x4:padding=8:margin=8" \
+  ./proof/contact_%03d.png
+```
+
+Inspect start, action, transient, and settled states. A contact sheet is a review
+index, not proof of gesture delivery; pair it with the driver action and fresh
+Accessibility/postcondition evidence. Full workflow:
+[../surfaces/ios-simulator.md](../surfaces/ios-simulator.md).
+
+## Path 3 — OS screen recording (macOS, local only)
 
 When you must capture the real screen — native windows, OS chrome, a non-Chromium
 app driven via [computer-use.md](./computer-use.md) — record at the OS level. This
@@ -93,5 +169,5 @@ lh acceptance run result submit --operation "$LOBE_OPERATION_ID" --item "$CHECK_
 - **ffmpeg** — `brew install ffmpeg` (or `bun add -g ffmpeg-static`). Needed for
   both paths' assembly/conversion.
 - **agent-browser** — for the CDP frame path ([agent-browser.md](./agent-browser.md)).
-- Path 1 is headless/cloud-safe; Path 2 is macOS-only — see
+- Path 1 is headless/cloud-safe; Paths 2 and 3 require local macOS — see
   [evidence.md](./evidence.md#headless--cloud-portability).

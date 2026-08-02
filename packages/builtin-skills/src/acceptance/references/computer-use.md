@@ -109,7 +109,7 @@ pbpaste
 
 - A `screencapture` PNG → `--type screenshot --by cli`.
 - For time-based native behavior, OS screen-record to MP4/GIF — see
-  [recording.md](./recording.md#path-2--os-screen-recording-macos-local-only).
+  [recording.md](./recording.md#path-3--os-screen-recording-macos-local-only).
 - Text read via `pbpaste` → `--type text --content "$(pbpaste)"`.
 
 ## Gotchas

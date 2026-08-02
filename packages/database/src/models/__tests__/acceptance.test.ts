@@ -67,6 +67,24 @@ describe('AcceptanceModel', () => {
     expect(third.requirement).toBe('Review UX polish ships end to end');
   });
 
+  it('keeps the first standalone display title and backfills one when initially absent', async () => {
+    const model = new AcceptanceModel(serverDB, userId);
+    const subjectId = 'standalone-external-delivery';
+
+    const first = await model.ensureForSubject('standalone', subjectId);
+    expect(first.metadata?.title).toBeUndefined();
+
+    const titled = await model.ensureForSubject('standalone', subjectId, {
+      metadata: { title: 'External delivery' },
+    });
+    expect(titled.metadata?.title).toBe('External delivery');
+
+    const unchanged = await model.ensureForSubject('standalone', subjectId, {
+      metadata: { title: 'Replacement title' },
+    });
+    expect(unchanged.metadata?.title).toBe('External delivery');
+  });
+
   it('defaults visibility by scope: personal public, workspace private', async () => {
     const personal = new AcceptanceModel(serverDB, userId);
     const personalRow = await personal.ensureForSubject('topic', topicId);

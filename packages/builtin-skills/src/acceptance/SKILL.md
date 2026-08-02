@@ -1,50 +1,72 @@
 ---
 name: acceptance
 description: >
-  Self-evidence for task delivery verification. When you run a task that has a
-  verify plan, this skill is the full operating manual: what to prove, which
-  surface to prove it on (CLI / web / desktop), how to drive that surface with
-  agent-browser, how to get past auth, and how to submit each artifact with
-  `lh acceptance run result submit` so the delivery is judged on real proof — not your
-  word that it works. Triggers on 'verify the task', 'collect evidence', 'prove
-  it works', 'upload evidence', 'verify plan', 'requiredEvidence', or any run
-  that must self-certify its delivery.
+  Self-evidence for delivery verification in any repository, with or without
+  LOBE_OPERATION_ID or a preconfigured verify plan. Discover an existing plan
+  when present; otherwise author checks and publish a standalone acceptance.
+  Pick the proving surface (CLI / web / desktop / iOS Simulator), capture real
+  evidence, and submit it with the lh CLI. Triggers on 'verify the task',
+  'collect evidence',
+  'prove it works', 'upload evidence', 'verify plan', 'requiredEvidence', or any
+  run that must self-certify its delivery. Missing LobeHub environment IDs never
+  make this skill inapplicable.
 ---
 
 # Verify (Builder Self-Evidence)
 
-You are the **builder** for a task. A separate review step will judge your
-delivery against a **verify plan** — a list of criteria, some of which demand
-**evidence** (a screenshot, a DOM snapshot, CLI output…). A criterion that
-declares `requiredEvidence` **cannot pass on your text alone**: if the artifact
-is missing, the structural gate marks it `uncertain` and the delivery is held.
+You are the **builder** for a delivery. A separate review step judges it against
+either an existing **verify plan** or checks you author before testing. Some
+criteria demand **evidence** (a screenshot, a DOM snapshot, CLI output…). A
+criterion that declares `requiredEvidence` **cannot pass on your text alone**:
+if the artifact is missing, the structural gate marks it `uncertain` and the
+delivery is held.
+
+## Applicability invariant
+
+This skill applies whenever the delivery needs real verification. Environment
+IDs select a path; they are not prerequisites:
+
+- `$LOBE_OPERATION_ID` means a verify plan already exists. Discover and satisfy
+  it.
+- No `$LOBE_OPERATION_ID` means you author the checks and publish a structured
+  report round.
+- `$LOBEHUB_TOPIC_ID` or `--subject` groups rounds under an existing LobeHub
+  object.
+- No topic or subject means `lh acceptance run ingest` creates a standalone
+  acceptance automatically.
+
+Never report that this skill is inapplicable merely because
+`$LOBE_OPERATION_ID`, `$LOBEHUB_TOPIC_ID`, or a Task ID is absent. Continue with
+the standalone path.
 
 So while you do the work, capture the proof and submit it. The loop:
 
 ```
-discover plan  →  pick the surface  →  capture evidence per criterion  →  submit each  →  self-check coverage
+discover or author plan  →  pick the surface  →  capture evidence  →  publish the round  →  self-check coverage
 ```
 
-Everything here is portable: the hard dependencies are the `lh` CLI (already
-authed in your environment) and, for UI proof, `agent-browser`. No repo scripts,
-no local report directory.
+The skill package is portable, but execution capabilities are surface-specific:
+`agent-browser` serves Web/Electron, while native macOS and iOS Simulator require
+a local macOS display and their platform tools. No repository-specific scripts
+or fixed report directory are required.
 
 ## Two entry points — an operation id is NOT required
 
 Every evidence command targets a **verification session** (a round). How you
 name that session is a choice, not a prerequisite:
 
-| You have                                 | Target the round with                                                                                               | Path                                                   |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| A verify plan (`$LOBE_OPERATION_ID` set) | `--operation "$LOBE_OPERATION_ID"`                                                                                  | This document: discover the plan, satisfy its criteria |
-| No plan — you author the checks          | `--run <verifyRunId>` from `lh acceptance run create`, or publish a whole directory with `lh acceptance run ingest` | [references/report.md](references/report.md)           |
+| You have                                 | Target the round with                                                                                                     | Path                                                   |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| A verify plan (`$LOBE_OPERATION_ID` set) | `--operation "$LOBE_OPERATION_ID"`                                                                                        | This document: discover the plan, satisfy its criteria |
+| No plan — you author the checks          | Publish a whole directory with `lh acceptance run ingest`; it creates the round and, when needed, a standalone acceptance | [references/report.md](references/report.md)           |
 
 `--operation` and `--run` are interchangeable on `result submit` and
 `result list`; a round created without an operation is simply recorded as
 `standalone`. (`evidence list` takes neither — it keys off a positional
 `<checkResultId>` you read from `result list`.) **A missing operation id never
 means "skip the acceptance"** — it only means you author the plan instead of
-discovering it.
+discovering it. On a later repair round, pass the previously printed
+`--acceptance <acceptanceId>` so the new snapshot joins the same history.
 
 ## Rounds are immutable — repair means a NEW round
 
@@ -64,18 +86,20 @@ the record of this attempt.
 
 - **`lh` is authed.** Confirm with `lh acceptance run list --json` (an empty `[]`
   means authed; an auth error means stop and surface it).
-- **A target round.** Either `$LOBE_OPERATION_ID` (provided in the environment or
-  named in your task prompt), or a `verifyRunId` you create yourself — see the
-  table above.
-- **For UI evidence, `agent-browser` is installed.** `npm i -g agent-browser`
-  then `agent-browser install` (downloads Chrome). Full reference:
-  [references/agent-browser.md](references/agent-browser.md).
+- **A round path.** Use `$LOBE_OPERATION_ID` when supplied. Otherwise author a
+  structured report; ingest creates both its round and, outside LobeHub, its
+  standalone acceptance.
+- **Install only the UI driver required by the selected surface.** Web/Electron
+  use `agent-browser`; native iOS uses Xcode/`simctl` plus a Simulator HID/AX CLI
+  such as AXe, or the repository's existing UI-test driver. Probe installed tools
+  before adding dependencies, and do not substitute a private agent plugin.
 
 ## Step 1 — Discover the plan (what to prove)
 
 > Plan-driven path only. Authoring your own checks instead? Jump to
-> [references/report.md](references/report.md) — Steps 2–4 below still apply,
-> targeting your round with `--run <verifyRunId>`.
+> [references/report.md](references/report.md), then use the relevant surface
+> recipes below to capture its evidence. Publish that authored plan and its
+> cases together with `lh acceptance run ingest`.
 
 One read tells you what to prove:
 
@@ -99,13 +123,14 @@ this point — that's expected.) Exact shapes:
 The criterion's `hint` usually implies the surface. Match the change you made to
 the cheapest surface that can actually prove it, and escalate only if needed:
 
-| What your task changed                                         | Surface                                               | Why                                                                        | Guide                                             |
-| -------------------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------- |
-| Backend / CLI / library / data logic                           | **CLI**                                               | Fastest, text-assertable, zero UI flakiness — upload stdout as `text`      | [surfaces/cli.md](surfaces/cli.md)                |
-| Web app frontend / styles / interactions                       | **Web** (agent-browser → running web app)             | The product shape users see; screenshot/DOM the rendered result            | [surfaces/web.md](surfaces/web.md)                |
-| New/changed API **plus** the UI consuming it                   | **Web**, full-stack (agent-browser + network capture) | One surface where request/response and rendered result are both observable | [surfaces/web.md](surfaces/web.md#web-full-stack) |
-| Desktop (Electron) app behavior                                | **Electron** (agent-browser `--cdp`)                  | Only the real desktop shell exercises desktop-only code paths              | [surfaces/electron.md](surfaces/electron.md)      |
-| Native macOS app / OS-level behavior agent-browser can't reach | **Native** (Computer Use: osascript + screencapture)  | The only way to drive non-Chromium apps and OS chrome (local macOS only)   | [surfaces/native.md](surfaces/native.md)          |
+| What your task changed                                         | Surface                                               | Why                                                                                            | Guide                                                  |
+| -------------------------------------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Backend / CLI / library / data logic                           | **CLI**                                               | Fastest, text-assertable, zero UI flakiness — upload stdout as `text`                          | [surfaces/cli.md](surfaces/cli.md)                     |
+| Web app frontend / styles / interactions                       | **Web** (agent-browser → running web app)             | The product shape users see; screenshot/DOM the rendered result                                | [surfaces/web.md](surfaces/web.md)                     |
+| New/changed API **plus** the UI consuming it                   | **Web**, full-stack (agent-browser + network capture) | One surface where request/response and rendered result are both observable                     | [surfaces/web.md](surfaces/web.md#web-full-stack)      |
+| Desktop (Electron) app behavior                                | **Electron** (agent-browser `--cdp`)                  | Only the real desktop shell exercises desktop-only code paths                                  | [surfaces/electron.md](surfaces/electron.md)           |
+| Native macOS app / OS-level behavior agent-browser can't reach | **Native** (Computer Use: osascript + screencapture)  | The only way to drive non-Chromium apps and OS chrome (local macOS only)                       | [surfaces/native.md](surfaces/native.md)               |
+| Native iOS app behavior, gestures, or device-size layout       | **iOS Simulator** (AXe/native CLI + `simctl`)         | Proves the installed iOS binary, native HID input, Accessibility state, and device framebuffer | [surfaces/ios-simulator.md](surfaces/ios-simulator.md) |
 
 Rules of thumb:
 
@@ -118,6 +143,10 @@ Rules of thumb:
   packaged shell, OS integration) — that code path doesn't exist in a plain web
   page. Switching conditions per surface: [surfaces/web.md](surfaces/web.md) and
   [surfaces/electron.md](surfaces/electron.md).
+- **iOS is not a browser or host-mouse surface.** Use AXe or another installed
+  Simulator HID/Accessibility CLI for taps, long press, swipe, pan, and UI-tree
+  inspection; use `simctl` for lifecycle/framebuffer capture. If the available
+  CLI cannot express the planned touch sequence, mark the case `blocked`.
 - **Auth is a gate, scoped to the surface.** If the state under test is behind a
   login, authenticate that surface first or every capture lands on the sign-in
   page. Recipes and boundaries: [references/auth.md](references/auth.md).
@@ -215,7 +244,8 @@ lh acceptance run evidence list vcr_77 --json          # → one screenshot pres
 
 - **Prefer engine-level capture over OS capture.** `agent-browser screenshot` /
   `dom` / `eval` render from the browser engine and run headless; `screencapture`
-  / osascript are macOS-only and break in the cloud.
+  / osascript are macOS-only and break in the cloud. For iOS Simulator, prefer
+  its own framebuffer via `xcrun simctl io` over host-window capture.
 - **Upload as you go, not at the end.** Evidence uploaded mid-run is keyed to the
   criterion immediately; a crash near the end doesn't lose your proof.
 - **Don't invent evidence.** Only capture the types a criterion declares.
@@ -230,7 +260,8 @@ verify/
 │   ├── cli.md                    # backend / CLI surface → text evidence from command output
 │   ├── web.md                    # web surface (frontend / full-stack) via agent-browser
 │   ├── electron.md               # desktop surface (Electron) via agent-browser --cdp
-│   └── native.md                 # native macOS app / OS-level surface via Computer Use
+│   ├── native.md                 # native macOS app / OS-level surface via Computer Use
+│   └── ios-simulator.md          # native iOS build, interaction, framebuffer, and gesture proof
 └── references/                   # cross-surface shared knowledge
     ├── plan-format.md            # verify contract: plan shape + checkItemId↔checkResultId join
     ├── evidence.md               # evidence type → capture recipe; upload; coverage; portability

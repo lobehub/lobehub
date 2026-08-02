@@ -11,6 +11,7 @@ import report from './references/report.md';
 import content from './SKILL.md';
 import cli from './surfaces/cli.md';
 import electron from './surfaces/electron.md';
+import iosSimulator from './surfaces/ios-simulator.md';
 import native from './surfaces/native.md';
 import web from './surfaces/web.md';
 
@@ -19,10 +20,13 @@ export const AcceptanceIdentifier = 'acceptance';
 /**
  * Portable builder-side acceptance skill. Unlike the repo-local `agent-testing`
  * skill (macOS scripts + local report dirs + LobeHub-specific probes), this one
- * depends only on the `lh` CLI and `agent-browser`, so any external builder
- * (Claude Code / Codex) can run it from a task's working directory: discover the
- * plan → pick a surface → capture evidence per criterion → `lh acceptance run
- * result submit` → self-check coverage.
+ * keeps its acceptance contract independent of repository-local scripts, so any
+ * external builder (Claude Code / Codex) can run it from a task's working
+ * directory, with or without a LobeHub operation/topic: discover or author the
+ * plan → pick a surface → capture evidence per criterion → publish a round →
+ * self-check coverage. Surface-specific tools remain explicit: agent-browser for
+ * Web/Electron, shell-level native automation for macOS, and an installed
+ * Simulator HID/Accessibility CLI plus Xcode/simctl for iOS.
  *
  * The references carry the full operating manual (agent-browser CLI, web vs
  * Electron decision + setup, auth recipes, capture recipes), with all
@@ -36,7 +40,7 @@ export const AcceptanceSkill: BuiltinSkill = {
   avatar: '✅',
   content,
   description:
-    'Self-evidence for task delivery acceptance — discover the verify plan, pick the right surface (CLI / web / desktop), drive it with agent-browser, get past auth, capture portable evidence per criterion, and submit each with `lh acceptance run result submit` so the delivery is judged on real proof.',
+    'Self-evidence for delivery acceptance in any repository, with or without a LobeHub operation or verify plan — discover or author checks, verify CLI, web, desktop, or iOS Simulator behavior on the correct surface, capture real evidence, and publish a standalone or subject-linked acceptance round.',
   identifier: AcceptanceIdentifier,
   name: 'acceptance',
   resources: toResourceMeta({
@@ -49,6 +53,7 @@ export const AcceptanceSkill: BuiltinSkill = {
     'references/report.md': report,
     'surfaces/cli.md': cli,
     'surfaces/electron.md': electron,
+    'surfaces/ios-simulator.md': iosSimulator,
     'surfaces/native.md': native,
     'surfaces/web.md': web,
   }),
