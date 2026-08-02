@@ -31,7 +31,7 @@ describe('chainUnderstandingDetailedPersona', () => {
   /** @example A pinned repository alone cannot become an active role in quick Understanding. */
   it('keeps profile curation below contribution evidence in the quick analysis', () => {
     const prompt = chainUnderstandingPersona({
-      diagnostics: { failedCount: 0, succeededCount: 1 },
+      diagnostics: { evidenceCount: 1, failedCount: 0, succeededCount: 1 },
       providers: ['github'],
       responseLanguage: 'zh-CN',
     });

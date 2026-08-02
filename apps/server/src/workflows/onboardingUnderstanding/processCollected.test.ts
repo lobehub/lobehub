@@ -69,7 +69,11 @@ describe('processCollectedUnderstanding', () => {
   });
 
   it('starts the full persona workflow only after the quick proposal is published', async () => {
-    const triggerDetailedPersona = vi.fn(async () => ({ workflowRunId: 'detailed-1' }));
+    const triggerDetailedPersona = vi.fn(
+      async (_input: unknown, _options: { workflowRunId: string }) => ({
+        workflowRunId: 'detailed-1',
+      }),
+    );
     const service = {
       processCollected: vi.fn(async () => ({
         feedbackRevision: 0,
@@ -96,7 +100,11 @@ describe('processCollectedUnderstanding', () => {
   });
 
   it('uses a distinct detailed workflow id for each generated proposal revision', async () => {
-    const triggerDetailedPersona = vi.fn(async () => ({ workflowRunId: 'detailed-1' }));
+    const triggerDetailedPersona = vi.fn(
+      async (_input: unknown, _options: { workflowRunId: string }) => ({
+        workflowRunId: 'detailed-1',
+      }),
+    );
     const service = {
       processCollected: vi
         .fn()
@@ -125,8 +133,9 @@ describe('processCollectedUnderstanding', () => {
       triggerDetailedPersona,
     });
 
-    expect(triggerDetailedPersona.mock.calls[0][1].workflowRunId).not.toBe(
-      triggerDetailedPersona.mock.calls[1][1].workflowRunId,
+    expect(triggerDetailedPersona).toHaveBeenCalledTimes(2);
+    expect(triggerDetailedPersona.mock.calls.at(0)?.[1].workflowRunId).not.toBe(
+      triggerDetailedPersona.mock.calls.at(1)?.[1].workflowRunId,
     );
   });
 
