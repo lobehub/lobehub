@@ -303,6 +303,8 @@ describe('ConversationLifecycle actions', () => {
 
       it('should not process AI when onlyAddUserMessage is true', async () => {
         const { result } = renderHook(() => useChatStore());
+        const onMessageAccepted = vi.fn();
+        const onMessagePersisted = vi.fn();
 
         vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
           messages: [],
@@ -314,15 +316,20 @@ describe('ConversationLifecycle actions', () => {
           await result.current.sendMessage({
             message: TEST_CONTENT.USER_MESSAGE,
             onlyAddUserMessage: true,
+            onMessageAccepted,
+            onMessagePersisted,
             context: createTestContext(),
           });
         });
 
         expect(result.current.executeClientAgent).not.toHaveBeenCalled();
+        expect(onMessageAccepted).toHaveBeenCalledOnce();
+        expect(onMessagePersisted).toHaveBeenCalledOnce();
       });
 
       it('should restore the pre-send editor snapshot when server send fails', async () => {
         const { result } = renderHook(() => useChatStore());
+        const onMessagePersisted = vi.fn();
         const inputEditorState = {
           root: {
             children: [
@@ -361,6 +368,7 @@ describe('ConversationLifecycle actions', () => {
             context: createTestContext(),
             editorData: inputEditorState as any,
             message: 'Restored rich text',
+            onMessagePersisted,
           });
         });
 
@@ -371,6 +379,95 @@ describe('ConversationLifecycle actions', () => {
         expect(sendMessageOperation?.metadata.inputEditorTempState).toEqual(inputEditorState);
         expect(setJSONState).toHaveBeenCalledWith(inputEditorState);
         expect(setDocument).not.toHaveBeenCalled();
+        expect(onMessagePersisted).not.toHaveBeenCalled();
+      });
+
+      it('should not restore an editor snapshot when a separate voice send fails', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const getJSONState = vi.fn().mockReturnValue({ stale: 'draft' });
+        const setDocument = vi.fn();
+        const setJSONState = vi.fn();
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockRejectedValue(
+          new TRPCClientError('voice persistence failed'),
+        );
+
+        act(() => {
+          useChatStore.setState({
+            mainInputEditor: {
+              getJSONState,
+              setDocument,
+              setJSONState,
+            } as any,
+          });
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: createTestContext(),
+            files: [{ id: 'voice-file' } as any],
+            message: '',
+            preserveComposer: true,
+          });
+        });
+
+        const sendMessageOperation = Object.values(result.current.operations).find(
+          (operation) => operation.type === 'sendMessage',
+        );
+
+        expect(sendMessageOperation?.metadata.inputEditorTempState).toBeUndefined();
+        expect(getJSONState).not.toHaveBeenCalled();
+        expect(setJSONState).not.toHaveBeenCalled();
+        expect(setDocument).not.toHaveBeenCalled();
+      });
+
+      it('should acknowledge persistence before client generation completes', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const onMessageAccepted = vi.fn();
+        const onMessagePersisted = vi.fn();
+        let resolveExecution!: () => void;
+        let sendCompleted = false;
+        const executionPromise = new Promise<void>((resolve) => {
+          resolveExecution = resolve;
+        });
+
+        act(() => {
+          useChatStore.setState({
+            executeClientAgent: vi.fn().mockReturnValue(executionPromise),
+          });
+        });
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          messages: [
+            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+          ],
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+
+        let sendPromise!: ReturnType<typeof result.current.sendMessage>;
+        act(() => {
+          sendPromise = result.current
+            .sendMessage({
+              context: createTestContext(),
+              message: TEST_CONTENT.USER_MESSAGE,
+              onMessageAccepted,
+              onMessagePersisted,
+            })
+            .then((value) => {
+              sendCompleted = true;
+              return value;
+            });
+        });
+
+        await waitFor(() => expect(onMessagePersisted).toHaveBeenCalledOnce());
+        expect(onMessageAccepted).toHaveBeenCalledOnce();
+        expect(sendCompleted).toBe(false);
+
+        await act(async () => {
+          resolveExecution();
+          await sendPromise;
+        });
       });
 
       it('should create user message and trigger AI processing', async () => {
@@ -1512,6 +1609,8 @@ describe('ConversationLifecycle actions', () => {
         const { result } = renderHook(() => useChatStore());
         const context = createTestContext();
         const contextKey = messageMapKey(context);
+        const onMessageAccepted = vi.fn();
+        const onMessagePersisted = vi.fn();
         const editorData = {
           root: {
             children: [
@@ -1557,6 +1656,8 @@ describe('ConversationLifecycle actions', () => {
             context,
             editorData: editorData as any,
             message: 'queued message',
+            onMessageAccepted,
+            onMessagePersisted,
           });
         });
 
@@ -1568,6 +1669,8 @@ describe('ConversationLifecycle actions', () => {
           }),
           'op-running',
         );
+        expect(onMessageAccepted).toHaveBeenCalledOnce();
+        expect(onMessagePersisted).not.toHaveBeenCalled();
       });
 
       it('should enqueue when an execHeterogeneousAgent op is running (CC queue mode)', async () => {

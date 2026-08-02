@@ -267,8 +267,35 @@ export class ConversationLifecycleActionImpl {
     parentId: inputParentId,
     pageSelections,
     onPreflightFailure,
+    onMessageAccepted,
+    onMessagePersisted,
     onTopicCreated,
+    preserveComposer,
   }: SendMessageWithContextParams): Promise<SendMessageResult | undefined> => {
+    let hasNotifiedMessageAccepted = false;
+    const notifyMessageAccepted = () => {
+      if (hasNotifiedMessageAccepted) return;
+
+      hasNotifiedMessageAccepted = true;
+      try {
+        onMessageAccepted?.();
+      } catch (error) {
+        console.error('[sendMessage] onMessageAccepted callback failed:', error);
+      }
+    };
+    let hasNotifiedMessagePersisted = false;
+    const notifyMessagePersisted = () => {
+      if (hasNotifiedMessagePersisted) return;
+
+      notifyMessageAccepted();
+      hasNotifiedMessagePersisted = true;
+      try {
+        onMessagePersisted?.();
+      } catch (error) {
+        console.error('[sendMessage] onMessagePersisted callback failed:', error);
+      }
+    };
+
     let editorData = inputEditorData;
     const { executeClientAgent, mainInputEditor } = this.#get();
     const targetInputEditor = inputEditor ?? mainInputEditor;
@@ -596,6 +623,7 @@ export class ConversationLifecycleActionImpl {
         },
         runningQueueBlockingOp.id,
       );
+      notifyMessageAccepted();
       return;
     }
 
@@ -605,6 +633,7 @@ export class ConversationLifecycleActionImpl {
         fileList: fileIdList,
         metadata: userMessageMetadata,
       });
+      notifyMessagePersisted();
 
       return;
     }
@@ -1000,7 +1029,9 @@ export class ConversationLifecycleActionImpl {
     }
 
     // Store editor state in operation metadata for cancel restoration
-    const jsonState = inputEditorData ?? targetInputEditor?.getJSONState();
+    const jsonState = preserveComposer
+      ? undefined
+      : (inputEditorData ?? targetInputEditor?.getJSONState());
     this.#get().updateOperationMetadata(operationId, {
       inputEditorTempState: jsonState,
       inputSendErrorMsg: undefined,
@@ -1185,6 +1216,7 @@ export class ConversationLifecycleActionImpl {
 
       // Complete sendMessage operation, start ACP execution as child operation
       this.#get().completeOperation(operationId);
+      notifyMessagePersisted();
 
       // Topic title: hetero used to set only a sliced placeholder
       // title on new topics — upgrade it to the LLM summary via the shared hook
@@ -1396,6 +1428,8 @@ export class ConversationLifecycleActionImpl {
         } else {
           rollbackOptimisticTopic('sendMessage/rollbackOptimisticTopic');
         }
+
+        notifyMessagePersisted();
 
         return {
           assistantMessageId: result.assistantMessageId,
@@ -1638,7 +1672,7 @@ export class ConversationLifecycleActionImpl {
         message: e instanceof Error ? e.message : 'Unknown error',
       });
 
-      if (e instanceof TRPCClientError) {
+      if (!preserveComposer && e instanceof TRPCClientError) {
         const isAbort = e.message.includes('aborted') || e.name === 'AbortError';
         // Check if error is due to cancellation
         if (!isAbort) {
@@ -1698,6 +1732,7 @@ export class ConversationLifecycleActionImpl {
     // Complete sendMessage operation here - message creation is done
     // execAgentRuntime is a separate operation (child) that handles AI response generation
     this.#get().completeOperation(operationId);
+    notifyMessagePersisted();
 
     const execContext = {
       ...operationContext,

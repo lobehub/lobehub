@@ -39,6 +39,7 @@ import TodoProgress from '../TodoProgress';
 import InputCompletionErrorAlert from './InputCompletionErrorAlert';
 import OpStatusTray from './OpStatusTray';
 import QueueTray from './QueueTray';
+import { sendVoiceMessage } from './sendVoiceMessage';
 import {
   getContextWindowMessages,
   getConversationChatInputUiState,
@@ -404,13 +405,7 @@ const ChatInput = memo<ChatInputProps>(
     };
 
     const handleVoiceMessageSend = useCallback(
-      (file: UploadFileItem) => {
-        void sendMessage({
-          files: [file],
-          message: '',
-          preserveComposer: true,
-        });
-      },
+      (file: UploadFileItem) => sendVoiceMessage(sendMessage, file),
       [sendMessage],
     );
 

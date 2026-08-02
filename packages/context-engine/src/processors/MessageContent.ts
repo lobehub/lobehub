@@ -71,7 +71,9 @@ export interface MessageContentConfig {
 
 export interface UserMessageContentPart {
   audio_url?: {
+    codec?: string;
     durationMs?: number;
+    mimeType?: string;
     url: string;
   };
   googleThoughtSignature?: string;
@@ -619,7 +621,9 @@ export class MessageContentProcessor extends BaseProcessor {
 
       return {
         audio_url: {
+          ...(audio.codec ? { codec: audio.codec } : {}),
           ...(durationMs === undefined ? {} : { durationMs }),
+          ...(audio.mimeType ? { mimeType: audio.mimeType } : {}),
           url: audio.url,
         },
         type: 'audio_url',

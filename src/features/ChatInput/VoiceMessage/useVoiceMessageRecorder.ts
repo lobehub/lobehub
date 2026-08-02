@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
-  getAudioCodec,
   getAudioFileExtension,
   getVoiceRecorderErrorCode,
   resolveRecordingMimeType,
@@ -12,6 +11,7 @@ import {
   VOICE_MESSAGE_MIN_DURATION_MS,
   type VoiceRecorderErrorCode,
 } from './mediaRecorder';
+import { type NormalizedVoiceRecording, normalizeVoiceRecording } from './normalizeRecording';
 
 const WAVEFORM_BAR_COUNT = 28;
 const WAVEFORM_FFT_SIZE = 64;
@@ -57,6 +57,7 @@ export interface VoiceRecording {
 interface VoiceMessageRecorderOptions {
   maxDurationMs?: number;
   minDurationMs?: number;
+  normalizeRecording?: (blob: Blob) => Promise<NormalizedVoiceRecording>;
   now?: () => number;
 }
 
@@ -71,6 +72,7 @@ const stopStream = (stream?: MediaStream) => {
 export const useVoiceMessageRecorder = ({
   maxDurationMs = VOICE_MESSAGE_MAX_DURATION_MS,
   minDurationMs = VOICE_MESSAGE_MIN_DURATION_MS,
+  normalizeRecording = normalizeVoiceRecording,
   now = Date.now,
 }: VoiceMessageRecorderOptions = {}) => {
   const [durationMs, setDurationMs] = useState(0);
@@ -81,7 +83,6 @@ export const useVoiceMessageRecorder = ({
 
   const analyserFrameRef = useRef<number | undefined>(undefined);
   const audioContextRef = useRef<AudioContext | undefined>(undefined);
-  const chunksRef = useRef<Blob[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const lastWaveformUpdateRef = useRef(0);
   const mountedRef = useRef(true);
@@ -91,6 +92,7 @@ export const useVoiceMessageRecorder = ({
   const sourceRef = useRef<MediaStreamAudioSourceNode | undefined>(undefined);
   const startedAtRef = useRef(0);
   const stopPromiseRef = useRef<Promise<VoiceRecording | undefined> | undefined>(undefined);
+  const stopRequestIdRef = useRef<number | undefined>(undefined);
   const stopResolveRef = useRef<((recording?: VoiceRecording) => void) | undefined>(undefined);
   const streamRef = useRef<MediaStream | undefined>(undefined);
   const wasCancelledRef = useRef(false);
@@ -118,10 +120,13 @@ export const useVoiceMessageRecorder = ({
     streamRef.current = undefined;
   }, []);
 
-  const settleStopPromise = useCallback((value?: VoiceRecording) => {
+  const settleStopPromise = useCallback((value?: VoiceRecording, requestId?: number) => {
+    if (requestId !== undefined && stopRequestIdRef.current !== requestId) return;
+
     stopResolveRef.current?.(value);
     stopResolveRef.current = undefined;
     stopPromiseRef.current = undefined;
+    stopRequestIdRef.current = undefined;
   }, []);
 
   const reset = useCallback(() => {
@@ -133,7 +138,6 @@ export const useVoiceMessageRecorder = ({
     if (recorder && recorder.state !== 'inactive') recorder.stop();
 
     cleanupCapture();
-    chunksRef.current = [];
     recordingRef.current = undefined;
     settleStopPromise();
 
@@ -232,34 +236,42 @@ export const useVoiceMessageRecorder = ({
         ? new MediaRecorder(stream, { mimeType: requestedMimeType })
         : new MediaRecorder(stream);
 
-      chunksRef.current = [];
+      const chunks: Blob[] = [];
+      let recorderFailed = false;
       recorderRef.current = recorder;
       streamRef.current = stream;
       startedAtRef.current = now();
       stopPromiseRef.current = new Promise((resolve) => {
         stopResolveRef.current = resolve;
       });
+      stopRequestIdRef.current = requestId;
 
       recorder.addEventListener('dataavailable', (event) => {
-        if (event.data.size > 0) chunksRef.current.push(event.data);
+        if (event.data.size > 0) chunks.push(event.data);
       });
       recorder.addEventListener('error', (event) => {
+        if (requestIdRef.current !== requestId) return;
+
+        recorderFailed = true;
         cleanupCapture();
         recorderRef.current = undefined;
-        settleStopPromise();
+        settleStopPromise(undefined, requestId);
         if (!mountedRef.current || wasCancelledRef.current) return;
 
         setError(getVoiceRecorderErrorCode((event as Event & { error?: unknown }).error));
         setStatus('error');
       });
-      recorder.addEventListener('stop', () => {
-        const chunks = chunksRef.current;
-        chunksRef.current = [];
+      recorder.addEventListener('stop', async () => {
+        if (requestIdRef.current !== requestId) {
+          settleStopPromise(undefined, requestId);
+          return;
+        }
+
         cleanupCapture();
         recorderRef.current = undefined;
 
-        if (wasCancelledRef.current) {
-          settleStopPromise();
+        if (wasCancelledRef.current || recorderFailed) {
+          settleStopPromise(undefined, requestId);
           return;
         }
 
@@ -268,27 +280,50 @@ export const useVoiceMessageRecorder = ({
         const blob = new Blob(chunks, { type: mimeType });
 
         if (blob.size === 0) {
-          settleStopPromise();
-          if (mountedRef.current) {
+          settleStopPromise(undefined, requestId);
+          if (requestIdRef.current === requestId && mountedRef.current) {
             setError('recording_failed');
             setStatus('error');
           }
           return;
         }
 
-        const file = new File([blob], `voice-message-${now()}.${getAudioFileExtension(mimeType)}`, {
-          type: mimeType,
-        });
+        let normalizedRecording: NormalizedVoiceRecording;
+        try {
+          normalizedRecording = await normalizeRecording(blob);
+        } catch {
+          settleStopPromise(undefined, requestId);
+          if (
+            requestIdRef.current === requestId &&
+            mountedRef.current &&
+            !wasCancelledRef.current
+          ) {
+            setError('recording_failed');
+            setStatus('error');
+          }
+          return;
+        }
+
+        if (requestIdRef.current !== requestId || wasCancelledRef.current || recorderFailed) {
+          settleStopPromise(undefined, requestId);
+          return;
+        }
+
+        const file = new File(
+          [normalizedRecording.blob],
+          `voice-message-${now()}.${getAudioFileExtension(normalizedRecording.mimeType)}`,
+          { type: normalizedRecording.mimeType },
+        );
         const nextRecording: VoiceRecording = {
-          codec: getAudioCodec(mimeType),
+          codec: normalizedRecording.codec,
           durationMs: finalDurationMs,
           file,
-          mimeType,
+          mimeType: normalizedRecording.mimeType,
           waveform: waveformRef.current,
         };
 
         recordingRef.current = nextRecording;
-        settleStopPromise(nextRecording);
+        settleStopPromise(nextRecording, requestId);
         if (mountedRef.current) {
           setDurationMs(finalDurationMs);
           setRecording(nextRecording);
@@ -311,15 +346,17 @@ export const useVoiceMessageRecorder = ({
       }, TIMER_INTERVAL_MS);
     } catch (cause) {
       stopStream(stream);
+      if (requestIdRef.current !== requestId) return;
+
       cleanupCapture();
       recorderRef.current = undefined;
-      settleStopPromise();
-      if (requestIdRef.current !== requestId || !mountedRef.current) return;
+      settleStopPromise(undefined, requestId);
+      if (!mountedRef.current) return;
 
       setError(getVoiceRecorderErrorCode(cause));
       setStatus('error');
     }
-  }, [cleanupCapture, maxDurationMs, now, settleStopPromise, setupWaveform]);
+  }, [cleanupCapture, maxDurationMs, normalizeRecording, now, settleStopPromise, setupWaveform]);
 
   const stop = useCallback(async (): Promise<VoiceRecording | undefined> => {
     if (recordingRef.current) return recordingRef.current;

@@ -7,7 +7,6 @@ import { ArrowUp, type LucideProps, RotateCcw, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useVisualMediaUploadAbility } from '@/hooks/useVisualMediaUploadAbility';
 import { useFileStore } from '@/store/file';
 
 import { ChatInputAction } from '../ActionBar/components/ChatInputAction';
@@ -16,6 +15,7 @@ import { useEffectiveModel } from '../hooks/useEffectiveModel';
 import { useChatInputStore, useStoreApi } from '../store';
 import { formatVoiceDuration } from './mediaRecorder';
 import { useIntentionalHover } from './useIntentionalHover';
+import { getVoiceMessageActionState, useVoiceMessageCapability } from './useVoiceMessageCapability';
 import { useVoiceMessageRecorder, type VoiceRecording } from './useVoiceMessageRecorder';
 
 const VoiceMessageIcon = ({
@@ -493,13 +493,15 @@ const VoiceMessage = memo(() => {
   const { t } = useTranslation('chat');
   const agentId = useAgentId();
   const { model, provider } = useEffectiveModel(agentId);
-  const { canUploadAudio } = useVisualMediaUploadAbility(model, provider, agentId);
+  const canRecordVoiceMessage = useVoiceMessageCapability(model, provider);
   const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
   const storeApi = useStoreApi();
   const [activeAudioInputMode, onVoiceMessageSend, setActiveAudioInputMode] = useChatInputStore(
     (s) => [s.activeAudioInputMode, s.onVoiceMessageSend, s.setActiveAudioInputMode],
   );
   const recorder = useVoiceMessageRecorder();
+  const canRecordVoiceMessageRef = useRef(canRecordVoiceMessage);
+  canRecordVoiceMessageRef.current = canRecordVoiceMessage;
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle');
   const abortControllerRef = useRef<AbortController | undefined>(undefined);
@@ -509,7 +511,7 @@ const VoiceMessage = memo(() => {
   const isActive = activeAudioInputMode === 'voiceMessage' || hasRecorderActivity;
   const isOtherAudioModeActive =
     activeAudioInputMode !== undefined && activeAudioInputMode !== 'voiceMessage';
-  const canStart = canUploadAudio && Boolean(onVoiceMessageSend) && !isOtherAudioModeActive;
+  const canStart = canRecordVoiceMessage && Boolean(onVoiceMessageSend) && !isOtherAudioModeActive;
 
   useEffect(() => {
     if (hasRecorderActivity && activeAudioInputMode !== 'voiceMessage') {
@@ -542,6 +544,8 @@ const VoiceMessage = memo(() => {
 
   const uploadAndSend = useCallback(
     async (captured?: VoiceRecording) => {
+      if (!canRecordVoiceMessageRef.current) return;
+
       const voiceRecording = captured ?? recorder.recording ?? (await recorder.stop());
       if (!voiceRecording || voiceRecording.durationMs < recorder.minDurationMs) return;
 
@@ -569,6 +573,14 @@ const VoiceMessage = memo(() => {
 
         if (requestId !== uploadRequestIdRef.current) return;
         if (!result) throw new Error('Voice message upload did not return a file');
+
+        // The selected model may have changed while the binary upload was in flight.
+        // Keep the local recording, but never dispatch audio to a text-only model.
+        if (!canRecordVoiceMessageRef.current) {
+          setUploadProgress(0);
+          setUploadStatus('idle');
+          return;
+        }
 
         const uploadItem: UploadFileItem = {
           audioMetadata: {
@@ -607,6 +619,8 @@ const VoiceMessage = memo(() => {
   }, [canStart, recorder, setActiveAudioInputMode]);
 
   const handleRetryPermission = useCallback(() => {
+    if (!canRecordVoiceMessageRef.current) return;
+
     recorder.reset();
     void recorder.start();
   }, [recorder]);
@@ -638,19 +652,24 @@ const VoiceMessage = memo(() => {
     );
   }
 
-  const errorText =
-    uploadStatus === 'failed'
+  const errorText = !canRecordVoiceMessage
+    ? t('voiceMessage.unsupported')
+    : uploadStatus === 'failed'
       ? t('voiceMessage.uploadFailed')
       : recorder.error
         ? t(`voiceMessage.error.${recorder.error}`)
         : undefined;
   const waveform = recorder.recording?.waveform ?? recorder.waveform;
   const visibleWaveform = waveform.slice(-8);
-  const canSend =
+  const canSendRecording =
     uploadStatus !== 'uploading' &&
     recorder.durationMs >= recorder.minDurationMs &&
     (recorder.status === 'recording' || recorder.status === 'ready');
-  const showRetry = uploadStatus === 'failed' || recorder.status === 'error';
+  const { canSend, sendDisabled, showRetry } = getVoiceMessageActionState({
+    canRecordVoiceMessage,
+    canSendRecording,
+    hasRecoverableError: uploadStatus === 'failed' || recorder.status === 'error',
+  });
   const showBusy =
     uploadStatus === 'uploading' ||
     recorder.status === 'requesting' ||
@@ -681,7 +700,7 @@ const VoiceMessage = memo(() => {
       groupLabel={t('voiceMessage.statusLabel')}
       isRetry={showRetry}
       progress={uploadStatus === 'uploading' ? uploadProgress : undefined}
-      sendDisabled={!showRetry && !canSend}
+      sendDisabled={sendDisabled}
       statusAnnouncement={statusAnnouncement}
       waveform={visibleWaveform}
       actionText={
@@ -691,7 +710,7 @@ const VoiceMessage = memo(() => {
         duration: formatVoiceDuration(recorder.durationMs),
       })}
       tooltip={
-        !canSend && recorder.status === 'recording'
+        canRecordVoiceMessage && !canSend && recorder.status === 'recording'
           ? t('voiceMessage.tooShort', { duration: recorder.minDurationMs })
           : undefined
       }

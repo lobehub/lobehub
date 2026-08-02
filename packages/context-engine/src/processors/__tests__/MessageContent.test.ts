@@ -992,6 +992,50 @@ describe('MessageContentProcessor', () => {
       expect(content[2].audio_url).not.toHaveProperty('durationMs');
     });
 
+    it('should preserve audio metadata when converting audios to audio_url parts', async () => {
+      mockIsCanUseAudio.mockReturnValue(true);
+
+      const processor = new MessageContentProcessor({
+        model: 'gpt-audio',
+        provider: 'openai',
+        isCanUseAudio: mockIsCanUseAudio,
+        fileContext: { enabled: false },
+      });
+
+      const messages: UIChatMessage[] = [
+        {
+          id: 'test',
+          role: 'user',
+          content: 'Listen',
+          audioList: [
+            {
+              alt: 'voice message',
+              codec: 'pcm_s16le',
+              durationMs: 3210,
+              id: 'voice-1',
+              mimeType: 'audio/wav',
+              url: 'http://example.com/voice.wav',
+            },
+          ],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      ];
+
+      const result = await processor.process(createContext(messages));
+
+      const content = result.messages[0].content as any[];
+      expect(content[1]).toEqual({
+        audio_url: {
+          codec: 'pcm_s16le',
+          durationMs: 3210,
+          mimeType: 'audio/wav',
+          url: 'http://example.com/voice.wav',
+        },
+        type: 'audio_url',
+      });
+    });
+
     it('should include audios in file context when enabled even if audio not supported', async () => {
       mockIsCanUseAudio.mockReturnValue(false);
 

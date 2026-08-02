@@ -161,6 +161,18 @@ export interface SendMessageParams {
   metadata?: Record<string, any>;
   onlyAddUserMessage?: boolean;
   /**
+   * Called once the send lifecycle owns the turn, either by persisting the user message or by
+   * placing it in the current conversation queue. Transient UI can release local resources after
+   * this acknowledgement because queued turns retain their uploaded file metadata.
+   */
+  onMessageAccepted?: () => void;
+  /**
+   * Called once the user message has been persisted, before the assistant run completes.
+   * UI flows that own separate transient content use this acknowledgement to release it
+   * without waiting for the full generation.
+   */
+  onMessagePersisted?: () => void;
+  /**
    * Page selections attached to the message (for Ask AI functionality)
    * These will be persisted to the database and injected via context-engine
    */

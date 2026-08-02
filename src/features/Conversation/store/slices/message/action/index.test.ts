@@ -247,8 +247,6 @@ describe('sendMessage composer ownership', () => {
     });
 
     expect(store.getState().inputMessage).toBe('keep this draft');
-    expect(sendMessage).toHaveBeenCalledWith(
-      expect.not.objectContaining({ preserveComposer: expect.anything() }),
-    );
+    expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({ preserveComposer: true }));
   });
 });
