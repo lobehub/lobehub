@@ -187,6 +187,7 @@
   "platform.trialSaved": "试用设置已保存",
   "platform.trialTitle": "试用配置",
   "platform.usdCredited": "已入账 USD",
+  "provider.managed.desc": "模型由 {{brandName}} 提供。用量从你的钱包或组织额度扣费，无需配置 API Key。",
   "wallet.amountToman": "金额（toman）",
   "wallet.balanceToman": "已支付（toman）",
   "wallet.balanceUsd": "余额（USD）",

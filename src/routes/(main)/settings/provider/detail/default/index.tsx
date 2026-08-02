@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 
 import { useClientDataSWR } from '@/libs/swr';
 import { lambdaClient } from '@/libs/trpc/client';
@@ -11,10 +11,12 @@ import { useServerConfigStore } from '@/store/serverConfig';
 import ModelList from '../../features/ModelList';
 import { type ProviderConfigProps } from '../../features/ProviderConfig';
 import ProviderConfig from '../../features/ProviderConfig';
+import AicoManagedProviderHeader from './AicoManagedProviderHeader';
 
 interface ProviderDetailProps extends ProviderConfigProps {
   showConfig?: boolean;
 }
+
 const ProviderDetail = memo<ProviderDetailProps>(({ showConfig = true, ...card }) => {
   const useFetchAiProviderItem = useAiInfraStore((s) => s.useFetchAiProviderItem);
   const useFetchAiProviderList = useAiInfraStore((s) => s.useFetchAiProviderList);
@@ -23,17 +25,39 @@ const ProviderDetail = memo<ProviderDetailProps>(({ showConfig = true, ...card }
   const { data: managedStatus } = useClientDataSWR('aico-provider-status', () =>
     lambdaClient.aicoBilling.getManagedProviderStatus.query(),
   );
-  const aicoManaged = Boolean(managedStatus?.managed);
-  // Managed Aico traffic hides BYOK config so users never see/edit OpenRouter secrets.
-  const hideKeyConfig = aicoManaged && (card.id === 'openrouter' || card.id === 'aico');
+  const aicoManaged = managedStatus?.managed ?? true;
+  // Managed Aico: branded panel only — never surface BYOK secrets or OpenRouter chrome.
+  const isManagedAico = aicoManaged && (card.id === 'openrouter' || card.id === 'aico');
 
-  useFetchAiProviderList({ enabled: isMobile });
+  const managedSettings = useMemo(() => {
+    if (!isManagedAico) return card.settings;
+    return {
+      ...card.settings,
+      disableBrowserRequest: true,
+      proxyUrl: undefined,
+      showApiKey: false,
+      showChecker: false,
+      showModelFetcher: false,
+    };
+  }, [card.settings, isManagedAico]);
+
+  useFetchAiProviderList({ enabled: isMobile || isManagedAico });
   useFetchAiProviderItem(card.id);
 
   return (
     <Flexbox gap={24} paddingBlock={8}>
-      {showConfig && !hideKeyConfig && <ProviderConfig {...card} />}
-      <ModelList id={card.id} {...card.settings} />
+      {showConfig &&
+        (isManagedAico ? (
+          <AicoManagedProviderHeader />
+        ) : (
+          <ProviderConfig {...card} settings={managedSettings} />
+        ))}
+      <ModelList
+        id={card.id}
+        modelEditable={!isManagedAico}
+        showAddNewModel={!isManagedAico}
+        {...managedSettings}
+      />
     </Flexbox>
   );
 });

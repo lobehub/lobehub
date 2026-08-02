@@ -9,6 +9,8 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { useClientDataSWR } from '@/libs/swr';
+import { lambdaClient } from '@/libs/trpc/client';
 import { useAiInfraStore } from '@/store/aiInfra/store';
 
 import AddNew from './AddNew';
@@ -93,11 +95,19 @@ const ProviderMenu = ({
   const [initAiProviderList, providerSearchKeyword, useFetchAiProviderList] = useAiInfraStore(
     (s) => [s.initAiProviderList, s.providerSearchKeyword, s.useFetchAiProviderList],
   );
+  const { data: managedStatus } = useClientDataSWR('aico-provider-status', () =>
+    lambdaClient.aicoBilling.getManagedProviderStatus.query(),
+  );
+  // Fail-closed: never flash the BYOK catalog / "list with one item" sidebar.
+  const aicoManaged = managedStatus?.managed ?? true;
 
   // Own the provider-list fetch here so a failed load surfaces error + Retry
   // instead of a permanent skeleton — `initAiProviderList` only flips on success
   //
   const { error, mutate } = useFetchAiProviderList();
+
+  // Managed users only see the Aico provider detail — not this list panel.
+  if (aicoManaged) return null;
 
   // Search overrides everything (matches prior behavior); otherwise gate the
   // list on load/error via AsyncBoundary.

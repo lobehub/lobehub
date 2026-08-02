@@ -49,6 +49,10 @@ const DefaultPage = dynamic(() => import('./default/ProviderDetialPage'), {
   loading: () => <Loading debugId="Provider > Default" />,
   ssr: false,
 });
+const AicoManagedRedirect = dynamic(() => import('./AicoManagedRedirect'), {
+  loading: () => <Loading debugId="Provider > AicoRedirect" />,
+  ssr: false,
+});
 
 type ProviderDetailPageProps = {
   id?: string | null;
@@ -58,44 +62,70 @@ type ProviderDetailPageProps = {
 const ProviderDetailPage = (props: ProviderDetailPageProps) => {
   const { id, onProviderSelect } = props;
 
+  let content;
   switch (id) {
-    case 'all': {
-      return <ProviderGrid onProviderSelect={onProviderSelect} />;
+    case 'all':
+    case undefined:
+    case null: {
+      content = <ProviderGrid onProviderSelect={onProviderSelect} />;
+      break;
+    }
+    case 'aico':
+    case 'openrouter': {
+      content = <DefaultPage id="openrouter" />;
+      break;
     }
     case 'azure': {
-      return <Azure />;
+      content = <Azure />;
+      break;
     }
     case 'azureai': {
-      return <AzureAI />;
+      content = <AzureAI />;
+      break;
     }
     case 'bedrock': {
-      return <Bedrock />;
+      content = <Bedrock />;
+      break;
     }
     case 'cloudflare': {
-      return <Cloudflare />;
+      content = <Cloudflare />;
+      break;
     }
     case 'comfyui': {
-      return <ComfyUI />;
+      content = <ComfyUI />;
+      break;
     }
     case 'github': {
-      return <GitHub />;
+      content = <GitHub />;
+      break;
     }
     case 'ollama': {
-      return <Ollama />;
+      content = <Ollama />;
+      break;
     }
     case 'newapi': {
-      return <NewAPI />;
+      content = <NewAPI />;
+      break;
     }
     case 'openai': {
-      return <OpenAI />;
+      content = <OpenAI />;
+      break;
     }
     case 'vertexai': {
-      return <VertexAI />;
+      content = <VertexAI />;
+      break;
     }
     default: {
-      return <DefaultPage id={id} />;
+      content = <DefaultPage id={id} />;
+      break;
     }
   }
+
+  return (
+    <AicoManagedRedirect fallback={content} id={id}>
+      {content}
+    </AicoManagedRedirect>
+  );
 };
 
 export default ProviderDetailPage;

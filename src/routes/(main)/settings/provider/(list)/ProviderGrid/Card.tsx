@@ -1,4 +1,4 @@
-import { BRANDING_PROVIDER } from '@lobechat/business-const';
+import { BRANDING_NAME, BRANDING_PROVIDER } from '@lobechat/business-const';
 import { ProviderCombine, ProviderIcon } from '@lobehub/icons';
 import { Avatar, Flexbox, Skeleton, Tag, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
@@ -7,6 +7,8 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { BrandingProviderCard } from '@/business/client/features/BrandingProviderCard';
+import { ProductLogo } from '@/components/Branding/ProductLogo';
+import { isCustomBranding } from '@/const/version';
 import { useIsDark } from '@/hooks/useIsDark';
 import { type AiProviderListItem } from '@/types/aiProvider';
 
@@ -50,7 +52,12 @@ const ProviderCard = memo<ProviderCardProps>(
           >
             <Flexbox gap={12} width={'100%'}>
               <Flexbox horizontal align={'center'} justify={'space-between'}>
-                {source === 'builtin' ? (
+                {isCustomBranding && (id === 'openrouter' || id === 'aico') ? (
+                  <Flexbox horizontal align={'center'} gap={8}>
+                    <ProductLogo size={24} type={'flat'} />
+                    <Text style={{ fontSize: 16, fontWeight: 'bold' }}>{BRANDING_NAME}</Text>
+                  </Flexbox>
+                ) : source === 'builtin' ? (
                   <Flexbox horizontal align={'center'} gap={8}>
                     <ProviderCombine
                       provider={id}

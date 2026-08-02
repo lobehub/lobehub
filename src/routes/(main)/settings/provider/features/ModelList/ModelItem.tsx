@@ -1,4 +1,3 @@
-import { ModelIcon } from '@lobehub/icons';
 import { ActionIcon, copyToClipboard, Flexbox, Tag, Text } from '@lobehub/ui';
 import { confirmModal, Switch } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
@@ -9,6 +8,7 @@ import { AiModelSourceEnum } from 'model-bank';
 import React, { memo, use, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { BrandedModelIcon, formatBrandedModelId } from '@/components/Branding';
 import { ModelInfoTags } from '@/components/ModelSelect';
 import NewModelBadge from '@/components/ModelSelect/NewModelBadge';
 import { useIsMobile } from '@/hooks/useIsMobile';
@@ -168,7 +168,7 @@ const ModelItem = memo<ModelItemProps>(
 
     const ModelIdTag = (
       <Tag style={{ cursor: 'pointer', marginRight: 0 }} onClick={copyModelId}>
-        {id}
+        {formatBrandedModelId(id)}
       </Tag>
     );
 
@@ -242,7 +242,7 @@ const ModelItem = memo<ModelItemProps>(
         width={'100%'}
       >
         <Flexbox horizontal align={'center'} flex={1} gap={16} style={{ minWidth: 0 }}>
-          <ModelIcon model={id} size={32} />
+          <BrandedModelIcon model={id} size={32} />
           <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
             <Flexbox horizontal align={'center'} gap={8}>
               {displayName || id}
@@ -276,7 +276,7 @@ const ModelItem = memo<ModelItemProps>(
         width={'100%'}
       >
         <Flexbox horizontal align={'center'} flex={1} gap={8} style={{ minWidth: 0 }}>
-          <ModelIcon model={id} size={32} />
+          <BrandedModelIcon model={id} size={32} />
           <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
             <Flexbox horizontal align={'center'} gap={8}>
               {displayName || id}

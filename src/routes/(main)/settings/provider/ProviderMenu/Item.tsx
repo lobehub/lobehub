@@ -1,4 +1,4 @@
-import { BRANDING_PROVIDER } from '@lobechat/business-const';
+import { BRANDING_NAME, BRANDING_PROVIDER } from '@lobechat/business-const';
 import { ProviderIcon } from '@lobehub/icons';
 import { Avatar, Center } from '@lobehub/ui';
 import { Badge } from 'antd';
@@ -15,6 +15,9 @@ interface ProviderItemProps extends AiProviderListItem {
   onClick: (id: string) => void;
 }
 
+const isBrandedRuntimeProvider = (id: string) =>
+  id === BRANDING_PROVIDER || id === 'openrouter' || id === 'aico';
+
 const ProviderItem = memo<ProviderItemProps>(
   ({ id, name, source, enabled, logo, onClick = () => {} }) => {
     const location = useLocation();
@@ -30,6 +33,7 @@ const ProviderItem = memo<ProviderItemProps>(
     }, [location.pathname]);
 
     const isCustom = source === AiProviderSourceEnum.Custom;
+    const useBrandLogo = isCustomBranding && isBrandedRuntimeProvider(id);
     const providerIcon =
       isCustom && logo ? (
         <Avatar
@@ -39,8 +43,8 @@ const ProviderItem = memo<ProviderItemProps>(
           size={22}
           style={{ borderRadius: 4 }}
         />
-      ) : isCustomBranding && id === BRANDING_PROVIDER ? (
-        <ProductLogo size={24} type={'flat'} />
+      ) : useBrandLogo ? (
+        <ProductLogo size={22} type={'flat'} />
       ) : (
         <ProviderIcon
           provider={id}
@@ -53,9 +57,9 @@ const ProviderItem = memo<ProviderItemProps>(
 
     return (
       <NavItem
-        active={activeKey === id}
+        active={activeKey === id || (useBrandLogo && (activeKey === 'aico' || activeKey === id))}
         icon={() => providerIcon}
-        title={name}
+        title={useBrandLogo ? BRANDING_NAME : name}
         extra={
           enabled ? (
             <Center width={24}>

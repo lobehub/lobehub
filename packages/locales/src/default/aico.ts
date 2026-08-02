@@ -193,6 +193,9 @@ export default {
   'platform.trialTitle': 'Trial configuration',
   'platform.usdCredited': 'USD credited',
 
+  'provider.managed.desc':
+    'Models are provided by {{brandName}}. Usage is billed from your wallet or organization credit — no API key setup is required.',
+
   'wallet.amountToman': 'Amount (toman)',
   'wallet.balanceToman': 'Paid-in (toman)',
   'wallet.balanceUsd': 'Balance (USD)',

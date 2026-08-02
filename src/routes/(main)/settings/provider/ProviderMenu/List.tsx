@@ -38,7 +38,8 @@ const ProviderList = (props: {
   const { data: managedStatus } = useClientDataSWR('aico-provider-status', () =>
     lambdaClient.aicoBilling.getManagedProviderStatus.query(),
   );
-  const aicoManaged = Boolean(managedStatus?.managed);
+  // Fail-closed: hide BYOK catalog until API says unmanaged.
+  const aicoManaged = managedStatus?.managed ?? true;
 
   // Accordion states - using array of active keys
   const [expandedKeys, setExpandedKeys] = useState<string[]>(['enabled', 'custom', 'disabled']);

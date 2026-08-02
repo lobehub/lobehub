@@ -1,6 +1,7 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
 import { type ChatModelCard } from '@lobechat/types';
 import { type IconAvatarProps } from '@lobehub/icons';
-import { LobeHub, ModelIcon, ProviderIcon } from '@lobehub/icons';
+import { LobeHub, ProviderIcon } from '@lobehub/icons';
 import { type FlexboxProps } from '@lobehub/ui';
 import { Avatar, Flexbox, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, useResponsive } from 'antd-style';
@@ -19,6 +20,9 @@ import { type CSSProperties, type FC } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { BrandedModelIcon } from '@/components/Branding/BrandedModelIcon';
+import { ProductLogo } from '@/components/Branding/ProductLogo';
+import { isCustomBranding } from '@/const/version';
 import { type AiProviderSourceType } from '@/types/aiProvider';
 import { formatTokenNumber } from '@/utils/format';
 
@@ -293,7 +297,7 @@ export const ModelItemRender = memo<ModelItemRenderProps>(
           gap={8}
           style={{ flexShrink: 1, minWidth: 0, overflow: 'hidden' }}
         >
-          <ModelIcon model={id} size={20} />
+          <BrandedModelIcon model={id} size={20} />
           <Text
             style={mobile ? { maxWidth: '60vw' } : { minWidth: 0, overflow: 'hidden' }}
             ellipsis={{
@@ -342,6 +346,8 @@ interface ProviderItemRenderProps {
 export const ProviderItemRender = memo<ProviderItemRenderProps>(
   ({ provider, name, source, logo, type = 'mono', size = 16 }) => {
     const isMono = type === 'mono';
+    const useBrandLogo = isCustomBranding && (provider === 'openrouter' || provider === 'aico');
+    const displayName = useBrandLogo ? BRANDING_NAME : name;
     return (
       <Flexbox
         horizontal
@@ -358,15 +364,17 @@ export const ProviderItemRender = memo<ProviderItemRenderProps>(
             shape={'circle'}
             size={size}
             style={isMono ? { filter: 'grayscale(1)' } : {}}
-            title={name}
+            title={displayName}
           />
+        ) : useBrandLogo ? (
+          <ProductLogo size={size} type={isMono ? 'mono' : 'flat'} />
         ) : provider === 'lobehub' ? (
           <LobeHub.Morden size={size} />
         ) : (
           <ProviderIcon provider={provider} size={size} type={type} />
         )}
         <Text ellipsis color={'inherit'}>
-          {name}
+          {displayName}
         </Text>
       </Flexbox>
     );

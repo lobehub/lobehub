@@ -157,15 +157,24 @@ export const aicoBillingRouter = router({
     }
   }),
 
-  /** Provider surface hint — never returns keys. */
+  /**
+   * Provider surface hint — never returns keys.
+   * Aico is always white-label managed OpenRouter for every signed-in user:
+   * they top up / get org credit / activate trial, and we provision limited
+   * keys server-side. The SPA must never show the multi-provider catalog.
+   */
   getManagedProviderStatus: billingProcedure.query(async ({ ctx }) => {
-    const wallet = await ctx.billingModel.getUserWallet(ctx.userId);
-    const trialActive = await ctx.billingModel.isTrialActive(ctx.userId);
-    const hasOrgKey = Boolean(await ctx.keyService.resolveUserApiKey(ctx.userId));
+    const [wallet, trialActive, hasOrgOrWalletKey] = await Promise.all([
+      ctx.billingModel.getUserWallet(ctx.userId),
+      ctx.billingModel.isTrialActive(ctx.userId),
+      ctx.keyService.resolveUserApiKey(ctx.userId).then((k) => Boolean(k)),
+    ]);
     return {
       brandName: 'Aico',
-      managed: Boolean(wallet?.openrouterKeyId) || trialActive || hasOrgKey,
+      hasCredit: Boolean(wallet?.openrouterKeyId) || trialActive || hasOrgOrWalletKey,
+      managed: true,
       providerId: 'aico',
+      runtimeProviderId: 'openrouter',
     };
   }),
 });
