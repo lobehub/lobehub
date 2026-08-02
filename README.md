@@ -310,6 +310,7 @@ If you find signing up for an OpenAI account or binding a foreign-currency credi
 |                                                                     | Provider     | Features                                                                                                | Proxy URL                 | Link                              |
 | ------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------- | ------------------------- | --------------------------------- |
 | <img src="https://resource.aihubmix.com/logo.png?v=1" width="48" /> | **AIHubMix** | Uses the OpenAI enterprise API; all models site-wide at **14% off** the official price (incl. GPT-5.6 and Claude Fable 5) | `https://aihubmix.com/v1` | [Get](https://console.aihubmix.com/token?aff=8DBz) |
+|  | **DaoXE** | OpenAI-compatible multi-model gateway (GPT/Claude/Gemini/DeepSeek etc.); also Anthropic Messages; Alipay/WeChat/USDT | `https://api.daoxe.com/v1` | [Get](https://daoxe.com) |
 
 > \[!WARNING]
 >
