@@ -232,6 +232,7 @@ export default {
   'wallet.trialActive': 'Trial active until {{date}}',
   'wallet.trialDesc': 'One-time trial ({{days}} days). Requires verified phone.',
   'wallet.trialFailed': 'Could not activate trial',
+  'wallet.trialInactive': 'Inactive',
   'wallet.trialTitle': 'Free trial',
   'wallet.trialUsed': 'Trial already used on this account',
   'wallet.upgradeDesc': 'Invite teammates and split company credits.',

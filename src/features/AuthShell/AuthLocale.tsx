@@ -4,6 +4,8 @@ import { ConfigProvider } from 'antd';
 import { memo, type PropsWithChildren, useEffect, useState } from 'react';
 import { isRtlLang } from 'rtl-detect';
 
+import { applyDocumentDirection } from '@/utils/client/applyDocumentDirection';
+
 import { createAuthI18n } from './createAuthI18n';
 
 interface AuthLocaleProps extends PropsWithChildren {
@@ -17,6 +19,10 @@ const AuthLocale = memo<AuthLocaleProps>(({ children, defaultLang }) => {
   if (!i18n.instance.isInitialized) {
     i18n.init();
   }
+
+  useEffect(() => {
+    applyDocumentDirection(lang);
+  }, [lang]);
 
   useEffect(() => {
     const handleLang = (lng: string) => {
