@@ -24,6 +24,11 @@ type AuthI18nNamespace = keyof typeof defaultResources;
 
 const isAllowedNamespace = (ns: string): ns is AuthI18nNamespace => ns in defaultResources;
 
+type LocaleModule = { default?: Record<string, string> } | Record<string, string>;
+
+const unwrapLocaleModule = (mod: LocaleModule) =>
+  (mod as { default?: Record<string, string> }).default ?? (mod as Record<string, string>);
+
 const loadZhNamespace = async (ns: AuthI18nNamespace) => {
   switch (ns) {
     case 'auth': {
@@ -47,17 +52,43 @@ const loadZhNamespace = async (ns: AuthI18nNamespace) => {
   }
 };
 
-const loadAuthNamespace = async (lng: string, ns: string) => {
+const loadFaNamespace = async (ns: AuthI18nNamespace) => {
+  switch (ns) {
+    case 'auth': {
+      return import('@/../locales/fa-IR/auth.json');
+    }
+    case 'authError': {
+      return import('@/../locales/fa-IR/authError.json');
+    }
+    case 'common': {
+      return import('@/../locales/fa-IR/common.json');
+    }
+    case 'error': {
+      return import('@/../locales/fa-IR/error.json');
+    }
+    case 'marketAuth': {
+      return import('@/../locales/fa-IR/marketAuth.json');
+    }
+    case 'oauth': {
+      return import('@/../locales/fa-IR/oauth.json');
+    }
+  }
+};
+
+/** Exported for regression tests — auth SPA must load fa-IR / zh-CN, not fall back to English. */
+export const loadAuthNamespace = async (lng: string, ns: string) => {
   const safeNamespace = isAllowedNamespace(ns) ? ns : 'auth';
   const normalizedLocale = normalizeLocale(lng);
 
-  if (normalizedLocale === 'zh-CN') {
-    try {
-      const mod = await loadZhNamespace(safeNamespace);
-      return (mod as any).default ?? mod;
-    } catch {
-      // fall through to bundled default namespace
+  try {
+    if (normalizedLocale === 'zh-CN') {
+      return unwrapLocaleModule(await loadZhNamespace(safeNamespace));
     }
+    if (normalizedLocale === 'fa-IR') {
+      return unwrapLocaleModule(await loadFaNamespace(safeNamespace));
+    }
+  } catch {
+    // fall through to bundled default namespace
   }
 
   return defaultResources[safeNamespace];

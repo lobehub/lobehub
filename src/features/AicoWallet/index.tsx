@@ -130,7 +130,9 @@ export const AicoWallet = () => {
       <Block className={styles.section} variant="outlined">
         <Flexbox gap={12}>
           <Text strong>{t('wallet.trialTitle')}</Text>
-          {trial?.active ? (
+          {trial && !trial.config.enabled ? (
+            <Text type="secondary">{t('wallet.trialInactive')}</Text>
+          ) : trial?.active ? (
             <Text>
               {t('wallet.trialActive', {
                 date: trial.trial?.expiresAt
@@ -146,7 +148,6 @@ export const AicoWallet = () => {
                 {t('wallet.trialDesc', { days: trial?.config.durationDays ?? 3 })}
               </Text>
               <Button
-                disabled={!trial?.config.enabled}
                 loading={busy}
                 type="primary"
                 onClick={async () => {

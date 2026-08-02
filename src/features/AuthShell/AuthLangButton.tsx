@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 
 import { LOBE_LOCALE_COOKIE } from '@/const/locale';
 import { localeOptions, normalizeLocale } from '@/locales/resources';
+import { applyDocumentDirection } from '@/utils/client/applyDocumentDirection';
 
 const setCookieSimple = (key: string, value: string, days: number) => {
   const expires = new Date(Date.now() + days * 86_400_000).toUTCString();
@@ -37,8 +38,9 @@ const AuthLangButton = memo<{ size?: number }>((props) => {
         ),
         onCheckedChange: (checked: boolean) => {
           if (!checked) return;
-          i18n.changeLanguage(item.value);
+          void i18n.changeLanguage(item.value);
           document.documentElement.lang = item.value;
+          applyDocumentDirection(item.value);
           setCookieSimple(LOBE_LOCALE_COOKIE, item.value, 365);
         },
         type: 'checkbox',

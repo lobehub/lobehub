@@ -223,6 +223,7 @@
   "wallet.trialActive": "试用有效至 {{date}}",
   "wallet.trialDesc": "一次性试用（{{days}} 天）。需验证手机号。",
   "wallet.trialFailed": "无法激活试用",
+  "wallet.trialInactive": "未启用",
   "wallet.trialTitle": "免费试用",
   "wallet.trialUsed": "此账户已使用过试用",
   "wallet.upgradeDesc": "邀请同事并拆分公司额度。",
