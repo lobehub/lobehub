@@ -73,14 +73,15 @@ export function classify(title: string, body: string): Classification {
 
   const hasMcp = /\bmcp\b/.test(text);
 
-  // Explicit add / submit intent. The `[MCP Submission]` and `[MCP Plugin]`
-  // title prefixes are themselves a declaration of intent.
-  const hasAddVerb =
-    /\b(?:add|submit|submission|submitting|list(?:ing)?|publish|index|register|include)\b/.test(
-      text,
-    ) ||
+  // URL-less requests need an unambiguous action signal because "listing" is
+  // also a common noun in marketplace product bug reports.
+  const hasExplicitSubmissionIntent =
+    /\b(?:add|submit|submission|submitting|publish|index|register|include)\b/.test(text) ||
+    /\b(?:please|kindly|request(?:ing)?(?:\s+to)?)\s+list\b|\blisting\s+request\b/.test(text) ||
     /上架|收录|添加|提交|登记/.test(text) ||
-    /^\s*\[mcp\s*(?:submission|plugin)\]/i.test(title);
+    /^\s*\[mcp\s*(?:submission|plugin)\]/i.test(title) ||
+    /^\s*\[request\].*\blist\b/i.test(title);
+  const hasSubmissionIntent = hasExplicitSubmissionIntent || /\blist(?:ing)?\b/.test(text);
 
   // Marketplace framing keeps us on listing requests and off random MCP bug
   // reports that merely mention "mcp" and a verb in passing.
@@ -122,7 +123,7 @@ export function classify(title: string, body: string): Classification {
   // CLI limitations (claim rejects org, etc.). Checked BEFORE isListingOps so
   // "please rescan — market-cli cannot claim" is not auto-closed back into CLI.
   const isCliLimitation =
-    /market.?cli cannot|cannot claim|can'?t claim|rejects? org|org[- ]owned|push\/admin access cannot claim/.test(
+    /market.?cli cannot|cannot claim|can'?t claim|rejects? org|push\/admin access cannot claim/.test(
       text,
     );
 
@@ -162,7 +163,7 @@ export function classify(title: string, body: string): Classification {
   if (!hasMcp) {
     return { isSubmission: false, reason: 'no "mcp" keyword', repoUrl };
   }
-  if (!hasAddVerb) {
+  if (!hasSubmissionIntent) {
     return { isSubmission: false, reason: 'no add/submit intent', repoUrl };
   }
   if (!hasMarketContext) {
@@ -172,6 +173,13 @@ export function classify(title: string, body: string): Classification {
     return {
       isSubmission: false,
       reason: 'looks like a marketplace/listing bug or CLI limitation',
+      repoUrl,
+    };
+  }
+  if (!repoUrl && !hasExplicitSubmissionIntent) {
+    return {
+      isSubmission: false,
+      reason: 'no explicit add/submit intent for a URL-less request',
       repoUrl,
     };
   }

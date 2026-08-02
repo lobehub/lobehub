@@ -27,6 +27,24 @@ The publishing skill points me at the wrong command sequence for this server.`,
     expect(classification.isSubmission).toBe(false);
   });
 
+  it('classifies org-owned MCP submissions when no claim failure occurred', () => {
+    const classification = classify(
+      '[Request] Add our org-owned MCP server to the marketplace',
+      'Repo: https://github.com/example/acme-mcp',
+    );
+
+    expect(classification).toMatchObject({
+      isSubmission: true,
+      repoUrl: 'https://github.com/example/acme-mcp',
+    });
+  });
+
+  it('does not classify URL-less marketplace product reports as submissions', () => {
+    const classification = classify('[Request] MCP marketplace listing page filters reset', '');
+
+    expect(classification.isSubmission).toBe(false);
+  });
+
   it('still treats a plain rescan (no CLI failure) as a listing request', () => {
     const classification = classify(
       '[Request] Rescan elecz MCP listing to v1.9.6',
