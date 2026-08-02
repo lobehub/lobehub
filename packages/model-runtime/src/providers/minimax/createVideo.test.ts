@@ -229,7 +229,7 @@ describe('createMiniMaxVideo', () => {
     ]);
   });
 
-  it('should map MiniMax-H3 reference images and keep the requested ratio', async () => {
+  it('should normalize all visible H3 inputs into reference images', async () => {
     global.fetch = vi.fn().mockResolvedValueOnce({
       ok: true,
       json: async () => ({ task_id: 'h3-reference-task' }),
@@ -253,6 +253,11 @@ describe('createMiniMaxVideo', () => {
     expect(body.content).toEqual([
       { text: 'Keep the referenced characters consistent', type: 'text' },
       {
+        image_url: { url: 'https://example.com/ignored-first.jpg' },
+        role: 'reference_image',
+        type: 'image_url',
+      },
+      {
         image_url: { url: 'https://example.com/reference-1.jpg' },
         role: 'reference_image',
         type: 'image_url',
@@ -262,7 +267,32 @@ describe('createMiniMaxVideo', () => {
         role: 'reference_image',
         type: 'image_url',
       },
+      {
+        image_url: { url: 'https://example.com/ignored-last.jpg' },
+        role: 'reference_image',
+        type: 'image_url',
+      },
     ]);
+  });
+
+  it('should reject more than nine normalized H3 reference images', async () => {
+    const payload: CreateVideoPayload = {
+      model: 'MiniMax-H3',
+      params: {
+        endImageUrl: 'https://example.com/last.jpg',
+        imageUrl: 'https://example.com/first.jpg',
+        imageUrls: Array.from(
+          { length: 8 },
+          (_, index) => `https://example.com/reference-${index}.jpg`,
+        ),
+        prompt: 'Keep every visible reference',
+      },
+    };
+
+    await expect(createMiniMaxVideo(payload, mockOptions)).rejects.toThrow(
+      'MiniMax-H3 supports up to 9 reference images',
+    );
+    expect(fetch).not.toHaveBeenCalled();
   });
 });
 
