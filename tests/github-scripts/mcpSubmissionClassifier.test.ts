@@ -17,4 +17,25 @@ The publishing skill points me at the wrong command sequence for this server.`,
       reason: 'looks like CLI/publishing feedback',
     });
   });
+
+  it('does not classify market-cli claim failures as listing requests', () => {
+    const classification = classify(
+      'market-cli cannot claim org-owned MCP server',
+      'Submit works for personal repos but claim rejects org even with admin access.',
+    );
+
+    expect(classification.isSubmission).toBe(false);
+  });
+
+  it('still treats a plain rescan (no CLI failure) as a listing request', () => {
+    const classification = classify(
+      '[Request] Rescan elecz MCP listing to v1.9.6',
+      'The marketplace listing is stuck on an old version, please rescan.',
+    );
+
+    expect(classification).toMatchObject({
+      isSubmission: true,
+      reason: expect.stringMatching(/rescan|refresh/i),
+    });
+  });
 });
