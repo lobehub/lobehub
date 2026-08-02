@@ -29,20 +29,53 @@ Everything here is portable: the hard dependencies are the `lh` CLI (already
 authed in your environment) and, for UI proof, `agent-browser`. No repo scripts,
 no local report directory.
 
+## Two entry points — an operation id is NOT required
+
+Every evidence command targets a **verification session** (a round). How you
+name that session is a choice, not a prerequisite:
+
+| You have | Target the round with | Path |
+| --- | --- | --- |
+| A verify plan (`$LOBE_OPERATION_ID` set) | `--operation "$LOBE_OPERATION_ID"` | This document: discover the plan, satisfy its criteria |
+| No plan — you author the checks | `--run <verifyRunId>` from `lh acceptance run create`, or publish a whole directory with `lh acceptance run ingest` | [references/report.md](references/report.md) |
+
+`--operation` and `--run` are interchangeable on `result submit` and
+`result list`; a round created without an operation is simply recorded as
+`standalone`. (`evidence list` takes neither — it keys off a positional
+`<checkResultId>` you read from `result list`.) **A missing operation id never
+means "skip the acceptance"** — it only means you author the plan instead of
+discovering it.
+
+## Rounds are immutable — repair means a NEW round
+
+A published round is a permanent record of what was true at that moment. **Never
+re-submit into a round to "fix" it after changing the code** — publish the
+re-verification as the next round, and let the acceptance page show the
+progression. Correcting a typo in the same session's report is fine; passing off
+post-fix evidence as the original round is not.
+
+The **acceptance** (`/acceptance/<acceptanceId>`) is the stable cross-round
+decision surface that aggregates every round for a subject; each **round**
+(`/verify/<verifyRunId>`) is one immutable snapshot with its evidence. Lead your
+final reply with the acceptance link when one exists; the round link follows as
+the record of this attempt.
+
 ## Prerequisites
 
 - **`lh` is authed.** Confirm with `lh acceptance run list --json` (an empty `[]`
   means authed; an auth error means stop and surface it).
-- **You know your operation id.** It is provided as `$LOBE_OPERATION_ID` in the
-  environment (or named in your task prompt). Every command below keys off it.
-  If it is unset, there is no plan to satisfy — author the checks yourself and
-  publish a **structured report round** instead:
-  [references/report.md](references/report.md).
+- **A target round.** Either `$LOBE_OPERATION_ID` (provided in the environment or
+  named in your task prompt), or a `verifyRunId` you create yourself — see the
+  table above.
 - **For UI evidence, `agent-browser` is installed.** `npm i -g agent-browser`
   then `agent-browser install` (downloads Chrome). Full reference:
   [references/agent-browser.md](references/agent-browser.md).
 
 ## Step 1 — Discover the plan (what to prove)
+
+> Plan-driven path only. Authoring your own checks instead? Jump to
+> [references/report.md](references/report.md) — Steps 2–4 below still apply,
+> targeting your round with `--run <verifyRunId>`.
 
 One read tells you what to prove:
 
@@ -137,12 +170,17 @@ how good the work is.
 
 ### Final handoff (mandatory)
 
-The final response MUST include the full report URL printed by
-`lh acceptance run result submit`, together with the explicit coverage result.
-Do not finish with only a check-result id, local artifact path, or prose claim.
+The final response MUST include the published URLs, together with the explicit
+coverage result. Do not finish with only a check-result id, local artifact path,
+or prose claim.
+
+Lead with the **acceptance** link when the command printed one — it is the stable
+cross-round decision surface; the **round** link follows as this attempt's
+immutable record. Put no images or local file links in the chat reply.
 
 ```text
-Verification report: https://app.lobehub.com/verify/<verifyRunId>
+Acceptance:   https://app.lobehub.com/acceptance/<acceptanceId>
+This round:   https://app.lobehub.com/verify/<verifyRunId>
 Coverage: 2/2 criteria, all required evidence uploaded
 ```
 

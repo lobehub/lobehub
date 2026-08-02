@@ -14,6 +14,33 @@ never gets that rendering; the structured round does.
 Rule of thumb: **plan exists → per-criterion submit; you author the checks →
 structured round ingest.** Never mix both for the same delivery round.
 
+## No operation id needed
+
+`--operation` is optional on every command in this skill. Without one you have
+two ways to own a round, and both are first-class (the server records them as
+`standalone`):
+
+```bash
+# A. one directory, one command — preferred when you have assets on disk
+lh acceptance run ingest <report-dir> --subject topic:tpc_xxx --json
+
+# B. create the round first, then submit into it with --run
+RUN=$(lh acceptance run create --title "…" --goal "…" --json | jq -r .id)
+lh acceptance run result submit --run "$RUN" --item <checkItemId> …
+```
+
+Prefer **A**: per-criterion submits without a plan produce checks with no
+declared intent, so the page has nothing to pair the outcome against.
+
+## Rounds are immutable
+
+Each ingest creates a **new** round. After fixing something, never edit or
+re-submit into the previous round to make it look green — publish the
+re-verification as the next round. The acceptance
+(`/acceptance/<acceptanceId>`) aggregates the rounds in order, so the repair
+history is the point, not something to hide. Reuse the same `--subject` across
+rounds; that is what groups them.
+
 ## Directory layout
 
 Any directory works — no repo convention required:
