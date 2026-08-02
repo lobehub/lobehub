@@ -13,3 +13,13 @@ export const ORG_NAME = 'Aico';
 // mirrored from packages/business/const — model-bank gates the LobeHub
 // provider entry on this flag; the OSS desktop build keeps it off
 export const ENABLE_BUSINESS_FEATURES = false;
+
+// Re-export Aico error catalog so client imports stay resolvable in desktop stubs.
+export {
+  AICO_ERROR_ALIASES,
+  AICO_ERROR_CODES,
+  AICO_ERROR_MESSAGES_FA,
+  isAicoErrorCode,
+  normalizeAicoErrorCode,
+  resolveAicoErrorCode,
+} from '../../../../../packages/business/const/src/aicoErrors';

@@ -1,4 +1,7 @@
 import type { ChatMessageError } from '@lobechat/types';
+import { useTranslation } from 'react-i18next';
+
+import { resolveAicoErrorMessage } from '@/business/client/resolveAicoErrorMessage';
 
 export interface BusinessErrorContentResult {
   errorType?: string;
@@ -7,7 +10,10 @@ export interface BusinessErrorContentResult {
 }
 
 export default function useBusinessErrorContent(
-  _error?: ChatMessageError | null,
+  error?: ChatMessageError | null,
 ): BusinessErrorContentResult {
-  return {};
+  const { t } = useTranslation('aico');
+  const message = resolveAicoErrorMessage(error?.message, t);
+  if (!message) return {};
+  return { message };
 }

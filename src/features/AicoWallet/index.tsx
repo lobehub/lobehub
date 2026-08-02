@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
+import { toastAicoError } from '@/business/client/resolveAicoErrorMessage';
 import { message } from '@/components/AntdStaticMethods';
 import StatisticCard from '@/components/StatisticCard';
 import { useClientDataSWR } from '@/libs/swr';
@@ -107,7 +108,7 @@ export const AicoWallet = () => {
                 form.resetFields();
                 await Promise.all([mutateWallet(), mutateTxs()]);
               } catch (err) {
-                message.error(err instanceof Error ? err.message : t('wallet.topupFailed'));
+                toastAicoError(err, t, 'wallet.topupFailed');
               } finally {
                 setBusy(false);
               }
@@ -156,7 +157,7 @@ export const AicoWallet = () => {
                     message.success(t('wallet.trialActivated'));
                     await mutateTrial();
                   } catch (err) {
-                    message.error(err instanceof Error ? err.message : t('wallet.trialFailed'));
+                    toastAicoError(err, t, 'wallet.trialFailed');
                   } finally {
                     setBusy(false);
                   }

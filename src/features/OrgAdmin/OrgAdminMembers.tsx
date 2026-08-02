@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router';
 
+import { toastAicoError } from '@/business/client/resolveAicoErrorMessage';
 import { message } from '@/components/AntdStaticMethods';
 import StatisticCard from '@/components/StatisticCard';
 import { isValidIranianPhoneNumber } from '@/libs/better-auth/phone';
@@ -134,7 +135,7 @@ export const OrgAdminMembers = () => {
       form.resetFields(['identifierValue']);
       await mutate();
     } catch (error) {
-      message.error(error instanceof Error ? error.message : t('org.invite.failed'));
+      toastAicoError(error, t, 'org.invite.failed');
     } finally {
       setInviting(false);
     }
@@ -165,7 +166,7 @@ export const OrgAdminMembers = () => {
                   setSelectedOrgId(org.id);
                   navigate(`/org/${org.id}/members`);
                 } catch (err) {
-                  message.error(err instanceof Error ? err.message : t('org.upgradeFailed'));
+                  toastAicoError(err, t, 'org.upgradeFailed');
                 } finally {
                   setBusy(false);
                 }
@@ -379,7 +380,7 @@ export const OrgAdminMembers = () => {
                     allocForm.resetFields(['amountUsd']);
                     await refreshAll();
                   } catch (err) {
-                    message.error(err instanceof Error ? err.message : t('org.allocateFailed'));
+                    toastAicoError(err, t, 'org.allocateFailed');
                   } finally {
                     setBusy(false);
                   }
@@ -480,9 +481,7 @@ export const OrgAdminMembers = () => {
                                 );
                                 await refreshAll();
                               } catch (error) {
-                                message.error(
-                                  error instanceof Error ? error.message : t('org.reclaimFailed'),
-                                );
+                                toastAicoError(error, t, 'org.reclaimFailed');
                               }
                             }}
                           >
@@ -501,9 +500,7 @@ export const OrgAdminMembers = () => {
                                 message.success(t('org.removeSuccess'));
                                 await refreshAll();
                               } catch (error) {
-                                message.error(
-                                  error instanceof Error ? error.message : t('org.removeFailed'),
-                                );
+                                toastAicoError(error, t, 'org.removeFailed');
                               }
                             }}
                           >
@@ -576,7 +573,7 @@ export const OrgAdminMembers = () => {
                     teamForm.resetFields();
                     await mutateTeams();
                   } catch (err) {
-                    message.error(err instanceof Error ? err.message : t('org.teamFailed'));
+                    toastAicoError(err, t, 'org.teamFailed');
                   } finally {
                     setBusy(false);
                   }
@@ -647,7 +644,7 @@ export const OrgAdminMembers = () => {
                     message.success(t('org.modelsSaved'));
                     await mutateTeams();
                   } catch (err) {
-                    message.error(err instanceof Error ? err.message : t('org.modelsFailed'));
+                    toastAicoError(err, t, 'org.modelsFailed');
                   } finally {
                     setBusy(false);
                   }
@@ -706,7 +703,7 @@ export const OrgAdminMembers = () => {
                     topupForm.resetFields();
                     await refreshAll();
                   } catch (err) {
-                    message.error(err instanceof Error ? err.message : t('org.topupFailed'));
+                    toastAicoError(err, t, 'org.topupFailed');
                   } finally {
                     setBusy(false);
                   }

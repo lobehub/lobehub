@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router';
 
+import { toastAicoError } from '@/business/client/resolveAicoErrorMessage';
 import { message } from '@/components/AntdStaticMethods';
 import { useClientDataSWR } from '@/libs/swr';
 import { lambdaClient } from '@/libs/trpc/client';
@@ -42,7 +43,7 @@ export const AcceptOrgInvite = () => {
       message.success(t('invite.accepted'));
       navigate(`/org/${result.orgId}/members`);
     } catch (err) {
-      message.error(err instanceof Error ? err.message : t('invite.failed'));
+      toastAicoError(err, t, 'invite.failed');
     } finally {
       setAccepting(false);
     }

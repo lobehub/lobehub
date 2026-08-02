@@ -8,6 +8,7 @@ import { Building2Icon, CircleDollarSignIcon, ShieldIcon, WalletIcon } from 'luc
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { toastAicoError } from '@/business/client/resolveAicoErrorMessage';
 import { message } from '@/components/AntdStaticMethods';
 import StatisticCard from '@/components/StatisticCard';
 import { useClientDataSWR } from '@/libs/swr';
@@ -209,7 +210,7 @@ export const PlatformAdminPanel = () => {
                     createForm.resetFields();
                     await mutate();
                   } catch (err) {
-                    message.error(err instanceof Error ? err.message : t('platform.createFailed'));
+                    toastAicoError(err, t, 'platform.createFailed');
                   } finally {
                     setBusy(false);
                   }
@@ -254,7 +255,7 @@ export const PlatformAdminPanel = () => {
                     message.success(t('platform.assigned'));
                     await mutate();
                   } catch (err) {
-                    message.error(err instanceof Error ? err.message : t('platform.assignFailed'));
+                    toastAicoError(err, t, 'platform.assignFailed');
                   } finally {
                     setBusy(false);
                   }
@@ -395,7 +396,7 @@ export const PlatformAdminPanel = () => {
                   message.success(t('platform.trialSaved'));
                   await mutateTrial();
                 } catch (err) {
-                  message.error(err instanceof Error ? err.message : t('platform.trialFailed'));
+                  toastAicoError(err, t, 'platform.trialFailed');
                 } finally {
                   setBusy(false);
                 }
@@ -489,7 +490,7 @@ export const PlatformAdminPanel = () => {
                   message.success(t('platform.credited'));
                   await Promise.all([mutate(), mutateFinancials()]);
                 } catch (err) {
-                  message.error(err instanceof Error ? err.message : t('platform.creditFailed'));
+                  toastAicoError(err, t, 'platform.creditFailed');
                 } finally {
                   setBusy(false);
                 }
