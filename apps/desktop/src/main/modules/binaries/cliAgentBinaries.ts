@@ -119,7 +119,7 @@ export const antigravityCliBinary: BinarySpec = defineValidatedBinary({
   name: 'agy',
   priority: 5,
   validatePattern:
-    /^(?:(?:agy|antigravity(?: cli)?) (?:version )?)?v?\d+\.\d+\.\d+(?:[-+][\dA-Z.-]+)?$/i,
+    /^(?:(?:agy|antigravity(?: cli)?) (?:version )?)?v?\d+\.\d+\.\d+(?:-[\dA-Z.-]+)?(?:\+[\dA-Z.-]+)?$/i,
 });
 
 /**
