@@ -1234,12 +1234,12 @@ export default {
   'settingSystemTools.tools.agentBrowser.desc':
     'Agent-browser - headless browser automation CLI for AI agents',
   'settingSystemTools.tools.ag.desc': 'The Silver Searcher - fast code searching tool',
+  'settingSystemTools.tools.antigravity.desc': 'Antigravity CLI - Google agentic coding CLI',
   'settingSystemTools.tools.aider.desc': 'Aider - AI pair programming in your terminal',
   'settingSystemTools.tools.claude.desc': 'Claude Code - Anthropic official agentic coding CLI',
   'settingSystemTools.tools.codex.desc': 'Codex - OpenAI agentic coding CLI',
   'settingSystemTools.tools.fd.desc': 'fd - fast and user-friendly alternative to find',
   'settingSystemTools.tools.find.desc': 'Unix find - standard file search command',
-  'settingSystemTools.tools.gemini.desc': 'Gemini CLI - Google agentic coding CLI',
   'settingSystemTools.tools.grep.desc': 'GNU grep - standard text search tool',
   'settingSystemTools.tools.kimi.desc': 'Kimi Code - Moonshot AI agentic coding CLI',
   'settingSystemTools.tools.mdfind.desc': 'macOS Spotlight search (fast indexed search)',
