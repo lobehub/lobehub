@@ -35,12 +35,19 @@ const toMs = (v: Date | string | null | undefined): number | null => {
   return Number.isNaN(ms) ? null : ms;
 };
 
-const toWindow = (row: QuotaWindowRow | undefined): HeteroQuotaWindow | null => {
+const toWindow = (row: QuotaWindowRow | undefined, now: number): HeteroQuotaWindow | null => {
   if (!row) return null;
+  // A window whose reset has already passed says nothing about current usage —
+  // the quota refilled at `resetsAt`. Showing its last utilization paints a
+  // spent window as if it were live (an exhausted 0%-left badge on a fresh
+  // quota), so drop it and let the caller fall back to a live sample.
+  const resetsAt = toMs(row.resetsAt);
+  if (resetsAt !== null && resetsAt <= now) return null;
+
   // Displayed "used" is the latest reading; peak is the monotonic ceiling fallback.
   const usedPercent = Math.max(0, Math.min(100, row.lastUtilization ?? row.peakUtilization ?? 0));
   return {
-    resetsAt: toMs(row.resetsAt),
+    resetsAt,
     usedPercent,
     windowMinutes: Math.round((row.windowSeconds ?? 0) / 60),
   };
@@ -66,10 +73,12 @@ const identityOf = (account: QuotaAccountRow): ClaudeCodeAccountIdentity => ({
 export const buildClaudeSnapshotFromWindows = (
   account: QuotaAccountRow,
   windows: QuotaWindowRow[],
+  now: number = Date.now(),
 ): ClaudeCodeQuotaSnapshot => {
   const session = windows.find((w) => w.limitType === 'session');
   const weekly = windows.find(isWeeklyAll);
   const scoped = windows.find((w) => w.limitType === 'weekly_scoped' && !!w.scopeKey);
+  const scopedWindow = toWindow(scoped, now);
 
   // Freshness is based on when our server received the snapshot, not on the
   // sampling device's wall clock. Device timestamps remain on the windows for
@@ -81,11 +90,12 @@ export const buildClaudeSnapshotFromWindows = (
     error: null,
     identity: identityOf(account),
     provider: 'claude-code',
-    scopedWeekly: scoped ? { modelName: scoped.scopeKey, window: toWindow(scoped)! } : null,
-    session: toWindow(session),
+    scopedWeekly:
+      scoped && scopedWindow ? { modelName: scoped.scopeKey, window: scopedWindow } : null,
+    session: toWindow(session, now),
     status: 'ok',
-    updatedAt: updatedAt || Date.now(),
-    weekly: toWindow(weekly),
+    updatedAt: updatedAt || now,
+    weekly: toWindow(weekly, now),
   };
 };
 
