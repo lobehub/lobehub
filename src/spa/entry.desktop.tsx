@@ -9,6 +9,7 @@ import { createElectronLocalDatabaseAdapter } from '@/libs/localDatabase/electro
 import { createAppRouter } from '@/utils/router';
 
 import BootShell from './BootShell';
+import { isMainLayoutLocation } from './BootShell/routeScope';
 import { startAppInitialization } from './initialize/bootstrap';
 import { applyDesktopBootstrapIdentity } from './initialize/desktopIdentity';
 import { desktopRoutes } from './router/desktopRouter.config';
@@ -24,9 +25,14 @@ startAppInitialization();
 
 const router = createAppRouter(desktopRoutes);
 
+// Mounting is conditional rather than an early return inside the shell: the hook
+// also strips the static logo, and a standalone route needs that logo to stay up
+// until its own brand-loading fallback takes over.
+const showBootShell = isMainLayoutLocation(desktopRoutes, window.location.pathname);
+
 createSPARoot(document.getElementById('root')!).render(
   <NextThemeProvider>
-    <BootShell />
+    {showBootShell && <BootShell />}
     <RouterProvider router={router} />
   </NextThemeProvider>,
 );
