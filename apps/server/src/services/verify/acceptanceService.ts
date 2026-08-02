@@ -31,6 +31,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { TaskService } from '@/server/services/task';
 
 import { computeFalseFlags } from './feedbackService';
+import { maybeContinueGoalLoop, syncGoalToolState } from './goalLoop';
 
 const log = debug('lobe-server:verify-acceptance');
 
@@ -546,9 +547,33 @@ export class AcceptanceService {
     await this.stampDecision(acceptanceId, 'accept', comment);
     await this.acceptanceModel.updateStatus(acceptanceId, 'accepted');
 
-    if (acceptance.subjectType === 'task') await this.completeTaskSubject(acceptance.subjectId);
+    if (acceptance.subjectType === 'task') {
+      await this.completeTaskSubject(acceptance.subjectId);
+      await this.syncGoalStateOnAccept(acceptance.subjectId);
+    }
 
     return (await this.acceptanceModel.findById(acceptanceId))!;
+  };
+
+  /** Flip a goal task's origin card to its terminal "done" state. Best-effort. */
+  private syncGoalStateOnAccept = async (subjectId: string): Promise<void> => {
+    try {
+      const taskModel = new TaskModel(this.db, this.userId, this.workspaceId);
+      const task = await taskModel.findById(subjectId);
+      if (!task) return;
+      const goal = taskModel.getGoalConfig(task);
+      if (!goal) return;
+
+      await syncGoalToolState({
+        db: this.db,
+        state: { phase: 'done', roundsRun: task.totalTopics || 0 },
+        task,
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      });
+    } catch (error) {
+      log('syncGoalStateOnAccept failed (non-fatal): %O', error);
+    }
   };
 
   /**
@@ -557,14 +582,49 @@ export class AcceptanceService {
    * picks it up. (Spawning the repair run itself is the runtime's job — for
    * agent-bound rounds via the repair pipeline, for ingested rounds via the
    * next `lh verify ingest-report`.)
+   *
+   * Goal tasks are the exception: a reject IS the "run another round" gesture,
+   * so the outer loop spawns the next task topic right here — the comment
+   * reaches the new round through the prompt builder, which reads it off this
+   * round's decision detail. Budgets still apply; when they ran out the reject
+   * only stamps state (the UI asks the user to raise the budget first).
    */
   reject = async (acceptanceId: string, comment: string): Promise<AcceptanceItem> => {
-    await this.requireDecidableAcceptance(acceptanceId);
+    const acceptance = await this.requireDecidableAcceptance(acceptanceId);
 
     await this.stampDecision(acceptanceId, 'reject', comment);
     await this.acceptanceModel.updateStatus(acceptanceId, 'rejected');
 
+    if (acceptance.subjectType === 'task') await this.spawnGoalRoundOnReject(acceptance.subjectId);
+
     return (await this.acceptanceModel.findById(acceptanceId))!;
+  };
+
+  /**
+   * If the rejected subject is a goal task with budget left, start the next
+   * round (fresh topic). Best-effort: any failure leaves the acceptance in
+   * `rejected` — exactly where a non-goal reject would leave it.
+   */
+  private spawnGoalRoundOnReject = async (subjectId: string): Promise<void> => {
+    try {
+      const taskModel = new TaskModel(this.db, this.userId, this.workspaceId);
+      const task = await taskModel.findById(subjectId);
+      if (!task) return;
+
+      const goal = taskModel.getGoalConfig(task);
+      if (!goal) return;
+
+      const outcome = await maybeContinueGoalLoop({
+        db: this.db,
+        goal,
+        task,
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      });
+      log('reject on goal task %s → loop outcome: %s', task.identifier, outcome);
+    } catch (error) {
+      log('spawnGoalRoundOnReject failed (non-fatal): %O', error);
+    }
   };
 
   /**

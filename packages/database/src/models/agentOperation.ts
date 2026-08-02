@@ -250,6 +250,24 @@ export class AgentOperationModel {
   }
 
   /**
+   * Total USD cost of every operation bound to a task — the goal outer loop's
+   * budget meter. Only root (task-bound) operations carry `taskId`, and each
+   * root's `totalCost` scalar already includes its direct children's rollup
+   * (see `persistCompletion`), so this sum covers verify / repair sub-runs
+   * without walking parent chains. Re-derived on every call — exact regardless
+   * of how many times a round settles.
+   */
+  async sumCostByTask(taskId: string): Promise<number> {
+    const [row] = await this.db
+      .select({ totalCost: sql<string | null>`sum(${agentOperations.totalCost})` })
+      .from(agentOperations)
+      .where(and(eq(agentOperations.taskId, taskId), this.ownership()));
+
+    const parsed = Number(row?.totalCost ?? 0);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  /**
    * Load an operation together with its direct child operations (`callSubAgent`
    * children / isolated group members) — the (at most) two-layer operation
    * tree. File-Work registration gathers every op in this tree so a round's

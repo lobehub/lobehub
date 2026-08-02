@@ -9,6 +9,12 @@ import type { LobeChatDatabase } from '@/database/type';
 import { TaskService } from '@/server/services/task';
 import { TaskResultBridgeService } from '@/server/services/taskResultBridge';
 
+import {
+  goalExhaustedBriefCopy,
+  maybeContinueGoalLoop,
+  resolveGoalRoundBudget,
+  syncGoalToolState,
+} from './goalLoop';
 import { maybeAutoRepair } from './repairService';
 import { VerifyReporterService } from './reporter';
 import { VerifyStatusService } from './statusService';
@@ -94,6 +100,8 @@ export const driveTaskFromVerify = async (
     const task = await taskModel.findById(taskOperation.taskId);
     if (!task || TERMINAL_TASK_STATUS.has(task.status)) return; // task already settled
 
+    const goal = taskModel.getGoalConfig(task);
+
     if (run.status === 'passed') {
       if (task.automationMode) {
         // Recurring tasks are parked back at `scheduled` and re-armed by the
@@ -109,6 +117,18 @@ export const driveTaskFromVerify = async (
         });
         log('verify passed → task %s completed', taskOperation.taskId);
       }
+      if (goal) {
+        // The task is complete, but the human sign-off on the acceptance is
+        // still open — the card shows "review", and flips to "done" when the
+        // user accepts (AcceptanceService.accept).
+        await syncGoalToolState({
+          db,
+          state: { phase: 'review', roundsRun: task.totalTopics || 0 },
+          task,
+          userId,
+          workspaceId,
+        });
+      }
     } else {
       // Two non-pass outcomes, kept distinct so an infra error never reads as a
       // rejected delivery:
@@ -116,21 +136,73 @@ export const driveTaskFromVerify = async (
       // - errored: the verifier could not run (infra) — the delivery was NOT
       //   evaluated, so we must not claim it "did not pass".
       const isErrored = run.status === 'errored';
+
+      // Goal outer loop: a *failed* (judged) run on a goal task spawns the next
+      // round in a fresh topic while budgets last, instead of parking the task
+      // on the user. `errored` stays on the pause path — verification never ran,
+      // so looping would burn budget without new signal.
+      let exhausted: 'exhausted-cost' | 'exhausted-rounds' | undefined;
+      if (goal && !isErrored) {
+        const outcome = await maybeContinueGoalLoop({ db, goal, task, userId, workspaceId });
+        if (outcome === 'continued') {
+          await syncGoalToolState({
+            db,
+            state: {
+              phase: 'running',
+              roundBudget: goal.maxIterations === null ? null : resolveGoalRoundBudget(goal),
+              roundsRun: (task.totalTopics || 0) + 1,
+            },
+            task,
+            userId,
+            workspaceId,
+          });
+          // Stamp idempotency and return: no brief, no pause, no creator
+          // callback — the loop continues silently until it converges or a
+          // budget runs out.
+          await runModel.setMetadata(run.id, {
+            ...(run.metadata as Record<string, unknown> | null),
+            taskDrivenAt: new Date().toISOString(),
+          });
+          return;
+        }
+        if (outcome === 'exhausted-cost' || outcome === 'exhausted-rounds') exhausted = outcome;
+        // 'spawn-failed' falls through to the regular pause + brief path.
+      }
+
+      const exhaustedCopy =
+        exhausted && goal ? goalExhaustedBriefCopy(task, exhausted, goal) : null;
       await new BriefModel(db, userId, workspaceId).create({
         actions: DEFAULT_BRIEF_ACTIONS['error'],
         agentId: task.assigneeAgentId || undefined,
         priority: 'urgent',
-        summary: isErrored
-          ? 'Verification could not run (internal error); the delivery was not evaluated.'
-          : 'Delivery did not pass verification.',
+        summary:
+          exhaustedCopy?.summary ??
+          (isErrored
+            ? 'Verification could not run (internal error); the delivery was not evaluated.'
+            : 'Delivery did not pass verification.'),
         taskId: taskOperation.taskId,
-        title: isErrored
-          ? `${task.identifier} verification errored`
-          : `${task.identifier} failed verification`,
+        title:
+          exhaustedCopy?.title ??
+          (isErrored
+            ? `${task.identifier} verification errored`
+            : `${task.identifier} failed verification`),
         trigger: 'task',
         type: 'error',
       });
       await taskModel.updateStatus(taskOperation.taskId, 'paused', { error: null });
+      if (goal) {
+        await syncGoalToolState({
+          db,
+          state: {
+            pausedReason: exhausted ?? (isErrored ? 'verify-errored' : 'verify-failed'),
+            phase: 'paused',
+            roundsRun: task.totalTopics || 0,
+          },
+          task,
+          userId,
+          workspaceId,
+        });
+      }
       log(
         isErrored
           ? 'verify errored → task %s paused + brief'
@@ -167,7 +239,12 @@ export const driveTaskFromVerify = async (
       );
     }
 
-    await runModel.setMetadata(run.id, { taskDrivenAt: new Date().toISOString() });
+    // `setMetadata` replaces the whole jsonb bag — spread the existing keys so
+    // the stamp can't clobber `maxRepairRounds` and friends.
+    await runModel.setMetadata(run.id, {
+      ...(run.metadata as Record<string, unknown> | null),
+      taskDrivenAt: new Date().toISOString(),
+    });
   } catch (error) {
     log('driveTaskFromVerify failed for op %s (non-fatal): %O', operationId, error);
   }

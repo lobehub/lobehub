@@ -23,8 +23,10 @@ export type TaskAutomationMode = 'heartbeat' | 'schedule';
  *                 scheduling state, nor count against the maxExecutions quota.
  * - `schedule`  — a cron `schedule` tick fired the run.
  * - `heartbeat` — a heartbeat interval tick fired the run.
+ * - `goal`      — the goal outer loop spawned this round after a failed verify.
+ *                 Like `manual`, it never counts against automation quotas.
  */
-export type TaskRunTrigger = 'manual' | 'schedule' | 'heartbeat';
+export type TaskRunTrigger = 'manual' | 'schedule' | 'heartbeat' | 'goal';
 
 // ── Config types ──
 
@@ -51,6 +53,21 @@ export interface CheckpointConfig {
  * config when present, otherwise the nearest ancestor's config in full (never a
  * field-level merge). Resolved at runtime via `TaskModel.resolveVerifyConfig`.
  */
+/**
+ * Goal-driven loop config, persisted under `tasks.config.goal`. Written by the
+ * `createGoal` builtin tool; its presence marks the task as a goal task and
+ * enables the outer verify-driven round loop (a failed verify run spawns a new
+ * task topic instead of pausing, until a budget below runs out).
+ */
+export interface TaskGoalConfig {
+  /** Max execution rounds (task topics). Null = uncapped by the user. */
+  maxIterations?: number | null;
+  /** Total USD budget across all rounds and their verify runs. Null = uncapped. */
+  maxTotalCost?: number | null;
+  /** Conversation topic that spawned the goal — terminal callbacks post back here. */
+  originTopicId?: string | null;
+}
+
 export interface TaskVerifyConfig {
   /** Whether the verify gate runs on topic completion. */
   enabled?: boolean;

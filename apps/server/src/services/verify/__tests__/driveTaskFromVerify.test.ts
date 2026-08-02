@@ -15,21 +15,38 @@ const {
   runSetMetadata,
   opFindById,
   taskFindById,
+  taskGetGoalConfig,
   taskUpdateStatus,
   briefCreate,
   serviceUpdateStatus,
   statusRecompute,
   deliverMock,
+  goalContinueMock,
+  goalSyncMock,
 } = vi.hoisted(() => ({
   briefCreate: vi.fn(),
   deliverMock: vi.fn(),
+  goalContinueMock: vi.fn(),
+  goalSyncMock: vi.fn(),
   opFindById: vi.fn(),
   runFindByOperation: vi.fn(),
   runSetMetadata: vi.fn(),
   serviceUpdateStatus: vi.fn(),
   statusRecompute: vi.fn(),
   taskFindById: vi.fn(),
+  taskGetGoalConfig: vi.fn(),
   taskUpdateStatus: vi.fn(),
+}));
+
+vi.mock('../goalLoop', () => ({
+  goalExhaustedBriefCopy: (task: any, outcome: string) => ({
+    summary: `budget exhausted (${outcome})`,
+    title: `${task.identifier} goal paused`,
+  }),
+  maybeContinueGoalLoop: goalContinueMock,
+  resolveGoalRoundBudget: (goal: any) =>
+    goal.maxIterations === null ? Number.POSITIVE_INFINITY : (goal.maxIterations ?? 3),
+  syncGoalToolState: goalSyncMock,
 }));
 
 vi.mock('../statusService', () => ({
@@ -46,7 +63,11 @@ vi.mock('@/database/models/agentOperation', () => ({
   AgentOperationModel: vi.fn(() => ({ findById: opFindById })),
 }));
 vi.mock('@/database/models/task', () => ({
-  TaskModel: vi.fn(() => ({ findById: taskFindById, updateStatus: taskUpdateStatus })),
+  TaskModel: vi.fn(() => ({
+    findById: taskFindById,
+    getGoalConfig: taskGetGoalConfig,
+    updateStatus: taskUpdateStatus,
+  })),
 }));
 vi.mock('@/database/models/brief', () => ({
   BriefModel: vi.fn(() => ({ create: briefCreate })),
@@ -69,11 +90,14 @@ describe('driveTaskFromVerify', () => {
       runSetMetadata,
       opFindById,
       taskFindById,
+      taskGetGoalConfig,
       taskUpdateStatus,
       briefCreate,
       serviceUpdateStatus,
       statusRecompute,
       deliverMock,
+      goalContinueMock,
+      goalSyncMock,
     ].forEach((m) => m.mockReset());
     opFindById.mockResolvedValue({ taskId: 'task-1', topicId: 'topic-done' });
     taskFindById.mockResolvedValue({
@@ -82,6 +106,7 @@ describe('driveTaskFromVerify', () => {
       identifier: 'T-1',
       status: 'running',
     });
+    taskGetGoalConfig.mockReturnValue(undefined);
   });
   afterEach(() => vi.restoreAllMocks());
 
@@ -215,5 +240,93 @@ describe('driveTaskFromVerify', () => {
     taskFindById.mockResolvedValue({ id: 'task-1', status: 'completed' });
     await driveTaskFromVerify(db, 'u1', 'op-1');
     expect(serviceUpdateStatus).not.toHaveBeenCalled();
+  });
+
+  describe('goal outer loop', () => {
+    const goalTask = {
+      assigneeAgentId: 'a1',
+      id: 'task-1',
+      identifier: 'T-1',
+      status: 'running',
+      totalTopics: 1,
+    };
+    const goal = { maxIterations: 3, maxTotalCost: null, originTopicId: 'origin-t' };
+
+    beforeEach(() => {
+      taskFindById.mockResolvedValue(goalTask);
+      taskGetGoalConfig.mockReturnValue(goal);
+    });
+
+    it('failed + budget left → spawns the next round silently (no brief, no pause, no callback)', async () => {
+      runFindByOperation.mockResolvedValue({
+        id: 'run-1',
+        metadata: { maxRepairRounds: 2 },
+        status: 'failed',
+      });
+      goalContinueMock.mockResolvedValue('continued');
+
+      await driveTaskFromVerify(db, 'u1', 'op-1');
+
+      expect(goalContinueMock).toHaveBeenCalledWith(
+        expect.objectContaining({ goal, task: goalTask }),
+      );
+      expect(briefCreate).not.toHaveBeenCalled();
+      expect(taskUpdateStatus).not.toHaveBeenCalled();
+      expect(deliverMock).not.toHaveBeenCalled();
+      // Idempotency stamp merges the existing metadata instead of clobbering it.
+      expect(runSetMetadata).toHaveBeenCalledWith(
+        'run-1',
+        expect.objectContaining({ maxRepairRounds: 2, taskDrivenAt: expect.any(String) }),
+      );
+      expect(goalSyncMock).toHaveBeenCalledWith(
+        expect.objectContaining({ state: expect.objectContaining({ phase: 'running' }) }),
+      );
+    });
+
+    it('failed + budget exhausted → pauses with budget-specific brief copy', async () => {
+      runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'failed' });
+      goalContinueMock.mockResolvedValue('exhausted-rounds');
+
+      await driveTaskFromVerify(db, 'u1', 'op-1');
+
+      expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', { error: null });
+      const briefArg = briefCreate.mock.calls[0][0];
+      expect(briefArg.summary).toContain('budget exhausted (exhausted-rounds)');
+      expect(goalSyncMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          state: expect.objectContaining({ pausedReason: 'exhausted-rounds', phase: 'paused' }),
+        }),
+      );
+    });
+
+    it('failed + spawn failure → falls back to the regular pause + brief path', async () => {
+      runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'failed' });
+      goalContinueMock.mockResolvedValue('spawn-failed');
+
+      await driveTaskFromVerify(db, 'u1', 'op-1');
+
+      expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', { error: null });
+      expect(briefCreate.mock.calls[0][0].summary).toContain('did not pass');
+    });
+
+    it('errored → never loops (verification did not run), pauses like a non-goal task', async () => {
+      runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'errored' });
+
+      await driveTaskFromVerify(db, 'u1', 'op-1');
+
+      expect(goalContinueMock).not.toHaveBeenCalled();
+      expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', { error: null });
+    });
+
+    it('passed → completes the task and flips the goal card to review', async () => {
+      runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'passed' });
+
+      await driveTaskFromVerify(db, 'u1', 'op-1');
+
+      expect(serviceUpdateStatus).toHaveBeenCalledWith({ id: 'task-1', status: 'completed' });
+      expect(goalSyncMock).toHaveBeenCalledWith(
+        expect.objectContaining({ state: expect.objectContaining({ phase: 'review' }) }),
+      );
+    });
   });
 });

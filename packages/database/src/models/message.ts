@@ -2795,6 +2795,22 @@ export class MessageModel {
   };
 
   /**
+   * Resolve the tool result message id for a toolCallId — the stable identifier
+   * the model emitted for the call. Lets server-side services push async state
+   * onto a tool card when all they hold is the call id recorded at creation
+   * time (e.g. the goal loop updating the `createGoal` card via
+   * `task.context.origin.toolCallId`).
+   */
+  findToolMessageIdByToolCallId = async (toolCallId: string): Promise<string | null> => {
+    const [row] = await this.db
+      .select({ id: messagePlugins.id })
+      .from(messagePlugins)
+      .where(and(eq(messagePlugins.toolCallId, toolCallId), this.pluginsOwnership()))
+      .limit(1);
+    return row?.id ?? null;
+  };
+
+  /**
    * Update tool message with content, metadata, pluginState, and pluginError in a single transaction
    * This prevents race conditions when updating multiple fields
    */

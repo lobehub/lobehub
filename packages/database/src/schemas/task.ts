@@ -242,7 +242,7 @@ export const taskTopics = pgTable(
     // 'schedule' (cron tick) or 'heartbeat' (interval tick). Null for legacy
     // rows created before this column existed. Used so the maxExecutions quota
     // counts only automation ticks, not manual runs.
-    trigger: text('trigger').$type<'manual' | 'schedule' | 'heartbeat'>(),
+    trigger: text('trigger').$type<'manual' | 'schedule' | 'heartbeat' | 'goal'>(),
 
     // Handoff (populated after topic completes via LLM summarization)
     // { title, summary, keyFindings: string[], nextAction }

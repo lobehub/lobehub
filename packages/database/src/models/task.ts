@@ -1,6 +1,7 @@
 import type {
   CheckpointConfig,
   NewTask,
+  TaskGoalConfig,
   TaskItem,
   TaskVerifyConfig,
   WorkspaceData,
@@ -753,6 +754,19 @@ export class TaskModel {
 
   async updateReviewConfig(id: string, review: Record<string, any>): Promise<TaskItem | null> {
     return this.updateTaskConfig(id, { review });
+  }
+
+  // ========== Goal Config ==========
+
+  /**
+   * Read this task's goal-loop config from `config.goal`. Presence marks a
+   * goal-driven task (created via the `createGoal` builtin tool) and enables
+   * the outer verify-driven round loop. No inheritance — a goal belongs to the
+   * exact task it was created on.
+   */
+  getGoalConfig(task: TaskItem): TaskGoalConfig | undefined {
+    const config = task.config as Record<string, any> | undefined;
+    return config?.goal ? (config.goal as TaskGoalConfig) : undefined;
   }
 
   // ========== Verify Config ==========

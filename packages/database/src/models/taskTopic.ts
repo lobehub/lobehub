@@ -66,7 +66,7 @@ export class TaskTopicModel {
     params: {
       operationId?: string;
       seq: number;
-      trigger?: 'manual' | 'schedule' | 'heartbeat';
+      trigger?: 'manual' | 'schedule' | 'heartbeat' | 'goal';
     },
   ): Promise<void> {
     const visibility = await this.getTaskVisibility(taskId);
@@ -227,7 +227,7 @@ export class TaskTopicModel {
    */
   async countByTask(
     taskId: string,
-    options?: { since?: Date; triggers?: Array<'manual' | 'schedule' | 'heartbeat'> },
+    options?: { since?: Date; triggers?: Array<'manual' | 'schedule' | 'heartbeat' | 'goal'> },
   ): Promise<number> {
     const conditions = [eq(taskTopics.taskId, taskId), this.ownership()];
     if (options?.since) conditions.push(gte(taskTopics.createdAt, options.since));
