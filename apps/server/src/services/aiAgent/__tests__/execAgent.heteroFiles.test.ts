@@ -6,6 +6,7 @@ const {
   mockDeviceFindByDeviceId,
   mockDeviceFindWorkspaceDeviceById,
   mockDispatchAgentRun,
+  mockExecuteToolCall,
   mockMessageCreate,
   mockResolveAttachmentsByFileIds,
   mockSpawnHeteroSandbox,
@@ -16,6 +17,7 @@ const {
   mockDeviceFindByDeviceId: vi.fn(),
   mockDeviceFindWorkspaceDeviceById: vi.fn(),
   mockDispatchAgentRun: vi.fn().mockResolvedValue({ success: true }),
+  mockExecuteToolCall: vi.fn().mockResolvedValue({ success: true }),
   mockIngestAttachment: vi.fn(),
   mockMessageCreate: vi.fn(),
   mockPublishAgentRuntimeEnd: vi.fn().mockResolvedValue('end-event-id'),
@@ -183,6 +185,7 @@ vi.mock('@/server/modules/Mecha', () => ({
 vi.mock('@/server/services/deviceGateway', () => ({
   deviceGateway: {
     dispatchAgentRun: mockDispatchAgentRun,
+    executeToolCall: mockExecuteToolCall,
     isConfigured: false,
     queryDeviceList: vi.fn().mockResolvedValue([]),
     resolveDeviceWorkspaceId: vi.fn().mockResolvedValue(undefined),
@@ -207,6 +210,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     mockResolveAttachmentsByFileIds.mockResolvedValue({ ...emptyResolvedAttachments });
     mockSpawnHeteroSandbox.mockResolvedValue(undefined);
     mockDispatchAgentRun.mockResolvedValue({ success: true });
+    mockExecuteToolCall.mockResolvedValue({ success: true });
     mockDeviceFindByDeviceId.mockResolvedValue({ defaultCwd: '/Users/alice/repo' });
     mockDeviceFindWorkspaceDeviceById.mockResolvedValue(undefined);
     mockIngestAttachment.mockReset();
@@ -702,6 +706,51 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       expect(mockPublishAgentRuntimeInit).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({ heteroType: 'claude-code' }),
+      );
+    });
+
+    it('preserves the workspace scope in a local hetero runtime init', async () => {
+      service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+      heteroAgentConfig.agencyConfig = {
+        heterogeneousProvider: { type: 'claude-code' },
+      } as any;
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'do the workspace task in the cloud sandbox',
+      } as any);
+
+      expect(mockSpawnHeteroSandbox).toHaveBeenCalled();
+      expect(mockPublishAgentRuntimeInit).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          heteroType: 'claude-code',
+          workspaceId: 'workspace-1',
+        }),
+      );
+    });
+
+    it('preserves the workspace scope in a remote hetero runtime init', async () => {
+      service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+      heteroAgentConfig.agencyConfig = {
+        boundDeviceId: 'device-1',
+        heterogeneousProvider: { type: 'openclaw' },
+      } as any;
+      heteroAgentConfig.model = 'openclaw';
+      mockDeviceFindWorkspaceDeviceById.mockResolvedValue({ deviceId: 'device-1' });
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'do the workspace task on the remote agent',
+      } as any);
+
+      expect(mockExecuteToolCall).toHaveBeenCalled();
+      expect(mockPublishAgentRuntimeInit).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          heteroType: 'openclaw',
+          workspaceId: 'workspace-1',
+        }),
       );
     });
   });

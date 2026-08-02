@@ -24,6 +24,7 @@ function createMockInner(): IStreamEventManager & { calls: Record<string, any[][
     cleanupOperation: track('cleanupOperation') as any,
     disconnect: track('disconnect') as any,
     getActiveOperationsCount: track('getActiveOperationsCount') as any,
+    getOperationAuthScope: track('getOperationAuthScope') as any,
     getStreamHistory: track('getStreamHistory') as any,
     publishAgentRuntimeEnd: track('publishAgentRuntimeEnd') as any,
     publishAgentRuntimeInit: track('publishAgentRuntimeInit') as any,
@@ -317,6 +318,15 @@ describe('GatewayStreamNotifier', () => {
       const pushCall = mockFetch.mock.calls.find((c: any[]) => c[0].includes('push-event'));
       const body = JSON.parse(pushCall![1].body);
       expect(body.event.data).not.toHaveProperty('uiMessages');
+    });
+  });
+
+  describe('getOperationAuthScope', () => {
+    it('delegates to the inner stream manager', async () => {
+      const result = await notifier.getOperationAuthScope('op-1');
+
+      expect(result).toBe('getOperationAuthScope-result');
+      expect(inner.calls.getOperationAuthScope).toEqual([['op-1']]);
     });
   });
 

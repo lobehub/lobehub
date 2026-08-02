@@ -1,8 +1,13 @@
 import { createSSEHeaders, createSSEWriter } from '@lobechat/utils/server';
 import debug from 'debug';
-import { type NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
+import { checkAuth, type RequestHandler } from '@/app/(backend)/middleware/auth';
+import {
+  AgentOperationModel,
+  type AgentOperationOwnerScope,
+} from '@/database/models/agentOperation';
+import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime';
 
 const log = debug('api-route:agent:stream');
@@ -12,7 +17,7 @@ const timing = debug('lobe-server:agent-runtime:timing');
  * Server-Sent Events (SSE) endpoint
  * Provides real-time Agent execution event stream for clients
  */
-export async function GET(request: NextRequest) {
+const handler: RequestHandler = async (request, { serverDB, userId, workspaceId }) => {
   // Initialize stream event manager (uses InMemory singleton in local dev, Redis in production)
   const streamManager = createStreamEventManager();
 
@@ -27,6 +32,52 @@ export async function GET(request: NextRequest) {
         error: 'operationId parameter is required',
       },
       { status: 400 },
+    );
+  }
+
+  // Prefer the durable audit row, but runtime startup deliberately tolerates a
+  // failed audit insert. The stream backend keeps the same minimal scope as a
+  // trusted live-operation fallback (shared through Redis in distributed mode).
+  let operation: AgentOperationOwnerScope | null = null;
+  try {
+    operation = await AgentOperationModel.findOwnerScope(serverDB, operationId);
+  } catch (error) {
+    log(`Failed to read durable ownership for operation ${operationId}:`, error);
+  }
+  operation ??= await streamManager.getOperationAuthScope(operationId);
+
+  // A workspace API key represents the validated workspace, not only the user
+  // who created it, so any operation in that workspace is in scope. Personal
+  // keys remain restricted to the caller's personal operations.
+  const isApiKeyRequest = !!request.headers.get('X-API-Key')?.trim();
+  const apiKeyWorkspaceId = workspaceId?.trim() || null;
+  let isAuthorized: boolean;
+  if (isApiKeyRequest) {
+    isAuthorized = apiKeyWorkspaceId
+      ? operation?.workspaceId === apiKeyWorkspaceId
+      : operation?.workspaceId === null && operation.userId === userId;
+  } else if (operation?.userId !== userId) {
+    isAuthorized = false;
+  } else if (!operation.workspaceId) {
+    isAuthorized = true;
+  } else {
+    // Session and OIDC identities can outlive workspace membership. Re-check
+    // the active membership before exposing retained history or live events.
+    try {
+      isAuthorized = !!(await new WorkspaceMemberModel(serverDB, userId).getMember(
+        operation.workspaceId,
+        userId,
+      ));
+    } catch (error) {
+      log(`Failed to validate workspace membership for operation ${operationId}:`, error);
+      isAuthorized = false;
+    }
+  }
+
+  if (!isAuthorized) {
+    return NextResponse.json(
+      { error: 'Forbidden: operation does not belong to this authentication scope' },
+      { status: 403 },
     );
   }
 
@@ -210,4 +261,6 @@ export async function GET(request: NextRequest) {
   return new Response(stream, {
     headers: createSSEHeaders(),
   });
-}
+};
+
+export const GET = checkAuth(handler, { allowApiKey: true });

@@ -13,36 +13,41 @@ Run the official OpenResponses compliance test suite against the local (or remot
 # From the openapi package directory
 cd lobehub/packages/openapi
 
+# Export the same 32+ character secret configured for the local dev server
+export DEV_AUTH_BYPASS_SECRET='<same value as the server DEV_AUTH_BYPASS_SECRET>'
+
 # Run all tests (dev mode, localhost:3010)
 APP_URL=http://localhost:3010 bun run test:response-compliance -- \
-  --auth-header "lobe-auth-dev-backend-api" --no-bearer --api-key 1
+  --auth-header "lobe-auth-dev-backend-api" --no-bearer --api-key "$DEV_AUTH_BYPASS_SECRET"
 
 # Run specific tests only
 APP_URL=http://localhost:3010 bun run test:response-compliance -- \
-  --auth-header "lobe-auth-dev-backend-api" --no-bearer --api-key 1 \
+  --auth-header "lobe-auth-dev-backend-api" --no-bearer --api-key "$DEV_AUTH_BYPASS_SECRET" \
   --filter basic-response,streaming-response
 
 # Verbose mode (shows request/response details)
 APP_URL=http://localhost:3010 bun run test:response-compliance -- \
-  --auth-header "lobe-auth-dev-backend-api" --no-bearer --api-key 1 -v
+  --auth-header "lobe-auth-dev-backend-api" --no-bearer --api-key "$DEV_AUTH_BYPASS_SECRET" -v
 
 # JSON output (for CI)
 APP_URL=http://localhost:3010 bun run test:response-compliance -- \
-  --auth-header "lobe-auth-dev-backend-api" --no-bearer --api-key 1 --json
+  --auth-header "lobe-auth-dev-backend-api" --no-bearer --api-key "$DEV_AUTH_BYPASS_SECRET" --json
 ```
 
 ## Prerequisites
 
-- Dev server running with `ENABLE_MOCK_DEV_USER=true` in `.env`
+- Dev server running in development mode with `ENABLE_DEV_AUTH_BYPASS=1` and a unique
+  `DEV_AUTH_BYPASS_SECRET` of at least 32 characters in `.env`
+- The same `DEV_AUTH_BYPASS_SECRET` exported in the shell that runs the compliance command
 - The `api/v1/responses` route registered (via `src/app/(backend)/api/v1/[[...route]]/route.ts`)
 
 ## Auth Modes
 
-| Mode            | Flags                                                               |
-| --------------- | ------------------------------------------------------------------- |
-| Dev (mock user) | `--auth-header "lobe-auth-dev-backend-api" --no-bearer --api-key 1` |
-| API Key         | `--api-key lb-xxxxxxxxxxxxxxxx`                                     |
-| Custom          | `--auth-header <name> --api-key <value>`                            |
+| Mode            | Flags                                                                                       |
+| --------------- | ------------------------------------------------------------------------------------------- |
+| Dev (mock user) | `--auth-header "lobe-auth-dev-backend-api" --no-bearer --api-key "$DEV_AUTH_BYPASS_SECRET"` |
+| API Key         | `--api-key lb-xxxxxxxxxxxxxxxx`                                                             |
+| Custom          | `--auth-header <name> --api-key <value>`                                                    |
 
 ## Test IDs
 

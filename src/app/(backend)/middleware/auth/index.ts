@@ -3,6 +3,7 @@ import { AgentRuntimeError } from '@lobechat/model-runtime';
 import { context as otContext } from '@lobechat/observability-otel/api';
 import type { ClientSecretPayload } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
+import type { NextRequest } from 'next/server';
 
 import { auth } from '@/auth';
 import { getServerDB } from '@/database/core/db-adaptor';
@@ -11,9 +12,15 @@ import { LOBE_CHAT_OIDC_AUTH_HEADER } from '@/envs/auth';
 import { extractTraceContext, injectActiveTraceHeaders } from '@/libs/observability/traceparent';
 import { assertOIDCUserActive } from '@/libs/oidc-provider/access-control';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
+import { createLambdaContext } from '@/libs/trpc/lambda/context';
+import { isDevAuthBypassRequest } from '@/utils/devAuth';
 import { createErrorResponse } from '@/utils/errorResponse';
 
 type RequestOptions = { params: Promise<{ provider?: string }> };
+
+interface CheckAuthOptions {
+  allowApiKey?: boolean;
+}
 
 export type RequestHandler = (
   req: Request,
@@ -21,6 +28,7 @@ export type RequestHandler = (
     jwtPayload: ClientSecretPayload;
     serverDB: LobeChatDatabase;
     userId: string;
+    workspaceId?: string | null;
   },
 ) => Promise<Response>;
 
@@ -46,8 +54,7 @@ const getOIDCClientDebugInfo = (token?: string | null): OIDCClientDebugInfo => {
   try {
     const normalizedPayload = payload.replaceAll('-', '+').replaceAll('_', '/');
     const decodedPayload = JSON.parse(Buffer.from(normalizedPayload, 'base64').toString('utf8')) as
-      | Record<string, unknown>
-      | undefined;
+      Record<string, unknown> | undefined;
 
     const clientId =
       typeof decodedPayload?.client_id === 'string' ? decodedPayload.client_id : undefined;
@@ -59,7 +66,8 @@ const getOIDCClientDebugInfo = (token?: string | null): OIDCClientDebugInfo => {
 };
 
 export const checkAuth =
-  (handler: RequestHandler) => async (req: Request, options: RequestOptions) => {
+  (handler: RequestHandler, checkAuthOptions: CheckAuthOptions = {}) =>
+  async (req: Request, options: RequestOptions) => {
     // Clone the request to avoid "Response body object should not be disturbed or locked" error
     // in Next.js 16 when the body stream has been consumed by Next.js internal mechanisms
     // This ensures the handler can safely read the request body
@@ -68,10 +76,9 @@ export const checkAuth =
     // Get serverDB for database access
     const serverDB = await getServerDB();
 
-    // we have a special header to debug the api endpoint in development mode
-    const isDebugApi = req.headers.get('lobe-auth-dev-backend-api') === '1';
-    const isMockUser = process.env.ENABLE_MOCK_DEV_USER === '1';
-    if (process.env.NODE_ENV === 'development' && (isDebugApi || isMockUser)) {
+    // Fetch Request does not expose the trusted TCP peer address, so a caller-controlled
+    // Host header cannot safely prove loopback origin. Require an explicit server-side token.
+    if (isDevAuthBypassRequest(req.headers)) {
       const mockUserId = process.env.MOCK_DEV_USER_ID || 'DEV_USER';
       return handler(clonedReq, {
         ...options,
@@ -82,11 +89,23 @@ export const checkAuth =
     }
 
     let userId: string;
+    let workspaceId: string | null | undefined;
 
     try {
-      // OIDC authentication (CLI)
-      const oidcAuthorization = req.headers.get(LOBE_CHAT_OIDC_AUTH_HEADER);
-      if (oidcAuthorization) {
+      const apiKeyToken = checkAuthOptions.allowApiKey && req.headers.get('X-API-Key')?.trim();
+
+      if (apiKeyToken) {
+        // The agent SSE endpoint supports CLI API keys. Reuse the tRPC context so
+        // key validation, workspace binding, admin status, and entitlement checks stay aligned.
+        const apiKeyContext = await createLambdaContext(req as NextRequest);
+        if (!apiKeyContext.userId) {
+          throw AgentRuntimeError.createError(ChatErrorType.Unauthorized);
+        }
+        userId = apiKeyContext.userId;
+        workspaceId = apiKeyContext.workspaceId;
+      } else if (req.headers.get(LOBE_CHAT_OIDC_AUTH_HEADER)) {
+        // OIDC authentication (CLI)
+        const oidcAuthorization = req.headers.get(LOBE_CHAT_OIDC_AUTH_HEADER)!;
         const oidc = await validateOIDCJWT(oidcAuthorization);
         userId = oidc.userId;
         await assertOIDCUserActive(serverDB, userId);
@@ -154,7 +173,7 @@ export const checkAuth =
     const extractedContext = extractTraceContext(req.headers);
 
     const res = await otContext.with(extractedContext, () =>
-      handler(clonedReq, { ...options, jwtPayload, serverDB, userId }),
+      handler(clonedReq, { ...options, jwtPayload, serverDB, userId, workspaceId }),
     );
 
     // Only inject trace headers when the handler returns a Response

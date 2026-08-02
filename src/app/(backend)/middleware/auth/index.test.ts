@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { assertOIDCUserActive } from '@/libs/oidc-provider/access-control';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
+import { createLambdaContext } from '@/libs/trpc/lambda/context';
 import { createErrorResponse } from '@/utils/errorResponse';
 
 import { checkAuth, type RequestHandler } from './index';
@@ -21,7 +22,7 @@ vi.mock('@lobechat/types', () => ({
   },
 }));
 
-const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+const _consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 const consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => undefined);
 
 vi.mock('@/utils/errorResponse', () => ({
@@ -55,6 +56,10 @@ vi.mock('@/libs/oidc-provider/jwt', () => ({
 
 vi.mock('@/libs/oidc-provider/access-control', () => ({
   assertOIDCUserActive: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('@/libs/trpc/lambda/context', () => ({
+  createLambdaContext: vi.fn(),
 }));
 
 vi.mock('@/envs/auth', () => ({
@@ -96,6 +101,47 @@ describe('checkAuth', () => {
         userId: 'oidc-user',
       }),
     );
+  });
+
+  it('should authenticate an explicitly enabled API Key through the shared tRPC gate', async () => {
+    const apiKeyRequest = new Request('https://example.com/api/agent/stream', {
+      headers: {
+        'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa',
+        'X-Workspace-Id': 'workspace-1',
+      },
+    });
+    vi.mocked(createLambdaContext).mockResolvedValueOnce({
+      userId: 'api-key-user',
+      workspaceId: 'workspace-1',
+    });
+    vi.mocked(mockHandler).mockResolvedValueOnce(new Response('ok'));
+
+    await checkAuth(mockHandler, { allowApiKey: true })(apiKeyRequest, mockOptions);
+
+    expect(createLambdaContext).toHaveBeenCalledWith(expect.any(Request));
+    expect(mockHandler).toHaveBeenCalledWith(
+      expect.any(Request),
+      expect.objectContaining({
+        jwtPayload: { userId: 'api-key-user' },
+        userId: 'api-key-user',
+        workspaceId: 'workspace-1',
+      }),
+    );
+  });
+
+  it('should reject an invalid API Key without falling back to a session', async () => {
+    const apiKeyRequest = new Request('https://example.com/api/agent/stream', {
+      headers: { 'X-API-Key': 'sk-lh-bbbbbbbbbbbbbbbb' },
+    });
+    vi.mocked(createLambdaContext).mockResolvedValueOnce({ userId: null });
+
+    await checkAuth(mockHandler, { allowApiKey: true })(apiKeyRequest, mockOptions);
+
+    expect(mockHandler).not.toHaveBeenCalled();
+    expect(createErrorResponse).toHaveBeenCalledWith(ChatErrorType.Unauthorized, {
+      error: expect.objectContaining({ errorType: ChatErrorType.Unauthorized }),
+      provider: 'mock',
+    });
   });
 
   it('should reject an inactive OIDC user without running the handler', async () => {
@@ -212,12 +258,19 @@ describe('checkAuth', () => {
   });
 
   describe('mock dev user', () => {
-    it('should use MOCK_DEV_USER_ID when ENABLE_MOCK_DEV_USER is enabled', async () => {
+    const bypassToken = 'dev-auth-bypass-token-at-least-32-characters';
+
+    it('should use MOCK_DEV_USER_ID with explicit opt-in and the configured token', async () => {
       vi.stubEnv('NODE_ENV', 'development');
-      vi.stubEnv('ENABLE_MOCK_DEV_USER', '1');
+      vi.stubEnv('ENABLE_DEV_AUTH_BYPASS', '1');
+      vi.stubEnv('DEV_AUTH_BYPASS_SECRET', bypassToken);
       vi.stubEnv('MOCK_DEV_USER_ID', 'mock-user-123');
 
-      await checkAuth(mockHandler)(mockRequest, mockOptions);
+      const debugRequest = new Request('http://localhost', {
+        headers: { 'lobe-auth-dev-backend-api': bypassToken },
+      });
+
+      await checkAuth(mockHandler)(debugRequest, mockOptions);
 
       expect(mockHandler).toHaveBeenCalledWith(
         expect.any(Request),
@@ -230,10 +283,15 @@ describe('checkAuth', () => {
 
     it('should fall back to DEV_USER when MOCK_DEV_USER_ID is not set', async () => {
       vi.stubEnv('NODE_ENV', 'development');
-      vi.stubEnv('ENABLE_MOCK_DEV_USER', '1');
-      delete process.env.MOCK_DEV_USER_ID;
+      vi.stubEnv('ENABLE_DEV_AUTH_BYPASS', '1');
+      vi.stubEnv('DEV_AUTH_BYPASS_SECRET', bypassToken);
+      vi.stubEnv('MOCK_DEV_USER_ID', undefined);
 
-      await checkAuth(mockHandler)(mockRequest, mockOptions);
+      const debugRequest = new Request('http://localhost', {
+        headers: { 'lobe-auth-dev-backend-api': bypassToken },
+      });
+
+      await checkAuth(mockHandler)(debugRequest, mockOptions);
 
       expect(mockHandler).toHaveBeenCalledWith(
         expect.any(Request),
@@ -244,31 +302,46 @@ describe('checkAuth', () => {
       );
     });
 
-    it('should use MOCK_DEV_USER_ID with debug header', async () => {
+    it('should reject a matching token when explicit opt-in is missing', async () => {
       vi.stubEnv('NODE_ENV', 'development');
-      vi.stubEnv('MOCK_DEV_USER_ID', 'mock-user-456');
+      vi.stubEnv('DEV_AUTH_BYPASS_SECRET', bypassToken);
 
-      const debugRequest = new Request('https://example.com', {
-        headers: { 'lobe-auth-dev-backend-api': '1' },
+      const debugRequest = new Request('http://localhost', {
+        headers: { 'lobe-auth-dev-backend-api': bypassToken },
       });
 
       await checkAuth(mockHandler)(debugRequest, mockOptions);
 
-      expect(mockHandler).toHaveBeenCalledWith(
-        expect.any(Request),
-        expect.objectContaining({
-          jwtPayload: { userId: 'mock-user-456' },
-          userId: 'mock-user-456',
-        }),
-      );
+      expect(mockHandler).not.toHaveBeenCalled();
+    });
+
+    it('should reject a remote request that spoofs localhost and the legacy debug value', async () => {
+      vi.stubEnv('NODE_ENV', 'development');
+      vi.stubEnv('ENABLE_DEV_AUTH_BYPASS', '1');
+      vi.stubEnv('DEV_AUTH_BYPASS_SECRET', bypassToken);
+
+      const spoofedRequest = new Request('https://remote.example', {
+        headers: {
+          'host': 'localhost',
+          'lobe-auth-dev-backend-api': '1',
+        },
+      });
+
+      await checkAuth(mockHandler)(spoofedRequest, mockOptions);
+
+      expect(mockHandler).not.toHaveBeenCalled();
     });
 
     it('should not mock user in production', async () => {
       vi.stubEnv('NODE_ENV', 'production');
-      vi.stubEnv('ENABLE_MOCK_DEV_USER', '1');
-      vi.stubEnv('MOCK_DEV_USER_ID', 'mock-user-123');
+      vi.stubEnv('ENABLE_DEV_AUTH_BYPASS', '1');
+      vi.stubEnv('DEV_AUTH_BYPASS_SECRET', bypassToken);
 
-      await checkAuth(mockHandler)(mockRequest, mockOptions);
+      const debugRequest = new Request('http://localhost', {
+        headers: { 'lobe-auth-dev-backend-api': bypassToken },
+      });
+
+      await checkAuth(mockHandler)(debugRequest, mockOptions);
 
       expect(mockHandler).not.toHaveBeenCalled();
     });

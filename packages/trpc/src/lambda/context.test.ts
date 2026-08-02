@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiKeyModel } from '@/database/models/apiKey';
 
@@ -200,6 +200,10 @@ describe('createContextInner', () => {
 });
 
 describe('createLambdaContext', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockExtractTraceContext.mockReturnValue(undefined);
@@ -211,6 +215,42 @@ describe('createLambdaContext', () => {
       userId: 'oidc-user',
     });
     mockUpdateLastUsed.mockResolvedValue(undefined);
+  });
+
+  it('should use the mock user only when the development bypass token matches', async () => {
+    const bypassToken = 'dev-auth-bypass-token-at-least-32-characters';
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('ENABLE_DEV_AUTH_BYPASS', '1');
+    vi.stubEnv('DEV_AUTH_BYPASS_SECRET', bypassToken);
+    vi.stubEnv('MOCK_DEV_USER_ID', 'mock-user');
+
+    const request = new NextRequest('http://localhost/trpc/lambda', {
+      headers: { 'lobe-auth-dev-backend-api': bypassToken },
+    });
+
+    const context = await createLambdaContext(request);
+
+    expect(context.userId).toBe('mock-user');
+    expect(mockGetSession).not.toHaveBeenCalled();
+  });
+
+  it('should reject a spoofed localhost header with the legacy bypass value', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('ENABLE_DEV_AUTH_BYPASS', '1');
+    vi.stubEnv('DEV_AUTH_BYPASS_SECRET', 'dev-auth-bypass-token-at-least-32-characters');
+    vi.stubEnv('MOCK_DEV_USER_ID', 'mock-user');
+
+    const request = new NextRequest('https://remote.example/trpc/lambda', {
+      headers: {
+        'host': 'localhost',
+        'lobe-auth-dev-backend-api': '1',
+      },
+    });
+
+    const context = await createLambdaContext(request);
+
+    expect(context.userId).toBe('session-user');
+    expect(mockGetSession).toHaveBeenCalledOnce();
   });
 
   it('should expose parsed web client metadata', async () => {

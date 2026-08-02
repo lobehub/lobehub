@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agentOperations, users } from '../../schemas';
+import { agentOperations, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentOperationModel } from '../agentOperation';
 
@@ -23,6 +23,32 @@ afterEach(async () => {
 });
 
 describe('AgentOperationModel', () => {
+  describe('findOwnerScope', () => {
+    it('returns only the durable user and workspace ownership fields', async () => {
+      const workspaceId = 'agent-operation-owner-scope-workspace';
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Owner Scope Workspace',
+        primaryOwnerId: userId,
+        slug: 'agent-operation-owner-scope',
+      });
+      await new AgentOperationModel(serverDB, userId, workspaceId).recordStart({
+        operationId: 'op-owner-scope',
+      });
+
+      await expect(AgentOperationModel.findOwnerScope(serverDB, 'op-owner-scope')).resolves.toEqual(
+        {
+          userId,
+          workspaceId,
+        },
+      );
+    });
+
+    it('returns null for an unknown operation', async () => {
+      await expect(AgentOperationModel.findOwnerScope(serverDB, 'op-missing')).resolves.toBeNull();
+    });
+  });
+
   describe('recordStart', () => {
     it('inserts a row with status=running and the provided ids', async () => {
       const model = new AgentOperationModel(serverDB, userId);

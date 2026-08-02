@@ -10,8 +10,10 @@ import {
 const mockRedis = {
   del: vi.fn(),
   expire: vi.fn(),
+  get: vi.fn(),
   keys: vi.fn(),
   quit: vi.fn(),
+  setex: vi.fn(),
   xadd: vi.fn(),
   xread: vi.fn(),
   xrevrange: vi.fn(),
@@ -64,6 +66,46 @@ describe('StreamEventManager', () => {
         'timestamp',
         expect.any(String),
       );
+      expect(mockRedis.setex).toHaveBeenCalledWith(
+        `agent_runtime_stream_auth:${operationId}`,
+        2 * 3600,
+        JSON.stringify({ userId: 'user-123', workspaceId: null }),
+      );
+    });
+
+    it('should persist and read the workspace authentication scope separately', async () => {
+      const scope = { userId: 'user-123', workspaceId: 'workspace-123' };
+      mockRedis.xadd.mockResolvedValue('event-id-123');
+      mockRedis.get.mockResolvedValue(JSON.stringify(scope));
+
+      await streamManager.publishAgentRuntimeInit('operation-123', scope);
+
+      expect(mockRedis.setex).toHaveBeenCalledWith(
+        'agent_runtime_stream_auth:operation-123',
+        2 * 3600,
+        JSON.stringify(scope),
+      );
+      await expect(streamManager.getOperationAuthScope('operation-123')).resolves.toEqual(scope);
+    });
+
+    it('should reject malformed authentication scope data', async () => {
+      mockRedis.get.mockResolvedValue(JSON.stringify({ userId: '', workspaceId: 42 }));
+
+      await expect(streamManager.getOperationAuthScope('operation-123')).resolves.toBeNull();
+    });
+  });
+
+  describe('publishStreamChunk', () => {
+    it('should not refresh the auth sidecar for every token chunk', async () => {
+      mockRedis.xadd.mockResolvedValue('event-id-chunk');
+
+      await streamManager.publishStreamChunk('operation-123', 1, {
+        chunkType: 'text',
+        content: 'hello',
+      });
+
+      expect(mockRedis.expire).toHaveBeenCalledTimes(1);
+      expect(mockRedis.expire).toHaveBeenCalledWith('agent_runtime_stream:operation-123', 2 * 3600);
     });
   });
 
@@ -391,6 +433,17 @@ describe('StreamEventManager', () => {
         stepIndex: 2,
         data: { toolCallId: 't1' },
       });
+    });
+  });
+
+  describe('cleanupOperation', () => {
+    it('should remove both stream data and its authentication scope', async () => {
+      await streamManager.cleanupOperation('op-1');
+
+      expect(mockRedis.del).toHaveBeenCalledWith(
+        'agent_runtime_stream:op-1',
+        'agent_runtime_stream_auth:op-1',
+      );
     });
   });
 

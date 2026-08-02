@@ -16,6 +16,7 @@ import { extractTraceContext } from '@/libs/observability/traceparent';
 import { assertOIDCUserActive, isOIDCUserInactiveError } from '@/libs/oidc-provider/access-control';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
 import { isApiKeyExpired, validateApiKeyFormat } from '@/utils/apiKey';
+import { isDevAuthBypassRequest } from '@/utils/devAuth';
 
 // Create context logger namespace
 const log = debug('lobe-trpc:lambda:context');
@@ -133,12 +134,7 @@ export type LambdaContext = Awaited<ReturnType<typeof createContextInner>>;
 export const createLambdaContext = async (request: NextRequest): Promise<LambdaContext> => {
   const clientMetadata = parseClientMetadata(request.headers);
 
-  // we have a special header to debug the api endpoint in development mode
-  // IT WON'T GO INTO PRODUCTION ANYMORE
-  const isDebugApi = request.headers.get('lobe-auth-dev-backend-api') === '1';
-  const isMockUser = process.env.ENABLE_MOCK_DEV_USER === '1';
-
-  if (process.env.NODE_ENV === 'development' && (isDebugApi || isMockUser)) {
+  if (isDevAuthBypassRequest(request.headers)) {
     return createContextInner({
       clientMetadata,
       userId: process.env.MOCK_DEV_USER_ID,
