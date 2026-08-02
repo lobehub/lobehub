@@ -3,11 +3,12 @@
 import { Button } from '@lobehub/ui/base-ui';
 import { ChevronLeftIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Link, useSearchParams } from 'react-router';
+import { useSearchParams } from 'react-router';
 
 import AuthCard from '@/features/AuthCard';
 import { sanitizeRedirectPath } from '@/utils/onboardingRedirect';
 
+import { exitVerifyPhoneFlow } from './useVerifyPhone';
 import { VerifyPhoneContent } from './VerifyPhoneContent';
 
 const VerifyPhonePage = () => {
@@ -20,11 +21,14 @@ const VerifyPhonePage = () => {
       subtitle={t('betterAuth.verifyPhone.description')}
       title={t('betterAuth.verifyPhone.title')}
       footer={
-        <Link to={`/signin?callbackUrl=${encodeURIComponent(callbackUrl)}`}>
-          <Button block icon={ChevronLeftIcon} size={'large'}>
-            {t('betterAuth.verifyPhone.backToSignIn')}
-          </Button>
-        </Link>
+        <Button
+          block
+          icon={ChevronLeftIcon}
+          size="large"
+          onClick={() => exitVerifyPhoneFlow(callbackUrl)}
+        >
+          {t('betterAuth.verifyPhone.back')}
+        </Button>
       }
     >
       <VerifyPhoneContent callbackUrl={callbackUrl} />
