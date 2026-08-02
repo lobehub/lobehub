@@ -33,6 +33,7 @@ import {
 } from '@/routes/(main)/agent/features/routeMeta';
 import { groupProfileRouteMeta, groupRouteMeta } from '@/routes/(main)/group/features/routeMeta';
 import { settingsRouteMeta } from '@/routes/(main)/settings/features/routeMeta';
+import AppShellSkeleton, { APP_SHELL_FALLBACK_ID } from '@/spa/BootShell/AppShellSkeleton';
 import { loadRouteWithBuiltinToolSurfaces } from '@/spa/initialize/toolSurfaces';
 import { routeMeta } from '@/spa/router/routeMeta';
 import { SettingsTabs } from '@/store/global/initialState';
@@ -1137,7 +1138,12 @@ export const createSharedDesktopRoutes = ({
 }: SharedDesktopRouteOptions): RouteObject[] => [
   {
     children: mainAreaChildren,
-    element: dynamicLayout(() => import('@/routes/(main)/_layout'), 'Desktop > Main > Layout'),
+    // `BootShell` unmounts the moment the cache gate releases, which is often
+    // before this chunk resolves. Falling back to the same skeleton keeps the
+    // handoff invisible instead of flashing the brand logo a second time.
+    element: dynamicLayout(() => import('@/routes/(main)/_layout'), 'Desktop > Main > Layout', {
+      fallback: <AppShellSkeleton id={APP_SHELL_FALLBACK_ID} />,
+    }),
     errorElement: <ErrorBoundary />,
     path: '/',
   },

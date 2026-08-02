@@ -1,11 +1,13 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import type { ReactElement } from 'react';
 import type { RouteObject } from 'react-router';
 import { matchRoutes } from 'react-router';
 import { describe, expect, it } from 'vitest';
 
 import { WORKSPACE_SETTINGS_TABS } from '@/features/Workspace/workspaceAwarePath';
+import AppShellSkeleton from '@/spa/BootShell/AppShellSkeleton';
 
 import {
   createMainAreaChildren as createWebMainAreaChildren,
@@ -175,6 +177,16 @@ describe('desktop router shared definition', () => {
     expect(electronPaths).not.toContain('/acceptance');
     expect(electronPaths).not.toContain('/onboarding');
     expect(electronPaths).toContain('/desktop-onboarding');
+  });
+
+  it.each([
+    ['Web', webDesktopRoutes],
+    ['Electron', electronDesktopRoutes],
+  ])('%s hands the boot shell over to the same skeleton, not the brand logo', (_, routes) => {
+    const root = routes.find((route) => route.path === '/');
+    const { fallback } = (root?.element as ReactElement<{ fallback: ReactElement }>).props;
+
+    expect(fallback.type).toBe(AppShellSkeleton);
   });
 
   it('injects Home only into Electron per-tab content routes', () => {

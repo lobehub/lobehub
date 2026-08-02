@@ -172,6 +172,30 @@ Acceptance fixture through the local CLI, and capture the same route in separate
 authenticated and storage-empty browser contexts. This proves both owner and
 shared-viewer rendering without depending on production browser cookies.
 
+### The debug proxy cannot reach a settled app — workspace `packages/*` dynamic imports fail cross-origin
+
+**Situation:** verifying frontend work through `/_dangerous_local_dev_proxy` (production
+page + production login + local Vite modules), needing a screenshot of the app after it
+has finished loading.
+
+**Doesn't work:** treating the resulting `ErrorBoundary` ("页面暂时不可用") as a defect in
+the change under test. The document origin is `https://app.lobehub.com`, and dynamic
+`import()` of workspace modules served from `http://localhost:9876` — `packages/builtin-tools/src/register.ts`,
+and intermittently `src/routes/**` — fails with `Failed to fetch dynamically imported module`.
+The same URLs return **200** to `curl` and to an in-page `fetch()`; only module scripts
+fail, because their cross-origin requirements are stricter. So the usual "is it reachable"
+probes all say yes while the app still dies.
+
+**Works:** treat this channel as good for boot-phase and pre-settle evidence only, and
+prove attribution rather than assuming it — `git stash -u` the whole change, reload the
+same proxy URL, and confirm the identical ErrorBoundary appears at HEAD. Report the
+settled-state check as blocked with that A/B attached instead of chasing the module
+graph. For a genuinely settled authenticated app, use Electron with an injected login
+snapshot; the local Vite entry (`http://localhost:9876/`) loads modules correctly but has
+no session, so it ends in the same error for a different reason. See also the two
+neighbouring entries on this proxy (loading-shell in an isolated context; no seeded
+agent-browser session).
+
 ### Reading a transitioned CSS property immediately after focus/hover
 
 **Situation:** asserting that a `:focus-within` / `:hover` rule reveals a
@@ -525,6 +549,17 @@ timer**: at the moment the observer first sees `#root` gain a child, schedule th
 main thread it fires far later than `N` — which is the difference between "the
 threshold logic is wrong" and "the threshold never had a chance to run", and no
 screenshot can tell those apart.
+
+**When the driver has no CDP (claude-in-chrome, the debug proxy), deliver the same
+sampler through Vite instead**: a temporary `[AGENT-TEST]` block at the top of
+`src/spa/entry.{web,desktop}.tsx` runs at bundle-eval — early enough for every
+post-React phase — and needs no `Page.addScriptToEvaluateOnNewDocument`. Two things
+to get right in the phase predicate: scope any `[role="status"][aria-label="Loading"]`
+check with `.closest('#loading-screen')` so the **static HTML shell's own logo** is not
+counted as the React `BrandTextLoading` (they share the same role/label, and conflating
+them turns a clean boot into a false "the logo flashed"); and record the max gap between
+consecutive ticks — LobeHub's boot routinely shows a single 0.6–1.1s blocking task, so a
+phase with no sample inside it is a blocked window, not a missing state.
 
 ### A global `indexedDB.open` stall holds the boot on web but kills the Electron renderer
 
