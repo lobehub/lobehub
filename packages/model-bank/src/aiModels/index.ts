@@ -8,6 +8,7 @@ import { default as aihubmix } from './aihubmix';
 import { default as akashchat } from './akashchat';
 import { default as antgroup } from './antgroup';
 import { default as anthropic } from './anthropic';
+import { default as avalai } from './avalai';
 import { default as azure } from './azure';
 import { default as azureai } from './azureai';
 import { default as baichuan } from './baichuan';
@@ -118,6 +119,7 @@ const staticModelMap: ModelsMap = {
   akashchat,
   antgroup,
   anthropic,
+  avalai,
   azure,
   azureai,
   baichuan,
@@ -234,6 +236,7 @@ export { default as aihubmix } from './aihubmix';
 export { default as akashchat } from './akashchat';
 export { default as antgroup } from './antgroup';
 export { default as anthropic } from './anthropic';
+export { default as avalai } from './avalai';
 export { default as azure } from './azure';
 export { default as azureai } from './azureai';
 export { default as baichuan } from './baichuan';

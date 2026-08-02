@@ -8,6 +8,7 @@ import AiHubMixProvider from './aihubmix';
 import AkashChatProvider from './akashchat';
 import AntGroupProvider from './antgroup';
 import AnthropicProvider from './anthropic';
+import AvalAIProvider from './avalai';
 import AzureProvider from './azure';
 import AzureAIProvider from './azureai';
 import BaichuanProvider from './baichuan';
@@ -217,6 +218,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   ReplicateProvider,
   NebiusProvider,
   CometAPIProvider,
+  AvalAIProvider,
   VercelAIGatewayProvider,
   CerebrasProvider,
   ZenMuxProvider,
@@ -252,6 +254,7 @@ export { default as AiHubMixProviderCard } from './aihubmix';
 export { default as AkashChatProviderCard } from './akashchat';
 export { default as AntGroupProviderCard } from './antgroup';
 export { default as AnthropicProviderCard } from './anthropic';
+export { default as AvalAIProviderCard } from './avalai';
 export { default as AzureProviderCard } from './azure';
 export { default as AzureAIProviderCard } from './azureai';
 export { default as BaichuanProviderCard } from './baichuan';
