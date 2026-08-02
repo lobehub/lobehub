@@ -2,6 +2,7 @@ import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { cacheHydration } from '@/libs/swr/cacheHydration';
+import { getAppPainted, setAppPainted } from '@/spa/atoms/app';
 
 // Import after mocks are registered.
 import CacheHydrationGate from './CacheHydrationGate';
@@ -32,16 +33,13 @@ const renderGate = () =>
 beforeEach(() => {
   mockScope = 'anon:personal';
   resetHydration();
-  // A loading-screen node so the gate's removal side-effect has a target.
-  const el = document.createElement('div');
-  el.id = 'loading-screen';
-  document.body.appendChild(el);
+  setAppPainted(false);
 });
 
 afterEach(() => {
   window.history.replaceState(null, '', '/');
   resetHydration();
-  document.getElementById('loading-screen')?.remove();
+  setAppPainted(false);
   vi.useRealTimers();
 });
 
@@ -50,15 +48,15 @@ describe('CacheHydrationGate', () => {
     renderGate();
     // not ready yet → blocked
     expect(screen.queryByTestId('app')).toBeNull();
-    expect(document.getElementById('loading-screen')).not.toBeNull();
+    expect(getAppPainted()).toBe(false);
 
     act(() => {
       cacheHydration.markReady('anon:personal');
     });
 
     expect(screen.queryByTestId('app')).not.toBeNull();
-    // loading-screen removed once released
-    expect(document.getElementById('loading-screen')).toBeNull();
+    // signals the boot shell to tear down once the real app has committed
+    expect(getAppPainted()).toBe(true);
   });
 
   it('CORE: after first release, a scope change does NOT unmount the app (no white-screen)', () => {

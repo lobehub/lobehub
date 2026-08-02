@@ -7,6 +7,7 @@ import NextThemeProvider from '@/layout/GlobalProvider/NextThemeProvider';
 import { bootTiming } from '@/libs/bootTiming';
 import { createAppRouter } from '@/utils/router';
 
+import BootShell from './BootShell';
 import { startAppInitialization } from './initialize/bootstrap';
 import { desktopRoutes } from './router/desktopRouter.config';
 import { createSPARoot } from './runtime';
@@ -25,6 +26,7 @@ const router = createAppRouter(desktopRoutes, { basename });
 createSPARoot(document.getElementById('root')!).render(
   <BootErrorBoundary>
     <NextThemeProvider>
+      <BootShell />
       <RouterProvider router={router} />
     </NextThemeProvider>
   </BootErrorBoundary>,

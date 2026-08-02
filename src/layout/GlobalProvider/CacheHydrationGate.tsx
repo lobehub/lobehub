@@ -6,6 +6,7 @@ import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from 'reac
 import { bootTiming } from '@/libs/bootTiming';
 import { cacheHydration } from '@/libs/swr/cacheHydration';
 import { useCacheScope } from '@/libs/swr/useCacheScope';
+import { setAppPainted } from '@/spa/atoms/app';
 
 // first-write-wins: only the very first paint records the boot timing mark.
 let firstPaintMarked = false;
@@ -26,7 +27,8 @@ const HYDRATION_TIMEOUT = 8000;
 /**
  * Blocks the first paint until the active scope's IndexedDB cache has hydrated,
  * so the app never flashes empty on cold boot — the static `loading-screen`
- * overlay covers exactly this window.
+ * overlay and then `BootShell` cover exactly this window, and releasing here is
+ * what signals `appPainted` to tear them down.
  *
  * This is a one-way latch: once released it never blanks again. A later scope
  * change (anonymous → signed-in, or workspace switch) re-hydrates the SWR cache
@@ -80,7 +82,9 @@ const CacheHydrationGate = ({ children }: PropsWithChildren) => {
       firstPaintMarked = true;
       bootTiming.mark('first-paint');
     }
-    document.getElementById('loading-screen')?.remove();
+    // Runs after `children` have committed, so the boot shell only tears down
+    // once the real app is already in the DOM.
+    setAppPainted(true);
   }, [released]);
 
   if (!released) return null;

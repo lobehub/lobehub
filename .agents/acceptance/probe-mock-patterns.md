@@ -501,6 +501,50 @@ Then assert on `aside.innerText` line count plus a count of text-free rounded bo
 collapsing to \~8 text-free rows is the nav-panel fallback, while fixed items present
 with only the list area shimmering is ordinary data loading.
 
+### Boot-phase UI cannot be observed by CDP polling — sample in-page, and mirror the timer
+
+**Situation:** asserting whether a transient boot-phase surface (a splash, a skeleton,
+a first-paint gate) appears between React's first commit and the app painting.
+
+**Doesn't work:** polling `Runtime.evaluate` from a CDP driver, even at a 50ms step.
+The desktop renderer's boot spends multi-second stretches in a single synchronous
+task, and every `Runtime.evaluate` queues behind it — the driver observes the state
+before the window and again after it, and reports the phase "never happened". CPU
+throttling makes it worse: it stretches the blocking task and the probe equally.
+
+**Works:** inject a pure observer with `Page.addScriptToEvaluateOnNewDocument` and
+sample from inside the page. Note `document.documentElement` does not exist yet in an
+on-new-document script, so a `MutationObserver` cannot be attached there — use
+`setInterval(check, 8)`. Record the largest gap between consecutive ticks: that gap
+is the main thread's longest blocking task, and a boot window with no intermediate
+sample is a blocked window, not a missing state.
+
+When the behavior under test is time-thresholded, also **mirror the product's own
+timer**: at the moment the observer first sees `#root` gain a child, schedule the same
+`setTimeout(…, N)` the component uses and record when it actually fires. On a blocked
+main thread it fires far later than `N` — which is the difference between "the
+threshold logic is wrong" and "the threshold never had a chance to run", and no
+screenshot can tell those apart.
+
+### A global `indexedDB.open` stall holds the boot on web but kills the Electron renderer
+
+**Situation:** needing to freeze the boot at a pre-app phase long enough to capture it,
+by keeping the SWR cache hydration from ever completing.
+
+**Doesn't work on desktop:** replacing `indexedDB.open` with a never-settling stub
+breaks the Electron renderer outright — the local database adapter registered in
+`entry.desktop.tsx` needs IndexedDB, so the entry dies before React renders and the
+HTML loading screen stays up forever. The symptom reads as "the phase under test never
+appears", i.e. exactly like the product defect you were looking for.
+
+**Works:** use the stall only on the web entry, where it holds `CacheHydrationGate`
+for its full `HYDRATION_TIMEOUT` (about 8s) — ample for a screenshot plus
+`getBoundingClientRect` / `getComputedStyle` measurements over the same CDP
+connection. For desktop, do not stall storage: observe the natural boot with the
+in-page sampler above. Either way, disarm with
+`Page.removeScriptToEvaluateOnNewDocument` and reload before capturing the settled
+state, or the comparison shot is taken against a still-crippled runtime.
+
 ## Detailed references
 
 - [Probe field notes](./references/probe-field-notes.md) — all historical

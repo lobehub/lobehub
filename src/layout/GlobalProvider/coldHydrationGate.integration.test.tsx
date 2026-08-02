@@ -70,12 +70,8 @@ describe('CacheHydrationGate + provider + consumer', () => {
     mockScope = SCOPE;
     probed = undefined;
     cacheHydration.markPending(SCOPE);
-    const el = document.createElement('div');
-    el.id = 'loading-screen';
-    document.body.appendChild(el);
   });
   afterEach(async () => {
-    document.getElementById('loading-screen')?.remove();
     cacheHydration.markPending(SCOPE);
     await localDataCache.clearScope(SCOPE);
   });

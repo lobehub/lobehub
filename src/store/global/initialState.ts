@@ -540,20 +540,30 @@ export const INITIAL_STATUS = {
 const statusStorage = new AsyncLocalStorage<SystemStatus>('LOBE_SYSTEM_STATUS');
 
 /**
- * Restore the Home rail before React's first render. The remaining system
- * status still follows the existing async initialization path, but this
- * layout-affecting preference must not briefly render its default value after
- * a page reload.
+ * Restore the shell-defining preferences before React's first render. The
+ * remaining system status still follows the existing async initialization path,
+ * but these must not briefly render their default value after a page reload —
+ * the boot shell reads them synchronously to draw a shell that lines up with
+ * the real layout, and `NavPanelDraggable` would otherwise size its
+ * pre-hydration placeholder to the default width.
  */
 export const createInitialSystemStatus = (): SystemStatus => {
   const persistedStatus = statusStorage.getFromLocalStorageSync();
 
   return {
     ...INITIAL_STATUS,
+    leftPanelWidth:
+      typeof persistedStatus.leftPanelWidth === 'number'
+        ? persistedStatus.leftPanelWidth
+        : INITIAL_STATUS.leftPanelWidth,
     showHomeRail:
       typeof persistedStatus.showHomeRail === 'boolean'
         ? persistedStatus.showHomeRail
         : INITIAL_STATUS.showHomeRail,
+    showLeftPanel:
+      typeof persistedStatus.showLeftPanel === 'boolean'
+        ? persistedStatus.showLeftPanel
+        : INITIAL_STATUS.showLeftPanel,
   };
 };
 

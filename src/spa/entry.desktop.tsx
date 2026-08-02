@@ -8,13 +8,12 @@ import { registerLocalDatabaseAdapter } from '@/libs/localDatabase';
 import { createElectronLocalDatabaseAdapter } from '@/libs/localDatabase/electronAdapter';
 import { createAppRouter } from '@/utils/router';
 
+import BootShell from './BootShell';
 import { startAppInitialization } from './initialize/bootstrap';
-import { applyDesktopBootstrapIdentity } from './initialize/desktopIdentity';
 import { desktopRoutes } from './router/desktopRouter.config';
 import { createSPARoot } from './runtime';
 
 registerLocalDatabaseAdapter(createElectronLocalDatabaseAdapter());
-applyDesktopBootstrapIdentity();
 bootTiming.mark('bundle-eval');
 startAppInitialization();
 
@@ -22,6 +21,7 @@ const router = createAppRouter(desktopRoutes);
 
 createSPARoot(document.getElementById('root')!).render(
   <NextThemeProvider>
+    <BootShell />
     <RouterProvider router={router} />
   </NextThemeProvider>,
 );
