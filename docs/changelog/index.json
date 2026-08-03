@@ -11,6 +11,13 @@
   ],
   "community": [
     {
+      "id": "2026-08-03-home-dashboard",
+      "date": "2026-08-03",
+      "versionRange": [
+        "2.2.12"
+      ]
+    },
+    {
       "image": "/blog/assets01038da1e0bf79c491876a4874082310.webp",
       "id": "2026-07-27-terminal-and-clearer-errors",
       "date": "2026-07-27",
