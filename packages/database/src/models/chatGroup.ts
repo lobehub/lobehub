@@ -637,6 +637,7 @@ export class ChatGroupModel {
       .select({
         agentId: chatGroupsAgents.agentId,
         description: agents.description,
+        name: agents.name,
         role: chatGroupsAgents.role,
         title: agents.title,
       })

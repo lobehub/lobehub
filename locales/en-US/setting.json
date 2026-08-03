@@ -652,6 +652,12 @@
   "serviceModel.memoryModels.title": "Memory",
   "serviceModel.modelAssignments.title": "General",
   "serviceModel.optionalFeatures.title": "Optional Features",
+  "settingAgent": {
+    "personalName": {
+      "label": "Name",
+      "placeholder": "Give it a name, e.g. Alice"
+    }
+  },
   "settingAgent.agentTools.add": "Add Tool",
   "settingAgent.agentTools.agentEmpty": "No agent-exclusive tools yet",
   "settingAgent.agentTools.authorizedBy": "Authorized by {{name}}",

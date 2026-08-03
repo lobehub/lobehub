@@ -1,7 +1,7 @@
 'use client';
 
 import { AGENT_CHAT_TOPIC_URL, GROUP_CHAT_TOPIC_URL, GROUP_CHAT_URL } from '@lobechat/const';
-import { type UIChatMessage } from '@lobechat/types';
+import { agentDisplayName, type UIChatMessage } from '@lobechat/types';
 import { ActionIcon, Avatar } from '@lobehub/ui';
 import { ArrowUpRight } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -148,14 +148,14 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group }) => {
             avatar={meta.avatar}
             background={meta.backgroundColor}
             size={28}
-            title={meta.title}
+            title={agentDisplayName(meta)}
           />
           <div className={styles.headerMeta}>
             <div className={styles.headerTitle}>
-              {topicTitle || meta.title || t('globalApproval.title')}
+              {topicTitle || agentDisplayName(meta, t('globalApproval.title'))}
             </div>
             <div className={styles.headerSubtitle}>
-              {meta.title ? `${meta.title} · ` : ''}
+              {agentDisplayName(meta) ? `${agentDisplayName(meta)} · ` : ''}
               {t('globalApproval.subtitle')}
             </div>
           </div>

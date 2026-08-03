@@ -2,6 +2,7 @@ import { BUILTIN_AGENT_SLUGS, getAgentPersistConfig } from '@lobechat/builtin-ag
 import { INBOX_SESSION_ID, isHeterogeneousAgentModelId } from '@lobechat/const';
 import type { AgentRankItem, LobeAgentAgencyConfig } from '@lobechat/types';
 import {
+  agentDisplayName,
   DEFAULT_WORKSPACE_AGENT_SELECTION_POLICIES,
   pruneWorkingDirByDeviceDeletes,
 } from '@lobechat/types';
@@ -167,6 +168,7 @@ export class AgentModel {
         backgroundColor: agents.backgroundColor,
         count: count(topics.id).as('count'),
         id: agents.id,
+        name: agents.name,
         slug: agents.slug,
         title: agents.title,
       })
@@ -482,6 +484,7 @@ export class AgentModel {
         backgroundColor: agents.backgroundColor,
         description: agents.description,
         id: agents.id,
+        name: agents.name,
         slug: agents.slug,
         title: agents.title,
         userId: agents.userId,
@@ -548,6 +551,7 @@ export class AgentModel {
         avatar: agents.avatar,
         backgroundColor: agents.backgroundColor,
         id: agents.id,
+        name: agents.name,
         slug: agents.slug,
         title: agents.title,
       })
@@ -562,10 +566,11 @@ export class AgentModel {
    * the inbox (other virtual agents excluded), ordered by `updatedAt DESC` with
    * the inbox pinned to the top.
    *
-   * Title fallback is fully owned here: the inbox resolves to the LobeAI
-   * default, and any other agent with a blank title resolves to
-   * `options.fallbackTitle` (default `null`, so a caller that omits it can let
-   * the client supply its own i18n default).
+   * The display label is fully owned here: it resolves name-first (see
+   * {@link agentDisplayName}), the inbox resolves to the LobeAI default, and an
+   * agent with neither name nor title falls back to `options.fallbackTitle`
+   * (default `null`, so a caller that omits it can supply its own i18n default).
+   * `name` and `title` are also returned raw for callers that need the split.
    */
   listMessengerBindableAgents = async (options?: {
     fallbackTitle?: string | null;
@@ -576,6 +581,7 @@ export class AgentModel {
       id: string;
       isInbox: boolean;
       isPrivate: boolean;
+      name: string | null;
       title: string | null;
     }>
   > => {
@@ -586,6 +592,7 @@ export class AgentModel {
         avatar: agents.avatar,
         backgroundColor: agents.backgroundColor,
         id: agents.id,
+        name: agents.name,
         slug: agents.slug,
         title: agents.title,
         visibility: agents.visibility,
@@ -609,9 +616,10 @@ export class AgentModel {
           // rows are all implicitly private, so the flag stays false there to
           // signal "no grouping needed".
           isPrivate: Boolean(this.workspaceId) && visibility === 'private',
-          // The inbox title is already resolved by normalizeInboxAgentMeta; any
-          // other blank title falls back to the caller-provided default.
-          title: meta.title?.trim() || fallbackTitle,
+          name: meta.name ?? null,
+          // The inbox title is already resolved by normalizeInboxAgentMeta; an
+          // agent with neither name nor title falls back to the caller default.
+          title: agentDisplayName(meta) ?? fallbackTitle,
         };
       });
 

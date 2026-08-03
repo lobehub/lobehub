@@ -11,6 +11,8 @@ export interface AvailableAgentItem {
   backgroundColor: string | null;
   description: string | null;
   id: string;
+  /** Personal name; resolve the label with `agentDisplayName(item, fallback)`. */
+  name: string | null;
   title: string | null;
 }
 

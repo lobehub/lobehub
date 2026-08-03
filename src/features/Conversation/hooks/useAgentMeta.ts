@@ -1,4 +1,4 @@
-import { type MetaData } from '@lobechat/types';
+import { agentDisplayName, type MetaData } from '@lobechat/types';
 import { useMemo } from 'react';
 
 import { useAgentStore } from '@/store/agent';
@@ -30,11 +30,14 @@ export const useAgentMeta = (messageAgentId?: string | null): MetaData => {
     const isBuiltinAgent = builtinAgentIds.includes(agentId);
 
     if (isBuiltinAgent) {
-      // Use DB-stored title if customized (e.g. via onboarding), otherwise fallback to Lobe AI
-      return { ...agentMeta, title: agentMeta.title || LOBE_AI_TITLE };
+      // Use the DB-stored identity if customized (e.g. via onboarding), otherwise Lobe AI
+      return { ...agentMeta, title: agentDisplayName(agentMeta, LOBE_AI_TITLE) };
     }
 
-    return agentMeta;
+    // Every consumer of this hook renders the result as a message author, so the
+    // returned `title` is the resolved label — name first, role as the fallback.
+    // `name` stays on the object for anything that needs the split.
+    return { ...agentMeta, title: agentDisplayName(agentMeta) };
   }, [agentId, agentMeta, builtinAgentIdMap]);
 };
 

@@ -1,3 +1,4 @@
+import { agentDisplayName } from '@lobechat/types';
 import { Avatar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -88,7 +89,7 @@ const StackedAgentAvatar = memo<{ agentId: string }>(({ agentId }) => {
       className={styles.stackedAvatar}
       shape={'circle'}
       size={AVATAR_SIZE}
-      title={agent.title}
+      title={agentDisplayName(agent)}
     />
   );
 });

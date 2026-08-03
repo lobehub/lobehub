@@ -103,6 +103,7 @@ export class BriefModel {
         agentAvatar: agents.avatar,
         agentBackgroundColor: agents.backgroundColor,
         agentRowId: agents.id,
+        agentName: agents.name,
         agentSlug: agents.slug,
         agentTitle: agents.title,
         brief: briefs,

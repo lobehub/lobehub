@@ -18,6 +18,8 @@ export interface AgentRankItem {
   backgroundColor: string | null;
   count: number;
   id: string;
+  /** Personal name; resolve the label with `agentDisplayName(item, fallback)`. */
+  name: string | null;
   title: string | null;
 }
 

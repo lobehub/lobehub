@@ -1,3 +1,4 @@
+import { agentDisplayName } from '@lobechat/types';
 import { ActionIcon, Avatar, Flexbox } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { t } from 'i18next';
@@ -36,7 +37,7 @@ const Header = memo(() => {
             size={20}
           />
           <div style={{ fontWeight: 600 }}>
-            {currentAgent?.title || t('defaultSession', { ns: 'common' })}
+            {agentDisplayName(currentAgent, t('defaultSession', { ns: 'common' }))}
           </div>
         </Flexbox>
       }

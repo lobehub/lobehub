@@ -1,4 +1,5 @@
 import type { TaskStatus } from '@lobechat/types';
+import { agentDisplayName } from '@lobechat/types';
 import type { FlexboxProps } from '@lobehub/ui';
 import { Avatar, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -139,7 +140,7 @@ const RecentTopicRow = memo<{ topic: RecentItem }>(({ topic }) => {
             className={styles.topicAvatar}
             shape={'circle'}
             size={22}
-            title={agent.title}
+            title={agentDisplayName(agent)}
           />
         ) : (
           <Icon color={cssVar.colorTextDescription} icon={HashIcon} size={16} />

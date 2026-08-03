@@ -13,12 +13,20 @@ const mocks = vi.hoisted(() => {
       activeAgentId: 'agent-a',
       agentMap: {} as Record<
         string,
-        { avatar?: string | null; backgroundColor?: string; title?: string }
+        { avatar?: string | null; backgroundColor?: string; name?: string; title?: string }
       >,
     },
     agentStoreListeners: new Set<() => void>(),
     emojiPickerProps: { last: undefined as Record<string, unknown> | undefined },
-    inputProps: { last: undefined as Record<string, unknown> | undefined },
+    // The header renders two inputs — the role headline first, the personal name
+    // second. `first` is the title input; keep assertions on it explicit so a
+    // later field can't silently steal them.
+    inputProps: {
+      all: [] as Record<string, unknown>[],
+      get first() {
+        return this.all[0];
+      },
+    },
     permissionState: { allowed: false },
     updateAgentMetaById: vi.fn(),
     uploadWithProgress: vi.fn(),
@@ -29,12 +37,13 @@ vi.mock('@lobehub/ui', () => ({
   Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Icon: () => <span />,
   Input: (props: Record<string, unknown>) => {
-    mocks.inputProps.last = props;
+    mocks.inputProps.all.push(props);
     return <input readOnly disabled={props.disabled as boolean} value={props.value as string} />;
   },
   Skeleton: {
     Button: () => <div />,
   },
+  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
   Tooltip: ({ children }: { children?: ReactNode }) => <>{children}</>,
 }));
 
@@ -115,7 +124,7 @@ describe('AgentHeader', () => {
     };
     mocks.agentStoreListeners.clear();
     mocks.emojiPickerProps.last = undefined;
-    mocks.inputProps.last = undefined;
+    mocks.inputProps.all = [];
     mocks.permissionState.allowed = false;
   });
 
@@ -138,7 +147,7 @@ describe('AgentHeader', () => {
     render(<AgentHeader />);
 
     act(() => {
-      const onChange = mocks.inputProps.last?.onChange as (event: {
+      const onChange = mocks.inputProps.first?.onChange as (event: {
         target: { value: string };
       }) => void;
       onChange({ target: { value: 'Agent A draft' } });
@@ -154,7 +163,30 @@ describe('AgentHeader', () => {
     expect(mocks.updateAgentMetaById).toHaveBeenCalledExactlyOnceWith('agent-a', {
       title: 'Agent A draft',
     });
-    expect(mocks.inputProps.last?.value).toBe('Same title');
+    expect(mocks.inputProps.first?.value).toBe('Same title');
+  });
+
+  it('persists the personal name separately from the role title', () => {
+    mocks.permissionState.allowed = true;
+    mocks.agentStoreState.agentMap = { 'agent-a': { name: 'Alice', title: 'Health Assistant' } };
+    const view = render(<AgentHeader />);
+
+    // The second input is the personal name; the first stays the role headline.
+    expect(mocks.inputProps.first?.value).toBe('Health Assistant');
+    expect(mocks.inputProps.all[1]?.value).toBe('Alice');
+
+    act(() => {
+      const onChange = mocks.inputProps.all[1]?.onChange as (event: {
+        target: { value: string };
+      }) => void;
+      onChange({ target: { value: '小艾' } });
+    });
+
+    view.unmount();
+
+    expect(mocks.updateAgentMetaById).toHaveBeenCalledExactlyOnceWith('agent-a', {
+      name: '小艾',
+    });
   });
 
   it('flushes a pending title when the scoped profile unmounts', () => {
@@ -163,7 +195,7 @@ describe('AgentHeader', () => {
     const view = render(<AgentHeader />);
 
     act(() => {
-      const onChange = mocks.inputProps.last?.onChange as (event: {
+      const onChange = mocks.inputProps.first?.onChange as (event: {
         target: { value: string };
       }) => void;
       onChange({ target: { value: 'Final Agent A title' } });

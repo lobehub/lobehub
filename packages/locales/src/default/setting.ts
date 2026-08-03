@@ -752,6 +752,8 @@ export default {
   'settingAgent.export.untitledFileName': 'agent-profile',
   'settingAgent.name.placeholder': 'Enter agent name',
   'settingAgent.name.title': 'Name',
+  'settingAgent.personalName.label': 'Name',
+  'settingAgent.personalName.placeholder': 'Give it a name, e.g. Alice',
   'settingAgent.prompt.desc':
     'Defines who this agent is, what it is responsible for, and how it works and responds. It serves as a core instruction in every conversation.',
   'settingAgent.prompt.editorPlaceholder':

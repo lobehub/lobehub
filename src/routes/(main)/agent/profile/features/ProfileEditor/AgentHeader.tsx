@@ -1,7 +1,7 @@
 'use client';
 
 import { EDITOR_DEBOUNCE_TIME } from '@lobechat/const';
-import { Flexbox, Icon, Input, Skeleton, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Input, Skeleton, Text, Tooltip } from '@lobehub/ui';
 import { toast } from '@lobehub/ui/base-ui';
 import { debounce } from 'es-toolkit/compat';
 import isEqual from 'fast-deep-equal';
@@ -35,11 +35,16 @@ const AgentHeader = memo(() => {
 
   // Local state for inputs (to avoid stuttering during typing)
   const [localTitle, setLocalTitle] = useState(meta.title || '');
+  const [localName, setLocalName] = useState(meta.name || '');
 
   // Sync local state when meta changes from external source
   useEffect(() => {
     setLocalTitle(meta.title || '');
   }, [agentId, meta.title]);
+
+  useEffect(() => {
+    setLocalName(meta.name || '');
+  }, [agentId, meta.name]);
 
   // Debounced save for title
   const debouncedSaveTitle = useMemo(
@@ -50,14 +55,24 @@ const AgentHeader = memo(() => {
     [updateMetaById],
   );
 
-  // A pending title belongs to the agent that was being edited. Commit that
+  const debouncedSaveName = useMemo(
+    () =>
+      debounce((targetAgentId: string, value: string) => {
+        updateMetaById(targetAgentId, { name: value });
+      }, EDITOR_DEBOUNCE_TIME),
+    [updateMetaById],
+  );
+
+  // A pending edit belongs to the agent that was being edited. Commit that
   // invocation before adopting another agent's local input state.
   useEffect(
     () => () => {
       debouncedSaveTitle.flush();
       debouncedSaveTitle.cancel();
+      debouncedSaveName.flush();
+      debouncedSaveName.cancel();
     },
-    [agentId, debouncedSaveTitle],
+    [agentId, debouncedSaveName, debouncedSaveTitle],
   );
 
   // Handle avatar change (immediate save)
@@ -172,8 +187,8 @@ const AgentHeader = memo(() => {
         onDelete={handleAvatarDelete}
         onUpload={handleAvatarUpload}
       />
-      {/* Title Section */}
-      <Flexbox flex={1} style={{ minWidth: 0 }}>
+      {/* Identity Section — the role is the headline, the personal name sits under it */}
+      <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
         <Input
           disabled={!canEdit}
           placeholder={t('settingAgent.name.placeholder', { ns: 'setting' })}
@@ -192,6 +207,24 @@ const AgentHeader = memo(() => {
             debouncedSaveTitle(agentId, e.target.value);
           }}
         />
+        <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
+          <Text style={{ flex: 'none' }} type={'secondary'}>
+            {t('settingAgent.personalName.label', { ns: 'setting' })}
+          </Text>
+          <Input
+            disabled={!canEdit}
+            placeholder={t('settingAgent.personalName.placeholder', { ns: 'setting' })}
+            style={{ flex: 1, padding: 0 }}
+            value={localName}
+            variant={'borderless'}
+            onChange={(e) => {
+              setLocalName(e.target.value);
+              if (!agentId || !canEdit) return;
+
+              debouncedSaveName(agentId, e.target.value);
+            }}
+          />
+        </Flexbox>
       </Flexbox>
     </Flexbox>
   );

@@ -1,4 +1,4 @@
-import { type SidebarAgentItem } from '@lobechat/types';
+import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
 import { ActionIcon, Icon } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Loader2, PinIcon } from 'lucide-react';
@@ -79,7 +79,7 @@ interface AgentItemProps {
 }
 
 const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate }) => {
-  const { id, avatar, backgroundColor, title, pinned, slug, userId, visibility } = item;
+  const { id, avatar, backgroundColor, pinned, slug, userId, visibility } = item;
   // Unread count is server-computed (topics.status === 'unread') and carried on
   // the sidebar list item, so it stays accurate across agents whose topics
   // aren't loaded into the chat store on this client.
@@ -95,8 +95,8 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate }) 
   // Separate loading state from chat store - only show loading for this specific agent
   const isLoading = useChatStore(operationSelectors.isAgentVisiblyRunning(id));
 
-  // Get display title with fallback
-  const displayTitle = title || t('untitledAgent');
+  // Name-first label with fallback (see agentDisplayName)
+  const displayTitle = agentDisplayName(item, t('untitledAgent'));
 
   const agentUrl = usePreservedAgentUrl(id);
 
