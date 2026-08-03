@@ -9,8 +9,10 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
     line-height: 0;
   `,
   closeIcon: css`
+    pointer-events: none;
+
     position: absolute;
-    inset-inline-end: 4px;
+    inset-inline-end: 3px;
 
     flex-shrink: 0;
 
@@ -53,14 +55,25 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
     flex: 1;
     min-width: 0;
   `,
+  // Tabs are absolutely positioned inside this box so that pinning can spring a tab
+  // across to its new slot; a flex reorder could only teleport it. The box tracks the
+  // strip's own width so the trailing "+" follows the tabs instead of jumping.
+  strip: css`
+    position: relative;
+    flex: none;
+    height: ${TAB_HEIGHT}px;
+  `,
   tab: css`
     cursor: default;
     user-select: none;
 
-    position: relative;
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: 0;
 
     display: flex;
     flex-shrink: 0;
+    gap: 6px;
     align-items: center;
 
     height: ${TAB_HEIGHT}px;
@@ -71,37 +84,71 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
 
     background-color: transparent;
 
-    /* No transition here: dnd-kit writes its own into the inline style, which would win
-       over anything declared in this class. TabItem composes both. */
+    transition: background-color 0.15s ${cssVar.motionEaseInOut};
 
     &:hover {
       background-color: ${cssVar.colorFillQuaternary};
     }
 
-    /* Persistent on a full tab, hover-only on a compact one. Narrower tiers carry no
-       close button at all — see TabItem. */
+    /* Persistent on a full tab, hover-only on a compact one. Below that the tab cannot
+       spare the button's 20px: the title would be cut to a couple of glyphs to make room
+       for it, and at icon width the icon is the only identity signal left. Pinned tabs
+       are always at icon width, so they fall out of this rule too. The button stays
+       mounted at every tier and fades — unmounting it made it vanish mid-pin. */
     &[data-tier='full'] [data-tab-close],
-    &:hover [data-tab-close] {
+    &[data-tier='compact']:hover [data-tab-close] {
+      pointer-events: auto;
       opacity: 1;
     }
 
     /* Reserve the button's footprint whether or not it is currently visible, so the
-       title's ellipsis lands before it. Fading the title out under the button instead
-       leaves half-opaque glyphs inside the gradient, which reads as an overlap. Keeping
-       the reservation constant also stops the text reflowing on hover. */
+       title's fade lands before it and no glyph is ever drawn under the button. Margin
+       rather than padding: the mask applies to the padding box, so padding would put the
+       gradient inside the reservation instead of at the text's edge. Keeping the
+       reservation constant also stops the text reflowing on hover.
+       20px button + 3px inset - the tab's own 6px end padding. */
     &[data-tier='full'] [data-tab-title],
     &[data-tier='compact'] [data-tab-title] {
-      padding-inline-end: 22px;
+      margin-inline-end: 17px;
+    }
+
+    /* The avatar is the only thing left, so centre it and collapse the title rather than
+       unmounting it — the tab is mid-shrink at this point and a title that pops out of
+       the flow would jerk the avatar sideways instead of gliding it to the middle. */
+    &[data-tier='icon'] {
+      gap: 0;
+      justify-content: center;
+      padding-inline: 0;
+
+      [data-tab-title] {
+        flex: none;
+        width: 0;
+        opacity: 0;
+      }
     }
   `,
   pinnedDivider: css`
-    align-self: center;
+    position: absolute;
+    inset-block-start: 4px;
+    inset-inline-start: 0;
 
     width: 1px;
     height: 18px;
-    margin-inline: 6px;
 
     background-color: ${cssVar.colorBorder};
+
+    transition: opacity 0.18s ${cssVar.motionEaseInOut};
+  `,
+  // A pinned tab renders at icon width, which is pixel-identical to an unpinned tab
+  // squeezed by a crowded strip — the surface is what tells the two apart. Declared
+  // ahead of `tabActive` so that an active pinned tab still reads as active:
+  // createStaticStyles settles equal specificity by definition order.
+  tabPinned: css`
+    background-color: ${cssVar.colorFillQuaternary};
+
+    &:hover {
+      background-color: ${cssVar.colorFillTertiary};
+    }
   `,
   overflowButton: css`
     cursor: default;
@@ -158,8 +205,15 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
 
     font-size: 12px;
     color: ${cssVar.colorText};
-    text-overflow: ellipsis;
     white-space: nowrap;
+
+    transition: opacity 0.12s ${cssVar.motionEaseInOut};
+
+    /* The one physical direction left in this file — mask-image has no logical form, and
+       nothing in the app sets dir="rtl". max(60%, …) caps the ramp at 40% of the box:
+       a narrow tab leaves the title barely 22px to live in, and a flat 20px ramp would
+       swallow the whole word rather than trailing it off. */
+    mask-image: linear-gradient(to right, #000 max(60%, calc(100% - 20px)), transparent);
   `,
   newTabButton: css`
     display: inline-flex;

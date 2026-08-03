@@ -1,7 +1,6 @@
 'use client';
 
 import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import {
   ActionIcon,
   Avatar,
@@ -14,7 +13,7 @@ import { cx } from 'antd-style';
 import { X } from 'lucide-react';
 import { useMotionValue, useSpring } from 'motion/react';
 import * as m from 'motion/react-m';
-import { memo, useCallback, useEffect } from 'react';
+import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { electronStylish } from '@/styles/electron';
@@ -22,31 +21,28 @@ import { electronStylish } from '@/styles/electron';
 import { type ResolvedTab } from './hooks/useResolvedTabs';
 import { useTabRunning } from './hooks/useTabRunning';
 import { useTabUnread } from './hooks/useTabUnread';
+import { TAB_SPRING } from './motion';
 import { useStyles } from './styles';
 import { buildTabContextMenuItems } from './tabContextMenu';
 import { type TabTier } from './tabLayout';
 
-// Width is driven by a spring rather than a CSS transition: tab widths are a layout
-// response — several tabs resize at once whenever one is activated, added or closed —
-// and a spring both settles more naturally and is interruptible, so rapid switching
-// redirects the motion instead of restarting a fixed 180ms ramp.
-//
-// Only `width` is animated here. dnd-kit owns `transform`/`transition` on the same
-// element (and inline style beats any class-level declaration), so background-color
-// keeps its own CSS transition composed alongside dnd-kit's below.
-// restDelta of half a pixel: without it the spring keeps ticking rAF long after the
-// motion is visually over (measured still 0.1px short at 425ms), which costs a frame
-// callback per tab for nothing.
-const WIDTH_SPRING = {
-  damping: 26,
-  mass: 0.4,
-  restDelta: 0.5,
-  restSpeed: 2,
-  stiffness: 380,
-} as const;
-const BACKGROUND_MOTION = 'background-color 0.15s var(--ant-motion-ease-in-out)';
+// 20px box on an 8px-round tab, inset a uniform 3px: 8 - 3 = 5 keeps the button's curve
+// concentric with the tab's own. ActionIcon writes blockSize and borderRadius straight
+// into its inline style, so a class cannot reach them — but it spreads `style` last.
+// `size` stays "small" for the glyph: passing the {blockSize, borderRadius} object form
+// sends the same object to Icon's own calcSize, which reads `size` off it, misses, and
+// falls back to a 24px glyph inside the 20px box.
+const CLOSE_BUTTON_STYLE = { borderRadius: 5, height: 20, width: 20 } as const;
 
 interface TabItemProps {
+  /**
+   * Where the tab's offset spring starts on the very first render — the strip's previous
+   * total width, i.e. the point a newly opened tab is appended at. Seeding it at the
+   * target instead would drop the tab straight onto its final offset while its
+   * neighbours are still shrinking into place, so the two would overlap by a full tab
+   * width and take the whole settle to pull apart.
+   */
+  enterX: number;
   index: number;
   isActive: boolean;
   item: ResolvedTab;
@@ -60,6 +56,7 @@ interface TabItemProps {
   tier: TabTier;
   totalCount: number;
   width: number;
+  x: number;
 }
 
 const TabItem = memo<TabItemProps>(
@@ -71,6 +68,8 @@ const TabItem = memo<TabItemProps>(
     tier,
     totalCount,
     width,
+    x,
+    enterX,
     onActivate,
     onClose,
     onCloseOthers,
@@ -86,26 +85,45 @@ const TabItem = memo<TabItemProps>(
     const isUnread = useTabUnread(tab);
     const showUnreadDot = !isRunning && isUnread;
     const pinned = !!tab.pinned;
-    const iconOnly = tier === 'icon';
-    // The close button needs 22px of its own, and below the compact tier the tab cannot
-    // spare them: the title would be cut to a couple of glyphs to make room for a button
-    // that is usually not even shown. Narrower tabs close by middle-click or the context
-    // menu instead. At icon width there is the further problem that the icon is the only
-    // identity signal left, so overlaying it would also change what a click does.
-    const closable = !pinned && totalCount > 1 && (tier === 'full' || tier === 'compact');
+    // Which tiers actually show the button is settled in CSS so that it can fade rather
+    // than unmount; a lone tab is the one case with no button to fade at all. Staying
+    // mounted below the compact tier would otherwise leave an invisible button in the
+    // focus order, so those tiers are made inert rather than merely transparent.
+    const closable = totalCount > 1;
+    const closeInert = tier !== 'full' && tier !== 'compact';
 
-    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    const { attributes, listeners, setNodeRef, transform, isDragging, isSorting } = useSortable({
       id,
     });
 
     // A newly opened tab springs out from zero rather than popping in at full width; the
     // motion value starts collapsed and is set to the real width on mount.
     const targetWidth = useMotionValue(0);
-    const springWidth = useSpring(targetWidth, WIDTH_SPRING);
+    const springWidth = useSpring(targetWidth, TAB_SPRING);
+    const targetX = useMotionValue(enterX);
+    const springX = useSpring(targetX, TAB_SPRING);
+    const wasSorting = useRef(false);
 
     useEffect(() => {
       targetWidth.set(width);
     }, [width, targetWidth]);
+
+    // Dropping a drag must jump, not animate. dnd-kit clears its transform in the same
+    // commit that the reordered store lands, and up to that frame the tab is already
+    // sitting at its new offset (springX at the old slot plus dnd-kit's displacement).
+    // Animating from there would send it back to where it was picked up and re-slide it.
+    useEffect(() => {
+      const settledFromDrag = wasSorting.current && !isSorting;
+      wasSorting.current = isSorting;
+
+      if (!settledFromDrag) {
+        targetX.set(x);
+        return;
+      }
+
+      targetX.jump(x);
+      springX.jump(x);
+    }, [x, isSorting, targetX, springX]);
 
     const handleClick = useCallback(() => {
       if (!isActive) {
@@ -186,16 +204,18 @@ const TabItem = memo<TabItemProps>(
         className={cx(
           electronStylish.nodrag,
           styles.tab,
+          pinned && styles.tabPinned,
           isActive && styles.tabActive,
           isDragging && styles.tabDragging,
         )}
         style={{
-          gap: iconOnly ? 0 : 6,
-          justifyContent: iconOnly ? 'center' : undefined,
-          transform: CSS.Translate.toString(transform),
-          transition: transition ? `${transition}, ${BACKGROUND_MOTION}` : BACKGROUND_MOTION,
+          // dnd-kit's displacement rides the standalone `translate` property while the
+          // offset spring owns `transform`. Both are pure x translations, so they
+          // compose, and neither has to be folded into the other's value.
+          translate: transform ? `${transform.x}px` : undefined,
           width: springWidth,
-          zIndex: isDragging ? 1 : undefined,
+          x: springX,
+          zIndex: isDragging ? 2 : pinned ? 1 : undefined,
         }}
         onAuxClick={handleAuxClick}
         onClick={handleClick}
@@ -203,30 +223,34 @@ const TabItem = memo<TabItemProps>(
         {...listeners}
       >
         {indicator}
-        {!iconOnly && (
-          <span data-tab-title className={styles.tabTitle}>
-            {meta.title}
-          </span>
-        )}
+        <span data-tab-title className={styles.tabTitle}>
+          {meta.title}
+        </span>
         {closable && (
           <ActionIcon
             data-tab-close
             className={styles.closeIcon}
             icon={X}
+            inert={closeInert}
             size="small"
+            style={CLOSE_BUTTON_STYLE}
             onClick={handleClose}
           />
         )}
       </m.div>
     );
 
-    // The Tooltip wraps unconditionally and opts out via an empty title. Swapping between
+    // The Tooltip wraps unconditionally and opts out through `disabled`. Swapping between
     // a wrapped and a bare node would remount the tab on every tier change — which is
-    // exactly when the width animates, so the new node would mount at its final width and
-    // the transition would never run.
+    // exactly when the width and offset animate, so the new node would mount at its final
+    // geometry and neither spring would ever run. An empty title is not an opt-out: the
+    // component only bails on a nullish one (`title == null`), so a full-width tab used to
+    // pop a blank bubble on hover.
     return (
       <ContextMenuTrigger items={contextMenuItems}>
-        <Tooltip title={tier === 'full' ? '' : meta.title}>{face}</Tooltip>
+        <Tooltip disabled={tier === 'full'} title={meta.title}>
+          {face}
+        </Tooltip>
       </ContextMenuTrigger>
     );
   },

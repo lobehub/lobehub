@@ -4,6 +4,8 @@ export const ACTIVE_TAB_MIN_WIDTH = 150;
 export const PINNED_TAB_WIDTH = 34;
 export const TAB_GAP = 2;
 export const OVERFLOW_CONTROL_WIDTH = 34;
+export const PINNED_DIVIDER_MARGIN = 6;
+export const PINNED_DIVIDER_WIDTH = PINNED_DIVIDER_MARGIN * 2 + 1;
 
 export type TabTier = 'compact' | 'full' | 'icon' | 'narrow';
 
@@ -124,4 +126,64 @@ export const allocateTabWidths = ({
 
   const last = attemptLayout(1, budget, count, activeIndex);
   return { hiddenCount: count - 1, visibleIndices: last.indices, widths: last.widths };
+};
+
+export interface TabPlacement {
+  id: string;
+  pinned: boolean;
+  width: number;
+  x: number;
+}
+
+export interface TabPlacementInput {
+  /** Ids of the unpinned tabs, in store order. */
+  flowIds: string[];
+  /** Ids of the pinned tabs, in store order — they always lead the strip. */
+  pinnedIds: string[];
+  visibleIndices: number[];
+  widths: number[];
+}
+
+export interface TabPlacementResult {
+  dividerX: number;
+  placements: TabPlacement[];
+  total: number;
+}
+
+/**
+ * Turns the width allocation into absolute offsets. Tabs are positioned rather than laid
+ * out by flex because pinning reorders the strip, and a flex reorder can only teleport:
+ * an explicit x is what lets the moved tab spring across to its new slot.
+ *
+ * Offsets are derived from the target widths, not the animated ones. Same-parameter
+ * springs superpose, so a tab springing its own x traces the identical path as summing
+ * the neighbours' springing widths would — no per-frame layout pass needed.
+ */
+export const resolvePlacements = ({
+  flowIds,
+  pinnedIds,
+  visibleIndices,
+  widths,
+}: TabPlacementInput): TabPlacementResult => {
+  const placements: TabPlacement[] = [];
+  let x = 0;
+
+  for (const id of pinnedIds) {
+    placements.push({ id, pinned: true, width: PINNED_TAB_WIDTH, x });
+    x += PINNED_TAB_WIDTH + TAB_GAP;
+  }
+
+  const dividerX = x + PINNED_DIVIDER_MARGIN;
+  if (pinnedIds.length > 0) x += PINNED_DIVIDER_WIDTH;
+
+  visibleIndices.forEach((index, position) => {
+    const id = flowIds[index];
+    if (id === undefined) return;
+
+    const width = widths[position];
+    placements.push({ id, pinned: false, width, x });
+    x += width + TAB_GAP;
+  });
+
+  return { dividerX, placements, total: Math.max(0, x - TAB_GAP) };
 };

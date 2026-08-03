@@ -6,6 +6,10 @@ import {
   MAX_TAB_WIDTH,
   MIN_TAB_WIDTH,
   OVERFLOW_CONTROL_WIDTH,
+  PINNED_DIVIDER_MARGIN,
+  PINNED_DIVIDER_WIDTH,
+  PINNED_TAB_WIDTH,
+  resolvePlacements,
   resolveTabTier,
   TAB_GAP,
 } from './tabLayout';
@@ -181,5 +185,87 @@ describe('allocateTabWidths', () => {
 
     expect(widths).toEqual([MAX_TAB_WIDTH, MAX_TAB_WIDTH]);
     expect(totalWidth(widths)).toBeLessThan(900);
+  });
+});
+
+describe('resolvePlacements', () => {
+  it('returns nothing for an empty strip', () => {
+    expect(
+      resolvePlacements({ flowIds: [], pinnedIds: [], visibleIndices: [], widths: [] }),
+    ).toEqual({ dividerX: PINNED_DIVIDER_MARGIN, placements: [], total: 0 });
+  });
+
+  it('lays flowing tabs out end to end with one gap between them', () => {
+    const { placements, total } = resolvePlacements({
+      flowIds: ['a', 'b', 'c'],
+      pinnedIds: [],
+      visibleIndices: [0, 1, 2],
+      widths: [120, 80, 60],
+    });
+
+    expect(placements).toEqual([
+      { id: 'a', pinned: false, width: 120, x: 0 },
+      { id: 'b', pinned: false, width: 80, x: 122 },
+      { id: 'c', pinned: false, width: 60, x: 204 },
+    ]);
+    // Trailing gap excluded: the strip ends at the last tab's right edge, and the
+    // container's own flex gap supplies the space before the "+".
+    expect(total).toBe(264);
+  });
+
+  it('leads with the pinned run and clears the divider before the flowing tabs', () => {
+    const { dividerX, placements, total } = resolvePlacements({
+      flowIds: ['c'],
+      pinnedIds: ['a', 'b'],
+      visibleIndices: [0],
+      widths: [100],
+    });
+
+    const runEnd = 2 * (PINNED_TAB_WIDTH + TAB_GAP);
+
+    expect(placements).toEqual([
+      { id: 'a', pinned: true, width: PINNED_TAB_WIDTH, x: 0 },
+      { id: 'b', pinned: true, width: PINNED_TAB_WIDTH, x: PINNED_TAB_WIDTH + TAB_GAP },
+      { id: 'c', pinned: false, width: 100, x: runEnd + PINNED_DIVIDER_WIDTH },
+    ]);
+    expect(dividerX).toBe(runEnd + PINNED_DIVIDER_MARGIN);
+    expect(total).toBe(runEnd + PINNED_DIVIDER_WIDTH + 100);
+  });
+
+  it('reserves no divider room when nothing is pinned', () => {
+    const { placements } = resolvePlacements({
+      flowIds: ['a'],
+      pinnedIds: [],
+      visibleIndices: [0],
+      widths: [100],
+    });
+
+    expect(placements[0].x).toBe(0);
+  });
+
+  // The width split can promote a tab past the visible cut, so `visibleIndices` is not
+  // always 0..n — placements must follow it rather than the flow order.
+  it('follows the visible indices when the active tab is held past the cut', () => {
+    const { placements } = resolvePlacements({
+      flowIds: ['a', 'b', 'c', 'd'],
+      pinnedIds: [],
+      visibleIndices: [0, 3],
+      widths: [40, 150],
+    });
+
+    expect(placements.map((placement) => placement.id)).toEqual(['a', 'd']);
+    expect(placements[1].x).toBe(42);
+  });
+
+  it('skips an index that no longer resolves to a tab', () => {
+    const { placements, total } = resolvePlacements({
+      flowIds: ['a'],
+      pinnedIds: [],
+      visibleIndices: [0, 1],
+      widths: [100, 100],
+    });
+
+    expect(placements).toEqual([{ id: 'a', pinned: false, width: 100, x: 0 }]);
+    expect(total).toBe(100);
   });
 });
