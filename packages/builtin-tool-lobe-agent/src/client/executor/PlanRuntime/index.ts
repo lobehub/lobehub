@@ -89,7 +89,10 @@ export class PlanExecutionRuntime {
   }
 
   private async resolveExistingTodos(context: PlanRuntimeContext): Promise<TodoItem[]> {
-    if (context.currentTodos) return context.currentTodos;
+    // `?.length`, not a plain truthy check: an empty array is truthy, so callers
+    // that always pass `currentTodos` (the client executor) would short-circuit
+    // the plan-document fallback on the very first call of a conversation.
+    if (context.currentTodos?.length) return context.currentTodos;
     if (!context.topicId) return [];
     const plan = await this.service.findPlanByTopic(context.topicId);
     return readTodosFromPlan(plan);

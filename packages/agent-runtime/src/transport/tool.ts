@@ -68,6 +68,12 @@ export interface ToolRunContext {
   agentId?: string;
   assistantMessageId?: string;
   callIndex: number;
+  /**
+   * Todo items as of this tool call, reconstructed from message history. Tool
+   * runtimes that mutate todos need it because their own persistence (the plan
+   * document) is optional — see `PlanExecutionRuntime.resolveExistingTodos`.
+   */
+  currentTodos?: unknown[];
   effectiveManifestMap: Record<string, any>;
   groupId?: string;
   messageId?: string;
