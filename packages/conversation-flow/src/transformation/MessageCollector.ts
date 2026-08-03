@@ -248,9 +248,10 @@ export class MessageCollector {
    *   (a post-task summary whose `parentId === currentAssistant.id`). Those are
    *   emitted by the council/tasks flow AFTER the group, so the assistant seed
    *   is dropped and the chain ends here.
-   * - **Branch resolution**: when >1 non-tool same-agent continuations share a
-   *   parent (e.g. a regenerated continuation), pick the active one via
-   *   `activeBranchIndex` instead of blindly taking the earliest.
+   * - **Branch resolution**: when >1 non-tool same-agent continuations compete,
+   *   first resolve the active direct child of this assistant (including
+   *   continuations under different tool results), then resolve regenerated
+   *   siblings under that child.
    */
   private findFlatChainContinuation(
     currentAssistant: Message,
@@ -280,7 +281,7 @@ export class MessageCollector {
       .filter((m) => m.role === 'assistant' && m.agentId === groupAgentId && !getMessageSignal(m))
       .sort((a, b) => a.createdAt - b.createdAt);
 
-    const activeId = this.resolveActiveContinuationId(candidates);
+    const activeId = this.resolveActiveContinuationId(candidates, currentAssistant);
     if (!activeId) return;
 
     const activeContinuation = candidates.find((message) => message.id === activeId);
@@ -315,23 +316,52 @@ export class MessageCollector {
 
   /**
    * Pick the active continuation among same-step candidates (sorted by
-   * createdAt). One candidate ⇒ a linear continuation. >1 non-tool siblings
-   * under a single parent ⇒ a branch (e.g. a regenerated continuation), so
-   * consult the parent's `activeBranchIndex` via BranchResolver instead of
-   * blindly taking the earliest — otherwise the inactive branch is silently
-   * chosen and the active one dropped. Returns undefined when there is no
-   * continuation, or the active branch is an optimistic not-yet-created one.
+   * createdAt). Parallel tool results can each own a continuation, so resolve
+   * the active direct child of the assistant before handling regenerated
+   * siblings under one parent. Without the first step, an earlier stale tool
+   * continuation wins before BranchResolver can see the latest user descendant.
    */
-  private resolveActiveContinuationId(sortedCandidates: Message[]): string | undefined {
+  private resolveActiveContinuationId(
+    sortedCandidates: Message[],
+    branchOwner?: Message,
+  ): string | undefined {
     if (sortedCandidates.length === 0) return undefined;
-    const earliest = sortedCandidates[0];
+
+    let candidates = sortedCandidates;
+    if (branchOwner && candidates.length > 1) {
+      const directChildIds = this.childrenMap.get(branchOwner.id) ?? [];
+      const directChildIdSet = new Set(directChildIds);
+      const candidateBranchIds = new Set(
+        candidates
+          .map((candidate) =>
+            candidate.parentId === branchOwner.id ? candidate.id : candidate.parentId,
+          )
+          .filter((id): id is string => Boolean(id && directChildIdSet.has(id))),
+      );
+
+      if (candidateBranchIds.size > 1) {
+        const activeBranchId = this.branchResolver.getActiveBranchIdFromMetadata(
+          branchOwner,
+          directChildIds,
+          this.childrenMap,
+        );
+        if (!activeBranchId) return undefined;
+
+        candidates = candidates.filter(
+          (candidate) => candidate.id === activeBranchId || candidate.parentId === activeBranchId,
+        );
+        if (candidates.length === 0) return undefined;
+      }
+    }
+
+    const earliest = candidates[0];
     const parentId = earliest.parentId;
     if (parentId == null) return earliest.id;
 
     // Branch siblings share one parent; only those under the earliest
     // candidate's parent participate in this branch decision. Use childrenMap
     // (creation) order so it lines up with how activeBranchIndex is assigned.
-    const eligibleIds = new Set(sortedCandidates.map((m) => m.id));
+    const eligibleIds = new Set(candidates.map((m) => m.id));
     const siblingIds = (this.childrenMap.get(parentId) ?? []).filter((id) => eligibleIds.has(id));
     if (siblingIds.length <= 1) return earliest.id;
 
@@ -507,7 +537,10 @@ export class MessageCollector {
       )
       .sort((a, b) => a.msg!.createdAt - b.msg!.createdAt);
 
-    const activeId = this.resolveActiveContinuationId(eligible.map((c) => c.msg!));
+    const activeId = this.resolveActiveContinuationId(
+      eligible.map((c) => c.msg!),
+      this.messageMap.get(idNode.id),
+    );
     return activeId ? eligible.find((c) => c.node.id === activeId)?.node : undefined;
   }
 

@@ -495,6 +495,105 @@ describe('parse', () => {
       });
     });
 
+    it('should resolve same-agent continuations across tool parents by the latest user branch', () => {
+      const messages: Message[] = [
+        { content: 'root', createdAt: 0, id: 'root-user', role: 'user', updatedAt: 0 },
+        {
+          agentId: 'agent-1',
+          content: 'run tools in parallel',
+          createdAt: 1,
+          id: 'root-assistant',
+          parentId: 'root-user',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'inspect',
+              arguments: '{}',
+              id: 'call-active',
+              identifier: 'internal',
+              result_msg_id: 'tool-active',
+              type: 'default',
+            },
+            {
+              apiName: 'inspect',
+              arguments: '{}',
+              id: 'call-stale',
+              identifier: 'internal',
+              result_msg_id: 'tool-stale',
+              type: 'default',
+            },
+          ],
+          updatedAt: 1,
+        },
+        {
+          content: 'active tool result',
+          createdAt: 2,
+          id: 'tool-active',
+          parentId: 'root-assistant',
+          role: 'tool',
+          tool_call_id: 'call-active',
+          updatedAt: 2,
+        },
+        {
+          content: 'stale tool result',
+          createdAt: 3,
+          id: 'tool-stale',
+          parentId: 'root-assistant',
+          role: 'tool',
+          tool_call_id: 'call-stale',
+          updatedAt: 3,
+        },
+        {
+          agentId: 'agent-1',
+          content: 'stale continuation',
+          createdAt: 4,
+          id: 'stale-continuation',
+          parentId: 'tool-stale',
+          role: 'assistant',
+          updatedAt: 4,
+        },
+        {
+          agentId: 'agent-1',
+          content: 'active continuation',
+          createdAt: 5,
+          id: 'active-continuation',
+          parentId: 'tool-active',
+          role: 'assistant',
+          updatedAt: 5,
+        },
+        {
+          content: 'current user request',
+          createdAt: 6,
+          id: 'current-user',
+          parentId: 'active-continuation',
+          role: 'user',
+          updatedAt: 6,
+        },
+        {
+          agentId: 'agent-1',
+          content: '...',
+          createdAt: 7,
+          id: 'current-placeholder',
+          parentId: 'current-user',
+          role: 'assistant',
+          updatedAt: 7,
+        },
+      ];
+
+      const result = parse(messages);
+
+      expect(result.contextTree.map((node) => node.id)).toEqual([
+        'root-user',
+        'root-assistant',
+        'current-user',
+        'current-placeholder',
+      ]);
+      expect(result.contextTree.find((node) => node.id === 'root-assistant')).toMatchObject({
+        children: [{ id: 'root-assistant' }, { id: 'active-continuation' }],
+        type: 'assistantGroup',
+      });
+    });
+
     it('should interleave continuations from sibling tool results by child creation time', () => {
       const time = (seconds: number) =>
         new Date(`2026-01-01T00:01:${String(seconds).padStart(2, '0')}.000Z`).getTime();
