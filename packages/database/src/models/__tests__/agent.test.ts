@@ -2519,6 +2519,26 @@ describe('AgentModel', () => {
       expect(result.sessionGroupId).toBeNull();
     });
 
+    it('should reject a folder the caller cannot see', async () => {
+      // The column is workspace-shared, so an unvalidated target corrupts the
+      // sidebar for every member: the foreign key accepts another user's
+      // folder, and everyone who cannot see it then finds the agent in
+      // Ungrouped.
+      const [foreignGroup] = await serverDB
+        .insert(sessionGroups)
+        .values({ userId: userId2, name: 'Someone else' })
+        .returning();
+
+      const [agent] = await serverDB.insert(agents).values({ userId, title: 'Agent' }).returning();
+
+      await expect(agentModel.updateSessionGroupId(agent.id, foreignGroup.id)).rejects.toThrow(
+        /not found in current scope/,
+      );
+
+      const [row] = await serverDB.select().from(agents).where(eq(agents.id, agent.id));
+      expect(row.sessionGroupId).toBeNull();
+    });
+
     it('should not update agents from other users', async () => {
       const [agent] = await serverDB
         .insert(agents)

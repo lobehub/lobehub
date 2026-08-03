@@ -1282,7 +1282,54 @@ export class AgentModel {
   /**
    * Update the sessionGroupId for an agent
    */
+  /**
+   * A move target must be a folder the caller can actually see, and a *public*
+   * agent may only sit in a *public* folder — otherwise the agent stays
+   * visible to the workspace while its folder does not, and everyone else
+   * silently finds it in Ungrouped. Private agents are only visible to their
+   * owner, so any folder that owner can see is fine.
+   */
+  private assertSessionGroupAssignable = async (agentId: string, sessionGroupId: string) => {
+    const [group] = await this.db
+      .select({ visibility: sessionGroups.visibility })
+      .from(sessionGroups)
+      .where(
+        and(
+          eq(sessionGroups.id, sessionGroupId),
+          buildWorkspaceWhere(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            {
+              userId: sessionGroups.userId,
+              visibility: sessionGroups.visibility,
+              workspaceId: sessionGroups.workspaceId,
+            },
+          ),
+        ),
+      )
+      .limit(1);
+
+    if (!group) throw new Error(`Session group ${sessionGroupId} not found in current scope`);
+
+    if (!this.workspaceId) return;
+
+    const [agent] = await this.db
+      .select({ visibility: agents.visibility })
+      .from(agents)
+      .where(and(eq(agents.id, agentId), this.ownership()))
+      .limit(1);
+
+    if (agent?.visibility === 'public' && group.visibility !== 'public')
+      throw new Error('A workspace-public agent cannot be moved into a private folder');
+  };
+
   updateSessionGroupId = async (agentId: string, sessionGroupId: string | null) => {
+    // The column is workspace-shared, so an unvalidated target corrupts the
+    // sidebar for everyone, not just the caller. The foreign key only proves
+    // the folder exists: another workspace's folder, or another member's
+    // private one, passes it happily and then renders as Ungrouped for every
+    // member who cannot see it.
+    if (sessionGroupId) await this.assertSessionGroupAssignable(agentId, sessionGroupId);
+
     const result = await this.db
       .update(agents)
       .set({ sessionGroupId, updatedAt: new Date() })
