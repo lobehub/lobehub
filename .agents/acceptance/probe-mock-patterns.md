@@ -58,7 +58,7 @@ HttpOnly, so an empty `document.cookie` does not establish signed-out state.
 | Render message-attached error UI   | In-memory chat dispatch                    | Safe when the temporary message has a unique id and is deleted |
 | Force a tool result                | `beforeToolCall` hook + `event.mock()`     | Local/in-memory hook mode only                                 |
 | Force a fetch failure              | Request boundary or narrow HMR injection   | Preserve dirty files byte-for-byte                             |
-| Verify first-load error            | Clear the relevant cache tier, then reload | A failed revalidation may intentionally keep settled data      |
+| Verify first-load error            | Clear the cache tier in the _new_ document | Clearing then reloading does not work — see "Cold SWR cache"   |
 | Diagnose Electron target confusion | CDP target list / raw CDP                  | Use a distinct agent-browser session per CDP port              |
 | Seed backend fixtures              | Public API first, raw SQL last             | Raw SQL must preserve product id and relation invariants       |
 
@@ -455,6 +455,40 @@ LOBE_DESKTOP_VITE_PORT=5175 \
 Keep that command session open for the run. Confirm the CDP endpoint, project
 process path, `app-probe.sh ready`, renderer auth, server auth, and a raw-CDP
 screenshot before collecting evidence.
+
+### Cold SWR cache: clearing then reloading is undone by the outgoing page
+
+**Situation:** forcing a first-load / skeleton state for anything backed by the
+tiered SWR cache (`recent:*`, `topic:*`, `message:*`, …).
+
+**Doesn't work:** clearing `localStorage['lobechat-swr-cache:<scope>']` (and the
+`lobehub-local-data` IndexedDB) in the current document, then reloading. The cache
+provider registers `flushAll()` on `visibilitychange` and `pagehide`, so the reload
+itself makes the outgoing page write its in-memory cache straight back. The next
+document hydrates from a repopulated tier and renders settled data — which reads as
+"the loading state never happens" and can be mistaken for a product bug.
+
+```
+1. before clear      : true
+2. right after clear : false
+3. after reload      : true   <- the outgoing page re-flushed on pagehide
+```
+
+**Works:** clear at document start in the NEW document, before the provider
+hydrates:
+
+```js
+Page.addScriptToEvaluateOnNewDocument({
+  source: `Object.keys(localStorage).filter(k=>k.startsWith('lobechat-swr-cache'))
+             .forEach(k=>localStorage.removeItem(k));
+           indexedDB.deleteDatabase('lobehub-local-data');`,
+});
+```
+
+Assert the clear actually ran in the new document (set a flag in that script and
+read it back) rather than trusting the removal. Pair it with a warm control run: if
+the warm run renders data while the request is held paused and the cold run shows
+the skeleton, the cache tier is proven to be what the render reads.
 
 ### `app-probe.sh goto /` cannot reach the desktop Home route — seed the tab first
 
