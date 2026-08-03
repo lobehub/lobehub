@@ -5,7 +5,12 @@ import { z } from 'zod';
 import { AicoBillingModel } from '@/database/models/aicoBilling';
 import { OrganizationModel } from '@/database/models/organization';
 import { users } from '@/database/schemas';
-import { tomanToUsd } from '@/envs/aico';
+import {
+  microUsdToDecimalString,
+  tomanString,
+  tomanToMicroUsd,
+  usdDecimalStringToMicro,
+} from '@/database/utils/aicoMoney';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getTomanPerUsd } from '@/server/services/aico/fxService';
@@ -136,16 +141,30 @@ export const platformAdminRouter = router({
     .mutation(async ({ ctx, input }) => {
       try {
         const { rate: fxRate } = await getTomanPerUsd();
-        const amountUsd = tomanToUsd(input.amountToman, fxRate);
-        return await ctx.organizationModel.addManualCredit({
+        const amountMicroUsd = Number(tomanToMicroUsd(input.amountToman, fxRate));
+        const result = await ctx.organizationModel.addManualCredit({
+          amountMicroUsd,
           amountToman: input.amountToman,
-          amountUsd,
           createdByUserId: ctx.userId,
           description: input.description,
-          fxRate,
+          fxRateTomanPerUsd: fxRate,
           orgId: input.orgId,
           type: 'manual_credit',
         });
+        return {
+          organization: {
+            ...result.organization,
+            walletBalanceMicroUsd: String(result.organization.walletBalanceMicroUsd ?? 0),
+            walletBalanceUsd: microUsdToDecimalString(
+              result.organization.walletBalanceMicroUsd ?? 0,
+            ),
+          },
+          transaction: {
+            ...result.transaction,
+            amountMicroUsd: String(result.transaction.amountMicroUsd ?? 0),
+            amountUsd: microUsdToDecimalString(result.transaction.amountMicroUsd ?? 0),
+          },
+        };
       } catch (error) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
@@ -186,7 +205,8 @@ export const platformAdminRouter = router({
       durationDays: config.durationDays,
       enabled: config.enabled,
       maxRequests: config.maxRequests,
-      trialBudgetUsd: Number(config.trialBudgetUsd),
+      trialBudgetMicroUsd: String(config.trialBudgetMicroUsd ?? 0),
+      trialBudgetUsd: microUsdToDecimalString(config.trialBudgetMicroUsd ?? 0),
     };
   }),
 
@@ -197,12 +217,20 @@ export const platformAdminRouter = router({
         durationDays: z.number().int().min(1).max(90).optional(),
         enabled: z.boolean().optional(),
         maxRequests: z.number().int().positive().nullable().optional(),
-        trialBudgetUsd: z.number().positive().optional(),
+        trialBudgetUsd: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      const trialBudgetMicroUsd =
+        input.trialBudgetUsd !== undefined
+          ? Number(usdDecimalStringToMicro(input.trialBudgetUsd))
+          : undefined;
       const row = await ctx.billingModel.updateTrialConfig({
-        ...input,
+        allowedModelIds: input.allowedModelIds,
+        durationDays: input.durationDays,
+        enabled: input.enabled,
+        maxRequests: input.maxRequests,
+        trialBudgetMicroUsd,
         updatedByUserId: ctx.userId,
       });
       return {
@@ -210,7 +238,8 @@ export const platformAdminRouter = router({
         durationDays: row.durationDays,
         enabled: row.enabled,
         maxRequests: row.maxRequests,
-        trialBudgetUsd: Number(row.trialBudgetUsd),
+        trialBudgetMicroUsd: String(row.trialBudgetMicroUsd ?? 0),
+        trialBudgetUsd: microUsdToDecimalString(row.trialBudgetMicroUsd ?? 0),
       };
     }),
 
@@ -224,30 +253,34 @@ export const platformAdminRouter = router({
         .optional(),
     )
     .query(async ({ ctx }) => {
-      const [txs, wallets, orgBalanceUsd, totalOpenRouterCostUsd, fx] = await Promise.all([
+      const [txs, wallets, orgBalanceMicroUsd, totalOpenRouterCostMicroUsd, fx] = await Promise.all([
         ctx.billingModel.listRecentTransactions(200),
         ctx.billingModel.listAllWallets(),
-        ctx.organizationModel.getTotalWalletBalanceUsd(),
-        ctx.billingModel.sumUsageCostUsd(),
+        ctx.organizationModel.getTotalWalletBalanceMicroUsd(),
+        ctx.billingModel.sumUsageCostMicroUsd(),
         getTomanPerUsd(),
       ]);
       const topups = txs.filter((t) => t.type === 'topup' || t.type === 'manual_credit');
       const totalRevenueToman = topups.reduce((sum, t) => sum + Number(t.amountToman || 0), 0);
-      const totalUsdCredited = topups.reduce((sum, t) => sum + Number(t.amountUsd || 0), 0);
-      const b2cBalanceUsd = wallets.reduce((sum, w) => sum + Number(w.balanceUsd || 0), 0);
-      // Approximate margin: revenue collected minus observed OpenRouter spend, converted
-      // at the current live rate (individual topups may have used a different historical rate).
-      const marginToman = totalRevenueToman - totalOpenRouterCostUsd * fx.rate;
+      const totalMicroCredited = topups.reduce((sum, t) => sum + Number(t.amountMicroUsd || 0), 0);
+      const b2cBalanceMicroUsd = wallets.reduce((sum, w) => sum + Number(w.balanceMicroUsd || 0), 0);
+      // Approximate margin in toman using integer FX (floored).
+      const costTomanEstimate =
+        Number((BigInt(totalOpenRouterCostMicroUsd) * BigInt(fx.rate)) / 1_000_000n);
+      const marginToman = totalRevenueToman - costTomanEstimate;
 
       return {
-        b2bBalanceUsd: String(orgBalanceUsd),
-        b2cBalanceUsd: String(b2cBalanceUsd),
+        b2bBalanceMicroUsd: String(orgBalanceMicroUsd),
+        b2bBalanceUsd: microUsdToDecimalString(orgBalanceMicroUsd),
+        b2cBalanceMicroUsd: String(b2cBalanceMicroUsd),
+        b2cBalanceUsd: microUsdToDecimalString(b2cBalanceMicroUsd),
         b2cWalletCount: wallets.length,
         from: null as string | null,
-        marginToman: String(Math.round(marginToman)),
+        marginToman: String(Math.trunc(marginToman)),
         recentTransactions: txs.slice(0, 50).map((t) => ({
-          amountToman: t.amountToman,
-          amountUsd: t.amountUsd == null ? null : Number(t.amountUsd),
+          amountMicroUsd: String(t.amountMicroUsd ?? 0),
+          amountToman: tomanString(t.amountToman ?? 0),
+          amountUsd: microUsdToDecimalString(t.amountMicroUsd ?? 0),
           createdAt: t.createdAt.toISOString(),
           id: t.id,
           orgId: t.orgId,
@@ -255,24 +288,25 @@ export const platformAdminRouter = router({
           userId: t.userId,
         })),
         to: null as string | null,
-        totalOpenRouterCostUsd: String(totalOpenRouterCostUsd),
+        totalOpenRouterCostMicroUsd: String(totalOpenRouterCostMicroUsd),
+        totalOpenRouterCostUsd: microUsdToDecimalString(totalOpenRouterCostMicroUsd),
         totalRevenueToman: String(totalRevenueToman),
-        totalUsdCredited: String(totalUsdCredited),
+        totalUsdCredited: microUsdToDecimalString(totalMicroCredited),
       };
     }),
 
   getMasterAccountStatus: platformProcedure.query(async ({ ctx }) => {
-    // OpenRouter's management API has no "account balance" endpoint for the master key,
-    // so this can't report the real remaining prepaid credit — only observed spend from
-    // our own usage logs. `balanceUsd`/`belowThreshold` stay stubbed until OpenRouter
-    // ships an account-credits endpoint.
-    const usageUsd = await ctx.billingModel.sumUsageCostUsd();
+    // OpenRouter Management API has no documented master prepaid-balance endpoint.
+    // Never fabricate a real balance — report observed usage + unknown status.
+    const usageMicro = await ctx.billingModel.sumUsageCostMicroUsd();
     return {
-      balanceUsd: '0',
-      belowThreshold: false,
+      balanceUsd: null as string | null,
+      belowThreshold: null as boolean | null,
       isStub: true,
-      thresholdUsd: '100',
-      totalObservedUsageUsd: String(usageUsd),
+      lastSuccessfulCheckAt: null as string | null,
+      status: 'unknown' as const,
+      thresholdUsd: '100.000000',
+      totalObservedUsageUsd: microUsdToDecimalString(usageMicro),
     };
   }),
 
@@ -282,8 +316,9 @@ export const platformAdminRouter = router({
       wallets.map((w) => w.userId),
     );
     return wallets.map((w) => ({
-      balanceToman: w.balanceToman,
-      balanceUsd: Number(w.balanceUsd),
+      balanceMicroUsd: String(w.balanceMicroUsd ?? 0),
+      balanceToman: tomanString(w.balanceToman ?? 0),
+      balanceUsd: microUsdToDecimalString(w.balanceMicroUsd ?? 0),
       hasManagedKey: Boolean(w.openrouterKeyId),
       isActive: w.isActive,
       publicCode: publicCodes.get(w.userId) ?? null,

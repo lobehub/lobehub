@@ -26,6 +26,7 @@ export interface OpenRouterManagementClient {
     disabled?: boolean;
     hash: string;
     limitUsd?: number;
+    limitReset?: OpenRouterKeyLimitReset;
     name?: string;
   }) => Promise<OpenRouterKeyInfo>;
 }
@@ -76,6 +77,7 @@ class HttpOpenRouterManagementClient implements OpenRouterManagementClient {
       body: JSON.stringify({
         ...(params.disabled !== undefined ? { disabled: params.disabled } : {}),
         ...(params.limitUsd !== undefined ? { limit: params.limitUsd } : {}),
+        ...(params.limitReset !== undefined ? { limit_reset: params.limitReset } : {}),
         ...(params.name !== undefined ? { name: params.name } : {}),
       }),
       method: 'PATCH',
@@ -88,19 +90,25 @@ class HttpOpenRouterManagementClient implements OpenRouterManagementClient {
   };
 }
 
+/** Mock keys keep `limitReset` so period budgets can be asserted without OpenRouter. */
+interface MockKeyRow extends CreateOpenRouterKeyResult {
+  limitReset: OpenRouterKeyLimitReset;
+}
+
 /** In-memory mock for local QA without a real management key. */
 class MockOpenRouterManagementClient implements OpenRouterManagementClient {
-  private keys = new Map<string, CreateOpenRouterKeyResult>();
+  private keys = new Map<string, MockKeyRow>();
 
   createKey: OpenRouterManagementClient['createKey'] = async (params) => {
     const hash = `mock_${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`;
     const key = `sk-or-v1-mock-${hash}`;
-    const row: CreateOpenRouterKeyResult = {
+    const row: MockKeyRow = {
       disabled: false,
       hash,
       key,
       limit: params.limitUsd,
       limitRemaining: params.limitUsd,
+      limitReset: params.limitReset ?? null,
       name: params.name,
       usage: 0,
     };
@@ -123,6 +131,7 @@ class MockOpenRouterManagementClient implements OpenRouterManagementClient {
       row.limit = params.limitUsd;
       row.limitRemaining = Math.max(0, params.limitUsd - row.usage);
     }
+    if (params.limitReset !== undefined) row.limitReset = params.limitReset;
     if (params.name !== undefined) row.name = params.name;
     const { key: _k, ...info } = row;
     return info;

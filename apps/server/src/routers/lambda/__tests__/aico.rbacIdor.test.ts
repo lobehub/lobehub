@@ -13,6 +13,7 @@ import { platformAdminRouter } from '../platformAdmin';
 import { createTestContext } from './integration/setup';
 
 process.env.KEY_VAULTS_SECRET = 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=';
+process.env.AICO_ALLOW_MOCK_TOPUP = '1';
 
 let testDB: LobeChatDatabase;
 vi.mock('@/database/core/db-adaptor', () => ({
@@ -110,24 +111,35 @@ afterEach(async () => {
 });
 
 describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
-  it('AICO-P1-001: mockTopup is callable by any authenticated user (must be production-forbidden)', async () => {
-    const caller = aicoBillingRouter.createCaller(createTestContext(strangerId));
-    const result = await caller.mockTopup({ amountToman: 100_000 });
-    // Invariant for release: must throw FORBIDDEN in production-like deploys.
-    // Actual: credits stranger wallet.
-    expect(result.balanceUsd).toBeGreaterThan(0);
-    // Explicit production gate probe:
-    const gatedInProduction = false;
-    expect(gatedInProduction).toBe(true);
+  it('AICO-P1-001: mockTopup is production-forbidden even with allow flag', async () => {
+    const prev = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    process.env.AICO_ALLOW_MOCK_TOPUP = '1';
+    try {
+      const caller = aicoBillingRouter.createCaller(createTestContext(strangerId));
+      await expect(caller.mockTopup({ amountToman: 100_000 })).rejects.toMatchObject({
+        message: 'MOCK_TOPUP_DISABLED',
+      });
+    } finally {
+      process.env.NODE_ENV = prev;
+      process.env.AICO_ALLOW_MOCK_TOPUP = '1';
+    }
   });
 
-  it('AICO-P1-002: org owner can mockOrgTopup (must be platform-admin-only / prod-forbidden)', async () => {
+  it('AICO-P1-002: mockOrgTopup is production-forbidden even with allow flag', async () => {
+    const prev = process.env.NODE_ENV;
     const orgCaller = organizationRouter.createCaller(createTestContext(ownerId));
     const created = await orgCaller.create({ name: 'RBAC Org' });
-    const topup = await orgCaller.mockOrgTopup({ amountToman: 100_000, orgId: created.id });
-    expect(topup.balanceUsd).toBeGreaterThan(0);
-    const gatedInProduction = false;
-    expect(gatedInProduction).toBe(true);
+    process.env.NODE_ENV = 'production';
+    process.env.AICO_ALLOW_MOCK_TOPUP = '1';
+    try {
+      await expect(
+        orgCaller.mockOrgTopup({ amountToman: 100_000, orgId: created.id }),
+      ).rejects.toMatchObject({ message: 'MOCK_TOPUP_DISABLED' });
+    } finally {
+      process.env.NODE_ENV = prev;
+      process.env.AICO_ALLOW_MOCK_TOPUP = '1';
+    }
   });
 
   it('member cannot listMembers / getOrgWallet / allocate (IDOR deny)', async () => {
@@ -140,7 +152,8 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
       role: 'member',
     });
     const memberCaller = organizationRouter.createCaller(createTestContext(memberId));
-    await memberCaller.acceptInvite({ token: invite.token });
+    const token = invite.inviteUrl.split('/invite/').at(-1)!;
+    await memberCaller.acceptInvite({ token });
 
     await expect(memberCaller.listMembers({ orgId: created.id })).rejects.toMatchObject({
       code: 'FORBIDDEN',
@@ -150,9 +163,10 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
     });
     await expect(
       memberCaller.allocateMemberCredit({
-        amountUsd: 1,
+        amountUsd: '1.000000',
         orgId: created.id,
         orgMemberId: 'x',
+        period: 'total',
       }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
@@ -195,12 +209,12 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
     expect(disableAllOrgMemberKeysMock).toHaveBeenCalledWith(created.id);
   });
 
-  it('platform admin updateTrialConfig round-trips trialBudgetUsd', async () => {
+  it('platform admin updateTrialConfig round-trips trialBudgetUsd as decimal string', async () => {
     const platformCaller = platformAdminRouter.createCaller(createTestContext(platformId));
-    const updated = await platformCaller.updateTrialConfig({ trialBudgetUsd: 2.5 });
-    expect(updated.trialBudgetUsd).toBe(2.5);
+    const updated = await platformCaller.updateTrialConfig({ trialBudgetUsd: '2.500000' });
+    expect(updated.trialBudgetUsd).toBe('2.500000');
     const fetched = await platformCaller.getTrialConfig();
-    expect(fetched.trialBudgetUsd).toBe(2.5);
+    expect(fetched.trialBudgetUsd).toBe('2.500000');
   });
 
   it('platform admin listUserWallets and listOrganizations include publicCode', async () => {
@@ -229,7 +243,7 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
     });
   });
 
-  it('AICO-P1-026: inviteMember mutation returns the raw token, but listMembers never leaks it', async () => {
+  it('AICO-P1-026: inviteMember returns inviteUrl only; listMembers never leaks token', async () => {
     const ownerCaller = organizationRouter.createCaller(createTestContext(ownerId));
     const created = await ownerCaller.create({ name: 'Token Leak Org' });
     const invite = await ownerCaller.inviteMember({
@@ -237,20 +251,20 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
       identifierValue: 'member@rbac.test',
       orgId: created.id,
     });
-    // The inviter needs the token once, from the mutation response, to share it.
-    expect(invite.token).toBeTruthy();
+    expect(invite.inviteUrl).toContain('/invite/');
+    expect((invite as { token?: string }).token).toBeUndefined();
 
-    // But a list endpoint must never leak raw invite tokens.
     const listed = await ownerCaller.listMembers({ orgId: created.id });
     expect(listed.invites.length).toBeGreaterThan(0);
     expect(listed.invites.every((i: any) => !('token' in i))).toBe(true);
   });
 
-  it('AICO-P1-018: getMyWallet returns number balances (contract expects strings)', async () => {
+  it('AICO-P1-018: getMyWallet returns string balances (micro-USD serialization)', async () => {
     const caller = aicoBillingRouter.createCaller(createTestContext(strangerId));
     const wallet = await caller.getMyWallet();
     expect(typeof wallet.balanceUsd).toBe('string');
     expect(typeof wallet.balanceToman).toBe('string');
+    expect(typeof wallet.balanceMicroUsd).toBe('string');
   });
 
   it('convertToManagement requires a verified phone and rejects a second organization', async () => {

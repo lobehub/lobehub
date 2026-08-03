@@ -1,13 +1,22 @@
 import { TRPCError } from '@trpc/server';
 
-import { aicoEnv } from '@/envs/aico';
-
 /**
- * Mock top-up is a dev/QA convenience that credits a wallet without a real payment gateway.
- * It must never be reachable in production unless explicitly allow-listed.
+ * Mock top-up is a local/dev QA convenience only.
+ * Production (`NODE_ENV=production`) always rejects — no env flag can override.
  */
 export function assertMockTopupAllowed(): void {
-  if (process.env.NODE_ENV === 'production' && !aicoEnv.AICO_ALLOW_MOCK_TOPUP) {
+  if (process.env.NODE_ENV === 'production') {
     throw new TRPCError({ code: 'FORBIDDEN', message: 'MOCK_TOPUP_DISABLED' });
   }
+
+  // Non-production still requires explicit enablement to avoid accidental minting
+  // in shared staging that forgets to set NODE_ENV=production.
+  if (process.env.AICO_ALLOW_MOCK_TOPUP !== '1' && process.env.AICO_ALLOW_MOCK_TOPUP !== 'true') {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'MOCK_TOPUP_DISABLED' });
+  }
+}
+
+export function isMockTopupUiEnabled(): boolean {
+  if (process.env.NODE_ENV === 'production') return false;
+  return process.env.AICO_ALLOW_MOCK_TOPUP === '1' || process.env.AICO_ALLOW_MOCK_TOPUP === 'true';
 }

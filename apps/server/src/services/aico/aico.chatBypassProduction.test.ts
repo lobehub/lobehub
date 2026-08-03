@@ -189,15 +189,13 @@ describe('AicoChatGuard trial fallthrough (Phase 2)', () => {
 });
 
 describe('Aico production safety (Phase 2)', () => {
-  it('AICO-P1-014: missing KAVENEGAR_API_KEY selects Debug SMS (must fail-closed in production)', () => {
+  it('AICO-P1-014: missing KAVENEGAR_API_KEY fails closed in production (no Debug SMS)', () => {
     const prev = process.env.KAVENEGAR_API_KEY;
     const prevNode = process.env.NODE_ENV;
     try {
       delete process.env.KAVENEGAR_API_KEY;
       (process.env as any).NODE_ENV = 'production';
-      const impl = createSmsServiceImpl();
-      // Invariant: production must not use debug.
-      expect(impl.constructor.name).not.toMatch(/Debug/i);
+      expect(() => createSmsServiceImpl()).toThrow(/KAVENEGAR_API_KEY/);
     } finally {
       process.env.KAVENEGAR_API_KEY = prev;
       (process.env as any).NODE_ENV = prevNode;

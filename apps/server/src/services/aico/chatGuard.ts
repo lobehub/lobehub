@@ -104,43 +104,52 @@ export class AicoChatGuard {
   };
 
   /**
-   * Post-chat bookkeeping for managed traffic: bumps trial usage, syncs the org
-   * member's OpenRouter-reported spend (source of truth for budgets), and always
-   * records a `usage_logs` row — with `costUsd: 0` when the caller doesn't know
-   * the real cost yet, so per-request analytics stay complete even before sync.
+   * Post-chat bookkeeping for managed traffic.
+   * Prefer callers that pass explicit billing context — first-match org lookup is legacy-only.
    */
   afterManagedChat = async (
     userId: string,
     params: {
+      billingSource?: 'personal' | 'organization';
       completionTokens?: number;
-      costUsd?: number;
+      costMicroUsd?: number;
       modelId: string;
+      orgId?: string | null;
+      orgMemberId?: string | null;
       promptTokens?: number;
       totalTokens?: number;
     },
   ): Promise<void> => {
     await this.recordTrialRequest(userId);
 
-    let orgId: string | null = null;
-    let orgMemberId: string | null = null;
+    let orgId: string | null = params.orgId ?? null;
+    let orgMemberId: string | null = params.orgMemberId ?? null;
+    let billingSource: 'personal' | 'organization' = params.billingSource ?? 'personal';
 
-    const orgs = await this.orgModel.listForUser(userId);
-    for (const org of orgs) {
-      const members = await this.orgModel.listMembers(org.id);
-      const me = members.find((m) => m.userId === userId && m.status === 'active');
-      if (!me) continue;
-      const budget = await this.orgModel.getMemberBudget(me.id);
-      if (budget?.openrouterKeyId) {
-        orgId = org.id;
-        orgMemberId = me.id;
-        await this.keyService.syncMemberUsage(me.id).catch(() => null);
-        break;
+    if (!params.billingSource) {
+      // Legacy path — do not invent billing; only sync if a single active org budget exists.
+      const orgs = await this.orgModel.listForUser(userId);
+      for (const org of orgs) {
+        const members = await this.orgModel.listMembers(org.id);
+        const me = members.find((m) => m.userId === userId && m.status === 'active');
+        if (!me) continue;
+        const budget = await this.orgModel.getMemberBudget(me.id);
+        if (budget?.openrouterKeyId) {
+          orgId = org.id;
+          orgMemberId = me.id;
+          billingSource = 'organization';
+          await this.keyService.syncMemberUsage(me.id).catch(() => null);
+          break;
+        }
       }
+    } else if (billingSource === 'organization' && orgMemberId) {
+      await this.keyService.syncMemberUsage(orgMemberId).catch(() => null);
     }
 
     await this.billingModel.recordUsage({
+      billingSource,
       completionTokens: params.completionTokens ?? 0,
-      costUsd: params.costUsd ?? 0,
+      costMicroUsd: params.costMicroUsd ?? 0,
       modelId: params.modelId,
       orgId,
       orgMemberId,

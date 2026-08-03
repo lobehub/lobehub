@@ -3,9 +3,15 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { OrganizationModel } from '@/database/models/organization';
-import { users } from '@/database/schemas';
+import { aicoKeyOutbox, users } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
-import { tomanToUsd } from '@/envs/aico';
+import {
+  isBudgetPeriod,
+  microUsdToDecimalString,
+  tomanString,
+  tomanToMicroUsd,
+  usdDecimalStringToMicro,
+} from '@/database/utils/aicoMoney';
 import { appEnv } from '@/envs/app';
 import { normalizeIranianPhoneNumber } from '@/libs/better-auth/phone';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
@@ -53,9 +59,11 @@ const mapInviteError = (error: unknown): never => {
   const code =
     message === 'INVITE_NOT_FOUND' || message === 'INVITE_EXPIRED'
       ? 'NOT_FOUND'
-      : message === 'INVITE_IDENTIFIER_MISMATCH' || message === 'INVITE_NOT_PENDING'
-        ? 'BAD_REQUEST'
-        : 'INTERNAL_SERVER_ERROR';
+      : message === 'USER_ALREADY_IN_ORGANIZATION' || message === 'ORG_NOT_ACTIVE'
+        ? 'CONFLICT'
+        : message === 'INVITE_IDENTIFIER_MISMATCH' || message === 'INVITE_NOT_PENDING'
+          ? 'BAD_REQUEST'
+          : 'INTERNAL_SERVER_ERROR';
   throw new TRPCError({ code, message });
 };
 
@@ -67,12 +75,20 @@ export const organizationRouter = router({
     .mutation(async ({ ctx, input }) => {
       await requireVerifiedPhone(ctx.serverDB, ctx.userId);
 
-      const org = await ctx.organizationModel.createOrganization({
-        name: input.name,
-        ownerUserId: ctx.userId,
-        slug: input.slug,
-      });
-      return { id: org.id, name: org.name, publicCode: org.publicCode, slug: org.slug };
+      try {
+        const org = await ctx.organizationModel.createOrganization({
+          name: input.name,
+          ownerUserId: ctx.userId,
+          slug: input.slug,
+        });
+        return { id: org.id, name: org.name, publicCode: org.publicCode, slug: org.slug };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'ORG_CREATE_FAILED';
+        if (message === 'USER_ALREADY_IN_ORGANIZATION') {
+          throw new TRPCError({ code: 'CONFLICT', message });
+        }
+        throw new TRPCError({ code: 'BAD_REQUEST', message });
+      }
     }),
 
   /**
@@ -126,20 +142,43 @@ export const organizationRouter = router({
 
   inviteMember: orgProcedure
     .input(
-      z.object({
-        identifierType: z.enum(['email', 'phone']),
-        identifierValue: z.string().min(3).max(200),
-        orgId: z.string().min(1),
-        role: z.enum(['admin', 'member']).default('member'),
-      }),
+      z
+        .object({
+          email: z.string().email().optional(),
+          identifierType: z.enum(['email', 'phone', 'public_user_id']).optional(),
+          identifierValue: z.string().min(3).max(200).optional(),
+          orgId: z.string().min(1),
+          phone: z.string().min(8).max(32).optional(),
+          publicUserId: z.string().min(3).max(64).optional(),
+          role: z.enum(['admin', 'member']).default('member'),
+        })
+        .refine(
+          (v) =>
+            Boolean(v.identifierValue || v.email || v.phone || v.publicUserId),
+          { message: 'INVITE_IDENTIFIER_REQUIRED' },
+        ),
     )
     .mutation(async ({ ctx, input }) => {
       await requireOrgManager(ctx.organizationModel, ctx.userId, input.orgId);
 
-      let identifierValue = input.identifierValue.trim();
-      if (input.identifierType === 'email') {
+      let identifierType: 'email' | 'phone' | 'public_user_id' =
+        input.identifierType ??
+        (input.publicUserId
+          ? 'public_user_id'
+          : input.phone
+            ? 'phone'
+            : 'email');
+      let identifierValue = (
+        input.identifierValue ??
+        input.publicUserId ??
+        input.phone ??
+        input.email ??
+        ''
+      ).trim();
+
+      if (identifierType === 'email') {
         identifierValue = identifierValue.toLowerCase();
-      } else {
+      } else if (identifierType === 'phone') {
         const normalized = normalizeIranianPhoneNumber(identifierValue);
         if (!normalized) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid phone number' });
@@ -154,7 +193,7 @@ export const organizationRouter = router({
       }
 
       const invite = await ctx.organizationModel.createInvite({
-        identifierType: input.identifierType,
+        identifierType,
         identifierValue,
         invitedByUserId: ctx.userId,
         orgId: input.orgId,
@@ -164,7 +203,7 @@ export const organizationRouter = router({
       const inviteUrl = `${appEnv.APP_URL}/invite/${invite.token}`;
 
       try {
-        if (input.identifierType === 'email') {
+        if (identifierType === 'email') {
           const emailService = new EmailService();
           await emailService.sendMail({
             html: `<p>You are invited to join <strong>${org.name}</strong> as <strong>${input.role}</strong>.</p><p><a href="${inviteUrl}">Accept invitation</a></p><p>This link expires in ${INVITE_EXPIRY_DAYS} days.</p>`,
@@ -172,7 +211,7 @@ export const organizationRouter = router({
             text: `You are invited to join ${org.name} as ${input.role}. Open: ${inviteUrl}`,
             to: identifierValue,
           });
-        } else {
+        } else if (identifierType === 'phone') {
           const smsService = new SmsService();
           await smsService.sendSms({
             message: `دعوت به ${org.name}: ${inviteUrl}`,
@@ -181,10 +220,14 @@ export const organizationRouter = router({
         }
       } catch (error) {
         console.error('[organization] failed to deliver invite', error);
-        // Invite row remains; caller can resend / share link
       }
 
-      return invite;
+      return {
+        expiresAt: invite.expiresAt.toISOString(),
+        id: invite.id,
+        inviteUrl,
+        role: invite.role,
+      };
     }),
 
   acceptInvite: orgProcedure
@@ -200,6 +243,7 @@ export const organizationRouter = router({
         return await ctx.organizationModel.acceptInvite({
           email: user?.email,
           phone: user?.phone,
+          publicUserId: await ctx.organizationModel.ensureUserPublicCode(ctx.userId),
           token: input.token,
           userId: ctx.userId,
         });
@@ -254,23 +298,19 @@ export const organizationRouter = router({
         });
       }
 
-      // Reclaim only the OpenRouter-reported remaining credit back to the org
-      // wallet; the member is already disabled above, so a reclaim failure here
-      // never re-grants access — it can be retried via `revokeMemberBudget`.
-      try {
-        const keyService = new AicoOpenRouterKeyService(ctx.serverDB);
-        const reclaimed = await keyService.reclaimMemberKey(input.memberId);
-        if (reclaimed) {
-          await ctx.organizationModel.reclaimMemberRemainingCredit({
-            createdByUserId: ctx.userId,
-            orgId: input.orgId,
-            orgMemberId: input.memberId,
-            remainingUsd: reclaimed.remainingUsd,
-          });
-        }
-      } catch (error) {
-        console.error('[organization] failed to reclaim member key on removeMember', error);
-      }
+      // Local access is already revocation_pending. Durable outbox handles OR
+      // disable + settlement — OpenRouter downtime must not block removal.
+      const budget = await ctx.organizationModel.getMemberBudget(input.memberId);
+      await ctx.serverDB.insert(aicoKeyOutbox).values({
+        action: 'reclaim_member',
+        nextAttemptAt: new Date(),
+        openrouterKeyId: budget?.openrouterKeyId ?? null,
+        orgId: input.orgId,
+        orgMemberId: input.memberId,
+        payload: { createdByUserId: ctx.userId },
+        status: 'pending',
+        userId: updated.userId,
+      });
 
       return updated;
     }),
@@ -291,12 +331,14 @@ export const organizationRouter = router({
         createdByUserId: ctx.userId,
         orgId: input.orgId,
         orgMemberId: input.orgMemberId,
-        remainingUsd: reclaimed.remainingUsd,
+        remainingMicroUsd: reclaimed.remainingMicroUsd,
       });
 
       return {
-        orgBalanceUsd: Number(result.organization.walletBalanceUsd),
-        reclaimedUsd: reclaimed.remainingUsd,
+        orgBalanceMicroUsd: String(result.organization.walletBalanceMicroUsd ?? 0),
+        orgBalanceUsd: microUsdToDecimalString(result.organization.walletBalanceMicroUsd ?? 0),
+        reclaimedMicroUsd: String(reclaimed.remainingMicroUsd),
+        reclaimedUsd: microUsdToDecimalString(reclaimed.remainingMicroUsd),
       };
     }),
 
@@ -331,8 +373,9 @@ export const organizationRouter = router({
       const org = await ctx.organizationModel.getById(input.orgId);
       if (!org) throw new TRPCError({ code: 'NOT_FOUND', message: 'Organization not found' });
       return {
-        balanceToman: org.walletBalanceToman,
-        balanceUsd: Number(org.walletBalanceUsd),
+        balanceMicroUsd: String(org.walletBalanceMicroUsd ?? 0),
+        balanceToman: tomanString(org.walletBalanceToman ?? 0),
+        balanceUsd: microUsdToDecimalString(org.walletBalanceMicroUsd ?? 0),
         status: org.status,
       };
     }),
@@ -348,22 +391,29 @@ export const organizationRouter = router({
       await requireOrgManager(ctx.organizationModel, ctx.userId, input.orgId);
       assertMockTopupAllowed();
 
-      const { rate: fxRate } = await getTomanPerUsd();
-      const amountUsd = tomanToUsd(input.amountToman, fxRate);
+      const { rate } = await getTomanPerUsd();
+      // Live FX rates are fractional; integer money math needs an integer rate.
+      const fxRate = Math.round(rate);
+      if (!Number.isFinite(fxRate) || fxRate <= 0) {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'INVALID_FX_RATE' });
+      }
+      const amountMicroUsd = Number(tomanToMicroUsd(input.amountToman, fxRate));
       const result = await ctx.organizationModel.addManualCredit({
+        amountMicroUsd,
         amountToman: input.amountToman,
-        amountUsd,
         createdByUserId: ctx.userId,
         description: 'Mock org topup',
-        fxRate,
+        fxRateTomanPerUsd: fxRate,
         orgId: input.orgId,
         type: 'topup',
       });
       return {
-        amountUsd,
-        balanceToman: result.organization.walletBalanceToman,
-        balanceUsd: Number(result.organization.walletBalanceUsd),
-        fxRate,
+        amountMicroUsd: String(amountMicroUsd),
+        amountUsd: microUsdToDecimalString(amountMicroUsd),
+        balanceMicroUsd: String(result.organization.walletBalanceMicroUsd ?? 0),
+        balanceToman: tomanString(result.organization.walletBalanceToman ?? 0),
+        balanceUsd: microUsdToDecimalString(result.organization.walletBalanceMicroUsd ?? 0),
+        fxRate: String(fxRate),
       };
     }),
 
@@ -384,7 +434,40 @@ export const organizationRouter = router({
           }),
       );
 
-      return ctx.organizationModel.getOrgDashboardStats(input.orgId);
+      const stats = await ctx.organizationModel.getOrgDashboardStats(input.orgId);
+      return {
+        ...stats,
+        allocatedMicroUsd: String(stats.allocatedMicroUsd),
+        allocatedUsd: microUsdToDecimalString(stats.allocatedMicroUsd),
+        balanceMicroUsd: String(stats.balanceMicroUsd),
+        balanceToman: tomanString(stats.balanceToman),
+        balanceUsd: microUsdToDecimalString(stats.balanceMicroUsd),
+        estimatedUnusedMicroUsd: String(
+          Math.max(0, stats.allocatedMicroUsd - stats.settledUsageMicroUsd),
+        ),
+        estimatedUnusedUsd: microUsdToDecimalString(
+          Math.max(0, stats.allocatedMicroUsd - stats.settledUsageMicroUsd),
+        ),
+        grossNextRenewalMicroUsd: String(stats.grossNextRenewalMicroUsd),
+        grossNextRenewalUsd: microUsdToDecimalString(stats.grossNextRenewalMicroUsd),
+        members: stats.members.map((m) => ({
+          ...m,
+          periodAmountMicroUsd: String(m.periodAmountMicroUsd),
+          periodAmountUsd: microUsdToDecimalString(m.periodAmountMicroUsd),
+          remainingMicroUsd: String(m.remainingMicroUsd),
+          remainingUsd: microUsdToDecimalString(m.remainingMicroUsd),
+          reservedMicroUsd: String(m.reservedMicroUsd),
+          settledUsageMicroUsd: String(m.settledUsageMicroUsd),
+          settledUsageUsd: microUsdToDecimalString(m.settledUsageMicroUsd),
+        })),
+        nextRenewalAt: stats.nextRenewalAt?.toISOString() ?? null,
+        settledUsageMicroUsd: String(stats.settledUsageMicroUsd),
+        settledUsageUsd: microUsdToDecimalString(stats.settledUsageMicroUsd),
+        shortfallMicroUsd: String(stats.shortfallMicroUsd),
+        shortfallUsd: microUsdToDecimalString(stats.shortfallMicroUsd),
+        unallocatedMicroUsd: String(stats.unallocatedMicroUsd),
+        unallocatedUsd: microUsdToDecimalString(stats.unallocatedMicroUsd),
+      };
     }),
 
   listTeams: orgProcedure
@@ -474,30 +557,56 @@ export const organizationRouter = router({
   allocateMemberCredit: orgProcedure
     .input(
       z.object({
-        amountUsd: z.number().positive().max(1_000_000),
+        /** Decimal USD string preferred; integer micro-USD string also accepted via amountMicroUsd. */
+        amountUsd: z.string().min(1).optional(),
+        amountMicroUsd: z.string().regex(/^\d+$/).optional(),
         orgId: z.string().min(1),
         orgMemberId: z.string().min(1),
+        period: z.enum(['total', 'daily', 'weekly', 'monthly']).default('total'),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       await requireOrgManager(ctx.organizationModel, ctx.userId, input.orgId);
+      if (!isBudgetPeriod(input.period)) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'INVALID_PERIOD' });
+      }
+
+      let periodAmountMicroUsd: number;
+      try {
+        if (input.amountMicroUsd) {
+          periodAmountMicroUsd = Number(input.amountMicroUsd);
+        } else if (input.amountUsd) {
+          periodAmountMicroUsd = Number(usdDecimalStringToMicro(input.amountUsd));
+        } else {
+          throw new Error('AMOUNT_REQUIRED');
+        }
+      } catch {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'INVALID_AMOUNT' });
+      }
+
       try {
         const result = await ctx.organizationModel.allocateMemberCredit({
-          amountUsd: input.amountUsd,
           createdByUserId: ctx.userId,
           orgId: input.orgId,
           orgMemberId: input.orgMemberId,
+          period: input.period,
+          periodAmountMicroUsd,
         });
         const keyService = new AicoOpenRouterKeyService(ctx.serverDB);
         await keyService.ensureMemberKey(input.orgMemberId);
         return {
-          budgetLimitUsd: Number(result.budget.limitUsd),
-          orgBalanceUsd: Number(result.organization.walletBalanceUsd),
+          budgetPeriod: result.budget.period,
+          budgetPeriodAmountMicroUsd: String(result.budget.periodAmountMicroUsd),
+          budgetPeriodAmountUsd: microUsdToDecimalString(result.budget.periodAmountMicroUsd),
+          orgBalanceMicroUsd: String(result.organization.walletBalanceMicroUsd ?? 0),
+          orgBalanceUsd: microUsdToDecimalString(result.organization.walletBalanceMicroUsd ?? 0),
+          reservedMicroUsd: String(result.budget.reservedMicroUsd),
+          reservedUsd: microUsdToDecimalString(result.budget.reservedMicroUsd),
         };
       } catch (error) {
         const message = error instanceof Error ? error.message : 'ALLOCATION_FAILED';
         throw new TRPCError({
-          code: message === 'INSUFFICIENT_ORG_BALANCE' ? 'BAD_REQUEST' : 'BAD_REQUEST',
+          code: 'BAD_REQUEST',
           message,
         });
       }
@@ -510,10 +619,20 @@ export const organizationRouter = router({
       const budget = await ctx.organizationModel.getMemberBudget(input.orgMemberId);
       if (!budget) return null;
       return {
+        currentPeriodEnd: budget.currentPeriodEnd?.toISOString() ?? null,
+        currentPeriodStart: budget.currentPeriodStart?.toISOString() ?? null,
         hasManagedKey: Boolean(budget.openrouterKeyId),
         isActive: budget.isActive,
-        limitUsd: Number(budget.limitUsd),
-        usedUsd: Number(budget.usedUsd),
+        nextRenewalAt: budget.nextRenewalAt?.toISOString() ?? null,
+        openrouterLimitReset: budget.openrouterLimitReset,
+        period: budget.period,
+        periodAmountMicroUsd: String(budget.periodAmountMicroUsd ?? 0),
+        periodAmountUsd: microUsdToDecimalString(budget.periodAmountMicroUsd ?? 0),
+        renewalStatus: budget.renewalStatus,
+        reservedMicroUsd: String(budget.reservedMicroUsd ?? 0),
+        reservedUsd: microUsdToDecimalString(budget.reservedMicroUsd ?? 0),
+        settledUsageMicroUsd: String(budget.settledUsageMicroUsd ?? 0),
+        settledUsageUsd: microUsdToDecimalString(budget.settledUsageMicroUsd ?? 0),
       };
     }),
 });
