@@ -41,7 +41,14 @@ export class BriefListActionImpl {
 
   deleteBrief = async (id: string) => {
     await briefService.delete(id);
-    const briefs = this.#get().briefs.filter((b) => b.id !== id);
+
+    const previous = this.#get().briefs;
+    const briefs = previous.filter((b) => b.id !== id);
+    // Nothing removed — the brief was already gone, or the list has since been
+    // replaced by another scope's (a workspace switch while the request was in
+    // flight). Either way, writing an identical list only churns subscribers.
+    if (briefs.length === previous.length) return;
+
     this.#set({ briefs }, false, n('deleteBrief'));
   };
 
@@ -59,20 +66,25 @@ export class BriefListActionImpl {
   resolveBriefsAsRead = async (ids: string[]) => {
     if (ids.length === 0) return;
 
+    // Capture the scope these ids belong to *before* awaiting. Unlike the
+    // id-keyed mutations above, this one rewrites the whole list and patches an
+    // SWR entry, so a workspace switch mid-request would splice the previous
+    // partition's briefs into the next one's bucket and cache key — the exact
+    // leak this slice exists to prevent.
+    const scope = this.#get().briefsScope;
+
     const result = await briefService.resolveManyAsRead(ids);
     const resolvedIds = new Set(result.data);
     if (resolvedIds.size === 0) return;
 
-    const { briefs: previous, briefsScope } = this.#get();
-    const briefs = previous.filter((b) => !resolvedIds.has(b.id));
-    this.#set({ briefs }, false, n('resolveBriefsAsRead'));
+    const state = this.#get();
+    // Unstamped, or the scope moved while the request was in flight: the switch
+    // already cleared the bucket, so there is nothing of ours left to patch.
+    if (scope === undefined || state.briefsScope !== scope) return;
 
-    // Write back to the entry this list actually came from, not to whatever
-    // scope is live now: on a mid-flight workspace switch the latter would seed
-    // the new workspace's cache with the previous one's briefs — the exact leak
-    // this slice exists to prevent. An unstamped list belongs to no entry.
-    if (briefsScope === undefined) return;
-    void mutate(briefKeys.list(true, briefsScope), briefs, { revalidate: false });
+    const briefs = state.briefs.filter((b) => !resolvedIds.has(b.id));
+    this.#set({ briefs }, false, n('resolveBriefsAsRead'));
+    void mutate(briefKeys.list(true, scope), briefs, { revalidate: false });
   };
 
   resolveBrief = async (id: string, action?: string, comment?: string) => {
