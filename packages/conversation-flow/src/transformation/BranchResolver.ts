@@ -106,7 +106,8 @@ export class BranchResolver {
    * A user turn is a stronger active-path signal than descendant presence alone:
    * parallel tool results and retried operations can leave several old assistant
    * chains with descendants, while only the branch the user continued should
-   * become the request tail.
+   * become the request tail. Thread replies are excluded because they do not
+   * belong to the main conversation tree.
    */
   private findBranchContainingLatestUser(
     branchIds: string[],
@@ -127,6 +128,8 @@ export class BranchResolver {
         visitedIds.add(messageId);
 
         const descendant = this.messageMap.get(messageId);
+        if (descendant?.threadId) continue;
+
         if (descendant?.role === 'user') {
           const timestamp = descendant.createdAt;
           if (timestamp > latestTimestamp) {
