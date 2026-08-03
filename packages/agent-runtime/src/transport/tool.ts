@@ -1,4 +1,9 @@
-import type { ChatToolPayload, RuntimeStepContext, WorkRegistrationIntent } from '@lobechat/types';
+import type {
+  ChatToolPayload,
+  RuntimeStepContext,
+  StepContextTodoItem,
+  WorkRegistrationIntent,
+} from '@lobechat/types';
 
 import type { AgentState } from '../types';
 import type { RuntimeRetryKind } from '../utils';
@@ -73,7 +78,7 @@ export interface ToolRunContext {
    * runtimes that mutate todos need it because their own persistence (the plan
    * document) is optional — see `PlanExecutionRuntime.resolveExistingTodos`.
    */
-  currentTodos?: unknown[];
+  currentTodos?: StepContextTodoItem[];
   effectiveManifestMap: Record<string, any>;
   groupId?: string;
   messageId?: string;

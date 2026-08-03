@@ -6,19 +6,6 @@ import { createLogger } from '../logger';
 
 const logger = createLogger('contentSearch:gitIgnore');
 
-/** Whether git considers `target` itself ignored. False when git can't answer. */
-const isIgnored = async (target: string): Promise<boolean> => {
-  try {
-    const { exitCode } = await execa('git', ['check-ignore', '--no-index', '-q', target], {
-      cwd: path.dirname(target),
-      reject: false,
-    });
-    return exitCode === 0;
-  } catch {
-    return false;
-  }
-};
-
 /**
  * Drop results that git would ignore.
  *
@@ -26,8 +13,12 @@ const isIgnored = async (target: string): Promise<boolean> => {
  * no such notion, so the same query returns different results depending on which
  * engine ran. Rather than reimplement gitignore semantics (nested ignore files,
  * negations, `.git/info/exclude`, `core.excludesFile`), shell out to
- * `git check-ignore`, which *is* the semantics — one batched call for the whole
- * result set via `--stdin`.
+ * `git check-ignore`, which *is* the semantics.
+ *
+ * Exactly one `git` process per search: `searchPath` rides along in the same
+ * `--stdin` batch as the results, so the "is the search root itself ignored?"
+ * question is answered without a second spawn. `rg`/`ag` searches never reach
+ * this code at all, so the common path pays nothing.
  *
  * Best-effort by design: outside a repo, or when git is unavailable, the caller
  * keeps its unfiltered results. This is a noise filter, not a security boundary.
@@ -38,21 +29,20 @@ export const filterGitIgnored = async (
 ): Promise<string[]> => {
   if (absolutePaths.length === 0) return absolutePaths;
 
-  // An explicitly requested root wins over the ignore rules — the same call that
-  // `rg <ignored-dir>` honours. Without this, deliberately searching `dist/`
-  // would come back empty from every engine except ripgrep.
-  if (await isIgnored(searchPath)) return absolutePaths;
-
   const unique = [...new Set(absolutePaths)];
 
   try {
     // `check-ignore` needs a repo cwd; a non-repo exits 128 and we bail below.
+    // Run from `searchPath` (the caller always passes a directory) rather than
+    // its parent: for a repo-root search the parent is outside the repo, and git
+    // would answer 128 for everything. Absolute inputs are classified the same
+    // from any cwd inside the repo, including from within an ignored directory.
     const { stdout, exitCode } = await execa(
       'git',
       ['check-ignore', '--no-index', '--stdin', '-z'],
       {
         cwd: searchPath,
-        input: unique.join('\0'),
+        input: [searchPath, ...unique].join('\0'),
         reject: false,
         stripFinalNewline: false,
       },
@@ -64,6 +54,11 @@ export const filterGitIgnored = async (
 
     const ignored = new Set(stdout.split('\0').filter(Boolean));
     if (ignored.size === 0) return absolutePaths;
+
+    // An explicitly requested root wins over the ignore rules — the same call
+    // `rg <ignored-dir>` honours. Without this, deliberately searching `dist/`
+    // would come back empty from every engine except ripgrep.
+    if (ignored.has(searchPath)) return absolutePaths;
 
     return absolutePaths.filter((p) => !ignored.has(p));
   } catch (error) {
