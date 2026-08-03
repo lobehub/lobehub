@@ -296,9 +296,26 @@ export class ChatGroupModel {
    * `private`. Restricted to the creator's own still-private group.
    */
   async publishToWorkspace(id: string): Promise<ChatGroupItem> {
+    // Rehome exactly as `setVisibility` does. A folder cannot mix
+    // visibilities, so publishing out of a private Category has to release the
+    // folder too — left in place, the group would be public while its folder
+    // is not, and the sidebar would show it in Ungrouped rather than where the
+    // user published it from.
+    const [current] = await this.db
+      .select({ folderVisibility: sessionGroups.visibility })
+      .from(chatGroups)
+      .leftJoin(sessionGroups, eq(chatGroups.groupId, sessionGroups.id))
+      .where(and(eq(chatGroups.id, id), this.ownership()))
+      .limit(1);
+    const clearFolder = current?.folderVisibility != null && current.folderVisibility !== 'public';
+
     const [result] = await this.db
       .update(chatGroups)
-      .set({ updatedAt: new Date(), visibility: 'public' })
+      .set({
+        updatedAt: new Date(),
+        visibility: 'public',
+        ...(clearFolder ? { groupId: null } : {}),
+      })
       .where(
         and(
           eq(chatGroups.id, id),
