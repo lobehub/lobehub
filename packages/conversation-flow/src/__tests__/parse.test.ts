@@ -481,6 +481,18 @@ describe('parse', () => {
       expect(ids).toContain('current-user');
       expect(ids.indexOf('stale-head')).toBeLessThan(ids.indexOf('current-user'));
       expect(ids.at(-1)).toBe('current-placeholder');
+
+      expect(result.contextTree.map((node) => node.id)).toEqual([
+        'root-user',
+        'root-assistant',
+        'active-head',
+        'current-user',
+        'current-placeholder',
+      ]);
+      expect(result.contextTree.find((node) => node.id === 'active-head')).toMatchObject({
+        children: [{ id: 'active-head' }, { id: 'current-continuation' }, { id: 'current-answer' }],
+        type: 'assistantGroup',
+      });
     });
 
     it('should interleave continuations from sibling tool results by child creation time', () => {

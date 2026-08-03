@@ -696,6 +696,24 @@ export class MessageCollector {
     if (toolChildren.length === 0) {
       return idNode;
     }
-    return toolChildren.at(-1) ?? null;
+    return this.resolveAssistantGroupToolTail(idNode, toolChildren) ?? null;
+  }
+
+  /**
+   * Resolve which parallel tool result owns the active continuation. Tool results
+   * are inline members of one AssistantGroup, but their descendants can still
+   * form competing conversation branches. Always taking the final tool child can
+   * therefore continue through an old branch and drop the latest user turn from
+   * contextTree even when flatList selected the correct branch.
+   */
+  private resolveAssistantGroupToolTail(
+    idNode: IdNode,
+    toolChildren: IdNode[],
+  ): IdNode | undefined {
+    const message = this.messageMap.get(idNode.id);
+    if (!message) return toolChildren.at(-1);
+
+    const activeBranchId = this.branchResolver.getActiveBranchId(message, idNode);
+    return toolChildren.find((child) => child.id === activeBranchId) ?? toolChildren.at(-1);
   }
 }
