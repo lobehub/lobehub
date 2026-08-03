@@ -11,7 +11,7 @@ import {
 } from '@lobehub/ui';
 import { cx } from 'antd-style';
 import { X } from 'lucide-react';
-import { useMotionValue, useSpring } from 'motion/react';
+import { useMotionValue, useSpring, useTransform } from 'motion/react';
 import * as m from 'motion/react-m';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -24,7 +24,7 @@ import { useTabUnread } from './hooks/useTabUnread';
 import { TAB_SPRING } from './motion';
 import { useStyles } from './styles';
 import { buildTabContextMenuItems } from './tabContextMenu';
-import { type TabTier } from './tabLayout';
+import { resolveTabInset, type TabTier } from './tabLayout';
 
 // 20px box on an 8px-round tab, inset a uniform 3px: 8 - 3 = 5 keeps the button's curve
 // concentric with the tab's own. ActionIcon writes blockSize and borderRadius straight
@@ -102,11 +102,21 @@ const TabItem = memo<TabItemProps>(
     const springWidth = useSpring(targetWidth, TAB_SPRING);
     const targetX = useMotionValue(enterX);
     const springX = useSpring(targetX, TAB_SPRING);
+    // The avatar's inset is sprung here rather than switched in the stylesheet. `tier` is
+    // resolved from the target width, so a rule keyed on it lands a whole spring before the
+    // box reaches the width that rule suits: centring from CSS threw the avatar into the
+    // middle of a tab that had not begun to shrink, a jump to the right before the travel
+    // left. Seeded at its resolved value rather than at zero, so a tab that mounts straight
+    // into the icon tier is centred on its first frame instead of sliding into place.
+    const targetInset = useMotionValue(resolveTabInset(width));
+    const springInset = useSpring(targetInset, TAB_SPRING);
+    const inset = useTransform(springInset, (value) => `${value}px`);
     const wasSorting = useRef(false);
 
     useEffect(() => {
       targetWidth.set(width);
-    }, [width, targetWidth]);
+      targetInset.set(resolveTabInset(width));
+    }, [width, targetWidth, targetInset]);
 
     // Dropping a drag must jump, not animate. dnd-kit clears its transform in the same
     // commit that the reordered store lands, and up to that frame the tab is already
@@ -209,6 +219,7 @@ const TabItem = memo<TabItemProps>(
           isDragging && styles.tabDragging,
         )}
         style={{
+          paddingInlineStart: inset,
           // dnd-kit's displacement rides the standalone `translate` property while the
           // offset spring owns `transform`. Both are pure x translations, so they
           // compose, and neither has to be folded into the other's value.

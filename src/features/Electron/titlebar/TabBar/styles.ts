@@ -1,11 +1,25 @@
 import { createStaticStyles } from 'antd-style';
 
+import { TAB_ICON_SIZE, TAB_INLINE_INSET } from './tabLayout';
+
 const TAB_HEIGHT = 26;
 
 export const useStyles = createStaticStyles(({ css, cssVar }) => ({
+  // A fixed slot, because the indicator is not one size: a tab with metadata renders a
+  // 16px Avatar and one without falls back to a 14px Icon. resolveTabInset centres on
+  // TAB_ICON_SIZE for both, so the slot has to be that size or the fallback sits a pixel
+  // off centre in a pinned pill. Measured on the desktop app, not inferred.
   avatarWrapper: css`
     position: relative;
-    flex-shrink: 0;
+
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+
+    width: ${TAB_ICON_SIZE}px;
+    height: ${TAB_ICON_SIZE}px;
+
     line-height: 0;
   `,
   closeIcon: css`
@@ -77,7 +91,10 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
 
     height: ${TAB_HEIGHT}px;
-    padding-inline: 8px 6px;
+
+    /* The start is the resting value only; TabItem overrides it with a sprung inset so the
+       avatar can travel to the middle of a tab that has shrunk to icon width. */
+    padding-inline: ${TAB_INLINE_INSET}px 6px;
     border-radius: ${cssVar.borderRadius};
 
     font-size: 12px;
@@ -112,17 +129,15 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
       margin-inline-end: 17px;
     }
 
-    /* The avatar is the only thing left, so centre it and collapse the title rather than
-       unmounting it — the tab is mid-shrink at this point and a title that pops out of
-       the flow would jerk the avatar sideways instead of gliding it to the middle. */
+    /* Nothing here may touch layout. The tier is resolved from the target width, so this
+       rule lands a whole spring before the box reaches it: centring the avatar from here
+       applied while the tab was still 200px wide and threw it into the middle of a box it
+       had not begun to shrink into — a jump to the right before the travel left. The
+       avatar still centres at this tier, but through the sprung inset in TabItem, which
+       arrives with the width instead of ahead of it. The title likewise only fades:
+       collapsing its width clipped the fade away in the frame it started. */
     &[data-tier='icon'] {
-      gap: 0;
-      justify-content: center;
-      padding-inline: 0;
-
       [data-tab-title] {
-        flex: none;
-        width: 0;
         opacity: 0;
       }
     }

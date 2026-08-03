@@ -1,7 +1,13 @@
 export const MAX_TAB_WIDTH = 200;
 export const MIN_TAB_WIDTH = 40;
 export const ACTIVE_TAB_MIN_WIDTH = 150;
-export const PINNED_TAB_WIDTH = 34;
+export const TAB_ICON_SIZE = 16;
+// Where the avatar sits while a title shares the tab with it.
+export const TAB_INLINE_INSET = 8;
+// Sized so that `resolveTabInset` returns TAB_INLINE_INSET for it: a pinned pill centres
+// the avatar on the inset it already had, so pinning — the longest journey any tab makes —
+// moves the avatar not at all relative to its own tab.
+export const PINNED_TAB_WIDTH = TAB_ICON_SIZE + TAB_INLINE_INSET * 2;
 export const TAB_GAP = 2;
 export const OVERFLOW_CONTROL_WIDTH = 34;
 export const PINNED_DIVIDER_MARGIN = 6;
@@ -29,6 +35,14 @@ export const resolveTabTier = (width: number): TabTier => {
   if (width >= 58) return 'narrow';
   return 'icon';
 };
+
+// Below the icon tier the avatar is the only content left, so it takes the middle; above
+// it, it leads the title from a fixed inset. The two rules disagree at the boundary — that
+// is inherent, since centring grows with width while leading does not — so the caller must
+// spring this value rather than apply it outright. Applying it outright is also what the
+// stylesheet used to do, one `tier` flip ahead of the width it was computed for.
+export const resolveTabInset = (width: number): number =>
+  resolveTabTier(width) === 'icon' ? (width - TAB_ICON_SIZE) / 2 : TAB_INLINE_INSET;
 
 const clampWidth = (width: number): number =>
   Math.max(MIN_TAB_WIDTH, Math.min(MAX_TAB_WIDTH, Math.floor(width)));

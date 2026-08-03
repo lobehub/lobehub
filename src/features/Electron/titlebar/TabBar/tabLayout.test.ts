@@ -10,8 +10,11 @@ import {
   PINNED_DIVIDER_WIDTH,
   PINNED_TAB_WIDTH,
   resolvePlacements,
+  resolveTabInset,
   resolveTabTier,
   TAB_GAP,
+  TAB_ICON_SIZE,
+  TAB_INLINE_INSET,
 } from './tabLayout';
 
 const totalWidth = (widths: number[]) =>
@@ -29,6 +32,25 @@ describe('resolveTabTier', () => {
     [MIN_TAB_WIDTH, 'icon'],
   ])('maps %ipx to %s', (width, tier) => {
     expect(resolveTabTier(width)).toBe(tier);
+  });
+});
+
+describe('resolveTabInset', () => {
+  it('leads the title from a fixed inset while a title is still shown', () => {
+    expect(resolveTabInset(MAX_TAB_WIDTH)).toBe(TAB_INLINE_INSET);
+    expect(resolveTabInset(58)).toBe(TAB_INLINE_INSET);
+  });
+
+  it('centres the avatar once it is the only content left', () => {
+    expect(resolveTabInset(57)).toBe((57 - TAB_ICON_SIZE) / 2);
+    expect(resolveTabInset(MIN_TAB_WIDTH)).toBe((MIN_TAB_WIDTH - TAB_ICON_SIZE) / 2);
+  });
+
+  // Pinning sends a tab across the whole strip while it shrinks by 168px, so it is the one
+  // width change where a sprung inset would read as the avatar drifting inside its own tab.
+  // The pinned width is chosen to land back on the inset the tab already had.
+  it('resolves a pinned pill to the inset it started from', () => {
+    expect(resolveTabInset(PINNED_TAB_WIDTH)).toBe(TAB_INLINE_INSET);
   });
 });
 
