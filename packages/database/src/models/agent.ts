@@ -1485,11 +1485,10 @@ export class AgentModel {
   updateSlug = async (
     agentId: string,
     slug: string,
-  ): Promise<{ reason?: 'invalid' | 'reserved' | 'taken'; success: boolean }> => {
+  ): Promise<{ reason?: 'builtin' | 'invalid' | 'reserved' | 'taken'; success: boolean }> => {
     const next = slug.trim().toLowerCase();
 
     if (!AGENT_SLUG_PATTERN.test(next)) return { reason: 'invalid', success: false };
-    if (RESERVED_AGENT_SLUGS.has(next)) return { reason: 'reserved', success: false };
 
     const current = await this.db.query.agents.findFirst({
       columns: { slug: true },
@@ -1497,6 +1496,13 @@ export class AgentModel {
     });
     if (!current) throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
     if (current.slug === next) return { success: true };
+
+    // A builtin agent IS its slug: `getBuiltinAgent` resolves it by that string,
+    // so renaming one away would silently mint a second, empty inbox / page
+    // agent and strand the original's history on an ordinary agent.
+    if (current.slug && RESERVED_AGENT_SLUGS.has(current.slug))
+      return { reason: 'builtin', success: false };
+    if (RESERVED_AGENT_SLUGS.has(next)) return { reason: 'reserved', success: false };
 
     // Check within the same scope the unique indexes use, so the pre-check and
     // the constraint agree. The insert can still lose a race, hence the catch.

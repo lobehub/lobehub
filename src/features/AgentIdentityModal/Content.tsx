@@ -56,11 +56,15 @@ const AgentIdentityContent = memo<AgentIdentityContentProps>(({ agentId }) => {
         label={t('settingAgent.slug.label', { ns: 'setting' })}
         hint={
           <Text style={{ fontSize: 12 }} type={form.error ? 'danger' : 'secondary'}>
-            {form.error ?? t('settingAgent.slug.tooltip', { ns: 'setting' })}
+            {form.error ??
+              t(form.slugLocked ? 'settingAgent.slug.builtinHint' : 'settingAgent.slug.tooltip', {
+                ns: 'setting',
+              })}
           </Text>
         }
       >
         <Input
+          disabled={form.slugLocked}
           placeholder={t('settingAgent.slug.placeholder', { ns: 'setting' })}
           prefix={'@'}
           status={form.error ? 'error' : undefined}

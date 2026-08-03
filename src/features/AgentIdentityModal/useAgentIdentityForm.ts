@@ -1,3 +1,4 @@
+import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,6 +10,8 @@ interface UseAgentIdentityFormOptions {
   agentId: string;
   onSaved: () => void;
 }
+
+const BUILTIN_SLUGS: ReadonlySet<string> = new Set<string>(Object.values(BUILTIN_AGENT_SLUGS));
 
 /**
  * Drives the three identity fields of the agent form.
@@ -32,10 +35,16 @@ export const useAgentIdentityForm = ({ agentId, onSaved }: UseAgentIdentityFormO
   const [error, setError] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);
 
+  // A builtin agent IS its slug — `getBuiltinAgent` resolves it by that string,
+  // so renaming one would mint a second, empty inbox / page agent. The server
+  // refuses it too (`reason: 'builtin'`); locking the field here is what makes
+  // that legible instead of a rejection after the fact.
+  const slugLocked = !!slug && BUILTIN_SLUGS.has(slug);
+
   const save = async () => {
     setSaving(true);
     try {
-      const trimmedSlug = nextSlug.trim().toLowerCase();
+      const trimmedSlug = slugLocked ? slug : nextSlug.trim().toLowerCase();
       if (trimmedSlug && trimmedSlug !== (slug || '')) {
         const result = await agentService.updateAgentSlug(agentId, trimmedSlug);
         if (!result.success) {
@@ -66,6 +75,7 @@ export const useAgentIdentityForm = ({ agentId, onSaved }: UseAgentIdentityFormO
     },
     setTitle,
     slug: nextSlug,
+    slugLocked,
     title,
   };
 };

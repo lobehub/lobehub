@@ -104,6 +104,45 @@ describe('useAgentIdentityForm', () => {
     expect(onSaved).not.toHaveBeenCalled();
   });
 
+  describe('builtin agents', () => {
+    beforeEach(() => {
+      mocks.agentMap = { 'agent-a': { slug: 'inbox', title: 'Lobe AI' } };
+    });
+
+    it('locks the slug of a builtin agent', () => {
+      const { result } = setup();
+
+      expect(result.current.slugLocked).toBe(true);
+    });
+
+    it('leaves an ordinary agent unlocked', () => {
+      mocks.agentMap = { 'agent-a': { slug: 'my-agent', title: 'Agent' } };
+      const { result } = setup();
+
+      expect(result.current.slugLocked).toBe(false);
+    });
+
+    // The lock is what the user sees, but the field could still be driven (a
+    // stale render, a paste before the disabled prop lands) — an edit must never
+    // reach the endpoint, or the builtin lookup would resolve to nothing and
+    // mint a second, empty inbox.
+    it('never sends a slug change for a builtin agent', async () => {
+      const { result, onSaved } = setup();
+
+      act(() => result.current.setSlug('my-inbox'));
+      await act(async () => {
+        await result.current.save();
+      });
+
+      expect(mocks.updateAgentSlug).not.toHaveBeenCalled();
+      expect(mocks.updateAgentMetaById).toHaveBeenCalledExactlyOnceWith('agent-a', {
+        name: '',
+        title: 'Lobe AI',
+      });
+      expect(onSaved).toHaveBeenCalled();
+    });
+  });
+
   it('clears a stale error as soon as the slug is edited again', async () => {
     mocks.updateAgentSlug.mockResolvedValue({ reason: 'taken', success: false });
     const { result } = setup();
