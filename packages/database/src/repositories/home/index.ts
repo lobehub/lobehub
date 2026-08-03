@@ -1,13 +1,16 @@
 import {
   type SidebarAgentItem,
+  type SidebarAgentLabel,
   type SidebarAgentListResponse,
   type SidebarGroup,
 } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
-import { and, count, desc, eq, inArray, isNull, not, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNull, not, or, sql } from 'drizzle-orm';
 
 import { ChatGroupModel } from '../../models/chatGroup';
 import {
+  agentLabelAssignments,
+  agentLabels,
   agents,
   agentsToSessions,
   chatGroups,
@@ -133,6 +136,10 @@ export class HomeRepository {
     // loaded topics for.
     const { agentUnread, groupUnread } = await this.getUnreadCounts();
 
+    // 2.3 Labels applied to agents — one scope-wide query, attached per item
+    // in processAgentList so the list can render tags / group by label.
+    const agentLabelsMap = await this.getAgentLabelsMap();
+
     // 3. Query sessionGroups (user-defined folders). Folders are a per-member
     // concern in workspace mode: only the caller's own folders render —
     // another member's folder must never shape this caller's sidebar. Items
@@ -174,7 +181,40 @@ export class HomeRepository {
       groupUnread,
       assignmentOverrides,
       pinnedOverrides,
+      agentLabelsMap,
     );
+  }
+
+  /**
+   * Labels applied to agents in the current scope, keyed by agent id. The
+   * junction rows carry the same workspace scoping as the label registry, so
+   * one predicate covers both personal and workspace mode.
+   */
+  private async getAgentLabelsMap(): Promise<Map<string, SidebarAgentLabel[]>> {
+    const rows = await this.db
+      .select({
+        agentId: agentLabelAssignments.agentId,
+        color: agentLabels.color,
+        id: agentLabels.id,
+        name: agentLabels.name,
+      })
+      .from(agentLabelAssignments)
+      .innerJoin(agentLabels, eq(agentLabelAssignments.labelId, agentLabels.id))
+      .where(
+        buildWorkspaceWhere(this.scope, {
+          userId: agentLabelAssignments.userId,
+          workspaceId: agentLabelAssignments.workspaceId,
+        }),
+      )
+      .orderBy(asc(agentLabels.name));
+
+    const map = new Map<string, SidebarAgentLabel[]>();
+    for (const { agentId, ...label } of rows) {
+      const existing = map.get(agentId) || [];
+      existing.push(label);
+      map.set(agentId, existing);
+    }
+    return map;
   }
 
   /**
@@ -269,6 +309,7 @@ export class HomeRepository {
     groupUnread: Map<string, number> = new Map(),
     assignmentOverrides: Record<string, string | null> = {},
     pinnedOverrides: Record<string, boolean> = {},
+    agentLabelsMap: Map<string, SidebarAgentLabel[]> = new Map(),
   ): SidebarAgentListResponse {
     // Sidebar organization (folder + pin) is FULLY per-member in workspace
     // mode: only the caller's own workspace_user_settings entries apply — the
@@ -305,6 +346,7 @@ export class HomeRepository {
           heterogeneousType: a.agencyConfig?.heterogeneousProvider?.type ?? null,
           id: a.id,
           isPrivate: visibility === 'private',
+          labels: agentLabelsMap.get(a.id),
           pinned: effectivePinned(a.id, a.pinned ?? a.sessionPinned ?? false),
           sessionId: a.sessionId,
           slug: a.slug,

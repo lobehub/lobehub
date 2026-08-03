@@ -15,6 +15,7 @@ import {
 
 import EditingPopover from '@/features/EditingPopover';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import LabelFormModal from '@/features/WorkspaceSetting/Labels/LabelFormModal';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
@@ -61,6 +62,12 @@ interface AgentModalContextValue {
   closeMemberSelectionModal: () => void;
   openConfigGroupModal: (scope?: 'private' | 'public') => void;
   openCreateGroupModal: (sessionId?: string, visibility?: 'private' | 'public') => void;
+  /**
+   * Create an agent label from anywhere in the list (e.g. the Labels
+   * submenu). When `assignTo` is given, the new label is applied to that
+   * agent right after creation.
+   */
+  openCreateLabelModal: (assignTo?: { agentId: string; currentLabelIds: string[] }) => void;
   openCreateModal: (type: 'agent' | 'group', options?: OpenCreateModalOptions) => void;
   openGroupWizardModal: (callbacks: GroupWizardCallbacks) => void;
   openMemberSelectionModal: (callbacks: MemberSelectionCallbacks) => void;
@@ -188,6 +195,12 @@ export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) =
   const [memberSelectionCallbacks, setMemberSelectionCallbacks] =
     useState<MemberSelectionCallbacks>({});
 
+  // Create-label modal state
+  const [createLabelModalOpen, setCreateLabelModalOpen] = useState(false);
+  const [createLabelAssignTo, setCreateLabelAssignTo] = useState<
+    { agentId: string; currentLabelIds: string[] } | undefined
+  >(undefined);
+
   // CreateAgentModal state
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createModalType, setCreateModalType] = useState<'agent' | 'group'>('agent');
@@ -217,6 +230,10 @@ export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) =
         setCreateGroupSessionId(sessionId);
         setCreateGroupVisibility(visibility);
         setCreateGroupModalOpen(true);
+      },
+      openCreateLabelModal: (assignTo?: { agentId: string; currentLabelIds: string[] }) => {
+        setCreateLabelAssignTo(assignTo);
+        setCreateLabelModalOpen(true);
       },
       openCreateModal: (type: 'agent' | 'group', options?: OpenCreateModalOptions) => {
         setCreateModalType(type);
@@ -253,6 +270,13 @@ export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) =
       {children}
 
       {/* All modals rendered at top level */}
+      {createLabelModalOpen && (
+        <LabelFormModal
+          open
+          assignTo={createLabelAssignTo}
+          onCancel={() => setCreateLabelModalOpen(false)}
+        />
+      )}
       {createGroupModalOpen && (
         <CreateGroupModal
           id={createGroupSessionId}

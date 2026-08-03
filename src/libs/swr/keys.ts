@@ -177,6 +177,12 @@ export const agentKeys = {
   list: def('agent:list', (isLogin: boolean) => ['agent:list', isLogin]),
 };
 
+// ---- agent labels -------------------------------------------------------
+export const agentLabelKeys = {
+  /** Agent label registry (workspace-shared, or personal). */
+  list: def('agentLabel:list', (isLogin: boolean) => ['agentLabel:list', isLogin]),
+};
+
 // ---- agent builder (opening-suggestion chips) ---------------------------
 // Kept off `CACHE_TIERS` on purpose — these are ephemeral LLM-generated chips.
 // `contextSummary` is intentionally NOT part of the key so config autosaves for
@@ -1110,6 +1116,7 @@ export const swrKeys = {
   agentDocument: agentDocumentSWRKeys,
   agentHome: agentHomeKeys,
   agentKnowledge: agentKnowledgeKeys,
+  agentLabel: agentLabelKeys,
   agentProfile: agentProfileKeys,
   agentSignal: agentSignalKeys,
   aiModel: aiModelKeys,

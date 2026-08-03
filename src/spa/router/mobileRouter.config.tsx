@@ -474,6 +474,13 @@ export const mobileRoutes: RouteObject[] = [
               },
               {
                 element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/labels'),
+                  'Mobile > Workspace > Settings > Labels',
+                ),
+                path: 'labels',
+              },
+              {
+                element: dynamicElement(
                   () => import('@/routes/(main)/[workspaceSlug]/settings/plans'),
                   'Mobile > Workspace > Settings > Plans',
                 ),

@@ -1043,6 +1043,13 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
               },
               {
                 element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/labels'),
+                  'Desktop > Workspace > Settings > Labels',
+                ),
+                path: 'labels',
+              },
+              {
+                element: dynamicElement(
                   () => import('@/routes/(main)/[workspaceSlug]/settings/storage'),
                   'Desktop > Workspace > Settings > Storage',
                 ),

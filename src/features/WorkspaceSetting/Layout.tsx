@@ -19,6 +19,7 @@ const COMPACT_HEADER_TABS = new Set<string>([
   WorkspaceSettingsTabs.Credits,
   WorkspaceSettingsTabs.Devices,
   WorkspaceSettingsTabs.General,
+  WorkspaceSettingsTabs.Labels,
   WorkspaceSettingsTabs.Members,
   WorkspaceSettingsTabs.Plans,
   WorkspaceSettingsTabs.ServiceModel,

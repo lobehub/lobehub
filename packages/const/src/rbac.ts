@@ -15,6 +15,15 @@ export const PERMISSION_ACTIONS = {
 
   AGENT_UPDATE: 'agent:update',
 
+  // ==================== Agent Label Management ====================
+  AGENT_LABEL_CREATE: 'agent_label:create',
+
+  AGENT_LABEL_DELETE: 'agent_label:delete',
+
+  AGENT_LABEL_READ: 'agent_label:read',
+
+  AGENT_LABEL_UPDATE: 'agent_label:update',
+
   // ==================== AI Infrastructure Management ====================
   AI_MODEL_CREATE: 'ai_model:create',
 
@@ -347,6 +356,10 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceSystemRoleName, readonl
     `${action('AGENT_UPDATE')}:all`,
     `${action('AGENT_DELETE')}:all`,
     `${action('AGENT_FORK')}:all`,
+    `${action('AGENT_LABEL_READ')}:all`,
+    `${action('AGENT_LABEL_CREATE')}:all`,
+    `${action('AGENT_LABEL_UPDATE')}:all`,
+    `${action('AGENT_LABEL_DELETE')}:all`,
     `${action('SESSION_READ')}:all`,
     `${action('SESSION_CREATE')}:all`,
     `${action('SESSION_UPDATE')}:all`,
@@ -416,6 +429,10 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceSystemRoleName, readonl
     `${action('AGENT_UPDATE')}:owner`,
     `${action('AGENT_DELETE')}:owner`,
     `${action('AGENT_FORK')}:owner`,
+    `${action('AGENT_LABEL_READ')}:all`,
+    `${action('AGENT_LABEL_CREATE')}:all`,
+    `${action('AGENT_LABEL_UPDATE')}:all`,
+    `${action('AGENT_LABEL_DELETE')}:all`,
     `${action('SESSION_READ')}:all`,
     `${action('SESSION_CREATE')}:owner`,
     `${action('SESSION_UPDATE')}:owner`,
@@ -473,6 +490,7 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceSystemRoleName, readonl
     `${action('AGENT_UPDATE')}:owner`,
     `${action('AGENT_DELETE')}:owner`,
     `${action('AGENT_FORK')}:owner`,
+    `${action('AGENT_LABEL_READ')}:all`,
     `${action('SESSION_READ')}:all`,
     `${action('SESSION_CREATE')}:owner`,
     `${action('SESSION_UPDATE')}:owner`,
@@ -514,6 +532,7 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceSystemRoleName, readonl
     `${action('WORKSPACE_READ')}:all`,
     `${action('WORKSPACE_MEMBER_READ')}:all`,
     `${action('AGENT_READ')}:all`,
+    `${action('AGENT_LABEL_READ')}:all`,
     `${action('SESSION_READ')}:all`,
     `${action('SESSION_GROUP_READ')}:all`,
     `${action('MESSAGE_READ')}:all`,

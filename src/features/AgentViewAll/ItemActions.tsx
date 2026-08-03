@@ -36,11 +36,28 @@ interface ItemActionsProps {
   /** Element the rename EditingPopover anchors to (the card / row root). */
   anchor: HTMLElement | null;
   /**
+   * Activate the real (hook-bearing) menu from outside — the row/card sets
+   * this on its own pointer-enter so a right-click anywhere on it has the
+   * menu ready, not just after hovering the "…" trigger.
+   */
+  forceActivated?: boolean;
+  /**
+   * Headless mode: mount the menu machinery (for the right-click trigger via
+   * `onMenuReady`) without rendering the "…" button — the context menu is the
+   * only entry.
+   */
+  hideTrigger?: boolean;
+  /**
    * Merge the sidebar show/hide toggle in as the first menu item (card mode).
    * List mode keeps the standalone eye icon next to this menu instead.
    */
   includeSidebarToggle?: boolean;
   item: SidebarAgentItem;
+  /**
+   * Hands the filtered menu-items getter back to the row/card, which feeds it
+   * to its ContextMenuTrigger so right-click shows the same menu as "…".
+   */
+  onMenuReady?: (getItems: () => MenuProps['items']) => void;
   onToggleSidebar?: (item: SidebarAgentItem) => void;
   sidebarHidden?: boolean;
 }
@@ -51,7 +68,15 @@ interface ActionsDropdownProps extends Omit<ItemActionsProps, 'anchor'> {
 
 /** Shared "…" trigger: adapts a sidebar item menu for the flat view-all list. */
 const ActionsDropdown = memo<ActionsDropdownProps>(
-  ({ getMenuItems, includeSidebarToggle, item, onToggleSidebar, sidebarHidden }) => {
+  ({
+    getMenuItems,
+    hideTrigger,
+    includeSidebarToggle,
+    item,
+    onMenuReady,
+    onToggleSidebar,
+    sidebarHidden,
+  }) => {
     const { t } = useTranslation('common');
 
     const items = useMemo(
@@ -83,6 +108,13 @@ const ActionsDropdown = memo<ActionsDropdownProps>(
       },
       [getMenuItems, includeSidebarToggle, item, onToggleSidebar, sidebarHidden, t],
     );
+
+    // Expose the same filtered items to the row/card's right-click trigger.
+    useEffect(() => {
+      onMenuReady?.(items);
+    }, [items, onMenuReady]);
+
+    if (hideTrigger) return null;
 
     return (
       <DropdownMenu items={items}>
@@ -117,6 +149,8 @@ const AgentItemActions = memo<ItemActionsProps>(({ anchor, item, ...rest }) => {
     backgroundColor: backgroundColor || undefined,
     group: undefined,
     id,
+    labels: item.labels,
+    labelsEnabled: true,
     openCreateGroupModal: handleOpenCreateGroupModal,
     pinned: pinned ?? false,
     slug,
@@ -168,15 +202,16 @@ GroupItemActions.displayName = 'GroupItemActions';
  * so the real menu is mounted by the time it is needed.
  */
 const ItemActions = memo<ItemActionsProps>((props) => {
-  const [activated, setActivated] = useState(false);
+  const [selfActivated, setSelfActivated] = useState(false);
+  const activated = selfActivated || props.forceActivated;
   const containerRef = useRef<HTMLSpanElement>(null);
   const refocusPending = useRef(false);
-  const activate = useCallback(() => setActivated(true), []);
+  const activate = useCallback(() => setSelfActivated(true), []);
   const activateFromFocus = useCallback(() => {
     // Swapping the focused placeholder subtree drops keyboard focus — note
     // it so the effect below can move focus onto the real trigger.
     refocusPending.current = true;
-    setActivated(true);
+    setSelfActivated(true);
   }, []);
 
   useEffect(() => {
@@ -193,7 +228,7 @@ const ItemActions = memo<ItemActionsProps>((props) => {
         ) : (
           <AgentItemActions {...props} />
         )
-      ) : (
+      ) : props.hideTrigger ? null : (
         <span onFocus={activateFromFocus} onPointerEnter={activate}>
           <ActionIcon icon={EllipsisIcon} size={'small'} />
         </span>

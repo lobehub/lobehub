@@ -137,6 +137,8 @@
   "credits.memberBudget.defaultLimit": "Varsayılan üye bütçesi",
   "credits.memberBudget.defaultLimitHint": "Özel bir kuralı olmayan üyeler, her fatura döneminde bu limiti kullanır.",
   "credits.memberBudget.desc": "Her üyenin mevcut fatura döneminde kullanabileceği çalışma alanı kredilerini sınırlayın",
+  "credits.memberBudget.details.action": "Detayları görüntüle",
+  "credits.memberBudget.details.title": "Üye kullanımı",
   "credits.memberBudget.effectiveBudget": "Geçerli bütçe",
   "credits.memberBudget.empty": "Henüz çalışma alanı üyesi yok",
   "credits.memberBudget.globalBadge": "Global",

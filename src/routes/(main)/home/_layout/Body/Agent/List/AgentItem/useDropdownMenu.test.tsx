@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
     pinAgent: vi.fn(),
     refreshAgentList: vi.fn(),
     removeAgent: vi.fn(),
+    setAgentLabels: vi.fn(),
     updateAgentGroup: vi.fn(),
   },
   navigate: vi.fn(),
@@ -84,6 +85,10 @@ vi.mock('@/hooks/useResourceManageable', () => ({
 
 vi.mock('@/services/agent', () => ({ agentService: {} }));
 
+vi.mock('@/routes/(main)/home/_layout/Body/Agent/ModalProvider', () => ({
+  useOptionalAgentModal: () => null,
+}));
+
 vi.mock('@/store/global', () => ({
   useGlobalStore: (selector: (state: { openAgentInNewWindow: typeof vi.fn }) => unknown) =>
     selector({ openAgentInNewWindow: mocks.openAgentInNewWindow }),
@@ -94,6 +99,9 @@ vi.mock('@/store/home', () => ({
 }));
 
 vi.mock('@/store/home/selectors', () => ({
+  agentLabelSelectors: {
+    allLabels: () => [],
+  },
   homeAgentListSelectors: {
     agentGroups: () => [],
     privateAgentGroups: () => [],
@@ -156,6 +164,24 @@ describe('useAgentDropdownMenu', () => {
       'duplicate',
       'moveGroup',
     ]);
+  });
+
+  it('shows the Labels submenu only where it is enabled (the agents list page)', () => {
+    const { result } = renderHook(() =>
+      useAgentDropdownMenu({
+        anchor: null,
+        group: undefined,
+        id: 'agent-1',
+        labelsEnabled: true,
+        openCreateGroupModal: vi.fn(),
+        pinned: false,
+        title: 'Public Agent',
+        userId: 'creator-1',
+        visibility: 'public',
+      }),
+    );
+
+    expect(getMenuKeys(result.current())).toContain('labels');
   });
 
   it('keeps write actions hidden from a Workspace viewer', () => {
