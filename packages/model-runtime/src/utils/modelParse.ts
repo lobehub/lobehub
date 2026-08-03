@@ -627,6 +627,7 @@ const processModelCard = (
     description: model.description ?? knownModel?.description ?? '',
     displayName: processDisplayName(model.displayName ?? knownModel?.displayName ?? model.id),
     enabled: model?.enabled || false,
+    files: model.files ?? knownModel?.abilities?.files ?? undefined,
     functionCall:
       model.functionCall ??
       knownModel?.abilities?.functionCall ??

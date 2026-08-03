@@ -6,7 +6,7 @@ import {
   type ToggleAiModelEnableParams,
   type UpdateAiModelParams,
 } from 'model-bank';
-import { isAiModelVisible } from 'model-bank/aiModel';
+import { isAiModelVisible, isFreeAiModel } from 'model-bank/aiModel';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -27,7 +27,7 @@ export class AiModelService {
     params?: GetAiProviderModelListParams,
   ): Promise<AiProviderModelListItem[]> => {
     const models = await lambdaClient.aiModel.getAiProviderModelList.query({ id, ...params });
-    return models.filter(isAiModelVisible);
+    return models.filter((model) => isAiModelVisible(model) && !isFreeAiModel(model));
   };
 
   getAiModelById = async (id: string) => {

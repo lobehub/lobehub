@@ -6,7 +6,11 @@ import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactor
 import { fetchOpenRouterModels } from './modelFetch';
 import type { OpenRouterReasoning } from './type';
 
-export { fetchOpenRouterModels, mapOpenRouterModelCard } from './modelFetch';
+export {
+  fetchOpenRouterModels,
+  mapOpenRouterModelCard,
+  typeFromOpenRouterOutputModalities,
+} from './modelFetch';
 
 export const params = {
   baseURL: 'https://openrouter.ai/api/v1',

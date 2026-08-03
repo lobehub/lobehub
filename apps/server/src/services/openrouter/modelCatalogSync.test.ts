@@ -30,6 +30,12 @@ describe('OpenRouterModelCatalogSyncService', () => {
         type: 'chat',
         vision: true,
       },
+      {
+        displayName: 'Nano Banana 2',
+        id: 'google/gemini-3.1-flash-image-preview:image',
+        parameters: { prompt: { default: '' } },
+        type: 'image',
+      },
     ]);
 
     const { OpenRouterModelCatalogSyncService } = await import('./modelCatalogSync');
@@ -39,19 +45,28 @@ describe('OpenRouterModelCatalogSyncService', () => {
     expect(status).toMatchObject({
       lastStatus: 'success',
       lastTriggeredBy: 'manual:admin-1',
-      modelCount: 1,
+      modelCount: 2,
     });
 
     const catalog = new OpenRouterModelCatalogModel(db);
     const models = await catalog.listAsProviderModels();
-    expect(models).toEqual([
-      expect.objectContaining({
-        abilities: expect.objectContaining({ functionCall: true, vision: true }),
-        displayName: 'Auto',
-        enabled: true,
-        id: 'openrouter/auto',
-      }),
-    ]);
+    expect(models).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          abilities: expect.objectContaining({ functionCall: true, vision: true }),
+          displayName: 'Auto',
+          enabled: true,
+          id: 'openrouter/auto',
+          type: 'chat',
+        }),
+        expect.objectContaining({
+          displayName: 'Nano Banana 2',
+          id: 'google/gemini-3.1-flash-image-preview:image',
+          parameters: { prompt: { default: '' } },
+          type: 'image',
+        }),
+      ]),
+    );
   });
 
   it('records failure status when OpenRouter fetch throws', async () => {

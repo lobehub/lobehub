@@ -46,6 +46,8 @@ export class OpenRouterModelCatalogSyncService {
           description: model.description,
           displayName: model.displayName,
           id: model.id,
+          // Image-tab `:image` clones need parameters restored from payload.
+          parameters: model.parameters,
           pricing: model.pricing,
           releasedAt: model.releasedAt,
           settings: model.settings,

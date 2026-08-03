@@ -61,6 +61,33 @@ describe('AiModelService', () => {
       });
       expect(result.map((model) => model.id)).toEqual(['deepseek-v4-pro']);
     });
+
+    it('filters free models marked by :free id or (free) display name', async () => {
+      mockLambdaClient.aiModel.getAiProviderModelList.query.mockResolvedValueOnce([
+        {
+          displayName: 'GPT-4o',
+          enabled: true,
+          id: 'openai/gpt-4o',
+          type: 'chat',
+        },
+        {
+          displayName: 'Llama 3.3 70B Instruct',
+          enabled: false,
+          id: 'meta-llama/llama-3.3-70b-instruct:free',
+          type: 'chat',
+        },
+        {
+          displayName: 'Gemma 2 9B (free)',
+          enabled: false,
+          id: 'google/gemma-2-9b-it',
+          type: 'chat',
+        },
+      ]);
+
+      const result = await aiModelService.getAiProviderModelList('openrouter');
+
+      expect(result.map((model) => model.id)).toEqual(['openai/gpt-4o']);
+    });
   });
 });
 

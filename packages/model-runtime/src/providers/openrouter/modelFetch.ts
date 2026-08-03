@@ -1,4 +1,7 @@
+import { CHAT_MODEL_IMAGE_GENERATION_PARAMS } from 'model-bank';
+
 import { processMultiProviderModelList } from '../../utils/modelParse';
+import { postProcessModelList } from '../../utils/postProcessModelList';
 import type { OpenRouterModelCard } from './type';
 
 const OPENROUTER_MODELS_URL = 'https://openrouter.ai/api/v1/models';
@@ -9,6 +12,22 @@ const formatPrice = (price?: string) => {
 };
 
 /**
+ * Map exclusive (non-text) OpenRouter output modalities onto LobeHub model types.
+ * Multimodal chat+image/audio stays `chat`; dedicated generators get a real type.
+ */
+export const typeFromOpenRouterOutputModalities = (
+  outputModalities: readonly string[],
+): 'image' | 'video' | 'text2music' | undefined => {
+  const hasText = outputModalities.includes('text');
+  if (hasText) return undefined;
+
+  if (outputModalities.includes('video')) return 'video';
+  if (outputModalities.includes('image')) return 'image';
+  if (outputModalities.includes('audio')) return 'text2music';
+  return undefined;
+};
+
+/**
  * Map a raw OpenRouter models API card into the flat fields consumed by
  * `processMultiProviderModelList`.
  */
@@ -16,6 +35,8 @@ export const mapOpenRouterModelCard = (model: OpenRouterModelCard) => {
   const { top_provider, architecture, pricing, supported_parameters } = model;
 
   const inputModalities = architecture.input_modalities || [];
+  const outputModalities = architecture.output_modalities || [];
+  const type = typeFromOpenRouterOutputModalities(outputModalities);
 
   // Process the name, by default strip the colon and everything before it
   let displayName = model.name;
@@ -45,12 +66,22 @@ export const mapOpenRouterModelCard = (model: OpenRouterModelCard) => {
   }
 
   const hasReasoning = supported_parameters.includes('reasoning');
+  const hasImageOutput = outputModalities.includes('image');
+  // Always set type explicitly so processModelCard keyword heuristics
+  // (e.g. `-image` → image → drop without parameters) cannot override
+  // multimodal chat+image cards before we synthesize `:image` clones.
+  const resolvedType = type ?? 'chat';
 
   return {
     contextWindowTokens: top_provider.context_length || model.context_length,
     description: model.description,
     displayName,
+    // OpenRouter marks document/PDF-capable chat models with file in input_modalities.
+    files: inputModalities.includes('file'),
     functionCall: supported_parameters.includes('tools'),
+    // Multimodal image generators expose image in output_modalities (often with text).
+    // Chat type stays; postProcessModelList adds `{id}:image` for the Image tab.
+    imageOutput: hasImageOutput,
     id: model.id,
     maxOutput:
       typeof top_provider.max_completion_tokens === 'number'
@@ -58,6 +89,8 @@ export const mapOpenRouterModelCard = (model: OpenRouterModelCard) => {
         : typeof model.context_length === 'number'
           ? model.context_length
           : undefined,
+    // Pure image generators need parameters or processModelCard drops them.
+    ...(resolvedType === 'image' ? { parameters: CHAT_MODEL_IMAGE_GENERATION_PARAMS } : {}),
     pricing: {
       cachedInput: cachedInputPrice,
       input: inputPrice,
@@ -66,6 +99,10 @@ export const mapOpenRouterModelCard = (model: OpenRouterModelCard) => {
     },
     reasoning: hasReasoning,
     releasedAt: new Date(model.created * 1000).toISOString().split('T')[0],
+    type: resolvedType,
+    // Video in input_modalities = can analyze video as input (chat ability),
+    // not type:'video' generation.
+    video: inputModalities.includes('video') || resolvedType === 'video',
     vision: inputModalities.includes('image'),
     // Merge all applicable extendParams for settings
     ...(() => {
@@ -119,6 +156,9 @@ export const fetchOpenRouterModels = async () => {
 
   const data = (await response.json()) as { data: OpenRouterModelCard[] };
   const formattedModels = data.data.map(mapOpenRouterModelCard);
+  const models = await processMultiProviderModelList(formattedModels, 'openrouter');
 
-  return processMultiProviderModelList(formattedModels, 'openrouter');
+  // Same post-pass as openaiCompatibleFactory.models(): synthesize `:image`
+  // clones for imageOutput / whitelisted generators so the Image tab populates.
+  return postProcessModelList(models);
 };
