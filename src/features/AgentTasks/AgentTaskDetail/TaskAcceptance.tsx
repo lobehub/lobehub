@@ -175,6 +175,7 @@ const TaskAcceptance = memo(() => {
     <TaskAcceptanceHeader
       count={checks.length}
       isOpen={sectionExpanded}
+      status={bundle?.acceptance.status}
       onToggle={() => setSectionExpanded((expanded) => !expanded)}
     />
   );

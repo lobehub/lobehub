@@ -304,6 +304,7 @@ export class TaskTopicModel {
         status: taskTopics.status,
         title: topics.title,
         topicId: taskTopics.topicId,
+        trigger: taskTopics.trigger,
       })
       .from(taskTopics)
       .leftJoin(topics, eq(taskTopics.topicId, topics.id))
@@ -334,6 +335,7 @@ export class TaskTopicModel {
         status: taskTopics.status,
         title: topics.title,
         topicId: taskTopics.topicId,
+        trigger: taskTopics.trigger,
       })
       .from(taskTopics)
       .innerJoin(tasks, eq(taskTopics.taskId, tasks.id))

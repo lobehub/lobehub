@@ -809,6 +809,10 @@ export class TaskService {
           sourceTaskName: t.sourceTaskName,
           time: toISO(t.createdAt),
           title: handoff?.title || t.title || UNTITLED_TOPIC_TITLE,
+          // What opened this round. Without it the feed cannot distinguish a run
+          // the user started from one the goal loop / scheduler opened on its
+          // own — they render identically apart from `#seq`.
+          trigger: t.trigger ?? null,
           type: 'topic' as const,
         };
       }),

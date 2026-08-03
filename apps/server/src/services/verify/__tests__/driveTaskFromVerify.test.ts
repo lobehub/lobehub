@@ -43,6 +43,13 @@ vi.mock('../goalLoop', () => ({
     summary: `budget exhausted (${outcome})`,
     title: `${task.identifier} goal paused`,
   }),
+  goalReadyForReviewBriefCopy: (task: any, acceptanceId?: string) => ({
+    actions: acceptanceId
+      ? [{ key: 'review', type: 'link', url: `/acceptance/${acceptanceId}` }]
+      : [],
+    summary: 'ready for your sign-off',
+    title: `${task.identifier} goal delivered`,
+  }),
   maybeContinueGoalLoop: goalContinueMock,
   resolveGoalRoundBudget: (goal: any) =>
     goal.maxIterations === null ? Number.POSITIVE_INFINITY : (goal.maxIterations ?? 3),
@@ -180,11 +187,16 @@ describe('driveTaskFromVerify', () => {
     expect(statusRecompute.mock.calls).toEqual([['repair-op-1'], ['root-op']]);
   });
 
-  it('failed → urgent brief + pauses, delivers a failure creator callback', async () => {
+  it('failed → urgent brief + pauses with the reason on the task row', async () => {
     runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'failed' });
     await driveTaskFromVerify(db, 'u1', 'op-1');
     expect(briefCreate).toHaveBeenCalled();
-    expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', { error: null });
+    // The reason must live on the task row, not only in a brief: the task
+    // detail feed deliberately excludes briefs, so a brief-only explanation is
+    // unreachable from the task page.
+    expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
+      error: 'Delivery did not pass verification.',
+    });
     expect(serviceUpdateStatus).not.toHaveBeenCalled();
     // Creator is told it failed verification (reason 'error'), not a passed result.
     expect(deliverMock.mock.calls[0][0]).toMatchObject({ reason: 'error', taskId: 'task-1' });
@@ -195,7 +207,11 @@ describe('driveTaskFromVerify', () => {
     await driveTaskFromVerify(db, 'u1', 'op-1');
 
     // Paused for a human, but NOT completed — the delivery was never evaluated.
-    expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', { error: null });
+    expect(taskUpdateStatus).toHaveBeenCalledWith(
+      'task-1',
+      'paused',
+      expect.objectContaining({ error: expect.stringContaining('could not run') }),
+    );
     expect(serviceUpdateStatus).not.toHaveBeenCalled();
 
     // The brief frames it as an internal verification error, not a rejected delivery.
@@ -289,7 +305,10 @@ describe('driveTaskFromVerify', () => {
 
       await driveTaskFromVerify(db, 'u1', 'op-1');
 
-      expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', { error: null });
+      // Reason on the row, not only in the brief — see the failed-branch test.
+      expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
+        error: 'budget exhausted (exhausted-rounds)',
+      });
       const briefArg = briefCreate.mock.calls[0][0];
       expect(briefArg.summary).toContain('budget exhausted (exhausted-rounds)');
       expect(goalSyncMock).toHaveBeenCalledWith(
@@ -305,7 +324,9 @@ describe('driveTaskFromVerify', () => {
 
       await driveTaskFromVerify(db, 'u1', 'op-1');
 
-      expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', { error: null });
+      expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
+        error: 'Delivery did not pass verification.',
+      });
       expect(briefCreate.mock.calls[0][0].summary).toContain('did not pass');
     });
 
@@ -315,18 +336,63 @@ describe('driveTaskFromVerify', () => {
       await driveTaskFromVerify(db, 'u1', 'op-1');
 
       expect(goalContinueMock).not.toHaveBeenCalled();
-      expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', { error: null });
+      expect(taskUpdateStatus).toHaveBeenCalledWith(
+        'task-1',
+        'paused',
+        expect.objectContaining({ error: expect.stringContaining('could not run') }),
+      );
     });
 
-    it('passed → completes the task and flips the goal card to review', async () => {
-      runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'passed' });
+    it('passed → parks for sign-off instead of completing (the verifier only recommends)', async () => {
+      runFindByOperation.mockResolvedValue({
+        acceptanceId: 'acc-9',
+        id: 'run-1',
+        metadata: null,
+        status: 'passed',
+      });
 
       await driveTaskFromVerify(db, 'u1', 'op-1');
 
-      expect(serviceUpdateStatus).toHaveBeenCalledWith({ id: 'task-1', status: 'completed' });
+      // The agent saying "done" is not the business fact — the human sign-off is.
+      expect(serviceUpdateStatus).not.toHaveBeenCalled();
+      // A converged goal and a goal that gave up both land on `paused`; only the
+      // reason on the row tells them apart in the UI.
+      expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
+        error: 'ready for your sign-off',
+      });
       expect(goalSyncMock).toHaveBeenCalledWith(
         expect.objectContaining({ state: expect.objectContaining({ phase: 'review' }) }),
       );
     });
+
+    it('passed → raises exactly one decision brief that links to the acceptance', async () => {
+      runFindByOperation.mockResolvedValue({
+        acceptanceId: 'acc-9',
+        id: 'run-1',
+        metadata: null,
+        status: 'passed',
+      });
+
+      await driveTaskFromVerify(db, 'u1', 'op-1');
+
+      expect(briefCreate).toHaveBeenCalledTimes(1);
+      const brief = briefCreate.mock.calls[0][0];
+      // `result` would be filed under "news" and its approve completes the task,
+      // bypassing the sign-off this branch exists to require.
+      expect(brief.type).toBe('decision');
+      expect(brief.actions).toEqual([
+        expect.objectContaining({ type: 'link', url: '/acceptance/acc-9' }),
+      ]);
+    });
+  });
+
+  it('non-goal task still completes on a passing verify (contract unchanged)', async () => {
+    taskGetGoalConfig.mockReturnValue(undefined);
+    runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'passed' });
+
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    expect(serviceUpdateStatus).toHaveBeenCalledWith({ id: 'task-1', status: 'completed' });
+    expect(briefCreate).not.toHaveBeenCalled();
   });
 });

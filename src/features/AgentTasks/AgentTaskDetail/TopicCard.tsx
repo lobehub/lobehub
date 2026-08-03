@@ -211,6 +211,17 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
               #{activity.seq}
             </Text>
           )}
+          {/* Only mark machine-opened rounds: a `manual` tag on every row the
+              user started themselves is noise, absence already means manual. */}
+          {activity.trigger && activity.trigger !== 'manual' && (
+            <Tag
+              size={'small'}
+              style={{ flexShrink: 0 }}
+              title={t(`taskDetail.runTrigger.${activity.trigger}` as const)}
+            >
+              {t(`taskDetail.runTrigger.${activity.trigger}` as const)}
+            </Tag>
+          )}
           {durationText && (
             <Text fontSize={12} style={{ flexShrink: 0 }} type={'secondary'}>
               · {durationText}

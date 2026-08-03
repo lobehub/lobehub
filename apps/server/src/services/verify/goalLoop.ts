@@ -1,4 +1,4 @@
-import type { TaskContext, TaskGoalConfig, TaskItem } from '@lobechat/types';
+import type { BriefAction, TaskContext, TaskGoalConfig, TaskItem } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -77,6 +77,37 @@ export const goalExhaustedBriefCopy = (
         summary: `The goal did not pass verification after ${task.totalTopics || 0} rounds (budget ${resolveGoalRoundBudget(goal)}). Adjust the plan or budget to restart the loop.`,
         title: `${task.identifier} goal paused — round budget exhausted`,
       };
+
+/**
+ * User-facing copy for the one brief a converged goal SHOULD raise: the loop is
+ * done iterating and the delivery is waiting on the user's sign-off.
+ *
+ * Per-round result briefs are suppressed for goal tasks (see
+ * `TaskLifecycleService.onTopicComplete`), so this is the moment the user is
+ * pulled back in — not once per round.
+ */
+export const goalReadyForReviewBriefCopy = (
+  task: TaskItem,
+  acceptanceId?: string,
+): { actions: BriefAction[]; summary: string; title: string } => ({
+  // A `decision` brief, not a `result` one, for two reasons: `result` briefs are
+  // filed unconditionally under "news" (nothing to do), and their approve button
+  // completes the task outright — which would bypass the very sign-off this
+  // change exists to require. The only action offered is a link to the
+  // acceptance page, so the button promises exactly what it does.
+  actions: acceptanceId
+    ? [
+        {
+          key: 'review',
+          label: '🔍 Review delivery',
+          type: 'link',
+          url: `/acceptance/${acceptanceId}`,
+        },
+      ]
+    : [],
+  summary: `The goal passed verification after ${task.totalTopics || 1} round(s) and is waiting for your sign-off. Review the checks, then accept or send it back.`,
+  title: `${task.identifier} goal delivered — ready for your review`,
+});
 
 /**
  * Push the goal's latest phase onto the `createGoal` tool card in the origin

@@ -438,6 +438,8 @@ export interface TaskDetailActivity {
   time?: string;
   title?: string;
   topicId?: string | null;
+  /** Topic-only: what opened this round — `goal` marks a loop-spawned rerun. */
+  trigger?: TaskRunTrigger | null;
   type: TaskActivityType;
   userId?: string | null;
 }
