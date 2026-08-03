@@ -736,23 +736,25 @@ describe('ClaudeCodeQuotaMenu', () => {
   it('auto-refreshes on the poll cadence while the tab stays visible', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        get: () => 'visible',
+      });
+
       mockQuotaService.listAccounts.mockResolvedValue([persistedAccount()]);
       mockQuotaService.getWindows.mockResolvedValue([persistedSessionWindow(Date.now() - 60_000)]);
       mockService.getClaudeCodeQuota.mockResolvedValue(claudeSnapshot());
 
       render(<ClaudeCodeQuotaMenu />);
 
-      // Fresh persisted data: nothing hits the live API on mount…
       expect(await screen.findByText('92%')).toBeTruthy();
       expect(mockService.getClaudeCodeQuota).not.toHaveBeenCalled();
 
-      // …but once the 2-minute cadence elapses the snapshot is stale and the
-      // scheduled poll revalidates against the live API.
       await act(async () => {
-        vi.advanceTimersByTime(2 * 60_000 + 500);
+        await vi.advanceTimersByTimeAsync(2 * 60_000 + 500);
       });
 
-      await waitFor(() => expect(mockService.getClaudeCodeQuota).toHaveBeenCalledTimes(1));
+      expect(mockService.getClaudeCodeQuota).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
     }
