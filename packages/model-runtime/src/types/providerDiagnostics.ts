@@ -18,9 +18,12 @@ export interface ProviderResponseEventDiagnostics {
 
 export interface ProviderRawResponseDiagnostics {
   body?: string;
+  /** Number of raw response bytes retained in body. */
   byteLength?: number;
   captureError?: string;
   status: 'captured' | 'failed' | 'unavailable';
+  /** The provider response exceeded the diagnostic capture budget. */
+  truncated?: boolean;
 }
 
 export interface ProviderResponseDiagnostics {
@@ -28,6 +31,8 @@ export interface ProviderResponseDiagnostics {
   apiMode: string;
   completedAt?: number;
   droppedEventCount: number;
+  /** Provider-native events omitted after reaching the count or byte budget. */
+  droppedRawEventCount?: number;
   endpoint?: string;
   error?: {
     message?: string;
@@ -43,6 +48,8 @@ export interface ProviderResponseDiagnostics {
   headers?: Record<string, string>;
   messageId?: string;
   model?: string;
+  /** Serialized bytes retained across rawEvents, excluding JSON array delimiters. */
+  rawEventByteLength?: number;
   /** Provider-native SDK events captured before LobeHub protocol transformation. */
   rawEvents: unknown[];
   /** Raw HTTP response body captured before the provider SDK consumes the stream. */
