@@ -81,6 +81,7 @@ import {
  */
 const AGENT_BUILDER_PROTECTED_FIELDS = [
   'title',
+  'name',
   'description',
   'avatar',
   'backgroundColor',

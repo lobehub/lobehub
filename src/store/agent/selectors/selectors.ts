@@ -91,6 +91,7 @@ const getAgentMetaById =
       backgroundColor: data.backgroundColor || DEFAULT_BACKGROUND_COLOR,
       description: data.description || undefined,
       marketIdentifier: data.marketIdentifier || undefined,
+      name: data.name || undefined,
       tags: data.tags,
       title: data.title || undefined,
     };

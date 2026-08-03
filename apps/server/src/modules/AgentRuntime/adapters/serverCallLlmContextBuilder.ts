@@ -452,6 +452,7 @@ export const buildServerCallLlmContext = async ({
             avatar: editingConfig.avatar ?? undefined,
             backgroundColor: editingConfig.backgroundColor ?? undefined,
             description: editingConfig.description ?? undefined,
+            name: editingConfig.name ?? undefined,
             tags: editingConfig.tags ?? undefined,
             title: editingConfig.title ?? undefined,
           },

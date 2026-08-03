@@ -1,4 +1,4 @@
-import { isDesktop } from '@lobechat/const';
+import { isDesktop, randomAgentName } from '@lobechat/const';
 import { type AgentContextDocument } from '@lobechat/context-engine';
 import {
   isChatGroupSessionId,
@@ -24,6 +24,8 @@ import {
   agentDocumentSWRKeys,
   resolveAgentDocumentsContext,
 } from '@/services/agentDocument';
+import { useGlobalStore } from '@/store/global';
+import { globalGeneralSelectors } from '@/store/global/selectors';
 import type { StoreSetter } from '@/store/types';
 import { getUserStoreState } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -42,7 +44,7 @@ import type { AgentSliceState, LoadingState, SaveStatus } from './initialState';
 type AgentMetaUpdate = Partial<
   Pick<
     AgentItem,
-    'avatar' | 'backgroundColor' | 'description' | 'marketIdentifier' | 'tags' | 'title'
+    'avatar' | 'backgroundColor' | 'description' | 'marketIdentifier' | 'name' | 'tags' | 'title'
   >
 >;
 type AgencyConfigPatch = PartialDeep<LobeAgentAgencyConfig>;
@@ -140,7 +142,18 @@ export class AgentSliceActionImpl {
   };
 
   createAgent = async (params: CreateAgentParams): Promise<CreateAgentResult> => {
-    const result = await agentService.createAgent(params);
+    // Seed a personal name so a new agent has an identity before the Agent
+    // Builder conversation produces one; the builder may replace it later. This
+    // lives here rather than in the create endpoint because the language only
+    // resolves on the client (`auto` follows the browser). A caller that already
+    // carries a name — e.g. a market agent — keeps it.
+    const locale = globalGeneralSelectors.currentLanguage(useGlobalStore.getState());
+    const config = {
+      ...params.config,
+      name: params.config?.name || randomAgentName(locale),
+    };
+
+    const result = await agentService.createAgent({ ...params, config });
     this.#get().invalidateAvailableAgents();
 
     // Track new agent creation analytics

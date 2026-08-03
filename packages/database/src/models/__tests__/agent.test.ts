@@ -845,6 +845,7 @@ describe('AgentModel', () => {
         description: 'hacked description',
         marketIdentifier: 'hacked-market-id',
         model: 'gpt-4', // non-protected field should still be applied
+        name: 'Hacked Builder Name',
         tags: ['hacked'],
         title: 'Hacked Builder Title',
       });
@@ -853,6 +854,7 @@ describe('AgentModel', () => {
         where: eq(agents.id, agent.id),
       });
 
+      expect(result?.name).toBeNull();
       expect(result?.title).toBeNull();
       expect(result?.description).toBeNull();
       expect(result?.avatar).toBeNull();
@@ -1241,6 +1243,7 @@ describe('AgentModel', () => {
         description: 'hacked description',
         marketIdentifier: 'hacked-market-id',
         model: 'gpt-4', // non-protected field should still be applied
+        name: 'Hacked Builder Name',
         tags: ['hacked'],
         title: 'Hacked Builder Title',
       });
@@ -1249,6 +1252,7 @@ describe('AgentModel', () => {
         where: eq(agents.id, agent.id),
       });
 
+      expect(result?.name).toBeNull();
       expect(result?.title).toBeNull();
       expect(result?.description).toBeNull();
       expect(result?.avatar).toBeNull();

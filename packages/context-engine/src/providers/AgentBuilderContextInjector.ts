@@ -52,6 +52,8 @@ export interface AgentBuilderContext {
     avatar?: string;
     backgroundColor?: string;
     description?: string;
+    /** The agent's personal name, as opposed to `title` (the role it plays) */
+    name?: string;
     tags?: string[];
     title?: string;
   };
@@ -77,6 +79,10 @@ const defaultFormatAgentContext = (context: AgentBuilderContext): string => {
   // Add meta section
   if (context.meta) {
     const metaFields: string[] = [];
+    // The builder treats a missing <name> as "this agent still needs one", so an
+    // agent that already has a name must carry it here — otherwise the builder
+    // re-names it on every turn.
+    if (context.meta.name) metaFields.push(`  <name>${escapeXml(context.meta.name)}</name>`);
     if (context.meta.title) metaFields.push(`  <title>${escapeXml(context.meta.title)}</title>`);
     if (context.meta.description)
       metaFields.push(`  <description>${escapeXml(context.meta.description)}</description>`);
