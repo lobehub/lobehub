@@ -527,7 +527,7 @@ describe('ConversationLifecycle actions', () => {
             title: '666',
           }),
         );
-        expect(optimisticTopic?.id).toMatch(/^tmp_topic_/);
+        expect(optimisticTopic?.id).toMatch(/^tpc_/);
         expect(useChatStore.getState().topicLoadingIds).toContain(optimisticTopic!.id);
 
         await act(async () => {
@@ -686,7 +686,7 @@ describe('ConversationLifecycle actions', () => {
         await waitFor(() => expect(executeGatewayAgentSpy).toHaveBeenCalled());
 
         const optimisticTopicId = useChatStore.getState().topicDataMap[topicKey]?.items[0]?.id;
-        expect(optimisticTopicId).toMatch(/^tmp_topic_/);
+        expect(optimisticTopicId).toMatch(/^tpc_/);
         expect(useChatStore.getState().topicLoadingIds).toContain(optimisticTopicId);
 
         await act(async () => {
@@ -982,9 +982,7 @@ describe('ConversationLifecycle actions', () => {
         });
 
         await waitFor(() =>
-          expect(useChatStore.getState().topicDataMap[groupKey]?.items[0]?.id).toMatch(
-            /^tmp_topic_/,
-          ),
+          expect(useChatStore.getState().topicDataMap[groupKey]?.items[0]?.id).toMatch(/^tpc_/),
         );
 
         const optimisticTopic = useChatStore.getState().topicDataMap[groupKey]?.items[0];
@@ -1064,9 +1062,7 @@ describe('ConversationLifecycle actions', () => {
         });
 
         await waitFor(() =>
-          expect(useChatStore.getState().topicDataMap[topicKey]?.items[0]?.id).toMatch(
-            /^tmp_topic_/,
-          ),
+          expect(useChatStore.getState().topicDataMap[topicKey]?.items[0]?.id).toMatch(/^tpc_/),
         );
         const optimisticTopicId = useChatStore.getState().topicDataMap[topicKey]!.items[0].id;
 
@@ -1753,7 +1749,10 @@ describe('ConversationLifecycle actions', () => {
 
         expect(sendMessageInServerSpy).toHaveBeenCalledWith(
           expect.objectContaining({
+            // Exact object on purpose: `model` must still be absent. `id` is the
+            // client-minted message id the server is asked to honour.
             newAssistantMessage: {
+              id: expect.stringMatching(/^msg_/),
               provider: 'codex',
             },
           }),

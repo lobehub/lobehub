@@ -26,7 +26,7 @@ import {
   getWorkingDirSourcePath,
   resolveAgentAgencyConfig,
 } from '@lobechat/types';
-import { nanoid } from '@lobechat/utils';
+import { generateEntityId, nanoid } from '@lobechat/utils';
 import { toast } from '@lobehub/ui/base-ui';
 import { TRPCClientError } from '@trpc/client';
 import { t } from 'i18next';
@@ -533,9 +533,14 @@ export class ConversationLifecycleActionImpl {
       parentId = displayMessageSelectors.findLastMessageId(lastMessage.id)(this.#get());
     }
 
-    // Create operation for send message first, so we can use operationId for optimistic updates
-    const tempId = 'tmp_' + nanoid();
-    const tempAssistantId = 'tmp_' + nanoid();
+    // Mint the ids this turn will live under, up front. These are the FINAL
+    // ids: the server honours them verbatim (`newUserMessage.id` /
+    // `newAssistantMessage.id`), so the optimistic rows never have to be
+    // re-keyed when the response lands. That is what keeps the conversation's
+    // identity — and therefore the mounted message list — stable across the
+    // whole send.
+    const tempId = generateEntityId('messages');
+    const tempAssistantId = generateEntityId('messages');
     const { operationId, abortController } = this.#get().startOperation({
       type: 'sendMessage',
       context: { ...operationContext, messageId: tempId },
@@ -708,8 +713,8 @@ export class ConversationLifecycleActionImpl {
     const newTopicModelSnapshot = !operationContext.topicId
       ? snapshotAgentModel(operationContext.agentId)
       : undefined;
-    // Example: a pending repo topic without this metadata renders under "No directory"
-    // until the server topic replaces `tmp_topic_*`.
+    // Example: a pending repo topic without this metadata renders under "No
+    // directory" until the server row lands.
     const optimisticTopicMetadata: ChatTopicMetadata | undefined =
       pendingTopicRepos.length > 0
         ? {
@@ -724,10 +729,14 @@ export class ConversationLifecycleActionImpl {
             }
           : undefined;
 
+    // The id this conversation's topic will be created under. Minted here and
+    // sent as `newTopic.id`, so the sidebar row, the message bucket and the
+    // active-topic pointer all use the final id from the very first frame —
+    // there is no placeholder id to reconcile once the server responds.
     const optimisticTopic: OptimisticTopicPlaceholder | undefined =
       !operationContext.topicId && !context.isolatedTopic
         ? {
-            id: `tmp_topic_${nanoid()}`,
+            id: generateEntityId('topics'),
             ...(optimisticTopicMetadata ? { metadata: optimisticTopicMetadata } : {}),
             ...newTopicModelSnapshot,
             title: newTopicTitle,
@@ -863,9 +872,14 @@ export class ConversationLifecycleActionImpl {
             // from the agent's requested model. Persist only the runtime
             // provider up front; the adapter backfills the actual model later
             // if the CLI reports it.
-            newAssistantMessage: { provider: heterogeneousProvider.type },
+            newAssistantMessage: {
+              id: tempAssistantId,
+              provider: heterogeneousProvider.type,
+            },
             newTopic: !operationContext.topicId
               ? {
+                  // Same id the optimistic sidebar row already uses.
+                  id: optimisticTopic?.id,
                   metadata: workingDirectory
                     ? {
                         workingDirectory,
@@ -881,6 +895,7 @@ export class ConversationLifecycleActionImpl {
               content: message,
               editorData,
               files: fileIdList,
+              id: tempId,
               metadata: userMessageMetadata,
               contextSelections,
               pageSelections,
@@ -969,11 +984,9 @@ export class ConversationLifecycleActionImpl {
         // spinner during a slow CLI startup.
       }
 
-      // Clean up temp messages
-      this.#get().internal_dispatchMessage(
-        { ids: [tempId, tempAssistantId], type: 'deleteMessages' },
-        { operationId },
-      );
+      // No temp-message cleanup: the optimistic rows were created under the very
+      // ids the server just persisted, so `replaceMessages` above already
+      // reconciled them in place. Deleting them here would delete the real ones.
 
       // Complete sendMessage operation, start ACP execution as child operation
       this.#get().completeOperation(operationId);
@@ -1235,6 +1248,7 @@ export class ConversationLifecycleActionImpl {
             content: persistedContent,
             editorData,
             files: fileIdList,
+            id: tempId,
             metadata: userMessageMetadata,
             contextSelections,
             pageSelections,
@@ -1259,6 +1273,8 @@ export class ConversationLifecycleActionImpl {
           newTopic: !topicId
             ? {
                 ...newTopicModelSnapshot,
+                // Same id the optimistic sidebar row already uses.
+                id: optimisticTopic?.id,
                 topicMessageIds: forceNewTopicFromExisting ? [] : messages.map((m) => m.id),
                 title: newTopicTitle,
               }
@@ -1267,6 +1283,7 @@ export class ConversationLifecycleActionImpl {
           // Pass groupId for group chat scenarios
           groupId: operationContext.groupId ?? undefined,
           newAssistantMessage: {
+            id: tempAssistantId,
             // Pass isSupervisor metadata for group orchestration
             metadata: operationContext.isSupervisor
               ? { isSupervisor: true, orchestrationRole: 'supervisor' as const }
@@ -1409,8 +1426,12 @@ export class ConversationLifecycleActionImpl {
         }
       }
     } finally {
-      // A new topic was created, or the user cancelled the message (or it failed), so data is absent here
-      if (isCreatedTopicResponse(data) || !data) {
+      // Roll the optimistic pair back only when the send did not land (cancel or
+      // failure). On success there is nothing to clean up: the rows were created
+      // under the ids the server persisted, so `replaceMessages` reconciled them
+      // in place — and for a brand-new topic `switchTopic({ clearNewKey: true })`
+      // drops the now-empty `_new` bucket anyway.
+      if (!data) {
         this.#get().internal_dispatchMessage(
           { type: 'deleteMessages', ids: [tempId, tempAssistantId] },
           { operationId },
