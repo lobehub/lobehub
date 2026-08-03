@@ -65,7 +65,17 @@ ALTER TABLE "usage_logs" ALTER COLUMN "org_member_id" DROP NOT NULL;--> statemen
 ALTER TABLE "wallet_transactions" ALTER COLUMN "org_id" DROP NOT NULL;--> statement-breakpoint
 ALTER TABLE "model_access_rules" ADD COLUMN "team_id" text;--> statement-breakpoint
 ALTER TABLE "organizations" ADD COLUMN "wallet_balance_usd" numeric(14, 6) DEFAULT 0 NOT NULL;--> statement-breakpoint
-ALTER TABLE "usage_logs" ADD COLUMN "user_id" text NOT NULL;--> statement-breakpoint
+ALTER TABLE "usage_logs" ADD COLUMN IF NOT EXISTS "user_id" text;--> statement-breakpoint
+-- Backfill before NOT NULL. Unmapped rows are reported by ops; do not invent fake user ids.
+UPDATE "usage_logs" SET "user_id" = 'unmapped' WHERE "user_id" IS NULL AND false;--> statement-breakpoint
+-- Only enforce NOT NULL when every row is mapped (empty table or backfilled).
+DO $ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM "usage_logs" WHERE "user_id" IS NULL) THEN
+    ALTER TABLE "usage_logs" ALTER COLUMN "user_id" SET NOT NULL;
+  ELSE
+    RAISE EXCEPTION 'AICO_MIGRATION_0132: usage_logs.user_id has NULL rows — resolve unmapped usage before continuing';
+  END IF;
+END $;--> statement-breakpoint
 ALTER TABLE "wallet_transactions" ADD COLUMN "user_id" text;--> statement-breakpoint
 ALTER TABLE "wallet_transactions" ADD COLUMN "amount_usd" numeric(14, 6);--> statement-breakpoint
 ALTER TABLE "wallet_transactions" ADD COLUMN "fx_rate" numeric(14, 4);--> statement-breakpoint

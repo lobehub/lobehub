@@ -181,8 +181,7 @@ describe('Phase 3 Env C — unsafe production configuration (fail-closed)', () =
     try {
       delete process.env.KAVENEGAR_API_KEY;
       (process.env as any).NODE_ENV = 'production';
-      const impl = createSmsServiceImpl();
-      expect(impl.constructor.name).not.toContain('Debug');
+      expect(() => createSmsServiceImpl()).toThrow(/KAVENEGAR_API_KEY/);
     } finally {
       process.env.KAVENEGAR_API_KEY = prev;
       (process.env as any).NODE_ENV = prevNode;
@@ -194,16 +193,17 @@ describe('Phase 3 Env C — unsafe production configuration (fail-closed)', () =
     expect(() => tomanToUsd(1000, -1)).toThrow(/Invalid FX/);
   });
 
-  it('AICO-P3-ENV-C: mockTopup must be forbidden in production unless explicitly allowlisted', async () => {
+  it('AICO-P3-ENV-C: mockTopup must be forbidden in production even when allowlisted', async () => {
     const prevNode = process.env.NODE_ENV;
     const prevAllow = process.env.AICO_ALLOW_MOCK_TOPUP;
     try {
       (process.env as any).NODE_ENV = 'production';
-      delete process.env.AICO_ALLOW_MOCK_TOPUP;
+      process.env.AICO_ALLOW_MOCK_TOPUP = '1';
 
       const caller = aicoBillingRouter.createCaller(createTestContext(strangerId));
       await expect(caller.mockTopup({ amountToman: 100_000 })).rejects.toMatchObject({
         code: 'FORBIDDEN',
+        message: 'MOCK_TOPUP_DISABLED',
       });
     } finally {
       (process.env as any).NODE_ENV = prevNode;

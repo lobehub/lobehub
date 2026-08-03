@@ -25,7 +25,11 @@ import { getBusinessModelRuntimeHooks } from '@/business/server/model-runtime';
 import { AiProviderModel } from '@/database/models/aiProvider';
 import { type LobeChatDatabase } from '@/database/type';
 import { getLLMConfig } from '@/envs/llm';
-import { AicoChatGuard, AicoChatGuardError } from '@/server/services/aico/chatGuard';
+import {
+  AicoManagedPolicy,
+  AicoManagedPolicyError,
+} from '@/server/services/aico/managedPolicy';
+import { AicoOpenRouterKeyService } from '@/server/services/openrouter/keyService';
 import { createLLMGenerationTracingHook } from '@/server/services/llmGenerationTracing/hook';
 import { ensureFreshOAuthToken } from '@/server/services/oauthDeviceFlow/refresh';
 
@@ -452,9 +456,10 @@ export const initModelRuntimeFromDB = async (
   userId: string,
   provider: string,
   workspaceId?: string,
+  options?: { billingContext?: unknown; modelId?: string },
 ): Promise<ModelRuntime> => {
-  const managed = AicoChatGuard.isManagedProvider(provider);
-  const runtimeLookupProvider = AicoChatGuard.resolveRuntimeProvider(provider);
+  const managed = AicoManagedPolicy.isManagedProvider(provider);
+  const runtimeLookupProvider = AicoManagedPolicy.resolveRuntimeProvider(provider);
 
   // 1. Get user's provider configuration from database
   const aiProviderModel = new AiProviderModel(db, userId, workspaceId);
@@ -494,17 +499,20 @@ export const initModelRuntimeFromDB = async (
     keyVaults = { ...keyVaults, ...freshKeyVaults } as ProviderKeyVaults;
   }
 
-  // Aico: inject per-user managed OpenRouter key (never from client / env / BYOK).
-  // Managed providers must never fall through to a shared env key or a leftover
-  // client vault secret — that would bypass wallet/trial limits.
+  // Aico: every managed path must pass the centralized policy boundary.
+  // Explicit billing context is mandatory — no first-match / env / BYOK fallback.
   if (managed) {
-    const guard = new AicoChatGuard(db);
-    // Throws for an active trial with no provisioned key (fail closed).
-    const managedKey = await guard.resolveManagedApiKey(userId);
-    if (!managedKey) {
-      throw new AicoChatGuardError('MANAGED_KEY_UNAVAILABLE');
+    if (options?.billingContext === undefined) {
+      throw new AicoManagedPolicyError('BILLING_CONTEXT_REQUIRED');
     }
-    keyVaults = { ...keyVaults, apiKey: managedKey };
+    const keyService = new AicoOpenRouterKeyService(db);
+    const policy = new AicoManagedPolicy(db, (ciphertext) => keyService.decryptKey(ciphertext));
+    const authorized = await policy.authorize({
+      billing: options.billingContext,
+      modelId: options.modelId,
+      userId,
+    });
+    keyVaults = { ...keyVaults, apiKey: authorized.apiKey };
   }
 
   const payload = buildPayloadFromKeyVaults(keyVaults, runtimeProvider);

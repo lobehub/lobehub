@@ -5,11 +5,12 @@ import { z } from 'zod';
 import { AicoBillingModel } from '@/database/models/aicoBilling';
 import { OrganizationModel } from '@/database/models/organization';
 import { users } from '@/database/schemas';
-import { tomanToUsd } from '@/envs/aico';
+import { microUsdToDecimalString, tomanToMicroUsd } from '@/database/utils/aicoMoney';
+import { aicoEnv } from '@/envs/aico';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getTomanPerUsd } from '@/server/services/aico/fxService';
-import { assertMockTopupAllowed } from '@/server/services/aico/mockTopupGate';
+import { assertMockTopupAllowed, isMockTopupUiEnabled } from '@/server/services/aico/mockTopupGate';
 import { AicoOpenRouterKeyService } from '@/server/services/openrouter/keyService';
 
 const billingProcedure = authedProcedure.use(serverDatabase).use(async ({ ctx, next }) => {
@@ -22,10 +23,49 @@ const billingProcedure = authedProcedure.use(serverDatabase).use(async ({ ctx, n
   });
 });
 
+const isProduction = () => process.env.NODE_ENV === 'production';
+
+/**
+ * Trial is disabled in production until atomic request quotas ship, and stays
+ * disabled elsewhere unless both the env flag and the platform config opt in.
+ * Missing/unset config defaults to disabled.
+ */
+const assertTrialAllowed = async (billingModel: AicoBillingModel): Promise<void> => {
+  if (isProduction()) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'TRIAL_DISABLED_IN_PRODUCTION' });
+  }
+  if (!aicoEnv.AICO_ALLOW_TRIAL) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'TRIAL_DISABLED' });
+  }
+  const config = await billingModel.getTrialConfig();
+  if (!config.enabled) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'TRIAL_DISABLED' });
+  }
+};
+
+/** FX rates arrive as floats from the live feed; period math needs an integer rate. */
+const toIntegerFxRate = (rate: number): number => {
+  const rounded = Math.round(rate);
+  if (!Number.isFinite(rounded) || rounded <= 0) {
+    throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'INVALID_FX_RATE' });
+  }
+  return rounded;
+};
+
+const microToSafeInteger = (micro: bigint, label: string): number => {
+  if (micro <= 0n) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: `AMOUNT_MUST_BE_POSITIVE:${label}` });
+  }
+  if (micro > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: `AMOUNT_TOO_LARGE:${label}` });
+  }
+  return Number(micro);
+};
+
 export const aicoBillingRouter = router({
   getFxRate: billingProcedure.query(async () => {
     const { rate, source } = await getTomanPerUsd();
-    return { source, tomanPerUsd: rate };
+    return { source, tomanPerUsd: toIntegerFxRate(rate) };
   }),
 
   getMyWallet: billingProcedure.query(async ({ ctx }) => {
@@ -33,11 +73,17 @@ export const aicoBillingRouter = router({
       ctx.billingModel.getOrCreateUserWallet(ctx.userId),
       ctx.organizationModel.ensureUserPublicCode(ctx.userId),
     ]);
+    const balanceMicroUsd = Number(wallet.balanceMicroUsd ?? 0);
     return {
-      balanceToman: wallet.balanceToman,
-      balanceUsd: Number(wallet.balanceUsd),
+      // Money is always a string: micro-USD integers and 6-decimal USD, never a float.
+      balanceMicroUsd: String(balanceMicroUsd),
+      balanceToman: String(wallet.balanceToman ?? 0),
+      balanceUsd: microUsdToDecimalString(balanceMicroUsd),
       hasManagedKey: Boolean(wallet.openrouterKeyId),
       isActive: wallet.isActive,
+      mockTopupEnabled: isMockTopupUiEnabled(),
+      preferredBillingSource: wallet.preferredBillingSource as 'personal' | 'organization',
+      preferredOrganizationId: wallet.preferredOrganizationId,
       publicCode,
       // Never expose key material
     };
@@ -50,13 +96,67 @@ export const aicoBillingRouter = router({
   getMyUsage: billingProcedure
     .input(z.object({ limit: z.number().int().min(1).max(100).optional() }).optional())
     .query(async ({ ctx, input }) => {
-      return ctx.billingModel.listUserUsage(ctx.userId, input?.limit ?? 50);
+      const rows = await ctx.billingModel.listUserUsage(ctx.userId, input?.limit ?? 50);
+      return rows.map((row) => ({
+        completionTokens: row.completionTokens,
+        costMicroUsd: String(row.costMicroUsd),
+        costUsd: microUsdToDecimalString(row.costMicroUsd),
+        createdAt: row.createdAt,
+        id: row.id,
+        modelId: row.modelId,
+        promptTokens: row.promptTokens,
+        settlementStatus: row.settlementStatus,
+        totalTokens: row.totalTokens,
+      }));
     }),
 
   getMyTransactions: billingProcedure
     .input(z.object({ limit: z.number().int().min(1).max(100).optional() }).optional())
     .query(async ({ ctx, input }) => {
-      return ctx.billingModel.listUserTransactions(ctx.userId, input?.limit ?? 50);
+      const rows = await ctx.billingModel.listUserTransactions(ctx.userId, input?.limit ?? 50);
+      return rows.map((row) => ({
+        amountMicroUsd: String(row.amountMicroUsd),
+        amountToman: String(row.amountToman),
+        amountUsd: microUsdToDecimalString(row.amountMicroUsd),
+        createdAt: row.createdAt,
+        description: row.description,
+        id: row.id,
+        type: row.type,
+      }));
+    }),
+
+  /**
+   * UX-only: remembers which wallet the SPA pre-selects. Every managed request
+   * still carries an explicit billing context that is authorized server-side.
+   */
+  setBillingPreference: billingProcedure
+    .input(
+      z.object({
+        organizationId: z.string().min(1).optional(),
+        source: z.enum(['personal', 'organization']),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (input.source === 'organization') {
+        if (!input.organizationId) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'ORGANIZATION_ID_REQUIRED' });
+        }
+        const role = await ctx.organizationModel.getMemberRole(ctx.userId, input.organizationId);
+        if (!role) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'ORG_MEMBERSHIP_REQUIRED' });
+        }
+      }
+
+      const wallet = await ctx.billingModel.setBillingPreference({
+        organizationId: input.organizationId,
+        source: input.source,
+        userId: ctx.userId,
+      });
+
+      return {
+        preferredBillingSource: wallet.preferredBillingSource as 'personal' | 'organization',
+        preferredOrganizationId: wallet.preferredOrganizationId,
+      };
     }),
 
   mockTopup: billingProcedure
@@ -64,24 +164,30 @@ export const aicoBillingRouter = router({
     .mutation(async ({ ctx, input }) => {
       assertMockTopupAllowed();
 
-      const { rate: fxRate } = await getTomanPerUsd();
-      const amountUsd = tomanToUsd(input.amountToman, fxRate);
+      const { rate } = await getTomanPerUsd();
+      const fxRateTomanPerUsd = toIntegerFxRate(rate);
+      const amountMicroUsd = microToSafeInteger(
+        tomanToMicroUsd(input.amountToman, fxRateTomanPerUsd),
+        'micro_usd',
+      );
 
       const { wallet, transaction } = await ctx.billingModel.mockTopupUser({
+        amountMicroUsd,
         amountToman: input.amountToman,
-        amountUsd,
         createdByUserId: ctx.userId,
-        fxRate,
+        fxRateTomanPerUsd,
         userId: ctx.userId,
       });
 
       await ctx.keyService.ensureUserKey(ctx.userId);
 
       return {
-        amountUsd,
-        balanceToman: wallet.balanceToman,
-        balanceUsd: Number(wallet.balanceUsd),
-        fxRate,
+        amountMicroUsd: String(amountMicroUsd),
+        amountUsd: microUsdToDecimalString(amountMicroUsd),
+        balanceMicroUsd: String(wallet.balanceMicroUsd),
+        balanceToman: String(wallet.balanceToman),
+        balanceUsd: microUsdToDecimalString(wallet.balanceMicroUsd),
+        fxRateTomanPerUsd,
         transactionId: transaction.id,
       };
     }),
@@ -92,27 +198,36 @@ export const aicoBillingRouter = router({
       ctx.billingModel.getTrialConfig(),
       ctx.billingModel.isTrialActive(ctx.userId),
     ]);
+
+    // Production (and any environment without the explicit flags) must not
+    // advertise a Trial the chat path would refuse to execute.
+    const enabled = !isProduction() && aicoEnv.AICO_ALLOW_TRIAL && config.enabled;
+
     return {
-      active,
+      active: enabled && active,
       config: {
         allowedModelIds: JSON.parse(config.allowedModelIds || '[]') as string[],
         durationDays: config.durationDays,
-        enabled: config.enabled,
+        enabled,
         maxRequests: config.maxRequests,
-        trialBudgetUsd: Number(config.trialBudgetUsd),
+        trialBudgetMicroUsd: String(config.trialBudgetMicroUsd),
+        trialBudgetUsd: microUsdToDecimalString(config.trialBudgetMicroUsd),
       },
-      trial: trial
-        ? {
-            expiresAt: trial.expiresAt.toISOString(),
-            requestCount: trial.requestCount,
-            startedAt: trial.startedAt.toISOString(),
-            status: trial.status,
-          }
-        : null,
+      trial:
+        enabled && trial
+          ? {
+              expiresAt: trial.expiresAt.toISOString(),
+              requestCount: trial.requestCount,
+              startedAt: trial.startedAt.toISOString(),
+              status: trial.status,
+            }
+          : null,
     };
   }),
 
   activateTrial: billingProcedure.mutation(async ({ ctx }) => {
+    await assertTrialAllowed(ctx.billingModel);
+
     const user = await ctx.serverDB.query.users.findFirst({
       where: eq(users.id, ctx.userId),
     });
@@ -131,10 +246,10 @@ export const aicoBillingRouter = router({
 
       const config = await ctx.billingModel.getTrialConfig();
       try {
-        await ctx.keyService.ensureTrialKey(ctx.userId, Number(config.trialBudgetUsd));
+        await ctx.keyService.ensureTrialKey(ctx.userId, Number(config.trialBudgetMicroUsd));
       } catch (error) {
-        // Trial row is already created — surface the failure via resolveManagedApiKey
-        // at chat time (fail closed) rather than rolling back trial activation here.
+        // Trial row already exists — the managed policy fails closed at chat time
+        // when no key was provisioned, so don't roll back activation here.
         console.error('[aicoBilling] failed to provision trial OpenRouter key', error);
       }
 
@@ -144,6 +259,7 @@ export const aicoBillingRouter = router({
         status: trial.status,
       };
     } catch (error) {
+      if (error instanceof TRPCError) throw error;
       const message = error instanceof Error ? error.message : 'TRIAL_FAILED';
       throw new TRPCError({
         code:
@@ -164,14 +280,27 @@ export const aicoBillingRouter = router({
    * keys server-side. The SPA must never show the multi-provider catalog.
    */
   getManagedProviderStatus: billingProcedure.query(async ({ ctx }) => {
-    const [wallet, trialActive, hasOrgOrWalletKey] = await Promise.all([
+    const [wallet, trialActive, orgs] = await Promise.all([
       ctx.billingModel.getUserWallet(ctx.userId),
       ctx.billingModel.isTrialActive(ctx.userId),
-      ctx.keyService.resolveUserApiKey(ctx.userId).then((k) => Boolean(k)),
+      ctx.organizationModel.listForUser(ctx.userId),
     ]);
+
+    const hasOrgCredit = (
+      await Promise.all(
+        orgs.map(async (org) => {
+          const members = await ctx.organizationModel.listMembers(org.id);
+          const me = members.find((m) => m.userId === ctx.userId && m.status === 'active');
+          if (!me) return false;
+          const budget = await ctx.organizationModel.getMemberBudget(me.id);
+          return Boolean(budget?.isActive && (budget.reservedMicroUsd ?? 0) > 0);
+        }),
+      )
+    ).some(Boolean);
+
     return {
       brandName: 'Aico',
-      hasCredit: Boolean(wallet?.openrouterKeyId) || trialActive || hasOrgOrWalletKey,
+      hasCredit: Boolean(wallet?.openrouterKeyId) || trialActive || hasOrgCredit,
       managed: true,
       providerId: 'aico',
       runtimeProviderId: 'openrouter',

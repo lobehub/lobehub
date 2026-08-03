@@ -12,8 +12,61 @@ import {
 } from '../schemas/aicoOrganization';
 import type { LobeChatDatabase } from '../type';
 
+/**
+ * Iranian mobile → E.164 normalization, duplicated (not imported) from
+ * `src/libs/better-auth/phone.ts` — the database package cannot depend on
+ * app-level `src/` code. Keep this in lockstep with that file.
+ *
+ * Fingerprints MUST be derived from a single canonical form, or distinct raw
+ * inputs (`09121234567`, `+989121234567`, Persian digits, …) for the same
+ * underlying number would produce distinct fingerprints and defeat trial
+ * abuse detection / the unique phone-fingerprint constraint.
+ */
+const IR_MOBILE_E164 = /^\+989\d{9}$/;
+const PERSIAN_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
+const ARABIC_INDIC_DIGITS = '٠١٢٣٤٥٦٧٨٩';
+
+const toAsciiDigits = (value: string): string =>
+  value.replaceAll(/[۰-۹٠-٩]/g, (ch) => {
+    const persian = PERSIAN_DIGITS.indexOf(ch);
+    if (persian >= 0) return String(persian);
+    const arabic = ARABIC_INDIC_DIGITS.indexOf(ch);
+    return arabic >= 0 ? String(arabic) : ch;
+  });
+
+const stripPhoneNoise = (value: string): string =>
+  toAsciiDigits(value).replaceAll(/[\s\-()]/g, '').trim();
+
+/** Normalizes an Iranian mobile number to E.164. Throws `INVALID_PHONE` if implausible. */
+export const normalizeIranianPhoneForFingerprint = (raw: string): string => {
+  const cleaned = stripPhoneNoise(raw);
+  if (!cleaned) throw new Error('INVALID_PHONE');
+
+  if (IR_MOBILE_E164.test(cleaned)) return cleaned;
+
+  if (/^\+98/.test(cleaned)) {
+    const digits = cleaned.slice(1);
+    if (/^989\d{9}$/.test(digits)) return `+${digits}`;
+    throw new Error('INVALID_PHONE');
+  }
+
+  if (/^989\d{9}$/.test(cleaned)) return `+${cleaned}`;
+
+  const digits = cleaned.replaceAll(/\D/g, '');
+  if (/^0?9\d{9}$/.test(digits)) {
+    const national = digits.startsWith('0') ? digits.slice(1) : digits;
+    return `+98${national}`;
+  }
+
+  throw new Error('INVALID_PHONE');
+};
+
+/** Postgres unique_violation. */
+const isUniqueConstraintViolation = (error: unknown): boolean =>
+  Boolean(error && typeof error === 'object' && (error as { code?: string }).code === '23505');
+
 export const fingerprintPhone = (phone: string): string =>
-  createHash('sha256').update(`phone:${phone.trim()}`).digest('hex');
+  createHash('sha256').update(`phone:${normalizeIranianPhoneForFingerprint(phone)}`).digest('hex');
 
 export const fingerprintEmail = (email: string): string =>
   createHash('sha256').update(`email:${email.trim().toLowerCase()}`).digest('hex');
@@ -52,15 +105,19 @@ export class AicoBillingModel {
   };
 
   mockTopupUser = async (params: {
+    amountMicroUsd: number;
     amountToman: number;
-    amountUsd: number;
     createdByUserId: string;
-    fxRate: number;
+    fxRateTomanPerUsd: number;
     gatewayRefId?: string;
     userId: string;
   }) => {
-    if (params.amountToman <= 0) throw new Error('amountToman must be positive');
-    if (params.amountUsd <= 0) throw new Error('amountUsd must be positive');
+    if (!Number.isInteger(params.amountToman) || params.amountToman <= 0) {
+      throw new Error('AMOUNT_TOMAN_MUST_BE_POSITIVE_INTEGER');
+    }
+    if (!Number.isInteger(params.amountMicroUsd) || params.amountMicroUsd <= 0) {
+      throw new Error('AMOUNT_MICRO_USD_MUST_BE_POSITIVE_INTEGER');
+    }
 
     return this.db.transaction(async (tx) => {
       await tx.insert(userWallets).values({ userId: params.userId }).onConflictDoNothing({
@@ -70,11 +127,11 @@ export class AicoBillingModel {
       const [txRow] = await tx
         .insert(walletTransactions)
         .values({
+          amountMicroUsd: params.amountMicroUsd,
           amountToman: params.amountToman,
-          amountUsd: params.amountUsd,
           createdByUserId: params.createdByUserId,
           description: 'Mock topup',
-          fxRate: params.fxRate,
+          fxRateTomanPerUsd: params.fxRateTomanPerUsd,
           gatewayRefId: params.gatewayRefId ?? `mock_${Date.now()}`,
           type: 'topup',
           userId: params.userId,
@@ -84,8 +141,8 @@ export class AicoBillingModel {
       const [wallet] = await tx
         .update(userWallets)
         .set({
+          balanceMicroUsd: sql`${userWallets.balanceMicroUsd} + ${params.amountMicroUsd}`,
           balanceToman: sql`${userWallets.balanceToman} + ${params.amountToman}`,
-          balanceUsd: sql`${userWallets.balanceUsd} + ${params.amountUsd}`,
           isActive: true,
         })
         .where(eq(userWallets.userId, params.userId))
@@ -95,8 +152,30 @@ export class AicoBillingModel {
     });
   };
 
+  /**
+   * UX-only preference for which wallet the SPA pre-selects. Authorization always
+   * re-derives the billing context from the request — never from this column.
+   */
+  setBillingPreference = async (params: {
+    organizationId?: string | null;
+    source: 'personal' | 'organization';
+    userId: string;
+  }) => {
+    await this.getOrCreateUserWallet(params.userId);
+    const [row] = await this.db
+      .update(userWallets)
+      .set({
+        preferredBillingSource: params.source,
+        preferredOrganizationId:
+          params.source === 'organization' ? (params.organizationId ?? null) : null,
+      })
+      .where(eq(userWallets.userId, params.userId))
+      .returning();
+    return row;
+  };
+
   updateUserOpenRouterKey = async (params: {
-    encryptedKey: string;
+    ciphertext: string;
     keyId: string;
     userId: string;
   }) => {
@@ -104,7 +183,7 @@ export class AicoBillingModel {
     const [row] = await this.db
       .update(userWallets)
       .set({
-        openrouterKeyHash: params.encryptedKey,
+        openrouterKeyCiphertext: params.ciphertext,
         openrouterKeyId: params.keyId,
       })
       .where(eq(userWallets.userId, params.userId))
@@ -120,6 +199,27 @@ export class AicoBillingModel {
     });
   };
 
+  /** UX preference only — never authorize managed requests from this alone. */
+  setBillingPreference = async (params: {
+    preferredBillingSource: 'personal' | 'organization';
+    preferredOrganizationId?: string | null;
+    userId: string;
+  }) => {
+    await this.getOrCreateUserWallet(params.userId);
+    const [row] = await this.db
+      .update(userWallets)
+      .set({
+        preferredBillingSource: params.preferredBillingSource,
+        preferredOrganizationId:
+          params.preferredBillingSource === 'organization'
+            ? (params.preferredOrganizationId ?? null)
+            : null,
+      })
+      .where(eq(userWallets.userId, params.userId))
+      .returning();
+    return row;
+  };
+
   listUserUsage = async (userId: string, limit = 50) => {
     return this.db.query.usageLogs.findMany({
       where: eq(usageLogs.userId, userId),
@@ -129,8 +229,9 @@ export class AicoBillingModel {
   };
 
   recordUsage = async (params: {
+    billingSource: 'personal' | 'organization';
     completionTokens: number;
-    costUsd: number;
+    costMicroUsd: number;
     modelId: string;
     orgId?: string | null;
     orgMemberId?: string | null;
@@ -141,8 +242,9 @@ export class AicoBillingModel {
     const [row] = await this.db
       .insert(usageLogs)
       .values({
+        billingSource: params.billingSource,
         completionTokens: params.completionTokens,
-        costUsd: params.costUsd,
+        costMicroUsd: params.costMicroUsd,
         modelId: params.modelId,
         orgId: params.orgId ?? null,
         orgMemberId: params.orgMemberId ?? null,
@@ -180,7 +282,7 @@ export class AicoBillingModel {
     durationDays?: number;
     enabled?: boolean;
     maxRequests?: number | null;
-    trialBudgetUsd?: number;
+    trialBudgetMicroUsd?: number;
     updatedByUserId: string;
   }) => {
     await this.getTrialConfig();
@@ -193,7 +295,9 @@ export class AicoBillingModel {
           ? { allowedModelIds: JSON.stringify(params.allowedModelIds) }
           : {}),
         ...(params.maxRequests !== undefined ? { maxRequests: params.maxRequests } : {}),
-        ...(params.trialBudgetUsd !== undefined ? { trialBudgetUsd: params.trialBudgetUsd } : {}),
+        ...(params.trialBudgetMicroUsd !== undefined
+          ? { trialBudgetMicroUsd: params.trialBudgetMicroUsd }
+          : {}),
         updatedByUserId: params.updatedByUserId,
       })
       .where(eq(platformTrialConfig.id, 'default'))
@@ -218,6 +322,13 @@ export class AicoBillingModel {
     return Boolean(row);
   };
 
+  /**
+   * Activates a trial. Pre-checks both uniqueness constraints (per-user,
+   * per-phone-fingerprint) for a clean error message, then relies on the DB's
+   * unique indexes (`user_trials_user_id_uidx`,
+   * `user_trials_phone_fingerprint_uidx`) as the actual race-safe guard —
+   * concurrent activations can never create two trials for the same phone.
+   */
   activateTrial = async (params: { phone: string; userId: string }) => {
     const config = await this.getTrialConfig();
     if (!config.enabled) throw new Error('TRIAL_DISABLED');
@@ -238,17 +349,23 @@ export class AicoBillingModel {
     const startedAt = new Date();
     const expiresAt = new Date(startedAt.getTime() + config.durationDays * 24 * 60 * 60 * 1000);
 
-    const [trial] = await this.db
-      .insert(userTrials)
-      .values({
-        expiresAt,
-        phoneFingerprint,
-        startedAt,
-        status: 'active',
-        userId: params.userId,
-      })
-      .returning();
-    return trial;
+    try {
+      const [trial] = await this.db
+        .insert(userTrials)
+        .values({
+          expiresAt,
+          phoneFingerprint,
+          startedAt,
+          status: 'active',
+          userId: params.userId,
+        })
+        .returning();
+      return trial;
+    } catch (error) {
+      if (!isUniqueConstraintViolation(error)) throw error;
+      const constraint = (error as { constraint?: string }).constraint ?? '';
+      throw new Error(constraint.includes('user_id') ? 'TRIAL_ALREADY_USED' : 'TRIAL_PHONE_ALREADY_USED');
+    }
   };
 
   incrementTrialRequest = async (userId: string) => {
@@ -312,10 +429,10 @@ export class AicoBillingModel {
     });
   };
 
-  /** Sum of `usage_logs.cost_usd` across all B2C + B2B traffic — real OpenRouter spend. */
-  sumUsageCostUsd = async (): Promise<number> => {
+  /** Sum of `usage_logs.cost_micro_usd` across all B2C + B2B traffic — real OpenRouter spend. */
+  sumUsageCostMicroUsd = async (): Promise<number> => {
     const [row] = await this.db
-      .select({ total: sql<number>`COALESCE(SUM(${usageLogs.costUsd}), 0)` })
+      .select({ total: sql<number>`COALESCE(SUM(${usageLogs.costMicroUsd}), 0)` })
       .from(usageLogs);
     return Number(row?.total ?? 0);
   };

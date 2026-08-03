@@ -1,18 +1,20 @@
 import { AicoBillingModel } from '@/database/models/aicoBilling';
 import { OrganizationModel } from '@/database/models/organization';
 import type { LobeChatDatabase } from '@/database/type';
+import {
+  type BudgetPeriod,
+  microUsdToDecimalString,
+  openRouterUsdToMicroFloor,
+  periodToOpenRouterLimitReset,
+} from '@/database/utils/aicoMoney';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
-import { createOpenRouterManagementClient, type OpenRouterManagementClient } from './management';
+import {
+  createOpenRouterManagementClient,
+  type OpenRouterKeyLimitReset,
+  type OpenRouterManagementClient,
+} from './management';
 
-/**
- * In-process mutex keyed by an arbitrary string. Serializes concurrent
- * "check key exists, else create" calls for the same wallet/budget within a
- * single server process so a double-submit (e.g. two rapid topup calls)
- * cannot both observe an empty key and provision two orphaned OpenRouter keys.
- * Does not protect across multiple server instances — a real fix would need a
- * DB-level unique constraint or advisory lock, out of scope here.
- */
 const locks = new Map<string, Promise<unknown>>();
 const runExclusive = <T>(key: string, fn: () => Promise<T>): Promise<T> => {
   const tail = locks.get(key) ?? Promise.resolve();
@@ -23,6 +25,8 @@ const runExclusive = <T>(key: string, fn: () => Promise<T>): Promise<T> => {
   );
   return result;
 };
+
+const microToOpenRouterLimitUsd = (micro: number): number => Number(microUsdToDecimalString(micro));
 
 /**
  * Provisions / updates OpenRouter keys for B2C wallets and B2B member budgets.
@@ -53,48 +57,48 @@ export class AicoOpenRouterKeyService {
     return wasAuthentic ? plaintext : null;
   }
 
-  /**
-   * Ensure a B2C user has an OpenRouter key whose limit matches wallet balance USD.
-   */
+  private isStaleManagedKeyId(keyId: string | null | undefined): boolean {
+    return !keyId || keyId.startsWith('mock_');
+  }
+
   ensureUserKey = async (userId: string) => {
     return runExclusive(`user-key:${userId}`, async () => {
       const wallet = await this.billingModel.getOrCreateUserWallet(userId);
-      const limitUsd = Number(wallet.balanceUsd);
+      const limitMicro = Number(wallet.balanceMicroUsd ?? 0);
+      const limitUsd = microToOpenRouterLimitUsd(limitMicro);
 
       if (
         wallet.openrouterKeyId &&
-        wallet.openrouterKeyHash &&
+        wallet.openrouterKeyCiphertext &&
         !this.isStaleManagedKeyId(wallet.openrouterKeyId)
       ) {
         try {
           await this.client.updateKey({
-            disabled: limitUsd <= 0,
+            disabled: limitMicro <= 0,
             hash: wallet.openrouterKeyId,
+            limitReset: null,
             limitUsd: Math.max(limitUsd, 0),
           });
           return { created: false, keyId: wallet.openrouterKeyId };
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           if (!/OpenRouter Management API (?:403|404)/.test(message)) throw error;
-          console.warn(
-            '[aico] user OpenRouter key update failed; recreating',
-            wallet.openrouterKeyId,
-            message,
-          );
+          console.warn('[aico] user OpenRouter key update failed; recreating', message);
         }
       }
 
-      if (limitUsd <= 0) {
+      if (limitMicro <= 0) {
         return { created: false, keyId: null };
       }
 
       const created = await this.client.createKey({
+        limitReset: null,
         limitUsd,
         name: `aico-user-${userId}`,
       });
       const encrypted = await this.encryptKey(created.key);
       await this.billingModel.updateUserOpenRouterKey({
-        encryptedKey: encrypted,
+        ciphertext: encrypted,
         keyId: created.hash,
         userId,
       });
@@ -102,28 +106,28 @@ export class AicoOpenRouterKeyService {
     });
   };
 
-  /**
-   * Create a trial-only OpenRouter key with a fixed USD limit. Never touches the
-   * paid wallet balance — trial spend is isolated from real top-ups. No-ops if the
-   * wallet already has a managed key (paid or trial), so a paid top-up always wins.
-   */
-  ensureTrialKey = async (userId: string, budgetUsd: number) => {
-    const budget = Number.isFinite(budgetUsd) && budgetUsd > 0 ? budgetUsd : 0.01;
+  ensureTrialKey = async (userId: string, budgetMicroUsd: number) => {
+    const budgetMicro =
+      Number.isFinite(budgetMicroUsd) && budgetMicroUsd > 0 ? Math.trunc(budgetMicroUsd) : 0;
+    if (budgetMicro <= 0) {
+      return { created: false, keyId: null };
+    }
 
     return runExclusive(`user-key:${userId}`, async () => {
       const wallet = await this.billingModel.getOrCreateUserWallet(userId);
 
-      if (wallet.openrouterKeyId && wallet.openrouterKeyHash) {
+      if (wallet.openrouterKeyId && wallet.openrouterKeyCiphertext) {
         return { created: false, keyId: wallet.openrouterKeyId };
       }
 
       const created = await this.client.createKey({
-        limitUsd: budget,
+        limitReset: null,
+        limitUsd: microToOpenRouterLimitUsd(budgetMicro),
         name: `aico-trial-${userId}`,
       });
       const encrypted = await this.encryptKey(created.key);
       await this.billingModel.updateUserOpenRouterKey({
-        encryptedKey: encrypted,
+        ciphertext: encrypted,
         keyId: created.hash,
         userId,
       });
@@ -132,54 +136,56 @@ export class AicoOpenRouterKeyService {
   };
 
   /**
-   * True for in-process mock key ids (`mock_…`) that OpenRouter will reject.
-   * After switching from mock → real management key, these must be replaced.
-   */
-  private isStaleManagedKeyId(keyId: string | null | undefined): boolean {
-    return !keyId || keyId.startsWith('mock_');
-  }
-
-  /**
-   * Ensure an org member budget has an OpenRouter key matching limitUsd.
+   * Ensure member OpenRouter key matches funded period amount + limit_reset.
+   * Never creates a key when reserved/period amount ≤ 0.
    */
   ensureMemberKey = async (orgMemberId: string) => {
     return runExclusive(`member-key:${orgMemberId}`, async () => {
       const budget = await this.orgModel.getMemberBudget(orgMemberId);
       if (!budget) throw new Error('BUDGET_NOT_FOUND');
 
-      const limitUsd = Number(budget.limitUsd);
+      const period = (budget.period || 'total') as BudgetPeriod;
+      const limitReset: OpenRouterKeyLimitReset = periodToOpenRouterLimitReset(period);
+      const limitMicro = Number(budget.reservedMicroUsd || budget.periodAmountMicroUsd || 0);
+      const limitUsd = microToOpenRouterLimitUsd(limitMicro);
+      const shouldDisable =
+        !budget.isActive ||
+        limitMicro <= 0 ||
+        budget.renewalStatus === 'renewal_pending' ||
+        budget.renewalStatus === 'renewal_failed';
 
       if (
         budget.openrouterKeyId &&
-        budget.openrouterKeyHash &&
+        budget.openrouterKeyCiphertext &&
         !this.isStaleManagedKeyId(budget.openrouterKeyId)
       ) {
         try {
           await this.client.updateKey({
-            disabled: !budget.isActive || limitUsd <= 0,
+            disabled: shouldDisable,
             hash: budget.openrouterKeyId,
+            limitReset,
             limitUsd: Math.max(limitUsd, 0),
           });
           return { created: false, keyId: budget.openrouterKeyId };
         } catch (error) {
-          // Orphaned / foreign-account key — recreate instead of blocking allocate.
           const message = error instanceof Error ? error.message : String(error);
           if (!/OpenRouter Management API (?:403|404)/.test(message)) throw error;
-          console.warn(
-            '[aico] member OpenRouter key update failed; recreating',
-            budget.openrouterKeyId,
-            message,
-          );
+          console.warn('[aico] member OpenRouter key update failed; recreating', message);
         }
       }
 
+      if (limitMicro <= 0 || shouldDisable) {
+        return { created: false, keyId: null };
+      }
+
       const created = await this.client.createKey({
-        limitUsd: Math.max(limitUsd, 0.01),
+        limitReset,
+        limitUsd,
         name: `aico-member-${orgMemberId}`,
       });
       const encrypted = await this.encryptKey(created.key);
       await this.orgModel.updateMemberOpenRouterKey({
-        encryptedKey: encrypted,
+        ciphertext: encrypted,
         keyId: created.hash,
         orgMemberId,
       });
@@ -187,61 +193,82 @@ export class AicoOpenRouterKeyService {
     });
   };
 
-  /** Disable (but keep) an org member's managed OpenRouter key — e.g. on remove/suspend. */
   disableMemberKey = async (orgMemberId: string) => {
     const budget = await this.orgModel.getMemberBudget(orgMemberId);
     if (!budget?.openrouterKeyId) return null;
     return this.client.updateKey({ disabled: true, hash: budget.openrouterKeyId });
   };
 
-  /** Disable every member key in an org — used when a platform admin suspends the org. */
+  disableUserKey = async (userId: string) => {
+    const wallet = await this.billingModel.getUserWallet(userId);
+    if (!wallet?.openrouterKeyId) return null;
+    return this.client.updateKey({ disabled: true, hash: wallet.openrouterKeyId });
+  };
+
   disableAllOrgMemberKeys = async (orgId: string) => {
     const members = await this.orgModel.listMembers(orgId);
     return Promise.allSettled(members.map((m) => this.disableMemberKey(m.id)));
   };
 
   /**
-   * Reclaim a member's OpenRouter key on remove/revoke: reads the OpenRouter-reported
-   * remaining credit, disables the key so it can never be spent again, then returns
-   * `remainingUsd` for the caller to credit back to the org wallet.
+   * Authoritative settlement helpers for removal / period close.
+   * Returns micro-USD usage/remaining from OpenRouter (floored).
    */
   reclaimMemberKey = async (
     orgMemberId: string,
-  ): Promise<{ remainingUsd: number; usageUsd: number } | null> => {
+  ): Promise<{ remainingMicroUsd: number; usageMicroUsd: number } | null> => {
     const budget = await this.orgModel.getMemberBudget(orgMemberId);
     if (!budget?.openrouterKeyId) return null;
 
     const info = await this.client.getKey(budget.openrouterKeyId);
-    const remainingUsd =
-      info.limitRemaining ?? Math.max(0, (info.limit ?? Number(budget.limitUsd)) - info.usage);
+    const usageMicro = Number(openRouterUsdToMicroFloor(info.usage));
+    const reserved = Number(budget.reservedMicroUsd || budget.periodAmountMicroUsd || 0);
+    const remainingFromOr =
+      info.limitRemaining == null
+        ? Math.max(0, reserved - usageMicro)
+        : Number(openRouterUsdToMicroFloor(info.limitRemaining));
 
     await this.client.updateKey({ disabled: true, hash: budget.openrouterKeyId });
 
-    return { remainingUsd, usageUsd: info.usage };
+    return {
+      remainingMicroUsd: Math.max(0, remainingFromOr),
+      usageMicroUsd: usageMicro,
+    };
   };
 
   /**
-   * Resolve plaintext key for server-side chat injection. Never expose via tRPC.
-   * Suspended orgs are already excluded by `listForUser`; inactive budgets are
-   * skipped explicitly below.
+   * Authoritative period settlement read — unlike {@link reclaimMemberKey} it
+   * leaves the key enabled, so a renewal can settle the closing period without
+   * interrupting a member whose next period is about to be funded.
    */
-  resolveUserApiKey = async (userId: string): Promise<string | null> => {
-    // Prefer org member budget key if user is in an org with a budget
-    const orgs = await this.orgModel.listForUser(userId);
-    for (const org of orgs) {
-      const members = await this.orgModel.listMembers(org.id);
-      const me = members.find((m) => m.userId === userId && m.status === 'active');
-      if (!me) continue;
-      const budget = await this.orgModel.getMemberBudget(me.id);
-      if (budget?.openrouterKeyHash && budget.isActive) {
-        return this.decryptKey(budget.openrouterKeyHash);
-      }
-    }
+  settleMemberPeriod = async (
+    orgMemberId: string,
+  ): Promise<{ remainingMicroUsd: number; usageMicroUsd: number } | null> => {
+    const budget = await this.orgModel.getMemberBudget(orgMemberId);
+    if (!budget?.openrouterKeyId) return null;
 
-    const wallet = await this.billingModel.getUserWallet(userId);
-    if (!wallet?.openrouterKeyHash || !wallet.isActive) return null;
-    return this.decryptKey(wallet.openrouterKeyHash);
+    const info = await this.client.getKey(budget.openrouterKeyId);
+    const usageMicro = Number(openRouterUsdToMicroFloor(info.usage));
+    const reserved = Number(budget.reservedMicroUsd || budget.periodAmountMicroUsd || 0);
+    const remaining =
+      info.limitRemaining == null
+        ? Math.max(0, reserved - usageMicro)
+        : Number(openRouterUsdToMicroFloor(info.limitRemaining));
+
+    await this.orgModel.syncMemberBudgetUsage({
+      orgMemberId,
+      settledUsageMicroUsd: usageMicro,
+    });
+
+    return { remainingMicroUsd: Math.max(0, remaining), usageMicroUsd: usageMicro };
   };
+
+  /**
+   * @deprecated Prefer explicit billing context via AicoManagedPolicy.
+   * Kept only for transitional non-managed diagnostics — returns null always
+   * so silent first-match billing cannot occur.
+   */
+  resolveUserApiKey = async (_userId: string): Promise<string | null> => null;
 
   syncMemberUsage = async (orgMemberId: string) => {
     const budget = await this.orgModel.getMemberBudget(orgMemberId);
@@ -249,7 +276,7 @@ export class AicoOpenRouterKeyService {
     const info = await this.client.getKey(budget.openrouterKeyId);
     return this.orgModel.syncMemberBudgetUsage({
       orgMemberId,
-      usedUsd: info.usage,
+      settledUsageMicroUsd: Number(openRouterUsdToMicroFloor(info.usage)),
     });
   };
 }

@@ -1,8 +1,9 @@
-import { and, count, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, ilike, inArray, ne, or, sql } from 'drizzle-orm';
 
 import {
   aicoUserPublicIds,
   memberBudgets,
+  type MemberBudgetItem,
   modelAccessRules,
   type NewOrganization,
   type OrganizationInviteItem,
@@ -20,11 +21,12 @@ import {
 import { users } from '../schemas/user';
 import type { LobeChatDatabase } from '../type';
 import { randomSlug } from '../utils/idGenerator';
+import { type BudgetPeriod, isBudgetPeriod, periodToOpenRouterLimitReset } from '../utils/aicoMoney';
 
 export type OrgMemberRole = 'owner' | 'admin' | 'member';
 export type OrgInviteRole = 'admin' | 'member';
-export type OrgMemberStatus = 'invited' | 'active' | 'disabled';
-export type InviteIdentifierType = 'email' | 'phone';
+export type OrgMemberStatus = 'invited' | 'active' | 'disabled' | 'revocation_pending' | 'left';
+export type InviteIdentifierType = 'email' | 'phone' | 'public_user_id';
 
 const INVITE_TTL_MS = 72 * 60 * 60 * 1000;
 export const DEFAULT_TEAM_NAME = 'Unspecified';
@@ -38,6 +40,68 @@ const slugify = (name: string): string => {
     .replaceAll(/(^-|-$)/g, '')
     .slice(0, 48);
   return base || randomSlug(2);
+};
+
+/** Postgres unique_violation. */
+const isUniqueConstraintViolation = (error: unknown): boolean =>
+  Boolean(error && typeof error === 'object' && (error as { code?: string }).code === '23505');
+
+/**
+ * UTC period-window computation — intentionally duplicated (not imported)
+ * from `apps/server/src/services/aico/periodBoundaries.ts`: the database
+ * package cannot depend on app-level server code. Keep this in lockstep with
+ * that file. OpenRouter resets periodic key limits at midnight UTC
+ * (weeks = Monday 00:00 UTC → Sunday) — never Iran-local midnight.
+ */
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+
+const startOfUtcDay = (d: Date): Date =>
+  new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0, 0));
+
+const startOfUtcWeekMonday = (d: Date): Date => {
+  const day = startOfUtcDay(d);
+  const mondayOffset = (day.getUTCDay() + 6) % 7;
+  return new Date(day.getTime() - mondayOffset * DAY_MS);
+};
+
+const startOfUtcMonth = (d: Date): Date =>
+  new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1, 0, 0, 0, 0));
+
+interface PeriodWindow {
+  end: Date;
+  nextRenewalAt: Date;
+  start: Date;
+}
+
+const computePeriodWindow = (period: BudgetPeriod, now = new Date()): PeriodWindow => {
+  switch (period) {
+    case 'daily': {
+      const start = startOfUtcDay(now);
+      const end = new Date(start.getTime() + DAY_MS);
+      return { end, nextRenewalAt: end, start };
+    }
+    case 'weekly': {
+      const start = startOfUtcWeekMonday(now);
+      const end = new Date(start.getTime() + 7 * DAY_MS);
+      return { end, nextRenewalAt: end, start };
+    }
+    case 'monthly': {
+      const start = startOfUtcMonth(now);
+      const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1, 0, 0, 0, 0));
+      return { end, nextRenewalAt: end, start };
+    }
+    case 'total': {
+      // No automatic reset — treat as open-ended until manually settled/revoked.
+      const start = now;
+      const end = new Date(Date.UTC(9999, 0, 1, 0, 0, 0, 0));
+      return { end, nextRenewalAt: end, start };
+    }
+    default: {
+      const _exhaustive: never = period;
+      throw new Error(`UNKNOWN_PERIOD:${_exhaustive}`);
+    }
+  }
 };
 
 export class OrganizationModel {
@@ -73,11 +137,25 @@ export class OrganizationModel {
 
   // ─── Organizations ─────────────────────────────────────────────────
 
+  /**
+   * Creates an org with an active owner membership. Platform-wide, a user may
+   * have at most one active organization membership — enforced here via a
+   * pre-check and, defensively against races, the unique
+   * `organization_members_unique_active_user_idx` on insert.
+   */
   createOrganization = async (params: {
     name: string;
     ownerUserId: string;
     slug?: string;
   }): Promise<OrganizationItem> => {
+    const activeElsewhere = await this.db.query.organizationMembers.findFirst({
+      where: and(
+        eq(organizationMembers.userId, params.ownerUserId),
+        eq(organizationMembers.status, 'active'),
+      ),
+    });
+    if (activeElsewhere) throw new Error('USER_ALREADY_IN_ORGANIZATION');
+
     let slug = params.slug?.trim() || slugify(params.name);
     // Ensure uniqueness
     for (let i = 0; i < 5; i++) {
@@ -88,44 +166,49 @@ export class OrganizationModel {
       slug = `${slugify(params.name)}-${randomSlug(1)}`;
     }
 
-    return this.db.transaction(async (tx) => {
-      const [org] = await tx
-        .insert(organizations)
-        .values({
-          name: params.name.trim(),
-          ownerUserId: params.ownerUserId,
-          slug,
-        } satisfies NewOrganization)
-        .returning();
+    try {
+      return await this.db.transaction(async (tx) => {
+        const [org] = await tx
+          .insert(organizations)
+          .values({
+            name: params.name.trim(),
+            ownerUserId: params.ownerUserId,
+            slug,
+          } satisfies NewOrganization)
+          .returning();
 
-      const [ownerMember] = await tx
-        .insert(organizationMembers)
-        .values({
-          joinedAt: new Date(),
-          orgId: org.id,
-          role: 'owner',
-          status: 'active',
-          userId: params.ownerUserId,
-        })
-        .returning();
+        const [ownerMember] = await tx
+          .insert(organizationMembers)
+          .values({
+            joinedAt: new Date(),
+            orgId: org.id,
+            role: 'owner',
+            status: 'active',
+            userId: params.ownerUserId,
+          })
+          .returning();
 
-      const [defaultTeam] = await tx
-        .insert(organizationTeams)
-        .values({
-          isDefault: true,
-          name: DEFAULT_TEAM_NAME,
-          orgId: org.id,
-          slug: DEFAULT_TEAM_SLUG,
-        })
-        .returning();
+        const [defaultTeam] = await tx
+          .insert(organizationTeams)
+          .values({
+            isDefault: true,
+            name: DEFAULT_TEAM_NAME,
+            orgId: org.id,
+            slug: DEFAULT_TEAM_SLUG,
+          })
+          .returning();
 
-      await tx.insert(organizationTeamMembers).values({
-        orgMemberId: ownerMember.id,
-        teamId: defaultTeam.id,
+        await tx.insert(organizationTeamMembers).values({
+          orgMemberId: ownerMember.id,
+          teamId: defaultTeam.id,
+        });
+
+        return org;
       });
-
-      return org;
-    });
+    } catch (error) {
+      if (isUniqueConstraintViolation(error)) throw new Error('USER_ALREADY_IN_ORGANIZATION');
+      throw error;
+    }
   };
 
   getById = async (orgId: string) => {
@@ -194,7 +277,7 @@ export class OrganizationModel {
         return {
           ...org,
           memberCount: Number(memberCount?.value ?? 0),
-          usageCostUsd: '0',
+          usageCostMicroUsd: 0,
         };
       }),
     );
@@ -207,10 +290,10 @@ export class OrganizationModel {
     };
   };
 
-  /** Sum of every org's `wallet_balance_usd` — used for platform financial reporting. */
-  getTotalWalletBalanceUsd = async (): Promise<number> => {
+  /** Sum of every org's `wallet_balance_micro_usd` — used for platform financial reporting. */
+  getTotalWalletBalanceMicroUsd = async (): Promise<number> => {
     const [row] = await this.db
-      .select({ total: sql<number>`COALESCE(SUM(${organizations.walletBalanceUsd}), 0)` })
+      .select({ total: sql<number>`COALESCE(SUM(${organizations.walletBalanceMicroUsd}), 0)` })
       .from(organizations);
     return Number(row?.total ?? 0);
   };
@@ -285,29 +368,35 @@ export class OrganizationModel {
     });
   };
 
+  /** Credits an org wallet directly (topup / manual credit / refund). Amounts must be positive integers. */
   addManualCredit = async (params: {
+    amountMicroUsd?: number;
     amountToman: number;
-    amountUsd?: number;
     createdByUserId: string;
     description?: string;
-    fxRate?: number;
+    fxRateTomanPerUsd?: number;
     orgId: string;
     type?: 'topup' | 'manual_credit' | 'refund';
   }) => {
-    if (params.amountToman <= 0) throw new Error('amountToman must be positive');
-    const amountUsd = params.amountUsd ?? 0;
-    const fxRate = params.fxRate ?? null;
+    if (!Number.isInteger(params.amountToman) || params.amountToman <= 0) {
+      throw new Error('AMOUNT_TOMAN_MUST_BE_POSITIVE_INTEGER');
+    }
+    const amountMicroUsd = params.amountMicroUsd ?? 0;
+    if (!Number.isInteger(amountMicroUsd) || amountMicroUsd < 0) {
+      throw new Error('AMOUNT_MICRO_USD_MUST_BE_NON_NEGATIVE_INTEGER');
+    }
+    const fxRateTomanPerUsd = params.fxRateTomanPerUsd ?? null;
     const type = params.type ?? 'manual_credit';
 
     return this.db.transaction(async (tx) => {
       const [txRow] = await tx
         .insert(walletTransactions)
         .values({
+          amountMicroUsd,
           amountToman: params.amountToman,
-          amountUsd,
           createdByUserId: params.createdByUserId,
           description: params.description,
-          fxRate,
+          fxRateTomanPerUsd,
           orgId: params.orgId,
           type,
         })
@@ -316,11 +405,12 @@ export class OrganizationModel {
       const [org] = await tx
         .update(organizations)
         .set({
+          walletBalanceMicroUsd: sql`${organizations.walletBalanceMicroUsd} + ${amountMicroUsd}`,
           walletBalanceToman: sql`${organizations.walletBalanceToman} + ${params.amountToman}`,
-          walletBalanceUsd: sql`${organizations.walletBalanceUsd} + ${amountUsd}`,
         })
         .where(eq(organizations.id, params.orgId))
         .returning();
+      if (!org) throw new Error('ORG_NOT_FOUND');
 
       return { organization: org, transaction: txRow };
     });
@@ -393,6 +483,11 @@ export class OrganizationModel {
     return updated;
   };
 
+  /**
+   * Marks a membership `revocation_pending` rather than immediately `disabled`:
+   * OpenRouter key disable / credit reclaim happens out-of-band (key outbox),
+   * so access must not be assumed revoked until that settles.
+   */
   removeMember = async (params: { memberId: string; orgId: string }) => {
     const member = await this.db.query.organizationMembers.findFirst({
       where: and(
@@ -407,10 +502,29 @@ export class OrganizationModel {
 
     const [updated] = await this.db
       .update(organizationMembers)
-      .set({ status: 'disabled' })
+      .set({ status: 'revocation_pending' })
       .where(eq(organizationMembers.id, params.memberId))
       .returning();
     return updated;
+  };
+
+  /**
+   * Completes a removal once the key outbox has disabled the OpenRouter key and
+   * reclaimed the remaining credit. Only transitions out of `revocation_pending`,
+   * so a retried outbox entry can never resurrect or re-close a membership.
+   */
+  finalizeMemberRevocation = async (orgMemberId: string) => {
+    const [row] = await this.db
+      .update(organizationMembers)
+      .set({ leftAt: new Date(), status: 'left' })
+      .where(
+        and(
+          eq(organizationMembers.id, orgMemberId),
+          eq(organizationMembers.status, 'revocation_pending'),
+        ),
+      )
+      .returning();
+    return row ?? null;
   };
 
   // ─── Invites ───────────────────────────────────────────────────────
@@ -469,9 +583,15 @@ export class OrganizationModel {
     return row;
   };
 
+  /**
+   * Accepts an invite. Enforces the platform-wide single-active-org invariant:
+   * rejects if the user already has an active membership in a *different* org.
+   * Rejects if the target org is suspended.
+   */
   acceptInvite = async (params: {
     email?: string | null;
     phone?: string | null;
+    publicUserId?: string | null;
     token: string;
     userId: string;
   }): Promise<{ orgId: string; member: OrganizationMemberItem }> => {
@@ -486,74 +606,100 @@ export class OrganizationModel {
       throw new Error('INVITE_EXPIRED');
     }
 
-    const identifier =
-      invite.identifierType === 'email' ? params.email?.trim().toLowerCase() : params.phone?.trim();
+    const org = await this.getById(invite.orgId);
+    if (!org) throw new Error('ORG_NOT_FOUND');
+    if (org.status !== 'active') throw new Error('ORG_NOT_ACTIVE');
+
+    let identifier: string | null | undefined;
+    if (invite.identifierType === 'email') {
+      identifier = params.email?.trim().toLowerCase();
+    } else if (invite.identifierType === 'phone') {
+      identifier = params.phone?.trim();
+    } else if (invite.identifierType === 'public_user_id') {
+      identifier = params.publicUserId?.trim() ?? (await this.ensureUserPublicCode(params.userId));
+    } else {
+      throw new Error('INVITE_IDENTIFIER_MISMATCH');
+    }
 
     if (!identifier || identifier !== invite.identifierValue) {
       throw new Error('INVITE_IDENTIFIER_MISMATCH');
     }
 
-    return this.db.transaction(async (tx) => {
-      await tx
-        .update(organizationInvites)
-        .set({ status: 'accepted' })
-        .where(eq(organizationInvites.id, invite.id));
+    const activeElsewhere = await this.db.query.organizationMembers.findFirst({
+      where: and(
+        eq(organizationMembers.userId, params.userId),
+        eq(organizationMembers.status, 'active'),
+        ne(organizationMembers.orgId, invite.orgId),
+      ),
+    });
+    if (activeElsewhere) throw new Error('USER_ALREADY_IN_ORGANIZATION');
 
-      const existing = await tx.query.organizationMembers.findFirst({
-        where: and(
-          eq(organizationMembers.orgId, invite.orgId),
-          eq(organizationMembers.userId, params.userId),
-        ),
-      });
+    try {
+      return await this.db.transaction(async (tx) => {
+        await tx
+          .update(organizationInvites)
+          .set({ status: 'accepted' })
+          .where(eq(organizationInvites.id, invite.id));
 
-      let member: OrganizationMemberItem;
-      if (existing) {
-        const [updated] = await tx
-          .update(organizationMembers)
-          .set({
-            invitedByUserId: invite.invitedByUserId,
-            joinedAt: new Date(),
-            role: invite.role,
-            status: 'active',
-          })
-          .where(eq(organizationMembers.id, existing.id))
-          .returning();
-        member = updated;
-      } else {
-        const [created] = await tx
-          .insert(organizationMembers)
-          .values({
-            invitedByUserId: invite.invitedByUserId,
-            joinedAt: new Date(),
-            orgId: invite.orgId,
-            role: invite.role,
-            status: 'active',
-            userId: params.userId,
-          })
-          .returning();
-        member = created;
-      }
-
-      const teamMembership = await tx.query.organizationTeamMembers.findFirst({
-        where: eq(organizationTeamMembers.orgMemberId, member.id),
-      });
-      if (!teamMembership) {
-        const defaultTeam = await tx.query.organizationTeams.findFirst({
+        const existing = await tx.query.organizationMembers.findFirst({
           where: and(
-            eq(organizationTeams.orgId, invite.orgId),
-            eq(organizationTeams.isDefault, true),
+            eq(organizationMembers.orgId, invite.orgId),
+            eq(organizationMembers.userId, params.userId),
           ),
         });
-        if (defaultTeam) {
-          await tx.insert(organizationTeamMembers).values({
-            orgMemberId: member.id,
-            teamId: defaultTeam.id,
-          });
-        }
-      }
 
-      return { member, orgId: invite.orgId };
-    });
+        let member: OrganizationMemberItem;
+        if (existing) {
+          const [updated] = await tx
+            .update(organizationMembers)
+            .set({
+              invitedByUserId: invite.invitedByUserId,
+              joinedAt: new Date(),
+              role: invite.role,
+              status: 'active',
+            })
+            .where(eq(organizationMembers.id, existing.id))
+            .returning();
+          member = updated;
+        } else {
+          const [created] = await tx
+            .insert(organizationMembers)
+            .values({
+              invitedByUserId: invite.invitedByUserId,
+              joinedAt: new Date(),
+              orgId: invite.orgId,
+              role: invite.role,
+              status: 'active',
+              userId: params.userId,
+            })
+            .returning();
+          member = created;
+        }
+
+        const teamMembership = await tx.query.organizationTeamMembers.findFirst({
+          where: eq(organizationTeamMembers.orgMemberId, member.id),
+        });
+        if (!teamMembership) {
+          const defaultTeam = await tx.query.organizationTeams.findFirst({
+            where: and(
+              eq(organizationTeams.orgId, invite.orgId),
+              eq(organizationTeams.isDefault, true),
+            ),
+          });
+          if (defaultTeam) {
+            await tx.insert(organizationTeamMembers).values({
+              orgMemberId: member.id,
+              teamId: defaultTeam.id,
+            });
+          }
+        }
+
+        return { member, orgId: invite.orgId };
+      });
+    } catch (error) {
+      if (isUniqueConstraintViolation(error)) throw new Error('USER_ALREADY_IN_ORGANIZATION');
+      throw error;
+    }
   };
 
   findUserIdByEmail = async (email: string): Promise<string | null> => {
@@ -737,21 +883,31 @@ export class OrganizationModel {
   };
 
   /**
-   * Allocate USD credit from org wallet to a member budget.
+   * Creates or funds a member's period budget from the org wallet.
    * Does not call OpenRouter — caller provisions/updates the key.
    *
-   * Money-safety: the debit is a compare-and-swap `UPDATE ... WHERE wallet_balance_usd >= amount`
-   * so concurrent allocations can never overspend the org wallet, even under stale JS-level reads —
-   * Postgres serializes concurrent writers on the row and re-evaluates the WHERE clause each time.
+   * Money-safety: the debit is a compare-and-swap
+   * `UPDATE ... WHERE wallet_balance_micro_usd >= amount` so concurrent
+   * allocations can never overspend the org wallet, even under stale
+   * JS-level reads — Postgres serializes concurrent writers on the row and
+   * re-evaluates the WHERE clause each time.
+   *
+   * - Same period as the existing budget → additive top-up of the current cycle.
+   * - Different period than the existing budget → queued via
+   *   `pendingPeriod`/`pendingPeriodAmountMicroUsd` so the member's active
+   *   cycle is never disrupted mid-flight; the money is still reserved
+   *   immediately out of the org wallet.
    */
   allocateMemberCredit = async (params: {
-    amountUsd: number;
     createdByUserId: string;
     orgId: string;
     orgMemberId: string;
+    period: BudgetPeriod;
+    periodAmountMicroUsd: number;
   }) => {
-    if (!Number.isFinite(params.amountUsd) || params.amountUsd <= 0) {
-      throw new Error('amountUsd must be a positive finite number');
+    if (!isBudgetPeriod(params.period)) throw new Error('INVALID_PERIOD');
+    if (!Number.isInteger(params.periodAmountMicroUsd) || params.periodAmountMicroUsd <= 0) {
+      throw new Error('AMOUNT_MUST_BE_POSITIVE_INTEGER_MICRO_USD');
     }
 
     return this.db.transaction(async (tx) => {
@@ -772,50 +928,78 @@ export class OrganizationModel {
       const [updatedOrg] = await tx
         .update(organizations)
         .set({
-          walletBalanceUsd: sql`${organizations.walletBalanceUsd} - ${params.amountUsd}`,
+          walletBalanceMicroUsd: sql`${organizations.walletBalanceMicroUsd} - ${params.periodAmountMicroUsd}`,
         })
         .where(
           and(
             eq(organizations.id, params.orgId),
-            sql`${organizations.walletBalanceUsd} >= ${params.amountUsd}`,
+            sql`${organizations.walletBalanceMicroUsd} >= ${params.periodAmountMicroUsd}`,
           ),
         )
         .returning();
       if (!updatedOrg) throw new Error('INSUFFICIENT_ORG_BALANCE');
 
+      const window = computePeriodWindow(params.period);
+      const openrouterLimitReset = periodToOpenRouterLimitReset(params.period);
       const existing = await tx.query.memberBudgets.findFirst({
         where: eq(memberBudgets.orgMemberId, params.orgMemberId),
       });
 
-      let budget;
-      if (existing) {
+      let budget: MemberBudgetItem;
+      if (!existing) {
+        [budget] = await tx
+          .insert(memberBudgets)
+          .values({
+            currentPeriodEnd: window.end,
+            currentPeriodStart: window.start,
+            nextRenewalAt: window.nextRenewalAt,
+            openrouterLimitReset,
+            orgMemberId: params.orgMemberId,
+            period: params.period,
+            periodAmountMicroUsd: params.periodAmountMicroUsd,
+            renewalStatus: 'active',
+            reservedMicroUsd: params.periodAmountMicroUsd,
+          })
+          .returning();
+      } else if (existing.period === params.period) {
         [budget] = await tx
           .update(memberBudgets)
           .set({
+            currentPeriodEnd: existing.currentPeriodEnd ?? window.end,
+            currentPeriodStart: existing.currentPeriodStart ?? window.start,
             isActive: true,
-            limitUsd: sql`${memberBudgets.limitUsd} + ${params.amountUsd}`,
+            nextRenewalAt: existing.nextRenewalAt ?? window.nextRenewalAt,
+            openrouterLimitReset,
+            pendingPeriod: null,
+            pendingPeriodAmountMicroUsd: null,
+            periodAmountMicroUsd: sql`${memberBudgets.periodAmountMicroUsd} + ${params.periodAmountMicroUsd}`,
+            renewalStatus: 'active',
+            reservedMicroUsd: sql`${memberBudgets.reservedMicroUsd} + ${params.periodAmountMicroUsd}`,
           })
           .where(eq(memberBudgets.id, existing.id))
           .returning();
       } else {
         [budget] = await tx
-          .insert(memberBudgets)
-          .values({
-            limitUsd: params.amountUsd,
-            orgMemberId: params.orgMemberId,
-            period: 'total',
+          .update(memberBudgets)
+          .set({
+            isActive: true,
+            pendingPeriod: params.period,
+            pendingPeriodAmountMicroUsd: params.periodAmountMicroUsd,
+            reservedMicroUsd: sql`${memberBudgets.reservedMicroUsd} + ${params.periodAmountMicroUsd}`,
           })
+          .where(eq(memberBudgets.id, existing.id))
           .returning();
       }
 
       const [txRow] = await tx
         .insert(walletTransactions)
         .values({
+          amountMicroUsd: params.periodAmountMicroUsd,
           amountToman: 0,
-          amountUsd: params.amountUsd,
           createdByUserId: params.createdByUserId,
-          description: `Allocate to member ${params.orgMemberId}`,
+          description: `Allocate period budget to member ${params.orgMemberId}`,
           orgId: params.orgId,
+          orgMemberId: params.orgMemberId,
           type: 'allocate',
           userId: member.userId,
         })
@@ -826,18 +1010,24 @@ export class OrganizationModel {
   };
 
   /**
-   * Reclaim a member's remaining OpenRouter credit back to the org wallet on
-   * revoke/remove. Only the OpenRouter-reported `limit_remaining` is returned —
-   * the caller (key service) computes it and passes it in; this method never
-   * re-derives it from `limitUsd - usedUsd` to avoid double-crediting drift.
+   * Reclaims a member's remaining reserved credit back to the org wallet on
+   * revoke/remove, and clears the OpenRouter key material. Only the
+   * OpenRouter-reported `limit_remaining` is returned — the caller (key
+   * service) computes it and passes it in; this method never re-derives it
+   * from `reservedMicroUsd - settledUsageMicroUsd` to avoid double-crediting
+   * drift.
    */
   reclaimMemberRemainingCredit = async (params: {
-    createdByUserId: string;
+    /** Null when reclaim runs from the background key outbox rather than a manager action. */
+    createdByUserId?: string | null;
     orgId: string;
     orgMemberId: string;
-    remainingUsd: number;
+    remainingMicroUsd: number;
   }) => {
-    const remaining = Number.isFinite(params.remainingUsd) ? Math.max(0, params.remainingUsd) : 0;
+    const remaining =
+      Number.isInteger(params.remainingMicroUsd) && params.remainingMicroUsd > 0
+        ? params.remainingMicroUsd
+        : 0;
 
     return this.db.transaction(async (tx) => {
       const member = await tx.query.organizationMembers.findFirst({
@@ -852,15 +1042,16 @@ export class OrganizationModel {
         where: eq(memberBudgets.orgMemberId, params.orgMemberId),
       });
 
-      let budget = null as (typeof existingBudget & object) | null;
+      let budget: MemberBudgetItem | null = null;
       if (existingBudget) {
         [budget] = await tx
           .update(memberBudgets)
           .set({
             isActive: false,
-            limitUsd: existingBudget.usedUsd,
-            openrouterKeyHash: null,
+            openrouterKeyCiphertext: null,
             openrouterKeyId: null,
+            renewalStatus: 'settled',
+            reservedMicroUsd: 0,
           })
           .where(eq(memberBudgets.id, existingBudget.id))
           .returning();
@@ -869,7 +1060,7 @@ export class OrganizationModel {
       const [organization] = await tx
         .update(organizations)
         .set({
-          walletBalanceUsd: sql`${organizations.walletBalanceUsd} + ${remaining}`,
+          walletBalanceMicroUsd: sql`${organizations.walletBalanceMicroUsd} + ${remaining}`,
         })
         .where(eq(organizations.id, params.orgId))
         .returning();
@@ -878,11 +1069,12 @@ export class OrganizationModel {
       const [transaction] = await tx
         .insert(walletTransactions)
         .values({
+          amountMicroUsd: remaining,
           amountToman: 0,
-          amountUsd: remaining,
-          createdByUserId: params.createdByUserId,
+          createdByUserId: params.createdByUserId ?? null,
           description: `Reclaim remaining credit from member ${params.orgMemberId}`,
           orgId: params.orgId,
+          orgMemberId: params.orgMemberId,
           type: 'reclaim',
           userId: member.userId,
         })
@@ -893,7 +1085,7 @@ export class OrganizationModel {
   };
 
   updateMemberOpenRouterKey = async (params: {
-    encryptedKey: string;
+    ciphertext: string;
     keyId: string;
     orgMemberId: string;
   }) => {
@@ -903,7 +1095,7 @@ export class OrganizationModel {
     const [row] = await this.db
       .update(memberBudgets)
       .set({
-        openrouterKeyHash: params.encryptedKey,
+        openrouterKeyCiphertext: params.ciphertext,
         openrouterKeyId: params.keyId,
       })
       .where(eq(memberBudgets.id, existing.id))
@@ -911,10 +1103,10 @@ export class OrganizationModel {
     return row;
   };
 
-  syncMemberBudgetUsage = async (params: { orgMemberId: string; usedUsd: number }) => {
+  syncMemberBudgetUsage = async (params: { orgMemberId: string; settledUsageMicroUsd: number }) => {
     const [row] = await this.db
       .update(memberBudgets)
-      .set({ lastSyncedAt: new Date(), usedUsd: params.usedUsd })
+      .set({ lastSyncedAt: new Date(), settledUsageMicroUsd: params.settledUsageMicroUsd })
       .where(eq(memberBudgets.orgMemberId, params.orgMemberId))
       .returning();
     return row;
@@ -974,7 +1166,7 @@ export class OrganizationModel {
     if (!org) throw new Error('ORG_NOT_FOUND');
 
     const members = await this.listMembersWithPublicCodes(orgId);
-    const activeMembers = members.filter((m) => m.status !== 'disabled');
+    const activeMembers = members.filter((m) => m.status === 'active');
 
     const memberStats = await Promise.all(
       activeMembers.map(async (m) => {
@@ -982,35 +1174,59 @@ export class OrganizationModel {
           this.getMemberBudget(m.id),
           this.getMemberTeam(m.id),
         ]);
-        const limitUsd = Number(budget?.limitUsd ?? 0);
-        const usedUsd = Number(budget?.usedUsd ?? 0);
+        const periodAmountMicroUsd = Number(budget?.periodAmountMicroUsd ?? 0);
+        const settledUsageMicroUsd = Number(budget?.settledUsageMicroUsd ?? 0);
+        const reservedMicroUsd = Number(budget?.reservedMicroUsd ?? 0);
         return {
-          limitUsd,
           memberId: m.id,
+          nextRenewalAt: budget?.nextRenewalAt ?? null,
+          period: (budget?.period as BudgetPeriod | undefined) ?? 'total',
+          periodAmountMicroUsd,
           publicCode: m.publicCode,
-          remainingUsd: Math.max(0, limitUsd - usedUsd),
+          remainingMicroUsd: Math.max(0, reservedMicroUsd - settledUsageMicroUsd),
+          renewalStatus: budget?.renewalStatus ?? null,
+          reservedMicroUsd,
           role: m.role as OrgMemberRole,
+          settledUsageMicroUsd,
           status: m.status as OrgMemberStatus,
           teamName: team?.name ?? null,
-          usedUsd,
           userId: m.userId,
         };
       }),
     );
 
-    const allocatedUsd = memberStats.reduce((sum, m) => sum + m.limitUsd, 0);
-    const usedUsd = memberStats.reduce((sum, m) => sum + m.usedUsd, 0);
-    const balanceUsd = Number(org.walletBalanceUsd);
+    const allocatedMicroUsd = memberStats.reduce((sum, m) => sum + m.periodAmountMicroUsd, 0);
+    const settledUsageMicroUsd = memberStats.reduce((sum, m) => sum + m.settledUsageMicroUsd, 0);
+    const balanceMicroUsd = Number(org.walletBalanceMicroUsd);
+
+    // Renewal forecast: gross amount required at the next renewal boundary
+    // across recurring (non-`total`) member budgets, and the shortfall if the
+    // org wallet cannot currently cover it. `total`-period budgets never
+    // renew automatically and are excluded from the forecast.
+    const recurringMembers = memberStats.filter((m) => m.period !== 'total');
+    const grossNextRenewalMicroUsd = recurringMembers.reduce(
+      (sum, m) => sum + m.periodAmountMicroUsd,
+      0,
+    );
+    const shortfallMicroUsd = Math.max(0, grossNextRenewalMicroUsd - balanceMicroUsd);
+    const nextRenewalAt =
+      recurringMembers
+        .map((m) => m.nextRenewalAt)
+        .filter((d): d is Date => Boolean(d))
+        .sort((a, b) => a.getTime() - b.getTime())[0] ?? null;
 
     return {
-      allocatedUsd,
+      allocatedMicroUsd,
+      balanceMicroUsd,
       balanceToman: org.walletBalanceToman,
-      balanceUsd,
+      grossNextRenewalMicroUsd,
       memberCount: activeMembers.length,
       members: memberStats,
+      nextRenewalAt,
       publicCode: org.publicCode,
-      unallocatedUsd: balanceUsd,
-      usedUsd,
+      settledUsageMicroUsd,
+      shortfallMicroUsd,
+      unallocatedMicroUsd: balanceMicroUsd,
     };
   };
 }

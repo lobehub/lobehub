@@ -5,7 +5,6 @@ import {
   index,
   integer,
   jsonb,
-  numeric,
   pgTable,
   text,
   uniqueIndex,
@@ -17,8 +16,9 @@ import { createdAt, timestamptz, updatedAt } from './_helpers';
 import { users } from './user';
 
 /**
- * Aico Phase 2+ — organizations (customer tenants with wallet + members + teams).
- * Separate from LobeHub `workspaces`.
+ * Aico organizations — wallets use integer minor units:
+ * - Toman: bigint Toman
+ * - USD: bigint micro-USD (1 USD = 1_000_000)
  */
 
 export const organizations = pgTable(
@@ -30,17 +30,15 @@ export const organizations = pgTable(
       .primaryKey(),
     name: text('name').notNull(),
     slug: text('slug').notNull(),
-    /** Short, user-facing identifier (e.g. `ORGAB12CD`) — safe to share in support/UI. */
     publicCode: text('public_code')
       .$defaultFn(() => generatePublicCode('ORG'))
       .notNull(),
     ownerUserId: text('owner_user_id')
       .references(() => users.id, { onDelete: 'restrict' })
       .notNull(),
-    /** Paid-in toman (audit of topups). */
     walletBalanceToman: bigint('wallet_balance_toman', { mode: 'number' }).notNull().default(0),
-    /** Allocatable USD balance after FX conversion. */
-    walletBalanceUsd: numeric('wallet_balance_usd', { mode: 'number', precision: 14, scale: 6 })
+    /** Allocatable balance in micro-USD. */
+    walletBalanceMicroUsd: bigint('wallet_balance_micro_usd', { mode: 'number' })
       .notNull()
       .default(0),
     /** active | suspended */
@@ -74,12 +72,16 @@ export const organizationMembers = pgTable(
       .notNull(),
     /** owner | admin | member */
     role: text('role').notNull().default('member'),
-    /** invited | active | disabled */
+    /**
+     * invited | active | disabled | revocation_pending | left
+     * At most one `active` membership per user platform-wide.
+     */
     status: text('status').notNull().default('invited'),
     invitedByUserId: text('invited_by_user_id').references(() => users.id, {
       onDelete: 'set null',
     }),
     joinedAt: timestamptz('joined_at'),
+    leftAt: timestamptz('left_at'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -90,13 +92,16 @@ export const organizationMembers = pgTable(
     uniqueIndex('organization_members_unique_active_owner_idx')
       .on(t.orgId)
       .where(sql`${t.role} = 'owner' AND ${t.status} = 'active'`),
+    /** Platform-wide: a user may have at most one active organization membership. */
+    uniqueIndex('organization_members_unique_active_user_idx')
+      .on(t.userId)
+      .where(sql`${t.status} = 'active'`),
   ],
 );
 
 export type OrganizationMemberItem = typeof organizationMembers.$inferSelect;
 export type NewOrganizationMember = typeof organizationMembers.$inferInsert;
 
-/** Teams nest under an organization; model allow-lists attach to teams. */
 export const organizationTeams = pgTable(
   'organization_teams',
   {
@@ -109,7 +114,6 @@ export const organizationTeams = pgTable(
       .notNull(),
     name: text('name').notNull(),
     slug: text('slug').notNull(),
-    /** Default "Unspecified" team — rename-protected. */
     isDefault: boolean('is_default').notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -161,7 +165,7 @@ export const organizationInvites = pgTable(
     orgId: text('org_id')
       .references(() => organizations.id, { onDelete: 'cascade' })
       .notNull(),
-    /** phone | email */
+    /** phone | email | public_code — at least one identifier binding required at accept time */
     identifierType: text('identifier_type').notNull(),
     identifierValue: text('identifier_value').notNull(),
     /** admin | member */
@@ -169,7 +173,7 @@ export const organizationInvites = pgTable(
     token: text('token')
       .$defaultFn(() => createNanoId(32)())
       .notNull(),
-    /** pending | accepted | expired | revoked */
+    /** pending | accepted | expired | revoked | rejected */
     status: text('status').notNull().default('pending'),
     invitedByUserId: text('invited_by_user_id')
       .references(() => users.id, { onDelete: 'cascade' })
@@ -187,7 +191,6 @@ export const organizationInvites = pgTable(
 export type OrganizationInviteItem = typeof organizationInvites.$inferSelect;
 export type NewOrganizationInvite = typeof organizationInvites.$inferInsert;
 
-/** Platform (super) admins — independent of org roles. */
 export const platformAdmins = pgTable(
   'platform_admins',
   {
@@ -206,6 +209,10 @@ export const platformAdmins = pgTable(
 export type PlatformAdminItem = typeof platformAdmins.$inferSelect;
 export type NewPlatformAdmin = typeof platformAdmins.$inferInsert;
 
+/**
+ * Per-member prepaid period budgets.
+ * OpenRouter key stays stable across renewals; limit_reset mirrors period.
+ */
 export const memberBudgets = pgTable(
   'member_budgets',
   {
@@ -216,25 +223,45 @@ export const memberBudgets = pgTable(
     orgMemberId: text('org_member_id')
       .references(() => organizationMembers.id, { onDelete: 'cascade' })
       .notNull(),
-    limitUsd: numeric('limit_usd', { mode: 'number', precision: 10, scale: 6 }).notNull(),
+    /** Configured period amount in micro-USD (gross renewal). */
+    periodAmountMicroUsd: bigint('period_amount_micro_usd', { mode: 'number' }).notNull(),
     /** daily | weekly | monthly | total */
     period: text('period').notNull().default('total'),
-    usedUsd: numeric('used_usd', { mode: 'number', precision: 10, scale: 6 }).notNull().default(0),
+    /** OpenRouter limit_reset mirror: daily | weekly | monthly | null */
+    openrouterLimitReset: text('openrouter_limit_reset'),
+    currentPeriodStart: timestamptz('current_period_start'),
+    currentPeriodEnd: timestamptz('current_period_end'),
+    nextRenewalAt: timestamptz('next_renewal_at'),
+    /**
+     * active | renewal_pending | renewal_failed | disabled | settled
+     */
+    renewalStatus: text('renewal_status').notNull().default('active'),
+    reservedMicroUsd: bigint('reserved_micro_usd', { mode: 'number' }).notNull().default(0),
+    settledUsageMicroUsd: bigint('settled_usage_micro_usd', { mode: 'number' }).notNull().default(0),
+    refundedMicroUsd: bigint('refunded_micro_usd', { mode: 'number' }).notNull().default(0),
+    /** Pending period change applied at next renewal boundary. */
+    pendingPeriod: text('pending_period'),
+    pendingPeriodAmountMicroUsd: bigint('pending_period_amount_micro_usd', { mode: 'number' }),
     openrouterKeyId: text('openrouter_key_id'),
-    /** Encrypted plaintext key (KeyVaultsGateKeeper); never returned to SPA. */
-    openrouterKeyHash: text('openrouter_key_hash'),
+    /** AES-GCM ciphertext (KeyVaultsGateKeeper); never returned to SPA. */
+    openrouterKeyCiphertext: text('openrouter_key_ciphertext'),
     isActive: boolean('is_active').notNull().default(true),
     lastSyncedAt: timestamptz('last_synced_at'),
+    lastSyncStatus: text('last_sync_status').notNull().default('never'),
+    lastSyncError: text('last_sync_error'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [uniqueIndex('member_budgets_org_member_uidx').on(t.orgMemberId)],
+  (t) => [
+    uniqueIndex('member_budgets_org_member_uidx').on(t.orgMemberId),
+    index('member_budgets_next_renewal_at_idx').on(t.nextRenewalAt),
+    index('member_budgets_renewal_status_idx').on(t.renewalStatus),
+  ],
 );
 
 export type MemberBudgetItem = typeof memberBudgets.$inferSelect;
 export type NewMemberBudget = typeof memberBudgets.$inferInsert;
 
-/** B2C personal wallet + managed OpenRouter key. */
 export const userWallets = pgTable(
   'user_wallets',
   {
@@ -246,12 +273,17 @@ export const userWallets = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
     balanceToman: bigint('balance_toman', { mode: 'number' }).notNull().default(0),
-    balanceUsd: numeric('balance_usd', { mode: 'number', precision: 14, scale: 6 })
-      .notNull()
-      .default(0),
+    balanceMicroUsd: bigint('balance_micro_usd', { mode: 'number' }).notNull().default(0),
+    /** UX preference only — never authorize from this alone. personal | organization */
+    preferredBillingSource: text('preferred_billing_source').notNull().default('personal'),
+    preferredOrganizationId: text('preferred_organization_id').references(() => organizations.id, {
+      onDelete: 'set null',
+    }),
     openrouterKeyId: text('openrouter_key_id'),
-    openrouterKeyHash: text('openrouter_key_hash'),
+    openrouterKeyCiphertext: text('openrouter_key_ciphertext'),
     isActive: boolean('is_active').notNull().default(true),
+    /** Soft-delete freeze of non-zero personal balance pending refund/recovery. */
+    frozenMicroUsd: bigint('frozen_micro_usd', { mode: 'number' }).notNull().default(0),
     lastSyncedAt: timestamptz('last_synced_at'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -272,7 +304,6 @@ export const modelAccessRules = pgTable(
     orgId: text('org_id')
       .references(() => organizations.id, { onDelete: 'cascade' })
       .notNull(),
-    /** organization | member | team */
     scope: text('scope').notNull(),
     orgMemberId: text('org_member_id').references(() => organizationMembers.id, {
       onDelete: 'cascade',
@@ -300,14 +331,23 @@ export const walletTransactions = pgTable(
       .primaryKey(),
     orgId: text('org_id').references(() => organizations.id, { onDelete: 'cascade' }),
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
-    /** topup | manual_credit | refund | allocate */
+    orgMemberId: text('org_member_id').references(() => organizationMembers.id, {
+      onDelete: 'set null',
+    }),
+    /**
+     * topup | manual_credit | refund | allocate | period_reservation |
+     * period_settlement | period_refund | period_renewal | renewal_failure |
+     * adjustment | reclaim | personal_freeze
+     */
     type: text('type').notNull(),
-    amountToman: bigint('amount_toman', { mode: 'number' }).notNull(),
-    amountUsd: numeric('amount_usd', { mode: 'number', precision: 14, scale: 6 }),
-    /** Toman per 1 USD at conversion time. */
-    fxRate: numeric('fx_rate', { mode: 'number', precision: 14, scale: 4 }),
+    amountToman: bigint('amount_toman', { mode: 'number' }).notNull().default(0),
+    amountMicroUsd: bigint('amount_micro_usd', { mode: 'number' }).notNull().default(0),
+    /** Toman per 1 USD at conversion time (integer). */
+    fxRateTomanPerUsd: bigint('fx_rate_toman_per_usd', { mode: 'number' }),
+    renewalBatchId: text('renewal_batch_id'),
     gatewayRefId: text('gateway_ref_id'),
     description: text('description'),
+    metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
     createdByUserId: text('created_by_user_id').references(() => users.id, {
       onDelete: 'set null',
     }),
@@ -317,11 +357,109 @@ export const walletTransactions = pgTable(
     index('wallet_transactions_org_id_idx').on(t.orgId),
     index('wallet_transactions_user_id_idx').on(t.userId),
     index('wallet_transactions_created_at_idx').on(t.createdAt),
+    index('wallet_transactions_renewal_batch_id_idx').on(t.renewalBatchId),
   ],
 );
 
 export type WalletTransactionItem = typeof walletTransactions.$inferSelect;
 export type NewWalletTransaction = typeof walletTransactions.$inferInsert;
+
+/** Idempotent all-or-none org renewal batches. */
+export const aicoRenewalBatches = pgTable(
+  'aico_renewal_batches',
+  {
+    id: text('id')
+      .$defaultFn(() => idGenerator('renewalBatches'))
+      .notNull()
+      .primaryKey(),
+    orgId: text('org_id')
+      .references(() => organizations.id, { onDelete: 'cascade' })
+      .notNull(),
+    /** Unique natural key: org + UTC period boundary timestamp iso */
+    batchKey: text('batch_key').notNull(),
+    /** pending | funded | failed | settled */
+    status: text('status').notNull().default('pending'),
+    grossRequiredMicroUsd: bigint('gross_required_micro_usd', { mode: 'number' }).notNull().default(0),
+    refundedMicroUsd: bigint('refunded_micro_usd', { mode: 'number' }).notNull().default(0),
+    shortfallMicroUsd: bigint('shortfall_micro_usd', { mode: 'number' }).notNull().default(0),
+    memberBudgetIds: jsonb('member_budget_ids').$type<string[]>().notNull().default([]),
+    error: text('error'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('aico_renewal_batches_batch_key_uidx').on(t.batchKey),
+    index('aico_renewal_batches_org_id_idx').on(t.orgId),
+    index('aico_renewal_batches_status_idx').on(t.status),
+  ],
+);
+
+export type AicoRenewalBatchItem = typeof aicoRenewalBatches.$inferSelect;
+export type NewAicoRenewalBatch = typeof aicoRenewalBatches.$inferInsert;
+
+/** Durable outbox for OpenRouter key disable/reclaim after local access removal. */
+export const aicoKeyOutbox = pgTable(
+  'aico_key_outbox',
+  {
+    id: text('id')
+      .$defaultFn(() => idGenerator('keyOutbox'))
+      .notNull()
+      .primaryKey(),
+    /** disable_member_key | reclaim_member | disable_user_key | disable_trial_keys */
+    action: text('action').notNull(),
+    orgId: text('org_id').references(() => organizations.id, { onDelete: 'set null' }),
+    orgMemberId: text('org_member_id').references(() => organizationMembers.id, {
+      onDelete: 'set null',
+    }),
+    userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
+    openrouterKeyId: text('openrouter_key_id'),
+    /** pending | processing | succeeded | failed */
+    status: text('status').notNull().default('pending'),
+    attempts: integer('attempts').notNull().default(0),
+    nextAttemptAt: timestamptz('next_attempt_at').notNull(),
+    lastError: text('last_error'),
+    alertedAt: timestamptz('alerted_at'),
+    payload: jsonb('payload').$type<Record<string, unknown>>().default({}),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index('aico_key_outbox_status_next_attempt_idx').on(t.status, t.nextAttemptAt),
+    index('aico_key_outbox_org_member_id_idx').on(t.orgMemberId),
+  ],
+);
+
+export type AicoKeyOutboxItem = typeof aicoKeyOutbox.$inferSelect;
+export type NewAicoKeyOutbox = typeof aicoKeyOutbox.$inferInsert;
+
+/** Soft-deleted account tombstones (restricted super-admin visibility). */
+export const aicoAccountTombs = pgTable(
+  'aico_account_tombs',
+  {
+    id: text('id')
+      .$defaultFn(() => idGenerator('accountTombs'))
+      .notNull()
+      .primaryKey(),
+    /** Original user id (row may be anonymized/disabled). */
+    userId: text('user_id').notNull(),
+    anonymizedEmailFingerprint: text('anonymized_email_fingerprint'),
+    anonymizedPhoneFingerprint: text('anonymized_phone_fingerprint'),
+    frozenPersonalMicroUsd: bigint('frozen_personal_micro_usd', { mode: 'number' })
+      .notNull()
+      .default(0),
+    deletedAt: timestamptz('deleted_at').notNull(),
+    deletedByUserId: text('deleted_by_user_id'),
+    metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('aico_account_tombs_user_id_uidx').on(t.userId),
+    index('aico_account_tombs_deleted_at_idx').on(t.deletedAt),
+  ],
+);
+
+export type AicoAccountTombItem = typeof aicoAccountTombs.$inferSelect;
+export type NewAicoAccountTomb = typeof aicoAccountTombs.$inferInsert;
 
 export const usageLogs = pgTable(
   'usage_logs',
@@ -337,11 +475,16 @@ export const usageLogs = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    /** personal | organization */
+    billingSource: text('billing_source').notNull().default('personal'),
     modelId: text('model_id').notNull(),
     promptTokens: integer('prompt_tokens').notNull().default(0),
     completionTokens: integer('completion_tokens').notNull().default(0),
     totalTokens: integer('total_tokens').notNull().default(0),
-    costUsd: numeric('cost_usd', { mode: 'number', precision: 10, scale: 6 }).notNull(),
+    /** Locally observed cost (micro-USD); may be pending. */
+    costMicroUsd: bigint('cost_micro_usd', { mode: 'number' }).notNull().default(0),
+    /** pending | synchronized | stale | failed */
+    settlementStatus: text('settlement_status').notNull().default('pending'),
     createdAt: createdAt(),
   },
   (t) => [
@@ -355,18 +498,19 @@ export const usageLogs = pgTable(
 export type UsageLogItem = typeof usageLogs.$inferSelect;
 export type NewUsageLog = typeof usageLogs.$inferInsert;
 
-/** Singleton-style trial settings (one active row keyed by id `default`). */
 export const platformTrialConfig = pgTable('platform_trial_config', {
   id: text('id').notNull().primaryKey().default('default'),
-  enabled: boolean('enabled').notNull().default(true),
+  /**
+   * Product default: Trial stays disabled until atomic maxRequests lands.
+   * Production also hard-rejects regardless of this flag (see aicoBilling router).
+   */
+  enabled: boolean('enabled').notNull().default(false),
   durationDays: integer('duration_days').notNull().default(3),
-  /** JSON array of model ids; empty = all models. */
   allowedModelIds: text('allowed_model_ids').notNull().default('[]'),
   maxRequests: integer('max_requests'),
-  /** USD limit granted to a trial OpenRouter key — never added to paid wallet balance. */
-  trialBudgetUsd: numeric('trial_budget_usd', { mode: 'number', precision: 10, scale: 6 })
+  trialBudgetMicroUsd: bigint('trial_budget_micro_usd', { mode: 'number' })
     .notNull()
-    .default(1),
+    .default(1_000_000),
   updatedByUserId: text('updated_by_user_id').references(() => users.id, {
     onDelete: 'set null',
   }),
@@ -389,7 +533,6 @@ export const userTrials = pgTable(
       .notNull(),
     startedAt: timestamptz('started_at').notNull(),
     expiresAt: timestamptz('expires_at').notNull(),
-    /** active | expired | revoked */
     status: text('status').notNull().default('active'),
     phoneFingerprint: text('phone_fingerprint').notNull(),
     requestCount: integer('request_count').notNull().default(0),
@@ -398,7 +541,7 @@ export const userTrials = pgTable(
   },
   (t) => [
     uniqueIndex('user_trials_user_id_uidx').on(t.userId),
-    index('user_trials_phone_fingerprint_idx').on(t.phoneFingerprint),
+    uniqueIndex('user_trials_phone_fingerprint_uidx').on(t.phoneFingerprint),
     index('user_trials_status_idx').on(t.status),
   ],
 );
@@ -406,7 +549,6 @@ export const userTrials = pgTable(
 export type UserTrialItem = typeof userTrials.$inferSelect;
 export type NewUserTrial = typeof userTrials.$inferInsert;
 
-/** Persists after account delete to block trial re-abuse. */
 export const trialAbuseBlocklist = pgTable(
   'trial_abuse_blocklist',
   {
@@ -414,7 +556,6 @@ export const trialAbuseBlocklist = pgTable(
       .$defaultFn(() => idGenerator('trialAbuseBlocklist'))
       .notNull()
       .primaryKey(),
-    /** phone | email */
     fingerprintType: text('fingerprint_type').notNull(),
     fingerprintValue: text('fingerprint_value').notNull(),
     reason: text('reason'),
@@ -428,7 +569,6 @@ export const trialAbuseBlocklist = pgTable(
 export type TrialAbuseBlocklistItem = typeof trialAbuseBlocklist.$inferSelect;
 export type NewTrialAbuseBlocklist = typeof trialAbuseBlocklist.$inferInsert;
 
-/** Short, user-facing identifiers for B2C users (e.g. `USR8F3K2Q`) — safe to share in support/UI. */
 export const aicoUserPublicIds = pgTable(
   'aico_user_public_ids',
   {
@@ -454,11 +594,6 @@ export const aicoUserPublicIds = pgTable(
 export type AicoUserPublicIdItem = typeof aicoUserPublicIds.$inferSelect;
 export type NewAicoUserPublicId = typeof aicoUserPublicIds.$inferInsert;
 
-/**
- * Platform-wide OpenRouter model catalog (Aico managed provider).
- * Synced daily via cron and on-demand from the platform admin panel.
- * Model `id` matches OpenRouter's public model id (e.g. `openai/gpt-4o`).
- */
 export const openrouterModelCatalog = pgTable(
   'openrouter_model_catalog',
   {
@@ -472,7 +607,6 @@ export const openrouterModelCatalog = pgTable(
     abilities: jsonb('abilities').default({}),
     settings: jsonb('settings').default({}),
     releasedAt: varchar('released_at', { length: 10 }),
-    /** Full normalized card payload for forward-compatible fields. */
     payload: jsonb('payload').notNull().default({}),
     syncedAt: timestamptz('synced_at').notNull(),
     createdAt: createdAt(),
@@ -484,15 +618,12 @@ export const openrouterModelCatalog = pgTable(
 export type OpenrouterModelCatalogItem = typeof openrouterModelCatalog.$inferSelect;
 export type NewOpenrouterModelCatalog = typeof openrouterModelCatalog.$inferInsert;
 
-/** Singleton sync metadata for the OpenRouter catalog (id = `default`). */
 export const openrouterModelSyncState = pgTable('openrouter_model_sync_state', {
   id: text('id').notNull().primaryKey().default('default'),
   lastSyncedAt: timestamptz('last_synced_at'),
-  /** success | error | never */
   lastStatus: text('last_status').notNull().default('never'),
   lastError: text('last_error'),
   modelCount: integer('model_count').notNull().default(0),
-  /** cron | manual:<userId> */
   lastTriggeredBy: text('last_triggered_by'),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
@@ -500,3 +631,23 @@ export const openrouterModelSyncState = pgTable('openrouter_model_sync_state', {
 
 export type OpenrouterModelSyncStateItem = typeof openrouterModelSyncState.$inferSelect;
 export type NewOpenrouterModelSyncState = typeof openrouterModelSyncState.$inferInsert;
+
+/** Master OpenRouter monitoring snapshot (never fabricate zero when unknown). */
+export const aicoMasterMonitorState = pgTable('aico_master_monitor_state', {
+  id: text('id').notNull().primaryKey().default('default'),
+  /** known | unknown | stale | error */
+  status: text('status').notNull().default('unknown'),
+  availableCreditMicroUsd: bigint('available_credit_micro_usd', { mode: 'number' }),
+  observedBurnMicroUsdPerDay: bigint('observed_burn_micro_usd_per_day', { mode: 'number' }),
+  lowCreditThresholdMicroUsd: bigint('low_credit_threshold_micro_usd', { mode: 'number' })
+    .notNull()
+    .default(100_000_000),
+  projectedExhaustionAt: timestamptz('projected_exhaustion_at'),
+  lastSuccessfulCheckAt: timestamptz('last_successful_check_at'),
+  lastError: text('last_error'),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+export type AicoMasterMonitorStateItem = typeof aicoMasterMonitorState.$inferSelect;
+export type NewAicoMasterMonitorState = typeof aicoMasterMonitorState.$inferInsert;
