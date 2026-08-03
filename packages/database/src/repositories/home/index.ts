@@ -64,8 +64,12 @@ export class HomeRepository {
 
   /**
    * Get sidebar agent list with pinned, grouped, and ungrouped items
+   *
+   * @param includeLabels - whether the caller holds `agent_label:read`. The
+   *   router decides; defaulting to `true` keeps personal mode and every
+   *   existing caller unchanged, since that grant only exists in a workspace.
    */
-  async getSidebarAgentList(): Promise<SidebarAgentListResponse> {
+  async getSidebarAgentList(includeLabels = true): Promise<SidebarAgentListResponse> {
     // 1. Query all agents (non-virtual) with their session info (if exists).
     //    `visibility` is selected so we can later bucket public vs. the
     //    current user's private rows; the WHERE already hides other members'
@@ -138,7 +142,11 @@ export class HomeRepository {
 
     // 2.3 Labels applied to agents — one scope-wide query, attached per item
     // in processAgentList so the list can render tags / group by label.
-    const agentLabelsMap = await this.getAgentLabelsMap();
+    //
+    // Skipped when the caller lacks the label read grant: the registry is
+    // gated on `agent_label:read`, and this payload carries the same label
+    // names and colors, so returning it anyway would just be a second way in.
+    const agentLabelsMap = includeLabels ? await this.getAgentLabelsMap() : new Map();
 
     // 3. Query sessionGroups (user-defined folders). Folders are a per-member
     // concern in workspace mode: only the caller's own folders render —

@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 import ImperativeModal from '@/components/ImperativeModal';
 import { useHomeStore } from '@/store/home';
 
-import { DEFAULT_LABEL_COLOR, LABEL_COLOR_PRESETS } from './constants';
+import { DEFAULT_LABEL_COLOR, isValidLabelColor, LABEL_COLOR_PRESETS } from './constants';
 import { isDuplicateLabelNameError } from './errors';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -75,7 +75,7 @@ const LabelFormModal = memo<LabelFormModalProps>(
       <div onClick={stopPropagation}>
         <ImperativeModal
           destroyOnHidden
-          okButtonProps={{ disabled: !name.trim(), loading }}
+          okButtonProps={{ disabled: !name.trim() || !isValidLabelColor(color), loading }}
           open={open}
           width={420}
           title={

@@ -16,3 +16,12 @@ export const LABEL_COLOR_PRESETS = [
 ] as const;
 
 export const DEFAULT_LABEL_COLOR = LABEL_COLOR_PRESETS[0];
+
+/**
+ * Mirrors the server's `hexColor` check. The value lands in an inline
+ * `background`, so anything else is a CSS injection point — the server is the
+ * gate, this only keeps the free-form input from submitting a value that is
+ * bound to be rejected.
+ */
+export const isValidLabelColor = (value: string): boolean =>
+  /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(value);

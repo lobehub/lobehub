@@ -8,6 +8,7 @@ import { HomeRepository } from '@/database/repositories/home';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { type HomeBriefData, HomeService } from '@/server/services/home';
+import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 const homeProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
@@ -30,7 +31,20 @@ export const homeRouter = router({
   ),
 
   getSidebarAgentList: homeProcedure.query(async ({ ctx }) => {
-    const result = await ctx.homeRepository.getSidebarAgentList();
+    // The sidebar payload carries applied label names and colors, so it has to
+    // respect the same grant as the label registry itself — otherwise denying
+    // `agent_label:read` only closes the front door. Personal scope has no
+    // workspace roles, so it always includes them.
+    const includeLabels = ctx.workspaceId
+      ? await hasWorkspaceScopedPermission({
+          action: 'AGENT_LABEL_READ',
+          db: ctx.serverDB,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        })
+      : true;
+
+    const result = await ctx.homeRepository.getSidebarAgentList(includeLabels);
 
     // Runtime migration: backfill sessionGroupId for legacy agents
     const runMigration = async () => {

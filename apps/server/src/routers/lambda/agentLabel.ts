@@ -8,6 +8,17 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { assertCanEditResource } from '@/server/services/resourcePermission';
 
+/**
+ * `color` is rendered straight into an inline `background` on label tags, the
+ * settings list and the picker dots, so an arbitrary string is a CSS injection
+ * point — `url(https://…)` alone would make every member who can see the
+ * shared label fetch an attacker-controlled resource. Constrain it to a hex
+ * literal at the only two places it can be written.
+ */
+const hexColor = z
+  .string()
+  .regex(/^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i, 'INVALID_LABEL_COLOR');
+
 /** Both partial unique indexes that guard active label names, per scope. */
 const LABEL_NAME_CONSTRAINTS = new Set([
   'agent_labels_user_id_name_unique',
@@ -58,7 +69,7 @@ export const agentLabelRouter = router({
     .use(withScopedPermission('agent_label:create'))
     .input(
       z.object({
-        color: z.string().optional(),
+        color: hexColor.optional(),
         description: z.string().optional(),
         name: z.string().trim().min(1),
       }),
@@ -118,7 +129,7 @@ export const agentLabelRouter = router({
         id: z.string(),
         value: z.object({
           archived: z.boolean().optional(),
-          color: z.string().nullable().optional(),
+          color: hexColor.nullable().optional(),
           description: z.string().nullable().optional(),
           name: z.string().trim().min(1).optional(),
         }),
