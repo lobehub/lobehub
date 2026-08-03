@@ -7,7 +7,6 @@ export const createNanoId = (size = 8) =>
 
 const prefixes = {
   agentCronJobs: 'cron',
-  agentLabels: 'albl',
   agentSkills: 'skl',
   briefs: 'brf',
   taskComments: 'cmt',

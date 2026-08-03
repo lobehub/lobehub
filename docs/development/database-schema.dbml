@@ -335,43 +335,6 @@ table agent_eval_test_cases {
   }
 }
 
-table agent_label_assignments {
-  id uuid [pk, not null, default: `gen_random_uuid()`]
-  label_id text [not null]
-  agent_id text [not null]
-  user_id text [not null]
-  workspace_id text
-  accessed_at "timestamp with time zone" [not null, default: `now()`]
-  created_at "timestamp with time zone" [not null, default: `now()`]
-  updated_at "timestamp with time zone" [not null, default: `now()`]
-
-  indexes {
-    (label_id, agent_id) [name: 'agent_label_assignments_label_id_agent_id_unique', unique]
-    agent_id [name: 'agent_label_assignments_agent_id_idx']
-    workspace_id [name: 'agent_label_assignments_workspace_id_idx']
-  }
-}
-
-table agent_labels {
-  id text [pk, not null]
-  name text [not null]
-  description text
-  color text
-  archived boolean [not null, default: false]
-  user_id text [not null]
-  workspace_id text
-  accessed_at "timestamp with time zone" [not null, default: `now()`]
-  created_at "timestamp with time zone" [not null, default: `now()`]
-  updated_at "timestamp with time zone" [not null, default: `now()`]
-
-  indexes {
-    user_id [name: 'agent_labels_user_id_idx']
-    workspace_id [name: 'agent_labels_workspace_id_idx']
-    (user_id, name) [name: 'agent_labels_user_id_name_unique', unique]
-    (workspace_id, name) [name: 'agent_labels_workspace_id_name_unique', unique]
-  }
-}
-
 table agent_operations {
   id text [pk, not null]
   user_id text [not null]

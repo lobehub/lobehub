@@ -924,13 +924,6 @@
       "when": 1785648308270,
       "tag": "0131_agents_add_name_column",
       "breakpoints": true
-    },
-    {
-      "idx": 132,
-      "version": "7",
-      "when": 1785705126494,
-      "tag": "0132_add_agent_labels",
-      "breakpoints": true
     }
   ],
   "version": "6"
