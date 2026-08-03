@@ -727,6 +727,34 @@ cache, so the renderer still shows the pre-write value (generic M18). Clear
 `Page.addScriptToEvaluateOnNewDocument` and reload (see "Cold SWR cache" above),
 then assert `agentMap[id].agencyConfig` before drawing any conclusion.
 
+### A fresh worktree installed with `--ignore-scripts` returns 500 on every `/trpc/lambda/*`
+
+**Situation:** bootstrapping a new git worktree for a run — `pnpm install` at the root,
+then `init-dev-env.sh dev`.
+
+**Doesn't work:** `pnpm install --ignore-scripts`. The server starts and serves the SPA
+normally, but Turbopack cannot instantiate `@icons-pack/react-simple-icons` (reached
+through `packages/const/src/composio.ts` → `packages/database/src/schemas/*`), so every
+`/trpc/lambda/*` route returns **500** while the page itself looks healthy. The CLI
+surfaces this only as `Unable to transform response from server`, which reads as an auth
+or API-key problem and sends you to `setup-auth.sh` instead of to the install. The Next
+log holds the real cause (`module factory is not available`), and its own suggested fix
+— clear the browser cache / service worker — is misleading here.
+
+**Works:** install without `--ignore-scripts`, and clear the stale Turbopack cache
+because the broken module graph is persisted:
+
+```bash
+.agents/acceptance/scripts/init-dev-env.sh stop-dev
+rm -rf .next && pnpm install # no --ignore-scripts
+.agents/acceptance/scripts/init-dev-env.sh dev
+```
+
+Gate on a real authenticated TRPC call rather than on the page rendering: a 200 from
+`$SERVER_URL/` proves nothing about the lambda routes. Remember `apps/cli` and
+`apps/desktop` are standalone installs (PROJECT.md §1), so each also needs its own
+`pnpm install` in a fresh worktree.
+
 ## Detailed references
 
 - [Probe field notes](./references/probe-field-notes.md) — all historical
