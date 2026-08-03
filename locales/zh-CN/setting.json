@@ -652,12 +652,6 @@
   "serviceModel.memoryModels.title": "记忆",
   "serviceModel.modelAssignments.title": "通用",
   "serviceModel.optionalFeatures.title": "可选功能",
-  "settingAgent": {
-    "personalName": {
-      "label": "名字",
-      "placeholder": "给它起个名字，比如小艾"
-    }
-  },
   "settingAgent.agentTools.add": "添加工具",
   "settingAgent.agentTools.agentEmpty": "还没有 Agent 专属工具",
   "settingAgent.agentTools.authorizedBy": "由 {{name}} 授权",
@@ -707,6 +701,8 @@
   "settingAgent.modelPolicy.title": "模型",
   "settingAgent.name.placeholder": "请输入助理名称",
   "settingAgent.name.title": "名称",
+  "settingAgent.personalName.label": "名字",
+  "settingAgent.personalName.placeholder": "给它起个名字，比如小艾",
   "settingAgent.prompt.desc": "定义这个助理的身份、职责、工作方式和回应风格。这里的设定会在每次对话中生效。",
   "settingAgent.prompt.editorPlaceholder": "输入核心指令，按 / 打开斜杠菜单",
   "settingAgent.prompt.mode.source": "Markdown 源码",

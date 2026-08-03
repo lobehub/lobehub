@@ -59,7 +59,7 @@ const Preview = memo<PreviewProps>(
         agentSelectors.displayableAgentPlugins(s),
         agentSelectors.currentAgentSystemRole(s),
         builtinAgentSelectors.isInboxAgent(s),
-        agentSelectors.currentAgentTitle(s),
+        agentSelectors.currentAgentDisplayName(s),
         agentSelectors.currentAgentAvatar(s),
         agentSelectors.currentAgentBackgroundColor(s),
         resolvedHeaderAgentId
