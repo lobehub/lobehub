@@ -111,4 +111,23 @@ describe('UserUpdater', () => {
 
     expect(useUserStore.getState().user).toBeUndefined();
   });
+
+  it('maps Aico session.user contract fields (phone + empty name) into the store', () => {
+    useSessionMock.mockReturnValue(
+      sampleSession({
+        name: '',
+        phoneNumber: '+989121234567',
+        phoneNumberVerified: true,
+        emailVerified: true,
+      }),
+    );
+    render(<UserUpdater />);
+
+    const user = useUserStore.getState().user;
+    expect(user?.id).toBe('u1');
+    expect(user?.fullName).toBeNull();
+    expect(user?.phoneNumber).toBe('+989121234567');
+    expect(user?.phoneNumberVerified).toBe(true);
+    expect(user?.emailVerified).toBe(true);
+  });
 });

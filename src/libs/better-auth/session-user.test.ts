@@ -41,4 +41,9 @@ describe('toAicoSessionUser', () => {
       phoneNumberVerified: false,
     });
   });
+
+  it('normalizes empty / whitespace name from phone OTP temp signup to null', () => {
+    expect(toAicoSessionUser({ id: 'user_1', name: '' })?.name).toBeNull();
+    expect(toAicoSessionUser({ id: 'user_1', name: '   ' })?.name).toBeNull();
+  });
 });
