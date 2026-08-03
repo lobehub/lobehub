@@ -6,7 +6,9 @@ import {
   isOpenAIComputerUseModel,
   isOpenAIReasoningPayloadModel,
   isResponsesAPIModel,
+  isResponsesAPIRequiredModel,
   parseOpenAIModelId,
+  responsesAPIModels,
   supportsGPT5ResponsesReasoningEffortNone,
   supportsOpenAIServiceTierFlex,
 } from './modelId';
@@ -97,6 +99,68 @@ describe('isGPT5ResponsesModel', () => {
     expect(isGPT5ResponsesModel('gpt-4o')).toBe(false);
     expect(isGPT5ResponsesModel('gpt-6')).toBe(false);
     expect(isGPT5ResponsesModel('o3-pro')).toBe(false);
+  });
+});
+
+describe('isResponsesAPIRequiredModel', () => {
+  it('should require Responses API for models with no chat/completions endpoint', () => {
+    // Static exceptions
+    expect(isResponsesAPIRequiredModel('o1-pro')).toBe(true);
+    expect(isResponsesAPIRequiredModel('o3-pro')).toBe(true);
+    expect(isResponsesAPIRequiredModel('o3-deep-research')).toBe(true);
+    expect(isResponsesAPIRequiredModel('o4-mini-deep-research')).toBe(true);
+    expect(isResponsesAPIRequiredModel('codex-mini-latest')).toBe(true);
+    expect(isResponsesAPIRequiredModel('computer-use-preview')).toBe(true);
+
+    // GPT-5 pro / codex variants
+    expect(isResponsesAPIRequiredModel('gpt-5-pro')).toBe(true);
+    expect(isResponsesAPIRequiredModel('gpt-5-pro-2025-10-06')).toBe(true);
+    expect(isResponsesAPIRequiredModel('gpt-5.5-pro')).toBe(true);
+    expect(isResponsesAPIRequiredModel('gpt-5.1-codex-mini')).toBe(true);
+  });
+
+  it('should not require Responses API for models that also speak chat/completions', () => {
+    // These are in responsesAPIModels (preferred) but work over chat/completions,
+    // so the user's enableResponseApi toggle must be able to opt out of them.
+    expect(isResponsesAPIRequiredModel('gpt-5-mini')).toBe(false);
+    expect(isResponsesAPIRequiredModel('gpt-5.2')).toBe(false);
+    expect(isResponsesAPIRequiredModel('gpt-5.4-mini')).toBe(false);
+    expect(isResponsesAPIRequiredModel('gpt-5.6')).toBe(false);
+    expect(isResponsesAPIRequiredModel('gpt-5.6-sol')).toBe(false);
+
+    // Chat variants and plain models are never Responses-only
+    expect(isResponsesAPIRequiredModel('gpt-5-chat-latest')).toBe(false);
+    expect(isResponsesAPIRequiredModel('gpt-5.5-chat-latest')).toBe(false);
+    expect(isResponsesAPIRequiredModel('gpt-4o')).toBe(false);
+  });
+
+  it('should not force OpenRouter GPT slugs into the required set', () => {
+    expect(isResponsesAPIRequiredModel('openai/gpt-5.5-pro')).toBe(false);
+    expect(isResponsesAPIRequiredModel('openai/gpt-5.1-codex-mini')).toBe(false);
+  });
+
+  it('should be a subset of isResponsesAPIModel', () => {
+    // Invariant: anything required is also part of the broader "defaults to
+    // Responses API" set, so consumers reading only the superset (Azure, GitHub
+    // Copilot, src/services/chat) stay correct without knowing about the new tier.
+    const samples = [
+      ...responsesAPIModels,
+      'gpt-5-pro',
+      'gpt-5.5-pro',
+      'gpt-5.1-codex-mini',
+      'gpt-5-mini',
+      'gpt-5.2',
+      'gpt-5.6-sol',
+      'gpt-5-chat-latest',
+      'gpt-4o',
+      'openai/gpt-5.5-pro',
+    ];
+
+    for (const model of samples) {
+      if (isResponsesAPIRequiredModel(model)) {
+        expect(isResponsesAPIModel(model)).toBe(true);
+      }
+    }
   });
 });
 
