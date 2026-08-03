@@ -30,6 +30,7 @@ import type { AgentItem } from '../schemas';
 import {
   agentBotProviders,
   agentCronJobs,
+  agentLabelAssignments,
   agents,
   agentsFiles,
   agentsKnowledgeBases,
@@ -1736,6 +1737,17 @@ export class AgentModel {
         .update(agentsToSessions)
         .set(ownershipUpdate)
         .where(inArray(agentsToSessions.agentId, agentIds));
+
+      // 5b. Drop label assignments. Unlike sessions, these cannot travel: a
+      // label belongs to the source registry, and the target scope has its own
+      // (or none). Re-homing them would need a name-matched label in the
+      // target, which is a merge decision, not a transfer one. Leaving them
+      // instead would keep inflating the source label's usage count and make
+      // the labels reappear if the agent ever moves back — same reasoning as
+      // the device bindings stripped above.
+      await trx
+        .delete(agentLabelAssignments)
+        .where(inArray(agentLabelAssignments.agentId, agentIds));
 
       // 6. Update topics (linked via sessionId or agentId)
       const topicCondition =

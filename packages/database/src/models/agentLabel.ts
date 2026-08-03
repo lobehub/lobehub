@@ -52,12 +52,18 @@ export class AgentLabelModel {
         id: agentLabels.id,
         name: agentLabels.name,
         updatedAt: agentLabels.updatedAt,
-        usageCount: count(agentLabelAssignments.id),
+        usageCount: count(agents.id),
         userId: agentLabels.userId,
         workspaceId: agentLabels.workspaceId,
       })
       .from(agentLabels)
+      // The usage total must only count agents the caller can actually see.
+      // Counting assignment rows alone would report how many of a teammate's
+      // private agents carry a shared label — a number the agents list itself
+      // never reveals. Joining through `agents` under the same visibility
+      // predicate keeps the count consistent with what the list shows.
       .leftJoin(agentLabelAssignments, eq(agentLabelAssignments.labelId, agentLabels.id))
+      .leftJoin(agents, and(eq(agents.id, agentLabelAssignments.agentId), this.agentOwnership()))
       .where(this.ownership())
       .groupBy(agentLabels.id)
       .orderBy(asc(agentLabels.name));
