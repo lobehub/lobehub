@@ -371,6 +371,57 @@ export const buildRunLifecycle = (
         });
       };
 
+      // On a cancelled run the assistant placeholder can be left EMPTY — no
+      // content, reasoning, tools or error — because the stream was aborted
+      // before it produced anything (Stop during TTFT, or during the provider
+      // retry backoff). Nothing else on the cancel path finalizes it, so it
+      // lingers as a perpetually-"generating" empty bubble that survives reloads
+      // in server DB mode (#17723). Drop it, the same way resumeReplay trims a
+      // trailing empty placeholder. Client + top-level + real topic only,
+      // mirroring resetActiveTopicRunningStatus; a placeholder that recorded an
+      // error is kept so the failure stays visible.
+      const cleanupEmptyAssistantPlaceholderOnCancel = async () => {
+        if (adapter.runtimeType !== 'client') return;
+        if (adapter.runScope === 'sub_agent') return;
+        if (disposition !== 'cancelled') return;
+        if (!topicId) return;
+
+        const messages = get().messagesMap[messageKey] || [];
+        const assistantMessageId = findCompletionAssistantMessageId(
+          messages,
+          parentMessageId,
+          parentMessageType,
+        );
+        if (!assistantMessageId) return;
+
+        const assistantMessage = messages.find((message) => message.id === assistantMessageId);
+        if (!assistantMessage || assistantMessage.role !== 'assistant') return;
+
+        const isEmptyPlaceholder =
+          !assistantMessage.content?.trim() &&
+          !assistantMessage.error &&
+          (assistantMessage.tools?.length ?? 0) === 0 &&
+          (assistantMessage.imageList?.length ?? 0) === 0 &&
+          !assistantMessage.reasoning?.content?.trim();
+        if (!isEmptyPlaceholder) return;
+
+        try {
+          // Operation-scoped delete, NOT `deleteMessage`: that one resolves the
+          // message through `displayMessageSelectors.getDisplayMessageById`, which
+          // only searches the ACTIVE conversation, so if the user switched topics
+          // before this cleanup ran it would silently no-op and leave the orphan
+          // row behind. `optimisticDeleteMessage` resolves the conversation from
+          // `operations[operationId].context` — the run's own topic — so the
+          // server-side delete still lands after a topic switch.
+          // Skipping `deleteMessage`'s cascade to assistantGroup children and tool
+          // results is safe here: the guards above already require a plain
+          // 'assistant' role with no tools and no images.
+          await get().optimisticDeleteMessage?.(assistantMessageId, { operationId });
+        } catch (error) {
+          console.error('[completeRun] failed to remove empty aborted assistant message:', error);
+        }
+      };
+
       // 1. afterCompletion callbacks — fire on ALL terminal states (tools that
       //    registered post-run actions: speak / broadcast / delegate).
       const operation = get().operations[operationId];
@@ -458,6 +509,11 @@ export const buildRunLifecycle = (
         // Parked states never reach `completeRun` — the executor routes them to
         // `onRunParked`.
       }
+
+      // Remove the orphan empty assistant placeholder before flipping the topic
+      // status, so a cancelled run leaves neither a stuck spinner nor a blank
+      // "generating" bubble behind.
+      await cleanupEmptyAssistantPlaceholderOnCancel();
 
       // Runs past the requeue early-return, so a run that continues into a queued
       // follow-up (which writes 'running' again) is never reset mid-flight.
