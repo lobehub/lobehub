@@ -1,5 +1,5 @@
 import { contextSupervisorMakeDecision } from '@lobechat/prompts';
-import { agentDisplayName, type GroupMemberWithAgent, type UIChatMessage } from '@lobechat/types';
+import { type GroupMemberWithAgent, type UIChatMessage } from '@lobechat/types';
 
 import { aiChatService } from '@/services/aiChat';
 
@@ -90,7 +90,7 @@ export class GroupChatSupervisor {
       allowDM: context.allowDM,
       availableAgents: context.availableAgents
         .filter((agent) => agent.id)
-        .map((agent) => ({ id: agent.id, title: agentDisplayName(agent) ?? null })),
+        .map((agent) => ({ id: agent.id, name: agent.name, title: agent.title })),
       messages: context.messages,
       scene: context.scene,
       todoList: context.todoList,

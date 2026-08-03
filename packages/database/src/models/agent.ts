@@ -2,7 +2,6 @@ import { BUILTIN_AGENT_SLUGS, getAgentPersistConfig } from '@lobechat/builtin-ag
 import { INBOX_SESSION_ID, isHeterogeneousAgentModelId } from '@lobechat/const';
 import type { AgentRankItem, LobeAgentAgencyConfig } from '@lobechat/types';
 import {
-  agentDisplayName,
   DEFAULT_WORKSPACE_AGENT_SELECTION_POLICIES,
   pruneWorkingDirByDeviceDeletes,
 } from '@lobechat/types';
@@ -566,11 +565,11 @@ export class AgentModel {
    * the inbox (other virtual agents excluded), ordered by `updatedAt DESC` with
    * the inbox pinned to the top.
    *
-   * The display label is fully owned here: it resolves name-first (see
-   * {@link agentDisplayName}), the inbox resolves to the LobeAI default, and an
-   * agent with neither name nor title falls back to `options.fallbackTitle`
-   * (default `null`, so a caller that omits it can supply its own i18n default).
-   * `name` and `title` are also returned raw for callers that need the split.
+   * Returns `name` and `title` separately — resolving them into one label is the
+   * caller's job (see `agentDisplayName`), since only the caller knows whether it
+   * can render an i18n fallback. `title` is still normalized here for the inbox
+   * (LobeAI default) and falls back to `options.fallbackTitle` when blank
+   * (default `null`, so a client caller can supply its own i18n default).
    */
   listMessengerBindableAgents = async (options?: {
     fallbackTitle?: string | null;
@@ -617,9 +616,9 @@ export class AgentModel {
           // signal "no grouping needed".
           isPrivate: Boolean(this.workspaceId) && visibility === 'private',
           name: meta.name ?? null,
-          // The inbox title is already resolved by normalizeInboxAgentMeta; an
-          // agent with neither name nor title falls back to the caller default.
-          title: agentDisplayName(meta) ?? fallbackTitle,
+          // The inbox title is already resolved by normalizeInboxAgentMeta; any
+          // other blank title falls back to the caller-provided default.
+          title: meta.title?.trim() || fallbackTitle,
         };
       });
 

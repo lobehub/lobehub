@@ -10,6 +10,7 @@ interface OverlayAgentSource {
   backgroundColor?: string | null;
   heterogeneousType?: string | null;
   id: string;
+  name?: string | null;
   title?: string | null;
 }
 
@@ -36,13 +37,14 @@ const toOverlayAgentOption = ({
   backgroundColor,
   heterogeneousType,
   id,
+  name,
   title,
 }: OverlayAgentSource): ScreenCaptureAgentOption => ({
   avatar: typeof avatar === 'string' ? avatar : DEFAULT_AVATAR,
   backgroundColor: backgroundColor ?? undefined,
   heterogeneousType,
   id,
-  title: title?.trim() || UNTITLED_AGENT_TITLE,
+  title: agentDisplayName({ name, title }, UNTITLED_AGENT_TITLE),
 });
 
 const createInboxOverlayAgentOption = (

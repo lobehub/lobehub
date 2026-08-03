@@ -1,5 +1,4 @@
 import type { BriefType, TaskDetailActivity } from '@lobechat/types';
-import { agentDisplayName } from '@lobechat/types';
 import { Accordion, AccordionItem, Avatar, Empty, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import type { TFunction } from 'i18next';
@@ -35,7 +34,8 @@ const toBriefItem = (act: TaskDetailActivity): BriefItem | null => {
           avatar: act.agent.avatar,
           backgroundColor: act.agent.backgroundColor,
           id: act.agent.id,
-          title: agentDisplayName(act.agent) ?? null,
+          name: act.agent.name ?? null,
+          title: act.agent.title ?? null,
         }
       : null,
     agentId: act.agentId ?? null,

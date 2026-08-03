@@ -10,6 +10,7 @@ import { buildWorkspacePayload } from '../utils/workspace';
 export interface UnresolvedBriefRow {
   agentAvatar: string | null;
   agentBackgroundColor: string | null;
+  agentName: string | null;
   agentRowId: string | null;
   agentTitle: string | null;
   brief: BriefItem;

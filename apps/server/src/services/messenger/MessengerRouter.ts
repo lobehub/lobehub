@@ -1,4 +1,5 @@
 import { createIoRedisState } from '@chat-adapter/state-ioredis';
+import { agentDisplayName } from '@lobechat/types';
 import {
   Chat,
   ConsoleLogger,
@@ -1590,18 +1591,19 @@ export class MessengerRouter {
   ): Promise<AgentSummary[]> {
     // The filter, ordering, pinning, and title fallback all live in the model.
     // This text-only channel has no client-side i18n default, so it asks the
-    // model to fill blank titles with a generic "Custom Agent" label.
+    // model to fill blank titles with a generic "Custom Agent" label, then
+    // resolves name-over-title itself — there is no renderer downstream to do it.
     const rows = await new AgentModel(
       serverDB,
       userId,
       workspaceId ?? undefined,
     ).listMessengerBindableAgents({ fallbackTitle: 'Custom Agent' });
 
-    // `fallbackTitle` guarantees a non-null title for every row.
+    // `fallbackTitle` guarantees a non-null label for every row.
     const summaries = rows.map((row) => ({
       id: row.id,
       isPrivate: row.isPrivate,
-      title: row.title!,
+      title: agentDisplayName(row, 'Custom Agent'),
     }));
 
     // Workspace scope: stable-partition shared workspace agents ahead of the
