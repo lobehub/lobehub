@@ -6,7 +6,6 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { AgentLabelModel } from '@/database/models/agentLabel';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { assertCanEditResource } from '@/server/services/resourcePermission';
 
 /**
  * `color` is rendered straight into an inline `background` on label tags, the
@@ -97,15 +96,20 @@ export const agentLabelRouter = router({
     }),
 
   /**
-   * Assigning labels is an agent mutation, so it rides on `agent:update`
-   * instead of the label-management scopes — members can label the agents
-   * they are allowed to edit even though label CRUD is admin-gated.
+   * Labelling is list organization, not agent configuration — the same bucket
+   * as pinning and moving to a group, which members may already do to any
+   * agent they can see. It therefore gates on the workspace-wide
+   * `agent:update` role scope and deliberately NOT on the agent's own
+   * permission row: requiring per-agent edit rights would stop a member
+   * tagging most of the workspace's agents, which is exactly the shared list
+   * they need to organize.
    *
-   * The role scope alone is not enough: it is workspace-wide, while the
-   * agent's own permission row decides who may edit *this* agent. Without the
-   * per-resource check a member holding `agent:update` could relabel a
-   * teammate's public agent they can only view, so this goes through the same
-   * guard the configuration endpoints use.
+   * Labels are shared, so this does let one member change state others see.
+   * That is the intended collaborative trade-off — the operation is cheap,
+   * reversible, and grants no configuration or data access. Two lines still
+   * hold: the viewer role carries no `agent:update` grant at all, and
+   * `agentOwnership()` in the model keeps another member's *private* agents
+   * out of reach entirely.
    */
   setAgentLabels: labelProcedure
     .use(withScopedPermission('agent:update'))
@@ -116,14 +120,6 @@ export const agentLabelRouter = router({
     .use(withScopedPermission('agent_label:read'))
     .input(z.object({ agentId: z.string(), labelIds: z.array(z.string()) }))
     .mutation(async ({ input, ctx }) => {
-      await assertCanEditResource({
-        db: ctx.serverDB,
-        resourceId: input.agentId,
-        resourceType: 'agent',
-        userId: ctx.userId,
-        workspaceId: ctx.workspaceId ?? undefined,
-      });
-
       return ctx.agentLabelModel.setAgentLabels(input.agentId, input.labelIds);
     }),
 
@@ -136,14 +132,6 @@ export const agentLabelRouter = router({
     .use(withScopedPermission('agent_label:read'))
     .input(z.object({ agentId: z.string(), assigned: z.boolean(), labelId: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      await assertCanEditResource({
-        db: ctx.serverDB,
-        resourceId: input.agentId,
-        resourceType: 'agent',
-        userId: ctx.userId,
-        workspaceId: ctx.workspaceId ?? undefined,
-      });
-
       return ctx.agentLabelModel.toggleAgentLabel(input.agentId, input.labelId, input.assigned);
     }),
 

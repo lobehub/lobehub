@@ -11,11 +11,6 @@ vi.mock('@/business/server/trpc-middlewares/rbacPermission', () => ({
   withScopedPermission: vi.fn(() => (opts: any) => opts.next({ ctx: opts.ctx })),
 }));
 
-const mockAssertCanEditResource = vi.fn();
-vi.mock('@/server/services/resourcePermission', () => ({
-  assertCanEditResource: (...args: any[]) => mockAssertCanEditResource(...args),
-}));
-
 const mockCreate = vi.fn();
 const mockUpdate = vi.fn();
 const mockSetAgentLabels = vi.fn();
@@ -42,37 +37,21 @@ describe('agentLabelRouter', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockAssertCanEditResource.mockResolvedValue(undefined);
     mockSetAgentLabels.mockResolvedValue(['label-1']);
   });
 
   describe('setAgentLabels', () => {
-    it('checks per-resource edit rights on the target agent before writing', async () => {
+    it('writes without requiring per-agent edit rights', async () => {
+      // Labelling is list organization, not configuration, so it gates on the
+      // `agent:update` role scope alone — a member may tag any agent they can
+      // see, which is the point of a shared, groupable list. The viewer role
+      // holds no such grant, and the model's `agentOwnership()` still keeps
+      // another member's private agents unreachable.
       const caller = agentLabelRouter.createCaller(ctx);
 
       await caller.setAgentLabels({ agentId: 'agent-1', labelIds: ['label-1'] });
 
-      expect(mockAssertCanEditResource).toHaveBeenCalledWith({
-        db: ctx.serverDB,
-        resourceId: 'agent-1',
-        resourceType: 'agent',
-        userId: 'user-1',
-        workspaceId: 'ws-1',
-      });
       expect(mockSetAgentLabels).toHaveBeenCalledWith('agent-1', ['label-1']);
-    });
-
-    it('does not write when the caller may only view the agent', async () => {
-      // Regression: the workspace-wide `agent:update` scope plus the model's
-      // visibility filter let a viewer relabel a teammate's public agent.
-      mockAssertCanEditResource.mockRejectedValue(new Error('FORBIDDEN'));
-      const caller = agentLabelRouter.createCaller(ctx);
-
-      await expect(
-        caller.setAgentLabels({ agentId: 'agent-1', labelIds: ['label-1'] }),
-      ).rejects.toThrow();
-
-      expect(mockSetAgentLabels).not.toHaveBeenCalled();
     });
   });
 

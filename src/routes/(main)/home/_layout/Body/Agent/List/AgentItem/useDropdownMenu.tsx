@@ -292,11 +292,12 @@ export const useAgentDropdownMenu = ({
         // workspace registry, personal mode a personal one. Clicking an entry
         // toggles that label on the agent.
         //
-        // Gated on `canConfigure`, not the coarse `canEdit`: labelling is an
-        // agent mutation the server checks per resource, so a member who may
-        // only view a teammate's public agent would otherwise see the submenu,
-        // watch the row patch optimistically, and then have it roll back.
-        ...(canConfigure && labelsEnabled
+        // Gated on `canEdit`, matching the server: labelling is list
+        // organization, so any member may tag any agent they can see. Using
+        // the per-resource `canConfigure` here would hide the submenu on most
+        // of a workspace's agents — the shared list a member most wants to
+        // organize.
+        ...(canEdit && labelsEnabled
           ? [
               {
                 children: [
