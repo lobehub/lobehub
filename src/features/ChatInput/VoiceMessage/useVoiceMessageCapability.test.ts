@@ -143,6 +143,45 @@ describe('useVoiceMessageCapability', () => {
 
     expect(result.current).toBe(true);
   });
+
+  it('does not require the curated LobeHub card to duplicate the runtime audio capability', () => {
+    const id = 'gemini-3.5-flash';
+    const curatedModel = {
+      abilities: { functionCall: true },
+      enabled: true,
+      id,
+      providerId: ModelProvider.LobeHub,
+      type: 'chat',
+    } as const;
+    useAiInfraStore.setState({
+      builtinAiModelList: [curatedModel],
+      enabledAiModels: [audioModel(id, ModelProvider.LobeHub)],
+    });
+
+    const { result } = renderHook(() => useVoiceMessageCapability(id, ModelProvider.LobeHub));
+
+    expect(result.current).toBe(true);
+  });
+
+  it('keeps a curated LobeHub model disabled when runtime audio support is absent', () => {
+    const model = {
+      abilities: { functionCall: true },
+      enabled: true,
+      id: 'text-only-model',
+      providerId: ModelProvider.LobeHub,
+      type: 'chat',
+    } as const;
+    useAiInfraStore.setState({
+      builtinAiModelList: [model],
+      enabledAiModels: [model],
+    });
+
+    const { result } = renderHook(() =>
+      useVoiceMessageCapability('text-only-model', ModelProvider.LobeHub),
+    );
+
+    expect(result.current).toBe(false);
+  });
 });
 
 describe('getVoiceMessageActionState', () => {

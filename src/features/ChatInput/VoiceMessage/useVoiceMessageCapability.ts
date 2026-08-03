@@ -59,7 +59,7 @@ export const useVoiceMessageCapability = (model?: string, provider?: string) =>
 
     const modelSupportsAudio = aiModelSelectors.isModelSupportAudio(model, provider)(state);
     const isCuratedModel = state.builtinAiModelList.some(
-      (item) => item.id === model && item.providerId === provider && item.abilities?.audio === true,
+      (item) => item.id === model && item.providerId === provider,
     );
     const isBuiltinProvider = Object.values(ModelProvider).includes(provider as ModelProvider);
     const runtimeProvider = isBuiltinProvider
