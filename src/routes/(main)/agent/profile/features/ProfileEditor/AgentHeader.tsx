@@ -2,6 +2,7 @@
 
 import { ActionIcon, Flexbox, Icon, Skeleton, Text, Tooltip } from '@lobehub/ui';
 import { toast } from '@lobehub/ui/base-ui';
+import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { PaletteIcon, PencilIcon } from 'lucide-react';
 import { memo, Suspense, useCallback, useState } from 'react';
@@ -165,16 +166,23 @@ const AgentHeader = memo(() => {
           ) : null}
         </Flexbox>
         <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
+          {/* `Text type="secondary"` resolves to `colorTextDescription`, which antd
+              maps to the TERTIARY step — too faint for the line that carries the
+              agent's role. Set the secondary colour explicitly, and leave only
+              the decorative `@` and the separator at tertiary. */}
           {meta.title?.trim() ? (
-            <Text ellipsis type={'secondary'}>
+            <Text ellipsis style={{ color: cssVar.colorTextSecondary }}>
               {meta.title}
             </Text>
           ) : null}
-          {meta.title?.trim() && slug ? <Text type={'secondary'}>·</Text> : null}
+          {meta.title?.trim() && slug ? (
+            <Text style={{ color: cssVar.colorTextTertiary }}>·</Text>
+          ) : null}
           {slug ? (
             <Tooltip title={t('settingAgent.slug.tooltip', { ns: 'setting' })}>
-              <Text code style={{ flex: 'none' }} type={'secondary'}>
-                @{slug}
+              <Text code style={{ color: cssVar.colorTextSecondary, flex: 'none' }}>
+                <span style={{ color: cssVar.colorTextTertiary }}>@</span>
+                {slug}
               </Text>
             </Tooltip>
           ) : null}

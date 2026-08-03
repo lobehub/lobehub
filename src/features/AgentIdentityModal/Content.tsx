@@ -2,7 +2,6 @@
 
 import { Flexbox, Input, Text } from '@lobehub/ui';
 import { Button, useModalContext } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -66,14 +65,6 @@ const AgentIdentityContent = memo<AgentIdentityContentProps>(({ agentId }) => {
           prefix={'@'}
           status={form.error ? 'error' : undefined}
           value={form.slug}
-          // Target the semantic slots, not the root: a `style` on the affix
-          // wrapper never reaches the inner `<input>`, whose own rule wins.
-          // The slug itself is a technical identifier, so it sits one step below
-          // name and role; the `@` is pure decoration and sits one step below it.
-          styles={{
-            input: { color: cssVar.colorTextSecondary },
-            prefix: { color: cssVar.colorTextTertiary },
-          }}
           onChange={(e) => form.setSlug(e.target.value)}
         />
       </Field>
