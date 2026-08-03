@@ -2743,6 +2743,7 @@
   "workspaceSetting.labels.form.name": "名称",
   "workspaceSetting.labels.form.namePlaceholder": "标签名称",
   "workspaceSetting.labels.form.restoreTitle": "重命名后恢复",
+  "workspaceSetting.labels.loadFailed": "标签加载失败",
   "workspaceSetting.labels.manageBlocked": "仅工作区管理员可以管理标签",
   "workspaceSetting.labels.scope.archived": "已归档",
   "workspaceSetting.labels.scope.personal": "个人",

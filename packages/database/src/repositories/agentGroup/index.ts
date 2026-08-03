@@ -22,6 +22,7 @@ import {
   chatGroupsAgents,
   messagePlugins,
   messages,
+  sessionGroups,
   threads,
   topics,
 } from '../../schemas';
@@ -429,15 +430,61 @@ export class AgentGroupRepository {
    * @param supervisorConfig - Optional configuration for the supervisor agent
    * @returns Created group, agents, and supervisor agent ID
    */
+  /**
+   * Resolve a folder the caller may put a group in, returning its visibility.
+   * Mirrors `AgentModel.getAssignableSessionGroupVisibility` — the foreign key
+   * only proves the folder exists, which is the wrong question once the column
+   * is read by every member's sidebar.
+   */
+  private async getAssignableFolderVisibility(folderId: string): Promise<'private' | 'public'> {
+    const [folder] = await this.db
+      .select({ visibility: sessionGroups.visibility })
+      .from(sessionGroups)
+      .where(
+        and(
+          eq(sessionGroups.id, folderId),
+          buildWorkspaceWhere(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            {
+              userId: sessionGroups.userId,
+              visibility: sessionGroups.visibility,
+              workspaceId: sessionGroups.workspaceId,
+            },
+          ),
+        ),
+      )
+      .limit(1);
+
+    if (!folder) throw new Error(`Session group ${folderId} not found in current scope`);
+
+    return folder.visibility as 'private' | 'public';
+  }
+
   async createGroupWithSupervisor(
     groupParams: Omit<NewChatGroup, 'userId'>,
     agentMembers: string[] = [],
     supervisorConfig?: SupervisorAgentConfig,
   ): Promise<CreateGroupWithSupervisorResult> {
+    // Creating inside a Category has to land in that Category. The sidebar
+    // resolves a public group's folder only against public folders (and a
+    // private group's only against private ones), so a default-public group
+    // created in a private Category renders in Ungrouped — for its creator as
+    // well. The folder therefore decides the new group's visibility, and an
+    // explicit value that contradicts it is refused rather than overridden.
+    // Same rule and same reasoning as agent creation.
+    const folderVisibility = groupParams.groupId
+      ? await this.getAssignableFolderVisibility(groupParams.groupId)
+      : undefined;
+
+    if (folderVisibility && groupParams.visibility && groupParams.visibility !== folderVisibility)
+      throw new Error(
+        `A ${groupParams.visibility} chat group cannot be created in a ${folderVisibility} folder`,
+      );
+
     // Mirror the group's visibility onto the synthetic supervisor agent so
     // workspace members don't see a stray supervisor when the parent group is
     // private. Defaults to 'public' to match the column default.
-    const groupVisibility = groupParams.visibility ?? 'public';
+    const groupVisibility = groupParams.visibility ?? folderVisibility ?? 'public';
 
     // 1. Create supervisor agent (virtual agent)
     const [supervisorAgent] = await this.db
@@ -468,7 +515,12 @@ export class AgentGroupRepository {
     // 2. Create the group
     const [group] = await this.db
       .insert(chatGroups)
-      .values({ ...groupParams, userId: this.userId, workspaceId: this.workspaceId ?? null })
+      .values({
+        ...groupParams,
+        userId: this.userId,
+        visibility: groupVisibility,
+        workspaceId: this.workspaceId ?? null,
+      })
       .returning();
 
     // 3. Add supervisor agent to group with role 'supervisor'

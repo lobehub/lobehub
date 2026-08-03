@@ -234,7 +234,7 @@ LabelTableHeader.displayName = 'WorkspaceLabelTableHeader';
  */
 const WorkspaceLabelsContent = memo(() => {
   const { t } = useTranslation(['setting', 'common']);
-  const { isLoading } = useFetchAgentLabels();
+  const { error, isLoading, mutate } = useFetchAgentLabels();
 
   const isInit = useHomeStore(agentLabelSelectors.isLabelsInit);
   const allLabels = useHomeStore(agentLabelSelectors.allLabels, isEqual);
@@ -339,6 +339,15 @@ const WorkspaceLabelsContent = memo(() => {
       </Flexbox>
       {!isInit && isLoading ? (
         <SkeletonList rows={4} />
+      ) : error && !isInit ? (
+        // A failed load must not read as "you have no labels" — the two look
+        // identical here and lead the user to create duplicates of labels that
+        // already exist.
+        <Empty
+          description={t('workspaceSetting.labels.loadFailed')}
+          extra={<Button onClick={() => mutate()}>{t('retry', { ns: 'common' })}</Button>}
+          style={{ paddingBlock: 40 }}
+        />
       ) : visibleLabels.length === 0 ? (
         <Empty
           style={{ paddingBlock: 40 }}

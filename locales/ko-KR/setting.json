@@ -2743,6 +2743,7 @@
   "workspaceSetting.labels.form.name": "이름",
   "workspaceSetting.labels.form.namePlaceholder": "레이블 이름",
   "workspaceSetting.labels.form.restoreTitle": "복원하려면 이름을 변경하세요",
+  "workspaceSetting.labels.loadFailed": "레이블을 불러오지 못했습니다",
   "workspaceSetting.labels.manageBlocked": "워크스페이스 관리자만 레이블을 관리할 수 있습니다",
   "workspaceSetting.labels.scope.archived": "보관됨",
   "workspaceSetting.labels.scope.personal": "개인",

@@ -2743,6 +2743,7 @@
   "workspaceSetting.labels.form.name": "Название",
   "workspaceSetting.labels.form.namePlaceholder": "Название метки",
   "workspaceSetting.labels.form.restoreTitle": "Переименуйте для восстановления",
+  "workspaceSetting.labels.loadFailed": "Не удалось загрузить метки",
   "workspaceSetting.labels.manageBlocked": "Только администраторы рабочего пространства могут управлять метками",
   "workspaceSetting.labels.scope.archived": "Архивированные",
   "workspaceSetting.labels.scope.personal": "Личное",

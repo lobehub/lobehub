@@ -2743,6 +2743,7 @@
   "workspaceSetting.labels.form.name": "名稱",
   "workspaceSetting.labels.form.namePlaceholder": "標籤名稱",
   "workspaceSetting.labels.form.restoreTitle": "重新命名以恢復",
+  "workspaceSetting.labels.loadFailed": "無法載入標籤",
   "workspaceSetting.labels.manageBlocked": "僅工作區管理員可以管理標籤",
   "workspaceSetting.labels.scope.archived": "已封存",
   "workspaceSetting.labels.scope.personal": "個人",

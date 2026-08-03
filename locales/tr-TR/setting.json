@@ -2743,6 +2743,7 @@
   "workspaceSetting.labels.form.name": "Ad",
   "workspaceSetting.labels.form.namePlaceholder": "Etiket adı",
   "workspaceSetting.labels.form.restoreTitle": "Geri yüklemek için yeniden adlandır",
+  "workspaceSetting.labels.loadFailed": "Etiketler yüklenemedi",
   "workspaceSetting.labels.manageBlocked": "Sadece çalışma alanı yöneticileri etiketleri yönetebilir",
   "workspaceSetting.labels.scope.archived": "Arşivlenmiş",
   "workspaceSetting.labels.scope.personal": "Kişisel",

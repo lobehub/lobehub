@@ -2743,6 +2743,7 @@
   "workspaceSetting.labels.form.name": "Nombre",
   "workspaceSetting.labels.form.namePlaceholder": "Nombre de la etiqueta",
   "workspaceSetting.labels.form.restoreTitle": "Renombrar para restaurar",
+  "workspaceSetting.labels.loadFailed": "No se pudieron cargar las etiquetas",
   "workspaceSetting.labels.manageBlocked": "Solo los administradores del espacio de trabajo pueden gestionar etiquetas",
   "workspaceSetting.labels.scope.archived": "Archivado",
   "workspaceSetting.labels.scope.personal": "Personal",

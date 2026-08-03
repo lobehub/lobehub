@@ -2743,6 +2743,7 @@
   "workspaceSetting.labels.form.name": "Tên",
   "workspaceSetting.labels.form.namePlaceholder": "Tên nhãn",
   "workspaceSetting.labels.form.restoreTitle": "Đổi tên để khôi phục",
+  "workspaceSetting.labels.loadFailed": "Không thể tải nhãn",
   "workspaceSetting.labels.manageBlocked": "Chỉ quản trị viên không gian làm việc mới có thể quản lý nhãn",
   "workspaceSetting.labels.scope.archived": "Đã lưu trữ",
   "workspaceSetting.labels.scope.personal": "Cá nhân",

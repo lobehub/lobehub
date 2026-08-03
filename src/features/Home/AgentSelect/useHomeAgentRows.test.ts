@@ -68,6 +68,9 @@ vi.mock('@/store/user', () => ({
 
 vi.mock('@/store/user/selectors', () => ({
   workspaceUserSettingsSelectors: {
+    // `useKeepSidebarGroupsListed` reaches through to the group-visibility
+    // hook, which now gates writes on the loaded preference workspace.
+    preferenceWorkspaceId: () => mocks.activeWorkspaceId ?? null,
     sidebarAgentVisibilityOverrides: () => mocks.sidebarVisibilityOverrides,
     sidebarHiddenAgentIds: () => mocks.sidebarHiddenAgentIds,
     sidebarHiddenGroupIds: () => mocks.sidebarHiddenGroupIds,

@@ -2743,6 +2743,7 @@
   "workspaceSetting.labels.form.name": "الاسم",
   "workspaceSetting.labels.form.namePlaceholder": "اسم التصنيف",
   "workspaceSetting.labels.form.restoreTitle": "إعادة التسمية للاستعادة",
+  "workspaceSetting.labels.loadFailed": "تعذر تحميل التصنيفات",
   "workspaceSetting.labels.manageBlocked": "يمكن فقط لمسؤولي مساحة العمل إدارة التصنيفات",
   "workspaceSetting.labels.scope.archived": "مؤرشف",
   "workspaceSetting.labels.scope.personal": "شخصي",

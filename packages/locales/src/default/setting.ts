@@ -2979,6 +2979,7 @@ When I am ___, I need ___
   'workspaceSetting.labels.empty': 'No labels yet. Create one to organize your agents.',
   'workspaceSetting.labels.filterEmpty': 'No labels match the filter',
   'workspaceSetting.labels.filterPlaceholder': 'Filter by name...',
+  'workspaceSetting.labels.loadFailed': "Couldn't load labels",
   'workspaceSetting.labels.form.color': 'Color',
   'workspaceSetting.labels.form.createTitle': 'New label',
   'workspaceSetting.labels.form.description': 'Description',

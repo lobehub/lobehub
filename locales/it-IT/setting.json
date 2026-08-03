@@ -2743,6 +2743,7 @@
   "workspaceSetting.labels.form.name": "Nome",
   "workspaceSetting.labels.form.namePlaceholder": "Nome dell'etichetta",
   "workspaceSetting.labels.form.restoreTitle": "Rinomina per ripristinare",
+  "workspaceSetting.labels.loadFailed": "Impossibile caricare le etichette",
   "workspaceSetting.labels.manageBlocked": "Solo gli amministratori dello spazio di lavoro possono gestire le etichette",
   "workspaceSetting.labels.scope.archived": "Archiviato",
   "workspaceSetting.labels.scope.personal": "Personale",

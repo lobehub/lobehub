@@ -2743,6 +2743,7 @@
   "workspaceSetting.labels.form.name": "Name",
   "workspaceSetting.labels.form.namePlaceholder": "Label name",
   "workspaceSetting.labels.form.restoreTitle": "Rename to restore",
+  "workspaceSetting.labels.loadFailed": "Couldn't load labels",
   "workspaceSetting.labels.manageBlocked": "Only workspace admins can manage labels",
   "workspaceSetting.labels.scope.archived": "Archived",
   "workspaceSetting.labels.scope.personal": "Personal",

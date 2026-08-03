@@ -2743,6 +2743,7 @@
   "workspaceSetting.labels.form.name": "Naam",
   "workspaceSetting.labels.form.namePlaceholder": "Labelnaam",
   "workspaceSetting.labels.form.restoreTitle": "Hernoemen om te herstellen",
+  "workspaceSetting.labels.loadFailed": "Kon labels niet laden",
   "workspaceSetting.labels.manageBlocked": "Alleen workspace-beheerders kunnen labels beheren",
   "workspaceSetting.labels.scope.archived": "Gearchiveerd",
   "workspaceSetting.labels.scope.personal": "Persoonlijk",

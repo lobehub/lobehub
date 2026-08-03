@@ -2743,6 +2743,7 @@
   "workspaceSetting.labels.form.name": "نام",
   "workspaceSetting.labels.form.namePlaceholder": "نام برچسب",
   "workspaceSetting.labels.form.restoreTitle": "برای بازیابی تغییر نام دهید",
+  "workspaceSetting.labels.loadFailed": "برچسب‌ها بارگیری نشدند",
   "workspaceSetting.labels.manageBlocked": "فقط مدیران فضای کاری می‌توانند برچسب‌ها را مدیریت کنند",
   "workspaceSetting.labels.scope.archived": "بایگانی‌شده",
   "workspaceSetting.labels.scope.personal": "شخصی",

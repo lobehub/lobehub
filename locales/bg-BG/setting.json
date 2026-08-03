@@ -2743,6 +2743,7 @@
   "workspaceSetting.labels.form.name": "Име",
   "workspaceSetting.labels.form.namePlaceholder": "Име на етикета",
   "workspaceSetting.labels.form.restoreTitle": "Преименувайте, за да възстановите",
+  "workspaceSetting.labels.loadFailed": "Не можа да се заредят етикетите",
   "workspaceSetting.labels.manageBlocked": "Само администраторите на работното пространство могат да управляват етикети",
   "workspaceSetting.labels.scope.archived": "Архивирани",
   "workspaceSetting.labels.scope.personal": "Лични",

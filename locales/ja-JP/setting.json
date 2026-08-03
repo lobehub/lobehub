@@ -2743,6 +2743,7 @@
   "workspaceSetting.labels.form.name": "名前",
   "workspaceSetting.labels.form.namePlaceholder": "ラベル名",
   "workspaceSetting.labels.form.restoreTitle": "名前を変更して復元",
+  "workspaceSetting.labels.loadFailed": "ラベルを読み込めませんでした",
   "workspaceSetting.labels.manageBlocked": "ワークスペース管理者のみがラベルを管理できます",
   "workspaceSetting.labels.scope.archived": "アーカイブ済み",
   "workspaceSetting.labels.scope.personal": "個人用",
