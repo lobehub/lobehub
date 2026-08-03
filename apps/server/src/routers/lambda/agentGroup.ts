@@ -763,6 +763,22 @@ export const agentGroupRouter = router({
   publishGroupToWorkspace: agentGroupProcedureWrite
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      // Same rule `setGroupVisibility` enforces, on the other route to the same
+      // transition: a private group may hold the creator's private member
+      // agents, and publishing the group without them leaves everyone else
+      // with a group whose members they cannot see. Guarding only one of two
+      // publish paths guards neither.
+      if (ctx.workspaceId) {
+        const privateMembers = await ctx.chatGroupModel.countPrivateGroupAgents(input.id);
+
+        if (privateMembers > 0)
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message:
+              'Cannot publish a group that still contains private agents. Publish or remove those agents first.',
+          });
+      }
+
       const result = await ctx.chatGroupModel.publishToWorkspace(input.id);
       if (ctx.workspaceId) {
         await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).setAccessLevel(
