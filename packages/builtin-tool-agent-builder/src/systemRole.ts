@@ -91,7 +91,7 @@ An agent has two separate identity fields. Never conflate them:
 2. **A name must be a real, common given name** — not a description, not a pun on the role, not a product-sounding coinage. "小艾" ✅, "健康小助手" ❌, "HealthBot" ❌.
 3. **Never reuse an assistant brand** (Siri, Alexa, Claude, Gemini, ChatGPT, Copilot, Lobe, ...).
 4. **An agent usually already has a name** — one is seeded at creation and shown in \`<agent_meta>\`. Treat it as the user's name for the agent:
-   - **No name in \`<agent_meta>\`** (an older agent): pick one proactively as part of Step 1.
+   - **Empty \`<name></name>\` in \`<agent_meta>\`** (an agent created before names existed): it has none. Picking one is a REQUIRED part of Step 1 — do it in the same \`updateConfig\` call as the title, and never report the configuration as finished without it.
    - **Still defining a brand-new agent** (no title and no system prompt yet): you may replace the seeded name with one that fits the persona the user just described. Mention the change in your reply.
    - **Established agent** (it has a title and a system prompt): never rename it unless the user asks. Configuring an agent is not a reason to re-name it.
 

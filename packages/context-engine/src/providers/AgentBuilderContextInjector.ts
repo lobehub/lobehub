@@ -78,11 +78,12 @@ const defaultFormatAgentContext = (context: AgentBuilderContext): string => {
 
   // Add meta section
   if (context.meta) {
-    const metaFields: string[] = [];
-    // The builder treats a missing <name> as "this agent still needs one", so an
-    // agent that already has a name must carry it here — otherwise the builder
-    // re-names it on every turn.
-    if (context.meta.name) metaFields.push(`  <name>${escapeXml(context.meta.name)}</name>`);
+    // `<name>` leads and is always emitted, empty included. An agent that has a name
+    // must carry it or the builder re-names it every turn; an agent that has none
+    // needs the empty element to make the gap *visible* — asking the model to notice
+    // an absent tag is a much weaker signal than showing it an empty value, and in
+    // testing it silently skipped naming a legacy agent when the element was omitted.
+    const metaFields: string[] = [`  <name>${escapeXml(context.meta.name ?? '')}</name>`];
     if (context.meta.title) metaFields.push(`  <title>${escapeXml(context.meta.title)}</title>`);
     if (context.meta.description)
       metaFields.push(`  <description>${escapeXml(context.meta.description)}</description>`);
@@ -93,9 +94,7 @@ const defaultFormatAgentContext = (context: AgentBuilderContext): string => {
     if (context.meta.tags && context.meta.tags.length > 0)
       metaFields.push(`  <tags>${context.meta.tags.join(', ')}</tags>`);
 
-    if (metaFields.length > 0) {
-      parts.push(`<agent_meta>\n${metaFields.join('\n')}\n</agent_meta>`);
-    }
+    parts.push(`<agent_meta>\n${metaFields.join('\n')}\n</agent_meta>`);
   }
 
   // Add config section

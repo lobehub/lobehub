@@ -48,7 +48,7 @@ describe('AgentBuilderContextInjector', () => {
     expect(injected).toContain('<title>健康助手</title>');
   });
 
-  it('should omit the name element when the agent has none, so the builder knows to pick one', async () => {
+  it('should emit an empty name element when the agent has none, so the gap is visible', async () => {
     const injector = new AgentBuilderContextInjector({
       agentContext: {
         meta: { title: '健康助手' },
@@ -59,7 +59,7 @@ describe('AgentBuilderContextInjector', () => {
     const result = await injector.process(createContext());
     const injected = result.messages[1].content;
 
-    expect(injected).not.toContain('<name>');
+    expect(injected).toContain('<name></name>');
     expect(injected).toContain('<title>健康助手</title>');
   });
 
