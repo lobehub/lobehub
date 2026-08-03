@@ -662,6 +662,71 @@ in-page sampler above. Either way, disarm with
 `Page.removeScriptToEvaluateOnNewDocument` and reload before capturing the settled
 state, or the comparison shot is taken against a still-crippled runtime.
 
+### The desktop instance pins a previous run's server port, and its saved OAuth login expires
+
+**Situation:** starting an Electron dev instance for a surface that needs the local
+backend (any tRPC-backed panel), in a fresh worktree.
+
+**Doesn't work:** starting the dev server on the port `init-dev-env.sh` allocates
+for this worktree and assuming the app will follow. The desktop app is a thin
+client — `BackendProxyProtocolManager` proxies `app://renderer/trpc/*` to whatever
+`dataSyncConfig.remoteServerUrl` the seeded login snapshot carries, which is the
+port an _earlier_ run allocated. The mismatch surfaces as `app-probe.sh server-auth`
+returning **502** (proxy reached nothing), not as an auth error. And once the port
+matches, the snapshot's OAuth tokens are usually expired anyway — the app shows
+「登录已过期」 and `server-auth` returns **401**, while `auth` still reports
+`isSignedIn: true` from renderer state alone.
+
+**Works:** read the app's own target first, then start the server on that port:
+
+```bash
+agent-browser --cdp 9222 eval '(() => JSON.stringify(window.__LOBE_STORES.electron().dataSyncConfig))()'
+# → {"storageMode":"selfHost","remoteServerUrl":"http://localhost:3111","active":true}
+SERVER_PORT=3111 .agents/acceptance/scripts/init-dev-env.sh dev-next
+```
+
+For the expired login, do **not** drive the OAuth flow. The proxy forwards the
+Electron session's cookies alongside its `Oidc-Auth` header, and the server accepts
+a better-auth session cookie — so mint one for the seeded user and inject it over
+raw CDP:
+
+```bash
+curl -c cookie.jar -H 'Content-Type: application/json' -X POST \
+  "$SERVER_URL/api/auth/sign-in/email" \
+  --data '{"callbackURL":"/","email":"agent-testing@lobehub.com","password":"TestPassword123!"}'
+# then Network.setCookie better-auth.session_token / better-auth.session_data
+# for url http://localhost:<port>, domain localhost, httpOnly, on the renderer target
+```
+
+Gate on `app-probe.sh server-auth` returning `{"authenticated":true,"status":200}` —
+renderer `isSignedIn` alone never proves the server accepted anything.
+
+### `agent.updateAgentConfig` silently drops `agencyConfig.heterogeneousProvider`
+
+**Situation:** turning a test agent into a CLI-agent shape (Claude Code / Codex) so
+the heterogeneous chat input and its quota badges render.
+
+**Doesn't work:** `updateAgentConfigById(id, { agencyConfig: { heterogeneousProvider:
+{ type: 'claude-code', command: 'claude' } } })`. The store's optimistic write makes
+it look applied — reading `agentMap[id].agencyConfig` back returns the provider — but
+the DB row keeps only the sibling keys (`executionTarget` persists, the provider does
+not), so the next full reload drops it and the plain chat input comes back. Reads as
+"the agent isn't hetero" with no error anywhere.
+
+**Works:** seed the shape directly (public API first is the rule; this is the
+documented exception where the write path does not carry the field):
+
+```bash
+docker exec lobehub-agent-testing-postgres psql -U postgres -d postgres -tAc \
+  "update agents set agency_config = '{\"executionTarget\":\"local\",\"heterogeneousProvider\":{\"type\":\"claude-code\",\"command\":\"claude\"}}'::jsonb where id='<agentId>';"
+```
+
+Then cold-load: a plain reload keeps serving the agent config from the tiered SWR
+cache, so the renderer still shows the pre-write value (generic M18). Clear
+`lobechat-swr-cache*` + `lobehub-local-data` through
+`Page.addScriptToEvaluateOnNewDocument` and reload (see "Cold SWR cache" above),
+then assert `agentMap[id].agencyConfig` before drawing any conclusion.
+
 ## Detailed references
 
 - [Probe field notes](./references/probe-field-notes.md) — all historical
