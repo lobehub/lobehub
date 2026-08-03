@@ -56,8 +56,7 @@ export class MessageCollector {
   constructor(
     private messageMap: Map<string, Message>,
     private childrenMap: Map<string | null, string[]>,
-    // BranchResolver is stateless; default keeps existing 2-arg call sites working.
-    private branchResolver: BranchResolver = new BranchResolver(),
+    private branchResolver: BranchResolver = new BranchResolver(messageMap),
   ) {}
 
   /**

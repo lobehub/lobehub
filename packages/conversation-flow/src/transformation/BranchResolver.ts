@@ -128,7 +128,7 @@ export class BranchResolver {
 
         const descendant = this.messageMap.get(messageId);
         if (descendant?.role === 'user') {
-          const timestamp = new Date(descendant.createdAt).getTime();
+          const timestamp = descendant.createdAt;
           if (timestamp > latestTimestamp) {
             latestTimestamp = timestamp;
             selectedBranchId = branchId;

@@ -62,9 +62,7 @@ export class FlatListBuilder {
     // leaving a stale assistant response at the request tail. A stable final sort
     // restores the persisted chronology without changing group membership or the
     // order of nodes with identical timestamps.
-    flatList.sort(
-      (first, second) => new Date(first.createdAt).getTime() - new Date(second.createdAt).getTime(),
-    );
+    flatList.sort((first, second) => first.createdAt - second.createdAt);
 
     return flatList;
   }

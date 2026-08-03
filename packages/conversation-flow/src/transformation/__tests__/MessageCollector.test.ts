@@ -796,6 +796,45 @@ describe('MessageCollector', () => {
       expect(allToolMessages.map((m) => m.id)).toEqual(['tool-1', 'tool-2']);
     });
 
+    it('uses the latest user descendant when the default resolver selects a continuation', () => {
+      const astRoot = mkAssistant('ast-root', {
+        parentId: 'user-root',
+        tools: [bashTool('tc-1')],
+      });
+      const tool = mkTool('tool-1', { parentId: 'ast-root', tool_call_id: 'tc-1' });
+      const astOld = mkAssistant('ast-old', { createdAt: 2, parentId: 'tool-1' });
+      const astCurrent = mkAssistant('ast-current', { createdAt: 3, parentId: 'tool-1' });
+      const userOld: Message = {
+        content: 'old follow-up',
+        createdAt: 4,
+        id: 'user-old',
+        parentId: 'ast-old',
+        role: 'user',
+        updatedAt: 4,
+      };
+      const userCurrent: Message = {
+        content: 'current follow-up',
+        createdAt: 5,
+        id: 'user-current',
+        parentId: 'ast-current',
+        role: 'user',
+        updatedAt: 5,
+      };
+      const allMessages = [astRoot, tool, astOld, astCurrent, userOld, userCurrent];
+      const messageMap = new Map(allMessages.map((message) => [message.id, message]));
+      const childrenMap = new Map<string | null, string[]>([
+        ['tool-1', ['ast-old', 'ast-current']],
+        ['ast-old', ['user-old']],
+        ['ast-current', ['user-current']],
+      ]);
+      const collector = new MessageCollector(messageMap, childrenMap);
+
+      const assistantChain: Message[] = [];
+      collector.collectAssistantChain(astRoot, allMessages, assistantChain, [], new Set());
+
+      expect(assistantChain.map((message) => message.id)).toEqual(['ast-root', 'ast-current']);
+    });
+
     it('continues past a duplicate edge to the current turn own tool result', () => {
       // A → tool(x) → B; B re-declares the SAME tool_call_id x and has its real
       // continuation C under B's own tool result. collectToolMessages(B) resolves
