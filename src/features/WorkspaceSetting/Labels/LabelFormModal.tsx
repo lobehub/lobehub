@@ -52,9 +52,9 @@ interface LabelFormModalProps extends Pick<ModalProps, 'open' | 'onCancel'> {
 const LabelFormModal = memo<LabelFormModalProps>(
   ({ assignTo, label, open, onCancel, restoreOnSave }) => {
     const { t } = useTranslation(['setting', 'common']);
-    const [createAgentLabel, setAgentLabels, updateAgentLabel] = useHomeStore((s) => [
+    const [createAgentLabel, toggleAgentLabel, updateAgentLabel] = useHomeStore((s) => [
       s.createAgentLabel,
-      s.setAgentLabels,
+      s.toggleAgentLabel,
       s.updateAgentLabel,
     ]);
 
@@ -106,7 +106,11 @@ const LabelFormModal = memo<LabelFormModalProps>(
                   name: trimmed,
                 });
                 if (assignTo && id) {
-                  await setAgentLabels(assignTo.agentId, [...assignTo.currentLabelIds, id]);
+                  // Delta, not `[...currentLabelIds, id]`: those ids were
+                  // captured when the modal opened, so replaying them as a full
+                  // set would delete anything another editor applied while the
+                  // user was typing.
+                  await toggleAgentLabel(assignTo.agentId, id, true);
                 }
               }
               onCancel?.(e as any);

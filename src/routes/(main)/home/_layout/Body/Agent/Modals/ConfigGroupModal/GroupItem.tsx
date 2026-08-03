@@ -53,7 +53,14 @@ const GroupItem = memo<GroupItemProps>(({ id, name, disabled }) => {
             icon={visible ? Eye : EyeOff}
             size={'small'}
             title={t(visible ? 'sessionGroup.hideFromSidebar' : 'sessionGroup.showInSidebar')}
-            onClick={() => setSidebarGroupVisible(id, !visible)}
+            onClick={async () => {
+              try {
+                await setSidebarGroupVisible(id, !visible);
+              } catch (error) {
+                console.error('Failed to toggle folder sidebar visibility:', error);
+                toast.error(t('operationFailed', { ns: 'common' }));
+              }
+            }}
           />
           <ActionIcon
             disabled={disabled}

@@ -71,9 +71,17 @@ export const useGroupDropdownMenu = ({
           icon: <Icon icon={EyeOffIcon} />,
           key: 'hideFromSidebar',
           label: t('sessionGroup.hideFromSidebar', { ns: 'chat' }),
-          onClick: (info: any) => {
+          onClick: async (info: any) => {
             info.domEvent?.stopPropagation();
-            void setSidebarGroupVisible(id, false);
+            try {
+              await setSidebarGroupVisible(id, false);
+            } catch (error) {
+              // Workspace mode rolls back, personal mode can keep an unsaved
+              // optimistic value — either way the folder looks hidden when it
+              // is not, so say so.
+              console.error('Failed to hide folder from sidebar:', error);
+              toast.error(t('operationFailed', { ns: 'common' }));
+            }
           },
           sfSymbol: 'eye.slash' as SFSymbol,
         }
