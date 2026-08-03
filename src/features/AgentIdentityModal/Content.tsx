@@ -65,10 +65,15 @@ const AgentIdentityContent = memo<AgentIdentityContentProps>(({ agentId }) => {
           placeholder={t('settingAgent.slug.placeholder', { ns: 'setting' })}
           prefix={'@'}
           status={form.error ? 'error' : undefined}
-          // The slug is a technical identifier, not prose — it reads at the same
-          // weight as the hint under it rather than competing with name and role.
-          style={{ color: cssVar.colorTextSecondary }}
           value={form.slug}
+          // Target the semantic slots, not the root: a `style` on the affix
+          // wrapper never reaches the inner `<input>`, whose own rule wins.
+          // The slug itself is a technical identifier, so it sits one step below
+          // name and role; the `@` is pure decoration and sits one step below it.
+          styles={{
+            input: { color: cssVar.colorTextSecondary },
+            prefix: { color: cssVar.colorTextTertiary },
+          }}
           onChange={(e) => form.setSlug(e.target.value)}
         />
       </Field>
