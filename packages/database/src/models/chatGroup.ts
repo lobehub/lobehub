@@ -220,10 +220,61 @@ export class ChatGroupModel {
 
   // ******* Update Methods ******* //
 
+  /**
+   * A move target must be a folder the caller can see, and a workspace-public
+   * group may only sit in a public folder. `chat_groups.groupId` is read by
+   * every member's sidebar now, and the foreign key only proves the folder
+   * exists — another workspace's folder, or another member's private one,
+   * satisfies it and then renders as Ungrouped for everyone who cannot see it.
+   * Mirrors `AgentModel.assertSessionGroupAssignable`.
+   */
+  private async assertFolderAssignable(id: string, groupId: string) {
+    const [folder] = await this.db
+      .select({ visibility: sessionGroups.visibility })
+      .from(sessionGroups)
+      .where(
+        and(
+          eq(sessionGroups.id, groupId),
+          buildWorkspaceWhere(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            {
+              userId: sessionGroups.userId,
+              visibility: sessionGroups.visibility,
+              workspaceId: sessionGroups.workspaceId,
+            },
+          ),
+        ),
+      )
+      .limit(1);
+
+    if (!folder) throw new Error(`Session group ${groupId} not found in current scope`);
+
+    if (!this.workspaceId) return;
+
+    const [group] = await this.db
+      .select({ visibility: chatGroups.visibility })
+      .from(chatGroups)
+      .where(and(eq(chatGroups.id, id), this.ownership()))
+      .limit(1);
+
+    if (group?.visibility === 'public' && folder.visibility !== 'public')
+      throw new Error('A workspace-public chat group cannot be moved into a private folder');
+  }
+
   async update(id: string, value: Partial<ChatGroupItem>): Promise<ChatGroupItem> {
+    if (value.groupId) await this.assertFolderAssignable(id, value.groupId);
+
+    // Scope columns never travel through the generic update. The router hands
+    // this a partial insert schema, so without stripping them a member could
+    // re-scope another member's group now that the ownership predicate spans
+    // every visible workspace row. Ignored rather than rejected so a client
+    // that sends an extra field still gets its real edit applied. Publishing
+    // has its own path and writes `visibility` directly.
+    const { userId: _userId, visibility: _visibility, workspaceId: _workspaceId, ...safe } = value;
+
     const [result] = await this.db
       .update(chatGroups)
-      .set(value)
+      .set(safe)
       .where(and(eq(chatGroups.id, id), this.ownership()))
       .returning();
 

@@ -859,7 +859,11 @@ export class AgentGroupRepository {
 
       await trx
         .update(chatGroups)
-        .set({ ...ownershipUpdate, ...visibilityUpdate, updatedAt: new Date() })
+        // Folders stay in the source scope, exactly as `transferAgents` does
+        // for `sessionGroupId`: carrying the id across would point the moved
+        // group at a folder the target workspace cannot resolve, dropping it
+        // into Ungrouped for every member there.
+        .set({ ...ownershipUpdate, ...visibilityUpdate, groupId: null, updatedAt: new Date() })
         .where(eq(chatGroups.id, groupId));
 
       await trx
