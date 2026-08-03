@@ -233,6 +233,13 @@ export const getAllowedScopesForAction = (
   // workspace_member.role + assigned permissions already pin who can do what.
   if (resource.startsWith('workspace')) return ['ALL'];
 
+  // Agent labels are a shared registry rather than per-author content: in a
+  // workspace every member sees and uses the same label set, and the model
+  // scopes reads and writes by `workspace_id` alone. An OWNER grant would
+  // therefore be a lie — it reads as "only labels you created" but would in
+  // fact authorize mutating every label in the workspace.
+  if (resource === 'agent_label') return ['ALL'];
+
   // user resource nuance: create/delete without OWNER; read/update allow OWNER
   if (resource === 'user') {
     if (action === 'create' || action === 'delete') return ['ALL'];

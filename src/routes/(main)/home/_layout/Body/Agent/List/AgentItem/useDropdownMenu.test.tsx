@@ -167,6 +167,8 @@ describe('useAgentDropdownMenu', () => {
   });
 
   it('shows the Labels submenu only where it is enabled (the agents list page)', () => {
+    mocks.canEditResource = true;
+
     const { result } = renderHook(() =>
       useAgentDropdownMenu({
         anchor: null,
@@ -182,6 +184,30 @@ describe('useAgentDropdownMenu', () => {
     );
 
     expect(getMenuKeys(result.current())).toContain('labels');
+  });
+
+  it('hides the Labels submenu when the agent is only viewable', () => {
+    // A workspace member can hold `edit_own_content` while having view-only
+    // access to a teammate's public agent. The server rejects the write, so
+    // offering the submenu would only produce an optimistic patch that snaps
+    // back.
+    mocks.canEditResource = false;
+
+    const { result } = renderHook(() =>
+      useAgentDropdownMenu({
+        anchor: null,
+        group: undefined,
+        id: 'agent-1',
+        labelsEnabled: true,
+        openCreateGroupModal: vi.fn(),
+        pinned: false,
+        title: 'Public Agent',
+        userId: 'creator-1',
+        visibility: 'public',
+      }),
+    );
+
+    expect(getMenuKeys(result.current())).not.toContain('labels');
   });
 
   it('keeps write actions hidden from a Workspace viewer', () => {

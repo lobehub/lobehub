@@ -290,7 +290,12 @@ export const useAgentDropdownMenu = ({
         // Labels work in both scopes: workspace mode uses the shared
         // workspace registry, personal mode a personal one. Clicking an entry
         // toggles that label on the agent.
-        ...(canEdit && labelsEnabled
+        //
+        // Gated on `canConfigure`, not the coarse `canEdit`: labelling is an
+        // agent mutation the server checks per resource, so a member who may
+        // only view a teammate's public agent would otherwise see the submenu,
+        // watch the row patch optimistically, and then have it roll back.
+        ...(canConfigure && labelsEnabled
           ? [
               {
                 children: [
