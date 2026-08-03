@@ -1802,6 +1802,11 @@ export class AgentModel {
             agencyConfig: targetWorkspaceId
               ? (resolvedAgencyConfigs.get(agent.id) ?? null)
               : (agent.agencyConfig ?? null),
+            // Pins are shared state now, exactly like the folder above: a pin
+            // the previous owner set for themselves would arrive as a pin for
+            // every member of the target workspace. Both belong to the source
+            // scope and are dropped with it.
+            pinned: false,
             sessionGroupId: null,
             slug: resolvedSlugs.get(agent.id) ?? agent.slug,
             // A scope transfer does not make the agent's content newer. Keep the

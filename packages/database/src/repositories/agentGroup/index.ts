@@ -927,7 +927,15 @@ export class AgentGroupRepository {
         // for `sessionGroupId`: carrying the id across would point the moved
         // group at a folder the target workspace cannot resolve, dropping it
         // into Ungrouped for every member there.
-        .set({ ...ownershipUpdate, ...visibilityUpdate, groupId: null, updatedAt: new Date() })
+        .set({
+          ...ownershipUpdate,
+          ...visibilityUpdate,
+          groupId: null,
+          // Same reasoning as the folder: a pin is the previous owner's own
+          // sidebar choice and would otherwise arrive as a workspace-wide pin.
+          pinned: false,
+          updatedAt: new Date(),
+        })
         .where(eq(chatGroups.id, groupId));
 
       await trx
@@ -950,8 +958,9 @@ export class AgentGroupRepository {
           .set({
             ...ownershipUpdate,
             ...visibilityUpdate,
-            // Folders belong to the source scope — same rule the group row and
-            // `AgentModel.transferAgents` follow.
+            // Folders and pins belong to the source scope — same rule the
+            // group row and `AgentModel.transferAgents` follow.
+            pinned: false,
             sessionGroupId: null,
             updatedAt: new Date(),
           })
