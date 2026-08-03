@@ -332,12 +332,22 @@ export class HomeRepository {
           avatar: meta.avatar,
           backgroundColor: a.backgroundColor,
           description: a.description,
-          groupId: a.agentSessionGroupId ?? a.sessionGroupId,
+          // Legacy fallback, personal scope only. `sessions` are per-user rows
+          // and this join does not filter by the caller, so in a workspace the
+          // fallback would hand one member's old per-session folder to every
+          // member — arbitrarily, since which session wins depends on the join.
+          // That was harmless while folders were per-member; now that the
+          // sidebar is shared it would publish one person's legacy state.
+          groupId: this.workspaceId
+            ? a.agentSessionGroupId
+            : (a.agentSessionGroupId ?? a.sessionGroupId),
           heterogeneousType: a.agencyConfig?.heterogeneousProvider?.type ?? null,
           id: a.id,
           isPrivate: visibility === 'private',
           labels: agentLabelsMap.get(a.id),
-          pinned: a.pinned ?? a.sessionPinned ?? false,
+          // Same personal-only reasoning as `groupId`: `sessions.pinned` is one
+          // member's legacy pin, and pins are shared again.
+          pinned: this.workspaceId ? (a.pinned ?? false) : (a.pinned ?? a.sessionPinned ?? false),
           sessionId: a.sessionId,
           slug: a.slug,
           title: meta.title,
@@ -520,7 +530,9 @@ export class HomeRepository {
           backgroundColor: a.backgroundColor,
           description: a.description,
           id: a.id,
-          pinned: a.pinned ?? a.sessionPinned ?? false,
+          // Same personal-only reasoning as `groupId`: `sessions.pinned` is one
+          // member's legacy pin, and pins are shared again.
+          pinned: this.workspaceId ? (a.pinned ?? false) : (a.pinned ?? a.sessionPinned ?? false),
           sessionId: a.sessionId,
           title: meta.title,
           type: 'agent' as const,
