@@ -2489,6 +2489,29 @@ describe('AgentModel', () => {
     });
   });
 
+  describe('duplicate visibility', () => {
+    it('keeps a private agent private when duplicated', async () => {
+      // The column defaults to `public`, so an omitted copy publishes the
+      // duplicate of a private agent to the whole workspace — and, now that
+      // folder placement is shared, strands it in Ungrouped as well, since a
+      // public item resolves only against public folders.
+      const [group] = await serverDB
+        .insert(sessionGroups)
+        .values({ name: 'Private folder', userId, visibility: 'private' })
+        .returning();
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({ sessionGroupId: group.id, title: 'Secret', userId, visibility: 'private' })
+        .returning();
+
+      const result = await agentModel.duplicate(agent.id);
+
+      const [copy] = await serverDB.select().from(agents).where(eq(agents.id, result!.agentId));
+      expect(copy.visibility).toBe('private');
+      expect(copy.sessionGroupId).toBe(group.id);
+    });
+  });
+
   describe('updateSessionGroupId', () => {
     it('should update agent sessionGroupId', async () => {
       const [group] = await serverDB

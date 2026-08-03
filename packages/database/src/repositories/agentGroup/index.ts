@@ -725,6 +725,12 @@ export class AgentGroupRepository {
           // Sidebar folder placement is shared state, so the copy lands next to
           // its source (matching AgentModel.duplicate's `sessionGroupId`).
           groupId: sourceGroup.groupId,
+          // Visibility travels with the folder, and must: the column defaults
+          // to `public`, so duplicating a private group would otherwise publish
+          // the copy to the workspace *and* strand it — the sidebar resolves a
+          // public item's folder only against public folders, so the copy would
+          // land in Ungrouped rather than beside its source.
+          visibility: sourceGroup.visibility,
           pinned: sourceGroup.pinned,
           title: newTitle || (sourceGroup.title ? `${sourceGroup.title} (Copy)` : 'Copy'),
           userId: this.userId,

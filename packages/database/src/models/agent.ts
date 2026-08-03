@@ -1394,8 +1394,13 @@ export class AgentModel {
             plugins: sourceAgent.plugins,
             provider: sourceAgent.provider,
 
-            // Session group
+            // Session group. Visibility has to travel with it: the column
+            // defaults to `public`, and now that folder placement is shared and
+            // authoritative, a private agent duplicated into its private folder
+            // would be published to the workspace and still render in Ungrouped,
+            // since a public item resolves only against public folders.
             sessionGroupId: sourceAgent.sessionGroupId,
+            visibility: sourceAgent.visibility,
             systemRole: sourceAgent.systemRole,
 
             tags: sourceAgent.tags,
