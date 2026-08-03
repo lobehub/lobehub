@@ -83,7 +83,7 @@ const empiriolabsChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_000_000,
     description:
-      'Fast 284B MoE reasoning model with 13B active parameters, a 1M context window, strong agentic coding, function calling, and hybrid thinking.',
+      'Post-trained 0731 release with major gains across coding, repository work, tool use, and full-stack tasks, plus a 1M context window.',
     displayName: 'DeepSeek V4 Flash 0731',
     id: 'deepseek-v4-flash-0731',
     maxOutput: 393_216,
@@ -363,24 +363,6 @@ const empiriolabsChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 40_000,
-    description:
-      'Reasoning model tuned for tasks needing longer thought and higher accuracy: legal research, financial forecasting, software, and storytelling.',
-    displayName: 'Magistral Medium 2509 Thinking',
-    id: 'magistral-medium-2509-thinking',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 2.6, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 6.5, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -895,6 +877,25 @@ const empiriolabsChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+    },
+    contextWindowTokens: 131_072,
+    description:
+      'Qwen3.6 35B A3B is a 256-expert mixture-of-experts reasoning model with 128K context, function tools, and strict structured JSON output.',
+    displayName: 'Qwen3.6 35B A3B',
+    id: 'qwen3-6-35b-a3b',
+    maxOutput: 16_384,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.07, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.42, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
       vision: true,
     },
     contextWindowTokens: 1_000_000,
@@ -954,6 +955,26 @@ const empiriolabsChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      'Fast Qwen3.7 vision-language model for text, image, video, tool use, and agentic tasks, with implicit caching and a 1M token context.',
+    displayName: 'Qwen3.7 Flash',
+    id: 'qwen3-7-flash',
+    maxOutput: 65_536,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.03, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.13, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
     },
     contextWindowTokens: 1_000_000,
     description:
@@ -985,6 +1006,26 @@ const empiriolabsChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 1.6, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      'Trillion-scale MoE flagship for coding, long-horizon agents, and professional work, with image and video understanding across a 1M-token context.',
+    displayName: 'Qwen3.8 Max',
+    id: 'qwen3-8-max',
+    maxOutput: 131_072,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -1475,7 +1516,7 @@ const empiriolabsVideoModels: AIVideoModelCard[] = [
   },
   {
     description:
-      'Image-to-video model that animates a source image with prompt-guided motion, up to 15 seconds at 480p or 720p across seven aspect ratios.',
+      'Text-to-video, image-to-video, and reference-to-video generation with up to seven reference images for consistent characters, up to 15 seconds at 1080p.',
     displayName: 'Grok Imagine Video 1.5',
     enabled: true,
     id: 'grok-imagine-video-1-5',
@@ -1484,8 +1525,9 @@ const empiriolabsVideoModels: AIVideoModelCard[] = [
       aspectRatio: { default: '1:1', enum: ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3'] },
       duration: { default: 10, max: 15, min: 1 },
       imageUrl: { default: null },
+      imageUrls: { default: [], maxCount: 4 },
       prompt: { default: '' },
-      resolution: { default: '720p', enum: ['480p', '720p'] },
+      resolution: { default: '720p', enum: ['480p', '720p', '1080p'] },
     },
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.168, strategy: 'fixed', unit: 'second' }],
@@ -1588,6 +1630,29 @@ const empiriolabsVideoModels: AIVideoModelCard[] = [
     },
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.168, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Generates 4 to 15 second clips at up to 2K with native stereo audio, following text, image, video, and audio references in one request.',
+    displayName: 'MiniMax H3',
+    enabled: true,
+    id: 'minimax-h3',
+    organization: 'MiniMax',
+    parameters: {
+      aspectRatio: {
+        default: 'adaptive',
+        enum: ['adaptive', '21:9', '16:9', '4:3', '1:1', '3:4', '9:16'],
+      },
+      duration: { default: 6, max: 15, min: 4 },
+      generateAudio: { default: false },
+      imageUrl: { default: null },
+      prompt: { default: '' },
+      resolution: { default: '768p', enum: ['768p', '2k'] },
+    },
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.16, strategy: 'fixed', unit: 'second' }],
     },
     type: 'video',
   },
