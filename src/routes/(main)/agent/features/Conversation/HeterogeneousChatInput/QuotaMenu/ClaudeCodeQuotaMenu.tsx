@@ -12,10 +12,9 @@ import QuotaAccountSwitcher from './QuotaAccountSwitcher';
 import type { FetchQuotaOptions, QuotaWindowItem } from './QuotaMenu';
 import QuotaMenu, { createQuotaSourceKey } from './QuotaMenu';
 import {
-  buildClaudeSnapshotFromReadings,
+  buildClaudePanelSnapshot,
   hasRenderableWindow,
   isQuotaStale,
-  mergeClaudeSnapshots,
   newestCapturedAt,
 } from './quotaViewModel';
 
@@ -111,7 +110,7 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
         isQuotaStale(account?.updatedAt, Date.now(), QUOTA_REFRESH_MS)
       ) {
         if (account && readings.length > 0) {
-          const interim = buildClaudeSnapshotFromReadings(account, readings);
+          const interim = buildClaudePanelSnapshot(account, readings, null);
           if (hasRenderableWindow(interim)) options?.onInterim?.(interim);
         }
         live = await fetchClaudeCodeQuotaSnapshot({ deviceId, env, force }).catch(() => null);
@@ -154,16 +153,14 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
         }
       }
 
-      // 3) Merge, window by window: the persisted view survives a failed live
-      // fetch, while a window it has no reading for (identity unresolvable
-      // because ~/.claude.json carries no oauthAccount though the quota came
-      // from the keychain, or an ingest that failed) comes from the live sample
-      // instead of leaving the panel one row short.
-      const persisted =
-        account && readings.length > 0 ? buildClaudeSnapshotFromReadings(account, readings) : null;
-      const merged = mergeClaudeSnapshots(persisted, live, newestCapturedAt(readings));
+      // 3) The persisted view survives a failed live fetch, and an attributable
+      // live sample fills what it has no reading for (an ingest that failed, a
+      // limit this account has no history for) — merged per limit, newest
+      // reading wins. With no account resolved at all there is nothing to
+      // attribute the sample to, so the live snapshot stands on its own.
+      const merged = account ? buildClaudePanelSnapshot(account, readings, live) : null;
       if (merged && hasRenderableWindow(merged)) return merged;
-      return live ?? persisted ?? unavailableSnapshot();
+      return live ?? merged ?? unavailableSnapshot();
     },
     [deviceId, env, agentId],
   );

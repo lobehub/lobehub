@@ -2,12 +2,7 @@ import type { ClaudeCodeQuotaSnapshot } from '@lobechat/electron-client-ipc';
 import { describe, expect, it } from 'vitest';
 
 import type { QuotaReadingRow } from './quotaViewModel';
-import {
-  buildClaudeSnapshotFromReadings,
-  isQuotaStale,
-  mergeClaudeSnapshots,
-  newestCapturedAt,
-} from './quotaViewModel';
+import { buildClaudePanelSnapshot, isQuotaStale, newestCapturedAt } from './quotaViewModel';
 
 const reset = Date.parse('2026-07-21T14:00:00Z');
 const sessionReset = Date.parse('2026-07-18T20:50:00Z');
@@ -37,9 +32,9 @@ const readings: QuotaReadingRow[] = [
   },
 ];
 
-describe('buildClaudeSnapshotFromReadings', () => {
+describe('buildClaudePanelSnapshot — persisted readings', () => {
   it('maps persisted readings to the panel snapshot (session / weekly / Fable scoped)', () => {
-    const snap = buildClaudeSnapshotFromReadings(account, readings, now);
+    const snap = buildClaudePanelSnapshot(account, readings, null, now);
     expect(snap.status).toBe('ok');
     expect(snap.session).toEqual({
       resetsAt: sessionReset,
@@ -59,7 +54,7 @@ describe('buildClaudeSnapshotFromReadings', () => {
     // the panel show the weekly limit alone, as if the plan had no session
     // limit at all; replaying its 43% would claim spend that has refilled.
     const afterSessionReset = sessionReset + 60_000;
-    const snap = buildClaudeSnapshotFromReadings(account, readings, afterSessionReset);
+    const snap = buildClaudePanelSnapshot(account, readings, null, afterSessionReset);
 
     expect(snap.session).toEqual({ resetsAt: null, usedPercent: 0, windowMinutes: 300 });
     expect(snap.weekly).toMatchObject({ usedPercent: 62 });
@@ -69,7 +64,7 @@ describe('buildClaudeSnapshotFromReadings', () => {
   it('keeps a limit the provider reports without a reset time', () => {
     // An untouched model-scoped weekly arrives as `resets_at: null`, so it has
     // no window row to be projected into — only the reading carries it.
-    const snap = buildClaudeSnapshotFromReadings(
+    const snap = buildClaudePanelSnapshot(
       account,
       [
         {
@@ -80,6 +75,7 @@ describe('buildClaudeSnapshotFromReadings', () => {
           utilization: 0,
         },
       ],
+      null,
       now,
     );
 
@@ -90,7 +86,7 @@ describe('buildClaudeSnapshotFromReadings', () => {
   });
 
   it('carries the account identity for the switcher', () => {
-    const snap = buildClaudeSnapshotFromReadings(account, readings, now);
+    const snap = buildClaudePanelSnapshot(account, readings, null, now);
     expect(snap.identity).toMatchObject({
       email: 'lobehubbot@gmail.com',
       externalAccountId: '48bfd5c6',
@@ -99,7 +95,7 @@ describe('buildClaudeSnapshotFromReadings', () => {
   });
 
   it('has no windows for an account with no readings', () => {
-    const snap = buildClaudeSnapshotFromReadings(account, [], now);
+    const snap = buildClaudePanelSnapshot(account, [], null, now);
     expect(snap.session).toBeNull();
     expect(snap.weekly).toBeNull();
     expect(snap.scopedWeekly).toBeNull();
@@ -114,10 +110,24 @@ describe('newestCapturedAt', () => {
   });
 });
 
-describe('mergeClaudeSnapshots', () => {
+describe('buildClaudePanelSnapshot — folding in a live sample', () => {
+  const liveReading = (over: Partial<QuotaReadingRow> = {}): QuotaReadingRow => ({
+    capturedAt: now,
+    limitType: 'session',
+    resetsAt: sessionReset,
+    scopeKey: '',
+    utilization: 7,
+    ...over,
+  });
+
   const live: ClaudeCodeQuotaSnapshot = {
     error: null,
+    identity: { externalAccountId: '48bfd5c6' },
     provider: 'claude-code',
+    readings: [
+      liveReading(),
+      liveReading({ limitType: 'weekly_all', resetsAt: reset, utilization: 9 }),
+    ],
     scopedWeekly: {
       modelName: 'Fable',
       window: { resetsAt: reset, usedPercent: 12, windowMinutes: 10_080 },
@@ -128,51 +138,83 @@ describe('mergeClaudeSnapshots', () => {
     weekly: { resetsAt: reset, usedPercent: 9, windowMinutes: 10_080 },
   };
 
-  it('fills the windows the persisted view has no reading for', () => {
-    // Only the weekly limit was ever persisted; the panel must still show the
-    // session and Fable windows the sample in hand carries.
-    const persisted = buildClaudeSnapshotFromReadings(account, [readings[1]], now);
-    const merged = mergeClaudeSnapshots(persisted, live, capturedAt)!;
+  it('takes the newest reading per limit, not the newest snapshot', () => {
+    // Buckets can be persisted at different times (one device ingested the
+    // session at 08:00 while the weekly last landed at 06:00). Comparing whole
+    // snapshots would let the fresher session bucket suppress a live weekly
+    // that is genuinely newer than the persisted one.
+    const persisted = [
+      readings[0], // session, captured 08:00 — newer than the live sample below
+      { ...readings[1], capturedAt: Date.parse('2026-07-18T06:00:00Z') }, // weekly, stale
+    ];
+    const olderLive = { ...live, updatedAt: Date.parse('2026-07-18T07:00:00Z') };
+    const snap = buildClaudePanelSnapshot(
+      account,
+      persisted,
+      {
+        ...olderLive,
+        readings: [
+          liveReading({ capturedAt: Date.parse('2026-07-18T07:00:00Z') }),
+          liveReading({
+            capturedAt: Date.parse('2026-07-18T07:00:00Z'),
+            limitType: 'weekly_all',
+            resetsAt: reset,
+            utilization: 9,
+          }),
+        ],
+      },
+      now,
+    );
 
-    expect(merged.session).toMatchObject({ usedPercent: 7 });
-    expect(merged.scopedWeekly).toMatchObject({ modelName: 'Fable' });
-    expect(merged.identity).toMatchObject({ externalAccountId: '48bfd5c6' });
+    expect(snap.session).toMatchObject({ usedPercent: 43 }); // persisted 08:00 wins
+    expect(snap.weekly).toMatchObject({ usedPercent: 9 }); // live 07:00 beats persisted 06:00
   });
 
-  it('leads with the live sample when it is newer than the persisted readings', () => {
-    const persisted = buildClaudeSnapshotFromReadings(account, readings, now);
-    const merged = mergeClaudeSnapshots(persisted, live, capturedAt)!;
+  it('fills a limit the account has no reading for from the sample', () => {
+    const snap = buildClaudePanelSnapshot(account, [readings[1]], live, now);
 
-    expect(merged.weekly).toMatchObject({ usedPercent: 9 });
-    expect(merged.session).toMatchObject({ usedPercent: 7 });
+    expect(snap.session).toMatchObject({ usedPercent: 7 });
+    expect(snap.scopedWeekly).toMatchObject({ modelName: 'Fable' });
+    expect(snap.identity).toMatchObject({ externalAccountId: '48bfd5c6' });
   });
 
-  it('leads with the persisted view when another host ingested something newer', () => {
-    const persisted = buildClaudeSnapshotFromReadings(account, readings, now);
-    const merged = mergeClaudeSnapshots(persisted, live, live.updatedAt + 60_000)!;
-
-    expect(merged.weekly).toMatchObject({ usedPercent: 62 });
-    expect(merged.session).toMatchObject({ usedPercent: 43 });
-  });
-
-  it('ignores a sample taken from another login', () => {
-    const persisted = buildClaudeSnapshotFromReadings(account, readings, now);
+  it('refuses a sample it cannot attribute to this account', () => {
+    // `~/.claude.json` may carry no oauthAccount while the quota comes from the
+    // keychain. With several logins on the machine the CLI's current one is not
+    // necessarily this account, so an unidentified sample must not be painted
+    // under this account's name — not even to fill an empty window.
+    const unidentified = { ...live, identity: undefined };
     const otherAccount = { ...live, identity: { externalAccountId: 'someone-else' } };
 
-    expect(mergeClaudeSnapshots(persisted, otherAccount, 0)).toBe(persisted);
+    expect(buildClaudePanelSnapshot(account, [readings[1]], unidentified, now).session).toBeNull();
+    expect(buildClaudePanelSnapshot(account, [readings[1]], otherAccount, now).session).toBeNull();
+    // An account we cannot name has nothing to be confused with.
+    const anonymous = { ...account, externalAccountId: null };
+    expect(
+      buildClaudePanelSnapshot(anonymous, [readings[1]], unidentified, now).session,
+    ).toMatchObject({ usedPercent: 7 });
+  });
+
+  it('reports the sample time once a live sample has been consulted', () => {
+    // Otherwise the header says "3 分钟前更新" over just-fetched numbers and
+    // every staleness gate immediately refetches the quota we already have.
+    const stale = { ...account, updatedAt: new Date('2026-07-18T07:00:00Z') };
+
+    expect(buildClaudePanelSnapshot(stale, readings, live, now).updatedAt).toBe(live.updatedAt);
+    expect(buildClaudePanelSnapshot(stale, readings, null, now).updatedAt).toBe(
+      Date.parse('2026-07-18T07:00:00Z'),
+    );
   });
 
   it('keeps the persisted view when the live fetch failed', () => {
-    const persisted = buildClaudeSnapshotFromReadings(account, readings, now);
     const failed = { ...live, error: 'fetch failed', status: 'error' as const };
 
-    expect(mergeClaudeSnapshots(persisted, failed, capturedAt)).toBe(persisted);
-    expect(mergeClaudeSnapshots(persisted, null, capturedAt)).toBe(persisted);
-  });
-
-  it('falls back to the live sample when nothing is persisted', () => {
-    expect(mergeClaudeSnapshots(null, live)).toBe(live);
-    expect(mergeClaudeSnapshots(null, null)).toBeNull();
+    expect(buildClaudePanelSnapshot(account, readings, failed, now).session).toMatchObject({
+      usedPercent: 43,
+    });
+    expect(buildClaudePanelSnapshot(account, readings, null, now).session).toMatchObject({
+      usedPercent: 43,
+    });
   });
 });
 
@@ -193,9 +235,10 @@ describe('isQuotaStale', () => {
 
   it('ignores device clock skew when building display freshness', () => {
     const deviceClockAhead = [{ ...readings[0], capturedAt: Date.parse('2026-07-19T09:00:00Z') }];
-    const snap = buildClaudeSnapshotFromReadings(
+    const snap = buildClaudePanelSnapshot(
       { ...account, updatedAt: new Date('2026-07-18T08:50:00Z') },
       deviceClockAhead,
+      null,
       now,
     );
 

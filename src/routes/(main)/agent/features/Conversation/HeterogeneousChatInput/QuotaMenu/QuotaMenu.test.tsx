@@ -588,9 +588,36 @@ describe('ClaudeCodeQuotaMenu', () => {
 
   it('shows the live sample when the persisted window has already reset', async () => {
     // A device offline since yesterday leaves a reading behind whose window has
-    // since reset. Its 100% describes spend that already refilled, so the live
-    // sample — even one that could not be persisted (identity without an
-    // external account id here) — must lead.
+    // since reset. Its 100% describes spend that already refilled, so a sample
+    // attributable to the same account must lead.
+    mockQuotaService.listAccounts.mockResolvedValue([persistedAccount(Date.now() - 60 * 60_000)]);
+    mockQuotaService.getLatestReadings.mockResolvedValue([
+      {
+        ...persistedSessionReading(Date.now() - 24 * 60 * 60_000),
+        resetsAt: Date.now() - 60 * 60_000,
+        utilization: 100,
+      },
+    ]);
+    mockService.getClaudeCodeQuota.mockResolvedValue(
+      claudeSnapshot({
+        identity: { externalAccountId: 'ext-1' },
+        readings: [{ ...liveSessionReading(Date.now()), utilization: 4 }],
+        session: { resetsAt: null, usedPercent: 4, windowMinutes: 300 },
+      }),
+    );
+
+    render(<ClaudeCodeQuotaMenu />);
+
+    // 96% left from the live sample — not the reset row's 100%, and not empty.
+    expect(await screen.findByText('96%')).toBeTruthy();
+    expect(screen.queryByText('heteroAgent.quota.noData')).toBeNull();
+  });
+
+  it('will not paint an unattributable sample under a named account', async () => {
+    // Same setup, except the sample carries no account identity (no
+    // `oauthAccount` in ~/.claude.json while the quota came from the keychain).
+    // With several logins on the machine it may belong to another account, so
+    // the panel keeps the account's own refilled window instead.
     mockQuotaService.listAccounts.mockResolvedValue([persistedAccount(Date.now() - 60 * 60_000)]);
     mockQuotaService.getLatestReadings.mockResolvedValue([
       {
@@ -605,9 +632,9 @@ describe('ClaudeCodeQuotaMenu', () => {
 
     render(<ClaudeCodeQuotaMenu />);
 
-    // 96% left from the live sample — not the reset row's 100%, and not empty.
-    expect(await screen.findByText('96%')).toBeTruthy();
-    expect(screen.queryByText('heteroAgent.quota.noData')).toBeNull();
+    // The reset window reads as refilled; the unattributable 96% is not shown.
+    expect(await screen.findByText('100%')).toBeTruthy();
+    expect(screen.queryByText('96%')).toBeNull();
   });
 
   it('keeps the 5-hour row on screen as refilled once its window resets', async () => {

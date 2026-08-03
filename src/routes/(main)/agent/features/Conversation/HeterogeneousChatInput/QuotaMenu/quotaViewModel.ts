@@ -38,42 +38,6 @@ const identityOf = (account: QuotaAccountRow): ClaudeCodeAccountIdentity => ({
 });
 
 /**
- * Build the panel snapshot from the persisted readings — the primary display
- * source. The live Anthropic fetch is only used to refresh/ingest these rows,
- * so the panel keeps showing data even when that fetch fails.
- *
- * Readings rather than `agent_quota_windows`: a window is keyed by its
- * `resets_at`, so a limit the provider reports without one (an untouched
- * model-scoped weekly) has no window row at all, and a window whose reset has
- * passed is not the live one. {@link buildClaudeQuotaWindows} covers both — a
- * rolled-over window renders as refilled instead of vanishing from the panel.
- */
-export const buildClaudeSnapshotFromReadings = (
-  account: QuotaAccountRow,
-  readings: QuotaReadingRow[],
-  now: number = Date.now(),
-): ClaudeCodeQuotaSnapshot => {
-  const windows = buildClaudeQuotaWindows(readings, now);
-
-  // Freshness is based on when our server received the snapshot, not on the
-  // sampling device's wall clock. Device timestamps remain on the readings for
-  // history and cached-echo detection, but clock skew must not suppress or
-  // accelerate browser refreshes.
-  const updatedAt = toMs(account.updatedAt) ?? 0;
-
-  return {
-    error: null,
-    identity: identityOf(account),
-    provider: 'claude-code',
-    scopedWeekly: windows.scopedWeekly,
-    session: windows.session,
-    status: 'ok',
-    updatedAt: updatedAt || now,
-    weekly: windows.weekly,
-  };
-};
-
-/**
  * Newest persisted reading time (0 when none). Readings carry the sampling
  * host's `capturedAt`, so this compares 1:1 against a live snapshot's readings
  * — both are stamped by the same host.
@@ -82,38 +46,73 @@ export const newestCapturedAt = (readings: QuotaReadingRow[]): number =>
   readings.reduce((max, r) => Math.max(max, r.capturedAt), 0);
 
 /**
- * Merge the persisted view with a live sample, window by window.
+ * Whether a live sample provably describes the account on screen.
  *
- * Whole-snapshot "persisted wins" loses real data: a window the DB has no
- * reading for (ingest failed, identity unresolvable, a limit this account has
- * no history for) would render as "this plan has no such limit" even though the
- * sample in hand has it. Which side leads is a freshness question —
- * `persistedAsOf` is the newest persisted reading time, comparable with the
- * live snapshot's stamp because both come from the sampler host — and the other
- * side fills whatever the leader is missing.
+ * Requiring a positive match (rather than only rejecting a mismatch) is what
+ * keeps an *unidentifiable* sample off a named account: `~/.claude.json` may
+ * carry no `oauthAccount` while the quota itself comes from the keychain, and
+ * with several logins on the machine the CLI's current one is not necessarily
+ * the account this panel is showing. Painting one account's numbers under
+ * another's name is worse than leaving a window unfilled. An account we cannot
+ * name either has nothing to be confused with, so it accepts any sample.
  */
-export const mergeClaudeSnapshots = (
-  persisted: ClaudeCodeQuotaSnapshot | null,
+const liveBelongsToAccount = (account: QuotaAccountRow, live: ClaudeCodeQuotaSnapshot): boolean => {
+  const accountId = account.externalAccountId;
+  if (!accountId) return true;
+  return live.identity?.externalAccountId === accountId;
+};
+
+/**
+ * The snapshot the panel renders: persisted readings, with an attributable live
+ * sample folded in. Pass `live = null` for the persisted-only view (the interim
+ * paint before a live refresh resolves).
+ *
+ * Readings rather than `agent_quota_windows`: a window is keyed by its
+ * `resets_at`, so a limit the provider reports without one (an untouched
+ * model-scoped weekly) has no window row at all, and a window whose reset has
+ * passed is not the live one. {@link buildClaudeQuotaWindows} covers both — a
+ * rolled-over window renders as refilled instead of vanishing from the panel.
+ *
+ * The merge happens at the *reading* level, so freshness is decided per limit —
+ * {@link buildClaudeQuotaWindows} keeps the newest reading in each bucket. A
+ * snapshot-level comparison would let one fresh bucket suppress newer live data
+ * for every other bucket (a session sampled at 12:00 discarding an 11:00 weekly
+ * that is newer than the persisted 10:00 one).
+ *
+ * A sample that carries windows but no readings (an older sampler build behind
+ * the device RPC) can still fill a limit the account has no reading for at all
+ * — otherwise the panel renders "this plan has no such limit" while holding a
+ * sample that has it.
+ */
+export const buildClaudePanelSnapshot = (
+  account: QuotaAccountRow,
+  persistedReadings: QuotaReadingRow[],
   live: ClaudeCodeQuotaSnapshot | null,
-  persistedAsOf = 0,
-): ClaudeCodeQuotaSnapshot | null => {
-  if (!persisted) return live;
-  if (!live || live.status !== 'ok') return persisted;
+  now: number = Date.now(),
+): ClaudeCodeQuotaSnapshot => {
+  const sample = live?.status === 'ok' && liveBelongsToAccount(account, live) ? live : null;
+  const readings = sample?.readings?.length
+    ? [...persistedReadings, ...sample.readings]
+    : persistedReadings;
+  const windows = buildClaudeQuotaWindows(readings, now);
 
-  // A sample taken from another login says nothing about the account on screen.
-  const persistedAccountId = persisted.identity?.externalAccountId;
-  const liveAccountId = live.identity?.externalAccountId;
-  if (persistedAccountId && liveAccountId && persistedAccountId !== liveAccountId) return persisted;
-
-  const preferLive = live.updatedAt >= persistedAsOf;
-  const pick = <T>(fromPersisted: T | null, fromLive: T | null): T | null =>
-    preferLive ? (fromLive ?? fromPersisted) : (fromPersisted ?? fromLive);
+  // Freshness is normally the server's receipt time — a device clock must not
+  // drive the refresh gates. But once a live sample has been consulted, the
+  // panel is at least as current as that sample, and reporting the older
+  // receipt would both mislabel the header and re-trip every staleness gate
+  // into refetching a quota we just fetched.
+  const receivedAt = toMs(account.updatedAt) ?? 0;
+  const updatedAt = sample ? Math.max(receivedAt, sample.updatedAt) : receivedAt;
 
   return {
-    ...persisted,
-    scopedWeekly: pick(persisted.scopedWeekly, live.scopedWeekly),
-    session: pick(persisted.session, live.session),
-    weekly: pick(persisted.weekly, live.weekly),
+    error: null,
+    identity: identityOf(account),
+    provider: 'claude-code',
+    scopedWeekly: windows.scopedWeekly ?? sample?.scopedWeekly ?? null,
+    session: windows.session ?? sample?.session ?? null,
+    status: 'ok',
+    updatedAt: updatedAt || now,
+    weekly: windows.weekly ?? sample?.weekly ?? null,
   };
 };
 
@@ -121,9 +120,9 @@ export const mergeClaudeSnapshots = (
  * Whether a built snapshot carries at least one window worth rendering.
  * Callers cannot infer this from the persisted row count: an account may hold
  * readings only for limits the panel does not render, which
- * {@link buildClaudeSnapshotFromReadings} maps to nothing. Treating a non-empty
- * row array as "we have data" would discard a live sample in favour of an
- * empty panel.
+ * {@link buildClaudePanelSnapshot} maps to nothing. Treating a non-empty row
+ * array as "we have data" would discard a live sample in favour of an empty
+ * panel.
  */
 export const hasRenderableWindow = (snapshot: ClaudeCodeQuotaSnapshot): boolean =>
   !!snapshot.session || !!snapshot.weekly || !!snapshot.scopedWeekly;
