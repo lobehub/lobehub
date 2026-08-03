@@ -5,12 +5,19 @@ import type {
   ProviderResponseDiagnostics,
   ProviderResponseEventDiagnostics,
 } from '../../types/providerDiagnostics';
+import {
+  appendRawProviderEvent,
+  captureRawProviderResponse,
+  waitForRawProviderResponse,
+} from '../providerDiagnostics';
 
 const MAX_RECORDED_PROVIDER_EVENTS = 128;
 const MAX_RECORDED_ERROR_MESSAGE_LENGTH = 500;
 const RESPONSE_HEADER_NAMES = [
   'anthropic-request-id',
   'cf-ray',
+  'content-length',
+  'content-type',
   'date',
   'request-id',
   'server-timing',
@@ -126,6 +133,7 @@ export const initializeAnthropicDiagnostics = ({
     events: [],
     hasNonWhitespaceText: false,
     hasNonWhitespaceThinking: false,
+    rawEvents: [],
     signatureChars: 0,
     terminalEventReceived: false,
     textChars: 0,
@@ -152,6 +160,7 @@ export const recordAnthropicResponseMetadata = (
   diagnostics.responseReceivedAt = Date.now();
   diagnostics.requestId = requestId ?? undefined;
   diagnostics.status = response?.status;
+  captureRawProviderResponse(diagnostics, response);
 
   if (!response) return;
 
@@ -173,6 +182,7 @@ export const recordAnthropicStreamEvent = (
   diagnostics: ProviderResponseDiagnostics,
   chunk: Anthropic.MessageStreamEvent,
 ) => {
+  appendRawProviderEvent(diagnostics, chunk);
   const event: Omit<ProviderResponseEventDiagnostics, 'index'> = { type: chunk.type };
   diagnostics.firstEventAt ??= Date.now();
 
@@ -180,6 +190,7 @@ export const recordAnthropicStreamEvent = (
     case 'message_start': {
       diagnostics.messageId = chunk.message.id;
       diagnostics.model = chunk.message.model;
+      diagnostics.usage = chunk.message.usage;
       break;
     }
     case 'content_block_start': {
@@ -220,6 +231,7 @@ export const recordAnthropicStreamEvent = (
     case 'message_delta': {
       diagnostics.stopReason = chunk.delta.stop_reason;
       diagnostics.stopSequence = chunk.delta.stop_sequence;
+      diagnostics.usage = chunk.usage;
       break;
     }
     case 'message_stop': {
@@ -251,12 +263,13 @@ export const observeAnthropicStream = async function* (
     };
     throw error;
   } finally {
+    await waitForRawProviderResponse(diagnostics);
     diagnostics.aborted = signal?.aborted || undefined;
     diagnostics.completedAt = Date.now();
   }
 };
 
-export const recordAnthropicNonStreamingResponse = (
+export const recordAnthropicNonStreamingResponse = async (
   diagnostics: ProviderResponseDiagnostics | undefined,
   message: Anthropic.Message,
   signal?: AbortSignal,
@@ -266,6 +279,8 @@ export const recordAnthropicNonStreamingResponse = (
   diagnostics.firstEventAt ??= Date.now();
   diagnostics.messageId = message.id;
   diagnostics.model = message.model;
+  appendRawProviderEvent(diagnostics, message);
+  diagnostics.usage = message.usage;
   diagnostics.stopReason = message.stop_reason;
   diagnostics.stopSequence = message.stop_sequence;
   appendEvent(diagnostics, { type: 'message_start' });
@@ -273,6 +288,7 @@ export const recordAnthropicNonStreamingResponse = (
   appendEvent(diagnostics, { type: 'message_delta' });
   appendEvent(diagnostics, { type: 'message_stop' });
   diagnostics.terminalEventReceived = true;
+  await waitForRawProviderResponse(diagnostics);
   diagnostics.aborted = signal?.aborted || undefined;
   diagnostics.completedAt = Date.now();
 };

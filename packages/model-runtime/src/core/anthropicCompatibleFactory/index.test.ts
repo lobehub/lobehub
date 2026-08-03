@@ -242,6 +242,7 @@ describe('createAnthropicCompatibleRuntime', () => {
       },
       { type: 'message_stop' },
     ];
+    const rawResponseBody = rawEvents.map((event) => `data: ${JSON.stringify(event)}\n\n`).join('');
     const rawStream = {
       async *[Symbol.asyncIterator]() {
         for (const event of rawEvents) yield event;
@@ -251,9 +252,10 @@ describe('createAnthropicCompatibleRuntime', () => {
       withResponse: vi.fn().mockResolvedValue({
         data: rawStream,
         request_id: 'req_deepseek_empty',
-        response: new Response(null, {
+        response: new Response(rawResponseBody, {
           headers: {
             'cf-ray': 'ray-1',
+            'content-type': 'text/event-stream',
             'x-request-id': 'req-header-1',
           },
           status: 200,
@@ -322,10 +324,17 @@ describe('createAnthropicCompatibleRuntime', () => {
         hasNonWhitespaceThinking: false,
         headers: {
           'cf-ray': 'ray-1',
+          'content-type': 'text/event-stream',
           'x-request-id': 'req-header-1',
         },
         messageId: 'msg_deepseek_empty',
         model: 'deepseek-v4-pro',
+        rawEvents,
+        rawResponse: {
+          body: rawResponseBody,
+          byteLength: new TextEncoder().encode(rawResponseBody).byteLength,
+          status: 'captured',
+        },
         requestId: 'req_deepseek_empty',
         responseReceivedAt: expect.any(Number),
         signatureChars: 18,
@@ -334,6 +343,7 @@ describe('createAnthropicCompatibleRuntime', () => {
         terminalEventReceived: true,
         thinkingChars: 1,
         toolUseCount: 0,
+        usage: { input_tokens: 206_384, output_tokens: 1 },
       }),
     );
   });

@@ -462,6 +462,7 @@ describe('ServerCallLlmAttempt', () => {
   });
 
   it('records route and provider-boundary evidence with an empty completion', async () => {
+    const rawResponseBody = 'data: {"type":"message_delta"}\n\ndata: {"type":"message_stop"}\n\n';
     const providerEvidence = {
       providerRequest: {
         apiMode: 'messages',
@@ -472,6 +473,15 @@ describe('ServerCallLlmAttempt', () => {
         eventCount: 5,
         hasNonWhitespaceText: false,
         hasNonWhitespaceThinking: false,
+        rawEvents: [
+          { delta: { stop_reason: 'end_turn' }, type: 'message_delta' },
+          { type: 'message_stop' },
+        ],
+        rawResponse: {
+          body: rawResponseBody,
+          byteLength: new TextEncoder().encode(rawResponseBody).byteLength,
+          status: 'captured',
+        },
         requestId: 'request-1',
         status: 200,
         stopReason: 'end_turn',

@@ -649,7 +649,7 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
           );
         }
 
-        recordAnthropicNonStreamingResponse(
+        await recordAnthropicNonStreamingResponse(
           providerResponseDiagnostics,
           response as Anthropic.Message,
           options?.signal,

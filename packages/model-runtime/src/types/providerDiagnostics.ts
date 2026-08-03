@@ -16,6 +16,13 @@ export interface ProviderResponseEventDiagnostics {
   type: string;
 }
 
+export interface ProviderRawResponseDiagnostics {
+  body?: string;
+  byteLength?: number;
+  captureError?: string;
+  status: 'captured' | 'failed' | 'unavailable';
+}
+
 export interface ProviderResponseDiagnostics {
   aborted?: boolean;
   apiMode: string;
@@ -36,6 +43,10 @@ export interface ProviderResponseDiagnostics {
   headers?: Record<string, string>;
   messageId?: string;
   model?: string;
+  /** Provider-native SDK events captured before LobeHub protocol transformation. */
+  rawEvents: unknown[];
+  /** Raw HTTP response body captured before the provider SDK consumes the stream. */
+  rawResponse?: ProviderRawResponseDiagnostics;
   requestId?: string;
   responseReceivedAt?: number;
   signatureChars: number;
@@ -47,6 +58,7 @@ export interface ProviderResponseDiagnostics {
   thinkingChars: number;
   toolInputChars: number;
   toolUseCount: number;
+  usage?: unknown;
 }
 
 export interface ModelRuntimeDiagnostics {
