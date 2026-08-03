@@ -61,19 +61,23 @@ Then('Home 主列与右栏都不应有各自的滚动条', async function (this:
 });
 
 Then('Home 滚动容器应贴合内容区右缘', async function (this: CustomWorld) {
+  // NOTE: never declare a named function inside a `page.evaluate` callback here.
+  // The steps are transpiled by `tsx/cjs` (esbuild with keepNames), which rewrites
+  // `const fn = () => …` into `__name(() => …, 'fn')`. `__name` is a module-scope
+  // helper that exists in Node but not in the page, so the callback dies in the
+  // browser with `ReferenceError: __name is not defined`. Inline arrows passed
+  // straight to `.map` / `.some` are left alone and are safe.
   const measured = await this.page.evaluate(() => {
     const main = document.querySelector<HTMLElement>('[data-testid="home-main"]')!;
-    const scrolls = (node: HTMLElement) =>
-      ['auto', 'scroll'].includes(getComputedStyle(node).overflowY);
 
     let scroller: HTMLElement | null = null;
     for (let node = main.parentElement; node && !scroller; node = node.parentElement)
-      if (scrolls(node)) scroller = node;
+      if (['auto', 'scroll'].includes(getComputedStyle(node).overflowY)) scroller = node;
     if (!scroller) return null;
 
     // The centred column the dashboard is laid out in — the thing the scroller
     // must NOT be, or the bar floats in the margin beside the content.
-    const column = main.closest<HTMLElement>('[data-testid="home-main"]')!.parentElement!;
+    const column = main.parentElement!;
 
     return {
       columnRight: column.getBoundingClientRect().right,
