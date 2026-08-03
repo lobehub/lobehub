@@ -109,6 +109,11 @@ export const agentLabelRouter = router({
    */
   setAgentLabels: labelProcedure
     .use(withScopedPermission('agent:update'))
+    // Assigning requires reading too: the call takes label ids and returns the
+    // effective set, so a role denied `agent_label:read` could otherwise probe
+    // the registry through it — which would leave the read guards on
+    // `getLabels` and the sidebar only half closing the door.
+    .use(withScopedPermission('agent_label:read'))
     .input(z.object({ agentId: z.string(), labelIds: z.array(z.string()) }))
     .mutation(async ({ input, ctx }) => {
       await assertCanEditResource({
