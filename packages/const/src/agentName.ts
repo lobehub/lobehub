@@ -104,9 +104,20 @@ const ZH_AGENT_NAMES = [
  * Any `zh-*` locale gets a Chinese name; everything else falls back to the
  * English pool, which reads acceptably across Latin-script locales. Traditional
  * Chinese (`zh-TW`) shares the simplified pool for now.
+ *
+ * `exclude` keeps the caller from handing out a name it already has in view —
+ * two agents called "Alice" in one sidebar are indistinguishable. When every
+ * candidate is excluded the full pool comes back rather than nothing: a repeat
+ * name beats no name.
  */
-export const randomAgentName = (locale?: string): string => {
-  const pool = locale?.toLowerCase().startsWith('zh') ? ZH_AGENT_NAMES : EN_AGENT_NAMES;
+export const randomAgentName = (locale?: string, exclude?: Iterable<string>): string => {
+  const fullPool = locale?.toLowerCase().startsWith('zh') ? ZH_AGENT_NAMES : EN_AGENT_NAMES;
+
+  const taken = new Set(
+    [...(exclude ?? [])].map((name) => name.trim().toLowerCase()).filter(Boolean),
+  );
+  const available = taken.size > 0 ? fullPool.filter((n) => !taken.has(n.toLowerCase())) : fullPool;
+  const pool = available.length > 0 ? available : fullPool;
 
   return pool[Math.floor(Math.random() * pool.length)];
 };

@@ -46,6 +46,8 @@ const mocks = vi.hoisted(() => {
       },
     },
     permissionState: { allowed: false },
+    randomAgentName: vi.fn(() => 'Zoe'),
+    sidebarAgents: [] as { id: string; name?: string | null }[],
     updateAgentMetaById: vi.fn(),
     uploadWithProgress: vi.fn(),
   };
@@ -130,6 +132,21 @@ vi.mock('@/features/AgentIdentityModal', () => ({
   createAgentIdentityModal: (...args: unknown[]) => mocks.createAgentIdentityModal(...args),
 }));
 
+vi.mock('@lobechat/const', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  randomAgentName: (...args: unknown[]) => mocks.randomAgentName(...(args as [])),
+}));
+
+vi.mock('@/store/home', () => ({
+  useHomeStore: { getState: () => ({ agents: mocks.sidebarAgents }) },
+}));
+
+vi.mock('@/store/home/selectors', () => ({
+  homeAgentListSelectors: {
+    allAgents: (state: { agents: unknown[] }) => state.agents,
+  },
+}));
+
 vi.mock('@/store/file', () => ({
   useFileStore: (selector: (state: unknown) => unknown) =>
     selector({ uploadWithProgress: mocks.uploadWithProgress }),
@@ -165,6 +182,8 @@ describe('AgentHeader', () => {
     mocks.inputProps.all = [];
     mocks.actionIconProps.all = [];
     mocks.permissionState.allowed = false;
+    mocks.randomAgentName.mockReturnValue('Zoe');
+    mocks.sidebarAgents = [];
   });
 
   afterEach(() => {
@@ -200,6 +219,58 @@ describe('AgentHeader', () => {
     const view = render(<AgentHeader />);
 
     expect(view.container.textContent).toContain('@brave-otter-lamp');
+  });
+
+  // Regression: the headline used to fall back to the name field's PLACEHOLDER,
+  // so every unnamed agent read as though it were called "Give it a name, …".
+  it('falls back to the unnamed label, never to the input placeholder', () => {
+    mocks.permissionState.allowed = true;
+    mocks.agentStoreState.agentMap = { 'agent-a': { slug: 'experiment-crop-then' } };
+    const view = render(<AgentHeader />);
+
+    expect(view.container.textContent).toContain('settingAgent.identity.untitled');
+    expect(view.container.textContent).not.toContain('settingAgent.personalName.placeholder');
+  });
+
+  it('offers one-click naming for an agent with no name', async () => {
+    mocks.permissionState.allowed = true;
+    mocks.agentStoreState.agentMap = { 'agent-a': { title: 'Health Assistant' } };
+    mocks.sidebarAgents = [
+      { id: 'agent-a', name: null },
+      { id: 'agent-b', name: 'Alice' },
+      { id: 'agent-c', name: 'Leo' },
+      { id: 'agent-d', name: null },
+    ];
+    const view = render(<AgentHeader />);
+
+    expect(view.container.textContent).toContain('settingAgent.personalName.unnamed');
+    const button = [...view.container.querySelectorAll('button')].find((el) =>
+      el.textContent?.includes('settingAgent.personalName.pickForMe'),
+    );
+
+    await act(async () => {
+      button?.click();
+    });
+
+    // Names already on screen are excluded — a second "Alice" would defeat the
+    // point of having a name at all.
+    expect(mocks.randomAgentName).toHaveBeenCalledExactlyOnceWith('en-US', ['Alice', 'Leo']);
+    expect(mocks.updateAgentMetaById).toHaveBeenCalledExactlyOnceWith('agent-a', { name: 'Zoe' });
+  });
+
+  it('does not offer naming for an agent that already has one', () => {
+    mocks.permissionState.allowed = true;
+    mocks.agentStoreState.agentMap = { 'agent-a': { name: 'Alice', title: 'Health Assistant' } };
+    const view = render(<AgentHeader />);
+
+    expect(view.container.textContent).not.toContain('settingAgent.personalName.pickForMe');
+  });
+
+  it('does not offer naming when edits are not allowed', () => {
+    mocks.agentStoreState.agentMap = { 'agent-a': { title: 'Health Assistant' } };
+    const view = render(<AgentHeader />);
+
+    expect(view.container.textContent).not.toContain('settingAgent.personalName.pickForMe');
   });
 
   it('keeps an asynchronous avatar upload bound to the agent that started it', async () => {

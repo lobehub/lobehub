@@ -502,6 +502,56 @@ Prove the working-tree bundle is actually live first — read back a string that
 exists only in the working tree (e.g. a changed placeholder), never assume HMR
 applied.
 
+### Counting section instances across the Home rail collapse needs real visibility, not a rect
+
+**Situation:** asserting that a Home section moved between the rail and the main
+column rather than being duplicated or lost.
+
+**Doesn't work:** two independent traps, each of which inverts the verdict.
+
+- Filtering candidates by `getBoundingClientRect()` alone. The collapsed rail is
+  hidden with `visibility: hidden` after a transition, and a `visibility: hidden`
+  subtree **keeps its layout boxes** — so the rail's copy still measures non-zero
+  and every folded-in section reads as duplicated. This is the inverse of the
+  generic D12 phantom (zero-size decoy); here the stale node is full-size.
+- Collecting only leaf elements. The main column's `GroupBlock` renders its
+  subtitle as a `<span>` inside the title, so the title element has children,
+  while the rail's `RailCard` takes no subtitle and its title _is_ a leaf. A
+  leaf-only walk therefore finds a section in the rail and "loses" it in the main
+  column — reading exactly like the fold-in never happened.
+
+**Works:** match on the element's own direct text nodes and gate on
+`el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })`, then sort
+by viewport `y`:
+
+```js
+const own = [...el.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent.trim()).join('');
+if (!label.test(own)) continue;
+if (!el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) continue;
+```
+
+Assert both columns in the same pass — a claim about _moving_ is only settled by
+observing the source column go empty and the destination fill in one snapshot.
+
+### A worktree Electron run leaves a second `@types/react` that fails the worktree type-check
+
+**Situation:** running the Electron surface from a git worktree, which requires
+the `apps/desktop` standalone install (adapter §1), then running `bun run check --type`.
+
+**Doesn't work:** treating the resulting type errors as the branch's own. The
+desktop install brings its own `@types/react` (e.g. `19.2.18`) alongside the
+root's (`19.2.13`), and the two identities collide on every `lucide-react` icon
+`ref`, producing a cluster of "Two different types with this name exist, but they
+are unrelated" errors in files the branch never touched.
+
+**Works:** intersect the erroring files with the branch's changed-file list before
+drawing any conclusion, and confirm causality by A/B — moving
+`apps/desktop/node_modules` aside makes the cluster vanish. At teardown, remove
+`apps/desktop/node_modules` and re-run the root `pnpm install` to restore a clean
+`✓ types clean` baseline. **Do not run the A/B while the instance is live** — the
+Electron binary runs out of that directory, so parking it kills the instance;
+capture all UI evidence first.
+
 ### Managed command runners can reap `electron-dev.sh start` children after the helper returns
 
 **Situation:** `electron-dev.sh start` (legacy and pool forms) reports that CDP

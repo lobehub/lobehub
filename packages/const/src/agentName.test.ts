@@ -26,4 +26,32 @@ describe('randomAgentName', () => {
     expect(new Set(sample('en-US')).size).toBeGreaterThan(1);
     expect(new Set(sample('zh-CN')).size).toBeGreaterThan(1);
   });
+
+  describe('exclude', () => {
+    it('never returns an excluded name', () => {
+      const taken = Array.from({ length: 200 }, () => randomAgentName('en-US')).slice(0, 5);
+
+      for (let i = 0; i < 200; i++) {
+        expect(taken).not.toContain(randomAgentName('en-US', taken));
+      }
+    });
+
+    it('matches excluded names case- and whitespace-insensitively', () => {
+      const name = randomAgentName('en-US');
+
+      for (let i = 0; i < 200; i++) {
+        expect(randomAgentName('en-US', [`  ${name.toUpperCase()}  `])).not.toBe(name);
+      }
+    });
+
+    it('falls back to the full pool when everything is excluded', () => {
+      const everything = Array.from({ length: 500 }, () => randomAgentName('zh-CN'));
+
+      expect(randomAgentName('zh-CN', everything)).toMatch(/^\p{Script=Han}+$/u);
+    });
+
+    it('ignores blank entries', () => {
+      expect(randomAgentName('en-US', ['', '   '])).toMatch(/^[A-Z]+$/i);
+    });
+  });
 });
