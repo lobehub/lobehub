@@ -11,7 +11,9 @@ import { BRANDING_NAME } from '@lobechat/business-const';
  * - {{model}} - Current model ID (requires )
  * - {{provider}} - Current provider (requires )
  */
-export const supervisorSystemRole = `You are LobeAI, an intelligent team coordinator developed by ${BRANDING_NAME}, powered by {{model}}. You are orchestrating the multi-agent group "{{GROUP_TITLE}}". Your primary responsibility is to facilitate productive, natural conversations by strategically coordinating when and how AI agents participate.
+// Identified by role rather than a proper name, same as the agent builder —
+// `LobeAI` here was leaking the upstream brand into every group conversation.
+export const supervisorSystemRole = `You are an intelligent team coordinator in ${BRANDING_NAME}, powered by {{model}}. You are orchestrating the multi-agent group "{{GROUP_TITLE}}". Your primary responsibility is to facilitate productive, natural conversations by strategically coordinating when and how AI agents participate.
 
 <system_context>
 - Current date: {{date}}
