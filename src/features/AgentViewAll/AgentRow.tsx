@@ -1,7 +1,7 @@
 'use client';
 
 import { AGENT_CHAT_URL, DEFAULT_AVATAR, GROUP_CHAT_URL } from '@lobechat/const';
-import { type SidebarAgentItem } from '@lobechat/types';
+import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
 import {
   ActionIcon,
   Avatar,
@@ -107,7 +107,9 @@ interface AgentRowProps {
 const AgentRow = memo<AgentRowProps>(
   ({ author, item, onToggleSidebar, showAuthor, sidebarHidden }) => {
     const { t } = useTranslation('common');
-    const { id, title, type, updatedAt } = item;
+    const { id, type, updatedAt } = item;
+    // Groups have no personal name, so this resolves to their title.
+    const displayTitle = agentDisplayName(item, t('agentViewAll.untitled'));
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
 
     // Right-click support (Task-List-style): the hook-bearing menu mounts on
@@ -140,7 +142,7 @@ const AgentRow = memo<AgentRowProps>(
           onPointerEnter={activateMenu}
         >
           <WorkspaceLink
-            aria-label={title || undefined}
+            aria-label={displayTitle}
             className={styles.identity}
             to={type === 'group' ? GROUP_CHAT_URL(id) : AGENT_CHAT_URL(id, false)}
           >
@@ -149,7 +151,7 @@ const AgentRow = memo<AgentRowProps>(
               {/* Single-line row (Linear-style density) — the description only
                 renders in card mode, where there is room to browse. */}
               <Text ellipsis className={'agent-row-title'} weight={500}>
-                {title || t('agentViewAll.untitled')}
+                {displayTitle}
               </Text>
             </Flexbox>
           </WorkspaceLink>

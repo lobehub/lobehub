@@ -1,7 +1,7 @@
 'use client';
 
 import { DEFAULT_AVATAR } from '@lobechat/const';
-import { type SidebarAgentItem } from '@lobechat/types';
+import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
 import { Avatar, Center, Empty, Flexbox, Icon, SearchBar, Text, Tooltip } from '@lobehub/ui';
 import { Button, DropdownMenu, Segmented, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -299,6 +299,7 @@ const AgentViewAllPage = memo(() => {
     let matched = query
       ? items.filter(
           (item) =>
+            item.name?.toLowerCase().includes(query) ||
             item.title?.toLowerCase().includes(query) ||
             item.description?.toLowerCase().includes(query),
         )
@@ -313,7 +314,10 @@ const AgentViewAllPage = memo(() => {
 
     const direction = orderDirection === 'asc' ? 1 : -1;
     return [...matched].sort((a, b) => {
-      if (orderBy === 'title') return direction * (a.title ?? '').localeCompare(b.title ?? '');
+      // Sort on the label the rows actually render, not the raw title — otherwise
+      // a list of personal names comes back ordered by their hidden roles.
+      if (orderBy === 'title')
+        return direction * agentDisplayName(a, '').localeCompare(agentDisplayName(b, ''));
       if (orderBy === 'author') return direction * authorName(a).localeCompare(authorName(b));
       return direction * (dayjs(a.updatedAt).valueOf() - dayjs(b.updatedAt).valueOf());
     });
