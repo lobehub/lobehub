@@ -4,6 +4,7 @@ import { memo, useEffect } from 'react';
 import { createStoreUpdater } from 'zustand-utils';
 
 import { useSession } from '@/libs/better-auth/auth-client';
+import { toAicoSessionUser } from '@/libs/better-auth/session-user';
 import { useUserStore } from '@/store/user';
 import { type LobeUser } from '@/types/user';
 
@@ -37,21 +38,26 @@ const UserUpdater = memo(() => {
   // drop the previous user's profile fields so they don't leak across
   // accounts. `useInitUserState` is `useOnlyFetchOnceSWR` with a constant
   // key, so it won't re-fetch profile data for the new user on its own.
+  //
+  // Phone / name / verification fields go through `toAicoSessionUser` so the
+  // Phase 1 session.user contract stays the single mapping source (AICO-8).
   useEffect(() => {
-    if (betterAuthUser) {
+    const aicoUser = toAicoSessionUser(betterAuthUser);
+    if (aicoUser && betterAuthUser) {
       useUserStore.setState((state) => {
-        const baseUser = state.user?.id === betterAuthUser.id ? state.user : undefined;
+        const baseUser = state.user?.id === aicoUser.id ? state.user : undefined;
         return {
           user: {
             ...baseUser,
             // Preserve avatar from settings, don't override with auth provider value
             avatar: baseUser?.avatar || '',
-            email: betterAuthUser.email,
-            emailVerified: Boolean(betterAuthUser.emailVerified),
-            fullName: betterAuthUser.name,
-            id: betterAuthUser.id,
-            phoneNumber: betterAuthUser.phoneNumber ?? null,
-            phoneNumberVerified: Boolean(betterAuthUser.phoneNumberVerified),
+            email: aicoUser.email,
+            emailVerified: aicoUser.emailVerified,
+            fullName: aicoUser.name,
+            id: aicoUser.id,
+            phoneNumber: aicoUser.phoneNumber,
+            phoneNumberVerified: aicoUser.phoneNumberVerified,
+            // username is an additional Better Auth field, outside the Aico contract
             username: betterAuthUser.username,
           } as LobeUser,
         };

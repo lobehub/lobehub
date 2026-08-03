@@ -31,12 +31,16 @@ export const toAicoSessionUser = (
 ): AicoSessionUser | null => {
   if (!user) return null;
 
+  // Phone OTP signup uses getTempName: () => '' so the onboarding name
+  // prompt stays blank — treat empty / whitespace as null for consumers.
+  const name = user.name?.trim() ? user.name : null;
+
   return {
     email: user.email ?? null,
     emailVerified: Boolean(user.emailVerified),
     id: user.id,
     image: user.image ?? null,
-    name: user.name ?? null,
+    name,
     phoneNumber: user.phoneNumber ?? null,
     phoneNumberVerified: Boolean(user.phoneNumberVerified),
   };
