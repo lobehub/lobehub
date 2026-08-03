@@ -56,11 +56,14 @@ beforeAll(async () => {
   repo = await mkdtemp(path.join(tmpdir(), 'content-search-parity-'));
   await mkdir(path.join(repo, 'dist', 'sub'), { recursive: true });
   await mkdir(path.join(repo, 'src'), { recursive: true });
+  await mkdir(path.join(repo, 'build'), { recursive: true });
   await writeFile(path.join(repo, '.gitignore'), 'dist/\n*.log\n');
   await writeFile(path.join(repo, 'src', 'a.ts'), 'needle\n');
   await writeFile(path.join(repo, 'src', 'noisy.log'), 'needle\n');
   await writeFile(path.join(repo, 'dist', 'b.js'), 'needle\n');
   await writeFile(path.join(repo, 'dist', 'sub', 'c.js'), 'needle\n');
+  // A *tracked* `build/` — the shape of `apps/desktop/build/entitlements.mac.plist`.
+  await writeFile(path.join(repo, 'build', 'entitlements.plist'), 'needle\n');
   await execa('git', ['init', '-q'], { cwd: repo });
 
   engines = ['nodejs'];
@@ -88,11 +91,29 @@ describe('content search engine parity', () => {
       }),
     );
 
-    // Only src/a.ts survives: dist/ and *.log are both gitignored.
+    // `dist/` and `*.log` are gitignored and must go; the tracked `build/` must
+    // stay, because only git decides what is build output — not the folder name.
     for (const [engine, matches] of results) {
       expect(matches, `${engine} should honour .gitignore`).toEqual([
+        path.join(repo, 'build', 'entitlements.plist'),
         path.join(repo, 'src', 'a.ts'),
       ]);
+    }
+  }, 60_000);
+
+  it('does not hide a tracked directory whose name looks like build output', async () => {
+    // Regression: a hardcoded `!**/build/**` made every engine skip this file,
+    // even though git tracks it.
+    const tracked = path.join(repo, 'build', 'entitlements.plist');
+
+    for (const engine of engines) {
+      const r = await search(engine, {
+        output_mode: 'files_with_matches',
+        pattern: 'needle',
+        scope: repo,
+      } as GrepContentParams);
+
+      expect(r.matches, `${engine} hid a tracked build/ file`).toContain(tracked);
     }
   }, 60_000);
 

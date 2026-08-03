@@ -60,9 +60,7 @@ describe('PlanExecutionRuntime todo resolution', () => {
     expect((updated.state as any).todos.items[0].status).toBe('completed');
   });
 
-  it('falls back to the plan document when currentTodos is an empty array', async () => {
-    // Regression: `if (context.currentTodos)` treated `[]` as "caller supplied
-    // todos" and skipped the plan-document fallback entirely.
+  it('falls back to the plan document only when currentTodos is undefined', async () => {
     const runtime = new PlanExecutionRuntime(
       createService([
         { status: 'todo', text: 'restored from plan' },
@@ -72,12 +70,31 @@ describe('PlanExecutionRuntime todo resolution', () => {
 
     const updated = await runtime.updateTodos(
       { operations: [{ index: 1, type: 'complete' }] },
-      { currentTodos: [], messageId: 'msg_1', topicId: 'tpc_1' },
+      { messageId: 'msg_1', topicId: 'tpc_1' },
     );
 
     expect(updated.content).not.toContain('No operations applied.');
     expect((updated.state as any).todos.items).toHaveLength(2);
     expect((updated.state as any).todos.items[1].status).toBe('completed');
+  });
+
+  it('keeps an explicitly cleared list cleared even if the plan mirror is stale', async () => {
+    // `syncTodosToPlan` swallows its errors, so the plan document can still hold
+    // the items `clearTodos` just removed. An empty `currentTodos` is the agent's
+    // real answer — treating it as "unknown" resurrects those items.
+    const runtime = new PlanExecutionRuntime(
+      createService([
+        { status: 'todo', text: 'stale item from the mirror' },
+        { status: 'todo', text: 'another stale item' },
+      ]),
+    );
+
+    const created = await runtime.createTodos(
+      { adds: ['a fresh item'] },
+      { currentTodos: [], messageId: 'msg_1', topicId: 'tpc_1' },
+    );
+
+    expect((created.state as any).todos.items).toEqual([{ status: 'todo', text: 'a fresh item' }]);
   });
 
   it('still reports the full list in state so pluginState never regresses to empty', async () => {

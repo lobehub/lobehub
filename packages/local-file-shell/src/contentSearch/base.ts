@@ -10,27 +10,23 @@ import { filterGitIgnored } from './gitIgnore';
 const logger = createLogger('contentSearch:base');
 
 /**
- * Directories that must never reach a search result.
+ * Directories excluded unconditionally, regardless of what the repo ignores.
  *
- * A cheap pre-filter that keeps traversal off the big generated trees. The exact
- * answer comes from `filterGitIgnored`, but that runs *after* the walk, so on its
- * own it would still pay to descend into a multi-GB `.next`. Excluding the usual
- * build output up front keeps the Node fallback usable on a real repo.
+ * Deliberately limited to two names that are never checked in. It is tempting to
+ * add the usual build output here (`dist`, `build`, `out`, `.next`, …), but those
+ * names are only *usually* generated: this repo tracks
+ * `apps/desktop/build/entitlements.mac.plist`, and `rg`'s `--glob` overrides all
+ * ignore logic, so a hardcoded `!**\/build\/**` silently makes tracked files
+ * unfindable on every engine.
+ *
+ * What actually belongs out of the results is "whatever git ignores", and
+ * `filterGitIgnored` answers that exactly — including this repo's `.next`. Guess
+ * nothing here; ask git there.
  *
  * Entries are matched relative to the search root, so explicitly scoping a
  * search *into* one of these directories still works.
  */
-const EXCLUDED_DIRS = [
-  'node_modules',
-  '.git',
-  '.next',
-  'dist',
-  'build',
-  'out',
-  'coverage',
-  '.turbo',
-  '.cache',
-] as const;
+const EXCLUDED_DIRS = ['node_modules', '.git'] as const;
 
 /**
  * Content search tool type
