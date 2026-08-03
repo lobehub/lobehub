@@ -334,8 +334,18 @@ describe('reportEvidence — comparison normalization', () => {
     expect(warnsFor(['row'])).toBe(true);
     expect(warnsFor({ id: 'row' })).toBe(true);
     expect(warnsFor({ id: 'row', role: 'middle' })).toBe(true);
+
+    // Falsy but present: someone wrote the field, so it is malformed rather
+    // than absent. A truthiness guard would drop these without a word.
+    expect(warnsFor('')).toBe(true);
+    expect(warnsFor(0)).toBe(true);
+    expect(warnsFor(false)).toBe(true);
+    expect(warnsFor(Number.NaN)).toBe(true);
+
+    // Absent is null/undefined only — an evidence item without a pair.
     expect(warnsFor({ id: 'row', role: 'before' })).toBe(false);
     expect(warnsFor(undefined)).toBe(false);
+    expect(warnsFor(null)).toBe(false);
   });
 
   it('supports the `file` / `desc` aliases and skips entries with no path', () => {

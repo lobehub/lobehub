@@ -392,7 +392,10 @@ export function reportEvidence(evidence: unknown): ReportEvidenceInput[] {
       // (`comparison: "row", role: "before"`) is not an object at all, so keying
       // the warning off `objectValue()` skipped the one shape that most needs
       // it — the author saw a clean ingest and unpaired images on the page.
-      if (value.comparison && !(comparison && id && (role === 'before' || role === 'after'))) {
+      // Absent means null/undefined only; `""` / `0` / `false` are malformed
+      // values that were written on purpose, so they warn like any other.
+      const hasComparison = value.comparison !== undefined && value.comparison !== null;
+      if (hasComparison && !(comparison && id && (role === 'before' || role === 'after'))) {
         log.warn(
           `evidence ${evidencePath}: comparison must be an object with a string "id" and role "before"/"after" — ignoring it`,
         );
