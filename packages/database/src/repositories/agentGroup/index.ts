@@ -669,6 +669,9 @@ export class AgentGroupRepository {
           content: sourceGroup.content,
           description: sourceGroup.description,
           editorData: sourceGroup.editorData,
+          // Sidebar folder placement is shared state, so the copy lands next to
+          // its source (matching AgentModel.duplicate's `sessionGroupId`).
+          groupId: sourceGroup.groupId,
           pinned: sourceGroup.pinned,
           title: newTitle || (sourceGroup.title ? `${sourceGroup.title} (Copy)` : 'Copy'),
           userId: this.userId,

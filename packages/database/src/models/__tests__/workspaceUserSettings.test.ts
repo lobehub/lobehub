@@ -124,18 +124,6 @@ describe('WorkspaceUserSettingsModel', () => {
     expect(preference.agentModeOverrides).toEqual({ agentX: true, agentY: false });
   });
 
-  it('deep-merges sidebarPinnedOverrides so a single-item patch never drops other items', async () => {
-    const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
-    await model.updatePreference({ sidebarPinnedOverrides: { agentX: true } });
-
-    // A stale/empty local copy patches ONLY groupY — agentX's pin (and an
-    // explicit unpin=false) must survive the write.
-    await model.updatePreference({ sidebarPinnedOverrides: { groupY: false } });
-
-    const preference = await model.getPreference();
-    expect(preference.sidebarPinnedOverrides).toEqual({ agentX: true, groupY: false });
-  });
-
   it('deep-merges sidebarAgentVisibilityOverrides across single-item patches', async () => {
     const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
     await model.updatePreference({ sidebarAgentVisibilityOverrides: { agentX: true } });
@@ -146,33 +134,15 @@ describe('WorkspaceUserSettingsModel', () => {
     expect(preference.sidebarAgentVisibilityOverrides).toEqual({ agentX: true, agentY: false });
   });
 
-  it('setSidebarGroupAssignment records a create-in-folder placement without dropping siblings', async () => {
+  it('replaces sidebarHiddenGroupIds wholesale — the caller always writes the full list', async () => {
     const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
-    await model.updatePreference({ sidebarGroupAssignments: { agentX: 'folder-1' } });
+    await model.updatePreference({ sidebarHiddenGroupIds: ['folder-1', 'folder-2'] });
 
-    // Server-side create-in-folder path (createAgent / createGroup lambdas).
-    await model.setSidebarGroupAssignment('agentNew', 'folder-2');
+    // Un-hiding folder-1 sends the remaining list, not a delta.
+    await model.updatePreference({ sidebarHiddenGroupIds: ['folder-2'] });
 
     const preference = await model.getPreference();
-    expect(preference.sidebarGroupAssignments).toEqual({
-      agentNew: 'folder-2',
-      agentX: 'folder-1',
-    });
-  });
-
-  it('copySidebarGroupAssignment carries the source folder to a duplicate, no-op when unassigned', async () => {
-    const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
-    await model.updatePreference({ sidebarGroupAssignments: { agentX: 'folder-1' } });
-
-    await model.copySidebarGroupAssignment('agentX', 'agentX-copy');
-    // Source never assigned → no entry is written for the target.
-    await model.copySidebarGroupAssignment('agentY', 'agentY-copy');
-
-    const preference = await model.getPreference();
-    expect(preference.sidebarGroupAssignments).toEqual({
-      'agentX': 'folder-1',
-      'agentX-copy': 'folder-1',
-    });
+    expect(preference.sidebarHiddenGroupIds).toEqual(['folder-2']);
   });
 
   it('deep-merges notification so a single-switch patch never drops other toggles', async () => {

@@ -80,19 +80,18 @@ export interface WorkspaceUserPreference {
   sidebar?: SidebarLayoutPreference;
   /**
    * Explicit per-member sidebar membership for workspace Agents / chat groups
-   * (itemId -> visible). When absent, Agents created by the caller are shown
-   * and Agents created by another member are hidden; chat groups and builtin
-   * Agents keep their existing visible default. An explicit entry always wins
-   * over that ownership-based default and the legacy hidden-id list.
+   * (itemId -> visible). The workspace sidebar is a shared structure, so every
+   * item a member can see is listed by default; an entry here is that member's
+   * personal opt-out (`false`) or an explicit re-show of something the legacy
+   * hidden-id list removed. An explicit entry always wins over that list.
    */
   sidebarAgentVisibilityOverrides?: Record<string /* itemId */, boolean>;
   /**
-   * Per-member folder assignment for sidebar items (agentId/chatGroupId →
-   * sessionGroupId). Folders are per-member in workspace mode, so moving a
-   * shared item into "my" folder must not rewrite the shared
-   * `agents.sessionGroupId` column (which would regroup every member's
-   * sidebar). This map is the sole source in workspace mode — items absent
-   * here sit in the default (ungrouped) list; the shared column is ignored.
+   * Per-member folder assignment for sidebar items.
+   *
+   * @deprecated Folder membership is workspace-shared again — it lives on the
+   *   `agents.sessionGroupId` / `chat_groups.groupId` columns. Existing keys
+   *   are ignored; nothing reads or writes this map.
    */
   sidebarGroupAssignments?: Record<string /* itemId */, string | null>;
   /**
@@ -103,12 +102,18 @@ export interface WorkspaceUserPreference {
    */
   sidebarHiddenAgentIds?: string[];
   /**
-   * Per-member pins for sidebar items (agentId/chatGroupId → pinned).
-   * Pinning is fully per-member in workspace mode: this map is the sole
-   * source — the shared `agents.pinned` / `chat_groups.pinned` columns are
-   * ignored (a transferred-in agent's personal pin, or a pin made before
-   * this preference existed, must not surface for anyone). Items absent
-   * here are unpinned.
+   * Sidebar folders (Categories) the caller removed from their own sidebar in
+   * this workspace. Folders themselves are shared, so this is the personal
+   * mask over them: absent id = shown. Hiding a folder hides the whole
+   * section, its items included — they stay reachable from the agents list.
+   */
+  sidebarHiddenGroupIds?: string[];
+  /**
+   * Per-member pins for sidebar items.
+   *
+   * @deprecated Pinning is workspace-shared again — it lives on the
+   *   `agents.pinned` / `chat_groups.pinned` columns. Existing keys are
+   *   ignored; nothing reads or writes this map.
    */
   sidebarPinnedOverrides?: Record<string /* itemId */, boolean>;
 }
@@ -231,6 +236,12 @@ export interface UserPreference {
    * removed from the personal sidebar via the View All page.
    */
   sidebarHiddenAgentIds?: string[];
+  /**
+   * Personal-mode counterpart of
+   * {@link WorkspaceUserPreference.sidebarHiddenGroupIds}: folders
+   * (Categories) hidden from the personal sidebar via Category Management.
+   */
+  sidebarHiddenGroupIds?: string[];
   /**
    * @deprecated Use settings.general.telemetry instead
    */
