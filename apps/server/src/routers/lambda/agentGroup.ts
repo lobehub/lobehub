@@ -323,24 +323,15 @@ export const agentGroupRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      // 1. Batch create virtual member agents
-      const memberConfigs = input.members.map((member) => ({
-        ...member,
-        // See the `batchCreateAgentsInGroup` cast above for why this bridges
-        // to `string[]` instead of failing type-check.
-        plugins: member.plugins as unknown as string[] | undefined,
-        tags: member.tags as string[] | undefined,
-        virtual: true,
-      }));
-
-      // Validate the folder BEFORE creating the member agents. The same check
+      // Resolve the folder BEFORE creating the member agents. The same check
       // runs inside `createGroupWithSupervisor`, but that happens after these
       // inserts and outside their transaction, so a bad folder id would leave
       // orphaned virtual agents behind.
       const groupFolderId = input.groupConfig?.groupId;
+      let folderVisibility: 'private' | 'public' | undefined;
+
       if (groupFolderId) {
-        const folderVisibility =
-          await ctx.agentGroupRepo.getAssignableFolderVisibility(groupFolderId);
+        folderVisibility = await ctx.agentGroupRepo.getAssignableFolderVisibility(groupFolderId);
         const requested = input.groupConfig?.visibility;
 
         if (requested && requested !== folderVisibility)
@@ -349,6 +340,24 @@ export const agentGroupRouter = router({
             message: `A ${requested} chat group cannot be created in a ${folderVisibility} folder`,
           });
       }
+
+      // The synthetic members inherit the group's visibility, the same way the
+      // supervisor does. Left to the column default they would be public
+      // workspace resources while their group is private — visible to
+      // permission checks that look agents up by id rather than through the
+      // group. Must match `createGroupWithSupervisor`'s own derivation.
+      const groupVisibility = input.groupConfig?.visibility ?? folderVisibility ?? undefined;
+
+      // 1. Batch create virtual member agents
+      const memberConfigs = input.members.map((member) => ({
+        ...member,
+        // See the `batchCreateAgentsInGroup` cast above for why this bridges
+        // to `string[]` instead of failing type-check.
+        plugins: member.plugins as unknown as string[] | undefined,
+        tags: member.tags as string[] | undefined,
+        virtual: true,
+        ...(groupVisibility ? { visibility: groupVisibility } : {}),
+      }));
 
       const createdAgents = await ctx.agentModel.batchCreate(memberConfigs);
       const memberAgentIds = createdAgents.map((agent) => agent.id);
