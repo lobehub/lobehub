@@ -136,6 +136,15 @@ export interface StreamChunkData {
 
 export class StreamEventManager {
   private redis: Redis;
+  /**
+   * Dedicated connection for blocking reads. ioredis executes commands on a
+   * connection strictly in order, so an `XREAD BLOCK` issued on the shared
+   * client parks the connection for up to the block timeout and every
+   * concurrent command (XADD / EXPIRE, plus any other module sharing the
+   * client) queues behind it — with an SSE subscriber attached, each publish
+   * pays up to ~1s, which serializes streaming into a chunk-per-second drip.
+   */
+  private readonly blockingRedis: Redis;
   private readonly STREAM_PREFIX = 'agent_runtime_stream';
   private readonly STREAM_RETENTION = 2 * 3600; // 2 hours
 
@@ -145,6 +154,7 @@ export class StreamEventManager {
       throw new Error('Redis is not available. Please configure REDIS_URL environment variable.');
     }
     this.redis = redisClient;
+    this.blockingRedis = redisClient.duplicate?.() ?? redisClient;
   }
 
   /**
@@ -286,7 +296,7 @@ export class StreamEventManager {
     while (!signal?.aborted) {
       try {
         const xreadStart = Date.now();
-        const results = await this.redis.xread(
+        const results = await this.blockingRedis.xread(
           'BLOCK',
           1000, // 1 second timeout
           'STREAMS',
@@ -391,7 +401,7 @@ export class StreamEventManager {
       fromId = tail.length > 0 ? tail[0][0] : '0';
     }
 
-    const results = await this.redis.xread('BLOCK', blockMs, 'STREAMS', streamKey, fromId);
+    const results = await this.blockingRedis.xread('BLOCK', blockMs, 'STREAMS', streamKey, fromId);
     if (!results || results.length === 0) return { events: [], lastEventId: fromId };
 
     const [, messages] = results[0];
@@ -484,5 +494,8 @@ export class StreamEventManager {
    */
   async disconnect(): Promise<void> {
     await this.redis.quit();
+    if (this.blockingRedis !== this.redis) {
+      await this.blockingRedis.quit();
+    }
   }
 }
