@@ -2,6 +2,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { ModelRuntimeDiagnostics } from '../../types/providerDiagnostics';
 import {
   createAnthropicCompatibleRuntime,
   createDefaultAnthropicClient,
@@ -211,6 +212,130 @@ describe('createAnthropicCompatibleRuntime', () => {
       expect.objectContaining({ model: 'logical-model' }),
     );
     expect(createClient.mock.calls[0][0]).not.toHaveProperty('modelIdMapping');
+  });
+
+  it('should retain the exact provider request and raw streaming response diagnostics', async () => {
+    const rawEvents: Anthropic.MessageStreamEvent[] = [
+      {
+        message: {
+          content: [],
+          id: 'msg_deepseek_empty',
+          model: 'deepseek-v4-pro',
+          role: 'assistant',
+          stop_reason: null,
+          stop_sequence: null,
+          type: 'message',
+          usage: { input_tokens: 206_384, output_tokens: 0 },
+        },
+        type: 'message_start',
+      },
+      {
+        content_block: { signature: 'provider-signature', thinking: ' ', type: 'thinking' },
+        index: 0,
+        type: 'content_block_start',
+      },
+      { index: 0, type: 'content_block_stop' },
+      {
+        delta: { stop_reason: 'end_turn', stop_sequence: null },
+        type: 'message_delta',
+        usage: { input_tokens: 206_384, output_tokens: 1 },
+      },
+      { type: 'message_stop' },
+    ];
+    const rawStream = {
+      async *[Symbol.asyncIterator]() {
+        for (const event of rawEvents) yield event;
+      },
+    };
+    const messagesCreate = vi.fn(() => ({
+      withResponse: vi.fn().mockResolvedValue({
+        data: rawStream,
+        request_id: 'req_deepseek_empty',
+        response: new Response(null, {
+          headers: {
+            'cf-ray': 'ray-1',
+            'x-request-id': 'req-header-1',
+          },
+          status: 200,
+        }),
+      }),
+    }));
+    const Runtime = createAnthropicCompatibleRuntime({
+      chatCompletion: {
+        handlePayload: (payload) => ({
+          max_tokens: 4096,
+          messages: [{ content: 'Question', role: 'user' }],
+          model: payload.model,
+          thinking: { budget_tokens: 2048, type: 'enabled' },
+        }),
+      },
+      customClient: {
+        createClient: () =>
+          ({
+            baseURL: 'https://api.deepseek.com/anthropic',
+            messages: { create: messagesCreate },
+          }) as unknown as Anthropic,
+      },
+      provider: 'test-provider',
+    });
+    const runtime = new Runtime({
+      apiKey: 'test-key',
+      baseURL: 'https://api.deepseek.com/anthropic',
+    });
+    const diagnostics: ModelRuntimeDiagnostics = {};
+
+    const response = await runtime.chat(
+      {
+        messages: [{ content: 'Question', role: 'user' }],
+        model: 'deepseek-v4-pro',
+        stream: true,
+      },
+      { diagnostics, user: 'user-1' },
+    );
+    await response.text();
+
+    expect(diagnostics.providerRequest).toEqual(
+      expect.objectContaining({
+        apiMode: 'messages',
+        endpoint: expect.stringMatching(/\/anthropic$/),
+        payload: expect.objectContaining({
+          max_tokens: 4096,
+          messages: [{ content: 'Question', role: 'user' }],
+          metadata: { user_id: 'user-1' },
+          model: 'deepseek-v4-pro',
+          stream: true,
+        }),
+        sentAt: expect.any(Number),
+      }),
+    );
+    expect(diagnostics.providerResponse).toEqual(
+      expect.objectContaining({
+        completedAt: expect.any(Number),
+        eventCount: 5,
+        eventCounts: expect.objectContaining({
+          'content_block_start:thinking': 1,
+          'message_delta': 1,
+          'message_stop': 1,
+        }),
+        firstEventAt: expect.any(Number),
+        hasNonWhitespaceText: false,
+        hasNonWhitespaceThinking: false,
+        headers: {
+          'cf-ray': 'ray-1',
+          'x-request-id': 'req-header-1',
+        },
+        messageId: 'msg_deepseek_empty',
+        model: 'deepseek-v4-pro',
+        requestId: 'req_deepseek_empty',
+        responseReceivedAt: expect.any(Number),
+        signatureChars: 18,
+        status: 200,
+        stopReason: 'end_turn',
+        terminalEventReceived: true,
+        thinkingChars: 1,
+        toolUseCount: 0,
+      }),
+    );
   });
 
   it('should strip trailing assistant prefill when a logical id maps to a Claude 5 model', async () => {
