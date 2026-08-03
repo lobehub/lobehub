@@ -29,6 +29,7 @@ export const useSidebarGroupVisibility = () => {
         : (s.preference.sidebarHiddenGroupIds ?? []),
     isEqual,
   );
+  const preferenceWorkspaceId = useUserStore(workspaceUserSettingsSelectors.preferenceWorkspaceId);
   const updatePreference = useUserStore((s) => s.updatePreference);
   const updateWorkspaceUserPreference = useUserStore((s) => s.updateWorkspaceUserPreference);
 
@@ -52,12 +53,28 @@ export const useSidebarGroupVisibility = () => {
       if (nextHiddenGroupIds === hiddenGroupIds) return;
 
       if (activeWorkspaceId) {
+        // The write sends the whole list, and the server replaces arrays
+        // rather than merging them — correct, since the caller owns the list.
+        // But that only holds once the caller actually *has* it: toggling
+        // before this workspace's preference row has loaded would persist a
+        // list built from an empty or previous-workspace value, dropping every
+        // Category hidden earlier. Refuse rather than write a guess; the
+        // callers surface it, and the window is a single fetch wide.
+        if (preferenceWorkspaceId !== activeWorkspaceId)
+          throw new Error('Workspace sidebar preference has not loaded yet');
+
         await updateWorkspaceUserPreference({ sidebarHiddenGroupIds: nextHiddenGroupIds });
         return;
       }
       await updatePreference({ sidebarHiddenGroupIds: nextHiddenGroupIds });
     },
-    [activeWorkspaceId, hiddenGroupIds, updatePreference, updateWorkspaceUserPreference],
+    [
+      activeWorkspaceId,
+      hiddenGroupIds,
+      preferenceWorkspaceId,
+      updatePreference,
+      updateWorkspaceUserPreference,
+    ],
   );
 
   return { isSidebarGroupVisible, setSidebarGroupVisible };

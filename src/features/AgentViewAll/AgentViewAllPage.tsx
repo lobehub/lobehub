@@ -20,6 +20,7 @@ import WideScreenContainer from '@/features/WideScreenContainer';
 import { useFetchAgentLabels } from '@/hooks/useFetchAgentLabels';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { usePermission } from '@/hooks/usePermission';
+import { useKeepSidebarGroupsListed } from '@/routes/(main)/home/_layout/Body/Agent/List/useAgentList';
 import { AgentModalProvider } from '@/routes/(main)/home/_layout/Body/Agent/ModalProvider';
 import { useSidebarItemVisibility } from '@/routes/(main)/home/_layout/Body/Agent/useSidebarItemVisibility';
 import { useCreateMenuItems } from '@/routes/(main)/home/_layout/hooks';
@@ -197,6 +198,7 @@ const AgentViewAllPage = memo(() => {
   );
 
   const { isSidebarItemVisible, setSidebarItemVisible } = useSidebarItemVisibility();
+  const keepGroups = useKeepSidebarGroupsListed();
 
   const workspaceItems = useMemo(
     () => flattenAgentBuckets(pinnedAgents, agentGroups, ungroupedAgents),
@@ -214,13 +216,34 @@ const AgentViewAllPage = memo(() => {
   // sidebar right now", so it ignores the tab and the search keyword (it
   // hides entirely while searching to keep results scannable).
   const sidebarItems = useMemo(() => {
+    // Rebuilt from folder-filtered buckets rather than reusing the page's
+    // flattened lists: hiding a Category removes its whole section from the
+    // sidebar, so its agents are not "in sidebar" either. The page's own list
+    // deliberately keeps showing them — hiding is a sidebar-only preference.
+    const inSidebar = [
+      ...flattenAgentBuckets(pinnedAgents, keepGroups(agentGroups), ungroupedAgents),
+      ...flattenAgentBuckets(
+        privatePinnedAgents,
+        keepGroups(privateAgentGroups),
+        privateUngroupedAgents,
+      ),
+    ];
     const seen = new Set<string>();
-    return [...workspaceItems, ...privateItems].filter((item) => {
+    return inSidebar.filter((item) => {
       if (seen.has(item.id) || !isSidebarItemVisible(item)) return false;
       seen.add(item.id);
       return true;
     });
-  }, [workspaceItems, privateItems, isSidebarItemVisible]);
+  }, [
+    agentGroups,
+    isSidebarItemVisible,
+    keepGroups,
+    pinnedAgents,
+    privateAgentGroups,
+    privatePinnedAgents,
+    privateUngroupedAgents,
+    ungroupedAgents,
+  ]);
 
   // Author info (column, grouping, sorting) only means something on the
   // workspace tab — every private item is the viewer's own.

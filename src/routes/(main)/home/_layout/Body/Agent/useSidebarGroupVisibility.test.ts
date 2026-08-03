@@ -9,6 +9,7 @@ import { useSidebarGroupVisibility } from './useSidebarGroupVisibility';
 const mocks = vi.hoisted(() => ({
   activeWorkspaceId: undefined as string | undefined,
   personalHiddenGroupIds: [] as string[],
+  preferenceWorkspaceId: null as string | null,
   updatePreference: vi.fn(),
   updateWorkspaceUserPreference: vi.fn(),
   workspaceHiddenGroupIds: [] as string[],
@@ -29,6 +30,7 @@ vi.mock('@/store/user', () => ({
 
 vi.mock('@/store/user/selectors', () => ({
   workspaceUserSettingsSelectors: {
+    preferenceWorkspaceId: () => mocks.preferenceWorkspaceId,
     sidebarHiddenGroupIds: () => mocks.workspaceHiddenGroupIds,
   },
 }));
@@ -38,6 +40,9 @@ describe('useSidebarGroupVisibility', () => {
     mocks.activeWorkspaceId = undefined;
     mocks.personalHiddenGroupIds = [];
     mocks.workspaceHiddenGroupIds = [];
+    // Default to "this workspace's row has loaded" so the existing cases
+    // exercise the normal path; the gate has its own case below.
+    mocks.preferenceWorkspaceId = 'ws_1';
     mocks.updatePreference.mockClear();
     mocks.updateWorkspaceUserPreference.mockClear();
   });
@@ -88,6 +93,20 @@ describe('useSidebarGroupVisibility', () => {
       await result.current.setSidebarGroupVisible('grp_a', false);
     });
 
+    expect(mocks.updateWorkspaceUserPreference).not.toHaveBeenCalled();
+  });
+
+  it("refuses to write before this workspace's preference row has loaded", async () => {
+    // The write replaces the whole array, so persisting one built from an
+    // empty or previous-workspace value would drop every Category the caller
+    // hid earlier. Failing is recoverable; a silent overwrite is not.
+    mocks.activeWorkspaceId = 'ws_2';
+    mocks.preferenceWorkspaceId = 'ws_1';
+    mocks.workspaceHiddenGroupIds = [];
+
+    const { result } = renderHook(() => useSidebarGroupVisibility());
+
+    await expect(result.current.setSidebarGroupVisible('grp_1', false)).rejects.toThrow();
     expect(mocks.updateWorkspaceUserPreference).not.toHaveBeenCalled();
   });
 });
