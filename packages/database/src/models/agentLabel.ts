@@ -1,4 +1,4 @@
-import { and, asc, count, eq, inArray } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, not } from 'drizzle-orm';
 
 import type { AgentLabelItem } from '../schemas';
 import { agentLabelAssignments, agentLabels, agents } from '../schemas';
@@ -63,7 +63,14 @@ export class AgentLabelModel {
       // never reveals. Joining through `agents` under the same visibility
       // predicate keeps the count consistent with what the list shows.
       .leftJoin(agentLabelAssignments, eq(agentLabelAssignments.labelId, agentLabels.id))
-      .leftJoin(agents, and(eq(agents.id, agentLabelAssignments.agentId), this.agentOwnership()))
+      .leftJoin(
+        agents,
+        and(
+          eq(agents.id, agentLabelAssignments.agentId),
+          not(eq(agents.virtual, true)),
+          this.agentOwnership(),
+        ),
+      )
       .where(this.ownership())
       .groupBy(agentLabels.id)
       .orderBy(asc(agentLabels.name));
@@ -168,7 +175,16 @@ export class AgentLabelModel {
     const [agent] = await this.db
       .select({ id: agents.id })
       .from(agents)
-      .where(and(eq(agents.id, agentId), this.agentOwnership()))
+      .where(
+        and(
+          eq(agents.id, agentId),
+          // Virtual agents — chat-group supervisors and synthetic members — are
+          // filtered out of the agents list entirely, so a label on one could
+          // never be seen while still inflating that label's usage count.
+          not(eq(agents.virtual, true)),
+          this.agentOwnership(),
+        ),
+      )
       .limit(1);
 
     if (!agent) throw new Error(`Agent ${agentId} not found in current scope`);
