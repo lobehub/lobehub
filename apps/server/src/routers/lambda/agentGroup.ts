@@ -333,6 +333,23 @@ export const agentGroupRouter = router({
         virtual: true,
       }));
 
+      // Validate the folder BEFORE creating the member agents. The same check
+      // runs inside `createGroupWithSupervisor`, but that happens after these
+      // inserts and outside their transaction, so a bad folder id would leave
+      // orphaned virtual agents behind.
+      const groupFolderId = input.groupConfig?.groupId;
+      if (groupFolderId) {
+        const folderVisibility =
+          await ctx.agentGroupRepo.getAssignableFolderVisibility(groupFolderId);
+        const requested = input.groupConfig?.visibility;
+
+        if (requested && requested !== folderVisibility)
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `A ${requested} chat group cannot be created in a ${folderVisibility} folder`,
+          });
+      }
+
       const createdAgents = await ctx.agentModel.batchCreate(memberConfigs);
       const memberAgentIds = createdAgents.map((agent) => agent.id);
 

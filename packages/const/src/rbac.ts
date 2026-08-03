@@ -240,6 +240,13 @@ export const getAllowedScopesForAction = (
   // fact authorize mutating every label in the workspace.
   if (resource === 'agent_label') return ['ALL'];
 
+  // Sidebar folders became the same kind of thing: they are the shared
+  // skeleton of a workspace sidebar, and `SessionGroupModel.ownership()` now
+  // matches every public folder rather than only the caller's. An OWNER grant
+  // would read as "only folders you created" while authorizing renames and
+  // deletes across every shared Category.
+  if (resource === 'session_group') return ['ALL'];
+
   // user resource nuance: create/delete without OWNER; read/update allow OWNER
   if (resource === 'user') {
     if (action === 'create' || action === 'delete') return ['ALL'];
@@ -445,9 +452,9 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceSystemRoleName, readonl
     `${action('SESSION_UPDATE')}:owner`,
     `${action('SESSION_DELETE')}:owner`,
     `${action('SESSION_GROUP_READ')}:all`,
-    `${action('SESSION_GROUP_CREATE')}:owner`,
-    `${action('SESSION_GROUP_UPDATE')}:owner`,
-    `${action('SESSION_GROUP_DELETE')}:owner`,
+    `${action('SESSION_GROUP_CREATE')}:all`,
+    `${action('SESSION_GROUP_UPDATE')}:all`,
+    `${action('SESSION_GROUP_DELETE')}:all`,
     `${action('MESSAGE_READ')}:all`,
     `${action('MESSAGE_CREATE')}:owner`,
     `${action('MESSAGE_UPDATE')}:owner`,
@@ -503,9 +510,9 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceSystemRoleName, readonl
     `${action('SESSION_UPDATE')}:owner`,
     `${action('SESSION_DELETE')}:owner`,
     `${action('SESSION_GROUP_READ')}:all`,
-    `${action('SESSION_GROUP_CREATE')}:owner`,
-    `${action('SESSION_GROUP_UPDATE')}:owner`,
-    `${action('SESSION_GROUP_DELETE')}:owner`,
+    `${action('SESSION_GROUP_CREATE')}:all`,
+    `${action('SESSION_GROUP_UPDATE')}:all`,
+    `${action('SESSION_GROUP_DELETE')}:all`,
     `${action('MESSAGE_READ')}:all`,
     `${action('MESSAGE_CREATE')}:owner`,
     `${action('MESSAGE_UPDATE')}:owner`,

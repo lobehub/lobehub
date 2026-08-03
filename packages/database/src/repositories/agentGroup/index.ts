@@ -436,7 +436,7 @@ export class AgentGroupRepository {
    * only proves the folder exists, which is the wrong question once the column
    * is read by every member's sidebar.
    */
-  private async getAssignableFolderVisibility(folderId: string): Promise<'private' | 'public'> {
+  async getAssignableFolderVisibility(folderId: string): Promise<'private' | 'public'> {
     const [folder] = await this.db
       .select({ visibility: sessionGroups.visibility })
       .from(sessionGroups)
