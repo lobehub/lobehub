@@ -69,7 +69,14 @@ export class SessionGroupModel {
     });
   };
 
-  update = async (id: string, value: Partial<SessionGroupItem>) => {
+  /**
+   * Rename / reorder only. The scope columns (`userId`, `workspaceId`,
+   * `visibility`) are deliberately not accepted: the ownership predicate now
+   * matches every public folder in the workspace, so allowing them here would
+   * let any member re-scope another member's Category. Publishing has its own
+   * one-way path.
+   */
+  update = async (id: string, value: Partial<Pick<SessionGroupItem, 'name' | 'sort'>>) => {
     return this.db
       .update(sessionGroups)
       .set({ ...value, updatedAt: new Date() })
