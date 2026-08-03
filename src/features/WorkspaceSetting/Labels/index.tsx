@@ -343,11 +343,10 @@ const WorkspaceLabelsContent = memo(() => {
         // A failed load must not read as "you have no labels" — the two look
         // identical here and lead the user to create duplicates of labels that
         // already exist.
-        <Empty
-          description={t('workspaceSetting.labels.loadFailed')}
-          extra={<Button onClick={() => mutate()}>{t('retry', { ns: 'common' })}</Button>}
-          style={{ paddingBlock: 40 }}
-        />
+        <Flexbox align={'center'} gap={12} paddingBlock={40}>
+          <Empty description={t('workspaceSetting.labels.loadFailed')} />
+          <Button onClick={() => mutate()}>{t('retry', { ns: 'common' })}</Button>
+        </Flexbox>
       ) : visibleLabels.length === 0 ? (
         <Empty
           style={{ paddingBlock: 40 }}
