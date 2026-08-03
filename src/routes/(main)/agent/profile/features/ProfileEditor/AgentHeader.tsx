@@ -27,6 +27,7 @@ const AgentHeader = memo(() => {
 
   const agentId = useAgentStore((s) => s.activeAgentId || '');
   const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId), isEqual);
+  const slug = useAgentStore(agentSelectors.getAgentSlugById(agentId));
   const updateMetaById = useAgentStore((s) => s.updateAgentMetaById);
 
   // File upload
@@ -187,12 +188,13 @@ const AgentHeader = memo(() => {
         onDelete={handleAvatarDelete}
         onUpload={handleAvatarUpload}
       />
-      {/* Identity Section — the role is the headline, the personal name sits under it */}
+      {/* Identity Section — the personal name is the headline; the role it plays and
+          the url slug sit under it. Both inputs bind their own raw field. */}
       <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
         <Input
           disabled={!canEdit}
-          placeholder={t('settingAgent.name.placeholder', { ns: 'setting' })}
-          value={localTitle}
+          placeholder={t('settingAgent.personalName.placeholder', { ns: 'setting' })}
+          value={localName}
           variant={'borderless'}
           style={{
             fontSize: 36,
@@ -201,29 +203,38 @@ const AgentHeader = memo(() => {
             width: '100%',
           }}
           onChange={(e) => {
-            setLocalTitle(e.target.value);
+            setLocalName(e.target.value);
             if (!agentId || !canEdit) return;
 
-            debouncedSaveTitle(agentId, e.target.value);
+            debouncedSaveName(agentId, e.target.value);
           }}
         />
-        <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-          <Text style={{ flex: 'none' }} type={'secondary'}>
-            {t('settingAgent.personalName.label', { ns: 'setting' })}
-          </Text>
-          <Input
-            disabled={!canEdit}
-            placeholder={t('settingAgent.personalName.placeholder', { ns: 'setting' })}
-            style={{ flex: 1, padding: 0 }}
-            value={localName}
-            variant={'borderless'}
-            onChange={(e) => {
-              setLocalName(e.target.value);
-              if (!agentId || !canEdit) return;
+        <Flexbox horizontal align={'center'} gap={12} style={{ minWidth: 0 }}>
+          <Flexbox horizontal align={'center'} gap={8} style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ flex: 'none' }} type={'secondary'}>
+              {t('settingAgent.role.label', { ns: 'setting' })}
+            </Text>
+            <Input
+              disabled={!canEdit}
+              placeholder={t('settingAgent.role.placeholder', { ns: 'setting' })}
+              style={{ flex: 1, padding: 0 }}
+              value={localTitle}
+              variant={'borderless'}
+              onChange={(e) => {
+                setLocalTitle(e.target.value);
+                if (!agentId || !canEdit) return;
 
-              debouncedSaveName(agentId, e.target.value);
-            }}
-          />
+                debouncedSaveTitle(agentId, e.target.value);
+              }}
+            />
+          </Flexbox>
+          {slug ? (
+            <Tooltip title={t('settingAgent.slug.tooltip', { ns: 'setting' })}>
+              <Text code style={{ flex: 'none' }} type={'secondary'}>
+                @{slug}
+              </Text>
+            </Tooltip>
+          ) : null}
         </Flexbox>
       </Flexbox>
     </Flexbox>

@@ -97,6 +97,9 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate }) 
 
   // Name-first label with fallback (see agentDisplayName)
   const displayTitle = agentDisplayName(item, t('untitledAgent'));
+  // When the personal name won the label, the role would otherwise be invisible —
+  // keep it beside the name as a muted tag. No tag when the label already IS the role.
+  const roleTag = item.name?.trim() && item.title?.trim() ? item.title : undefined;
 
   const agentUrl = usePreservedAgentUrl(id);
 
@@ -206,7 +209,16 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate }) 
         icon={avatarIcon}
         key={id}
         style={style}
-        title={displayTitle}
+        title={
+          roleTag ? (
+            <>
+              {displayTitle}
+              <span style={{ fontSize: 12, marginInlineStart: 6, opacity: 0.6 }}>{roleTag}</span>
+            </>
+          ) : (
+            displayTitle
+          )
+        }
         onDoubleClick={handleDoubleClick}
         onDragEnd={handleDragEnd}
         onDragStart={handleDragStart}

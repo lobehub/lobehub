@@ -17,6 +17,8 @@ export interface TitleProps {
 const Title = memo<TitleProps>(({ showTitle, time, avatar, titleAddon }) => {
   const { t } = useTranslation('chat');
   const title = agentDisplayName(avatar, t('untitledAgent'));
+  // The role is only worth repeating when the personal name took the label slot.
+  const roleTag = avatar.name?.trim() && avatar.title?.trim() ? avatar.title.trim() : undefined;
   const { text: timeText, title: timeTitle } = useActivityTime(time);
 
   return (
@@ -24,6 +26,11 @@ const Title = memo<TitleProps>(({ showTitle, time, avatar, titleAddon }) => {
       {showTitle && (
         <Text fontSize={14} weight={500}>
           {title}
+        </Text>
+      )}
+      {showTitle && roleTag && (
+        <Text fontSize={12} type={'secondary'}>
+          {roleTag}
         </Text>
       )}
       {showTitle ? titleAddon : undefined}
