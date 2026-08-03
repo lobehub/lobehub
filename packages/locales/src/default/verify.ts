@@ -47,6 +47,8 @@ export default {
   'acceptance.checks.emptyFilter.ignored': 'No checks ignored',
   'acceptance.checks.emptyFilter.needsFix': 'No checks marked for fixing',
   'acceptance.checks.emptyFilter.pending': 'No checks left to review',
+  'acceptance.checks.judgeReason': 'How this verdict was reached',
+  'acceptance.checks.viewTrace': 'View verification run',
   'acceptance.checks.finalRoundHint':
     'The final result and evidence come from this round — click to locate it.',
   'acceptance.checks.introduced': 'Added in round {{round}}',

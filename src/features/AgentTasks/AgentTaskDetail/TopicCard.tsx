@@ -13,7 +13,16 @@ import {
 } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { CircleDot, CircleStop, Copy, ExternalLink, MoreHorizontal, SquarePen } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronRight,
+  CircleDot,
+  CircleStop,
+  Copy,
+  ExternalLink,
+  MoreHorizontal,
+  SquarePen,
+} from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -54,10 +63,17 @@ const RunContent = memo<{ content: string }>(({ content }) => (
 
 interface TopicCardProps {
   activity: TaskDetailActivity;
+  /**
+   * Whether the run body starts open. A goal loop can produce many rounds, and
+   * an all-expanded feed buries the newest result under older ones — the list
+   * opens only the latest and collapses the rest.
+   */
+  defaultExpanded?: boolean;
 }
 
-const TopicCard = memo<TopicCardProps>(({ activity }) => {
+const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) => {
   const { t } = useTranslation('chat');
+  const [bodyExpanded, setBodyExpanded] = useState(defaultExpanded);
   const openTopicDrawer = useTaskStore((s) => s.openTopicDrawer);
   const cancelTopic = useTaskStore((s) => s.cancelTopic);
   const addComment = useTaskStore((s) => s.addComment);
@@ -71,6 +87,7 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
   // active task.
   const runTaskId = activity.sourceTaskId ?? activeTaskId;
   const canFollowUp = canEditTask && !!runTaskId;
+  const hasBody = Boolean(activity.summary || activity.content || canFollowUp);
 
   const finalDuration =
     !isRunning && activity.time && activity.completedAt
@@ -235,6 +252,16 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
               {startedAt}
             </Text>
           )}
+          {hasBody && (
+            <Flexbox onClick={stopPropagation}>
+              <ActionIcon
+                icon={bodyExpanded ? ChevronDown : ChevronRight}
+                size={'small'}
+                title={t(bodyExpanded ? 'taskDetail.runCollapse' : 'taskDetail.runExpand')}
+                onClick={() => setBodyExpanded((open) => !open)}
+              />
+            </Flexbox>
+          )}
           <Flexbox onClick={stopPropagation}>
             <DropdownMenu items={menuItems}>
               <ActionIcon icon={MoreHorizontal} size={'small'} />
@@ -243,7 +270,7 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
         </Flexbox>
       </Flexbox>
 
-      {(activity.summary || activity.content || canFollowUp) && (
+      {hasBody && bodyExpanded && (
         <Flexbox gap={8} paddingInline={4}>
           {activity.summary && (
             <Text

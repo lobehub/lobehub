@@ -1287,6 +1287,8 @@ export default {
   'taskDetail.comment.save': 'Save',
   'taskDetail.commentPlaceholder':
     'Leave feedback to guide the agent — your comments shape the next run...',
+  'taskDetail.runCollapse': 'Collapse run',
+  'taskDetail.runExpand': 'Expand run',
   'taskDetail.runFollowUp': 'Ask a follow-up',
   'taskDetail.runFollowUpPlaceholder': 'Ask a follow-up about this run...',
   'taskDetail.collapseReply': 'Collapse',

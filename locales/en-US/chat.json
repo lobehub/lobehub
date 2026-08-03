@@ -1129,6 +1129,8 @@
   "taskDetail.runAll.skipped.blockedExternally": "{{count}} task(s) waiting on a blocker outside this batch — will run automatically when unblocked",
   "taskDetail.runAll.skipped.ineligible": "{{count}} task(s) running or scheduled — skipped",
   "taskDetail.runAll.title": "Run subtasks in dependency order",
+  "taskDetail.runCollapse": "Collapse run",
+  "taskDetail.runExpand": "Expand run",
   "taskDetail.runFollowUp": "Ask a follow-up",
   "taskDetail.runFollowUpPlaceholder": "Ask a follow-up about this run...",
   "taskDetail.runNow": "Run now",

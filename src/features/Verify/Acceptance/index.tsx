@@ -433,6 +433,23 @@ const AcceptancePage = memo<AcceptancePageProps>(
       setTopicPanelOpen(true);
       setLedgerExpand(true);
     }, [data, openTopicDrawer]);
+
+    /**
+     * An agent judge argues by running, not by writing a paragraph — so the
+     * reviewable form of its verdict is its own conversation. Resolve the
+     * verifier operation to its topic and open the same drawer used for the
+     * origin run.
+     */
+    const openVerifierTrace = useCallback(
+      async (verifierOperationId: string) => {
+        const resolved = await verifyService.getVerifierThread(verifierOperationId);
+        const topicId = resolved?.topicId;
+        if (!topicId) return;
+        openTopicDrawer(topicId, { title: t('acceptance.checks.viewTrace') });
+        setTopicPanelOpen(true);
+      },
+      [openTopicDrawer, t],
+    );
     const [reportRound, setReportRound] = useState<AcceptanceRound | null>(null);
     // `?r=<roundIndex>` deep-links one round's full report — a durable
     // per-round snapshot URL (standalone page only; the portal embed rides the
@@ -1787,6 +1804,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
                   reviewPending={pending}
                   round={roundFilter}
                   onGroupFeedback={handleGroupFeedback}
+                  onOpenTrace={openVerifierTrace}
                   onReview={handleReview}
                   onRound={historyNavigation}
                   onToggleGroup={handleToggleGroup}
