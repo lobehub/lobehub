@@ -127,6 +127,26 @@ export const agentLabelRouter = router({
       return ctx.agentLabelModel.setAgentLabels(input.agentId, input.labelIds);
     }),
 
+  /**
+   * Single-label delta. Same guards as `setAgentLabels`, but expresses one
+   * toggle so a concurrent editor's change is not clobbered.
+   */
+  toggleAgentLabel: labelProcedure
+    .use(withScopedPermission('agent:update'))
+    .use(withScopedPermission('agent_label:read'))
+    .input(z.object({ agentId: z.string(), assigned: z.boolean(), labelId: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      await assertCanEditResource({
+        db: ctx.serverDB,
+        resourceId: input.agentId,
+        resourceType: 'agent',
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+
+      return ctx.agentLabelModel.toggleAgentLabel(input.agentId, input.labelId, input.assigned);
+    }),
+
   updateLabel: labelProcedure
     .use(withScopedPermission('agent_label:update'))
     .input(

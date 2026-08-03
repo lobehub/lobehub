@@ -102,8 +102,8 @@ export const useAgentDropdownMenu = ({
     isEqual,
   );
   const refreshAgentList = useHomeStore((s) => s.refreshAgentList);
-  const [pinAgent, duplicateAgent, updateAgentGroup, removeAgent, setAgentLabels] = useHomeStore(
-    (s) => [s.pinAgent, s.duplicateAgent, s.updateAgentGroup, s.removeAgent, s.setAgentLabels],
+  const [pinAgent, duplicateAgent, updateAgentGroup, removeAgent, toggleAgentLabel] = useHomeStore(
+    (s) => [s.pinAgent, s.duplicateAgent, s.updateAgentGroup, s.removeAgent, s.toggleAgentLabel],
   );
 
   // Label picker: the shared registry (archived labels only stay listed while
@@ -340,11 +340,12 @@ export const useAgentDropdownMenu = ({
                     label: label.name,
                     onClick: async ({ domEvent }: any) => {
                       domEvent?.stopPropagation();
-                      const next = assignedLabelIds.has(label.id)
-                        ? [...assignedLabelIds].filter((labelId) => labelId !== label.id)
-                        : [...assignedLabelIds, label.id];
+                      // Delta, not a full replacement: `assignedLabelIds` is
+                      // only as fresh as the last list fetch, so sending the
+                      // whole set would drop a label another editor (or
+                      // another tab) added since.
                       try {
-                        await setAgentLabels(id, next);
+                        await toggleAgentLabel(id, label.id, !assignedLabelIds.has(label.id));
                       } catch (error) {
                         console.error('Failed to update agent labels:', error);
                         toast.error(t('operationFailed', { ns: 'common' }));
@@ -353,9 +354,9 @@ export const useAgentDropdownMenu = ({
                     sfSymbol: assignedLabelIds.has(label.id) ? 'checkmark' : undefined,
                   })),
                   ...(pickerLabels.length > 0 ? [{ type: 'divider' as const }] : []),
-                  // In-place creation: personal mode has no labels settings
-                  // page, so the submenu carries its own "New label" entry
-                  // (workspace admins get it too as a shortcut).
+                  // In-place creation: creating a label from the picker and
+                  // then having to reopen it would be surprising, so the
+                  // submenu carries its own "New label" entry.
                   ...(canCreateLabel
                     ? [
                         {
@@ -550,7 +551,7 @@ export const useAgentDropdownMenu = ({
       duplicateAgent,
       updateAgentGroup,
       removeAgent,
-      setAgentLabels,
+      toggleAgentLabel,
       pickerLabels,
       assignedLabelIds,
       canCreateLabel,

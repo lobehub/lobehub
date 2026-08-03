@@ -183,6 +183,45 @@ describe('AgentLabelModel', () => {
       expect(await personalModel.getAgentLabelIds('agt-stale')).toEqual([mine.id]);
     });
 
+    it('should not clobber a concurrent editor when toggling one label', async () => {
+      // Regression: the menu used to send a full replacement built from its
+      // cached assignment set, so a click made against a stale list deleted
+      // whatever another editor had added since that list was fetched.
+      await createAgent('agt-race');
+      const a = await personalModel.create({ name: 'A' });
+      const b = await personalModel.create({ name: 'B' });
+
+      // Another editor applies A.
+      await personalModel.toggleAgentLabel('agt-race', a.id, true);
+
+      // This client's cache still says "no labels"; it toggles B on.
+      await personalModel.toggleAgentLabel('agt-race', b.id, true);
+
+      expect((await personalModel.getAgentLabelIds('agt-race')).toSorted()).toEqual(
+        [a.id, b.id].toSorted(),
+      );
+    });
+
+    it('should be idempotent when toggling the same label on twice', async () => {
+      await createAgent('agt-idem');
+      const label = await personalModel.create({ name: 'Idem' });
+
+      await personalModel.toggleAgentLabel('agt-idem', label.id, true);
+      await personalModel.toggleAgentLabel('agt-idem', label.id, true);
+
+      expect(await personalModel.getAgentLabelIds('agt-idem')).toEqual([label.id]);
+    });
+
+    it('should refuse to newly apply an archived label through the toggle', async () => {
+      await createAgent('agt-toggle-arch');
+      const label = await personalModel.create({ name: 'Retired' });
+      await personalModel.update(label.id, { archived: true });
+
+      await expect(
+        personalModel.toggleAgentLabel('agt-toggle-arch', label.id, true),
+      ).rejects.toThrow(/archived/);
+    });
+
     it('should not newly apply archived labels but keep existing ones', async () => {
       await createAgent('agt-arch');
       const active = await personalModel.create({ name: 'Active' });

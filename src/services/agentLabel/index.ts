@@ -38,6 +38,14 @@ export class AgentLabelService {
   setAgentLabels = (agentId: string, labelIds: string[]): Promise<string[]> => {
     return lambdaClient.agentLabel.setAgentLabels.mutate({ agentId, labelIds });
   };
+
+  /**
+   * Apply or remove one label. Use this for toggles — a full replacement built
+   * from a cached assignment set drops whatever another editor added since.
+   */
+  toggleAgentLabel = (agentId: string, labelId: string, assigned: boolean): Promise<string[]> => {
+    return lambdaClient.agentLabel.toggleAgentLabel.mutate({ agentId, assigned, labelId });
+  };
 }
 
 export const agentLabelService = new AgentLabelService();

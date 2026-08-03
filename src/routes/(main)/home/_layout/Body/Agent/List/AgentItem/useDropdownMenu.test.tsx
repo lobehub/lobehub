@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
     pinAgent: vi.fn(),
     refreshAgentList: vi.fn(),
     removeAgent: vi.fn(),
-    setAgentLabels: vi.fn(),
+    toggleAgentLabel: vi.fn(),
     updateAgentGroup: vi.fn(),
   },
   navigate: vi.fn(),

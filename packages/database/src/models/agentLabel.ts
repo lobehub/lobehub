@@ -117,12 +117,54 @@ export class AgentLabelModel {
   };
 
   /**
-   * Replace the full label set of an agent. Only labels that exist in the
-   * current scope can be applied; archived labels stay applied if already
-   * assigned but cannot be newly added.
+   * Apply or remove a single label. Preferred over `setAgentLabels` wherever
+   * the caller expresses one toggle: a full replacement built from a client's
+   * cached assignment set silently drops whatever another editor added since
+   * that cache was filled. Mirrors the add/remove pairs used for the other
+   * many-to-many memberships (knowledge-base files, chat-group agents).
    */
-  setAgentLabels = async (agentId: string, labelIds: string[]) => {
-    // The agent itself must be visible in the current scope.
+  toggleAgentLabel = async (agentId: string, labelId: string, assigned: boolean) => {
+    await this.assertAgentInScope(agentId);
+
+    if (!assigned) {
+      await this.db
+        .delete(agentLabelAssignments)
+        .where(
+          and(
+            eq(agentLabelAssignments.agentId, agentId),
+            eq(agentLabelAssignments.labelId, labelId),
+            this.assignmentOwnership(),
+          ),
+        );
+
+      return this.getAgentLabelIds(agentId);
+    }
+
+    const [label] = await this.db
+      .select({ archived: agentLabels.archived, id: agentLabels.id })
+      .from(agentLabels)
+      .where(and(eq(agentLabels.id, labelId), this.ownership()))
+      .limit(1);
+
+    if (!label) throw new Error(`Agent label not found in current scope: ${labelId}`);
+    // Archived labels are retired: existing assignments survive, new ones are
+    // refused rather than silently ignored, matching `setAgentLabels`.
+    if (label.archived) throw new Error(`Agent label is archived: ${labelId}`);
+
+    await this.db
+      .insert(agentLabelAssignments)
+      .values(
+        buildWorkspacePayload(
+          { userId: this.userId, workspaceId: this.workspaceId },
+          { agentId, labelId },
+        ),
+      )
+      .onConflictDoNothing();
+
+    return this.getAgentLabelIds(agentId);
+  };
+
+  private assertAgentInScope = async (agentId: string) => {
     const [agent] = await this.db
       .select({ id: agents.id })
       .from(agents)
@@ -130,6 +172,16 @@ export class AgentLabelModel {
       .limit(1);
 
     if (!agent) throw new Error(`Agent ${agentId} not found in current scope`);
+  };
+
+  /**
+   * Replace the full label set of an agent. Only labels that exist in the
+   * current scope can be applied; archived labels stay applied if already
+   * assigned but cannot be newly added.
+   */
+  setAgentLabels = async (agentId: string, labelIds: string[]) => {
+    // The agent itself must be visible in the current scope.
+    await this.assertAgentInScope(agentId);
 
     const currentIds = new Set(await this.getAgentLabelIds(agentId));
 

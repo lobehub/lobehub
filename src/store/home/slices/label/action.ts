@@ -54,10 +54,42 @@ export class LabelActionImpl {
     await Promise.all([this.refreshAgentLabels(), this.#get().refreshAgentList()]);
   };
 
-  setAgentLabels = async (agentId: string, labelIds: string[]): Promise<void> => {
-    // Optimistic: patch the agent's labels in every list bucket immediately —
-    // waiting for the mutation + full list refetch reads as lag. Name-sorted
-    // to match the server's ordering, so the refresh doesn't reshuffle.
+  /**
+   * Toggle one label on an agent. Optimistically patches the same way
+   * `setAgentLabels` does, but the server call carries only the delta so a
+   * concurrent editor's assignment survives.
+   */
+  toggleAgentLabel = async (agentId: string, labelId: string, assigned: boolean): Promise<void> => {
+    const state = this.#get();
+    const current = new Set(
+      [...state.agentGroups.flatMap((g) => g.items), ...state.pinnedAgents]
+        .concat(state.ungroupedAgents, state.privatePinnedAgents, state.privateUngroupedAgents)
+        .concat(state.privateAgentGroups.flatMap((g) => g.items))
+        .find((item) => item.id === agentId && item.type === 'agent')
+        ?.labels?.map((label) => label.id) ?? [],
+    );
+
+    if (assigned) current.add(labelId);
+    else current.delete(labelId);
+
+    this.#patchAgentLabels(agentId, [...current]);
+
+    try {
+      await agentLabelService.toggleAgentLabel(agentId, labelId, assigned);
+    } catch (error) {
+      await this.#get().refreshAgentList();
+      throw error;
+    }
+
+    await Promise.all([this.refreshAgentLabels(), this.#get().refreshAgentList()]);
+  };
+
+  /**
+   * Optimistic: patch the agent's labels in every list bucket immediately —
+   * waiting for the mutation + full list refetch reads as lag. Name-sorted to
+   * match the server's ordering, so the refresh doesn't reshuffle.
+   */
+  #patchAgentLabels = (agentId: string, labelIds: string[]) => {
     const state = this.#get();
     const nextLabels: SidebarAgentLabel[] = state.agentLabels
       .filter((label) => labelIds.includes(label.id))
@@ -81,8 +113,12 @@ export class LabelActionImpl {
         ungroupedAgents: patchItems(state.ungroupedAgents),
       },
       false,
-      n('setAgentLabels/optimistic'),
+      n('patchAgentLabels/optimistic'),
     );
+  };
+
+  setAgentLabels = async (agentId: string, labelIds: string[]): Promise<void> => {
+    this.#patchAgentLabels(agentId, labelIds);
 
     try {
       await agentLabelService.setAgentLabels(agentId, labelIds);
