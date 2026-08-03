@@ -1058,6 +1058,7 @@ export class FileUploadService extends BaseService {
         '.xml',
         '.csv',
         '.tsv',
+        '.ipynb',
         '.pdf',
         '.doc',
         '.docx',
