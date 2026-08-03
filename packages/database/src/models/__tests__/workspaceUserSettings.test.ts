@@ -134,6 +134,26 @@ describe('WorkspaceUserSettingsModel', () => {
     expect(preference.sidebarAgentVisibilityOverrides).toEqual({ agentX: true, agentY: false });
   });
 
+  it.each([
+    ['sidebarGroupAssignments', 'folder-1'],
+    ['sidebarPinnedOverrides', true],
+  ] as const)(
+    'keeps deep-merging the deprecated %s for clients from before the shared sidebar',
+    async (key, value) => {
+      // The fields are deprecated but still on the API, so a released client
+      // can patch a single item. A top-level replace would let one such write
+      // shred the rest of that user's map — the very data the deprecation
+      // promises to leave intact for a rollback.
+      const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
+      await model.updatePreference({ [key]: { itemX: value } } as any);
+
+      await model.updatePreference({ [key]: { itemY: value } } as any);
+
+      const preference = await model.getPreference();
+      expect((preference as any)[key]).toEqual({ itemX: value, itemY: value });
+    },
+  );
+
   it('replaces sidebarHiddenGroupIds wholesale — the caller always writes the full list', async () => {
     const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
     await model.updatePreference({ sidebarHiddenGroupIds: ['folder-1', 'folder-2'] });

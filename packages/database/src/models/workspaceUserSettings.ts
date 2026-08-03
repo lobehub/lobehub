@@ -112,6 +112,28 @@ export class WorkspaceUserSettingsModel {
             },
           }
         : {}),
+      // Deprecated, but still merged: the fields stay on the API, so a client
+      // from before the shared-sidebar change can still patch a single item.
+      // A top-level replace would let one such write shred the rest of that
+      // user's saved map — which is exactly the data the deprecation promises
+      // to leave intact for a rollback. Drop these two once the fields leave
+      // `WorkspaceUserPreference`.
+      ...(patch.sidebarGroupAssignments
+        ? {
+            sidebarGroupAssignments: {
+              ...current.sidebarGroupAssignments,
+              ...patch.sidebarGroupAssignments,
+            },
+          }
+        : {}),
+      ...(patch.sidebarPinnedOverrides
+        ? {
+            sidebarPinnedOverrides: {
+              ...current.sidebarPinnedOverrides,
+              ...patch.sidebarPinnedOverrides,
+            },
+          }
+        : {}),
     };
     const [row] = await this.db
       .insert(workspaceUserSettings)
