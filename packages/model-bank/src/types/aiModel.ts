@@ -314,6 +314,12 @@ export interface AIBaseModelCard {
 
 export const isAiModelVisible = (model: { visible?: boolean }) => model.visible !== false;
 
+/**
+ * OpenRouter-style free tiers: id suffix `:free` (e.g. `…:free`) or display name `(free)`.
+ */
+export const isFreeAiModel = (model: { displayName?: string | null; id: string }) =>
+  model.id.includes(':free') || /\(free\)/i.test(model.displayName ?? '');
+
 export interface AiModelConfig {
   /**
    * used in azure and volcengine

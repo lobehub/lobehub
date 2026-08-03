@@ -884,6 +884,100 @@ describe('LobeOpenRouterAI - custom features', () => {
       expect(visionModel?.vision).toBe(true);
     });
 
+    it('should detect imageOutput and synthesize :image clone for whitelisted generators', async () => {
+      const mockModels = [
+        {
+          id: 'google/gemini-3.1-flash-image-preview',
+          canonical_slug: 'google/gemini-3.1-flash-image-preview',
+          name: 'Google: Nano Banana 2',
+          created: 1679587200,
+          context_length: 8192,
+          architecture: {
+            modality: 'text+image->text+image',
+            input_modalities: ['text', 'image'],
+            output_modalities: ['text', 'image'],
+            tokenizer: 'default',
+            instruct_type: null,
+          },
+          pricing: {
+            prompt: '0.00001',
+            completion: '0.00002',
+          },
+          top_provider: {
+            context_length: 8192,
+            max_completion_tokens: 4096,
+            is_moderated: false,
+          },
+          supported_parameters: [],
+        },
+      ];
+
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          json: async () => ({ data: mockModels }),
+        }),
+      );
+
+      const models = await params.models!();
+
+      const chatModel = models.find((m) => m.id === 'google/gemini-3.1-flash-image-preview');
+      const imageModel = models.find((m) => m.id === 'google/gemini-3.1-flash-image-preview:image');
+
+      expect(chatModel?.type).toBe('chat');
+      expect(chatModel?.imageOutput).toBe(true);
+      expect(chatModel?.vision).toBe(true);
+      expect(imageModel?.type).toBe('image');
+      expect(imageModel?.parameters).toBeDefined();
+    });
+
+    it('should detect video and files abilities from input_modalities', async () => {
+      const mockModels = [
+        {
+          id: 'google/gemini-video',
+          canonical_slug: 'google/gemini-video',
+          name: 'Google: Gemini Video',
+          created: 1679587200,
+          context_length: 8192,
+          architecture: {
+            modality: 'text+image+file+video->text',
+            input_modalities: ['text', 'image', 'file', 'video'],
+            output_modalities: ['text'],
+            tokenizer: 'default',
+            instruct_type: null,
+          },
+          pricing: {
+            prompt: '0.00001',
+            completion: '0.00002',
+          },
+          top_provider: {
+            context_length: 8192,
+            max_completion_tokens: 4096,
+            is_moderated: false,
+          },
+          supported_parameters: [],
+        },
+      ];
+
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          json: async () => ({ data: mockModels }),
+        }),
+      );
+
+      const models = await params.models!();
+      const model = models.find((m) => m.id === 'google/gemini-video');
+
+      expect(model?.type).toBe('chat');
+      expect(model?.video).toBe(true);
+      expect(model?.files).toBe(true);
+      expect(model?.vision).toBe(true);
+      expect(models.some((m) => m.type === 'video')).toBe(false);
+    });
+
     it('should detect function call from supported_parameters', async () => {
       const mockModels = [
         {

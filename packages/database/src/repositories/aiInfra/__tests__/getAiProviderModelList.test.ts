@@ -151,6 +151,38 @@ describe('AiInfraRepos', () => {
       expect(result.map((i) => i.id)).toEqual(['deepseek-v4-pro']);
     });
 
+    it('should filter free models before applying pagination', async () => {
+      const providerId = 'openrouter';
+      const builtinModels = [
+        {
+          displayName: 'Llama 3.3 70B Instruct',
+          enabled: false,
+          id: 'meta-llama/llama-3.3-70b-instruct:free',
+          type: 'chat',
+        },
+        {
+          displayName: 'Gemma 2 9B (free)',
+          enabled: false,
+          id: 'google/gemma-2-9b-it',
+          type: 'chat',
+        },
+        { displayName: 'GPT-4o', enabled: false, id: 'openai/gpt-4o', type: 'chat' },
+        {
+          displayName: 'Claude Sonnet',
+          enabled: false,
+          id: 'anthropic/claude-sonnet',
+          type: 'chat',
+        },
+      ] as AiProviderModelListItem[];
+
+      vi.spyOn(repo.aiModelModel, 'getModelListByProviderId').mockResolvedValue([]);
+      vi.spyOn(repo as any, 'fetchBuiltinModels').mockResolvedValue(builtinModels);
+
+      const result = await repo.getAiProviderModelList(providerId, { limit: 1, offset: 0 });
+
+      expect(result.map((i) => i.id)).toEqual(['openai/gpt-4o']);
+    });
+
     it('should support enabled filter with pagination', async () => {
       const providerId = 'openai';
 

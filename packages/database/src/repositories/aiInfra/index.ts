@@ -12,6 +12,7 @@ import type { AIChatModelCard, AiProviderModelListItem, EnabledAiModel } from 'm
 import {
   AiModelSourceEnum,
   isAiModelVisible,
+  isFreeAiModel,
   normalizeAiModelType,
   resolveModelSearchDefaultSettings,
 } from 'model-bank';
@@ -380,7 +381,7 @@ export class AiInfraRepos {
       mergedModel = mergedModel.filter((m) => builtinIds.has(m.id));
     }
 
-    mergedModel = mergedModel.filter(isAiModelVisible);
+    mergedModel = mergedModel.filter((model) => isAiModelVisible(model) && !isFreeAiModel(model));
 
     let list = mergedModel.map((m) =>
       injectSearchSettings(providerId, m),
