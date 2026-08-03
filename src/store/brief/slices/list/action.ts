@@ -63,9 +63,16 @@ export class BriefListActionImpl {
     const resolvedIds = new Set(result.data);
     if (resolvedIds.size === 0) return;
 
-    const briefs = this.#get().briefs.filter((b) => !resolvedIds.has(b.id));
+    const { briefs: previous, briefsScope } = this.#get();
+    const briefs = previous.filter((b) => !resolvedIds.has(b.id));
     this.#set({ briefs }, false, n('resolveBriefsAsRead'));
-    void mutate(briefKeys.list(true, getCacheScope()), briefs, { revalidate: false });
+
+    // Write back to the entry this list actually came from, not to whatever
+    // scope is live now: on a mid-flight workspace switch the latter would seed
+    // the new workspace's cache with the previous one's briefs — the exact leak
+    // this slice exists to prevent. An unstamped list belongs to no entry.
+    if (briefsScope === undefined) return;
+    void mutate(briefKeys.list(true, briefsScope), briefs, { revalidate: false });
   };
 
   resolveBrief = async (id: string, action?: string, comment?: string) => {

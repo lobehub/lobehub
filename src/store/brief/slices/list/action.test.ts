@@ -47,14 +47,16 @@ describe('BriefListActionImpl', () => {
     vi.restoreAllMocks();
   });
 
+  const SCOPE = 'user-1:workspace-1';
+
   it('should remove resolved briefs from the SWR snapshot used on route remount', async () => {
     const resolvedBrief = createBrief('brief-resolved');
     const remainingBrief = createBrief('brief-remaining');
     const initialBriefs = [resolvedBrief, remainingBrief];
-    const cacheKey = JSON.stringify(briefKeys.list(true, 'anon:personal'));
+    const cacheKey = JSON.stringify(briefKeys.list(true, SCOPE));
     cache.set(cacheKey, initialBriefs);
 
-    const state = { briefs: initialBriefs, isBriefsInit: true };
+    const state = { briefs: initialBriefs, briefsScope: SCOPE, isBriefsInit: true };
     const set = vi.fn((patch: Partial<typeof state>) => Object.assign(state, patch));
     const action = new BriefListActionImpl(set as never, () => state as BriefStore);
     vi.spyOn(briefService, 'resolveManyAsRead').mockResolvedValue({
@@ -68,5 +70,21 @@ describe('BriefListActionImpl', () => {
 
     state.briefs = cache.get(cacheKey) ?? [];
     expect(state.briefs).not.toContainEqual(expect.objectContaining({ id: resolvedBrief.id }));
+  });
+
+  // The write-back must land on the entry the list came from. Keying it off the
+  // live scope instead would, on a mid-flight workspace switch, seed the new
+  // workspace's cache with the previous workspace's briefs.
+  it('should not write an unstamped brief list into any scope entry', async () => {
+    const brief = createBrief('brief-1');
+    const state = { briefs: [brief], briefsScope: undefined, isBriefsInit: true };
+    const set = vi.fn((patch: Partial<typeof state>) => Object.assign(state, patch));
+    const action = new BriefListActionImpl(set as never, () => state as BriefStore);
+    vi.spyOn(briefService, 'resolveManyAsRead').mockResolvedValue({ data: [brief.id] } as never);
+
+    await action.resolveBriefsAsRead([brief.id]);
+
+    expect(state.briefs).toEqual([]);
+    expect(cache.size).toBe(0);
   });
 });
