@@ -104,6 +104,12 @@ const AGENT_BUILDER_PROTECTED_FIELDS = [
 const IMMUTABLE_AGENT_FIELDS = [
   'createdAt',
   'id',
+  // Folder placement is shared state and has its own validated path
+  // (`updateSessionGroupId`), which checks the target is visible in scope and
+  // matches the agent's visibility bucket. Riding along in a config patch
+  // would skip both, leaving the shared row in a folder the sidebar cannot
+  // resolve — it then renders in Ungrouped for every member.
+  'sessionGroupId',
   'slug',
   'userId',
   'virtual',
