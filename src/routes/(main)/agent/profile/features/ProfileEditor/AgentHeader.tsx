@@ -2,7 +2,8 @@
 
 import { EDITOR_DEBOUNCE_TIME } from '@lobechat/const';
 import { ActionIcon, Flexbox, Icon, Input, Skeleton, Text, Tooltip } from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { Button, toast } from '@lobehub/ui/base-ui';
+import { cssVar } from 'antd-style';
 import { debounce } from 'es-toolkit/compat';
 import isEqual from 'fast-deep-equal';
 import { CheckIcon, PaletteIcon, PencilIcon } from 'lucide-react';
@@ -20,6 +21,9 @@ import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 
 const MAX_AVATAR_SIZE = 1024 * 1024; // 1MB limit for server actions
+
+/** Keeps the role and slug inputs on the same left edge under the name. */
+const IDENTITY_LABEL_WIDTH = 32;
 
 const AgentHeader = memo(() => {
   const { t } = useTranslation(['setting', 'common']);
@@ -230,71 +234,79 @@ const AgentHeader = memo(() => {
       <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
         {editing ? (
           <>
-            <Flexbox horizontal align={'center'} gap={4} style={{ minWidth: 0 }}>
+            <Input
+              autoFocus
+              placeholder={t('settingAgent.personalName.placeholder', { ns: 'setting' })}
+              style={{ fontSize: 36, fontWeight: 600, padding: 0, width: '100%' }}
+              value={localName}
+              variant={'borderless'}
+              onChange={(e) => {
+                setLocalName(e.target.value);
+                if (!agentId) return;
+
+                debouncedSaveName(agentId, e.target.value);
+              }}
+            />
+            {/* Role and slug get a line each, with fixed-width labels so the two
+                inputs line up, and the confirm sits under them rather than at the
+                far edge of the header. */}
+            <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
+              <Text style={{ flex: 'none', width: IDENTITY_LABEL_WIDTH }} type={'secondary'}>
+                {t('settingAgent.role.label', { ns: 'setting' })}
+              </Text>
               <Input
-                autoFocus
-                placeholder={t('settingAgent.personalName.placeholder', { ns: 'setting' })}
-                style={{ flex: 1, fontSize: 36, fontWeight: 600, padding: 0 }}
-                value={localName}
+                placeholder={t('settingAgent.role.placeholder', { ns: 'setting' })}
+                style={{ padding: 0, width: 260 }}
+                value={localTitle}
                 variant={'borderless'}
                 onChange={(e) => {
-                  setLocalName(e.target.value);
+                  setLocalTitle(e.target.value);
                   if (!agentId) return;
 
-                  debouncedSaveName(agentId, e.target.value);
+                  debouncedSaveTitle(agentId, e.target.value);
                 }}
               />
-              <ActionIcon
+            </Flexbox>
+            <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
+              <Text style={{ flex: 'none', width: IDENTITY_LABEL_WIDTH }} type={'secondary'}>
+                @
+              </Text>
+              <Input
+                placeholder={t('settingAgent.slug.placeholder', { ns: 'setting' })}
+                status={slugError ? 'error' : undefined}
+                // Same weight as the role value above it — a dimmer slug read as
+                // disabled next to an editable field.
+                style={{ color: cssVar.colorText, padding: 0, width: 260 }}
+                value={localSlug}
+                variant={'borderless'}
+                onBlur={() => void commitSlug()}
+                onChange={(e) => {
+                  setLocalSlug(e.target.value);
+                  setSlugError(undefined);
+                }}
+              />
+            </Flexbox>
+            {slugError ? (
+              <Text
+                style={{ fontSize: 12, marginInlineStart: IDENTITY_LABEL_WIDTH + 8 }}
+                type={'danger'}
+              >
+                {slugError}
+              </Text>
+            ) : null}
+            <Flexbox horizontal style={{ marginInlineStart: IDENTITY_LABEL_WIDTH + 8 }}>
+              <Button
                 icon={CheckIcon}
                 size={'small'}
-                title={t('settingAgent.identity.done', { ns: 'setting' })}
+                type={'primary'}
                 onClick={() => {
                   void commitSlug();
                   setEditing(false);
                 }}
-              />
+              >
+                {t('settingAgent.identity.done', { ns: 'setting' })}
+              </Button>
             </Flexbox>
-            {/* Left-aligned and compact: a stretching role input would push the slug
-                back to the far edge, which is exactly what the grouped layout fixes. */}
-            <Flexbox horizontal align={'center'} gap={12} style={{ minWidth: 0 }}>
-              <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none', minWidth: 0 }}>
-                <Text style={{ flex: 'none' }} type={'secondary'}>
-                  {t('settingAgent.role.label', { ns: 'setting' })}
-                </Text>
-                <Input
-                  placeholder={t('settingAgent.role.placeholder', { ns: 'setting' })}
-                  style={{ padding: 0, width: 220 }}
-                  value={localTitle}
-                  variant={'borderless'}
-                  onChange={(e) => {
-                    setLocalTitle(e.target.value);
-                    if (!agentId) return;
-
-                    debouncedSaveTitle(agentId, e.target.value);
-                  }}
-                />
-              </Flexbox>
-              <Flexbox horizontal align={'center'} gap={4} style={{ flex: 'none' }}>
-                <Text type={'secondary'}>@</Text>
-                <Input
-                  placeholder={t('settingAgent.slug.placeholder', { ns: 'setting' })}
-                  status={slugError ? 'error' : undefined}
-                  style={{ padding: 0, width: 180 }}
-                  value={localSlug}
-                  variant={'borderless'}
-                  onBlur={() => void commitSlug()}
-                  onChange={(e) => {
-                    setLocalSlug(e.target.value);
-                    setSlugError(undefined);
-                  }}
-                />
-              </Flexbox>
-            </Flexbox>
-            {slugError ? (
-              <Text style={{ fontSize: 12 }} type={'danger'}>
-                {slugError}
-              </Text>
-            ) : null}
           </>
         ) : (
           <>

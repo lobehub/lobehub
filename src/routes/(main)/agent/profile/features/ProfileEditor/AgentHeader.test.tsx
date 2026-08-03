@@ -60,6 +60,11 @@ vi.mock('@lobehub/ui', () => ({
       </button>
     );
   },
+  Button: (props: Record<string, unknown>) => (
+    <button type="button" onClick={props.onClick as () => void}>
+      {props.children as ReactNode}
+    </button>
+  ),
   Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Icon: () => <span />,
   Input: (props: Record<string, unknown>) => {
