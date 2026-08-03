@@ -180,6 +180,14 @@ const createAbortError = () =>
 
 const QUEUE_BLOCKING_OPERATION_TYPE_SET = new Set<OperationType>(QUEUE_BLOCKING_OPERATION_TYPES);
 
+const throwIfSendAborted = (signal?: AbortSignal) => {
+  if (!signal?.aborted) return;
+
+  throw signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException('Message send was cancelled', 'AbortError');
+};
+
 const attachSendTimeMetadataToUserMessage = (
   messages: UIChatMessage[],
   userMessageId: string,
@@ -271,12 +279,20 @@ export class ConversationLifecycleActionImpl {
     onMessagePersisted,
     onTopicCreated,
     preserveComposer,
+    signal,
   }: SendMessageWithContextParams): Promise<SendMessageResult | undefined> => {
+    throwIfSendAborted(signal);
+
+    let detachCallerAbort = () => {};
     let hasNotifiedMessageAccepted = false;
+    const detachUnacceptedCallerAbort = () => {
+      if (!hasNotifiedMessageAccepted) detachCallerAbort();
+    };
     const notifyMessageAccepted = () => {
       if (hasNotifiedMessageAccepted) return;
 
       hasNotifiedMessageAccepted = true;
+      detachCallerAbort();
       try {
         onMessageAccepted?.();
       } catch (error) {
@@ -545,6 +561,8 @@ export class ConversationLifecycleActionImpl {
     const requestTrigger = (metadata as Pick<MessageMetadata, 'trigger'> | undefined)?.trigger;
     const requestMetadata = requestTrigger ? { trigger: requestTrigger } : undefined;
 
+    throwIfSendAborted(signal);
+
     const hasFile = !!fileIdList && fileIdList.length > 0;
 
     // if message is empty or no files, then stop
@@ -682,6 +700,28 @@ export class ConversationLifecycleActionImpl {
         inThread: !!operationContext.threadId,
       },
     });
+    const cleanupTempMessages = () => {
+      this.#get().internal_dispatchMessage(
+        { ids: [tempId, tempAssistantId], type: 'deleteMessages' },
+        { operationId },
+      );
+    };
+    if (signal) {
+      const cancelFromCaller = () => {
+        const operation = this.#get().operations[operationId];
+        if (hasNotifiedMessageAccepted || operation?.status !== 'running') return;
+
+        this.#get().cancelOperation(operationId, 'Caller cancelled before message acceptance');
+      };
+
+      if (signal.aborted) {
+        cancelFromCaller();
+      } else {
+        signal.addEventListener('abort', cancelFromCaller, { once: true });
+        detachCallerAbort = () => signal.removeEventListener('abort', cancelFromCaller);
+      }
+    }
+    throwIfSendAborted(signal);
 
     // Shared run lifecycle for the post-persist topic-title hook. Built once here
     // so all three runtime branches fire the SAME `afterUserMessagePersisted`
@@ -1052,6 +1092,7 @@ export class ConversationLifecycleActionImpl {
       // Persist messages to DB first (same as client mode)
       let heteroData: SendMessageServerResponse | undefined;
       try {
+        throwIfSendAborted(signal);
         heteroData = await aiChatService.sendMessageInServer(
           {
             agentId: operationContext.agentId,
@@ -1105,18 +1146,25 @@ export class ConversationLifecycleActionImpl {
         );
       } catch (e) {
         console.error('[HeterogeneousAgent] Failed to persist messages:', e);
-        this.#get().failOperation(operationId, {
-          message: e instanceof Error ? e.message : 'Unknown error',
-          type: 'HeterogeneousAgentError',
-        });
+        if (this.#get().operations[operationId]?.status !== 'cancelled') {
+          this.#get().failOperation(operationId, {
+            message: e instanceof Error ? e.message : 'Unknown error',
+            type: 'HeterogeneousAgentError',
+          });
+        }
+        cleanupTempMessages();
+        detachUnacceptedCallerAbort();
         rollbackOptimisticTopic('sendMessage/rollbackOptimisticTopic');
         return;
       }
 
       if (!heteroData) {
+        cleanupTempMessages();
+        detachUnacceptedCallerAbort();
         rollbackOptimisticTopic('sendMessage/rollbackOptimisticTopic');
         return;
       }
+      notifyMessageAccepted();
 
       // Update context with server-created topicId. Once the server has returned a
       // persisted topic, the hetero stream must target the real topic bucket; keeping
@@ -1218,6 +1266,24 @@ export class ConversationLifecycleActionImpl {
       this.#get().completeOperation(operationId);
       notifyMessagePersisted();
 
+      // Clear editor temp state — the user's message is already persisted, so
+      // a later Stop click must NOT restore it into the input (would feel like
+      // the app re-sent the message). Client/Gateway paths clear this at
+      // line 684-686 after `sendMessageInServer` resolves, but the hetero
+      // branch returns early (line 498) and never reaches that clear.
+      this.#get().updateOperationMetadata(operationId, { inputEditorTempState: null });
+
+      if (abortController.signal.aborted) {
+        if (optimisticTopic && optimisticTopicResolved && heteroData.topicId) {
+          this.#get().internal_updateTopicLoading(heteroData.topicId, false);
+        }
+
+        return {
+          assistantMessageId: heteroData.assistantMessageId,
+          userMessageId: heteroData.userMessageId,
+        };
+      }
+
       // Topic title: hetero used to set only a sliced placeholder
       // title on new topics — upgrade it to the LLM summary via the shared hook
       // (reads the just-persisted conversation from the store). Fire-and-forget.
@@ -1233,13 +1299,6 @@ export class ConversationLifecycleActionImpl {
           topicId: heteroData.topicId,
         })
         .catch(console.error);
-
-      // Clear editor temp state — the user's message is already persisted, so
-      // a later Stop click must NOT restore it into the input (would feel like
-      // the app re-sent the message). Client/Gateway paths clear this at
-      // line 684-686 after `sendMessageInServer` resolves, but the hetero
-      // branch returns early (line 498) and never reaches that clear.
-      this.#get().updateOperationMetadata(operationId, { inputEditorTempState: null });
 
       // Sidebar "running" spinner for hetero runs is driven off the persisted
       // `topic.status === 'running'` (written by the executor's writeTopicStatus,
@@ -1380,6 +1439,7 @@ export class ConversationLifecycleActionImpl {
           fileIds: fileIdList,
           message,
           metadata: requestMetadata,
+          onMessageAccepted: notifyMessageAccepted,
           parentOperationId: operationId,
           optimisticTopic,
           // Forward @-mentioned tool ids so the server runtime enables them for
@@ -1400,6 +1460,8 @@ export class ConversationLifecycleActionImpl {
           // messages with the server's real IDs.
           tempMessageIds: [tempAssistantId],
         });
+        const cancelledAfterPersistence = abortController.signal.aborted;
+        if (cancelledAfterPersistence) cleanupTempMessages();
 
         // Topic title: gateway-created topics had no LLM-summarized
         // title. executeGatewayAgent has already replaced messages + switched to
@@ -1413,18 +1475,20 @@ export class ConversationLifecycleActionImpl {
           if (optimisticTopic && optimisticTopicActive) {
             optimisticTopicActive = false;
           }
-          void sendRunLifecycle
-            .afterUserMessagePersisted({
-              assistantMessageId: result.assistantMessageId,
-              context: { ...operationContext, topicId: result.topicId },
-              isCreateNewTopic: willCreateNewTopic,
-              operationId,
-              runId: operationId,
-              runScope: sendRunScope,
-              runtimeType,
-              topicId: result.topicId,
-            })
-            .catch(console.error);
+          if (!cancelledAfterPersistence) {
+            void sendRunLifecycle
+              .afterUserMessagePersisted({
+                assistantMessageId: result.assistantMessageId,
+                context: { ...operationContext, topicId: result.topicId },
+                isCreateNewTopic: willCreateNewTopic,
+                operationId,
+                runId: operationId,
+                runScope: sendRunScope,
+                runtimeType,
+                topicId: result.topicId,
+              })
+              .catch(console.error);
+          }
         } else {
           rollbackOptimisticTopic('sendMessage/rollbackOptimisticTopic');
         }
@@ -1441,6 +1505,8 @@ export class ConversationLifecycleActionImpl {
         // server task. Don't clobber that with 'failed'.
         const op = this.#get().operations[operationId];
         if (op?.status === 'cancelled') {
+          cleanupTempMessages();
+          detachUnacceptedCallerAbort();
           rollbackOptimisticTopic('sendMessage/rollbackOptimisticTopic');
           return;
         }
@@ -1450,6 +1516,8 @@ export class ConversationLifecycleActionImpl {
           message: e instanceof Error ? e.message : 'Unknown error',
           type: 'GatewayError',
         });
+        cleanupTempMessages();
+        detachUnacceptedCallerAbort();
         rollbackOptimisticTopic('sendMessage/rollbackOptimisticTopic');
         return;
       }
@@ -1463,6 +1531,7 @@ export class ConversationLifecycleActionImpl {
       );
 
     try {
+      throwIfSendAborted(signal);
       const { model, provider } = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
 
       const topicId = operationContext.topicId;
@@ -1546,6 +1615,7 @@ export class ConversationLifecycleActionImpl {
         },
         abortController,
       );
+      notifyMessageAccepted();
       const responseMeta = data as SendMessageServerResponseMeta;
       // Use created topicId/threadId if available, otherwise use original from context
       let finalTopicId = data.topicId ?? operationContext.topicId;
@@ -1667,10 +1737,12 @@ export class ConversationLifecycleActionImpl {
       console.error(e);
       rollbackOptimisticTopic('sendMessage/rollbackOptimisticTopic');
       // Fail operation on error
-      this.#get().failOperation(operationId, {
-        type: e instanceof Error ? e.name : 'unknown_error',
-        message: e instanceof Error ? e.message : 'Unknown error',
-      });
+      if (this.#get().operations[operationId]?.status !== 'cancelled') {
+        this.#get().failOperation(operationId, {
+          type: e instanceof Error ? e.name : 'unknown_error',
+          message: e instanceof Error ? e.message : 'Unknown error',
+        });
+      }
 
       if (!preserveComposer && e instanceof TRPCClientError) {
         const isAbort = e.message.includes('aborted') || e.name === 'AbortError';
@@ -1705,12 +1777,24 @@ export class ConversationLifecycleActionImpl {
     }
 
     if (!data) {
+      detachUnacceptedCallerAbort();
       rollbackOptimisticTopic('sendMessage/rollbackOptimisticTopic');
       return;
     }
 
     rollbackOptimisticTopic('sendMessage/rollbackUnresolvedOptimisticTopic');
 
+    if (abortController.signal.aborted) {
+      this.#get().completeOperation(operationId);
+      notifyMessagePersisted();
+
+      return {
+        assistantMessageId: data.assistantMessageId,
+        createdThreadId: data.createdThreadId,
+        createdTopicId: isCreatedTopicResponse(data) ? data.topicId : undefined,
+        userMessageId: data.userMessageId,
+      };
+    }
     // Topic title auto-generation, now via the shared `afterUserMessagePersisted`
     // hook. The client passes its freshly-created `data.messages`
     // (not yet in the store under the real topicId); gateway/hetero call the same

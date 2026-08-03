@@ -653,6 +653,20 @@ export const fileRouter = router({
       await ctx.fileService.deleteFile(file.url!);
     }),
 
+  removeUnreferencedFile: fileProcedure
+    .use(withScopedPermission('file:delete'))
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const existing = await ctx.fileModel.findById(input.id);
+      if (!existing) return;
+      assertWorkspaceRowManageable(ctx, existing.userId, 'file');
+
+      const file = await ctx.fileModel.deleteUnreferenced(input.id, serverDBEnv.REMOVE_GLOBAL_FILE);
+      if (!file) return;
+
+      await ctx.fileService.deleteFile(file.url!);
+    }),
+
   removeFileAsyncTask: fileProcedure
     .use(withScopedPermission('file:update'))
     .input(

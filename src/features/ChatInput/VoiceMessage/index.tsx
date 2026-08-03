@@ -1,12 +1,12 @@
 'use client';
 
-import { type UploadFileItem } from '@lobechat/types';
 import { Icon, Tooltip } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { ArrowUp, type LucideProps, RotateCcw, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { fileService } from '@/services/file';
 import { useFileStore } from '@/store/file';
 
 import { ChatInputAction } from '../ActionBar/components/ChatInputAction';
@@ -14,6 +14,7 @@ import { useAgentId } from '../hooks/useAgentId';
 import { useEffectiveModel } from '../hooks/useEffectiveModel';
 import { useChatInputStore, useStoreApi } from '../store';
 import { formatVoiceDuration } from './mediaRecorder';
+import { VoiceMessageUploadOwnership } from './uploadOwnership';
 import { useIntentionalHover } from './useIntentionalHover';
 import { getVoiceMessageActionState, useVoiceMessageCapability } from './useVoiceMessageCapability';
 import { useVoiceMessageRecorder, type VoiceRecording } from './useVoiceMessageRecorder';
@@ -359,7 +360,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-type UploadStatus = 'idle' | 'uploading' | 'failed';
+type UploadStatus = 'idle' | 'uploading' | 'sending' | 'failed';
 
 export interface VoiceMessageControlProps {
   actionLabel: string;
@@ -505,7 +506,13 @@ const VoiceMessage = memo(() => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle');
   const abortControllerRef = useRef<AbortController | undefined>(undefined);
-  const uploadRequestIdRef = useRef(0);
+  const uploadOwnershipRef = useRef<VoiceMessageUploadOwnership | undefined>(undefined);
+  if (!uploadOwnershipRef.current) {
+    uploadOwnershipRef.current = new VoiceMessageUploadOwnership((id) =>
+      fileService.removeUnreferencedFile(id),
+    );
+  }
+  const uploadOwnership = uploadOwnershipRef.current;
 
   const hasRecorderActivity = recorder.status !== 'idle' || uploadStatus !== 'idle';
   const isActive = activeAudioInputMode === 'voiceMessage' || hasRecorderActivity;
@@ -523,24 +530,26 @@ const VoiceMessage = memo(() => {
 
   useEffect(
     () => () => {
-      uploadRequestIdRef.current += 1;
+      const cleanup = uploadOwnership.discard();
       abortControllerRef.current?.abort();
+      void cleanup.catch(console.error);
       if (storeApi.getState().activeAudioInputMode === 'voiceMessage') {
         storeApi.getState().setActiveAudioInputMode(undefined);
       }
     },
-    [storeApi],
+    [storeApi, uploadOwnership],
   );
 
   const discard = useCallback(() => {
-    uploadRequestIdRef.current += 1;
+    const cleanup = uploadOwnership.discard();
     abortControllerRef.current?.abort();
     abortControllerRef.current = undefined;
+    void cleanup.catch(console.error);
     setUploadProgress(0);
     setUploadStatus('idle');
     recorder.reset();
     setActiveAudioInputMode(undefined);
-  }, [recorder, setActiveAudioInputMode]);
+  }, [recorder, setActiveAudioInputMode, uploadOwnership]);
 
   const uploadAndSend = useCallback(
     async (captured?: VoiceRecording) => {
@@ -549,66 +558,92 @@ const VoiceMessage = memo(() => {
       const voiceRecording = captured ?? recorder.recording ?? (await recorder.stop());
       if (!voiceRecording || voiceRecording.durationMs < recorder.minDurationMs) return;
 
-      const requestId = uploadRequestIdRef.current + 1;
-      uploadRequestIdRef.current = requestId;
+      const requestId = uploadOwnership.beginAttempt();
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
       setUploadProgress(0);
-      setUploadStatus('uploading');
+      setUploadStatus(uploadOwnership.getPending() ? 'sending' : 'uploading');
 
       try {
-        const result = await uploadWithProgress({
-          abortController,
-          file: voiceRecording.file,
-          fileMetadata: {
-            codec: voiceRecording.codec,
-            durationMs: voiceRecording.durationMs,
-            mimeType: voiceRecording.mimeType,
-          },
-          onStatusUpdate: (event) => {
-            if (event.type !== 'updateFile' || requestId !== uploadRequestIdRef.current) return;
-            if (event.value.uploadState) setUploadProgress(event.value.uploadState.progress);
-          },
-        });
+        let uploadItem = uploadOwnership.getPending();
+        if (!uploadItem) {
+          const result = await uploadWithProgress({
+            abortController,
+            file: voiceRecording.file,
+            fileMetadata: {
+              codec: voiceRecording.codec,
+              durationMs: voiceRecording.durationMs,
+              mimeType: voiceRecording.mimeType,
+            },
+            onStatusUpdate: (event) => {
+              if (event.type !== 'updateFile' || !uploadOwnership.isCurrent(requestId)) return;
+              if (event.value.uploadState) setUploadProgress(event.value.uploadState.progress);
+            },
+          });
 
-        if (requestId !== uploadRequestIdRef.current) return;
-        if (!result) throw new Error('Voice message upload did not return a file');
+          if (!result) {
+            if (!uploadOwnership.isCurrent(requestId)) return;
+            throw new Error('Voice message upload did not return a file');
+          }
+
+          uploadItem = {
+            audioMetadata: {
+              codec: voiceRecording.codec,
+              durationMs: voiceRecording.durationMs,
+              mimeType: voiceRecording.mimeType,
+            },
+            file: voiceRecording.file,
+            fileUrl: result.url,
+            id: result.id,
+            status: 'success',
+          };
+          try {
+            if (!(await uploadOwnership.ownUploaded(requestId, uploadItem))) return;
+          } catch (error) {
+            console.error('[VoiceMessage] Failed to clean up stale upload:', error);
+            return;
+          }
+        }
+
+        if (!uploadOwnership.isCurrent(requestId)) return;
 
         // The selected model may have changed while the binary upload was in flight.
-        // Keep the local recording, but never dispatch audio to a text-only model.
+        // Keep and reuse the uploaded recording, but never dispatch audio to a text-only model.
         if (!canRecordVoiceMessageRef.current) {
           setUploadProgress(0);
           setUploadStatus('idle');
           return;
         }
 
-        const uploadItem: UploadFileItem = {
-          audioMetadata: {
-            codec: voiceRecording.codec,
-            durationMs: voiceRecording.durationMs,
-            mimeType: voiceRecording.mimeType,
-          },
-          file: voiceRecording.file,
-          fileUrl: result.url,
-          id: result.id,
-          status: 'success',
-        };
+        if (!onVoiceMessageSend) throw new Error('Voice message send handler is unavailable');
 
-        await onVoiceMessageSend?.(uploadItem);
-        if (requestId !== uploadRequestIdRef.current) return;
+        setUploadStatus('sending');
+        const sendPromise = Promise.resolve(
+          onVoiceMessageSend(uploadItem, { signal: abortController.signal }),
+        );
+        uploadOwnership.trackSend(uploadItem, sendPromise);
+        try {
+          await sendPromise;
+          // Acceptance transfers file ownership even if cancel/unmount already invalidated this UI
+          // attempt. Clear ownership before checking request freshness so cleanup can never delete it.
+          uploadOwnership.accept(uploadItem);
+        } finally {
+          uploadOwnership.finishSend(sendPromise);
+        }
+        if (!uploadOwnership.isCurrent(requestId)) return;
 
         setUploadProgress(0);
         setUploadStatus('idle');
         recorder.reset();
         setActiveAudioInputMode(undefined);
       } catch {
-        if (requestId !== uploadRequestIdRef.current) return;
+        if (!uploadOwnership.isCurrent(requestId)) return;
         setUploadStatus('failed');
       } finally {
-        if (requestId === uploadRequestIdRef.current) abortControllerRef.current = undefined;
+        if (uploadOwnership.isCurrent(requestId)) abortControllerRef.current = undefined;
       }
     },
-    [onVoiceMessageSend, recorder, setActiveAudioInputMode, uploadWithProgress],
+    [onVoiceMessageSend, recorder, setActiveAudioInputMode, uploadOwnership, uploadWithProgress],
   );
 
   const handleStart = useCallback(() => {
@@ -663,6 +698,7 @@ const VoiceMessage = memo(() => {
   const visibleWaveform = waveform.slice(-8);
   const canSendRecording =
     uploadStatus !== 'uploading' &&
+    uploadStatus !== 'sending' &&
     recorder.durationMs >= recorder.minDurationMs &&
     (recorder.status === 'recording' || recorder.status === 'ready');
   const { canSend, sendDisabled, showRetry } = getVoiceMessageActionState({
@@ -672,6 +708,7 @@ const VoiceMessage = memo(() => {
   });
   const showBusy =
     uploadStatus === 'uploading' ||
+    uploadStatus === 'sending' ||
     recorder.status === 'requesting' ||
     recorder.status === 'stopping';
   const statusText =
@@ -679,7 +716,7 @@ const VoiceMessage = memo(() => {
       ? t('voiceMessage.requesting')
       : recorder.status === 'stopping'
         ? t('voiceMessage.stopping')
-        : uploadStatus === 'uploading'
+        : uploadStatus === 'uploading' || uploadStatus === 'sending'
           ? t('voiceMessage.uploading')
           : undefined;
   const statusAnnouncement =

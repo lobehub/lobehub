@@ -470,6 +470,164 @@ describe('ConversationLifecycle actions', () => {
         });
       });
 
+      it('reconciles a persisted client message but skips generation when cancellation wins the request race', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const controller = new AbortController();
+        const onMessageAccepted = vi.fn();
+        const onMessagePersisted = vi.fn();
+        let resolvePersistence!: (value: any) => void;
+        const persistence = new Promise<any>((resolve) => {
+          resolvePersistence = resolve;
+        });
+        const sendMessageInServer = vi
+          .spyOn(aiChatService, 'sendMessageInServer')
+          .mockReturnValue(persistence);
+        const context = {
+          agentId: TEST_IDS.SESSION_ID,
+          threadId: null,
+          topicId: TEST_IDS.TOPIC_ID,
+        };
+
+        let sendPromise!: ReturnType<typeof result.current.sendMessage>;
+        act(() => {
+          sendPromise = result.current.sendMessage({
+            context,
+            message: TEST_CONTENT.USER_MESSAGE,
+            onMessageAccepted,
+            onMessagePersisted,
+            signal: controller.signal,
+          });
+        });
+        await waitFor(() => expect(sendMessageInServer).toHaveBeenCalledOnce());
+
+        act(() => controller.abort(new DOMException('cancelled', 'AbortError')));
+        await act(async () => {
+          resolvePersistence({
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            messages: [
+              createMockMessage({
+                id: TEST_IDS.USER_MESSAGE_ID,
+                role: 'user',
+                topicId: TEST_IDS.TOPIC_ID,
+              }),
+              createMockMessage({
+                id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+                role: 'assistant',
+                topicId: TEST_IDS.TOPIC_ID,
+              }),
+            ],
+            topicId: TEST_IDS.TOPIC_ID,
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          });
+          await sendPromise;
+        });
+
+        expect(onMessageAccepted).toHaveBeenCalledOnce();
+        expect(onMessagePersisted).toHaveBeenCalledOnce();
+        expect(result.current.executeClientAgent).not.toHaveBeenCalled();
+        expect(result.current.messagesMap[messageMapKey(context)]).toHaveLength(2);
+      });
+
+      it('releases the migrated topic loading owner when cancellation wins a new-topic persistence race', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const controller = new AbortController();
+        const agentId = TEST_IDS.SESSION_ID;
+        const topicKey = topicMapKey({ agentId });
+        const newTopicId = TEST_IDS.NEW_TOPIC_ID;
+        let resolvePersistence!: (value: any) => void;
+        const persistence = new Promise<any>((resolve) => {
+          resolvePersistence = resolve;
+        });
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: undefined,
+            topicDataMap: {
+              [topicKey]: {
+                currentPage: 0,
+                hasMore: false,
+                isExpandingPageSize: false,
+                isLoadingMore: false,
+                items: [],
+                pageSize: 20,
+                total: 0,
+              },
+            },
+          });
+        });
+        const sendMessageInServer = vi
+          .spyOn(aiChatService, 'sendMessageInServer')
+          .mockReturnValue(persistence);
+
+        let sendPromise!: ReturnType<typeof result.current.sendMessage>;
+        act(() => {
+          sendPromise = result.current.sendMessage({
+            context: { agentId, threadId: null, topicId: null },
+            message: TEST_CONTENT.USER_MESSAGE,
+            signal: controller.signal,
+          });
+        });
+        await waitFor(() => expect(sendMessageInServer).toHaveBeenCalledOnce());
+
+        const optimisticTopicId = useChatStore.getState().topicDataMap[topicKey]?.items[0]?.id;
+        expect(optimisticTopicId).toMatch(/^tmp_topic_/);
+        expect(useChatStore.getState().topicLoadingIds).toContain(optimisticTopicId);
+
+        act(() => controller.abort(new DOMException('cancelled', 'AbortError')));
+        await act(async () => {
+          resolvePersistence({
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            isCreateNewTopic: true,
+            messages: [
+              createMockMessage({
+                id: TEST_IDS.USER_MESSAGE_ID,
+                role: 'user',
+                topicId: newTopicId,
+              }),
+              createMockMessage({
+                id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+                role: 'assistant',
+                topicId: newTopicId,
+              }),
+            ],
+            topicId: newTopicId,
+            topics: { items: [{ id: newTopicId, title: 'Server Topic' }], total: 1 },
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          });
+          await sendPromise;
+        });
+
+        expect(result.current.executeClientAgent).not.toHaveBeenCalled();
+        expect(useChatStore.getState().topicDataMap[topicKey]?.items[0]?.id).toBe(newTopicId);
+        expect(useChatStore.getState().topicLoadingIds).not.toContain(optimisticTopicId);
+        expect(useChatStore.getState().topicLoadingIds).not.toContain(newTopicId);
+      });
+
+      it('detaches the caller cancellation signal after an unaccepted persistence failure', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const controller = new AbortController();
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockRejectedValue(
+          new TRPCClientError('persistence failed'),
+        );
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: createTestContext(),
+            message: TEST_CONTENT.USER_MESSAGE,
+            signal: controller.signal,
+          });
+        });
+        const sendOperation = Object.values(result.current.operations).find(
+          (operation) => operation.type === 'sendMessage',
+        );
+        expect(sendOperation?.status).toBe('failed');
+
+        act(() => controller.abort(new DOMException('late cancel', 'AbortError')));
+
+        expect(result.current.operations[sendOperation!.id]?.status).toBe('failed');
+      });
+
       it('should create user message and trigger AI processing', async () => {
         const { result } = renderHook(() => useChatStore());
 
@@ -1014,6 +1172,65 @@ describe('ConversationLifecycle actions', () => {
         expect(
           operationSelectors.isTopicVisiblyRunning(optimisticTopicId!)(useChatStore.getState()),
         ).toBe(false);
+      });
+
+      it('cleans temporary gateway messages when persistence wins after caller cancellation', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const controller = new AbortController();
+        const context = {
+          agentId: TEST_IDS.SESSION_ID,
+          threadId: null,
+          topicId: TEST_IDS.TOPIC_ID,
+        };
+        let gatewayParams: any;
+        let resolveGateway!: () => void;
+        const executeGatewayAgentSpy = vi.fn().mockImplementation(
+          (params: any) =>
+            new Promise<any>((resolve) => {
+              gatewayParams = params;
+              resolveGateway = () =>
+                resolve({
+                  assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+                  operationId: 'gateway-op-cancelled-after-persistence',
+                  topicId: TEST_IDS.TOPIC_ID,
+                  userMessageId: TEST_IDS.USER_MESSAGE_ID,
+                });
+            }),
+        );
+        const internalDispatchMessageSpy = vi.spyOn(result.current, 'internal_dispatchMessage');
+
+        act(() => {
+          useChatStore.setState({
+            executeGatewayAgent: executeGatewayAgentSpy,
+            isGatewayModeEnabled: () => true,
+          });
+        });
+
+        let sendPromise!: ReturnType<typeof result.current.sendMessage>;
+        act(() => {
+          sendPromise = result.current.sendMessage({
+            context,
+            message: TEST_CONTENT.USER_MESSAGE,
+            signal: controller.signal,
+          });
+        });
+        await waitFor(() => expect(executeGatewayAgentSpy).toHaveBeenCalledOnce());
+
+        act(() => controller.abort(new DOMException('cancelled', 'AbortError')));
+        await act(async () => {
+          gatewayParams.onMessageAccepted();
+          resolveGateway();
+          await sendPromise;
+        });
+
+        expect(internalDispatchMessageSpy).toHaveBeenCalledWith(
+          {
+            ids: [expect.stringMatching(/^tmp_/), expect.stringMatching(/^tmp_/)],
+            type: 'deleteMessages',
+          },
+          { operationId: expect.any(String) },
+        );
+        expect(result.current.messagesMap[messageMapKey(context)] ?? []).toEqual([]);
       });
 
       it('should keep the sidebar spinner on through a hetero new-topic run and stop it at the end', async () => {
@@ -2496,6 +2713,72 @@ describe('ConversationLifecycle actions', () => {
 
         expect(useChatStore.getState().messagesMap[persistedTopicKey]).toHaveLength(2);
         expect(useChatStore.getState().messagesMap[leakedNewTopicKey] ?? []).toHaveLength(0);
+      });
+
+      it('reconciles a persisted heterogeneous message but skips CLI execution after cancellation', async () => {
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              heterogeneousProvider: { command: 'codex', type: 'codex' },
+            },
+          },
+        });
+        const { result } = renderHook(() => useChatStore());
+        const controller = new AbortController();
+        const onMessageAccepted = vi.fn();
+        const onMessagePersisted = vi.fn();
+        let resolvePersistence!: (value: any) => void;
+        const persistence = new Promise<any>((resolve) => {
+          resolvePersistence = resolve;
+        });
+        const sendMessageInServer = vi
+          .spyOn(aiChatService, 'sendMessageInServer')
+          .mockReturnValue(persistence);
+        const context = {
+          agentId: TEST_IDS.SESSION_ID,
+          threadId: null,
+          topicId: TEST_IDS.TOPIC_ID,
+        };
+
+        let sendPromise!: ReturnType<typeof result.current.sendMessage>;
+        act(() => {
+          sendPromise = result.current.sendMessage({
+            context,
+            message: TEST_CONTENT.USER_MESSAGE,
+            onMessageAccepted,
+            onMessagePersisted,
+            signal: controller.signal,
+          });
+        });
+        await waitFor(() => expect(sendMessageInServer).toHaveBeenCalledOnce());
+
+        act(() => controller.abort(new DOMException('cancelled', 'AbortError')));
+        await act(async () => {
+          resolvePersistence({
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            messages: [
+              createMockMessage({
+                id: TEST_IDS.USER_MESSAGE_ID,
+                role: 'user',
+                topicId: TEST_IDS.TOPIC_ID,
+              }),
+              createMockMessage({
+                id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+                role: 'assistant',
+                topicId: TEST_IDS.TOPIC_ID,
+              }),
+            ],
+            topicId: TEST_IDS.TOPIC_ID,
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          });
+          await sendPromise;
+        });
+
+        expect(onMessageAccepted).toHaveBeenCalledOnce();
+        expect(onMessagePersisted).toHaveBeenCalledOnce();
+        expect(executeHeterogeneousAgentMock).not.toHaveBeenCalled();
+        expect(result.current.messagesMap[messageMapKey(context)]).toHaveLength(2);
       });
 
       it('should preserve the isNew marker for heterogeneous new-thread contexts', async () => {

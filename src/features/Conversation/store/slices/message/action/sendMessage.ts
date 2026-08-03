@@ -9,6 +9,14 @@ interface ConversationSendMessageParams extends SendMessageParams {
   onPreflightFailure?: () => void;
 }
 
+const throwIfAborted = (signal?: AbortSignal) => {
+  if (!signal?.aborted) return;
+
+  throw signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException('Message send was cancelled', 'AbortError');
+};
+
 /**
  * Send a message in this conversation
  *
@@ -24,6 +32,7 @@ export const sendMessage = (
   get: () => ConversationStore,
 ) => {
   return async (params: ConversationSendMessageParams) => {
+    throwIfAborted(params.signal);
     const state = get();
     const { context, editor, hooks, displayMessages } = state;
     const { preserveComposer } = params;
@@ -42,6 +51,8 @@ export const sendMessage = (
         params.onPreflightFailure?.();
         return;
       }
+
+      throwIfAborted(params.signal);
     }
 
     // Keep ConversationStore in sync with the editor, which is cleared immediately on send.

@@ -12,7 +12,14 @@ export type SendButtonHandler = (params: {
   getMarkdownContent: () => string;
 }) => Promise<void> | void;
 
-export type VoiceMessageSendHandler = (file: UploadFileItem) => Promise<void> | void;
+export interface VoiceMessageSendOptions {
+  signal: AbortSignal;
+}
+
+export type VoiceMessageSendHandler = (
+  file: UploadFileItem,
+  options: VoiceMessageSendOptions,
+) => Promise<void>;
 
 export interface SendButtonProps {
   disabled?: boolean;

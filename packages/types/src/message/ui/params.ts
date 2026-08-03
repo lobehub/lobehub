@@ -154,11 +154,11 @@ export interface SendMessageParams {
    * This decouples sendMessage from store selectors.
    */
   messages?: UIChatMessage[];
-
   /**
    * Additional metadata for the message (e.g., mentioned users)
    */
   metadata?: Record<string, any>;
+
   onlyAddUserMessage?: boolean;
   /**
    * Called once the send lifecycle owns the turn, either by persisting the user message or by
@@ -188,6 +188,12 @@ export interface SendMessageParams {
    * remain available after the audio-only turn is dispatched.
    */
   preserveComposer?: boolean;
+  /**
+   * Cancels the send before the conversation lifecycle accepts ownership of the turn.
+   * Once `onMessageAccepted` fires, later aborts are ignored and the existing runtime Stop flow
+   * owns any subsequent model execution.
+   */
+  signal?: AbortSignal;
 }
 
 export interface SendGroupMessageParams {

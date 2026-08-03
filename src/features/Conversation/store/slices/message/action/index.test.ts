@@ -218,6 +218,10 @@ describe('message convenience actions', () => {
 });
 
 describe('sendMessage composer ownership', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('keeps the active text draft when dispatching a separate voice message', async () => {
     const store = createTestStore();
     const sendMessage = vi.fn().mockResolvedValue({
@@ -248,5 +252,35 @@ describe('sendMessage composer ownership', () => {
 
     expect(store.getState().inputMessage).toBe('keep this draft');
     expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({ preserveComposer: true }));
+  });
+
+  it('does not clear or dispatch the draft when cancellation happens inside the before-send hook', async () => {
+    const store = createTestStore();
+    const sendMessage = vi.fn();
+    const controller = new AbortController();
+    const abortError = new DOMException('cancelled', 'AbortError');
+    let releaseHook!: (allowed: boolean) => void;
+    const onBeforeSendMessage = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          releaseHook = resolve;
+        }),
+    );
+    vi.spyOn(useChatStore, 'getState').mockReturnValue({ sendMessage } as any);
+    store.setState({
+      hooks: { onBeforeSendMessage },
+      inputMessage: 'keep this draft',
+    });
+
+    const result = store.getState().sendMessage({
+      message: 'draft',
+      signal: controller.signal,
+    });
+    controller.abort(abortError);
+    releaseHook(true);
+
+    await expect(result).rejects.toBe(abortError);
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(store.getState().inputMessage).toBe('keep this draft');
   });
 });

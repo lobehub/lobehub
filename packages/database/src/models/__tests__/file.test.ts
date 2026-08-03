@@ -291,6 +291,84 @@ describe('FileModel', () => {
     });
   });
 
+  describe('deleteUnreferenced', () => {
+    it('deletes an owned file that has no message or session references', async () => {
+      await fileModel.createGlobalFile({
+        creator: userId,
+        fileType: 'audio/webm',
+        hashId: 'voice-unreferenced',
+        size: 100,
+        url: 'voice/unreferenced.webm',
+      });
+      const { id } = await fileModel.create({
+        fileHash: 'voice-unreferenced',
+        fileType: 'audio/webm',
+        name: 'voice.webm',
+        size: 100,
+        url: 'voice/unreferenced.webm',
+      });
+
+      const deleted = await fileModel.deleteUnreferenced(id);
+
+      expect(deleted).toMatchObject({ id, url: 'voice/unreferenced.webm' });
+      await expect(
+        serverDB.query.files.findFirst({ where: eq(files.id, id) }),
+      ).resolves.toBeUndefined();
+    });
+
+    it('preserves a file attached to a persisted message', async () => {
+      const { id } = await fileModel.create({
+        fileType: 'audio/webm',
+        name: 'voice.webm',
+        size: 100,
+        url: 'voice/message.webm',
+      });
+      await serverDB.insert(messages).values({ id: 'voice-message', role: 'user', userId });
+      await serverDB
+        .insert(messagesFiles)
+        .values({ fileId: id, messageId: 'voice-message', userId });
+
+      await expect(fileModel.deleteUnreferenced(id)).resolves.toBeUndefined();
+      await expect(
+        serverDB.query.files.findFirst({ where: eq(files.id, id) }),
+      ).resolves.toBeDefined();
+    });
+
+    it('preserves a file attached to a session', async () => {
+      const { id } = await fileModel.create({
+        fileType: 'audio/webm',
+        name: 'voice.webm',
+        size: 100,
+        url: 'voice/session.webm',
+      });
+      await serverDB.insert(sessions).values({ id: 'voice-session', userId });
+      await serverDB
+        .insert(filesToSessions)
+        .values({ fileId: id, sessionId: 'voice-session', userId });
+
+      await expect(fileModel.deleteUnreferenced(id)).resolves.toBeUndefined();
+      await expect(
+        serverDB.query.files.findFirst({ where: eq(files.id, id) }),
+      ).resolves.toBeDefined();
+    });
+
+    it("does not delete another user's unreferenced file", async () => {
+      await serverDB.insert(files).values({
+        fileType: 'audio/webm',
+        id: 'other-user-voice',
+        name: 'voice.webm',
+        size: 100,
+        url: 'voice/other.webm',
+        userId: 'user2',
+      });
+
+      await expect(fileModel.deleteUnreferenced('other-user-voice')).resolves.toBeUndefined();
+      await expect(
+        serverDB.query.files.findFirst({ where: eq(files.id, 'other-user-voice') }),
+      ).resolves.toBeDefined();
+    });
+  });
+
   describe('deleteMany', () => {
     it('should delete multiple files', async () => {
       await fileModel.createGlobalFile({

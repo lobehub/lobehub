@@ -17,6 +17,7 @@ import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
 import {
   type SendButtonHandler,
   type SendButtonProps,
+  type VoiceMessageSendOptions,
 } from '@/features/ChatInput/store/initialState';
 import { useAgentStore } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
@@ -405,7 +406,8 @@ const ChatInput = memo<ChatInputProps>(
     };
 
     const handleVoiceMessageSend = useCallback(
-      (file: UploadFileItem) => sendVoiceMessage(sendMessage, file),
+      (file: UploadFileItem, { signal }: VoiceMessageSendOptions) =>
+        sendVoiceMessage(sendMessage, file, { signal }),
       [sendMessage],
     );
 
