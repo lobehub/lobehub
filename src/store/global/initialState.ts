@@ -252,7 +252,15 @@ export interface SystemStatus {
    * number of pages (documents) to display per page
    */
   pagePageSize?: number;
+  /**
+   * @deprecated legacy shared portal width, kept as the fallback for views that
+   * have no entry in `portalWidths` yet
+   */
   portalWidth: number;
+  /**
+   * portal width remembered per view type, see `PortalWidths`
+   */
+  portalWidths?: Record<string, number>;
   /**
    * number of private agents (ungrouped) to display in the Private sidebar bucket
    */
@@ -507,6 +515,7 @@ export const INITIAL_STATUS = {
   pageAgentPanelWidth: 360,
   pagePageSize: 20,
   portalWidth: 400,
+  portalWidths: {},
   readNotificationSlugs: [],
   resourceManagerColumnWidths: DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS,
   showCommandMenu: false,

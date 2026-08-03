@@ -396,6 +396,7 @@ const leftPanelWidth = (s: GlobalState): number => {
   return normalizeNavPanelWidth(s.status.leftPanelWidth);
 };
 const portalWidth = (s: GlobalState) => s.status.portalWidth || 400;
+const portalWidths = (s: GlobalState) => s.status.portalWidths;
 const filePanelWidth = (s: GlobalState) => s.status.filePanelWidth;
 const groupAgentBuilderPanelWidth = (s: GlobalState) => s.status.groupAgentBuilderPanelWidth || 360;
 const imagePanelWidth = (s: GlobalState) => s.status.imagePanelWidth;
@@ -475,6 +476,7 @@ export const systemStatusSelectors = {
   pageAgentPanelWidth,
   pagePageSize,
   portalWidth,
+  portalWidths,
   privateAgentPageSize,
   recentPageSize,
   taskCreateInlineCollapsed,
