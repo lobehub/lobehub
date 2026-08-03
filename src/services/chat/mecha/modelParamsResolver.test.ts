@@ -362,6 +362,23 @@ describe('resolveModelExtendParams', () => {
         });
       });
 
+      it('should enable thinking and set low reasoning_effort for DeepSeek', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            deepseekV4ReasoningEffort: 'low',
+          } as any,
+          model: 'deepseek-v4-pro',
+          provider: 'deepseek',
+        });
+
+        expect(result).toEqual({
+          reasoning_effort: 'low',
+          thinking: {
+            type: 'enabled',
+          },
+        });
+      });
+
       it('should disable thinking and omit reasoning_effort for DeepSeek when configured as none', () => {
         mockModelReasoningConfig({ deepseekV4ReasoningEffort: 'none' });
 

@@ -1,7 +1,7 @@
 import type { CreatedLevelSliderProps } from './createLevelSlider';
 import { createLevelSliderComponent } from './createLevelSlider';
 
-const DEEPSEEK_REASONING_EFFORT_LEVELS = ['none', 'high', 'max'] as const;
+const DEEPSEEK_REASONING_EFFORT_LEVELS = ['none', 'low', 'high', 'max'] as const;
 
 type DeepSeekReasoningEffort = (typeof DEEPSEEK_REASONING_EFFORT_LEVELS)[number];
 

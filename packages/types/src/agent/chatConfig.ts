@@ -32,7 +32,7 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    * Model ID to use for generating compression summaries
    */
   compressionModelId?: string;
-  deepseekV4ReasoningEffort?: 'none' | 'high' | 'max';
+  deepseekV4ReasoningEffort?: 'none' | 'low' | 'high' | 'max';
 
   /**
    * Disable context caching
@@ -237,7 +237,7 @@ export const SelfIterationChatConfigSchema = z.object({
 export const AgentChatConfigSchema = z
   .object({
     codexMaxReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
-    deepseekV4ReasoningEffort: z.enum(['none', 'high', 'max']).optional(),
+    deepseekV4ReasoningEffort: z.enum(['none', 'low', 'high', 'max']).optional(),
     compressionModelId: z.string().optional(),
     disableContextCaching: z.boolean().optional(),
     disableGatewayMode: z.boolean().optional(),
