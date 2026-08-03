@@ -3,7 +3,10 @@ import { memo, useCallback, useMemo, useState } from 'react';
 
 import { useConversationResourceAccess } from '../hooks/useConversationResourceAccess';
 import { useConversationStore } from '../store';
-import { type PendingIntervention } from '../store/slices/data/pendingInterventions';
+import {
+  getInterventionBatch,
+  type PendingIntervention,
+} from '../store/slices/data/pendingInterventions';
 import InterventionContent from './InterventionContent';
 import InterventionTabBar from './InterventionTabBar';
 import { styles } from './style';
@@ -40,20 +43,31 @@ const InterventionBar = memo<InterventionBarProps>(({ interventions }) => {
     [interventions],
   );
 
+  const activeIntervention = interventions[activeIndex];
+
+  // The active card's own parallel batch. `interventions` spans the whole
+  // conversation, so approve-all must never act on the raw list.
+  const batch = useMemo(
+    () => getInterventionBatch(interventions, activeIntervention),
+    [interventions, activeIntervention],
+  );
+
   const handleApproveAll = useCallback(async () => {
     if (approveAllLoading) return;
     setApproveAllLoading(true);
     try {
-      await approveAllToolCalls(interventions.map((i) => i.toolMessageId));
+      await approveAllToolCalls(batch.map((i) => i.toolMessageId));
     } finally {
       setApproveAllLoading(false);
     }
-  }, [approveAllLoading, approveAllToolCalls, interventions]);
+  }, [approveAllLoading, approveAllToolCalls, batch]);
 
-  const activeIntervention = interventions[activeIndex];
   if (!activeIntervention) return null;
 
-  const isBatch = interventions.length > 1;
+  // Tabs still list every pending call so nothing is hidden; only the batch
+  // action is scoped to the active turn.
+  const hasMultipleCards = interventions.length > 1;
+  const canApproveBatch = batch.length > 1;
 
   return (
     <ChatInput
@@ -63,12 +77,15 @@ const InterventionBar = memo<InterventionBarProps>(({ interventions }) => {
       maxHeight={'50vh' as any}
       resize={false}
     >
-      {isBatch && (
+      {hasMultipleCards && (
         <InterventionTabBar
           activeIndex={activeIndex}
-          approveAllLoading={approveAllLoading}
           interventions={interventions}
-          onApproveAll={canUseResource ? handleApproveAll : undefined}
+          approveAll={
+            canUseResource && canApproveBatch
+              ? { count: batch.length, loading: approveAllLoading, onApprove: handleApproveAll }
+              : undefined
+          }
           onTabChange={handleTabChange}
         />
       )}

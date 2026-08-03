@@ -1557,6 +1557,16 @@ export class AiAgentService {
     /** Assistant that emitted this batch — the pending tool rows' shared parent. */
     let approvalOwnerAssistantId: string | undefined;
 
+    // Load and validate EVERY decision before applying any of them. The apply
+    // step writes per entry, so validating inline would leave a rejected batch
+    // half-persisted — some tools already marked approved with no run to
+    // execute them.
+    const validatedDecisions: {
+      entry: (typeof approvalDecisions)[number];
+      plugin: MessagePluginItem;
+      targetMessage: NonNullable<typeof resumeParentMessage>;
+    }[] = [];
+
     for (const decisionEntry of approvalDecisions) {
       // The single-decision form validated `parentMessageId` (the op-level
       // resume anchor) as the target tool message. In the batch form each
@@ -1592,6 +1602,28 @@ export class AiAgentService {
         );
       }
 
+      validatedDecisions.push({ entry: decisionEntry, plugin, targetMessage });
+    }
+
+    // A batch resume executes every approved tool as ONE `call_tools_batch`
+    // under ONE assistant anchor and continues the LLM once. That is only
+    // meaningful when the calls actually came from the same assistant turn.
+    // The client scopes its selection, but a stale or hand-built request could
+    // mix an abandoned approval from an earlier turn into this one — which
+    // would run an unrelated tool and fold its result into a turn it does not
+    // belong to. Reject rather than silently anchoring on whichever entry came
+    // first.
+    const approvalOwnerIds = new Set(
+      validatedDecisions.map(({ targetMessage }) => targetMessage.parentId ?? '(none)'),
+    );
+    if (approvalOwnerIds.size > 1) {
+      throw new Error(
+        `resumeApprovals must resolve one assistant turn, got ${approvalOwnerIds.size} owners: ` +
+          [...approvalOwnerIds].join(', '),
+      );
+    }
+
+    for (const { entry: decisionEntry, plugin, targetMessage } of validatedDecisions) {
       const { decision, rejectionReason } = decisionEntry;
       if (decision === 'approved') {
         await this.messageModel.updateMessagePlugin(decisionEntry.parentMessageId, {

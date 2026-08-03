@@ -1524,10 +1524,13 @@ describe('GeneralChatAgent', () => {
 
       const result = await agent.runner(context, state);
 
-      // Should handle abort and resolve pending tools
+      // Should handle abort and resolve pending tools, carrying the id of the
+      // row that already exists so the executor settles it instead of inserting
+      // a duplicate beside it.
       expect(result).toEqual({
         type: 'resolve_aborted_tools',
         payload: {
+          existingToolMessageIds: { 'call-1': 'tool-msg-1' },
           parentMessageId: 'msg-456',
           toolsCalling: [
             {
@@ -1540,6 +1543,66 @@ describe('GeneralChatAgent', () => {
           ],
         },
       });
+    });
+
+    it('carries existing tool message ids when aborting a FOLDED (server-shape) pending batch', async () => {
+      // The server runtime rebuilds `state.messages` through conversation-flow,
+      // which folds an assistant plus its tool rows into one `assistantGroup`.
+      // Without the ids, `resolve_aborted_tools` would insert a second row per
+      // call and leave the originals `pending` — the approval cards would
+      // survive the Stop.
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const state = createMockState({
+        status: 'interrupted',
+        messages: [
+          {
+            id: 'assistant-group-1',
+            role: 'assistantGroup',
+            children: [
+              {
+                tools: [
+                  {
+                    apiName: 'createPlan',
+                    arguments: '{}',
+                    id: 'call-alpha',
+                    identifier: 'lobe-agent',
+                    intervention: { status: 'pending' },
+                    result_msg_id: 'pending-msg-alpha',
+                    type: 'builtin',
+                  },
+                  {
+                    apiName: 'createPlan',
+                    arguments: '{}',
+                    id: 'call-beta',
+                    identifier: 'lobe-agent',
+                    intervention: { status: 'pending' },
+                    result_msg_id: 'pending-msg-beta',
+                    type: 'builtin',
+                  },
+                ],
+              },
+            ],
+          } as any,
+        ],
+      });
+
+      const context = createMockContext('tools_batch_result', {
+        parentMessageId: 'assistant-group-1',
+      });
+
+      const result = await agent.runner(context, state);
+
+      expect((result as any).type).toBe('resolve_aborted_tools');
+      expect((result as any).payload.existingToolMessageIds).toEqual({
+        'call-alpha': 'pending-msg-alpha',
+        'call-beta': 'pending-msg-beta',
+      });
+      expect((result as any).payload.toolsCalling).toHaveLength(2);
     });
 
     it('should return finish when state is interrupted with no tools', async () => {

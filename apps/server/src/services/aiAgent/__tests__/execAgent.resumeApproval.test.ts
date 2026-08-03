@@ -149,6 +149,8 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
   // `messages` row — `findById` returns this. Note plugin metadata (apiName,
   // identifier, etc.) lives in a separate `message_plugins` table.
   const pendingToolMessage = {
+    // Non-null in the schema; the batch resume sorts approved rows by it.
+    createdAt: new Date('2026-08-02T00:00:00.000Z'),
     id: 'tool-msg-1',
     role: 'tool',
     sessionId: 'session-1',
@@ -332,6 +334,66 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
           },
         }),
       ).rejects.toThrow(/no plugin row/);
+    });
+
+    it('rejects a batch whose targets belong to different assistant turns', async () => {
+      // A batch resume runs every approved tool as ONE `call_tools_batch` under
+      // ONE assistant anchor and continues the model once. Mixing an abandoned
+      // approval from an earlier turn would execute an unrelated tool and fold
+      // its result into this turn. Anchoring on whichever entry came first is
+      // silent corruption, so refuse instead.
+      mockFindById.mockImplementation(async (id: string) =>
+        id === 'tool-msg-old'
+          ? { ...pendingToolMessage, id: 'tool-msg-old', parentId: 'assistant-old' }
+          : { ...pendingToolMessage, parentId: 'assistant-new' },
+      );
+
+      await expect(
+        service.execAgent({
+          ...baseParams,
+          resumeApprovals: [
+            { decision: 'approved', parentMessageId: 'tool-msg-1', toolCallId: 'call_xyz' },
+            { decision: 'approved', parentMessageId: 'tool-msg-old', toolCallId: 'call_xyz' },
+          ],
+        }),
+      ).rejects.toThrow(/must resolve one assistant turn/);
+
+      // Nothing may be persisted: validation runs before any write, so a
+      // refused batch cannot leave half its tools marked approved with no run
+      // to execute them.
+      expect(mockUpdateMessagePlugin).not.toHaveBeenCalled();
+      expect(mockCreateOperation).not.toHaveBeenCalled();
+    });
+
+    it('accepts a batch whose targets share one assistant turn', async () => {
+      mockFindById.mockImplementation(async (id: string) => ({
+        ...pendingToolMessage,
+        id,
+        parentId: 'assistant-new',
+      }));
+
+      await service.execAgent({
+        ...baseParams,
+        resumeApprovals: [
+          { decision: 'approved', parentMessageId: 'tool-msg-1', toolCallId: 'call_xyz' },
+          { decision: 'approved', parentMessageId: 'tool-msg-2', toolCallId: 'call_xyz' },
+        ],
+      });
+
+      expect(mockUpdateMessagePlugin).toHaveBeenCalledWith('tool-msg-1', {
+        intervention: { status: 'approved' },
+      });
+      expect(mockUpdateMessagePlugin).toHaveBeenCalledWith('tool-msg-2', {
+        intervention: { status: 'approved' },
+      });
+      expect(mockCreateOperation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          initialContext: expect.objectContaining({
+            payload: expect.objectContaining({ parentMessageId: 'assistant-new' }),
+            phase: 'human_approved_tool',
+          }),
+        }),
+      );
     });
   });
 });

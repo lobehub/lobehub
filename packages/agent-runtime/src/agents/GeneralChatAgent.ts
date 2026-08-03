@@ -308,6 +308,12 @@ export class GeneralChatAgent implements Agent {
     let hasToolsCalling = false;
     let toolsCalling: ChatToolPayload[] = [];
     let parentMessageId = '';
+    /**
+     * `tool_call_id → existing tool message id` for pending rows the approval
+     * pause already wrote. Carried to `resolve_aborted_tools` so it settles
+     * those rows instead of inserting duplicates beside them.
+     */
+    let existingToolMessageIds: Record<string, string> | undefined;
 
     // Extract abort info based on current phase
     switch (context.phase) {
@@ -339,12 +345,17 @@ export class GeneralChatAgent implements Agent {
         if (pendingToolMessages.length > 0) {
           hasToolsCalling = true;
           toolsCalling = pendingToolMessages.map((m: any) => m.plugin).filter(Boolean);
+          existingToolMessageIds = Object.fromEntries(
+            pendingToolMessages
+              .filter((m: any) => m.plugin?.id && m.id)
+              .map((m: any) => [m.plugin.id, m.id]),
+          );
         }
         break;
       }
     }
 
-    return { hasToolsCalling, parentMessageId, toolsCalling };
+    return { existingToolMessageIds, hasToolsCalling, parentMessageId, toolsCalling };
   }
 
   /**
@@ -536,15 +547,13 @@ export class GeneralChatAgent implements Agent {
     context: AgentRuntimeContext,
     state: AgentState,
   ): AgentInstruction | AgentInstruction[] {
-    const { hasToolsCalling, parentMessageId, toolsCalling } = this.extractAbortInfo(
-      context,
-      state,
-    );
+    const { existingToolMessageIds, hasToolsCalling, parentMessageId, toolsCalling } =
+      this.extractAbortInfo(context, state);
 
     // If there are pending tool calls, resolve them
     if (hasToolsCalling && toolsCalling.length > 0) {
       return {
-        payload: { parentMessageId, toolsCalling },
+        payload: { existingToolMessageIds, parentMessageId, toolsCalling },
         type: 'resolve_aborted_tools',
       };
     }
@@ -918,7 +927,10 @@ export class GeneralChatAgent implements Agent {
         const { hasToolsCalling, parentMessageId, toolsCalling, reason } =
           context.payload as HumanAbortPayload;
 
-        // If there are pending tool calls, resolve them
+        // If there are pending tool calls, resolve them. No
+        // `existingToolMessageIds` here on purpose: this phase is an abort
+        // DURING llm streaming, where the calls came off the stream and no tool
+        // row has been written yet — the executor must insert.
         if (hasToolsCalling && toolsCalling && toolsCalling.length > 0) {
           return {
             payload: { parentMessageId, toolsCalling },

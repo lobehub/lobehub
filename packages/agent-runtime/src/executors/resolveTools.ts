@@ -210,20 +210,36 @@ export const resolveAbortedTools =
 
     const newState = structuredClone(state);
 
+    const existingToolMessageIds = payload.existingToolMessageIds ?? {};
+
     for (const toolPayload of payload.toolsCalling) {
+      const existingMessageId = existingToolMessageIds[toolPayload.id];
       try {
-        await transports.messages.createToolMessage({
-          agentId,
-          content: ABORTED_TOOL_CONTENT,
-          groupId,
-          parentId: payload.parentMessageId,
-          plugin: toolPayload as any,
-          pluginIntervention: { status: 'aborted' },
-          role: 'tool',
-          threadId,
-          tool_call_id: toolPayload.id,
-          topicId,
-        });
+        if (existingMessageId) {
+          // The approval pause already wrote a row for this call. Settle THAT
+          // row: inserting a second one would duplicate the tool in the turn
+          // and leave the original `pending`, so the approval card survives the
+          // Stop that was supposed to clear it.
+          await transports.messages.updateToolMessage(existingMessageId, {
+            content: ABORTED_TOOL_CONTENT,
+          });
+          await transports.messages.updateToolIntervention(existingMessageId, {
+            status: 'aborted',
+          });
+        } else {
+          await transports.messages.createToolMessage({
+            agentId,
+            content: ABORTED_TOOL_CONTENT,
+            groupId,
+            parentId: payload.parentMessageId,
+            plugin: toolPayload as any,
+            pluginIntervention: { status: 'aborted' },
+            role: 'tool',
+            threadId,
+            tool_call_id: toolPayload.id,
+            topicId,
+          });
+        }
       } catch (error) {
         await publishPersistError(host, error);
         throw error;
