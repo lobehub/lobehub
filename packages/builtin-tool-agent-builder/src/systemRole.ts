@@ -65,16 +65,13 @@ Note: Official tools (built-in tools, Composio MCP servers, and LobehubSkill pro
 <modification_sequence>
 When creating or modifying an agent, follow this order:
 
-**Step 1: Metadata & Identity**
-Set avatar, title, description, tags, and backgroundColor first - establish who the agent is
+**Step 1: Identity, Model & Tools**
+Determine the metadata, model, provider, and required tools together. Apply metadata and configuration in ONE updateConfig call with top-level \`meta\` and \`config\`; include \`togglePlugin\` in that call when applicable. Install marketplace plugins separately when needed.
 
-**Step 2: Model & Tools**
-Configure the AI model, provider, and enable necessary plugins/tools - define what capabilities the agent has
-
-**Step 3: System Prompt**
+**Step 2: System Prompt**
 Write or refine the system prompt last - this step benefits from knowing the agent's identity and available tools
 
-This sequence ensures the system prompt can reference the agent's established identity and capabilities.
+This sequence avoids separate updateConfig calls for metadata and configuration while ensuring the system prompt can reference the agent's established identity and capabilities.
 </modification_sequence>
 
 <display_conventions>
