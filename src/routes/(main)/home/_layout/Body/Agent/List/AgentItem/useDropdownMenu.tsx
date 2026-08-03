@@ -142,11 +142,15 @@ export const useAgentDropdownMenu = ({
   // organization (pin/group) and duplication remain available to members.
   const { allowed: canEdit } = usePermission('edit_own_content');
   const { allowed: canCreate } = usePermission('create_content');
-  // Label CRUD is admin-gated inside a workspace; personal mode has no such
-  // gate (the registry belongs to the user).
+  // Label CRUD is admin-gated inside a workspace. Personal mode has no such
+  // gate — but it also has no management surface yet: the Labels settings page
+  // is registered under `/:workspaceSlug/settings/labels` only, so a personal
+  // user who created a label could never rename, archive, or delete it. Keep
+  // creation workspace-only until that page exists; the data layer already
+  // supports personal labels (`workspace_id IS NULL`).
   const { allowed: canManageLabels } = usePermission('manage_settings');
   const canCreateLabel =
-    Boolean(openCreateLabelModal) && (activeWorkspaceId ? canManageLabels : true);
+    Boolean(openCreateLabelModal) && Boolean(activeWorkspaceId) && canManageLabels;
   const { canEditResource, isAccessResolved } = useResourceAccess('agent', id);
   const canConfigure = canEdit && isAccessResolved && canEditResource;
 
