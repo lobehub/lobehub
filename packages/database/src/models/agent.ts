@@ -1318,8 +1318,15 @@ export class AgentModel {
       .where(and(eq(agents.id, agentId), this.ownership()))
       .limit(1);
 
-    if (agent?.visibility === 'public' && group.visibility !== 'public')
-      throw new Error('A workspace-public agent cannot be moved into a private folder');
+    // Buckets must match exactly, not merely "public agent needs a public
+    // folder". `processAgentList` resolves a private item's folder only against
+    // the private folder set and a public item's only against the public one,
+    // so a mismatch in either direction renders as Ungrouped rather than in
+    // the folder the user picked.
+    if (agent && agent.visibility !== group.visibility)
+      throw new Error(
+        `A ${agent.visibility} agent cannot be moved into a ${group.visibility} folder`,
+      );
   };
 
   updateSessionGroupId = async (agentId: string, sessionGroupId: string | null) => {

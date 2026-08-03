@@ -16,6 +16,7 @@ import type {
   NewChatGroupAgent,
 } from '../../schemas';
 import {
+  agentLabelAssignments,
   agents,
   chatGroups,
   chatGroupsAgents,
@@ -883,8 +884,24 @@ export class AgentGroupRepository {
 
         await trx
           .update(agents)
-          .set({ ...ownershipUpdate, ...visibilityUpdate, updatedAt: new Date() })
+          .set({
+            ...ownershipUpdate,
+            ...visibilityUpdate,
+            // Folders belong to the source scope — same rule the group row and
+            // `AgentModel.transferAgents` follow.
+            sessionGroupId: null,
+            updatedAt: new Date(),
+          })
           .where(inArray(agents.id, agentIds));
+
+        // This path moves member agents itself instead of going through
+        // `AgentModel.transferAgents`, so it has to repeat that method's
+        // cleanup: a label belongs to the source registry and cannot travel.
+        // Left behind, the rows keep inflating the source label's usage count
+        // and reappear if the agent ever comes back.
+        await trx
+          .delete(agentLabelAssignments)
+          .where(inArray(agentLabelAssignments.agentId, agentIds));
       }
 
       await trx

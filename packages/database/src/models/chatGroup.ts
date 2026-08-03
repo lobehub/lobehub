@@ -257,8 +257,13 @@ export class ChatGroupModel {
       .where(and(eq(chatGroups.id, id), this.ownership()))
       .limit(1);
 
-    if (group?.visibility === 'public' && folder.visibility !== 'public')
-      throw new Error('A workspace-public chat group cannot be moved into a private folder');
+    // Same exact-match rule as agents: the render path resolves a private
+    // item's folder only against private folders and a public item's only
+    // against public ones, so either mismatch lands it in Ungrouped.
+    if (group && group.visibility !== folder.visibility)
+      throw new Error(
+        `A ${group.visibility} chat group cannot be moved into a ${folder.visibility} folder`,
+      );
   }
 
   async update(id: string, value: Partial<ChatGroupItem>): Promise<ChatGroupItem> {
