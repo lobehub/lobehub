@@ -335,7 +335,10 @@ const action = (key: keyof typeof PERMISSION_ACTIONS): string => PERMISSION_ACTI
  * - `workspace_owner` — every workspace-domain permission + every content
  *   permission (`:all`) so they can manage other members' resources too.
  * - `workspace_admin` — workspace administration without billing, workspace
- *   deletion, ownership transfer, or write access to other members' content.
+ *   deletion, or ownership transfer. Holds `AGENT_UPDATE:all` so Agent
+ *   curation (rename, config, Member Permissions) is not blocked by another
+ *   member's General Access; every other content resource stays `:owner`, and
+ *   deleting or rehoming someone else's Agent remains Owner/creator-only.
  * - `workspace_member` — read workspace + members; create/update/delete their
  *   own content (`:owner`) on every content resource.
  * - `workspace_viewer` — strict read-only on workspace + members + content.
@@ -437,10 +440,15 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceSystemRoleName, readonl
     `${action('WORKSPACE_ROLE_CREATE')}:all`,
     `${action('WORKSPACE_ROLE_UPDATE')}:all`,
     `${action('WORKSPACE_ROLE_DELETE')}:all`,
-    // Content — Admin can read shared resources but only write their own
+    // Content — Admin curates shared Agents (`AGENT_UPDATE:all` is what lets
+    // `canPerformResourceAction` bypass a resource's Member Permissions, so
+    // General Access constrains members and viewers, not the Admin who has to
+    // keep the workspace's Agent list in order). Destructive / ownership
+    // actions stay with the creator or the workspace Owner: AGENT_DELETE and
+    // transfer are deliberately still `:owner`-scoped here.
     `${action('AGENT_READ')}:all`,
     `${action('AGENT_CREATE')}:owner`,
-    `${action('AGENT_UPDATE')}:owner`,
+    `${action('AGENT_UPDATE')}:all`,
     `${action('AGENT_DELETE')}:owner`,
     `${action('AGENT_FORK')}:owner`,
     `${action('AGENT_LABEL_READ')}:all`,

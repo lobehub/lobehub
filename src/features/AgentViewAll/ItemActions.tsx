@@ -48,8 +48,10 @@ interface ItemActionsProps {
    */
   hideTrigger?: boolean;
   /**
-   * Merge the sidebar show/hide toggle in as the first menu item (card mode).
-   * List mode keeps the standalone eye icon next to this menu instead.
+   * Merge the sidebar show/hide toggle in as the first menu item. Every
+   * surface that can toggle sets it: cards have no other affordance, and rows
+   * carry the standalone eye icon as a shortcut but still need the action
+   * where users look for a row's actions — its right-click menu.
    */
   includeSidebarToggle?: boolean;
   item: SidebarAgentItem;

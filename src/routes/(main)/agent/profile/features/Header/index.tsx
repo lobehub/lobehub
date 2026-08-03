@@ -247,10 +247,16 @@ const Header = memo(() => {
       },
       showPermissionPageEntry
         ? {
+            // Same gate the page itself applies (ResourceConfigAccessGate):
+            // without edit-level access it redirects straight back with a
+            // toast, so an enabled entry here is a click into a dead end.
+            // Disabled, not hidden — the member can still see the action exists.
+            disabled: !canEditResource,
             icon: <Icon icon={UsersIcon} />,
             key: 'permission',
             label: t('permission.page.entry', { ns: 'setting' }),
             onClick: () => {
+              if (!canEditResource) return;
               if (activeAgentId) navigate(`/agent/${activeAgentId}/permission`);
             },
           }

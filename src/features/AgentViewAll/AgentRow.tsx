@@ -206,13 +206,19 @@ const AgentRow = memo<AgentRowProps>(
                 onClick={handleToggleSidebar}
               />
             )}
-            {/* Headless: the row's context menu is the only actions entry. */}
+            {/* Headless: the row's context menu is the only actions entry. It
+              carries the sidebar toggle too — the eye icon above is a fast
+              single-click path, but right-click is where users look for the
+              row's actions, and the toggle went missing there. */}
             <ItemActions
               hideTrigger
               anchor={anchor}
               forceActivated={menuActivated}
+              includeSidebarToggle={Boolean(onToggleSidebar)}
               item={item}
+              sidebarHidden={sidebarHidden}
               onMenuReady={handleMenuReady}
+              onToggleSidebar={onToggleSidebar}
             />
           </Flexbox>
         </Flexbox>
