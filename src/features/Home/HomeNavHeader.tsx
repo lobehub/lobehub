@@ -14,7 +14,7 @@ import RailToggle from './RailToggle';
 const styles = createStaticStyles(({ css }) => ({
   header: css`
     position: absolute;
-    z-index: 10;
+    z-index: 1;
     inset-block-start: 0;
     inset-inline: 0;
   `,
