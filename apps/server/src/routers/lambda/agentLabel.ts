@@ -69,9 +69,14 @@ export const agentLabelRouter = router({
       return data?.id;
     }),
 
-  getLabels: labelProcedure.query(async ({ ctx }) => {
-    return ctx.agentLabelModel.query();
-  }),
+  getLabels: labelProcedure
+    // The registry is workspace-shared, so reading it is what `agent_label:read`
+    // exists to gate. Without this the permission is declared but unenforceable,
+    // and a custom role denied it could still enumerate every label.
+    .use(withScopedPermission('agent_label:read'))
+    .query(async ({ ctx }) => {
+      return ctx.agentLabelModel.query();
+    }),
 
   removeLabel: labelProcedure
     .use(withScopedPermission('agent_label:delete'))
