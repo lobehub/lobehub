@@ -230,6 +230,35 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_000_000,
     description:
+      'DeepSeek V4 Flash 0731 is a dated snapshot of the V4 Flash series: fast, cost-efficient hybrid thinking with a 1M context window — one of the cheapest capable models available.',
+    displayName: 'DeepSeek V4 Flash 0731',
+    family: 'deepseek',
+    generation: 'deepseek-v4',
+    id: 'deepseek-v4-flash-0731',
+    maxOutput: 393_216,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 1 * 0.2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-07-31',
+    settings: {
+      extendParams: ['deepseekV4ReasoningEffort'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
       'DeepSeek V4 Flash is the fast, cost-efficient member of the V4 family with a 1M context window and hybrid thinking — one of the cheapest capable models available.',
     displayName: 'DeepSeek V4 Flash',
     family: 'deepseek',
@@ -241,6 +270,7 @@ const qwenChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 1 * 0.2, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     settings: {
@@ -2271,6 +2301,43 @@ const qwenChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
       search: true,
+      video: true,
+      vision: true,
+    },
+    config: {
+      deploymentName: 'qwen3.8-max', // Supports context caching
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      'Qwen3.8 Max is a 2.4T-parameter MoE flagship with major gains in coding and office automation. It can autonomously code for 10+ days to deliver complete projects, handle hundreds of professional domains, and run long-horizon agent workflows with native vision understanding across planning, execution, and verification.',
+    displayName: 'Qwen3.8 Max',
+    enabled: true,
+    family: 'qwen',
+    generation: 'qwen3.8',
+    id: 'qwen3.8-max',
+    maxOutput: 131_072,
+    organization: 'Qwen',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheWrite', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 36, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-08-03',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken', 'preserveThinking'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
     },
     config: {
       deploymentName: 'qwen3.7-max', // Supports context caching
@@ -2279,7 +2346,6 @@ const qwenChatModels: AIChatModelCard[] = [
     description:
       'Qwen3.7 Max is the flagship omnipotent model of the AI agent era, offering comprehensive capabilities across text, image, and video understanding. It provides superior reasoning, function calling, and agent task execution performance.',
     displayName: 'Qwen3.7 Max',
-    enabled: true,
     family: 'qwen',
     generation: 'qwen3.7',
     id: 'qwen3.7-max',
