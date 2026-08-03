@@ -4,8 +4,51 @@ const sambanovaChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
+      reasoning: true,
     },
-    contextWindowTokens: 16_000,
+    contextWindowTokens: 192_000,
+    description:
+      'MiniMax-M2.7 is a self-evolving foundation model with top-tier reasoning, coding, and agentic capabilities, delivering high throughput for production workloads.',
+    displayName: 'MiniMax M2.7',
+    enabled: true,
+    family: 'minimax',
+    generation: 'minimax-m2.7',
+    id: 'MiniMax-M2.7',
+    maxOutput: 131_072,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 128_000,
+    description:
+      'DeepSeek-V3.1 is an upgraded version of DeepSeek-V3 with improved reasoning capabilities, better instruction following, and stronger multilingual support.',
+    displayName: 'DeepSeek V3.1',
+    enabled: true,
+    family: 'deepseek',
+    generation: 'deepseek-v3.1',
+    id: 'DeepSeek-V3.1',
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+    },
+    contextWindowTokens: 128_000,
     description:
       'Llama 3.3 is the most advanced multilingual open-source Llama model, delivering near-405B performance at very low cost. It is Transformer-based and improved with SFT and RLHF for usefulness and safety. The instruction-tuned version is optimized for multilingual chat and beats many open and closed chat models on industry benchmarks. Knowledge cutoff: Dec 2023.',
     displayName: 'Meta Llama 3.3 70B Instruct',
@@ -23,116 +66,24 @@ const sambanovaChatModels: AIChatModelCard[] = [
     type: 'chat',
   },
   {
-    contextWindowTokens: 16_000,
-    description:
-      'Cutting-edge small language model with strong language understanding, excellent reasoning, and text generation.',
-    displayName: 'Meta Llama 3.2 1B Instruct',
-    family: 'llama',
-    generation: 'llama-3.2',
-    id: 'Meta-Llama-3.2-1B-Instruct',
-    knowledgeCutoff: '2023-12',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.04, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.08, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 8000,
-    description:
-      'Cutting-edge small language model with strong language understanding, excellent reasoning, and text generation.',
-    displayName: 'Meta Llama 3.2 3B Instruct',
-    family: 'llama',
-    generation: 'llama-3.2',
-    id: 'Meta-Llama-3.2-3B-Instruct',
-    knowledgeCutoff: '2023-12',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.08, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.16, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      vision: true,
-    },
-    contextWindowTokens: 4000,
-    description:
-      'Strong image reasoning on high-resolution images, suited for visual understanding applications.',
-    displayName: 'Meta Llama 3.2 11B Vision Instruct',
-    enabled: true,
-    family: 'llama',
-    generation: 'llama-3.2',
-    id: 'Llama-3.2-11B-Vision-Instruct',
-    knowledgeCutoff: '2023-12',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      vision: true,
-    },
-    contextWindowTokens: 4000,
-    description: 'Advanced image reasoning for visual-understanding agent applications.',
-    displayName: 'Meta Llama 3.2 90B Vision Instruct',
-    enabled: true,
-    family: 'llama',
-    generation: 'llama-3.2',
-    id: 'Llama-3.2-90B-Vision-Instruct',
-    knowledgeCutoff: '2023-12',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 1.6, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
     abilities: {
       functionCall: true,
-    },
-    contextWindowTokens: 16_000,
-    description:
-      'Llama 3.1 instruction-tuned text model optimized for multilingual chat, performing strongly on common industry benchmarks among open and closed chat models.',
-    displayName: 'Meta Llama 3.1 8B Instruct',
-    family: 'llama',
-    generation: 'llama-3.1',
-    id: 'Meta-Llama-3.1-8B-Instruct',
-    knowledgeCutoff: '2023-12',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
+      reasoning: true,
     },
     contextWindowTokens: 128_000,
     description:
-      'Llama 3.1 instruction-tuned text model optimized for multilingual chat, performing strongly on common industry benchmarks among open and closed chat models.',
-    displayName: 'Meta Llama 3.1 70B Instruct',
-    family: 'llama',
-    generation: 'llama-3.1',
-    id: 'Meta-Llama-3.1-70B-Instruct',
-    knowledgeCutoff: '2023-12',
+      'OpenAI GPT-OSS 120B is a top-tier open-source language model with 120 billion parameters, offering strong reasoning and coding capabilities.',
+    displayName: 'GPT OSS 120B',
+    enabled: true,
+    family: 'gpt-oss',
+    generation: 'gpt-oss',
+    id: 'gpt-oss-120b',
+    knowledgeCutoff: '2024-06',
+    maxOutput: 65_536,
     pricing: {
       units: [
-        { name: 'textInput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 1.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -140,123 +91,42 @@ const sambanovaChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
-    },
-    contextWindowTokens: 16_000,
-    description:
-      'Llama 3.1 instruction-tuned text model optimized for multilingual chat, performing strongly on common industry benchmarks among open and closed chat models.',
-    displayName: 'Meta Llama 3.1 405B Instruct',
-    family: 'llama',
-    generation: 'llama-3.1',
-    id: 'Meta-Llama-3.1-405B-Instruct',
-    knowledgeCutoff: '2023-12',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 16_000,
-    displayName: 'Llama 3.1 Tulu 3 405B',
-    family: 'llama',
-    generation: 'llama-3.1',
-    id: 'Llama-3.1-Tulu-3-405B',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.7, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 1.4, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      reasoning: true,
-    },
-    contextWindowTokens: 4000,
-    description: 'State-of-the-art efficient LLM, strong at reasoning, math, and coding.',
-    displayName: 'DeepSeek R1',
-    family: 'deepseek',
-    generation: 'deepseek-r1',
-    id: 'DeepSeek-R1',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 7, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
       reasoning: true,
     },
     contextWindowTokens: 32_000,
     description:
-      'DeepSeek R1, the larger and smarter model in the DeepSeek suite, is distilled into the Llama 70B architecture. Benchmarks and human evals show it is smarter than the base Llama 70B, especially on math and fact-precision tasks.',
-    displayName: 'DeepSeek R1 Distill Llama 70B',
-    enabled: true,
+      'DeepSeek-V3.2 is a preview model with enhanced reasoning and code generation capabilities. Intended for evaluation and experimentation only.',
+    displayName: 'DeepSeek V3.2',
     family: 'deepseek',
-    generation: 'deepseek-r1-distill',
-    id: 'DeepSeek-R1-Distill-Llama-70B',
+    generation: 'deepseek-v3.2',
+    id: 'DeepSeek-V3.2',
     pricing: {
       units: [
-        { name: 'textInput', rate: 0.7, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 1.4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
   },
   {
     abilities: {
+      functionCall: true,
       reasoning: true,
+      vision: true,
     },
-    contextWindowTokens: 16_000,
-    description: 'Qwen QwQ is an experimental research model focused on improving reasoning.',
-    displayName: 'QwQ 32B Preview',
-    enabled: true,
-    family: 'qwen',
-    generation: 'qwq',
-    id: 'QwQ-32B-Preview',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 16_000,
-    description: 'LLM for Chinese and English, tuned for language, coding, math, and reasoning.',
-    displayName: 'Qwen2.5 72B Instruct',
-    enabled: true,
-    family: 'qwen',
-    generation: 'qwen2.5',
-    id: 'Qwen2.5-72B-Instruct',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 16_000,
+    contextWindowTokens: 128_000,
     description:
-      'Advanced LLM for code generation, reasoning, and bug fixing across major programming languages.',
-    displayName: 'Qwen2.5 Coder 32B Instruct',
-    enabled: true,
-    family: 'qwen',
-    generation: 'qwen2.5',
-    id: 'Qwen2.5-Coder-32B-Instruct',
+      "Gemma 4 31B IT is Google's latest multimodal model supporting text, image, and video understanding. Preview model for evaluation purposes only.",
+    displayName: 'Gemma 4 31B IT',
+    family: 'gemma',
+    generation: 'gemma-4',
+    id: 'gemma-4-31B-it',
+    knowledgeCutoff: '2025-01',
+    maxOutput: 32_768,
     pricing: {
       units: [
-        { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
