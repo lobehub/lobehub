@@ -26,7 +26,13 @@ class AgentQuotaService {
 
   listAccounts = async () => lambdaClient.agentQuota.listAccounts.query();
 
-  getWindows = async (accountId: string) => lambdaClient.agentQuota.getWindows.query({ accountId });
+  /**
+   * Newest reading per limit bucket — what the panel renders. Windows are keyed
+   * by `resets_at`, so a limit reported without one (an untouched model-scoped
+   * weekly) only exists here.
+   */
+  getLatestReadings = async (accountId: string) =>
+    lambdaClient.agentQuota.getLatestReadings.query({ accountId });
 
   listBindings = async (agentId: string) => lambdaClient.agentQuota.listBindings.query({ agentId });
 
