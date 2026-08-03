@@ -19,6 +19,7 @@ import {
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useFetchAgentLabels } from '@/hooks/useFetchAgentLabels';
 import { usePermission } from '@/hooks/usePermission';
@@ -238,10 +239,17 @@ const WorkspaceLabelsContent = memo(() => {
   const isInit = useHomeStore(agentLabelSelectors.isLabelsInit);
   const allLabels = useHomeStore(agentLabelSelectors.allLabels, isEqual);
 
-  // Label management shares the workspace-settings gate: admin/owner only.
-  // Buttons stay visible but disabled for members (consistent with the rest
-  // of the settings surface).
-  const { allowed: canManage, reason: manageBlockedReason } = usePermission('manage_settings');
+  // Inside a workspace, label management shares the workspace-settings gate:
+  // admin/owner only, with buttons visible but disabled for members
+  // (consistent with the rest of the settings surface). In personal mode the
+  // registry belongs to the single user who owns it, so there is nobody to
+  // gate against — `manage_settings` is a workspace-role signal and would
+  // wrongly lock a personal user out of their own labels.
+  const activeWorkspaceId = useActiveWorkspaceId();
+  const { allowed: workspaceCanManage, reason: workspaceBlockedReason } =
+    usePermission('manage_settings');
+  const canManage = activeWorkspaceId ? workspaceCanManage : true;
+  const manageBlockedReason = activeWorkspaceId ? workspaceBlockedReason : undefined;
 
   const [keyword, setKeyword] = useState('');
   // Linear-style scope filter: the default "workspace" scope lists active
@@ -289,10 +297,20 @@ const WorkspaceLabelsContent = memo(() => {
     </Button>
   );
 
+  // The active-labels scope is named after where the registry lives, so it
+  // reads "Workspace" for a team and "Personal" for a single user.
+  const activeScopeLabel = t(
+    activeWorkspaceId
+      ? 'workspaceSetting.labels.scope.workspace'
+      : 'workspaceSetting.labels.scope.personal',
+  );
+  const scopeLabel = (value: 'archived' | 'workspace') =>
+    value === 'archived' ? t('workspaceSetting.labels.scope.archived') : activeScopeLabel;
+
   const scopeMenuItems = (['workspace', 'archived'] as const).map((value) => ({
     icon: value === scope ? <Icon icon={CheckIcon} /> : undefined,
     key: value,
-    label: t(`workspaceSetting.labels.scope.${value}`),
+    label: scopeLabel(value),
     onClick: () => setScope(value),
   }));
 
@@ -308,7 +326,7 @@ const WorkspaceLabelsContent = memo(() => {
             onChange={(e) => setKeyword(e.target.value)}
           />
           <DropdownMenu items={scopeMenuItems}>
-            <Button icon={ListFilterIcon}>{t(`workspaceSetting.labels.scope.${scope}`)}</Button>
+            <Button icon={ListFilterIcon}>{scopeLabel(scope)}</Button>
           </DropdownMenu>
         </Flexbox>
         {canManage ? (

@@ -76,6 +76,7 @@ export enum SettingsTabs {
   Hotkey = 'hotkey',
   /** @deprecated Use ServiceModel instead */
   Image = 'image',
+  Labels = 'labels',
   Labs = 'labs',
   LLM = 'llm',
   Memory = 'memory',

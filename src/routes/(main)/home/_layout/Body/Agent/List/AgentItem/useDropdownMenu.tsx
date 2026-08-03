@@ -142,15 +142,12 @@ export const useAgentDropdownMenu = ({
   // organization (pin/group) and duplication remain available to members.
   const { allowed: canEdit } = usePermission('edit_own_content');
   const { allowed: canCreate } = usePermission('create_content');
-  // Label CRUD is admin-gated inside a workspace. Personal mode has no such
-  // gate — but it also has no management surface yet: the Labels settings page
-  // is registered under `/:workspaceSlug/settings/labels` only, so a personal
-  // user who created a label could never rename, archive, or delete it. Keep
-  // creation workspace-only until that page exists; the data layer already
-  // supports personal labels (`workspace_id IS NULL`).
+  // Label CRUD is admin-gated inside a workspace; personal mode has no such
+  // gate, since the registry belongs to the single user who owns it and both
+  // scopes now have a management page at `/settings/labels`.
   const { allowed: canManageLabels } = usePermission('manage_settings');
   const canCreateLabel =
-    Boolean(openCreateLabelModal) && Boolean(activeWorkspaceId) && canManageLabels;
+    Boolean(openCreateLabelModal) && (activeWorkspaceId ? canManageLabels : true);
   const { canEditResource, isAccessResolved } = useResourceAccess('agent', id);
   const canConfigure = canEdit && isAccessResolved && canEditResource;
 
@@ -378,22 +375,19 @@ export const useAgentDropdownMenu = ({
                         },
                       ]
                     : []),
-                  // The management page lives under workspace settings — only
-                  // reachable inside a workspace.
-                  ...(activeWorkspaceId
-                    ? [
-                        {
-                          icon: <Icon icon={Settings2Icon} />,
-                          key: 'manageLabels',
-                          label: t('agentLabel.manage', { ns: 'common' }),
-                          onClick: ({ domEvent }: any) => {
-                            domEvent?.stopPropagation();
-                            navigate('/settings/labels');
-                          },
-                          sfSymbol: 'gearshape',
-                        },
-                      ]
-                    : []),
+                  // `/settings/labels` resolves in both scopes: the workspace
+                  // settings tree and the personal one both render the same
+                  // page, which reads the active workspace itself.
+                  {
+                    icon: <Icon icon={Settings2Icon} />,
+                    key: 'manageLabels',
+                    label: t('agentLabel.manage', { ns: 'common' }),
+                    onClick: ({ domEvent }: any) => {
+                      domEvent?.stopPropagation();
+                      navigate('/settings/labels');
+                    },
+                    sfSymbol: 'gearshape',
+                  },
                 ],
                 icon: <Icon icon={TagIcon} />,
                 key: 'labels',
