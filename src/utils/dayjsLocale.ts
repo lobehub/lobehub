@@ -6,6 +6,8 @@ const DAYJS_LOCALE_ALIASES: Record<string, string> = {
   'zh': 'zh-cn',
   'zh-cn': 'zh-cn',
   'zh-tw': 'zh-tw',
+  // dayjs ships `pt-br` (not `pt`) — must not be stripped to the language tag
+  'pt-br': 'pt-br',
 };
 
 interface DayjsLocaleModule {
@@ -25,5 +27,15 @@ export const normalizeDayjsLocale = (lang: string): string => {
   if (lower.startsWith('zh-hans')) return 'zh-cn';
   if (lower.startsWith('zh-hant')) return 'zh-tw';
 
-  return DAYJS_LOCALE_ALIASES[lower] ?? lower;
+  const aliased = DAYJS_LOCALE_ALIASES[lower];
+  if (aliased) return aliased;
+
+  // App locales are usually BCP-47 with a region (`fa-IR`, `de-DE`, `ja-JP`),
+  // while dayjs mostly registers language-only ids (`fa`, `de`, `ja`). Without
+  // this strip, loaders miss and relativeTime falls back to English
+  // ("a few seconds ago ذخیره شد").
+  if (lower.startsWith('pt-br')) return 'pt-br';
+
+  const [language] = lower.split('-');
+  return language || lower;
 };

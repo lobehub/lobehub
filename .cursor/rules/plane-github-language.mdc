@@ -1,5 +1,5 @@
 ---
-description: Dual tracking — Plane (FA) + GitHub (EN); language rules for each
+description: Aico dual track — Plane (FA) + GitHub (EN); point agents at aico-ship
 alwaysApply: true
 ---
 
@@ -9,15 +9,13 @@ alwaysApply: true
 - **GitHub** (issues, PR titles/bodies, commit messages, code review comments): write in **English**.
 - When linking Plane ↔ GitHub, put the Plane identifier/URL in the PR/issue body; put the PR/issue URL in a Plane comment (Persian summary is fine).
 
-# Creating an “issue”
+# Shipping / issues / PRs
 
-When the user asks to **create an issue** (or “issue + PR”), create **both** trackers — do not stop at Plane alone:
+For creating issues, finish-job closeout, dual trackers, and Aico PR linking, follow the **`aico-ship`** skill (do not patch upstream `pr` / `linear` skills).
 
-1. **GitHub issue** — English title and body (`gh issue create`).
-2. **Plane work item** — Persian title and description (default Aico project unless named otherwise).
+Short rules (details in `aico-ship`):
 
-Then cross-link:
-
-- Plane comment (or link) → GitHub issue URL
-- GitHub issue body → Plane browse URL / `AICO-xx`
-- If a PR follows, reference **both** in the PR body (`Related to #n`, Plane `AICO-xx`)
+- “Create an issue” → **both** GitHub (EN) and Plane (FA), then cross-link
+- **No duplicate search** — create from this Cursor session; reuse only an `#n` / `AICO-xx` already in this chat
+- PR that finishes the work → `Fixes #n` + Plane `AICO-xx`; Plane state **Testing** + Persian completion comment (not Done until merge)
+- Auto-run closeout when the user asks to ship/PR/workflow, or the change is a clear product fix/feature; otherwise suggest once

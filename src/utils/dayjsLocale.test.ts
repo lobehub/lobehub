@@ -18,6 +18,19 @@ describe('normalizeDayjsLocale', () => {
     expect(normalizeDayjsLocale('pt-BR')).toBe('pt-br');
   });
 
+  it('should strip region codes for language-only dayjs locales', () => {
+    expect(normalizeDayjsLocale('fa-IR')).toBe('fa');
+    expect(normalizeDayjsLocale('de-DE')).toBe('de');
+    expect(normalizeDayjsLocale('ja-JP')).toBe('ja');
+    expect(normalizeDayjsLocale('ko-KR')).toBe('ko');
+    expect(normalizeDayjsLocale('vi-VN')).toBe('vi');
+  });
+
+  it('should keep already-short dayjs locale ids', () => {
+    expect(normalizeDayjsLocale('fa')).toBe('fa');
+    expect(normalizeDayjsLocale('ar')).toBe('ar');
+  });
+
   it('should normalize simplified Chinese script locales to zh-cn', () => {
     expect(normalizeDayjsLocale('zh-Hans')).toBe('zh-cn');
     expect(normalizeDayjsLocale('zh-Hans-CN')).toBe('zh-cn');
