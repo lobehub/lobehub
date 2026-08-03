@@ -38,7 +38,7 @@ const TOOL_CATEGORIES = {
     tools: [
       { descKey: 'settingSystemTools.tools.claude.desc', name: 'claude' },
       { descKey: 'settingSystemTools.tools.codex.desc', name: 'codex' },
-      { descKey: 'settingSystemTools.tools.gemini.desc', name: 'gemini' },
+      { descKey: 'settingSystemTools.tools.antigravity.desc', name: 'agy' },
       { descKey: 'settingSystemTools.tools.qwen.desc', name: 'qwen' },
       { descKey: 'settingSystemTools.tools.kimi.desc', name: 'kimi' },
       { descKey: 'settingSystemTools.tools.aider.desc', name: 'aider' },

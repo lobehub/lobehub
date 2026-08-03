@@ -1,3 +1,6 @@
+import { homedir, platform } from 'node:os';
+import path from 'node:path';
+
 import {
   detectHeterogeneousCliCommand,
   detectValidatedCommand,
@@ -20,13 +23,14 @@ interface ValidatedBinaryOptions {
   name: string;
   priority: number;
   validateFlag?: string;
-  validateKeywords: string[];
+  validateKeywords?: string[];
+  validatePattern?: RegExp;
 }
 
 /**
  * Binary spec that resolves a command path via which/where, then validates
  * the binary by matching `--version` (or `--help`) output against a keyword
- * to avoid collisions with unrelated executables of the same name.
+ * or pattern to avoid collisions with unrelated executables of the same name.
  */
 const defineValidatedBinary = (options: ValidatedBinaryOptions): BinarySpec => {
   const { candidates, description, name, priority, ...validation } = options;
@@ -99,15 +103,23 @@ export const opencodeBinary: BinarySpec = {
 };
 
 /**
- * Google Gemini CLI
- * @see https://github.com/google-gemini/gemini-cli
+ * Google Antigravity CLI
+ * @see https://antigravity.google/docs/cli-getting-started
  */
-export const geminiCliBinary: BinarySpec = defineValidatedBinary({
-  candidates: ['gemini'],
-  description: 'Gemini CLI - Google agentic coding CLI',
-  name: 'gemini',
+export const antigravityCliBinary: BinarySpec = defineValidatedBinary({
+  candidates: [
+    'agy',
+    ...(platform() === 'win32'
+      ? process.env.LOCALAPPDATA
+        ? [path.join(process.env.LOCALAPPDATA, 'agy', 'bin', 'agy.exe')]
+        : []
+      : [path.join(homedir(), '.local', 'bin', 'agy')]),
+  ],
+  description: 'Antigravity CLI - Google agentic coding CLI',
+  name: 'agy',
   priority: 5,
-  validateKeywords: ['gemini'],
+  validatePattern:
+    /^(?:(?:agy|antigravity(?: cli)?) (?:version )?)?v?\d+\.\d+\.\d+(?:-[\dA-Z.-]+)?(?:\+[\dA-Z.-]+)?$/i,
 });
 
 /**
@@ -152,7 +164,7 @@ export const cliAgentBinaries: BinarySpec[] = [
   codexBinary,
   ampBinary,
   opencodeBinary,
-  geminiCliBinary,
+  antigravityCliBinary,
   qwenCodeBinary,
   kimiCliBinary,
   aiderBinary,
