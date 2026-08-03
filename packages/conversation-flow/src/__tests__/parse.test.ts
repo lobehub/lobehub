@@ -269,6 +269,220 @@ describe('parse', () => {
       expect(ids.indexOf('first-question')).toBeLessThan(ids.indexOf('status-user'));
     });
 
+    it('should keep the branch containing the latest user turn after parallel tool continuations', () => {
+      const messages: Message[] = [
+        { content: 'root', createdAt: 0, id: 'root-user', role: 'user', updatedAt: 0 },
+        {
+          agentId: 'agent-1',
+          content: 'run tools in parallel',
+          createdAt: 1,
+          id: 'root-assistant',
+          parentId: 'root-user',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'inspect',
+              arguments: '{}',
+              id: 'call-active',
+              identifier: 'internal',
+              result_msg_id: 'tool-active',
+              type: 'default',
+            },
+            {
+              apiName: 'inspect',
+              arguments: '{}',
+              id: 'call-stale',
+              identifier: 'internal',
+              result_msg_id: 'tool-stale',
+              type: 'default',
+            },
+          ],
+          updatedAt: 1,
+        },
+        {
+          content: 'active tool result',
+          createdAt: 2,
+          id: 'tool-active',
+          parentId: 'root-assistant',
+          role: 'tool',
+          tool_call_id: 'call-active',
+          updatedAt: 2,
+        },
+        {
+          content: 'stale tool result',
+          createdAt: 3,
+          id: 'tool-stale',
+          parentId: 'root-assistant',
+          role: 'tool',
+          tool_call_id: 'call-stale',
+          updatedAt: 3,
+        },
+        {
+          agentId: 'agent-2',
+          content: 'active nested continuation',
+          createdAt: 4,
+          id: 'active-head',
+          parentId: 'tool-active',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'inspect',
+              arguments: '{}',
+              id: 'call-branch',
+              identifier: 'internal',
+              result_msg_id: 'tool-branch',
+              type: 'default',
+            },
+          ],
+          updatedAt: 4,
+        },
+        {
+          agentId: 'agent-2',
+          content: 'stale nested continuation',
+          createdAt: 5,
+          id: 'stale-head',
+          parentId: 'tool-stale',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'inspect',
+              arguments: '{}',
+              id: 'call-stale-nested',
+              identifier: 'internal',
+              result_msg_id: 'tool-stale-nested',
+              type: 'default',
+            },
+          ],
+          updatedAt: 5,
+        },
+        {
+          content: 'active nested result',
+          createdAt: 6,
+          id: 'tool-branch',
+          parentId: 'active-head',
+          role: 'tool',
+          tool_call_id: 'call-branch',
+          updatedAt: 6,
+        },
+        {
+          content: 'stale nested result',
+          createdAt: 7,
+          id: 'tool-stale-nested',
+          parentId: 'stale-head',
+          role: 'tool',
+          tool_call_id: 'call-stale-nested',
+          updatedAt: 7,
+        },
+        {
+          agentId: 'agent-2',
+          content: 'old continuation',
+          createdAt: 8,
+          id: 'old-continuation',
+          parentId: 'tool-branch',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'inspect',
+              arguments: '{}',
+              id: 'call-old',
+              identifier: 'internal',
+              result_msg_id: 'tool-old',
+              type: 'default',
+            },
+          ],
+          updatedAt: 8,
+        },
+        {
+          agentId: 'agent-2',
+          content: 'current continuation',
+          createdAt: 9,
+          id: 'current-continuation',
+          parentId: 'tool-branch',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'inspect',
+              arguments: '{}',
+              id: 'call-current',
+              identifier: 'internal',
+              result_msg_id: 'tool-current',
+              type: 'default',
+            },
+          ],
+          updatedAt: 9,
+        },
+        {
+          content: 'old result',
+          createdAt: 10,
+          id: 'tool-old',
+          parentId: 'old-continuation',
+          role: 'tool',
+          tool_call_id: 'call-old',
+          updatedAt: 10,
+        },
+        {
+          content: 'current result',
+          createdAt: 11,
+          id: 'tool-current',
+          parentId: 'current-continuation',
+          role: 'tool',
+          tool_call_id: 'call-current',
+          updatedAt: 11,
+        },
+        {
+          agentId: 'agent-2',
+          content: 'old branch answer',
+          createdAt: 12,
+          id: 'old-answer',
+          parentId: 'tool-old',
+          role: 'assistant',
+          updatedAt: 12,
+        },
+        {
+          agentId: 'agent-2',
+          content: '...',
+          createdAt: 13,
+          id: 'current-answer',
+          parentId: 'tool-current',
+          role: 'assistant',
+          updatedAt: 13,
+        },
+        {
+          agentId: 'agent-2',
+          content: 'stale parallel answer',
+          createdAt: 14,
+          id: 'stale-parallel-answer',
+          parentId: 'tool-stale-nested',
+          role: 'assistant',
+          updatedAt: 14,
+        },
+        {
+          content: 'current user request',
+          createdAt: 15,
+          id: 'current-user',
+          parentId: 'current-answer',
+          role: 'user',
+          updatedAt: 15,
+        },
+        {
+          agentId: 'agent-2',
+          content: '...',
+          createdAt: 16,
+          id: 'current-placeholder',
+          parentId: 'current-user',
+          role: 'assistant',
+          updatedAt: 16,
+        },
+      ];
+
+      const result = parse(messages);
+      const ids = result.flatList.map((message) => message.id);
+
+      expect(ids).toContain('current-user');
+      expect(ids.indexOf('stale-head')).toBeLessThan(ids.indexOf('current-user'));
+      expect(ids.at(-1)).toBe('current-placeholder');
+    });
+
     it('should interleave continuations from sibling tool results by child creation time', () => {
       const time = (seconds: number) =>
         new Date(`2026-01-01T00:01:${String(seconds).padStart(2, '0')}.000Z`).getTime();

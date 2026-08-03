@@ -55,6 +55,17 @@ export class FlatListBuilder {
     // Build the active path by traversing from root
     this.buildFlatListRecursive(rootParentId, flatList, processedIds, messages);
 
+    // Assistant groups must be assembled before ordering because their members
+    // are discovered through recursive tool-result chains. That traversal is
+    // depth-first: when parallel tool results continue under different agents,
+    // it can finish a newer user subtree and then append an older sibling subtree,
+    // leaving a stale assistant response at the request tail. A stable final sort
+    // restores the persisted chronology without changing group membership or the
+    // order of nodes with identical timestamps.
+    flatList.sort(
+      (first, second) => new Date(first.createdAt).getTime() - new Date(second.createdAt).getTime(),
+    );
+
     return flatList;
   }
 
