@@ -51,7 +51,7 @@ describe('BriefListActionImpl', () => {
     const resolvedBrief = createBrief('brief-resolved');
     const remainingBrief = createBrief('brief-remaining');
     const initialBriefs = [resolvedBrief, remainingBrief];
-    const cacheKey = JSON.stringify(briefKeys.list(true));
+    const cacheKey = JSON.stringify(briefKeys.list(true, 'anon:personal'));
     cache.set(cacheKey, initialBriefs);
 
     const state = { briefs: initialBriefs, isBriefsInit: true };

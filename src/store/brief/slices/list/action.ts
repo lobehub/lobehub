@@ -1,8 +1,10 @@
 import isEqual from 'fast-deep-equal';
+import { useEffect } from 'react';
 import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { briefKeys } from '@/libs/swr/keys';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
 import { briefService } from '@/services/brief';
 import { taskService } from '@/services/task';
 import { type BriefStore } from '@/store/brief/store';
@@ -63,7 +65,7 @@ export class BriefListActionImpl {
 
     const briefs = this.#get().briefs.filter((b) => !resolvedIds.has(b.id));
     this.#set({ briefs }, false, n('resolveBriefsAsRead'));
-    void mutate(briefKeys.list(true), briefs, { revalidate: false });
+    void mutate(briefKeys.list(true, getCacheScope()), briefs, { revalidate: false });
   };
 
   resolveBrief = async (id: string, action?: string, comment?: string) => {
@@ -91,18 +93,51 @@ export class BriefListActionImpl {
     }
   };
 
-  useFetchBriefs = (isLogin: boolean | undefined): SWRResponse<BriefItem[]> => {
+  /**
+   * `scope` is the identity partition (`${userId}:${workspaceId}`) the caller is
+   * rendering. Briefs are per-user AND per-workspace rows, so carrying a list
+   * across a scope change hands the user cards whose ids the server can no
+   * longer resolve — every action on them 404s, and the tRPC client only logs
+   * non-401 failures, so the surface just stops responding. Dropping the bucket
+   * the moment the scope changes is what keeps that from happening.
+   */
+  useFetchBriefs = (isLogin: boolean | undefined, scope: string): SWRResponse<BriefItem[]> => {
+    // Effect (not render-time set) because this writes another store; the
+    // scope-aware selectors already keep the foreign list off screen in the
+    // frame before it runs.
+    useEffect(() => {
+      const { briefsScope } = this.#get();
+      if (briefsScope === undefined || briefsScope === scope) return;
+
+      this.#set(
+        { briefs: [], briefsScope: undefined, isBriefsInit: false },
+        false,
+        n('useFetchBriefs/scopeChanged'),
+      );
+    }, [scope]);
+
     return useClientDataSWRWithSync<BriefItem[]>(
-      isLogin === true ? briefKeys.list(isLogin) : null,
+      isLogin === true ? briefKeys.list(isLogin, scope) : null,
       async () => {
         const result = await briefService.listUnresolved();
         return result.data as BriefItem[];
       },
       {
         onData: (data) => {
-          if (this.#get().isBriefsInit && isEqual(this.#get().briefs, data)) return;
+          // A response in flight across a scope switch answers for the previous
+          // partition — writing it back would re-seed exactly the unreachable
+          // list this hook exists to clear.
+          if (getCacheScope() !== scope) return;
 
-          this.#set({ briefs: data, isBriefsInit: true }, false, n('useFetchBriefs/onData'));
+          const state = this.#get();
+          if (state.isBriefsInit && state.briefsScope === scope && isEqual(state.briefs, data))
+            return;
+
+          this.#set(
+            { briefs: data, briefsScope: scope, isBriefsInit: true },
+            false,
+            n('useFetchBriefs/onData'),
+          );
         },
       },
     );

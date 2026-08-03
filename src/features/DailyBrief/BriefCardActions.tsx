@@ -1,6 +1,6 @@
 import { type BriefAction, DEFAULT_BRIEF_ACTIONS, type TaskStatus } from '@lobechat/types';
 import { Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { Check, SquarePen, Workflow } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
@@ -109,38 +109,58 @@ const BriefCardActions = memo<BriefCardActionsProps>(
       [isResult, resultLabelKey, t],
     );
 
+    // The tRPC client only console.errors non-401 failures, so without this a
+    // rejected action (permission denied, brief no longer reachable, network)
+    // reads as a dead button — the user clicks and nothing at all happens.
+    // Surface the server's reason instead.
+    const reportFailure = useCallback(
+      (error: unknown) => {
+        toast.error((error as Error)?.message || t('brief.actionFailed'));
+      },
+      [t],
+    );
+
     const handleResolve = useCallback(
       async (key: string) => {
         setLoadingKey(key);
         try {
           await resolveBrief(briefId, key);
           await onAfterResolve?.();
+        } catch (error) {
+          reportFailure(error);
         } finally {
           setLoadingKey(null);
         }
       },
-      [briefId, resolveBrief, onAfterResolve],
+      [briefId, resolveBrief, onAfterResolve, reportFailure],
     );
 
     const handleCommentSubmit = useCallback(
       async (text: string) => {
         if (!commentMode) return;
 
-        if (commentMode.type === 'comment') {
-          setLoadingKey(commentMode.key);
-          try {
-            await resolveBrief(briefId, commentMode.key, text);
+        try {
+          if (commentMode.type === 'comment') {
+            setLoadingKey(commentMode.key);
+            try {
+              await resolveBrief(briefId, commentMode.key, text);
+              await onAfterResolve?.();
+            } finally {
+              setLoadingKey(null);
+            }
+          } else if (taskId) {
+            // Free-form feedback must resolve the brief (so the heartbeat
+            // re-arm gate stops blocking on this urgent brief) AND re-run
+            // the task so the agent picks up `resolvedComment` next turn.
+            await submitFeedback(briefId, taskId, text);
+            await onAfterAddComment?.();
             await onAfterResolve?.();
-          } finally {
-            setLoadingKey(null);
           }
-        } else if (taskId) {
-          // Free-form feedback must resolve the brief (so the heartbeat
-          // re-arm gate stops blocking on this urgent brief) AND re-run
-          // the task so the agent picks up `resolvedComment` next turn.
-          await submitFeedback(briefId, taskId, text);
-          await onAfterAddComment?.();
-          await onAfterResolve?.();
+        } catch (error) {
+          // Keep the editor open on failure — closing it would discard text the
+          // user typed for an action that never landed.
+          reportFailure(error);
+          return;
         }
 
         setCommentMode(null);
@@ -153,6 +173,7 @@ const BriefCardActions = memo<BriefCardActionsProps>(
         taskId,
         onAfterResolve,
         onAfterAddComment,
+        reportFailure,
       ],
     );
 

@@ -11,6 +11,7 @@
   "brief.action.ignore": "نادیده گرفتن",
   "brief.action.retry": "تلاش دوباره",
   "brief.action.upgrade": "ارتقاء طرح",
+  "brief.actionFailed": "این عملیات انجام نشد. لطفاً دوباره تلاش کنید.",
   "brief.addFeedback": "اشتراک‌گذاری بازخورد",
   "brief.agentSignal.selfReview.applied.heading": "به‌روزرسانی شد",
   "brief.agentSignal.selfReview.applied.summary": "{{count}} به‌روزرسانی رویا اعمال شد.",

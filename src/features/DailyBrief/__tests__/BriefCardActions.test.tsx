@@ -1,5 +1,6 @@
 import type { BriefAction } from '@lobechat/types';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { toast } from '@lobehub/ui/base-ui';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -30,6 +31,7 @@ vi.mock('react-i18next', () => ({
 }));
 
 const mockResolveBrief = vi.fn();
+const mockToastError = vi.spyOn(toast, 'error').mockReturnValue(undefined as never);
 
 const sampleActions: BriefAction[] = [
   { key: 'approve', label: 'Approve', type: 'resolve' },
@@ -185,6 +187,47 @@ describe('BriefCardActions', () => {
     );
     expect(screen.getByText('Confirm complete')).toBeInTheDocument();
     expect(screen.queryByText('Confirm', { exact: true })).not.toBeInTheDocument();
+  });
+
+  // LOBE-12704: the tRPC client only console.errors non-401 failures, so a
+  // rejected action used to read as a dead button — which is how "no permission"
+  // reached us as a bug report with no error on screen.
+  it('should surface the failure reason when a resolve action is rejected', async () => {
+    mockResolveBrief.mockRejectedValueOnce(
+      new Error('You do not have permission to perform this action.'),
+    );
+    const onAfterResolve = vi.fn();
+    renderWithRouter(
+      <BriefCardActions
+        actions={sampleActions}
+        briefId="brief-9"
+        briefType="decision"
+        onAfterResolve={onAfterResolve}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Approve'));
+
+    await waitFor(() =>
+      expect(mockToastError).toHaveBeenCalledWith(
+        'You do not have permission to perform this action.',
+      ),
+    );
+    expect(onAfterResolve).not.toHaveBeenCalled();
+    // Still actionable — a failed attempt must not leave the card in limbo.
+    expect(screen.getByText('Approve')).toBeInTheDocument();
+  });
+
+  it('should fall back to a generic message when the failure carries no reason', async () => {
+    // A network abort / non-Error rejection reaches the handler without a message.
+    mockResolveBrief.mockRejectedValueOnce({});
+    renderWithRouter(
+      <BriefCardActions actions={sampleActions} briefId="brief-10" briefType="decision" />,
+    );
+
+    fireEvent.click(screen.getByText('Approve'));
+
+    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('brief.actionFailed'));
   });
 
   it('should label the result action "Confirm" when the parent task is parked at status="scheduled"', () => {

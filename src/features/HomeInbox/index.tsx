@@ -11,6 +11,7 @@ import GroupBlock from '@/features/Home/components/GroupBlock';
 import { homeType } from '@/features/Home/components/homeType';
 import RailCard from '@/features/Home/components/RailCard';
 import Recommendations, { useRecommendationsVisible } from '@/features/Recommendations';
+import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { useBriefStore } from '@/store/brief';
 import { briefListSelectors } from '@/store/brief/selectors';
 import { useUserStore } from '@/store/user';
@@ -98,10 +99,14 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   const isLogin = useUserStore(authSelectors.isLogin);
   const myId = useUserStore(userProfileSelectors.userId);
 
+  // Briefs are per-user AND per-workspace rows, so the feed is read through the
+  // active cache scope — a list left over from the previous workspace holds ids
+  // this one cannot resolve, and every action on it would fail silently.
+  const cacheScope = useCacheScope();
   const useFetchBriefs = useBriefStore((s) => s.useFetchBriefs);
-  const briefsSWR = useFetchBriefs(isLogin);
-  const briefs = useBriefStore(briefListSelectors.briefs);
-  const isBriefsInit = useBriefStore(briefListSelectors.isBriefsInit);
+  const briefsSWR = useFetchBriefs(isLogin, cacheScope);
+  const briefs = useBriefStore(briefListSelectors.briefs(cacheScope));
+  const isBriefsInit = useBriefStore(briefListSelectors.isBriefsInit(cacheScope));
 
   const topics = useHomeInboxTopics(isLogin);
   const recommendationsVisible = useRecommendationsVisible();

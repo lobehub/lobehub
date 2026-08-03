@@ -11,6 +11,7 @@
   "brief.action.ignore": "Ignora",
   "brief.action.retry": "Riprova",
   "brief.action.upgrade": "Aggiorna piano",
+  "brief.actionFailed": "Non è andato a buon fine. Per favore, riprova.",
   "brief.addFeedback": "Condividi feedback",
   "brief.agentSignal.selfReview.applied.heading": "Aggiornato",
   "brief.agentSignal.selfReview.applied.summary": "{{count}} aggiornamento del sogno è stato applicato.",

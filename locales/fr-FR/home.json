@@ -11,6 +11,7 @@
   "brief.action.ignore": "Ignorer",
   "brief.action.retry": "Réessayer",
   "brief.action.upgrade": "Mettre à niveau le plan",
+  "brief.actionFailed": "Cela n'a pas fonctionné. Veuillez réessayer.",
   "brief.addFeedback": "Partager un retour",
   "brief.agentSignal.selfReview.applied.heading": "Mis à jour",
   "brief.agentSignal.selfReview.applied.summary": "{{count}} mise à jour de rêve a été appliquée.",

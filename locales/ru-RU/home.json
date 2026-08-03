@@ -11,6 +11,7 @@
   "brief.action.ignore": "Игнорировать",
   "brief.action.retry": "Повторить",
   "brief.action.upgrade": "Обновить план",
+  "brief.actionFailed": "Это не удалось. Пожалуйста, попробуйте еще раз.",
   "brief.addFeedback": "Оставить отзыв",
   "brief.agentSignal.selfReview.applied.heading": "Обновлено",
   "brief.agentSignal.selfReview.applied.summary": "Применено {{count}} обновление мечты.",

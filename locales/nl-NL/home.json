@@ -11,6 +11,7 @@
   "brief.action.ignore": "Negeren",
   "brief.action.retry": "Opnieuw proberen",
   "brief.action.upgrade": "Upgrade plan",
+  "brief.actionFailed": "Dat is niet gelukt. Probeer het opnieuw.",
   "brief.addFeedback": "Feedback delen",
   "brief.agentSignal.selfReview.applied.heading": "Bijgewerkt",
   "brief.agentSignal.selfReview.applied.summary": "{{count}} droomupdate is toegepast.",
