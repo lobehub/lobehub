@@ -14,6 +14,7 @@ import HomeInbox from '@/features/HomeInbox';
 import { filterTopicsForInboxScope } from '@/features/HomeInbox/scopeTogglePlacement';
 import { splitBriefs } from '@/features/HomeInbox/splitBriefs';
 import { useHomeInboxTopics } from '@/features/HomeInbox/useHomeInboxTopics';
+import Recommendations from '@/features/Recommendations';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useClientDataSWR } from '@/libs/swr';
 import { recentKeys } from '@/libs/swr/keys';
@@ -76,6 +77,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface HomeModeContentProps {
+  /**
+   * The rail is folded away, so this column carries the sections it owns: what
+   * is in flight and what happened stay above the recent topics, and the
+   * suggestions — nothing that happened, only what you could do — land after.
+   */
+  inlineRail?: boolean;
   mode: HomeMode;
   onSuggestionSelect: (prompt: string) => void;
 }
@@ -242,7 +249,7 @@ const TaskContent = memo(() => {
   );
 });
 
-const HomeModeContent = memo<HomeModeContentProps>(({ mode, onSuggestionSelect }) => {
+const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSuggestionSelect }) => {
   const { t } = useTranslation('home');
   const isLogin = useUserStore(authSelectors.isLogin);
   const authLoaded = useUserStore(authSelectors.isLoaded);
@@ -288,7 +295,7 @@ const HomeModeContent = memo<HomeModeContentProps>(({ mode, onSuggestionSelect }
 
     return (
       <Flexbox gap={32}>
-        <HomeInbox variant={'main'} />
+        <HomeInbox inlineRail={inlineRail} variant={'main'} />
         {(state !== 'ready' || topicRecents.length > 0) && (
           <GroupBlock count={topicRecents.length || undefined} title={t('dashboard.chat.recents')}>
             {state === 'error' ? (
@@ -304,6 +311,7 @@ const HomeModeContent = memo<HomeModeContentProps>(({ mode, onSuggestionSelect }
             )}
           </GroupBlock>
         )}
+        {inlineRail && <Recommendations variant={'main'} />}
       </Flexbox>
     );
   }
