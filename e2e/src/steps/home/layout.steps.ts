@@ -43,14 +43,54 @@ Then('Home 主列与右栏都不应有各自的滚动条', async function (this:
 
   // A column-local viewport is exactly what "scroll as one page" rules out: it
   // would let the topic list travel under a pinned greeting while the rail sits
-  // still. The page scroller is the only vertical scrollbar on the dashboard.
+  // still.
+  const columnsScroll = await this.page.evaluate(() =>
+    ['home-main', 'home-rail']
+      .map((id) => document.querySelector<HTMLElement>(`[data-testid="${id}"]`))
+      .filter((node): node is HTMLElement => !!node)
+      .some((node) => {
+        const overflowY = getComputedStyle(node).overflowY;
+        return overflowY === 'auto' || overflowY === 'scroll';
+      }),
+  );
+
+  expect(columnsScroll).toBe(false);
+  // Nor via a scroll-viewport widget nested inside either column.
   await expect(main.locator('[data-orientation="vertical"]')).toHaveCount(0);
   await expect(rail.locator('[data-orientation="vertical"]')).toHaveCount(0);
-  await expect(
-    this.page
-      .locator('[data-testid="home-scroll"]:visible')
-      .locator('[data-orientation="vertical"]'),
-  ).toHaveCount(1);
+});
+
+Then('Home 滚动容器应贴合内容区右缘', async function (this: CustomWorld) {
+  const measured = await this.page.evaluate(() => {
+    const main = document.querySelector<HTMLElement>('[data-testid="home-main"]')!;
+    const scrolls = (node: HTMLElement) =>
+      ['auto', 'scroll'].includes(getComputedStyle(node).overflowY);
+
+    let scroller: HTMLElement | null = null;
+    for (let node = main.parentElement; node && !scroller; node = node.parentElement)
+      if (scrolls(node)) scroller = node;
+    if (!scroller) return null;
+
+    // The centred column the dashboard is laid out in — the thing the scroller
+    // must NOT be, or the bar floats in the margin beside the content.
+    const column = main.closest<HTMLElement>('[data-testid="home-main"]')!.parentElement!;
+
+    return {
+      columnRight: column.getBoundingClientRect().right,
+      overflow: scroller.scrollHeight - scroller.clientHeight,
+      paneRight: scroller.parentElement!.getBoundingClientRect().right,
+      scrollerRight: scroller.getBoundingClientRect().right,
+    };
+  });
+
+  expect(measured).not.toBeNull();
+  const { columnRight, overflow, paneRight, scrollerRight } = measured!;
+
+  // A scrollbar rides its own scroller's edge, so the scroller has to be the
+  // full-width pane, not the centred column inside it.
+  expect(overflow).toBeGreaterThan(0);
+  expect(scrollerRight).toBeCloseTo(paneRight, 0);
+  expect(scrollerRight).toBeGreaterThan(columnRight);
 });
 
 Then('Home 滚动应同时带动主列与右栏', async function (this: CustomWorld) {
@@ -79,34 +119,27 @@ Then('Home 滚动应同时带动主列与右栏', async function (this: CustomWo
   await settleBox(this, main);
 });
 
-Then('Home 页面滚动条应位于右栏卡片与页面边缘之间', async function (this: CustomWorld) {
+Then('Home 右栏应保持卡片与页面边缘的分层间距', async function (this: CustomWorld) {
   const rail = this.page.locator('[data-testid="home-rail"]:visible');
   const card = rail.getByTestId('home-rail-card').first();
-  const scrollbar = this.page
-    .locator('[data-testid="home-scroll"]:visible')
-    .locator('[data-orientation="vertical"]')
-    .first();
 
   await expect(card).toBeVisible({ timeout: WAIT_TIMEOUT });
 
-  const [railBox, cardBox, scrollbarBox, viewportWidth] = await Promise.all([
+  const [railBox, cardBox, viewportWidth] = await Promise.all([
     rail.boundingBox(),
     card.boundingBox(),
-    scrollbar.boundingBox(),
     this.page.evaluate(() => window.innerWidth),
   ]);
 
   expect(railBox).not.toBeNull();
   expect(cardBox).not.toBeNull();
-  expect(scrollbarBox).not.toBeNull();
 
   const railRight = railBox!.x + railBox!.width;
   const cardRight = cardBox!.x + cardBox!.width;
 
-  // Card → gutter → scrollbar track → page edge, each layer clear of the last.
+  // Card → gutter → column edge → page margin, each layer clear of the last.
   expect(cardBox!.width).toBeCloseTo(380, 0);
   expect(railRight - cardRight).toBeCloseTo(14, 0);
-  expect(scrollbarBox!.x).toBeGreaterThanOrEqual(cardRight);
   expect(viewportWidth - railRight).toBeGreaterThanOrEqual(24);
 });
 

@@ -1,7 +1,6 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { ScrollArea } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { memo, useCallback, useState } from 'react';
 
@@ -19,10 +18,7 @@ import InputArea from './InputArea';
 import PortraitBubble from './PortraitBubble';
 import type { HomeMode } from './types';
 
-/** Mirrors the row hover bleed in HomeModeContent; the viewport would clip it. */
-const ROW_BLEED = 10;
-
-/** Gutter the page scrollbar lives in, so it never sits over a rail card. */
+/** Trailing gutter that keeps the rail's cards off the page's scroll lane. */
 const RAIL_GUTTER = 14;
 const RAIL_CARD_WIDTH = 380;
 const RAIL_COLUMN_GAP = 28;
@@ -48,30 +44,11 @@ const GREETING_LANE = COLLAPSED_CONTENT_OFFSET * 2 + PORTRAIT_LANE + BUBBLE_MAX_
 /** Under this the greeting, the bubble and the portrait cannot share a line. */
 const BUBBLE_INLINE_MIN = 1080;
 
-/**
- * ScrollArea's content node ships its own gap / font-size — neutralize both.
- * The inline padding is the lane the row hover bleed paints into: without it the
- * viewport's own overflow clip would shear the bleed off at the column edge.
- */
-const PAGE_CONTENT_STYLE = {
-  display: 'block',
-  fontSize: 'inherit',
-  gap: 0,
-  lineHeight: 'inherit',
-  paddingBlockEnd: 24,
-  paddingInline: ROW_BLEED,
-} as const;
-
 const styles = createStaticStyles(({ css }) => ({
-  // One scroll viewport wraps the whole dashboard, so the greeting, the
-  // composer, the topic list and the rail travel together. Giving the columns
-  // their own viewports made the page scroll in pieces: the list moved under a
-  // pinned greeting while the rail sat still, and the reading position of the
-  // page as a whole was never anyone's to control.
-  pageScroll: css`
-    flex: 1;
-    min-height: 0;
-  `,
+  // Both rows size to their content and the page scrolls around the whole grid
+  // (see the route). Giving each column its own scroll viewport made the page
+  // scroll in pieces: the topic list moved under a pinned greeting while the
+  // rail sat still, and no gesture moved the dashboard as a whole.
   grid: css`
     /* The nav panel takes 240–400px out of the viewport, so viewport breakpoints
        say nothing about the room this dashboard actually has. */
@@ -232,8 +209,8 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
   // Above the portrait so the agent stands behind the glass, not on top of it.
-  // The trailing gutter is what the page scrollbar rides in, so the track never
-  // lands on a card.
+  // The trailing gutter keeps the cards short of the column edge, so they stop
+  // where the main column's rows stop instead of running to the page margin.
   rail: css`
     position: relative;
     z-index: 1;
@@ -278,63 +255,52 @@ const Home = memo(() => {
   );
 
   return (
-    // No scrollFade: the mask would make this viewport a backdrop root, and the
-    // rail cards' glass has to keep sampling the portrait standing behind them.
-    <ScrollArea
-      disableContentFit
-      className={styles.pageScroll}
-      contentProps={{ style: PAGE_CONTENT_STYLE }}
-      data-testid={'home-scroll'}
-    >
-      <Flexbox className={styles.grid}>
-        <div
-          className={cx(styles.header, styles.content, railCollapsed && styles.contentCollapsed)}
-        >
-          <HomeHeader />
-          {/* No portrait for signed-out visitors, so no one to speak the line. */}
-          {isLogin && (
-            <div className={cx(styles.bubbleSlot, railCollapsed && styles.bubbleSlotCollapsed)}>
-              <PortraitBubble />
-            </div>
-          )}
+    <Flexbox className={styles.grid}>
+      <div className={cx(styles.header, styles.content, railCollapsed && styles.contentCollapsed)}>
+        <HomeHeader />
+        {/* No portrait for signed-out visitors, so no one to speak the line. */}
+        {isLogin && (
+          <div className={cx(styles.bubbleSlot, railCollapsed && styles.bubbleSlotCollapsed)}>
+            <PortraitBubble />
+          </div>
+        )}
+      </div>
+
+      {isLogin && (
+        <div className={cx(styles.portrait, railCollapsed && styles.portraitCollapsed)}>
+          <HomePortrait />
         </div>
+      )}
 
-        {isLogin && (
-          <div className={cx(styles.portrait, railCollapsed && styles.portraitCollapsed)}>
-            <HomePortrait />
-          </div>
-        )}
-
-        <Flexbox
-          className={cx(styles.main, styles.content, railCollapsed && styles.contentCollapsed)}
-          data-testid={'home-main'}
-          gap={24}
-        >
-          <div className={styles.inputArea}>
-            <InputArea
-              inputValue={inputValue}
-              mode={mode}
-              onInputValueChange={handleInputValueChange}
-              onModeChange={setMode}
-            />
-          </div>
-          <HomeModeContent mode={mode} onSuggestionSelect={handleSuggestionSelect} />
-        </Flexbox>
-
-        {isLogin && (
-          <aside
-            aria-hidden={railCollapsed}
-            className={cx(styles.rail, styles.railSurface)}
-            data-collapsed={railCollapsed}
-            data-testid={'home-rail'}
-            id={'home-rail'}
-            inert={railCollapsed}
-          >
-            <HomeInbox hideNeedsYou hideUnread variant={'rail'} />
-          </aside>
-        )}
+      <Flexbox
+        className={cx(styles.main, styles.content, railCollapsed && styles.contentCollapsed)}
+        data-testid={'home-main'}
+        gap={24}
+      >
+        <div className={styles.inputArea}>
+          <InputArea
+            inputValue={inputValue}
+            mode={mode}
+            onInputValueChange={handleInputValueChange}
+            onModeChange={setMode}
+          />
+        </div>
+        <HomeModeContent mode={mode} onSuggestionSelect={handleSuggestionSelect} />
       </Flexbox>
-    </ScrollArea>
+
+      {isLogin && (
+        <aside
+          aria-hidden={railCollapsed}
+          className={cx(styles.rail, styles.railSurface)}
+          data-collapsed={railCollapsed}
+          data-testid={'home-rail'}
+          id={'home-rail'}
+          inert={railCollapsed}
+        >
+          <HomeInbox hideNeedsYou hideUnread variant={'rail'} />
+        </aside>
+      )}
+    </Flexbox>
   );
 });
 
