@@ -1,19 +1,16 @@
 'use client';
 
-import { EDITOR_DEBOUNCE_TIME } from '@lobechat/const';
-import { ActionIcon, Flexbox, Icon, Input, Skeleton, Text, Tooltip } from '@lobehub/ui';
-import { Button, toast } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
-import { debounce } from 'es-toolkit/compat';
+import { ActionIcon, Flexbox, Icon, Skeleton, Text, Tooltip } from '@lobehub/ui';
+import { toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
-import { CheckIcon, PaletteIcon, PencilIcon } from 'lucide-react';
-import { memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { PaletteIcon, PencilIcon } from 'lucide-react';
+import { memo, Suspense, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import EmojiPicker from '@/components/EmojiPicker';
+import { createAgentIdentityModal } from '@/features/AgentIdentityModal';
 import BackgroundSwatches from '@/features/AgentSetting/AgentMeta/BackgroundSwatches';
 import { usePermission } from '@/hooks/usePermission';
-import { agentService } from '@/services/agent';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useFileStore } from '@/store/file';
@@ -21,9 +18,6 @@ import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 
 const MAX_AVATAR_SIZE = 1024 * 1024; // 1MB limit for server actions
-
-/** Keeps the role and slug inputs on the same left edge under the name. */
-const IDENTITY_LABEL_WIDTH = 32;
 
 const AgentHeader = memo(() => {
   const { t } = useTranslation(['setting', 'common']);
@@ -34,87 +28,10 @@ const AgentHeader = memo(() => {
   const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId), isEqual);
   const slug = useAgentStore(agentSelectors.getAgentSlugById(agentId));
   const updateMetaById = useAgentStore((s) => s.updateAgentMetaById);
-  const refreshAgentConfig = useAgentStore((s) => s.internal_refreshAgentConfig);
 
   // File upload
   const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
   const [uploading, setUploading] = useState(false);
-
-  // Identity is read-only until the user opts into editing — three always-on
-  // inputs made a settled profile look like an unsaved form.
-  const [editing, setEditing] = useState(false);
-
-  // Local state for inputs (to avoid stuttering during typing)
-  const [localTitle, setLocalTitle] = useState(meta.title || '');
-  const [localName, setLocalName] = useState(meta.name || '');
-  // The slug is not part of the meta patch — it has its own validated endpoint —
-  // so it commits on blur rather than on every keystroke.
-  const [localSlug, setLocalSlug] = useState(slug || '');
-  const [slugError, setSlugError] = useState<string | undefined>();
-
-  // Sync local state when meta changes from external source
-  useEffect(() => {
-    setLocalTitle(meta.title || '');
-  }, [agentId, meta.title]);
-
-  useEffect(() => {
-    setLocalName(meta.name || '');
-  }, [agentId, meta.name]);
-
-  useEffect(() => {
-    setLocalSlug(slug || '');
-    setSlugError(undefined);
-  }, [agentId, slug]);
-
-  useEffect(() => {
-    setEditing(false);
-  }, [agentId]);
-
-  const commitSlug = useCallback(async () => {
-    const next = localSlug.trim().toLowerCase();
-    if (!agentId || !canEdit || !next || next === (slug || '')) {
-      setSlugError(undefined);
-      return;
-    }
-
-    const result = await agentService.updateAgentSlug(agentId, next);
-    if (result.success) {
-      setSlugError(undefined);
-      await refreshAgentConfig(agentId);
-      return;
-    }
-
-    setSlugError(t(`settingAgent.slug.error.${result.reason ?? 'invalid'}`, { ns: 'setting' }));
-  }, [agentId, canEdit, localSlug, refreshAgentConfig, slug, t]);
-
-  // Debounced save for title
-  const debouncedSaveTitle = useMemo(
-    () =>
-      debounce((targetAgentId: string, value: string) => {
-        updateMetaById(targetAgentId, { title: value });
-      }, EDITOR_DEBOUNCE_TIME),
-    [updateMetaById],
-  );
-
-  const debouncedSaveName = useMemo(
-    () =>
-      debounce((targetAgentId: string, value: string) => {
-        updateMetaById(targetAgentId, { name: value });
-      }, EDITOR_DEBOUNCE_TIME),
-    [updateMetaById],
-  );
-
-  // A pending edit belongs to the agent that was being edited. Commit that
-  // invocation before adopting another agent's local input state.
-  useEffect(
-    () => () => {
-      debouncedSaveTitle.flush();
-      debouncedSaveTitle.cancel();
-      debouncedSaveName.flush();
-      debouncedSaveName.cancel();
-    },
-    [agentId, debouncedSaveName, debouncedSaveTitle],
-  );
 
   // Handle avatar change (immediate save)
   const handleAvatarChange = (emoji: string) => {
@@ -228,120 +145,40 @@ const AgentHeader = memo(() => {
         onDelete={handleAvatarDelete}
         onUpload={handleAvatarUpload}
       />
-      {/* Identity Section — name is the headline; role and slug sit together under
-          it. Read-only until the pencil is clicked, so a settled profile doesn't
-          read as an unsaved form. */}
+      {/* Identity Section — display only. Editing all three fields happens in a
+          form modal; inline inputs crowded the header and left no room for a
+          per-field label or error. */}
       <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
-        {editing ? (
-          <>
-            <Input
-              autoFocus
-              placeholder={t('settingAgent.personalName.placeholder', { ns: 'setting' })}
-              style={{ fontSize: 36, fontWeight: 600, padding: 0, width: '100%' }}
-              value={localName}
-              variant={'borderless'}
-              onChange={(e) => {
-                setLocalName(e.target.value);
-                if (!agentId) return;
-
-                debouncedSaveName(agentId, e.target.value);
-              }}
+        <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
+          <Text ellipsis style={{ fontSize: 36, fontWeight: 600 }}>
+            {meta.name?.trim() ||
+              meta.title?.trim() ||
+              t('settingAgent.personalName.placeholder', { ns: 'setting' })}
+          </Text>
+          {canEdit ? (
+            <ActionIcon
+              icon={PencilIcon}
+              size={'small'}
+              title={t('settingAgent.identity.edit', { ns: 'setting' })}
+              onClick={() => createAgentIdentityModal(agentId)}
             />
-            {/* Role and slug get a line each, with fixed-width labels so the two
-                inputs line up, and the confirm sits under them rather than at the
-                far edge of the header. */}
-            <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-              <Text style={{ flex: 'none', width: IDENTITY_LABEL_WIDTH }} type={'secondary'}>
-                {t('settingAgent.role.label', { ns: 'setting' })}
+          ) : null}
+        </Flexbox>
+        <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
+          {meta.title?.trim() ? (
+            <Text ellipsis type={'secondary'}>
+              {meta.title}
+            </Text>
+          ) : null}
+          {meta.title?.trim() && slug ? <Text type={'secondary'}>·</Text> : null}
+          {slug ? (
+            <Tooltip title={t('settingAgent.slug.tooltip', { ns: 'setting' })}>
+              <Text code style={{ flex: 'none' }} type={'secondary'}>
+                @{slug}
               </Text>
-              <Input
-                placeholder={t('settingAgent.role.placeholder', { ns: 'setting' })}
-                style={{ padding: 0, width: 260 }}
-                value={localTitle}
-                variant={'borderless'}
-                onChange={(e) => {
-                  setLocalTitle(e.target.value);
-                  if (!agentId) return;
-
-                  debouncedSaveTitle(agentId, e.target.value);
-                }}
-              />
-            </Flexbox>
-            <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-              <Text style={{ flex: 'none', width: IDENTITY_LABEL_WIDTH }} type={'secondary'}>
-                @
-              </Text>
-              <Input
-                placeholder={t('settingAgent.slug.placeholder', { ns: 'setting' })}
-                status={slugError ? 'error' : undefined}
-                // Same weight as the role value above it — a dimmer slug read as
-                // disabled next to an editable field.
-                style={{ color: cssVar.colorText, padding: 0, width: 260 }}
-                value={localSlug}
-                variant={'borderless'}
-                onBlur={() => void commitSlug()}
-                onChange={(e) => {
-                  setLocalSlug(e.target.value);
-                  setSlugError(undefined);
-                }}
-              />
-            </Flexbox>
-            {slugError ? (
-              <Text
-                style={{ fontSize: 12, marginInlineStart: IDENTITY_LABEL_WIDTH + 8 }}
-                type={'danger'}
-              >
-                {slugError}
-              </Text>
-            ) : null}
-            <Flexbox horizontal style={{ marginInlineStart: IDENTITY_LABEL_WIDTH + 8 }}>
-              <Button
-                icon={CheckIcon}
-                size={'small'}
-                type={'primary'}
-                onClick={() => {
-                  void commitSlug();
-                  setEditing(false);
-                }}
-              >
-                {t('settingAgent.identity.done', { ns: 'setting' })}
-              </Button>
-            </Flexbox>
-          </>
-        ) : (
-          <>
-            <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-              <Text ellipsis style={{ fontSize: 36, fontWeight: 600 }}>
-                {meta.name?.trim() ||
-                  meta.title?.trim() ||
-                  t('settingAgent.personalName.placeholder', { ns: 'setting' })}
-              </Text>
-              {canEdit ? (
-                <ActionIcon
-                  icon={PencilIcon}
-                  size={'small'}
-                  title={t('settingAgent.identity.edit', { ns: 'setting' })}
-                  onClick={() => setEditing(true)}
-                />
-              ) : null}
-            </Flexbox>
-            <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-              {meta.title?.trim() ? (
-                <Text ellipsis type={'secondary'}>
-                  {meta.title}
-                </Text>
-              ) : null}
-              {meta.title?.trim() && slug ? <Text type={'secondary'}>·</Text> : null}
-              {slug ? (
-                <Tooltip title={t('settingAgent.slug.tooltip', { ns: 'setting' })}>
-                  <Text code style={{ flex: 'none' }} type={'secondary'}>
-                    @{slug}
-                  </Text>
-                </Tooltip>
-              ) : null}
-            </Flexbox>
-          </>
-        )}
+            </Tooltip>
+          ) : null}
+        </Flexbox>
       </Flexbox>
     </Flexbox>
   );

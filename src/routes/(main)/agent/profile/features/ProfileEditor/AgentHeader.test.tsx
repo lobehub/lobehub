@@ -24,7 +24,7 @@ const mocks = vi.hoisted(() => {
     },
     agentStoreListeners: new Set<() => void>(),
     actionIconProps: { all: [] as Record<string, unknown>[] },
-    updateAgentSlug: vi.fn(),
+    createAgentIdentityModal: vi.fn(),
     refreshAgentConfig: vi.fn(),
     emojiPickerProps: { last: undefined as Record<string, unknown> | undefined },
     // In edit mode the header renders three inputs, in order: personal name,
@@ -126,10 +126,8 @@ vi.mock('@/store/agent/selectors', () => ({
   },
 }));
 
-vi.mock('@/services/agent', () => ({
-  agentService: {
-    updateAgentSlug: (...args: unknown[]) => mocks.updateAgentSlug(...args),
-  },
+vi.mock('@/features/AgentIdentityModal', () => ({
+  createAgentIdentityModal: (...args: unknown[]) => mocks.createAgentIdentityModal(...args),
 }));
 
 vi.mock('@/store/file', () => ({
@@ -150,15 +148,6 @@ vi.mock('@/store/global/selectors', () => ({
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
-
-/** The identity block is read-only until the pencil is clicked. */
-const renderEditing = () => {
-  const view = render(<AgentHeader />);
-  act(() => {
-    (mocks.actionIconProps.all[0]?.onClick as () => void)?.();
-  });
-  return view;
-};
 
 describe('AgentHeader', () => {
   beforeEach(() => {
@@ -188,61 +177,19 @@ describe('AgentHeader', () => {
     expect(mocks.emojiPickerProps.last?.open).toBe(false);
   });
 
-  it('flushes a pending title to its original agent and resets the next agent input', async () => {
+  it('opens the identity form instead of editing inline', () => {
     mocks.permissionState.allowed = true;
-    mocks.agentStoreState.agentMap = {
-      'agent-a': { title: 'Same title' },
-      'agent-b': { title: 'Same title' },
-    };
-    renderEditing();
+    mocks.agentStoreState.agentMap = { 'agent-a': { name: 'Alice', title: 'Health Assistant' } };
+    const view = render(<AgentHeader />);
 
-    act(() => {
-      const onChange = mocks.inputProps.role?.onChange as (event: {
-        target: { value: string };
-      }) => void;
-      onChange({ target: { value: 'Agent A draft' } });
-    });
+    // The header is display-only: the three fields live in the modal.
+    expect(view.container.querySelectorAll('input')).toHaveLength(0);
 
-    expect(mocks.updateAgentMetaById).not.toHaveBeenCalled();
-
-    act(() => {
-      mocks.agentStoreState.activeAgentId = 'agent-b';
-      mocks.agentStoreListeners.forEach((listener) => listener());
-    });
-
-    expect(mocks.updateAgentMetaById).toHaveBeenCalledExactlyOnceWith('agent-a', {
-      title: 'Agent A draft',
-    });
-
-    // Switching agents leaves edit mode; re-entering it must start from agent-b's
-    // own data, not from the draft that was just flushed to agent-a.
     act(() => {
       (mocks.actionIconProps.all.at(-1)?.onClick as () => void)?.();
     });
-    expect(mocks.inputProps.role?.value).toBe('Same title');
-  });
 
-  it('persists the personal name separately from the role title', () => {
-    mocks.permissionState.allowed = true;
-    mocks.agentStoreState.agentMap = { 'agent-a': { name: 'Alice', title: 'Health Assistant' } };
-    const view = renderEditing();
-
-    // The headline is the personal name; the role sits under it.
-    expect(mocks.inputProps.name?.value).toBe('Alice');
-    expect(mocks.inputProps.role?.value).toBe('Health Assistant');
-
-    act(() => {
-      const onChange = mocks.inputProps.name?.onChange as (event: {
-        target: { value: string };
-      }) => void;
-      onChange({ target: { value: '小艾' } });
-    });
-
-    view.unmount();
-
-    expect(mocks.updateAgentMetaById).toHaveBeenCalledExactlyOnceWith('agent-a', {
-      name: '小艾',
-    });
+    expect(mocks.createAgentIdentityModal).toHaveBeenCalledExactlyOnceWith('agent-a');
   });
 
   it('shows the slug next to the role', () => {
@@ -253,67 +200,6 @@ describe('AgentHeader', () => {
     const view = render(<AgentHeader />);
 
     expect(view.container.textContent).toContain('@brave-otter-lamp');
-  });
-
-  it('commits a slug rename through its own endpoint on blur', async () => {
-    mocks.permissionState.allowed = true;
-    mocks.agentStoreState.agentMap = { 'agent-a': { name: 'Alice', slug: 'old-slug' } };
-    mocks.updateAgentSlug.mockResolvedValue({ success: true });
-    renderEditing();
-
-    expect(mocks.inputProps.slug?.value).toBe('old-slug');
-
-    await act(async () => {
-      (mocks.inputProps.slug?.onChange as (event: { target: { value: string } }) => void)({
-        target: { value: 'New-Slug' },
-      });
-    });
-    await act(async () => {
-      await (mocks.inputProps.slug?.onBlur as () => Promise<void>)();
-    });
-
-    // Normalized to lowercase, and routed away from the meta patch.
-    expect(mocks.updateAgentSlug).toHaveBeenCalledExactlyOnceWith('agent-a', 'new-slug');
-    expect(mocks.updateAgentMetaById).not.toHaveBeenCalled();
-  });
-
-  it('surfaces a rejected slug instead of silently keeping the draft', async () => {
-    mocks.permissionState.allowed = true;
-    mocks.agentStoreState.agentMap = { 'agent-a': { name: 'Alice', slug: 'old-slug' } };
-    mocks.updateAgentSlug.mockResolvedValue({ reason: 'taken', success: false });
-    const view = renderEditing();
-
-    await act(async () => {
-      (mocks.inputProps.slug?.onChange as (event: { target: { value: string } }) => void)({
-        target: { value: 'taken-slug' },
-      });
-    });
-    await act(async () => {
-      await (mocks.inputProps.slug?.onBlur as () => Promise<void>)();
-    });
-
-    expect(view.container.textContent).toContain('settingAgent.slug.error.taken');
-  });
-
-  it('flushes a pending title when the scoped profile unmounts', () => {
-    mocks.permissionState.allowed = true;
-    mocks.agentStoreState.agentMap = { 'agent-a': { title: 'Agent A' } };
-    const view = renderEditing();
-
-    act(() => {
-      const onChange = mocks.inputProps.role?.onChange as (event: {
-        target: { value: string };
-      }) => void;
-      onChange({ target: { value: 'Final Agent A title' } });
-    });
-
-    view.unmount();
-
-    expect(mocks.updateAgentMetaById).toHaveBeenCalledExactlyOnceWith('agent-a', {
-      title: 'Final Agent A title',
-    });
-    act(() => vi.runAllTimers());
-    expect(mocks.updateAgentMetaById).toHaveBeenCalledTimes(1);
   });
 
   it('keeps an asynchronous avatar upload bound to the agent that started it', async () => {
