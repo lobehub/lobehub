@@ -89,6 +89,22 @@ const recordStringContent = (
   }
 };
 
+const recordError = (diagnostics: ProviderResponseDiagnostics, error: unknown) => {
+  diagnostics.error = {
+    message:
+      error instanceof Error
+        ? error.message.slice(0, MAX_RECORDED_ERROR_MESSAGE_LENGTH)
+        : undefined,
+    name: error instanceof Error ? error.name : undefined,
+  };
+};
+
+const finalizeResponse = async (diagnostics: ProviderResponseDiagnostics, signal?: AbortSignal) => {
+  await waitForRawProviderResponse(diagnostics);
+  diagnostics.aborted = signal?.aborted || undefined;
+  diagnostics.completedAt ??= Date.now();
+};
+
 const recordMessageContentBlock = (
   diagnostics: ProviderResponseDiagnostics,
   block: Anthropic.ContentBlock,
@@ -243,7 +259,7 @@ export const recordAnthropicStreamEvent = (
   appendEvent(diagnostics, event);
 };
 
-export const observeAnthropicStream = async function* (
+const observeAsyncIterable = async function* (
   stream: AsyncIterable<Anthropic.MessageStreamEvent>,
   diagnostics: ProviderResponseDiagnostics,
   signal?: AbortSignal,
@@ -254,20 +270,60 @@ export const observeAnthropicStream = async function* (
       yield chunk;
     }
   } catch (error) {
-    diagnostics.error = {
-      message:
-        error instanceof Error
-          ? error.message.slice(0, MAX_RECORDED_ERROR_MESSAGE_LENGTH)
-          : undefined,
-      name: error instanceof Error ? error.name : undefined,
-    };
+    recordError(diagnostics, error);
     throw error;
   } finally {
-    await waitForRawProviderResponse(diagnostics);
-    diagnostics.aborted = signal?.aborted || undefined;
-    diagnostics.completedAt = Date.now();
+    await finalizeResponse(diagnostics, signal);
   }
 };
+
+const observeReadableStream = (
+  stream: ReadableStream<Anthropic.MessageStreamEvent>,
+  diagnostics: ProviderResponseDiagnostics,
+  signal?: AbortSignal,
+) => {
+  const reader = stream.getReader();
+
+  return new ReadableStream<Anthropic.MessageStreamEvent>({
+    async cancel(reason) {
+      try {
+        await reader.cancel(reason);
+      } catch (error) {
+        recordError(diagnostics, error);
+        throw error;
+      } finally {
+        await finalizeResponse(diagnostics, signal);
+      }
+    },
+    async pull(controller) {
+      try {
+        const { done, value } = await reader.read();
+        if (done) {
+          await finalizeResponse(diagnostics, signal);
+          controller.close();
+          return;
+        }
+
+        recordAnthropicStreamEvent(diagnostics, value);
+        controller.enqueue(value);
+      } catch (error) {
+        recordError(diagnostics, error);
+        await finalizeResponse(diagnostics, signal);
+        controller.error(error);
+      }
+    },
+  });
+};
+
+export const observeAnthropicStream = (
+  stream:
+    AsyncIterable<Anthropic.MessageStreamEvent> | ReadableStream<Anthropic.MessageStreamEvent>,
+  diagnostics: ProviderResponseDiagnostics,
+  signal?: AbortSignal,
+) =>
+  stream instanceof ReadableStream
+    ? observeReadableStream(stream, diagnostics, signal)
+    : observeAsyncIterable(stream, diagnostics, signal);
 
 export const recordAnthropicNonStreamingResponse = async (
   diagnostics: ProviderResponseDiagnostics | undefined,
@@ -288,7 +344,5 @@ export const recordAnthropicNonStreamingResponse = async (
   appendEvent(diagnostics, { type: 'message_delta' });
   appendEvent(diagnostics, { type: 'message_stop' });
   diagnostics.terminalEventReceived = true;
-  await waitForRawProviderResponse(diagnostics);
-  diagnostics.aborted = signal?.aborted || undefined;
-  diagnostics.completedAt = Date.now();
+  await finalizeResponse(diagnostics, signal);
 };

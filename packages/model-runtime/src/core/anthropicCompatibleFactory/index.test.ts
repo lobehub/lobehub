@@ -348,6 +348,79 @@ describe('createAnthropicCompatibleRuntime', () => {
     );
   });
 
+  it('should observe provider diagnostics from a custom ReadableStream response', async () => {
+    const rawEvents: Anthropic.MessageStreamEvent[] = [
+      {
+        message: {
+          content: [],
+          id: 'msg_readable_stream',
+          model: 'custom-model',
+          role: 'assistant',
+          stop_reason: null,
+          stop_sequence: null,
+          type: 'message',
+          usage: { input_tokens: 12, output_tokens: 0 },
+        },
+        type: 'message_start',
+      },
+      {
+        delta: { stop_reason: 'end_turn', stop_sequence: null },
+        type: 'message_delta',
+        usage: { input_tokens: 12, output_tokens: 0 },
+      },
+      { type: 'message_stop' },
+    ];
+    const rawStream = new ReadableStream<Anthropic.MessageStreamEvent>({
+      start(controller) {
+        for (const event of rawEvents) controller.enqueue(event);
+        controller.close();
+      },
+    });
+    const messagesCreate = vi.fn(() => ({
+      withResponse: vi.fn().mockResolvedValue({ data: rawStream }),
+    }));
+    const Runtime = createAnthropicCompatibleRuntime({
+      chatCompletion: {
+        handlePayload: (payload) => ({
+          max_tokens: 1024,
+          messages: [{ content: 'Question', role: 'user' }],
+          model: payload.model,
+        }),
+      },
+      customClient: {
+        createClient: () =>
+          ({
+            baseURL: 'https://example.com/anthropic',
+            messages: { create: messagesCreate },
+          }) as unknown as Anthropic,
+      },
+      provider: 'test-provider',
+    });
+    const runtime = new Runtime({ apiKey: 'test-key' });
+    const diagnostics: ModelRuntimeDiagnostics = {};
+
+    const response = await runtime.chat(
+      {
+        messages: [{ content: 'Question', role: 'user' }],
+        model: 'custom-model',
+        stream: true,
+      },
+      { diagnostics },
+    );
+    await response.text();
+
+    expect(diagnostics.providerResponse).toEqual(
+      expect.objectContaining({
+        completedAt: expect.any(Number),
+        eventCount: 3,
+        messageId: 'msg_readable_stream',
+        rawEvents,
+        stopReason: 'end_turn',
+        terminalEventReceived: true,
+      }),
+    );
+  });
+
   it('should strip trailing assistant prefill when a logical id maps to a Claude 5 model', async () => {
     // The prefill strip inside handlePayload sees the logical id; when the
     // mapping only later resolves to a Claude 4.6+/5 upstream id, chat() must

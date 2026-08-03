@@ -615,7 +615,8 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
         } satisfies Pick<AnthropicStreamOptions, 'callbacks' | 'payload'>;
 
         if (shouldStream) {
-          const streamResponse = response as Stream<Anthropic.MessageStreamEvent>;
+          const streamResponse = response as
+            Stream<Anthropic.MessageStreamEvent> | ReadableStream<Anthropic.MessageStreamEvent>;
           let prod: Stream<Anthropic.MessageStreamEvent> | ReadableStream = streamResponse;
 
           if (shouldDebugChatCompletion) {
@@ -627,12 +628,20 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
             debugStream(useForDebugStream).catch(console.error);
           }
 
-          if (providerResponseDiagnostics && !(prod instanceof ReadableStream)) {
+          if (providerResponseDiagnostics) {
             /** Observe provider-native events before the protocol adapter transforms them. */
-            prod = readableFromAsyncIterable(
-              observeAnthropicStream(prod, providerResponseDiagnostics, options?.signal),
-              { model: payload.model, provider: this.id },
+            const observedStream = observeAnthropicStream(
+              prod,
+              providerResponseDiagnostics,
+              options?.signal,
             );
+            prod =
+              observedStream instanceof ReadableStream
+                ? observedStream
+                : readableFromAsyncIterable(observedStream, {
+                    model: payload.model,
+                    provider: this.id,
+                  });
           }
 
           return StreamingResponse(
