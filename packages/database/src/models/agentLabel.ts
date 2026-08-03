@@ -135,6 +135,16 @@ export class AgentLabelModel {
             .where(and(inArray(agentLabels.id, labelIds), this.ownership()))
         : [];
 
+    // Silently dropping ids the caller cannot see would turn a partial
+    // mismatch into a destructive write: this is a full replacement, so an
+    // unresolvable id shrinks `nextIds` and deletes assignments the caller
+    // never meant to touch. A client holding another scope's registry (mid
+    // workspace switch) would wipe the agent's labels. Fail loudly instead.
+    const scopedIds = new Set(scopedLabels.map((label) => label.id));
+    const unknownIds = labelIds.filter((id) => !scopedIds.has(id));
+    if (unknownIds.length > 0)
+      throw new Error(`Agent labels not found in current scope: ${unknownIds.join(', ')}`);
+
     const nextIds = scopedLabels
       .filter((label) => !label.archived || currentIds.has(label.id))
       .map((label) => label.id);

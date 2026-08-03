@@ -3,7 +3,7 @@
 import { DEFAULT_AVATAR } from '@lobechat/const';
 import { type SidebarAgentItem } from '@lobechat/types';
 import { Avatar, Center, Empty, Flexbox, Icon, SearchBar, Text, Tooltip } from '@lobehub/ui';
-import { Button, DropdownMenu, Segmented } from '@lobehub/ui/base-ui';
+import { Button, DropdownMenu, Segmented, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
@@ -393,10 +393,18 @@ const AgentViewAllPage = memo(() => {
   );
 
   const handleToggleSidebar = useCallback(
-    (item: SidebarAgentItem) => {
-      void setSidebarItemVisible(item.id, !isSidebarItemVisible(item));
+    async (item: SidebarAgentItem) => {
+      try {
+        await setSidebarItemVisible(item.id, !isSidebarItemVisible(item));
+      } catch (error) {
+        // Personal mode writes the preference optimistically and never rolls
+        // back, workspace mode rolls back silently — either way the row's
+        // state stops matching what was saved, so say so.
+        console.error('Failed to toggle Agent sidebar visibility:', error);
+        toast.error(t('operationFailed'));
+      }
     },
-    [isSidebarItemVisible, setSidebarItemVisible],
+    [isSidebarItemVisible, setSidebarItemVisible, t],
   );
 
   const renderCard = useCallback(

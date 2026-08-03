@@ -5,6 +5,7 @@ import {
   type SidebarGroup,
 } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
+import { useEffect } from 'react';
 import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
@@ -41,7 +42,10 @@ export class LabelActionImpl {
   };
 
   refreshAgentLabels = async (): Promise<void> => {
-    await mutate(agentLabelKeys.list(true));
+    // Revalidate the key for the scope the registry was loaded for, not a
+    // hardcoded one — the key carries the workspace, so mutating inside a
+    // workspace must not refresh the personal list instead.
+    await mutate(agentLabelKeys.list(true, this.#get().agentLabelsWorkspaceId));
   };
 
   removeAgentLabel = async (id: string): Promise<void> => {
@@ -105,17 +109,41 @@ export class LabelActionImpl {
     await Promise.all([this.refreshAgentLabels(), this.#get().refreshAgentList()]);
   };
 
-  useFetchAgentLabels = (isLogin: boolean | undefined): SWRResponse<AgentLabelListItem[]> => {
+  useFetchAgentLabels = (
+    isLogin: boolean | undefined,
+    workspaceId: string | null | undefined,
+  ): SWRResponse<AgentLabelListItem[]> => {
+    const scopeId = workspaceId ?? null;
+
+    // Changing the SWR key refetches, but the store keeps serving the previous
+    // scope's registry until that request lands. Drop it immediately instead:
+    // an empty picker is a moment of missing UI, while a picker holding
+    // foreign label ids is a destructive write waiting to happen.
+    useEffect(() => {
+      if (this.#get().agentLabelsWorkspaceId === scopeId) return;
+
+      this.#set(
+        { agentLabels: [], agentLabelsWorkspaceId: scopeId, isAgentLabelsInit: false },
+        false,
+        n('useFetchAgentLabels/scopeChanged'),
+      );
+    }, [scopeId]);
+
     return useClientDataSWR<AgentLabelListItem[]>(
-      isLogin === true ? agentLabelKeys.list(isLogin) : null,
+      isLogin === true ? agentLabelKeys.list(isLogin, scopeId) : null,
       () => agentLabelService.getLabels(),
       {
         onSuccess: (data) => {
           const state = this.#get();
-          if (state.isAgentLabelsInit && isEqual(state.agentLabels, data)) return;
+          if (
+            state.isAgentLabelsInit &&
+            state.agentLabelsWorkspaceId === scopeId &&
+            isEqual(state.agentLabels, data)
+          )
+            return;
 
           this.#set(
-            { agentLabels: data, isAgentLabelsInit: true },
+            { agentLabels: data, agentLabelsWorkspaceId: scopeId, isAgentLabelsInit: true },
             false,
             n('useFetchAgentLabels/onSuccess'),
           );

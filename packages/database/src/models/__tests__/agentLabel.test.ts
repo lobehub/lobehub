@@ -156,12 +156,31 @@ describe('AgentLabelModel', () => {
       await expect(workspaceModel.setAgentLabels('agt-scope', [label.id])).rejects.toThrow();
     });
 
-    it('should ignore labels outside the scope', async () => {
+    it('should reject labels outside the scope instead of dropping them', async () => {
       await createAgent('agt-cross');
       const wsLabel = await workspaceModel.create({ name: 'WS Only' });
 
-      const next = await personalModel.setAgentLabels('agt-cross', [wsLabel.id]);
-      expect(next).toEqual([]);
+      await expect(personalModel.setAgentLabels('agt-cross', [wsLabel.id])).rejects.toThrow(
+        /not found in current scope/,
+      );
+    });
+
+    it('should not wipe existing labels when the caller sends a foreign id', async () => {
+      // Regression: this is a full replacement, so silently dropping an
+      // unresolvable id shrinks the next set and deletes assignments the
+      // caller never touched. A client still holding another workspace's
+      // registry across a scope switch would erase the agent's labels.
+      await createAgent('agt-stale');
+      const mine = await personalModel.create({ name: 'Mine' });
+      const foreign = await workspaceModel.create({ name: 'Theirs' });
+
+      await personalModel.setAgentLabels('agt-stale', [mine.id]);
+
+      await expect(
+        personalModel.setAgentLabels('agt-stale', [mine.id, foreign.id]),
+      ).rejects.toThrow();
+
+      expect(await personalModel.getAgentLabelIds('agt-stale')).toEqual([mine.id]);
     });
 
     it('should not newly apply archived labels but keep existing ones', async () => {

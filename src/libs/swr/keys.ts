@@ -179,8 +179,16 @@ export const agentKeys = {
 
 // ---- agent labels -------------------------------------------------------
 export const agentLabelKeys = {
-  /** Agent label registry (workspace-shared, or personal). */
-  list: def('agentLabel:list', (isLogin: boolean) => ['agentLabel:list', isLogin]),
+  /**
+   * Agent label registry (workspace-shared, or personal). Keyed by workspace:
+   * the registries are disjoint per scope, so a shared key would serve the
+   * previous workspace's labels across a switch.
+   */
+  list: def('agentLabel:list', (isLogin: boolean, workspaceId: string | null | undefined) => [
+    'agentLabel:list',
+    isLogin,
+    workspaceId ?? null,
+  ]),
 };
 
 // ---- agent builder (opening-suggestion chips) ---------------------------
