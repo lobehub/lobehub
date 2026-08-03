@@ -64,9 +64,14 @@ export const sessionGroupRouter = router({
       return ctx.sessionGroupModel.publishToWorkspace(input.id);
     }),
 
-  getSessionGroup: sessionProcedure.query(async ({ ctx }): Promise<SessionGroupItem[]> => {
-    return ctx.sessionGroupModel.query() as any;
-  }),
+  getSessionGroup: sessionProcedure
+    // Folders are shared workspace structure now, so listing them is what
+    // `session_group:read` exists to gate. Without this the permission is
+    // declared but unenforceable.
+    .use(withScopedPermission('session_group:read'))
+    .query(async ({ ctx }): Promise<SessionGroupItem[]> => {
+      return ctx.sessionGroupModel.query() as any;
+    }),
 
   // NOTE: no row-level creator check on the mutations below (unlike other
   // workspace-shared resources). Sidebar organization is a per-member concern

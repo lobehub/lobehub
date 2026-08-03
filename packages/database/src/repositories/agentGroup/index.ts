@@ -754,6 +754,10 @@ export class AgentGroupRepository {
           title: supervisorAgent?.title || 'Supervisor',
           userId: this.userId,
           virtual: true,
+          // Synthetic agents stay in lockstep with their group, the same way
+          // creation and `setVisibility` keep them. Left to the column default
+          // they would be workspace-visible while the group stays private.
+          visibility: sourceGroup.visibility,
           workspaceId: this.workspaceId ?? null,
         })
         .returning();
@@ -783,6 +787,7 @@ export class AgentGroupRepository {
           // User & virtual flag
           userId: this.userId,
           virtual: true,
+          visibility: sourceGroup.visibility,
           workspaceId: this.workspaceId ?? null,
         }));
 

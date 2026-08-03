@@ -44,7 +44,21 @@ export const homeRouter = router({
         })
       : true;
 
-    const result = await ctx.homeRepository.getSidebarAgentList(includeLabels);
+    // Same reasoning for folders: this payload carries every shared Category's
+    // id, name and order, so denying `session_group:read` has to close this
+    // door too. Omitted rather than rejected — the agent list itself is not
+    // gated on it, and losing the whole sidebar over a folder grant would be
+    // worse than losing the folders.
+    const includeGroups = ctx.workspaceId
+      ? await hasWorkspaceScopedPermission({
+          action: 'SESSION_GROUP_READ',
+          db: ctx.serverDB,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        })
+      : true;
+
+    const result = await ctx.homeRepository.getSidebarAgentList(includeLabels, includeGroups);
 
     // Runtime migration: backfill sessionGroupId for legacy agents
     const runMigration = async () => {

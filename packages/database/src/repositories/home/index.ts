@@ -68,7 +68,10 @@ export class HomeRepository {
    *   router decides; defaulting to `true` keeps personal mode and every
    *   existing caller unchanged, since that grant only exists in a workspace.
    */
-  async getSidebarAgentList(includeLabels = true): Promise<SidebarAgentListResponse> {
+  async getSidebarAgentList(
+    includeLabels = true,
+    includeGroups = true,
+  ): Promise<SidebarAgentListResponse> {
     // 1. Query all agents (non-virtual) with their session info (if exists).
     //    `visibility` is selected so we can later bucket public vs. the
     //    current user's private rows; the WHERE already hides other members'
@@ -153,23 +156,25 @@ export class HomeRepository {
     // creator through the standard visibility predicate. Items whose groupId
     // points at a folder invisible to the caller fall back to the ungrouped
     // list in processAgentList.
-    const groupList = await this.db
-      .select({
-        id: sessionGroups.id,
-        name: sessionGroups.name,
-        sort: sessionGroups.sort,
-        userId: sessionGroups.userId,
-        visibility: sessionGroups.visibility,
-      })
-      .from(sessionGroups)
-      .where(
-        buildWorkspaceWhere(this.scope, {
-          userId: sessionGroups.userId,
-          workspaceId: sessionGroups.workspaceId,
-          visibility: sessionGroups.visibility,
-        }),
-      )
-      .orderBy(sessionGroups.sort);
+    const groupList = !includeGroups
+      ? []
+      : await this.db
+          .select({
+            id: sessionGroups.id,
+            name: sessionGroups.name,
+            sort: sessionGroups.sort,
+            userId: sessionGroups.userId,
+            visibility: sessionGroups.visibility,
+          })
+          .from(sessionGroups)
+          .where(
+            buildWorkspaceWhere(this.scope, {
+              userId: sessionGroups.userId,
+              workspaceId: sessionGroups.workspaceId,
+              visibility: sessionGroups.visibility,
+            }),
+          )
+          .orderBy(sessionGroups.sort);
 
     // 4. Process and categorize
     return this.processAgentList(
