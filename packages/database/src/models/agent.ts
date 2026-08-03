@@ -1289,7 +1289,15 @@ export class AgentModel {
    * silently finds it in Ungrouped. Private agents are only visible to their
    * owner, so any folder that owner can see is fine.
    */
-  private assertSessionGroupAssignable = async (agentId: string, sessionGroupId: string) => {
+  /**
+   * Resolve a folder the caller may put an item in, returning its visibility.
+   * Shared by the move guard and the create path — both need the same
+   * "visible in scope" check, and create additionally derives the new agent's
+   * visibility from the result.
+   */
+  getAssignableSessionGroupVisibility = async (
+    sessionGroupId: string,
+  ): Promise<'private' | 'public'> => {
     const [group] = await this.db
       .select({ visibility: sessionGroups.visibility })
       .from(sessionGroups)
@@ -1309,6 +1317,13 @@ export class AgentModel {
       .limit(1);
 
     if (!group) throw new Error(`Session group ${sessionGroupId} not found in current scope`);
+
+    return group.visibility as 'private' | 'public';
+  };
+
+  private assertSessionGroupAssignable = async (agentId: string, sessionGroupId: string) => {
+    const groupVisibility = await this.getAssignableSessionGroupVisibility(sessionGroupId);
+    const group = { visibility: groupVisibility };
 
     if (!this.workspaceId) return;
 
