@@ -216,8 +216,22 @@ const CLI_AUTH_REQUIRED_PATTERNS = [
  */
 const CLI_USER_RATE_LIMIT_PATTERNS = [
   /you'?ve hit your limit/i,
+  // CC names the window in the wording it actually ships — `You've hit your
+  // session limit · resets 6:30pm (Asia/Shanghai)` and `You've hit your weekly
+  // limit · resets Jul 3 at 1pm`. Without these the bare `you've hit your
+  // limit` pattern misses every real message, leaving the 429 to fall through
+  // to the overloaded (retry) guide.
+  /you'?ve hit your \S+ limit/i,
+  // Credit/balance exhaustion, e.g. `You've reached your Fable 5 limit. Run
+  // /usage-credits to continue or switch models with /model.`
+  /you'?ve reached your .{0,40}\blimit\b/i,
   /usage limit reached/i,
   /\blimit reached\b/i,
+  // Gateways/proxies in front of the API localize the same quota rejection,
+  // e.g. `API Error: Request rejected (429) · [1234][已达到 5 小时使用上限，
+  // 2026-06-19 22:00:00 后可继续使用。…]`. English-only patterns classified
+  // these as a transient overload and told the user to just retry.
+  /使用上限/,
 ] as const;
 
 /**
@@ -233,12 +247,60 @@ const CLI_SERVER_THROTTLE_PATTERNS = [
   /server is temporarily limiting requests/i,
 ] as const;
 
+/**
+ * Transport-level failures: the connection dropped, stalled, or timed out
+ * before the run could finish. CC reports these as an `API Error:` line with
+ * no `api_error_status` at all, so neither the 429/529 check nor the
+ * overloaded wording claimed them and they fell through to the opaque generic
+ * card — with no retry affordance, even though retrying is exactly the right
+ * move. They share the transient/retry UX with a server overload, so they are
+ * classified as `overloaded` rather than earning a code the UI can't render.
+ */
+const CLI_NETWORK_ERROR_PATTERNS = [
+  /unable to connect to api/i,
+  /\beconnreset\b/i,
+  /\beconnrefused\b/i,
+  /\bconnectionrefused\b/i,
+  /\betimedout\b/i,
+  /\benotfound\b/i,
+  /connection closed mid-response/i,
+  /socket connection was closed/i,
+  /socket hang up/i,
+  /stream idle timeout/i,
+  /response stalled mid-stream/i,
+  /request timed out/i,
+] as const;
+
 const CLI_OVERLOADED_PATTERNS = [
   /overloaded_error/i,
   /\boverloaded\b/i,
-  /api error:\s*529\b/i,
+  // Any 5xx is a server-side condition with the same retry UX — the old
+  // 529-only pattern let `API Error: 500 Internal server error` (and the
+  // localized `API Error: 503 · [该模型当前访问量过大，请您稍后再试]`) fall
+  // through to the generic card.
+  /api error:\s*5\d\d\b/i,
   ...CLI_SERVER_THROTTLE_PATTERNS,
+  ...CLI_NETWORK_ERROR_PATTERNS,
 ] as const;
+
+/**
+ * CC's internal end-of-run diagnostic, e.g.
+ * `[ede_diagnostic] result_type=user last_content_type=n/a stop_reason=tool_use`.
+ * It rides in the result event's `errors` array on aborted runs. It is
+ * engineer-facing jargon, never a user-facing reason, so it must not become
+ * the error card's message — it belongs in the details pane.
+ */
+const CC_INTERNAL_DIAGNOSTIC_PATTERN = /^\[ede_diagnostic\]/i;
+
+/**
+ * Terminal reasons CC reports when a run was stopped rather than failed —
+ * a user pressing stop closes the SDK session / SIGINTs the tree, and CC
+ * winds down and exits **0**. The result event is still flagged `is_error`
+ * with no `result` text, so these used to surface the raw `[ede_diagnostic]`
+ * line as the failure message. They are by far the most common "error" in
+ * real traces, and none of them is a fault worth a red card's usual wording.
+ */
+const CLI_ABORTED_TERMINAL_REASONS = new Set(['aborted_streaming', 'aborted_tools']);
 
 /**
  * CC streams a synthetic assistant text turn when the underlying API call
@@ -314,6 +376,10 @@ const getCliResultErrors = (raw: any): string | undefined => {
   const text = raw.errors
     .map((entry: unknown) => getCliResultMessage(entry))
     .filter((entry?: string): entry is string => !!entry?.trim())
+    // Drop CC's internal end-of-run diagnostic: it is the ONLY `errors` entry
+    // on an aborted run, so letting it through made the error card read
+    // `[ede_diagnostic] result_type=user last_content_type=n/a …`.
+    .filter((entry: string) => !CC_INTERNAL_DIAGNOSTIC_PATTERN.test(entry.trim()))
     .join('\n');
 
   return text || undefined;
@@ -459,6 +525,40 @@ const getAuthRequiredTerminalError = (
 };
 
 /**
+ * A run that was stopped, not one that failed. CC flags the result `is_error`
+ * with `terminal_reason: 'aborted_streaming' | 'aborted_tools'`, an empty
+ * `result`, and only its internal `[ede_diagnostic]` line in `errors` — while
+ * exiting 0. Left unclassified it produced the single most common "failure"
+ * users see, worded as raw engineer jargon.
+ *
+ * Reported with an explicit `aborted` code and a plain-language message so the
+ * card can read as a stop rather than a fault. The event stays an `error` so
+ * downstream run/topic bookkeeping is unchanged; only the code and the wording
+ * improve.
+ */
+const getAbortedTerminalError = (raw: any): HeterogeneousTerminalErrorData | undefined => {
+  if (!CLI_ABORTED_TERMINAL_REASONS.has(raw?.terminal_reason)) return;
+  // A stop that still reported a real reason (a rate limit that landed while
+  // winding down) belongs to the classifier that owns that reason.
+  if (getCliResultMessage(raw.result) || getCliResultErrors(raw)) return;
+
+  const message = 'Claude Code stopped before finishing this run.';
+
+  return {
+    agentType: 'claude-code',
+    code: 'aborted',
+    details: {
+      ...(typeof raw.num_turns === 'number' ? { numTurns: raw.num_turns } : {}),
+      ...(typeof raw.session_id === 'string' ? { sessionId: raw.session_id } : {}),
+      ...(typeof raw.subtype === 'string' ? { subtype: raw.subtype } : {}),
+      terminalReason: raw.terminal_reason,
+    },
+    error: message,
+    message,
+  };
+};
+
+/**
  * Last-resort terminal error for `is_error` results that no structured
  * classifier (rate-limit / overloaded / auth) claimed. CC's error results
  * frequently carry NO `result` text at all — a mid-response network drop
@@ -525,11 +625,17 @@ const getOverloadedTerminalError = (
   // A real user-quota limit is the rate-limit classifier's job — never steal
   // it here, even if it happened to ride in on a 429/529.
   if (isUserQuotaRateLimit(rateLimitInfo)) return;
+  // Nor an authentication failure that merely *mentions* a transport symptom,
+  // e.g. `Failed to authenticate. API Error: 401 The socket connection was
+  // closed unexpectedly.` — retrying that forever never signs the user in.
+  if (apiErrorStatus === 401 || apiErrorStatus === 403) return;
+  if (rawMessage && CLI_AUTH_REQUIRED_PATTERNS.some((pattern) => pattern.test(rawMessage))) return;
 
   const looksOverloaded =
-    // Both 529 (upstream overloaded) and a 429 with no quota signal (transient
-    // server throttle) are momentary server-side conditions — same retry UX.
-    apiErrorStatus === 529 ||
+    // Any 5xx (upstream overloaded / internal error) and a 429 with no quota
+    // signal (transient server throttle) are momentary server-side conditions
+    // — same retry UX.
+    (typeof apiErrorStatus === 'number' && apiErrorStatus >= 500 && apiErrorStatus < 600) ||
     apiErrorStatus === 429 ||
     (!!rawMessage && CLI_OVERLOADED_PATTERNS.some((pattern) => pattern.test(rawMessage)));
 
@@ -1711,7 +1817,10 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     const finalEvent: HeterogeneousAgentEvent | undefined = raw.is_error
       ? this.makeEvent(
           'error',
-          rateLimitError ||
+          // A stopped run is checked first: it reports no reason of its own, so
+          // every other classifier would either miss it or mislabel it.
+          getAbortedTerminalError(raw) ||
+            rateLimitError ||
             getOverloadedTerminalError(
               classifiableResult,
               raw.api_error_status,
