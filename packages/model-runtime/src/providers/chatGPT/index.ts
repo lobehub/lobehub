@@ -26,6 +26,14 @@ const isResponsesLiteModel = (model: string | undefined) =>
 export const LobeChatGPTAI = createOpenAICompatibleRuntime<ChatGPTClientOptions>({
   baseURL: CHATGPT_CODEX_BASE_URL,
   chatCompletion: {
+    // The Codex backend exposes no /chat/completions endpoint, so every request must
+    // go through the Responses API. This is a hard provider capability, not a default:
+    // the user's `enableResponseApi` toggle must not be able to opt out of it.
+    handlePayload: (payload) =>
+      ({
+        ...payload,
+        apiMode: 'responses',
+      }) as unknown as OpenAI.ChatCompletionCreateParamsStreaming,
     useResponse: true,
   },
   customClient: {

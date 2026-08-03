@@ -9,7 +9,7 @@ import {
   isGPT5ProResponsesModel,
   isOpenAIComputerUseModel,
   isOpenAIReasoningPayloadModel,
-  isResponsesAPIModel,
+  isResponsesAPIRequiredModel,
   supportsOpenAIServiceTierFlex,
 } from './modelId';
 
@@ -27,7 +27,11 @@ export const params = {
     handlePayload: (payload) => {
       const { enabledSearch, model, ...rest } = payload;
 
-      if (isResponsesAPIModel(model) || enabledSearch) {
+      // Only models that *require* the Responses API force the mode here. Models that
+      // merely prefer it are decided by shouldUseResponsesAPI() in the factory, which
+      // honors the user's `enableResponseApi` toggle — forcing the mode in handlePayload
+      // would bypass that decision entirely (see #13513).
+      if (isResponsesAPIRequiredModel(model) || enabledSearch) {
         return { ...rest, apiMode: 'responses', enabledSearch, model } as ChatStreamPayload;
       }
 
