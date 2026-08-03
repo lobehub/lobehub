@@ -399,6 +399,14 @@ run metadata so the report can render a separate interaction-cost section.
 
 ### Step 5 — Structured report (mandatory deliverable)
 
+**Read [references/report.md](./references/report.md) in full before writing the
+first line of `result.json`** — it is the schema, and this section is only a
+summary of it. Do not infer field shapes from the snippets here: the fields that
+actually get written wrong are the nested ones (evidence `comparison` pairs,
+structured `visualizations`, `plan[]` verifier metadata), and none of them are
+spelled out below. A field written in the wrong shape is dropped on ingest, so
+the run publishes green with the evidence silently degraded.
+
 Every automated test session ends with a structured, evidence-backed report — not
 a chat-only summary. Scaffold it up front and fill it as you test:
 
@@ -446,6 +454,10 @@ Hard rules worth front-loading:
 - **Visual evidence lives in `result.json`, NOT in `report.md`.** Attach each
   screenshot/GIF to its case via `cases[].evidence`; the page renders it next to
   the check. Do NOT embed images/GIFs in `report.md`.
+- **A before/after pair is one nested `comparison` object per half**, never a
+  flat `comparison` + `role` pair of keys — copy the example in
+  [references/report.md](./references/report.md#workflow) rather than writing it
+  from memory. Both halves need the same `id`, opposite `role`s, and a `label`.
 - **Non-visual behavioral claims use dual text evidence.** Attach two separate
   text artifacts to the same case: a reviewer-facing **reasoning** document and
   an audit-facing **execution** document. The reasoning artifact explains the

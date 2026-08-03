@@ -387,9 +387,14 @@ export function reportEvidence(evidence: unknown): ReportEvidenceInput[] {
       // The report viewer pairs on `id` and drops any comparison lacking one, so
       // an id-less half could never render side by side. Warn rather than upload
       // a comparison that is silently downgraded to an ordinary image.
-      if (comparison && !(id && (role === 'before' || role === 'after'))) {
+      //
+      // Test the raw field, not the parsed object: a comparison written flat
+      // (`comparison: "row", role: "before"`) is not an object at all, so keying
+      // the warning off `objectValue()` skipped the one shape that most needs
+      // it — the author saw a clean ingest and unpaired images on the page.
+      if (value.comparison && !(comparison && id && (role === 'before' || role === 'after'))) {
         log.warn(
-          `evidence ${evidencePath}: comparison needs both a string "id" and role "before"/"after" — ignoring it`,
+          `evidence ${evidencePath}: comparison must be an object with a string "id" and role "before"/"after" — ignoring it`,
         );
       }
       const layout = comparison?.layout === 'vertical' ? 'vertical' : undefined;

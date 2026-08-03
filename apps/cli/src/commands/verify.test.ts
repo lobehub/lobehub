@@ -5,6 +5,7 @@ import path from 'node:path';
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { log } from '../utils/logger';
 import {
   deriveReportVerdict,
   evidenceTypeForFile,
@@ -304,6 +305,37 @@ describe('reportEvidence — comparison normalization', () => {
     expect(
       reportEvidence([{ comparison: { id: 'x' }, path: 'a.png' }])[0].comparison,
     ).toBeUndefined();
+  });
+
+  // The flat shape (`comparison: "row", role: "before"`) is the easiest one to
+  // write from memory, and it used to be the ONLY malformed shape that produced
+  // no warning: the guard parsed the field into an object first, so a string
+  // read as "no comparison at all" and the ingest exited clean while the page
+  // rendered two unpaired images.
+  it('warns and drops a comparison that is not an object', () => {
+    vi.mocked(log.warn).mockClear();
+
+    const [item] = reportEvidence([
+      { comparison: 'row', path: 'before.png', role: 'before' } as unknown,
+    ]);
+
+    expect(item).toEqual({ comparison: undefined, description: undefined, path: 'before.png' });
+    expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('before.png'));
+  });
+
+  it('warns for every malformed comparison shape, and stays quiet for a valid or absent one', () => {
+    const warnsFor = (comparison: unknown) => {
+      vi.mocked(log.warn).mockClear();
+      reportEvidence([{ comparison, path: 'a.png' } as unknown]);
+      return vi.mocked(log.warn).mock.calls.length > 0;
+    };
+
+    expect(warnsFor('row')).toBe(true);
+    expect(warnsFor(['row'])).toBe(true);
+    expect(warnsFor({ id: 'row' })).toBe(true);
+    expect(warnsFor({ id: 'row', role: 'middle' })).toBe(true);
+    expect(warnsFor({ id: 'row', role: 'before' })).toBe(false);
+    expect(warnsFor(undefined)).toBe(false);
   });
 
   it('supports the `file` / `desc` aliases and skips entries with no path', () => {
