@@ -666,6 +666,12 @@ export class ChatGroupModel {
         and(
           eq(chatGroupsAgents.chatGroupId, groupId),
           eq(agents.visibility, 'private'),
+          // The synthetic supervisor mirrors the group's own visibility, so a
+          // private group always owns one private agent. Counting it makes the
+          // publish guard unsatisfiable — every private group would look like
+          // it still holds private members and could never be shared. Only
+          // real members can block a publish.
+          ne(chatGroupsAgents.role, 'supervisor'),
           this.agentsOwnership(),
         ),
       );

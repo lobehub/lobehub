@@ -1024,7 +1024,7 @@ export class AgentModel {
    */
   publishToWorkspace = async (agentId: string) => {
     const agent = await this.db.query.agents.findFirst({
-      columns: { agencyConfig: true, workspaceId: true },
+      columns: { agencyConfig: true, sessionGroupId: true, workspaceId: true },
       where: and(
         eq(agents.id, agentId),
         this.ownership(),
@@ -1042,9 +1042,24 @@ export class AgentModel {
     // when workspace members cannot resolve it.
     await this.assertFixedExecutionTarget(agent.workspaceId, agent.agencyConfig);
 
+    // Rehome exactly as `setVisibility` does: a folder cannot mix
+    // visibilities, so publishing out of a private Category releases the
+    // folder. Left in place the agent would be public while its folder is not,
+    // and the sidebar would show it in Ungrouped rather than where it was
+    // published from.
+    const clearGroup = agent.sessionGroupId
+      ? await this.getAssignableSessionGroupVisibility(agent.sessionGroupId)
+          .then((visibility) => visibility !== 'public')
+          .catch(() => true)
+      : false;
+
     const [result] = await this.db
       .update(agents)
-      .set({ updatedAt: new Date(), visibility: 'public' })
+      .set({
+        updatedAt: new Date(),
+        visibility: 'public',
+        ...(clearGroup ? { sessionGroupId: null } : {}),
+      })
       .where(
         and(
           eq(agents.id, agentId),
