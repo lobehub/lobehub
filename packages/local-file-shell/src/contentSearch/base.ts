@@ -9,6 +9,30 @@ import type { GrepContentParams, GrepContentResult } from '../types';
 const logger = createLogger('contentSearch:base');
 
 /**
+ * Directories that must never reach a search result.
+ *
+ * `rg` and `ag` honour `.gitignore`, so build output is filtered for free. `grep`
+ * and the Node fallback have no ignore-file awareness, so without this list the
+ * *same query* returns hundreds of compiled bundles from `.next` whenever
+ * ripgrep isn't on PATH — an engine downgrade silently becomes a change in
+ * results. Keep every engine symmetric instead.
+ *
+ * Entries are matched relative to the search root, so explicitly scoping a
+ * search *into* one of these directories still works.
+ */
+const EXCLUDED_DIRS = [
+  'node_modules',
+  '.git',
+  '.next',
+  'dist',
+  'build',
+  'out',
+  'coverage',
+  '.turbo',
+  '.cache',
+] as const;
+
+/**
  * Content search tool type
  */
 export type ContentSearchTool = 'ag' | 'grep' | 'nodejs' | 'rg';
@@ -81,7 +105,8 @@ export abstract class BaseContentSearch {
           }
         }
 
-        args.push('--glob', '!**/node_modules/**', '--glob', '!**/.git/**', pattern, '.');
+        for (const dir of EXCLUDED_DIRS) args.push('--glob', `!**/${dir}/**`);
+        args.push(pattern, '.');
         break;
       }
 
@@ -104,7 +129,8 @@ export abstract class BaseContentSearch {
           }
         }
 
-        args.push('--ignore-dir', 'node_modules', '--ignore-dir', '.git', pattern, '.');
+        for (const dir of EXCLUDED_DIRS) args.push('--ignore-dir', dir);
+        args.push(pattern, '.');
         break;
       }
 
@@ -129,7 +155,8 @@ export abstract class BaseContentSearch {
           }
         }
 
-        args.push('--exclude-dir', 'node_modules', '--exclude-dir', '.git', '-E', pattern, '.');
+        for (const dir of EXCLUDED_DIRS) args.push('--exclude-dir', dir);
+        args.push('-E', pattern, '.');
         break;
       }
     }
@@ -248,6 +275,6 @@ export abstract class BaseContentSearch {
    * Can be overridden by subclasses for platform-specific patterns
    */
   protected getDefaultIgnorePatterns(): string[] {
-    return ['**/node_modules/**', '**/.git/**'];
+    return EXCLUDED_DIRS.map((dir) => `**/${dir}/**`);
   }
 }
