@@ -17,18 +17,13 @@ import SwitchPanel from './SwitchPanel';
 const Agent = memo<PropsWithChildren>(() => {
   const { t } = useTranslation(['chat', 'common']);
 
-  const [isLoading, isInbox, title, role, avatar, backgroundColor] = useAgentStore((s) => [
+  const [isLoading, isInbox, title, avatar, backgroundColor] = useAgentStore((s) => [
     agentSelectors.isAgentConfigLoading(s),
     builtinAgentSelectors.isInboxAgent(s),
     agentSelectors.currentAgentDisplayName(s),
-    agentSelectors.currentAgentTitle(s),
     agentSelectors.currentAgentAvatar(s),
     agentSelectors.currentAgentBackgroundColor(s),
   ]);
-
-  // Show the role beside the name only when the name is what won the label —
-  // otherwise the label already is the role and the tag would repeat it.
-  const roleTag = title && role?.trim() && title !== role.trim() ? role.trim() : undefined;
 
   const displayTitle = isInbox
     ? title || 'Lobe AI'
@@ -59,11 +54,6 @@ const Agent = memo<PropsWithChildren>(() => {
         <Text ellipsis weight={500}>
           {displayTitle}
         </Text>
-        {roleTag ? (
-          <Text ellipsis style={{ flex: 'none', fontSize: 12 }} type={'secondary'}>
-            {roleTag}
-          </Text>
-        ) : null}
         <ActionIcon
           icon={ChevronsUpDownIcon}
           size={DESKTOP_HEADER_ICON_SMALL_SIZE}

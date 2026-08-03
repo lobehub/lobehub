@@ -48,7 +48,7 @@ describe('AgentBuilderContextInjector', () => {
     expect(injected).toContain('<title>健康助手</title>');
   });
 
-  it('should emit an empty name element when the agent has none, so the gap is visible', async () => {
+  it('should fall back to the role when the agent has no personal name', async () => {
     const injector = new AgentBuilderContextInjector({
       agentContext: {
         meta: { title: '健康助手' },
@@ -59,7 +59,7 @@ describe('AgentBuilderContextInjector', () => {
     const result = await injector.process(createContext());
     const injected = result.messages[1].content;
 
-    expect(injected).toContain('<name></name>');
+    expect(injected).toContain('<name>健康助手</name>');
     expect(injected).toContain('<title>健康助手</title>');
   });
 

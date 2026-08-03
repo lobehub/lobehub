@@ -124,6 +124,13 @@ const IMMUTABLE_AGENT_FIELDS = [
   'workspaceId',
 ] as const;
 
+/**
+ * Accepted shape for a user-chosen slug: lowercase words joined by single
+ * hyphens, matching what `randomSlug` generates. No underscores — the agent
+ * route tells an id from a slug by the underscore in every generated id.
+ */
+const AGENT_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
 /** Slugs owned by builtin provisioning; user input must never set one. */
 const RESERVED_AGENT_SLUGS: ReadonlySet<string> = new Set<string>(
   Object.values(BUILTIN_AGENT_SLUGS),
@@ -1442,6 +1449,75 @@ export class AgentModel {
       .returning();
 
     return { agentId: newAgent.id };
+  };
+
+  /**
+   * Resolve a user-facing slug to its agent id, scoped by the caller's ownership
+   * predicate. Returns `null` when no visible agent owns that slug — callers must
+   * treat that as "not found" and must NOT distinguish it from "exists but not
+   * yours", or the endpoint becomes an existence oracle for other users' agents.
+   */
+  resolveIdBySlug = async (slug: string): Promise<string | null> => {
+    const trimmed = slug.trim();
+    if (!trimmed) return null;
+
+    const rows = await this.db
+      .select({ id: agents.id })
+      .from(agents)
+      .where(and(this.ownership(), eq(agents.slug, trimmed)))
+      .limit(1);
+
+    return rows[0]?.id ?? null;
+  };
+
+  /**
+   * Rename an agent's url slug.
+   *
+   * Deliberately its own method rather than a field on `updateConfig`: `slug`
+   * stays in {@link IMMUTABLE_AGENT_FIELDS} so it can never ride along in a
+   * passthrough config patch. Renaming needs validation the config path has no
+   * place for — shape, reserved builtin slugs, and a uniqueness scope that
+   * differs between personal and workspace rows.
+   *
+   * Returns a discriminated result instead of throwing so the caller can render
+   * a field-level message; only a genuinely missing agent throws.
+   */
+  updateSlug = async (
+    agentId: string,
+    slug: string,
+  ): Promise<{ reason?: 'invalid' | 'reserved' | 'taken'; success: boolean }> => {
+    const next = slug.trim().toLowerCase();
+
+    if (!AGENT_SLUG_PATTERN.test(next)) return { reason: 'invalid', success: false };
+    if (RESERVED_AGENT_SLUGS.has(next)) return { reason: 'reserved', success: false };
+
+    const current = await this.db.query.agents.findFirst({
+      columns: { slug: true },
+      where: and(eq(agents.id, agentId), this.ownership()),
+    });
+    if (!current) throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
+    if (current.slug === next) return { success: true };
+
+    // Check within the same scope the unique indexes use, so the pre-check and
+    // the constraint agree. The insert can still lose a race, hence the catch.
+    const clash = await this.db
+      .select({ id: agents.id })
+      .from(agents)
+      .where(and(this.ownership(), eq(agents.slug, next)))
+      .limit(1);
+    if (clash.length > 0) return { reason: 'taken', success: false };
+
+    try {
+      await this.db
+        .update(agents)
+        .set({ slug: next, updatedAt: new Date() })
+        .where(and(eq(agents.id, agentId), this.ownership()));
+    } catch {
+      // Unique violation from a concurrent rename — same user-facing outcome.
+      return { reason: 'taken', success: false };
+    }
+
+    return { success: true };
   };
 
   /**

@@ -1,5 +1,5 @@
 import { agentDisplayName } from '@lobechat/types';
-import { Text } from '@lobehub/ui';
+import { Tag, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -28,11 +28,7 @@ const Title = memo<TitleProps>(({ showTitle, time, avatar, titleAddon }) => {
           {title}
         </Text>
       )}
-      {showTitle && roleTag && (
-        <Text fontSize={12} type={'secondary'}>
-          {roleTag}
-        </Text>
-      )}
+      {showTitle && roleTag && <Tag size={'small'}>{roleTag}</Tag>}
       {showTitle ? titleAddon : undefined}
       {!timeText ? null : (
         <Text

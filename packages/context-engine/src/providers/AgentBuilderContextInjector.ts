@@ -78,12 +78,13 @@ const defaultFormatAgentContext = (context: AgentBuilderContext): string => {
 
   // Add meta section
   if (context.meta) {
-    // `<name>` leads and is always emitted, empty included. An agent that has a name
-    // must carry it or the builder re-names it every turn; an agent that has none
-    // needs the empty element to make the gap *visible* — asking the model to notice
-    // an absent tag is a much weaker signal than showing it an empty value, and in
-    // testing it silently skipped naming a legacy agent when the element was omitted.
-    const metaFields: string[] = [`  <name>${escapeXml(context.meta.name ?? '')}</name>`];
+    // `<name>` leads and always carries a usable label: an agent with no personal
+    // name falls back to its role, the same rule the UI renders by. An empty
+    // element was tried first and rejected — it made the builder treat "no name"
+    // as a hole to fill, when the product answer is simply to use the role.
+    const metaFields: string[] = [
+      `  <name>${escapeXml(context.meta.name?.trim() || context.meta.title?.trim() || '')}</name>`,
+    ];
     if (context.meta.title) metaFields.push(`  <title>${escapeXml(context.meta.title)}</title>`);
     if (context.meta.description)
       metaFields.push(`  <description>${escapeXml(context.meta.description)}</description>`);
