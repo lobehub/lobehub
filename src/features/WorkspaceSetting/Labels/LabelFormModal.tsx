@@ -10,6 +10,7 @@ import ImperativeModal from '@/components/ImperativeModal';
 import { useHomeStore } from '@/store/home';
 
 import { DEFAULT_LABEL_COLOR, LABEL_COLOR_PRESETS } from './constants';
+import { isDuplicateLabelNameError } from './errors';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   swatch: css`
@@ -40,119 +41,136 @@ interface LabelFormModalProps extends Pick<ModalProps, 'open' | 'onCancel'> {
    */
   assignTo?: { agentId: string; currentLabelIds: string[] };
   label?: AgentLabelListItem;
+  /**
+   * Opened from a failed restore: the label is archived and its old name is
+   * taken, so saving must also flip `archived` back off — otherwise the user
+   * renames it and still has to find the restore action again.
+   */
+  restoreOnSave?: boolean;
 }
 
-const LabelFormModal = memo<LabelFormModalProps>(({ assignTo, label, open, onCancel }) => {
-  const { t } = useTranslation(['setting', 'common']);
-  const [createAgentLabel, setAgentLabels, updateAgentLabel] = useHomeStore((s) => [
-    s.createAgentLabel,
-    s.setAgentLabels,
-    s.updateAgentLabel,
-  ]);
+const LabelFormModal = memo<LabelFormModalProps>(
+  ({ assignTo, label, open, onCancel, restoreOnSave }) => {
+    const { t } = useTranslation(['setting', 'common']);
+    const [createAgentLabel, setAgentLabels, updateAgentLabel] = useHomeStore((s) => [
+      s.createAgentLabel,
+      s.setAgentLabels,
+      s.updateAgentLabel,
+    ]);
 
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [color, setColor] = useState<string>(DEFAULT_LABEL_COLOR);
-  const [loading, setLoading] = useState(false);
+    const [name, setName] = useState('');
+    const [description, setDescription] = useState('');
+    const [color, setColor] = useState<string>(DEFAULT_LABEL_COLOR);
+    const [loading, setLoading] = useState(false);
 
-  // Reset per open so the form reflects the target label (or a blank create).
-  useEffect(() => {
-    if (!open) return;
-    setName(label?.name ?? '');
-    setDescription(label?.description ?? '');
-    setColor(label?.color ?? DEFAULT_LABEL_COLOR);
-  }, [open, label]);
+    // Reset per open so the form reflects the target label (or a blank create).
+    useEffect(() => {
+      if (!open) return;
+      setName(label?.name ?? '');
+      setDescription(label?.description ?? '');
+      setColor(label?.color ?? DEFAULT_LABEL_COLOR);
+    }, [open, label]);
 
-  return (
-    <div onClick={stopPropagation}>
-      <ImperativeModal
-        destroyOnHidden
-        okButtonProps={{ disabled: !name.trim(), loading }}
-        open={open}
-        width={420}
-        title={
-          label
-            ? t('workspaceSetting.labels.form.editTitle')
-            : t('workspaceSetting.labels.form.createTitle')
-        }
-        onCancel={onCancel}
-        onOk={async (e) => {
-          const trimmed = name.trim();
-          if (!trimmed) return;
-
-          setLoading(true);
-          try {
-            if (label) {
-              await updateAgentLabel(label.id, {
-                color,
-                description: description.trim() || null,
-                name: trimmed,
-              });
-            } else {
-              const id = await createAgentLabel({
-                color,
-                description: description.trim() || undefined,
-                name: trimmed,
-              });
-              if (assignTo && id) {
-                await setAgentLabels(assignTo.agentId, [...assignTo.currentLabelIds, id]);
-              }
-            }
-            onCancel?.(e as any);
-          } catch (error) {
-            console.error('Failed to save label:', error);
-            toast.error(t('operationFailed', { ns: 'common' }));
-          } finally {
-            setLoading(false);
+    return (
+      <div onClick={stopPropagation}>
+        <ImperativeModal
+          destroyOnHidden
+          okButtonProps={{ disabled: !name.trim(), loading }}
+          open={open}
+          width={420}
+          title={
+            restoreOnSave
+              ? t('workspaceSetting.labels.form.restoreTitle')
+              : label
+                ? t('workspaceSetting.labels.form.editTitle')
+                : t('workspaceSetting.labels.form.createTitle')
           }
-        }}
-      >
-        <Flexbox gap={16} paddingBlock={8}>
-          <Flexbox gap={8}>
-            <span>{t('workspaceSetting.labels.form.name')}</span>
-            <Input
-              autoFocus
-              maxLength={40}
-              placeholder={t('workspaceSetting.labels.form.namePlaceholder')}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </Flexbox>
-          <Flexbox gap={8}>
-            <span>{t('workspaceSetting.labels.form.description')}</span>
-            <Input
-              maxLength={200}
-              placeholder={t('workspaceSetting.labels.form.descriptionPlaceholder')}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-          </Flexbox>
-          <Flexbox gap={8}>
-            <span>{t('workspaceSetting.labels.form.color')}</span>
-            <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
-              {LABEL_COLOR_PRESETS.map((preset) => (
-                <span
-                  aria-label={preset}
-                  className={cx(styles.swatch, color === preset && styles.swatchActive)}
-                  key={preset}
-                  role={'button'}
-                  style={{ background: preset }}
-                  onClick={() => setColor(preset)}
-                />
-              ))}
+          onCancel={onCancel}
+          onOk={async (e) => {
+            const trimmed = name.trim();
+            if (!trimmed) return;
+
+            setLoading(true);
+            try {
+              if (label) {
+                await updateAgentLabel(label.id, {
+                  ...(restoreOnSave ? { archived: false } : {}),
+                  color,
+                  description: description.trim() || null,
+                  name: trimmed,
+                });
+              } else {
+                const id = await createAgentLabel({
+                  color,
+                  description: description.trim() || undefined,
+                  name: trimmed,
+                });
+                if (assignTo && id) {
+                  await setAgentLabels(assignTo.agentId, [...assignTo.currentLabelIds, id]);
+                }
+              }
+              onCancel?.(e as any);
+            } catch (error) {
+              // Keep the modal open on a name clash — the user's next move is to
+              // edit the name they already typed, not to start over.
+              if (isDuplicateLabelNameError(error)) {
+                toast.error(t('workspaceSetting.labels.form.duplicateName'));
+                return;
+              }
+              console.error('Failed to save label:', error);
+              toast.error(t('operationFailed', { ns: 'common' }));
+            } finally {
+              setLoading(false);
+            }
+          }}
+        >
+          <Flexbox gap={16} paddingBlock={8}>
+            <Flexbox gap={8}>
+              <span>{t('workspaceSetting.labels.form.name')}</span>
               <Input
-                placeholder={'#RRGGBB'}
-                style={{ width: 100 }}
-                value={color}
-                onChange={(e) => setColor(e.target.value)}
+                autoFocus
+                maxLength={40}
+                placeholder={t('workspaceSetting.labels.form.namePlaceholder')}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
               />
             </Flexbox>
+            <Flexbox gap={8}>
+              <span>{t('workspaceSetting.labels.form.description')}</span>
+              <Input
+                maxLength={200}
+                placeholder={t('workspaceSetting.labels.form.descriptionPlaceholder')}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            </Flexbox>
+            <Flexbox gap={8}>
+              <span>{t('workspaceSetting.labels.form.color')}</span>
+              <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+                {LABEL_COLOR_PRESETS.map((preset) => (
+                  <span
+                    aria-label={preset}
+                    className={cx(styles.swatch, color === preset && styles.swatchActive)}
+                    key={preset}
+                    role={'button'}
+                    style={{ background: preset }}
+                    onClick={() => setColor(preset)}
+                  />
+                ))}
+                <Input
+                  placeholder={'#RRGGBB'}
+                  style={{ width: 100 }}
+                  value={color}
+                  onChange={(e) => setColor(e.target.value)}
+                />
+              </Flexbox>
+            </Flexbox>
           </Flexbox>
-        </Flexbox>
-      </ImperativeModal>
-    </div>
-  );
-});
+        </ImperativeModal>
+      </div>
+    );
+  },
+);
 
 LabelFormModal.displayName = 'LabelFormModal';
 

@@ -26,6 +26,7 @@ import { useHomeStore } from '@/store/home';
 import { agentLabelSelectors } from '@/store/home/selectors';
 
 import DeleteLabelModal from './DeleteLabelModal';
+import { isDuplicateLabelNameError } from './errors';
 import LabelFormModal from './LabelFormModal';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -55,6 +56,8 @@ interface LabelRowProps {
   manageBlockedReason?: string;
   onDelete: (label: AgentLabelListItem) => void;
   onEdit: (label: AgentLabelListItem) => void;
+  /** Restoring hit an active label with the same name — offer rename-and-restore. */
+  onRestoreConflict: (label: AgentLabelListItem) => void;
 }
 
 /** Shared column widths so the header and rows stay aligned. */
@@ -64,16 +67,24 @@ const CREATED_COL_WIDTH = 96;
 const ACTION_COL_WIDTH = 32;
 
 const LabelRow = memo<LabelRowProps>(
-  ({ canManage, label, manageBlockedReason, onDelete, onEdit }) => {
+  ({ canManage, label, manageBlockedReason, onDelete, onEdit, onRestoreConflict }) => {
     const { t } = useTranslation(['setting', 'common']);
     const updateAgentLabel = useHomeStore((s) => s.updateAgentLabel);
 
     const toggleArchive = () => {
       if (label.archived) {
         // Unarchive is non-destructive — no confirm needed.
-        updateAgentLabel(label.id, { archived: false }).catch(() =>
-          toast.error(t('operationFailed', { ns: 'common' })),
-        );
+        updateAgentLabel(label.id, { archived: false }).catch((error) => {
+          // The name freed up by archiving may have been taken since. Archived
+          // labels have no Edit action, so without this the label would be
+          // stuck: hand the user a rename-and-restore form instead of a
+          // dead-end "operation failed".
+          if (isDuplicateLabelNameError(error)) {
+            onRestoreConflict(label);
+            return;
+          }
+          toast.error(t('operationFailed', { ns: 'common' }));
+        });
         return;
       }
       confirmModal({
@@ -236,7 +247,11 @@ const WorkspaceLabelsContent = memo(() => {
   // Linear-style scope filter: the default "workspace" scope lists active
   // labels; "archived" surfaces archived ones so they can be restored.
   const [scope, setScope] = useState<'archived' | 'workspace'>('workspace');
-  const [formModal, setFormModal] = useState<{ label?: AgentLabelListItem; open: boolean }>({
+  const [formModal, setFormModal] = useState<{
+    label?: AgentLabelListItem;
+    open: boolean;
+    restoreOnSave?: boolean;
+  }>({
     open: false,
   });
   const [deleteTarget, setDeleteTarget] = useState<AgentLabelListItem | undefined>();
@@ -257,6 +272,9 @@ const WorkspaceLabelsContent = memo(() => {
       manageBlockedReason={manageBlockedReason}
       onDelete={setDeleteTarget}
       onEdit={(target) => setFormModal({ label: target, open: true })}
+      onRestoreConflict={(target) =>
+        setFormModal({ label: target, open: true, restoreOnSave: true })
+      }
     />
   );
 
@@ -323,6 +341,7 @@ const WorkspaceLabelsContent = memo(() => {
       <LabelFormModal
         label={formModal.label}
         open={formModal.open}
+        restoreOnSave={formModal.restoreOnSave}
         onCancel={() => setFormModal({ open: false })}
       />
       <DeleteLabelModal
