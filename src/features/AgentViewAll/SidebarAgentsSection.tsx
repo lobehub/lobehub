@@ -2,7 +2,7 @@
 
 import { AGENT_CHAT_URL, GROUP_CHAT_URL } from '@lobechat/const';
 import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
-import { Block, ContextMenuTrigger, Flexbox, Icon, type MenuProps, Text } from '@lobehub/ui';
+import { Block, ContextMenuTrigger, Flexbox, Icon, type MenuProps, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, responsive } from 'antd-style';
 import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
 import { memo, useCallback, useRef, useState } from 'react';
@@ -131,12 +131,14 @@ const SidebarMiniCard = memo<SidebarMiniCardProps>(({ item, onToggleSidebar }) =
         <Block clickable className={styles.card} height={'100%'} variant={'outlined'}>
           <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
             <AgentAvatar item={item} size={24} />
-            <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={600}>
+            <Text ellipsis style={{ minWidth: 0 }} weight={600}>
               {displayTitle}
-              {roleTag ? (
-                <span style={{ fontSize: 12, marginInlineStart: 6, opacity: 0.6 }}>{roleTag}</span>
-              ) : null}
             </Text>
+            {roleTag ? (
+              <Tag size={'small'} style={{ flex: 'none' }}>
+                {roleTag}
+              </Tag>
+            ) : null}
           </Flexbox>
           {description ? (
             <Text className={styles.description} fontSize={12} type={'secondary'}>

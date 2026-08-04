@@ -8,6 +8,7 @@ import {
   ContextMenuTrigger,
   Flexbox,
   type MenuProps,
+  Tag,
   Text,
   Tooltip,
 } from '@lobehub/ui';
@@ -154,14 +155,16 @@ const AgentRow = memo<AgentRowProps>(
             <Flexbox flex={1} style={{ minWidth: 0 }}>
               {/* Single-line row (Linear-style density) — the description only
                 renders in card mode, where there is room to browse. */}
-              <Text ellipsis className={'agent-row-title'} weight={500}>
-                {displayTitle}
+              <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
+                <Text ellipsis className={'agent-row-title'} weight={500}>
+                  {displayTitle}
+                </Text>
                 {roleTag ? (
-                  <span style={{ fontSize: 12, marginInlineStart: 6, opacity: 0.6 }}>
+                  <Tag size={'small'} style={{ flex: 'none' }}>
                     {roleTag}
-                  </span>
+                  </Tag>
                 ) : null}
-              </Text>
+              </Flexbox>
             </Flexbox>
           </WorkspaceLink>
           {/* Trailing cluster (Task-list-style): label pills + author avatar +

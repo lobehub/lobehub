@@ -227,12 +227,11 @@ describe('AgentHeader', () => {
 
   // Regression: the headline used to fall back to the name field's PLACEHOLDER,
   // so every unnamed agent read as though it were called "Give it a name, …".
-  it('falls back to the unnamed label, never to the input placeholder', () => {
+  it('never renders the input placeholder as a headline', () => {
     mocks.permissionState.allowed = true;
     mocks.agentStoreState.agentMap = { 'agent-a': { slug: 'experiment-crop-then' } };
     const view = render(<AgentHeader />);
 
-    expect(view.container.textContent).toContain('settingAgent.identity.untitled');
     expect(view.container.textContent).not.toContain('settingAgent.personalName.placeholder');
   });
 
@@ -243,9 +242,42 @@ describe('AgentHeader', () => {
     mocks.agentStoreState.agentMap = { 'agent-a': { slug: 'inbox', title: 'Lobe AI' } };
     const view = render(<AgentHeader />);
 
-    expect(view.container.textContent).toContain('settingAgent.identity.untitled');
-    // Exactly once: on the role line, not also as the headline.
+    // Exactly once: on the role line, never as the headline.
     expect(view.container.textContent?.match(/Lobe AI/g)).toHaveLength(1);
+  });
+
+  // With no name there is nothing to headline, so the slot carries the prompt
+  // that fixes it — not a placeholder dressed up as a name.
+  it('gives the headline slot to the naming prompt while unnamed', () => {
+    mocks.permissionState.allowed = true;
+    mocks.agentStoreState.agentMap = { 'agent-a': { slug: 'inbox', title: 'Lobe AI' } };
+    const view = render(<AgentHeader />);
+
+    expect(view.container.textContent).toContain('settingAgent.personalName.unnamed');
+    expect(view.container.textContent).not.toContain('settingAgent.identity.untitled');
+    // Naming it IS the next step; the identity form would split attention.
+    expect(view.container.textContent).not.toContain('settingAgent.identity.edit');
+  });
+
+  // Read-only viewers get the plain label — an action they cannot take would be
+  // worse than a stated absence.
+  it('falls back to the unnamed label when edits are not allowed', () => {
+    mocks.agentStoreState.agentMap = { 'agent-a': { slug: 'inbox', title: 'Lobe AI' } };
+    const view = render(<AgentHeader />);
+
+    expect(view.container.textContent).toContain('settingAgent.identity.untitled');
+    expect(view.container.textContent).not.toContain('settingAgent.personalName.pickForMe');
+    expect(view.container.textContent).not.toContain('settingAgent.identity.edit');
+  });
+
+  it('restores the headline and the edit affordance once named', () => {
+    mocks.permissionState.allowed = true;
+    mocks.agentStoreState.agentMap = { 'agent-a': { name: '思远', slug: 'inbox' } };
+    const view = render(<AgentHeader />);
+
+    expect(view.container.textContent).toContain('思远');
+    expect(view.container.textContent).not.toContain('settingAgent.personalName.unnamed');
+    expect(view.container.textContent).toContain('settingAgent.identity.edit');
   });
 
   it('states the role is unset instead of leaving a bare slug', () => {

@@ -32,7 +32,9 @@ const AgentHeader = memo(() => {
   const slug = useAgentStore(agentSelectors.getAgentSlugById(agentId));
   const updateMetaById = useAgentStore((s) => s.updateAgentMetaById);
   const { autoName, naming } = useAutoName(agentId);
-  const isUnnamed = !meta.name?.trim();
+  // Without edit rights there is nothing to prompt for, so a nameless agent
+  // falls back to the plain label rather than showing an action nobody can take.
+  const showNamePrompt = !meta.name?.trim() && canEdit;
 
   // File upload
   const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
@@ -154,24 +156,48 @@ const AgentHeader = memo(() => {
           form modal; inline inputs crowded the header and left no room for a
           per-field label or error. */}
       <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
-        <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-          {/* This headline is the NAME slot, so it does not borrow the role the
-              way list surfaces do: the role already has its own line right below,
-              and falling back would print it twice (an agent titled "Lobe AI"
-              read "Lobe AI / Lobe AI · @inbox"). A missing name says so instead —
-              the header states what is absent rather than hiding it. */}
-          <Text ellipsis style={{ fontSize: 36, fontWeight: 600 }}>
-            {meta.name?.trim() || t('settingAgent.identity.untitled', { ns: 'setting' })}
-          </Text>
-          {canEdit ? (
-            <ActionIcon
-              icon={PencilIcon}
+        {/* The headline is the NAME slot. It does not borrow the role the way
+            list surfaces do — the role has its own line right below, and falling
+            back would print it twice (an agent titled "Lobe AI" read
+            "Lobe AI / Lobe AI · @inbox").
+
+            With no name there is nothing to headline, so the slot carries the
+            one thing that can fix it instead of a placeholder pretending to be a
+            name. The edit affordance stays hidden until then: naming it IS the
+            next step, and offering the full identity form alongside would split
+            attention between two ways to do the same thing. */}
+        {showNamePrompt ? (
+          <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
+            <Text ellipsis style={{ color: cssVar.colorTextTertiary, fontSize: 20 }}>
+              {t('settingAgent.personalName.unnamed', { ns: 'setting' })}
+            </Text>
+            <Button
+              icon={SparklesIcon}
+              loading={naming}
               size={'small'}
-              title={t('settingAgent.identity.edit', { ns: 'setting' })}
-              onClick={() => createAgentIdentityModal(agentId)}
-            />
-          ) : null}
-        </Flexbox>
+              type={'text'}
+              onClick={() => {
+                void autoName();
+              }}
+            >
+              {t('settingAgent.personalName.pickForMe', { ns: 'setting' })}
+            </Button>
+          </Flexbox>
+        ) : (
+          <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
+            <Text ellipsis style={{ fontSize: 36, fontWeight: 600 }}>
+              {meta.name?.trim() || t('settingAgent.identity.untitled', { ns: 'setting' })}
+            </Text>
+            {canEdit ? (
+              <ActionIcon
+                icon={PencilIcon}
+                size={'small'}
+                title={t('settingAgent.identity.edit', { ns: 'setting' })}
+                onClick={() => createAgentIdentityModal(agentId)}
+              />
+            ) : null}
+          </Flexbox>
+        )}
         <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
           {/* `Text type="secondary"` resolves to `colorTextDescription`, which antd
               maps to the TERTIARY step — too faint for the line that carries the
@@ -199,27 +225,6 @@ const AgentHeader = memo(() => {
             </Tooltip>
           ) : null}
         </Flexbox>
-        {/* A nameless agent is the one state the header can actually fix, so it
-            says so and offers the fix inline rather than sending the user into
-            the form to invent a name on the spot. */}
-        {isUnnamed && canEdit ? (
-          <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-            <Text ellipsis style={{ color: cssVar.colorTextTertiary, fontSize: 12 }}>
-              {t('settingAgent.personalName.unnamed', { ns: 'setting' })}
-            </Text>
-            <Button
-              icon={SparklesIcon}
-              loading={naming}
-              size={'small'}
-              type={'text'}
-              onClick={() => {
-                void autoName();
-              }}
-            >
-              {t('settingAgent.personalName.pickForMe', { ns: 'setting' })}
-            </Button>
-          </Flexbox>
-        ) : null}
       </Flexbox>
     </Flexbox>
   );

@@ -8,6 +8,7 @@ import {
   ContextMenuTrigger,
   Flexbox,
   type MenuProps,
+  Tag,
   Text,
   Tooltip,
 } from '@lobehub/ui';
@@ -126,14 +127,16 @@ const AgentCard = memo<AgentCardProps>(
           <Block clickable className={cardStyles.card} height={'100%'} variant={'outlined'}>
             <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
               <AgentAvatar item={item} size={24} />
-              <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={600}>
-                {displayTitle}
+              <Flexbox horizontal align={'center'} flex={1} gap={6} style={{ minWidth: 0 }}>
+                <Text ellipsis style={{ minWidth: 0 }} weight={600}>
+                  {displayTitle}
+                </Text>
                 {roleTag ? (
-                  <span style={{ fontSize: 12, marginInlineStart: 6, opacity: 0.6 }}>
+                  <Tag size={'small'} style={{ flex: 'none' }}>
                     {roleTag}
-                  </span>
+                  </Tag>
                 ) : null}
-              </Text>
+              </Flexbox>
               <Flexbox
                 flex={'none'}
                 onClick={(e) => {
