@@ -2,16 +2,19 @@ import type { TaskStatus } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
 import type { FlexboxProps } from '@lobehub/ui';
 import { Avatar, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
+import { Segmented } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { HashIcon } from 'lucide-react';
-import { memo, type ReactNode, useMemo } from 'react';
+import { memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useWorkspaceMemberProfiles } from '@/business/client/hooks/useWorkspaceMemberProfiles';
 import AsyncError from '@/components/AsyncError';
 import TaskStatusIcon from '@/features/AgentTasks/features/TaskStatusIcon';
 import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import HomeInbox from '@/features/HomeInbox';
+import AuthorChip from '@/features/HomeInbox/AuthorChip';
 import { filterTopicsForInboxScope } from '@/features/HomeInbox/scopeTogglePlacement';
 import { splitBriefs } from '@/features/HomeInbox/splitBriefs';
 import { useHomeInboxTopics } from '@/features/HomeInbox/useHomeInboxTopics';
@@ -28,6 +31,7 @@ import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/selectors';
+import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import GroupBlock from './components/GroupBlock';
 import { homeType } from './components/homeType';
@@ -129,33 +133,46 @@ const Row = memo<RowProps>(({ description, href, icon, title, trailing }) => (
   </WorkspaceLink>
 ));
 
-const RecentTopicRow = memo<{ topic: RecentItem }>(({ topic }) => {
-  const agent = useAgentDisplayMeta(topic.agentId);
-  const description = topic.description?.trim() || topic.lastAssistantMessage?.trim();
+const RecentTopicRow = memo<{ showAuthor?: boolean; topic: RecentItem }>(
+  ({ showAuthor, topic }) => {
+    const agent = useAgentDisplayMeta(topic.agentId);
+    const raw = topic.description?.trim() || topic.lastAssistantMessage?.trim();
+    // The snippet is raw markdown (a user note or the last assistant reply);
+    // rendered as one plain line, its syntax markers are just noise.
+    const description = useMemo(
+      () => (raw ? markdownToTxt(raw).replaceAll(/\s+/g, ' ').trim() : undefined),
+      [raw],
+    );
 
-  return (
-    <Row
-      description={description}
-      href={topic.routePath}
-      title={topic.title}
-      trailing={<Time date={topic.updatedAt} />}
-      icon={
-        agent ? (
-          <Avatar
-            avatar={agent.avatar}
-            background={agent.backgroundColor}
-            className={styles.topicAvatar}
-            shape={'circle'}
-            size={22}
-            title={agentDisplayName(agent)}
-          />
-        ) : (
-          <Icon color={cssVar.colorTextDescription} icon={HashIcon} size={16} />
-        )
-      }
-    />
-  );
-});
+    return (
+      <Row
+        description={description}
+        href={topic.routePath}
+        title={topic.title}
+        icon={
+          agent ? (
+            <Avatar
+              avatar={agent.avatar}
+              background={agent.backgroundColor}
+              className={styles.topicAvatar}
+              shape={'circle'}
+              size={22}
+              title={agentDisplayName(agent)}
+            />
+          ) : (
+            <Icon color={cssVar.colorTextDescription} icon={HashIcon} size={16} />
+          )
+        }
+        trailing={
+          <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
+            {showAuthor && <AuthorChip userId={topic.userId} />}
+            <Time date={topic.updatedAt} />
+          </Flexbox>
+        }
+      />
+    );
+  },
+);
 
 interface SkeletonLineProps {
   /** Height of the painted band inside the line box. */
@@ -256,9 +273,23 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
   const authLoaded = useUserStore(authSelectors.isLoaded);
   const myId = useUserStore(userProfileSelectors.userId);
   const cacheScope = useCacheScope();
+
+  // One page-level mine/team scope, shared by the inbox sections and Recent
+  // topics. In personal mode the member map is empty, `isTeam` stays false and
+  // the whole layer is inert.
+  const memberProfiles = useWorkspaceMemberProfiles();
+  const isTeam = memberProfiles.size > 1;
+  const [scope, setScope] = useState<'mine' | 'team'>('mine');
+  const teamView = isTeam && scope === 'team';
+
+  // Workspace topics are shared, so "mine" must be narrowed server-side —
+  // client-filtering the top N of a team-wide feed could starve out the
+  // viewer's own topics entirely.
   const recentsSWR = useClientDataSWR(
-    isLogin ? recentKeys.topicList(HOME_TOPIC_RECENT_LIMIT, cacheScope) : null,
-    () => recentService.getAll(HOME_TOPIC_RECENT_LIMIT, ['topic'], true),
+    isLogin
+      ? recentKeys.topicList(HOME_TOPIC_RECENT_LIMIT, cacheScope, teamView ? 'team' : 'mine')
+      : null,
+    () => recentService.getAll(HOME_TOPIC_RECENT_LIMIT, ['topic'], true, !teamView),
     { revalidateOnFocus: false },
   );
 
@@ -311,9 +342,31 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
 
     return (
       <Flexbox gap={32}>
-        <HomeInbox inlineRail={inlineRail} variant={'main'} />
+        <HomeInbox
+          inlineRail={inlineRail}
+          scope={scope}
+          variant={'main'}
+          onScopeChange={setScope}
+        />
         {(state !== 'ready' || topicRecents.length > 0) && (
-          <GroupBlock count={topicRecents.length || undefined} title={t('dashboard.chat.recents')}>
+          <GroupBlock
+            actionAlwaysVisible
+            count={topicRecents.length || undefined}
+            title={t('dashboard.chat.recents')}
+            action={
+              isTeam ? (
+                <Segmented
+                  size={'small'}
+                  value={scope}
+                  options={[
+                    { label: t('inbox.scope.mine'), value: 'mine' },
+                    { label: t('inbox.scope.team'), value: 'team' },
+                  ]}
+                  onChange={(value) => setScope(value as 'mine' | 'team')}
+                />
+              ) : undefined
+            }
+          >
             {state === 'error' ? (
               <AsyncError error={recentsSWR.error} variant={'inline'} onRetry={recentsSWR.mutate} />
             ) : state === 'loading' ? (
@@ -321,7 +374,7 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
             ) : (
               <Flexbox gap={4}>
                 {topicRecents.slice(0, 8).map((item) => (
-                  <RecentTopicRow key={item.id} topic={item} />
+                  <RecentTopicRow key={item.id} showAuthor={teamView} topic={item} />
                 ))}
               </Flexbox>
             )}

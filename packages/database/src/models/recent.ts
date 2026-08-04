@@ -18,6 +18,8 @@ export interface RecentDbItem {
   title: string;
   type: 'topic' | 'document' | 'task';
   updatedAt: Date;
+  /** The member who owns (created) this item — for author attribution in team views. */
+  userId: string;
 }
 
 // Mirrors `MAIN_SIDEBAR_EXCLUDE_TRIGGERS` in `src/const/topic.ts` plus the
@@ -48,6 +50,7 @@ export class RecentModel {
     limit: number = 10,
     types?: RecentDbItem['type'][],
     withTopicPreview?: boolean,
+    mineOnly?: boolean,
   ): Promise<RecentDbItem[]> => {
     const scope = { userId: this.userId, workspaceId: this.workspaceId };
     const requestedTypes = types ? new Set(types) : undefined;
@@ -57,6 +60,13 @@ export class RecentModel {
     const taskScopeWhere = this.workspaceId
       ? eq(tasks.workspaceId, this.workspaceId)
       : and(eq(tasks.createdByUserId, this.userId), isNull(tasks.workspaceId));
+
+    // Workspace rows are shared across members; `mineOnly` narrows a workspace
+    // feed back to the viewer's own items. A no-op in personal mode, where the
+    // scope predicate already pins the user.
+    const mineTopicWhere = mineOnly ? eq(topics.userId, this.userId) : undefined;
+    const mineDocumentWhere = mineOnly ? eq(documents.userId, this.userId) : undefined;
+    const mineTaskWhere = mineOnly ? eq(tasks.createdByUserId, this.userId) : undefined;
 
     const lastAssistantMessageSubquery = this.db
       .select({
@@ -90,6 +100,7 @@ export class RecentModel {
         title: sql<string>`COALESCE(${topics.title}, 'Untitled Topic')`.as('title'),
         type: sql<RecentDbItem['type']>`'topic'`.as('type'),
         updatedAt: topics.updatedAt,
+        userId: topics.userId,
       })
       .from(topics)
       .leftJoin(agents, eq(topics.agentId, agents.id))
@@ -98,6 +109,7 @@ export class RecentModel {
           ? sql`false`
           : and(
               buildWorkspaceWhere(scope, topics),
+              mineTopicWhere,
               or(
                 isNotNull(topics.groupId),
                 eq(agents.slug, 'inbox'),
@@ -123,6 +135,7 @@ export class RecentModel {
           ),
         type: sql<RecentDbItem['type']>`'document'`.as('type'),
         updatedAt: documents.updatedAt,
+        userId: documents.userId,
       })
       .from(documents)
       .where(
@@ -130,6 +143,7 @@ export class RecentModel {
           ? sql`false`
           : and(
               buildWorkspaceWhere(scope, documents),
+              mineDocumentWhere,
               not(inArray(documents.sourceType, TOOL_DOCUMENT_SOURCE_TYPES)),
               isNull(documents.knowledgeBaseId),
               ne(documents.fileType, DOCUMENT_FOLDER_TYPE),
@@ -150,12 +164,13 @@ export class RecentModel {
         ),
         type: sql<RecentDbItem['type']>`'task'`.as('type'),
         updatedAt: tasks.updatedAt,
+        userId: sql<string>`${tasks.createdByUserId}`.as('user_id'),
       })
       .from(tasks)
       .where(
         requestedTypes && !requestedTypes.has('task')
           ? sql`false`
-          : and(taskScopeWhere, not(inArray(tasks.status, TASK_FINAL_STATUSES))),
+          : and(taskScopeWhere, mineTaskWhere, not(inArray(tasks.status, TASK_FINAL_STATUSES))),
       );
 
     const rows = await unionAll(topicArm, documentArm, taskArm)
@@ -176,6 +191,7 @@ export class RecentModel {
       title: row.title,
       type: row.type,
       updatedAt: row.updatedAt instanceof Date ? row.updatedAt : new Date(row.updatedAt as any),
+      userId: row.userId,
     }));
   };
 }

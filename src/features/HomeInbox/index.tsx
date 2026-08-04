@@ -87,11 +87,21 @@ interface HomeInboxProps {
    * news) fold into this column instead of disappearing with it.
    */
   inlineRail?: boolean;
+  /** Controlled mine/team scope — lets the page share one scope across sibling sections. */
+  onScopeChange?: (scope: 'mine' | 'team') => void;
+  scope?: 'mine' | 'team';
   variant?: 'default' | 'main' | 'rail';
 }
 
 const HomeInbox = memo<HomeInboxProps>((props) => {
-  const { hideNeedsYou, hideUnread, inlineRail, variant = 'default' } = props;
+  const {
+    hideNeedsYou,
+    hideUnread,
+    inlineRail,
+    onScopeChange,
+    scope: controlledScope,
+    variant = 'default',
+  } = props;
   const isRail = variant === 'rail';
   const isMain = variant === 'main';
   const showRailSections = ownsRailSections({ inlineRail, variant });
@@ -117,7 +127,9 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   const memberProfiles = useWorkspaceMemberProfiles();
   const isTeam = memberProfiles.size > 1;
 
-  const [scope, setScope] = useState<'mine' | 'team'>('mine');
+  const [internalScope, setInternalScope] = useState<'mine' | 'team'>('mine');
+  const scope = controlledScope ?? internalScope;
+  const setScope = onScopeChange ?? setInternalScope;
   const teamView = isTeam && scope === 'team';
 
   const { needsYou, news } = useMemo(() => splitBriefs(briefs), [briefs]);

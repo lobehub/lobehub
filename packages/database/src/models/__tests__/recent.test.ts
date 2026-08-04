@@ -11,6 +11,7 @@ import {
   tasks,
   topics,
   users,
+  workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { RecentModel } from '../recent';
@@ -620,6 +621,50 @@ describe('RecentModel', () => {
 
         const [row] = await recentModel.queryRecent();
         expect(row.updatedAt).toBeInstanceOf(Date);
+      });
+    });
+
+    describe('workspace mode', () => {
+      const workspaceId = 'recent-model-test-workspace';
+      const workspaceModel = new RecentModel(serverDB, userId, workspaceId);
+
+      beforeEach(async () => {
+        await serverDB
+          .insert(workspaces)
+          .values({ id: workspaceId, name: 'ws', primaryOwnerId: userId, slug: workspaceId });
+        await serverDB.insert(agents).values({ id: 'agent-ws', userId, slug: 'inbox' });
+        await serverDB.insert(topics).values([
+          {
+            agentId: 'agent-ws',
+            id: 'topic-ws-mine',
+            title: 'mine',
+            updatedAt: minutesAgo(1),
+            userId,
+            workspaceId,
+          },
+          {
+            agentId: 'agent-ws',
+            id: 'topic-ws-other',
+            title: 'other',
+            updatedAt: minutesAgo(2),
+            userId: otherUserId,
+            workspaceId,
+          },
+        ]);
+      });
+
+      it('returns every member topic with its author userId', async () => {
+        const result = await workspaceModel.queryRecent();
+
+        expect(result.map((r) => r.id)).toEqual(['topic-ws-mine', 'topic-ws-other']);
+        expect(result.map((r) => r.userId)).toEqual([userId, otherUserId]);
+      });
+
+      it('narrows to the viewer own topics when mineOnly is set', async () => {
+        const result = await workspaceModel.queryRecent(10, ['topic'], false, true);
+
+        expect(result.map((r) => r.id)).toEqual(['topic-ws-mine']);
+        expect(result[0].userId).toBe(userId);
       });
     });
   });
