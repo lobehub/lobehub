@@ -109,6 +109,8 @@ describe('isLhCommand', () => {
     ['brace group', '{ lh agent list; }'],
     ['loop body', 'for i in 1 2; do lh agent list; done'],
     ['if condition', 'if lh agent view agt_1; then echo ok; fi'],
+    ['same-line case arm', 'case "$scope" in workspace) lh whoami ;; esac'],
+    ['multiple case arms', 'case $x in a) lh agent list ;; b) lh topic list ;; esac'],
     ['inline env assignment', 'LOBEHUB_WORKSPACE_ID=ws lh agent list'],
     ['quoted inline assignment', 'FOO="a b" lh agent list'],
     // `!` and `time` are reserved words, so the shell still resolves `lh`

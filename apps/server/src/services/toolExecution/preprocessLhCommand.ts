@@ -20,11 +20,12 @@ export interface PreprocessResult {
  * assignments in between (`FOO=1 lh agent list`).
  *
  * Command-position openers covered: newline, `;`, `&` (also the second `&` of
- * `&&`), `|` (also `||`), `(` (also the `(` of `$(`), a backtick, `{`, and the
- * compound-command keywords. That set is what makes multi-line scripts,
- * pipelines, command substitution, subshells and loops resolve — the previous
- * pattern only knew `^`, `&&`, `||` and `;` on a single line, so everything
- * after the first line of a `view` → `edit` script fell through unhandled.
+ * `&&`), `|` (also `||`), `(` (also the `(` of `$(`), `)` (a `case` arm), a
+ * backtick, `{`, and the compound-command keywords. That set is what makes
+ * multi-line scripts, pipelines, command substitution, subshells, loops and
+ * `case` statements resolve — the previous pattern only knew `^`, `&&`, `||`
+ * and `;` on a single line, so everything after the first line of a `view` →
+ * `edit` script fell through unhandled.
  *
  * Between the opener and `lh` the pattern also allows the `!` and `time`
  * prefixes (`if ! lh whoami; then …`, `time lh agent list`) and inline
@@ -42,7 +43,7 @@ export interface PreprocessResult {
  * `lh` is quoted text.
  */
 const LH_COMMAND_PATTERN =
-  /(?:^|[\n;&|(`{]|\b(?:do|then|else|if|elif|while|until)\b)[\t ]*(?:(?:!|\btime)[\t ]+)*(?:[A-Za-z_]\w*=(?:'[^']*'|"[^"]*"|[^\s'"&;|]*)[\t ]+)*lh(?=[\s;&|)]|$)/;
+  /(?:^|[\n;&|()`{]|\b(?:do|then|else|if|elif|while|until)\b)[\t ]*(?:(?:!|\btime)[\t ]+)*(?:[A-Za-z_]\w*=(?:'[^']*'|"[^"]*"|[^\s'"&;|]*)[\t ]+)*lh(?=[\s;&|)]|$)/;
 
 export const isLhCommand = (command: string): boolean => LH_COMMAND_PATTERN.test(command);
 
