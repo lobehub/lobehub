@@ -240,6 +240,8 @@ MULTIMODAL_UNDERSTANDING_PROVIDER=google
 MULTIMODAL_UNDERSTANDING_MODEL=gemini-2.5-flash
 ```
 
+For migration compatibility, `VISUAL_UNDERSTANDING_PROVIDER` and `VISUAL_UNDERSTANDING_MODEL` remain supported as legacy aliases. When both old and new variables are set, `MULTIMODAL_UNDERSTANDING_*` takes precedence.
+
 When this feature is enabled, users can upload audio, images, or videos while using a model that does not have the corresponding native multimodal capability, as long as the active model supports tool use. File upload still requires the normal file storage configuration for your deployment.
 
 ## AI Image

@@ -235,6 +235,8 @@ MULTIMODAL_UNDERSTANDING_PROVIDER=google
 MULTIMODAL_UNDERSTANDING_MODEL=gemini-2.5-flash
 ```
 
+为兼容迁移，旧环境变量 `VISUAL_UNDERSTANDING_PROVIDER` 和 `VISUAL_UNDERSTANDING_MODEL` 仍可继续使用。同时配置新旧变量时，`MULTIMODAL_UNDERSTANDING_*` 优先。
+
 启用后，当当前模型没有对应的原生多模态能力但支持工具调用时，用户仍可上传音频、图片或视频，并由兜底多模态理解模型进行分析。文件上传本身仍需要部署中正常配置文件存储能力。
 
 ## AI 图像
