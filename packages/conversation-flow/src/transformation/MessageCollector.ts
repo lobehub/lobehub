@@ -713,22 +713,6 @@ export class MessageCollector {
   }
 
   /**
-   * Find the last node in an AssistantGroup sequence
-   * Only follows messages from the SAME agent (matching agentId)
-   */
-  findLastNodeInAssistantGroup(idNode: IdNode, groupAgentId?: string): IdNode | null {
-    const lastAssistantNode = this.findLastAssistantNodeInGroup(idNode, groupAgentId);
-
-    // No further same-agent assistant. If this step still owns tool results
-    // (e.g. the last tool hosts an AgentCouncil / tasks), return the last tool
-    // node so findNextAfterTools can inspect it; otherwise this node is the tail.
-    const activeChild = this.resolveAssistantGroupTailChild(lastAssistantNode);
-    if (activeChild && this.messageMap.get(activeChild.id)?.role === 'tool') return activeChild;
-
-    return lastAssistantNode;
-  }
-
-  /**
    * Return the final same-agent assistant that belongs inside this group. The
    * child selected after that assistant can be either a tool-hosted legacy
    * continuation or a direct non-tool continuation in the current storage form.
