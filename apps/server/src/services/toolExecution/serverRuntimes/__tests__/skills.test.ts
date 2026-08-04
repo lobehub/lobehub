@@ -286,7 +286,8 @@ describe('skillsRuntime', () => {
   // credentials, no workspace scope.
   it('preprocesses lh commands passed to execScript, not just runCommand', async () => {
     mocks.preprocessLhCommand.mockResolvedValueOnce({
-      command: "export LOBEHUB_WORKSPACE_ID='workspace-1'\nlh agent edit agt_123 -t x",
+      command:
+        'lh() { LOBEHUB_WORKSPACE_ID=\'workspace-1\' npx -y @lobehub/cli "$@"; }\nlh agent edit agt_123 -t x',
       isLhCommand: true,
       skipSkillLookup: true,
     });
@@ -314,7 +315,8 @@ describe('skillsRuntime', () => {
     expect(mocks.sandboxService.callTool).toHaveBeenCalledWith(
       'execScript',
       expect.objectContaining({
-        command: "export LOBEHUB_WORKSPACE_ID='workspace-1'\nlh agent edit agt_123 -t x",
+        command:
+          'lh() { LOBEHUB_WORKSPACE_ID=\'workspace-1\' npx -y @lobehub/cli "$@"; }\nlh agent edit agt_123 -t x',
       }),
     );
   });

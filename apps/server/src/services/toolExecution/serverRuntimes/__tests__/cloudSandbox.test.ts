@@ -63,7 +63,8 @@ describe('cloudSandboxRuntime', () => {
   // CLI, no credentials and no workspace scope.
   it('preprocesses lh commands with the run workspace scope', async () => {
     mocks.preprocessLhCommand.mockResolvedValueOnce({
-      command: "export LOBEHUB_WORKSPACE_ID='ws-42'\nlh agent edit agt_1 -t x",
+      command:
+        'lh() { LOBEHUB_WORKSPACE_ID=\'ws-42\' npx -y @lobehub/cli "$@"; }\nlh agent edit agt_1 -t x',
       isLhCommand: true,
       skipSkillLookup: true,
     });
@@ -81,7 +82,8 @@ describe('cloudSandboxRuntime', () => {
     expect(mocks.sandboxService.callTool).toHaveBeenCalledWith(
       'runCommand',
       expect.objectContaining({
-        command: "export LOBEHUB_WORKSPACE_ID='ws-42'\nlh agent edit agt_1 -t x",
+        command:
+          'lh() { LOBEHUB_WORKSPACE_ID=\'ws-42\' npx -y @lobehub/cli "$@"; }\nlh agent edit agt_1 -t x',
       }),
     );
   });

@@ -27,7 +27,7 @@ export interface PreprocessResult {
  * after the first line of a `view` → `edit` script fell through unhandled.
  *
  * This is a DETECTION-only heuristic: the command itself is never rewritten
- * (see `preprocessLhCommand`), so a false positive costs one harmless prelude
+ * (see `preprocessLhCommand`), so a false positive costs one harmless shim
  * while a false negative costs a broken `lh` invocation. Erring permissive is
  * therefore the right trade — e.g. `echo 'a && lh b'` matches even though the
  * `lh` is quoted text.
@@ -67,11 +67,10 @@ const shellSingleQuote = (value: string): string => `'${value.replaceAll("'", St
  *
  * Instead of rewriting every `lh` occurrence (which can only ever cover the
  * shell forms the regex happens to know), the command is left **byte-identical**
- * and a two-line prelude is prepended:
+ * and a one-line shim is prepended:
  *
  * ```sh
- * export LOBEHUB_JWT='…' LOBEHUB_SERVER='…' LOBEHUB_WORKSPACE_ID='…'
- * lh() { npx -y @lobehub/cli "$@"; }
+ * lh() { LOBEHUB_JWT='…' LOBEHUB_SERVER='…' LOBEHUB_WORKSPACE_ID='…' npx -y @lobehub/cli "$@"; }
  * <original command>
  * ```
  *
@@ -79,6 +78,16 @@ const shellSingleQuote = (value: string): string => `'${value.replaceAll("'", St
  * this resolves `lh` in every form the model can write — pipelines, `$(lh …)`,
  * `for … do lh …`, and every line of a multi-line script — while emitting the
  * JWT exactly once instead of per occurrence.
+ *
+ * The credentials are assignment-prefixed to `npx` INSIDE the function rather
+ * than `export`ed around the script. Exporting would put a full user auth token
+ * in the environment of every command the model wrote, where any later `env`,
+ * `echo $LOBEHUB_JWT`, `curl` or child process could read and exfiltrate it —
+ * and since detection is deliberately permissive, a script that merely mentions
+ * `lh` in quoted text would get one too. Prefixing an external command is
+ * well-defined POSIX and scopes the value to that one `npx` process. Nothing is
+ * lost: the shim is a shell function, so it was never visible to a child shell
+ * process (`sh -c 'lh …'`) that an exported variable would have reached.
  *
  * `LOBEHUB_WORKSPACE_ID` is what keeps a workspace run's CLI calls in the
  * workspace: without it the CLI resolves to personal scope and a workspace
@@ -105,15 +114,13 @@ export const preprocessLhCommand = async (
     ].join(' ');
 
     // Newline-separated (not `;`-separated) so a command whose first line is a
-    // comment or a shebang cannot swallow the prelude.
-    const finalCommand = [
-      `export ${envAssignments}`,
-      'lh() { npx -y @lobehub/cli "$@"; }',
-      command,
-    ].join('\n');
+    // comment or a shebang cannot swallow the shim.
+    const finalCommand = [`lh() { ${envAssignments} npx -y @lobehub/cli "$@"; }`, command].join(
+      '\n',
+    );
 
     log(
-      'Intercepted lh command for user %s (workspace %s), prelude injected',
+      'Intercepted lh command for user %s (workspace %s), shim injected',
       userId,
       workspaceId ?? 'personal',
     );
