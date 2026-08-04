@@ -763,9 +763,8 @@ export default {
   'settingAgent.identity.untitled': 'Unnamed agent',
   'settingAgent.role.label': 'Role',
   'settingAgent.role.placeholder': 'What it is responsible for, e.g. Health Assistant',
+  'settingAgent.role.unset': 'No role set yet',
   'settingAgent.slug.label': 'Identifier',
-  'settingAgent.slug.builtinHint':
-    'Builtin agents are addressed by this identifier, so it can’t be changed',
   'settingAgent.slug.error.builtin': 'A builtin agent’s identifier can’t be changed',
   'settingAgent.slug.error.invalid': 'Use lowercase letters, numbers and hyphens only',
   'settingAgent.slug.error.reserved': 'This identifier is reserved',

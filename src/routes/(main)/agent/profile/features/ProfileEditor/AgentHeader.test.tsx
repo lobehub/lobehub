@@ -236,6 +236,27 @@ describe('AgentHeader', () => {
     expect(view.container.textContent).not.toContain('settingAgent.personalName.placeholder');
   });
 
+  // The headline is the NAME slot. Borrowing the role printed it twice, since
+  // the role already has its own line right below.
+  it('does not borrow the role for the headline', () => {
+    mocks.permissionState.allowed = true;
+    mocks.agentStoreState.agentMap = { 'agent-a': { slug: 'inbox', title: 'Lobe AI' } };
+    const view = render(<AgentHeader />);
+
+    expect(view.container.textContent).toContain('settingAgent.identity.untitled');
+    // Exactly once: on the role line, not also as the headline.
+    expect(view.container.textContent?.match(/Lobe AI/g)).toHaveLength(1);
+  });
+
+  it('states the role is unset instead of leaving a bare slug', () => {
+    mocks.permissionState.allowed = true;
+    mocks.agentStoreState.agentMap = { 'agent-a': { name: '思远', slug: 'belong-pot-women' } };
+    const view = render(<AgentHeader />);
+
+    expect(view.container.textContent).toContain('settingAgent.role.unset');
+    expect(view.container.textContent).toContain('@belong-pot-women');
+  });
+
   it('offers one-click naming for an agent with no name', async () => {
     mocks.permissionState.allowed = true;
     mocks.agentStoreState.agentMap = { 'agent-a': { title: 'Health Assistant' } };

@@ -1,6 +1,5 @@
 'use client';
 
-import { agentDisplayName } from '@lobechat/types';
 import { ActionIcon, Flexbox, Icon, Skeleton, Text, Tooltip } from '@lobehub/ui';
 import { Button, toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
@@ -156,12 +155,13 @@ const AgentHeader = memo(() => {
           per-field label or error. */}
       <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
         <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-          {/* Never fall back to the name field's PLACEHOLDER here — it reads as
-              though the agent were literally called "Give it a name, e.g. Alice".
-              An agent with neither name nor role gets the plain unnamed label,
-              and the prompt to name it lives on its own line below. */}
+          {/* This headline is the NAME slot, so it does not borrow the role the
+              way list surfaces do: the role already has its own line right below,
+              and falling back would print it twice (an agent titled "Lobe AI"
+              read "Lobe AI / Lobe AI · @inbox"). A missing name says so instead —
+              the header states what is absent rather than hiding it. */}
           <Text ellipsis style={{ fontSize: 36, fontWeight: 600 }}>
-            {agentDisplayName(meta, t('settingAgent.identity.untitled', { ns: 'setting' }))}
+            {meta.name?.trim() || t('settingAgent.identity.untitled', { ns: 'setting' })}
           </Text>
           {canEdit ? (
             <ActionIcon
@@ -177,14 +177,19 @@ const AgentHeader = memo(() => {
               maps to the TERTIARY step — too faint for the line that carries the
               agent's role. Set the secondary colour explicitly, and leave only
               the decorative `@` and the separator at tertiary. */}
-          {meta.title?.trim() ? (
-            <Text ellipsis style={{ color: cssVar.colorTextSecondary }}>
-              {meta.title}
-            </Text>
-          ) : null}
-          {meta.title?.trim() && slug ? (
-            <Text style={{ color: cssVar.colorTextTertiary }}>·</Text>
-          ) : null}
+          {/* The role always occupies its slot. An agent with no role gets a
+              stated placeholder rather than a gap — otherwise the line silently
+              collapses to a bare slug and the missing role is indistinguishable
+              from a role that was never meant to be there. */}
+          <Text
+            ellipsis
+            style={{
+              color: meta.title?.trim() ? cssVar.colorTextSecondary : cssVar.colorTextTertiary,
+            }}
+          >
+            {meta.title?.trim() || t('settingAgent.role.unset', { ns: 'setting' })}
+          </Text>
+          {slug ? <Text style={{ color: cssVar.colorTextTertiary }}>·</Text> : null}
           {slug ? (
             <Tooltip title={t('settingAgent.slug.tooltip', { ns: 'setting' })}>
               <Text code style={{ color: cssVar.colorTextSecondary, flex: 'none' }}>

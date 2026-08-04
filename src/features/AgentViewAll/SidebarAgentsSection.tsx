@@ -104,6 +104,8 @@ const SidebarMiniCard = memo<SidebarMiniCardProps>(({ item, onToggleSidebar }) =
   const { description, id, type } = item;
   // Groups have no personal name, so this resolves to their title.
   const displayTitle = agentDisplayName(item, t('agentViewAll.untitled'));
+  // Keep the role visible beside a personal name (same as the sidebar row).
+  const roleTag = item.name?.trim() && item.title?.trim() ? item.title : undefined;
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
 
   const [menuActivated, setMenuActivated] = useState(false);
@@ -131,6 +133,9 @@ const SidebarMiniCard = memo<SidebarMiniCardProps>(({ item, onToggleSidebar }) =
             <AgentAvatar item={item} size={24} />
             <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={600}>
               {displayTitle}
+              {roleTag ? (
+                <span style={{ fontSize: 12, marginInlineStart: 6, opacity: 0.6 }}>{roleTag}</span>
+              ) : null}
             </Text>
           </Flexbox>
           {description ? (

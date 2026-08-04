@@ -2,6 +2,7 @@
 
 import { Flexbox, Input, Text } from '@lobehub/ui';
 import { Button, useModalContext } from '@lobehub/ui/base-ui';
+import { cssVar } from 'antd-style';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -52,26 +53,35 @@ const AgentIdentityContent = memo<AgentIdentityContentProps>(({ agentId }) => {
           onChange={(e) => form.setTitle(e.target.value)}
         />
       </Field>
-      <Field
-        label={t('settingAgent.slug.label', { ns: 'setting' })}
-        hint={
-          <Text style={{ fontSize: 12 }} type={form.error ? 'danger' : 'secondary'}>
-            {form.error ??
-              t(form.slugLocked ? 'settingAgent.slug.builtinHint' : 'settingAgent.slug.tooltip', {
-                ns: 'setting',
-              })}
+      {/* A builtin agent's identifier is not an editable field at all, so it is
+          not dressed as one: a disabled input still reads as "a control you
+          can't use right now" and needs a sentence explaining itself. Rendering
+          the bare marker states the fact and needs no caption. */}
+      {form.slugLocked ? (
+        <Field label={t('settingAgent.slug.label', { ns: 'setting' })}>
+          <Text code style={{ alignSelf: 'flex-start', color: cssVar.colorTextSecondary }}>
+            <span style={{ color: cssVar.colorTextTertiary }}>@</span>
+            {form.slug}
           </Text>
-        }
-      >
-        <Input
-          disabled={form.slugLocked}
-          placeholder={t('settingAgent.slug.placeholder', { ns: 'setting' })}
-          prefix={'@'}
-          status={form.error ? 'error' : undefined}
-          value={form.slug}
-          onChange={(e) => form.setSlug(e.target.value)}
-        />
-      </Field>
+        </Field>
+      ) : (
+        <Field
+          label={t('settingAgent.slug.label', { ns: 'setting' })}
+          hint={
+            <Text style={{ fontSize: 12 }} type={form.error ? 'danger' : 'secondary'}>
+              {form.error ?? t('settingAgent.slug.tooltip', { ns: 'setting' })}
+            </Text>
+          }
+        >
+          <Input
+            placeholder={t('settingAgent.slug.placeholder', { ns: 'setting' })}
+            prefix={'@'}
+            status={form.error ? 'error' : undefined}
+            value={form.slug}
+            onChange={(e) => form.setSlug(e.target.value)}
+          />
+        </Field>
+      )}
       <Flexbox horizontal gap={8} justify={'flex-end'}>
         <Button disabled={form.saving} onClick={() => close()}>
           {t('cancel', { ns: 'common' })}

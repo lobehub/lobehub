@@ -110,6 +110,10 @@ const AgentRow = memo<AgentRowProps>(
     const { id, type, updatedAt } = item;
     // Groups have no personal name, so this resolves to their title.
     const displayTitle = agentDisplayName(item, t('agentViewAll.untitled'));
+    // When the personal name won the label the role would otherwise vanish from
+    // this list entirely — keep it beside the name as a muted tag, the same way
+    // the sidebar row does. No tag when the label already IS the role.
+    const roleTag = item.name?.trim() && item.title?.trim() ? item.title : undefined;
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
 
     // Right-click support (Task-List-style): the hook-bearing menu mounts on
@@ -152,6 +156,11 @@ const AgentRow = memo<AgentRowProps>(
                 renders in card mode, where there is room to browse. */}
               <Text ellipsis className={'agent-row-title'} weight={500}>
                 {displayTitle}
+                {roleTag ? (
+                  <span style={{ fontSize: 12, marginInlineStart: 6, opacity: 0.6 }}>
+                    {roleTag}
+                  </span>
+                ) : null}
               </Text>
             </Flexbox>
           </WorkspaceLink>

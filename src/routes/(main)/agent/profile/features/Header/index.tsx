@@ -1,5 +1,5 @@
 import { isDesktop } from '@lobechat/const';
-import { getActivePluginIds } from '@lobechat/types';
+import { getActivePluginIds, type LobeAgentConfig } from '@lobechat/types';
 import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { confirmModal, type ModalInstance } from '@lobehub/ui/base-ui';
 import { toast } from '@lobehub/ui/base-ui';
@@ -105,7 +105,13 @@ const Header = memo(() => {
   const navigate = useWorkspaceAwareNavigate();
 
   const meta = useAgentStore(agentSelectors.currentAgentMeta, isEqual);
-  const config = useAgentStore(agentSelectors.currentAgentConfig, isEqual);
+  // `currentAgentConfig` is typed non-nullable but reads straight out of
+  // `agentMap`, so it IS undefined until the config lands. Reaching a profile by
+  // slug adds a resolution hop before that happens, which is long enough for the
+  // dependency array below to read `config.model` off nothing and drop the whole
+  // page into the error boundary.
+  const config = useAgentStore(agentSelectors.currentAgentConfig, isEqual) as
+    LobeAgentConfig | undefined;
   const systemRole = useAgentStore(agentSelectors.currentAgentSystemRole);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
@@ -171,11 +177,11 @@ const Header = memo(() => {
         : (editor?.getDocument('markdown') as string | null | undefined);
       const profileMarkdown = buildAgentProfileMarkdown({
         description: meta?.description,
-        model: config.model,
+        model: config?.model,
         // Pinned identifiers only — a disabled plugin shouldn't be advertised
         // as "enabled" in the exported markdown.
-        plugins: getActivePluginIds(config.plugins),
-        provider: config.provider,
+        plugins: getActivePluginIds(config?.plugins),
+        provider: config?.provider,
         systemRole: editorMarkdown ?? systemRole,
         t,
         tags: meta?.tags,
@@ -211,7 +217,16 @@ const Header = memo(() => {
       console.error('Failed to export agent profile markdown:', error);
       toast.error(t('settingAgent.export.error', { ns: 'setting' }));
     }
-  }, [config.model, config.plugins, config.provider, editor, isHeterogeneous, meta, systemRole, t]);
+  }, [
+    config?.model,
+    config?.plugins,
+    config?.provider,
+    editor,
+    isHeterogeneous,
+    meta,
+    systemRole,
+    t,
+  ]);
 
   const importMenuItem = useBusinessAgentImportMenuItem(activeAgentId ?? undefined);
   const transferMenuItems = useAgentTransferMenuItem(activeAgentId ?? undefined, meta);
