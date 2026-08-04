@@ -6,8 +6,14 @@ import { useAgentIdentityForm } from './useAgentIdentityForm';
 const mocks = vi.hoisted(() => ({
   agentMap: {} as Record<string, { name?: string; slug?: string; title?: string }>,
   refreshAgentConfig: vi.fn(),
+  refreshAgentList: vi.fn(),
   updateAgentMetaById: vi.fn(),
   updateAgentSlug: vi.fn(),
+}));
+
+vi.mock('@/store/home', () => ({
+  useHomeStore: (selector: (state: unknown) => unknown) =>
+    selector({ refreshAgentList: mocks.refreshAgentList }),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -74,6 +80,31 @@ describe('useAgentIdentityForm', () => {
     });
     expect(mocks.updateAgentSlug).not.toHaveBeenCalled();
     expect(onSaved).toHaveBeenCalled();
+  });
+
+  // The sidebar keeps its own copy of the label; without a refresh the list
+  // shows the old name while the profile shows the new one.
+  it('refreshes the sidebar list after a rename', async () => {
+    const { result } = setup();
+
+    act(() => result.current.setName('小艾'));
+    await act(async () => {
+      await result.current.save();
+    });
+
+    expect(mocks.refreshAgentList).toHaveBeenCalledOnce();
+  });
+
+  it('does not refresh the sidebar when the save was rejected', async () => {
+    mocks.updateAgentSlug.mockResolvedValue({ reason: 'taken', success: false });
+    const { result } = setup();
+
+    act(() => result.current.setSlug('taken-slug'));
+    await act(async () => {
+      await result.current.save();
+    });
+
+    expect(mocks.refreshAgentList).not.toHaveBeenCalled();
   });
 
   it('routes a slug change to its own endpoint, normalized to lowercase', async () => {

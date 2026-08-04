@@ -25,6 +25,7 @@ export const useAutoName = (agentId: string) => {
   const { t } = useTranslation('setting');
   const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
   const updateMetaById = useAgentStore((s) => s.updateAgentMetaById);
+  const refreshAgentList = useHomeStore((s) => s.refreshAgentList);
   const [naming, setNaming] = useState(false);
 
   const autoName = useCallback(async () => {
@@ -37,12 +38,17 @@ export const useAutoName = (agentId: string) => {
         .filter((name): name is string => !!name);
 
       await updateMetaById(agentId, { name: randomAgentName(locale, takenNames) });
+      // The sidebar keeps its own copy of the label, so a rename that skips this
+      // leaves the new name on the profile and the old one in the list until
+      // something else revalidates. Refreshing here follows the same convention
+      // as the sidebar's own rename popover.
+      await refreshAgentList();
     } catch {
       toast.error(t('settingAgent.personalName.pickFailed'));
     } finally {
       setNaming(false);
     }
-  }, [agentId, locale, t, updateMetaById]);
+  }, [agentId, locale, refreshAgentList, t, updateMetaById]);
 
   return { autoName, naming };
 };

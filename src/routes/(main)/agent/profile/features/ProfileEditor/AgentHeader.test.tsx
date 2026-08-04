@@ -47,6 +47,7 @@ const mocks = vi.hoisted(() => {
     },
     permissionState: { allowed: false },
     randomAgentName: vi.fn(() => 'Zoe'),
+    refreshAgentList: vi.fn(),
     sidebarAgents: [] as { id: string; name?: string | null }[],
     updateAgentMetaById: vi.fn(),
     uploadWithProgress: vi.fn(),
@@ -137,9 +138,12 @@ vi.mock('@lobechat/const', async (importOriginal) => ({
   randomAgentName: (...args: unknown[]) => mocks.randomAgentName(...(args as [])),
 }));
 
-vi.mock('@/store/home', () => ({
-  useHomeStore: { getState: () => ({ agents: mocks.sidebarAgents }) },
-}));
+vi.mock('@/store/home', () => {
+  const useHomeStore = (selector: (state: unknown) => unknown) =>
+    selector({ refreshAgentList: mocks.refreshAgentList });
+  useHomeStore.getState = () => ({ agents: mocks.sidebarAgents });
+  return { useHomeStore };
+});
 
 vi.mock('@/store/home/selectors', () => ({
   homeAgentListSelectors: {
@@ -256,6 +260,9 @@ describe('AgentHeader', () => {
     // point of having a name at all.
     expect(mocks.randomAgentName).toHaveBeenCalledExactlyOnceWith('en-US', ['Alice', 'Leo']);
     expect(mocks.updateAgentMetaById).toHaveBeenCalledExactlyOnceWith('agent-a', { name: 'Zoe' });
+    // Otherwise the sidebar keeps showing the unnamed label next to a now-named
+    // profile.
+    expect(mocks.refreshAgentList).toHaveBeenCalledOnce();
   });
 
   it('does not offer naming for an agent that already has one', () => {
