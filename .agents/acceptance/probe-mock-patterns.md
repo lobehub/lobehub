@@ -776,6 +776,47 @@ cache, so the renderer still shows the pre-write value (generic M18). Clear
 `lobechat-swr-cache*` + `lobehub-local-data` through
 `Page.addScriptToEvaluateOnNewDocument` and reload (see "Cold SWR cache" above),
 then assert `agentMap[id].agencyConfig` before drawing any conclusion.
+### An unconverged lockfile puts two copies of a dep in the graph — every route using it dies at the ErrorBoundary
+
+**Situation:** after rebasing onto a canary that bumped a shared UI dependency and
+running `pnpm install`, every route rendering the rich-text editor (agent profile,
+Home composer) fails with
+`LexicalComposerContext.useLexicalComposerContext: cannot find a LexicalComposerContext`
+and the SPA shows 页面暂时不可用.
+
+**Doesn't work:** reading it as a defect in the change under test, or as a stale
+Vite dep cache. Clearing `node_modules/.vite` (both root and `src/`) and a plain
+`pnpm install` both leave it broken, because the duplicate is in the resolution,
+not the cache.
+
+**Works:** attribute first, then measure the resolution.
+
+1. Attribution is cheap and decisive: load a route the branch definitely does not
+   touch that uses the same dependency. If it fails too, the change under test is
+   ruled out without checking out the base ref.
+
+2. The mechanism is two physical copies with different peer sets. The root
+   declares an exact-ish range while workspace packages declare a loose one, so a
+   dependency bump moves only the root:
+
+   ```bash
+   readlink node_modules/@lobehub/editor            # -> …editor@4.23.1_…ui@5.27.0
+   readlink packages/*/node_modules/@lobehub/editor # -> …editor@4.20.3_…ui@5.20.2
+   ```
+
+   A React context is module-scoped, so two copies means the provider and the
+   consumer read different context objects — the symptom is always "cannot find
+   the context", never a version error.
+
+3. `pnpm dedupe` converges them; clear the Vite dep caches and restart afterwards.
+
+**`pnpm-lock.yaml` is gitignored in this repo (`.gitignore`), so this divergence is
+always LOCAL install state — never something canary committed and never something to
+open a PR about.** A loose workspace range (`^4`) stays satisfied by the old version
+across incremental installs, so the drift accumulates silently in a long-lived
+checkout and appears right after a rebase that bumps the root range. Do not report it
+as a defect of the branch or of the base ref; note it as an environment finding and
+move on. Back up the lockfile before `dedupe` anyway — it is the only copy.
 
 ## Detailed references
 
