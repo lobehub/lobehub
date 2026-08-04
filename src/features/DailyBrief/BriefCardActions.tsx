@@ -1,6 +1,6 @@
 import { type BriefAction, DEFAULT_BRIEF_ACTIONS, type TaskStatus } from '@lobechat/types';
 import { Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { Check, SquarePen, Workflow } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
@@ -109,17 +109,59 @@ const BriefCardActions = memo<BriefCardActionsProps>(
       [isResult, resultLabelKey, t],
     );
 
+    /**
+     * Run a brief mutation and report a rejection to the user, returning whether
+     * it landed.
+     *
+     * The tRPC client only console.errors non-401 failures, so without the toast
+     * a rejected action (permission denied, brief no longer reachable, network)
+     * reads as a dead button — the user clicks and nothing at all happens.
+     */
+    const runMutation = useCallback(
+      async (mutate: () => Promise<unknown>): Promise<boolean> => {
+        try {
+          await mutate();
+          return true;
+        } catch (error) {
+          toast.error((error as Error)?.message || t('brief.actionFailed'));
+          return false;
+        }
+      },
+      [t],
+    );
+
+    /**
+     * Run the parent's post-action callbacks, which fire *after* the mutation has
+     * already landed (`refreshActiveTask` in `TaskActivities`, list revalidation
+     * elsewhere).
+     *
+     * A rejection here means the view is stale, not that the action failed.
+     * Reporting it as a failure would tell the user to retry a resolve that
+     * already succeeded — and for feedback, to re-send the comment and re-run the
+     * task a second time.
+     */
+    const refreshAfter = useCallback(
+      async (...refreshers: (undefined | (() => void | Promise<void>))[]) => {
+        try {
+          for (const refresh of refreshers) await refresh?.();
+        } catch (error) {
+          console.error('[BriefCardActions] post-action refresh failed', error);
+        }
+      },
+      [],
+    );
+
     const handleResolve = useCallback(
       async (key: string) => {
         setLoadingKey(key);
         try {
-          await resolveBrief(briefId, key);
-          await onAfterResolve?.();
+          if (!(await runMutation(() => resolveBrief(briefId, key)))) return;
+          await refreshAfter(onAfterResolve);
         } finally {
           setLoadingKey(null);
         }
       },
-      [briefId, resolveBrief, onAfterResolve],
+      [briefId, resolveBrief, onAfterResolve, runMutation, refreshAfter],
     );
 
     const handleCommentSubmit = useCallback(
@@ -129,8 +171,10 @@ const BriefCardActions = memo<BriefCardActionsProps>(
         if (commentMode.type === 'comment') {
           setLoadingKey(commentMode.key);
           try {
-            await resolveBrief(briefId, commentMode.key, text);
-            await onAfterResolve?.();
+            // Keep the editor open on failure — closing it would discard text the
+            // user typed for an action that never landed.
+            if (!(await runMutation(() => resolveBrief(briefId, commentMode.key, text)))) return;
+            await refreshAfter(onAfterResolve);
           } finally {
             setLoadingKey(null);
           }
@@ -138,9 +182,8 @@ const BriefCardActions = memo<BriefCardActionsProps>(
           // Free-form feedback must resolve the brief (so the heartbeat
           // re-arm gate stops blocking on this urgent brief) AND re-run
           // the task so the agent picks up `resolvedComment` next turn.
-          await submitFeedback(briefId, taskId, text);
-          await onAfterAddComment?.();
-          await onAfterResolve?.();
+          if (!(await runMutation(() => submitFeedback(briefId, taskId, text)))) return;
+          await refreshAfter(onAfterAddComment, onAfterResolve);
         }
 
         setCommentMode(null);
@@ -153,6 +196,8 @@ const BriefCardActions = memo<BriefCardActionsProps>(
         taskId,
         onAfterResolve,
         onAfterAddComment,
+        runMutation,
+        refreshAfter,
       ],
     );
 

@@ -320,6 +320,35 @@ describe('AgentSlice Actions', () => {
       // The background fetch only populates agentMap; it must not steal the active agent.
       expect(result.current.activeAgentId).toBe('routed-agent');
     });
+
+    it('replaces a stale profile snapshot so omitted editorData is cleared', async () => {
+      useAgentStore.setState({
+        activeAgentId: 'agent-1',
+        agentMap: {
+          'agent-1': {
+            editorData: { root: { children: [{ text: 'Old prompt' }] } },
+            id: 'agent-1',
+            systemRole: 'Old prompt',
+          } as any,
+        },
+      });
+      vi.mocked(agentService.getAgentConfigById).mockResolvedValue({
+        id: 'agent-1',
+        systemRole: 'New prompt from Agent Builder',
+      } as any);
+
+      renderHook(() => useAgentStore().useFetchAgentConfig(true, 'agent-1'), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => {
+        expect(useAgentStore.getState().agentMap['agent-1']).toEqual({
+          id: 'agent-1',
+          systemRole: 'New prompt from Agent Builder',
+        });
+      });
+      expect(useAgentStore.getState().agentMap['agent-1']).not.toHaveProperty('editorData');
+    });
   });
 
   describe('invalidateAvailableAgents', () => {

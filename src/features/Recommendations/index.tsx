@@ -9,6 +9,7 @@ import {
   type DailyBriefRecommendationsUIState,
   useDailyBriefRecommendationsUI,
 } from '@/business/client/useDailyBriefRecommendationsUI';
+import GroupBlock from '@/features/Home/components/GroupBlock';
 import RailCard from '@/features/Home/components/RailCard';
 
 import { useEligibleActions } from './hooks/useEligibleActions';
@@ -26,7 +27,7 @@ export const useRecommendationsVisible = (): boolean => {
 };
 
 interface RecommendationsProps {
-  variant?: 'default' | 'rail';
+  variant?: 'default' | 'main' | 'rail';
 }
 
 const Recommendations = memo<RecommendationsProps>(({ variant = 'default' }) => {
@@ -110,6 +111,15 @@ const Recommendations = memo<RecommendationsProps>(({ variant = 'default' }) => 
       <RailCard action={refresh} title={t('recommendations.title')}>
         {body}
       </RailCard>
+    );
+
+  // In the main column it is one section among the page's other headed blocks,
+  // so it wears the same heading they do instead of its own subtitle line.
+  if (variant === 'main')
+    return (
+      <GroupBlock action={refresh} title={t('recommendations.title')}>
+        {body}
+      </GroupBlock>
     );
 
   return (

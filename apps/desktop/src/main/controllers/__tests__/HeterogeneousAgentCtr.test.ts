@@ -1336,6 +1336,32 @@ describe('HeterogeneousAgentCtr', () => {
           'Failed to authenticate. API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"Invalid authentication credentials"}}',
       });
     });
+
+    it('classifies missing credentials for Pi as an auth-required error', () => {
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      const payload = (ctr as any).getSessionErrorPayload(
+        'No API key found for provider anthropic',
+        {
+          agentType: 'pi',
+          args: [],
+          command: 'pi',
+          sessionId: 'session-1',
+        },
+      );
+
+      expect(payload).toEqual({
+        agentType: 'pi',
+        code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+        command: 'pi',
+        docsUrl: 'https://github.com/earendil-works/pi',
+        message: 'Pi could not authenticate. Run `pi`, use `/login`, then retry.',
+        stderr: 'No API key found for provider anthropic',
+      });
+    });
   });
 
   describe('spawnLhHeteroExec', () => {

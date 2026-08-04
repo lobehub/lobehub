@@ -11,6 +11,7 @@
   "brief.action.ignore": "Ignorar",
   "brief.action.retry": "Reintentar",
   "brief.action.upgrade": "Actualizar plan",
+  "brief.actionFailed": "Eso no funcionó. Por favor, inténtalo de nuevo.",
   "brief.addFeedback": "Compartir comentarios",
   "brief.agentSignal.selfReview.applied.heading": "Actualizado",
   "brief.agentSignal.selfReview.applied.summary": "Se aplicó {{count}} actualización de sueño.",

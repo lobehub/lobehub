@@ -462,6 +462,7 @@
   "builtins.lobe-user-interaction.apiName.skipUserResponse": "Benutzerantwort überspringen",
   "builtins.lobe-user-interaction.apiName.submitUserResponse": "Benutzerantwort einreichen",
   "builtins.lobe-user-interaction.title": "Benutzerinteraktion",
+  "builtins.lobe-user-memory.apiName.addActivityMemory": "Aktivitätsspeicher hinzufügen",
   "builtins.lobe-user-memory.apiName.addContextMemory": "Kontextgedächtnis hinzufügen",
   "builtins.lobe-user-memory.apiName.addExperienceMemory": "Erfahrungsgedächtnis hinzufügen",
   "builtins.lobe-user-memory.apiName.addIdentityMemory": "Identitätsgedächtnis hinzufügen",

@@ -462,6 +462,7 @@
   "builtins.lobe-user-interaction.apiName.skipUserResponse": "사용자 응답 건너뛰기",
   "builtins.lobe-user-interaction.apiName.submitUserResponse": "사용자 응답 제출",
   "builtins.lobe-user-interaction.title": "사용자 상호작용",
+  "builtins.lobe-user-memory.apiName.addActivityMemory": "활동 메모리 추가",
   "builtins.lobe-user-memory.apiName.addContextMemory": "상황 기억 추가",
   "builtins.lobe-user-memory.apiName.addExperienceMemory": "경험 기억 추가",
   "builtins.lobe-user-memory.apiName.addIdentityMemory": "신원 기억 추가",

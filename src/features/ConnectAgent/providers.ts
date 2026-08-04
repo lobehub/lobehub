@@ -5,7 +5,7 @@ import {
   type RemoteHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
 import { HETEROGENEOUS_AGENT_CLIENT_CONFIGS } from '@lobechat/heterogeneous-agents/client';
-import { Amp, ClaudeCode, Codex, HermesAgent, OpenClaw, OpenCode } from '@lobehub/icons';
+import { Amp, ClaudeCode, Codex, HermesAgent, OpenClaw, OpenCode, Pi } from '@lobehub/icons';
 
 /**
  * One row in the connect wizard's agent inventory. `kind` mirrors the domain
@@ -22,7 +22,8 @@ export interface ConnectableProvider {
     | typeof Codex
     | typeof HermesAgent
     | typeof OpenClaw
-    | typeof OpenCode;
+    | typeof OpenCode
+    | typeof Pi;
   /** Spawn command — cli providers only. */
   command?: string;
   kind: 'cli' | 'platform';
@@ -35,6 +36,7 @@ const CLI_BRANDS: Record<LocalHeterogeneousAgentType, ConnectableProvider['brand
   'claude-code': ClaudeCode,
   'codex': Codex,
   'opencode': OpenCode,
+  'pi': Pi,
 };
 
 const PLATFORM_BRANDS: Record<RemoteHeterogeneousAgentType, ConnectableProvider['brand']> = {

@@ -29,7 +29,8 @@ export const isHeterogeneousAgentStatusGuideError = (
     (agentType === 'amp' ||
       agentType === 'claude-code' ||
       agentType === 'codex' ||
-      agentType === 'opencode') &&
+      agentType === 'opencode' ||
+      agentType === 'pi') &&
     typeof code === 'string' &&
     HETEROGENEOUS_AGENT_STATUS_GUIDE_ERROR_CODES.has(code)
   );

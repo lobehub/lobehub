@@ -462,6 +462,7 @@
   "builtins.lobe-user-interaction.apiName.skipUserResponse": "Gebruikersreactie overslaan",
   "builtins.lobe-user-interaction.apiName.submitUserResponse": "Gebruikersreactie indienen",
   "builtins.lobe-user-interaction.title": "Gebruikersinteractie",
+  "builtins.lobe-user-memory.apiName.addActivityMemory": "Activiteitsgeheugen toevoegen",
   "builtins.lobe-user-memory.apiName.addContextMemory": "Contextgeheugen toevoegen",
   "builtins.lobe-user-memory.apiName.addExperienceMemory": "Ervaringsgeheugen toevoegen",
   "builtins.lobe-user-memory.apiName.addIdentityMemory": "Identiteitsgeheugen toevoegen",

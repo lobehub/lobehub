@@ -25,6 +25,8 @@ import {
   HeterogeneousAgentSessionErrorCode,
   OPENCODE_CLI_INSTALL_COMMANDS,
   OPENCODE_CLI_INSTALL_DOCS_URL,
+  PI_CLI_INSTALL_COMMANDS,
+  PI_CLI_INSTALL_DOCS_URL,
 } from '@lobechat/electron-client-ipc/types/heterogeneous-agent';
 import type { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import type {
@@ -126,6 +128,8 @@ const CLI_AUTH_REQUIRED_PATTERNS = [
   /not authenticated/i,
   /\bunauthorized\b/i,
   /\b401\b/,
+  /no api key found/i,
+  /no models available/i,
 ] as const;
 const AMP_AUTH_REQUIRED_PATTERNS = [/please (?:log|sign) in/i, /amp_api_key/i] as const;
 const CODEX_RESUME_CWD_MISMATCH_PATTERNS = [
@@ -411,6 +415,9 @@ export default class HeterogeneousAgentCtr {
       case 'opencode': {
         return 'opencode';
       }
+      case 'pi': {
+        return 'pi';
+      }
       default: {
         return 'claude';
       }
@@ -469,6 +476,19 @@ export default class HeterogeneousAgentCtr {
     };
   }
 
+  private buildPiCliMissingError(session: AgentSession): HeterogeneousAgentSessionError {
+    const command = this.resolveSessionCommand(session);
+
+    return {
+      agentType: 'pi',
+      code: HeterogeneousAgentSessionErrorCode.CliNotFound,
+      command,
+      docsUrl: PI_CLI_INSTALL_DOCS_URL,
+      installCommands: PI_CLI_INSTALL_COMMANDS,
+      message: `Pi CLI was not found. Install it and make sure \`${command}\` can be executed.`,
+    };
+  }
+
   private buildCliMissingError(session: AgentSession): HeterogeneousAgentSessionError | undefined {
     switch (session.agentType) {
       case 'amp': {
@@ -482,6 +502,9 @@ export default class HeterogeneousAgentCtr {
       }
       case 'opencode': {
         return this.buildOpenCodeCliMissingError(session);
+      }
+      case 'pi': {
+        return this.buildPiCliMissingError(session);
       }
       default: {
         return;
@@ -537,6 +560,16 @@ export default class HeterogeneousAgentCtr {
           docsUrl: OPENCODE_CLI_INSTALL_DOCS_URL,
           message:
             'OpenCode could not authenticate. Sign in again or refresh its credentials, then retry.',
+          stderr,
+        };
+      }
+      case 'pi': {
+        return {
+          agentType: 'pi',
+          code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+          command,
+          docsUrl: PI_CLI_INSTALL_DOCS_URL,
+          message: 'Pi could not authenticate. Run `pi`, use `/login`, then retry.',
           stderr,
         };
       }
@@ -695,7 +728,9 @@ export default class HeterogeneousAgentCtr {
             ? 'codex'
             : session.agentType === 'opencode'
               ? 'opencode'
-              : undefined;
+              : session.agentType === 'pi'
+                ? 'pi'
+                : undefined;
     if (!defaultCommand) return;
 
     const command = this.resolveSessionCommand(session);
@@ -1692,7 +1727,7 @@ export default class HeterogeneousAgentCtr {
     return { agentSessionId: session?.agentSessionId };
   }
 
-  /** Query OpenCode's model catalog using the same cwd/env rules as a real local session. */
+  /** Query a heterogeneous CLI's model catalog using the same rules as a real local session. */
   async listModels(
     params: ListHeterogeneousAgentModelsParams,
   ): Promise<HeterogeneousAgentModelCatalog> {

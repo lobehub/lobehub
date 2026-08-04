@@ -325,6 +325,11 @@ describe('resolveCliCommand', () => {
       expect(DEFAULT_HETERO_COMMAND.opencode).toBe('opencode');
     });
 
+    it('defines pi as the default Pi command', async () => {
+      const { DEFAULT_HETERO_COMMAND } = await importModule();
+      expect(DEFAULT_HETERO_COMMAND.pi).toBe('pi');
+    });
+
     it('resolves the default bare command to the validated absolute path', async () => {
       callExecFile('/usr/local/bin/codex\n');
       callExecFile('codex-cli 0.142.5');

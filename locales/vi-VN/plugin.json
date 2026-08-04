@@ -462,6 +462,7 @@
   "builtins.lobe-user-interaction.apiName.skipUserResponse": "Bỏ qua phản hồi của người dùng",
   "builtins.lobe-user-interaction.apiName.submitUserResponse": "Gửi phản hồi của người dùng",
   "builtins.lobe-user-interaction.title": "Tương tác người dùng",
+  "builtins.lobe-user-memory.apiName.addActivityMemory": "Thêm bộ nhớ hoạt động",
   "builtins.lobe-user-memory.apiName.addContextMemory": "Thêm trí nhớ ngữ cảnh",
   "builtins.lobe-user-memory.apiName.addExperienceMemory": "Thêm trí nhớ kinh nghiệm",
   "builtins.lobe-user-memory.apiName.addIdentityMemory": "Thêm trí nhớ danh tính",

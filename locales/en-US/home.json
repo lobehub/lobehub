@@ -11,6 +11,7 @@
   "brief.action.ignore": "Ignore",
   "brief.action.retry": "Retry",
   "brief.action.upgrade": "Upgrade plan",
+  "brief.actionFailed": "That didn't go through. Please try again.",
   "brief.addFeedback": "Share feedback",
   "brief.agentSignal.selfReview.applied.heading": "Updated",
   "brief.agentSignal.selfReview.applied.summary": "{{count}} dream update was applied.",

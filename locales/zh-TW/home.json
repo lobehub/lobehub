@@ -11,6 +11,7 @@
   "brief.action.ignore": "忽略",
   "brief.action.retry": "重試",
   "brief.action.upgrade": "升級方案",
+  "brief.actionFailed": "操作未成功，請再試一次。",
   "brief.addFeedback": "分享意見回饋",
   "brief.agentSignal.selfReview.applied.heading": "已更新",
   "brief.agentSignal.selfReview.applied.summary": "已套用 {{count}} 個夢境更新。",

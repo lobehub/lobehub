@@ -204,6 +204,20 @@ describe('cliAgentBinaries', () => {
       });
     });
 
+    it('detects Pi through the shared bare-version probe', async () => {
+      callExecFile('/Users/test/.local/bin/pi\n');
+      callExecFile('0.83.0');
+
+      const { piBinary } = await import('../cliAgentBinaries');
+      const status = await piBinary.detect();
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/Users/test/.local/bin/pi',
+        version: '0.83.0',
+      });
+    });
+
     it('runs the binary directly via execFile (no shell)', async () => {
       callExecFile('/usr/local/bin/claude\n');
       callExecFile('1.2.3 (Claude Code)');

@@ -409,7 +409,17 @@ export class AgentSliceActionImpl {
             return;
           }
           this.#clearAgentNotFound(agentId);
-          this.#get().internal_dispatchAgentMap(agentId, data);
+          // This endpoint returns a complete, authoritative profile snapshot.
+          // Replace the cached entry instead of applying patch semantics: fields
+          // cleared on the server (for example editorData: null) may be omitted
+          // from the response and must not survive from an older local profile.
+          if (!isEqual(this.#get().agentMap[agentId], data)) {
+            this.#set(
+              (state) => ({ agentMap: { ...state.agentMap, [agentId]: data } }),
+              false,
+              'fetchAgentConfig',
+            );
+          }
           // Only adopt the fetched agent as the active one when nothing is
           // active yet. The active agent is owned by the route-level sync
           // (AgentIdSync on desktop/mobile, the popup pages' own setState).

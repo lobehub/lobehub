@@ -200,6 +200,7 @@
   "acceptance.status.repairing": "修復中",
   "acceptance.status.verifying": "驗證中",
   "acceptance.subject.document": "文件",
+  "acceptance.subject.standalone": "獨立",
   "acceptance.subject.task": "任務",
   "acceptance.subject.topic": "主題",
   "acceptance.surface.other": "其他",

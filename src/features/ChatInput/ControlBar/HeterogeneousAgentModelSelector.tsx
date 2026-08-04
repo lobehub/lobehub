@@ -1,6 +1,10 @@
 'use client';
 
-import type { HeterogeneousAgentModel, HeterogeneousProviderConfig } from '@lobechat/types';
+import type {
+  HeterogeneousAgentModel,
+  HeterogeneousProviderConfig,
+  ListHeterogeneousAgentModelsParams,
+} from '@lobechat/types';
 import { HETEROGENEOUS_AGENT_DEFAULT_SELECTION } from '@lobechat/types';
 import { ActionIcon, Icon, Input, Tooltip } from '@lobehub/ui';
 import {
@@ -114,9 +118,9 @@ const styles = createStaticStyles(({ css }) => ({
     border-block-end: 1px solid ${cssVar.colorSplit};
   `,
   spinning: css`
-    animation: opencode-model-spin 0.8s linear infinite;
+    animation: heterogeneous-agent-model-spin 0.8s linear infinite;
 
-    @keyframes opencode-model-spin {
+    @keyframes heterogeneous-agent-model-spin {
       to {
         transform: rotate(360deg);
       }
@@ -170,34 +174,36 @@ const fingerprintConfig = (provider: HeterogeneousProviderConfig | undefined) =>
 const getCatalogErrorKey = (name: string) => {
   switch (name) {
     case 'cli_not_found': {
-      return 'heteroAgent.openCodeModel.cliNotFound';
+      return 'heteroAgent.cliModel.cliNotFound';
     }
     case 'device_unavailable': {
-      return 'heteroAgent.openCodeModel.targetUnavailable';
+      return 'heteroAgent.cliModel.targetUnavailable';
     }
     case 'timeout': {
-      return 'heteroAgent.openCodeModel.timeout';
+      return 'heteroAgent.cliModel.timeout';
     }
     case 'unsupported_client': {
-      return 'heteroAgent.openCodeModel.unsupportedClient';
+      return 'heteroAgent.cliModel.unsupportedClient';
     }
     default: {
-      return 'heteroAgent.openCodeModel.error';
+      return 'heteroAgent.cliModel.error';
     }
   }
 };
 
-interface OpenCodeModelSelectorProps {
+interface HeterogeneousAgentModelSelectorProps {
   agentId?: string;
   disabled: boolean;
   model: string;
   onSelect: (model: string) => void;
   permissionReason?: string;
+  type: ListHeterogeneousAgentModelsParams['type'];
 }
 
-export const OpenCodeModelSelector = memo<OpenCodeModelSelectorProps>(
-  ({ agentId, disabled, model, onSelect, permissionReason }) => {
+export const HeterogeneousAgentModelSelector = memo<HeterogeneousAgentModelSelectorProps>(
+  ({ agentId, disabled, model, onSelect, permissionReason, type }) => {
     const { t } = useTranslation('chat');
+    const agentName = type === 'pi' ? 'Pi' : 'OpenCode';
     const [search, setSearch] = useState('');
     const {
       contentActive,
@@ -231,7 +237,8 @@ export const OpenCodeModelSelector = memo<OpenCodeModelSelectorProps>(
     const { data, error, isLoading, isValidating, mutate } = useSWR(
       contentActive && targetReady
         ? [
-            'opencode-model-catalog',
+            'heterogeneous-agent-model-catalog',
+            type,
             useLocalIpc ? 'local' : rpcDeviceId,
             cwd ?? '',
             provider?.command ?? '',
@@ -244,7 +251,7 @@ export const OpenCodeModelSelector = memo<OpenCodeModelSelectorProps>(
           cwd,
           deviceId: rpcDeviceId,
           env: provider?.env,
-          type: 'opencode',
+          type,
         });
         if (result.status === 'error') {
           const catalogError = new Error(result.error.message);
@@ -273,7 +280,7 @@ export const OpenCodeModelSelector = memo<OpenCodeModelSelectorProps>(
               modelId: currentModel.includes('/')
                 ? currentModel.slice(currentModel.indexOf('/') + 1)
                 : currentModel,
-              providerId: t('heteroAgent.openCodeModel.saved'),
+              providerId: t('heteroAgent.cliModel.saved'),
             },
             ...catalogModels,
           ]
@@ -307,7 +314,8 @@ export const OpenCodeModelSelector = memo<OpenCodeModelSelectorProps>(
     const trigger = (
       <div
         className={cx(styles.trigger, disabled && styles.triggerDisabled)}
-        aria-label={t('heteroAgent.openCodeModel.ariaLabel', {
+        aria-label={t('heteroAgent.cliModel.ariaLabel', {
+          name: agentName,
           model:
             currentModel === HETEROGENEOUS_AGENT_DEFAULT_SELECTION
               ? t('heteroAgent.modelSelector.default')
@@ -345,7 +353,7 @@ export const OpenCodeModelSelector = memo<OpenCodeModelSelectorProps>(
                 <div className={styles.search}>
                   <Input
                     autoFocus
-                    placeholder={t('heteroAgent.openCodeModel.search')}
+                    placeholder={t('heteroAgent.cliModel.search')}
                     prefix={<Icon icon={SearchIcon} size={14} />}
                     size="small"
                     value={search}
@@ -354,12 +362,12 @@ export const OpenCodeModelSelector = memo<OpenCodeModelSelectorProps>(
                     onKeyDown={(event) => event.stopPropagation()}
                   />
                   <ActionIcon
-                    aria-label={t('heteroAgent.openCodeModel.reload')}
+                    aria-label={t('heteroAgent.cliModel.reload')}
                     className={cx(isValidating && styles.spinning)}
                     disabled={!targetReady || isValidating}
                     icon={isValidating ? LoaderCircleIcon : RefreshCwIcon}
                     size="small"
-                    title={t('heteroAgent.openCodeModel.reload')}
+                    title={t('heteroAgent.cliModel.reload')}
                     onClick={() => void mutate()}
                   />
                 </div>
@@ -373,7 +381,7 @@ export const OpenCodeModelSelector = memo<OpenCodeModelSelectorProps>(
                         {t('heteroAgent.modelSelector.default')}
                       </div>
                       <div className={styles.itemSubtitle}>
-                        {t('heteroAgent.openCodeModel.defaultDesc')}
+                        {t('heteroAgent.cliModel.defaultDesc', { name: agentName })}
                       </div>
                     </div>
                     {currentModel === HETEROGENEOUS_AGENT_DEFAULT_SELECTION && (
@@ -382,11 +390,13 @@ export const OpenCodeModelSelector = memo<OpenCodeModelSelectorProps>(
                   </DropdownMenuItem>
 
                   {isLoading && !data && (
-                    <div className={styles.empty}>{t('heteroAgent.openCodeModel.loading')}</div>
+                    <div className={styles.empty}>
+                      {t('heteroAgent.cliModel.loading', { name: agentName })}
+                    </div>
                   )}
                   {!targetReady && (
                     <div className={styles.empty}>
-                      {t('heteroAgent.openCodeModel.targetUnavailable')}
+                      {t('heteroAgent.cliModel.targetUnavailable')}
                     </div>
                   )}
                   {error && (
@@ -394,15 +404,15 @@ export const OpenCodeModelSelector = memo<OpenCodeModelSelectorProps>(
                       {t(getCatalogErrorKey(error.name))}
                       <br />
                       <Button size="small" type="text" onClick={() => void mutate()}>
-                        {t('heteroAgent.openCodeModel.retry')}
+                        {t('heteroAgent.cliModel.retry')}
                       </Button>
                     </div>
                   )}
                   {data && rows.length === 0 && (
                     <div className={styles.empty}>
                       {search.trim()
-                        ? t('heteroAgent.openCodeModel.noMatch')
-                        : t('heteroAgent.openCodeModel.empty')}
+                        ? t('heteroAgent.cliModel.noMatch')
+                        : t('heteroAgent.cliModel.empty', { name: agentName })}
                     </div>
                   )}
                   {Object.entries(groups).map(([providerId, models]) => (
@@ -424,7 +434,7 @@ export const OpenCodeModelSelector = memo<OpenCodeModelSelectorProps>(
                             >
                               {item.id}
                               {selectedIsStale && item.id === currentModel
-                                ? ` · ${t('heteroAgent.openCodeModel.stale')}`
+                                ? ` · ${t('heteroAgent.cliModel.stale')}`
                                 : ''}
                             </div>
                           </div>
@@ -445,4 +455,4 @@ export const OpenCodeModelSelector = memo<OpenCodeModelSelectorProps>(
   },
 );
 
-OpenCodeModelSelector.displayName = 'OpenCodeModelSelector';
+HeterogeneousAgentModelSelector.displayName = 'HeterogeneousAgentModelSelector';

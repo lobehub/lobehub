@@ -11,6 +11,7 @@
   "brief.action.ignore": "Bỏ qua",
   "brief.action.retry": "Thử lại",
   "brief.action.upgrade": "Nâng cấp gói",
+  "brief.actionFailed": "Điều đó không thành công. Vui lòng thử lại.",
   "brief.addFeedback": "Gửi phản hồi",
   "brief.agentSignal.selfReview.applied.heading": "Đã cập nhật",
   "brief.agentSignal.selfReview.applied.summary": "Đã áp dụng {{count}} cập nhật giấc mơ.",

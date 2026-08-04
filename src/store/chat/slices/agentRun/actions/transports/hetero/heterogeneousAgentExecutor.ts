@@ -10,6 +10,7 @@ import {
   type HeterogeneousAgentSessionError,
   HeterogeneousAgentSessionErrorCode,
   OPENCODE_CLI_INSTALL_DOCS_URL,
+  PI_CLI_INSTALL_DOCS_URL,
 } from '@lobechat/electron-client-ipc';
 import {
   createMainAgentRunState,
@@ -94,11 +95,13 @@ const CLI_AUTH_REQUIRED_PATTERNS = [
   /not authenticated/i,
   /\bunauthorized\b/i,
   /\b401\b/,
+  /no api key found/i,
+  /no models available/i,
 ] as const;
 const AMP_AUTH_REQUIRED_PATTERNS = [/please (?:log|sign) in/i, /amp_api_key/i] as const;
 
 const buildCliAuthRequiredSessionError = (
-  agentType: 'amp' | 'claude-code' | 'codex' | 'opencode',
+  agentType: 'amp' | 'claude-code' | 'codex' | 'opencode' | 'pi',
   rawMessage: string,
 ): HeterogeneousAgentSessionError => {
   switch (agentType) {
@@ -142,6 +145,15 @@ const buildCliAuthRequiredSessionError = (
         stderr: rawMessage,
       };
     }
+    case 'pi': {
+      return {
+        agentType,
+        code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+        docsUrl: PI_CLI_INSTALL_DOCS_URL,
+        message: 'Pi could not authenticate. Run `pi`, use `/login`, then retry.',
+        stderr: rawMessage,
+      };
+    }
   }
 };
 
@@ -155,7 +167,8 @@ const maybeClassifyCliAuthRequiredError = (
     agentType !== 'amp' &&
     agentType !== 'claude-code' &&
     agentType !== 'codex' &&
-    agentType !== 'opencode'
+    agentType !== 'opencode' &&
+    agentType !== 'pi'
   ) {
     return;
   }
@@ -210,6 +223,9 @@ const getDefaultHeterogeneousCommand = (agentType: string): string => {
     }
     case 'opencode': {
       return 'opencode';
+    }
+    case 'pi': {
+      return 'pi';
     }
     default: {
       return 'claude';
