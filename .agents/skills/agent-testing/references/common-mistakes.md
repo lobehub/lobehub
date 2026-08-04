@@ -569,3 +569,31 @@ attempt, pass criteria, interpretation, and limitations. The second is an
 execution document: exact command/request, relevant raw output and observed state,
 plus a short mapping from those values to the criteria. Republish both halves in
 every follow-up round so the round remains self-contained.
+
+---
+
+## M28 — Writing a report field from the router's summary instead of opening the linked schema
+
+**Wrong approach**: reading SKILL.md's Step 5, seeing that it describes `result.json`
+and links the format reference, and then writing the file from that summary plus
+inference — without opening the reference. The summary describes what the fields
+_mean_; it does not spell out the nested shapes.
+
+**Why it's wrong**: the fields that get written wrong are exactly the ones a summary
+cannot convey — a before/after `comparison`, a structured visualization, plan-item
+verifier metadata. The plausible-looking guess (a flat `comparison` + `role` pair of
+keys instead of one nested object per half) parses as valid JSON, so nothing on the
+authoring side objects. Ingest then drops the unrecognized shape, exits zero, and the
+published round looks complete.
+
+**What it breaks**: a passing round whose evidence is silently degraded — two
+screenshots that were meant to read as Before / After render as unlabeled siblings,
+so the contrast the case depends on is invisible to the reviewer. It surfaces only
+when a human asks why the page looks wrong, costing a whole extra round.
+
+**Correct approach**: when a step links a schema or format reference, open it before
+writing the artifact, and **copy the example rather than reconstructing it**. After
+ingest, read the command's warnings as failures, not noise: a dropped-field warning
+means the round published incomplete and needs a corrected re-ingest, the same as a
+skipped evidence upload. And when a reviewer reports that something rendered wrong,
+suspect your own metadata shape before the renderer.

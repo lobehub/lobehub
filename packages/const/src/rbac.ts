@@ -15,6 +15,15 @@ export const PERMISSION_ACTIONS = {
 
   AGENT_UPDATE: 'agent:update',
 
+  // ==================== Agent Label Management ====================
+  AGENT_LABEL_CREATE: 'agent_label:create',
+
+  AGENT_LABEL_DELETE: 'agent_label:delete',
+
+  AGENT_LABEL_READ: 'agent_label:read',
+
+  AGENT_LABEL_UPDATE: 'agent_label:update',
+
   // ==================== AI Infrastructure Management ====================
   AI_MODEL_CREATE: 'ai_model:create',
 
@@ -224,6 +233,20 @@ export const getAllowedScopesForAction = (
   // workspace_member.role + assigned permissions already pin who can do what.
   if (resource.startsWith('workspace')) return ['ALL'];
 
+  // Agent labels are a shared registry rather than per-author content: in a
+  // workspace every member sees and uses the same label set, and the model
+  // scopes reads and writes by `workspace_id` alone. An OWNER grant would
+  // therefore be a lie — it reads as "only labels you created" but would in
+  // fact authorize mutating every label in the workspace.
+  if (resource === 'agent_label') return ['ALL'];
+
+  // Sidebar folders became the same kind of thing: they are the shared
+  // skeleton of a workspace sidebar, and `SessionGroupModel.ownership()` now
+  // matches every public folder rather than only the caller's. An OWNER grant
+  // would read as "only folders you created" while authorizing renames and
+  // deletes across every shared Category.
+  if (resource === 'session_group') return ['ALL'];
+
   // user resource nuance: create/delete without OWNER; read/update allow OWNER
   if (resource === 'user') {
     if (action === 'create' || action === 'delete') return ['ALL'];
@@ -312,7 +335,10 @@ const action = (key: keyof typeof PERMISSION_ACTIONS): string => PERMISSION_ACTI
  * - `workspace_owner` — every workspace-domain permission + every content
  *   permission (`:all`) so they can manage other members' resources too.
  * - `workspace_admin` — workspace administration without billing, workspace
- *   deletion, ownership transfer, or write access to other members' content.
+ *   deletion, or ownership transfer. Holds `AGENT_UPDATE:all` so Agent
+ *   curation (rename, config, Member Permissions) is not blocked by another
+ *   member's General Access; every other content resource stays `:owner`, and
+ *   deleting or rehoming someone else's Agent remains Owner/creator-only.
  * - `workspace_member` — read workspace + members; create/update/delete their
  *   own content (`:owner`) on every content resource.
  * - `workspace_viewer` — strict read-only on workspace + members + content.
@@ -347,6 +373,10 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceSystemRoleName, readonl
     `${action('AGENT_UPDATE')}:all`,
     `${action('AGENT_DELETE')}:all`,
     `${action('AGENT_FORK')}:all`,
+    `${action('AGENT_LABEL_READ')}:all`,
+    `${action('AGENT_LABEL_CREATE')}:all`,
+    `${action('AGENT_LABEL_UPDATE')}:all`,
+    `${action('AGENT_LABEL_DELETE')}:all`,
     `${action('SESSION_READ')}:all`,
     `${action('SESSION_CREATE')}:all`,
     `${action('SESSION_UPDATE')}:all`,
@@ -410,20 +440,29 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceSystemRoleName, readonl
     `${action('WORKSPACE_ROLE_CREATE')}:all`,
     `${action('WORKSPACE_ROLE_UPDATE')}:all`,
     `${action('WORKSPACE_ROLE_DELETE')}:all`,
-    // Content — Admin can read shared resources but only write their own
+    // Content — Admin curates shared Agents (`AGENT_UPDATE:all` is what lets
+    // `canPerformResourceAction` bypass a resource's Member Permissions, so
+    // General Access constrains members and viewers, not the Admin who has to
+    // keep the workspace's Agent list in order). Destructive / ownership
+    // actions stay with the creator or the workspace Owner: AGENT_DELETE and
+    // transfer are deliberately still `:owner`-scoped here.
     `${action('AGENT_READ')}:all`,
     `${action('AGENT_CREATE')}:owner`,
-    `${action('AGENT_UPDATE')}:owner`,
+    `${action('AGENT_UPDATE')}:all`,
     `${action('AGENT_DELETE')}:owner`,
     `${action('AGENT_FORK')}:owner`,
+    `${action('AGENT_LABEL_READ')}:all`,
+    `${action('AGENT_LABEL_CREATE')}:all`,
+    `${action('AGENT_LABEL_UPDATE')}:all`,
+    `${action('AGENT_LABEL_DELETE')}:all`,
     `${action('SESSION_READ')}:all`,
     `${action('SESSION_CREATE')}:owner`,
     `${action('SESSION_UPDATE')}:owner`,
     `${action('SESSION_DELETE')}:owner`,
     `${action('SESSION_GROUP_READ')}:all`,
-    `${action('SESSION_GROUP_CREATE')}:owner`,
-    `${action('SESSION_GROUP_UPDATE')}:owner`,
-    `${action('SESSION_GROUP_DELETE')}:owner`,
+    `${action('SESSION_GROUP_CREATE')}:all`,
+    `${action('SESSION_GROUP_UPDATE')}:all`,
+    `${action('SESSION_GROUP_DELETE')}:all`,
     `${action('MESSAGE_READ')}:all`,
     `${action('MESSAGE_CREATE')}:owner`,
     `${action('MESSAGE_UPDATE')}:owner`,
@@ -473,14 +512,15 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceSystemRoleName, readonl
     `${action('AGENT_UPDATE')}:owner`,
     `${action('AGENT_DELETE')}:owner`,
     `${action('AGENT_FORK')}:owner`,
+    `${action('AGENT_LABEL_READ')}:all`,
     `${action('SESSION_READ')}:all`,
     `${action('SESSION_CREATE')}:owner`,
     `${action('SESSION_UPDATE')}:owner`,
     `${action('SESSION_DELETE')}:owner`,
     `${action('SESSION_GROUP_READ')}:all`,
-    `${action('SESSION_GROUP_CREATE')}:owner`,
-    `${action('SESSION_GROUP_UPDATE')}:owner`,
-    `${action('SESSION_GROUP_DELETE')}:owner`,
+    `${action('SESSION_GROUP_CREATE')}:all`,
+    `${action('SESSION_GROUP_UPDATE')}:all`,
+    `${action('SESSION_GROUP_DELETE')}:all`,
     `${action('MESSAGE_READ')}:all`,
     `${action('MESSAGE_CREATE')}:owner`,
     `${action('MESSAGE_UPDATE')}:owner`,
@@ -514,6 +554,7 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceSystemRoleName, readonl
     `${action('WORKSPACE_READ')}:all`,
     `${action('WORKSPACE_MEMBER_READ')}:all`,
     `${action('AGENT_READ')}:all`,
+    `${action('AGENT_LABEL_READ')}:all`,
     `${action('SESSION_READ')}:all`,
     `${action('SESSION_GROUP_READ')}:all`,
     `${action('MESSAGE_READ')}:all`,

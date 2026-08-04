@@ -99,7 +99,7 @@ vi.mock('@/libs/trpc/client', () => ({
 // path without each one stalling on a real HTTP request; individual tests can
 // hand it persisted accounts/windows.
 const mockQuotaService = vi.hoisted(() => ({
-  getWindows: vi.fn(async (): Promise<unknown[]> => []),
+  getLatestReadings: vi.fn(async (): Promise<unknown[]> => []),
   ingestClaudeSnapshot: vi.fn(async () => undefined),
   listAccounts: vi.fn(async (): Promise<unknown[]> => []),
   listBindings: vi.fn(async (): Promise<unknown[]> => []),
@@ -205,15 +205,13 @@ const persistedAccount = (updatedAt = Date.now()) => ({
   updatedAt: new Date(updatedAt),
 });
 
-/** A persisted `agent_quota_windows` row whose newest reading is `lastSeenAt`. */
-const persistedSessionWindow = (lastSeenAt: number) => ({
-  lastSeenAt: new Date(lastSeenAt),
-  lastUtilization: 8,
+/** The account's newest persisted session reading, captured at `capturedAt`. */
+const persistedSessionReading = (capturedAt: number) => ({
+  capturedAt,
   limitType: 'session',
-  peakUtilization: 8,
   resetsAt: null,
   scopeKey: '',
-  windowSeconds: 300 * 60,
+  utilization: 8,
 });
 
 /** A live session reading as fossilized by the desktop sampler at `capturedAt`. */
@@ -252,7 +250,7 @@ beforeEach(() => {
   mockService.getCodexQuota.mockReset();
   toastErrorMock.mockReset();
   toastSuccessMock.mockReset();
-  mockQuotaService.getWindows.mockResolvedValue([]);
+  mockQuotaService.getLatestReadings.mockResolvedValue([]);
   mockQuotaService.ingestClaudeSnapshot.mockClear();
   mockQuotaService.listAccounts.mockResolvedValue([]);
   mockQuotaService.listBindings.mockResolvedValue([]);
@@ -439,7 +437,7 @@ describe('ClaudeCodeQuotaMenu', () => {
     mockQuotaService.listAccounts.mockResolvedValue([
       { externalAccountId: 'ext-1', id: 'acc-1', provider: 'claude-code' },
     ]);
-    mockQuotaService.getWindows.mockResolvedValue([]);
+    mockQuotaService.getLatestReadings.mockResolvedValue([]);
     mockService.getClaudeCodeQuota.mockResolvedValue(
       claudeSnapshot({ session: { resetsAt: null, usedPercent: 8, windowMinutes: 300 } }),
     );
@@ -588,18 +586,44 @@ describe('ClaudeCodeQuotaMenu', () => {
     expect(await screen.findByText('heteroAgent.quota.noData')).toBeTruthy();
   });
 
-  it('shows the live sample when every persisted window has already reset', async () => {
-    // A device offline since yesterday leaves rows behind whose windows have
-    // reset. The row count still looks like "we have data", so a live sample
-    // that could not be persisted (identity without an external account id here)
-    // must not lose to that empty persisted view.
+  it('shows the live sample when the persisted window has already reset', async () => {
+    // A device offline since yesterday leaves a reading behind whose window has
+    // since reset. Its 100% describes spend that already refilled, so a sample
+    // attributable to the same account must lead.
     mockQuotaService.listAccounts.mockResolvedValue([persistedAccount(Date.now() - 60 * 60_000)]);
-    mockQuotaService.getWindows.mockResolvedValue([
+    mockQuotaService.getLatestReadings.mockResolvedValue([
       {
-        ...persistedSessionWindow(Date.now() - 24 * 60 * 60_000),
-        lastUtilization: 100,
-        peakUtilization: 100,
-        resetsAt: new Date(Date.now() - 60 * 60_000),
+        ...persistedSessionReading(Date.now() - 24 * 60 * 60_000),
+        resetsAt: Date.now() - 60 * 60_000,
+        utilization: 100,
+      },
+    ]);
+    mockService.getClaudeCodeQuota.mockResolvedValue(
+      claudeSnapshot({
+        identity: { externalAccountId: 'ext-1' },
+        readings: [{ ...liveSessionReading(Date.now()), utilization: 4 }],
+        session: { resetsAt: null, usedPercent: 4, windowMinutes: 300 },
+      }),
+    );
+
+    render(<ClaudeCodeQuotaMenu />);
+
+    // 96% left from the live sample — not the reset row's 100%, and not empty.
+    expect(await screen.findByText('96%')).toBeTruthy();
+    expect(screen.queryByText('heteroAgent.quota.noData')).toBeNull();
+  });
+
+  it('will not paint an unattributable sample under a named account', async () => {
+    // Same setup, except the sample carries no account identity (no
+    // `oauthAccount` in ~/.claude.json while the quota came from the keychain).
+    // With several logins on the machine it may belong to another account, so
+    // the panel keeps the account's own refilled window instead.
+    mockQuotaService.listAccounts.mockResolvedValue([persistedAccount(Date.now() - 60 * 60_000)]);
+    mockQuotaService.getLatestReadings.mockResolvedValue([
+      {
+        ...persistedSessionReading(Date.now() - 24 * 60 * 60_000),
+        resetsAt: Date.now() - 60 * 60_000,
+        utilization: 100,
       },
     ]);
     mockService.getClaudeCodeQuota.mockResolvedValue(
@@ -608,14 +632,44 @@ describe('ClaudeCodeQuotaMenu', () => {
 
     render(<ClaudeCodeQuotaMenu />);
 
-    // 96% left from the live sample — not the expired row's 0%, and not empty.
-    expect(await screen.findByText('96%')).toBeTruthy();
-    expect(screen.queryByText('heteroAgent.quota.noData')).toBeNull();
+    // The reset window reads as refilled; the unattributable 96% is not shown.
+    expect(await screen.findByText('100%')).toBeTruthy();
+    expect(screen.queryByText('96%')).toBeNull();
+  });
+
+  it('keeps the 5-hour row on screen as refilled once its window resets', async () => {
+    // The regression: after five idle hours the session window rolls over and
+    // the panel used to drop the row entirely, leaving the weekly limit alone
+    // as if the plan had no session limit. A reset window is free, not absent.
+    mockQuotaService.listAccounts.mockResolvedValue([persistedAccount(Date.now() - 60_000)]);
+    mockQuotaService.getLatestReadings.mockResolvedValue([
+      {
+        ...persistedSessionReading(Date.now() - 60_000),
+        resetsAt: Date.now() - 30 * 60_000,
+        utilization: 83,
+      },
+      {
+        capturedAt: Date.now() - 60_000,
+        limitType: 'weekly_all',
+        resetsAt: Date.now() + 4 * 24 * 60 * 60_000,
+        scopeKey: '',
+        utilization: 21,
+      },
+    ]);
+
+    render(<ClaudeCodeQuotaMenu />);
+
+    // Session refilled to 100% left, weekly still at 79% — two rows, not one.
+    expect(await screen.findByText('100%')).toBeTruthy();
+    expect(screen.getByText('79%')).toBeTruthy();
+    expect(mockService.getClaudeCodeQuota).not.toHaveBeenCalled();
   });
 
   it('renders persisted windows without a live call while the newest reading is fresh', async () => {
     mockQuotaService.listAccounts.mockResolvedValue([persistedAccount(Date.now() - 60_000)]);
-    mockQuotaService.getWindows.mockResolvedValue([persistedSessionWindow(Date.now() - 60_000)]);
+    mockQuotaService.getLatestReadings.mockResolvedValue([
+      persistedSessionReading(Date.now() - 60_000),
+    ]);
 
     render(<ClaudeCodeQuotaMenu />);
 
@@ -627,8 +681,8 @@ describe('ClaudeCodeQuotaMenu', () => {
     // Under the previous 30 min policy this 31-minute-old reading is a
     // conservative stale case; the gate now trips at 2 minutes.
     mockQuotaService.listAccounts.mockResolvedValue([persistedAccount(Date.now() - 31 * 60_000)]);
-    mockQuotaService.getWindows.mockResolvedValue([
-      persistedSessionWindow(Date.now() - 31 * 60_000),
+    mockQuotaService.getLatestReadings.mockResolvedValue([
+      persistedSessionReading(Date.now() - 31 * 60_000),
     ]);
     mockService.getClaudeCodeQuota.mockResolvedValue(claudeSnapshot());
 
@@ -642,8 +696,8 @@ describe('ClaudeCodeQuotaMenu', () => {
 
   it('paints persisted windows while a stale live refresh is still in flight', async () => {
     mockQuotaService.listAccounts.mockResolvedValue([persistedAccount(Date.now() - 31 * 60_000)]);
-    mockQuotaService.getWindows.mockResolvedValue([
-      persistedSessionWindow(Date.now() - 31 * 60_000),
+    mockQuotaService.getLatestReadings.mockResolvedValue([
+      persistedSessionReading(Date.now() - 31 * 60_000),
     ]);
     const requests: Array<(snapshot: ElectronClientIpcModule.ClaudeCodeQuotaSnapshot) => void> = [];
     mockService.getClaudeCodeQuota.mockImplementation(
@@ -671,7 +725,9 @@ describe('ClaudeCodeQuotaMenu', () => {
   it('revalidates against the live API when the window regains focus', async () => {
     // 90 s: fresh for the mount gate (2 min) but past the focus gate (60 s).
     mockQuotaService.listAccounts.mockResolvedValue([persistedAccount(Date.now() - 90_000)]);
-    mockQuotaService.getWindows.mockResolvedValue([persistedSessionWindow(Date.now() - 90_000)]);
+    mockQuotaService.getLatestReadings.mockResolvedValue([
+      persistedSessionReading(Date.now() - 90_000),
+    ]);
     mockService.getClaudeCodeQuota.mockResolvedValue(claudeSnapshot());
 
     render(<ClaudeCodeQuotaMenu />);
@@ -710,7 +766,7 @@ describe('ClaudeCodeQuotaMenu', () => {
     const capturedAt = Date.now();
     const account = persistedAccount();
     mockQuotaService.listAccounts.mockResolvedValue([account]);
-    mockQuotaService.getWindows.mockResolvedValue([persistedSessionWindow(capturedAt)]);
+    mockQuotaService.getLatestReadings.mockResolvedValue([persistedSessionReading(capturedAt)]);
     mockLambdaDeviceQuota.mockResolvedValueOnce(
       claudeSnapshot({
         identity: { externalAccountId: 'ext-1' },
@@ -742,7 +798,9 @@ describe('ClaudeCodeQuotaMenu', () => {
       });
 
       mockQuotaService.listAccounts.mockResolvedValue([persistedAccount()]);
-      mockQuotaService.getWindows.mockResolvedValue([persistedSessionWindow(Date.now() - 60_000)]);
+      mockQuotaService.getLatestReadings.mockResolvedValue([
+        persistedSessionReading(Date.now() - 60_000),
+      ]);
       mockService.getClaudeCodeQuota.mockResolvedValue(claudeSnapshot());
 
       render(<ClaudeCodeQuotaMenu />);
@@ -767,7 +825,7 @@ describe('ClaudeCodeQuotaMenu', () => {
     // 90 s: fresh for the mount gate (2 min) but past the focus gate (60 s).
     const persistedAt = Date.now() - 90_000;
     mockQuotaService.listAccounts.mockResolvedValue([persistedAccount(Date.now() - 90_000)]);
-    mockQuotaService.getWindows.mockResolvedValue([persistedSessionWindow(persistedAt)]);
+    mockQuotaService.getLatestReadings.mockResolvedValue([persistedSessionReading(persistedAt)]);
     mockService.getClaudeCodeQuota.mockResolvedValue(
       claudeSnapshot({
         identity: { externalAccountId: 'ext-1' },
@@ -790,7 +848,7 @@ describe('ClaudeCodeQuotaMenu', () => {
   it('ingests genuinely fresh readings surfaced by a revalidation', async () => {
     const persistedAt = Date.now() - 90_000;
     mockQuotaService.listAccounts.mockResolvedValue([persistedAccount(Date.now() - 90_000)]);
-    mockQuotaService.getWindows.mockResolvedValue([persistedSessionWindow(persistedAt)]);
+    mockQuotaService.getLatestReadings.mockResolvedValue([persistedSessionReading(persistedAt)]);
     const readings = [liveSessionReading(Date.now())];
     mockService.getClaudeCodeQuota.mockResolvedValue(
       claudeSnapshot({ identity: { externalAccountId: 'ext-1' }, readings }),

@@ -548,6 +548,7 @@ export class SearchRepo {
         createdAt: agents.createdAt,
         description: agents.description,
         id: agents.id,
+        name: agents.name,
         score: sql<number>`paradedb.score(${agents.id})`.as('score'),
         slug: agents.slug,
         tags: agents.tags,
@@ -662,6 +663,7 @@ export class SearchRepo {
         agentBackgroundColor: agents.backgroundColor,
         agentId: hits.agentId,
         agentMatchedId: agents.id,
+        agentName: agents.name,
         agentSlug: agents.slug,
         agentTitle: agents.title,
         content: hits.content,
@@ -764,6 +766,7 @@ export class SearchRepo {
     const rows = await this.db
       .select({
         agentId: hits.agentId,
+        agentName: agents.name,
         agentSlug: agents.slug,
         agentTitle: agents.title,
         content: hits.content,

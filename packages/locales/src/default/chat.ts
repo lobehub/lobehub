@@ -1037,6 +1037,7 @@ export default {
   'sessionGroup.createSuccess': 'Created successfully',
   'sessionGroup.creatingAgent': 'Creating agent...',
   'sessionGroup.groupName': 'Category Name',
+  'sessionGroup.hideFromSidebar': 'Hide from my sidebar',
   'sessionGroup.inputPlaceholder': 'Please enter category name...',
   'sessionGroup.moveGroup': 'Move to Category',
   'sessionGroup.newGroup': 'New Category',
@@ -1051,6 +1052,7 @@ export default {
   'sessionGroup.renameSuccess': 'Renamed successfully',
   'sessionGroup.searchAgents': 'Search agents',
   'sessionGroup.selectedAgents': 'Selected agents ({{count}})',
+  'sessionGroup.showInSidebar': 'Show in my sidebar',
   'sessionGroup.sortSuccess': 'Reorder successful',
   'sessionGroup.sorting': 'Category sorting updating...',
   'sessionGroup.tooLong': 'Category name length should be between 1-20',
@@ -1474,9 +1476,15 @@ export default {
   'tokenTag.used': 'Used',
   'tool.intervention.approvalMode': 'Approval Mode',
   'tool.intervention.approve': 'Approve',
+  'tool.intervention.approveAll': 'Approve all {{count}}',
+  'tool.intervention.approveAllTooltip':
+    'Run all {{count}} pending tool calls together, then continue',
   'tool.intervention.optionApprove': 'Approve',
   'tool.intervention.optionApproveRemember': "Approve, and don't ask again for similar actions",
   'tool.intervention.rememberSimilar': "Don't ask again for similar actions",
+  'tool.intervention.stop': 'Stop',
+  'tool.intervention.stopTooltip':
+    'Stop here — nothing pending runs and the agent does not continue',
   'tool.intervention.renderFallback.description':
     'This display was downgraded to raw JSON because the current model was not capable enough to generate a stable interactive payload. Switch to a stronger model and try again.',
   'tool.intervention.renderFallback.rawJson': 'Raw JSON',

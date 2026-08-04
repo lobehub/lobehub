@@ -4,6 +4,7 @@ import {
   type ActionsBarConfig,
   type ConversationContext,
   type ConversationHooks,
+  type MessagesChangeMeta,
   type OperationState,
 } from '../types';
 import { DEFAULT_OPERATION_STATE } from '../types/operation';
@@ -36,8 +37,14 @@ export interface State extends DataState, InputState, MessageStateState, VirtuaL
    * Callback when messages are fetched or changed internally
    * @param messages - The updated messages array
    * @param context - The context that this data belongs to (prevents race conditions)
+   * @param meta - Set when the messages are a fetched server snapshot rather
+   *   than an internal mutation (see MessagesChangeMeta)
    */
-  onMessagesChange?: (messages: UIChatMessage[], context: ConversationContext) => void;
+  onMessagesChange?: (
+    messages: UIChatMessage[],
+    context: ConversationContext,
+    meta?: MessagesChangeMeta,
+  ) => void;
 
   /**
    * External operation state (from ChatStore)

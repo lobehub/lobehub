@@ -17,7 +17,7 @@ import { homeAgentListSelectors } from '@/store/home/selectors';
 import CreateAgentButton from '../Agent/CreateAgentButton';
 import Group from '../Agent/List/Group';
 import SessionList from '../Agent/List/List';
-import { useKeepSidebarListed } from '../Agent/List/useAgentList';
+import { useKeepSidebarGroupsListed, useKeepSidebarListed } from '../Agent/List/useAgentList';
 
 interface PrivateListProps {
   hideCreateButton?: boolean;
@@ -37,13 +37,20 @@ const PrivateList = memo<PrivateListProps>(({ hideCreateButton, onMoreClick }) =
   const rawPrivateUngrouped = useHomeStore(homeAgentListSelectors.privateUngroupedAgents, isEqual);
   const navigate = useWorkspaceAwareNavigate();
   const keep = useKeepSidebarListed();
+  const keepGroups = useKeepSidebarGroupsListed();
 
   if (!isInit) return <SkeletonList rows={2} />;
 
   // Drop the caller's sidebar-hidden items BEFORE the page-size cut so a
   // removal doesn't shrink the visible page below `privateAgentPageSize`.
   const privatePinned = keep(rawPrivatePinned);
-  const privateGroups = rawPrivateGroups.map((group) => ({ ...group, items: keep(group.items) }));
+  // Hidden Categories drop out here too, the same way the public list does —
+  // otherwise hiding one from Category Management saves the preference and
+  // changes nothing on screen.
+  const privateGroups = keepGroups(rawPrivateGroups).map((group) => ({
+    ...group,
+    items: keep(group.items),
+  }));
   const filteredUngrouped = keep(rawPrivateUngrouped);
   const privateUngrouped = filteredUngrouped.slice(0, privateAgentPageSize);
 

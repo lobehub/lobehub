@@ -2590,4 +2590,177 @@ describe('ConversationControl actions', () => {
       );
     });
   });
+  describe('approveAllToolCalls', () => {
+    const agentId = 'server-agent';
+    const topicId = 'server-topic';
+    const chatKey = messageMapKey({ agentId, topicId, threadId: undefined });
+
+    const seedPendingBatch = (result: any) => {
+      const assistantMessage = createMockMessage({ id: 'assistant-msg-1', role: 'assistant' });
+      const toolMessages = ['a', 'b', 'c'].map((suffix, index) =>
+        createMockMessage({
+          id: `tool-msg-${suffix}`,
+          parentId: assistantMessage.id,
+          plugin: {
+            apiName: 'calculate',
+            arguments: `{"expression":"${index}"}`,
+            identifier: 'lobe-calculator',
+            type: 'default',
+          },
+          role: 'tool',
+          tool_call_id: `call_${suffix}`,
+        } as any),
+      );
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          activeTopicId: topicId,
+          dbMessagesMap: { [chatKey]: [assistantMessage, ...toolMessages] },
+          messagesMap: { [chatKey]: [assistantMessage, ...toolMessages] },
+        });
+      });
+
+      vi.spyOn(result.current, 'isGatewayModeEnabled').mockReturnValue(true);
+      vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
+    };
+
+    // The whole point of the batch path: ONE gateway op carrying every decision.
+    // Looping single approvals starts one op per tool, and each continues the
+    // LLM while its siblings are still empty pending rows.
+    it('resolves the whole batch through a single gateway op', async () => {
+      const { result } = renderHook(() => useChatStore());
+      seedPendingBatch(result);
+
+      const executeGatewayAgentSpy = vi
+        .spyOn(result.current, 'executeGatewayAgent')
+        .mockResolvedValue({} as any);
+      const executeClientAgentSpy = vi
+        .spyOn(result.current, 'executeClientAgent')
+        .mockResolvedValue(undefined);
+
+      await act(async () => {
+        await result.current.approveAllToolCalls(['tool-msg-a', 'tool-msg-b', 'tool-msg-c']);
+      });
+
+      expect(executeGatewayAgentSpy).toHaveBeenCalledTimes(1);
+      expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: '',
+          parentMessageId: 'tool-msg-c',
+          resumeApprovals: [
+            { decision: 'approved', parentMessageId: 'tool-msg-a', toolCallId: 'call_a' },
+            { decision: 'approved', parentMessageId: 'tool-msg-b', toolCallId: 'call_b' },
+            { decision: 'approved', parentMessageId: 'tool-msg-c', toolCallId: 'call_c' },
+          ],
+        }),
+      );
+      expect(executeClientAgentSpy).not.toHaveBeenCalled();
+
+      executeGatewayAgentSpy.mockRestore();
+    });
+
+    it('marks every card approved so the bar settles in one paint', async () => {
+      const { result } = renderHook(() => useChatStore());
+      seedPendingBatch(result);
+
+      const optimisticSpy = vi.mocked(result.current.optimisticUpdateMessagePlugin);
+      optimisticSpy.mockClear();
+      const executeGatewayAgentSpy = vi
+        .spyOn(result.current, 'executeGatewayAgent')
+        .mockResolvedValue({} as any);
+
+      await act(async () => {
+        await result.current.approveAllToolCalls(['tool-msg-a', 'tool-msg-b', 'tool-msg-c']);
+      });
+
+      for (const id of ['tool-msg-a', 'tool-msg-b', 'tool-msg-c']) {
+        expect(optimisticSpy).toHaveBeenCalledWith(
+          id,
+          { intervention: { status: 'approved' } },
+          expect.anything(),
+        );
+      }
+
+      executeGatewayAgentSpy.mockRestore();
+    });
+
+    // An optimistic row has no server identity yet, so the server can't address
+    // it; sending it would fail the whole batch instead of just that card.
+    it('drops rows the server cannot address', async () => {
+      const { result } = renderHook(() => useChatStore());
+      seedPendingBatch(result);
+
+      const executeGatewayAgentSpy = vi
+        .spyOn(result.current, 'executeGatewayAgent')
+        .mockResolvedValue({} as any);
+
+      await act(async () => {
+        await result.current.approveAllToolCalls(['tool-msg-a', 'tmp_pending', 'tool-msg-c']);
+      });
+
+      expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          resumeApprovals: [
+            { decision: 'approved', parentMessageId: 'tool-msg-a', toolCallId: 'call_a' },
+            { decision: 'approved', parentMessageId: 'tool-msg-c', toolCallId: 'call_c' },
+          ],
+        }),
+      );
+
+      executeGatewayAgentSpy.mockRestore();
+    });
+
+    // Client mode has no batch resume; its local runtime re-parks on the
+    // remaining pending tools after each approval, so sequential is correct.
+    it('falls back to sequential approvals in client mode', async () => {
+      const { result } = renderHook(() => useChatStore());
+      seedPendingBatch(result);
+      vi.spyOn(result.current, 'isGatewayModeEnabled').mockReturnValue(false);
+
+      vi.spyOn(result.current, 'internal_createAgentState').mockReturnValue({
+        agentConfig: createMockResolvedAgentConfig(),
+        context: { phase: 'init' } as any,
+        state: {} as any,
+      });
+      const executeGatewayAgentSpy = vi
+        .spyOn(result.current, 'executeGatewayAgent')
+        .mockResolvedValue({} as any);
+      const executeClientAgentSpy = vi
+        .spyOn(result.current, 'executeClientAgent')
+        .mockResolvedValue(undefined);
+
+      await act(async () => {
+        await result.current.approveAllToolCalls(['tool-msg-a', 'tool-msg-b']);
+      });
+
+      expect(executeGatewayAgentSpy).not.toHaveBeenCalled();
+      // One local resume per tool, in order — the runtime re-parks on the
+      // remaining pending tools between them.
+      expect(executeClientAgentSpy).toHaveBeenCalledTimes(2);
+      expect(
+        executeClientAgentSpy.mock.calls.map((call) => (call[0] as any).parentMessageId),
+      ).toEqual(['tool-msg-a', 'tool-msg-b']);
+
+      executeClientAgentSpy.mockRestore();
+      executeGatewayAgentSpy.mockRestore();
+    });
+
+    it('is a no-op for an empty batch', async () => {
+      const { result } = renderHook(() => useChatStore());
+      seedPendingBatch(result);
+
+      const executeGatewayAgentSpy = vi
+        .spyOn(result.current, 'executeGatewayAgent')
+        .mockResolvedValue({} as any);
+
+      await act(async () => {
+        await result.current.approveAllToolCalls([]);
+      });
+
+      expect(executeGatewayAgentSpy).not.toHaveBeenCalled();
+
+      executeGatewayAgentSpy.mockRestore();
+    });
+  });
 });

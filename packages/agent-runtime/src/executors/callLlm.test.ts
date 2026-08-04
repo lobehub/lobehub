@@ -73,6 +73,7 @@ const createMessageTransport = (): MessageTransport => ({
   query: vi.fn(),
   update: vi.fn(),
   updatePluginState: vi.fn(),
+  updateToolIntervention: vi.fn(),
   updateToolMessage: vi.fn(),
 });
 

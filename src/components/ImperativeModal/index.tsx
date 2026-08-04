@@ -7,7 +7,8 @@ import {
   ModalFooter,
   type ModalInstance,
 } from '@lobehub/ui/base-ui';
-import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef } from 'react';
+import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 interface LegacyModalButtonProps {
@@ -98,6 +99,20 @@ const ImperativeModal = ({
   const { t } = useTranslation('common');
   const modalRef = useRef<ModalInstance>(undefined);
   const canRenderContent = open || !destroyOnHidden;
+
+  // `createModal` renders into its own host tree, so handing `children` over as
+  // modal content would put them in a tree that only learns about caller state
+  // one commit late (the update below runs in an effect). React then restores
+  // the stale value onto controlled inputs at the end of each event, which
+  // aborts IME composition — CJK input becomes impossible. Instead the modal
+  // tree renders a stable empty slot and the children are portaled into it from
+  // THIS tree, so their state and their inputs commit together (this also
+  // matches how the antd modals behaved before the base-ui migration).
+  const [contentHost, setContentHost] = useState<HTMLElement | null>(null);
+  const contentSlot = useMemo(
+    () => <div ref={setContentHost} style={{ display: 'contents' }} />,
+    [],
+  );
   const modalFooter = useMemo(() => {
     if (footer === null) return null;
     if (footer !== undefined) return footer;
@@ -144,7 +159,7 @@ const ImperativeModal = ({
     const modalProps = {
       ...rest,
       classNames: normalizeClassNames(className, classNames),
-      content: canRenderContent ? children : null,
+      content: canRenderContent ? contentSlot : null,
       footer: modalFooter,
       loading,
       onOpenChange: (nextOpen: boolean) => {
@@ -165,7 +180,7 @@ const ImperativeModal = ({
   }, [
     afterOpenChange,
     canRenderContent,
-    children,
+    contentSlot,
     className,
     classNames,
     loading,
@@ -183,7 +198,9 @@ const ImperativeModal = ({
     };
   }, []);
 
-  return null;
+  if (!contentHost || !canRenderContent) return null;
+
+  return createPortal(children, contentHost);
 };
 
 ImperativeModal.displayName = 'ImperativeModal';

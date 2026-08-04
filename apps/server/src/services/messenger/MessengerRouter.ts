@@ -1,4 +1,5 @@
 import { createIoRedisState } from '@chat-adapter/state-ioredis';
+import { agentDisplayName } from '@lobechat/types';
 import {
   Chat,
   ConsoleLogger,
@@ -244,25 +245,11 @@ export class MessengerRouter {
     this.bots.delete(installationKey);
   }
 
-  /**
-   * Open a platform DM and post a proactive message outside an inbound
-   * webhook. Each registered bot contains exactly one platform adapter, so
-   * numeric Telegram / Discord user ids remain unambiguous to Chat SDK.
-   *
-   * Credential resolution stays with the caller because Slack must select
-   * the correct workspace installation before the bot can be loaded.
-   */
-  async sendDirectMessage(params: {
-    content: string;
-    credentials: InstallationCredentials;
-    platformUserId: string;
-  }): Promise<void> {
-    const bot = await this.getOrCreateBot(params.credentials);
-    if (!bot) throw new Error(`Messenger ${params.credentials.platform} bot unavailable`);
-
-    const thread = await bot.chatBot.openDM(params.platformUserId);
-    await thread.post(params.content);
-  }
+  // Proactive DMs deliberately do NOT live here — see `messenger/outbound.ts`.
+  // Loading a bot through this class runs `registerHandlers`, which needs
+  // `AgentBridgeService`; that is correct for inbound traffic but would make
+  // every function that can merely reach an outbound send carry the whole
+  // agent runtime.
 
   private getCommandsForPlatform(platform: MessengerPlatform): MessengerCommand[] {
     if (platform !== 'wechat') return this.commands;
@@ -1604,18 +1591,19 @@ export class MessengerRouter {
   ): Promise<AgentSummary[]> {
     // The filter, ordering, pinning, and title fallback all live in the model.
     // This text-only channel has no client-side i18n default, so it asks the
-    // model to fill blank titles with a generic "Custom Agent" label.
+    // model to fill blank titles with a generic "Custom Agent" label, then
+    // resolves name-over-title itself — there is no renderer downstream to do it.
     const rows = await new AgentModel(
       serverDB,
       userId,
       workspaceId ?? undefined,
     ).listMessengerBindableAgents({ fallbackTitle: 'Custom Agent' });
 
-    // `fallbackTitle` guarantees a non-null title for every row.
+    // `fallbackTitle` guarantees a non-null label for every row.
     const summaries = rows.map((row) => ({
       id: row.id,
       isPrivate: row.isPrivate,
-      title: row.title!,
+      title: agentDisplayName(row, 'Custom Agent'),
     }));
 
     // Workspace scope: stable-partition shared workspace agents ahead of the

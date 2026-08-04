@@ -1,4 +1,5 @@
-import { Text } from '@lobehub/ui';
+import { agentDisplayName } from '@lobechat/types';
+import { Tag, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -15,7 +16,9 @@ export interface TitleProps {
 
 const Title = memo<TitleProps>(({ showTitle, time, avatar, titleAddon }) => {
   const { t } = useTranslation('chat');
-  const title = avatar.title || t('untitledAgent');
+  const title = agentDisplayName(avatar, t('untitledAgent'));
+  // The role is only worth repeating when the personal name took the label slot.
+  const roleTag = avatar.name?.trim() && avatar.title?.trim() ? avatar.title.trim() : undefined;
   const { text: timeText, title: timeTitle } = useActivityTime(time);
 
   return (
@@ -25,6 +28,7 @@ const Title = memo<TitleProps>(({ showTitle, time, avatar, titleAddon }) => {
           {title}
         </Text>
       )}
+      {showTitle && roleTag && <Tag size={'small'}>{roleTag}</Tag>}
       {showTitle ? titleAddon : undefined}
       {!timeText ? null : (
         <Text

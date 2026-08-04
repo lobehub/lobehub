@@ -137,6 +137,8 @@
   "credits.memberBudget.defaultLimit": "기본 멤버 예산",
   "credits.memberBudget.defaultLimitHint": "사용자 지정 규칙이 없는 멤버는 각 청구 주기마다 이 한도를 사용합니다.",
   "credits.memberBudget.desc": "현재 청구 주기 동안 각 멤버가 사용할 수 있는 워크스페이스 크레딧을 제한합니다.",
+  "credits.memberBudget.details.action": "세부 정보 보기",
+  "credits.memberBudget.details.title": "회원 사용량",
   "credits.memberBudget.effectiveBudget": "적용 예산",
   "credits.memberBudget.empty": "아직 워크스페이스 멤버가 없습니다.",
   "credits.memberBudget.globalBadge": "글로벌",

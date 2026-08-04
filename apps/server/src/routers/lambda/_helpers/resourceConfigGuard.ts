@@ -135,6 +135,7 @@ const AGENT_PROFILE_KEYS = [
   'isSupervisor',
   'marketIdentifier',
   'model',
+  'name',
   'openingMessage',
   'openingQuestions',
   'provider',

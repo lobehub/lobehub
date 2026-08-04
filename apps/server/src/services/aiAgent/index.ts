@@ -183,6 +183,13 @@ import { isWorkspaceCacheFresh, upsertWorkspaceScan } from './workspaceInitCache
 
 const log = debug('lobe-server:ai-agent-service');
 
+/**
+ * Content written onto a tool row that the user stopped before it ran. Mirrors
+ * the runtime's aborted-tool wording so a stopped call reads the same whether
+ * it was settled here or by `resolve_aborted_tools`.
+ */
+const STOPPED_TOOL_CONTENT = 'Tool execution was aborted by user.';
+
 const createGraphAwareAgentFactory =
   (
     upstreamFactory?: AgentRuntimeServiceOptions['agentFactory'],
@@ -404,6 +411,24 @@ interface InternalExecAgentParams extends ExecAgentParams {
     rejectionReason?: string;
     toolCallId: string;
   };
+  /**
+   * Batch form of `resumeApproval` — every decision the user made in ONE
+   * action ("approve all" on a parallel tool batch). The service applies each
+   * decision to its tool message and resumes with a single `call_tools_batch`
+   * covering all approved tools, so the LLM is continued exactly once with the
+   * complete result set.
+   *
+   * Resolving a parallel batch as N sequential `resumeApproval` calls instead
+   * produces N operations, and each one continues the LLM while the tools not
+   * yet approved are still empty rows. Mutually exclusive with
+   * `resumeApproval`; when both are absent nothing approval-related runs.
+   */
+  resumeApprovals?: {
+    decision: 'approved' | 'rejected' | 'rejected_continue';
+    parentMessageId: string;
+    rejectionReason?: string;
+    toolCallId: string;
+  }[];
   /**
    * When present, this execAgent call resumes a previous op that paused on a
    * `humanIntervention: 'always'` tool (e.g. lobe-agent `askUserQuestion`). The
@@ -1180,6 +1205,7 @@ export class AiAgentService {
       parentOperationId,
       resume,
       resumeApproval,
+      resumeApprovals,
       resumeToolResult,
       selectedToolIds,
       mentionedAgents,
@@ -1462,7 +1488,16 @@ export class AiAgentService {
     // tRPC router get `resume: true` via the router, but the service-level
     // API allows resumeApproval alone — fold both into a single effective
     // flag so downstream resume branches don't need to know about approval.
-    const effectiveResume = resume || !!resumeApproval || !!resumeToolResult;
+    // Normalize the single and batch approval forms into one list so every
+    // branch below (validation, DB writes, resume context) has a single shape
+    // to reason about. `resumeApproval` stays the wire format for one decision.
+    const approvalDecisions = resumeApprovals?.length
+      ? resumeApprovals
+      : resumeApproval
+        ? [resumeApproval]
+        : [];
+
+    const effectiveResume = resume || approvalDecisions.length > 0 || !!resumeToolResult;
 
     // Both resume and suppressUserMessage run the turn off existing history
     // instead of appending a new user message — share the message-construction
@@ -1516,40 +1551,97 @@ export class AiAgentService {
     // tool_call_id / apiName / identifier / arguments / type fields live on
     // the plugin row and must be fetched separately.
     let resumeApprovalPlugin: MessagePluginItem | undefined;
+    /**
+     * Approved decisions paired with their plugin row, in the order the caller
+     * listed them. Drives the batch resume context at 16b; the tool message id
+     * doubles as the row `call_tools_batch` fills in place.
+     */
+    const approvedToolEntries: {
+      createdAt: Date;
+      plugin: MessagePluginItem;
+      toolMessageId: string;
+    }[] = [];
+    /** Assistant that emitted this batch — the pending tool rows' shared parent. */
+    let approvalOwnerAssistantId: string | undefined;
 
-    if (resumeApproval) {
-      if (!resumeParentMessage) {
-        throw new Error('resumeApproval requires parentMessageId to point at a tool message');
+    // Load and validate EVERY decision before applying any of them. The apply
+    // step writes per entry, so validating inline would leave a rejected batch
+    // half-persisted — some tools already marked approved with no run to
+    // execute them.
+    const validatedDecisions: {
+      entry: (typeof approvalDecisions)[number];
+      plugin: MessagePluginItem;
+      targetMessage: NonNullable<typeof resumeParentMessage>;
+    }[] = [];
+
+    for (const decisionEntry of approvalDecisions) {
+      // The single-decision form validated `parentMessageId` (the op-level
+      // resume anchor) as the target tool message. In the batch form each
+      // decision names its own tool message, so load and validate per entry —
+      // the op-level anchor is only one of them.
+      const targetMessage =
+        decisionEntry.parentMessageId === parentMessageId
+          ? resumeParentMessage
+          : await this.messageModel.findById(decisionEntry.parentMessageId);
+
+      if (!targetMessage) {
+        throw new Error(`resumeApproval: tool message not found: ${decisionEntry.parentMessageId}`);
       }
-      if (resumeParentMessage.role !== 'tool') {
+      if (targetMessage.role !== 'tool') {
         throw new Error(
-          `resumeApproval.parentMessageId must point at a role='tool' message, got role='${resumeParentMessage.role}'`,
+          `resumeApproval.parentMessageId must point at a role='tool' message, got role='${targetMessage.role}'`,
+        );
+      }
+      if (targetMessage.topicId !== appContext?.topicId) {
+        throw new Error('appContext.topicId does not match approval target message');
+      }
+
+      const plugin = await this.messageModel.findMessagePlugin(decisionEntry.parentMessageId);
+      if (!plugin) {
+        throw new Error(
+          `resumeApproval: no plugin row for tool message ${decisionEntry.parentMessageId}`,
+        );
+      }
+      if (plugin.toolCallId && plugin.toolCallId !== decisionEntry.toolCallId) {
+        throw new Error(
+          `resumeApproval.toolCallId mismatch for message ${decisionEntry.parentMessageId}: ` +
+            `stored=${plugin.toolCallId}, requested=${decisionEntry.toolCallId}`,
         );
       }
 
-      resumeApprovalPlugin = await this.messageModel.findMessagePlugin(
-        resumeApproval.parentMessageId,
+      validatedDecisions.push({ entry: decisionEntry, plugin, targetMessage });
+    }
+
+    // A batch resume executes every approved tool as ONE `call_tools_batch`
+    // under ONE assistant anchor and continues the LLM once. That is only
+    // meaningful when the calls actually came from the same assistant turn.
+    // The client scopes its selection, but a stale or hand-built request could
+    // mix an abandoned approval from an earlier turn into this one — which
+    // would run an unrelated tool and fold its result into a turn it does not
+    // belong to. Reject rather than silently anchoring on whichever entry came
+    // first.
+    const approvalOwnerIds = new Set(
+      validatedDecisions.map(({ targetMessage }) => targetMessage.parentId ?? '(none)'),
+    );
+    if (approvalOwnerIds.size > 1) {
+      throw new Error(
+        `resumeApprovals must resolve one assistant turn, got ${approvalOwnerIds.size} owners: ` +
+          [...approvalOwnerIds].join(', '),
       );
-      if (!resumeApprovalPlugin) {
-        throw new Error(
-          `resumeApproval: no plugin row for tool message ${resumeApproval.parentMessageId}`,
-        );
-      }
-      if (
-        resumeApprovalPlugin.toolCallId &&
-        resumeApprovalPlugin.toolCallId !== resumeApproval.toolCallId
-      ) {
-        throw new Error(
-          `resumeApproval.toolCallId mismatch for message ${resumeApproval.parentMessageId}: ` +
-            `stored=${resumeApprovalPlugin.toolCallId}, requested=${resumeApproval.toolCallId}`,
-        );
-      }
+    }
 
-      const { decision, rejectionReason } = resumeApproval;
+    for (const { entry: decisionEntry, plugin, targetMessage } of validatedDecisions) {
+      const { decision, rejectionReason } = decisionEntry;
       if (decision === 'approved') {
-        await this.messageModel.updateMessagePlugin(resumeApproval.parentMessageId, {
+        await this.messageModel.updateMessagePlugin(decisionEntry.parentMessageId, {
           intervention: { status: 'approved' },
         });
+        approvedToolEntries.push({
+          createdAt: targetMessage.createdAt,
+          plugin,
+          toolMessageId: decisionEntry.parentMessageId,
+        });
+        approvalOwnerAssistantId ??= targetMessage.parentId ?? undefined;
       } else {
         // rejected / rejected_continue both write the same rejection content
         // + intervention state. The difference surfaces later in how the new
@@ -1557,21 +1649,42 @@ export class AiAgentService {
         const rejectionContent = rejectionReason
           ? `User reject this tool calling with reason: ${rejectionReason}`
           : 'User reject this tool calling without reason';
-        await this.messageModel.updateToolMessage(resumeApproval.parentMessageId, {
+        await this.messageModel.updateToolMessage(decisionEntry.parentMessageId, {
           content: rejectionContent,
         });
-        await this.messageModel.updateMessagePlugin(resumeApproval.parentMessageId, {
+        await this.messageModel.updateMessagePlugin(decisionEntry.parentMessageId, {
           intervention: { rejectedReason: rejectionReason, status: 'rejected' },
         });
       }
 
+      // Kept for the single-decision resume context at 16b, which reads the
+      // plugin of the op-level anchor message.
+      if (decisionEntry.parentMessageId === parentMessageId) resumeApprovalPlugin = plugin;
+
       log(
         'execAgent: resumeApproval decision=%s applied to tool message %s (toolCallId=%s)',
         decision,
-        resumeApproval.parentMessageId,
-        resumeApproval.toolCallId,
+        decisionEntry.parentMessageId,
+        decisionEntry.toolCallId,
       );
     }
+
+    // The approval pause creates one row per pending tool sequentially, in the
+    // order the model emitted the calls — so row creation order IS declaration
+    // order, and sorting by it makes the resume independent of how the client
+    // happened to order its request array.
+    approvedToolEntries.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+    /**
+     * Spine anchor for a batch approval: the ASSISTANT that emitted the batch —
+     * i.e. the previous LLM call. A step is one LLM call, and tool rows are
+     * inline data of the call that produced them, never spine nodes. So the
+     * continuation assistant created below chains directly onto that assistant
+     * (`user → asst → asst …`, tools hanging off their caller) rather than onto
+     * one of the batch's tool rows, which would make the spine depend on which
+     * tool row you happened to pick and on the order they were written in.
+     */
+    const batchApprovalAnchorId = resumeApprovals?.length ? approvalOwnerAssistantId : undefined;
 
     // 2.7. Human-answer resume: a `humanIntervention: 'always'` tool (e.g.
     // lobe-agent `askUserQuestion`) paused this run. Write the human-provided
@@ -1865,8 +1978,11 @@ export class AiAgentService {
       metadata: orchestrationMetadata,
       model: isHeteroAgent ? undefined : model,
       // Chain onto the user turn we just persisted; `parentMessageId` is the
-      // anchor only on a resume, where no user message is created.
-      parentId: userMessageRecord?.id ?? parentMessageId,
+      // anchor only on a resume, where no user message is created. A batch
+      // approval overrides it with the assistant that emitted the batch — the
+      // previous LLM call — so the spine stays one node per call and never
+      // depends on which of the batch's tool rows the client sent as anchor.
+      parentId: userMessageRecord?.id ?? batchApprovalAnchorId ?? parentMessageId,
       provider: isHeteroAgent ? heteroType : provider,
       role: 'assistant',
       threadId: appContext?.threadId ?? undefined,
@@ -3821,7 +3937,42 @@ export class AiAgentService {
     // decision is persisted, there's nothing meaningful to do differently
     // server-side, and letting the LLM produce a brief acknowledgement keeps
     // the conversation cleanly terminated either way.
-    if (resumeApproval && resumeApprovalPlugin) {
+    // Batch approval: hand the runtime every approved tool at once so it runs a
+    // single `call_tools_batch` against the existing pending rows and continues
+    // the LLM exactly once, with the complete result set. Taken whenever the
+    // caller used the batch wire form; the single `resumeApproval` form keeps
+    // the established `call_tool` + `skipCreateToolMessage` path below.
+    if (resumeApprovals?.length && approvedToolEntries.length > 0) {
+      initialContext = {
+        initialContext: initialContext.initialContext,
+        payload: {
+          approvedToolCalls: approvedToolEntries.map(({ plugin }) => ({
+            apiName: plugin.apiName,
+            arguments: plugin.arguments,
+            id: plugin.toolCallId,
+            identifier: plugin.identifier,
+            type: plugin.type ?? 'default',
+          })),
+          assistantMessageId: assistantMessageRecord.id,
+          // The tool rows already exist and are parented to the assistant that
+          // emitted the calls; the batch executor addresses them through
+          // `toolMessageIds` and never inserts, so this only anchors the spine.
+          parentMessageId: approvalOwnerAssistantId ?? assistantMessageRecord.id,
+          toolMessageIds: Object.fromEntries(
+            approvedToolEntries
+              .filter(({ plugin }) => !!plugin.toolCallId)
+              .map(({ plugin, toolMessageId }) => [plugin.toolCallId!, toolMessageId]),
+          ),
+        } as any,
+        phase: 'human_approved_tool' as const,
+        session: {
+          messageCount: allMessages.length,
+          sessionId: operationId,
+          status: 'idle' as const,
+          stepCount: 0,
+        },
+      };
+    } else if (resumeApproval && resumeApprovalPlugin) {
       if (resumeApproval.decision === 'approved') {
         // Ask the runtime to execute the approved tool directly. Matches the
         // `phase: 'human_approved_tool'` contract used by the in-place
@@ -5247,6 +5398,88 @@ export class AiAgentService {
       operationId: resolvedOperationId,
       success: true,
       threadId: thread?.id,
+    };
+  }
+
+  /**
+   * Stop a run that is parked waiting for tool approval: settle the pending
+   * tool rows and terminate the operation, WITHOUT executing anything and
+   * without continuing the model.
+   *
+   * This is the "from this step on, don't go any further" action. It is not the
+   * same as rejecting a tool — a rejection resumes the model so it can respond
+   * to the refusal, whereas stopping ends the turn outright.
+   *
+   * Why it can't reuse the ordinary cancel path: when the runtime parks it
+   * emits a stream-terminal `waiting_for_human`, so the client marks its own
+   * operation `completed` and prunes it ~30s later, and the topic's
+   * `runningOperation` pointer is cleared. By the time the user decides to
+   * stop, the client no longer knows the parked operation id — so we resolve it
+   * here from the topic instead of trusting the caller.
+   *
+   * The tool rows are settled IN PLACE (the approval pause already created one
+   * row per pending call). Inserting fresh aborted rows would duplicate every
+   * tool in the turn and leave the originals `pending`, which is exactly what
+   * keeps the approval cards on screen after a stop.
+   */
+  async stopPendingApproval(params: { toolMessageIds: string[]; topicId: string }): Promise<{
+    operationId?: string;
+    settledToolMessageIds: string[];
+    success: boolean;
+  }> {
+    const { toolMessageIds, topicId } = params;
+
+    // Validate every target before writing any of them: a half-settled batch
+    // would clear some cards while leaving the rest pointing at a run that is
+    // already gone.
+    const targets: { id: string }[] = [];
+    for (const toolMessageId of toolMessageIds) {
+      const message = await this.messageModel.findById(toolMessageId);
+      if (!message)
+        throw new Error(`stopPendingApproval: tool message not found: ${toolMessageId}`);
+      if (message.role !== 'tool') {
+        throw new Error(
+          `stopPendingApproval.toolMessageIds must point at role='tool' messages, got role='${message.role}'`,
+        );
+      }
+      if (message.topicId !== topicId) {
+        throw new Error('stopPendingApproval: topicId does not match the target tool message');
+      }
+      targets.push({ id: toolMessageId });
+    }
+
+    for (const target of targets) {
+      await this.messageModel.updateToolMessage(target.id, {
+        content: STOPPED_TOOL_CONTENT,
+      });
+      await this.messageModel.updateMessagePlugin(target.id, {
+        intervention: { status: 'aborted' },
+      } as any);
+    }
+
+    // Retire the parked operation so the topic does not keep a run that can
+    // never be resumed. Resolved from the topic because the client has lost the
+    // id by now (see the doc comment above).
+    const parkedOperationId = await this.agentOperationModel.findLatestParkedOperationId(topicId);
+    if (parkedOperationId) {
+      await this.agentRuntimeService.interruptOperation(parkedOperationId);
+      await this.agentOperationModel.recordCompletion(parkedOperationId, {
+        completedAt: new Date(),
+        completionReason: 'interrupted',
+        status: 'interrupted',
+      });
+    }
+
+    log(
+      'stopPendingApproval: settled %d tool message(s), retired operation %s',
+      targets.length,
+      parkedOperationId ?? '(none)',
+    );
+
+    return {
+      operationId: parkedOperationId,
+      settledToolMessageIds: targets.map((t) => t.id),
+      success: true,
     };
   }
 }

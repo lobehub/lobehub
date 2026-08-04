@@ -354,6 +354,8 @@ export interface TaskDetailActivityAgent {
   avatar: string | null;
   backgroundColor: string | null;
   id: string;
+  /** Personal name; renderers resolve the label with `agentDisplayName(agent, fallback)`. */
+  name?: string | null;
   title: string | null;
 }
 
