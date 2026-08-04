@@ -38,8 +38,20 @@ describe('isWidgetSectionVisible', () => {
     expect(isWidgetSectionVisible('needsYou-loading', ['needsYou'])).toBe(false);
   });
 
-  it('hides an error section governed by a hidden widget', () => {
-    expect(isWidgetSectionVisible('topics-error', ['unread'])).toBe(false);
+  it('keeps the topic error banner while running still needs it', () => {
+    expect(isWidgetSectionVisible('topics-error', ['unread'])).toBe(true);
+  });
+
+  it('hides the topic error banner only once unread and running are both hidden', () => {
+    expect(isWidgetSectionVisible('topics-error', ['unread', 'running'])).toBe(false);
+  });
+
+  it('keeps the briefs error banner while news still needs it', () => {
+    expect(isWidgetSectionVisible('needsYou-error', ['needsYou'])).toBe(true);
+  });
+
+  it('hides the briefs error banner only once needs-you and news are both hidden', () => {
+    expect(isWidgetSectionVisible('needsYou-error', ['needsYou', 'news'])).toBe(false);
   });
 
   it('keeps an unmapped section visible', () => {

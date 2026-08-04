@@ -18,7 +18,7 @@ describe('filterHiddenWidgetSections', () => {
     expect(filterHiddenWidgetSections(assembled, [])).toEqual(assembled);
   });
 
-  it('drops the needs-you section together with its error and loading placeholders', () => {
+  it('drops the needs-you section and its loading placeholder, but not its error banner', () => {
     const sections = [...assembled, { key: 'needsYou-error' }, { key: 'needsYou-loading' }];
 
     expect(keysOf(filterHiddenWidgetSections(sections, ['needsYou']))).toEqual([
@@ -26,13 +26,32 @@ describe('filterHiddenWidgetSections', () => {
       'unread',
       'running',
       'news',
+      'needsYou-error',
     ]);
   });
 
-  it('takes the topic error banner down with the unread section it reports on', () => {
+  it('drops the briefs error banner once news is hidden alongside needs-you', () => {
+    const sections = [...assembled, { key: 'needsYou-error' }];
+
+    expect(keysOf(filterHiddenWidgetSections(sections, ['needsYou', 'news']))).toEqual([
+      'topics-error',
+      'unread',
+      'running',
+    ]);
+  });
+
+  it('keeps the topic error banner when only unread is hidden, since running shares the feed', () => {
     expect(keysOf(filterHiddenWidgetSections(assembled, ['unread']))).toEqual([
       'needsYou',
+      'topics-error',
       'running',
+      'news',
+    ]);
+  });
+
+  it('drops the topic error banner once running is hidden alongside unread', () => {
+    expect(keysOf(filterHiddenWidgetSections(assembled, ['unread', 'running']))).toEqual([
+      'needsYou',
       'news',
     ]);
   });
@@ -103,7 +122,7 @@ describe('resolveInboxScopeToggleSection', () => {
     ).toBe('needsYou');
   });
 
-  it('leaves an empty section without the toggle regardless of the hidden set', () => {
+  it('skips sections with nothing in them and lands on the one that has content', () => {
     expect(
       resolveInboxScopeToggleSection({
         hiddenWidgets: [],

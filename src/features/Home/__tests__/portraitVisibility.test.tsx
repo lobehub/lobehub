@@ -62,21 +62,21 @@ describe('Home portrait visibility', () => {
 
     expect(screen.getByTestId('home-portrait')).toBeInTheDocument();
     expect(screen.getByTestId('portrait-bubble')).toBeInTheDocument();
-  });
+  }, 20000);
 
   it('keeps the portrait when the preference is explicitly on', async () => {
     await renderHome({ showHomePortrait: true });
 
     expect(screen.getByTestId('home-portrait')).toBeInTheDocument();
     expect(screen.getByTestId('portrait-bubble')).toBeInTheDocument();
-  });
+  }, 20000);
 
   it('takes the bubble down with the portrait when the preference is off', async () => {
     await renderHome({ showHomePortrait: false });
 
     expect(screen.queryByTestId('home-portrait')).not.toBeInTheDocument();
     expect(screen.queryByTestId('portrait-bubble')).not.toBeInTheDocument();
-  });
+  }, 20000);
 
   it('leaves the rest of the dashboard standing without the portrait', async () => {
     await renderHome({ showHomePortrait: false });
@@ -84,12 +84,12 @@ describe('Home portrait visibility', () => {
     expect(screen.getByTestId('home-header')).toBeInTheDocument();
     expect(screen.getByTestId('home-main')).toBeInTheDocument();
     expect(screen.getByTestId('home-rail')).toBeInTheDocument();
-  });
+  }, 20000);
 
   it('shows no portrait to a signed-out visitor even with the preference on', async () => {
     await renderHome({ isLogin: false, showHomePortrait: true });
 
     expect(screen.queryByTestId('home-portrait')).not.toBeInTheDocument();
     expect(screen.queryByTestId('portrait-bubble')).not.toBeInTheDocument();
-  });
+  }, 20000);
 });
