@@ -1,7 +1,12 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 
-import { isThinkingForcedQwenModel, parseQwenModelId } from './modelId';
+import {
+  isQwen38MaxModel,
+  isThinkingForcedQwenModel,
+  normalizeQwen38ReasoningEffort,
+  parseQwenModelId,
+} from './modelId';
 
 describe('parseQwenModelId', () => {
   it('should parse versioned commercial ids', () => {
@@ -69,5 +74,26 @@ describe('isThinkingForcedQwenModel', () => {
     expect(isThinkingForcedQwenModel('qwen3.8-plus')).toBe(false);
     expect(isThinkingForcedQwenModel('qwen3-vl-plus')).toBe(false);
     expect(isThinkingForcedQwenModel('deepseek-v4-pro')).toBe(false);
+  });
+});
+
+describe('qwen3.8 max parameters', () => {
+  it('should identify only the qwen3.8 max family', () => {
+    expect(isQwen38MaxModel('qwen3.8-max-preview')).toBe(true);
+    expect(isQwen38MaxModel('qwen3.8-max-2026-08-01')).toBe(true);
+    expect(isQwen38MaxModel('qwen3.9-max-preview')).toBe(false);
+    expect(isQwen38MaxModel('qwen3.8-plus')).toBe(false);
+  });
+
+  it.each([
+    ['minimal', 'low'],
+    ['low', 'low'],
+    ['medium', 'medium'],
+    ['high', 'xhigh'],
+    ['xhigh', 'xhigh'],
+    ['max', 'xhigh'],
+    ['none', undefined],
+  ])('should normalize reasoning effort %s to %s', (input, expected) => {
+    expect(normalizeQwen38ReasoningEffort(input)).toBe(expected);
   });
 });

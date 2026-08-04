@@ -56,3 +56,18 @@ export const isThinkingForcedQwenModel = (model: string): boolean => {
 
   return parsed.majorVersion === 3 && (parsed.minorVersion ?? 0) >= 8;
 };
+
+export const isQwen38MaxModel = (model: string): boolean => {
+  const parsed = parseQwenModelId(model);
+
+  return parsed?.family === 'max' && parsed.majorVersion === 3 && parsed.minorVersion === 8;
+};
+
+export const normalizeQwen38ReasoningEffort = (effort?: string) => {
+  if (effort === 'minimal') return 'low';
+  if (effort === 'high' || effort === 'max') return 'xhigh';
+  if (effort === 'low' || effort === 'medium' || effort === 'xhigh') return effort;
+
+  // `none` maps to enable_thinking=false, which thinking-only Qwen3.8-Max rejects.
+  return undefined;
+};

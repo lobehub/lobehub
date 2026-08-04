@@ -137,6 +137,49 @@ describe('LobeQwenAI - custom features', () => {
       expect(calledPayload.thinking_budget).toBe(4096);
     });
 
+    it('should prefer normalized reasoning_effort over thinking_budget for qwen3.8 max', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'qwen3.8-max-preview',
+        reasoning_effort: 'high',
+        thinking: {
+          budget_tokens: 4096,
+          type: 'enabled',
+        },
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+
+      expect(calledPayload.enable_thinking).toBe(true);
+      expect(calledPayload.reasoning_effort).toBe('xhigh');
+      expect(calledPayload.thinking_budget).toBeUndefined();
+    });
+
+    it('should ignore reasoning_effort none for thinking-only qwen3.8 max', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'qwen3.8-max-preview',
+        reasoning_effort: 'none',
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+
+      expect(calledPayload.enable_thinking).toBe(true);
+      expect(calledPayload.reasoning_effort).toBeUndefined();
+    });
+
+    it('should clamp qwen3.8 max temperature to the documented minimum', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'qwen3.8-max-preview',
+        temperature: 0.2,
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+
+      expect(calledPayload.temperature).toBe(0.6);
+    });
+
     it('should still force enable_thinking for dedicated thinking models', async () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],

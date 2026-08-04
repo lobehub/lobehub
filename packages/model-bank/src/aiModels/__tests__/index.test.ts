@@ -148,6 +148,34 @@ describe('Hunyuan models', () => {
   });
 });
 
+describe('Qwen models', () => {
+  it('registers qwen3.8-max-preview with Token Plan capabilities and limits', () => {
+    const qwen38 = LOBE_DEFAULT_MODEL_LIST.find(
+      (model) => model.providerId === ModelProvider.Qwen && model.id === 'qwen3.8-max-preview',
+    );
+
+    expect(qwen38).toEqual(
+      expect.objectContaining({
+        abilities: expect.objectContaining({
+          functionCall: true,
+          reasoning: true,
+          vision: true,
+        }),
+        contextWindowTokens: 983_616,
+        enabled: true,
+        maxOutput: 131_072,
+        releasedAt: '2026-07-19',
+        settings: {
+          extendParams: ['reasoningEffort', 'preserveThinking'],
+        },
+        type: 'chat',
+      }),
+    );
+    expect(qwen38?.abilities?.search).toBeUndefined();
+    expect(qwen38?.pricing).toBeUndefined();
+  });
+});
+
 describe('Google rolling model aliases', () => {
   it('tracks the current Flash and Flash-Lite model versions', () => {
     const googleModels = LOBE_DEFAULT_MODEL_LIST.filter((model) => model.providerId === 'google');

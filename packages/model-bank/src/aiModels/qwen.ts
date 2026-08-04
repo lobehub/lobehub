@@ -2270,6 +2270,31 @@ const qwenChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+      vision: true,
+    },
+    config: {
+      deploymentName: 'qwen3.8-max-preview',
+    },
+    contextWindowTokens: 983_616,
+    description:
+      "Qwen3.8-Max-Preview is a Token Plan preview of Alibaba's next-generation 2.4T-parameter flagship model, with major gains in coding, professional productivity, and complex long-horizon tasks.",
+    displayName: 'Qwen3.8 Max Preview',
+    enabled: true,
+    family: 'qwen',
+    generation: 'qwen3.8',
+    id: 'qwen3.8-max-preview',
+    maxOutput: 131_072,
+    organization: 'Qwen',
+    releasedAt: '2026-07-19',
+    settings: {
+      extendParams: ['reasoningEffort', 'preserveThinking'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
       search: true,
     },
     config: {

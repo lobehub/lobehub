@@ -7,7 +7,11 @@ import { QwenAIStream } from '../../core/streams';
 import { processMultiProviderModelList } from '../../utils/modelParse';
 import { createQwenImage } from './createImage';
 import { createQwenVideo } from './createVideo';
-import { isThinkingForcedQwenModel } from './modelId';
+import {
+  isQwen38MaxModel,
+  isThinkingForcedQwenModel,
+  normalizeQwen38ReasoningEffort,
+} from './modelId';
 
 export interface QwenModelCard {
   id: string;
@@ -41,7 +45,11 @@ export const params = {
         ...rest
       } = payload;
       const isDeepSeekV4Model = model.startsWith('deepseek-v4');
+      const isQwen38Max = isQwen38MaxModel(model);
       const thinkingExplicitlyDisabled = thinking?.type === 'disabled';
+      const qwen38ReasoningEffort = isQwen38Max
+        ? normalizeQwen38ReasoningEffort(reasoning_effort)
+        : undefined;
 
       // Resolve parameters with model-specific constraints
       const resolvedParams = resolveParameters(
@@ -49,7 +57,10 @@ export const params = {
         {
           normalizeTemperature: false,
           presencePenaltyRange: QwenLegacyModels.has(model) ? undefined : { max: 2, min: -2 },
-          temperatureRange: { max: 2, min: 0 },
+          temperatureRange: {
+            max: 2,
+            min: isQwen38Max ? 0.6 : 0,
+          },
           topPRange:
             model.startsWith('qvq') || model.startsWith('qwen-vl')
               ? { max: 1, min: 0 }
@@ -89,12 +100,14 @@ export const params = {
           : isThinkingForcedQwenModel(model)
             ? {
                 enable_thinking: true,
+                ...(qwen38ReasoningEffort && { reasoning_effort: qwen38ReasoningEffort }),
                 // A disabled preference carries budget_tokens: 0 — sending it alongside
                 // a forced-on thinking flag would zero out the reasoning budget.
-                ...(!thinkingExplicitlyDisabled && {
-                  thinking_budget:
-                    thinking?.budget_tokens === 0 ? 0 : thinking?.budget_tokens || undefined,
-                }),
+                ...(!thinkingExplicitlyDisabled &&
+                  !qwen38ReasoningEffort && {
+                    thinking_budget:
+                      thinking?.budget_tokens === 0 ? 0 : thinking?.budget_tokens || undefined,
+                  }),
               }
             : model.includes('-thinking')
               ? {
