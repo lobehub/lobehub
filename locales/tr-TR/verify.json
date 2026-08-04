@@ -200,6 +200,7 @@
   "acceptance.status.repairing": "Onarım devam ediyor",
   "acceptance.status.verifying": "Doğrulama devam ediyor",
   "acceptance.subject.document": "Belge",
+  "acceptance.subject.standalone": "Bağımsız",
   "acceptance.subject.task": "Görev",
   "acceptance.subject.topic": "Konu",
   "acceptance.surface.other": "Diğer",

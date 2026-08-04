@@ -462,6 +462,7 @@
   "builtins.lobe-user-interaction.apiName.skipUserResponse": "ユーザーの応答をスキップ",
   "builtins.lobe-user-interaction.apiName.submitUserResponse": "ユーザーの応答を送信",
   "builtins.lobe-user-interaction.title": "ユーザーインタラクション",
+  "builtins.lobe-user-memory.apiName.addActivityMemory": "アクティビティメモリを追加",
   "builtins.lobe-user-memory.apiName.addContextMemory": "コンテキスト記憶を追加",
   "builtins.lobe-user-memory.apiName.addExperienceMemory": "経験記憶を追加",
   "builtins.lobe-user-memory.apiName.addIdentityMemory": "アイデンティティ記憶を追加",

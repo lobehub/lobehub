@@ -200,6 +200,7 @@
   "acceptance.status.repairing": "تعمیر در حال انجام",
   "acceptance.status.verifying": "تأیید در حال انجام",
   "acceptance.subject.document": "سند",
+  "acceptance.subject.standalone": "مستقل",
   "acceptance.subject.task": "وظیفه",
   "acceptance.subject.topic": "موضوع",
   "acceptance.surface.other": "سایر",

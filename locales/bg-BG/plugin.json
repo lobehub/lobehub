@@ -462,6 +462,7 @@
   "builtins.lobe-user-interaction.apiName.skipUserResponse": "Пропускане на отговора на потребителя",
   "builtins.lobe-user-interaction.apiName.submitUserResponse": "Изпращане на отговора на потребителя",
   "builtins.lobe-user-interaction.title": "Взаимодействие с потребителя",
+  "builtins.lobe-user-memory.apiName.addActivityMemory": "Добавяне на памет за активност",
   "builtins.lobe-user-memory.apiName.addContextMemory": "Добавяне на контекстна памет",
   "builtins.lobe-user-memory.apiName.addExperienceMemory": "Добавяне на памет за опит",
   "builtins.lobe-user-memory.apiName.addIdentityMemory": "Добавяне на памет за идентичност",

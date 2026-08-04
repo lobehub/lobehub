@@ -197,6 +197,8 @@
   "pageList.workspaceTitle": "Arbeitsbereich",
   "portal.openInPageEditor": "In Seite bearbeiten",
   "preview.downloadFile": "Datei herunterladen",
+  "preview.raw": "Roh",
+  "preview.render": "Vorschau",
   "preview.unsupportedFileAndContact": "Dieses Dateiformat wird derzeit nicht für die Online-Vorschau unterstützt. Wenn Sie eine Vorschau wünschen, <1>kontaktieren Sie uns</1> gerne.",
   "resource": "Ressource",
   "resourceList.batchCopyDescription": "Ausgewählte Ressourcen in einen anderen Arbeitsbereich klonen.",

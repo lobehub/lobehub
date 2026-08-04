@@ -200,6 +200,7 @@
   "acceptance.status.repairing": "Réparation en cours",
   "acceptance.status.verifying": "Vérification en cours",
   "acceptance.subject.document": "Document",
+  "acceptance.subject.standalone": "Autonome",
   "acceptance.subject.task": "Tâche",
   "acceptance.subject.topic": "Sujet",
   "acceptance.surface.other": "Autre",

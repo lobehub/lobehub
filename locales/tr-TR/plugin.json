@@ -462,6 +462,7 @@
   "builtins.lobe-user-interaction.apiName.skipUserResponse": "Kullanıcı yanıtını atla",
   "builtins.lobe-user-interaction.apiName.submitUserResponse": "Kullanıcı yanıtını gönder",
   "builtins.lobe-user-interaction.title": "Kullanıcı Etkileşimi",
+  "builtins.lobe-user-memory.apiName.addActivityMemory": "Etkinlik hafızası ekle",
   "builtins.lobe-user-memory.apiName.addContextMemory": "Bağlam hafızası ekle",
   "builtins.lobe-user-memory.apiName.addExperienceMemory": "Deneyim hafızası ekle",
   "builtins.lobe-user-memory.apiName.addIdentityMemory": "Kimlik hafızası ekle",

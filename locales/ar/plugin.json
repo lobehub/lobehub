@@ -462,6 +462,7 @@
   "builtins.lobe-user-interaction.apiName.skipUserResponse": "تخطي استجابة المستخدم",
   "builtins.lobe-user-interaction.apiName.submitUserResponse": "إرسال استجابة المستخدم",
   "builtins.lobe-user-interaction.title": "تفاعل المستخدم",
+  "builtins.lobe-user-memory.apiName.addActivityMemory": "إضافة ذاكرة النشاط",
   "builtins.lobe-user-memory.apiName.addContextMemory": "إضافة ذاكرة السياق",
   "builtins.lobe-user-memory.apiName.addExperienceMemory": "إضافة ذاكرة الخبرة",
   "builtins.lobe-user-memory.apiName.addIdentityMemory": "إضافة ذاكرة الهوية",
