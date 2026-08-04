@@ -22,7 +22,3 @@ export const hasVisibleRailWidget = ({
 
     return !hiddenWidgets.includes(key);
   });
-
-export const isBriefsBlockVisible = ({ hiddenWidgets, hideNeedsYou }: ColumnWidgetInput): boolean =>
-  (!hideNeedsYou && isWidgetSectionVisible('needsYou', hiddenWidgets)) ||
-  isWidgetSectionVisible('news', hiddenWidgets);

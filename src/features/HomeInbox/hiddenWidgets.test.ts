@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  filterHiddenWidgetSections,
-  hasVisibleRailWidget,
-  isBriefsBlockVisible,
-} from './hiddenWidgets';
+import { filterHiddenWidgetSections, hasVisibleRailWidget } from './hiddenWidgets';
 import { resolveInboxScopeToggleSection } from './scopeTogglePlacement';
 
 const assembled = [
@@ -95,28 +91,6 @@ describe('hasVisibleRailWidget', () => {
 
   it('keeps a column that hosts needs-you and unread on the same hidden set', () => {
     expect(hasVisibleRailWidget({ hiddenWidgets: ['running', 'news', 'suggestions'] })).toBe(true);
-  });
-});
-
-describe('isBriefsBlockVisible', () => {
-  it('keeps the block-level briefs states while both brief widgets are on', () => {
-    expect(isBriefsBlockVisible({ hiddenWidgets: [] })).toBe(true);
-  });
-
-  it('drops them in the rail once news is off, since the rail never shows needs-you', () => {
-    expect(isBriefsBlockVisible({ hiddenWidgets: ['news'], hideNeedsYou: true })).toBe(false);
-  });
-
-  it('keeps them where needs-you still renders, even with news off', () => {
-    expect(isBriefsBlockVisible({ hiddenWidgets: ['news'] })).toBe(true);
-  });
-
-  it('keeps them for news alone when only needs-you is off', () => {
-    expect(isBriefsBlockVisible({ hiddenWidgets: ['needsYou'] })).toBe(true);
-  });
-
-  it('drops them once both brief-powered widgets are off', () => {
-    expect(isBriefsBlockVisible({ hiddenWidgets: ['needsYou', 'news'] })).toBe(false);
   });
 });
 
