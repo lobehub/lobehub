@@ -1482,6 +1482,9 @@ export default {
   'tool.intervention.optionApprove': 'Approve',
   'tool.intervention.optionApproveRemember': "Approve, and don't ask again for similar actions",
   'tool.intervention.rememberSimilar': "Don't ask again for similar actions",
+  'tool.intervention.stop': 'Stop',
+  'tool.intervention.stopTooltip':
+    'Stop here — nothing pending runs and the agent does not continue',
   'tool.intervention.renderFallback.description':
     'This display was downgraded to raw JSON because the current model was not capable enough to generate a stable interactive payload. Switch to a stronger model and try again.',
   'tool.intervention.renderFallback.rawJson': 'Raw JSON',

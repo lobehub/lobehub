@@ -1,5 +1,9 @@
 import { ChatInput } from '@lobehub/editor/react';
+import { Tooltip } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
+import { CircleStop } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useConversationResourceAccess } from '../hooks/useConversationResourceAccess';
 import { useConversationStore } from '../store';
@@ -19,8 +23,11 @@ const InterventionBar = memo<InterventionBarProps>(({ interventions }) => {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [actionsPortalTarget, setActionsPortalTarget] = useState<HTMLDivElement | null>(null);
   const [approveAllLoading, setApproveAllLoading] = useState(false);
+  const [stopLoading, setStopLoading] = useState(false);
+  const { t } = useTranslation('chat');
 
   const approveAllToolCalls = useConversationStore((s) => s.approveAllToolCalls);
+  const stopPendingApproval = useConversationStore((s) => s.stopPendingApproval);
   // Workspace topics are shared: a view-only member can be looking at a
   // teammate's run and must not drive its approvals — same gate the per-card
   // actions apply.
@@ -62,6 +69,16 @@ const InterventionBar = memo<InterventionBarProps>(({ interventions }) => {
     }
   }, [approveAllLoading, approveAllToolCalls, batch]);
 
+  const handleStop = useCallback(async () => {
+    if (stopLoading) return;
+    setStopLoading(true);
+    try {
+      await stopPendingApproval(batch.map((i) => i.toolMessageId));
+    } finally {
+      setStopLoading(false);
+    }
+  }, [stopLoading, stopPendingApproval, batch]);
+
   if (!activeIntervention) return null;
 
   // Tabs still list every pending call so nothing is hidden; only the batch
@@ -73,9 +90,30 @@ const InterventionBar = memo<InterventionBarProps>(({ interventions }) => {
     <ChatInput
       data-pending-hotkey-scope
       className={styles.container}
-      footer={<div className={styles.actions} ref={setActionsPortalTarget} />}
       maxHeight={'50vh' as any}
       resize={false}
+      footer={
+        // The stop control lives in the footer, NOT the tab bar: the tab bar
+        // only mounts for multiple cards, and a run parked on a single call is
+        // exactly the case where the user most needs a way out. The per-card
+        // Submit portals into `actions`, so the two sit on opposite ends.
+        <div className={styles.footer}>
+          {canUseResource && (
+            <Tooltip title={t('tool.intervention.stopTooltip')}>
+              <Button
+                icon={CircleStop}
+                loading={stopLoading}
+                size={'small'}
+                type={'text'}
+                onClick={handleStop}
+              >
+                {t('tool.intervention.stop')}
+              </Button>
+            </Tooltip>
+          )}
+          <div className={styles.actions} ref={setActionsPortalTarget} />
+        </div>
+      }
     >
       {hasMultipleCards && (
         <InterventionTabBar

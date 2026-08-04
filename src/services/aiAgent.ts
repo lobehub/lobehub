@@ -221,6 +221,17 @@ class AiAgentService {
   }
 
   /**
+   * Stop a run parked on tool approval: settle the pending tool rows and end
+   * the operation without running anything or continuing the model.
+   *
+   * Not `interruptTask` — that one assumes a live loop will persist the
+   * outcome, which a parked run does not have.
+   */
+  async stopPendingApproval(params: { toolMessageIds: string[]; topicId: string }) {
+    return await lambdaClient.aiAgent.stopPendingApproval.mutate(params);
+  }
+
+  /**
    * Create Thread for client-side task execution (desktop only, single agent mode)
    *
    * This method is called when runInClient=true on desktop client.

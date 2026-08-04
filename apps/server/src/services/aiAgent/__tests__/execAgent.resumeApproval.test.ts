@@ -12,7 +12,13 @@ const {
   mockMessageQuery,
   mockUpdateMessagePlugin,
   mockUpdateToolMessage,
+  mockFindLatestParkedOperationId,
+  mockRecordCompletion,
+  mockInterruptOperation,
 } = vi.hoisted(() => ({
+  mockFindLatestParkedOperationId: vi.fn(),
+  mockRecordCompletion: vi.fn(),
+  mockInterruptOperation: vi.fn(),
   mockCreateOperation: vi.fn(),
   mockFindById: vi.fn(),
   mockFindMessagePlugin: vi.fn(),
@@ -95,6 +101,14 @@ vi.mock('@/database/models/userMemory/persona', () => ({
 vi.mock('@/server/services/agentRuntime', () => ({
   AgentRuntimeService: vi.fn().mockImplementation(() => ({
     createOperation: mockCreateOperation,
+    interruptOperation: mockInterruptOperation,
+  })),
+}));
+
+vi.mock('@/database/models/agentOperation', () => ({
+  AgentOperationModel: vi.fn().mockImplementation(() => ({
+    findLatestParkedOperationId: mockFindLatestParkedOperationId,
+    recordCompletion: mockRecordCompletion,
   })),
 }));
 
@@ -395,5 +409,83 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
         }),
       );
     });
+  });
+});
+
+describe('AiAgentService.stopPendingApproval', () => {
+  let service: AiAgentService;
+
+  const pendingToolMessage = {
+    createdAt: new Date('2026-08-03T00:00:00.000Z'),
+    id: 'tool-msg-1',
+    role: 'tool',
+    topicId: 'topic-1',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockFindById.mockImplementation(async (id: string) => ({ ...pendingToolMessage, id }));
+    mockUpdateMessagePlugin.mockResolvedValue(undefined);
+    mockUpdateToolMessage.mockResolvedValue(undefined);
+    mockFindLatestParkedOperationId.mockResolvedValue('op-parked-1');
+    mockRecordCompletion.mockResolvedValue(undefined);
+    mockInterruptOperation.mockResolvedValue(true);
+    service = new AiAgentService({} as unknown as LobeChatDatabase, 'user-1');
+  });
+
+  it('settles every pending row in place and retires the parked operation', async () => {
+    const result = await service.stopPendingApproval({
+      toolMessageIds: ['tool-msg-1', 'tool-msg-2'],
+      topicId: 'topic-1',
+    });
+
+    // In place: the approval pause already wrote these rows. Inserting fresh
+    // aborted rows would duplicate every tool AND leave the originals pending,
+    // which is what keeps the approval cards on screen after a stop.
+    for (const id of ['tool-msg-1', 'tool-msg-2']) {
+      expect(mockUpdateToolMessage).toHaveBeenCalledWith(id, {
+        content: 'Tool execution was aborted by user.',
+      });
+      expect(mockUpdateMessagePlugin).toHaveBeenCalledWith(id, {
+        intervention: { status: 'aborted' },
+      });
+    }
+
+    // The parked op is resolved from the topic — the client has lost its id by
+    // the time the user decides to stop.
+    expect(mockInterruptOperation).toHaveBeenCalledWith('op-parked-1');
+    expect(mockRecordCompletion).toHaveBeenCalledWith(
+      'op-parked-1',
+      expect.objectContaining({ completionReason: 'interrupted', status: 'interrupted' }),
+    );
+    expect(result.settledToolMessageIds).toEqual(['tool-msg-1', 'tool-msg-2']);
+  });
+
+  it('nothing runs and the model is not continued', async () => {
+    await service.stopPendingApproval({ toolMessageIds: ['tool-msg-1'], topicId: 'topic-1' });
+
+    // A stop is not a rejection: a rejection resumes the model so it can
+    // respond, a stop ends the turn outright.
+    expect(mockCreateOperation).not.toHaveBeenCalled();
+  });
+
+  it('rejects a target from another topic before writing anything', async () => {
+    mockFindById.mockImplementation(async (id: string) => ({
+      ...pendingToolMessage,
+      id,
+      topicId: id === 'tool-msg-2' ? 'other-topic' : 'topic-1',
+    }));
+
+    await expect(
+      service.stopPendingApproval({
+        toolMessageIds: ['tool-msg-1', 'tool-msg-2'],
+        topicId: 'topic-1',
+      }),
+    ).rejects.toThrow(/topicId does not match/);
+
+    // Validation runs before any write, so a refused stop cannot half-clear the
+    // batch and strand the rest against a run that is already gone.
+    expect(mockUpdateMessagePlugin).not.toHaveBeenCalled();
+    expect(mockInterruptOperation).not.toHaveBeenCalled();
   });
 });

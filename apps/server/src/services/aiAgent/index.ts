@@ -183,6 +183,13 @@ import { isWorkspaceCacheFresh, upsertWorkspaceScan } from './workspaceInitCache
 
 const log = debug('lobe-server:ai-agent-service');
 
+/**
+ * Content written onto a tool row that the user stopped before it ran. Mirrors
+ * the runtime's aborted-tool wording so a stopped call reads the same whether
+ * it was settled here or by `resolve_aborted_tools`.
+ */
+const STOPPED_TOOL_CONTENT = 'Tool execution was aborted by user.';
+
 const createGraphAwareAgentFactory =
   (
     upstreamFactory?: AgentRuntimeServiceOptions['agentFactory'],
@@ -5391,6 +5398,88 @@ export class AiAgentService {
       operationId: resolvedOperationId,
       success: true,
       threadId: thread?.id,
+    };
+  }
+
+  /**
+   * Stop a run that is parked waiting for tool approval: settle the pending
+   * tool rows and terminate the operation, WITHOUT executing anything and
+   * without continuing the model.
+   *
+   * This is the "from this step on, don't go any further" action. It is not the
+   * same as rejecting a tool — a rejection resumes the model so it can respond
+   * to the refusal, whereas stopping ends the turn outright.
+   *
+   * Why it can't reuse the ordinary cancel path: when the runtime parks it
+   * emits a stream-terminal `waiting_for_human`, so the client marks its own
+   * operation `completed` and prunes it ~30s later, and the topic's
+   * `runningOperation` pointer is cleared. By the time the user decides to
+   * stop, the client no longer knows the parked operation id — so we resolve it
+   * here from the topic instead of trusting the caller.
+   *
+   * The tool rows are settled IN PLACE (the approval pause already created one
+   * row per pending call). Inserting fresh aborted rows would duplicate every
+   * tool in the turn and leave the originals `pending`, which is exactly what
+   * keeps the approval cards on screen after a stop.
+   */
+  async stopPendingApproval(params: { toolMessageIds: string[]; topicId: string }): Promise<{
+    operationId?: string;
+    settledToolMessageIds: string[];
+    success: boolean;
+  }> {
+    const { toolMessageIds, topicId } = params;
+
+    // Validate every target before writing any of them: a half-settled batch
+    // would clear some cards while leaving the rest pointing at a run that is
+    // already gone.
+    const targets: { id: string }[] = [];
+    for (const toolMessageId of toolMessageIds) {
+      const message = await this.messageModel.findById(toolMessageId);
+      if (!message)
+        throw new Error(`stopPendingApproval: tool message not found: ${toolMessageId}`);
+      if (message.role !== 'tool') {
+        throw new Error(
+          `stopPendingApproval.toolMessageIds must point at role='tool' messages, got role='${message.role}'`,
+        );
+      }
+      if (message.topicId !== topicId) {
+        throw new Error('stopPendingApproval: topicId does not match the target tool message');
+      }
+      targets.push({ id: toolMessageId });
+    }
+
+    for (const target of targets) {
+      await this.messageModel.updateToolMessage(target.id, {
+        content: STOPPED_TOOL_CONTENT,
+      });
+      await this.messageModel.updateMessagePlugin(target.id, {
+        intervention: { status: 'aborted' },
+      } as any);
+    }
+
+    // Retire the parked operation so the topic does not keep a run that can
+    // never be resumed. Resolved from the topic because the client has lost the
+    // id by now (see the doc comment above).
+    const parkedOperationId = await this.agentOperationModel.findLatestParkedOperationId(topicId);
+    if (parkedOperationId) {
+      await this.agentRuntimeService.interruptOperation(parkedOperationId);
+      await this.agentOperationModel.recordCompletion(parkedOperationId, {
+        completedAt: new Date(),
+        completionReason: 'interrupted',
+        status: 'interrupted',
+      });
+    }
+
+    log(
+      'stopPendingApproval: settled %d tool message(s), retired operation %s',
+      targets.length,
+      parkedOperationId ?? '(none)',
+    );
+
+    return {
+      operationId: parkedOperationId,
+      settledToolMessageIds: targets.map((t) => t.id),
+      success: true,
     };
   }
 }

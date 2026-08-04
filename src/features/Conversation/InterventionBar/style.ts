@@ -2,14 +2,27 @@ import { createStaticStyles } from 'antd-style';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   actions: css`
-    padding-block: 8px 10px;
-    padding-inline: 10px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    background: color-mix(in srgb, ${cssVar.colorBgElevated} 92%, ${cssVar.colorFillSecondary});
-
     &:empty {
       display: none;
     }
+  `,
+  /**
+   * Footer row: stop on the left, the per-card Submit (portalled into
+   * `actions`) on the right. The chrome that used to sit on `actions` moved
+   * here so the row keeps its border and background even when the portal is
+   * still empty — otherwise the stop button would float without a bar.
+   */
+  footer: css`
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: space-between;
+
+    padding-block: 8px 10px;
+    padding-inline: 10px;
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+
+    background: color-mix(in srgb, ${cssVar.colorBgElevated} 92%, ${cssVar.colorFillSecondary});
   `,
   container: css`
     margin-block-end: 12px;

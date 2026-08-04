@@ -51,6 +51,19 @@ export class ToolActionImpl {
    * `updatePluginArguments`, so approving without waiting would ship the
    * pre-edit arguments for any card the user had just typed in.
    */
+  /**
+   * Stop a run parked on tool approval — nothing in the batch executes and the
+   * model is not continued.
+   *
+   * No `waitForPendingArgsUpdate` here, unlike approval: the arguments are
+   * about to be discarded, so flushing a debounced edit into a call that will
+   * never run is pure latency.
+   */
+  stopPendingApproval = async (toolMessageIds: string[]): Promise<void> => {
+    const { context } = this.#get();
+    await useChatStore.getState().stopPendingApproval(toolMessageIds, context);
+  };
+
   approveAllToolCalls = async (toolMessageIds: string[]): Promise<void> => {
     const { hooks, context, waitForPendingArgsUpdate } = this.#get();
 

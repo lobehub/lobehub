@@ -1521,6 +1521,39 @@ export const aiAgentRouter = router({
    * This endpoint interrupts a SubAgent task by threadId or operationId.
    * It updates both operation status and Thread status to cancelled state.
    */
+  /**
+   * Stop a run parked on tool approval: settle the pending tool rows and end
+   * the operation without executing anything or continuing the model.
+   *
+   * Distinct from `interruptTask`, which only flips runtime state and assumes
+   * a live loop will persist the outcome — a parked run has no loop, so its
+   * tool rows and DB row would both be left behind.
+   */
+  stopPendingApproval: aiAgentWriteProcedure
+    .input(
+      z.object({
+        /** Pending `role='tool'` message ids to settle — the active batch. */
+        toolMessageIds: z.array(z.string()).min(1),
+        topicId: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      // Same ownership gate the approval resume uses: every target must belong
+      // to the caller before anything is written.
+      await assertCanUseAgentRunConversation({
+        db: ctx.serverDB,
+        messageIds: input.toolMessageIds,
+        topicId: input.topicId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+
+      return ctx.aiAgentService.stopPendingApproval({
+        toolMessageIds: input.toolMessageIds,
+        topicId: input.topicId,
+      });
+    }),
+
   interruptTask: aiAgentWriteProcedure
     .input(InterruptTaskSchema)
     .mutation(async ({ input, ctx }) => {

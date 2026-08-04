@@ -11,6 +11,7 @@ import { t } from 'i18next';
 
 import { type ChatInputEditor } from '@/features/ChatInput';
 import { lambdaClient } from '@/libs/trpc/client';
+import { aiAgentService } from '@/services/aiAgent';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { displayMessageSelectors } from '@/store/chat/selectors';
@@ -546,6 +547,63 @@ export class ConversationControlActionImpl {
    * already correct there. Approvals are issued in order and awaited so the
    * runtime never sees two resumes racing on the same assistant turn.
    */
+  /**
+   * Stop a run parked on tool approval — "from this step on, don't continue".
+   *
+   * Distinct from rejecting a tool: a rejection resumes the model so it can
+   * respond to the refusal, whereas stopping ends the turn outright. Nothing
+   * in the batch executes.
+   *
+   * This cannot go through the ordinary cancel actions: they all filter on
+   * `status === 'running'`, and a parked run's client operation is `completed`
+   * (the server's park is stream-terminal) and pruned ~30s later, so the client
+   * no longer holds the parked operation id. The server resolves it from the
+   * topic instead.
+   */
+  stopPendingApproval = async (
+    toolMessageIds: string[],
+    context?: ConversationContext,
+  ): Promise<void> => {
+    if (toolMessageIds.length === 0) return;
+
+    const effectiveContext: ConversationContext = context ?? {
+      agentId: this.#get().activeAgentId,
+      topicId: this.#get().activeTopicId,
+      threadId: this.#get().activeThreadId,
+    };
+
+    const topicId = effectiveContext.topicId;
+    if (!topicId) {
+      console.warn('[stopPendingApproval] no active topic; skipping');
+      return;
+    }
+
+    // Only rows the server can address — an optimistic `tmp_` row has no server
+    // identity yet.
+    const addressable = toolMessageIds.filter((id) => !id.startsWith('tmp_'));
+    if (addressable.length === 0) return;
+
+    // Clear the cards in one paint rather than letting them wink out one by one
+    // as the server catches up.
+    await Promise.all(
+      addressable.map((toolMessageId) =>
+        this.#get().optimisticUpdateMessagePlugin(toolMessageId, {
+          intervention: { status: 'aborted' },
+        }),
+      ),
+    );
+
+    const pausedOpIds = this.#getRunningServerOps(effectiveContext).map((op) => op.id);
+
+    try {
+      await aiAgentService.stopPendingApproval({ toolMessageIds: addressable, topicId });
+      this.#completeOpsById(pausedOpIds);
+    } catch (error) {
+      console.error('[stopPendingApproval] failed:', error);
+      throw error;
+    }
+  };
+
   approveAllToolCalls = async (
     toolMessageIds: string[],
     context?: ConversationContext,

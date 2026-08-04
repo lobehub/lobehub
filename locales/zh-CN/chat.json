@@ -1326,6 +1326,8 @@
   "tool.intervention.scrollToIntervention": "查看",
   "tool.intervention.skipMessage": "先跳过这个问题。",
   "tool.intervention.skipMessageWithReason": "先跳过这个问题。{{reason}}",
+  "tool.intervention.stop": "停止",
+  "tool.intervention.stopTooltip": "就停在这一步——待审批的工具都不会执行，Agent 也不会继续",
   "tool.intervention.submit": "提交",
   "tool.intervention.toolAbort": "你已取消本次技能调用",
   "tool.intervention.toolRejected": "本次技能调用已被拒绝",
