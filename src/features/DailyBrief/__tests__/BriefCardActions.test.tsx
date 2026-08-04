@@ -30,7 +30,30 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
+// The real editor cannot be driven headlessly — `getDocument('markdown')` comes
+// back empty in jsdom, so its send button is a no-op and the submit paths would
+// be untestable. The stub keeps the affordances the other cases assert on.
+vi.mock('../CommentInput', () => ({
+  default: ({
+    onCancel,
+    onSubmit,
+  }: {
+    onCancel: () => void;
+    onSubmit: (text: string) => void | Promise<void>;
+  }) => (
+    <div>
+      <button type={'button'} onClick={onCancel}>
+        Cancel
+      </button>
+      <button title={'Submit feedback'} type={'button'} onClick={() => onSubmit('my feedback')}>
+        send
+      </button>
+    </div>
+  ),
+}));
+
 const mockResolveBrief = vi.fn();
+const mockSubmitFeedback = vi.fn();
 const mockToastError = vi.spyOn(toast, 'error').mockReturnValue(undefined as never);
 
 const sampleActions: BriefAction[] = [
@@ -42,6 +65,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   useBriefStore.setState({
     resolveBrief: mockResolveBrief,
+    submitFeedback: mockSubmitFeedback,
   });
 });
 
@@ -81,8 +105,10 @@ describe('BriefCardActions', () => {
     fireEvent.click(screen.getByText('Approve'));
 
     expect(mockResolveBrief).toHaveBeenCalledWith('brief-1', 'approve');
-    await Promise.resolve();
-    expect(onAfterResolve).toHaveBeenCalled();
+    // `waitFor`, not a single microtask tick: the refresh runs after the
+    // mutation settles, so the number of awaits in between is an implementation
+    // detail this assertion must not encode.
+    await waitFor(() => expect(onAfterResolve).toHaveBeenCalled());
   });
 
   it('should hide action buttons when comment button clicked', () => {
@@ -228,6 +254,74 @@ describe('BriefCardActions', () => {
     fireEvent.click(screen.getByText('Approve'));
 
     await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('brief.actionFailed'));
+  });
+
+  // The parent's refresh callbacks run *after* the mutation landed. Reporting
+  // their rejection as an action failure would tell the user to retry a resolve
+  // that already succeeded — and, on the feedback path, to re-send the comment
+  // and re-run the task a second time.
+  it('should not report a failure when only the post-resolve refresh rejects', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockResolveBrief.mockResolvedValueOnce(undefined);
+    const onAfterResolve = vi.fn().mockRejectedValue(new Error('refresh failed'));
+    renderWithRouter(
+      <BriefCardActions
+        actions={sampleActions}
+        briefId="brief-11"
+        briefType="decision"
+        onAfterResolve={onAfterResolve}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Approve'));
+
+    await waitFor(() => expect(onAfterResolve).toHaveBeenCalled());
+    expect(mockToastError).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
+  it('should close the feedback editor when the mutation lands but the refresh rejects', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockSubmitFeedback.mockResolvedValueOnce(undefined);
+    const onAfterAddComment = vi.fn().mockRejectedValue(new Error('refresh failed'));
+    const { container } = renderWithRouter(
+      <BriefCardActions
+        actions={sampleActions}
+        briefId="brief-12"
+        briefType="decision"
+        taskId="task-1"
+        onAfterAddComment={onAfterAddComment}
+      />,
+    );
+
+    fireEvent.click(container.querySelector('.brief-comment-btn')!);
+    fireEvent.click(screen.getByTitle('Submit feedback'));
+
+    // Editor closed — leaving it open would invite a second send of feedback
+    // that already resolved the brief and re-ran the task.
+    await waitFor(() => expect(screen.getByText('Approve')).toBeInTheDocument());
+    expect(mockSubmitFeedback).toHaveBeenCalledWith('brief-12', 'task-1', 'my feedback');
+    expect(mockToastError).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
+  it('should keep the feedback editor open when the mutation itself fails', async () => {
+    mockSubmitFeedback.mockRejectedValueOnce(new Error('You do not have permission.'));
+    const { container } = renderWithRouter(
+      <BriefCardActions
+        actions={sampleActions}
+        briefId="brief-13"
+        briefType="decision"
+        taskId="task-1"
+      />,
+    );
+
+    fireEvent.click(container.querySelector('.brief-comment-btn')!);
+    fireEvent.click(screen.getByTitle('Submit feedback'));
+
+    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('You do not have permission.'));
+    // Still open — closing would discard the text the user typed.
+    expect(screen.getByTitle('Submit feedback')).toBeInTheDocument();
   });
 
   it('should label the result action "Confirm" when the parent task is parked at status="scheduled"', () => {
