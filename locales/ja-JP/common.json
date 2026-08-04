@@ -523,6 +523,7 @@
   "upgradeVersion.hasNew": "アップデートがあります",
   "upgradeVersion.newVersion": "利用可能なアップデート：{{version}}",
   "upgradeVersion.serverVersion": "サーバー：{{version}}",
+  "userPanel.accountSetting": "アカウント設定",
   "userPanel.anonymousNickName": "匿名ユーザー",
   "userPanel.billing": "請求管理",
   "userPanel.cloud": "{{name}} を体験",

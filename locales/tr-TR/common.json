@@ -523,6 +523,7 @@
   "upgradeVersion.hasNew": "Güncelleme mevcut",
   "upgradeVersion.newVersion": "Yeni sürüm mevcut: {{version}}",
   "upgradeVersion.serverVersion": "Sunucu: {{version}}",
+  "userPanel.accountSetting": "Hesap Ayarları",
   "userPanel.anonymousNickName": "Anonim Kullanıcı",
   "userPanel.billing": "Faturalandırma Yönetimi",
   "userPanel.cloud": "{{name}}'i Başlat",
