@@ -166,6 +166,10 @@ export const UserLabSchema = z.object({
    */
   enableClaudeCodeSdk: z.boolean().optional(),
   /**
+   * run Codex hetero sessions through codex app-server instead of one-shot CLI spawn
+   */
+  enableCodexAppServer: z.boolean().optional(),
+  /**
    * one-click import of local Claude Code / Codex CLI sessions as topics (desktop only)
    */
   enableHeteroSessionImport: z.boolean().optional(),

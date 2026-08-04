@@ -10,6 +10,8 @@
   "features.assistantMessageGroup.title": "代理消息分组",
   "features.claudeCodeSdk.desc": "通过 Claude Agent SDK 运行 Claude Code 会话，替代 CLI 进程方式，提供更丰富的流式输出与会话控制。",
   "features.claudeCodeSdk.title": "Claude Code SDK 运行时",
+  "features.codexAppServer.desc": "通过本地 App Server 运行 Codex 会话，替代一次性的 CLI 进程，提供 Token 流式输出与原生 Turn 控制。",
+  "features.codexAppServer.title": "Codex App Server 运行时",
   "features.groupChat.desc": "启用多代理协同群聊功能。",
   "features.groupChat.title": "群聊（多代理）",
   "features.heteroSessionImport.desc": "在话题列表菜单中新增「导入本地 Agent 会话」入口：扫描本地 Claude Code / Codex CLI 的会话记录并导入为话题，重复导入时增量同步新消息。",

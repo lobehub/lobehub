@@ -32,6 +32,16 @@ export {
   type HeterogeneousAgentRuntimeTask,
 } from './claudeAgentSdkSession';
 export { type CliSpawnPlan, resolveCliSpawnPlan } from './cliSpawn';
+export {
+  buildCodexAppServerArgs,
+  buildCodexAppServerInput,
+  buildCodexAppServerThreadParams,
+  CodexAppServerSession,
+  type CodexAppServerSessionOptions,
+  type CodexAppServerThreadParams,
+  type CodexAppServerUserInput,
+  getCodexAppServerUnsupportedArgs,
+} from './codexAppServerSession';
 export { CodexFileChangeTracker } from './codexFileChangeTracker';
 export {
   type CodexInitialModelResolution,

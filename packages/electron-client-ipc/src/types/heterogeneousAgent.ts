@@ -153,5 +153,5 @@ export interface HeterogeneousAgentRuntimeStatus {
   sessionId: string;
   staleDeadlineAt?: number;
   state: HeterogeneousAgentRuntimeState;
-  transport: 'claude-sdk' | 'cli-spawn';
+  transport: 'claude-sdk' | 'cli-spawn' | 'codex-app-server';
 }

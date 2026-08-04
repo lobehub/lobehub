@@ -22,6 +22,7 @@ import { ThreadStatus } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useChatStore } from '@/store/chat/store';
+import { useUserStore } from '@/store/user';
 
 import { createGatewayEventHandler } from '../transports/gateway/gatewayEventHandler';
 import type { HeterogeneousAgentExecutorParams } from '../transports/hetero/heterogeneousAgentExecutor';
@@ -1679,6 +1680,36 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       });
     });
 
+    it('should inject local workspace context only when starting a native session', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+      const params = {
+        ...defaultParams,
+        heterogeneousProvider: {
+          command: 'codex',
+          systemContext: 'Follow the agent rules.',
+          type: 'codex' as const,
+        },
+        workingDirectory: '/Users/me/repo',
+      };
+
+      await executeHeterogeneousAgent(get, params);
+
+      expect(mockSendPrompt.mock.calls[0][0].systemContext).toContain(
+        "You are running on the user's own machine. Your working directory is `/Users/me/repo`.",
+      );
+
+      await executeHeterogeneousAgent(get, {
+        ...params,
+        resumeSessionId: 'codex-thread-existing',
+      });
+
+      const resumedSystemContext = mockSendPrompt.mock.calls[1][0].systemContext;
+      expect(resumedSystemContext).toBe('Follow the agent rules.');
+      expect(resumedSystemContext).not.toContain('## Workspace');
+      expect(resumedSystemContext).not.toContain('/Users/me/repo');
+    });
+
     it('should forward context selections as heterogeneous system context', async () => {
       const store = createMockStore();
       const get = vi.fn(() => store);
@@ -1762,6 +1793,33 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
             'model_reasoning_effort="xhigh"',
           ],
         }),
+      );
+    });
+
+    it('should pass the Codex app-server lab preference to the desktop session', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+      const previousLab = useUserStore.getState().preference.lab;
+      useUserStore.setState((state) => ({
+        preference: {
+          ...state.preference,
+          lab: { ...state.preference.lab, enableCodexAppServer: true },
+        },
+      }));
+
+      try {
+        await executeHeterogeneousAgent(get, {
+          ...defaultParams,
+          heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+        });
+      } finally {
+        useUserStore.setState((state) => ({
+          preference: { ...state.preference, lab: previousLab },
+        }));
+      }
+
+      expect(mockStartSession).toHaveBeenCalledWith(
+        expect.objectContaining({ useCodexAppServer: true }),
       );
     });
 

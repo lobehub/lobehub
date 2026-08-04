@@ -2469,7 +2469,9 @@ export class AiAgentService {
           const deviceSystemContext = buildRemoteDeviceHeteroContext({
             agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
             conversationHistory,
-            cwd: deviceCwd,
+            // The native CLI session already knows its cwd. Keep the explanatory workspace note
+            // on the first turn only so persistent resumed sessions do not accumulate duplicates.
+            cwd: resumeSessionId ? undefined : deviceCwd,
           });
 
           const result = await deviceGateway.dispatchAgentRun({

@@ -1949,6 +1949,7 @@ export const executeHeterogeneousAgent = async (
       env: sessionEnv,
       resumeSessionId,
       useClaudeCodeSdk: labPreferSelectors.enableClaudeCodeSdk(useUserStore.getState()),
+      useCodexAppServer: labPreferSelectors.enableCodexAppServer(useUserStore.getState()),
     });
 
     // Attribute the run to the login the FINAL env actually resolves to (an
@@ -2421,7 +2422,9 @@ export const executeHeterogeneousAgent = async (
       agentSystemContext: heterogeneousProvider.systemContext,
       contextSelections,
       pageSelections,
-      workingDirectory,
+      // The native CLI session already retains its workspace context. Reinjecting this note on
+      // every resumed turn makes it accumulate in persistent Codex/Claude conversations.
+      workingDirectory: resumeSessionId ? undefined : workingDirectory,
     });
 
     // When resuming, hand main the prior turns so it can rebuild a Claude Code
