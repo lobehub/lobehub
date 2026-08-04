@@ -16,7 +16,6 @@ import { SessionModel } from '@/database/models/session';
 import { TaskModel } from '@/database/models/task';
 import { TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS } from '@/database/models/topicComment';
 import { UserModel } from '@/database/models/user';
-import { WorkspaceUserSettingsModel } from '@/database/models/workspaceUserSettings';
 import type { ResourceAccessLevel } from '@/database/schemas';
 import { DEFAULT_RESOURCE_ACCESS_LEVELS, RESOURCE_ACCESS_LEVELS_BY_TYPE } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
@@ -129,6 +128,25 @@ export const agentRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      // Creating inside a Category has to land in that Category. The folder's
+      // visibility decides the new agent's, rather than the other way round:
+      // the sidebar resolves a public agent's folder only against public
+      // folders (and a private agent's only against private ones), so a
+      // default-public agent created from a private Category would render in
+      // Ungrouped — for its creator too. The "New Agent" action inside a
+      // private Category sends only `{ groupId }`, so this is the normal path,
+      // not a crafted one. An explicit conflicting `visibility` is refused
+      // rather than silently overridden.
+      const folderVisibility = input.groupId
+        ? await ctx.agentModel.getAssignableSessionGroupVisibility(input.groupId)
+        : undefined;
+
+      if (folderVisibility && input.visibility && input.visibility !== folderVisibility)
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `A ${input.visibility} agent cannot be created in a ${folderVisibility} folder`,
+        });
+
       const agent = await ctx.agentModel.create({
         ...input.config,
         // The DB-layer AgentItem (packages/database/src/schemas/agent.ts) is
@@ -140,7 +158,9 @@ export const agentRouter = router({
         // Router-level `visibility` wins over any nested config value so the
         // sidebar's "Create in Private" entry can't be overridden by a stale
         // default config.
-        ...(input.visibility ? { visibility: input.visibility } : {}),
+        ...(input.visibility || folderVisibility
+          ? { visibility: input.visibility ?? folderVisibility }
+          : {}),
       });
 
       if (ctx.workspaceId && agent.visibility !== 'private') {
@@ -150,17 +170,6 @@ export const agentRouter = router({
           DEFAULT_RESOURCE_ACCESS_LEVELS.agent,
           ctx.userId,
         );
-      }
-
-      // Folder placement is per-member in workspace mode (the shared
-      // `sessionGroupId` column is ignored there), so a create-in-folder must
-      // also record the caller's own assignment for the new agent.
-      if (ctx.workspaceId && input.groupId) {
-        await new WorkspaceUserSettingsModel(
-          ctx.serverDB,
-          ctx.userId,
-          ctx.workspaceId,
-        ).setSidebarGroupAssignment(agent.id, input.groupId);
       }
 
       return { agentId: agent.id };
@@ -495,13 +504,6 @@ export const agentRouter = router({
           DEFAULT_RESOURCE_ACCESS_LEVELS.agent,
           ctx.userId,
         );
-        // Folder placement is per-member in workspace mode: keep the copy in
-        // the caller's folder when they had assigned the source agent there.
-        await new WorkspaceUserSettingsModel(
-          ctx.serverDB,
-          ctx.userId,
-          ctx.workspaceId,
-        ).copySidebarGroupAssignment(input.agentId, result.agentId);
       }
       return result;
     }),

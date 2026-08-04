@@ -1,7 +1,8 @@
 import type { TaskStatus } from '@lobechat/types';
+import type { FlexboxProps } from '@lobehub/ui';
 import { Avatar, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { HashIcon, ListTodoIcon } from 'lucide-react';
+import { HashIcon } from 'lucide-react';
 import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -44,20 +45,25 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextTertiary};
   `,
   row: css`
-    min-width: 0;
-    margin-inline: -10px;
-    padding-block: 9px;
-    padding-inline: 10px;
     border-radius: ${cssVar.borderRadiusLG};
-
     color: inherit;
     text-decoration: none;
-
     transition: background ${cssVar.motionDurationFast};
 
     &:hover {
       background: ${cssVar.colorFillQuaternary};
     }
+  `,
+  /**
+   * Box metrics shared by a real row and its skeleton, so the placeholder
+   * occupies exactly the space its content will. Kept apart from `row` because
+   * the skeleton must not pick up the hover affordance — nothing to click yet.
+   */
+  rowBox: css`
+    min-width: 0;
+    margin-inline: -10px;
+    padding-block: 9px;
+    padding-inline: 10px;
   `,
   rowText: css`
     flex: 1;
@@ -97,7 +103,7 @@ const normalizeTaskStatus = (status: string): TaskStatus =>
   TASK_STATUSES.has(status as TaskStatus) ? (status as TaskStatus) : 'backlog';
 
 const Row = memo<RowProps>(({ description, href, icon, title, trailing }) => (
-  <WorkspaceLink className={styles.row} to={href}>
+  <WorkspaceLink className={cx(styles.rowBox, styles.row)} to={href}>
     <Flexbox horizontal align={'flex-start'} gap={12}>
       <Flexbox flex={'none'} paddingBlock={3}>
         {icon}
@@ -143,24 +149,63 @@ const RecentTopicRow = memo<{ topic: RecentItem }>(({ topic }) => {
   );
 });
 
-const LoadingRows = ({ icon = HashIcon }: { icon?: typeof HashIcon }) => (
-  <Flexbox gap={1}>
-    {[
-      ['62%', '24%'],
-      ['48%', '20%'],
-      ['70%', '27%'],
-    ].map(([titleWidth, descriptionWidth], index) => (
-      <Flexbox aria-hidden horizontal className={styles.row} gap={12} key={index}>
-        <Flexbox flex={'none'} paddingBlock={3}>
-          <Icon color={cssVar.colorTextDescription} icon={icon} size={16} />
-        </Flexbox>
-        <Flexbox flex={1} gap={5}>
-          <Skeleton.Button active size={'small'} style={{ height: 14, width: titleWidth }} />
-          <Skeleton.Button active size={'small'} style={{ height: 11, width: descriptionWidth }} />
-        </Flexbox>
-      </Flexbox>
-    ))}
+interface SkeletonLineProps {
+  /** Height of the painted band inside the line box. */
+  bar: number;
+  flex?: FlexboxProps['flex'];
+  /** Line-height of the text role this stands in for, from {@link homeType}. */
+  line: number;
+  width: number | string;
+}
+
+/**
+ * A skeleton bar centred in the exact line box of the text it stands in for, so
+ * the row already has its final height and nothing reflows when data lands.
+ */
+const SkeletonLine = memo<SkeletonLineProps>(({ bar, flex, line, width }) => (
+  <Flexbox align={'flex-start'} flex={flex} height={line} justify={'center'}>
+    <Skeleton.Block active height={bar} width={width} />
   </Flexbox>
+));
+
+/**
+ * Widths per row, shaped like the content they precede: a short name over a
+ * longer sentence. Uneven rows read as "a list is coming", not as a filled block.
+ */
+const SKELETON_ROWS = [
+  { description: '86%', title: '38%' },
+  { description: '64%', title: '27%' },
+  { description: '92%', title: '48%' },
+];
+
+/**
+ * Loading placeholder for {@link Row}. It mirrors the real row exactly — same
+ * padding, same 12px lead gap, same line boxes — and keeps every element a
+ * skeleton: a concrete leading icon would read as already-loaded content and
+ * then be swapped for an avatar, which is precisely the wrong promise to make.
+ */
+const LoadingRows = memo<{ avatarSize?: number; withTime?: boolean }>(
+  ({ avatarSize = 22, withTime }) => (
+    <Flexbox aria-hidden gap={4}>
+      {SKELETON_ROWS.map(({ description, title }, index) => (
+        <Flexbox horizontal align={'flex-start'} className={styles.rowBox} gap={12} key={index}>
+          <Flexbox flex={'none'} paddingBlock={3}>
+            <Skeleton.Avatar
+              active
+              className={styles.topicAvatar}
+              shape={'circle'}
+              size={avatarSize}
+            />
+          </Flexbox>
+          <Flexbox className={styles.rowText} gap={3}>
+            <SkeletonLine bar={14} line={22} width={title} />
+            <SkeletonLine bar={12} line={20} width={description} />
+          </Flexbox>
+          {withTime && <SkeletonLine bar={10} flex={'none'} line={18} width={52} />}
+        </Flexbox>
+      ))}
+    </Flexbox>
+  ),
 );
 
 const TaskContent = memo(() => {
@@ -177,7 +222,7 @@ const TaskContent = memo(() => {
       {tasksSWR.error && !tasksInit ? (
         <AsyncError error={tasksSWR.error} variant={'inline'} onRetry={tasksSWR.mutate} />
       ) : !tasksInit ? (
-        <LoadingRows icon={ListTodoIcon} />
+        <LoadingRows avatarSize={16} />
       ) : tasks.length === 0 ? (
         <Text className={styles.empty}>{t('dashboard.task.empty')}</Text>
       ) : (
@@ -249,7 +294,7 @@ const HomeModeContent = memo<HomeModeContentProps>(({ mode, onSuggestionSelect }
             {state === 'error' ? (
               <AsyncError error={recentsSWR.error} variant={'inline'} onRetry={recentsSWR.mutate} />
             ) : state === 'loading' ? (
-              <LoadingRows />
+              <LoadingRows withTime />
             ) : (
               <Flexbox gap={4}>
                 {topicRecents.slice(0, 8).map((item) => (

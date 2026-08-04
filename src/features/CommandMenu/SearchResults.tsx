@@ -35,6 +35,7 @@ import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { CommandItem } from './components';
 import { styles } from './styles';
+import { shouldShowMarketplaceFallback } from './utils/marketplaceFallback';
 import { type ValidSearchType } from './utils/queryParser';
 
 interface SearchResultsProps {
@@ -605,10 +606,14 @@ const SearchResults = memo<SearchResultsProps>(
           </Command.Group>
         )}
 
-        {/* The aggregate search is DB-only, so marketplace hits never appear
-            above; keep permanent typed-search entries as the visible route into
-            marketplace discovery. */}
-        {!typeFilter && (
+        {/* Marketplace typed-search entries as the no-result fallback; see
+            shouldShowMarketplaceFallback for the rationale. */}
+        {shouldShowMarketplaceFallback({
+          hasLocalTopicResults,
+          hasResults,
+          isLoading,
+          typeFilter,
+        }) && (
           <Command.Group forceMount>
             {renderSearchMore('mcp', mcpResults.length)}
             {renderSearchMore('plugin', pluginResults.length)}

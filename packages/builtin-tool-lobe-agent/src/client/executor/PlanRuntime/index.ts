@@ -89,7 +89,12 @@ export class PlanExecutionRuntime {
   }
 
   private async resolveExistingTodos(context: PlanRuntimeContext): Promise<TodoItem[]> {
-    if (context.currentTodos) return context.currentTodos;
+    // Only `undefined` means "caller doesn't know" — an empty array is a real
+    // answer. After `clearTodos`, message history legitimately reports `[]`, and
+    // treating that as missing would reload the plan document and resurrect the
+    // items the agent just cleared (the plan document is a best-effort mirror
+    // whose sync failure is swallowed, so it can easily still hold them).
+    if (context.currentTodos !== undefined) return context.currentTodos;
     if (!context.topicId) return [];
     const plan = await this.service.findPlanByTopic(context.topicId);
     return readTodosFromPlan(plan);

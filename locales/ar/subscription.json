@@ -137,6 +137,8 @@
   "credits.memberBudget.defaultLimit": "الحد الافتراضي لميزانية العضو",
   "credits.memberBudget.defaultLimitHint": "الأعضاء الذين ليس لديهم قاعدة مخصصة يستخدمون هذا الحد في كل دورة فوترة.",
   "credits.memberBudget.desc": "حدد عدد الاعتمادات التي يمكن لكل عضو استخدامها في دورة الفوترة الحالية",
+  "credits.memberBudget.details.action": "عرض التفاصيل",
+  "credits.memberBudget.details.title": "استخدام العضو",
   "credits.memberBudget.effectiveBudget": "الميزانية الفعالة",
   "credits.memberBudget.empty": "لا يوجد أعضاء في مساحة العمل حتى الآن",
   "credits.memberBudget.globalBadge": "عام",

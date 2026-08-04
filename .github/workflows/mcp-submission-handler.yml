@@ -1,5 +1,5 @@
 name: MCP Submission Handler
-# Auto-close "Add my MCP server to the marketplace" issues and redirect to the self-service CLI
+# Auto-close MCP marketplace listing / rescan issues and redirect to the self-service CLI
 
 on:
   issues:

@@ -14,7 +14,7 @@ import type {
   AgentState,
   InstructionExecutor,
 } from '../types';
-import { extractActivatedSkillsFromMessages } from '../utils';
+import { extractActivatedSkillsFromMessages, extractTodosFromMessages } from '../utils';
 
 const TOOL_EXECUTION_PHASE = 'tool_execution';
 const TOOL_MESSAGE_PERSIST_PHASE = 'tool_message_persist';
@@ -162,6 +162,11 @@ const createRunContext = ({
     agentId: host.operation.agentId ?? state.metadata?.agentId,
     assistantMessageId: parentMessageId,
     callIndex: resolveCallIndex(state, toolName),
+    // Todo state is reconstructed from message history for the same reason the
+    // prompt side does it (`serverCallLlmContextBuilder`): the plan document is
+    // a best-effort mirror that only exists once `createPlan` has run, so the
+    // tool-execution side must not treat it as the source of truth.
+    currentTodos: extractTodosFromMessages(state.messages)?.items,
     effectiveManifestMap: buildEffectiveManifestMap(state),
     groupId: host.operation.groupId ?? state.metadata?.groupId,
     messageId: state.metadata?.sourceMessageId,

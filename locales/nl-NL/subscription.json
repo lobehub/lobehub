@@ -137,6 +137,8 @@
   "credits.memberBudget.defaultLimit": "Standaard ledenbudget",
   "credits.memberBudget.defaultLimitHint": "Leden zonder een aangepaste regel gebruiken deze limiet per factureringscyclus.",
   "credits.memberBudget.desc": "Beperk hoeveel werkruimtecredits elk lid kan gebruiken in de huidige factureringscyclus",
+  "credits.memberBudget.details.action": "Bekijk details",
+  "credits.memberBudget.details.title": "Ledengebruik",
   "credits.memberBudget.effectiveBudget": "Effectief budget",
   "credits.memberBudget.empty": "Nog geen werkruimteleden",
   "credits.memberBudget.globalBadge": "Globaal",

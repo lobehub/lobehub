@@ -24,14 +24,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   image: css`
     margin-block: 0 !important;
-
-    .ant-image {
-      height: 100% !important;
-
-      img {
-        height: 100% !important;
-      }
-    }
   `,
 }));
 
@@ -61,7 +53,7 @@ const ImageItem = memo<ImageItemProps>(
         height={isSafari ? 'auto' : '100%'}
         isLoading={loading}
         preview={preview}
-        size={IMAGE_SIZE as any}
+        size={IMAGE_SIZE}
         src={url}
         style={{ height: isSafari ? 'auto' : '100%', width: '100%', ...style }}
         actions={

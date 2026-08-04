@@ -1,11 +1,13 @@
 'use client';
 
+import { DEFAULT_AVATAR } from '@lobechat/const';
 import { type SidebarAgentItem } from '@lobechat/types';
-import { Center, Empty, Flexbox, Icon, SearchBar, Text, Tooltip } from '@lobehub/ui';
-import { Button, DropdownMenu, Segmented } from '@lobehub/ui/base-ui';
+import { Avatar, Center, Empty, Flexbox, Icon, SearchBar, Text, Tooltip } from '@lobehub/ui';
+import { Button, DropdownMenu, Segmented, toast } from '@lobehub/ui/base-ui';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
-import { ChevronDownIcon, PlusIcon } from 'lucide-react';
+import { ChevronDownIcon, ChevronRightIcon, PlusIcon } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
@@ -15,8 +17,10 @@ import { useWorkspaceMembers } from '@/business/client/hooks/useWorkspaceMembers
 import NavHeader from '@/features/NavHeader';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import WideScreenContainer from '@/features/WideScreenContainer';
+import { useFetchAgentLabels } from '@/hooks/useFetchAgentLabels';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { usePermission } from '@/hooks/usePermission';
+import { useKeepSidebarGroupsListed } from '@/routes/(main)/home/_layout/Body/Agent/List/useAgentList';
 import { AgentModalProvider } from '@/routes/(main)/home/_layout/Body/Agent/ModalProvider';
 import { useSidebarItemVisibility } from '@/routes/(main)/home/_layout/Body/Agent/useSidebarItemVisibility';
 import { useCreateMenuItems } from '@/routes/(main)/home/_layout/hooks';
@@ -31,10 +35,108 @@ import AgentRow, { type AgentRowAuthor } from './AgentRow';
 import { flattenAgentBuckets } from './flattenBuckets';
 import ListConfig from './ListConfig';
 import { type AgentListViewOptions, normalizeAgentListViewOptions } from './listViewOptions';
-import TableHeader from './TableHeader';
+import SidebarAgentsSection from './SidebarAgentsSection';
 
 type SegmentValue = 'private' | 'workspace';
 type ViewMode = 'card' | 'list';
+
+interface GroupHeaderProps {
+  /** Author avatar for author-grouping headers (Linear-style). */
+  avatar?: string | null;
+  collapsed: boolean;
+  color?: string | null;
+  count: number;
+  /** Position in the group list — drives the alternating bar tint. */
+  index: number;
+  label: string;
+  onToggle: () => void;
+}
+
+// Linear-style group header: a full-width subtle bar with chevron +
+// identity (color dot / avatar) + name + count.
+const groupHeaderStyles = createStaticStyles(({ css, cssVar }) => ({
+  bar: css`
+    cursor: pointer;
+    user-select: none;
+
+    width: 100%;
+    padding-block: 8px;
+    padding-inline: 12px;
+    border-radius: ${cssVar.borderRadiusLG};
+
+    transition: background 0.15s;
+  `,
+  // Alternating tints (mirrors Linear's group striping).
+  barEven: css`
+    background: ${cssVar.colorFillQuaternary};
+
+    &:hover {
+      background: ${cssVar.colorFillTertiary};
+    }
+  `,
+  barOdd: css`
+    background: ${cssVar.colorFillTertiary};
+
+    &:hover {
+      background: ${cssVar.colorFillSecondary};
+    }
+  `,
+}));
+
+const GroupHeader = memo<GroupHeaderProps>(
+  ({ avatar, collapsed, color, count, index, label, onToggle }) => (
+    <Flexbox
+      horizontal
+      align={'center'}
+      gap={8}
+      className={cx(
+        groupHeaderStyles.bar,
+        index % 2 === 0 ? groupHeaderStyles.barEven : groupHeaderStyles.barOdd,
+      )}
+      onClick={onToggle}
+    >
+      <Icon
+        color={cssVar.colorTextSecondary}
+        icon={collapsed ? ChevronRightIcon : ChevronDownIcon}
+        size={14}
+      />
+      {avatar ? (
+        <Avatar avatar={avatar} size={20} />
+      ) : color ? (
+        <span
+          style={{
+            background: color,
+            borderRadius: '50%',
+            display: 'inline-block',
+            height: 9,
+            width: 9,
+          }}
+        />
+      ) : null}
+      <Text fontSize={13} weight={500}>
+        {label}
+      </Text>
+      <Text fontSize={12} type={'secondary'}>
+        {count}
+      </Text>
+    </Flexbox>
+  ),
+);
+
+GroupHeader.displayName = 'AgentViewAllGroupHeader';
+
+// Bucket tab label: name plus how many agents the tab would list, in the same
+// muted-count style the group headers use.
+const SegmentLabel = memo<{ count: number; label: string }>(({ count, label }) => (
+  <Flexbox horizontal align={'center'} gap={6}>
+    {label}
+    <Text fontSize={12} type={'secondary'}>
+      {count}
+    </Text>
+  </Flexbox>
+));
+
+SegmentLabel.displayName = 'AgentViewAllSegmentLabel';
 
 const AgentViewAllPage = memo(() => {
   const { t } = useTranslation('common');
@@ -80,6 +182,7 @@ const AgentViewAllPage = memo(() => {
   // The sidebar usually owns these fetches, but this page must survive a
   // direct deep link — SWR dedupes when both are mounted.
   useFetchAgentList();
+  useFetchAgentLabels();
   const useFetchWorkspaceUserPreference = useUserStore((s) => s.useFetchWorkspaceUserPreference);
   useFetchWorkspaceUserPreference();
 
@@ -95,6 +198,7 @@ const AgentViewAllPage = memo(() => {
   );
 
   const { isSidebarItemVisible, setSidebarItemVisible } = useSidebarItemVisibility();
+  const keepGroups = useKeepSidebarGroupsListed();
 
   const workspaceItems = useMemo(
     () => flattenAgentBuckets(pinnedAgents, agentGroups, ungroupedAgents),
@@ -106,6 +210,40 @@ const AgentViewAllPage = memo(() => {
   );
 
   const items = activeWorkspaceId && segment === 'private' ? privateItems : workspaceItems;
+
+  // "In sidebar" overview data: everything visible in the sidebar across BOTH
+  // the workspace and private buckets — the block answers "what's in my
+  // sidebar right now", so it ignores the tab and the search keyword (it
+  // hides entirely while searching to keep results scannable).
+  const sidebarItems = useMemo(() => {
+    // Rebuilt from folder-filtered buckets rather than reusing the page's
+    // flattened lists: hiding a Category removes its whole section from the
+    // sidebar, so its agents are not "in sidebar" either. The page's own list
+    // deliberately keeps showing them — hiding is a sidebar-only preference.
+    const inSidebar = [
+      ...flattenAgentBuckets(pinnedAgents, keepGroups(agentGroups), ungroupedAgents),
+      ...flattenAgentBuckets(
+        privatePinnedAgents,
+        keepGroups(privateAgentGroups),
+        privateUngroupedAgents,
+      ),
+    ];
+    const seen = new Set<string>();
+    return inSidebar.filter((item) => {
+      if (seen.has(item.id) || !isSidebarItemVisible(item)) return false;
+      seen.add(item.id);
+      return true;
+    });
+  }, [
+    agentGroups,
+    isSidebarItemVisible,
+    keepGroups,
+    pinnedAgents,
+    privateAgentGroups,
+    privatePinnedAgents,
+    privateUngroupedAgents,
+    ungroupedAgents,
+  ]);
 
   // Author info (column, grouping, sorting) only means something on the
   // workspace tab — every private item is the viewer's own.
@@ -131,7 +269,24 @@ const AgentViewAllPage = memo(() => {
   // author controls are hidden) — coerce back to visible defaults instead of
   // sorting by an invisible key with a select value that has no option.
   const { orderDirection, showSidebarHidden } = viewOptions;
-  const groupBy = showAuthor ? viewOptions.groupBy : 'none';
+
+  // Tab counts describe how big each bucket is, so they follow the persisted
+  // hidden-agent setting (what the tab would list) but ignore the keyword —
+  // searching narrows the list below, it doesn't shrink the buckets.
+  const bucketCounts = useMemo(() => {
+    const count = (list: SidebarAgentItem[]) =>
+      showSidebarHidden ? list.length : list.filter(isSidebarItemVisible).length;
+    return { private: count(privateItems), workspace: count(workspaceItems) };
+  }, [workspaceItems, privateItems, showSidebarHidden, isSidebarItemVisible]);
+
+  // Label grouping works on every tab (labels exist in personal mode too);
+  // author grouping only makes sense where the author column shows.
+  const groupBy =
+    showAuthor || viewOptions.groupBy === 'label'
+      ? viewOptions.groupBy
+      : viewOptions.groupBy === 'author'
+        ? 'none'
+        : viewOptions.groupBy;
   const orderBy =
     !showAuthor && viewOptions.orderBy === 'author' ? 'updatedAt' : viewOptions.orderBy;
   const effectiveViewOptions = useMemo(
@@ -177,28 +332,102 @@ const AgentViewAllPage = memo(() => {
   // already sorted, so buckets keep the in-group order; groups themselves
   // read alphabetically.
   const groupedItems = useMemo(() => {
-    if (!activeWorkspaceId || groupBy !== 'author' || segment === 'private') return null;
-    const buckets = new Map<string, SidebarAgentItem[]>();
-    for (const item of filteredItems) {
-      const key = item.userId ?? '';
-      const bucket = buckets.get(key);
-      if (bucket) bucket.push(item);
-      else buckets.set(key, [item]);
+    if (groupBy === 'author') {
+      if (!activeWorkspaceId || segment === 'private') return null;
+      const buckets = new Map<string, SidebarAgentItem[]>();
+      for (const item of filteredItems) {
+        const key = item.userId ?? '';
+        const bucket = buckets.get(key);
+        if (bucket) bucket.push(item);
+        else buckets.set(key, [item]);
+      }
+      const groups = [...buckets.entries()].map(([userId, groupItems]) => ({
+        // Same fallback as the row avatars — a member without a profile
+        // avatar still gets the default one instead of a bare name.
+        avatar: (userId && authorByUserId.get(userId)?.avatar) || DEFAULT_AVATAR,
+        color: undefined as string | null | undefined,
+        items: groupItems,
+        key: `author:${userId || 'unknown'}`,
+        label:
+          (userId && authorByUserId.get(userId)?.name) || t('agentViewAll.groupBy.unknownAuthor'),
+      }));
+      return groups.sort((a, b) => a.label.localeCompare(b.label));
     }
-    const groups = [...buckets.entries()].map(([userId, groupItems]) => ({
-      items: groupItems,
-      key: userId || 'unknown',
-      label:
-        (userId && authorByUserId.get(userId)?.name) || t('agentViewAll.groupBy.unknownAuthor'),
-    }));
-    return groups.sort((a, b) => a.label.localeCompare(b.label));
+
+    if (groupBy === 'label') {
+      // Label sections: an agent carrying several labels appears once per
+      // label (mirrors Linear); unlabeled items collect in a trailing bucket.
+      const buckets = new Map<
+        string,
+        { color?: string | null; items: SidebarAgentItem[]; label: string }
+      >();
+      const unlabeled: SidebarAgentItem[] = [];
+      for (const item of filteredItems) {
+        const itemLabels = item.labels ?? [];
+        if (itemLabels.length === 0) {
+          unlabeled.push(item);
+          continue;
+        }
+        for (const label of itemLabels) {
+          const bucket = buckets.get(label.id);
+          if (bucket) bucket.items.push(item);
+          else buckets.set(label.id, { color: label.color, items: [item], label: label.name });
+        }
+      }
+      const groups = [...buckets.entries()]
+        .map(([labelId, bucket]) => ({
+          avatar: null as string | null,
+          color: bucket.color,
+          items: bucket.items,
+          key: `label:${labelId}`,
+          label: bucket.label,
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label));
+      if (unlabeled.length > 0)
+        groups.push({
+          avatar: null,
+          color: undefined,
+          items: unlabeled,
+          key: 'label:none',
+          label: t('agentViewAll.groupBy.noLabel'),
+        });
+      return groups;
+    }
+
+    return null;
   }, [activeWorkspaceId, groupBy, segment, filteredItems, authorByUserId, t]);
 
-  const handleToggleSidebar = useCallback(
-    (item: SidebarAgentItem) => {
-      void setSidebarItemVisible(item.id, !isSidebarItemVisible(item));
+  // Group collapse state — groups default to COLLAPSED (mirrors Linear), so
+  // the EXPANDED keys are what persists (systemStatus): a reload keeps opened
+  // groups open, and newly appearing groups start collapsed.
+  const expandedGroupKeys = useGlobalStore(
+    systemStatusSelectors.agentListExpandedGroupKeys,
+    isEqual,
+  );
+  const expandedGroupSet = useMemo(() => new Set(expandedGroupKeys), [expandedGroupKeys]);
+  const toggleGroupCollapsed = useCallback(
+    (key: string) => {
+      const next = expandedGroupSet.has(key)
+        ? expandedGroupKeys.filter((item) => item !== key)
+        : [...expandedGroupKeys, key];
+      updateSystemStatus({ agentListExpandedGroupKeys: next }, 'toggleAgentListGroupExpanded');
     },
-    [isSidebarItemVisible, setSidebarItemVisible],
+    [expandedGroupKeys, expandedGroupSet, updateSystemStatus],
+  );
+
+  const handleToggleSidebar = useCallback(
+    async (item: SidebarAgentItem) => {
+      try {
+        await setSidebarItemVisible(item.id, !isSidebarItemVisible(item));
+      } catch (error) {
+        // Personal mode writes the preference optimistically and never rolls
+        // back, workspace mode rolls back silently — either way the row's
+        // state stops matching what was saved, so say so.
+        console.error('Failed to toggle Agent sidebar visibility:', error);
+        toast.error(t('operationFailed'));
+      }
+    },
+    [isSidebarItemVisible, setSidebarItemVisible, t],
   );
 
   const renderCard = useCallback(
@@ -286,6 +515,9 @@ const AgentViewAllPage = memo(() => {
         }
       />
       <WideScreenContainer gap={16} paddingBlock={16} wrapperStyle={{ flex: 1, overflowY: 'auto' }}>
+        {isInit && !keyword.trim() && sidebarItems.length > 0 && (
+          <SidebarAgentsSection items={sidebarItems} onToggleSidebar={handleToggleSidebar} />
+        )}
         <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
           {/* The workspace/private split only exists inside a workspace;
               personal mode leads with the search box instead. */}
@@ -293,8 +525,24 @@ const AgentViewAllPage = memo(() => {
             <Segmented
               value={segment}
               options={[
-                { label: t('navPanel.publicAgents'), value: 'workspace' },
-                { label: t('navPanel.privateAgents'), value: 'private' },
+                {
+                  label: (
+                    <SegmentLabel
+                      count={bucketCounts.workspace}
+                      label={t('navPanel.publicAgents')}
+                    />
+                  ),
+                  value: 'workspace',
+                },
+                {
+                  label: (
+                    <SegmentLabel
+                      count={bucketCounts.private}
+                      label={t('navPanel.privateAgents')}
+                    />
+                  ),
+                  value: 'private',
+                },
               ]}
               onChange={(value) => handleSegmentChange(value as SegmentValue)}
             />
@@ -344,47 +592,52 @@ const AgentViewAllPage = memo(() => {
           </Center>
         ) : viewMode === 'card' ? (
           groupedItems ? (
-            <Flexbox gap={24}>
-              {groupedItems.map((group) => (
-                <Flexbox gap={12} key={group.key}>
-                  <Flexbox horizontal align={'center'} gap={6}>
-                    <Text fontSize={13} weight={500}>
-                      {group.label}
-                    </Text>
-                    <Text fontSize={12} type={'secondary'}>
-                      {group.items.length}
-                    </Text>
+            <Flexbox gap={8}>
+              {groupedItems.map((group, index) => {
+                const collapsed = !expandedGroupSet.has(group.key);
+                return (
+                  <Flexbox gap={12} key={group.key}>
+                    <GroupHeader
+                      avatar={group.avatar}
+                      collapsed={collapsed}
+                      color={group.color}
+                      count={group.items.length}
+                      index={index}
+                      label={group.label}
+                      onToggle={() => toggleGroupCollapsed(group.key)}
+                    />
+                    {!collapsed && (
+                      <div className={cardStyles.grid}>{group.items.map(renderCard)}</div>
+                    )}
                   </Flexbox>
-                  <div className={cardStyles.grid}>{group.items.map(renderCard)}</div>
-                </Flexbox>
-              ))}
+                );
+              })}
             </Flexbox>
           ) : (
             <div className={cardStyles.grid}>{filteredItems.map(renderCard)}</div>
           )
         ) : (
-          <Flexbox gap={2}>
-            <TableHeader showAuthor={showAuthor} />
+          // Grouped list shares the card branch's wrapper rhythm (outer gap 8,
+          // bare GroupHeader) so toggling the view mode doesn't shift the bars.
+          <Flexbox gap={groupedItems ? 8 : 2}>
             {groupedItems
-              ? groupedItems.map((group) => (
-                  <Flexbox gap={2} key={group.key}>
-                    <Flexbox
-                      horizontal
-                      align={'center'}
-                      gap={6}
-                      paddingBlock={8}
-                      paddingInline={12}
-                    >
-                      <Text fontSize={13} weight={500}>
-                        {group.label}
-                      </Text>
-                      <Text fontSize={12} type={'secondary'}>
-                        {group.items.length}
-                      </Text>
+              ? groupedItems.map((group, index) => {
+                  const collapsed = !expandedGroupSet.has(group.key);
+                  return (
+                    <Flexbox gap={2} key={group.key}>
+                      <GroupHeader
+                        avatar={group.avatar}
+                        collapsed={collapsed}
+                        color={group.color}
+                        count={group.items.length}
+                        index={index}
+                        label={group.label}
+                        onToggle={() => toggleGroupCollapsed(group.key)}
+                      />
+                      {!collapsed && group.items.map(renderRow)}
                     </Flexbox>
-                    {group.items.map(renderRow)}
-                  </Flexbox>
-                ))
+                  );
+                })
               : filteredItems.map(renderRow)}
           </Flexbox>
         )}

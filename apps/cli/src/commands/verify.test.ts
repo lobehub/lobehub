@@ -5,9 +5,11 @@ import path from 'node:path';
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { log } from '../utils/logger';
 import {
   deriveReportVerdict,
   evidenceTypeForFile,
+  formatAnnotationRegion,
   genericContextFromResult,
   inlineTextEvidenceForFile,
   originFromEnv,
@@ -306,6 +308,47 @@ describe('reportEvidence — comparison normalization', () => {
     ).toBeUndefined();
   });
 
+  // The flat shape (`comparison: "row", role: "before"`) is the easiest one to
+  // write from memory, and it used to be the ONLY malformed shape that produced
+  // no warning: the guard parsed the field into an object first, so a string
+  // read as "no comparison at all" and the ingest exited clean while the page
+  // rendered two unpaired images.
+  it('warns and drops a comparison that is not an object', () => {
+    vi.mocked(log.warn).mockClear();
+
+    const [item] = reportEvidence([
+      { comparison: 'row', path: 'before.png', role: 'before' } as unknown,
+    ]);
+
+    expect(item).toEqual({ comparison: undefined, description: undefined, path: 'before.png' });
+    expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('before.png'));
+  });
+
+  it('warns for every malformed comparison shape, and stays quiet for a valid or absent one', () => {
+    const warnsFor = (comparison: unknown) => {
+      vi.mocked(log.warn).mockClear();
+      reportEvidence([{ comparison, path: 'a.png' } as unknown]);
+      return vi.mocked(log.warn).mock.calls.length > 0;
+    };
+
+    expect(warnsFor('row')).toBe(true);
+    expect(warnsFor(['row'])).toBe(true);
+    expect(warnsFor({ id: 'row' })).toBe(true);
+    expect(warnsFor({ id: 'row', role: 'middle' })).toBe(true);
+
+    // Falsy but present: someone wrote the field, so it is malformed rather
+    // than absent. A truthiness guard would drop these without a word.
+    expect(warnsFor('')).toBe(true);
+    expect(warnsFor(0)).toBe(true);
+    expect(warnsFor(false)).toBe(true);
+    expect(warnsFor(Number.NaN)).toBe(true);
+
+    // Absent is null/undefined only — an evidence item without a pair.
+    expect(warnsFor({ id: 'row', role: 'before' })).toBe(false);
+    expect(warnsFor(undefined)).toBe(false);
+    expect(warnsFor(null)).toBe(false);
+  });
+
   it('supports the `file` / `desc` aliases and skips entries with no path', () => {
     expect(
       reportEvidence([{ desc: 'a shot', file: 'a.png' }, { comparison: { id: 'x' } }]),
@@ -601,6 +644,7 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
     mockTrpcClient.acceptance = {
       attachRun: { mutate: vi.fn() },
       ensure: { mutate: vi.fn().mockResolvedValue({ id: 'acceptance-1' }) },
+      getBundle: { query: vi.fn() },
     };
 
     dir = mkdtempSync(path.join(tmpdir(), 'lh-ingest-'));
@@ -635,6 +679,51 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
     });
     expect(mockTrpcClient.acceptance.attachRun.mutate).toHaveBeenCalledWith({
       acceptanceId: 'acceptance-1',
+      verifyRunId: 'run-new',
+    });
+  });
+
+  it('creates a standalone acceptance when an external project has no operation or subject', async () => {
+    delete process.env.LOBEHUB_TOPIC_ID;
+    writeFileSync(
+      path.join(dir, 'result.json'),
+      JSON.stringify({ cases: [], title: 'External delivery verification' }),
+    );
+
+    await run(['ingest-report', dir, '--json']);
+
+    expect(mockTrpcClient.acceptance.ensure.mutate).toHaveBeenCalledWith({
+      requirement: undefined,
+      subjectId: expect.stringMatching(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+      ),
+      subjectType: 'standalone',
+      title: 'External delivery verification',
+    });
+    expect(mockTrpcClient.acceptance.attachRun.mutate).toHaveBeenCalledWith({
+      acceptanceId: 'acceptance-1',
+      verifyRunId: 'run-new',
+    });
+  });
+
+  it('appends a re-verification round directly to an existing acceptance', async () => {
+    mockTrpcClient.acceptance.getBundle.query.mockResolvedValue({
+      acceptance: {
+        id: 'acceptance-existing',
+        status: 'delivered',
+        subjectId: 'standalone-subject',
+        subjectType: 'standalone',
+      },
+    });
+
+    await run(['ingest-report', dir, '--acceptance', 'acceptance-existing', '--json']);
+
+    expect(mockTrpcClient.acceptance.getBundle.query).toHaveBeenCalledWith({
+      id: 'acceptance-existing',
+    });
+    expect(mockTrpcClient.acceptance.ensure.mutate).not.toHaveBeenCalled();
+    expect(mockTrpcClient.acceptance.attachRun.mutate).toHaveBeenCalledWith({
+      acceptanceId: 'acceptance-existing',
       verifyRunId: 'run-new',
     });
   });
@@ -1021,6 +1110,38 @@ describe('lh acceptance — canonical run tree', () => {
     rmSync(dir, { force: true, recursive: true });
   });
 
+  it('removes stale materialized resources on `acceptance update`', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'acceptance-update-'));
+    mockTrpcClient.verify.getSkillBundle.query.mockReset().mockResolvedValueOnce({
+      content: '# Acceptance SKILL',
+      files: {
+        'references/auth.md': '# Mixed auth',
+        'references/recording.md': '# Mixed recording',
+      },
+      identifier: 'acceptance',
+      name: 'acceptance',
+    });
+    await run(['install', '--dir', dir]);
+
+    mockTrpcClient.verify.getSkillBundle.query.mockResolvedValueOnce({
+      content: '# Acceptance SKILL v2',
+      files: {
+        'references/auth-web.md': '# Web auth',
+        'references/recording-cdp.md': '# CDP recording',
+      },
+      identifier: 'acceptance',
+      name: 'acceptance',
+    });
+    await run(['update', '--dir', dir]);
+
+    const skillDir = path.join(dir, '.agents', 'skills', 'acceptance');
+    expect(existsSync(path.join(skillDir, 'references', 'auth.md'))).toBe(false);
+    expect(existsSync(path.join(skillDir, 'references', 'recording.md'))).toBe(false);
+    expect(existsSync(path.join(skillDir, 'references', 'auth-web.md'))).toBe(true);
+    expect(existsSync(path.join(skillDir, 'references', 'recording-cdp.md'))).toBe(true);
+    rmSync(dir, { force: true, recursive: true });
+  });
+
   it('does NOT attach the run subtree to the deprecated `verify acceptance` alias', async () => {
     const program = new Command();
     program.exitOverride();
@@ -1028,5 +1149,41 @@ describe('lh acceptance — canonical run tree', () => {
     const acceptance = program.commands.find((c) => c.name() === 'acceptance');
     const hasRun = acceptance?.commands.some((c) => c.name() === 'run');
     expect(hasRun).toBe(false);
+  });
+});
+
+describe('formatAnnotationRegion', () => {
+  const rect = { height: 0.03, width: 0.12, x: 0.31, y: 0.24 };
+
+  it('names the evidence the region was drawn on and where on it', () => {
+    expect(
+      formatAnnotationRegion(
+        { comment: 'too light', evidenceId: 'ev-1', rect },
+        new Map([['ev-1', 'c11-profile-editing.png']]),
+      ),
+    ).toBe('c11-profile-editing.png @ 31%,24% · 12%×3%');
+  });
+
+  // Without the filename a reader still cannot tell WHICH screenshot was circled,
+  // so the raw id is better than dropping the reference entirely.
+  it('falls back to the raw evidence id when the label is unknown', () => {
+    expect(formatAnnotationRegion({ evidenceId: 'ev-9', rect })).toBe('ev-9 @ 31%,24% · 12%×3%');
+  });
+
+  it('renders the position alone when the annotation names no evidence', () => {
+    expect(formatAnnotationRegion({ rect })).toBe('31%,24% · 12%×3%');
+  });
+
+  it('renders the evidence alone when the rect is absent', () => {
+    expect(formatAnnotationRegion({ evidenceId: 'ev-1' }, new Map([['ev-1', 'shot.png']]))).toBe(
+      'shot.png',
+    );
+  });
+
+  // Reviews made before regions existed carry only a comment — printing an empty
+  // "└" line under every one of them would be pure noise.
+  it('returns undefined when there is no location at all', () => {
+    expect(formatAnnotationRegion({ comment: 'just a note' })).toBeUndefined();
+    expect(formatAnnotationRegion({ rect: { x: 0.1 } })).toBeUndefined();
   });
 });

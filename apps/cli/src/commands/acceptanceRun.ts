@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { acceptanceSubjectTypes } from '@lobechat/const/verify';
@@ -51,6 +52,15 @@ interface InstallOptions {
   skill: string;
 }
 
+const listMaterializedFiles = (directory: string): string[] => {
+  if (!existsSync(directory)) return [];
+
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const entryPath = path.join(directory, entry.name);
+    return entry.isDirectory() ? listMaterializedFiles(entryPath) : [entryPath];
+  });
+};
+
 async function installAction(options: InstallOptions): Promise<void> {
   const client = await getTrpcClient();
   // Pulled live from the server's deployed builtin-skills — always the latest.
@@ -81,13 +91,36 @@ async function installAction(options: InstallOptions): Promise<void> {
     written.push(rel);
   }
 
+  // `acceptance update` is an explicit force-refresh of a materialized skill,
+  // not a merge into a hand-maintained directory. Remove files that belonged to
+  // an older bundle so renamed/split references cannot remain discoverable.
+  const removed: string[] = [];
+  if (options.force) {
+    const currentEntries = new Set(entries.map(([rel]) => path.normalize(rel)));
+    for (const file of listMaterializedFiles(skillDir)) {
+      const relativePath = path.relative(skillDir, file);
+      if (currentEntries.has(path.normalize(relativePath))) continue;
+
+      rmSync(file, { force: true });
+      removed.push(relativePath.split(path.sep).join('/'));
+    }
+  }
+
   const link = linkHarnessSkills(baseDir, bundle.identifier);
   const ignored =
     options.gitignore === false
       ? []
       : ensureSkillIgnored(baseDir, bundle.identifier, link.kind === 'linked');
 
-  const result = { dir: skillDir, ignored, link, skill: bundle.identifier, skipped, written };
+  const result = {
+    dir: skillDir,
+    ignored,
+    link,
+    removed,
+    skill: bundle.identifier,
+    skipped,
+    written,
+  };
   if (options.json !== undefined) {
     outputJson(result, typeof options.json === 'string' ? options.json : undefined);
     return;
@@ -95,7 +128,9 @@ async function installAction(options: InstallOptions): Promise<void> {
   console.log(
     `${pc.green('✓')} ${pc.bold(bundle.name)} skill → ${pc.dim(path.relative(process.cwd(), skillDir) || skillDir)}`,
   );
-  console.log(`  ${written.length} written${skipped.length ? `, ${skipped.length} skipped` : ''}`);
+  console.log(
+    `  ${written.length} written${skipped.length ? `, ${skipped.length} skipped` : ''}${removed.length ? `, ${removed.length} stale removed` : ''}`,
+  );
   if (skipped.length > 0) console.log(pc.dim(`  (skipped existing — pass --force to overwrite)`));
   printWiring(link, ignored);
 }
@@ -478,6 +513,7 @@ async function reportGetAction(runId: string, options: { json?: boolean | string
 // ── ingest-report (aggregate convenience over the atomic commands) ──
 
 interface IngestReportOptions {
+  acceptance?: string;
   goal?: string;
   json?: boolean | string;
   open?: boolean;
@@ -555,34 +591,6 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   // results by `id`, so the report can show a planned item that never ran.
   const plan = planFromResult(result);
 
-  // Every agent-testing report belongs to an acceptance. Explicit CLI input
-  // wins, then result.json, then the authoring topic echoed by the runtime.
-  let subject = subjectFromResult(result);
-  if (options.subject) {
-    const ref = parseSubjectRef(options.subject);
-    if (!ref) {
-      log.error(
-        `--subject must be one of ${acceptanceSubjectTypes.map((t) => `${t}:<id>`).join(' | ')}`,
-      );
-      process.exit(1);
-    }
-    subject = { ref, requirement: subject?.requirement };
-  } else if (result.subject && !subject) {
-    log.error('result.json `subject` is malformed (expected "type:id" or {type,id})');
-    process.exit(1);
-  } else if (!subject) {
-    const ref = subjectFromEnv();
-    if (ref) subject = { ref };
-  }
-  if (!subject) {
-    log.error(
-      'Acceptance subject is required: run inside a LobeHub topic or pass --subject task:<id> | topic:<id> | document:<id>',
-    );
-    process.exit(1);
-  }
-  const requirement = options.requirement ?? subject?.requirement;
-
-  const client = await getTrpcClient();
   const goal = options.goal ?? (typeof result.focus === 'string' ? result.focus : undefined);
   const title = options.title ?? result.title;
   // The title is the run's identity in every list surface — an untitled
@@ -592,17 +600,69 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
       'result.json has no "title" — the run will list as untitled; set result.title (or pass --title)',
     );
   }
+
+  const requestedAcceptanceId = options.acceptance?.trim();
+  if (requestedAcceptanceId && (options.subject || result.subject)) {
+    log.error(
+      'Choose one acceptance target: pass --acceptance <id>, or use --subject/result.json `subject`.',
+    );
+    process.exit(1);
+  }
+
+  // Explicit subject input wins, then result.json, then the authoring topic.
+  // An external repository has none of those, so create a first-class
+  // standalone subject instead of making the caller manufacture a Task ID.
+  let subject = subjectFromResult(result);
+  if (!requestedAcceptanceId && options.subject) {
+    const ref = parseSubjectRef(options.subject);
+    if (!ref) {
+      log.error(
+        `--subject must be one of ${acceptanceSubjectTypes.map((t) => `${t}:<id>`).join(' | ')}`,
+      );
+      process.exit(1);
+    }
+    subject = { ref, requirement: subject?.requirement };
+  } else if (!requestedAcceptanceId && result.subject && !subject) {
+    log.error('result.json `subject` is malformed (expected "type:id" or {type,id})');
+    process.exit(1);
+  } else if (!requestedAcceptanceId && !subject) {
+    const ref = subjectFromEnv();
+    if (ref) subject = { ref };
+  }
+  if (!requestedAcceptanceId && !subject) {
+    subject = {
+      ref: { subjectId: randomUUID(), subjectType: 'standalone' },
+    };
+  }
+  const requirement = options.requirement ?? subject?.requirement;
+
+  const client = await getTrpcClient();
+  let acceptance;
+  if (requestedAcceptanceId) {
+    const bundle = await client.acceptance.getBundle.query({ id: requestedAcceptanceId });
+    acceptance = bundle.acceptance;
+    subject = {
+      ref: {
+        subjectId: acceptance.subjectId,
+        subjectType: acceptance.subjectType,
+      },
+    };
+  } else {
+    acceptance = await client.acceptance.ensure.mutate({
+      requirement,
+      subjectId: subject!.ref.subjectId,
+      subjectType: subject!.ref.subjectType,
+      ...(subject!.ref.subjectType === 'standalone' && (title || goal)
+        ? { title: title || goal }
+        : {}),
+    });
+  }
   // The in-app conversation that ran this harness, if any (env-supplied).
   // Strictly the authoring conversation. `--operation` names the Agent Run
   // under test and is passed to `createRun` below — a different relation.
   const origin = originFromEnv();
   const newRunMetadata = metadataForReport(result, undefined, origin);
 
-  const acceptance = await client.acceptance.ensure.mutate({
-    requirement,
-    subjectId: subject.ref.subjectId,
-    subjectType: subject.ref.subjectType,
-  });
   if (acceptance.status === 'accepted' || acceptance.status === 'closed') {
     log.error(
       `Acceptance is already ${acceptance.status}. Reopen it before publishing another round.`,
@@ -740,7 +800,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
         pullRequest,
         roundIndex,
         scenario,
-        subject: subject.ref,
+        subject: subject!.ref,
         unplanned,
         verifyRunId: runId,
       },
@@ -764,9 +824,11 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   if (pullRequest?.url) console.log(`${pc.bold('pr')}: ${pullRequest.url}`);
   if (origin?.topicId) console.log(`${pc.bold('origin topic')}: ${origin.topicId}`);
   console.log(`${pc.bold('verifyRunId')}: ${runId} ${pc.dim('(immutable snapshot)')}`);
-  console.log(
-    `${pc.bold('acceptance')}: ${acceptanceId} ${pc.dim(`(${subject.ref.subjectType}:${subject.ref.subjectId})`)}`,
-  );
+  const subjectLabel =
+    subject!.ref.subjectType === 'standalone'
+      ? 'standalone'
+      : `${subject!.ref.subjectType}:${subject!.ref.subjectId}`;
+  console.log(`${pc.bold('acceptance')}: ${acceptanceId} ${pc.dim(`(${subjectLabel})`)}`);
   if (options.open) {
     // The acceptance page is the only link surfaced to users — the raw /verify
     // page stays internal. `?r=<roundIndex>` is this round's fixed snapshot.
@@ -871,11 +933,12 @@ function withIngestReportOptions(cmd: Command): Command {
   return cmd
     .option('--source <source>', 'agent | agent-testing', 'agent-testing')
     .option('--operation <id>', 'Link the session to an existing Agent Run')
+    .option('--acceptance <id>', 'Append this round to an existing acceptance')
     .option('--title <title>', 'Override the session title')
     .option('--goal <goal>', 'The goal/task being verified')
     .option(
       '--subject <type:id>',
-      'Override the required acceptance subject (defaults to the current LOBEHUB_TOPIC_ID)',
+      'Attach to a task/topic/document (defaults to the current topic; otherwise standalone)',
     )
     .option(
       '--requirement <text>',
@@ -904,7 +967,9 @@ export function attachAcceptanceRunCommands(acceptance: Command): void {
   withInstallOptions(
     acceptance
       .command('update')
-      .description('Re-pull the acceptance skill, overwriting local files and re-wiring harnesses'),
+      .description(
+        'Re-pull the acceptance skill, replacing its materialized files and re-wiring harnesses',
+      ),
   ).action((options: InstallOptions) => installAction({ ...options, force: true }));
 
   const run = acceptance

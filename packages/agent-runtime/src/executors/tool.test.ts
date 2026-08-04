@@ -596,4 +596,68 @@ describe('tool executors', () => {
       expect(registeredIntent.args).toEqual(skillIntent.args);
     });
   });
+
+  describe('todo state forwarding', () => {
+    // Todo-mutating tools (lobe-agent createTodos/updateTodos) persist their own
+    // copy into a plan document that only exists after `createPlan`. Message
+    // history is the store that always exists, so the run context must carry it
+    // — otherwise `updateTodos` reloads an empty list and silently drops every
+    // index-based operation.
+    const stateWithTodos = () =>
+      createState({
+        messages: [
+          {
+            content: 'todo tool result',
+            id: 'tool-msg-0',
+            plugin: { apiName: 'createTodos', identifier: 'lobe-agent', type: 'builtin' },
+            pluginState: {
+              todos: {
+                items: [
+                  { status: 'completed', text: 'env setup' },
+                  { status: 'todo', text: 'run case 1' },
+                ],
+                updatedAt: '2026-07-09T00:00:00.000Z',
+              },
+            },
+            role: 'tool',
+          },
+        ] as unknown as AgentState['messages'],
+      });
+
+    it('forwards todos rebuilt from message history to the tool transport', async () => {
+      const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
+        payload: {
+          parentMessageId: 'assistant-msg-1',
+          toolCalling: createToolCall('tool-call-1', 'lobe-agent'),
+        },
+        type: 'call_tool',
+      };
+
+      await callTool(host)(instruction, stateWithTodos());
+
+      expect(runTool).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          currentTodos: [
+            { status: 'completed', text: 'env setup' },
+            { status: 'todo', text: 'run case 1' },
+          ],
+        }),
+      );
+    });
+
+    it('leaves currentTodos undefined when no todo state exists yet', async () => {
+      const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
+        payload: {
+          parentMessageId: 'assistant-msg-1',
+          toolCalling: createToolCall(),
+        },
+        type: 'call_tool',
+      };
+
+      await callTool(host)(instruction, createState());
+
+      expect(runTool.mock.calls[0][1].currentTodos).toBeUndefined();
+    });
+  });
 });

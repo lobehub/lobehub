@@ -30,6 +30,7 @@ import type { AgentItem } from '../schemas';
 import {
   agentBotProviders,
   agentCronJobs,
+  agentLabelAssignments,
   agents,
   agentsFiles,
   agentsKnowledgeBases,
@@ -103,6 +104,12 @@ const AGENT_BUILDER_PROTECTED_FIELDS = [
 const IMMUTABLE_AGENT_FIELDS = [
   'createdAt',
   'id',
+  // Folder placement is shared state and has its own validated path
+  // (`updateSessionGroupId`), which checks the target is visible in scope and
+  // matches the agent's visibility bucket. Riding along in a config patch
+  // would skip both, leaving the shared row in a folder the sidebar cannot
+  // resolve — it then renders in Ungrouped for every member.
+  'sessionGroupId',
   'slug',
   'userId',
   'virtual',
@@ -1017,7 +1024,7 @@ export class AgentModel {
    */
   publishToWorkspace = async (agentId: string) => {
     const agent = await this.db.query.agents.findFirst({
-      columns: { agencyConfig: true, workspaceId: true },
+      columns: { agencyConfig: true, sessionGroupId: true, workspaceId: true },
       where: and(
         eq(agents.id, agentId),
         this.ownership(),
@@ -1035,9 +1042,24 @@ export class AgentModel {
     // when workspace members cannot resolve it.
     await this.assertFixedExecutionTarget(agent.workspaceId, agent.agencyConfig);
 
+    // Rehome exactly as `setVisibility` does: a folder cannot mix
+    // visibilities, so publishing out of a private Category releases the
+    // folder. Left in place the agent would be public while its folder is not,
+    // and the sidebar would show it in Ungrouped rather than where it was
+    // published from.
+    const clearGroup = agent.sessionGroupId
+      ? await this.getAssignableSessionGroupVisibility(agent.sessionGroupId)
+          .then((visibility) => visibility !== 'public')
+          .catch(() => true)
+      : false;
+
     const [result] = await this.db
       .update(agents)
-      .set({ updatedAt: new Date(), visibility: 'public' })
+      .set({
+        updatedAt: new Date(),
+        visibility: 'public',
+        ...(clearGroup ? { sessionGroupId: null } : {}),
+      })
       .where(
         and(
           eq(agents.id, agentId),
@@ -1281,7 +1303,76 @@ export class AgentModel {
   /**
    * Update the sessionGroupId for an agent
    */
+  /**
+   * A move target must be a folder the caller can actually see, and a *public*
+   * agent may only sit in a *public* folder — otherwise the agent stays
+   * visible to the workspace while its folder does not, and everyone else
+   * silently finds it in Ungrouped. Private agents are only visible to their
+   * owner, so any folder that owner can see is fine.
+   */
+  /**
+   * Resolve a folder the caller may put an item in, returning its visibility.
+   * Shared by the move guard and the create path — both need the same
+   * "visible in scope" check, and create additionally derives the new agent's
+   * visibility from the result.
+   */
+  getAssignableSessionGroupVisibility = async (
+    sessionGroupId: string,
+  ): Promise<'private' | 'public'> => {
+    const [group] = await this.db
+      .select({ visibility: sessionGroups.visibility })
+      .from(sessionGroups)
+      .where(
+        and(
+          eq(sessionGroups.id, sessionGroupId),
+          buildWorkspaceWhere(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            {
+              userId: sessionGroups.userId,
+              visibility: sessionGroups.visibility,
+              workspaceId: sessionGroups.workspaceId,
+            },
+          ),
+        ),
+      )
+      .limit(1);
+
+    if (!group) throw new Error(`Session group ${sessionGroupId} not found in current scope`);
+
+    return group.visibility as 'private' | 'public';
+  };
+
+  private assertSessionGroupAssignable = async (agentId: string, sessionGroupId: string) => {
+    const groupVisibility = await this.getAssignableSessionGroupVisibility(sessionGroupId);
+    const group = { visibility: groupVisibility };
+
+    if (!this.workspaceId) return;
+
+    const [agent] = await this.db
+      .select({ visibility: agents.visibility })
+      .from(agents)
+      .where(and(eq(agents.id, agentId), this.ownership()))
+      .limit(1);
+
+    // Buckets must match exactly, not merely "public agent needs a public
+    // folder". `processAgentList` resolves a private item's folder only against
+    // the private folder set and a public item's only against the public one,
+    // so a mismatch in either direction renders as Ungrouped rather than in
+    // the folder the user picked.
+    if (agent && agent.visibility !== group.visibility)
+      throw new Error(
+        `A ${agent.visibility} agent cannot be moved into a ${group.visibility} folder`,
+      );
+  };
+
   updateSessionGroupId = async (agentId: string, sessionGroupId: string | null) => {
+    // The column is workspace-shared, so an unvalidated target corrupts the
+    // sidebar for everyone, not just the caller. The foreign key only proves
+    // the folder exists: another workspace's folder, or another member's
+    // private one, passes it happily and then renders as Ungrouped for every
+    // member who cannot see it.
+    if (sessionGroupId) await this.assertSessionGroupAssignable(agentId, sessionGroupId);
+
     const result = await this.db
       .update(agents)
       .set({ sessionGroupId, updatedAt: new Date() })
@@ -1324,8 +1415,13 @@ export class AgentModel {
             plugins: sourceAgent.plugins,
             provider: sourceAgent.provider,
 
-            // Session group
+            // Session group. Visibility has to travel with it: the column
+            // defaults to `public`, and now that folder placement is shared and
+            // authoritative, a private agent duplicated into its private folder
+            // would be published to the workspace and still render in Ungrouped,
+            // since a public item resolves only against public folders.
             sessionGroupId: sourceAgent.sessionGroupId,
+            visibility: sourceAgent.visibility,
             systemRole: sourceAgent.systemRole,
 
             tags: sourceAgent.tags,
@@ -1706,6 +1802,11 @@ export class AgentModel {
             agencyConfig: targetWorkspaceId
               ? (resolvedAgencyConfigs.get(agent.id) ?? null)
               : (agent.agencyConfig ?? null),
+            // Pins are shared state now, exactly like the folder above: a pin
+            // the previous owner set for themselves would arrive as a pin for
+            // every member of the target workspace. Both belong to the source
+            // scope and are dropped with it.
+            pinned: false,
             sessionGroupId: null,
             slug: resolvedSlugs.get(agent.id) ?? agent.slug,
             // A scope transfer does not make the agent's content newer. Keep the
@@ -1736,6 +1837,17 @@ export class AgentModel {
         .update(agentsToSessions)
         .set(ownershipUpdate)
         .where(inArray(agentsToSessions.agentId, agentIds));
+
+      // 5b. Drop label assignments. Unlike sessions, these cannot travel: a
+      // label belongs to the source registry, and the target scope has its own
+      // (or none). Re-homing them would need a name-matched label in the
+      // target, which is a merge decision, not a transfer one. Leaving them
+      // instead would keep inflating the source label's usage count and make
+      // the labels reappear if the agent ever moves back — same reasoning as
+      // the device bindings stripped above.
+      await trx
+        .delete(agentLabelAssignments)
+        .where(inArray(agentLabelAssignments.agentId, agentIds));
 
       // 6. Update topics (linked via sessionId or agentId)
       const topicCondition =

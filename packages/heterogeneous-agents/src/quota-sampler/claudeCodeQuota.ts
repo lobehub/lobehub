@@ -4,12 +4,9 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 
 import { parseClaudeAccountIdentity } from '../quota/identity';
-import type {
-  ClaudeCodeQuotaSnapshot,
-  ClaudeCodeQuotaUnavailableReason,
-  ClaudeCodeScopedWeekly,
-  HeteroQuotaWindow,
-} from '../quota/snapshot';
+import { buildClaudeQuotaWindows } from '../quota/readings';
+import type { ClaudeCodeQuotaSnapshot, ClaudeCodeQuotaUnavailableReason } from '../quota/snapshot';
+import type { ClaudeUsagePayload } from '../quota/usageApi';
 import { mapClaudeUsageToReadings } from '../quota/usageApi';
 
 /**
@@ -203,98 +200,6 @@ const readClaudeOAuthCredentials = async (
   return fresh ? { credentials: fresh, state: 'ok' } : { state: 'expired' };
 };
 
-interface OAuthUsageWindow {
-  resets_at?: number | string;
-  used_percentage?: number;
-  utilization?: number;
-}
-
-interface OAuthUsageLimit {
-  kind?: string;
-  percent?: number;
-  resets_at?: number | string;
-  scope?: { model?: { display_name?: string } } | null;
-}
-
-interface OAuthUsageResponse {
-  fable_seven_day?: OAuthUsageWindow;
-  fable_weekly?: OAuthUsageWindow;
-  five_hour?: OAuthUsageWindow;
-  limits?: OAuthUsageLimit[];
-  seven_day?: OAuthUsageWindow;
-  seven_day_fable?: OAuthUsageWindow;
-}
-
-const parseResetsAt = (value: number | string | undefined): number | null => {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value < 10_000_000_000 ? value * 1000 : value;
-  }
-
-  if (typeof value !== 'string' || !value.trim()) return null;
-
-  const numeric = Number(value);
-  if (Number.isFinite(numeric)) {
-    return numeric < 10_000_000_000 ? numeric * 1000 : numeric;
-  }
-
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? parsed : null;
-};
-
-const mapUsageWindow = (
-  raw: OAuthUsageWindow | undefined,
-  windowMinutes: number,
-): HeteroQuotaWindow | null => {
-  const usedPercent =
-    typeof raw?.utilization === 'number' && Number.isFinite(raw.utilization)
-      ? raw.utilization
-      : typeof raw?.used_percentage === 'number' && Number.isFinite(raw.used_percentage)
-        ? raw.used_percentage
-        : null;
-
-  if (usedPercent === null) return null;
-
-  return {
-    resetsAt: parseResetsAt(raw?.resets_at),
-    usedPercent: Math.min(100, Math.max(0, usedPercent)),
-    windowMinutes,
-  };
-};
-
-/**
- * Model-scoped weekly windows (e.g. the Fable weekly meter) are reported in
- * the `limits` array as `kind: 'weekly_scoped'` with the model display name in
- * `scope`, not as a top-level window field. Older deployments exposed a
- * `fable_*` top-level window instead, so keep those as a fallback.
- */
-const mapScopedWeekly = (payload: OAuthUsageResponse): ClaudeCodeScopedWeekly | null => {
-  const scoped = payload.limits?.find(
-    (limit) =>
-      limit?.kind === 'weekly_scoped' &&
-      typeof limit.percent === 'number' &&
-      Number.isFinite(limit.percent) &&
-      typeof limit.scope?.model?.display_name === 'string' &&
-      limit.scope.model.display_name.length > 0,
-  );
-
-  if (scoped) {
-    return {
-      modelName: scoped.scope!.model!.display_name!,
-      window: {
-        resetsAt: parseResetsAt(scoped.resets_at),
-        usedPercent: Math.min(100, Math.max(0, scoped.percent!)),
-        windowMinutes: 10_080,
-      },
-    };
-  }
-
-  const fableWindow = mapUsageWindow(
-    payload.fable_weekly ?? payload.fable_seven_day ?? payload.seven_day_fable,
-    10_080,
-  );
-  return fableWindow ? { modelName: 'Fable', window: fableWindow } : null;
-};
-
 /**
  * Read the account identity for DB persistence. `~/.claude.json` (or the
  * explicit profile dir's copy) carries `oauthAccount`; the credential blob
@@ -372,19 +277,23 @@ export const fetchClaudeCodeQuota = async (
       return errorSnapshot(`Anthropic usage API returned ${response.status}`);
     }
 
-    const payload = (await response.json()) as OAuthUsageResponse;
+    const payload = (await response.json()) as ClaudeUsagePayload;
     const capturedAt = Date.now();
+    // The panel windows are projected from the same readings we persist, so a
+    // limit can never render live yet go missing from the account's history.
+    const readings = mapClaudeUsageToReadings(payload, capturedAt);
+    const windows = buildClaudeQuotaWindows(readings, capturedAt);
 
     return {
       error: null,
       identity: await readAccountIdentity(options),
       provider: 'claude-code',
-      readings: mapClaudeUsageToReadings(payload, capturedAt),
-      scopedWeekly: mapScopedWeekly(payload),
-      session: mapUsageWindow(payload.five_hour, 300),
+      readings,
+      scopedWeekly: windows.scopedWeekly,
+      session: windows.session,
       status: 'ok',
       updatedAt: capturedAt,
-      weekly: mapUsageWindow(payload.seven_day, 10_080),
+      weekly: windows.weekly,
     };
   } catch (error) {
     if (controller.signal.aborted) {

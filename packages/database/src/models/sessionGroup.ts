@@ -1,7 +1,7 @@
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, asc, count, desc, eq } from 'drizzle-orm';
 
 import type { SessionGroupItem } from '../schemas';
-import { sessionGroups } from '../schemas';
+import { agents, chatGroups, sessionGroups } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { idGenerator } from '../utils/idGenerator';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
@@ -17,13 +17,15 @@ export class SessionGroupModel {
     this.workspaceId = workspaceId;
   }
 
-  // Sidebar folders are a per-member concern: in workspace mode every member
-  // sees and manages ONLY their own folders (visibility still decides which
-  // sidebar section a folder renders in). This deliberately diverges from the
-  // shared "public rows + own private rows" predicate other resources use —
-  // one member's folder edits must never reshape another member's sidebar.
-  private ownership = () => {
-    const shared = buildWorkspaceWhere(
+  // Sidebar folders are the SHARED skeleton of a workspace sidebar: every
+  // member sees and manages the same public folders (creating, renaming,
+  // reordering and deleting them), exactly like any other workspace-public
+  // resource. Private folders stay constrained to their creator by the
+  // standard visibility predicate. Members who don't want a folder in their
+  // own sidebar hide it through `sidebarHiddenGroupIds` — a personal
+  // preference that never touches these rows.
+  private ownership = () =>
+    buildWorkspaceWhere(
       { userId: this.userId, workspaceId: this.workspaceId },
       {
         userId: sessionGroups.userId,
@@ -31,9 +33,6 @@ export class SessionGroupModel {
         visibility: sessionGroups.visibility,
       },
     );
-    if (!this.workspaceId) return shared;
-    return and(shared, eq(sessionGroups.userId, this.userId))!;
-  };
 
   create = async (params: { name: string; sort?: number; visibility?: 'private' | 'public' }) => {
     const [result] = await this.db
@@ -70,7 +69,14 @@ export class SessionGroupModel {
     });
   };
 
-  update = async (id: string, value: Partial<SessionGroupItem>) => {
+  /**
+   * Rename / reorder only. The scope columns (`userId`, `workspaceId`,
+   * `visibility`) are deliberately not accepted: the ownership predicate now
+   * matches every public folder in the workspace, so allowing them here would
+   * let any member re-scope another member's Category. Publishing has its own
+   * one-way path.
+   */
+  update = async (id: string, value: Partial<Pick<SessionGroupItem, 'name' | 'sort'>>) => {
     return this.db
       .update(sessionGroups)
       .set({ ...value, updatedAt: new Date() })
@@ -84,6 +90,28 @@ export class SessionGroupModel {
    * it as a container for their bookmarks.
    */
   publishToWorkspace = async (id: string) => {
+    // A folder cannot mix visibilities: the sidebar resolves a public item's
+    // folder only against public folders and a private item's only against
+    // private ones. Publishing a folder that still holds private items would
+    // therefore silently evict the owner's own contents to Private → Ungrouped
+    // while every other member received an empty shared folder. Promoting the
+    // children instead would publish private work nobody asked to share, so
+    // this refuses and leaves the choice with the user.
+    const [{ privateChildren }] = await this.db
+      .select({ privateChildren: count() })
+      .from(agents)
+      .where(and(eq(agents.sessionGroupId, id), eq(agents.visibility, 'private')));
+
+    const [{ privateGroups }] = await this.db
+      .select({ privateGroups: count() })
+      .from(chatGroups)
+      .where(and(eq(chatGroups.groupId, id), eq(chatGroups.visibility, 'private')));
+
+    if (privateChildren > 0 || privateGroups > 0)
+      throw new Error(
+        'Move or publish the private items inside this folder before sharing it with the workspace',
+      );
+
     return this.db
       .update(sessionGroups)
       .set({ updatedAt: new Date(), visibility: 'public' })

@@ -137,6 +137,8 @@
   "credits.memberBudget.defaultLimit": "Budget par défaut des membres",
   "credits.memberBudget.defaultLimitHint": "Les membres sans règle personnalisée utilisent cette limite à chaque cycle de facturation.",
   "credits.memberBudget.desc": "Limitez le nombre de crédits d'espace de travail que chaque membre peut utiliser dans le cycle de facturation en cours",
+  "credits.memberBudget.details.action": "Voir les détails",
+  "credits.memberBudget.details.title": "Utilisation par membre",
   "credits.memberBudget.effectiveBudget": "Budget effectif",
   "credits.memberBudget.empty": "Pas encore de membres dans l'espace de travail",
   "credits.memberBudget.globalBadge": "Global",

@@ -12,6 +12,13 @@ export const CONVERSATION_MIN_WIDTH = 960;
 export const CHAT_PORTAL_WIDTH = 400;
 export const CHAT_PORTAL_MAX_WIDTH = 1280;
 export const CHAT_PORTAL_TOOL_UI_WIDTH = 600;
+/** For portal views that read as a document (acceptance report, evidence, screenshots) */
+export const CHAT_PORTAL_WIDE_WIDTH = 840;
+/**
+ * Width the conversation column needs to stay usable next to an open portal.
+ * Below this the working sidebar yields, leaving conversation + portal.
+ */
+export const CONVERSATION_KEEP_WIDTH = 420;
 
 export const MARKET_SIDEBAR_WIDTH = 400;
 export const FOLDER_WIDTH = 270;

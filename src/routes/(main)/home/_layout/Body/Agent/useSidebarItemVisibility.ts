@@ -1,46 +1,36 @@
 'use client';
 
-import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import type { SidebarAgentItem } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import { useCallback, useMemo } from 'react';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useUserStore } from '@/store/user';
-import { userProfileSelectors, workspaceUserSettingsSelectors } from '@/store/user/selectors';
+import { workspaceUserSettingsSelectors } from '@/store/user/selectors';
 
-const BUILTIN_SLUGS = new Set<string>(Object.values(BUILTIN_AGENT_SLUGS));
 const EMPTY_VISIBILITY_OVERRIDES: Record<string, boolean> = {};
 
 type SidebarVisibilityItem = Pick<SidebarAgentItem, 'id' | 'slug' | 'type' | 'userId'>;
 
 interface ResolveSidebarItemVisibilityOptions {
-  currentUserId?: string;
   hiddenItemIds: ReadonlySet<string>;
-  isWorkspaceMode: boolean;
   visibilityOverrides: Readonly<Record<string, boolean>>;
 }
 
+/**
+ * The workspace sidebar is a shared structure: everything the caller can see
+ * is listed by default, regardless of who created it. Hiding is the caller's
+ * own opt-out, recorded either as an explicit override or in the legacy
+ * hidden-id list.
+ */
 export const resolveSidebarItemVisibility = (
   item: SidebarVisibilityItem,
-  {
-    currentUserId,
-    hiddenItemIds,
-    isWorkspaceMode,
-    visibilityOverrides,
-  }: ResolveSidebarItemVisibilityOptions,
+  { hiddenItemIds, visibilityOverrides }: ResolveSidebarItemVisibilityOptions,
 ) => {
   const override = visibilityOverrides[item.id];
   if (override !== undefined) return override;
-  if (hiddenItemIds.has(item.id)) return false;
 
-  if (!isWorkspaceMode || item.type !== 'agent') return true;
-  if (item.slug && BUILTIN_SLUGS.has(item.slug)) return true;
-
-  // Keep the pre-profile frame stable while the current user is loading.
-  // Once resolved, shared Agents created by another member default hidden.
-  if (!currentUserId) return true;
-  return item.userId === currentUserId;
+  return !hiddenItemIds.has(item.id);
 };
 
 /**
@@ -50,7 +40,6 @@ export const resolveSidebarItemVisibility = (
  */
 export const useSidebarItemVisibility = () => {
   const activeWorkspaceId = useActiveWorkspaceId();
-  const currentUserId = useUserStore(userProfileSelectors.userId);
   const hiddenItemIds = useUserStore(
     (s) =>
       activeWorkspaceId
@@ -72,12 +61,10 @@ export const useSidebarItemVisibility = () => {
   const isSidebarItemVisible = useCallback(
     (item: SidebarVisibilityItem) =>
       resolveSidebarItemVisibility(item, {
-        currentUserId,
         hiddenItemIds: hiddenItemIdSet,
-        isWorkspaceMode: Boolean(activeWorkspaceId),
         visibilityOverrides,
       }),
-    [activeWorkspaceId, currentUserId, hiddenItemIdSet, visibilityOverrides],
+    [hiddenItemIdSet, visibilityOverrides],
   );
 
   const setSidebarItemVisible = useCallback(

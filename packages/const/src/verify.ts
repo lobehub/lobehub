@@ -129,7 +129,7 @@ export const normalizeVerifySurface = (value: string): VerifySurface | null => {
  * is not coupled to task-only workflows: a future run can accept a topic,
  * document, artifact, release, etc. without another schema reshape.
  */
-export const acceptanceSubjectTypes = ['task', 'topic', 'document'] as const;
+export const acceptanceSubjectTypes = ['task', 'topic', 'document', 'standalone'] as const;
 export type AcceptanceSubjectType = (typeof acceptanceSubjectTypes)[number];
 
 /**
