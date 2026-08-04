@@ -1,6 +1,6 @@
 'use client';
 
-import { App } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
 import { type ReactNode } from 'react';
 import { createContext, use, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -133,7 +133,6 @@ const checkNeedsProfileSetup = async (username: string): Promise<boolean> => {
  * Market authorization context provider
  */
 export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderProps) => {
-  const { message } = App.useApp();
   const { t } = useTranslation('marketAuth');
 
   const [session, setSession] = useState<MarketAuthSession | null>(null);
@@ -381,9 +380,9 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
 
       // Display different error messages based on error type
       if (error instanceof MarketAuthError) {
-        message.error(t(`errors.${error.code}`) || t('errors.general'));
+        toast.error(t(`errors.${error.code}`) || t('errors.general'));
       } else {
-        message.error(t('errors.general'));
+        toast.error(t('errors.general'));
       }
 
       throw error;

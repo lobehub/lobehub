@@ -1,6 +1,7 @@
 import { type ModalProps } from '@lobehub/ui';
 import { Flexbox, Input, stopPropagation } from '@lobehub/ui';
-import { App, type InputRef } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
+import { type InputRef } from 'antd';
 import { type MouseEvent } from 'react';
 import { memo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -25,7 +26,7 @@ const CreateGroupModal = memo<CreateGroupModalProps>(
     const { allowed: canCreate } = usePermission('create_content');
 
     const toggleExpandSessionGroup = useGlobalStore((s) => s.toggleExpandSessionGroup);
-    const { message } = App.useApp();
+
     const [updateAgentGroup, addGroup] = useHomeStore((s) => [s.updateAgentGroup, s.addGroup]);
     // The input stays uncontrolled: ImperativeModal renders this content through
     // the global ModalHost, so a controlled value living in this component only
@@ -49,7 +50,7 @@ const CreateGroupModal = memo<CreateGroupModalProps>(
 
             const input = inputRef.current?.input?.value ?? '';
             if (input.length === 0 || input.length > 20 || input.trim() === '')
-              return message.warning(t('sessionGroup.tooLong'));
+              return toast.warning(t('sessionGroup.tooLong'));
 
             setLoading(true);
             const groupId = await addGroup(input, visibility);
@@ -57,7 +58,7 @@ const CreateGroupModal = memo<CreateGroupModalProps>(
             toggleExpandSessionGroup(groupId, true);
             setLoading(false);
 
-            message.success(t('sessionGroup.createSuccess'));
+            toast.success(t('sessionGroup.createSuccess'));
             onCancel?.(e);
           }}
         >

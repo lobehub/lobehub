@@ -424,6 +424,11 @@ export class AcceptanceService {
     subjectType: AcceptanceSubjectType,
     subjectId: string,
   ): Promise<void> => {
+    // Standalone acceptances are the subject themselves. They deliberately do
+    // not require a Task/Topic/Document row, which keeps external repositories
+    // from having to manufacture a LobeHub task before publishing evidence.
+    if (subjectType === 'standalone') return;
+
     const found = await this.findSubject(subjectType, subjectId);
     if (!found) {
       throw new Error(`${subjectType} "${subjectId}" not found in the current workspace`);
@@ -451,6 +456,9 @@ export class AcceptanceService {
         );
         return doc ? { title: doc.title ?? null } : null;
       }
+      case 'standalone': {
+        return null;
+      }
     }
   };
 
@@ -458,10 +466,15 @@ export class AcceptanceService {
   ensureForSubject = async (
     subjectType: AcceptanceSubjectType,
     subjectId: string,
-    defaults?: { requirement?: string },
+    defaults?: { requirement?: string; title?: string },
   ): Promise<AcceptanceItem> => {
     await this.assertSubjectExists(subjectType, subjectId);
-    return this.acceptanceModel.ensureForSubject(subjectType, subjectId, defaults);
+    return this.acceptanceModel.ensureForSubject(subjectType, subjectId, {
+      requirement: defaults?.requirement,
+      ...(subjectType === 'standalone' && defaults?.title
+        ? { metadata: { title: defaults.title } }
+        : {}),
+    });
   };
 
   /**

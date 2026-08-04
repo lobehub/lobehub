@@ -20,6 +20,10 @@ describe('chainOnboardingTaskRecommendation', () => {
 
     expect(messages).toHaveLength(2);
     expect(messages[0].content).toContain('Return at most 3 recommendations.');
+    expect(messages[0].content).toContain(
+      'Write every user-visible title, instruction, and reason in en-US',
+    );
+    expect(messages[0].content).toContain('Preserve repository names, product names');
     expect(messages[0].content).toContain('Never comment, submit a review, approve');
     expect(messages[0].content).toContain('Title: Analyze mobile lifecycle risk');
     expect(messages[1].content).toContain('<connector-evidence provider="github">');

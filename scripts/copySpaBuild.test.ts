@@ -18,7 +18,7 @@ describe('copySpaBuild', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'copy-spa-build-'));
     testRoots.push(root);
 
-    for (const dir of ['assets', 'i18n', 'model-bank', 'shiki', 'vendor']) {
+    for (const dir of ['assets', 'devtools', 'i18n', 'model-bank', 'shiki', 'vendor']) {
       const sourceDir = path.join(root, 'dist/desktop', dir);
       mkdirSync(sourceDir, { recursive: true });
       writeFileSync(path.join(sourceDir, `${dir}.js`), `export default '${dir}';`);
@@ -26,7 +26,7 @@ describe('copySpaBuild', () => {
 
     copySpaBuild(root);
 
-    for (const dir of ['assets', 'i18n', 'model-bank', 'shiki', 'vendor']) {
+    for (const dir of ['assets', 'devtools', 'i18n', 'model-bank', 'shiki', 'vendor']) {
       expect(existsSync(path.join(root, 'public/_spa', dir, `${dir}.js`))).toBe(true);
     }
   });
@@ -45,5 +45,19 @@ describe('copySpaBuild', () => {
     });
 
     expect(existsSync(path.join(root, 'public/_spa/model-bank/catalog.js'))).toBe(true);
+  });
+
+  it('publishes Workbench chunks under an isolated public asset root', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'copy-spa-workbench-'));
+    testRoots.push(root);
+
+    const sourceDir = path.join(root, 'dist/workbench/assets');
+    mkdirSync(sourceDir, { recursive: true });
+    writeFileSync(path.join(sourceDir, 'workbench.js'), 'export default true;');
+
+    copySpaBuild(root);
+
+    expect(existsSync(path.join(root, 'public/_spa-workbench/assets/workbench.js'))).toBe(true);
+    expect(existsSync(path.join(root, 'public/_spa/assets/workbench.js'))).toBe(false);
   });
 });

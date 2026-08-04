@@ -2,11 +2,7 @@ import { constants } from 'node:fs';
 import { access, readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 
-import {
-  defaultSearchProjectFiles,
-  prepareSkillDirectory,
-  type SkillDirectoryDeps,
-} from '@lobechat/device-control';
+import type { SkillDirectoryDeps } from '@lobechat/device-control';
 import {
   type AuditSafePathsParams,
   type AuditSafePathsResult,
@@ -49,18 +45,16 @@ import {
 import {
   editLocalFile,
   expandTilde,
-  type FileResult,
   listLocalFiles,
   moveLocalFiles,
   readLocalFile,
   renameLocalFile,
   resolveAgainstCwd,
-  type SearchOptions,
   writeLocalFile,
-} from '@lobechat/local-file-shell';
+} from '@lobechat/local-file-shell/file';
+import type { FileResult, SearchOptions } from '@lobechat/local-file-shell/types';
 import { resolveMimeType } from '@lobechat/utils/mimeType';
 import { dialog, shell } from 'electron';
-import { execa } from 'execa';
 
 import ContentSearchService from '@/services/contentSearchSrv';
 import FileSearchService from '@/services/fileSearchSrv';
@@ -143,14 +137,43 @@ const normalizeContentType = (contentType: string): string =>
 const isTextPreviewMimeType = (mimeType: string): boolean =>
   mimeType.startsWith('text/') || TEXT_PREVIEW_MIME_TYPES.has(mimeType);
 
+/** Binary documents the in-app portal can preview (or offer to download). */
+const DOCUMENT_PREVIEW_MIME_TYPES = new Set([
+  'application/msword',
+  'application/pdf',
+  'application/vnd.ms-excel',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+]);
+
+/**
+ * Documents above this raw size fall back to the content-less `binary` / `pdf`
+ * variants: base64 inflates the payload ~4/3 and it must fit in a single
+ * IPC / Gateway RPC response.
+ */
+const MAX_DOCUMENT_PREVIEW_BYTES = 20 * 1024 * 1024;
+
 const serializePreviewFile = ({
   buffer,
   contentType,
+  oversized,
 }: {
   buffer: Buffer;
   contentType: string;
+  oversized?: boolean;
 }): NonNullable<LocalFilePreviewResult['preview']> => {
   const normalizedContentType = normalizeContentType(contentType);
+
+  // The protocol manager short-circuited the read (oversized document):
+  // `buffer` is empty by construction, so go straight to the content-less
+  // fallback instead of serializing the empty buffer as a real document.
+  if (oversized) {
+    return normalizedContentType === 'application/pdf'
+      ? { contentType: normalizedContentType, type: 'pdf' }
+      : { contentType: normalizedContentType, type: 'binary' };
+  }
 
   if (normalizedContentType.startsWith('image/')) {
     return {
@@ -165,6 +188,17 @@ const serializePreviewFile = ({
       content: buffer.toString('utf8'),
       contentType: normalizedContentType,
       type: 'text',
+    };
+  }
+
+  if (
+    DOCUMENT_PREVIEW_MIME_TYPES.has(normalizedContentType) &&
+    buffer.byteLength <= MAX_DOCUMENT_PREVIEW_BYTES
+  ) {
+    return {
+      base64: buffer.toString('base64'),
+      contentType: normalizedContentType,
+      type: 'document',
     };
   }
 
@@ -607,6 +641,7 @@ export default class LocalFileCtr extends ControllerModule {
   async handlePrepareSkillDirectory(
     params: PrepareSkillDirectoryParams,
   ): Promise<PrepareSkillDirectoryResult> {
+    const { prepareSkillDirectory } = await import('@lobechat/device-control/skill-directory');
     return prepareSkillDirectory(params, this.getSkillDirectoryDeps());
   }
 
@@ -642,6 +677,7 @@ export default class LocalFileCtr extends ControllerModule {
 
   @IpcMethod()
   async getProjectFileIndex(params: ProjectFileIndexParams = {}): Promise<ProjectFileIndexResult> {
+    const { execa } = await import('execa');
     const requestedScope = params.scope || process.cwd();
     const startedAt = Date.now();
 
@@ -799,6 +835,8 @@ export default class LocalFileCtr extends ControllerModule {
   @IpcMethod()
   async searchProjectFiles(params: ProjectFileSearchParams): Promise<ProjectFileSearchResult> {
     const startedAt = Date.now();
+    const { defaultSearchProjectFiles } =
+      await import('@lobechat/device-control/project-file-index');
     const result = await defaultSearchProjectFiles(params);
 
     logger.debug('Project file search completed', {

@@ -1,10 +1,8 @@
 'use client';
 
-import { Alert, Block, Flexbox, Icon, Input, Skeleton, Tag, Text } from '@lobehub/ui';
-import { Button, Select } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
-import { createStaticStyles } from 'antd-style';
-import { CheckCircle2Icon, ClockIcon, MoonIcon, RefreshCwIcon, SendIcon } from 'lucide-react';
+import { Alert, Block, Flexbox, Icon, Input, Text } from '@lobehub/ui';
+import { Button, Select, toast } from '@lobehub/ui/base-ui';
+import { SendIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
@@ -14,42 +12,11 @@ import { messengerService } from '@/services/messenger';
 
 import type { MessengerPlatform } from '../constants';
 import { getMessengerErrorMessage } from '../i18n';
+import { MessengerPushWindowState } from './MessengerPushWindowState';
 import { styles } from './shared';
 
 const PUSH_WINDOW_REFRESH_INTERVAL = 5000;
 const PUSH_WINDOW_DEFAULT_MAX_SENDS = 10;
-
-const pushStyles = createStaticStyles(({ css, cssVar }) => ({
-  quotaText: css`
-    font-size: 13px;
-    color: ${cssVar.colorText};
-    white-space: nowrap;
-
-    > span {
-      color: ${cssVar.colorTextSecondary};
-    }
-  `,
-  statBar: css`
-    width: 4px;
-    height: 16px;
-    border-radius: 2px;
-    background: ${cssVar.colorFillSecondary};
-
-    &[data-filled='true'] {
-      background: ${cssVar.colorInfo};
-    }
-  `,
-}));
-
-/** Discrete best-effort quota meter: one bar per locally tracked send. */
-const QuotaBars = memo<{ remaining: number; total: number }>(({ remaining, total }) => (
-  <Flexbox horizontal align="center" gap={3}>
-    {Array.from({ length: total }, (_, index) => (
-      <div className={pushStyles.statBar} data-filled={index < remaining} key={index} />
-    ))}
-  </Flexbox>
-));
-QuotaBars.displayName = 'MessengerPushQuotaBars';
 
 export interface MessengerPushTarget {
   label: string;
@@ -73,7 +40,6 @@ interface MessengerPushSectionProps {
 export const MessengerPushSection = memo<MessengerPushSectionProps>(
   ({ name, platform, targets }) => {
     const { t } = useTranslation('messenger');
-    const { message } = App.useApp();
     const [content, setContent] = useState('');
     const [sending, setSending] = useState(false);
     const [tenantId, setTenantId] = useState(targets?.[0]?.tenantId);
@@ -114,7 +80,7 @@ export const MessengerPushSection = memo<MessengerPushSectionProps>(
         });
         switch (result.status) {
           case 'sent': {
-            message.success(
+            toast.success(
               result.remaining === undefined
                 ? t('messenger.push.sentToast', { platform: name })
                 : t('messenger.push.sentWindowedToast', {
@@ -126,95 +92,24 @@ export const MessengerPushSection = memo<MessengerPushSectionProps>(
             break;
           }
           case 'queued': {
-            message.info(t('messenger.push.queuedToast', { platform: name }));
+            toast.info(t('messenger.push.queuedToast', { platform: name }));
             setContent('');
             break;
           }
           case 'unlinked': {
-            message.warning(t('messenger.push.unlinkedToast', { platform: name }));
+            toast.warning(t('messenger.push.unlinkedToast', { platform: name }));
             break;
           }
           default: {
-            message.warning(t('messenger.push.unavailableToast'));
+            toast.warning(t('messenger.push.unavailableToast'));
           }
         }
         await windowSWR.mutate();
       } catch (error) {
-        message.error(getMessengerErrorMessage(error, t, 'messenger.push.unavailableToast'));
+        toast.error(getMessengerErrorMessage(error, t, 'messenger.push.unavailableToast'));
       } finally {
         setSending(false);
       }
-    };
-
-    const renderWindowState = () => {
-      if (windowSWR.error)
-        return (
-          <Flexbox horizontal align="center" gap={8}>
-            <Text type="secondary">{t('messenger.push.loadFailed')}</Text>
-            <Button
-              icon={<Icon icon={RefreshCwIcon} />}
-              size="small"
-              onClick={() => windowSWR.mutate()}
-            >
-              {t('messenger.push.retry')}
-            </Button>
-          </Flexbox>
-        );
-
-      if (!status) return <Skeleton.Button active size="small" style={{ width: 220 }} />;
-
-      if (status.deliverability === 'always')
-        return (
-          <Flexbox horizontal align="center" gap={8} wrap="wrap">
-            <Tag color="success" icon={<Icon icon={CheckCircle2Icon} size="small" />}>
-              {t('messenger.push.alwaysAvailable')}
-            </Tag>
-            <Text style={{ fontSize: 13 }} type="secondary">
-              {t('messenger.push.alwaysAvailableHint', { platform: name })}
-            </Text>
-          </Flexbox>
-        );
-
-      if (!status.windowOpen)
-        return (
-          <Flexbox horizontal align="center" gap={8} wrap="wrap">
-            <Tag icon={<Icon icon={MoonIcon} size="small" />}>
-              {t('messenger.push.windowClosed')}
-            </Tag>
-            <Text style={{ fontSize: 13 }} type="secondary">
-              {t('messenger.push.windowClosedHint', { platform: name })}
-            </Text>
-          </Flexbox>
-        );
-
-      const expiryValue =
-        status.expiresInSeconds === null
-          ? null
-          : status.expiresInSeconds >= 3600
-            ? `~${Math.round(status.expiresInSeconds / 3600)}h`
-            : `~${Math.max(1, Math.round(status.expiresInSeconds / 60))}m`;
-
-      return (
-        <Flexbox horizontal align="center" gap={8} justify="space-between" wrap="wrap">
-          <Flexbox horizontal align="center" gap={8}>
-            <Tag color="success" icon={<Icon icon={CheckCircle2Icon} size="small" />}>
-              {t('messenger.push.windowOpen')}
-            </Tag>
-            {expiryValue && (
-              <Tag icon={<Icon icon={ClockIcon} size="small" />}>
-                {t('messenger.push.expiresIn', { value: expiryValue })}
-              </Tag>
-            )}
-          </Flexbox>
-          <Flexbox horizontal align="center" gap={8}>
-            <QuotaBars remaining={status.remaining} total={status.maxSends} />
-            <span className={pushStyles.quotaText}>
-              {status.remaining}
-              <span> / {status.maxSends}</span>
-            </span>
-          </Flexbox>
-        </Flexbox>
-      );
     };
 
     return (
@@ -242,7 +137,12 @@ export const MessengerPushSection = memo<MessengerPushSectionProps>(
                 <Text style={{ fontSize: 12 }} type="secondary">
                   {t('messenger.push.title')}
                 </Text>
-                {renderWindowState()}
+                <MessengerPushWindowState
+                  error={windowSWR.error}
+                  name={name}
+                  status={status}
+                  onRetry={() => windowSWR.mutate()}
+                />
               </Flexbox>
             </Flexbox>
 

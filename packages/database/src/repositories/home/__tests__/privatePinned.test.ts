@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import { AgentModel } from '../../../models/agent';
-import { WorkspaceUserSettingsModel } from '../../../models/workspaceUserSettings';
 import * as Schema from '../../../schemas';
 import { HomeRepository } from '../index';
 
@@ -41,11 +40,7 @@ describe('workspace private pinned bucket', () => {
       title: 'Private Agent',
       visibility: 'private',
     } as any);
-    // Workspace pins live in the caller's per-member preference, not the
-    // shared `agents.pinned` column.
-    await new WorkspaceUserSettingsModel(clientDB, creator, ws).updatePreference({
-      sidebarPinnedOverrides: { [agent.id]: true },
-    });
+    await agentModel.update(agent.id, { pinned: true });
 
     const result = await new HomeRepository(clientDB, creator, ws).getSidebarAgentList();
 
@@ -62,9 +57,7 @@ describe('workspace private pinned bucket', () => {
       title: 'Public Agent',
       visibility: 'public',
     } as any);
-    await new WorkspaceUserSettingsModel(clientDB, creator, ws).updatePreference({
-      sidebarPinnedOverrides: { [agent.id]: true },
-    });
+    await agentModel.update(agent.id, { pinned: true });
 
     const result = await new HomeRepository(clientDB, creator, ws).getSidebarAgentList();
 

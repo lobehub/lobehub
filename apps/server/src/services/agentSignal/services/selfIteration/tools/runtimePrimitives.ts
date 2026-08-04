@@ -213,6 +213,9 @@ export const createResourceRuntimePrimitives = ({
         target: result.target,
         ...(result.agentDocumentId ? { agentDocumentId: result.agentDocumentId } : {}),
         ...(result.documentId ? { documentId: result.documentId } : {}),
+        ...(result.expectedCurrentDocumentUpdatedAt
+          ? { expectedCurrentDocumentUpdatedAt: result.expectedCurrentDocumentUpdatedAt }
+          : {}),
         ...(result.historyId ? { historyId: result.historyId } : {}),
       };
     },

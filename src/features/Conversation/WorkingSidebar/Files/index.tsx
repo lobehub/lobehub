@@ -2,8 +2,8 @@
 
 import type { ProjectFileIndexEntry } from '@lobechat/electron-client-ipc';
 import { Center, copyToClipboard, Empty, Flexbox, SearchBar, stopPropagation } from '@lobehub/ui';
+import { toast } from '@lobehub/ui/base-ui';
 import type { GitStatusEntry } from '@pierre/trees';
-import { message } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { FileIcon } from 'lucide-react';
 import type { DragEvent } from 'react';
@@ -338,7 +338,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
           label: t('workingPanel.files.copyAbsolutePath'),
           onClick: async () => {
             await copyToClipboard(path);
-            message.success(t('workingPanel.review.copied'));
+            toast.success(t('workingPanel.review.copied'));
           },
           sfSymbol: 'doc.on.doc',
         },
@@ -347,7 +347,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
           label: t('workingPanel.files.copyRelativePath'),
           onClick: async () => {
             await copyToClipboard(relativePath);
-            message.success(t('workingPanel.review.copied'));
+            toast.success(t('workingPanel.review.copied'));
           },
           sfSymbol: 'doc.on.doc',
         },

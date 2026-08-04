@@ -79,6 +79,8 @@ export const MessageApiName = {
   setMessengerActiveAgent: 'setMessengerActiveAgent',
   /** Remove the user's account link for a platform (does not uninstall). */
   unlinkMessenger: 'unlinkMessenger',
+  /** Proactively push a message to the current user's own linked messenger DM. */
+  sendMessengerPush: 'sendMessengerPush',
 } as const;
 
 export type MessageApiNameType = (typeof MessageApiName)[keyof typeof MessageApiName];
@@ -672,4 +674,63 @@ export interface UnlinkMessengerParams {
 
 export interface UnlinkMessengerState {
   success: boolean;
+}
+
+// --- Proactive Messenger Push ---
+
+/** Platforms the System Bot proactive push supports (mirrors `MESSENGER_PUSH_PLATFORMS`). */
+/**
+ * Upper bound on a proactive push body. Chosen to clear the tightest platform
+ * limit in the set (Discord's 2000-character message cap) so the cap fails the
+ * call up front instead of at delivery, where only one platform would reject.
+ *
+ * Single source for the tool schema, the server runtime guard and the TRPC
+ * route, so the advertised limit and the enforced one cannot drift.
+ */
+export const MESSENGER_PUSH_CONTENT_MAX_LENGTH = 2000;
+
+export const MessengerPushPlatform = {
+  discord: 'discord',
+  slack: 'slack',
+  telegram: 'telegram',
+  wechat: 'wechat',
+} as const;
+
+export type MessengerPushPlatformType =
+  (typeof MessengerPushPlatform)[keyof typeof MessengerPushPlatform];
+
+export interface SendMessengerPushParams {
+  /** Message content to deliver into the user's DM with the LobeHub System Bot. */
+  content: string;
+  platform: MessengerPushPlatformType;
+  /**
+   * Slack-only: target workspace (team id) when the user linked several.
+   * Omit elsewhere — the runtime auto-resolves single-link platforms.
+   */
+  tenantId?: string;
+}
+
+/**
+ * Delivery outcome of a proactive push. Mirrors the server-side
+ * `MessengerPushResult` statuses, plus `needs_workspace_selection` which the
+ * runtime synthesizes when a Slack push is ambiguous across workspaces.
+ */
+export type MessengerPushStatus =
+  'sent' | 'queued' | 'unlinked' | 'unavailable' | 'needs_workspace_selection';
+
+/** Candidate workspace surfaced when a Slack push needs disambiguation. */
+export interface MessengerPushWorkspaceOption {
+  tenantId: string;
+  tenantName?: string;
+}
+
+export interface SendMessengerPushState {
+  platform: MessengerPushPlatformType;
+  /** WeChat-only: sends remaining in the current 24h window (present on `sent`). */
+  remaining?: number;
+  status: MessengerPushStatus;
+  /** The workspace the message was routed to, when one was resolved. */
+  tenantId?: string;
+  /** Present on `needs_workspace_selection` — options to relay to the user. */
+  workspaces?: MessengerPushWorkspaceOption[];
 }

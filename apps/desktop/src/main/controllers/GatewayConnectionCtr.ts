@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { type DeviceControlDeps, executeDeviceRpc as runDeviceRpc } from '@lobechat/device-control';
+import type { DeviceControlDeps } from '@lobechat/device-control';
 import type { AgentRunRequestMessage, GatewayMcpParams } from '@lobechat/device-gateway-client';
 import type {
   EditLocalFileParams,
@@ -194,7 +194,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
   // ─── Lifecycle ───
 
-  afterAppReady() {
+  afterFirstFrame() {
     const srv = this.service;
 
     srv.loadOrCreateDeviceId();
@@ -413,6 +413,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
    * desktop main process and the CLI daemon share one device RPC surface.
    */
   private async executeDeviceRpc(method: string, params: unknown): Promise<unknown> {
+    const { executeDeviceRpc: runDeviceRpc } = await import('@lobechat/device-control');
     return runDeviceRpc(method, params, this.deviceControlDeps);
   }
 
@@ -567,6 +568,14 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
       case 'getAgentProfile': {
         const result = await this.getAgentProfile(args as { agentId?: string; platform: string });
+        return { content: JSON.stringify(result), state: result, success: true };
+      }
+
+      case 'scanHeterogeneousAgents': {
+        const { scanHeterogeneousAgentsOnHost } =
+          await import('@lobechat/heterogeneous-agents/scanHost');
+        const agents = await scanHeterogeneousAgentsOnHost();
+        const result = { agents };
         return { content: JSON.stringify(result), state: result, success: true };
       }
 

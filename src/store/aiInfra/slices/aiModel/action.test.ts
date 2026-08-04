@@ -1,10 +1,10 @@
+import { toast } from '@lobehub/ui/base-ui';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type * as I18nextModule from 'i18next';
 import { t } from 'i18next';
 import type { AiProviderModelListItem } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { message } from '@/components/AntdStaticMethods';
 import type * as SwrModule from '@/libs/swr';
 import { mutate } from '@/libs/swr';
 import { aiModelService } from '@/services/aiModel';
@@ -22,10 +22,8 @@ vi.mock('i18next', async (importOriginal) => {
   };
 });
 
-vi.mock('@/components/AntdStaticMethods', () => ({
-  message: {
-    warning: vi.fn(),
-  },
+vi.mock('@lobehub/ui/base-ui', () => ({
+  toast: { warning: vi.fn() },
 }));
 
 vi.mock('@/libs/swr', async (importOriginal) => {
@@ -282,7 +280,7 @@ describe('AiModelAction', () => {
         type: 'image',
       });
       expect(refreshSpy).toHaveBeenCalledTimes(1);
-      expect(message.warning).not.toHaveBeenCalled();
+      expect(toast.warning).not.toHaveBeenCalled();
     });
 
     it('should deduplicate remote models and warn after a successful update', async () => {
@@ -344,7 +342,7 @@ describe('AiModelAction', () => {
         ns: 'modelProvider',
         remainingCount: 1,
       });
-      expect(message.warning).toHaveBeenCalledWith(
+      expect(toast.warning).toHaveBeenCalledWith(
         'providerModels.list.fetcher.duplicatesRemovedWithMore',
       );
       expect(refreshSpy).toHaveBeenCalledTimes(1);
@@ -374,7 +372,7 @@ describe('AiModelAction', () => {
         });
       }).rejects.toThrow('batch update failed');
 
-      expect(message.warning).not.toHaveBeenCalled();
+      expect(toast.warning).not.toHaveBeenCalled();
     });
 
     it('should preserve enabled status of existing models when fetching', async () => {

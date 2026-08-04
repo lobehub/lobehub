@@ -14,6 +14,7 @@ import Connector from '../connector';
 import Creds from '../creds';
 import Devices from '../devices';
 import Hotkey from '../hotkey';
+import Labels from '../labels';
 import Labs from '../labs';
 import Memory from '../memory';
 import Messenger from '../messenger';
@@ -43,6 +44,7 @@ export const componentMap = {
   [SettingsTabs.SystemTools]: SystemTools,
   [SettingsTabs.Storage]: Storage,
   [SettingsTabs.Devices]: Devices,
+  [SettingsTabs.Labels]: Labels,
   // Profile related tabs
   [SettingsTabs.Profile]: Profile,
   [SettingsTabs.Stats]: Stats,

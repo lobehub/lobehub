@@ -13,7 +13,7 @@ import {
   Tooltip,
   TooltipGroup,
 } from '@lobehub/ui';
-import { App } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import {
   AlertTriangle,
@@ -136,7 +136,7 @@ const UserAgentCard = memo<UserAgentCardProps>(
   }) => {
     const { t } = useTranslation(['discover', 'setting']);
     const navigate = useWorkspaceAwareNavigate();
-    const { message } = App.useApp();
+
     const { isOwner, onStatusChange } = useUserDetailContext();
     const { allowed: canCreate } = usePermission('create_content');
     const { allowed: canEdit } = usePermission('edit_own_content');
@@ -179,7 +179,7 @@ const UserAgentCard = memo<UserAgentCardProps>(
           });
 
           if (!marketAgent) {
-            message.error(t('setting:myAgents.errors.fetchFailed'));
+            toast.error(t('setting:myAgents.errors.fetchFailed'));
             return;
           }
 
@@ -208,11 +208,11 @@ const UserAgentCard = memo<UserAgentCardProps>(
         }
       } catch (error) {
         console.error('[UserAgentCard] handleEdit error:', error);
-        message.error(t('setting:myAgents.errors.editFailed'));
+        toast.error(t('setting:myAgents.errors.editFailed'));
       } finally {
         setIsEditLoading(false);
       }
-    }, [canCreate, canEdit, identifier, navigate, createAgent, refreshAgentList, message, t]);
+    }, [canCreate, canEdit, identifier, navigate, createAgent, refreshAgentList, t]);
 
     const handleStatusAction = useCallback(
       (action: 'deprecate') => {

@@ -1,9 +1,9 @@
+import { existsSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 import { tryGetMimeType } from '@lobechat/utils/mimeType';
 import { app, protocol } from 'electron';
-import { pathExistsSync } from 'fs-extra';
 
 import { createLogger } from '@/utils/logger';
 
@@ -126,7 +126,7 @@ export class StaticRendererFallback implements RendererFallbackStrategy {
     this.rendererDir = rendererDir;
     this.resolveRendererFilePath = resolveRendererFilePath;
 
-    if (!pathExistsSync(this.rendererDir)) {
+    if (!existsSync(this.rendererDir)) {
       this.logger.warn(`Renderer directory not found: ${this.rendererDir}`);
     }
   }

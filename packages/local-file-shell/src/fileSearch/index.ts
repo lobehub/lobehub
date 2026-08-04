@@ -8,6 +8,12 @@ import { WindowsSearchServiceImpl } from './impl/windows';
 
 const logger = createLogger('fileSearch:factory');
 
+export type {
+  FileResult,
+  GlobFilesParams,
+  GlobFilesResult,
+  SearchFilesParams as SearchOptions,
+} from '../types';
 export { BaseFileSearch } from './base';
 
 export const createFileSearchModule = (toolDetector?: ToolDetector) => {

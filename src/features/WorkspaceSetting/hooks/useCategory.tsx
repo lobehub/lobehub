@@ -9,12 +9,14 @@ import {
   Coins,
   CreditCard,
   Database,
+  HandCoins,
   KeyIcon,
   KeyRound,
   Map,
   MonitorSmartphoneIcon,
   ScrollText,
   Sparkles,
+  TagIcon,
   Users,
 } from 'lucide-react';
 import { useMemo } from 'react';
@@ -107,6 +109,13 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Credits,
               label: tSubscription('tab.credits'),
             },
+            // Spend governance (budget pools + member caps) — admin task,
+            // same visibility gate as the other money pages.
+            canViewBilling && {
+              icon: HandCoins,
+              key: WorkspaceSettingsTabs.Budget,
+              label: tSubscription('tab.budget'),
+            },
             canViewBilling && {
               icon: CreditCard,
               key: WorkspaceSettingsTabs.Billing,
@@ -136,6 +145,13 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               icon: SkillsIcon,
               key: WorkspaceSettingsTabs.Skill,
               label: t('workspaceSetting.tab.skill'),
+            },
+            // Label registry is readable by everyone; the page itself keeps
+            // management actions behind the admin gate (disabled, not hidden).
+            {
+              icon: TagIcon,
+              key: WorkspaceSettingsTabs.Labels,
+              label: t('workspaceSetting.tab.labels'),
             },
             {
               icon: Blocks,

@@ -5,6 +5,7 @@ import { Hono } from 'hono';
 
 import { OnboardingTaskRecommendationWorkflow } from '@/server/workflows/onboardingTaskRecommendation';
 import {
+  OnboardingUnderstandingWorkflow,
   type ProcessCollectedUnderstandingPayload,
   type ProcessUnderstandingProvidersPayload,
 } from '@/server/workflows/onboardingUnderstanding';
@@ -12,6 +13,10 @@ import {
   processCollectedUnderstanding,
   processCollectedWorkflowOptions,
 } from '@/server/workflows/onboardingUnderstanding/processCollected';
+import {
+  processDetailedPersonaWorkflowOptions,
+  processDetailedUnderstandingPersona,
+} from '@/server/workflows/onboardingUnderstanding/processDetailedPersona';
 import {
   processProvidersWorkflowOptions,
   processUnderstandingProviders,
@@ -21,13 +26,28 @@ import { createWorkflowQstashClient } from '../qstashClient';
 
 const app = new Hono();
 
+export const processDetailedPersonaWorkflow = createWorkflow<
+  ProcessCollectedUnderstandingPayload,
+  Awaited<ReturnType<typeof processDetailedUnderstandingPersona>>
+>(
+  withOtelMetricsForUpstashWorkflows(processDetailedUnderstandingPersona, {
+    url: '/api/workflows/onboarding/understanding/process-detailed-persona',
+  }),
+  processDetailedPersonaWorkflowOptions,
+);
+
 export const processCollectedWorkflow = createWorkflow<
   ProcessCollectedUnderstandingPayload,
   Awaited<ReturnType<typeof processCollectedUnderstanding>>
 >(
-  withOtelMetricsForUpstashWorkflows(processCollectedUnderstanding, {
-    url: '/api/workflows/onboarding/understanding/process-collected',
-  }),
+  withOtelMetricsForUpstashWorkflows(
+    (context: WorkflowContext<ProcessCollectedUnderstandingPayload>) =>
+      processCollectedUnderstanding(context, {
+        triggerDetailedPersona: (input, options) =>
+          OnboardingUnderstandingWorkflow.triggerDetailedPersona(input, options),
+      }),
+    { url: '/api/workflows/onboarding/understanding/process-collected' },
+  ),
   processCollectedWorkflowOptions,
 );
 
@@ -53,6 +73,7 @@ app.post(
     {
       'process-providers': processProvidersWorkflow,
       'process-collected': processCollectedWorkflow,
+      'process-detailed-persona': processDetailedPersonaWorkflow,
     },
     { qstashClient: createWorkflowQstashClient() },
   ),

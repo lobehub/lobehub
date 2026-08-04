@@ -31,7 +31,7 @@ vi.mock('electron', () => ({
   },
 }));
 
-vi.mock('electron-is', () => ({
+vi.mock('@/utils/platform', () => ({
   macOS: vi.fn(() => true),
 }));
 

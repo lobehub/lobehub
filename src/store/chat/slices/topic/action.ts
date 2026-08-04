@@ -3,12 +3,12 @@
 import { chainSummaryTitle } from '@lobechat/prompts';
 import { type ChatTopicMetadata, type MessageMapScope, type UIChatMessage } from '@lobechat/types';
 import { TraceNameMap } from '@lobechat/types';
+import { toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
-import { message } from '@/components/AntdStaticMethods';
 import { LOADING_FLAT } from '@/const/message';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { cronKeys, deviceKeys, topicKeys } from '@/libs/swr/keys';
@@ -242,16 +242,12 @@ export class ChatTopicActionImpl {
 
     const newTitle = t('duplicateTitle', { ns: 'chat', title: topic?.title });
 
-    message.loading({
-      content: t('duplicateLoading', { ns: 'topic' }),
-      key: 'duplicateTopic',
-      duration: 0,
-    });
+    const loadingToast = toast.loading(t('duplicateLoading', { ns: 'topic' }));
 
     const newTopicId = await topicService.cloneTopic(id, newTitle);
     await refreshTopic();
-    message.destroy('duplicateTopic');
-    message.success(t('duplicateSuccess', { ns: 'topic' }));
+    loadingToast.close();
+    toast.success(t('duplicateSuccess', { ns: 'topic' }));
 
     await switchTopic(newTopicId);
   };
@@ -261,11 +257,7 @@ export class ChatTopicActionImpl {
 
     if (!activeAgentId) return;
 
-    message.loading({
-      content: t('importLoading', { ns: 'topic' }),
-      duration: 0,
-      key: 'importTopic',
-    });
+    const loadingToast = toast.loading(t('importLoading', { ns: 'topic' }));
 
     try {
       const result = await topicService.importTopic({
@@ -275,15 +267,15 @@ export class ChatTopicActionImpl {
       });
 
       await refreshTopic();
-      message.destroy('importTopic');
-      message.success(t('importSuccess', { count: result.messageCount, ns: 'topic' }));
+      loadingToast.close();
+      toast.success(t('importSuccess', { count: result.messageCount, ns: 'topic' }));
 
       await switchTopic(result.topicId);
 
       return result.topicId;
     } catch (error) {
-      message.destroy('importTopic');
-      message.error(t('importError', { ns: 'topic' }));
+      loadingToast.close();
+      toast.error(t('importError', { ns: 'topic' }));
       console.error('[importTopic] Failed:', error);
       return undefined;
     }

@@ -601,6 +601,188 @@ describe('LobeGroq - custom features', () => {
         expect.anything(),
       );
     });
+
+    it('should strip Lobe-internal fields to avoid API errors', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'mistralai/mistral-7b-instruct:free',
+        // Internal fields to strip
+        thinking: { type: 'enabled', budget: 1024 },
+        reasoning: { effort: 'medium', summary: 'test' },
+        reasoning_effort: 'medium',
+        effort: 'medium',
+      } as any);
+
+      const callArgs = vi.mocked(instance['client'].chat.completions.create).mock.calls[0][0];
+
+      const internalFields = ['thinking', 'reasoning', 'reasoning_effort', 'effort'];
+
+      for (const field of internalFields) {
+        expect(callArgs).not.toHaveProperty(field);
+      }
+    });
+
+    it('should handle DeepSeek R1 default reasoning settings (reasoning_format: parsed)', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'deepseek-r1-distill-llama-70b',
+      });
+
+      expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reasoning_format: 'parsed',
+        }),
+        expect.anything(),
+      );
+      const callArgs = vi.mocked(instance['client'].chat.completions.create).mock.calls[0][0];
+      expect(callArgs).not.toHaveProperty('reasoning_effort');
+    });
+
+    it('should handle DeepSeek R1 with thinking disabled (reasoning_format: hidden)', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'deepseek-r1-distill-llama-70b',
+        thinking: { type: 'disabled' },
+      } as any);
+
+      expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reasoning_format: 'hidden',
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('should handle DeepSeek R1 with tools (reasoning_format: parsed)', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'deepseek-r1-distill-llama-70b',
+        tools: [
+          {
+            type: 'function',
+            function: { name: 'tool1', description: '', parameters: {} },
+          },
+        ],
+      });
+
+      expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reasoning_format: 'parsed',
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('should handle Qwen 3.6 27B default settings (reasoning_format: parsed, reasoning_effort: default)', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'qwen3.6-27b',
+      });
+
+      expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reasoning_format: 'parsed',
+          reasoning_effort: 'default',
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('should handle Qwen 3.6 27B with thinking disabled (reasoning_format: hidden, reasoning_effort: none)', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'qwen3.6-27b',
+        thinking: { type: 'disabled' },
+      } as any);
+
+      expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reasoning_format: 'hidden',
+          reasoning_effort: 'none',
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('should handle Qwen3 default settings (reasoning_format: parsed, no reasoning_effort)', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'qwen/qwen3-32b',
+      });
+
+      expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reasoning_format: 'parsed',
+        }),
+        expect.anything(),
+      );
+      const callArgs = vi.mocked(instance['client'].chat.completions.create).mock.calls[0][0];
+      expect(callArgs).not.toHaveProperty('reasoning_effort');
+    });
+
+    it('should handle GPT-OSS with high effort (no reasoning_format, reasoning_effort: high)', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'gpt-oss-8b',
+        reasoning_effort: 'high',
+      } as any);
+
+      expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reasoning_effort: 'high',
+        }),
+        expect.anything(),
+      );
+      const callArgs = vi.mocked(instance['client'].chat.completions.create).mock.calls[0][0];
+      expect(callArgs).not.toHaveProperty('reasoning_format');
+    });
+
+    it('should handle GPT-OSS with low effort (no reasoning_format, reasoning_effort: low)', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'gpt-oss-120b',
+        effort: 'low',
+      } as any);
+
+      expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reasoning_effort: 'low',
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('should not set reasoning parameters for non-reasoning models', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'llama-3.1-70b-versatile',
+        reasoning_effort: 'high',
+      } as any);
+
+      const callArgs = vi.mocked(instance['client'].chat.completions.create).mock.calls[0][0];
+      expect(callArgs).not.toHaveProperty('reasoning_format');
+      expect(callArgs).not.toHaveProperty('reasoning_effort');
+    });
+  });
+
+  describe('handleTransformResponseToStream', () => {
+    it('should map reasoning field to reasoning_content for non-streaming response transformation', () => {
+      const mockCompletion = {
+        choices: [
+          {
+            index: 0,
+            message: {
+              content: 'Test content',
+              role: 'assistant',
+              reasoning: 'Test reasoning',
+            },
+          },
+        ],
+      };
+
+      const stream = params.chatCompletion.handleTransformResponseToStream!(mockCompletion as any);
+      expect(stream).toBeDefined();
+    });
   });
 
   describe('handleError', () => {
@@ -702,18 +884,28 @@ describe('LobeGroq - custom features', () => {
         data: [
           { id: 'deepseek-r1-distill-llama-70b', context_window: 8192 },
           { id: 'deepseek-r1-distill-qwen-32b', context_window: 32768 },
+          { id: 'qwen3-72b-instruct', context_window: 32768 },
+          { id: 'gpt-oss-20b', context_window: 8192 },
         ],
       });
 
       const models = await params.models({ client: mockClient as any });
 
-      expect(models).toHaveLength(2);
+      expect(models).toHaveLength(4);
       expect(models[0]).toMatchObject({
         id: 'deepseek-r1-distill-llama-70b',
         reasoning: true,
       });
       expect(models[1]).toMatchObject({
         id: 'deepseek-r1-distill-qwen-32b',
+        reasoning: true,
+      });
+      expect(models[2]).toMatchObject({
+        id: 'qwen3-72b-instruct',
+        reasoning: true,
+      });
+      expect(models[3]).toMatchObject({
+        id: 'gpt-oss-20b',
         reasoning: true,
       });
     });

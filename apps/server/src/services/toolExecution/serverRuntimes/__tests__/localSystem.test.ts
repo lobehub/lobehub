@@ -232,6 +232,45 @@ describe('localSystemRuntime', () => {
       expect(parseArgs()).toEqual({ pattern: 'TODO', scope: '/Users/me/repo' });
     });
 
+    it('injects scope into globFiles when omitted', async () => {
+      const proxy = buildProxy('/Users/me/repo');
+      await proxy[LocalSystemApiName.globFiles]({ pattern: '**/*.ts' });
+
+      expect(parseArgs()).toEqual({ pattern: '**/*.ts', scope: '/Users/me/repo' });
+    });
+
+    it('replaces scope "." with workingDirectory for globFiles', async () => {
+      const proxy = buildProxy('/Users/me/repo');
+      await proxy[LocalSystemApiName.globFiles]({ pattern: '**/*.ts', scope: '.' });
+
+      expect(parseArgs()).toEqual({ pattern: '**/*.ts', scope: '/Users/me/repo' });
+    });
+
+    it('replaces scope "." with workingDirectory for searchFiles', async () => {
+      const proxy = buildProxy('/Users/me/repo');
+      await proxy[LocalSystemApiName.searchFiles]({ keywords: 'foo', scope: '.' });
+
+      expect(parseArgs()).toEqual({ keywords: 'foo', scope: '/Users/me/repo' });
+    });
+
+    it('replaces scope "." with Windows workingDirectory for search ops', async () => {
+      const proxy = buildProxy('D:\\some-project');
+
+      await proxy[LocalSystemApiName.globFiles]({ pattern: '**/*.ts', scope: '.' });
+      expect(parseArgs()).toEqual({ pattern: '**/*.ts', scope: 'D:\\some-project' });
+
+      mockExecuteToolCall.mockClear();
+      await proxy[LocalSystemApiName.searchFiles]({ keywords: 'foo', scope: '.' });
+      expect(parseArgs()).toEqual({ keywords: 'foo', scope: 'D:\\some-project' });
+    });
+
+    it('does not override an explicit absolute scope on search ops', async () => {
+      const proxy = buildProxy('/Users/me/repo');
+      await proxy[LocalSystemApiName.globFiles]({ pattern: '**/*.ts', scope: '/explicit' });
+
+      expect(parseArgs()).toEqual({ pattern: '**/*.ts', scope: '/explicit' });
+    });
+
     it('does not override an explicit cwd/scope supplied by the model', async () => {
       const proxy = buildProxy('/Users/me/repo');
       await proxy[LocalSystemApiName.runCommand]({ command: 'ls', cwd: '/explicit' });

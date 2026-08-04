@@ -1,4 +1,5 @@
 import { FILE_URL } from '@lobechat/business-const';
+import { toast } from '@lobehub/ui/base-ui';
 import debug from 'debug';
 import { type TFunction } from 'i18next';
 import { type ChangeEvent } from 'react';
@@ -46,16 +47,8 @@ const useNotionImport = ({
       const file = event.target.files?.[0];
       if (!file) return;
 
+      const loadingToast = toast.loading(t('header.actions.notion.importing'));
       try {
-        const { message } = await import('antd');
-
-        const loadingKey = 'notion-import';
-        message.loading({
-          content: t('header.actions.notion.importing'),
-          duration: 0,
-          key: loadingKey,
-        });
-
         let files = await unzipFile(file);
 
         log(
@@ -99,8 +92,8 @@ const useNotionImport = ({
         });
 
         if (mdFiles.length === 0) {
-          message.destroy(loadingKey);
-          message.warning(
+          loadingToast.close();
+          toast.warning(
             t('header.actions.notion.noMarkdownFiles') +
               ` (${t('header.actions.notion.foundFiles', { count: files.length })})`,
           );
@@ -144,16 +137,16 @@ const useNotionImport = ({
           }
         }
 
-        message.destroy(loadingKey);
+        loadingToast.close();
 
         if (failedCount === 0) {
-          message.success(
+          toast.success(
             t('header.actions.notion.success', {
               count: successCount,
             }),
           );
         } else {
-          message.warning(
+          toast.warning(
             t('header.actions.notion.partial', {
               failed: failedCount,
               success: successCount,
@@ -164,8 +157,8 @@ const useNotionImport = ({
         await refetchResources?.();
       } catch (error) {
         console.error('Failed to import Notion export:', error);
-        const { message } = await import('antd');
-        message.error(t('header.actions.notion.error'));
+        loadingToast.close();
+        toast.error(t('header.actions.notion.error'));
       }
 
       event.target.value = '';

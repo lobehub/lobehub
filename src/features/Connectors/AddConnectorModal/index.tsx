@@ -1,4 +1,5 @@
-import { App, Input } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
+import { Input } from 'antd';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -68,7 +69,7 @@ const waitForOAuthPopup = (popup: Window, connectorId: string): Promise<OAuthPop
 
 const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose, connectorId }) => {
   const { t } = useTranslation('tool');
-  const { message } = App.useApp();
+
   const createConnector = useToolStore((s) => s.createConnector);
   const updateConnector = useToolStore((s) => s.updateConnector);
   const startConnectorOAuth = useToolStore((s) => s.startConnectorOAuth);
@@ -135,7 +136,7 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose, connect
     // the real authorize URL after the connector + OAuth-start mutations resolve.
     const popup = window.open('about:blank', 'lobe-connector-oauth', 'width=600,height=720');
     if (!popup) {
-      message.error(
+      toast.error(
         t('connector.add.popupBlocked', 'Please allow popups for this site and try again.'),
       );
       return;
@@ -174,31 +175,31 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose, connect
         await fetchConnectors();
         if (result.status === 'success') {
           if (result.synced === false) {
-            message.warning(
+            toast.warning(
               t(
                 'connector.add.syncFailed',
                 'Authorized, but tools could not be synced. Click Sync to retry.',
               ),
             );
           } else {
-            message.success(t('connector.add.success', 'Connector connected'));
+            toast.success(t('connector.add.success', 'Connector connected'));
           }
         } else if (result.status === 'error') {
-          message.error(
+          toast.error(
             t('connector.add.authError', 'Authorization failed: {{reason}}', {
               reason: result.error || t('connector.add.unknownError', 'unknown error'),
             }),
           );
         } else {
-          message.warning(t('connector.add.cancelled', 'Authorization was not completed'));
+          toast.warning(t('connector.add.cancelled', 'Authorization was not completed'));
         }
       } catch {
         popup.close();
         try {
           await syncConnectorTools(newConnectorId);
-          message.success(t('connector.add.success', 'Connector connected'));
+          toast.success(t('connector.add.success', 'Connector connected'));
         } catch {
-          message.error(
+          toast.error(
             t(
               'connector.add.authFailed',
               'Could not connect. This server may require an OAuth Client ID in Advanced settings.',
@@ -228,7 +229,7 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose, connect
     if (needsReAuth) {
       popup = window.open('about:blank', 'lobe-connector-oauth', 'width=600,height=720');
       if (!popup) {
-        message.error(
+        toast.error(
           t('connector.add.popupBlocked', 'Please allow popups for this site and try again.'),
         );
         return;
@@ -261,31 +262,31 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose, connect
           await fetchConnectors();
           if (result.status === 'success') {
             if (result.synced === false) {
-              message.warning(
+              toast.warning(
                 t(
                   'connector.add.syncFailed',
                   'Authorized, but tools could not be synced. Click Sync to retry.',
                 ),
               );
             } else {
-              message.success(t('connector.edit.success', 'Connector updated'));
+              toast.success(t('connector.edit.success', 'Connector updated'));
             }
           } else if (result.status === 'error') {
-            message.error(
+            toast.error(
               t('connector.add.authError', 'Authorization failed: {{reason}}', {
                 reason: result.error || t('connector.add.unknownError', 'unknown error'),
               }),
             );
           } else {
-            message.warning(t('connector.add.cancelled', 'Authorization was not completed'));
+            toast.warning(t('connector.add.cancelled', 'Authorization was not completed'));
           }
         } catch {
           popup.close();
           try {
             await syncConnectorTools(connectorId);
-            message.success(t('connector.edit.success', 'Connector updated'));
+            toast.success(t('connector.edit.success', 'Connector updated'));
           } catch {
-            message.error(
+            toast.error(
               t(
                 'connector.add.authFailed',
                 'Could not connect. This server may require an OAuth Client ID in Advanced settings.',
@@ -294,7 +295,7 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose, connect
           }
         }
       } else {
-        message.success(t('connector.edit.success', 'Connector updated'));
+        toast.success(t('connector.edit.success', 'Connector updated'));
       }
 
       reset();

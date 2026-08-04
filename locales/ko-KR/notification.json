@@ -77,5 +77,7 @@
   "workspace_primary_ownership_transferred": "이제 워크스페이스 \"{{workspaceName}}\"의 주요 소유자가 되었습니다. 청구 및 주요 권한이 귀하에게 이전되었습니다.",
   "workspace_primary_ownership_transferred_title": "이제 {{workspaceName}}의 주요 소유자가 되었습니다",
   "workspace_subscription_expired": "워크스페이스 \"{{workspaceName}}\"의 구독이 종료되었습니다. 워크스페이스가 다운그레이드되기 전에 {{days}}일 이내에 갱신하여 전체 액세스를 복원하세요.",
-  "workspace_subscription_expired_title": "{{workspaceName}}의 구독 종료"
+  "workspace_subscription_expired_title": "{{workspaceName}}의 구독 종료",
+  "workspace_waitlist_approved": "워크스페이스 베타 액세스가 준비되었습니다. LobeHub로 이동하여 첫 번째 워크스페이스를 생성하고 팀을 초대하세요.",
+  "workspace_waitlist_approved_title": "워크스페이스 베타 액세스 승인됨"
 }

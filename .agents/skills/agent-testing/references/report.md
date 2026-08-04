@@ -95,10 +95,18 @@ table — those double up on the page. It carries only the non-duplicate narrati
      ]
      ```
 
+     `comparison` is a nested **object** on each half. Writing it flat —
+     `{ "path": "…", "comparison": "topic-row", "role": "before" }` — is the
+     usual slip, and it does not pair: `role` is read from inside `comparison`,
+     never from the evidence item itself.
+
      The verify page renders a complete pair with each screenshot under its own
      tinted band — red for `before`, green for `after`. A group contains exactly one
      `before` and one `after`, and **both halves need the same string `id`**; a half
      without an `id` can never pair. Incomplete groups render as ordinary evidence.
+     `acceptance run ingest` warns on every malformed `comparison` it drops —
+     treat that warning as a failed publish and re-ingest a corrected round,
+     exactly as with a skipped evidence upload.
 
      Two fields are worth setting on every pair:
 

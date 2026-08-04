@@ -59,7 +59,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const WorkVersionHistoryCard = memo<{ work: WorkListItem }>(({ work }) => {
   const { t } = useTranslation('chat');
   const [expanded, setExpanded] = useState(false);
-  const [openDocument, openTaskDetail] = useChatStore((s) => [s.openDocument, s.openTaskDetail]);
+  const [openDocument, openFilePreview, openTaskDetail] = useChatStore((s) => [
+    s.openDocument,
+    s.openFilePreview,
+    s.openTaskDetail,
+  ]);
   const ToggleIcon = expanded ? ChevronDownIcon : ChevronRightIcon;
   // The underlying task was deleted outside the tool path — the Work survives as
   // an orphan rendered from its snapshot, and opening the (gone) task detail 404s.
@@ -85,6 +89,9 @@ const WorkVersionHistoryCard = memo<{ work: WorkListItem }>(({ work }) => {
         return isSafeExternalUrl(openTarget.url)
           ? () => window.open(openTarget.url, '_blank', 'noopener,noreferrer')
           : undefined;
+      }
+      case 'filePreview': {
+        return () => openFilePreview({ fileId: openTarget.fileId });
       }
       case 'task': {
         return taskDeleted ? undefined : () => openTaskDetail(openTarget.identifier);

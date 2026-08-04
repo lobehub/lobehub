@@ -3,10 +3,10 @@
 import { appendFile } from 'node:fs/promises';
 
 import {
+  MCP_LEGACY_MANUAL_REVIEW_LABEL,
   MCP_LEGACY_REMOTE_LABEL,
+  MCP_LEGACY_RESCAN_LABEL,
   MCP_LEGACY_SUBMISSION_LABEL,
-  MCP_MANUAL_REVIEW_LABEL,
-  MCP_RESCAN_LABEL,
   MCP_SUBMISSION_LABEL,
 } from './shared/mcp-labels';
 import { classify } from './shared/mcp-submission-classifier';
@@ -29,10 +29,10 @@ interface DedupeDecision {
 
 const MCP_DEDUPE_SKIP_LABELS = [
   MCP_SUBMISSION_LABEL,
-  MCP_MANUAL_REVIEW_LABEL,
-  MCP_RESCAN_LABEL,
   MCP_LEGACY_SUBMISSION_LABEL,
   MCP_LEGACY_REMOTE_LABEL,
+  MCP_LEGACY_MANUAL_REVIEW_LABEL,
+  MCP_LEGACY_RESCAN_LABEL,
 ] as const;
 
 async function githubRequest<T>(endpoint: string, token: string): Promise<T> {
@@ -84,13 +84,7 @@ export function shouldDedupeIssue(issue: DedupeIssue): DedupeDecision {
   const classification = classify(issue.title || '', issue.body || '');
   if (classification.isSubmission) {
     return {
-      reason: `MCP marketplace listing request (${classification.delivery}) is handled by the MCP submission workflow`,
-      shouldDedupe: false,
-    };
-  }
-  if (classification.kind === 'listing-ops') {
-    return {
-      reason: 'MCP listing rescan request is handled by the MCP submission workflow',
+      reason: `MCP marketplace listing request (${classification.reason}) is handled by the MCP submission workflow`,
       shouldDedupe: false,
     };
   }

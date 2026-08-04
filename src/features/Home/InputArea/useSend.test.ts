@@ -93,8 +93,8 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock('@/components/AntdStaticMethods', () => ({
-  message: { error: messageErrorMock },
+vi.mock('@lobehub/ui/base-ui', () => ({
+  toast: { error: messageErrorMock },
 }));
 
 vi.mock('@/hooks/usePermission', () => ({

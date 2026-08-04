@@ -1,12 +1,13 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
-const copyDirs = ['assets', 'i18n', 'model-bank', 'shiki', 'vendor'] as const;
+const copyDirs = ['assets', 'devtools', 'i18n', 'model-bank', 'shiki', 'vendor'] as const;
 const copyRootFilePatterns = [/^favicon.*\.ico$/, /^apple-touch-icon\.png$/] as const;
 const targets = [
   { distDir: 'desktop', publicDir: 'public/_spa' },
   { distDir: 'mobile', publicDir: 'public/_spa' },
   { distDir: 'auth', publicDir: 'public/_spa-auth' },
+  { distDir: 'workbench', publicDir: 'public/_spa-workbench' },
 ] as const;
 
 export const copySpaBuild = (root = path.resolve(import.meta.dirname, '..')) => {

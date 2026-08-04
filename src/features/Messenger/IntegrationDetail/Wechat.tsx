@@ -2,8 +2,8 @@
 
 import { InfoCircleOutlined } from '@ant-design/icons';
 import { Alert, Block, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { App, QRCode } from 'antd';
+import { Button, toast } from '@lobehub/ui/base-ui';
+import { QRCode } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { ExternalLinkIcon, QrCodeIcon, RefreshCwIcon, XIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
@@ -241,7 +241,7 @@ interface WechatDetailProps {
 
 const WechatDetail = memo<WechatDetailProps>(({ access, name, onBack }) => {
   const { t } = useTranslation('messenger');
-  const { message } = App.useApp();
+
   const navigate = useWorkspaceAwareNavigate();
   const { allowed: canCreate } = usePermission('create_content');
   const { allowed: canEdit } = usePermission('edit_own_content');
@@ -268,7 +268,7 @@ const WechatDetail = memo<WechatDetailProps>(({ access, name, onBack }) => {
   const handleConfirmed = async () => {
     await Promise.all([data.linksMutate(), data.installationsMutate()]);
     setRescanning(false);
-    message.success(t('messenger.wechat.connected'));
+    toast.success(t('messenger.wechat.connected'));
   };
 
   const headerAction =

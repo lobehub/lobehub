@@ -4,11 +4,11 @@ import {
   sanitizeFolderName,
   topologicalSortFolders,
 } from '@lobechat/utils';
+import { toast } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 import pMap from 'p-map';
 import { type SWRResponse } from 'swr';
 
-import { message } from '@/components/AntdStaticMethods';
 import { FILE_UPLOAD_BLACKLIST, MAX_UPLOAD_FILE_COUNT } from '@/const/file';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { fileKeys } from '@/libs/swr/keys';
@@ -533,14 +533,10 @@ export class FileManageActionImpl {
     const sortedFolderPaths = topologicalSortFolders(folders);
 
     // Show toast notification if there are folders to create
-    const messageKey = 'uploadFolder.creatingFolders';
-    if (sortedFolderPaths.length > 0) {
-      message.loading({
-        content: t('header.actions.uploadFolder.creatingFolders', { ns: 'file' }),
-        duration: 0, // Don't auto-dismiss
-        key: messageKey,
-      });
-    }
+    const loadingToast =
+      sortedFolderPaths.length > 0
+        ? toast.loading(t('header.actions.uploadFolder.creatingFolders', { ns: 'file' }))
+        : undefined;
 
     try {
       // Map to store created folder IDs: relative path -> folder ID
@@ -593,9 +589,7 @@ export class FileManageActionImpl {
       }
 
       // Dismiss the toast after folders are created
-      if (sortedFolderPaths.length > 0) {
-        message.destroy(messageKey);
-      }
+      loadingToast?.close();
 
       // Refresh file list to show the new folders
       await this.#get().refreshFileList();
@@ -697,9 +691,7 @@ export class FileManageActionImpl {
       }
     } catch (error) {
       // Dismiss toast on error
-      if (sortedFolderPaths.length > 0) {
-        message.destroy(messageKey);
-      }
+      loadingToast?.close();
       throw error;
     }
   };

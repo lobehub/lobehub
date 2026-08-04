@@ -1,4 +1,7 @@
-import { UNDERSTANDING_ANALYSIS_JSON_SCHEMA } from '@lobechat/prompts';
+import {
+  UNDERSTANDING_ANALYSIS_JSON_SCHEMA,
+  UNDERSTANDING_DETAILED_PERSONA_JSON_SCHEMA,
+} from '@lobechat/prompts';
 import {
   type CollectionDiagnostics,
   type OnboardingUnderstandingMessageMetadata,
@@ -34,7 +37,7 @@ const analysis: UnderstandingAnalysis = {
     interests: [
       {
         description: 'TEST_INTEREST_DESCRIPTION',
-        salience: 96,
+        rank: 96,
         title: 'TEST_INTEREST_TITLE',
       },
     ],
@@ -120,6 +123,7 @@ const createHarness = (initialSession?: OnboardingUnderstandingSession) => {
   });
 
   const repository = {
+    commitDetailedWriting: vi.fn(async (_input: unknown) => ({ published: true })),
     commitWriting: vi.fn(async (_input: unknown) => ({ published: true })),
     completeProvider: vi.fn(
       async ({ providerId, revision }: { providerId: string; revision: number }) => {
@@ -168,6 +172,7 @@ const createHarness = (initialSession?: OnboardingUnderstandingSession) => {
       },
     ),
     failProvider: vi.fn(async () => session!),
+    failDetailedWriting: vi.fn(async () => session!),
     failWriting: vi.fn(async ({ error, sourceFingerprint }) => {
       session = {
         ...session!,
@@ -235,7 +240,7 @@ const createHarness = (initialSession?: OnboardingUnderstandingSession) => {
     async (
       _input: Parameters<UnderstandingServiceDependencies['generator']['generateObject']>[0],
       _options: Parameters<UnderstandingServiceDependencies['generator']['generateObject']>[1],
-    ) => analysis,
+    ): Promise<unknown> => analysis,
   );
   type CreateMessageInput = Parameters<UnderstandingServiceDependencies['messages']['create']>[0];
   const messages = {
@@ -281,6 +286,8 @@ const createHarness = (initialSession?: OnboardingUnderstandingSession) => {
     repository,
     service: new UnderstandingService(dependencies),
     setLatestAssistant: (value: typeof latestAssistant) => (latestAssistant = value),
+    setAssistantMetadata: (id: string, value: OnboardingUnderstandingMessageMetadata) =>
+      assistantMetadata.set(id, value),
     setSession: (value: OnboardingUnderstandingSession) => (session = value),
     sourceStore,
     sourceStoreFactory,
@@ -611,6 +618,67 @@ describe('UnderstandingService', () => {
       role: 'assistant',
     });
     expect(JSON.parse(createdMessage.content)).toEqual(analysis);
+  });
+
+  it('expands the quick composition and original contexts into a detailed persona', async () => {
+    const detailedPersona = {
+      content: '# Identity\n\nYou build source-grounded systems.\n\n# Working style\n\nYou ship.',
+      reasoning: 'Repeated repository activity supports the working-style synthesis.',
+      tagline: 'Source-grounded builder',
+    };
+    const harness = createHarness({
+      generationRevision: 1,
+      id: 'session-1',
+      sources: { github: providerState('completed', 1) },
+      writing: {
+        detailed: { status: 'running', updatedAt: '2026-07-20T00:00:00.000Z' },
+        feedbackRevision: 0,
+        generationRevision: 1,
+        resultMessageId: 'assistant-structured',
+        sourceFingerprint: 'github@1',
+        status: 'completed',
+        updatedAt: '2026-07-20T00:00:00.000Z',
+      },
+    });
+    harness.stored.set('github:1', storedContext('github', '# GitHub\n\nGITHUB_MARKDOWN'));
+    harness.setAssistantMetadata('assistant-structured', {
+      analysis,
+      diagnostics,
+      feedbackRevision: 0,
+      generationRevision: 1,
+      kind: 'proposal',
+      providers: ['github'],
+      resultId: 'assistant-structured',
+      sourceFingerprint: 'github@1',
+    });
+    harness.generateObject.mockResolvedValueOnce(detailedPersona);
+
+    await expect(
+      harness.service.processDetailedPersona({
+        expectedSourceFingerprint: 'github@1',
+        responseLanguage: 'zh-CN',
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+      }),
+    ).resolves.toEqual({ published: true, sourceFingerprint: 'github@1' });
+
+    expect(harness.generateObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        schema: UNDERSTANDING_DETAILED_PERSONA_JSON_SCHEMA,
+      }),
+      { metadata: { trigger: RequestTrigger.Onboarding } },
+    );
+    const writerInput = harness.generateObject.mock.calls[0][0];
+    expect(writerInput.messages[0].content).toContain('TEST_INTEREST_TITLE');
+    expect(writerInput.messages[1].content).toContain('GITHUB_MARKDOWN');
+    expect(harness.repository.commitDetailedWriting).toHaveBeenCalledWith({
+      detailedPersona,
+      feedbackRevision: 0,
+      generationRevision: 1,
+      sessionId: 'session-1',
+      sourceFingerprint: 'github@1',
+      topicId: 'topic-1',
+    });
   });
 
   /**

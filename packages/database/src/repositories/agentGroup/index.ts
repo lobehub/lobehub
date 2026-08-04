@@ -16,11 +16,13 @@ import type {
   NewChatGroupAgent,
 } from '../../schemas';
 import {
+  agentLabelAssignments,
   agents,
   chatGroups,
   chatGroupsAgents,
   messagePlugins,
   messages,
+  sessionGroups,
   threads,
   topics,
 } from '../../schemas';
@@ -428,15 +430,61 @@ export class AgentGroupRepository {
    * @param supervisorConfig - Optional configuration for the supervisor agent
    * @returns Created group, agents, and supervisor agent ID
    */
+  /**
+   * Resolve a folder the caller may put a group in, returning its visibility.
+   * Mirrors `AgentModel.getAssignableSessionGroupVisibility` — the foreign key
+   * only proves the folder exists, which is the wrong question once the column
+   * is read by every member's sidebar.
+   */
+  async getAssignableFolderVisibility(folderId: string): Promise<'private' | 'public'> {
+    const [folder] = await this.db
+      .select({ visibility: sessionGroups.visibility })
+      .from(sessionGroups)
+      .where(
+        and(
+          eq(sessionGroups.id, folderId),
+          buildWorkspaceWhere(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            {
+              userId: sessionGroups.userId,
+              visibility: sessionGroups.visibility,
+              workspaceId: sessionGroups.workspaceId,
+            },
+          ),
+        ),
+      )
+      .limit(1);
+
+    if (!folder) throw new Error(`Session group ${folderId} not found in current scope`);
+
+    return folder.visibility as 'private' | 'public';
+  }
+
   async createGroupWithSupervisor(
     groupParams: Omit<NewChatGroup, 'userId'>,
     agentMembers: string[] = [],
     supervisorConfig?: SupervisorAgentConfig,
   ): Promise<CreateGroupWithSupervisorResult> {
+    // Creating inside a Category has to land in that Category. The sidebar
+    // resolves a public group's folder only against public folders (and a
+    // private group's only against private ones), so a default-public group
+    // created in a private Category renders in Ungrouped — for its creator as
+    // well. The folder therefore decides the new group's visibility, and an
+    // explicit value that contradicts it is refused rather than overridden.
+    // Same rule and same reasoning as agent creation.
+    const folderVisibility = groupParams.groupId
+      ? await this.getAssignableFolderVisibility(groupParams.groupId)
+      : undefined;
+
+    if (folderVisibility && groupParams.visibility && groupParams.visibility !== folderVisibility)
+      throw new Error(
+        `A ${groupParams.visibility} chat group cannot be created in a ${folderVisibility} folder`,
+      );
+
     // Mirror the group's visibility onto the synthetic supervisor agent so
     // workspace members don't see a stray supervisor when the parent group is
     // private. Defaults to 'public' to match the column default.
-    const groupVisibility = groupParams.visibility ?? 'public';
+    const groupVisibility = groupParams.visibility ?? folderVisibility ?? 'public';
 
     // 1. Create supervisor agent (virtual agent)
     const [supervisorAgent] = await this.db
@@ -467,7 +515,12 @@ export class AgentGroupRepository {
     // 2. Create the group
     const [group] = await this.db
       .insert(chatGroups)
-      .values({ ...groupParams, userId: this.userId, workspaceId: this.workspaceId ?? null })
+      .values({
+        ...groupParams,
+        userId: this.userId,
+        visibility: groupVisibility,
+        workspaceId: this.workspaceId ?? null,
+      })
       .returning();
 
     // 3. Add supervisor agent to group with role 'supervisor'
@@ -669,6 +722,15 @@ export class AgentGroupRepository {
           content: sourceGroup.content,
           description: sourceGroup.description,
           editorData: sourceGroup.editorData,
+          // Sidebar folder placement is shared state, so the copy lands next to
+          // its source (matching AgentModel.duplicate's `sessionGroupId`).
+          groupId: sourceGroup.groupId,
+          // Visibility travels with the folder, and must: the column defaults
+          // to `public`, so duplicating a private group would otherwise publish
+          // the copy to the workspace *and* strand it — the sidebar resolves a
+          // public item's folder only against public folders, so the copy would
+          // land in Ungrouped rather than beside its source.
+          visibility: sourceGroup.visibility,
           pinned: sourceGroup.pinned,
           title: newTitle || (sourceGroup.title ? `${sourceGroup.title} (Copy)` : 'Copy'),
           userId: this.userId,
@@ -692,6 +754,10 @@ export class AgentGroupRepository {
           title: supervisorAgent?.title || 'Supervisor',
           userId: this.userId,
           virtual: true,
+          // Synthetic agents stay in lockstep with their group, the same way
+          // creation and `setVisibility` keep them. Left to the column default
+          // they would be workspace-visible while the group stays private.
+          visibility: sourceGroup.visibility,
           workspaceId: this.workspaceId ?? null,
         })
         .returning();
@@ -721,6 +787,7 @@ export class AgentGroupRepository {
           // User & virtual flag
           userId: this.userId,
           virtual: true,
+          visibility: sourceGroup.visibility,
           workspaceId: this.workspaceId ?? null,
         }));
 
@@ -856,7 +923,19 @@ export class AgentGroupRepository {
 
       await trx
         .update(chatGroups)
-        .set({ ...ownershipUpdate, ...visibilityUpdate, updatedAt: new Date() })
+        // Folders stay in the source scope, exactly as `transferAgents` does
+        // for `sessionGroupId`: carrying the id across would point the moved
+        // group at a folder the target workspace cannot resolve, dropping it
+        // into Ungrouped for every member there.
+        .set({
+          ...ownershipUpdate,
+          ...visibilityUpdate,
+          groupId: null,
+          // Same reasoning as the folder: a pin is the previous owner's own
+          // sidebar choice and would otherwise arrive as a workspace-wide pin.
+          pinned: false,
+          updatedAt: new Date(),
+        })
         .where(eq(chatGroups.id, groupId));
 
       await trx
@@ -876,8 +955,25 @@ export class AgentGroupRepository {
 
         await trx
           .update(agents)
-          .set({ ...ownershipUpdate, ...visibilityUpdate, updatedAt: new Date() })
+          .set({
+            ...ownershipUpdate,
+            ...visibilityUpdate,
+            // Folders and pins belong to the source scope — same rule the
+            // group row and `AgentModel.transferAgents` follow.
+            pinned: false,
+            sessionGroupId: null,
+            updatedAt: new Date(),
+          })
           .where(inArray(agents.id, agentIds));
+
+        // This path moves member agents itself instead of going through
+        // `AgentModel.transferAgents`, so it has to repeat that method's
+        // cleanup: a label belongs to the source registry and cannot travel.
+        // Left behind, the rows keep inflating the source label's usage count
+        // and reappear if the agent ever comes back.
+        await trx
+          .delete(agentLabelAssignments)
+          .where(inArray(agentLabelAssignments.agentId, agentIds));
       }
 
       await trx

@@ -3,7 +3,8 @@
 import { CaretDownFilled, LoadingOutlined } from '@ant-design/icons';
 import { DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
 import { ActionIcon, Block, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
-import { App, Input } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
+import { Input } from 'antd';
 import { cx } from 'antd-style';
 import { FileText, FolderIcon, FolderOpenIcon } from 'lucide-react';
 import * as m from 'motion/react-m';
@@ -39,7 +40,6 @@ interface HierarchyNodeProps {
 export const HierarchyNode = memo<HierarchyNodeProps>(
   ({ item, level = 0, isExpanded, isLoading, onToggle, selectedKey, parentKey }) => {
     const navigate = useWorkspaceAwareNavigate();
-    const { message } = App.useApp();
 
     const [setMode, libraryId] = useResourceManagerStore((s) => [s.setMode, s.libraryId]);
 
@@ -84,7 +84,7 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
 
     const handleRenameConfirm = useCallback(async () => {
       if (!renamingValue.trim()) {
-        message.error('Folder name cannot be empty');
+        toast.error('Folder name cannot be empty');
         return;
       }
 
@@ -95,13 +95,13 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
 
       try {
         await renameItem(item.id, parentKey, renamingValue.trim());
-        message.success('Renamed successfully');
+        toast.success('Renamed successfully');
         setIsRenaming(false);
       } catch (error) {
         console.error('Rename error:', error);
-        message.error('Rename failed');
+        toast.error('Rename failed');
       }
-    }, [item.id, item.name, parentKey, renamingValue, renameItem, message]);
+    }, [item.id, item.name, parentKey, renamingValue, renameItem]);
 
     const handleRenameCancel = useCallback(() => {
       setIsRenaming(false);

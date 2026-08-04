@@ -1,7 +1,6 @@
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { LucideCopy, Pen, PictureInPicture2Icon, Pin, PinOff, Trash } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -39,7 +38,7 @@ export const useGroupDropdownMenu = ({
   userId,
 }: UseGroupDropdownMenuParams): (() => MenuProps['items']) => {
   const { t } = useTranslation(['chat', 'common']);
-  const { message } = App.useApp();
+
   const { allowed: canEdit } = usePermission('edit_own_content');
   const { canEditResource, isAccessResolved } = useResourceAccess('agentGroup', id);
   const canConfigure = canEdit && isAccessResolved && canEditResource;
@@ -134,9 +133,9 @@ export const useGroupDropdownMenu = ({
                     onOk: async () => {
                       try {
                         await removeAgentGroup(id);
-                        message.success(t('confirmRemoveGroupSuccess'));
+                        toast.success(t('confirmRemoveGroupSuccess'));
                       } catch (error) {
-                        message.error(
+                        toast.error(
                           isOwnerOnlyForbiddenError(error)
                             ? t('deleteSharedOwnerOnly', { ns: 'common' })
                             : isForbiddenError(error)
@@ -168,7 +167,6 @@ export const useGroupDropdownMenu = ({
       duplicateAgentGroup,
       openAgentInNewWindow,
       removeAgentGroup,
-      message,
       transferMenuItems,
     ],
   );

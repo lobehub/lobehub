@@ -220,10 +220,66 @@ export class ChatGroupModel {
 
   // ******* Update Methods ******* //
 
+  /**
+   * A move target must be a folder the caller can see, and a workspace-public
+   * group may only sit in a public folder. `chat_groups.groupId` is read by
+   * every member's sidebar now, and the foreign key only proves the folder
+   * exists — another workspace's folder, or another member's private one,
+   * satisfies it and then renders as Ungrouped for everyone who cannot see it.
+   * Mirrors `AgentModel.assertSessionGroupAssignable`.
+   */
+  private async assertFolderAssignable(id: string, groupId: string) {
+    const [folder] = await this.db
+      .select({ visibility: sessionGroups.visibility })
+      .from(sessionGroups)
+      .where(
+        and(
+          eq(sessionGroups.id, groupId),
+          buildWorkspaceWhere(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            {
+              userId: sessionGroups.userId,
+              visibility: sessionGroups.visibility,
+              workspaceId: sessionGroups.workspaceId,
+            },
+          ),
+        ),
+      )
+      .limit(1);
+
+    if (!folder) throw new Error(`Session group ${groupId} not found in current scope`);
+
+    if (!this.workspaceId) return;
+
+    const [group] = await this.db
+      .select({ visibility: chatGroups.visibility })
+      .from(chatGroups)
+      .where(and(eq(chatGroups.id, id), this.ownership()))
+      .limit(1);
+
+    // Same exact-match rule as agents: the render path resolves a private
+    // item's folder only against private folders and a public item's only
+    // against public ones, so either mismatch lands it in Ungrouped.
+    if (group && group.visibility !== folder.visibility)
+      throw new Error(
+        `A ${group.visibility} chat group cannot be moved into a ${folder.visibility} folder`,
+      );
+  }
+
   async update(id: string, value: Partial<ChatGroupItem>): Promise<ChatGroupItem> {
+    if (value.groupId) await this.assertFolderAssignable(id, value.groupId);
+
+    // Scope columns never travel through the generic update. The router hands
+    // this a partial insert schema, so without stripping them a member could
+    // re-scope another member's group now that the ownership predicate spans
+    // every visible workspace row. Ignored rather than rejected so a client
+    // that sends an extra field still gets its real edit applied. Publishing
+    // has its own path and writes `visibility` directly.
+    const { userId: _userId, visibility: _visibility, workspaceId: _workspaceId, ...safe } = value;
+
     const [result] = await this.db
       .update(chatGroups)
-      .set(value)
+      .set(safe)
       .where(and(eq(chatGroups.id, id), this.ownership()))
       .returning();
 
@@ -240,9 +296,26 @@ export class ChatGroupModel {
    * `private`. Restricted to the creator's own still-private group.
    */
   async publishToWorkspace(id: string): Promise<ChatGroupItem> {
+    // Rehome exactly as `setVisibility` does. A folder cannot mix
+    // visibilities, so publishing out of a private Category has to release the
+    // folder too — left in place, the group would be public while its folder
+    // is not, and the sidebar would show it in Ungrouped rather than where the
+    // user published it from.
+    const [current] = await this.db
+      .select({ folderVisibility: sessionGroups.visibility })
+      .from(chatGroups)
+      .leftJoin(sessionGroups, eq(chatGroups.groupId, sessionGroups.id))
+      .where(and(eq(chatGroups.id, id), this.ownership()))
+      .limit(1);
+    const clearFolder = current?.folderVisibility != null && current.folderVisibility !== 'public';
+
     const [result] = await this.db
       .update(chatGroups)
-      .set({ updatedAt: new Date(), visibility: 'public' })
+      .set({
+        updatedAt: new Date(),
+        visibility: 'public',
+        ...(clearFolder ? { groupId: null } : {}),
+      })
       .where(
         and(
           eq(chatGroups.id, id),
@@ -593,6 +666,12 @@ export class ChatGroupModel {
         and(
           eq(chatGroupsAgents.chatGroupId, groupId),
           eq(agents.visibility, 'private'),
+          // The synthetic supervisor mirrors the group's own visibility, so a
+          // private group always owns one private agent. Counting it makes the
+          // publish guard unsatisfiable — every private group would look like
+          // it still holds private members and could never be shared. Only
+          // real members can block a publish.
+          ne(chatGroupsAgents.role, 'supervisor'),
           this.agentsOwnership(),
         ),
       );

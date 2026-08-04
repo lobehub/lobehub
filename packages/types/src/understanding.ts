@@ -14,7 +14,7 @@ export const MAX_ANALYSIS_SHORT_TEXT_LENGTH = 256;
 export const MAX_UNDERSTANDING_FEEDBACK_LENGTH = 2000;
 /** Maximum immutable feedback turns retained by one Understanding session. */
 export const MAX_UNDERSTANDING_FEEDBACK_TURNS = 16;
-export const MAX_PERSONA_CONTENT_LENGTH = 4000;
+export const MAX_PERSONA_CONTENT_LENGTH = 12_000;
 
 export type UnderstandingProviderStatus = 'pending' | 'running' | 'completed' | 'failed';
 
@@ -52,7 +52,7 @@ export type CollectionDiagnosticsSummary = Omit<CollectionDiagnostics, 'errors'>
 
 export interface UnderstandingCompositionItem {
   description: string;
-  salience: number;
+  rank: number;
   title: string;
 }
 
@@ -80,6 +80,24 @@ export interface UnderstandingPersonaProposal {
   tagline: string;
 }
 
+/** Tracks the second-stage writer that expands the quick analysis into a complete persona. */
+export type UnderstandingDetailedWritingState =
+  | {
+      error?: never;
+      status: 'running';
+      updatedAt: string;
+    }
+  | {
+      error?: never;
+      status: 'completed';
+      updatedAt: string;
+    }
+  | {
+      error: CollectionError;
+      status: 'failed';
+      updatedAt: string;
+    };
+
 export interface UnderstandingAnalysis {
   composition: UnderstandingComposition;
   personaProposal: UnderstandingPersonaProposal;
@@ -96,6 +114,8 @@ export interface UnderstandingProviderState {
 }
 
 interface UnderstandingWritingStateBase {
+  /** State of the full persona pass started after the quick analysis is published. */
+  detailed?: UnderstandingDetailedWritingState;
   /**
    * Latest cumulative feedback revision included in this generation.
    *
@@ -150,6 +170,8 @@ export interface OnboardingUnderstandingSession {
 
 export interface OnboardingUnderstandingMessageMetadata {
   analysis: UnderstandingAnalysis;
+  /** Full Markdown persona produced asynchronously from the analysis and original sources. */
+  detailedPersona?: UnderstandingPersonaProposal;
   diagnostics: CollectionDiagnostics;
   /**
    * Feedback revision used to produce this proposal.
@@ -282,19 +304,60 @@ const displayStringSchema = (maxLength: number) => z.string().trim().min(1).max(
 const ShortDisplayStringSchema = displayStringSchema(MAX_ANALYSIS_SHORT_TEXT_LENGTH);
 const DescriptionStringSchema = displayStringSchema(MAX_ANALYSIS_DESCRIPTION_LENGTH);
 
-export const UnderstandingCompositionItemSchema = z
+/**
+ * Validates the short or detailed persona content attached to an Understanding proposal.
+ *
+ * Use when:
+ * - Parsing either writing stage before persisting message metadata
+ *
+ * Expects:
+ * - Non-empty display text within the shared persona limits
+ *
+ * Returns:
+ * - A strict {@link UnderstandingPersonaProposal}
+ */
+export const UnderstandingPersonaProposalSchema = z
   .object({
-    description: DescriptionStringSchema,
-    salience: z.number().int().min(0).max(100),
-    title: ShortDisplayStringSchema,
+    content: displayStringSchema(MAX_PERSONA_CONTENT_LENGTH),
+    reasoning: DescriptionStringSchema,
+    tagline: ShortDisplayStringSchema,
   })
-  .strict() satisfies z.ZodType<UnderstandingCompositionItem>;
+  .strict() satisfies z.ZodType<UnderstandingPersonaProposal>;
+
+/**
+ * Normalizes composition items written before `rank` replaced `salience`.
+ *
+ * Before:
+ * - `{ title: "Builder", description: "Ships systems.", salience: 90 }`
+ *
+ * After:
+ * - `{ title: "Builder", description: "Ships systems.", rank: 90 }`
+ */
+const normalizeCompositionRank = (value: unknown): unknown => {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !('salience' in value)) {
+    return value;
+  }
+
+  const { salience, ...item } = value as Record<string, unknown>;
+  return { ...item, rank: item.rank ?? salience };
+};
+
+export const UnderstandingCompositionItemSchema = z.preprocess(
+  normalizeCompositionRank,
+  z
+    .object({
+      description: DescriptionStringSchema,
+      rank: z.number().int().min(0).max(100),
+      title: ShortDisplayStringSchema,
+    })
+    .strict(),
+) satisfies z.ZodType<UnderstandingCompositionItem>;
 
 const compositionVectorSchema = (maxItems: number) =>
   z
     .array(UnderstandingCompositionItemSchema)
     .max(maxItems)
-    .transform((items) => items.toSorted((a, b) => b.salience - a.salience));
+    .transform((items) => items.toSorted((a, b) => b.rank - a.rank));
 
 export const UnderstandingAnalysisSchema = z
   .object({
@@ -307,13 +370,7 @@ export const UnderstandingAnalysisSchema = z
         working: compositionVectorSchema(6),
       })
       .strict(),
-    personaProposal: z
-      .object({
-        content: displayStringSchema(MAX_PERSONA_CONTENT_LENGTH),
-        reasoning: DescriptionStringSchema,
-        tagline: ShortDisplayStringSchema,
-      })
-      .strict(),
+    personaProposal: UnderstandingPersonaProposalSchema,
     profile: z
       .object({
         domains: z.array(ShortDisplayStringSchema).max(8),
@@ -331,6 +388,7 @@ export const UnderstandingAnalysisSchema = z
 export const OnboardingUnderstandingMessageMetadataSchema = z
   .object({
     analysis: UnderstandingAnalysisSchema,
+    detailedPersona: UnderstandingPersonaProposalSchema.optional(),
     diagnostics: CollectionDiagnosticsSchema,
     feedbackRevision: z.number().int().nonnegative().max(MAX_COLLECTION_COUNT).default(0),
     generationRevision: z.number().int().nonnegative().max(MAX_COLLECTION_COUNT).default(0),
@@ -370,6 +428,19 @@ export const UnderstandingProviderStateSchema = z
   .strict() satisfies z.ZodType<UnderstandingProviderState>;
 
 const understandingWritingStateBaseShape = {
+  detailed: z
+    .discriminatedUnion('status', [
+      z.object({ status: z.literal('running'), updatedAt: z.string() }).strict(),
+      z.object({ status: z.literal('completed'), updatedAt: z.string() }).strict(),
+      z
+        .object({
+          error: CollectionErrorSchema,
+          status: z.literal('failed'),
+          updatedAt: z.string(),
+        })
+        .strict(),
+    ])
+    .optional(),
   feedbackRevision: z.number().int().nonnegative().max(MAX_COLLECTION_COUNT).default(0),
   generationRevision: z.number().int().nonnegative().max(MAX_COLLECTION_COUNT).default(0),
   sourceFingerprint: z.string(),
@@ -428,6 +499,8 @@ export const projectOnboardingUnderstandingSessionStatus = (
   if (session.writing.status === 'failed') {
     return session.writing.resultMessageId ? 'partial' : 'failed';
   }
+  if (session.writing.detailed?.status === 'running') return 'processing';
+  if (session.writing.detailed?.status === 'failed') return 'partial';
 
   return sources.some(({ status }) => status === 'failed') ? 'partial' : 'completed';
 };

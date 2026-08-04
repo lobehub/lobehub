@@ -13,8 +13,7 @@ import {
   Text,
 } from '@lobehub/ui';
 import type { DropdownItem } from '@lobehub/ui/base-ui';
-import { confirmModal, DropdownMenu } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { confirmModal, DropdownMenu, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
@@ -271,7 +270,7 @@ const ReportListItem = memo<{
   onReportsChanged: () => Promise<unknown> | unknown;
 }>(({ active, item, onReportsChanged }) => {
   const { t } = useTranslation(['verify', 'common']);
-  const { message } = App.useApp();
+
   const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState(item.run.title || '');
@@ -312,7 +311,7 @@ const ReportListItem = memo<{
 
     const nextTitle = draftTitle.trim();
     if (!nextTitle) {
-      message.error(t('verify:workspace.renameEmpty'));
+      toast.error(t('verify:workspace.renameEmpty'));
       setDraftTitle(item.run.title || '');
       setEditing(false);
       return;
@@ -328,11 +327,11 @@ const ReportListItem = memo<{
     try {
       await verifyService.updateRunTitle(item.run.id, nextTitle);
       await refreshRelatedReports();
-      message.success(t('verify:workspace.renameSuccess'));
+      toast.success(t('verify:workspace.renameSuccess'));
       setEditing(false);
     } catch (error) {
       console.error('[verify:renameReport]', error);
-      message.error(t('verify:workspace.renameError'));
+      toast.error(t('verify:workspace.renameError'));
     } finally {
       isSavingRef.current = false;
       setMutating(false);
@@ -354,10 +353,10 @@ const ReportListItem = memo<{
             onReportsChanged(),
             mutate(verifyKeys.reportBundle(item.run.id), null, { revalidate: false }),
           ]);
-          message.success(t('verify:workspace.deleteSuccess'));
+          toast.success(t('verify:workspace.deleteSuccess'));
         } catch (error) {
           console.error('[verify:deleteReport]', error);
-          message.error(t('verify:workspace.deleteError'));
+          toast.error(t('verify:workspace.deleteError'));
         } finally {
           setMutating(false);
         }

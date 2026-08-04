@@ -1,6 +1,5 @@
 import { ActionIcon, DropdownMenu, Icon } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { type ItemType } from 'antd/es/menu/interface';
 import isEqual from 'fast-deep-equal';
 import {
@@ -60,8 +59,6 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
     s.pinAgentGroup,
     s.removeAgentGroup,
   ]);
-
-  const { message } = App.useApp();
 
   const isDefault = group === SessionDefaultGroup.Default;
 
@@ -178,13 +175,13 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
                   try {
                     if (parentType === 'group') {
                       await removeAgentGroup(id);
-                      message.success(t('confirmRemoveGroupSuccess'));
+                      toast.success(t('confirmRemoveGroupSuccess'));
                     } else {
                       await removeSession(id);
-                      message.success(t('confirmRemoveSessionSuccess'));
+                      toast.success(t('confirmRemoveSessionSuccess'));
                     }
                   } catch (error) {
-                    message.error(
+                    toast.error(
                       isOwnerOnlyForbiddenError(error)
                         ? t('deleteSharedOwnerOnly', { ns: 'common' })
                         : isForbiddenError(error)
@@ -223,7 +220,6 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
       sessionType,
       t,
       updateSessionGroup,
-      message,
     ],
   );
 

@@ -31,9 +31,9 @@ const normalize = (raw: string): string => raw.replaceAll('**', '').replaceAll(/
 
 /**
  * The daily-brief welcome is authored as markdown for a two-line block of its
- * own, where each line is a separate finding. The greeting appends it to a
- * sentence instead, so only the first finding is taken — concatenating both
- * with a space reads as one run-on claim and pushes the heading to three lines.
+ * own, where each line is a separate finding. The portrait speaks a single
+ * line instead, so only the first finding is taken — concatenating both reads
+ * as one run-on claim, and overruns the bubble.
  *
  * Links are kept as spans rather than flattened: the generator wraps every
  * referenced entity in `[name](url)` precisely so the reader can jump to it.

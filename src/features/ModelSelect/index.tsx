@@ -1,12 +1,12 @@
 import { ModelIcon } from '@lobehub/icons';
 import { Flexbox, Tag, Text, Tooltip, TooltipGroup } from '@lobehub/ui';
 import { Button, Select, type SelectProps, Switch } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { message } from '@/components/AntdStaticMethods';
 import { ModelItemRender, ProviderItemRender, TAG_CLASSNAME } from '@/components/ModelSelect';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
@@ -214,7 +214,7 @@ const ModelSelect = memo<ModelSelectProps>(
         // enabled model resolves as a valid option instead of staying stale.
         if (providerId !== value.provider) onChange?.({ model: value.model, provider: providerId });
       } catch {
-        message.error(t('ModelSelect.staleModel.notEnabled.actionFailed'));
+        toast.error(t('ModelSelect.staleModel.notEnabled.actionFailed'));
       } finally {
         setEnabling(false);
       }

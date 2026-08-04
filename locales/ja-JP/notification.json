@@ -77,5 +77,7 @@
   "workspace_primary_ownership_transferred": "ワークスペース「{{workspaceName}}」のプライマリオーナーになりました。請求およびプライマリ特権があなたに移管されました。",
   "workspace_primary_ownership_transferred_title": "あなたが{{workspaceName}}のプライマリオーナーになりました",
   "workspace_subscription_expired": "ワークスペース「{{workspaceName}}」のサブスクリプションが終了しました。ワークスペースがダウングレードされる前に、{{days}}日以内に更新して完全なアクセスを復元してください。",
-  "workspace_subscription_expired_title": "{{workspaceName}}のサブスクリプションが終了しました"
+  "workspace_subscription_expired_title": "{{workspaceName}}のサブスクリプションが終了しました",
+  "workspace_waitlist_approved": "ワークスペースのベータアクセスが準備完了しました。LobeHubにアクセスして、最初のワークスペースを作成し、チームを招待してください。",
+  "workspace_waitlist_approved_title": "ワークスペースのベータアクセスが承認されました"
 }

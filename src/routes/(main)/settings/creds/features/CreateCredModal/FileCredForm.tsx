@@ -1,9 +1,9 @@
 'use client';
 
 import { InboxOutlined } from '@ant-design/icons';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, toast } from '@lobehub/ui/base-ui';
 import { useMutation } from '@tanstack/react-query';
-import { Form, Input, message, Upload } from 'antd';
+import { Form, Input, Upload } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -84,10 +84,10 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onBack, onSuc
 
       setFileName(result.fileName);
       setFileHashId(result.fileHashId);
-      message.success(t('creds.file.uploadSuccess'));
+      toast.success(t('creds.file.uploadSuccess'));
     } catch (error) {
       console.error('[FileCredForm] Upload failed:', error);
-      message.error(error instanceof Error ? error.message : t('creds.file.uploadFailed'));
+      toast.error(error instanceof Error ? error.message : t('creds.file.uploadFailed'));
     } finally {
       setIsUploading(false);
     }
@@ -99,7 +99,7 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onBack, onSuc
     if (disabled) return;
 
     if (!fileHashId) {
-      message.error(t('creds.form.fileRequired'));
+      toast.error(t('creds.form.fileRequired'));
       return;
     }
     createMutation.mutate(values);

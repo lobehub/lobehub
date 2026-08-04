@@ -113,7 +113,8 @@ const HeterogeneousChatInput = memo(() => {
     executionTarget === 'none';
 
   // OpenCode can discover models on an explicit bound device; Claude Code and
-  // Codex retain their existing local/sandbox-only selector behavior.
+  // Codex show the selector on every execution path (local / sandbox / device)
+  // since dispatch forwards --model/--effort everywhere.
   const isSelectableHeteroProvider =
     providerType === 'claude-code' || providerType === 'codex' || providerType === 'opencode';
   const showHeteroModel =

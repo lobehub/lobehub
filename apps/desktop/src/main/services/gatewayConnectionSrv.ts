@@ -9,6 +9,7 @@ import type {
 } from '@lobechat/device-control';
 import type {
   AgentRunRequestMessage,
+  GatewayClient,
   GatewayMcpParams,
   MessageApiRequestMessage,
   RpcRequestMessage,
@@ -16,11 +17,8 @@ import type {
   ToolCallRequestMessage,
   ToolCallResponseMessage,
 } from '@lobechat/device-gateway-client';
-import { GatewayClient } from '@lobechat/device-gateway-client';
 import type { IdentitySource } from '@lobechat/device-identity';
-import { deriveDeviceId, deriveScopedFallbackId } from '@lobechat/device-identity';
 import type { GatewayConnectionStatus } from '@lobechat/electron-client-ipc';
-import { getShellInfo } from '@lobechat/local-file-shell';
 import { app, powerSaveBlocker } from 'electron';
 
 import { isDev } from '@/const/env';
@@ -260,7 +258,10 @@ export default class GatewayConnectionService extends ServiceModule {
    * because it hashes the OS machine id; falls back to the stored random UUID
    * when the machine id is unavailable. Caches the result for this session.
    */
-  resolveDeviceIdentity(userId: string): { deviceId: string; identitySource: IdentitySource } {
+  async resolveDeviceIdentity(
+    userId: string,
+  ): Promise<{ deviceId: string; identitySource: IdentitySource }> {
+    const { deriveDeviceId } = await import('@lobechat/device-identity');
     const fallbackId = this.app.storeManager.get('gatewayDeviceId') as string | undefined;
     const identity = deriveDeviceId(userId, { fallbackId });
     this.deviceId = identity.deviceId;
@@ -373,7 +374,7 @@ export default class GatewayConnectionService extends ServiceModule {
     // registry before opening the WS, so the device row exists by the time the
     // gateway reports it online.
     if (userId) {
-      const identity = this.resolveDeviceIdentity(userId);
+      const identity = await this.resolveDeviceIdentity(userId);
       await this.deviceRegistrar?.({
         deviceId: identity.deviceId,
         hostname: os.hostname(),
@@ -384,6 +385,7 @@ export default class GatewayConnectionService extends ServiceModule {
       });
     }
 
+    const { GatewayClient } = await import('@lobechat/device-gateway-client');
     const client = new GatewayClient({
       channel: isDev ? 'desktop-dev' : 'desktop',
       connectionId: this.getConnectionId(),
@@ -508,7 +510,10 @@ export default class GatewayConnectionService extends ServiceModule {
    * enrolled into a workspace — via desktop share or `lh connect --workspace` —
    * resolves to one workspace device.
    */
-  private resolveWorkspaceDeviceIdentity(workspaceId: string): EnrollWorkspaceResult {
+  private async resolveWorkspaceDeviceIdentity(
+    workspaceId: string,
+  ): Promise<EnrollWorkspaceResult> {
+    const { deriveDeviceId, deriveScopedFallbackId } = await import('@lobechat/device-identity');
     // Fallback machines (no readable machine id) must still derive a STABLE
     // workspace id — the identity-only probe, the real enroll, and restore
     // checks each re-derive it. Namespace the persisted install UUID rather
@@ -529,8 +534,9 @@ export default class GatewayConnectionService extends ServiceModule {
     // Re-enroll replaces the previous share connection instead of stacking one.
     await this.closeWorkspaceClient(workspaceId);
 
-    const identity = this.resolveWorkspaceDeviceIdentity(workspaceId);
+    const identity = await this.resolveWorkspaceDeviceIdentity(workspaceId);
 
+    const { GatewayClient } = await import('@lobechat/device-gateway-client');
     const client = new GatewayClient({
       channel: isDev ? 'desktop-dev' : 'desktop',
       // Reuse the install's connectionId: the gateway dedupes stale sockets per
@@ -599,7 +605,7 @@ export default class GatewayConnectionService extends ServiceModule {
         if (this.workspaceClients.has(workspaceId)) continue;
 
         try {
-          const identity = this.resolveWorkspaceDeviceIdentity(workspaceId);
+          const identity = await this.resolveWorkspaceDeviceIdentity(workspaceId);
 
           const registered = await this.workspaceDeviceChecker?.(workspaceId, identity.deviceId);
           if (registered === false) {
@@ -682,6 +688,7 @@ export default class GatewayConnectionService extends ServiceModule {
 
   private async handleSystemInfoRequest(client: GatewayClient, request: SystemInfoRequestMessage) {
     logger.info(`Received system_info_request: requestId=${request.requestId}`);
+    const { getShellInfo } = await import('@lobechat/local-file-shell/shell');
     client.sendSystemInfoResponse({
       requestId: request.requestId,
       result: {

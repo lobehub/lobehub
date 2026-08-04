@@ -1,5 +1,6 @@
 'use client';
 
+import { currentUtilization, isWeeklyAllLimit } from '@lobechat/heterogeneous-agents/quota';
 import { ActionIcon, DropdownMenu, Flexbox, Icon, Input, Text } from '@lobehub/ui';
 import { Button, createModal, type ModalInstance, Switch } from '@lobehub/ui/base-ui';
 import { Radio } from 'antd';
@@ -56,17 +57,20 @@ const styles = createStaticStyles(({ css }) => ({
 
 type Account = Awaited<ReturnType<typeof agentQuotaService.listAccounts>>[number];
 type Binding = Awaited<ReturnType<typeof agentQuotaService.listBindings>>[number];
-type QuotaWindow = Awaited<ReturnType<typeof agentQuotaService.getWindows>>[number];
+type QuotaReading = Awaited<ReturnType<typeof agentQuotaService.getLatestReadings>>[number];
 
 const AUTO = 'auto';
 
 const clampPercent = (n: number) => Math.min(100, Math.max(0, Math.round(n)));
 
-const weeklyLeftOf = (windows: QuotaWindow[]): number | undefined => {
-  const wk = windows.find((w) => w.limitType === 'weekly_all');
-  if (!wk) return undefined;
-  const used = wk.lastUtilization ?? wk.peakUtilization;
-  return used == null ? undefined : clampPercent(100 - used);
+/**
+ * Weekly headroom for the account row. A reading whose window already rolled
+ * over describes spend that has since refilled, so it counts as free rather
+ * than as the last utilization it happened to record.
+ */
+const weeklyLeftOf = (readings: QuotaReading[], now = Date.now()): number | undefined => {
+  const weekly = readings.find((r) => isWeeklyAllLimit(r));
+  return weekly ? clampPercent(100 - currentUtilization(weekly, now)) : undefined;
 };
 
 const accountName = (a: Account) => a.label || a.email || a.externalAccountId;
@@ -93,8 +97,10 @@ const QuotaAccountManager = memo<{ agentId: string }>(({ agentId }) => {
 
     const entries = await Promise.all(
       accs.map(async (a) => {
-        const w = await agentQuotaService.getWindows(a.id).catch(() => [] as QuotaWindow[]);
-        return [a.id, weeklyLeftOf(w)] as const;
+        const readings = await agentQuotaService
+          .getLatestReadings(a.id)
+          .catch(() => [] as QuotaReading[]);
+        return [a.id, weeklyLeftOf(readings)] as const;
       }),
     );
     setWeeklyById(Object.fromEntries(entries));

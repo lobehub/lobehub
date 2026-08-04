@@ -98,7 +98,7 @@ export const processUnderstandingProviders = async (
           topicId: payload.topicId,
           userId: payload.userId,
         };
-        await Promise.all([
+        const downstreamTasks: Promise<unknown>[] = [
           context.invoke(`provider:${providerId}:write:${result.revision}`, {
             body,
             // Serialize writers for this session. The repository's fingerprint CAS then prevents a
@@ -110,27 +110,32 @@ export const processUnderstandingProviders = async (
             workflow: dependencies.processCollectedWorkflow,
             workflowRunId: collectedWorkflowRunId(payload.sessionId, result.sourceFingerprint),
           }),
-          context.run(`provider:${providerId}:recommend:${result.revision}`, () =>
-            // NOTICE:
-            // Cross-route workflow fan-out must use an absolute QStash trigger.
-            // context.invoke only replaces the current URL's final path segment, which sent this
-            // child to `/api/workflows/onboarding/understanding/process` and returned 404.
-            // Source/context: `workflows-hono/memory-user-memory/workflows/processUserTopics.ts:193`.
-            // Remove when Upstash context.invoke supports absolute cross-route workflow URLs.
-            dependencies.triggerTaskRecommendations(body, {
-              // Every completed provider may race to schedule a fingerprint-specific run. The
-              // session-scoped flow-control key makes the first accepted fingerprint immutable.
-              flowControl: {
-                key: getTaskRecommendationFlowControlKey(payload.sessionId),
-                parallelism: 1,
-              },
-              workflowRunId: taskRecommendationWorkflowRunId(
-                payload.sessionId,
-                result.sourceFingerprint,
-              ),
-            }),
-          ),
-        ]);
+        ];
+        if (payload.triggerTaskRecommendations !== false) {
+          downstreamTasks.push(
+            context.run(`provider:${providerId}:recommend:${result.revision}`, () =>
+              // NOTICE:
+              // Cross-route workflow fan-out must use an absolute QStash trigger.
+              // context.invoke only replaces the current URL's final path segment, which sent this
+              // child to `/api/workflows/onboarding/understanding/process` and returned 404.
+              // Source/context: `workflows-hono/memory-user-memory/workflows/processUserTopics.ts:193`.
+              // Remove when Upstash context.invoke supports absolute cross-route workflow URLs.
+              dependencies.triggerTaskRecommendations(body, {
+                // Every completed provider may race to schedule a fingerprint-specific run. The
+                // session-scoped flow-control key makes the first accepted fingerprint immutable.
+                flowControl: {
+                  key: getTaskRecommendationFlowControlKey(payload.sessionId),
+                  parallelism: 1,
+                },
+                workflowRunId: taskRecommendationWorkflowRunId(
+                  payload.sessionId,
+                  result.sourceFingerprint,
+                ),
+              }),
+            ),
+          );
+        }
+        await Promise.all(downstreamTasks);
       }
 
       return {

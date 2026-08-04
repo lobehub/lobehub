@@ -13,17 +13,18 @@ export const shouldShowHeteroModelSelector = ({
   isDesktopClient,
   providerType,
 }: ShouldShowHeteroModelSelectorParams): boolean => {
+  // OpenCode has no cloud-side model list — its selector needs a concrete
+  // runtime to discover models from: the desktop itself, or an explicit bound
+  // device that answers listHeterogeneousAgentModels.
   if (providerType === 'opencode') {
     if (executionTarget === 'local') return isDesktopClient;
     return executionTarget === 'device' && !!boundDeviceId;
   }
 
-  if (executionTarget === 'auto' || executionTarget === 'device') return false;
-
-  // A desktop "local" selection stores that desktop's connected-device id so
-  // web clients can route back to the same machine. On web this is a device
-  // dispatch, and selector args are not capability-gated for devices yet.
-  if (!isDesktopClient && executionTarget === 'local' && boundDeviceId) return false;
-
+  // Claude Code / Codex model + effort picks are forwarded on every execution
+  // path: the desktop local spawn, the cloud sandbox, and device dispatch
+  // (explicit `device`, `auto` routing, and web-initiated runs on a bound
+  // desktop) all append `buildHeteroExecArgs` output to `lh hetero exec` — so
+  // the selector is always shown.
   return true;
 };

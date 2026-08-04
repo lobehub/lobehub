@@ -1,6 +1,5 @@
+import { existsSync } from 'node:fs';
 import path from 'node:path';
-
-import { pathExistsSync } from 'fs-extra';
 
 import { rendererDir } from '@/const/dir';
 import { isDev } from '@/const/env';
@@ -77,7 +76,7 @@ export class RendererUrlManager {
     // Static assets: direct file mapping
     if (pathname.startsWith('/assets/') || path.extname(pathname)) {
       const filePath = path.join(rendererDir, pathname);
-      return pathExistsSync(filePath) ? filePath : null;
+      return existsSync(filePath) ? filePath : null;
     }
 
     // Overlay entry (separate MPA page)

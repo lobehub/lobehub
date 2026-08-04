@@ -1,7 +1,6 @@
 import { ModelIcon } from '@lobehub/icons';
 import { ActionIcon, copyToClipboard, Flexbox, Tag, Text } from '@lobehub/ui';
-import { confirmModal, Switch } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { confirmModal, Switch, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { LucidePencil, TrashIcon } from 'lucide-react';
 import { type AiProviderModelListItem } from 'model-bank';
@@ -156,10 +155,9 @@ const ModelItem = memo<ModelItemProps>(
       ...formatPricing(),
     ].filter(Boolean) as string[];
 
-    const { message } = App.useApp();
     const copyModelId = async () => {
       await copyToClipboard(id);
-      message.success({ content: t('copySuccess', { ns: 'common' }) });
+      toast.success(t('copySuccess', { ns: 'common' }));
     };
 
     const isMobile = useIsMobile();
@@ -222,7 +220,7 @@ const ModelItem = memo<ModelItemProps>(
                   okText: t('delete', { ns: 'common' }),
                   onOk: async () => {
                     await removeAiModel(id, activeAiProvider!);
-                    message.success(t('providerModels.item.delete.success'));
+                    toast.success(t('providerModels.item.delete.success'));
                   },
                   title: t('providerModels.item.delete.title'),
                 });
