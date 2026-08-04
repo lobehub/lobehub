@@ -163,11 +163,16 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
     const ratedDimensions = ratingDimensions.filter((item) => item.score !== undefined);
     const hasRating = ratedDimensions.length > 0;
 
+    // Model ids can contain `:` (e.g. `gemini-3-pro-image-preview:image`). i18next
+    // defaults nsSeparator to `:`, so without disabling it the lookup splits into the
+    // wrong namespace and never hits `models.lobehub.<id>.description`.
     const description = model.description
       ? String(
           t(getModelDescriptionI18nKey(model.id, provider) as any, {
             defaultValue: model.description,
+            keySeparator: false,
             ns: 'models',
+            nsSeparator: false,
           }),
         ).trim()
       : undefined;
