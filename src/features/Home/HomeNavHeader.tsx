@@ -1,3 +1,4 @@
+import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
@@ -7,6 +8,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
+import CustomizeButton from './CustomizeButton';
 import RailToggle from './RailToggle';
 
 // Floats over the dashboard instead of pushing it down: the controls live in
@@ -33,7 +35,10 @@ const HomeNavHeader = memo(() => {
       className={styles.header}
       right={
         isLogin && isStatusInit ? (
-          <RailToggle railVisible={showHomeRail} onToggle={toggleHomeRail} />
+          <Flexbox horizontal align={'center'} gap={4}>
+            <CustomizeButton />
+            <RailToggle railVisible={showHomeRail} onToggle={toggleHomeRail} />
+          </Flexbox>
         ) : undefined
       }
     />
