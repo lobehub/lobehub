@@ -291,7 +291,22 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
         (briefsInit || Boolean(briefsSWR.error)),
     });
 
-    if (state === 'empty') return <EmptySuggestions onSelect={onSuggestionSelect} />;
+    // The empty short-circuit predates the fold-in: with the rail open it only
+    // skips the main column's own blocks, while news and suggestions live on in
+    // the rail. Folded, it would swallow them too — news needs no activity to
+    // exist. Mirror the expanded page instead: suggestions first, then whatever
+    // folded in (both sections render null when there is nothing to carry).
+    if (state === 'empty') {
+      if (!inlineRail) return <EmptySuggestions onSelect={onSuggestionSelect} />;
+
+      return (
+        <Flexbox gap={32}>
+          <EmptySuggestions onSelect={onSuggestionSelect} />
+          <HomeInbox inlineRail variant={'main'} />
+          <Recommendations variant={'main'} />
+        </Flexbox>
+      );
+    }
 
     return (
       <Flexbox gap={32}>
@@ -319,7 +334,19 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
   if (!isLogin) return null;
 
   if (mode === 'task') {
-    return <TaskContent />;
+    if (!inlineRail) return <TaskContent />;
+
+    // The rail's sections sit beside task mode while it is open, so a folded
+    // rail must not take them away here either: in flight and what happened
+    // above the task list, suggestions after it. Unread and needs-you stay
+    // hidden — task mode never surfaces them, folded or not.
+    return (
+      <Flexbox gap={32}>
+        <HomeInbox hideNeedsYou hideUnread inlineRail variant={'main'} />
+        <TaskContent />
+        <Recommendations variant={'main'} />
+      </Flexbox>
+    );
   }
 
   return null;
