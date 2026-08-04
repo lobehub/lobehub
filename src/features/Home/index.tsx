@@ -5,6 +5,7 @@ import { createStaticStyles, cx } from 'antd-style';
 import { memo, useCallback, useState } from 'react';
 
 import HomeInbox from '@/features/HomeInbox';
+import { hasVisibleRailWidget } from '@/features/HomeInbox/hiddenWidgets';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -234,9 +235,14 @@ const Home = memo(() => {
   const isLogin = useUserStore(authSelectors.isLogin);
   const showHomeRail = useGlobalStore(systemStatusSelectors.showHomeRail);
   const showHomePortrait = useGlobalStore(systemStatusSelectors.showHomePortrait);
+  const hiddenWidgets = useGlobalStore(systemStatusSelectors.hiddenHomeWidgets);
   const [mode, setMode] = useState<HomeMode>('chat');
   const [inputValue, setInputValue] = useState('');
-  const railVisible = Boolean(isLogin && showHomeRail);
+  const railVisible = Boolean(
+    isLogin &&
+    showHomeRail &&
+    hasVisibleRailWidget({ hiddenWidgets, hideNeedsYou: true, hideUnread: true }),
+  );
   const railCollapsed = !railVisible;
   const portraitVisible = Boolean(isLogin && showHomePortrait);
 
@@ -260,7 +266,7 @@ const Home = memo(() => {
     <Flexbox className={styles.grid}>
       <div className={cx(styles.header, styles.content, railCollapsed && styles.contentCollapsed)}>
         <HomeHeader />
-        {/* No portrait for signed-out visitors, so no one to speak the line. */}
+        {/* The bubble is the portrait's line, so it goes wherever the portrait goes. */}
         {portraitVisible && (
           <div className={cx(styles.bubbleSlot, railCollapsed && styles.bubbleSlotCollapsed)}>
             <PortraitBubble />

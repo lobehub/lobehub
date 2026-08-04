@@ -19,7 +19,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
-import { filterHiddenWidgetSections } from './hiddenWidgets';
+import { filterHiddenWidgetSections, isBriefsBlockVisible } from './hiddenWidgets';
 import InboxBriefCard from './InboxBriefCard';
 import MarkAllReadButton from './MarkAllReadButton';
 import NeedsYouRailCard from './NeedsYouRailCard';
@@ -152,9 +152,11 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
 
   if (!isLogin) return null;
 
+  const briefsBlockVisible = isBriefsBlockVisible({ hiddenWidgets, hideNeedsYou });
+
   // The brief feed is the primary content; a first-load failure blocks the whole
   // surface. No fabricated section heading — we don't know what's under it yet.
-  if (!isMain && briefsSWR.error && !isBriefsInit && !briefsSWR.isLoading) {
+  if (!isMain && briefsBlockVisible && briefsSWR.error && !isBriefsInit && !briefsSWR.isLoading) {
     return (
       <AsyncError
         error={briefsSWR.error}
@@ -168,7 +170,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
 
   // First load: bare skeletons, no group heading (loading must not assert a
   // "Needs you" section that may turn out empty). Recommendations keep their own.
-  if (!isMain && !isBriefsInit) {
+  if (!isMain && briefsBlockVisible && !isBriefsInit) {
     return (
       <Flexbox gap={12}>
         <BriefCardSkeleton />
@@ -325,11 +327,11 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
     if (isMain) return null;
 
     if (isRail)
-      return (
+      return recommendationsVisible ? (
         <Flexbox gap={12}>
           <Recommendations variant={'rail'} />
         </Flexbox>
-      );
+      ) : null;
 
     // With no titled block above it, the bare recommendations list doesn't need
     // the full section gap below the input area — offset the parent's gap so it
