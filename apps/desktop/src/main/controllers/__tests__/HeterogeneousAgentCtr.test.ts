@@ -1089,6 +1089,10 @@ describe('HeterogeneousAgentCtr', () => {
     });
 
     it('falls back to codex exec when app-server cannot preserve a CLI argument', async () => {
+      // Fallback path still spawns `codex exec`; without a fake process, sendPrompt hangs.
+      const { proc } = createFakeProc();
+      nextFakeProc = proc;
+
       const ctr = new HeterogeneousAgentCtr({
         appStoragePath,
         storeManager: { get: vi.fn() },
