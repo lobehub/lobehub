@@ -583,10 +583,17 @@ export const createInitialSystemStatus = (): SystemStatus => {
 
   return {
     ...INITIAL_STATUS,
+    hiddenHomeWidgets: Array.isArray(persistedStatus.hiddenHomeWidgets)
+      ? persistedStatus.hiddenHomeWidgets
+      : INITIAL_STATUS.hiddenHomeWidgets,
     leftPanelWidth:
       typeof persistedStatus.leftPanelWidth === 'number'
         ? persistedStatus.leftPanelWidth
         : INITIAL_STATUS.leftPanelWidth,
+    showHomePortrait:
+      typeof persistedStatus.showHomePortrait === 'boolean'
+        ? persistedStatus.showHomePortrait
+        : INITIAL_STATUS.showHomePortrait,
     showHomeRail:
       typeof persistedStatus.showHomeRail === 'boolean'
         ? persistedStatus.showHomeRail
