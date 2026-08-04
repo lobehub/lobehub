@@ -6,16 +6,17 @@ sides of a contract in one run. Driven by `agent-browser`
 ([../references/agent-browser.md](../references/agent-browser.md)).
 
 Use web when the behavior is the same in a normal browser against the app's dev
-server or a deployed URL. If the criterion depends on the desktop shell, use
-[electron.md](./electron.md) instead; if it's backend/CLI, use [cli.md](./cli.md).
+server or a deployed URL. Return to the surface router if the criterion depends
+on the desktop shell or is fully provable through backend/CLI output.
 
 ## Setup
 
 1. Have the app reachable at a URL: a local dev server you started (e.g.
    `http://localhost:<port>`), or a deployed/preview URL the task targets.
 2. If the state under test is behind login, authenticate the agent-browser
-   session first — see [../references/auth.md](../references/auth.md). Use a named
-   `--session` so cookies persist across commands.
+   session first — see
+   [../references/auth-web.md](../references/auth-web.md). Use a named `--session`
+   so cookies persist across commands.
 
 ```bash
 SESSION=app
@@ -56,14 +57,16 @@ proves frontend behavior, not backend changes.
 ## Time-based behavior & OS-level steps
 
 - **Behavior over time** (streaming, loading→loaded, animation) needs a clip, not a
-  screenshot — record it: [../references/recording.md](../references/recording.md).
+  screenshot — record CDP frames:
+  [../references/recording-cdp.md](../references/recording-cdp.md).
 - **A native step the page can't script** (file picker, OS permission prompt, Save
   dialog) — drop to Computer Use for that step, then return:
   [../references/computer-use.md](../references/computer-use.md).
 
 ## Boundaries
 
+- **Provenance:** tag artifacts captured by `agent-browser` as
+  `--by agent-browser`; use `--by cdp` only for a direct CDP client capture.
 - **Headless / cloud:** web is cloud-native — headless Chromium and CDP screenshots
-  work without a display. Prefer CDP capture over OS-level capture (see
-  [../references/evidence.md](../references/evidence.md#headless--cloud-portability)).
+  work without a display. Prefer CDP capture over OS-level capture.
 - **HMR breaks refs.** After a hot reload during dev, re-snapshot before interacting.

@@ -11,16 +11,16 @@ const AgentIdSync = () => {
   const [searchParams] = useSearchParams();
   const navigate = useWorkspaceAwareNavigate();
   const location = useLocation();
-  const { agentId: activeId, isBuiltinSlug, resolvedAgentId } = useResolvedAgentRouteId(params.aid);
+  const { agentId: activeId, isSlugRoute, resolvedAgentId } = useResolvedAgentRouteId(params.aid);
 
   // Redirect slug URL to real agent ID URL, preserving child path and query string
   useEffect(() => {
-    if (isBuiltinSlug && resolvedAgentId) {
+    if (isSlugRoute && resolvedAgentId) {
       const suffix = location.pathname.replace(`/agent/${params.aid}`, '');
       const qs = searchParams.toString();
       navigate(`/agent/${resolvedAgentId}${suffix}${qs ? `?${qs}` : ''}`, { replace: true });
     }
-  }, [isBuiltinSlug, resolvedAgentId, navigate, searchParams, location.pathname, params.aid]);
+  }, [isSlugRoute, resolvedAgentId, navigate, searchParams, location.pathname, params.aid]);
 
   useAgentIdStoreSync({
     activeId,

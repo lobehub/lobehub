@@ -228,6 +228,7 @@ export default {
   'acceptance.status.repairing': 'Repair in progress',
   'acceptance.status.verifying': 'Verification in progress',
   'acceptance.subject.document': 'Document',
+  'acceptance.subject.standalone': 'Standalone',
   'acceptance.subject.task': 'Task',
   'acceptance.subject.topic': 'Topic',
   'acceptance.tray.addCheck': 'Add tracking item',

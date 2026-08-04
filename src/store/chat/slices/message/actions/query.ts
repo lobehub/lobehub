@@ -87,7 +87,15 @@ export class MessageQueryActionImpl {
     prefetchingMessageKeys.add(messagesKey);
 
     const request = runMessageListQuery(context, messageService.getMessages).then((messages) => {
-      this.#get().replaceMessages(messages, { action: 'prefetchMessages', context });
+      // Re-check at DELIVERY time, not just at start: the user can open this
+      // topic and submit a follow-up while the request is in flight. Applying
+      // the pre-run snapshot then would drop the freshly created user/assistant
+      // rows, and streaming updates targeting those now-missing ids are silent
+      // no-ops until terminal reconciliation. Mirrors the defense-in-depth gate
+      // in `useFetchMessages`' onData; the SWR cache seed below is unaffected.
+      if (!operationSelectors.isAgentRuntimeRunningByContext(context)(this.#get())) {
+        this.#get().replaceMessages(messages, { action: 'prefetchMessages', context });
+      }
       return messages;
     });
 
@@ -119,6 +127,16 @@ export class MessageQueryActionImpl {
        * refetch restores them.
        */
       preserveWorks?: boolean;
+
+      /**
+       * 'fetch' — the messages are a server-snapshot echo from a Conversation
+       * store's SWR sync (`onMessagesChange` meta). Skips the SWR cache
+       * write-through: SWR already holds this value, and at mount the echo
+       * carries the STALE cached list while the revalidation is in flight — a
+       * cache mutate then trips SWR's mutation race guard and discards the
+       * fresh result, locking the conversation on the stale/partial list.
+       */
+      source?: 'fetch';
     },
   ): void => {
     let ctx: MessageMapKeyInput;
@@ -189,7 +207,12 @@ export class MessageQueryActionImpl {
     // updated by the dispatch, so a later remount would hydrate the
     // pre-mutation snapshot (stale content / deleted rows). Seeding here keeps
     // the cache correct even on a store no-op.
-    this.#writeThroughMessageCache(ctx, messagesKey, reconciled, params?.action);
+    // Fetch echoes never write through: SWR already holds that exact value, and
+    // at mount the echo is the STALE cached list racing the in-flight
+    // revalidation (see `source` doc above).
+    if (params?.source !== 'fetch') {
+      this.#writeThroughMessageCache(ctx, messagesKey, reconciled, params?.action);
+    }
 
     if (isEqual(nextDbMap, this.#get().dbMessagesMap)) return;
 

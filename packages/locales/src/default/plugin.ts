@@ -468,6 +468,7 @@ export default {
   'builtins.lobe-self-feedback-intent.inspector.skill.create': 'New method found',
   'builtins.lobe-self-feedback-intent.inspector.skill.refine': 'Improve method',
   'builtins.lobe-self-feedback-intent.title': 'Improvement Ideas',
+  'builtins.lobe-user-memory.apiName.addActivityMemory': 'Add activity memory',
   'builtins.lobe-user-memory.apiName.addContextMemory': 'Add context memory',
   'builtins.lobe-user-memory.apiName.addExperienceMemory': 'Add experience memory',
   'builtins.lobe-user-memory.apiName.addIdentityMemory': 'Add identity memory',

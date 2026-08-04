@@ -34,6 +34,13 @@ const sidebarAgentVisibilityOverrides = (s: UserStore): Record<string, boolean> 
 const sidebarHiddenAgentIds = (s: UserStore): string[] =>
   s.workspaceUserPreference.sidebarHiddenAgentIds ?? EMPTY_HIDDEN;
 
+/**
+ * Folders (Categories) the caller hid from their sidebar in the active
+ * workspace. The folders themselves stay shared — this is the personal mask.
+ */
+const sidebarHiddenGroupIds = (s: UserStore): string[] =>
+  s.workspaceUserPreference.sidebarHiddenGroupIds ?? EMPTY_HIDDEN;
+
 /** Whether the caller removed this item from their sidebar (default is listed). */
 const isAgentHiddenFromSidebar =
   (agentId: string) =>
@@ -53,5 +60,6 @@ export const workspaceUserSettingsSelectors = {
   preferenceWorkspaceId,
   sidebarAgentVisibilityOverrides,
   sidebarHiddenAgentIds,
+  sidebarHiddenGroupIds,
   sidebarLayout,
 };

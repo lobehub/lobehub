@@ -48,11 +48,13 @@ const pendingTool = {
 
 describe('requestHumanApprove', () => {
   let createToolMessage: ReturnType<typeof vi.fn>;
+  let deleteMessage: ReturnType<typeof vi.fn>;
   let query: ReturnType<typeof vi.fn>;
   let host: AgentRuntimeHost;
 
   beforeEach(() => {
     createToolMessage = vi.fn().mockResolvedValue({ id: 'tool-msg-1' });
+    deleteMessage = vi.fn().mockResolvedValue(undefined);
     query = vi.fn().mockResolvedValue([]);
 
     host = {
@@ -64,7 +66,7 @@ describe('requestHumanApprove', () => {
         topicId: 'topic-1',
       },
       transports: {
-        messages: { createToolMessage, query },
+        messages: { createToolMessage, deleteMessage, query },
         stream: { publishChunk: vi.fn(), publishEvent: vi.fn() },
       },
     } as unknown as AgentRuntimeHost;
@@ -158,5 +160,50 @@ describe('requestHumanApprove', () => {
     expect(
       (host.transports.stream.publishChunk as ReturnType<typeof vi.fn>).mock.calls[0][0],
     ).toMatchObject({ toolMessageIds: { call_ask_1: 'tool-msg-existing' } });
+  });
+  describe('unconsumed assistant placeholder', () => {
+    // A resume op (approve / answer) seeds an assistant placeholder so the UI
+    // shows a spinner, and the first `call_llm` claims it. Parking here means no
+    // `call_llm` ran — the approved tool executed and the batch still has
+    // unresolved siblings — so the placeholder would linger as an empty "…"
+    // assistant hanging off the tool that was just settled.
+    const instruction = {
+      parentMessageId: 'assistant-msg-1',
+      pendingToolsCalling: [pendingTool],
+      skipCreateToolMessage: true,
+      type: 'request_human_approve',
+    } as unknown as AgentInstruction;
+
+    it('retires the seeded placeholder when the run parks without calling the LLM', async () => {
+      const result = await requestHumanApprove(host)(
+        instruction,
+        createState({ pendingAssistantMessageId: 'assistant-placeholder-1' }),
+        undefined as any,
+      );
+
+      expect(deleteMessage).toHaveBeenCalledWith('assistant-placeholder-1');
+      expect(result.newState.pendingAssistantMessageId).toBeUndefined();
+      expect(result.newState.status).toBe('waiting_for_human');
+    });
+
+    it('parks normally when no placeholder was seeded', async () => {
+      const result = await requestHumanApprove(host)(instruction, createState(), undefined as any);
+
+      expect(deleteMessage).not.toHaveBeenCalled();
+      expect(result.newState.status).toBe('waiting_for_human');
+    });
+
+    it('still parks when retiring the placeholder fails', async () => {
+      deleteMessage.mockRejectedValue(new Error('db down'));
+
+      const result = await requestHumanApprove(host)(
+        instruction,
+        createState({ pendingAssistantMessageId: 'assistant-placeholder-1' }),
+        undefined as any,
+      );
+
+      expect(result.newState.status).toBe('waiting_for_human');
+      expect(result.newState.pendingToolsCalling).toEqual([pendingTool]);
+    });
   });
 });

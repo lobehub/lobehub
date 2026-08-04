@@ -3,36 +3,43 @@ import { describe, expect, it } from 'vitest';
 import { resolveSidebarItemVisibility } from './useSidebarItemVisibility';
 
 const options = (overrides: Partial<Parameters<typeof resolveSidebarItemVisibility>[1]> = {}) => ({
-  currentUserId: 'member-1',
   hiddenItemIds: new Set<string>(),
-  isWorkspaceMode: true,
   visibilityOverrides: {},
   ...overrides,
 });
 
 describe('resolveSidebarItemVisibility', () => {
-  it('shows own Agents and hides Agents created by another workspace member by default', () => {
+  // Regression: shared Agents created by another member used to default to
+  // hidden, which left a new workspace member staring at an empty sidebar and
+  // made the list impossible to curate collectively.
+  it('shows every item by default, whoever created it', () => {
     expect(
       resolveSidebarItemVisibility({ id: 'own', type: 'agent', userId: 'member-1' }, options()),
     ).toBe(true);
     expect(
       resolveSidebarItemVisibility({ id: 'shared', type: 'agent', userId: 'member-2' }, options()),
-    ).toBe(false);
-  });
-
-  it('keeps builtin Agents and chat groups visible by default', () => {
-    expect(
-      resolveSidebarItemVisibility(
-        { id: 'builtin', slug: 'agent-builder', type: 'agent', userId: 'member-2' },
-        options(),
-      ),
     ).toBe(true);
     expect(
       resolveSidebarItemVisibility({ id: 'group', type: 'group', userId: 'member-2' }, options()),
     ).toBe(true);
   });
 
-  it('lets an explicit per-member override win over ownership and legacy hidden ids', () => {
+  it('hides items the caller opted out of, via override or the legacy hidden-id list', () => {
+    expect(
+      resolveSidebarItemVisibility(
+        { id: 'shared', type: 'agent', userId: 'member-2' },
+        options({ visibilityOverrides: { shared: false } }),
+      ),
+    ).toBe(false);
+    expect(
+      resolveSidebarItemVisibility(
+        { id: 'legacy', type: 'agent', userId: 'member-1' },
+        options({ hiddenItemIds: new Set(['legacy']) }),
+      ),
+    ).toBe(false);
+  });
+
+  it('lets an explicit override win over the legacy hidden-id list', () => {
     expect(
       resolveSidebarItemVisibility(
         { id: 'shared', type: 'agent', userId: 'member-2' },
@@ -42,26 +49,5 @@ describe('resolveSidebarItemVisibility', () => {
         }),
       ),
     ).toBe(true);
-    expect(
-      resolveSidebarItemVisibility(
-        { id: 'own', type: 'agent', userId: 'member-1' },
-        options({ visibilityOverrides: { own: false } }),
-      ),
-    ).toBe(false);
-  });
-
-  it('preserves personal-mode visibility and the legacy hidden-id preference', () => {
-    expect(
-      resolveSidebarItemVisibility(
-        { id: 'personal', type: 'agent', userId: 'member-2' },
-        options({ isWorkspaceMode: false }),
-      ),
-    ).toBe(true);
-    expect(
-      resolveSidebarItemVisibility(
-        { id: 'personal', type: 'agent', userId: 'member-1' },
-        options({ hiddenItemIds: new Set(['personal']), isWorkspaceMode: false }),
-      ),
-    ).toBe(false);
   });
 });

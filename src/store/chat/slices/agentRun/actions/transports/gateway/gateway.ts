@@ -406,6 +406,12 @@ export class GatewayActionImpl {
      */
     resumeApproval?: ResumeApprovalParam;
     /**
+     * Batch form of `resumeApproval` — every decision made in one "approve all"
+     * action. Forwarded so the server resolves the whole pending batch in a
+     * single op instead of one op (and one LLM continuation) per tool.
+     */
+    resumeApprovals?: ResumeApprovalParam[];
+    /**
      * Resume a paused op waiting on a human-intervention tool (e.g. lobe-agent
      * `askUserQuestion`). Forwarded to `aiAgentService.execAgentTask` so the new
      * server-side op writes the human answer as the tool result and resumes from
@@ -448,6 +454,7 @@ export class GatewayActionImpl {
       parentMessageId,
       parentOperationId,
       resumeApproval,
+      resumeApprovals,
       resumeToolResult,
       selectedToolIds,
       mentionedAgents,
@@ -541,6 +548,7 @@ export class GatewayActionImpl {
         parentMessageId,
         prompt: message,
         resumeApproval,
+        resumeApprovals,
         resumeToolResult,
         selectedToolIds,
         trigger: metadata?.trigger,

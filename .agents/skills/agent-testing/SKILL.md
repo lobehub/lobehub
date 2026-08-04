@@ -399,6 +399,13 @@ run metadata so the report can render a separate interaction-cost section.
 
 ### Step 5 — Structured report (mandatory deliverable)
 
+**Read [references/report.md](./references/report.md) in full before writing the
+first line of `result.json`** — it is the schema, and this section is only a
+summary of it. Do not infer a field's shape from the snippets here; the nested
+ones are spelled out there and nowhere else. A field written in the wrong shape
+is dropped on ingest, so the run publishes green with its evidence silently
+degraded.
+
 Every automated test session ends with a structured, evidence-backed report — not
 a chat-only summary. Scaffold it up front and fill it as you test:
 

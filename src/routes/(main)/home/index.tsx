@@ -11,15 +11,20 @@ const Home: FC = () => {
     <>
       <HomePageTracker />
       <HomeNavHeader />
+      {/* The page scrolls here, at full pane width, rather than inside the
+          centered column: it puts the scrollbar against the app frame instead
+          of floating it in the margin beside the content, and a native
+          overflow container takes no tab stop — a scroll viewport would, and
+          its focus ring would trace a box around the entire dashboard. */}
       <Flexbox
         height={'100%'}
-        style={{ overflow: 'hidden', paddingBlockStart: 32, paddingInline: 24 }}
+        style={{ overflowY: 'auto', paddingBlock: '32px 24px', paddingInline: 24 }}
         width={'100%'}
       >
         <WideScreenContainer
           fullWidth
-          style={{ marginInline: 'auto', maxWidth: 1240, minHeight: 0 }}
-          wrapperStyle={{ flex: 1, minHeight: 0 }}
+          style={{ marginInline: 'auto', maxWidth: 1240 }}
+          wrapperStyle={{ flex: 'none' }}
         >
           <HomeContent />
         </WideScreenContainer>

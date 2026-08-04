@@ -845,6 +845,7 @@ describe('AgentModel', () => {
         description: 'hacked description',
         marketIdentifier: 'hacked-market-id',
         model: 'gpt-4', // non-protected field should still be applied
+        name: 'Hacked Builder Name',
         tags: ['hacked'],
         title: 'Hacked Builder Title',
       });
@@ -853,6 +854,7 @@ describe('AgentModel', () => {
         where: eq(agents.id, agent.id),
       });
 
+      expect(result?.name).toBeNull();
       expect(result?.title).toBeNull();
       expect(result?.description).toBeNull();
       expect(result?.avatar).toBeNull();
@@ -1241,6 +1243,7 @@ describe('AgentModel', () => {
         description: 'hacked description',
         marketIdentifier: 'hacked-market-id',
         model: 'gpt-4', // non-protected field should still be applied
+        name: 'Hacked Builder Name',
         tags: ['hacked'],
         title: 'Hacked Builder Title',
       });
@@ -1249,6 +1252,7 @@ describe('AgentModel', () => {
         where: eq(agents.id, agent.id),
       });
 
+      expect(result?.name).toBeNull();
       expect(result?.title).toBeNull();
       expect(result?.description).toBeNull();
       expect(result?.avatar).toBeNull();
@@ -2489,6 +2493,29 @@ describe('AgentModel', () => {
     });
   });
 
+  describe('duplicate visibility', () => {
+    it('keeps a private agent private when duplicated', async () => {
+      // The column defaults to `public`, so an omitted copy publishes the
+      // duplicate of a private agent to the whole workspace — and, now that
+      // folder placement is shared, strands it in Ungrouped as well, since a
+      // public item resolves only against public folders.
+      const [group] = await serverDB
+        .insert(sessionGroups)
+        .values({ name: 'Private folder', userId, visibility: 'private' })
+        .returning();
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({ sessionGroupId: group.id, title: 'Secret', userId, visibility: 'private' })
+        .returning();
+
+      const result = await agentModel.duplicate(agent.id);
+
+      const [copy] = await serverDB.select().from(agents).where(eq(agents.id, result!.agentId));
+      expect(copy.visibility).toBe('private');
+      expect(copy.sessionGroupId).toBe(group.id);
+    });
+  });
+
   describe('updateSessionGroupId', () => {
     it('should update agent sessionGroupId', async () => {
       const [group] = await serverDB
@@ -2517,6 +2544,26 @@ describe('AgentModel', () => {
 
       const result = await agentModel.updateSessionGroupId(agent.id, null);
       expect(result.sessionGroupId).toBeNull();
+    });
+
+    it('should reject a folder the caller cannot see', async () => {
+      // The column is workspace-shared, so an unvalidated target corrupts the
+      // sidebar for every member: the foreign key accepts another user's
+      // folder, and everyone who cannot see it then finds the agent in
+      // Ungrouped.
+      const [foreignGroup] = await serverDB
+        .insert(sessionGroups)
+        .values({ userId: userId2, name: 'Someone else' })
+        .returning();
+
+      const [agent] = await serverDB.insert(agents).values({ userId, title: 'Agent' }).returning();
+
+      await expect(agentModel.updateSessionGroupId(agent.id, foreignGroup.id)).rejects.toThrow(
+        /not found in current scope/,
+      );
+
+      const [row] = await serverDB.select().from(agents).where(eq(agents.id, agent.id));
+      expect(row.sessionGroupId).toBeNull();
     });
 
     it('should not update agents from other users', async () => {

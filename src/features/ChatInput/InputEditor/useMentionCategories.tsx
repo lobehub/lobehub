@@ -1,3 +1,4 @@
+import { agentDisplayName } from '@lobechat/types';
 import { Avatar, Icon } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import isEqual from 'fast-deep-equal';
@@ -58,7 +59,7 @@ export const useMentionCategories = (): MentionCategory[] => {
         />
       ),
       key: `agent-${agent.id}`,
-      label: agent.title || 'Untitled Agent',
+      label: agentDisplayName(agent, 'Untitled Agent'),
       metadata: {
         id: agent.id,
         timestamp: agent.updatedAt ? new Date(agent.updatedAt).getTime() : 0,

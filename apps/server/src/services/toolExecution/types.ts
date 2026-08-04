@@ -5,6 +5,7 @@ import {
   type ClientSecretPayload,
   type ExecSubAgentParams,
   type StepActivatedSkill,
+  type StepContextTodoItem,
   type WorkRegistrationIntent,
 } from '@lobechat/types';
 
@@ -173,6 +174,15 @@ export interface ToolExecutionContext {
   assistantMessageId?: string;
   /** Originating request IP propagated through the operation metadata. */
   clientIp?: string;
+  /**
+   * Todo items as of this tool call, reconstructed from the operation's message
+   * history by the runtime executors — the tool-execution counterpart of what
+   * `serverCallLlmContextBuilder` feeds the prompt. The lobe-agent runtime needs
+   * it because its own store (the topic's plan document) only exists after
+   * `createPlan`, so an agent that only ever calls `createTodos` would otherwise
+   * read back an empty list on every subsequent call.
+   */
+  currentTodos?: StepContextTodoItem[];
   /**
    * Whether the run's execution plan is device-capable (`device` or
    * `device-unrouted`) — derived from `state.metadata.executionPlan` by the

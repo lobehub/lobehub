@@ -5,15 +5,21 @@ reach, this is the escape hatch: **macOS Computer Use** via `osascript`
 (AppleScript) and `screencapture`. Use it to drive native apps, handle OS-level
 chrome, and read the screen when no CDP target exists.
 
-This is the native/OS counterpart of [agent-browser.md](./agent-browser.md). It is
-**macOS-only and not cloud-portable** — prefer CDP automation when both can reach
-the target; reach here only when CDP can't.
+This is the native/OS counterpart of Chromium automation. It is **macOS-only and
+not cloud-portable** — prefer CDP automation when both can reach the target;
+reach here only when CDP cannot.
+
+## Contents
+
+- [When you need it](#when-you-need-it)
+- [Core patterns](#core-patterns)
+- [Capturing as evidence](#capturing-as-evidence)
+- [Gotchas](#gotchas)
 
 ## When you need it
 
 - **Native (non-Chromium) app under test** — the thing you're verifying is a native
-  macOS app agent-browser can't attach to. Drive it here (see
-  [../surfaces/native.md](../surfaces/native.md)).
+  macOS app a Chromium driver cannot attach to. Drive it here.
 - **OS-level steps inside a web/Electron flow** — a native file picker, a system
   permission prompt, a Save dialog, dock/menu-bar interaction, or a Spotlight/
   app-switch the page can't script. Drop to Computer Use for that step, then return
@@ -109,7 +115,7 @@ pbpaste
 
 - A `screencapture` PNG → `--type screenshot --by cli`.
 - For time-based native behavior, OS screen-record to MP4/GIF — see
-  [recording.md](./recording.md#path-2--os-screen-recording-macos-local-only).
+  [recording-native-macos.md](./recording-native-macos.md).
 - Text read via `pbpaste` → `--type text --content "$(pbpaste)"`.
 
 ## Gotchas

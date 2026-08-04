@@ -200,6 +200,7 @@
   "acceptance.status.repairing": "修复进行中",
   "acceptance.status.verifying": "验证进行中",
   "acceptance.subject.document": "文档",
+  "acceptance.subject.standalone": "独立验收",
   "acceptance.subject.task": "任务",
   "acceptance.subject.topic": "话题",
   "acceptance.surface.other": "其他",

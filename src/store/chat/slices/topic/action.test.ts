@@ -585,6 +585,133 @@ describe('topic action', () => {
       ).toEqual(topics);
     });
 
+    describe('unread message prefetch', () => {
+      // Regression: unread prefetch used to live only in the sidebar item's
+      // mount effect, so topics in collapsed groups / outside the virtualized
+      // viewport were never warmed — first click rendered the creation-time
+      // seed (first message only) until the switch revalidation landed.
+
+      it('prefetches messages for topics that flip to unread in a refetch', async () => {
+        const agentId = 'unread-flip-agent';
+        const prefetchMessages = vi.fn();
+        act(() => {
+          useChatStore.setState({
+            prefetchMessages,
+            topicDataMap: {
+              [topicMapKey({ agentId })]: {
+                currentPage: 0,
+                hasMore: false,
+                isInbox: false,
+                items: [{ id: 'tpc-flip', status: 'running', title: 'Running' }] as ChatTopic[],
+                pageSize: 20,
+                total: 1,
+              },
+            },
+          });
+        });
+        (topicService.getTopics as Mock).mockResolvedValue({
+          items: [{ id: 'tpc-flip', status: 'unread', title: 'Done' }],
+          total: 1,
+        });
+
+        renderHook(() => useChatStore().useFetchTopics(true, { agentId }));
+
+        await waitFor(() => {
+          expect(prefetchMessages).toHaveBeenCalledWith({
+            agentId,
+            scope: 'main',
+            topicId: 'tpc-flip',
+          });
+        });
+      });
+
+      it('sweeps already-unread topics on the first list load (app-closed runs)', async () => {
+        const agentId = 'unread-boot-agent';
+        const prefetchMessages = vi.fn();
+        act(() => {
+          useChatStore.setState({ prefetchMessages });
+        });
+        (topicService.getTopics as Mock).mockResolvedValue({
+          items: [
+            { id: 'tpc-a', status: 'unread', title: 'A' },
+            { id: 'tpc-b', status: null, title: 'B' },
+            { id: 'tpc-c', status: 'unread', title: 'C' },
+          ],
+          total: 3,
+        });
+
+        renderHook(() => useChatStore().useFetchTopics(true, { agentId }));
+
+        await waitFor(() => {
+          expect(prefetchMessages).toHaveBeenCalledTimes(2);
+        });
+        expect(prefetchMessages).toHaveBeenCalledWith({ agentId, scope: 'main', topicId: 'tpc-a' });
+        expect(prefetchMessages).toHaveBeenCalledWith({ agentId, scope: 'main', topicId: 'tpc-c' });
+      });
+
+      it('does not re-prefetch topics that were already unread, and caps the fan-out', async () => {
+        const agentId = 'unread-cap-agent';
+        const prefetchMessages = vi.fn();
+        const alreadyUnread = { id: 'tpc-old', status: 'unread', title: 'Old' } as ChatTopic;
+        act(() => {
+          useChatStore.setState({
+            prefetchMessages,
+            topicDataMap: {
+              [topicMapKey({ agentId })]: {
+                currentPage: 0,
+                hasMore: false,
+                isInbox: false,
+                items: [alreadyUnread],
+                pageSize: 20,
+                total: 1,
+              },
+            },
+          });
+        });
+        // 1 already-unread + 7 fresh flips → only 5 (the cap) prefetch, none for tpc-old
+        (topicService.getTopics as Mock).mockResolvedValue({
+          items: [
+            alreadyUnread,
+            ...Array.from({ length: 7 }, (_, index) => ({
+              id: `tpc-new-${index}`,
+              status: 'unread',
+              title: `New ${index}`,
+            })),
+          ],
+          total: 8,
+        });
+
+        renderHook(() => useChatStore().useFetchTopics(true, { agentId }));
+
+        await waitFor(() => {
+          expect(prefetchMessages).toHaveBeenCalledTimes(5);
+        });
+        expect(prefetchMessages).not.toHaveBeenCalledWith(
+          expect.objectContaining({ topicId: 'tpc-old' }),
+        );
+      });
+
+      it('skips group topic lists (message buckets are not representable)', async () => {
+        const prefetchMessages = vi.fn();
+        act(() => {
+          useChatStore.setState({ prefetchMessages });
+        });
+        (topicService.getTopics as Mock).mockResolvedValue({
+          items: [{ id: 'tpc-group', status: 'unread', title: 'G' }],
+          total: 1,
+        });
+
+        renderHook(() => useChatStore().useFetchTopics(true, { groupId: 'grp-1' }));
+
+        await waitFor(() => {
+          expect(
+            useChatStore.getState().topicDataMap[topicMapKey({ groupId: 'grp-1' })]?.items,
+          ).toBeDefined();
+        });
+        expect(prefetchMessages).not.toHaveBeenCalled();
+      });
+    });
+
     it('should preserve expanded topic list when first page revalidates after deletion', async () => {
       const agentId = 'expanded-delete-agent';
       const pageSize = 20;

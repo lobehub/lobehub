@@ -1,5 +1,6 @@
 'use client';
 
+import { agentDisplayName } from '@lobechat/types';
 import { Icon, Text } from '@lobehub/ui';
 import { Breadcrumb as AntBreadcrumb } from 'antd';
 import { createStaticStyles } from 'antd-style';
@@ -51,7 +52,9 @@ const AgentBreadcrumb = memo<AgentBreadcrumbProps>(({ agentId, extraItems, title
   const { t } = useTranslation(['chat', 'common']);
   const { pathname } = useLocation();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
-  const agentTitle = useAgentStore((s) => agentSelectors.getAgentMetaById(agentId)(s).title);
+  const agentTitle = useAgentStore((s) =>
+    agentDisplayName(agentSelectors.getAgentMetaById(agentId)(s)),
+  );
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const isInbox = !!inboxAgentId && agentId === inboxAgentId;
   const displayTitle = isInbox
