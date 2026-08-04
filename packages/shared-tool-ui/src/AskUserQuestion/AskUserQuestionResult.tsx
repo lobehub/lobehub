@@ -39,12 +39,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     padding-block: 8px 4px;
   `,
-  description: css`
-    font-size: 12px;
-    line-height: 1.5;
-    color: ${cssVar.colorTextTertiary};
-    overflow-wrap: anywhere;
-  `,
   divider: css`
     align-self: stretch;
     height: 1px;
@@ -118,13 +112,12 @@ export interface AskUserQuestionResultLabels {
 }
 
 interface AnswerLineProps {
-  description?: string;
   icon: typeof Check;
   selected?: boolean;
   text: string;
 }
 
-const AnswerLine = memo<AnswerLineProps>(({ icon, text, description, selected }) => (
+const AnswerLine = memo<AnswerLineProps>(({ icon, text, selected }) => (
   <Flexbox horizontal align="flex-start" className={styles.answerRow} gap={12}>
     <Icon
       className={cx(styles.answerIcon, selected && styles.answerIconSelected)}
@@ -133,7 +126,6 @@ const AnswerLine = memo<AnswerLineProps>(({ icon, text, description, selected })
     />
     <Flexbox className={styles.answerContent} flex={1} gap={4}>
       <span className={styles.answer}>{text}</span>
-      {description && <span className={styles.description}>{description}</span>}
     </Flexbox>
   </Flexbox>
 ));
@@ -149,7 +141,6 @@ interface QuestionAnswerProps {
 
 const QuestionAnswer = memo<QuestionAnswerProps>(({ question, answer, index, notAnswered }) => {
   const labels: string[] = Array.isArray(answer) ? answer : answer ? [answer] : [];
-  const optionByLabel = new Map(question.options.map((option) => [option.label, option]));
 
   return (
     <Flexbox align="flex-start" gap={8} horizontal={!!index}>
@@ -161,23 +152,12 @@ const QuestionAnswer = memo<QuestionAnswerProps>(({ question, answer, index, not
         </div>
         {labels.length > 0 ? (
           <Flexbox gap={8}>
-            {labels.map((label) => {
-              const option = optionByLabel.get(label);
-
-              return (
-                <AnswerLine
-                  selected
-                  icon={Check}
-                  key={label}
-                  text={label}
-                  description={
-                    option?.description && option.description !== label
-                      ? option.description
-                      : undefined
-                  }
-                />
-              );
-            })}
+            {/* Label only — re-printing the option's description would re-list
+                choose-time context the reader no longer needs (Codex-style
+                compact summary). */}
+            {labels.map((label) => (
+              <AnswerLine selected icon={Check} key={label} text={label} />
+            ))}
           </Flexbox>
         ) : (
           <span className={styles.unanswered}>{notAnswered}</span>

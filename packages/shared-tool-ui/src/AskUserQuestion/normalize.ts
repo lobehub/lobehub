@@ -12,15 +12,30 @@ const parseJsonString = (value: unknown): unknown => {
   }
 };
 
+/**
+ * Convention-based recommendation marker (see `AskUserQuestionOption.recommended`).
+ * Accepts ASCII/fullwidth parens and the English/Chinese wording models emit.
+ */
+const RECOMMENDED_SUFFIX = /\s*[(（](?:recommended|推荐)[)）]\s*$/i;
+
 const normalizeOption = (value: unknown): AskUserQuestionOption | undefined => {
   const option = toRecord(value);
-  const label = pickString(option?.label);
+  const rawLabel = pickString(option?.label);
 
-  if (!label) return;
+  if (!rawLabel) return;
 
+  const strippedLabel = rawLabel.replace(RECOMMENDED_SUFFIX, '');
+  // Only treat the suffix as a marker when something remains — a label that IS
+  // "(Recommended)" stays verbatim rather than collapsing to an empty option.
+  const recommended = strippedLabel.length > 0 && strippedLabel !== rawLabel;
+  const label = recommended ? strippedLabel : rawLabel;
   const description = pickString(option?.description);
 
-  return description ? { description, label } : { label };
+  return {
+    label,
+    ...(description ? { description } : {}),
+    ...(recommended ? { recommended } : {}),
+  };
 };
 
 const isQuestionOption = (
