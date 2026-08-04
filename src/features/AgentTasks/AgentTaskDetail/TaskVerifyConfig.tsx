@@ -1,18 +1,15 @@
 'use client';
 
+import { ActionIcon, Block, Flexbox, Icon, SortableList, Tag, Text, TextArea } from '@lobehub/ui';
 import {
-  ActionIcon,
-  Block,
+  Button,
+  confirmModal,
+  Drawer,
   type DropdownItem,
   DropdownMenu,
-  Flexbox,
-  Icon,
-  SortableList,
-  Tag,
-  Text,
-  TextArea,
-} from '@lobehub/ui';
-import { Button, confirmModal, Drawer, Select, toast } from '@lobehub/ui/base-ui';
+  Select,
+  toast,
+} from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   ChevronRight,

@@ -314,7 +314,45 @@ describe('TaskAcceptance', () => {
       requirement: null,
       verifyCriteriaIds: null,
     });
+    // Config clears BEFORE the aggregate is deleted: the inverse order could
+    // destroy the record and then fail, leaving a stale config to recreate it.
+    expect(mocks.updateVerifyConfig.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.deleteAcceptance.mock.invocationCallOrder[0],
+    );
     expect(mocks.mutateSubject).toHaveBeenCalled();
+  });
+
+  it('aborts removal without deleting the aggregate when the config clear fails', async () => {
+    mocks.acceptanceSubject = { id: 'acceptance-1' };
+    mocks.bundle = {
+      acceptance: { id: 'acceptance-1', requirement: 'Everything is verifiable.' },
+      checks: [{ category: 'Setup', id: 'c1', seq: 1, title: 'Create task' }],
+      isOwner: true,
+    };
+    mocks.updateVerifyConfig.mockRejectedValueOnce(new Error('config write failed'));
+
+    render(<TaskAcceptance />);
+
+    fireEvent.click(screen.getByText('taskDetail.acceptance.remove'));
+    const opts = mocks.confirmModal.mock.calls[0][0] as { onOk: () => Promise<void> };
+    await expect(opts.onOk()).rejects.toThrow('config write failed');
+
+    expect(mocks.deleteAcceptance).not.toHaveBeenCalled();
+    expect(mocks.mutateSubject).not.toHaveBeenCalled();
+  });
+
+  it('hides the remove button when the viewer does not own the acceptance', () => {
+    mocks.acceptanceSubject = { id: 'acceptance-1' };
+    mocks.bundle = {
+      acceptance: { id: 'acceptance-1', requirement: 'Everything is verifiable.' },
+      checks: [{ category: 'Setup', id: 'c1', seq: 1, title: 'Create task' }],
+      isOwner: false,
+    };
+
+    render(<TaskAcceptance />);
+
+    expect(screen.getByText('Create task')).toBeInTheDocument();
+    expect(screen.queryByText('taskDetail.acceptance.remove')).not.toBeInTheDocument();
   });
 
   it('keeps the Acceptance cross-round union visible in Task detail', () => {

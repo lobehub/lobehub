@@ -196,6 +196,11 @@ const TaskAcceptance = memo(() => {
   // Removing the acceptance drops the aggregate (round reports detach) AND
   // clears the task's verify config — otherwise the section would fall back to
   // the configured-criteria view and the next run would recreate the aggregate.
+  // Ordering makes the two writes safe without a server transaction: the config
+  // is cleared FIRST (a failure aborts before anything is destroyed), and only
+  // then is the aggregate deleted (a failure there leaves it intact for retry).
+  // The inverse order could delete the record while the stale config survives
+  // to recreate it on the next run.
   const handleRemoveAcceptance = () => {
     if (!acceptanceSubject || !taskId) return;
     confirmModal({
@@ -203,18 +208,21 @@ const TaskAcceptance = memo(() => {
       okButtonProps: { danger: true },
       okText: t('taskDetail.acceptance.removeConfirm.ok'),
       onOk: async () => {
-        await verifyService.deleteAcceptance(acceptanceSubject.id);
         await useTaskStore.getState().updateVerifyConfig(taskId, {
           enabled: false,
           requirement: null,
           verifyCriteriaIds: null,
         });
+        await verifyService.deleteAcceptance(acceptanceSubject.id);
         await mutateSubject();
       },
       title: t('taskDetail.acceptance.removeConfirm.title'),
     });
   };
 
+  // `acceptance.remove` only authorizes the acceptance creator (or a workspace
+  // owner, cloud-side), not everyone who can edit the task — so the affordance
+  // follows the bundle's isOwner rather than dead-ending in FORBIDDEN.
   const header = (
     <TaskAcceptanceHeader
       count={checks.length}
@@ -233,7 +241,7 @@ const TaskAcceptance = memo(() => {
             >
               {t('taskDetail.acceptance.openReport')}
             </Button>
-            {canEditTask && (
+            {canEditTask && bundle?.isOwner && (
               <ActionIcon
                 icon={Trash}
                 size={'small'}
