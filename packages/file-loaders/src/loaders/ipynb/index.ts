@@ -427,6 +427,14 @@ export const convertIpynbToMarkdown = (raw: string): string | null => {
 };
 
 /**
+ * Raised when the file is not text at all. `loadFile` only copies errors it
+ * catches itself into `FileDocument.metadata.error`, and the local `readFile`
+ * tool decides success from that field, so this rejection has to escape
+ * `loadPages` instead of being reported as a page-level error.
+ */
+class BinaryNotebookError extends Error {}
+
+/**
  * Loader for Jupyter notebooks (.ipynb). Preserves code/markdown/raw cell
  * sources and textual outputs while replacing token-heavy payloads (base64
  * images and long inline data URIs, widget state, HTML/SVG that carries a
@@ -443,14 +451,7 @@ export class IpynbLoader implements FileLoaderInterface {
       const sniff = sniffBinaryBuffer(buffer.subarray(0, 8192));
       if (sniff.isBinary) {
         log('Rejecting binary content: %s', sniff.reason);
-        return [
-          {
-            charCount: 0,
-            lineCount: 0,
-            metadata: { error: `Binary content in .ipynb file: ${sniff.reason}` },
-            pageContent: '',
-          },
-        ];
+        throw new BinaryNotebookError(`Binary content in .ipynb file: ${sniff.reason}`);
       }
 
       const raw = buffer.toString('utf8').replace(/^\uFEFF/, '');
@@ -481,6 +482,7 @@ export class IpynbLoader implements FileLoaderInterface {
       }));
     } catch (e) {
       const error = e as Error;
+      if (error instanceof BinaryNotebookError) throw error;
       console.error(`Error loading ipynb file ${filePath}: ${error.message}`);
       return [
         {

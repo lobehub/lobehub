@@ -1091,9 +1091,8 @@ describe('IpynbLoader fallbacks', () => {
   });
 
   it('rejects binary content masquerading as a notebook', async () => {
-    const pages = await loader.loadPages(fixturePath('binary.ipynb'));
-    expect(pages).toHaveLength(1);
-    expect(pages[0].pageContent).toBe('');
-    expect(String(pages[0].metadata.error)).toContain('Binary content');
+    await expect(loader.loadPages(fixturePath('binary.ipynb'))).rejects.toThrow(
+      /Binary content in \.ipynb file: \d+(\.\d+)?% non-printable chars/,
+    );
   });
 });
