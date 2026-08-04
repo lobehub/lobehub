@@ -40,6 +40,12 @@ const createServerVariableGenerators = (params: {
     day: () => timeParts().day,
     hour: () => timeParts().hour,
     iso: () => new Date().toISOString(),
+    // The client resolves {{locale}} from the browser (Intl resolvedOptions). The
+    // server has no request locale here — the user's configured response language
+    // arrives via `additionalVariables` and overrides this through the spread
+    // order below; without it, fall back to the same default as
+    // UserModel.getInfoForAIGeneration instead of leaking the literal token.
+    locale: () => 'en-US',
     minute: () => timeParts().minute,
     month: () => timeParts().month,
     second: () => timeParts().second,

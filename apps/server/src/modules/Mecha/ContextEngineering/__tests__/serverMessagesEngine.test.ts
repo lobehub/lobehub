@@ -155,7 +155,7 @@ describe('serverMessagesEngine', () => {
       const systemRole =
         'Date: {{date}} Day: {{day}} Weekday: {{weekday}} Hour: {{hour}} ' +
         'Minute: {{minute}} Second: {{second}} Month: {{month}} Year: {{year}} ' +
-        'ISO: {{iso}} Timestamp: {{timestamp}}';
+        'ISO: {{iso}} Timestamp: {{timestamp}} Locale: {{locale}}';
 
       const result = await serverMessagesEngine({
         messages,
@@ -171,6 +171,22 @@ describe('serverMessagesEngine', () => {
       expect(result[0].content).toMatch(
         /Weekday: (Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)/,
       );
+      expect(result[0].content).toContain('Locale: en-US');
+    });
+
+    it('lets additionalVariables override the locale fallback', async () => {
+      const messages = createBasicMessages();
+
+      const result = await serverMessagesEngine({
+        additionalVariables: { locale: 'zh-CN' },
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+        systemRole: 'Locale: {{locale}}',
+      });
+
+      expect(result[0].content).toContain('Locale: zh-CN');
+      expect(result[0].content).not.toContain('en-US');
     });
 
     it('renders wall-clock components in the user timezone', async () => {
