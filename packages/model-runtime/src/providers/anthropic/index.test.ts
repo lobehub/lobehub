@@ -909,7 +909,7 @@ describe('LobeAnthropicAI', () => {
         ]);
       });
 
-      it('should drop ALL stacked trailing assistant messages (LOBE-12572)', async () => {
+      it('should drop ALL stacked trailing assistant messages', async () => {
         // Failed-run placeholder rows can stack several assistant turns at the
         // payload tail; popping only one still triggers the prefill 400.
         const payload: ChatStreamPayload = {
