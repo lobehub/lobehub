@@ -340,9 +340,10 @@ export class MessageCollector {
       );
 
       if (candidateBranchIds.size > 1) {
+        const orderedCandidateBranchIds = directChildIds.filter((id) => candidateBranchIds.has(id));
         const activeBranchId = this.branchResolver.getActiveBranchIdFromMetadata(
           branchOwner,
-          directChildIds,
+          orderedCandidateBranchIds,
           this.childrenMap,
         );
         if (!activeBranchId) return undefined;
