@@ -1,17 +1,14 @@
 import { imageUrlToBase64 } from '@lobechat/utils/imageToBase64';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { VisualFileItem } from '../../visualMedia';
-import {
-  resolveClientVisualMediaPayloadItems,
-  resolveClientVisualMediaUris,
-} from './resolveVisualMediaUris';
+import type { MediaFileItem } from '../../media';
+import { resolveClientMediaPayloadItems, resolveClientMediaUris } from './resolveMediaUris';
 
 vi.mock('@lobechat/utils/imageToBase64', () => ({
   imageUrlToBase64: vi.fn(),
 }));
 
-const createVisualItem = (item: Partial<VisualFileItem>): VisualFileItem => ({
+const createMediaItem = (item: Partial<MediaFileItem>): MediaFileItem => ({
   description: 'test.png',
   localRef: 'image_1',
   name: 'test.png',
@@ -21,12 +18,12 @@ const createVisualItem = (item: Partial<VisualFileItem>): VisualFileItem => ({
   ...item,
 });
 
-describe('resolveClientVisualMediaUris', () => {
+describe('resolveClientMediaUris', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('should convert desktop local visual media URLs to data URLs', async () => {
+  it('should convert desktop local media URLs to data URLs', async () => {
     vi.mocked(imageUrlToBase64)
       .mockResolvedValueOnce({
         base64: 'image-base64',
@@ -35,29 +32,39 @@ describe('resolveClientVisualMediaUris', () => {
       .mockResolvedValueOnce({
         base64: 'video-base64',
         mimeType: 'video/mp4',
+      })
+      .mockResolvedValueOnce({
+        base64: 'audio-base64',
+        mimeType: 'audio/mpeg',
       });
 
-    const localImage = createVisualItem({
+    const localImage = createMediaItem({
       name: 'local.png',
       uri: 'http://127.0.0.1:3210/uploads/local.png',
     });
-    const localVideo = createVisualItem({
+    const localVideo = createMediaItem({
       name: 'local.mp4',
       type: 'video',
       uri: 'http://127.0.0.1:3210/uploads/local.mp4',
     });
-    const remoteImage = createVisualItem({
+    const localAudio = createMediaItem({
+      name: 'local.mp3',
+      type: 'audio',
+      uri: 'http://127.0.0.1:3210/uploads/local.mp3',
+    });
+    const remoteImage = createMediaItem({
       name: 'remote.png',
       uri: 'https://example.com/remote.png',
     });
-    const dataImage = createVisualItem({
+    const dataImage = createMediaItem({
       name: 'inline.png',
       uri: 'data:image/png;base64,inline-base64',
     });
 
-    const result = await resolveClientVisualMediaUris([
+    const result = await resolveClientMediaUris([
       localImage,
       localVideo,
+      localAudio,
       remoteImage,
       dataImage,
     ]);
@@ -71,12 +78,17 @@ describe('resolveClientVisualMediaUris', () => {
         ...localVideo,
         uri: 'data:video/mp4;base64,video-base64',
       },
+      {
+        ...localAudio,
+        uri: 'data:audio/mpeg;base64,audio-base64',
+      },
       remoteImage,
       dataImage,
     ]);
-    expect(imageUrlToBase64).toHaveBeenCalledTimes(2);
+    expect(imageUrlToBase64).toHaveBeenCalledTimes(3);
     expect(imageUrlToBase64).toHaveBeenNthCalledWith(1, 'http://127.0.0.1:3210/uploads/local.png');
     expect(imageUrlToBase64).toHaveBeenNthCalledWith(2, 'http://127.0.0.1:3210/uploads/local.mp4');
+    expect(imageUrlToBase64).toHaveBeenNthCalledWith(3, 'http://127.0.0.1:3210/uploads/local.mp3');
   });
 
   it('should reject desktop local URLs when fetched MIME type does not match the item type', async () => {
@@ -85,12 +97,12 @@ describe('resolveClientVisualMediaUris', () => {
       mimeType: 'text/plain',
     });
 
-    const localImage = createVisualItem({
+    const localImage = createMediaItem({
       name: 'missing.png',
       uri: 'http://127.0.0.1:3210/uploads/missing.png',
     });
 
-    await expect(resolveClientVisualMediaUris([localImage])).rejects.toThrow(
+    await expect(resolveClientMediaUris([localImage])).rejects.toThrow(
       'Unable to read image attachment "missing.png": expected image/* MIME type, received text/plain.',
     );
   });
@@ -101,35 +113,35 @@ describe('resolveClientVisualMediaUris', () => {
       mimeType: 'image/png',
     });
 
-    const localVideo = createVisualItem({
+    const localVideo = createMediaItem({
       name: 'clip.mp4',
       type: 'video',
       uri: 'http://127.0.0.1:3210/uploads/clip.mp4',
     });
 
-    await expect(resolveClientVisualMediaUris([localVideo])).rejects.toThrow(
+    await expect(resolveClientMediaUris([localVideo])).rejects.toThrow(
       'Unable to read video attachment "clip.mp4": expected video/* MIME type, received image/png.',
     );
   });
 
-  it('should only convert attachment refs when building visual media payload items', async () => {
+  it('should only convert attachment refs when building media payload items', async () => {
     vi.mocked(imageUrlToBase64).mockResolvedValue({
       base64: 'attachment-base64',
       mimeType: 'image/png',
     });
 
-    const localAttachment = createVisualItem({
+    const localAttachment = createMediaItem({
       name: 'attachment.png',
       uri: 'http://127.0.0.1:3210/uploads/attachment.png',
     });
-    const directLocalUrl = createVisualItem({
+    const directLocalUrl = createMediaItem({
       localRef: 'url_1',
       name: 'direct.png',
       ref: 'url_1',
       uri: 'http://127.0.0.1:3210/private/direct.png',
     });
 
-    const result = await resolveClientVisualMediaPayloadItems({
+    const result = await resolveClientMediaPayloadItems({
       selectedRefs: [localAttachment],
       selectedUrls: [directLocalUrl],
     });

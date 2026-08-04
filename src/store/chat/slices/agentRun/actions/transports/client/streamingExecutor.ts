@@ -29,7 +29,7 @@ import debug from 'debug';
 
 import { createAgentToolsEngine } from '@/helpers/toolEngineering';
 import { aiAgentService } from '@/services/aiAgent';
-import { isCanUseVideo, isCanUseVision } from '@/services/chat/helper';
+import { isCanUseAudio, isCanUseVideo, isCanUseVision } from '@/services/chat/helper';
 import { type ResolvedAgentConfig } from '@/services/chat/mecha';
 import { composeEnabledTools, resolveAgentConfig } from '@/services/chat/mecha';
 import { localFileService } from '@/services/electron/localFileService';
@@ -84,7 +84,8 @@ const hasReferTopicNode = (editorData: Record<string, any> | null | undefined): 
   return walk(editorData.root);
 };
 
-const getVisualMediaAvailability = (messages: UIChatMessage[]) => ({
+const getMediaAvailability = (messages: UIChatMessage[]) => ({
+  hasAudios: messages.some((message) => message.role === 'user' && !!message.audioList?.length),
   hasImages: messages.some((message) => message.role === 'user' && !!message.imageList?.length),
   hasVideos: messages.some((message) => message.role === 'user' && !!message.videoList?.length),
 });
@@ -205,21 +206,23 @@ export class StreamingExecutorActionImpl {
 
     // Dynamically inject turn-scoped builtin tools.
     const hasTopicReference = messages.some((m) => hasReferTopicNode(m.editorData));
-    const visualMediaAvailability = getVisualMediaAvailability(messages);
+    const mediaAvailability = getMediaAvailability(messages);
     const serverConfigState = getServerConfigStoreState();
-    const visualUnderstandingConfigured =
-      !!serverConfigState && serverConfigSelectors.enableVisualUnderstanding(serverConfigState);
-    const shouldEnableVisualUnderstanding =
-      visualUnderstandingConfigured &&
-      ((visualMediaAvailability.hasImages &&
-        !isCanUseVision(agentConfigData.model, agentConfigData.provider!)) ||
-        (visualMediaAvailability.hasVideos &&
+    const multimodalUnderstandingConfigured =
+      !!serverConfigState && serverConfigSelectors.enableMultimodalUnderstanding(serverConfigState);
+    const shouldEnableMultimodalUnderstanding =
+      multimodalUnderstandingConfigured &&
+      ((mediaAvailability.hasAudios &&
+        !isCanUseAudio(agentConfigData.model, agentConfigData.provider!)) ||
+        (mediaAvailability.hasImages &&
+          !isCanUseVision(agentConfigData.model, agentConfigData.provider!)) ||
+        (mediaAvailability.hasVideos &&
           !isCanUseVideo(agentConfigData.model, agentConfigData.provider!)));
     const runtimePluginIds = [
       ...new Set([
         ...(pluginIds || []),
         ...(hasTopicReference ? ['lobe-topic-reference'] : []),
-        ...(shouldEnableVisualUnderstanding ? [LobeAgentManifest.identifier] : []),
+        ...(shouldEnableMultimodalUnderstanding ? [LobeAgentManifest.identifier] : []),
       ]),
     ];
     const effectivePluginIds = runtimePluginIds.length > 0 ? runtimePluginIds : undefined;

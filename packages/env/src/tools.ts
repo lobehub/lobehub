@@ -17,8 +17,8 @@ export const getToolsConfig = () => {
       SEARCH_PROVIDERS: process.env.SEARCH_PROVIDERS,
       SEARXNG_URL: process.env.SEARXNG_URL,
       TOOL_NAME_MAX_LENGTH: process.env.TOOL_NAME_MAX_LENGTH,
-      VISUAL_UNDERSTANDING_MODEL: process.env.VISUAL_UNDERSTANDING_MODEL,
-      VISUAL_UNDERSTANDING_PROVIDER: process.env.VISUAL_UNDERSTANDING_PROVIDER,
+      MULTIMODAL_UNDERSTANDING_MODEL: process.env.MULTIMODAL_UNDERSTANDING_MODEL,
+      MULTIMODAL_UNDERSTANDING_PROVIDER: process.env.MULTIMODAL_UNDERSTANDING_PROVIDER,
     },
 
     server: {
@@ -42,8 +42,8 @@ export const getToolsConfig = () => {
        * the whole server config down, instead of falling back to the default.
        */
       TOOL_NAME_MAX_LENGTH: z.string().optional(),
-      VISUAL_UNDERSTANDING_MODEL: z.string().optional(),
-      VISUAL_UNDERSTANDING_PROVIDER: z.string().optional(),
+      MULTIMODAL_UNDERSTANDING_MODEL: z.string().optional(),
+      MULTIMODAL_UNDERSTANDING_PROVIDER: z.string().optional(),
     },
   });
 };

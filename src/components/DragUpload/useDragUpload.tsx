@@ -2,7 +2,7 @@ import { toast } from '@lobehub/ui/base-ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useVisualMediaUploadAbility } from '@/hooks/useVisualMediaUploadAbility';
+import { useMediaUploadAbility } from '@/hooks/useMediaUploadAbility';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
@@ -78,7 +78,7 @@ export const useDragUpload = (onUploadFiles: (files: File[]) => Promise<void>) =
   const model = useAgentStore(agentSelectors.currentAgentModel);
   const provider = useAgentStore(agentSelectors.currentAgentModelProvider);
   const agentId = useAgentStore((s) => s.activeAgentId ?? undefined);
-  const { canUploadImage, canUploadVideo } = useVisualMediaUploadAbility(model, provider, agentId);
+  const { canUploadImage, canUploadVideo } = useMediaUploadAbility(model, provider, agentId);
 
   const warnIfVisualUploadUnsupported = useCallback(
     (files: File[]) => {

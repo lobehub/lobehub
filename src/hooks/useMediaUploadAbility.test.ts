@@ -9,7 +9,7 @@ import { useAgentStore } from '@/store/agent';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { useServerConfigStore } from '@/store/serverConfig';
 
-import { useVisualMediaUploadAbility } from './useVisualMediaUploadAbility';
+import { useMediaUploadAbility } from './useMediaUploadAbility';
 
 vi.mock('@/hooks/useModelSupportAudio');
 vi.mock('@/hooks/useModelSupportToolUse');
@@ -29,7 +29,7 @@ vi.mock('@/store/aiInfra', () => ({
       (id: string, provider: string) =>
       (s: {
         enabledAiModels?: {
-          abilities: { video?: boolean; vision?: boolean };
+          abilities: { audio?: boolean; video?: boolean; vision?: boolean };
           id: string;
           providerId: string;
         }[];
@@ -40,10 +40,11 @@ vi.mock('@/store/aiInfra', () => ({
 }));
 vi.mock('@/store/serverConfig', () => ({
   serverConfigSelectors: {
-    enableVisualUnderstanding: (s: { enableVisualUnderstanding: boolean }) =>
-      s.enableVisualUnderstanding,
-    visualUnderstanding: (s: { visualUnderstanding?: { model: string; provider: string } }) =>
-      s.visualUnderstanding,
+    enableMultimodalUnderstanding: (s: { enableMultimodalUnderstanding: boolean }) =>
+      s.enableMultimodalUnderstanding,
+    multimodalUnderstanding: (s: {
+      multimodalUnderstanding?: { model: string; provider: string };
+    }) => s.multimodalUnderstanding,
   },
   useServerConfigStore: vi.fn(),
 }));
@@ -56,7 +57,7 @@ const mockedUseAgentStore = vi.mocked(useAgentStore);
 const mockedUseAiInfraStore = vi.mocked(useAiInfraStore);
 const mockedUseServerConfigStore = vi.mocked(useServerConfigStore);
 
-describe('useVisualMediaUploadAbility', () => {
+describe('useMediaUploadAbility', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockedUseModelSupportAudio.mockReturnValue(false);
@@ -71,26 +72,27 @@ describe('useVisualMediaUploadAbility', () => {
       selector({ enabledAiModels: [] } as any),
     );
     mockedUseServerConfigStore.mockImplementation((selector) =>
-      selector({ enableVisualUnderstanding: false, visualUnderstanding: undefined } as any),
+      selector({ enableMultimodalUnderstanding: false, multimodalUnderstanding: undefined } as any),
     );
   });
 
-  it('should allow native visual upload without tool use', () => {
+  it('should allow native image upload without tool use', () => {
     mockedUseModelSupportVision.mockImplementation((id) => id === 'model');
 
-    const { result } = renderHook(() => useVisualMediaUploadAbility('model', 'provider'));
+    const { result } = renderHook(() => useMediaUploadAbility('model', 'provider'));
 
+    expect(result.current.canUploadAudio).toBe(false);
     expect(result.current.canUploadImage).toBe(true);
     expect(result.current.canUploadVideo).toBe(false);
   });
 
-  it('should allow fallback visual upload only when tool use is supported', () => {
+  it('should allow fallback media upload only when tool use is supported', () => {
     mockedUseModelSupportToolUse.mockReturnValue(true);
     mockedUseAiInfraStore.mockImplementation((selector) =>
       selector({
         enabledAiModels: [
           {
-            abilities: { video: true, vision: true },
+            abilities: { audio: true, video: true, vision: true },
             id: 'fallback-model',
             providerId: 'fallback-provider',
           },
@@ -99,38 +101,40 @@ describe('useVisualMediaUploadAbility', () => {
     );
     mockedUseServerConfigStore.mockImplementation((selector) =>
       selector({
-        enableVisualUnderstanding: true,
-        visualUnderstanding: { model: 'fallback-model', provider: 'fallback-provider' },
+        enableMultimodalUnderstanding: true,
+        multimodalUnderstanding: { model: 'fallback-model', provider: 'fallback-provider' },
       } as any),
     );
 
-    const { result } = renderHook(() => useVisualMediaUploadAbility('model', 'provider'));
+    const { result } = renderHook(() => useMediaUploadAbility('model', 'provider'));
 
+    expect(result.current.canUploadAudio).toBe(true);
     expect(result.current.canUploadImage).toBe(true);
     expect(result.current.canUploadVideo).toBe(true);
   });
 
-  it('should allow fallback visual upload when fallback model abilities are unknown', () => {
+  it('should allow fallback media upload when fallback model abilities are unknown', () => {
     mockedUseModelSupportToolUse.mockReturnValue(true);
     mockedUseServerConfigStore.mockImplementation((selector) =>
       selector({
-        enableVisualUnderstanding: true,
-        visualUnderstanding: { model: 'server-only-model', provider: 'server-only-provider' },
+        enableMultimodalUnderstanding: true,
+        multimodalUnderstanding: { model: 'server-only-model', provider: 'server-only-provider' },
       } as any),
     );
 
-    const { result } = renderHook(() => useVisualMediaUploadAbility('model', 'provider'));
+    const { result } = renderHook(() => useMediaUploadAbility('model', 'provider'));
 
+    expect(result.current.canUploadAudio).toBe(true);
     expect(result.current.canUploadImage).toBe(true);
     expect(result.current.canUploadVideo).toBe(true);
   });
 
-  it('should reject fallback visual upload when tool use is unsupported', () => {
+  it('should reject fallback media upload when tool use is unsupported', () => {
     mockedUseAiInfraStore.mockImplementation((selector) =>
       selector({
         enabledAiModels: [
           {
-            abilities: { video: true, vision: true },
+            abilities: { audio: true, video: true, vision: true },
             id: 'fallback-model',
             providerId: 'fallback-provider',
           },
@@ -139,13 +143,14 @@ describe('useVisualMediaUploadAbility', () => {
     );
     mockedUseServerConfigStore.mockImplementation((selector) =>
       selector({
-        enableVisualUnderstanding: true,
-        visualUnderstanding: { model: 'fallback-model', provider: 'fallback-provider' },
+        enableMultimodalUnderstanding: true,
+        multimodalUnderstanding: { model: 'fallback-model', provider: 'fallback-provider' },
       } as any),
     );
 
-    const { result } = renderHook(() => useVisualMediaUploadAbility('model', 'provider'));
+    const { result } = renderHook(() => useMediaUploadAbility('model', 'provider'));
 
+    expect(result.current.canUploadAudio).toBe(false);
     expect(result.current.canUploadImage).toBe(false);
     expect(result.current.canUploadVideo).toBe(false);
   });
@@ -156,7 +161,7 @@ describe('useVisualMediaUploadAbility', () => {
       selector({
         enabledAiModels: [
           {
-            abilities: { video: false, vision: true },
+            abilities: { audio: false, video: false, vision: true },
             id: 'fallback-model',
             providerId: 'fallback-provider',
           },
@@ -165,13 +170,14 @@ describe('useVisualMediaUploadAbility', () => {
     );
     mockedUseServerConfigStore.mockImplementation((selector) =>
       selector({
-        enableVisualUnderstanding: true,
-        visualUnderstanding: { model: 'fallback-model', provider: 'fallback-provider' },
+        enableMultimodalUnderstanding: true,
+        multimodalUnderstanding: { model: 'fallback-model', provider: 'fallback-provider' },
       } as any),
     );
 
-    const { result } = renderHook(() => useVisualMediaUploadAbility('model', 'provider'));
+    const { result } = renderHook(() => useMediaUploadAbility('model', 'provider'));
 
+    expect(result.current.canUploadAudio).toBe(false);
     expect(result.current.canUploadImage).toBe(true);
     expect(result.current.canUploadVideo).toBe(false);
   });
@@ -181,9 +187,7 @@ describe('useVisualMediaUploadAbility', () => {
       selector({ enableMode: true, heterogeneous: false } as any),
     );
 
-    const { result } = renderHook(() =>
-      useVisualMediaUploadAbility('model', 'provider', 'agent-1'),
-    );
+    const { result } = renderHook(() => useMediaUploadAbility('model', 'provider', 'agent-1'));
 
     expect(result.current.canUploadAudio).toBe(true);
     expect(result.current.canUploadImage).toBe(true);
@@ -195,9 +199,7 @@ describe('useVisualMediaUploadAbility', () => {
       selector({ enableMode: false, heterogeneous: true } as any),
     );
 
-    const { result } = renderHook(() =>
-      useVisualMediaUploadAbility('model', 'provider', 'agent-1'),
-    );
+    const { result } = renderHook(() => useMediaUploadAbility('model', 'provider', 'agent-1'));
 
     expect(result.current.canUploadAudio).toBe(true);
     expect(result.current.canUploadImage).toBe(true);
@@ -210,9 +212,7 @@ describe('useVisualMediaUploadAbility', () => {
       selector({ enableMode: false, heterogeneous: false } as any),
     );
 
-    const { result } = renderHook(() =>
-      useVisualMediaUploadAbility('model', 'provider', 'agent-1'),
-    );
+    const { result } = renderHook(() => useMediaUploadAbility('model', 'provider', 'agent-1'));
 
     expect(result.current.canUploadAudio).toBe(false);
     expect(result.current.canUploadImage).toBe(false);

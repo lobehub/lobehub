@@ -2,20 +2,21 @@ import { imageUrlToBase64 } from '@lobechat/utils/imageToBase64';
 import { parseDataUri } from '@lobechat/utils/uriParser';
 import { isDesktopLocalStaticServerUrl } from '@lobechat/utils/url';
 
-import type { VisualFileItem } from '../../visualMedia';
+import type { MediaFileItem } from '../../media';
 
-interface ResolveClientVisualMediaPayloadItemsParams {
-  selectedRefs: VisualFileItem[];
-  selectedUrls: VisualFileItem[];
+interface ResolveClientMediaPayloadItemsParams {
+  selectedRefs: MediaFileItem[];
+  selectedUrls: MediaFileItem[];
 }
 
-const VISUAL_MEDIA_MIME_TYPE_PREFIXES = {
+const MEDIA_MIME_TYPE_PREFIXES = {
+  audio: 'audio/',
   image: 'image/',
   video: 'video/',
-} as const satisfies Record<VisualFileItem['type'], string>;
+} as const satisfies Record<MediaFileItem['type'], string>;
 
-const assertExpectedVisualMediaMimeType = (item: VisualFileItem, mimeType: string) => {
-  const expectedPrefix = VISUAL_MEDIA_MIME_TYPE_PREFIXES[item.type];
+const assertExpectedMediaMimeType = (item: MediaFileItem, mimeType: string) => {
+  const expectedPrefix = MEDIA_MIME_TYPE_PREFIXES[item.type];
   const normalizedMimeType = mimeType.trim().toLowerCase();
 
   if (normalizedMimeType.startsWith(expectedPrefix)) return;
@@ -27,12 +28,10 @@ const assertExpectedVisualMediaMimeType = (item: VisualFileItem, mimeType: strin
 
 /**
  * Desktop attachments are exposed through a 127.0.0.1 static file server.
- * Convert those URLs in the client before sending a remote visual request;
+ * Convert those URLs in the client before sending a remote media request;
  * otherwise the server sees its own localhost and SSRF protection blocks it.
  */
-export const resolveClientVisualMediaUris = async (
-  items: VisualFileItem[],
-): Promise<VisualFileItem[]> =>
+export const resolveClientMediaUris = async (items: MediaFileItem[]): Promise<MediaFileItem[]> =>
   Promise.all(
     items.map(async (item) => {
       const { type } = parseDataUri(item.uri);
@@ -40,7 +39,7 @@ export const resolveClientVisualMediaUris = async (
       if (type !== 'url' || !isDesktopLocalStaticServerUrl(item.uri)) return item;
 
       const { base64, mimeType } = await imageUrlToBase64(item.uri);
-      assertExpectedVisualMediaMimeType(item, mimeType);
+      assertExpectedMediaMimeType(item, mimeType);
 
       return {
         ...item,
@@ -49,10 +48,10 @@ export const resolveClientVisualMediaUris = async (
     }),
   );
 
-export const resolveClientVisualMediaPayloadItems = async ({
+export const resolveClientMediaPayloadItems = async ({
   selectedRefs,
   selectedUrls,
-}: ResolveClientVisualMediaPayloadItemsParams): Promise<VisualFileItem[]> => [
-  ...(await resolveClientVisualMediaUris(selectedRefs)),
+}: ResolveClientMediaPayloadItemsParams): Promise<MediaFileItem[]> => [
+  ...(await resolveClientMediaUris(selectedRefs)),
   ...selectedUrls,
 ];

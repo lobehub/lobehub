@@ -30,8 +30,8 @@ const {
   mockMessageQuery: vi.fn(),
   mockResolveTask: vi.fn(),
   mockToolsEnv: {
-    VISUAL_UNDERSTANDING_MODEL: undefined as string | undefined,
-    VISUAL_UNDERSTANDING_PROVIDER: undefined as string | undefined,
+    MULTIMODAL_UNDERSTANDING_MODEL: undefined as string | undefined,
+    MULTIMODAL_UNDERSTANDING_PROVIDER: undefined as string | undefined,
   },
 }));
 
@@ -181,17 +181,17 @@ vi.mock('model-bank', async (importOriginal) => {
     ...actual,
     LOBE_DEFAULT_MODEL_LIST: [
       {
-        abilities: { functionCall: true, video: false, vision: true },
+        abilities: { audio: false, functionCall: true, video: false, vision: true },
         id: 'gpt-4',
         providerId: 'openai',
       },
       {
-        abilities: { functionCall: true, video: false, vision: false },
+        abilities: { audio: false, functionCall: true, video: false, vision: false },
         id: 'text-only',
         providerId: 'openai',
       },
       {
-        abilities: { functionCall: true, video: true, vision: true },
+        abilities: { audio: true, functionCall: true, video: true, vision: true },
         id: 'gemini-3.1-flash-lite-preview',
         providerId: 'google',
       },
@@ -221,8 +221,8 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
       responseLanguage: 'en-US',
       userName: 'Test User',
     });
-    mockToolsEnv.VISUAL_UNDERSTANDING_MODEL = 'vision-model';
-    mockToolsEnv.VISUAL_UNDERSTANDING_PROVIDER = 'test-provider';
+    mockToolsEnv.MULTIMODAL_UNDERSTANDING_MODEL = 'vision-model';
+    mockToolsEnv.MULTIMODAL_UNDERSTANDING_PROVIDER = 'test-provider';
     mockCreateOperation.mockResolvedValue({
       autoStarted: true,
       messageId: 'queue-msg-1',
@@ -620,7 +620,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     );
   });
 
-  it('should inject lobe-agent when history has visual media and model lacks vision', async () => {
+  it('should inject lobe-agent when history has audio and model lacks native audio support', async () => {
     mockGetAgentConfig.mockResolvedValue({
       chatConfig: {},
       id: 'agent-custom',
@@ -631,8 +631,8 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     });
     mockMessageQuery.mockResolvedValue([
       {
-        id: 'history-image',
-        imageList: [{ alt: 'image.png', id: 'file-image', url: 'https://example.com/image.png' }],
+        audioList: [{ alt: 'audio.mp3', id: 'file-audio', url: 'https://example.com/audio.mp3' }],
+        id: 'history-audio',
         role: 'user',
       },
     ]);
@@ -640,7 +640,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     await service.execAgent({
       agentId: 'agent-custom',
       appContext: { topicId: 'topic-1' },
-      prompt: 'What is in the previous image?',
+      prompt: 'What is said in the previous audio?',
     });
 
     expect(createServerAgentToolsEngine).toHaveBeenCalledWith(
@@ -653,7 +653,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     );
   });
 
-  it('should not inject lobe-agent when the LobeHub routed model supports visual media natively', async () => {
+  it('should not inject lobe-agent when the LobeHub routed model supports audio natively', async () => {
     mockGetAgentConfig.mockResolvedValue({
       chatConfig: {},
       id: 'agent-custom',
@@ -664,16 +664,16 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     });
     mockMessageQuery.mockResolvedValue([
       {
-        id: 'history-video',
+        audioList: [{ id: 'file-audio', url: 'https://example.com/audio.mp3' }],
+        id: 'history-audio',
         role: 'user',
-        videoList: [{ id: 'file-video', url: 'https://example.com/video.mp4' }],
       },
     ]);
 
     await service.execAgent({
       agentId: 'agent-custom',
       appContext: { topicId: 'topic-1' },
-      prompt: 'What is in the previous video?',
+      prompt: 'What is said in the previous audio?',
     });
 
     const callArgs = vi.mocked(createServerAgentToolsEngine).mock.calls[0][1];

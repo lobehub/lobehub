@@ -7,25 +7,28 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
-export const useVisualMediaUploadAbility = (model: string, provider: string, agentId?: string) => {
+export const useMediaUploadAbility = (model: string, provider: string, agentId?: string) => {
   const supportVision = useModelSupportVision(model, provider);
   const supportVideo = useModelSupportVideo(model, provider);
   const supportAudio = useModelSupportAudio(model, provider);
   const supportToolUse = useModelSupportToolUse(model, provider);
-  const enableVisualUnderstanding = useServerConfigStore(
-    serverConfigSelectors.enableVisualUnderstanding,
+  const enableMultimodalUnderstanding = useServerConfigStore(
+    serverConfigSelectors.enableMultimodalUnderstanding,
   );
-  const visualUnderstanding = useServerConfigStore(serverConfigSelectors.visualUnderstanding);
+  const multimodalUnderstanding = useServerConfigStore(
+    serverConfigSelectors.multimodalUnderstanding,
+  );
   const fallbackModel = useAiInfraStore(
     aiModelSelectors.getEnabledModelById(
-      visualUnderstanding?.model ?? '',
-      visualUnderstanding?.provider ?? '',
+      multimodalUnderstanding?.model ?? '',
+      multimodalUnderstanding?.provider ?? '',
     ),
   );
-  const fallbackConfigured = !!(visualUnderstanding?.model && visualUnderstanding.provider);
+  const fallbackConfigured = !!(multimodalUnderstanding?.model && multimodalUnderstanding.provider);
+  const fallbackSupportAudio = fallbackConfigured && fallbackModel?.abilities?.audio !== false;
   const fallbackSupportVision = fallbackConfigured && fallbackModel?.abilities?.vision !== false;
   const fallbackSupportVideo = fallbackConfigured && fallbackModel?.abilities?.video !== false;
-  const canUseVisualUnderstanding = enableVisualUnderstanding && supportToolUse;
+  const canUseMultimodalUnderstanding = enableMultimodalUnderstanding && supportToolUse;
 
   // In agent mode (tool calls) or heterogeneous agents (Claude Code / Codex, etc.) the agent
   // can parse any file via scripts/terminal, so the upload should not be gated on the model's
@@ -44,8 +47,8 @@ export const useVisualMediaUploadAbility = (model: string, provider: string, age
   }
 
   return {
-    canUploadAudio: supportAudio,
-    canUploadImage: supportVision || (canUseVisualUnderstanding && fallbackSupportVision),
-    canUploadVideo: supportVideo || (canUseVisualUnderstanding && fallbackSupportVideo),
+    canUploadAudio: supportAudio || (canUseMultimodalUnderstanding && fallbackSupportAudio),
+    canUploadImage: supportVision || (canUseMultimodalUnderstanding && fallbackSupportVision),
+    canUploadVideo: supportVideo || (canUseMultimodalUnderstanding && fallbackSupportVideo),
   };
 };

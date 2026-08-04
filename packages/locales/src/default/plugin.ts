@@ -51,10 +51,10 @@ export default {
   'builtins.lobe-agent-management.render.installPlugin.plugin': 'Skill',
   'builtins.lobe-agent-management.render.installPlugin.success': 'Installed successfully',
   'builtins.lobe-agent-management.title': 'Agent Manager',
-  'builtins.lobe-agent.apiName.analyzeVisualMedia': 'Analyze visual media',
-  'builtins.lobe-agent.apiName.analyzeVisualMedia.mediaCount': '{{count}} media',
-  'builtins.lobe-agent.apiName.analyzeVisualMedia.result':
-    'Analyze visual media: <question>{{question}}</question>',
+  'builtins.lobe-agent.apiName.analyzeMedia': 'Analyze media',
+  'builtins.lobe-agent.apiName.analyzeMedia.mediaCount': '{{count}} media',
+  'builtins.lobe-agent.apiName.analyzeMedia.result':
+    'Analyze media: <question>{{question}}</question>',
   'builtins.lobe-agent.apiName.callSubAgent': 'Call sub-agent',
   'builtins.lobe-agent.subAgent.stats.tokens': '{{count}} tokens',
   'builtins.lobe-agent.subAgent.stats.tools': '{{count}} tools',

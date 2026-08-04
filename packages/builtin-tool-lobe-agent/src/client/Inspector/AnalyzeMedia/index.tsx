@@ -8,12 +8,12 @@ import { Trans, useTranslation } from 'react-i18next';
 
 import { highlightTextStyles, inspectorTextStyles, shinyTextStyles } from '@/styles';
 
-import type { AnalyzeVisualMediaParams, AnalyzeVisualMediaState } from '../../../types';
+import type { AnalyzeMediaParams, AnalyzeMediaState } from '../../../types';
 
 const getArrayLength = (value?: string[]) => (Array.isArray(value) ? value.length : 0);
 
-export const AnalyzeVisualMediaInspector = memo<
-  BuiltinInspectorProps<AnalyzeVisualMediaParams, AnalyzeVisualMediaState>
+export const AnalyzeMediaInspector = memo<
+  BuiltinInspectorProps<AnalyzeMediaParams, AnalyzeMediaState>
 >(({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
   const { t } = useTranslation('plugin');
 
@@ -26,7 +26,7 @@ export const AnalyzeVisualMediaInspector = memo<
   if (isArgumentsStreaming && !question) {
     return (
       <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-agent.apiName.analyzeVisualMedia')}</span>
+        <span>{t('builtins.lobe-agent.apiName.analyzeMedia')}</span>
       </div>
     );
   }
@@ -41,12 +41,12 @@ export const AnalyzeVisualMediaInspector = memo<
       {question ? (
         <Trans
           components={{ question: <span className={highlightTextStyles.primary} /> }}
-          i18nKey="builtins.lobe-agent.apiName.analyzeVisualMedia.result"
+          i18nKey="builtins.lobe-agent.apiName.analyzeMedia.result"
           ns="plugin"
           values={{ question }}
         />
       ) : (
-        <span>{t('builtins.lobe-agent.apiName.analyzeVisualMedia')}</span>
+        <span>{t('builtins.lobe-agent.apiName.analyzeMedia')}</span>
       )}
       {!isArgumentsStreaming && !isLoading && mediaCount > 0 && (
         <Text
@@ -55,13 +55,13 @@ export const AnalyzeVisualMediaInspector = memo<
           fontSize={12}
           style={{ marginInlineStart: 6 }}
         >
-          · {t('builtins.lobe-agent.apiName.analyzeVisualMedia.mediaCount', { count: mediaCount })}
+          · {t('builtins.lobe-agent.apiName.analyzeMedia.mediaCount', { count: mediaCount })}
         </Text>
       )}
     </div>
   );
 });
 
-AnalyzeVisualMediaInspector.displayName = 'AnalyzeVisualMediaInspector';
+AnalyzeMediaInspector.displayName = 'AnalyzeMediaInspector';
 
-export default AnalyzeVisualMediaInspector;
+export default AnalyzeMediaInspector;
