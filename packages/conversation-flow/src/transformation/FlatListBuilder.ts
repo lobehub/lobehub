@@ -537,6 +537,10 @@ export class FlatListBuilder {
     allMessages: Message[],
   ): void {
     const lastAssistant = assistantChain.at(-1);
+    if (lastAssistant) {
+      this.suppressInactiveExplicitContinuations(lastAssistant, allToolMessages, processedIds);
+    }
+
     const parentIds = [
       ...(lastAssistant ? [lastAssistant.id] : []),
       ...allToolMessages.map((toolMessage) => toolMessage.id),
@@ -558,6 +562,44 @@ export class FlatListBuilder {
         processedIds,
         allMessages,
       );
+    }
+  }
+
+  /**
+   * Keep AssistantGroup draining in the same canonical branch space as the UI.
+   * An explicit index selects a direct non-tool child; tool-hosted continuations
+   * belong to older/inactive branches and must not be appended to the model
+   * history. For an optimistic index at `branchCount`, every existing
+   * continuation stays hidden until the newly created branch is persisted.
+   */
+  private suppressInactiveExplicitContinuations(
+    lastAssistant: Message,
+    allToolMessages: Message[],
+    processedIds: Set<string>,
+  ): void {
+    const directChildIds = this.childrenMap.get(lastAssistant.id) ?? [];
+    const metadataBranchIds = this.branchResolver.getMetadataBranchIds(directChildIds);
+    const activeBranchIndex = (lastAssistant.metadata as any)?.activeBranchIndex;
+    if (
+      typeof activeBranchIndex !== 'number' ||
+      activeBranchIndex < 0 ||
+      activeBranchIndex > metadataBranchIds.length
+    ) {
+      return;
+    }
+
+    const activeBranchId = metadataBranchIds[activeBranchIndex];
+    const tailToolIds = allToolMessages
+      .filter((toolMessage) => toolMessage.parentId === lastAssistant.id)
+      .map((toolMessage) => toolMessage.id);
+    const continuationParentIds = [lastAssistant.id, ...tailToolIds];
+
+    for (const parentId of continuationParentIds) {
+      for (const childId of this.childrenMap.get(parentId) ?? []) {
+        if (!processedIds.has(childId) && childId !== activeBranchId) {
+          processedIds.add(childId);
+        }
+      }
     }
   }
 

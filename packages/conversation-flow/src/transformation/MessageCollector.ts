@@ -686,34 +686,30 @@ export class MessageCollector {
    * Find next message after tools in an assistant group
    */
   findNextAfterTools(assistantMsg: Message, idNode: IdNode): IdNode | null {
-    // Recursively find the last message in the assistant group (same agentId only)
-    const lastNode = this.findLastNodeInAssistantGroup(idNode, assistantMsg.agentId);
-    if (!lastNode) return null;
+    const lastAssistantNode = this.findLastAssistantNodeInGroup(idNode, assistantMsg.agentId);
+    const nextNode = this.resolveAssistantGroupTailChild(lastAssistantNode);
+    if (!nextNode) return null;
 
-    // Check if lastNode is a tool with agentCouncil mode
+    const nextMessage = this.messageMap.get(nextNode.id);
+    if (nextMessage?.role !== 'tool') return nextNode;
+
+    // Check if the selected tool has agentCouncil mode
     // In this case, return the tool node itself so ContextTreeBuilder can process it
-    const lastMsg = this.messageMap.get(lastNode.id);
-    if (lastMsg?.role === 'tool' && (lastMsg.metadata as any)?.agentCouncil === true) {
-      return lastNode;
+    if ((nextMessage.metadata as any)?.agentCouncil === true) {
+      return nextNode;
     }
 
-    // Check if lastNode is a tool with ANY task children
+    // Check if the selected tool has ANY task children
     // In this case, return the tool node itself so ContextTreeBuilder can process tasks
-    if (lastMsg?.role === 'tool') {
-      const taskChildren = lastNode.children.filter((child) => {
-        const childMsg = this.messageMap.get(child.id);
-        return childMsg?.role === 'task';
-      });
-      if (taskChildren.length > 0) {
-        return lastNode;
-      }
+    const taskChildren = nextNode.children.filter((child) => {
+      const childMessage = this.messageMap.get(child.id);
+      return childMessage?.role === 'task';
+    });
+    if (taskChildren.length > 0) {
+      return nextNode;
     }
 
-    // Otherwise, return the first child of the last node
-    if (lastNode.children.length > 0) {
-      return lastNode.children[0];
-    }
-    return null;
+    return nextNode.children[0] ?? null;
   }
 
   /**
@@ -721,39 +717,45 @@ export class MessageCollector {
    * Only follows messages from the SAME agent (matching agentId)
    */
   findLastNodeInAssistantGroup(idNode: IdNode, groupAgentId?: string): IdNode | null {
-    // Walk the chain to its next step (dual-form aware, see findChainContinuationNode)
-    const nextNode = this.findChainContinuationNode(idNode, groupAgentId);
-    if (nextNode) {
-      return this.findLastNodeInAssistantGroup(nextNode, groupAgentId);
-    }
+    const lastAssistantNode = this.findLastAssistantNodeInGroup(idNode, groupAgentId);
 
     // No further same-agent assistant. If this step still owns tool results
     // (e.g. the last tool hosts an AgentCouncil / tasks), return the last tool
     // node so findNextAfterTools can inspect it; otherwise this node is the tail.
-    const toolChildren = idNode.children.filter(
-      (child) => this.messageMap.get(child.id)?.role === 'tool',
-    );
-    if (toolChildren.length === 0) {
-      return idNode;
-    }
-    return this.resolveAssistantGroupToolTail(idNode, toolChildren) ?? null;
+    const activeChild = this.resolveAssistantGroupTailChild(lastAssistantNode);
+    if (activeChild && this.messageMap.get(activeChild.id)?.role === 'tool') return activeChild;
+
+    return lastAssistantNode;
   }
 
   /**
-   * Resolve which parallel tool result owns the active continuation. Tool results
-   * are inline members of one AssistantGroup, but their descendants can still
-   * form competing conversation branches. Always taking the final tool child can
-   * therefore continue through an old branch and drop the latest user turn from
-   * contextTree even when flatList selected the correct branch.
+   * Return the final same-agent assistant that belongs inside this group. The
+   * child selected after that assistant can be either a tool-hosted legacy
+   * continuation or a direct non-tool continuation in the current storage form.
    */
-  private resolveAssistantGroupToolTail(
-    idNode: IdNode,
-    toolChildren: IdNode[],
-  ): IdNode | undefined {
-    const message = this.messageMap.get(idNode.id);
-    if (!message) return toolChildren.at(-1);
+  private findLastAssistantNodeInGroup(idNode: IdNode, groupAgentId?: string): IdNode {
+    const nextNode = this.findChainContinuationNode(idNode, groupAgentId);
+    return nextNode ? this.findLastAssistantNodeInGroup(nextNode, groupAgentId) : idNode;
+  }
 
-    const activeBranchId = this.branchResolver.getActiveBranchId(message, idNode);
-    return toolChildren.find((child) => child.id === activeBranchId) ?? toolChildren.at(-1);
+  /**
+   * Resolve the first node after an AssistantGroup without applying
+   * `activeBranchIndex` to tool children. Persisted branch indexes count only
+   * non-tool direct children; latest-user inference may still select a legacy
+   * continuation hosted below a tool result when no explicit branch is active.
+   */
+  private resolveAssistantGroupTailChild(idNode: IdNode): IdNode | undefined {
+    const message = this.messageMap.get(idNode.id);
+    if (!message) return idNode.children.at(-1);
+
+    const childIds = idNode.children.map((child) => child.id);
+    const activeBranchId = this.branchResolver.getActiveBranchIdFromMetadata(
+      message,
+      childIds,
+      this.childrenMap,
+      this.branchResolver.getMetadataBranchIds(childIds),
+    );
+
+    return idNode.children.find((child) => child.id === activeBranchId);
   }
 }
