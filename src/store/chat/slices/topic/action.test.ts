@@ -82,6 +82,7 @@ beforeEach(() => {
       agentTopicsViewMap: {},
       searchTopics: [],
       topicDataMap: {},
+      topicDetailMap: {},
       // ... initial state
     },
     false,
@@ -624,6 +625,29 @@ describe('topic action', () => {
       expect(updateSpy).toHaveBeenCalledWith(topicId, { status: 'running' });
     });
   });
+  describe('useFetchTopicDetail', () => {
+    // Regression: an archived (completed) topic is excluded from the sidebar
+    // list fetch, so the active topic vanished from topicDataMap and the
+    // header degraded to the "new topic" placeholder. The by-id detail fetch
+    // caches the row in topicDetailMap, which currentActiveTopic falls back to.
+    it('caches the fetched topic in topicDetailMap', async () => {
+      const archived = { id: 'archived-topic', status: 'completed', title: 'Archived Topic' };
+      (topicService.getTopicDetail as Mock).mockResolvedValue(archived);
+
+      const { result } = renderHook(() => useChatStore().useFetchTopicDetail('archived-topic'));
+
+      await waitFor(() => {
+        expect(result.current.data).toEqual(archived);
+      });
+      expect(useChatStore.getState().topicDetailMap['archived-topic']).toEqual(archived);
+    });
+
+    it('does not fetch when no topic id is given', () => {
+      renderHook(() => useChatStore().useFetchTopicDetail(undefined));
+      expect(topicService.getTopicDetail).not.toHaveBeenCalled();
+    });
+  });
+
   describe('useFetchTopics', () => {
     it('should fetch topics for a given session id', async () => {
       const sessionId = 'test-session-id';

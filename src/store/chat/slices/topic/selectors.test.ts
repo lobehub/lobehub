@@ -174,6 +174,42 @@ describe('topicSelectors', () => {
       const topic = topicSelectors.currentActiveTopic(state);
       expect(topic).toEqual(topicItems[0]);
     });
+
+    it('should fall back to the detail cache when the topic is missing from the list bucket', () => {
+      // An archived (completed) topic is excluded from the sidebar list fetch,
+      // so it never lands in topicDataMap — only in the by-id detail cache.
+      const archived = { id: 'archived1', title: 'Archived topic', status: 'completed' };
+      const state = merge(initialStore, {
+        topicDataMap,
+        topicDetailMap: { archived1: archived },
+        activeAgentId: 'test',
+        activeTopicId: 'archived1',
+      });
+      expect(topicSelectors.currentActiveTopic(state)).toEqual(archived);
+    });
+
+    it('should prefer the list bucket row over the detail cache', () => {
+      const state = merge(initialStore, {
+        topicDataMap,
+        topicDetailMap: { topic1: { id: 'topic1', title: 'stale detail' } },
+        activeAgentId: 'test',
+        activeTopicId: 'topic1',
+      });
+      expect(topicSelectors.currentActiveTopic(state)).toEqual(topicItems[0]);
+    });
+  });
+
+  describe('getTopicById', () => {
+    it('should fall back to the detail cache when the topic is missing from the list bucket', () => {
+      const archived = { id: 'archived1', title: 'Archived topic', status: 'completed' };
+      const state = merge(initialStore, {
+        topicDataMap,
+        topicDetailMap: { archived1: archived },
+        activeAgentId: 'test',
+      });
+      expect(topicSelectors.getTopicById('archived1')(state)).toEqual(archived);
+      expect(topicSelectors.getTopicById('topic1')(state)).toEqual(topicItems[0]);
+    });
   });
 
   describe('currentUnFavTopics', () => {

@@ -124,6 +124,7 @@ export const topicKeys = {
     containerKey,
     opts,
   ]),
+  detail: def('topic:detail', (topicId: string) => ['topic:detail', topicId]),
   list: def('topic:list', (containerKey: string, opts: Record<string, unknown>) => [
     'topic:list',
     containerKey,

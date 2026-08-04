@@ -954,6 +954,34 @@ export class ChatTopicActionImpl {
   };
 
   /**
+   * By-id topic detail fetch, used as a fallback when a topic the UI is
+   * anchored on is missing from the loaded list bucket — e.g. an archived
+   * (`completed`) topic that the sidebar fetch excludes via `excludeStatuses`,
+   * or a topic deep-linked from the Topics management page. The result lands
+   * in `topicDetailMap`, which `currentActiveTopic` / `getTopicById` read as
+   * a fallback. Pass `undefined` to disable the fetch.
+   */
+  useFetchTopicDetail = (topicId?: string | null): SWRResponse<ChatTopic | null> =>
+    useClientDataSWRWithSync<ChatTopic | null>(
+      topicId ? topicKeys.detail(topicId) : null,
+      () => topicService.getTopicDetail(topicId!),
+      {
+        onData: (topic) => {
+          if (!topic) return;
+
+          const currentMap = this.#get().topicDetailMap;
+          if (isEqual(currentMap[topic.id], topic)) return;
+
+          this.#set(
+            { topicDetailMap: { ...currentMap, [topic.id]: topic } },
+            false,
+            n('useFetchTopicDetail(onData)', { topicId: topic.id }),
+          );
+        },
+      },
+    );
+
+  /**
    * Topic fetch dedicated to the Agent Topics management page.
    * Lives in its own SWR key + state bucket so the heavier `withDetails`
    * payload doesn't collide with the sidebar's cheap fetch — sharing one
