@@ -74,7 +74,11 @@ const CustomizeModalContent = memo(() => {
             description={t('dashboard.customize.portrait.desc')}
             title={t('dashboard.customize.portrait.title')}
           >
-            <Switch checked={showPortrait} onChange={togglePortrait} />
+            <Switch
+              aria-label={t('dashboard.customize.portrait.title')}
+              checked={showPortrait}
+              onChange={togglePortrait}
+            />
           </SettingRow>
         </Flexbox>
 
@@ -84,7 +88,11 @@ const CustomizeModalContent = memo(() => {
           </Text>
           {HOME_WIDGET_KEYS.map((key) => (
             <SettingRow key={key} title={t(`dashboard.customize.widget.${key}`)}>
-              <Switch checked={!isWidgetHidden(key)} onChange={() => toggleWidget(key)} />
+              <Switch
+                aria-label={t(`dashboard.customize.widget.${key}`)}
+                checked={!isWidgetHidden(key)}
+                onChange={() => toggleWidget(key)}
+              />
             </SettingRow>
           ))}
         </Flexbox>
@@ -95,6 +103,7 @@ const CustomizeModalContent = memo(() => {
           </Text>
           <SettingRow title={t('dashboard.customize.recents.count.title')}>
             <CountStepper
+              label={t('dashboard.customize.recents.count.title')}
               max={HOME_COUNT_MAX}
               min={HOME_COUNT_MIN}
               value={recentsCount}
@@ -103,6 +112,7 @@ const CustomizeModalContent = memo(() => {
           </SettingRow>
           <SettingRow title={t('dashboard.customize.tasks.count.title')}>
             <CountStepper
+              label={t('dashboard.customize.tasks.count.title')}
               max={HOME_COUNT_MAX}
               min={HOME_COUNT_MIN}
               value={taskCount}
