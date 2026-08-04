@@ -13,7 +13,7 @@ export const modelDescriptionOverrides = {
   'lobehub-kimi-k3-fast.description':
     'Fast variant of Kimi K3 with substantially lower latency. Same capabilities as Kimi K3 — costs more, but responds much faster.',
   'qwen3.8-max-preview.description':
-    "Qwen3.8-Max-Preview is a preview of Alibaba's next-generation 2.4T-parameter flagship model, with major gains over Qwen3.7-Max in coding and professional productivity, and leading performance on complex long-horizon tasks such as full-stack development and data analysis.",
+    "Qwen3.8-Max-Preview is a Token Plan preview of Alibaba's next-generation 2.4T-parameter flagship model, with major gains in coding, professional productivity, and complex long-horizon tasks. It is available only through Token Plan and requires a Token Plan API key and the Token Plan OpenAI-compatible endpoint; standard Qwen credentials and endpoint are not supported.",
   'seedance-1-5-pro-251215.description':
     'Seedance 1.5 Pro by ByteDance supports text-to-video, image-to-video (first frame, first+last frame), and audio generation synchronized with visuals.',
   'seedream-5-0-260128.description':

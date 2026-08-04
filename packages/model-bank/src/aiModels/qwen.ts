@@ -2277,7 +2277,7 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_000_000,
     description:
-      "Qwen3.8-Max-Preview is a Token Plan preview of Alibaba's next-generation 2.4T-parameter flagship model, with major gains in coding, professional productivity, and complex long-horizon tasks.",
+      "Qwen3.8-Max-Preview is a Token Plan preview of Alibaba's next-generation 2.4T-parameter flagship model, with major gains in coding, professional productivity, and complex long-horizon tasks. It is available only through Token Plan and requires a Token Plan API key and the Token Plan OpenAI-compatible endpoint; standard Qwen credentials and endpoint are not supported.",
     displayName: 'Qwen3.8 Max Preview',
     enabled: false,
     family: 'qwen',
