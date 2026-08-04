@@ -113,6 +113,9 @@ const TASK_STATUSES = new Set<TaskStatus>([
 ]);
 export const HOME_TOPIC_RECENT_LIMIT = 15;
 
+export const resolveRecentsBadgeCount = (fetched: number, shown: number): number | undefined =>
+  Math.min(fetched, shown) || undefined;
+
 const normalizeTaskStatus = (status: string): TaskStatus =>
   TASK_STATUSES.has(status as TaskStatus) ? (status as TaskStatus) : 'backlog';
 
@@ -355,7 +358,7 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
         {(state !== 'ready' || topicRecents.length > 0) && (
           <GroupBlock
             actionAlwaysVisible
-            count={topicRecents.length || undefined}
+            count={resolveRecentsBadgeCount(topicRecents.length, recentsCount)}
             title={t('dashboard.chat.recents')}
             action={
               isTeam ? (
