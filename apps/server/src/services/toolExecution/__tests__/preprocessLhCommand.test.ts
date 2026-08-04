@@ -111,6 +111,16 @@ describe('isLhCommand', () => {
     ['if condition', 'if lh agent view agt_1; then echo ok; fi'],
     ['inline env assignment', 'LOBEHUB_WORKSPACE_ID=ws lh agent list'],
     ['quoted inline assignment', 'FOO="a b" lh agent list'],
+    // `!` and `time` are reserved words, so the shell still resolves `lh`
+    // through the injected function — missing them left the command running as
+    // a bare `lh` (not found in the sandbox, unscoped on a device).
+    ['negated', '! lh whoami'],
+    ['negated if condition', 'if ! lh whoami; then echo no; fi'],
+    ['negated while condition', 'while ! lh agent list; do sleep 1; done'],
+    ['negated after &&', 'cd /tmp && ! lh agent view agt_1'],
+    ['timed', 'time lh agent list'],
+    ['negated and timed', '! time lh agent list'],
+    ['negated with inline assignment', '! FOO=1 lh agent list'],
   ])('detects %s', (_label, command) => {
     expect(isLhCommand(command)).toBe(true);
   });
@@ -121,6 +131,8 @@ describe('isLhCommand', () => {
     ['npm script name', 'npm run lhtest'],
     ['a local script of the same name', './lh agent list'],
     ['a path segment', 'ls /opt/lh'],
+    // `time` is matched as a whole word only.
+    ['a word merely ending in time', 'notime lh'],
   ])('does not detect %s', (_label, command) => {
     expect(isLhCommand(command)).toBe(false);
   });

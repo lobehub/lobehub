@@ -26,6 +26,15 @@ export interface PreprocessResult {
  * pattern only knew `^`, `&&`, `||` and `;` on a single line, so everything
  * after the first line of a `view` → `edit` script fell through unhandled.
  *
+ * Between the opener and `lh` the pattern also allows the `!` and `time`
+ * prefixes (`if ! lh whoami; then …`, `time lh agent list`) and inline
+ * `VAR=value` assignments. `!` and `time` are the only command prefixes worth
+ * matching: they are shell reserved words, so the shell still resolves `lh`
+ * through the injected function. Prefixes that fork an external command —
+ * `env`, `nohup`, `xargs`, and POSIX `command` / `exec`, which bypass function
+ * lookup by definition — could never see a shell function anyway, so matching
+ * them would inject a shim that cannot help.
+ *
  * This is a DETECTION-only heuristic: the command itself is never rewritten
  * (see `preprocessLhCommand`), so a false positive costs one harmless shim
  * while a false negative costs a broken `lh` invocation. Erring permissive is
@@ -33,7 +42,7 @@ export interface PreprocessResult {
  * `lh` is quoted text.
  */
 const LH_COMMAND_PATTERN =
-  /(?:^|[\n;&|(`{]|\b(?:do|then|else|if|elif|while|until)\b)[\t ]*(?:[A-Za-z_]\w*=(?:'[^']*'|"[^"]*"|[^\s'"&;|]*)[\t ]+)*lh(?=[\s;&|)]|$)/;
+  /(?:^|[\n;&|(`{]|\b(?:do|then|else|if|elif|while|until)\b)[\t ]*(?:(?:!|\btime)[\t ]+)*(?:[A-Za-z_]\w*=(?:'[^']*'|"[^"]*"|[^\s'"&;|]*)[\t ]+)*lh(?=[\s;&|)]|$)/;
 
 export const isLhCommand = (command: string): boolean => LH_COMMAND_PATTERN.test(command);
 
