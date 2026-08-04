@@ -16,6 +16,7 @@ import {
   documents,
   files,
   knowledgeBases,
+  messageGroups,
   messagePlugins,
   messages,
   sessionGroups,
@@ -564,6 +565,48 @@ describe('AgentModel.transferAgent', () => {
       content: 'orphaned note',
       id: 'tcm-guard-orphan',
       topicId: 'guard-topic',
+      workspaceId: wsId1,
+    });
+    expect(await model.transferHasForeignRows(agent.id)).toBe(true);
+  });
+
+  it('should flag topic-only teammate messages and message groups as foreign rows', async () => {
+    const model = new AgentModel(serverDB, userId, wsId1);
+    const agent = await model.create({ title: 'Anchor Guarded Agent' });
+
+    await serverDB
+      .insert(topics)
+      .values({ id: 'anchor-guard-topic', agentId: agent.id, userId, workspaceId: wsId1 });
+
+    // Caller's own topic-only message — not foreign
+    await serverDB.insert(messages).values({
+      id: 'anchor-guard-own',
+      role: 'user',
+      topicId: 'anchor-guard-topic',
+      userId,
+      workspaceId: wsId1,
+    });
+    expect(await model.transferHasForeignRows(agent.id)).toBe(false);
+
+    // A teammate's message carrying ONLY a topicId (the OpenAPI create shape:
+    // agentId optional, sessionId always null) follows the transferred topic
+    // under derived scope — the session/agent probes alone cannot see it
+    await serverDB.insert(messages).values({
+      id: 'anchor-guard-teammate',
+      role: 'user',
+      topicId: 'anchor-guard-topic',
+      userId: targetUserId,
+      workspaceId: wsId1,
+    });
+    expect(await model.transferHasForeignRows(agent.id)).toBe(true);
+
+    // Same for a teammate's message group anchored to the caller's topic
+    await serverDB.delete(messages).where(eq(messages.id, 'anchor-guard-teammate'));
+    expect(await model.transferHasForeignRows(agent.id)).toBe(false);
+    await serverDB.insert(messageGroups).values({
+      id: 'anchor-guard-group',
+      topicId: 'anchor-guard-topic',
+      userId: targetUserId,
       workspaceId: wsId1,
     });
     expect(await model.transferHasForeignRows(agent.id)).toBe(true);

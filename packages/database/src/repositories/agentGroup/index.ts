@@ -29,7 +29,11 @@ import {
 import type { LobeChatDatabase } from '../../type';
 import { idGenerator } from '../../utils/idGenerator';
 import { normalizeInboxAgentMeta } from '../../utils/inboxAgent';
-import { buildMessageChildScopeWhere, buildMessageScopeWhere } from '../../utils/messageScope';
+import {
+  buildMessageChildScopeWhere,
+  buildMessageScopeWhere,
+  hasForeignTopicAnchoredMessageRows,
+} from '../../utils/messageScope';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
 interface CopyAgentGroupToWorkspaceOptions {
@@ -884,6 +888,12 @@ export class AgentGroupRepository {
     // topics — a teammate's comment on the caller's own topic is still their
     // work. NULL authors (deleted accounts) count as foreign too.
     if (await hasForeignTopicComments(this.db, this.userId, eq(topics.groupId, groupId)))
+      return true;
+
+    // Messages / message_groups anchored to a transferred topic follow it at
+    // read time (derived scope) — including teammate rows carrying only a
+    // topicId, which the direct groupId probe below cannot see.
+    if (await hasForeignTopicAnchoredMessageRows(this.db, this.userId, eq(topics.groupId, groupId)))
       return true;
 
     const [foreignThread] = await this.db

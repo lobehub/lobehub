@@ -1,4 +1,4 @@
-import { and, eq, exists, isNull, or, type SQL, sql, type SQLWrapper } from 'drizzle-orm';
+import { and, eq, exists, isNull, ne, or, type SQL, sql, type SQLWrapper } from 'drizzle-orm';
 import { type AnyPgColumn, QueryBuilder } from 'drizzle-orm/pg-core';
 
 import {
@@ -225,4 +225,43 @@ export const resnapshotTransferredMessagesBeforeOwnerDelete = async (
       )}
     `);
   }
+};
+
+/**
+ * Whether any message rows anchored to the given topics were authored by
+ * someone other than `userId`.
+ *
+ * Transfer guards need this because `messages` and `message_groups` derive
+ * their scope from the owning topic at read time (see buildMessageScopeWhere /
+ * buildTopicAnchoredScopeWhere): every row anchored to a transferred topic
+ * moves with it — including rows the direct session/agent linkage probes
+ * cannot see, e.g. OpenAPI-created messages that carry only a `topicId`
+ * (`agentId` is optional there and `sessionId` is always null). A teammate's
+ * topic-only rows are still their work, so a non-owner transfer must not
+ * rehome them.
+ *
+ * `topicWhere` must bound the probed topics (by session/agent/group linkage)
+ * so both probes stay index-driven; each stops at the first foreign row.
+ */
+export const hasForeignTopicAnchoredMessageRows = async (
+  // `Pick` so both the base database and a transaction executor are accepted
+  db: Pick<LobeChatDatabase, 'select'>,
+  userId: string,
+  topicWhere: SQL,
+): Promise<boolean> => {
+  const [foreignMessage] = await db
+    .select({ id: messages.id })
+    .from(messages)
+    .innerJoin(topics, eq(messages.topicId, topics.id))
+    .where(and(topicWhere, ne(messages.userId, userId)))
+    .limit(1);
+  if (foreignMessage) return true;
+
+  const [foreignGroup] = await db
+    .select({ id: messageGroups.id })
+    .from(messageGroups)
+    .innerJoin(topics, eq(messageGroups.topicId, topics.id))
+    .where(and(topicWhere, ne(messageGroups.userId, userId)))
+    .limit(1);
+  return !!foreignGroup;
 };

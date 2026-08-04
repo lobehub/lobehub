@@ -12,7 +12,7 @@ import {
 } from '../../models/topicComment';
 import { agents } from '../../schemas/agent';
 import { chatGroups, chatGroupsAgents } from '../../schemas/chatGroup';
-import { messagePlugins, messages } from '../../schemas/message';
+import { messageGroups, messagePlugins, messages } from '../../schemas/message';
 import { threads, topics } from '../../schemas/topic';
 import { topicCommentMentions, topicComments } from '../../schemas/topicComment';
 import { users } from '../../schemas/user';
@@ -1660,6 +1660,57 @@ describe('AgentGroupRepository', () => {
         workspaceId,
       });
       expect(await wsRepo.transferHasForeignRows('guard-group')).toBe(true);
+    });
+
+    it('flags topic-only teammate messages and message groups as foreign transfer rows', async () => {
+      await serverDB.insert(chatGroups).values({
+        id: 'anchor-guard-group',
+        title: 'Anchor Guard Group',
+        userId,
+        workspaceId,
+      });
+      await serverDB.insert(topics).values({
+        groupId: 'anchor-guard-group',
+        id: 'anchor-guard-group-topic',
+        title: 'Own Topic',
+        userId,
+        workspaceId,
+      });
+
+      const wsRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
+
+      // Caller's own topic-only message — not foreign
+      await serverDB.insert(messages).values({
+        id: 'anchor-guard-group-own',
+        role: 'user',
+        topicId: 'anchor-guard-group-topic',
+        userId,
+        workspaceId,
+      });
+      expect(await wsRepo.transferHasForeignRows('anchor-guard-group')).toBe(false);
+
+      // A teammate's message carrying ONLY a topicId (no groupId/sessionId)
+      // follows the transferred topic under derived scope — the direct
+      // groupId probe alone cannot see it
+      await serverDB.insert(messages).values({
+        id: 'anchor-guard-group-teammate',
+        role: 'user',
+        topicId: 'anchor-guard-group-topic',
+        userId: otherUserId,
+        workspaceId,
+      });
+      expect(await wsRepo.transferHasForeignRows('anchor-guard-group')).toBe(true);
+
+      // Same for a teammate's message group anchored to the caller's topic
+      await serverDB.delete(messages).where(eq(messages.id, 'anchor-guard-group-teammate'));
+      expect(await wsRepo.transferHasForeignRows('anchor-guard-group')).toBe(false);
+      await serverDB.insert(messageGroups).values({
+        id: 'anchor-guard-group-mg',
+        topicId: 'anchor-guard-group-topic',
+        userId: otherUserId,
+        workspaceId,
+      });
+      expect(await wsRepo.transferHasForeignRows('anchor-guard-group')).toBe(true);
     });
 
     it.skipIf(!isServerDB)(

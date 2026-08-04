@@ -55,6 +55,7 @@ import {
 import type { LobeChatDatabase } from '../type';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { normalizeInboxAgentMeta } from '../utils/inboxAgent';
+import { hasForeignTopicAnchoredMessageRows } from '../utils/messageScope';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import {
   hasForeignTopicComments,
@@ -1671,6 +1672,12 @@ export class AgentModel {
     // topics — a teammate's comment on the caller's own topic is still their
     // work. NULL authors (deleted accounts) count as foreign too.
     if (await hasForeignTopicComments(this.db, this.userId, topicWhere!)) return true;
+
+    // Messages / message_groups anchored to a transferred topic follow it at
+    // read time (derived scope) — including teammate rows carrying only a
+    // topicId (e.g. OpenAPI-created: agentId optional, sessionId always
+    // null), which the direct session/agent probes below cannot see.
+    if (await hasForeignTopicAnchoredMessageRows(this.db, this.userId, topicWhere!)) return true;
 
     const messageWhere =
       sessionIds.length > 0
