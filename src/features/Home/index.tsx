@@ -233,10 +233,12 @@ const styles = createStaticStyles(({ css }) => ({
 const Home = memo(() => {
   const isLogin = useUserStore(authSelectors.isLogin);
   const showHomeRail = useGlobalStore(systemStatusSelectors.showHomeRail);
+  const showHomePortrait = useGlobalStore(systemStatusSelectors.showHomePortrait);
   const [mode, setMode] = useState<HomeMode>('chat');
   const [inputValue, setInputValue] = useState('');
   const railVisible = Boolean(isLogin && showHomeRail);
   const railCollapsed = !railVisible;
+  const portraitVisible = Boolean(isLogin && showHomePortrait);
 
   const handleInputValueChange = useCallback((value: string) => {
     setInputValue(value);
@@ -259,14 +261,14 @@ const Home = memo(() => {
       <div className={cx(styles.header, styles.content, railCollapsed && styles.contentCollapsed)}>
         <HomeHeader />
         {/* No portrait for signed-out visitors, so no one to speak the line. */}
-        {isLogin && (
+        {portraitVisible && (
           <div className={cx(styles.bubbleSlot, railCollapsed && styles.bubbleSlotCollapsed)}>
             <PortraitBubble />
           </div>
         )}
       </div>
 
-      {isLogin && (
+      {portraitVisible && (
         <div className={cx(styles.portrait, railCollapsed && styles.portraitCollapsed)}>
           <HomePortrait />
         </div>
