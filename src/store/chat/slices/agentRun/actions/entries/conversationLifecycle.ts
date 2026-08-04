@@ -1135,6 +1135,14 @@ export class ConversationLifecycleActionImpl {
         // input loading state would drop during the execAgentTask round-trip
         // and the send button would flicker back to "send".
         const result = await this.#get().executeGatewayAgent({
+          // The ids this send's optimistic rows already render under. The
+          // server honours them, so the gateway path converges on the same ids
+          // instead of minting its own — same contract as sendMessageInServer.
+          clientIds: {
+            assistantMessageId: tempAssistantId,
+            topicId: optimisticTopic?.id,
+            userMessageId: tempId,
+          },
           context: operationContext,
           fileIds: fileIdList,
           message,

@@ -57,6 +57,13 @@ export interface ExecAgentTaskParams {
   agentId?: string;
   appContext?: ExecAgentAppContext;
   autoStart?: boolean;
+  /**
+   * Client-minted ids for the rows this run creates, honoured verbatim by the
+   * server — the gateway counterpart of `sendMessageInServer`'s
+   * `newTopic.id` / `newUserMessage.id` / `newAssistantMessage.id`. Fresh
+   * sends only; resume / regeneration must not replay them.
+   */
+  clientIds?: { assistantMessageId?: string; topicId?: string; userMessageId?: string };
   deviceId?: string;
   existingMessageIds?: string[];
   /** File IDs of already-uploaded attachments to attach to the new user message */

@@ -370,6 +370,12 @@ export class GatewayActionImpl {
    * then starts the agent. This method handles topic switching and WebSocket connection.
    */
   executeGatewayAgent = async (params: {
+    /**
+     * Client-minted ids for the rows this run creates (fresh sends only). The
+     * server honours them verbatim, so the optimistic topic / message rows keep
+     * their ids instead of diverging from the server-minted ones.
+     */
+    clientIds?: { assistantMessageId?: string; topicId?: string; userMessageId?: string };
     /** Agent/runtime context used to execute the server operation. */
     context: ConversationContext;
     /** File IDs of already-uploaded attachments to attach to the new user message */
@@ -444,6 +450,7 @@ export class GatewayActionImpl {
     tempMessageIds?: string[];
   }): Promise<ExecAgentResult> => {
     const {
+      clientIds,
       context: executionContext,
       fileIds,
       message,
@@ -519,6 +526,9 @@ export class GatewayActionImpl {
     const result = await aiAgentService.execAgentTask(
       {
         agentId: executionContext.agentId,
+        // Fresh sends only — resume flows never pass this, and the server drops
+        // it defensively on resume-like params anyway.
+        clientIds,
         appContext: {
           agentDocumentId: executionContext.agentDocumentId,
           defaultTaskAssigneeAgentId: executionContext.defaultTaskAssigneeAgentId,

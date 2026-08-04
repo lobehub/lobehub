@@ -1213,6 +1213,14 @@ export class AiAgentService {
       ephemeralUserMessage,
     } = params;
 
+    // Honour client-minted row ids on a FRESH send only. Resume / regeneration
+    // replays reach this method too (resumeApproval, resumeToolResult,
+    // parentMessageId), and a replayed id there would collide with the row the
+    // original send already created — so those paths drop the ids defensively
+    // rather than trusting every caller to omit them.
+    const isResumeLike = !!resume || !!resumeApproval || !!resumeToolResult || !!parentMessageId;
+    const clientIds = isResumeLike ? undefined : params.clientIds;
+
     // Validate that either agentId or slug is provided
     if (!agentId && !slug) {
       throw new Error('Either agentId or slug must be provided');
@@ -1794,26 +1802,31 @@ export class AiAgentService {
           : undefined;
 
       const fallbackTitleSource = markdownToTxt(prompt);
-      const newTopic = await this.topicModel.create({
-        agentId: resolvedAgentId,
-        // Persist the group association when running inside a group conversation.
-        // Without it the topic is created group-less and only shows under the
-        // member agent's topic list — never in the group sidebar (which queries
-        // `topics.groupId`), so the conversation silently "disappears" from the
-        // group. execGroupAgent normally pre-creates the topic, but any path
-        // that reaches execAgent without a topicId (e.g. the async/queue run)
-        // must carry the groupId through too (group topic sidebar + ownership fix).
-        groupId: appContext?.groupId,
-        metadata,
-        // Snapshot the effective model as the topic's pinned model (config).
-        model,
-        provider,
-        title:
-          title !== undefined
-            ? title
-            : fallbackTitleSource.slice(0, 50) + (fallbackTitleSource.length > 50 ? '...' : ''),
-        trigger,
-      });
+      // Second argument: the id the client already rendered this topic under
+      // (sidebar row, message bucket). Absent → the model mints one as before.
+      const newTopic = await this.topicModel.create(
+        {
+          agentId: resolvedAgentId,
+          // Persist the group association when running inside a group conversation.
+          // Without it the topic is created group-less and only shows under the
+          // member agent's topic list — never in the group sidebar (which queries
+          // `topics.groupId`), so the conversation silently "disappears" from the
+          // group. execGroupAgent normally pre-creates the topic, but any path
+          // that reaches execAgent without a topicId (e.g. the async/queue run)
+          // must carry the groupId through too (group topic sidebar + ownership fix).
+          groupId: appContext?.groupId,
+          metadata,
+          // Snapshot the effective model as the topic's pinned model (config).
+          model,
+          provider,
+          title:
+            title !== undefined
+              ? title
+              : fallbackTitleSource.slice(0, 50) + (fallbackTitleSource.length > 50 ? '...' : ''),
+          trigger,
+        },
+        clientIds?.topicId,
+      );
       topicId = newTopic.id;
       log(
         'execAgent: created new topic %s with trigger %s, groupId %s, cronJobId %s',
@@ -1932,20 +1945,24 @@ export class AiAgentService {
     const userMessageParentId = await resolveUserMessageParentId();
     const userMessageRecord = runFromHistory
       ? undefined
-      : await this.messageModel.create({
-          agentId: persistAgentId,
-          content: prompt,
-          files: runAttachments.fileIds,
-          // Group reads filter on messages.groupId (MessageModel.query group
-          // branch), so a group turn must stamp groupId or the message never
-          // shows when the topic is reopened (group topic sidebar + ownership fix).
-          groupId: appContext?.groupId ?? undefined,
-          metadata: requestTriggerMetadata,
-          parentId: userMessageParentId,
-          role: 'user',
-          threadId: appContext?.threadId ?? undefined,
-          topicId,
-        });
+      : await this.messageModel.create(
+          {
+            agentId: persistAgentId,
+            content: prompt,
+            files: runAttachments.fileIds,
+            // Group reads filter on messages.groupId (MessageModel.query group
+            // branch), so a group turn must stamp groupId or the message never
+            // shows when the topic is reopened (group topic sidebar + ownership fix).
+            groupId: appContext?.groupId ?? undefined,
+            metadata: requestTriggerMetadata,
+            parentId: userMessageParentId,
+            role: 'user',
+            threadId: appContext?.threadId ?? undefined,
+            topicId,
+          },
+          // The id the client's optimistic user row already renders under.
+          clientIds?.userMessageId,
+        );
     if (userMessageRecord) {
       selfMessageIds.add(userMessageRecord.id);
       log('execAgent: created user message %s', userMessageRecord.id);
@@ -1969,25 +1986,29 @@ export class AiAgentService {
     // / `turn_metadata` (backfilled by HeterogeneousPersistenceHandler), and
     // seeding the agent's chat model would leak it into the model tag. A normal
     // run seeds model + provider as usual.
-    const assistantMessageRecord = await this.messageModel.create({
-      agentId: persistAgentId,
-      content: LOADING_FLAT,
-      // Stamp groupId so the assistant turn is visible in the group read path
-      // (MessageModel.query filters group chats by messages.groupId).
-      groupId: appContext?.groupId ?? undefined,
-      metadata: orchestrationMetadata,
-      model: isHeteroAgent ? undefined : model,
-      // Chain onto the user turn we just persisted; `parentMessageId` is the
-      // anchor only on a resume, where no user message is created. A batch
-      // approval overrides it with the assistant that emitted the batch — the
-      // previous LLM call — so the spine stays one node per call and never
-      // depends on which of the batch's tool rows the client sent as anchor.
-      parentId: userMessageRecord?.id ?? batchApprovalAnchorId ?? parentMessageId,
-      provider: isHeteroAgent ? heteroType : provider,
-      role: 'assistant',
-      threadId: appContext?.threadId ?? undefined,
-      topicId,
-    });
+    const assistantMessageRecord = await this.messageModel.create(
+      {
+        agentId: persistAgentId,
+        content: LOADING_FLAT,
+        // Stamp groupId so the assistant turn is visible in the group read path
+        // (MessageModel.query filters group chats by messages.groupId).
+        groupId: appContext?.groupId ?? undefined,
+        metadata: orchestrationMetadata,
+        model: isHeteroAgent ? undefined : model,
+        // Chain onto the user turn we just persisted; `parentMessageId` is the
+        // anchor only on a resume, where no user message is created. A batch
+        // approval overrides it with the assistant that emitted the batch — the
+        // previous LLM call — so the spine stays one node per call and never
+        // depends on which of the batch's tool rows the client sent as anchor.
+        parentId: userMessageRecord?.id ?? batchApprovalAnchorId ?? parentMessageId,
+        provider: isHeteroAgent ? heteroType : provider,
+        role: 'assistant',
+        threadId: appContext?.threadId ?? undefined,
+        topicId,
+      },
+      // The id the client's assistant placeholder already renders under.
+      clientIds?.assistantMessageId,
+    );
     selfMessageIds.add(assistantMessageRecord.id);
     assistantMessageRef.current = assistantMessageRecord.id;
     log('execAgent: created assistant message %s', assistantMessageRecord.id);

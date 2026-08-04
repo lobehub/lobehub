@@ -2,6 +2,7 @@ import { type AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { parse } from '@lobechat/conversation-flow';
 import type { TaskCurrentActivity, TaskStatusResult } from '@lobechat/types';
 import {
+  entityIdPattern,
   RequestTrigger,
   ThreadStatus,
   ThreadType,
@@ -25,6 +26,7 @@ import { heteroAuthedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { signUserJWT } from '@/libs/trpc/utils/internalJwt';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
+import { unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
 import {
   assertCanUseMessageTargets,
   assertCanUseTopicTargets,
@@ -224,6 +226,20 @@ const ExecAgentSchema = z
       .optional(),
     /** Whether to auto-start execution after creating operation */
     autoStart: z.boolean().optional().default(true),
+    /**
+     * Client-minted ids for the rows this run creates, honoured verbatim —
+     * the gateway counterpart of `sendMessageInServer`'s `newTopic.id` /
+     * `newUserMessage.id` / `newAssistantMessage.id`. Validated per namespace:
+     * an unvalidated client primary key would let a caller submit look-alike
+     * ids, wrong namespaces, or strings that leak into logs and URLs.
+     */
+    clientIds: z
+      .object({
+        assistantMessageId: z.string().regex(entityIdPattern('messages')).optional(),
+        topicId: z.string().regex(entityIdPattern('topics')).optional(),
+        userMessageId: z.string().regex(entityIdPattern('messages')).optional(),
+      })
+      .optional(),
     /** Explicit device ID to bind to the topic and activate for this run */
     deviceId: z.string().optional(),
     /** Optional existing message IDs to include in context */
@@ -908,6 +924,7 @@ export const aiAgentRouter = router({
         agentId,
         appContext,
         autoStart,
+        clientIds: input.clientIds,
         // Propagate the originating request's client IP / user agent into the run
         // so downstream LLM-call metadata can carry them for auditing and spend
         // attribution. These are server-derived from the tRPC context and are
@@ -936,6 +953,17 @@ export const aiAgentRouter = router({
 
       if (error instanceof TRPCError) {
         throw error;
+      }
+
+      // A primary-key collision on a client-supplied id (a retried send
+      // replaying the same `clientIds`) is client-correctable — surface it as
+      // CONFLICT, not a 500. Generic message on purpose: echoing the id would
+      // let a caller probe for rows it cannot read.
+      if (unwrapPgError(error)?.code === '23505') {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'This run has already been created.',
+        });
       }
 
       throw new TRPCError({

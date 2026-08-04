@@ -473,6 +473,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
         metadata: { trigger: RequestTrigger.Onboarding },
         role: 'user',
       }),
+      undefined,
     );
   });
 
