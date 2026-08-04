@@ -417,11 +417,13 @@ export interface TaskRunPromptInput {
   /** Task data */
   task: {
     assigneeAgentId?: string | null;
+    automationMode?: 'heartbeat' | 'schedule' | null;
     dependencies?: Array<{ dependsOn: string; type: string }>;
     description?: string | null;
     /** Lightweight metadata of files attached to the task instruction. Actual
      * content is forwarded to the agent runtime via `fileIds` on execAgent. */
     files?: TaskRunPromptAttachment[];
+    heartbeatInterval?: number | null;
     id: string;
     identifier: string;
     instruction: string;
@@ -433,6 +435,8 @@ export interface TaskRunPromptInput {
       maxIterations?: number;
       rubrics?: Array<{ name: string; threshold?: number; type: string }>;
     } | null;
+    schedulePattern?: string | null;
+    scheduleTimezone?: string | null;
     status: string;
     subtasks?: Array<TaskSummary & { blockedBy?: string }>;
     /** Delivery-acceptance criteria the builder must self-evidence while working. */
@@ -464,6 +468,14 @@ const timeAgo = (dateStr: string, now?: Date): string => {
   if (diffHr < 24) return `${diffHr}h ago`;
   const diffDay = Math.floor(diffHr / 24);
   return `${diffDay}d ago`;
+};
+
+// ── Heartbeat interval helper ──
+
+const formatInterval = (seconds: number): string => {
+  if (seconds % 3600 === 0) return `${seconds / 3600}h`;
+  if (seconds % 60 === 0) return `${seconds / 60}m`;
+  return `${seconds}s`;
 };
 
 // ── Brief icon ──
@@ -528,8 +540,19 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
     `<hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>`,
     `${task.identifier} ${task.name || task.identifier}`,
     `Status: ${statusIcon(task.status)} ${task.status}     Priority: ${priorityLabel(task.priority)}`,
-    `Instruction: ${task.instruction}`,
   ];
+  if (task.automationMode) {
+    const cadence =
+      task.automationMode === 'heartbeat' && task.heartbeatInterval
+        ? `heartbeat, every ${formatInterval(task.heartbeatInterval)}`
+        : task.automationMode === 'schedule' && task.schedulePattern
+          ? `cron "${task.schedulePattern}" (${task.scheduleTimezone || 'UTC'})`
+          : task.automationMode;
+    taskLines.push(
+      `Automation: ${cadence} — this task is a recurring loop and this run is one tick of it. When the run ends, the next tick is armed automatically; a tick with nothing to do is still a successful run. NEVER set this task to completed (or any terminal status) — that permanently stops the loop.`,
+    );
+  }
+  taskLines.push(`Instruction: ${task.instruction}`);
   if (task.description) taskLines.push(`Description: ${task.description}`);
   if (task.files && task.files.length > 0) {
     taskLines.push('Attachments (contents provided separately as multimodal inputs):');
