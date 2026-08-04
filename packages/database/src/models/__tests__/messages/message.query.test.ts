@@ -1413,6 +1413,56 @@ describe('MessageModel Query Tests', () => {
       expect(result[0].id).toBe('2');
       expect(result[1].id).toBe('1');
     });
+
+    it('should merge all three derivation arms in descending order', async () => {
+      // Topic arm: transferred-in topic — the message keeps the previous
+      // owner's snapshot but derives scope from the topic's current owner
+      await serverDB
+        .insert(topics)
+        .values([{ id: 'qa-topic', userId, createdAt: new Date('2023-01-01') }]);
+      await serverDB.insert(messages).values([
+        {
+          id: 'qa-topic-msg',
+          userId: otherUserId,
+          role: 'user',
+          content: 'transferred topic message',
+          topicId: 'qa-topic',
+          createdAt: new Date('2023-03-01'),
+        },
+        // Session arm: no topic, session owned by the caller
+        {
+          id: 'qa-session-msg',
+          userId,
+          role: 'user',
+          content: 'session message',
+          sessionId: '1',
+          createdAt: new Date('2023-02-01'),
+        },
+        // Orphan arm: no anchors, own snapshot
+        {
+          id: 'qa-orphan-msg',
+          userId,
+          role: 'user',
+          content: 'orphan message',
+          createdAt: new Date('2023-01-01'),
+        },
+        // Foreign orphan — must not leak in
+        {
+          id: 'qa-foreign-msg',
+          userId: otherUserId,
+          role: 'user',
+          content: 'foreign message',
+          createdAt: new Date('2023-04-01'),
+        },
+      ]);
+
+      const result = await messageModel.queryAll();
+      expect(result.map((m) => m.id)).toEqual(['qa-topic-msg', 'qa-session-msg', 'qa-orphan-msg']);
+
+      // Pagination spans arms seamlessly
+      const page2 = await messageModel.queryAll({ current: 1, pageSize: 2 });
+      expect(page2.map((m) => m.id)).toEqual(['qa-orphan-msg']);
+    });
   });
 
   describe('findById', () => {

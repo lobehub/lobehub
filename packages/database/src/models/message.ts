@@ -51,6 +51,7 @@ import {
   or,
   sql,
 } from 'drizzle-orm';
+import { unionAll } from 'drizzle-orm/pg-core';
 
 import { merge } from '@/utils/merge';
 import { sanitizeNullBytes } from '@/utils/sanitizeNullBytes';
@@ -1878,11 +1879,30 @@ export class MessageModel {
     const { current = 0, pageSize = 100 } = params ?? {};
     const offset = current * pageSize;
 
+    // Whole-scope listing: the bare derived-scope predicate would be the only
+    // filter over the shared messages table (unbounded scan) — fan out over
+    // the three derivation arms instead, each bounded by its own index, and
+    // let the database order/page the union (same shape as count()).
+    const { topicOwned, sessionOwned, orphan } = this.scopeArms();
+    const columns = getTableColumns(messages);
+    const scoped = unionAll(
+      this.db
+        .select(columns)
+        .from(messages)
+        .innerJoin(topics, eq(topics.id, messages.topicId))
+        .where(topicOwned),
+      this.db
+        .select(columns)
+        .from(messages)
+        .innerJoin(sessions, eq(sessions.id, messages.sessionId))
+        .where(sessionOwned),
+      this.db.select(columns).from(messages).where(orphan),
+    ).as('scoped_messages');
+
     const result = await this.db
       .select()
-      .from(messages)
-      .where(and(this.ownership()))
-      .orderBy(desc(messages.createdAt))
+      .from(scoped)
+      .orderBy(desc(scoped.createdAt))
       .limit(pageSize)
       .offset(offset);
 
