@@ -471,7 +471,11 @@ export class GatewayActionImpl {
     const agentGatewayUrl =
       window.global_serverConfigStore!.getState().serverConfig.agentGatewayUrl!;
 
-    const isCreateNewTopic = !messageContext.topicId;
+    // The EXECUTION context decides whether the server creates a topic. The
+    // message context can already carry the client-minted topic id (the send
+    // adopted it up front so the streamed messages land in the on-screen
+    // bucket) while the topic still has no server row.
+    const isCreateNewTopic = !executionContext.topicId;
     const taskId =
       executionContext.viewedTask?.type === 'detail'
         ? executionContext.viewedTask.taskId
@@ -631,6 +635,13 @@ export class GatewayActionImpl {
       messageMapKey(messageContext),
       messageMapKey(resolvedMessageContext),
     );
+    // Legacy queue location: follow-ups enqueued behind an op still registered
+    // under the pre-mint `_new` key.
+    if (isCreateNewTopic)
+      this.#get().moveQueuedMessages(
+        messageMapKey({ ...messageContext, topicId: null }),
+        messageMapKey(resolvedMessageContext),
+      );
 
     if (result.topicId) {
       void this.#get().updateTopicStatus?.({

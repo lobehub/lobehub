@@ -405,6 +405,29 @@ export class ConversationLifecycleActionImpl {
         ? pageAgentRuntime.getCurrentDocId()
         : undefined;
 
+    // Whether this send has to create the topic. From here on this flag — NOT
+    // `!operationContext.topicId` — is the "new topic" test: the conversation
+    // adopts its client-minted topic id below, so the context CARRIES a topicId
+    // for a topic that does not exist on the server yet.
+    const willCreateNewTopic = !context.topicId;
+
+    /**
+     * The id this send's topic will be created under, minted up front and
+     * adopted by the WHOLE send: the operation context, the optimistic message
+     * bucket, `activeTopicId` and the sidebar row all use it from the first
+     * frame, and the server honours it verbatim (`newTopic.id` / `clientIds`).
+     *
+     * This is what removes the `_new` → topic transition — the conversation's
+     * `contextKey` never changes, so the conversation surface never remounts
+     * and the virtualized list never repaints from an empty viewport (the
+     * first-send "messages vanish for a frame" flicker).
+     *
+     * Isolated-topic callers keep the legacy flow (they re-subscribe via
+     * `onTopicCreated` and never render the main conversation surface).
+     */
+    const mintedTopicId =
+      willCreateNewTopic && !context.isolatedTopic ? generateEntityId('topics') : undefined;
+
     const operationContext = {
       ...context,
       ...(isCreatingNewThread && { threadId: undefined }),
@@ -414,6 +437,7 @@ export class ConversationLifecycleActionImpl {
       // is kept for back-compat.
       ...(isGroupSupervisor && { isSupervisor: true, orchestrationRole: 'supervisor' as const }),
       ...(activePageDocumentId ? { documentId: activePageDocumentId } : {}),
+      ...(mintedTopicId ? { topicId: mintedTopicId } : {}),
     };
 
     const fileIdList = files?.map((f) => f.id);
@@ -466,12 +490,40 @@ export class ConversationLifecycleActionImpl {
     // a fast second Enter must queue on `main_<agent>_new` instead of starting
     // topic B.
     const currentContextKey = messageMapKey(operationContext);
-    const contextOpIds = this.#get().operationsByContext[currentContextKey] || [];
-    const runningQueueBlockingOp = contextOpIds
-      .map((id) => this.#get().operations[id])
-      .find(
-        (op) => op && QUEUE_BLOCKING_OPERATION_TYPE_SET.has(op.type) && op.status === 'running',
-      );
+    // A new-topic send must ALSO queue behind a send that is still creating its
+    // topic for this same conversation surface. That earlier send's operation is
+    // registered under ITS minted topic's bucket (the context adopted the id up
+    // front), so probing only this send's key would miss it — a fast second
+    // Enter would start a concurrent topic instead of queueing. `creatingTopicIds`
+    // names exactly those in-flight buckets.
+    const queueCandidateKeys = [
+      currentContextKey,
+      ...(willCreateNewTopic
+        ? [
+            // The pre-mint `_new` key: ops that predate topic adoption (or any
+            // legacy caller) still register here.
+            messageMapKey({ ...operationContext, topicId: null }),
+            ...this.#get().creatingTopicIds.map((creatingId) =>
+              messageMapKey({ ...operationContext, topicId: creatingId }),
+            ),
+          ].filter((key) => key !== currentContextKey)
+        : []),
+    ];
+    const findRunningBlockingOp = (key: string) =>
+      (this.#get().operationsByContext[key] || [])
+        .map((id) => this.#get().operations[id])
+        .find(
+          (op) => op && QUEUE_BLOCKING_OPERATION_TYPE_SET.has(op.type) && op.status === 'running',
+        );
+    let queueTargetKey = currentContextKey;
+    let runningQueueBlockingOp: ReturnType<typeof findRunningBlockingOp>;
+    for (const key of queueCandidateKeys) {
+      runningQueueBlockingOp = findRunningBlockingOp(key);
+      if (runningQueueBlockingOp) {
+        queueTargetKey = key;
+        break;
+      }
+    }
 
     if (runningQueueBlockingOp) {
       // Snapshot file previews so the tray can render thumbnails AND the
@@ -485,7 +537,7 @@ export class ConversationLifecycleActionImpl {
       }));
 
       this.#get().enqueueMessage(
-        currentContextKey,
+        queueTargetKey,
         {
           id: nanoid(),
           content: message,
@@ -624,18 +676,66 @@ export class ConversationLifecycleActionImpl {
     this.#get().associateMessageWithOperation(tempId, operationId);
     this.#get().associateMessageWithOperation(tempAssistantId, operationId);
 
+    // Group main topic lists are keyed by `group_${groupId}`. Keeping the
+    // supervisor agent id here would write "group first message" placeholders
+    // into `group_agent_${groupId}_${agentId}`, invisible to the group sidebar.
+    const topicListAgentId =
+      operationContext.groupId && operationContext.scope === 'group'
+        ? undefined
+        : operationContext.agentId;
+    const optimisticTopicScope = {
+      agentId: topicListAgentId,
+      groupId: operationContext.groupId ?? undefined,
+    };
+    // A topic created by this send pins the model it was started with, same as
+    // the manual createTopic/saveToTopic and Gateway (AiAgentService) paths. The
+    // snapshot goes to the top-level `topics.model`/`provider` columns (config
+    // source of truth) — generation and ChatInput display resolve from it
+    // (topicSelectors.getTopicModelById).
+    const newTopicModelSnapshot = willCreateNewTopic
+      ? snapshotAgentModel(operationContext.agentId)
+      : undefined;
+
+    // Adopt the minted topic id NOW, synchronously with the optimistic message
+    // dispatch above: insert the sidebar row and point `activeTopicId` at it in
+    // the same React commit that shows the optimistic pair. The conversation's
+    // contextKey is therefore final from its very first painted frame — nothing
+    // remounts when the server later confirms the topic, which is the flicker
+    // this whole flow used to have. Everything after this point (cwd
+    // resolution, the runtime branches) awaits, so it must come before them.
+    if (mintedTopicId) {
+      this.#get().internal_dispatchTopic(
+        {
+          ...optimisticTopicScope,
+          optimistic: true,
+          type: 'addTopic',
+          value: {
+            id: mintedTopicId,
+            ...newTopicModelSnapshot,
+            ...(operationContext.groupId ? {} : { sessionId: operationContext.agentId }),
+            title: newTopicTitle,
+          },
+        },
+        'sendMessage/optimisticCreateTopic',
+      );
+      this.#get().internal_updateTopicLoading(mintedTopicId, true);
+      await this.#get().switchTopic(mintedTopicId, { skipRefreshMessage: true });
+    }
+
     // The topic list store is paginated — a deep-linked older topic can be the
     // ACTIVE topic yet miss `getTopicById`. For hetero runs that miss used to
     // silently resolve the agent/device default cwd instead of the topic's
     // bound workingDirectory and drop `--resume` (fresh CLI session, context
-    // lost, no error) — fall back to the server row.
+    // lost, no error) — fall back to the server row. A topic this send is
+    // about to create has no server row, so the lookup is skipped entirely.
     const existingTopic = await resolveExistingTopicForRun({
       fetchTopicDetail: (id) => topicService.getTopicDetail(id),
       isHetero: !!heterogeneousProvider,
-      storeTopic: operationContext.topicId
-        ? topicSelectors.getTopicById(operationContext.topicId)(this.#get())
-        : undefined,
-      topicId: operationContext.topicId,
+      storeTopic:
+        operationContext.topicId && !willCreateNewTopic
+          ? topicSelectors.getTopicById(operationContext.topicId)(this.#get())
+          : undefined,
+      topicId: willCreateNewTopic ? undefined : operationContext.topicId,
     });
     const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
     // Resolve the cwd for every hetero-provider run that lands on a MACHINE
@@ -702,17 +802,9 @@ export class ConversationLifecycleActionImpl {
         ? { path: existingTopic.metadata.workingDirectory }
         : agentWorkingDirectoryConfig);
     const pendingTopicRepos =
-      runtimeType === 'gateway' && !operationContext.topicId && operationContext.agentId
+      runtimeType === 'gateway' && willCreateNewTopic && operationContext.agentId
         ? getPendingTopicRepos(operationContext.agentId)
         : [];
-    // A topic created by this send pins the model it was started with, same as
-    // the manual createTopic/saveToTopic and Gateway (AiAgentService) paths. The
-    // snapshot goes to the top-level `topics.model`/`provider` columns (config
-    // source of truth) — generation and ChatInput display resolve from it
-    // (topicSelectors.getTopicModelById).
-    const newTopicModelSnapshot = !operationContext.topicId
-      ? snapshotAgentModel(operationContext.agentId)
-      : undefined;
     // Example: a pending repo topic without this metadata renders under "No
     // directory" until the server row lands.
     const optimisticTopicMetadata: ChatTopicMetadata | undefined =
@@ -729,33 +821,20 @@ export class ConversationLifecycleActionImpl {
             }
           : undefined;
 
-    // The id this conversation's topic will be created under. Minted here and
-    // sent as `newTopic.id`, so the sidebar row, the message bucket and the
-    // active-topic pointer all use the final id from the very first frame —
-    // there is no placeholder id to reconcile once the server responds.
-    const optimisticTopic: OptimisticTopicPlaceholder | undefined =
-      !operationContext.topicId && !context.isolatedTopic
-        ? {
-            id: generateEntityId('topics'),
-            ...(optimisticTopicMetadata ? { metadata: optimisticTopicMetadata } : {}),
-            ...newTopicModelSnapshot,
-            title: newTopicTitle,
-          }
-        : undefined;
+    // The sidebar row was already inserted (title + model) before the awaits
+    // above; the cwd/repos metadata only resolves here, so patch it on now.
+    // `optimisticTopic` keeps carrying the full snapshot for the resolve /
+    // rollback helpers below.
+    const optimisticTopic: OptimisticTopicPlaceholder | undefined = mintedTopicId
+      ? {
+          id: mintedTopicId,
+          ...(optimisticTopicMetadata ? { metadata: optimisticTopicMetadata } : {}),
+          ...newTopicModelSnapshot,
+          title: newTopicTitle,
+        }
+      : undefined;
     let optimisticTopicActive = false;
     let optimisticTopicResolved = false;
-
-    // Group main topic lists are keyed by `group_${groupId}`. Keeping the
-    // supervisor agent id here would write "group first message" placeholders
-    // into `group_agent_${groupId}_${agentId}`, invisible to the group sidebar.
-    const topicListAgentId =
-      operationContext.groupId && operationContext.scope === 'group'
-        ? undefined
-        : operationContext.agentId;
-    const optimisticTopicScope = {
-      agentId: topicListAgentId,
-      groupId: operationContext.groupId ?? undefined,
-    };
 
     const addResolvedTopicPlaceholder = (
       topicId: string,
@@ -837,22 +916,22 @@ export class ConversationLifecycleActionImpl {
     };
 
     if (optimisticTopic) {
-      // Input "666" used to leave the sidebar unchanged until the server returned
-      // a topicId; insert a temporary topic so the new conversation is visible immediately.
-      addResolvedTopicPlaceholder(
-        optimisticTopic.id,
-        optimisticTopic.title,
-        'sendMessage/optimisticCreateTopic',
-        {
-          metadata: optimisticTopic.metadata,
-          model: optimisticTopic.model,
-          // Client-only until the server confirms the topic; a refetch landing
-          // in that window must not wipe the row.
-          optimistic: true,
-          provider: optimisticTopic.provider,
-        },
-      );
-      this.#get().internal_updateTopicLoading(optimisticTopic.id, true);
+      // The row itself (title + model, marked `optimistic`) was inserted before
+      // the awaits above so it shares the first paint with the optimistic
+      // messages. The cwd/repos metadata only resolved after those awaits —
+      // patch it on now instead of re-adding the row (an addTopic here would
+      // unshift a duplicate).
+      if (optimisticTopic.metadata) {
+        this.#get().internal_dispatchTopic(
+          {
+            ...optimisticTopicScope,
+            id: optimisticTopic.id,
+            type: 'updateTopic',
+            value: { metadata: optimisticTopic.metadata },
+          },
+          'sendMessage/optimisticTopicMetadata',
+        );
+      }
       optimisticTopicActive = true;
     }
 
@@ -890,7 +969,7 @@ export class ConversationLifecycleActionImpl {
               id: tempAssistantId,
               provider: heterogeneousProvider.type,
             },
-            newTopic: !operationContext.topicId
+            newTopic: willCreateNewTopic
               ? {
                   // Same id the optimistic sidebar row already uses.
                   id: optimisticTopic?.id,
@@ -921,7 +1000,10 @@ export class ConversationLifecycleActionImpl {
               operationContext.groupId ?? undefined,
             ),
             topicPageSize: systemStatusSelectors.topicPageSize(useGlobalStore.getState()),
-            topicId: operationContext.topicId ?? undefined,
+            // While creating, the topic exists only client-side — the server
+            // sees `newTopic` (with the minted id) and no topicId, exactly the
+            // shape an older client sends.
+            topicId: willCreateNewTopic ? undefined : (operationContext.topicId ?? undefined),
           },
           abortController,
         );
@@ -955,6 +1037,13 @@ export class ConversationLifecycleActionImpl {
       const heteroResponseMeta = heteroData as SendMessageServerResponseMeta;
       const heteroMessageKey = messageMapKey(heteroContext);
       this.#get().moveQueuedMessages(currentContextKey, heteroMessageKey);
+      // Legacy queue location: follow-ups enqueued behind an op still
+      // registered under the pre-mint `_new` key.
+      if (willCreateNewTopic)
+        this.#get().moveQueuedMessages(
+          messageMapKey({ ...operationContext, topicId: null }),
+          heteroMessageKey,
+        );
       const heteroMessages = heteroResponseMeta.__isPartialMessages
         ? mergePartialPersistedMessages(
             this.#get().messagesMap[heteroMessageKey] || [],
@@ -1143,7 +1232,15 @@ export class ConversationLifecycleActionImpl {
             topicId: optimisticTopic?.id,
             userMessageId: tempId,
           },
-          context: operationContext,
+          // Execution context: what the SERVER should act on. While creating,
+          // the topic exists only client-side, so the server must see no
+          // topicId (that is what makes execAgent create it — under
+          // `clientIds.topicId`). The message context below keeps the minted id
+          // so streamed messages land in the bucket already on screen.
+          context: willCreateNewTopic
+            ? { ...operationContext, topicId: undefined }
+            : operationContext,
+          messageContext: operationContext,
           fileIds: fileIdList,
           message,
           metadata: requestMetadata,
@@ -1190,7 +1287,7 @@ export class ConversationLifecycleActionImpl {
             .afterUserMessagePersisted({
               assistantMessageId: result.assistantMessageId,
               context: { ...operationContext, topicId: result.topicId },
-              isCreateNewTopic: !operationContext.topicId,
+              isCreateNewTopic: willCreateNewTopic,
               operationId,
               runId: operationId,
               runScope: sendRunScope,
@@ -1230,8 +1327,7 @@ export class ConversationLifecycleActionImpl {
     let data: SendMessageServerResponse | undefined;
     const isCreatedTopicResponse = (response?: SendMessageServerResponse) =>
       Boolean(
-        response &&
-        (response.isCreateNewTopic || (!operationContext.topicId && !!response.topicId)),
+        response && (response.isCreateNewTopic || (willCreateNewTopic && !!response.topicId)),
       );
 
     try {
@@ -1277,8 +1373,9 @@ export class ConversationLifecycleActionImpl {
             parentId,
           },
           preloadMessages: undefined,
-          // if there is topicId, then add topicId to message
-          topicId: topicId ?? undefined,
+          // While creating, the topic exists only client-side — the server
+          // sees `newTopic` (with the minted id) and no topicId.
+          topicId: willCreateNewTopic ? undefined : (topicId ?? undefined),
           topicFilter: this.#getTopicFilter(
             topicListAgentId,
             operationContext.groupId ?? undefined,
@@ -1292,7 +1389,7 @@ export class ConversationLifecycleActionImpl {
                 type: newThread.type,
               }
             : undefined,
-          newTopic: !topicId
+          newTopic: willCreateNewTopic
             ? {
                 ...newTopicModelSnapshot,
                 // Same id the optimistic sidebar row already uses.
@@ -1391,6 +1488,13 @@ export class ConversationLifecycleActionImpl {
       };
       const finalMessageKey = messageMapKey(finalContext);
       this.#get().moveQueuedMessages(currentContextKey, finalMessageKey);
+      // Legacy queue location: follow-ups enqueued behind an op still
+      // registered under the pre-mint `_new` key.
+      if (willCreateNewTopic)
+        this.#get().moveQueuedMessages(
+          messageMapKey({ ...operationContext, topicId: null }),
+          finalMessageKey,
+        );
       const persistedMessages = attachSendTimeMetadataToUserMessage(
         data.messages,
         data.userMessageId,

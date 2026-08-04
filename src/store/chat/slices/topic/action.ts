@@ -434,22 +434,6 @@ export class ChatTopicActionImpl {
    */
   #pendingTopicStatusWrites = new Map<string, { expiresAt: number; status: ChatTopicStatus }>();
 
-  /**
-   * Ids of client-only topic rows inserted before the server has created them
-   * (the first-send placeholder), tracked explicitly rather than sniffed from
-   * the id string.
-   *
-   * A prefix test cannot work here: the placeholder now carries the same
-   * `tpc_…` id the server is asked to honour, so it is indistinguishable from a
-   * persisted row. Worse, a prefix test fails *silently* when the id format
-   * changes — the guard simply stops matching and the row starts disappearing.
-   *
-   * Registered by `internal_dispatchTopic` on an `optimistic` addTopic and
-   * cleared when the row leaves that state (`replaceTopicId` once the server
-   * id is known, `deleteTopic` on rollback).
-   */
-  #optimisticTopicIds = new Set<string>();
-
   #reconcileFetchedTopics = (items: ChatTopic[], currentItems?: ChatTopic[]): ChatTopic[] => {
     let next = items;
 
@@ -468,16 +452,17 @@ export class ChatTopicActionImpl {
     // In-flight first-send optimistic rows are client-only, so any refetch
     // landing mid-send (e.g. the fire-and-forget refreshTopic after a previous
     // run's topic creation or terminal) would wipe them from the sidebar until
-    // the server returns the real topicId. Re-prepend the ones still in the
-    // bucket — they only ever leave it via replaceTopicId (send resolved) or
-    // deleteTopic (rollback), never via a fetch.
+    // the server confirms the topic. Re-prepend the ones still in the bucket —
+    // they only ever leave it via replaceTopicId (send resolved) or deleteTopic
+    // (rollback), never via a fetch.
     //
-    // Membership comes from `#optimisticTopicIds`, not from the id string: the
-    // placeholder carries a real `tpc_…` id, and in gateway mode the server
-    // mints a *different* id, so the row is never in a fetched list at all
-    // until the send resolves.
-    if (currentItems && currentItems.length > 0 && this.#optimisticTopicIds.size > 0) {
-      const optimisticRows = currentItems.filter((item) => this.#optimisticTopicIds.has(item.id));
+    // Membership comes from `creatingTopicIds`, not from the id string: the
+    // placeholder carries a real `tpc_…` id the server is asked to honour, so
+    // it is indistinguishable from a persisted one — and a prefix test would
+    // fail silently the next time the id format changes.
+    const creatingTopicIds = this.#get().creatingTopicIds;
+    if (currentItems && currentItems.length > 0 && creatingTopicIds.length > 0) {
+      const optimisticRows = currentItems.filter((item) => creatingTopicIds.includes(item.id));
       if (optimisticRows.length > 0) {
         const fetchedIds = new Set(next.map((item) => item.id));
         const surviving = optimisticRows.filter((item) => !fetchedIds.has(item.id));
@@ -1614,11 +1599,26 @@ export class ChatTopicActionImpl {
     // add / replace / delete goes through, so a caller cannot register a
     // placeholder and then forget to clear it.
     if (payload.type === 'addTopic' && payload.optimistic && payload.value.id) {
-      this.#optimisticTopicIds.add(payload.value.id);
-    } else if (payload.type === 'replaceTopicId' || payload.type === 'deleteTopic') {
-      // The row is no longer client-only: either the server id is known, or the
-      // send rolled back and the row is gone.
-      this.#optimisticTopicIds.delete(payload.id);
+      const id = payload.value.id;
+      if (!this.#get().creatingTopicIds.includes(id)) {
+        this.#set(
+          (state) => ({ creatingTopicIds: [...state.creatingTopicIds, id] }),
+          false,
+          n('creatingTopic/register'),
+        );
+      }
+    } else if (
+      (payload.type === 'replaceTopicId' || payload.type === 'deleteTopic') && // The row is no longer client-only: either the server confirmed it, or
+      // the send rolled back and the row is gone.
+      this.#get().creatingTopicIds.includes(payload.id)
+    ) {
+      this.#set(
+        (state) => ({
+          creatingTopicIds: state.creatingTopicIds.filter((creating) => creating !== payload.id),
+        }),
+        false,
+        n('creatingTopic/release'),
+      );
     }
 
     const { activeAgentId, activeGroupId } = this.#get();
