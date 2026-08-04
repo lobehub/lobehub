@@ -1,8 +1,8 @@
 export type HeterogeneousAgentMenuLabelKey =
-  'newAmpAgent' | 'newClaudeCodeAgent' | 'newCodexAgent' | 'newOpenCodeAgent';
+  'newAmpAgent' | 'newClaudeCodeAgent' | 'newCodexAgent' | 'newOpenCodeAgent' | 'newPiAgent';
 
 /**
- * Config for local CLI hetero agents (Amp, Claude Code, Codex, OpenCode) that run as
+ * Config for local CLI hetero agents (Amp, Claude Code, Codex, OpenCode, Pi) that run as
  * desktop subprocesses via Electron IPC. Remote device agents (openclaw,
  * hermes) have their own setup flow and are not listed here.
  */
@@ -12,10 +12,18 @@ export interface HeterogeneousAgentConfig {
   menuKey: string;
   menuLabelKey: HeterogeneousAgentMenuLabelKey;
   title: string;
-  type: 'amp' | 'claude-code' | 'codex' | 'opencode';
+  type: 'amp' | 'claude-code' | 'codex' | 'opencode' | 'pi';
 }
 
 export const HETEROGENEOUS_AGENT_CONFIGS = [
+  {
+    command: 'amp',
+    iconId: 'Amp',
+    menuKey: 'newAmpAgent',
+    menuLabelKey: 'newAmpAgent',
+    title: 'Amp',
+    type: 'amp',
+  },
   {
     command: 'claude',
     iconId: 'ClaudeCode',
@@ -33,20 +41,20 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
     type: 'codex',
   },
   {
-    command: 'amp',
-    iconId: 'Amp',
-    menuKey: 'newAmpAgent',
-    menuLabelKey: 'newAmpAgent',
-    title: 'Amp',
-    type: 'amp',
-  },
-  {
     command: 'opencode',
     iconId: 'OpenCode',
     menuKey: 'newOpenCodeAgent',
     menuLabelKey: 'newOpenCodeAgent',
     title: 'OpenCode',
     type: 'opencode',
+  },
+  {
+    command: 'pi',
+    iconId: 'Pi',
+    menuKey: 'newPiAgent',
+    menuLabelKey: 'newPiAgent',
+    title: 'Pi',
+    type: 'pi',
   },
 ] as const satisfies readonly HeterogeneousAgentConfig[];
 

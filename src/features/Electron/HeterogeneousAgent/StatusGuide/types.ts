@@ -46,6 +46,7 @@ export const SUPPORTED_HETEROGENEOUS_AGENT_TYPES = [
   'claude-code',
   'codex',
   'opencode',
+  'pi',
 ] as const;
 
 export type SupportedHeterogeneousAgentType = (typeof SUPPORTED_HETEROGENEOUS_AGENT_TYPES)[number];

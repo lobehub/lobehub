@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { AmpAdapter, ClaudeCodeAdapter, CodexAdapter, OpenCodeAdapter } from './adapters';
+import {
+  AmpAdapter,
+  ClaudeCodeAdapter,
+  CodexAdapter,
+  OpenCodeAdapter,
+  PiAdapter,
+} from './adapters';
 import { createAdapter, listAgentTypes } from './registry';
 
 describe('registry', () => {
@@ -24,6 +30,10 @@ describe('registry', () => {
       expect(createAdapter('opencode')).toBeInstanceOf(OpenCodeAdapter);
     });
 
+    it('creates a PiAdapter for "pi"', () => {
+      expect(createAdapter('pi')).toBeInstanceOf(PiAdapter);
+    });
+
     it('throws for unknown agent type', () => {
       expect(() => createAdapter('unknown-agent')).toThrow('Unknown agent type: "unknown-agent"');
     });
@@ -36,6 +46,7 @@ describe('registry', () => {
       expect(types).toContain('claude-code');
       expect(types).toContain('codex');
       expect(types).toContain('opencode');
+      expect(types).toContain('pi');
     });
   });
 });

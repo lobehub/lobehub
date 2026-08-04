@@ -28,6 +28,13 @@ describe('isHeteroStatusGuideErrorData', () => {
         message: 'ProviderAuthError',
       }),
     ).toBe(true);
+    expect(
+      isHeteroStatusGuideErrorData({
+        agentType: 'pi',
+        code: 'auth_required',
+        message: 'No API key found',
+      }),
+    ).toBe(true);
   });
 
   it('rejects payloads missing the agentType/code pair or outside the guide sets', () => {
@@ -83,6 +90,23 @@ describe('classifyHeteroProcessFailure', () => {
 
     expect(result).toMatchObject({ agentType: 'opencode', code: 'cli_not_found' });
     expect(result?.message).toContain('`opencode`');
+  });
+
+  it('classifies missing Pi and Pi provider credentials', () => {
+    expect(
+      classifyHeteroProcessFailure({
+        agentType: 'pi',
+        detail: 'Error: spawn pi ENOENT',
+        errnoCode: 'ENOENT',
+      }),
+    ).toMatchObject({ agentType: 'pi', code: 'cli_not_found' });
+
+    expect(
+      classifyHeteroProcessFailure({
+        agentType: 'pi',
+        detail: 'No API key found for provider anthropic',
+      }),
+    ).toMatchObject({ agentType: 'pi', code: 'auth_required' });
   });
 
   it('does NOT treat an in-run ENOENT (no spawn context) as cli_not_found', () => {

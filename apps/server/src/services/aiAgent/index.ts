@@ -1866,7 +1866,7 @@ export class AiAgentService {
     // 3.5. Hetero-agent early exit — local CLI and remote platform agents bypass the
     // server-side LLM pipeline.  After topic + message creation we hand off to
     // the device gateway (desktop) or cloud sandbox, which will push events
-    // back via `heteroIngest` / `heteroFinish` (claude-code / codex / opencode) or
+    // back via `heteroIngest` / `heteroFinish` (amp / claude-code / codex / opencode / pi) or
     // `agentNotify.notify` (openclaw / hermes).
     //
     // Detection: prefer agencyConfig.heterogeneousProvider.type (set by the UI),
@@ -1875,7 +1875,7 @@ export class AiAgentService {
     const heteroProviderType = agentConfig.agencyConfig?.heterogeneousProvider?.type;
     const isHeteroAgent = !!heteroProviderType || isHeterogeneousAgentModelId(model);
     const heteroType = (heteroProviderType ?? model) as
-      'amp' | 'claude-code' | 'codex' | 'hermes' | 'openclaw' | 'opencode';
+      'amp' | 'claude-code' | 'codex' | 'hermes' | 'openclaw' | 'opencode' | 'pi';
 
     // ── Shared turn setup (runs for BOTH hetero and normal agents) ──────────
     // Everything up to and including persisting the turn is identical for both
@@ -2161,7 +2161,8 @@ export class AiAgentService {
         heteroType === 'amp' ||
         heteroType === 'claude-code' ||
         heteroType === 'codex' ||
-        heteroType === 'opencode'
+        heteroType === 'opencode' ||
+        heteroType === 'pi'
           ? buildHeteroExecArgs(
               agentConfig.agencyConfig?.heterogeneousProvider?.type === heteroType
                 ? agentConfig.agencyConfig.heterogeneousProvider
@@ -2343,7 +2344,7 @@ export class AiAgentService {
           };
         }
       } else {
-        // Local CLI hetero (Amp / Claude Code / Codex / OpenCode) — fork between device dispatch
+        // Local CLI hetero (Amp / Claude Code / Codex / OpenCode / Pi) — fork between device dispatch
         // and cloud sandbox via the shared execution plan:
         //   - requestedDeviceId (topic-level override) always wins
         //   - executionTarget 'device' → dispatch to boundDeviceId (errors if unset)
@@ -2404,7 +2405,7 @@ export class AiAgentService {
               agentId: resolvedAgentId,
               assistantMessageId: assistantMessageRecord.id,
               detail:
-                heteroType === 'amp' || heteroType === 'opencode'
+                heteroType === 'amp' || heteroType === 'opencode' || heteroType === 'pi'
                   ? 'No device bound. Pick a local or connected device in the Execution Device switcher.'
                   : 'No device bound. Pick a device in the Execution Device switcher, or switch to Cloud sandbox.',
               message: 'No bound device for hetero agent',

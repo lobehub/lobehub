@@ -31,6 +31,10 @@ export const OPENCODE_CLI_INSTALL_COMMANDS = [
   'curl -fsSL https://opencode.ai/install | bash',
 ] as const;
 
+export const PI_CLI_INSTALL_DOCS_URL = 'https://github.com/earendil-works/pi';
+
+export const PI_CLI_INSTALL_COMMANDS = ['npm install -g @earendil-works/pi-coding-agent'] as const;
+
 export const HeterogeneousAgentSessionErrorCode = {
   AuthRequired: 'auth_required',
   CliNotFound: 'cli_not_found',

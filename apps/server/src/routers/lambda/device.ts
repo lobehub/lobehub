@@ -293,7 +293,7 @@ export const deviceRouter = router({
       return result ?? null;
     }),
 
-  /** Query OpenCode's model catalog on the device that will execute the agent. */
+  /** Query a heterogeneous CLI's model catalog on the device that will execute the agent. */
   listHeterogeneousAgentModels: deviceProcedure
     .input(
       z.object({
@@ -301,7 +301,7 @@ export const deviceRouter = router({
         cwd: z.string().optional(),
         deviceId: z.string(),
         env: z.record(z.string(), z.string()).optional(),
-        type: z.literal('opencode'),
+        type: z.enum(['opencode', 'pi']),
       }),
     )
     .query(async ({ ctx, input }) =>
