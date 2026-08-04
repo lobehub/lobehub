@@ -36,6 +36,7 @@
  * - `tool_result` blocks are in `type: 'user'` events, not assistant events
  */
 
+import type { HeteroErrorKind } from '../errors/specs';
 import { imagePlaceholder } from '../imageEcho';
 import type {
   AgentEventAdapter,
@@ -214,6 +215,16 @@ const CLI_AUTH_REQUIRED_PATTERNS = [
  * appears in Anthropic's transient server throttle, so leaning on it would
  * reintroduce the very misclassification this set exists to avoid.
  */
+/**
+ * Credit/balance exhaustion, e.g. `You've reached your Fable 5 limit. Run
+ * /usage-credits to continue or switch models with /model.` It renders the
+ * same guide as a plan window, but waiting for a reset never clears it.
+ */
+const CLI_CREDIT_LIMIT_PATTERNS = [
+  /you'?ve reached your .{0,40}\blimit\b/i,
+  /\/usage-credits\b/i,
+] as const;
+
 const CLI_USER_RATE_LIMIT_PATTERNS = [
   /you'?ve hit your limit/i,
   // CC names the window in the wording it actually ships — `You've hit your
@@ -222,9 +233,7 @@ const CLI_USER_RATE_LIMIT_PATTERNS = [
   // limit` pattern misses every real message, leaving the 429 to fall through
   // to the overloaded (retry) guide.
   /you'?ve hit your \S+ limit/i,
-  // Credit/balance exhaustion, e.g. `You've reached your Fable 5 limit. Run
-  // /usage-credits to continue or switch models with /model.`
-  /you'?ve reached your .{0,40}\blimit\b/i,
+  ...CLI_CREDIT_LIMIT_PATTERNS,
   /usage limit reached/i,
   /\blimit reached\b/i,
   // Gateways/proxies in front of the API localize the same quota rejection,
@@ -301,6 +310,39 @@ const CC_INTERNAL_DIAGNOSTIC_PATTERN = /^\[ede_diagnostic\]/i;
  * real traces, and none of them is a fault worth a red card's usual wording.
  */
 const CLI_ABORTED_TERMINAL_REASONS = new Set(['aborted_streaming', 'aborted_tools']);
+
+/**
+ * The remaining long tail, each taken from real recorded traces. None of these
+ * has a dedicated status guide, so they ride the generic card — but they still
+ * earn a taxonomy `kind` so the failure is named in telemetry rather than
+ * pooled into the `agent_failed` catch-all.
+ */
+const CLI_TAIL_CLASSIFIERS: { kind: HeteroErrorKind; patterns: readonly RegExp[] }[] = [
+  {
+    // `No conversation found with session ID: <uuid>` — a stale `--resume` id.
+    // Arrives via the result event's `errors` array with turns=0 and no result
+    // text; the spawn layer recovers it, but the run still terminates here.
+    kind: 'resume_thread_not_found',
+    patterns: [/no conversation found with session id/i],
+  },
+  {
+    // `Claude Fable 5 is currently unavailable. Learn more: …` /
+    // `There's an issue with the selected model (claude-fable-5).`
+    kind: 'model_unavailable',
+    patterns: [/is currently unavailable/i, /issue with the selected model/i],
+  },
+  {
+    // `Failed to decode image: The image format Gif is not supported`
+    kind: 'unsupported_attachment',
+    patterns: [/failed to decode image/i, /image format \w+ is not supported/i],
+  },
+  {
+    // `API Error: 400 messages.6.content.2.server_tool_use.id: String should
+    // match pattern …` — a malformed request; retrying reproduces it exactly.
+    kind: 'invalid_request',
+    patterns: [/api error:\s*400\b/i, /string should match pattern/i],
+  },
+];
 
 /**
  * CC streams a synthetic assistant text turn when the underlying API call
@@ -516,6 +558,7 @@ const getAuthRequiredTerminalError = (
     agentType: 'claude-code',
     clearEchoedContent: true,
     code: 'auth_required',
+    details: { kind: 'auth_required' satisfies HeteroErrorKind },
     docsUrl: CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
     error: rawMessage,
     message:
@@ -548,6 +591,7 @@ const getAbortedTerminalError = (raw: any): HeterogeneousTerminalErrorData | und
     agentType: 'claude-code',
     code: 'aborted',
     details: {
+      kind: 'aborted' satisfies HeteroErrorKind,
       ...(typeof raw.num_turns === 'number' ? { numTurns: raw.num_turns } : {}),
       ...(typeof raw.session_id === 'string' ? { sessionId: raw.session_id } : {}),
       ...(typeof raw.subtype === 'string' ? { subtype: raw.subtype } : {}),
@@ -555,6 +599,30 @@ const getAbortedTerminalError = (raw: any): HeterogeneousTerminalErrorData | und
     },
     error: message,
     message,
+  };
+};
+
+/**
+ * Classify the long tail that has no dedicated guide card. The message is
+ * already self-explanatory, so it is surfaced verbatim; the value added here
+ * is the taxonomy `kind`, which keeps these out of the `agent_failed`
+ * catch-all whose volume drives what we carve out next.
+ */
+const getTailTerminalError = (result: unknown): HeterogeneousTerminalErrorData | undefined => {
+  const rawMessage = getCliResultMessage(result);
+  if (!rawMessage) return;
+
+  const entry = CLI_TAIL_CLASSIFIERS.find(({ patterns }) =>
+    patterns.some((pattern) => pattern.test(rawMessage)),
+  );
+  if (!entry) return;
+
+  return {
+    agentType: 'claude-code',
+    code: entry.kind,
+    details: { kind: entry.kind },
+    error: rawMessage,
+    message: rawMessage,
   };
 };
 
@@ -582,7 +650,13 @@ const buildFallbackTerminalError = (
     (subtype && CLI_ERROR_SUBTYPE_MESSAGES[subtype]) ||
     'Agent execution failed';
 
+  // `error_max_turns` is a named lifecycle outcome, not an unclassified
+  // failure; everything else that reaches here is the catch-all whose volume
+  // tells us which kind to carve out next.
+  const kind: HeteroErrorKind = subtype === 'error_max_turns' ? 'max_turns' : 'agent_failed';
+
   const details: Record<string, unknown> = {
+    kind,
     ...(raw.api_error_status == null ? {} : { apiErrorStatus: raw.api_error_status }),
     ...(typeof raw.duration_ms === 'number' ? { durationMs: raw.duration_ms } : {}),
     ...(streamedApiError && streamedApiError !== message ? { lastApiError: streamedApiError } : {}),
@@ -641,10 +715,22 @@ const getOverloadedTerminalError = (
 
   if (!looksOverloaded || !rawMessage) return;
 
+  // Same `overloaded` guide code (and therefore the same auto-retry contract),
+  // but recorded as three distinct taxonomy kinds so telemetry can tell a bad
+  // local network apart from a genuinely busy provider.
+  const kind: HeteroErrorKind = CLI_NETWORK_ERROR_PATTERNS.some((pattern) =>
+    pattern.test(rawMessage),
+  )
+    ? 'network_drop'
+    : CLI_SERVER_THROTTLE_PATTERNS.some((pattern) => pattern.test(rawMessage))
+      ? 'server_throttle'
+      : 'server_overloaded';
+
   return {
     agentType: 'claude-code',
     clearEchoedContent: true,
     code: 'overloaded',
+    details: { kind },
     error: rawMessage,
     message: rawMessage,
     stderr: rawMessage,
@@ -673,10 +759,19 @@ const getRateLimitTerminalError = (
 
   if (!looksLikeUserLimit || !rawMessage) return;
 
+  // A credit/balance limit shares the `rate_limit` guide but not its remedy:
+  // waiting for a reset never clears it, so it is a distinct taxonomy kind.
+  const kind: HeteroErrorKind = CLI_CREDIT_LIMIT_PATTERNS.some((pattern) =>
+    pattern.test(rawMessage),
+  )
+    ? 'credit_limit'
+    : 'usage_limit';
+
   return {
     agentType: 'claude-code',
     clearEchoedContent: true,
     code: 'rate_limit',
+    details: { kind },
     error: rawMessage,
     message: rawMessage,
     rateLimitInfo,
@@ -1827,6 +1922,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
               this.pendingRateLimitInfo,
             ) ||
             getAuthRequiredTerminalError(classifiableResult) ||
+            getTailTerminalError(classifiableResult) ||
             buildFallbackTerminalError(raw, this.lastApiErrorText),
         )
       : this.options.runtimeEndStrategy === 'on-result'

@@ -607,7 +607,87 @@ describe('ClaudeCodeAdapter', () => {
         type: 'result',
       });
 
-      expect(events.at(-1)!.data).toMatchObject({ message: resumeError });
+      expect(events.at(-1)!.data).toMatchObject({
+        code: 'resume_thread_not_found',
+        message: resumeError,
+      });
+    });
+
+    // The long tail has no dedicated guide card, so the value is the taxonomy
+    // kind: it keeps these out of the `agent_failed` catch-all.
+    it.each([
+      ['Claude Fable 5 is currently unavailable. Learn more: …', 'model_unavailable'],
+      ["There's an issue with the selected model (claude-fable-5).", 'model_unavailable'],
+      ['Failed to decode image: The image format Gif is not supported', 'unsupported_attachment'],
+      [
+        'API Error: 400 messages.6.content.2.server_tool_use.id: String should match pattern',
+        'invalid_request',
+      ],
+    ])('classifies tail failure %j as %s', (rawError, kind) => {
+      const adapter = new ClaudeCodeAdapter();
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({ is_error: true, result: rawError, type: 'result' });
+
+      expect(events.at(-1)!.data).toMatchObject({
+        code: kind,
+        details: { kind },
+        message: rawError,
+      });
+    });
+
+    it.each([
+      ['API Error: Unable to connect to API (ECONNRESET)', null, 'network_drop'],
+      [
+        'API Error: Server is temporarily limiting requests (not your usage limit) · Rate limited',
+        429,
+        'server_throttle',
+      ],
+      ['API Error: 529 Overloaded.', 529, 'server_overloaded'],
+    ])('tags %j with taxonomy kind %s under one overloaded guide code', (msg, status, kind) => {
+      const adapter = new ClaudeCodeAdapter();
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        api_error_status: status,
+        is_error: true,
+        result: msg,
+        type: 'result',
+      });
+
+      // One guide code (so auto-retry behavior is unchanged), three kinds.
+      expect(events.at(-1)!.data).toMatchObject({ code: 'overloaded', details: { kind } });
+    });
+
+    it('separates a credit limit from a plan window under the rate_limit guide', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const rawError = "You've reached your Fable 5 limit. Run /usage-credits to continue.";
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        api_error_status: 429,
+        is_error: true,
+        result: rawError,
+        type: 'result',
+      });
+
+      expect(events.at(-1)!.data).toMatchObject({
+        code: 'rate_limit',
+        details: { kind: 'credit_limit' },
+      });
+    });
+
+    it('names error_max_turns as a lifecycle outcome, not the catch-all', () => {
+      const adapter = new ClaudeCodeAdapter();
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        is_error: true,
+        subtype: 'error_max_turns',
+        type: 'result',
+      });
+
+      expect(events.at(-1)!.data).toMatchObject({ details: { kind: 'max_turns' } });
     });
 
     it('classifies rate-limit failures from paired rate_limit_event + result events', () => {
