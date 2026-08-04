@@ -215,7 +215,7 @@ describe('createAnthropicCompatibleRuntime', () => {
   });
 
   it('should retain the exact provider request and raw streaming response diagnostics', async () => {
-    const rawEvents: Anthropic.MessageStreamEvent[] = [
+    const rawEvents = [
       {
         message: {
           content: [],
@@ -241,7 +241,7 @@ describe('createAnthropicCompatibleRuntime', () => {
         usage: { input_tokens: 206_384, output_tokens: 1 },
       },
       { type: 'message_stop' },
-    ];
+    ] as unknown as Anthropic.MessageStreamEvent[];
     const rawResponseBody = rawEvents.map((event) => `data: ${JSON.stringify(event)}\n\n`).join('');
     const rawStream = {
       async *[Symbol.asyncIterator]() {
@@ -349,7 +349,7 @@ describe('createAnthropicCompatibleRuntime', () => {
   });
 
   it('should observe provider diagnostics from a custom ReadableStream response', async () => {
-    const rawEvents: Anthropic.MessageStreamEvent[] = [
+    const rawEvents = [
       {
         message: {
           content: [],
@@ -369,7 +369,7 @@ describe('createAnthropicCompatibleRuntime', () => {
         usage: { input_tokens: 12, output_tokens: 0 },
       },
       { type: 'message_stop' },
-    ];
+    ] as unknown as Anthropic.MessageStreamEvent[];
     const rawStream = new ReadableStream<Anthropic.MessageStreamEvent>({
       start(controller) {
         for (const event of rawEvents) controller.enqueue(event);

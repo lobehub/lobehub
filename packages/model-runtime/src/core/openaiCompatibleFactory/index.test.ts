@@ -269,7 +269,7 @@ describe('LobeOpenAICompatibleFactory', () => {
           sequence_number: 1,
           type: 'response.completed',
         },
-      ] satisfies OpenAI.Responses.ResponseStreamEvent[];
+      ] as unknown as OpenAI.Responses.ResponseStreamEvent[];
       const rawResponseBody = rawEvents
         .map((event) => `data: ${JSON.stringify(event)}\n\n`)
         .join('');
