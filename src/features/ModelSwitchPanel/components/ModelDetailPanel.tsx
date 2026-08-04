@@ -6,6 +6,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { EnabledProviderWithModels } from '@/types/aiProvider';
+import { getModelDescriptionI18nKey } from '@/utils/modelDescriptionI18n';
 
 import type { FormattedUnitPrice } from '../hooks/useModelDetailPanel';
 import { UNIT_ICON_MAP, useModelDetailPanel } from '../hooks/useModelDetailPanel';
@@ -164,7 +165,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
 
     const description = model.description
       ? String(
-          t(`${model.id}.description` as any, {
+          t(getModelDescriptionI18nKey(model.id, provider) as any, {
             defaultValue: model.description,
             ns: 'models',
           }),

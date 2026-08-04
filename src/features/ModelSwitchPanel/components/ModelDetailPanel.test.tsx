@@ -130,6 +130,7 @@ const translations: Record<string, string> = {
   'ModelSwitchPanel.detail.rating.dimension.price': 'Price',
   'ModelSwitchPanel.detail.rating.dimension.speed': 'Speed',
   'ModelSwitchPanel.detail.rating.dimension.writing': 'Writing',
+  'lobehub.test-model.description': 'Localized LobeHub model description.',
   'test-model.description': 'Localized model description.',
 };
 
@@ -201,7 +202,7 @@ const createEnabledList = (
 ];
 
 describe('ModelDetailPanel pricing', () => {
-  it('renders the localized model description when provided', () => {
+  it('renders the LobeHub-scoped localized description for the LobeHub provider', () => {
     const { container } = render(
       <ModelDetailPanel
         model="test-model"
@@ -213,7 +214,40 @@ describe('ModelDetailPanel pricing', () => {
     );
 
     expect(container.querySelector('.description')).toHaveTextContent(
+      'Localized LobeHub model description.',
+    );
+  });
+
+  it('renders the bare model-id description key for non-LobeHub providers', () => {
+    const { container } = render(
+      <ModelDetailPanel
+        model="test-model"
+        provider="openai"
+        enabledList={createEnabledList('openai', textPricing, {
+          description: 'Fallback model description.',
+        })}
+      />,
+    );
+
+    expect(container.querySelector('.description')).toHaveTextContent(
       'Localized model description.',
+    );
+  });
+
+  it('falls back to the model card description when no locale key exists', () => {
+    const { container } = render(
+      <ModelDetailPanel
+        model="missing-locale-model"
+        provider="lobehub"
+        enabledList={createEnabledList('lobehub', textPricing, {
+          description: 'Fallback model description.',
+          id: 'missing-locale-model',
+        })}
+      />,
+    );
+
+    expect(container.querySelector('.description')).toHaveTextContent(
+      'Fallback model description.',
     );
   });
 
