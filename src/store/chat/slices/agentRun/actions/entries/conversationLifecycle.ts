@@ -761,11 +761,22 @@ export class ConversationLifecycleActionImpl {
       topicId: string,
       title: string,
       action: string,
-      extra?: { metadata?: ChatTopicMetadata; model?: string; provider?: string },
+      extra?: {
+        metadata?: ChatTopicMetadata;
+        model?: string;
+        /**
+         * True only for the client-only placeholder inserted before the server
+         * has created the topic. The topic slice keeps those ids so a refetch
+         * landing mid-send re-prepends the row instead of wiping it.
+         */
+        optimistic?: boolean;
+        provider?: string;
+      },
     ) => {
       this.#get().internal_dispatchTopic(
         {
           ...optimisticTopicScope,
+          ...(extra?.optimistic ? { optimistic: true } : {}),
           type: 'addTopic',
           value: {
             id: topicId,
@@ -835,6 +846,9 @@ export class ConversationLifecycleActionImpl {
         {
           metadata: optimisticTopic.metadata,
           model: optimisticTopic.model,
+          // Client-only until the server confirms the topic; a refetch landing
+          // in that window must not wipe the row.
+          optimistic: true,
           provider: optimisticTopic.provider,
         },
       );

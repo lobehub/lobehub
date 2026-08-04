@@ -2243,6 +2243,101 @@ describe('topic action', () => {
       expect(result.current.topicLoadingIdCounts).toEqual({});
     });
   });
+  describe('optimistic topic preservation across refetches', () => {
+    const agentId = 'agent-1';
+    const key = topicMapKey({ agentId });
+    // The placeholder carries a real `tpc_…` id (the server is asked to honour
+    // it), so nothing about the string marks it as client-only.
+    const optimisticId = 'tpc_clientMinted1';
+
+    const seedOptimisticRow = (result: { current: ReturnType<typeof useChatStore.getState> }) => {
+      act(() => {
+        useChatStore.setState({ activeAgentId: agentId, topicDataMap: {} });
+      });
+      act(() => {
+        result.current.internal_dispatchTopic({
+          agentId,
+          optimistic: true,
+          type: 'addTopic',
+          value: { id: optimisticId, sessionId: agentId, title: '第一条消息' },
+        });
+      });
+    };
+
+    // A refetch triggered mid-send (fire-and-forget refreshTopic, SWR focus
+    // revalidate) returns a list that cannot contain the placeholder yet. In
+    // gateway mode it never will: the server mints its own id there.
+    const serverList = [
+      { createdAt: Date.now(), favorite: false, id: 'tpc_serverOther1', title: '别的话题' },
+    ] as ChatTopic[];
+
+    it('should keep a client-minted optimistic row when a refetch lands mid-send', () => {
+      const { result } = renderHook(() => useChatStore());
+      seedOptimisticRow(result);
+
+      act(() => {
+        result.current.internal_updateTopics(agentId, {
+          items: serverList,
+          pageSize: 20,
+          total: 1,
+        });
+      });
+
+      const ids = result.current.topicDataMap[key].items.map((item) => item.id);
+      // Dropping it here makes the sidebar row and its loading spinner vanish,
+      // and leaves replaceTopicId with nothing to reconcile the row's data onto.
+      expect(ids).toContain(optimisticId);
+      expect(ids).toEqual([optimisticId, 'tpc_serverOther1']);
+    });
+
+    it('should stop preserving the row once the server id is known', () => {
+      const { result } = renderHook(() => useChatStore());
+      seedOptimisticRow(result);
+
+      act(() => {
+        result.current.internal_replaceTopicId({
+          agentId,
+          nextId: 'tpc_serverReal01',
+          previousId: optimisticId,
+        });
+      });
+
+      act(() => {
+        result.current.internal_updateTopics(agentId, {
+          items: serverList,
+          pageSize: 20,
+          total: 1,
+        });
+      });
+
+      // No longer client-only, so a later refetch is authoritative — otherwise a
+      // resolved row would be pinned to the sidebar forever.
+      const ids = result.current.topicDataMap[key].items.map((item) => item.id);
+      expect(ids).not.toContain(optimisticId);
+      expect(ids).toEqual(['tpc_serverOther1']);
+    });
+
+    it('should stop preserving the row after a rollback', () => {
+      const { result } = renderHook(() => useChatStore());
+      seedOptimisticRow(result);
+
+      act(() => {
+        result.current.internal_dispatchTopic({ agentId, id: optimisticId, type: 'deleteTopic' });
+      });
+
+      act(() => {
+        result.current.internal_updateTopics(agentId, {
+          items: serverList,
+          pageSize: 20,
+          total: 1,
+        });
+      });
+
+      const ids = result.current.topicDataMap[key].items.map((item) => item.id);
+      expect(ids).not.toContain(optimisticId);
+    });
+  });
+
   describe('replaceTopicId', () => {
     it('should migrate a loading optimistic topic to the server topic id', () => {
       const { result } = renderHook(() => useChatStore());
