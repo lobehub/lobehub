@@ -709,6 +709,7 @@
   "settingAgent.personalName.pickFailed": "名字保存失败，请重试",
   "settingAgent.personalName.pickForMe": "一键起名",
   "settingAgent.personalName.placeholder": "给它起个名字，比如小艾",
+  "settingAgent.personalName.roll": "随机换一个名字",
   "settingAgent.personalName.unnamed": "该助理还没有名字",
   "settingAgent.prompt.desc": "定义这个助理的身份、职责、工作方式和回应风格。这里的设定会在每次对话中生效。",
   "settingAgent.prompt.editorPlaceholder": "输入核心指令，按 / 打开斜杠菜单",

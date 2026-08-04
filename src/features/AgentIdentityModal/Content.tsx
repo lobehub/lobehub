@@ -1,10 +1,17 @@
 'use client';
 
-import { Flexbox, Input, Text } from '@lobehub/ui';
+import { randomAgentName } from '@lobechat/const';
+import { ActionIcon, Flexbox, Input, Text } from '@lobehub/ui';
 import { Button, useModalContext } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { memo, type ReactNode } from 'react';
+import { DicesIcon } from 'lucide-react';
+import { memo, type ReactNode, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { useGlobalStore } from '@/store/global';
+import { globalGeneralSelectors } from '@/store/global/selectors';
+import { useHomeStore } from '@/store/home';
+import { homeAgentListSelectors } from '@/store/home/selectors';
 
 import { useAgentIdentityForm } from './useAgentIdentityForm';
 
@@ -34,7 +41,23 @@ interface AgentIdentityContentProps {
 const AgentIdentityContent = memo<AgentIdentityContentProps>(({ agentId }) => {
   const { t } = useTranslation(['setting', 'common']);
   const { close } = useModalContext();
+  const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
   const form = useAgentIdentityForm({ agentId, onSaved: close });
+  const { setName } = form;
+
+  // Same draw as the header's "name it for me" button: the pool matches the
+  // user's language, and names already visible in the sidebar are excluded so
+  // the dice never suggests a second "佳宁". Read at click time — the list only
+  // matters at the moment of the roll.
+  const rollName = useCallback(() => {
+    const takenNames = homeAgentListSelectors
+      .allAgents(useHomeStore.getState())
+      .filter((agent) => agent.id !== agentId)
+      .map((agent) => agent.name)
+      .filter((name): name is string => !!name);
+
+    setName(randomAgentName(locale, takenNames));
+  }, [agentId, locale, setName]);
 
   return (
     <Flexbox gap={20} padding={20}>
@@ -43,6 +66,14 @@ const AgentIdentityContent = memo<AgentIdentityContentProps>(({ agentId }) => {
           autoFocus
           placeholder={t('settingAgent.personalName.placeholder', { ns: 'setting' })}
           value={form.name}
+          suffix={
+            <ActionIcon
+              icon={DicesIcon}
+              size={'small'}
+              title={t('settingAgent.personalName.roll', { ns: 'setting' })}
+              onClick={rollName}
+            />
+          }
           onChange={(e) => form.setName(e.target.value)}
         />
       </Field>

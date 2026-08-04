@@ -709,6 +709,7 @@
   "settingAgent.personalName.pickFailed": "Could not save the name, please try again",
   "settingAgent.personalName.pickForMe": "Name it for me",
   "settingAgent.personalName.placeholder": "Give it a name, e.g. Alice",
+  "settingAgent.personalName.roll": "Roll a random name",
   "settingAgent.personalName.unnamed": "This agent has no name yet",
   "settingAgent.prompt.desc": "Defines who this agent is, what it is responsible for, and how it works and responds. It serves as a core instruction in every conversation.",
   "settingAgent.prompt.editorPlaceholder": "Enter core instructions, press / to open the Slash Menu",
