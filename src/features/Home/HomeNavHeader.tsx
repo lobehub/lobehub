@@ -10,6 +10,7 @@ import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 import CustomizeButton from './CustomizeButton';
 import RailToggle from './RailToggle';
+import { canHostRail } from './railVisibility';
 
 // Floats over the dashboard instead of pushing it down: the controls live in
 // the page's top corners, where the content never reaches.
@@ -29,6 +30,7 @@ const HomeNavHeader = memo(() => {
     s.toggleHomeRail,
     systemStatusSelectors.isStatusInit(s),
   ]);
+  const hiddenWidgets = useGlobalStore(systemStatusSelectors.hiddenHomeWidgets);
 
   return (
     <NavHeader
@@ -37,7 +39,9 @@ const HomeNavHeader = memo(() => {
         isLogin && isStatusInit ? (
           <Flexbox horizontal align={'center'} gap={4}>
             <CustomizeButton />
-            <RailToggle railVisible={showHomeRail} onToggle={toggleHomeRail} />
+            {canHostRail(hiddenWidgets) && (
+              <RailToggle railVisible={showHomeRail} onToggle={toggleHomeRail} />
+            )}
           </Flexbox>
         ) : undefined
       }

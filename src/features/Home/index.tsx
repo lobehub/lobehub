@@ -5,7 +5,6 @@ import { createStaticStyles, cx } from 'antd-style';
 import { memo, useCallback, useState } from 'react';
 
 import HomeInbox from '@/features/HomeInbox';
-import { hasVisibleRailWidget } from '@/features/HomeInbox/hiddenWidgets';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -17,6 +16,7 @@ import HomeModeContent from './HomeModeContent';
 import HomePortrait from './HomePortrait';
 import InputArea from './InputArea';
 import PortraitBubble from './PortraitBubble';
+import { RAIL_INBOX_PROPS, resolveRailVisibility } from './railVisibility';
 import type { HomeMode } from './types';
 
 /** Trailing gutter that keeps the rail's cards off the page's scroll lane. */
@@ -238,11 +238,7 @@ const Home = memo(() => {
   const hiddenWidgets = useGlobalStore(systemStatusSelectors.hiddenHomeWidgets);
   const [mode, setMode] = useState<HomeMode>('chat');
   const [inputValue, setInputValue] = useState('');
-  const railVisible = Boolean(
-    isLogin &&
-    showHomeRail &&
-    hasVisibleRailWidget({ hiddenWidgets, hideNeedsYou: true, hideUnread: true }),
-  );
+  const railVisible = resolveRailVisibility({ hiddenWidgets, isLogin, showHomeRail });
   const railCollapsed = !railVisible;
   const portraitVisible = Boolean(isLogin && showHomePortrait);
 
@@ -309,7 +305,7 @@ const Home = memo(() => {
           id={'home-rail'}
           inert={railCollapsed}
         >
-          <HomeInbox hideNeedsYou hideUnread variant={'rail'} />
+          <HomeInbox {...RAIL_INBOX_PROPS} variant={'rail'} />
         </aside>
       )}
     </Flexbox>
