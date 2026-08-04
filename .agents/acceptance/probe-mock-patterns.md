@@ -398,6 +398,67 @@ is what selects the Render component) and the tool message (`updateMessagePlugin
   (NOT `lobe-claude-code`) and PascalCase `apiName` (`TodoWrite`). All of this is
   in-memory only — a reload clears it; delete the temp topic at teardown.
 
+### Verifying a builtin-tool Render with no provider key — dispatch a fresh assistant+tool pair
+
+**Situation:** verifying a builtin tool's Render / Streaming component when the local
+env has no LLM provider key, so no real model can be made to emit that tool call
+(and update/remove-style APIs would need pre-existing entity ids anyway).
+
+**Doesn't work:** waiting for a real run, or reaching for Agent Mock when no case
+covers the tool. Note the neighbouring Agent Mock entry warns that "dispatching
+brand-new messages at the end of the list may never mount" — that holds for a
+long, already-populated mock topic, **not** for an empty conversation.
+
+**Works:** open a conversation with no messages (`/agent/<agentId>`, bucket
+`main_<agentId>_new`) and dispatch the pair straight in. The Render is selected from
+the **tool message's** `plugin.identifier` + `plugin.apiName`, and its `args` come
+from `safeParseJSON(plugin.arguments)` — so those three fields are the whole
+contract:
+
+```js
+const c = window.__LOBE_STORES.chat();
+c.internal_dispatchMessage({
+  type: 'createMessage',
+  id: aId,
+  value: {
+    role: 'assistant',
+    content: '',
+    meta: {},
+    tools: [
+      { apiName, arguments: argsJson, id: callId, identifier, result_msg_id: tId, type: 'builtin' },
+    ],
+  },
+});
+c.internal_dispatchMessage({
+  type: 'createMessage',
+  id: tId,
+  value: {
+    role: 'tool',
+    content: resultText,
+    parentId: aId,
+    tool_call_id: callId,
+    plugin: { apiName, arguments: argsJson, identifier, type: 'builtin' },
+    pluginState,
+  },
+});
+```
+
+Two things that decide what you actually see, both in
+`features/Conversation/Messages/AssistantGroup/Tool/`:
+
+- **The row is collapsed unless the manifest says otherwise.** `getRenderDisplayControl`
+  defaults to `'collapsed'`, so most tools need a click on the header before the card
+  mounts — a screenshot taken right after dispatch shows only the Inspector line.
+- **Truncating `arguments` into invalid JSON is how you reach the Streaming component.**
+  `isArgumentsStreaming` is literally `JSON.parse(requestArgs)` throwing, and
+  `forceShowStreamingRender` then auto-expands the row. Slicing the real args string
+  to \~55% is a faithful half-streamed payload and also exercises the card's
+  partial-data path.
+
+Toggling the row's first action button flips `showCustomToolRender`, which drops back
+to `FallbackArgumentRender` — the same branch an unregistered tool takes, so it is a
+faithful "before this change" contrast shot.
+
 ### Desktop theme follows the system appearance, not `settings.general.themeMode`
 
 **Situation:** capturing dark-mode evidence for a desktop UI change.
