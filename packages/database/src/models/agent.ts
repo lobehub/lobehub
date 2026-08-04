@@ -55,7 +55,10 @@ import {
 import type { LobeChatDatabase } from '../type';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { normalizeInboxAgentMeta } from '../utils/inboxAgent';
-import { hasForeignTopicAnchoredMessageRows } from '../utils/messageScope';
+import {
+  hasForeignTopicAnchoredMessageRows,
+  MESSAGE_TRANSFER_HAS_FOREIGN_AUTHORS,
+} from '../utils/messageScope';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import {
   hasForeignTopicComments,
@@ -1715,7 +1718,10 @@ export class AgentModel {
     targetWorkspaceId: string | null,
     targetUserId: string,
     targetVisibility?: 'private' | 'public',
-    options: { rejectForeignTopicCommentAuthors?: boolean } = {},
+    options: {
+      rejectForeignMessageAuthors?: boolean;
+      rejectForeignTopicCommentAuthors?: boolean;
+    } = {},
   ): Promise<{ agentId: string; slug: string | null }> => {
     const [result] = await this.transferAgents(
       [agentId],
@@ -1742,7 +1748,10 @@ export class AgentModel {
     targetWorkspaceId: string | null,
     targetUserId: string,
     targetVisibility?: 'private' | 'public',
-    options: { rejectForeignTopicCommentAuthors?: boolean } = {},
+    options: {
+      rejectForeignMessageAuthors?: boolean;
+      rejectForeignTopicCommentAuthors?: boolean;
+    } = {},
   ): Promise<{ agentId: string; slug: string | null }[]> => {
     if (agentIds.length === 0) return [];
 
@@ -1972,6 +1981,19 @@ export class AgentModel {
         (await hasForeignTopicComments(trx, this.userId, topicCondition!))
       ) {
         throw new Error(TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS);
+      }
+
+      // Re-run the topic-anchored foreign-row check UNDER the lock: the
+      // pre-transaction transferHasForeignRows call races message creation.
+      // Message inserts hold FOR KEY SHARE on their topic (FK enforcement),
+      // which conflicts with the FOR UPDATE above — so by this point every
+      // topic-anchored insert has either committed (visible here) or is
+      // blocked until this transaction ends.
+      if (
+        options.rejectForeignMessageAuthors &&
+        (await hasForeignTopicAnchoredMessageRows(trx, this.userId, topicCondition!))
+      ) {
+        throw new Error(MESSAGE_TRANSFER_HAS_FOREIGN_AUTHORS);
       }
       const movedTopics = await trx
         .update(topics)

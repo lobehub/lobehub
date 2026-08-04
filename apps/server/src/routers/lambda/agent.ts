@@ -18,6 +18,7 @@ import { TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS } from '@/database/models/to
 import { UserModel } from '@/database/models/user';
 import type { ResourceAccessLevel } from '@/database/schemas';
 import { DEFAULT_RESOURCE_ACCESS_LEVELS, RESOURCE_ACCESS_LEVELS_BY_TYPE } from '@/database/schemas';
+import { MESSAGE_TRANSFER_HAS_FOREIGN_AUTHORS } from '@/database/utils/messageScope';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentService } from '@/server/services/agent';
@@ -855,12 +856,16 @@ export const agentRouter = router({
           input.targetWorkspaceId,
           ctx.userId,
           input.targetVisibility,
-          { rejectForeignTopicCommentAuthors: isWorkspaceNonOwner(ctx) },
+          {
+            rejectForeignMessageAuthors: isWorkspaceNonOwner(ctx),
+            rejectForeignTopicCommentAuthors: isWorkspaceNonOwner(ctx),
+          },
         );
       } catch (error) {
         if (
           error instanceof Error &&
-          error.message === TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS
+          (error.message === TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS ||
+            error.message === MESSAGE_TRANSFER_HAS_FOREIGN_AUTHORS)
         ) {
           throw new TRPCError({
             cause: { data: { code: TransferErrorCode.OwnerOnly } },
@@ -991,12 +996,16 @@ export const agentRouter = router({
           input.targetWorkspaceId,
           ctx.userId,
           input.targetVisibility,
-          { rejectForeignTopicCommentAuthors: isWorkspaceNonOwner(ctx) },
+          {
+            rejectForeignMessageAuthors: isWorkspaceNonOwner(ctx),
+            rejectForeignTopicCommentAuthors: isWorkspaceNonOwner(ctx),
+          },
         );
       } catch (error) {
         if (
           error instanceof Error &&
-          error.message === TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS
+          (error.message === TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS ||
+            error.message === MESSAGE_TRANSFER_HAS_FOREIGN_AUTHORS)
         ) {
           throw new TRPCError({
             cause: { data: { code: TransferErrorCode.OwnerOnly } },

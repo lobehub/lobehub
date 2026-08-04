@@ -33,6 +33,7 @@ import {
   buildMessageChildScopeWhere,
   buildMessageScopeWhere,
   hasForeignTopicAnchoredMessageRows,
+  MESSAGE_TRANSFER_HAS_FOREIGN_AUTHORS,
 } from '../../utils/messageScope';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
@@ -916,7 +917,10 @@ export class AgentGroupRepository {
     targetWorkspaceId: string | null,
     targetUserId: string,
     targetVisibility?: 'private' | 'public',
-    options: { rejectForeignTopicCommentAuthors?: boolean } = {},
+    options: {
+      rejectForeignMessageAuthors?: boolean;
+      rejectForeignTopicCommentAuthors?: boolean;
+    } = {},
   ): Promise<{ groupId: string } | null> {
     const sourceGroup = await this.db.query.chatGroups.findFirst({
       where: and(eq(chatGroups.id, groupId), this.groupOwnership()),
@@ -1008,6 +1012,16 @@ export class AgentGroupRepository {
         (await hasForeignTopicComments(trx, this.userId, eq(topics.groupId, groupId)))
       ) {
         throw new Error(TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS);
+      }
+
+      // Re-run the topic-anchored foreign-row check UNDER the lock — the
+      // precheck races message creation; see AgentModel.transferAgents for
+      // the FOR KEY SHARE / FOR UPDATE serialization argument.
+      if (
+        options.rejectForeignMessageAuthors &&
+        (await hasForeignTopicAnchoredMessageRows(trx, this.userId, eq(topics.groupId, groupId)))
+      ) {
+        throw new Error(MESSAGE_TRANSFER_HAS_FOREIGN_AUTHORS);
       }
 
       const movedTopics = await trx

@@ -227,6 +227,9 @@ export const resnapshotTransferredMessagesBeforeOwnerDelete = async (
   }
 };
 
+/** Transfer aborted: a teammate's topic-anchored message/message_group appeared. */
+export const MESSAGE_TRANSFER_HAS_FOREIGN_AUTHORS = 'MESSAGE_TRANSFER_HAS_FOREIGN_AUTHORS';
+
 /**
  * Whether any message rows anchored to the given topics were authored by
  * someone other than `userId`.

@@ -35,7 +35,10 @@ import {
   workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { buildMessageChildScopeWhere } from '../../utils/messageScope';
+import {
+  buildMessageChildScopeWhere,
+  MESSAGE_TRANSFER_HAS_FOREIGN_AUTHORS,
+} from '../../utils/messageScope';
 import { AgentModel } from '../agent';
 import { MessageModel } from '../message';
 import {
@@ -610,6 +613,44 @@ describe('AgentModel.transferAgent', () => {
       workspaceId: wsId1,
     });
     expect(await model.transferHasForeignRows(agent.id)).toBe(true);
+  });
+
+  it('should recheck topic-anchored teammate rows inside the transfer transaction', async () => {
+    const model = new AgentModel(serverDB, userId, wsId1);
+    const agent = await model.create({ title: 'Locked Guard Agent' });
+
+    await serverDB
+      .insert(topics)
+      .values({ id: 'locked-guard-topic', agentId: agent.id, userId, workspaceId: wsId1 });
+
+    // Simulates the TOCTOU window: the teammate row already exists by the
+    // time the transaction rechecks under the topic lock (the router-side
+    // transferHasForeignRows precheck is deliberately skipped here).
+    await serverDB.insert(messages).values({
+      id: 'locked-guard-msg',
+      role: 'user',
+      topicId: 'locked-guard-topic',
+      userId: targetUserId,
+      workspaceId: wsId1,
+    });
+
+    await expect(
+      model.transferAgent(agent.id, null, userId, undefined, {
+        rejectForeignMessageAuthors: true,
+      }),
+    ).rejects.toThrow(MESSAGE_TRANSFER_HAS_FOREIGN_AUTHORS);
+
+    // The rejection rolled the whole transfer back
+    const [topic] = await serverDB.select().from(topics).where(eq(topics.id, 'locked-guard-topic'));
+    expect(topic.workspaceId).toBe(wsId1);
+
+    // Without foreign rows the same flag lets the transfer through
+    await serverDB.delete(messages).where(eq(messages.id, 'locked-guard-msg'));
+    await expect(
+      model.transferAgent(agent.id, null, userId, undefined, {
+        rejectForeignMessageAuthors: true,
+      }),
+    ).resolves.toBeTruthy();
   });
 
   it.skipIf(!isServerDB)(

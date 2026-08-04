@@ -1,7 +1,7 @@
 import { and, asc, count, desc, eq, ilike, inArray, isNull, type SQL } from 'drizzle-orm';
 
 import { MessageModel } from '@/database/models/message';
-import { messages, messagesFiles } from '@/database/schemas';
+import { messages, messagesFiles, topics } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { idGenerator } from '@/database/utils/idGenerator';
 import { buildMessageScopeWhere } from '@/database/utils/messageScope';
@@ -423,33 +423,56 @@ export class MessageService extends BaseService {
         throw this.createAuthorizationError(permissionResult.message || '无权创建消息');
       }
 
-      const [newMessage] = await this.db
-        .insert(messages)
-        .values({
-          agentId: messageData.agentId,
-          clientId: messageData.clientId,
-          content: messageData.content,
-          favorite: messageData.favorite ?? false,
-          id: idGenerator('messages'),
-          metadata: messageData.metadata,
-          model: messageData.model,
-          observationId: messageData.observationId,
-          parentId: messageData.parentId,
-          provider: messageData.provider,
-          quotaId: messageData.quotaId,
-          reasoning: messageData.reasoning,
-          role: messageData.role,
-          search: messageData.search,
-          sessionId: null,
-          threadId: messageData.threadId,
-          tools: messageData.tools,
-          topicId: messageData.topicId,
-          traceId: messageData.traceId,
-          ...this.buildWorkspacePayload({}),
-        })
-        .returning({
-          id: messages.id,
-        });
+      const [newMessage] = await this.db.transaction(async (tx) => {
+        if (messageData.topicId) {
+          // Serialize with agent/group transfers, mirroring the topic-comment
+          // create protocol: the transfer locks its topics FOR UPDATE and
+          // rechecks for teammate-authored rows, so this create must block on
+          // an in-flight transfer and revalidate the topic's scope once the
+          // lock clears — the permission check above ran without a lock and
+          // could have approved a topic that has since moved to another scope.
+          const [topic] = await tx
+            .select({ userId: topics.userId, workspaceId: topics.workspaceId })
+            .from(topics)
+            .where(eq(topics.id, messageData.topicId))
+            .limit(1)
+            .for('share');
+          const inScope = this.workspaceId
+            ? topic?.workspaceId === this.workspaceId
+            : !!topic && topic.userId === this.userId && !topic.workspaceId;
+          if (!inScope) {
+            throw this.createAuthorizationError('话题已不在当前范围内,无法创建消息');
+          }
+        }
+
+        return tx
+          .insert(messages)
+          .values({
+            agentId: messageData.agentId,
+            clientId: messageData.clientId,
+            content: messageData.content,
+            favorite: messageData.favorite ?? false,
+            id: idGenerator('messages'),
+            metadata: messageData.metadata,
+            model: messageData.model,
+            observationId: messageData.observationId,
+            parentId: messageData.parentId,
+            provider: messageData.provider,
+            quotaId: messageData.quotaId,
+            reasoning: messageData.reasoning,
+            role: messageData.role,
+            search: messageData.search,
+            sessionId: null,
+            threadId: messageData.threadId,
+            tools: messageData.tools,
+            topicId: messageData.topicId,
+            traceId: messageData.traceId,
+            ...this.buildWorkspacePayload({}),
+          })
+          .returning({
+            id: messages.id,
+          });
+      });
 
       // Handle file attachments
       if (messageData.files && messageData.files.length > 0) {
