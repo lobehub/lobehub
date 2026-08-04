@@ -230,7 +230,7 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
     if (!enabled) return null;
     if (automationMode === 'heartbeat') {
       return nextHeartbeatFiring(
-        detail?.heartbeat?.lastAt ?? detail?.heartbeat?.scheduledAt,
+        detail?.heartbeat?.scheduledAt ?? detail?.heartbeat?.lastAt,
         finalCurrentInterval,
       );
     }

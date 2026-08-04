@@ -1406,6 +1406,7 @@ describe('TaskService', () => {
       expect(scheduleNextTopic).toHaveBeenCalledWith({
         delay: 3600,
         taskId: 'task-1',
+        tickToken: expect.any(String),
         userId,
       });
       expect(mockTaskModel.updateContext).toHaveBeenCalledWith('task-1', {
@@ -1413,6 +1414,7 @@ describe('TaskService', () => {
           consecutiveFailures: 0,
           scheduledAt: expect.any(String),
           tickMessageId: 'tick-new',
+          tickToken: expect.any(String),
         },
       });
     });
@@ -1442,6 +1444,35 @@ describe('TaskService', () => {
           scheduler: expect.objectContaining({ consecutiveFailures: 2, tickMessageId: 'tick-new' }),
         }),
       );
+    });
+
+    it('restores the previous status when the first heartbeat tick cannot be published', async () => {
+      const prev = baseTask({
+        automationMode: 'heartbeat',
+        context: {},
+        heartbeatInterval: 3600,
+        status: 'paused',
+      });
+      const next = baseTask({
+        automationMode: 'heartbeat',
+        heartbeatInterval: 3600,
+        status: 'scheduled',
+      });
+      mockTaskModel.resolve.mockResolvedValue(prev);
+      mockTaskModel.updateStatus.mockResolvedValue(next);
+      scheduleNextTopic.mockRejectedValueOnce(new Error('qstash unavailable'));
+
+      const service = new TaskService(db, userId);
+
+      await expect(service.updateStatus({ id: 'T-1', status: 'scheduled' as any })).rejects.toThrow(
+        'qstash unavailable',
+      );
+      expect(mockTaskModel.updateStatus).toHaveBeenNthCalledWith(1, 'task-1', 'scheduled', {});
+      expect(mockTaskModel.updateStatus).toHaveBeenNthCalledWith(2, 'task-1', 'paused');
+      expect(mockTaskModel.updateContext).toHaveBeenCalledWith('task-1', {
+        scheduler: { tickToken: expect.any(String) },
+      });
+      expect(mockTaskModel.update).toHaveBeenCalledWith('task-1', { context: {} });
     });
 
     it('does NOT stamp when the new status is not scheduled', async () => {

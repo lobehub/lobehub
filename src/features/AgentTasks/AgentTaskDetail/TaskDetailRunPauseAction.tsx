@@ -119,7 +119,7 @@ const TaskDetailRunPauseAction = memo(() => {
     let next = null;
     if (automationMode === 'heartbeat') {
       next = nextHeartbeatFiring(
-        detail?.heartbeat?.lastAt ?? detail?.heartbeat?.scheduledAt,
+        detail?.heartbeat?.scheduledAt ?? detail?.heartbeat?.lastAt,
         interval,
       );
     } else if (automationMode === 'schedule' && schedulePattern) {

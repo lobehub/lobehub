@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type {
   TaskContext,
   TaskDetailActivity,
@@ -399,23 +401,42 @@ export class TaskService {
       const schedulerContext = (resolved.context as TaskContext | null)?.scheduler as
         TaskSchedulerContext | undefined;
       const previousTickMessageId = schedulerContext?.tickMessageId;
-      const tickMessageId = await scheduler.scheduleNextTopic({
-        delay: task.heartbeatInterval,
-        taskId: task.id,
-        userId: this.userId,
-      });
+      const tickToken = randomUUID();
+      let tickMessageId: string | undefined;
+
+      try {
+        // Invalidate the previous generation before publishing. This closes
+        // the race where an old QStash delivery arrives while the replacement
+        // message is being created.
+        await this.taskModel.updateContext(task.id, { scheduler: { tickToken } });
+        tickMessageId = await scheduler.scheduleNextTopic({
+          delay: task.heartbeatInterval,
+          taskId: task.id,
+          tickToken,
+          userId: this.userId,
+        });
+
+        await this.taskModel.updateContext(task.id, {
+          scheduler: {
+            consecutiveFailures: schedulerContext?.consecutiveFailures ?? 0,
+            scheduledAt: new Date().toISOString(),
+            tickMessageId,
+            tickToken,
+          },
+        });
+      } catch (error) {
+        // Never expose a scheduled status without a persisted tick. Restore
+        // the user-visible state and cancel a newly published message when
+        // persistence was the failing step.
+        if (tickMessageId) await scheduler.cancelScheduled(tickMessageId).catch(() => undefined);
+        await this.taskModel.update(task.id, { context: resolved.context });
+        await this.taskModel.updateStatus(task.id, resolved.status);
+        throw error;
+      }
 
       if (previousTickMessageId) {
         await scheduler.cancelScheduled(previousTickMessageId).catch(() => undefined);
       }
-
-      await this.taskModel.updateContext(task.id, {
-        scheduler: {
-          consecutiveFailures: schedulerContext?.consecutiveFailures ?? 0,
-          scheduledAt: new Date().toISOString(),
-          tickMessageId,
-        },
-      });
     }
 
     const unlocked: string[] = [];
