@@ -161,7 +161,7 @@ describe('Qwen models', () => {
           reasoning: true,
           vision: true,
         }),
-        contextWindowTokens: 983_616,
+        contextWindowTokens: 1_000_000,
         enabled: false,
         maxOutput: 131_072,
         releasedAt: '2026-07-19',

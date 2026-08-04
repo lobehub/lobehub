@@ -2275,7 +2275,7 @@ const qwenChatModels: AIChatModelCard[] = [
     config: {
       deploymentName: 'qwen3.8-max-preview',
     },
-    contextWindowTokens: 983_616,
+    contextWindowTokens: 1_000_000,
     description:
       "Qwen3.8-Max-Preview is a Token Plan preview of Alibaba's next-generation 2.4T-parameter flagship model, with major gains in coding, professional productivity, and complex long-horizon tasks.",
     displayName: 'Qwen3.8 Max Preview',
