@@ -313,9 +313,7 @@ export class FlatListBuilder {
       const childMessages = this.childrenMap.get(message.id) ?? [];
       // Non-tool children only are branch candidates (dual-form reader invariant: tool children are inline, not branches):
       // a tool child is inline data of its assistant, never a sibling branch.
-      const nonToolChildMessages = childMessages.filter(
-        (childId) => this.messageMap.get(childId)?.role !== 'tool',
-      );
+      const nonToolChildMessages = this.branchResolver.getMetadataBranchIds(childMessages);
       if (this.isCompareMode(message) && childMessages.length > 1) {
         // Add user message
         flatList.push(message);

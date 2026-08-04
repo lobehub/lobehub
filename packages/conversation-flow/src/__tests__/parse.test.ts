@@ -582,6 +582,13 @@ describe('parse', () => {
 
       const result = parse(messages);
 
+      expect(result.flatList.map((message) => message.id)).toEqual([
+        'root-user',
+        'root-assistant',
+        'current-user',
+        'current-placeholder',
+      ]);
+
       expect(result.contextTree.map((node) => node.id)).toEqual([
         'root-user',
         'root-assistant',

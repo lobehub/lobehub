@@ -282,33 +282,36 @@ export class MessageCollector {
       .sort((a, b) => a.createdAt - b.createdAt);
 
     const activeId = this.resolveActiveContinuationId(candidates, currentAssistant);
-    if (!activeId) return;
+    if (!activeId) {
+      this.markUnselectedContinuations(undefined, candidates, processedIds);
+      return;
+    }
 
     const activeContinuation = candidates.find((message) => message.id === activeId);
-    if (!activeContinuation) return;
+    if (!activeContinuation) {
+      this.markUnselectedContinuations(undefined, candidates, processedIds);
+      return;
+    }
 
-    this.markUnselectedContinuationSiblings(activeContinuation, candidates, processedIds);
+    this.markUnselectedContinuations(activeContinuation.id, candidates, processedIds);
     return activeContinuation;
   }
 
   /**
-   * Multiple assistant continuations can share a tool-result parent, including
-   * duplicate outputs left by a retried execution. Once BranchResolver selects
-   * the continuation for the current chain, the other same-parent assistants
-   * must be treated as consumed;
+   * Multiple assistant continuations can share one parent or compete across
+   * parallel tool-result parents. Once BranchResolver selects the continuation
+   * for the current chain, every other same-step candidate must be consumed;
    * otherwise FlatListBuilder's post-group continuation drain emits them later
-   * as standalone messages, often after a much newer turn.
+   * as standalone messages and leaks an inactive assistant branch into the next
+   * model request.
    */
-  private markUnselectedContinuationSiblings(
-    activeContinuation: Message,
+  private markUnselectedContinuations(
+    activeContinuationId: string | undefined,
     candidates: Message[],
     processedIds: Set<string>,
   ): void {
     for (const candidate of candidates) {
-      if (
-        candidate.id !== activeContinuation.id &&
-        candidate.parentId === activeContinuation.parentId
-      ) {
+      if (candidate.id !== activeContinuationId) {
         processedIds.add(candidate.id);
       }
     }
@@ -345,6 +348,7 @@ export class MessageCollector {
           branchOwner,
           orderedCandidateBranchIds,
           this.childrenMap,
+          this.branchResolver.getMetadataBranchIds(directChildIds),
         );
         if (!activeBranchId) return undefined;
 
@@ -363,7 +367,8 @@ export class MessageCollector {
     // candidate's parent participate in this branch decision. Use childrenMap
     // (creation) order so it lines up with how activeBranchIndex is assigned.
     const eligibleIds = new Set(candidates.map((m) => m.id));
-    const siblingIds = (this.childrenMap.get(parentId) ?? []).filter((id) => eligibleIds.has(id));
+    const directSiblingIds = this.childrenMap.get(parentId) ?? [];
+    const siblingIds = directSiblingIds.filter((id) => eligibleIds.has(id));
     if (siblingIds.length <= 1) return earliest.id;
 
     const parentMsg = this.messageMap.get(parentId);
@@ -373,6 +378,7 @@ export class MessageCollector {
       parentMsg,
       siblingIds,
       this.childrenMap,
+      this.branchResolver.getMetadataBranchIds(directSiblingIds),
     );
   }
 

@@ -13,6 +13,15 @@ export class BranchResolver {
   constructor(private messageMap?: Map<string, Message>) {}
 
   /**
+   * Return the canonical child order used by persisted `activeBranchIndex` metadata.
+   * Tool results are inline members of an assistant turn, so branch controls never
+   * count them as selectable siblings.
+   */
+  getMetadataBranchIds(childIds: string[]): string[] {
+    return childIds.filter((id) => this.messageMap?.get(id)?.role !== 'tool');
+  }
+
+  /**
    * Get active branch ID from IdNode structure (used in contextTree building)
    * Returns undefined for optimistic updates when the branch hasn't been created yet
    */
@@ -61,25 +70,28 @@ export class BranchResolver {
 
   /**
    * Get active branch ID from flat list (used in flatList building)
+   * `metadataBranchIds` preserves the full UI branch-index space when `childIds`
+   * is a filtered set of candidates owned by a specialized collector.
    * Returns undefined for optimistic updates when the branch hasn't been created yet
    */
   getActiveBranchIdFromMetadata(
     message: Message,
     childIds: string[],
     childrenMap: Map<string | null, string[]>,
+    metadataBranchIds: string[] = childIds,
   ): string | undefined {
     // Priority 1: Try to get from metadata.activeBranchIndex (index-based)
     const activeBranchIndex = (message.metadata as any)?.activeBranchIndex;
     if (typeof activeBranchIndex === 'number' && activeBranchIndex >= 0) {
       // If index is within bounds, return the branch at that index
-      if (activeBranchIndex < childIds.length) {
-        return childIds[activeBranchIndex];
+      if (activeBranchIndex < metadataBranchIds.length) {
+        return metadataBranchIds[activeBranchIndex];
       }
-      // Optimistic update: index === childIds.length means branch is being created
-      if (activeBranchIndex === childIds.length) {
+      // Optimistic update: index === metadataBranchIds.length means branch is being created
+      if (activeBranchIndex === metadataBranchIds.length) {
         return undefined;
       }
-      // Invalid index (> childIds.length), ignore and continue to other strategies
+      // Invalid index (> metadataBranchIds.length), ignore and continue to other strategies
     }
 
     // Priority 2: Prefer the branch that the user most recently continued.

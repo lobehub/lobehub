@@ -835,6 +835,36 @@ describe('MessageCollector', () => {
       expect(assistantChain.map((message) => message.id)).toEqual(['ast-root', 'ast-current']);
     });
 
+    it('preserves activeBranchIndex when filtered continuations use a smaller candidate set', () => {
+      const astRoot = mkAssistant('ast-root', {
+        metadata: { activeBranchIndex: 2 },
+        parentId: 'user-root',
+        tools: [bashTool('tc-1')],
+      });
+      const tool = mkTool('tool-1', { parentId: 'ast-root', tool_call_id: 'tc-1' });
+      const otherAgent = mkAssistant('ast-other-agent', {
+        agentId: 'agent-y',
+        createdAt: 1,
+        parentId: 'ast-root',
+      });
+      const astOld = mkAssistant('ast-old', { createdAt: 2, parentId: 'ast-root' });
+      const astCurrent = mkAssistant('ast-current', { createdAt: 3, parentId: 'ast-root' });
+      const allMessages = [astRoot, tool, otherAgent, astOld, astCurrent];
+      const messageMap = new Map(allMessages.map((message) => [message.id, message]));
+      const childrenMap = new Map<string | null, string[]>([
+        ['ast-root', ['tool-1', 'ast-other-agent', 'ast-old', 'ast-current']],
+      ]);
+      const collector = new MessageCollector(messageMap, childrenMap);
+
+      const assistantChain: Message[] = [];
+      const processedIds = new Set<string>();
+      collector.collectAssistantChain(astRoot, allMessages, assistantChain, [], processedIds);
+
+      expect(assistantChain.map((message) => message.id)).toEqual(['ast-root', 'ast-current']);
+      expect(processedIds.has('ast-old')).toBe(true);
+      expect(processedIds.has('ast-other-agent')).toBe(false);
+    });
+
     it('continues past a duplicate edge to the current turn own tool result', () => {
       // A → tool(x) → B; B re-declares the SAME tool_call_id x and has its real
       // continuation C under B's own tool result. collectToolMessages(B) resolves
