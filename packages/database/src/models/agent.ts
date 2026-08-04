@@ -1416,6 +1416,11 @@ export class AgentModel {
         buildWorkspacePayload(
           { userId: this.userId, workspaceId: this.workspaceId },
           {
+            // Agency config (heterogeneous provider, execution target, device
+            // binding, sub-agent defaults, verify rubric...). Duplicating must
+            // preserve it, otherwise a heterogeneous agent is copied as a plain
+            // one and its external runtime config is silently lost.
+            agencyConfig: sourceAgent.agencyConfig,
             avatar: sourceAgent.avatar,
             backgroundColor: sourceAgent.backgroundColor,
             chatConfig: sourceAgent.chatConfig,
