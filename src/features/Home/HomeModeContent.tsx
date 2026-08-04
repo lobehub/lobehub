@@ -245,11 +245,12 @@ const TaskContent = memo(() => {
   // filter. It must always show the complete task set.
   const tasksSWR = useFetchTaskList({ allAgents: true, visibility: 'all' });
   const tasks = useTaskStore(taskListSelectors.taskList);
+  const tasksTotal = useTaskStore(taskListSelectors.taskListTotal);
   const tasksInit = useTaskStore(taskListSelectors.isTaskListInit);
   const taskCount = useGlobalStore(systemStatusSelectors.homeTaskCount);
 
   return (
-    <GroupBlock count={tasks.length || undefined} title={t('dashboard.task.title')}>
+    <GroupBlock count={tasksTotal || undefined} title={t('dashboard.task.title')}>
       {tasksSWR.error && !tasksInit ? (
         <AsyncError error={tasksSWR.error} variant={'inline'} onRetry={tasksSWR.mutate} />
       ) : !tasksInit ? (
