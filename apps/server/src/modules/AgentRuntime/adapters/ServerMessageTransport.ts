@@ -124,6 +124,10 @@ export class ServerMessageTransport implements MessageTransport {
     await this.messageModel.updatePluginState(id, state);
   }
 
+  async updateToolIntervention(id: string, intervention: Record<string, any>): Promise<void> {
+    await this.messageModel.updateMessagePlugin(id, { intervention } as any);
+  }
+
   async updateToolMessage(id: string, params: UpdateToolMessageInput): Promise<void> {
     await this.messageModel.updateToolMessage(id, params);
   }

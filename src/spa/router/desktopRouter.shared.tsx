@@ -947,6 +947,15 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
                 ),
                 path: 'notification',
               },
+              // Channel detail level of the two-level notification settings —
+              // the page reads the channel id from the `sub` route param.
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/notification'),
+                  'Desktop > Workspace > Settings > Notification > Channel',
+                ),
+                path: 'notification/:sub',
+              },
               {
                 element: dynamicElement(
                   () => import('@/routes/(main)/[workspaceSlug]/settings/statistics'),
@@ -1040,6 +1049,13 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
                   'Desktop > Workspace > Settings > Audit Log',
                 ),
                 path: 'audit-log',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/labels'),
+                  'Desktop > Workspace > Settings > Labels',
+                ),
+                path: 'labels',
               },
               {
                 element: dynamicElement(

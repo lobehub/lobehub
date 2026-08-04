@@ -30,7 +30,7 @@ export class Transformer {
     this.messageMap = helperMaps.messageMap;
 
     // Initialize utility classes
-    this.branchResolver = new BranchResolver();
+    this.branchResolver = new BranchResolver(this.messageMap);
     this.messageCollector = new MessageCollector(
       this.messageMap,
       helperMaps.childrenMap,

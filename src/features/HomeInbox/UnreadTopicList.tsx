@@ -1,5 +1,5 @@
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
-import { type ConversationContext } from '@lobechat/types';
+import { agentDisplayName, type ConversationContext } from '@lobechat/types';
 import { Avatar, Flexbox, Icon, Markdown, stopPropagation, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -181,7 +181,7 @@ const UnreadTopicItem = memo<UnreadTopicItemProps>(
               shape={'circle'}
               size={AVATAR_SIZE}
               style={{ flex: 'none' }}
-              title={agent.title}
+              title={agentDisplayName(agent)}
             />
           )}
           <Text

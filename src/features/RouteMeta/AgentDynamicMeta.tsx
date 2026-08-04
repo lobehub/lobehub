@@ -1,5 +1,6 @@
 'use client';
 
+import { agentDisplayName } from '@lobechat/types';
 import { useTranslation } from 'react-i18next';
 
 import type { DynamicRouteMetaProps } from '@/spa/router/routeMeta';
@@ -37,7 +38,7 @@ const AgentDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
   });
   const topicTitle = useTopicTitle(params.aid, params.topicId ?? params.topic, routeWorkspaceId);
   const hasMeta = Object.keys(meta).length > 0;
-  const agentTitle = hasMeta ? meta.title : undefined;
+  const agentTitle = hasMeta ? agentDisplayName(meta) : undefined;
 
   usePublishDynamicRouteMeta(
     {
@@ -71,7 +72,7 @@ const createAgentSectionDynamicMeta = (titleKey: string) => {
       return agentSelectors.getAgentMetaById(agentId)(state);
     });
     const hasMeta = Object.keys(meta).length > 0;
-    const agentTitle = hasMeta ? meta.title : undefined;
+    const agentTitle = hasMeta ? agentDisplayName(meta) : undefined;
 
     usePublishDynamicRouteMeta(
       {

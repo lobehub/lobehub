@@ -1,7 +1,7 @@
 'use client';
 
 import { AGENT_CHAT_TOPIC_URL, GROUP_CHAT_TOPIC_URL, GROUP_CHAT_URL } from '@lobechat/const';
-import { type UIChatMessage } from '@lobechat/types';
+import { agentDisplayName, type UIChatMessage } from '@lobechat/types';
 import { ActionIcon, Avatar } from '@lobehub/ui';
 import { ArrowUpRight } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -12,7 +12,7 @@ import { ConversationProvider } from '@/features/Conversation';
 import InterventionContent from '@/features/Conversation/InterventionBar/InterventionContent';
 import InterventionTabBar from '@/features/Conversation/InterventionBar/InterventionTabBar';
 import MarkdownMessage from '@/features/Conversation/Markdown';
-import { type ConversationContext } from '@/features/Conversation/types';
+import { type ConversationContext, type MessagesChangeMeta } from '@/features/Conversation/types';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useOperationState } from '@/hooks/useOperationState';
@@ -46,8 +46,8 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group }) => {
   const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
   const replaceMessages = useChatStore((s) => s.replaceMessages);
   const handleMessagesChange = useCallback(
-    (next: UIChatMessage[], ctx: ConversationContext) => {
-      replaceMessages(next, { context: ctx });
+    (next: UIChatMessage[], ctx: ConversationContext, meta?: MessagesChangeMeta) => {
+      replaceMessages(next, { context: ctx, source: meta?.source });
     },
     [replaceMessages],
   );
@@ -148,14 +148,14 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group }) => {
             avatar={meta.avatar}
             background={meta.backgroundColor}
             size={28}
-            title={meta.title}
+            title={agentDisplayName(meta)}
           />
           <div className={styles.headerMeta}>
             <div className={styles.headerTitle}>
-              {topicTitle || meta.title || t('globalApproval.title')}
+              {topicTitle || agentDisplayName(meta, t('globalApproval.title'))}
             </div>
             <div className={styles.headerSubtitle}>
-              {meta.title ? `${meta.title} · ` : ''}
+              {agentDisplayName(meta) ? `${agentDisplayName(meta)} · ` : ''}
               {t('globalApproval.subtitle')}
             </div>
           </div>

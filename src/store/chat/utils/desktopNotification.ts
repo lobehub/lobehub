@@ -6,6 +6,7 @@ import {
   isDesktop,
 } from '@lobechat/const';
 import type { ConversationContext } from '@lobechat/types';
+import { agentDisplayName } from '@lobechat/types';
 import { t } from 'i18next';
 
 import { getAgentStoreState } from '@/store/agent';
@@ -81,7 +82,8 @@ export const resolveNotificationTitle = (
   if (context.agentId) {
     const agentMeta = agentSelectors.getAgentMetaById(context.agentId)(getAgentStoreState());
 
-    if (agentMeta?.title) return agentMeta.title;
+    const agentName = agentDisplayName(agentMeta);
+    if (agentName) return agentName;
   }
 
   return fallbackTitle;

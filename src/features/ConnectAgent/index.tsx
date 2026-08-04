@@ -8,6 +8,7 @@ import type {
 } from '@lobechat/heterogeneous-agents';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import type { DeviceListItem } from '@lobechat/types';
+import { agentDisplayName } from '@lobechat/types';
 import { Alert, CopyButton, Flexbox, Icon, Input, Text, TextArea, Tooltip } from '@lobehub/ui';
 import { Button, createModal, type ModalInstance, useModalContext } from '@lobehub/ui/base-ui';
 import { Checkbox, Typography } from 'antd';
@@ -606,7 +607,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
                 <agent.provider.brand.Avatar size={32} />
                 <Flexbox flex={1} gap={1} style={{ minWidth: 0 }}>
                   <Text strong fontSize={13}>
-                    {agent.title}
+                    {agentDisplayName(agent)}
                   </Text>
                   <Text ellipsis fontSize={12} type={'secondary'}>
                     {agent.provider.title}

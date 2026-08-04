@@ -32,6 +32,7 @@ import {
   logTimingSink as logTiming,
   runTimedSinkStage as runTimedStage,
 } from '@lobechat/utils';
+import { isPlainRecord } from '@lobechat/utils/object';
 import type { HeatmapsProps } from '@lobehub/charts';
 import dayjs from 'dayjs';
 import type { SQL } from 'drizzle-orm';
@@ -183,6 +184,14 @@ interface MessageThreadRelation {
   status: string | null;
   threadId: string;
   title: string | null;
+}
+
+interface ActiveBranchSnapshot {
+  activeBranchId?: string;
+  activeBranchIndex: number;
+  metadata: Record<PropertyKey, unknown>;
+  parentId: string;
+  wasOptimistic: boolean;
 }
 
 interface MessageFileRelations {
@@ -3175,6 +3184,105 @@ export class MessageModel {
 
   // **************** Delete *************** //
 
+  /**
+   * Preserve the selected branch by identity across a deletion. Branch metadata
+   * stores a positional index, while deleting or reparenting children can change
+   * that index space. If the selected branch itself is deleted, remove the stale
+   * index so conversation-flow can infer the remaining active branch instead of
+   * mistaking `index === branchCount` for an optimistic branch creation.
+   */
+  private captureActiveBranchSnapshots = async (
+    tx: Transaction,
+    parentIds: string[],
+  ): Promise<ActiveBranchSnapshot[]> => {
+    const uniqueParentIds = [...new Set(parentIds)];
+    if (uniqueParentIds.length === 0) return [];
+
+    const parentRows = await tx
+      .select({ id: messages.id, metadata: messages.metadata })
+      .from(messages)
+      .where(and(this.ownership(), inArray(messages.id, uniqueParentIds)));
+    const branchIdsByParent = await this.queryDirectBranchIds(tx, uniqueParentIds);
+    const snapshots: ActiveBranchSnapshot[] = [];
+
+    for (const parent of parentRows) {
+      if (!isPlainRecord(parent.metadata)) continue;
+
+      const activeBranchIndex = parent.metadata.activeBranchIndex;
+      if (typeof activeBranchIndex !== 'number' || activeBranchIndex < 0) continue;
+
+      const branchIds = branchIdsByParent.get(parent.id) ?? [];
+      snapshots.push({
+        activeBranchId: branchIds[activeBranchIndex],
+        activeBranchIndex,
+        metadata: parent.metadata,
+        parentId: parent.id,
+        wasOptimistic: activeBranchIndex === branchIds.length,
+      });
+    }
+
+    return snapshots;
+  };
+
+  private queryDirectBranchIds = async (tx: Transaction, parentIds: string[]) => {
+    const branchRows = await tx
+      .select({ id: messages.id, parentId: messages.parentId })
+      .from(messages)
+      .where(
+        and(
+          this.ownership(),
+          inArray(messages.parentId, parentIds),
+          not(eq(messages.role, 'tool')),
+        ),
+      )
+      .orderBy(asc(messages.createdAt), asc(messages.id));
+    const branchIdsByParent = new Map<string, string[]>();
+
+    for (const branch of branchRows) {
+      if (!branch.parentId) continue;
+      const branchIds = branchIdsByParent.get(branch.parentId) ?? [];
+      branchIds.push(branch.id);
+      branchIdsByParent.set(branch.parentId, branchIds);
+    }
+
+    return branchIdsByParent;
+  };
+
+  private reconcileActiveBranchSnapshots = async (
+    tx: Transaction,
+    snapshots: ActiveBranchSnapshot[],
+  ) => {
+    if (snapshots.length === 0) return;
+
+    const branchIdsByParent = await this.queryDirectBranchIds(
+      tx,
+      snapshots.map((snapshot) => snapshot.parentId),
+    );
+
+    for (const snapshot of snapshots) {
+      const branchIds = branchIdsByParent.get(snapshot.parentId) ?? [];
+      const survivingBranchIndex = snapshot.activeBranchId
+        ? branchIds.indexOf(snapshot.activeBranchId)
+        : -1;
+      const activeBranchIndex = snapshot.wasOptimistic
+        ? branchIds.length
+        : survivingBranchIndex >= 0
+          ? survivingBranchIndex
+          : undefined;
+
+      if (activeBranchIndex === snapshot.activeBranchIndex) continue;
+
+      const metadata = { ...snapshot.metadata };
+      delete metadata.activeBranchIndex;
+      if (activeBranchIndex !== undefined) metadata.activeBranchIndex = activeBranchIndex;
+
+      await tx
+        .update(messages)
+        .set({ metadata })
+        .where(and(eq(messages.id, snapshot.parentId), this.ownership()));
+    }
+  };
+
   deleteMessage = async (id: string) => {
     return this.db.transaction(async (tx) => {
       // 1. Query the complete information of the message to be deleted
@@ -3186,6 +3294,11 @@ export class MessageModel {
 
       // If the message to be deleted is not found, return directly
       if (message.length === 0) return;
+
+      const activeBranchSnapshots = await this.captureActiveBranchSnapshots(
+        tx,
+        message[0].parentId ? [message[0].parentId] : [],
+      );
 
       // 2. Update child messages' parentId to the current message's parentId
       // This preserves the tree structure when deleting a node
@@ -3218,6 +3331,8 @@ export class MessageModel {
       await tx
         .delete(messages)
         .where(and(this.ownership(), inArray(messages.id, messageIdsToDelete)));
+
+      await this.reconcileActiveBranchSnapshots(tx, activeBranchSnapshots);
 
       // 7. Keep the topic's usage rollup in sync (pure derived — a removed
       // assistant message must drop out of the topic totals).
@@ -3275,6 +3390,11 @@ export class MessageModel {
         findFinalAncestor(id);
       }
 
+      const activeBranchSnapshots = await this.captureActiveBranchSnapshots(
+        tx,
+        [...new Set(finalAncestorMap.values())].filter((id): id is string => id !== null),
+      );
+
       // 4. Query child messages whose parentId points to messages being deleted
       const children = await tx
         .select({ id: messages.id, parentId: messages.parentId })
@@ -3294,6 +3414,8 @@ export class MessageModel {
 
       // 6. Delete the messages
       await tx.delete(messages).where(and(this.ownership(), inArray(messages.id, ids)));
+
+      await this.reconcileActiveBranchSnapshots(tx, activeBranchSnapshots);
 
       // 7. Recompute the usage rollup for every affected topic (pure derived).
       const affectedTopicIds = [

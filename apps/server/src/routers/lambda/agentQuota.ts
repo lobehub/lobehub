@@ -171,6 +171,15 @@ export const agentQuotaRouter = router({
     .input(z.object({ accountId: z.string(), limit: z.number().optional() }))
     .query(async ({ ctx, input }) => ctx.windowModel.listByAccount(input.accountId, input.limit)),
 
+  /**
+   * Display read model: the newest reading per limit bucket. Prefer this over
+   * `getWindows` for anything user-facing — windows are keyed by `resets_at`,
+   * so limits the provider reports without one never make it into that table.
+   */
+  getLatestReadings: quotaProcedure
+    .input(z.object({ accountId: z.string() }))
+    .query(async ({ ctx, input }) => ctx.quotaService.listLatestReadings(input.accountId)),
+
   // ── load balancing ───────────────────────────────────────────────────────
   resolveAccountLoads: quotaProcedure
     .input(z.object({ accountIds: z.array(z.string()) }))

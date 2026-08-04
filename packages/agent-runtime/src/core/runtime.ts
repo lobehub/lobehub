@@ -110,12 +110,19 @@ export class AgentRuntime {
       // Handle human approved tool calls
       if (runtimeContext.phase === 'human_approved_tool') {
         const approvedPayload = runtimeContext.payload as {
-          approvedToolCall: ChatToolPayload;
+          approvedToolCall?: ChatToolPayload;
+          /**
+           * Batch approval — every tool the user approved in ONE action.
+           * Present instead of `approvedToolCall` when the client resolved the
+           * whole pending batch at once.
+           */
+          approvedToolCalls?: ChatToolPayload[];
           assistantMessageId?: string;
           parentMessageId: string;
-          skipCreateToolMessage: boolean;
+          skipCreateToolMessage?: boolean;
+          /** `tool_call_id → pending tool message id`, batch path only. */
+          toolMessageIds?: Record<string, string>;
         };
-        const toolCalling = approvedPayload.approvedToolCall;
 
         // The resume seeded an assistant placeholder (assistantMessageId) for
         // this operation, but the first instruction here is a tool execution —
@@ -128,14 +135,31 @@ export class AgentRuntime {
           newState.pendingAssistantMessageId = approvedPayload.assistantMessageId;
         }
 
-        rawInstructions = {
-          payload: {
-            parentMessageId: approvedPayload.parentMessageId,
-            skipCreateToolMessage: approvedPayload.skipCreateToolMessage,
-            toolCalling,
-          },
-          type: 'call_tool',
-        };
+        const approvedBatch = approvedPayload.approvedToolCalls ?? [];
+
+        if (approvedBatch.length > 0) {
+          // Run every approved tool in ONE batch, exactly as the original
+          // (pre-approval) `call_tools_batch` would have. Approving them one at
+          // a time instead means one LLM continuation per tool, each seeing the
+          // not-yet-approved siblings as empty results.
+          rawInstructions = {
+            payload: {
+              existingToolMessageIds: approvedPayload.toolMessageIds ?? {},
+              parentMessageId: approvedPayload.parentMessageId,
+              toolsCalling: approvedBatch,
+            },
+            type: 'call_tools_batch',
+          };
+        } else {
+          rawInstructions = {
+            payload: {
+              parentMessageId: approvedPayload.parentMessageId,
+              skipCreateToolMessage: approvedPayload.skipCreateToolMessage,
+              toolCalling: approvedPayload.approvedToolCall,
+            },
+            type: 'call_tool',
+          };
+        }
       } else {
         if (runtimeContext.phase === 'tool_result') {
           const toolResultPayload = runtimeContext.payload as

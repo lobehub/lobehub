@@ -6,4 +6,5 @@ export {
   MessagePlatform,
   type MessagePlatformType,
   MessageToolIdentifier,
+  MESSENGER_PUSH_CONTENT_MAX_LENGTH,
 } from './types';

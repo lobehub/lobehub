@@ -1,5 +1,5 @@
 import { isDesktop } from '@lobechat/const';
-import { getActivePluginIds } from '@lobechat/types';
+import { getActivePluginIds, type LobeAgentConfig } from '@lobechat/types';
 import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { confirmModal, type ModalInstance } from '@lobehub/ui/base-ui';
 import { toast } from '@lobehub/ui/base-ui';
@@ -105,7 +105,13 @@ const Header = memo(() => {
   const navigate = useWorkspaceAwareNavigate();
 
   const meta = useAgentStore(agentSelectors.currentAgentMeta, isEqual);
-  const config = useAgentStore(agentSelectors.currentAgentConfig, isEqual);
+  // `currentAgentConfig` is typed non-nullable but reads straight out of
+  // `agentMap`, so it IS undefined until the config lands. Reaching a profile by
+  // slug adds a resolution hop before that happens, which is long enough for the
+  // dependency array below to read `config.model` off nothing and drop the whole
+  // page into the error boundary.
+  const config = useAgentStore(agentSelectors.currentAgentConfig, isEqual) as
+    LobeAgentConfig | undefined;
   const systemRole = useAgentStore(agentSelectors.currentAgentSystemRole);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
@@ -145,6 +151,11 @@ const Header = memo(() => {
   // affordance must not be offered at all.
   const isBuiltinAgent = useAgentStore(builtinAgentSelectors.isBuiltinAgent(activeAgentId));
   const canManage = hasEditPermission && canManageResource && !isBuiltinAgent;
+  // Both halves, in the same order `ResourceConfigAccessGate` applies them: a
+  // role that cannot edit content is refused even where this agent's General
+  // Access says `edit`. Checking only the resource half would re-open the
+  // dead-end click for exactly that member.
+  const canConfigure = hasEditPermission && canEditResource;
 
   const handleDelete = useCallback(() => {
     if (!canManage || !activeAgentId) return;
@@ -166,11 +177,11 @@ const Header = memo(() => {
         : (editor?.getDocument('markdown') as string | null | undefined);
       const profileMarkdown = buildAgentProfileMarkdown({
         description: meta?.description,
-        model: config.model,
+        model: config?.model,
         // Pinned identifiers only — a disabled plugin shouldn't be advertised
         // as "enabled" in the exported markdown.
-        plugins: getActivePluginIds(config.plugins),
-        provider: config.provider,
+        plugins: getActivePluginIds(config?.plugins),
+        provider: config?.provider,
         systemRole: editorMarkdown ?? systemRole,
         t,
         tags: meta?.tags,
@@ -206,7 +217,16 @@ const Header = memo(() => {
       console.error('Failed to export agent profile markdown:', error);
       toast.error(t('settingAgent.export.error', { ns: 'setting' }));
     }
-  }, [config.model, config.plugins, config.provider, editor, isHeterogeneous, meta, systemRole, t]);
+  }, [
+    config?.model,
+    config?.plugins,
+    config?.provider,
+    editor,
+    isHeterogeneous,
+    meta,
+    systemRole,
+    t,
+  ]);
 
   const importMenuItem = useBusinessAgentImportMenuItem(activeAgentId ?? undefined);
   const transferMenuItems = useAgentTransferMenuItem(activeAgentId ?? undefined, meta);
@@ -227,12 +247,12 @@ const Header = memo(() => {
       {
         // View/use-level members can't edit the agent config — keep the entry
         // visible but disabled (project convention: disabled, not hidden).
-        disabled: !canEditResource,
+        disabled: !canConfigure,
         icon: <Icon icon={Settings2Icon} />,
         key: 'advanced-settings',
         label: t('advancedSettings', { ns: 'setting' }),
         onClick: () => {
-          if (!canEditResource) return;
+          if (!canConfigure) return;
           settingsModalRef.current?.close();
           settingsModalRef.current = openAgentSettingsModal();
         },
@@ -247,10 +267,16 @@ const Header = memo(() => {
       },
       showPermissionPageEntry
         ? {
+            // Same gate the page itself applies (ResourceConfigAccessGate):
+            // without edit-level access it redirects straight back with a
+            // toast, so an enabled entry here is a click into a dead end.
+            // Disabled, not hidden — the member can still see the action exists.
+            disabled: !canConfigure,
             icon: <Icon icon={UsersIcon} />,
             key: 'permission',
             label: t('permission.page.entry', { ns: 'setting' }),
             onClick: () => {
+              if (!canConfigure) return;
               if (activeAgentId) navigate(`/agent/${activeAgentId}/permission`);
             },
           }
@@ -312,7 +338,7 @@ const Header = memo(() => {
   }, [
     activeAgentId,
     authorName,
-    canEditResource,
+    canConfigure,
     canManage,
     createdAt,
     dateLocale,

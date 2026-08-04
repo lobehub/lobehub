@@ -11,6 +11,7 @@ import GroupBlock from '@/features/Home/components/GroupBlock';
 import { homeType } from '@/features/Home/components/homeType';
 import RailCard from '@/features/Home/components/RailCard';
 import Recommendations, { useRecommendationsVisible } from '@/features/Recommendations';
+import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { useBriefStore } from '@/store/brief';
 import { briefListSelectors } from '@/store/brief/selectors';
 import { useUserStore } from '@/store/user';
@@ -20,6 +21,7 @@ import InboxBriefCard from './InboxBriefCard';
 import MarkAllReadButton from './MarkAllReadButton';
 import NeedsYouRailCard from './NeedsYouRailCard';
 import NewsList from './NewsList';
+import { ownsRailSections } from './railSectionPlacement';
 import RunningTasksCard from './RunningTasksCard';
 import { filterTopicsForInboxScope, resolveScopeToggleSection } from './scopeTogglePlacement';
 import { splitBriefs } from './splitBriefs';
@@ -80,20 +82,31 @@ interface InboxSection {
 interface HomeInboxProps {
   hideNeedsYou?: boolean;
   hideUnread?: boolean;
+  /**
+   * Main column only: the rail is collapsed, so the sections it owns (running,
+   * news) fold into this column instead of disappearing with it.
+   */
+  inlineRail?: boolean;
   variant?: 'default' | 'main' | 'rail';
 }
 
-const HomeInbox = memo<HomeInboxProps>(({ hideNeedsYou, hideUnread, variant = 'default' }) => {
+const HomeInbox = memo<HomeInboxProps>((props) => {
+  const { hideNeedsYou, hideUnread, inlineRail, variant = 'default' } = props;
   const isRail = variant === 'rail';
   const isMain = variant === 'main';
+  const showRailSections = ownsRailSections({ inlineRail, variant });
   const { t } = useTranslation('home');
   const isLogin = useUserStore(authSelectors.isLogin);
   const myId = useUserStore(userProfileSelectors.userId);
 
+  // Briefs are per-user AND per-workspace rows, so the feed is read through the
+  // active cache scope — a list left over from the previous workspace holds ids
+  // this one cannot resolve, and every action on it would fail silently.
+  const cacheScope = useCacheScope();
   const useFetchBriefs = useBriefStore((s) => s.useFetchBriefs);
-  const briefsSWR = useFetchBriefs(isLogin);
-  const briefs = useBriefStore(briefListSelectors.briefs);
-  const isBriefsInit = useBriefStore(briefListSelectors.isBriefsInit);
+  const briefsSWR = useFetchBriefs(isLogin, cacheScope);
+  const briefs = useBriefStore(briefListSelectors.briefs(cacheScope));
+  const isBriefsInit = useBriefStore(briefListSelectors.isBriefsInit(cacheScope));
 
   const topics = useHomeInboxTopics(isLogin);
   const recommendationsVisible = useRecommendationsVisible();
@@ -259,7 +272,7 @@ const HomeInbox = memo<HomeInboxProps>(({ hideNeedsYou, hideUnread, variant = 'd
   }
 
   // No title: the card already says "3 tasks running" on its own head.
-  if (!isMain && runningTopics.length > 0)
+  if (showRailSections && runningTopics.length > 0)
     sections.push({
       key: 'running',
       node: (
@@ -272,7 +285,7 @@ const HomeInbox = memo<HomeInboxProps>(({ hideNeedsYou, hideUnread, variant = 'd
       ),
     });
 
-  if (!isMain && news.length > 0)
+  if (showRailSections && news.length > 0)
     sections.push({
       action: <MarkAllReadButton news={news} />,
       // Team view: News is still only mine (briefs are per-user), so say so

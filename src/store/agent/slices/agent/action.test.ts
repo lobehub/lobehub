@@ -7,6 +7,7 @@ import { setScopedMutate } from '@/libs/swr';
 import { agentConfigKeys } from '@/libs/swr/keys';
 import { agentService } from '@/services/agent';
 import { agentDocumentService } from '@/services/agentDocument';
+import { useGlobalStore } from '@/store/global';
 import { type LobeAgentConfig } from '@/types/agent';
 import { withSWR } from '~test-utils';
 
@@ -176,6 +177,7 @@ describe('AgentSlice Actions', () => {
               backgroundColor: null,
               description: 'stale',
               id: 'agent-1',
+              name: null,
               title: 'Stale Agent',
             },
           ],
@@ -187,6 +189,36 @@ describe('AgentSlice Actions', () => {
       });
 
       expect(result.current.availableAgents).toBeUndefined();
+    });
+
+    it('should seed a personal name matching the user language', async () => {
+      vi.mocked(agentService.createAgent).mockResolvedValue({ agentId: 'agent-2' });
+      const status = useGlobalStore.getState().status;
+      useGlobalStore.setState({ status: { ...status, language: 'zh-CN' } });
+      const { result } = renderHook(() => useAgentStore());
+
+      try {
+        await act(async () => {
+          await result.current.createAgent({ config: { title: '健康助手' } });
+        });
+
+        const config = vi.mocked(agentService.createAgent).mock.calls[0][0].config!;
+        expect(config.title).toBe('健康助手');
+        expect(config.name).toMatch(/^\p{Script=Han}+$/u);
+      } finally {
+        useGlobalStore.setState({ status });
+      }
+    });
+
+    it('should keep a name the caller already provided', async () => {
+      vi.mocked(agentService.createAgent).mockResolvedValue({ agentId: 'agent-2' });
+      const { result } = renderHook(() => useAgentStore());
+
+      await act(async () => {
+        await result.current.createAgent({ config: { name: 'Ada', title: 'Math Tutor' } });
+      });
+
+      expect(vi.mocked(agentService.createAgent).mock.calls[0][0].config?.name).toBe('Ada');
     });
   });
 
@@ -223,6 +255,7 @@ describe('AgentSlice Actions', () => {
           backgroundColor: null,
           description: 'Helps with setup',
           id: 'agent-1',
+          name: null,
           title: 'Setup',
         },
       ]);
@@ -238,6 +271,7 @@ describe('AgentSlice Actions', () => {
             backgroundColor: null,
             description: 'Helps with setup',
             id: 'agent-1',
+            name: null,
             title: 'Setup',
           },
         ]);
@@ -300,6 +334,7 @@ describe('AgentSlice Actions', () => {
               backgroundColor: null,
               description: 'stale',
               id: 'agent-1',
+              name: null,
               title: 'Stale Agent',
             },
           ],
@@ -863,6 +898,7 @@ describe('AgentSlice Actions', () => {
               backgroundColor: null,
               description: 'Old Desc',
               id: 'agent-1',
+              name: null,
               title: 'Old Title',
             },
           ],

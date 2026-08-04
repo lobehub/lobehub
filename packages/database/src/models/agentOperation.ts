@@ -131,6 +131,31 @@ export class AgentOperationModel {
   }
 
   /**
+   * Newest operation in this topic that is parked waiting for tool approval.
+   *
+   * A parked run is stream-terminal, so the client marks its own operation
+   * completed and prunes it — by the time the user decides to stop, only the
+   * DB still knows which operation is holding the turn. Scoped by `userId` so
+   * one user can never resolve (and then terminate) another's run.
+   */
+  async findLatestParkedOperationId(topicId: string): Promise<string | undefined> {
+    const [row] = await this.db
+      .select({ id: agentOperations.id })
+      .from(agentOperations)
+      .where(
+        and(
+          eq(agentOperations.topicId, topicId),
+          eq(agentOperations.userId, this.userId),
+          eq(agentOperations.status, 'waiting_for_human'),
+        ),
+      )
+      .orderBy(sql`${agentOperations.createdAt} desc`)
+      .limit(1);
+
+    return row?.id;
+  }
+
+  /**
    * Update the row when the operation reaches a terminal state. Scoped by
    * `userId` so a leaked operationId can't be used to flip another user's
    * row. No-op when the start row was never written.

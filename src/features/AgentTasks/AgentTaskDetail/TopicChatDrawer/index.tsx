@@ -85,8 +85,8 @@ export const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(
         hasInitMessages={!!messages}
         messages={messages}
         operationState={operationState}
-        onMessagesChange={(msgs, ctx) => {
-          replaceMessages(msgs, { context: ctx });
+        onMessagesChange={(msgs, ctx, meta) => {
+          replaceMessages(msgs, { context: ctx, source: meta?.source });
         }}
       >
         <TaskCardScopeProvider value={true}>

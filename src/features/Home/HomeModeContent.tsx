@@ -1,4 +1,5 @@
 import type { TaskStatus } from '@lobechat/types';
+import { agentDisplayName } from '@lobechat/types';
 import type { FlexboxProps } from '@lobehub/ui';
 import { Avatar, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -14,6 +15,7 @@ import HomeInbox from '@/features/HomeInbox';
 import { filterTopicsForInboxScope } from '@/features/HomeInbox/scopeTogglePlacement';
 import { splitBriefs } from '@/features/HomeInbox/splitBriefs';
 import { useHomeInboxTopics } from '@/features/HomeInbox/useHomeInboxTopics';
+import Recommendations from '@/features/Recommendations';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useClientDataSWR } from '@/libs/swr';
 import { recentKeys } from '@/libs/swr/keys';
@@ -76,6 +78,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface HomeModeContentProps {
+  /**
+   * The rail is folded away, so this column carries the sections it owns: what
+   * is in flight and what happened stay above the recent topics, and the
+   * suggestions — nothing that happened, only what you could do — land after.
+   */
+  inlineRail?: boolean;
   mode: HomeMode;
   onSuggestionSelect: (prompt: string) => void;
 }
@@ -139,7 +147,7 @@ const RecentTopicRow = memo<{ topic: RecentItem }>(({ topic }) => {
             className={styles.topicAvatar}
             shape={'circle'}
             size={22}
-            title={agent.title}
+            title={agentDisplayName(agent)}
           />
         ) : (
           <Icon color={cssVar.colorTextDescription} icon={HashIcon} size={16} />
@@ -242,7 +250,7 @@ const TaskContent = memo(() => {
   );
 });
 
-const HomeModeContent = memo<HomeModeContentProps>(({ mode, onSuggestionSelect }) => {
+const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSuggestionSelect }) => {
   const { t } = useTranslation('home');
   const isLogin = useUserStore(authSelectors.isLogin);
   const authLoaded = useUserStore(authSelectors.isLoaded);
@@ -264,9 +272,9 @@ const HomeModeContent = memo<HomeModeContentProps>(({ mode, onSuggestionSelect }
     [inboxTopics.running, myId],
   );
   const useFetchBriefs = useBriefStore((s) => s.useFetchBriefs);
-  const briefsSWR = useFetchBriefs(isLogin);
-  const briefs = useBriefStore(briefListSelectors.briefs);
-  const briefsInit = useBriefStore(briefListSelectors.isBriefsInit);
+  const briefsSWR = useFetchBriefs(isLogin, cacheScope);
+  const briefs = useBriefStore(briefListSelectors.briefs(cacheScope));
+  const briefsInit = useBriefStore(briefListSelectors.isBriefsInit(cacheScope));
   const needsYouCount = useMemo(() => splitBriefs(briefs).needsYou.length, [briefs]);
   const topicRecents = recentsSWR.data ?? [];
 
@@ -284,11 +292,26 @@ const HomeModeContent = memo<HomeModeContentProps>(({ mode, onSuggestionSelect }
         (briefsInit || Boolean(briefsSWR.error)),
     });
 
-    if (state === 'empty') return <EmptySuggestions onSelect={onSuggestionSelect} />;
+    // The empty short-circuit predates the fold-in: with the rail open it only
+    // skips the main column's own blocks, while news and suggestions live on in
+    // the rail. Folded, it would swallow them too — news needs no activity to
+    // exist. Mirror the expanded page instead: suggestions first, then whatever
+    // folded in (both sections render null when there is nothing to carry).
+    if (state === 'empty') {
+      if (!inlineRail) return <EmptySuggestions onSelect={onSuggestionSelect} />;
+
+      return (
+        <Flexbox gap={32}>
+          <EmptySuggestions onSelect={onSuggestionSelect} />
+          <HomeInbox inlineRail variant={'main'} />
+          <Recommendations variant={'main'} />
+        </Flexbox>
+      );
+    }
 
     return (
       <Flexbox gap={32}>
-        <HomeInbox variant={'main'} />
+        <HomeInbox inlineRail={inlineRail} variant={'main'} />
         {(state !== 'ready' || topicRecents.length > 0) && (
           <GroupBlock count={topicRecents.length || undefined} title={t('dashboard.chat.recents')}>
             {state === 'error' ? (
@@ -304,6 +327,7 @@ const HomeModeContent = memo<HomeModeContentProps>(({ mode, onSuggestionSelect }
             )}
           </GroupBlock>
         )}
+        {inlineRail && <Recommendations variant={'main'} />}
       </Flexbox>
     );
   }
@@ -311,7 +335,19 @@ const HomeModeContent = memo<HomeModeContentProps>(({ mode, onSuggestionSelect }
   if (!isLogin) return null;
 
   if (mode === 'task') {
-    return <TaskContent />;
+    if (!inlineRail) return <TaskContent />;
+
+    // The rail's sections sit beside task mode while it is open, so a folded
+    // rail must not take them away here either: in flight and what happened
+    // above the task list, suggestions after it. Unread and needs-you stay
+    // hidden — task mode never surfaces them, folded or not.
+    return (
+      <Flexbox gap={32}>
+        <HomeInbox hideNeedsYou hideUnread inlineRail variant={'main'} />
+        <TaskContent />
+        <Recommendations variant={'main'} />
+      </Flexbox>
+    );
   }
 
   return null;

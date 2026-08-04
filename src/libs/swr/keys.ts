@@ -177,6 +177,20 @@ export const agentKeys = {
   list: def('agent:list', (isLogin: boolean) => ['agent:list', isLogin]),
 };
 
+// ---- agent labels -------------------------------------------------------
+export const agentLabelKeys = {
+  /**
+   * Agent label registry (workspace-shared, or personal). Keyed by workspace:
+   * the registries are disjoint per scope, so a shared key would serve the
+   * previous workspace's labels across a switch.
+   */
+  list: def('agentLabel:list', (isLogin: boolean, workspaceId: string | null | undefined) => [
+    'agentLabel:list',
+    isLogin,
+    workspaceId ?? null,
+  ]),
+};
+
 // ---- agent builder (opening-suggestion chips) ---------------------------
 // Kept off `CACHE_TIERS` on purpose — these are ephemeral LLM-generated chips.
 // `contextSummary` is intentionally NOT part of the key so config autosaves for
@@ -295,7 +309,12 @@ export const workKeys = {
 
 // ---- brief --------------------------------------------------------------
 export const briefKeys = {
-  list: def('brief:list', (isLogin: boolean) => ['brief:list', isLogin]),
+  /**
+   * Unresolved brief feed, keyed by login + identity scope. Briefs are per-user
+   * AND per-workspace rows, so an entry fetched in one scope must never be
+   * served in another — its ids are unreachable there.
+   */
+  list: def('brief:list', (isLogin: boolean, scope: string) => ['brief:list', isLogin, scope]),
 };
 
 // ---- home inbox ---------------------------------------------------------
@@ -1110,6 +1129,7 @@ export const swrKeys = {
   agentDocument: agentDocumentSWRKeys,
   agentHome: agentHomeKeys,
   agentKnowledge: agentKnowledgeKeys,
+  agentLabel: agentLabelKeys,
   agentProfile: agentProfileKeys,
   agentSignal: agentSignalKeys,
   aiModel: aiModelKeys,
