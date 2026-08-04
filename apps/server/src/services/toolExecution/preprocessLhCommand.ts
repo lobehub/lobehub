@@ -47,13 +47,22 @@ const LH_COMMAND_PATTERN =
 export const isLhCommand = (command: string): boolean => LH_COMMAND_PATTERN.test(command);
 
 /**
- * Env overrides for an `lh` command running ON THE USER'S DEVICE rather than in
- * the sandbox.
+ * Env overrides for a workspace run executing ON THE USER'S DEVICE rather than
+ * in the sandbox.
  *
  * A device shell has its own `lh` and its own stored credentials, so nothing
  * needs rewriting there — but without `LOBEHUB_WORKSPACE_ID` the CLI resolves
  * to personal scope, and a workspace agent asked to edit itself silently reads
  * and writes the wrong tenancy instead of failing.
+ *
+ * Applied to EVERY command of a workspace run, deliberately not gated on
+ * `isLhCommand`. The device merges this into the spawned process environment,
+ * so every descendant inherits it — which is the only way to reach an `lh` the
+ * command invokes indirectly: `bash -lc 'lh whoami'`, a shell script, a
+ * Makefile target, an npm script. Command-position detection sees none of
+ * those, and unlike the sandbox path there is nothing here worth gating: this
+ * mints no credential, it exports a non-secret scope id that only the LobeHub
+ * CLI reads, so setting it on a command that never calls `lh` costs nothing.
  *
  * `LOBEHUB_JWT` is deliberately NOT sent: on a personal device the stored
  * credentials already are the caller's, so it buys nothing, while a workspace
@@ -63,10 +72,9 @@ export const isLhCommand = (command: string): boolean => LH_COMMAND_PATTERN.test
  * an explicit error rather than a silent personal-scope write.
  */
 export const buildDeviceLhEnv = (
-  command: string,
   workspaceId: string | undefined,
 ): Record<string, string> | undefined =>
-  workspaceId && isLhCommand(command) ? { LOBEHUB_WORKSPACE_ID: workspaceId } : undefined;
+  workspaceId ? { LOBEHUB_WORKSPACE_ID: workspaceId } : undefined;
 
 /** POSIX single-quoting, safe for any value including quotes and newlines. */
 const shellSingleQuote = (value: string): string => `'${value.replaceAll("'", String.raw`'\''`)}'`;

@@ -139,21 +139,26 @@ describe('isLhCommand', () => {
 });
 
 describe('buildDeviceLhEnv', () => {
-  it('scopes an lh command to the run workspace', () => {
-    expect(buildDeviceLhEnv('lh agent edit agt_1 -t x', 'ws-1')).toEqual({
-      LOBEHUB_WORKSPACE_ID: 'ws-1',
-    });
+  it('scopes the run to its workspace', () => {
+    expect(buildDeviceLhEnv('ws-1')).toEqual({ LOBEHUB_WORKSPACE_ID: 'ws-1' });
   });
 
   it('never ships the caller JWT onto the device', () => {
-    expect(buildDeviceLhEnv('lh agent list', 'ws-1')).not.toHaveProperty('LOBEHUB_JWT');
+    expect(buildDeviceLhEnv('ws-1')).not.toHaveProperty('LOBEHUB_JWT');
   });
 
   it('returns undefined for personal runs', () => {
-    expect(buildDeviceLhEnv('lh agent list', undefined)).toBeUndefined();
+    expect(buildDeviceLhEnv(undefined)).toBeUndefined();
   });
 
-  it('returns undefined for non-lh commands', () => {
-    expect(buildDeviceLhEnv('ls -la', 'ws-1')).toBeUndefined();
+  // Regression: this used to be gated on `isLhCommand(command)`, so an `lh`
+  // the command reached indirectly got no scope and silently fell back to the
+  // device credentials' personal tenancy. The device merges env into the
+  // spawned process, so setting it unconditionally is what covers these.
+  it('scopes commands that reach lh indirectly, which no detector could match', () => {
+    for (const command of ["bash -lc 'lh whoami'", 'make deploy', './sync.sh', 'npm run sync']) {
+      expect(isLhCommand(command)).toBe(false);
+      expect(buildDeviceLhEnv('ws-1')).toEqual({ LOBEHUB_WORKSPACE_ID: 'ws-1' });
+    }
   });
 });

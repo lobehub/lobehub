@@ -357,11 +357,21 @@ describe('localSystemRuntime', () => {
       expect(parseArgs().env).toEqual({ LOBEHUB_WORKSPACE_ID: 'ws-42' });
     });
 
-    it('leaves non-lh commands alone', async () => {
+    // Regression: injection used to be gated on detecting `lh` in command
+    // position, so a command that reaches `lh` through a child shell, a script
+    // or a Makefile got no scope and silently used the device credentials'
+    // personal tenancy. The device merges env into the spawned process, so
+    // every descendant inherits it — which is the only way to cover these.
+    it.each([
+      ['child shell', "bash -lc 'lh whoami'"],
+      ['shell script', './sync.sh'],
+      ['makefile target', 'make deploy'],
+      ['npm script', 'npm run sync'],
+    ])('scopes a workspace run invoking lh via a %s', async (_label, command) => {
       const proxy = buildProxy({ workspaceId: 'ws-42' });
-      await proxy[LocalSystemApiName.runCommand]({ command: 'git status' });
+      await proxy[LocalSystemApiName.runCommand]({ command });
 
-      expect(parseArgs()).toEqual({ command: 'git status' });
+      expect(parseArgs().env).toEqual({ LOBEHUB_WORKSPACE_ID: 'ws-42' });
     });
 
     it('does not inject in a personal run', async () => {

@@ -85,10 +85,12 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
 
         // A device shell has its own `lh`, so nothing is rewritten — but the
         // CLI would resolve to the device credentials' PERSONAL scope, which is
-        // how a workspace agent ends up unable to find (or edit) itself. The
-        // model's own `env` wins: it may be deliberately overriding the scope.
+        // how a workspace agent ends up unable to find (or edit) itself. Set on
+        // every command, so an `lh` reached indirectly (`bash -lc 'lh …'`, a
+        // script, a Makefile) inherits the scope too. The model's own `env`
+        // wins: it may be deliberately overriding the scope.
         if (api.name === LocalSystemApiName.runCommand && typeof finalArgs?.command === 'string') {
-          const lhEnv = buildDeviceLhEnv(finalArgs.command, await getContentWorkspaceId());
+          const lhEnv = buildDeviceLhEnv(await getContentWorkspaceId());
           if (lhEnv) finalArgs = { ...finalArgs, env: { ...lhEnv, ...finalArgs.env } };
         }
 

@@ -411,7 +411,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
       // Content scope, NOT the gateway-addressing scope resolved above: a
       // workspace agent routed to the caller's own machine is still editing
       // workspace content.
-      const deviceLhEnv = buildDeviceLhEnv(command, await this.resolveWorkspaceId());
+      const deviceLhEnv = buildDeviceLhEnv(await this.resolveWorkspaceId());
       const response = await deviceGateway.executeToolCall(
         {
           deviceId: device.deviceId,
