@@ -1,3 +1,4 @@
+import { getShellSyntaxGuidance } from '@lobechat/builtin-tool-local-system';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { MessagesEngine } from '@lobechat/context-engine';
 import { type OpenAIChatMessage } from '@lobechat/types';
@@ -38,6 +39,9 @@ const createServerVariableGenerators = (params: {
     // leaking the literal `{{defaultShell}}` token into the prompt.
     defaultShell: () =>
       'the platform default shell (PowerShell on Windows, /bin/sh on macOS/Linux)',
+    // Same leak-guard for the paired syntax-guidance placeholder; passing
+    // undefined yields the shell-agnostic wording.
+    shellSyntaxGuidance: () => getShellSyntaxGuidance(undefined),
   };
 };
 

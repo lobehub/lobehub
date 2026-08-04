@@ -13,7 +13,7 @@ import { BUILTIN_AGENT_SLUGS, getAgentRuntimeConfig } from '@lobechat/builtin-ag
 import { builtinSkills } from '@lobechat/builtin-skills';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { LobeAgentIdentifier, LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
-import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
+import { getShellSyntaxGuidance, LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MessageToolIdentifier } from '@lobechat/builtin-tool-message';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import type { DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
@@ -3567,13 +3567,14 @@ export class AiAgentService {
         if (!systemInfo) return {};
         const device = onlineDevices.find((d) => d.deviceId === deviceId);
         log('execAgent: fetched device system info for %s', deviceId);
+        // Devices that don't report defaultShell run an older client whose
+        // runner still hardcodes cmd.exe on Windows — describe that honestly
+        // instead of the new PowerShell default.
+        const defaultShell =
+          systemInfo.defaultShell ?? (device?.platform === 'win32' ? 'cmd.exe' : '/bin/sh');
         return {
           arch: systemInfo.arch,
-          // Devices that don't report defaultShell run an older client whose
-          // runner still hardcodes cmd.exe on Windows — describe that honestly
-          // instead of the new PowerShell default.
-          defaultShell:
-            systemInfo.defaultShell ?? (device?.platform === 'win32' ? 'cmd.exe' : '/bin/sh'),
+          defaultShell,
           desktopPath: systemInfo.desktopPath,
           documentsPath: systemInfo.documentsPath,
           downloadsPath: systemInfo.downloadsPath,
@@ -3582,6 +3583,9 @@ export class AiAgentService {
           musicPath: systemInfo.musicPath,
           picturesPath: systemInfo.picturesPath,
           platform: device?.platform ?? 'unknown',
+          // Keep the syntax guidance consistent with the shell named above —
+          // the system role references both placeholders in one sentence.
+          shellSyntaxGuidance: getShellSyntaxGuidance(defaultShell),
           userDataPath: systemInfo.userDataPath,
           videosPath: systemInfo.videosPath,
           // `workingDirectory` is intentionally NOT taken from the live device

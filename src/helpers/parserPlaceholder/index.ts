@@ -1,3 +1,4 @@
+import { getShellSyntaxGuidance } from '@lobechat/builtin-tool-local-system';
 import { isDesktop } from '@lobechat/const';
 import { uuid } from '@lobechat/utils';
 
@@ -164,6 +165,7 @@ export const VARIABLE_GENERATORS = {
    * | `{{userDataPath}}` | /Users/username/Library/Application Support/LobeChat |
    * | `{{workingDirectory}}` | /Users/username/Projects/my-project |
    * | `{{defaultShell}}` | PowerShell 7+ (pwsh) |
+   * | `{{shellSyntaxGuidance}}` | Write PowerShell syntax; ... |
    *
    */
   homePath: () => globalAgentContextManager.getContext().homePath ?? '',
@@ -172,6 +174,10 @@ export const VARIABLE_GENERATORS = {
   defaultShell: () =>
     globalAgentContextManager.getContext().defaultShell ??
     'the platform default shell (PowerShell on Windows, /bin/sh on macOS/Linux)',
+  // Syntax rules matching the shell above, so the model never sees guidance
+  // for a shell it is not running in (see getShellSyntaxGuidance).
+  shellSyntaxGuidance: () =>
+    getShellSyntaxGuidance(globalAgentContextManager.getContext().defaultShell),
   desktopPath: () => globalAgentContextManager.getContext().desktopPath ?? '',
   documentsPath: () => globalAgentContextManager.getContext().documentsPath ?? '',
   downloadsPath: () => globalAgentContextManager.getContext().downloadsPath ?? '',
