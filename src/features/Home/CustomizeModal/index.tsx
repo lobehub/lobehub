@@ -5,6 +5,7 @@ import { FileTextIcon, LayoutGrid, TimerIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import type { HomeCustomizeTab } from './config';
 import Layout, { type CustomizeModalTab } from './Layout';
 import RecentsTab from './tabs/Recents';
 import RightBarTab from './tabs/RightBar';
@@ -12,12 +13,12 @@ import TasksTab from './tabs/Tasks';
 import { useHomeCustomization } from './useHomeCustomization';
 
 interface CustomizeModalContentProps {
-  initialTab?: string;
+  initialTab?: HomeCustomizeTab;
 }
 
 const CustomizeModalContent = memo<CustomizeModalContentProps>(({ initialTab }) => {
   const { t } = useTranslation('home');
-  const [activeTab, setActiveTab] = useState(initialTab ?? 'rightBar');
+  const [activeTab, setActiveTab] = useState<HomeCustomizeTab>(initialTab ?? 'rightBar');
   const {
     isWidgetHidden,
     recentsCount,
@@ -54,7 +55,7 @@ const CustomizeModalContent = memo<CustomizeModalContentProps>(({ initialTab }) 
   );
 });
 
-export const openHomeCustomizeModal = (tab?: string): ModalInstance =>
+export const openHomeCustomizeModal = (tab?: HomeCustomizeTab): ModalInstance =>
   createModal({
     content: <CustomizeModalContent initialTab={tab} />,
     footer: null,

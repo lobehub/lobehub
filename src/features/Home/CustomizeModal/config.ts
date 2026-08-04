@@ -12,11 +12,13 @@ export const HOME_CUSTOMIZE_DEFAULTS = {
 export const HOME_COUNT_MIN = 3;
 export const HOME_COUNT_MAX = 15;
 
+export type HomeCustomizeTab = 'rightBar' | 'recents' | 'tasks';
+
 // An error banner covers every widget whose content it reports on, not just the
 // one it is named after: the topic feed powers unread AND running, and the briefs
 // fetch powers needsYou AND news. Narrowing either pair back to one key lets a
 // hidden widget silence a failure that explains the other's absence.
-export const HOME_SECTION_WIDGET_COVERAGE: Record<string, HomeWidgetKey[]> = {
+const HOME_SECTION_WIDGET_COVERAGE: Record<string, HomeWidgetKey[]> = {
   'needsYou': ['needsYou'],
   'needsYou-error': ['needsYou', 'news'],
   'needsYou-loading': ['needsYou'],

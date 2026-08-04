@@ -7,17 +7,19 @@ import { type LucideIcon, XIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import type { HomeCustomizeTab } from './config';
+
 export interface CustomizeModalTab {
   icon: LucideIcon;
-  key: string;
+  key: HomeCustomizeTab;
   label: string;
 }
 
 export interface LayoutProps {
-  activeTab: string;
+  activeTab: HomeCustomizeTab;
   children: ReactNode;
   onReset: () => void;
-  onTabChange: (key: string) => void;
+  onTabChange: (key: HomeCustomizeTab) => void;
   tabs: CustomizeModalTab[];
 }
 
