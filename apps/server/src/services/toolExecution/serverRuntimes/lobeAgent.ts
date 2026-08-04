@@ -122,20 +122,33 @@ class LobeAgentExecutionRuntime {
 
   // ==================== Plan / Todo (delegated to PlanExecutionRuntime) ====================
 
-  createPlan = (params: any) =>
-    this.planRuntime.createPlan(params, { messageId: this.messageId, topicId: this.topicId });
+  /**
+   * Todo APIs read their prior state from `ctx.currentTodos` (rebuilt from
+   * message history by the runtime executors). Without it the runtime falls back
+   * to the topic's plan document, which only exists once `createPlan` has run —
+   * so a plain `createTodos` → `updateTodos` sequence would see an empty list,
+   * drop every index-based operation, and answer "No operations applied.".
+   */
+  private planContext = (ctx?: ToolExecutionContext) => ({
+    currentTodos: ctx?.currentTodos,
+    messageId: this.messageId,
+    topicId: this.topicId,
+  });
 
-  updatePlan = (params: any) =>
-    this.planRuntime.updatePlan(params, { messageId: this.messageId, topicId: this.topicId });
+  createPlan = (params: any, ctx?: ToolExecutionContext) =>
+    this.planRuntime.createPlan(params, this.planContext(ctx));
 
-  createTodos = (params: any) =>
-    this.planRuntime.createTodos(params, { messageId: this.messageId, topicId: this.topicId });
+  updatePlan = (params: any, ctx?: ToolExecutionContext) =>
+    this.planRuntime.updatePlan(params, this.planContext(ctx));
 
-  updateTodos = (params: any) =>
-    this.planRuntime.updateTodos(params, { messageId: this.messageId, topicId: this.topicId });
+  createTodos = (params: any, ctx?: ToolExecutionContext) =>
+    this.planRuntime.createTodos(params, this.planContext(ctx));
 
-  clearTodos = (params: any) =>
-    this.planRuntime.clearTodos(params, { messageId: this.messageId, topicId: this.topicId });
+  updateTodos = (params: any, ctx?: ToolExecutionContext) =>
+    this.planRuntime.updateTodos(params, this.planContext(ctx));
+
+  clearTodos = (params: any, ctx?: ToolExecutionContext) =>
+    this.planRuntime.clearTodos(params, this.planContext(ctx));
 
   // ==================== Sub-agent (async suspend/resume) ====================
 

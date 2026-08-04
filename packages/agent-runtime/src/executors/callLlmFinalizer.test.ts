@@ -21,6 +21,7 @@ const createMessageTransport = (): MessageTransport => ({
   query: vi.fn(),
   update: vi.fn().mockResolvedValue(undefined),
   updatePluginState: vi.fn(),
+  updateToolIntervention: vi.fn(),
   updateToolMessage: vi.fn(),
 });
 

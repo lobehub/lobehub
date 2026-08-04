@@ -12,6 +12,7 @@ export default {
   'brief.action.ignore': 'Ignore',
   'brief.action.retry': 'Retry',
   'brief.action.upgrade': 'Upgrade plan',
+  'brief.actionFailed': "That didn't go through. Please try again.",
   'brief.agentSignal.selfReview.applied.heading': 'Updated',
   'brief.agentSignal.selfReview.applied.summary': '{{count}} dream update was applied.',
   'brief.agentSignal.selfReview.applied.summary_plural': '{{count}} dream updates were applied.',

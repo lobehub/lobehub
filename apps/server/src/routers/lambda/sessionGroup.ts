@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { SessionGroupModel } from '@/database/models/sessionGroup';
-import { insertSessionGroupSchema } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { type SessionGroupItem } from '@/types/session';
@@ -17,6 +16,20 @@ const sessionProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
       sessionGroupModel: new SessionGroupModel(ctx.serverDB, ctx.userId, wsId),
     },
   });
+});
+
+/**
+ * Renaming and reordering only. Deliberately NOT `insertSessionGroupSchema.partial()`:
+ * that carries `userId`, `workspaceId` and `visibility`, and folders are now
+ * workspace-shared, so the ownership predicate matches every public folder in
+ * the workspace. A member could otherwise take another member's Category
+ * private, reassign it, or move it out of the workspace — breaking the shared
+ * sidebar for everyone and putting the row out of the victim's own reach.
+ * Publishing has its own one-way procedure; there is no un-publish by design.
+ */
+const updatableSessionGroupFields = z.object({
+  name: z.string().optional(),
+  sort: z.number().nullable().optional(),
 });
 
 export const sessionGroupRouter = router({
@@ -51,9 +64,14 @@ export const sessionGroupRouter = router({
       return ctx.sessionGroupModel.publishToWorkspace(input.id);
     }),
 
-  getSessionGroup: sessionProcedure.query(async ({ ctx }): Promise<SessionGroupItem[]> => {
-    return ctx.sessionGroupModel.query() as any;
-  }),
+  getSessionGroup: sessionProcedure
+    // Folders are shared workspace structure now, so listing them is what
+    // `session_group:read` exists to gate. Without this the permission is
+    // declared but unenforceable.
+    .use(withScopedPermission('session_group:read'))
+    .query(async ({ ctx }): Promise<SessionGroupItem[]> => {
+      return ctx.sessionGroupModel.query() as any;
+    }),
 
   // NOTE: no row-level creator check on the mutations below (unlike other
   // workspace-shared resources). Sidebar organization is a per-member concern
@@ -72,7 +90,7 @@ export const sessionGroupRouter = router({
     .input(
       z.object({
         id: z.string(),
-        value: insertSessionGroupSchema.partial(),
+        value: updatableSessionGroupFields,
       }),
     )
     .mutation(async ({ input, ctx }) => {

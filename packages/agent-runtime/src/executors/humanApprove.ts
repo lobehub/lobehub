@@ -58,6 +58,23 @@ export const requestHumanApprove =
     newState.status = 'waiting_for_human';
     newState.pendingToolsCalling = pendingToolsCalling;
 
+    // A resume op (approve / answer) seeds an assistant placeholder up front so
+    // the UI has a spinner row, and the first `call_llm` claims it. Parking here
+    // means no `call_llm` ever ran — the tool executed, and the batch still has
+    // unresolved siblings — so that placeholder would be left behind as an empty
+    // "…" assistant hanging off the tool we just settled. Retire it: the next
+    // resume seeds its own, and the run has produced no assistant content to
+    // keep. Best-effort — a failed delete must not strand the approval pause.
+    if (newState.pendingAssistantMessageId) {
+      const orphanId = newState.pendingAssistantMessageId;
+      newState.pendingAssistantMessageId = undefined;
+      try {
+        await transports.messages.deleteMessage(orphanId);
+      } catch {
+        // leaving the placeholder is cosmetic; parking correctly is not
+      }
+    }
+
     // Map of toolCallId -> toolMessageId, populated either by creating fresh
     // pending tool messages or (in resumption mode) by looking up existing ones.
     const toolMessageIds: Record<string, string> = {};

@@ -1,5 +1,6 @@
 // @vitest-environment node
 import type {
+  OnboardingTaskRecommendationSession,
   OnboardingUnderstandingMessageMetadata,
   UnderstandingAnalysis,
 } from '@lobechat/types';
@@ -184,6 +185,47 @@ describe('OnboardingUnderstandingRepository', () => {
     ]);
     await installTopic();
     repository = new OnboardingUnderstandingRepository(db, userId);
+  });
+
+  /** @example A fresh onboarding run cannot inherit completed starter-task recommendations. */
+  it('removes Understanding and task recommendations together on reset', async () => {
+    const taskRecommendations: OnboardingTaskRecommendationSession = {
+      createdTaskIds: {},
+      errors: [],
+      id: sessionId,
+      providerIds: ['github'],
+      recommendations: [],
+      sourceFingerprint: 'github@1',
+      status: 'pending',
+      updatedAt: '2026-08-04T00:00:00.000Z',
+    };
+    const [existing] = await db
+      .select({ metadata: topics.metadata })
+      .from(topics)
+      .where(eq(topics.id, topicId));
+    await db
+      .update(topics)
+      .set({
+        metadata: {
+          ...existing.metadata,
+          onboardingSession: {
+            ...existing.metadata!.onboardingSession!,
+            taskRecommendations,
+          },
+        },
+      })
+      .where(eq(topics.id, topicId));
+    await repository.initialize(topicId, sessionId, ['github']);
+
+    await repository.removeForReset(topicId);
+
+    const [resetTopic] = await db
+      .select({ metadata: topics.metadata })
+      .from(topics)
+      .where(eq(topics.id, topicId));
+    expect(resetTopic.metadata?.model).toBe('keep-me');
+    expect(resetTopic.metadata?.onboardingSession?.understanding).toBeUndefined();
+    expect(resetTopic.metadata?.onboardingSession?.taskRecommendations).toBeUndefined();
   });
 
   /**

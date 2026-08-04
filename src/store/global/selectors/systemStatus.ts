@@ -402,6 +402,9 @@ const groupAgentBuilderPanelWidth = (s: GlobalState) => s.status.groupAgentBuild
 const imagePanelWidth = (s: GlobalState) => s.status.imagePanelWidth;
 const agentListViewMode = (s: GlobalState) => s.status.agentListViewMode || 'list';
 const agentListViewOptions = (s: GlobalState) => s.status.agentListViewOptions;
+const agentListExpandedGroupKeys = (s: GlobalState) => s.status.agentListExpandedGroupKeys ?? [];
+const agentListSidebarSectionCollapsed = (s: GlobalState) =>
+  s.status.agentListSidebarSectionCollapsed ?? false;
 const imageTopicViewMode = (s: GlobalState) => s.status.imageTopicViewMode || 'grid';
 const imageTopicPanelWidth = (s: GlobalState) => s.status.imageTopicPanelWidth;
 const verifyReportPanelWidth = (s: GlobalState) => s.status.verifyReportPanelWidth || 300;
@@ -446,6 +449,8 @@ const homeSelectedAgentId = (s: GlobalState) => s.status.homeSelectedAgentId;
 
 export const systemStatusSelectors = {
   agentBuilderPanelWidth,
+  agentListExpandedGroupKeys,
+  agentListSidebarSectionCollapsed,
   agentListViewMode,
   agentListViewOptions,
   agentPageSize,

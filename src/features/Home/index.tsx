@@ -285,7 +285,11 @@ const Home = memo(() => {
             onModeChange={setMode}
           />
         </div>
-        <HomeModeContent mode={mode} onSuggestionSelect={handleSuggestionSelect} />
+        <HomeModeContent
+          inlineRail={railCollapsed && isLogin}
+          mode={mode}
+          onSuggestionSelect={handleSuggestionSelect}
+        />
       </Flexbox>
 
       {isLogin && (

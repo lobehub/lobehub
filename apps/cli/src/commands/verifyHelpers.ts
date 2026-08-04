@@ -387,9 +387,17 @@ export function reportEvidence(evidence: unknown): ReportEvidenceInput[] {
       // The report viewer pairs on `id` and drops any comparison lacking one, so
       // an id-less half could never render side by side. Warn rather than upload
       // a comparison that is silently downgraded to an ordinary image.
-      if (comparison && !(id && (role === 'before' || role === 'after'))) {
+      //
+      // Test the raw field, not the parsed object: a comparison written flat
+      // (`comparison: "row", role: "before"`) is not an object at all, so keying
+      // the warning off `objectValue()` skipped the one shape that most needs
+      // it — the author saw a clean ingest and unpaired images on the page.
+      // Absent means null/undefined only; `""` / `0` / `false` are malformed
+      // values that were written on purpose, so they warn like any other.
+      const hasComparison = value.comparison !== undefined && value.comparison !== null;
+      if (hasComparison && !(comparison && id && (role === 'before' || role === 'after'))) {
         log.warn(
-          `evidence ${evidencePath}: comparison needs both a string "id" and role "before"/"after" — ignoring it`,
+          `evidence ${evidencePath}: comparison must be an object with a string "id" and role "before"/"after" — ignoring it`,
         );
       }
       const layout = comparison?.layout === 'vertical' ? 'vertical' : undefined;
@@ -789,4 +797,47 @@ export function statusColor(status: string): string {
   if (status === 'failed') return pc.red(status);
   if (status === 'running') return pc.yellow(status);
   return pc.dim(status);
+}
+
+/** A region a reviewer circled on one evidence image. */
+export interface ReviewAnnotationRegion {
+  comment?: string;
+  evidenceId?: string;
+  rect?: { height?: number; width?: number; x?: number; y?: number };
+}
+
+const asPercent = (value?: number) =>
+  typeof value === 'number' && Number.isFinite(value) ? `${Math.round(value * 100)}%` : undefined;
+
+/**
+ * Where a review annotation points, rendered for a terminal.
+ *
+ * The comment alone is not enough to act on: a screenshot usually has several
+ * plausible targets, and without the image and the rect the reader has to guess
+ * which one was circled. `rect` is normalized to the image box (0–1), so it is
+ * printed as percentages.
+ *
+ * Returns `undefined` when the annotation carries no location at all — an older
+ * review, or one made before regions existed.
+ */
+export function formatAnnotationRegion(
+  annotation: ReviewAnnotationRegion,
+  evidenceLabels?: Map<string, string>,
+): string | undefined {
+  const label = annotation.evidenceId
+    ? (evidenceLabels?.get(annotation.evidenceId) ?? annotation.evidenceId)
+    : undefined;
+
+  const { rect } = annotation;
+  const x = asPercent(rect?.x);
+  const y = asPercent(rect?.y);
+  const width = asPercent(rect?.width);
+  const height = asPercent(rect?.height);
+  const at = x && y ? `${x},${y}` : undefined;
+  const size = width && height ? `${width}×${height}` : undefined;
+  const position = [at, size].filter(Boolean).join(' · ');
+
+  if (!label && !position) return undefined;
+  if (!position) return label;
+  return label ? `${label} @ ${position}` : position;
 }

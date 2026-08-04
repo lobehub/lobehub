@@ -76,6 +76,7 @@ export enum SettingsTabs {
   Hotkey = 'hotkey',
   /** @deprecated Use ServiceModel instead */
   Image = 'image',
+  Labels = 'labels',
   Labs = 'labs',
   LLM = 'llm',
   Memory = 'memory',
@@ -145,6 +146,17 @@ export interface SystemStatus {
    */
   agentBuilderPanelWidth?: number;
   /**
+   * Expanded group keys of the agent view-all page. Expanded (not collapsed)
+   * keys are persisted because groups default to COLLAPSED (mirrors Linear) —
+   * newly appearing groups start collapsed until explicitly opened.
+   */
+  agentListExpandedGroupKeys?: string[];
+  /**
+   * Whether the "in sidebar" overview section of the agent view-all page is
+   * collapsed. Defaults to expanded so the section is discoverable.
+   */
+  agentListSidebarSectionCollapsed?: boolean;
+  /**
    * View mode of the agent view-all page (card grid vs table list)
    */
   agentListViewMode?: 'card' | 'list';
@@ -152,7 +164,7 @@ export interface SystemStatus {
    * Display options of the agent view-all page (grouping / ordering / hidden-agent visibility)
    */
   agentListViewOptions?: {
-    groupBy: 'author' | 'none';
+    groupBy: 'author' | 'label' | 'none';
     orderBy: 'author' | 'title' | 'updatedAt';
     orderDirection: 'asc' | 'desc';
     showSidebarHidden: boolean;
@@ -470,6 +482,8 @@ export interface GlobalState {
 
 export const INITIAL_STATUS = {
   agentBuilderPanelWidth: 360,
+  agentListExpandedGroupKeys: [] as string[],
+  agentListSidebarSectionCollapsed: false,
   agentListViewMode: 'list' as const,
   agentListViewOptions: {
     groupBy: 'none' as const,

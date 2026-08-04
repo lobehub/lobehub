@@ -8,14 +8,16 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 
+import { useSidebarGroupVisibility } from '../useSidebarGroupVisibility';
 import { useSidebarItemVisibility } from '../useSidebarItemVisibility';
 
 /**
- * Filter predicate over the caller's effective sidebar membership. Workspace
- * mode combines ownership defaults, legacy hidden ids, and explicit per-item
- * overrides; personal mode reads `users.preference`. Applied at render on
- * every sidebar-scoped surface (section lists AND the overflow drawer), not
- * in the home store, so `/agents` can still list every available item.
+ * Filter predicate over the caller's effective sidebar membership: legacy
+ * hidden ids plus explicit per-item overrides, read from
+ * `workspace_user_settings` in workspace mode and `users.preference`
+ * otherwise. Applied at render on every sidebar-scoped surface (section lists
+ * AND the overflow drawer), not in the home store, so `/agents` can still list
+ * every available item.
  */
 export const useKeepSidebarListed = () => {
   const { isSidebarItemVisible } = useSidebarItemVisibility();
@@ -25,6 +27,22 @@ export const useKeepSidebarListed = () => {
       <T extends Parameters<typeof isSidebarItemVisible>[0]>(items: T[]) =>
         items.filter(isSidebarItemVisible),
     [isSidebarItemVisible],
+  );
+};
+
+/**
+ * Companion predicate for folders: drops the whole section (items included)
+ * when the caller hid that Category. The folder itself stays shared — this is
+ * only the caller's own view of it.
+ */
+export const useKeepSidebarGroupsListed = () => {
+  const { isSidebarGroupVisible } = useSidebarGroupVisibility();
+
+  return useMemo(
+    () =>
+      <T extends { id: string }>(groups: T[]) =>
+        groups.filter((group) => isSidebarGroupVisible(group.id)),
+    [isSidebarGroupVisible],
   );
 };
 
@@ -42,16 +60,17 @@ export const useAgentList = (limitDefault = true) => {
     isEqual,
   );
   const keep = useKeepSidebarListed();
+  const keepGroups = useKeepSidebarGroupsListed();
 
   return useMemo(() => {
     const filteredUngrouped = keep(ungroupedAgents);
 
     return {
-      customList: agentGroups.map((group) => ({ ...group, items: keep(group.items) })),
+      customList: keepGroups(agentGroups).map((group) => ({ ...group, items: keep(group.items) })),
       // Filter BEFORE the page-size cut so an unpin doesn't shrink the page.
       defaultList: limitDefault ? filteredUngrouped.slice(0, agentPageSize) : filteredUngrouped,
       pinnedList: keep(pinnedAgents),
-      privateGroupList: privateAgentGroups.map((group) => ({
+      privateGroupList: keepGroups(privateAgentGroups).map((group) => ({
         ...group,
         items: keep(group.items),
       })),
@@ -61,6 +80,7 @@ export const useAgentList = (limitDefault = true) => {
     agentGroups,
     agentPageSize,
     keep,
+    keepGroups,
     limitDefault,
     pinnedAgents,
     ungroupedAgents,

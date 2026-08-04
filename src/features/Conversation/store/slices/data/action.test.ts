@@ -301,6 +301,40 @@ describe('DataSlice', () => {
       expect(state.displayMessages).toHaveLength(0);
       expect(state.dbMessages).toHaveLength(0);
     });
+
+    it('should sync internal replacements to the external store via onMessagesChange', () => {
+      const store = createTestStore();
+      const onMessagesChange = vi.fn();
+      store.setState({ onMessagesChange });
+
+      const messages: UIChatMessage[] = [
+        { id: 'msg-1', content: 'Hello', role: 'user', createdAt: 1000, updatedAt: 1000 } as any,
+      ];
+      store.getState().replaceMessages(messages);
+
+      expect(onMessagesChange).toHaveBeenCalledWith(messages, store.getState().context);
+    });
+
+    it('should NOT echo external prop sync back through onMessagesChange (skipOnMessagesChange)', () => {
+      // Regression: StoreUpdater's external → internal sync used to echo the
+      // bucket back to ChatStore, whose write-through mutate re-wrote the SWR
+      // cache with the (possibly partial) bucket and discarded an in-flight
+      // switch-time revalidation — locking the UI on a partial message list.
+      const store = createTestStore();
+      const onMessagesChange = vi.fn();
+      store.setState({ onMessagesChange });
+
+      const partialBucket: UIChatMessage[] = [
+        { id: 'msg-first', content: 'seed', role: 'user', createdAt: 1000, updatedAt: 1000 } as any,
+      ];
+      store.getState().replaceMessages(partialBucket, { skipOnMessagesChange: true });
+
+      // State still updates…
+      expect(store.getState().dbMessages).toHaveLength(1);
+      expect(store.getState().displayMessages[0].id).toBe('msg-first');
+      // …but nothing is echoed back to the external store.
+      expect(onMessagesChange).not.toHaveBeenCalled();
+    });
   });
 
   describe('selectors', () => {
@@ -577,6 +611,28 @@ describe('DataSlice', () => {
           threadId: 'test-thread',
           topicId: 'test-topic',
         });
+      });
+    });
+
+    it("tags the onData echo with source 'fetch' so handlers skip the cache write-through", async () => {
+      // Regression: without the tag, ChatStore.replaceMessages writes the
+      // echoed (possibly stale) snapshot through the SWR cache at mount, which
+      // trips SWR's mutation race guard and discards the in-flight
+      // revalidation — the conversation locks on the stale/partial list.
+      const mockMessages: UIChatMessage[] = [
+        { id: 'sync-msg-1', content: 'Synced', role: 'user', createdAt: 1000, updatedAt: 1000 },
+      ];
+      vi.mocked(messageService.getMessages).mockResolvedValue(mockMessages);
+
+      const context = { agentId: 'test-session', threadId: null, topicId: 'test-topic' };
+      const store = createStore({ context });
+      const onMessagesChange = vi.fn();
+      store.setState({ onMessagesChange });
+
+      store.getState().useFetchMessages(context);
+
+      await waitFor(() => {
+        expect(onMessagesChange).toHaveBeenCalledWith(mockMessages, context, { source: 'fetch' });
       });
     });
 
