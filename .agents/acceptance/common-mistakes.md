@@ -232,6 +232,25 @@ DOM measurements as well as visual evidence.
 
 ## Environment safety
 
+### L-S0 — Installing with `--filter .` after changing a dependency range
+
+**Wrong approach:** refresh a shared dependency by running `pnpm install --filter .`
+at the repo root, then treat a type-check failure in untouched files as pre-existing.
+
+**Why it fails:** the filter installs only the root workspace, so `packages/*` keep
+their previously resolved copies of every shared peer. Two identities of the same
+package then coexist in the graph, and the errors surface far from the change — a
+duplicated `next` shows up as `NextRequest is not assignable to NextRequest` in
+backend route shells, and a duplicated UI package kills routes at the ErrorBoundary
+with a missing React context. Neither names the real cause.
+
+**Correct approach:** run a full `pnpm install` (no filter) after any dependency
+range change, then `pnpm dedupe` when the root and the workspace packages resolve
+different versions of a shared peer. Verify convergence by comparing
+`readlink node_modules/<pkg>` with `readlink packages/*/node_modules/<pkg>` before
+concluding anything about the branch. Remember `apps/desktop` and `apps/cli` are
+standalone installs that a root install never covers.
+
 ### L-S1 — Publishing to an assumed server target
 
 **Wrong approach:** strip a server environment variable and treat `lh whoami` as
