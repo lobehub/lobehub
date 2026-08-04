@@ -555,28 +555,52 @@ describe('ClaudeCodeAdapter', () => {
       expect(events.at(-1)!.data).toMatchObject({ code: 'auth_required' });
     });
 
-    it('reports a stopped run as aborted instead of leaking CC internal diagnostics', () => {
-      const adapter = new ClaudeCodeAdapter();
+    it.each(['aborted_streaming', 'aborted_tools'])(
+      'terminates a stopped run (%s) as interrupted, NOT as an error',
+      (terminalReason) => {
+        const adapter = new ClaudeCodeAdapter();
+
+        adapter.adapt({ subtype: 'init', type: 'system' });
+        // Real shape of a user-initiated stop: is_error, no result text, only
+        // CC's internal diagnostic in `errors`, and the process exits 0.
+        const events = adapter.adapt({
+          errors: ['[ede_diagnostic] result_type=user last_content_type=n/a stop_reason=tool_use'],
+          is_error: true,
+          num_turns: 4,
+          subtype: 'error_during_execution',
+          terminal_reason: terminalReason,
+          type: 'result',
+        });
+
+        const terminal = events.at(-1)!;
+        // A stop is an outcome, not a fault: no error terminal means no red
+        // card, no `failed` topic status.
+        expect(events.some((e) => e.type === 'error')).toBe(false);
+        expect(terminal.type).toBe('agent_runtime_end');
+        expect(terminal.data).toMatchObject({
+          kind: 'aborted',
+          reason: 'interrupted',
+          terminalReason,
+        });
+        expect(JSON.stringify(terminal.data)).not.toContain('ede_diagnostic');
+      },
+    );
+
+    it('does not fabricate a terminal for a stop under the on-transport-close strategy', () => {
+      // The SDK transport supplies its own terminal when the transport closes;
+      // emitting one here too would double-terminate the run.
+      const adapter = new ClaudeCodeSdkAdapter();
 
       adapter.adapt({ subtype: 'init', type: 'system' });
-      // Real shape of a user-initiated stop: is_error, no result text, only
-      // CC's internal diagnostic in `errors`, and the process exits 0.
       const events = adapter.adapt({
         errors: ['[ede_diagnostic] result_type=user last_content_type=n/a stop_reason=tool_use'],
         is_error: true,
-        num_turns: 4,
         subtype: 'error_during_execution',
         terminal_reason: 'aborted_streaming',
         type: 'result',
       });
 
-      const data = events.at(-1)!.data as Record<string, any>;
-      expect(data).toMatchObject({
-        code: 'aborted',
-        details: { terminalReason: 'aborted_streaming' },
-        message: 'Claude Code stopped before finishing this run.',
-      });
-      expect(JSON.stringify(data)).not.toContain('ede_diagnostic');
+      expect(events.some((e) => e.type === 'error' || e.type === 'agent_runtime_end')).toBe(false);
     });
 
     it('keeps a real reason reported during an aborted wind-down', () => {

@@ -568,39 +568,36 @@ const getAuthRequiredTerminalError = (
 };
 
 /**
- * A run that was stopped, not one that failed. CC flags the result `is_error`
- * with `terminal_reason: 'aborted_streaming' | 'aborted_tools'`, an empty
- * `result`, and only its internal `[ede_diagnostic]` line in `errors` — while
- * exiting 0. Left unclassified it produced the single most common "failure"
- * users see, worded as raw engineer jargon.
+ * A run that was **stopped**, not one that failed — the single most common
+ * `is_error` result in real traces.
  *
- * Reported with an explicit `aborted` code and a plain-language message so the
- * card can read as a stop rather than a fault. The event stays an `error` so
- * downstream run/topic bookkeeping is unchanged; only the code and the wording
- * improve.
+ * CC flags a user stop `is_error` with `terminal_reason: 'aborted_streaming' |
+ * 'aborted_tools'`, an empty `result`, and only its internal `[ede_diagnostic]`
+ * line in `errors` — while exiting **0**. It is an outcome, not a fault, so it
+ * must not terminate as an `error`: that persists a red card, writes topic
+ * status `failed`, and frames the user's own stop as a crash.
+ *
+ * Instead it terminates as `agent_runtime_end` with `reason: 'interrupted'` —
+ * the reason the runtime already uses for a mid-stream cancel
+ * (`NON_COMPLETION_RUNTIME_END_REASONS`), which routes to a neutral `active`
+ * topic status with no unread badge and no completion notification, while
+ * still flushing whatever content the run produced before it was stopped.
+ *
+ * A stop that DID report a reason (a rate limit landing while winding down)
+ * is not this case — it belongs to the classifier that owns that reason.
  */
-const getAbortedTerminalError = (raw: any): HeterogeneousTerminalErrorData | undefined => {
-  if (!CLI_ABORTED_TERMINAL_REASONS.has(raw?.terminal_reason)) return;
-  // A stop that still reported a real reason (a rate limit that landed while
-  // winding down) belongs to the classifier that owns that reason.
-  if (getCliResultMessage(raw.result) || getCliResultErrors(raw)) return;
+const isAbortedResult = (raw: any): boolean =>
+  CLI_ABORTED_TERMINAL_REASONS.has(raw?.terminal_reason) &&
+  !getCliResultMessage(raw?.result) &&
+  !getCliResultErrors(raw);
 
-  const message = 'Claude Code stopped before finishing this run.';
-
-  return {
-    agentType: 'claude-code',
-    code: 'aborted',
-    details: {
-      kind: 'aborted' satisfies HeteroErrorKind,
-      ...(typeof raw.num_turns === 'number' ? { numTurns: raw.num_turns } : {}),
-      ...(typeof raw.session_id === 'string' ? { sessionId: raw.session_id } : {}),
-      ...(typeof raw.subtype === 'string' ? { subtype: raw.subtype } : {}),
-      terminalReason: raw.terminal_reason,
-    },
-    error: message,
-    message,
-  };
-};
+const buildAbortedRuntimeEndData = (raw: any): Record<string, unknown> => ({
+  kind: 'aborted' satisfies HeteroErrorKind,
+  reason: 'interrupted',
+  ...(typeof raw.num_turns === 'number' ? { numTurns: raw.num_turns } : {}),
+  ...(typeof raw.subtype === 'string' ? { subtype: raw.subtype } : {}),
+  terminalReason: raw.terminal_reason,
+});
 
 /**
  * Classify the long tail that has no dedicated guide card. The message is
@@ -1909,25 +1906,28 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     const classifiableResult =
       getCliResultMessage(raw.result) || getCliResultErrors(raw) || this.lastApiErrorText;
     const rateLimitError = getRateLimitTerminalError(classifiableResult, this.pendingRateLimitInfo);
-    const finalEvent: HeterogeneousAgentEvent | undefined = raw.is_error
-      ? this.makeEvent(
-          'error',
-          // A stopped run is checked first: it reports no reason of its own, so
-          // every other classifier would either miss it or mislabel it.
-          getAbortedTerminalError(raw) ||
+    // A stop is resolved before any classifier: it reports no reason of its
+    // own, so every one of them would either miss it or mislabel it. It then
+    // follows the SAME runtime-end strategy as a clean finish, because it is
+    // now a non-error terminal like one.
+    const aborted = isAbortedResult(raw);
+    const finalEvent: HeterogeneousAgentEvent | undefined =
+      raw.is_error && !aborted
+        ? this.makeEvent(
+            'error',
             rateLimitError ||
-            getOverloadedTerminalError(
-              classifiableResult,
-              raw.api_error_status,
-              this.pendingRateLimitInfo,
-            ) ||
-            getAuthRequiredTerminalError(classifiableResult) ||
-            getTailTerminalError(classifiableResult) ||
-            buildFallbackTerminalError(raw, this.lastApiErrorText),
-        )
-      : this.options.runtimeEndStrategy === 'on-result'
-        ? this.makeEvent('agent_runtime_end', {})
-        : undefined;
+              getOverloadedTerminalError(
+                classifiableResult,
+                raw.api_error_status,
+                this.pendingRateLimitInfo,
+              ) ||
+              getAuthRequiredTerminalError(classifiableResult) ||
+              getTailTerminalError(classifiableResult) ||
+              buildFallbackTerminalError(raw, this.lastApiErrorText),
+          )
+        : this.options.runtimeEndStrategy === 'on-result'
+          ? this.makeEvent('agent_runtime_end', aborted ? buildAbortedRuntimeEndData(raw) : {})
+          : undefined;
 
     this.pendingRateLimitInfo = undefined;
     this.lastApiErrorText = undefined;

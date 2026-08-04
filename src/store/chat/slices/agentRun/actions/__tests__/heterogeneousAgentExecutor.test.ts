@@ -5645,6 +5645,42 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       );
     });
 
+    // ── 5b. CLI-reported stop → non-error terminal, but still not a completion ──
+    it('a CLI-reported stop writes "active", fires NO notification and NO drain', async () => {
+      desktopFlag.value = true;
+      const updateTopicStatus = vi.fn();
+      const store = createMockStore({
+        activeTopicId: 'topic-1',
+        drainQueuedMessages: vi.fn(() => [{ content: 'queued', id: 'q1' }]),
+        updateTopicStatus,
+      });
+
+      // No abortController: the stop was reported by the CLI itself, so
+      // `isAborted()` is false and only the terminal's `interrupted` reason
+      // can distinguish this from a finished run.
+      await runToComplete(store, [
+        ccInit(),
+        ccText('msg_01', 'partial'),
+        {
+          errors: ['[ede_diagnostic] result_type=user last_content_type=n/a stop_reason=tool_use'],
+          is_error: true,
+          subtype: 'error_during_execution',
+          terminal_reason: 'aborted_streaming',
+          type: 'result',
+        },
+      ]);
+
+      // Not a failure: no error persisted, topic left neutral.
+      expect(mockUpdateMessageError).not.toHaveBeenCalled();
+      expect(updateTopicStatus).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'active', topicId: 'topic-1' }),
+      );
+      // Not a completion either: announcing it or draining the queue would
+      // treat the user's stop as a finished turn.
+      expect(mockShowNotification).not.toHaveBeenCalled();
+      expect(store.drainQueuedMessages).not.toHaveBeenCalled();
+    });
+
     // ── 5. stuck-spinner regression: status reset must not wait on queued persistence ──
     it('resets topic status even when the persist queue never drains', async () => {
       // A DB write that never settles — mirrors a dropped desktop-IPC reply. It

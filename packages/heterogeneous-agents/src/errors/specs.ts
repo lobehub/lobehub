@@ -185,7 +185,7 @@ export const HETERO_ERROR_SPECS: Record<HeteroErrorKind, HeteroErrorSpec> = {
     category: 'lifecycle',
     countAsFailure: false,
     description:
-      'The run was stopped before finishing (the user pressed stop). The CLI still flags the result `is_error` while exiting 0 — it is an outcome, not a fault.',
+      'The run was stopped before finishing (the user pressed stop). The CLI flags the result `is_error` while exiting 0, but it is an outcome, not a fault — so it does NOT terminate as an error: it ends as `agent_runtime_end { reason: "interrupted" }`, leaving the topic neutral with no error card, no unread badge, and no completion notification.',
     kind: 'aborted',
     numericId: 6001,
     retryable: false,
