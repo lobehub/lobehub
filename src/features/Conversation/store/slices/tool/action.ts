@@ -2,6 +2,8 @@ import { useChatStore } from '@/store/chat';
 import { type StoreSetter } from '@/store/types';
 
 import { type Store as ConversationStore } from '../../action';
+import { getInterventionBatch } from '../data/pendingInterventions';
+import { dataSelectors } from '../data/selectors';
 
 /**
  * Tool Interaction Actions
@@ -62,6 +64,24 @@ export class ToolActionImpl {
   stopPendingApproval = async (toolMessageIds: string[]): Promise<void> => {
     const { context } = this.#get();
     await useChatStore.getState().stopPendingApproval(toolMessageIds, context);
+  };
+
+  /**
+   * Stop from a single card: resolve that card's own parallel batch and stop
+   * the whole thing.
+   *
+   * Scoped the same way approve-all is — the pending list spans the entire
+   * conversation, so stopping the raw list would also discard an unrelated
+   * turn's approval.
+   */
+  stopPendingApprovalForCard = async (toolMessageId: string): Promise<void> => {
+    const state = this.#get();
+    const pending = dataSelectors.pendingInterventions(state);
+    const active = pending.find((item) => item.toolMessageId === toolMessageId);
+    const batch = getInterventionBatch(pending, active);
+    const ids = batch.length > 0 ? batch.map((item) => item.toolMessageId) : [toolMessageId];
+
+    await useChatStore.getState().stopPendingApproval(ids, state.context);
   };
 
   approveAllToolCalls = async (toolMessageIds: string[]): Promise<void> => {
