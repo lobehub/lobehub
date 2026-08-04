@@ -729,6 +729,7 @@
   "settingAgent.slug.error.reserved": "该标识为系统保留",
   "settingAgent.slug.error.taken": "该标识已被占用",
   "settingAgent.slug.label": "标识",
+  "settingAgent.slug.openWith": "可用 /agent/{{slug}} 直接打开",
   "settingAgent.slug.placeholder": "url-标识",
   "settingAgent.slug.tooltip": "该助理的 url 标识 —— 可用 /agent/<slug> 直接打开",
   "settingAgent.submit": "更新助理信息",

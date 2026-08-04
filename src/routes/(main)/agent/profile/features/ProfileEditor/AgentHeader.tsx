@@ -216,8 +216,10 @@ const AgentHeader = memo(() => {
             {meta.title?.trim() || t('settingAgent.role.unset', { ns: 'setting' })}
           </Text>
           {slug ? <Text style={{ color: cssVar.colorTextTertiary }}>·</Text> : null}
+          {/* The tooltip only renders when a slug exists, so it can always name
+              the real url rather than a `<slug>` the reader has to substitute. */}
           {slug ? (
-            <Tooltip title={t('settingAgent.slug.tooltip', { ns: 'setting' })}>
+            <Tooltip title={t('settingAgent.slug.openWith', { ns: 'setting', slug })}>
               <Text code style={{ color: cssVar.colorTextSecondary, flex: 'none' }}>
                 <span style={{ color: cssVar.colorTextTertiary }}>@</span>
                 {slug}

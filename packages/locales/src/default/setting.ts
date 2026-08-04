@@ -770,6 +770,7 @@ export default {
   'settingAgent.slug.error.reserved': 'This identifier is reserved',
   'settingAgent.slug.error.taken': 'This identifier is already in use',
   'settingAgent.slug.placeholder': 'url-identifier',
+  'settingAgent.slug.openWith': 'Open it directly with /agent/{{slug}}',
   'settingAgent.slug.tooltip': 'The agent’s url identifier — open it with /agent/<slug>',
   'settingAgent.prompt.desc':
     'Defines who this agent is, what it is responsible for, and how it works and responds. It serves as a core instruction in every conversation.',
