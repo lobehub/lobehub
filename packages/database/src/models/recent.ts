@@ -68,31 +68,16 @@ export class RecentModel {
     const mineDocumentWhere = mineOnly ? eq(documents.userId, this.userId) : undefined;
     const mineTaskWhere = mineOnly ? eq(tasks.createdByUserId, this.userId) : undefined;
 
-    const lastAssistantMessageSubquery = this.db
-      .select({
-        value: sql<string>`left(${messages.content}, ${LAST_MESSAGE_PREVIEW_LENGTH + 1})`,
-      })
-      .from(messages)
-      .where(
-        and(
-          eq(messages.topicId, topics.id),
-          eq(messages.role, 'assistant'),
-          buildWorkspaceWhere(scope, messages),
-          ne(messages.content, ''),
-        ),
-      )
-      .orderBy(desc(messages.createdAt))
-      .limit(1);
-
     const topicArm = this.db
       .select({
         description: withTopicPreview
           ? topics.description
           : sql<string | null>`NULL`.as('description'),
         id: topics.id,
-        lastAssistantMessage: withTopicPreview
-          ? sql<string | null>`(${lastAssistantMessageSubquery})`.as('last_assistant_message')
-          : sql<string | null>`NULL`.as('last_assistant_message'),
+        // Previews are fetched in a second batched query scoped to the final
+        // page — inlining the subquery here would evaluate it for every topic
+        // the user owns before the sort/limit prunes to `limit` rows.
+        lastAssistantMessage: sql<string | null>`NULL`.as('last_assistant_message'),
         metadata: sql<any>`${topics.metadata}`.as('metadata'),
         routeGroupId: sql<string | null>`${topics.groupId}`.as('route_group_id'),
         routeId: sql<string | null>`${topics.agentId}`.as('route_id'),
@@ -177,21 +162,54 @@ export class RecentModel {
       .orderBy(desc(sql`updated_at`))
       .limit(limit);
 
-    return rows.map((row) => ({
-      description: row.description,
-      id: row.id,
-      lastAssistantMessage:
-        row.lastAssistantMessage && row.lastAssistantMessage.length > LAST_MESSAGE_PREVIEW_LENGTH
-          ? `${row.lastAssistantMessage.slice(0, LAST_MESSAGE_PREVIEW_LENGTH)}…`
-          : row.lastAssistantMessage,
-      metadata: row.metadata ?? undefined,
-      routeGroupId: row.routeGroupId,
-      routeId: row.routeId,
-      status: row.status,
-      title: row.title,
-      type: row.type,
-      updatedAt: row.updatedAt instanceof Date ? row.updatedAt : new Date(row.updatedAt as any),
-      userId: row.userId,
-    }));
+    const previewByTopicId = withTopicPreview
+      ? await this.queryLastAssistantPreviews(
+          rows.filter((row) => row.type === 'topic').map((row) => row.id),
+        )
+      : new Map<string, string>();
+
+    return rows.map((row) => {
+      const preview = previewByTopicId.get(row.id) ?? null;
+      return {
+        description: row.description,
+        id: row.id,
+        lastAssistantMessage:
+          preview && preview.length > LAST_MESSAGE_PREVIEW_LENGTH
+            ? `${preview.slice(0, LAST_MESSAGE_PREVIEW_LENGTH)}…`
+            : preview,
+        metadata: row.metadata ?? undefined,
+        routeGroupId: row.routeGroupId,
+        routeId: row.routeId,
+        status: row.status,
+        title: row.title,
+        type: row.type,
+        updatedAt: row.updatedAt instanceof Date ? row.updatedAt : new Date(row.updatedAt as any),
+        userId: row.userId,
+      };
+    });
+  };
+
+  private queryLastAssistantPreviews = async (topicIds: string[]): Promise<Map<string, string>> => {
+    if (topicIds.length === 0) return new Map();
+
+    const rows = await this.db
+      .selectDistinctOn([messages.topicId], {
+        topicId: messages.topicId,
+        value: sql<string>`left(${messages.content}, ${LAST_MESSAGE_PREVIEW_LENGTH + 1})`,
+      })
+      .from(messages)
+      .where(
+        and(
+          inArray(messages.topicId, topicIds),
+          eq(messages.role, 'assistant'),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messages),
+          ne(messages.content, ''),
+        ),
+      )
+      .orderBy(messages.topicId, desc(messages.createdAt));
+
+    return new Map(
+      rows.filter((row) => row.topicId !== null).map((row) => [row.topicId!, row.value]),
+    );
   };
 }
