@@ -147,7 +147,19 @@ export const acceptanceRouter = router({
         input.subjectType,
         input.subjectId,
       );
-      return acceptance ?? null;
+      if (!acceptance) return null;
+
+      // `delivered` alone is ambiguous for the subject's status surface: a
+      // converged delivery waiting for sign-off and a failed one waiting for a
+      // decision both land there. The latest round's verdict is what tells
+      // them apart, so ship it with the aggregate instead of forcing callers
+      // to load the whole bundle for one field.
+      const latest = await ctx.acceptanceService.latestRound(acceptance.id);
+      return {
+        ...acceptance,
+        latestRunStatus: latest?.status ?? null,
+        latestRunUserDecision: latest?.userDecision ?? null,
+      };
     }),
 
   /**

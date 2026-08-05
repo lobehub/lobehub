@@ -536,6 +536,12 @@ export class AcceptanceService {
     return status;
   };
 
+  /** Latest round of an aggregate — the row `stampDecision` would write to. */
+  latestRound = async (acceptanceId: string) => {
+    const runs = await this.runModel.listByAcceptance(acceptanceId);
+    return runs.at(-1) ?? null;
+  };
+
   /**
    * The user accepts the delivery — the terminal business event (P-12). Stamps
    * the decision on the current round, closes the aggregate, and best-effort

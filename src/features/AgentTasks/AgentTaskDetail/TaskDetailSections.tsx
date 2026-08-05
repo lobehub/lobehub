@@ -10,7 +10,6 @@ import TaskDetailTitleInput from './TaskDetailTitleInput';
 import TaskInstruction from './TaskInstruction';
 import TaskModelConfig from './TaskModelConfig';
 import TaskParentBar from './TaskParentBar';
-import TaskPauseReason from './TaskPauseReason';
 import TaskProperties from './TaskProperties';
 import TaskSubtasks from './TaskSubtasks';
 
@@ -38,7 +37,6 @@ const TaskDetailSections = memo(() => {
         </Flexbox>
       </Flexbox>
       <Flexbox gap={24} style={{ paddingBottom: 120 }}>
-        <TaskPauseReason />
         <TaskInstruction />
         <TaskAcceptance />
         <TaskSubtasks />
