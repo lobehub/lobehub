@@ -24,5 +24,17 @@ COPY scripts/migrateServerDB/errorHint.js ./errorHint.js
 COPY scripts/serverLauncher/startServer.js ./startServer.js
 COPY scripts/_shared ./scripts/_shared
 
+# docker.cjs needs drizzle-orm; Next standalone often omits it (bundled into app).
+# Prefer `moz -u` / deploy-local.sh which copies host node_modules with symlink deref.
+# Fallback: install migration deps in-image when building this Dockerfile directly.
+RUN mkdir -p /tmp/migrate-deps \
+  && cd /tmp/migrate-deps \
+  && npm init -y >/dev/null \
+  && npm install --omit=dev pg drizzle-orm \
+  && mkdir -p /app/node_modules \
+  && cp -a /tmp/migrate-deps/node_modules/drizzle-orm /app/node_modules/drizzle-orm \
+  && (test -e /app/node_modules/pg || cp -a /tmp/migrate-deps/node_modules/pg /app/node_modules/pg) \
+  && rm -rf /tmp/migrate-deps
+
 EXPOSE 3210
 CMD ["node", "startServer.js"]
