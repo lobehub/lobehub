@@ -23,15 +23,18 @@ interface ComposioServerItemProps {
 
 const ComposioServerItem = memo<ComposioServerItemProps>(
   ({ identifier, label, server, appSlug, icon }) => {
-    const { isWaitingAuth, openOAuthWindow } = useComposioOAuth({
+    const { cancelOAuthWindow, isWaitingAuth, openOAuthWindow, prepareOAuthWindow } =
+      useComposioOAuth({
       serverStatus: server?.status,
-    });
+      });
 
     const { isConnecting, handleConnect, handleReauthorize } = useComposioServerActions({
       appSlug,
       identifier,
       label,
       onAuthRequired: openOAuthWindow,
+      onBeforeAuth: prepareOAuthWindow,
+      onCancelAuth: cancelOAuthWindow,
       server,
     });
 

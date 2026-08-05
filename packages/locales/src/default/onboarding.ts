@@ -135,6 +135,9 @@ export default {
   'interests.title2': 'This will help me know you better',
   'interests.title3': "Take your time, I'll get to know you better",
   'next': 'Next',
+  'proSettings.connectors.connectFailed': 'Could not start the connection. Please try again.',
+  'proSettings.connectors.popupBlocked':
+    'Connection popup blocked. Allow popups in your browser to continue.',
   'proSettings.connectors.title': 'Connect Your Favorite Tools',
   'responseLanguage.hint':
     'After selecting a language, AI responses will use that language, and the interface language will also sync',

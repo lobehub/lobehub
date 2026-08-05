@@ -1,6 +1,6 @@
 import { Icon } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { CheckIcon, CircleX, Loader2 } from 'lucide-react';
+import { CheckIcon, CircleAlert, CircleX, Loader2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -34,7 +34,13 @@ const ServerStatusControl = memo<ServerStatusControlProps>(
       }
 
       case ComposioServerStatus.PENDING_AUTH: {
-        return null;
+        return (
+          <Icon
+            color={cssVar.colorWarning}
+            icon={CircleAlert}
+            title={t('tools.composio.authRequired', { defaultValue: 'Authentication Required' })}
+          />
+        );
       }
 
       case ComposioServerStatus.ERROR: {

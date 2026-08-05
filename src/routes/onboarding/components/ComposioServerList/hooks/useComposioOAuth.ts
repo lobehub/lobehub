@@ -6,9 +6,17 @@ import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
 const POLL_INTERVAL_MS = 1000;
 const POLL_TIMEOUT_MS = 15_000;
 const WINDOW_CLOSED_POLL_TIMEOUT_MS = 4000; // Shorter timeout when window is closed
+const OAUTH_WINDOW_FEATURES = 'width=600,height=700';
 
 interface UseComposioOAuthProps {
   serverStatus?: ComposioServerStatus;
+}
+
+export class ComposioOAuthPopupBlockedError extends Error {
+  constructor() {
+    super('Composio OAuth popup was blocked');
+    this.name = 'ComposioOAuthPopupBlockedError';
+  }
 }
 
 export const useComposioOAuth = ({ serverStatus }: UseComposioOAuthProps) => {
@@ -20,6 +28,14 @@ export const useComposioOAuth = ({ serverStatus }: UseComposioOAuthProps) => {
   const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refreshComposioConnectionStatus = useToolStore((s) => s.refreshComposioConnectionStatus);
+
+  const closeOAuthWindow = useCallback((oauthWindow?: Window | null) => {
+    try {
+      oauthWindow?.close();
+    } catch {
+      // Ignore cross-origin close restrictions.
+    }
+  }, []);
 
   const cleanup = useCallback(() => {
     if (windowCheckIntervalRef.current) {
@@ -37,6 +53,11 @@ export const useComposioOAuth = ({ serverStatus }: UseComposioOAuthProps) => {
     oauthWindowRef.current = null;
     setIsWaitingAuth(false);
   }, []);
+
+  const cancelOAuthWindow = useCallback(() => {
+    closeOAuthWindow(oauthWindowRef.current);
+    cleanup();
+  }, [cleanup, closeOAuthWindow]);
 
   useEffect(() => {
     return () => {
@@ -104,23 +125,54 @@ export const useComposioOAuth = ({ serverStatus }: UseComposioOAuthProps) => {
   );
 
   const openOAuthWindow = useCallback(
-    (redirectUrl: string, serverName: string) => {
+    (redirectUrl: string, serverName: string, oauthWindow?: Window | null) => {
+      const popup = oauthWindow ?? oauthWindowRef.current;
+
+      if (popup && !popup.closed) {
+        oauthWindowRef.current = popup;
+        setIsWaitingAuth(true);
+        popup.location.href = redirectUrl;
+        return;
+      }
+
       cleanup();
       setIsWaitingAuth(true);
 
-      const oauthWindow = window.open(redirectUrl, '_blank', 'width=600,height=700');
-      if (oauthWindow) {
-        oauthWindowRef.current = oauthWindow;
-        startWindowMonitor(oauthWindow, serverName);
-      } else {
-        startFallbackPolling(serverName);
+      const nextWindow = window.open(redirectUrl, '_blank', OAUTH_WINDOW_FEATURES);
+      if (!nextWindow) {
+        setIsWaitingAuth(false);
+        throw new ComposioOAuthPopupBlockedError();
       }
+
+      oauthWindowRef.current = nextWindow;
+      startWindowMonitor(nextWindow, serverName);
     },
-    [cleanup, startWindowMonitor, startFallbackPolling],
+    [cleanup, startWindowMonitor],
+  );
+
+  const prepareOAuthWindow = useCallback(
+    (serverName: string) => {
+      cleanup();
+      setIsWaitingAuth(true);
+
+      const oauthWindow = window.open('about:blank', '_blank', OAUTH_WINDOW_FEATURES);
+      if (!oauthWindow) {
+        setIsWaitingAuth(false);
+        throw new ComposioOAuthPopupBlockedError();
+      }
+
+      oauthWindowRef.current = oauthWindow;
+      startWindowMonitor(oauthWindow, serverName);
+
+      return oauthWindow;
+    },
+    [cleanup, startWindowMonitor],
   );
 
   return {
+    cancelOAuthWindow,
     isWaitingAuth,
     openOAuthWindow,
+    prepareOAuthWindow,
   };
 };
