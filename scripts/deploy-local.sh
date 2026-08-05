@@ -2,10 +2,13 @@
 # Build Aico from this repo and deploy via docker-compose/deploy.
 #
 # Usage:
-#   ./scripts/deploy-local.sh                 # deploy existing image (default)
-#   ./scripts/deploy-local.sh -u             # build + deploy after code changes
-#   ./scripts/deploy-local.sh -b             # build image only
-#   ./scripts/deploy-local.sh -s             # stop the deployment
+#   ./scripts/deploy-local.sh              # start if not running (default)
+#   ./scripts/deploy-local.sh -u|--up      # build + deploy
+#   ./scripts/deploy-local.sh -b|--build   # build image only
+#   ./scripts/deploy-local.sh -d|--deploy  # force redeploy (recreate)
+#   ./scripts/deploy-local.sh -r|--restart # restart containers
+#   ./scripts/deploy-local.sh -i|--info    # containers / HTTP / migrations
+#   ./scripts/deploy-local.sh -k|--kill    # stop containers
 #
 # Optional env:
 #   AICO_LEGACY_DEPLOY_DIR  One-time .env migration source (default: ~/docker-lobehub/lobehub-db)
@@ -18,35 +21,75 @@ IMAGE="aico/lobehub:local"
 TAG="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo local)"
 LEGACY_DEPLOY_DIR="${AICO_LEGACY_DEPLOY_DIR:-$HOME/docker-lobehub/lobehub-db}"
 CONTAINER_NAME="lobehub"
+POSTGRES_CONTAINER="lobe-postgres"
 STAGE=""
 
 BUILD=0
-DEPLOY=1
+DEPLOY=0
 STOP=0
+STATUS=0
+RESTART=0
+START_IF_NEEDED=0
+
+if [[ $# -eq 0 ]]; then
+  START_IF_NEEDED=1
+fi
+
 for arg in "$@"; do
   case "$arg" in
-    --up|--ship|-u) BUILD=1 ;;
-    --deploy-only|-d) BUILD=0 ;;
-    --build-only|-b) BUILD=1; DEPLOY=0 ;;
-    --stop|--down|-s) STOP=1; BUILD=0; DEPLOY=0 ;;
-    -h|--help)
+    -u|--up|--ship|up) BUILD=1; DEPLOY=1; START_IF_NEEDED=0 ;;
+    -d|--deploy|--deploy-only|deploy) DEPLOY=1; START_IF_NEEDED=0 ;;
+    -b|--build|--build-only|build) BUILD=1; DEPLOY=0; START_IF_NEEDED=0 ;;
+    -r|--restart|restart) RESTART=1; START_IF_NEEDED=0 ;;
+    -i|--info|info|status|--status) STATUS=1; BUILD=0; DEPLOY=0; STOP=0; RESTART=0; START_IF_NEEDED=0 ;;
+    -k|--kill|kill|stop|--stop|--down) STOP=1; BUILD=0; DEPLOY=0; RESTART=0; START_IF_NEEDED=0 ;;
+    -s|-S)
+      echo "Error: $arg removed. Use distinct letters:" >&2
+      echo "  moz -i   info / status" >&2
+      echo "  moz -k   kill / stop containers" >&2
+      echo "  moz -r   restart containers" >&2
+      exit 2
+      ;;
+    -t)
+      echo "Error: -t removed. Use: moz -i / moz --info" >&2
+      exit 2
+      ;;
+    -h|--help|help)
       cat <<EOF
-Usage: $0 [-u|--up] [--build-only|-b] [--stop|-s]
+Usage: moz [options]
 
 Deploy Aico via docker-compose/deploy using the local image in this repo.
 
-Options:
-  (default)           Redeploy the existing local image (skip build)
-  -u, --up, --ship    Build from source, then deploy
-  -d, --deploy-only   Same as default (redeploy without building)
-  -b, --build-only    Build and tag the image only (skip deploy)
-  -s, --stop, --down  Stop the deployment containers
+Options (each has a distinct one-letter flag):
+  (default)             Start stack only if not already running
+  -u, --up, up          Build from source, then force-deploy
+  -d, --deploy, deploy  Force redeploy / recreate (no build)
+  -b, --build, build    Build and tag the image only (skip deploy)
+  -r, --restart, restart  Restart running containers (start if stopped)
+  -i, --info, info      Show containers, HTTP, image, and DB migration status
+  -k, --kill, kill      Stop the deployment containers
+  -h, --help, help      Show this help
+
+Aliases (same actions):
+  --ship                → -u
+  --deploy-only         → -d
+  --build-only          → -b
+  status, --status      → -i
+  stop, --stop, --down  → -k
 
 Environment:
   AICO_LEGACY_DEPLOY_DIR   Legacy deploy directory for one-time .env migration
                            (default: ~/docker-lobehub/lobehub-db)
 EOF
       exit 0
+      ;;
+    -*)
+      echo "Error: unknown option: $arg (try: moz -h)" >&2
+      exit 2
+      ;;
+    *)
+      echo "Error: unknown argument: $arg (try: moz -h)" >&2
+      exit 2
       ;;
   esac
 done
@@ -114,10 +157,178 @@ docker compose version >/dev/null 2>&1 || {
   exit 1
 }
 [[ $BUILD -eq 1 ]] && require_cmd bun
-[[ $DEPLOY -eq 1 ]] && require_cmd curl
+[[ $DEPLOY -eq 1 || $STATUS -eq 1 || $START_IF_NEEDED -eq 1 || $RESTART -eq 1 ]] && require_cmd curl
+
+app_url() {
+  local app_port
+  app_port="$(grep -E '^LOBE_PORT=' "$DEPLOY_DIR/.env" 2>/dev/null | cut -d= -f2- || true)"
+  echo "http://127.0.0.1:${app_port:-3210}"
+}
+
+is_app_running() {
+  [[ "$(docker inspect -f '{{.State.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo missing)" == "running" ]]
+}
+
+compose_in_deploy_dir() {
+  (
+    cd "$DEPLOY_DIR"
+    docker compose \
+      --env-file ../../.env \
+      --env-file .env \
+      -f docker-compose.yml \
+      -f docker-compose.aico.override.yml \
+      "$@"
+  )
+}
+
+stop_legacy_deploy() {
+  if [[ -f "$LEGACY_DEPLOY_DIR/docker-compose.yml" ]]; then
+    (cd "$LEGACY_DEPLOY_DIR" && docker compose down 2>/dev/null) || true
+  fi
+}
+
+verify_deploy_health() {
+  local url migrate_line
+  url="$(app_url)"
+
+  echo "==> Waiting for container $CONTAINER_NAME..."
+  wait_for_container "$CONTAINER_NAME" 120
+
+  echo "==> Waiting for HTTP readiness at $url ..."
+  if ! wait_for_http "$url/signin" 120; then
+    echo "==> Deployment failed readiness check" >&2
+    docker logs "$CONTAINER_NAME" 2>&1 | tail -30 >&2
+    return 1
+  fi
+
+  echo "==> Deployment healthy"
+
+  migrate_line="$(docker logs "$CONTAINER_NAME" 2>&1 | grep -iE 'database migration|DB Migration|Skipping DB migration' | tail -5 || true)"
+  if printf '%s\n' "$migrate_line" | grep -qiE 'Skipping DB migration|Refusing to start|Database migrate failed'; then
+    echo "==> Migration check failed:" >&2
+    printf '%s\n' "$migrate_line" | sed 's/^/  /' >&2
+    return 1
+  fi
+  if printf '%s\n' "$migrate_line" | grep -q 'database migration pass'; then
+    echo "==> DB migration: ok"
+  else
+    echo "==> Warning: no migration-pass log line found (check DATABASE_DRIVER / SKIP_DB_MIGRATE)"
+    printf '%s\n' "$migrate_line" | sed 's/^/  /'
+  fi
+
+  docker logs "$CONTAINER_NAME" 2>&1 | tail -8
+  echo ""
+  echo "App: $url"
+}
+
+container_state() {
+  local name="$1"
+  docker inspect -f '{{.State.Status}}{{if .State.Health}} ({{.State.Health.Status}}){{end}}' "$name" 2>/dev/null || echo "missing"
+}
+
+show_status() {
+  local app_port app_url http_code image_id image_created
+  local expected_migrations applied_migrations migrate_log docker_cjs migrations_dir
+  local user_count admin_count exit_code=0
+
+  app_port="$(grep -E '^LOBE_PORT=' "$DEPLOY_DIR/.env" 2>/dev/null | cut -d= -f2- || true)"
+  app_url="http://127.0.0.1:${app_port:-3210}"
+
+  echo "Aico deploy status"
+  echo "------------------"
+  printf "App URL:     %s\n" "$app_url"
+  printf "Repo HEAD:   %s\n" "$TAG"
+  printf "Image:       %s\n" "$IMAGE"
+
+  image_id="$(docker image inspect "$IMAGE" --format '{{.Id}}' 2>/dev/null || true)"
+  if [[ -n "$image_id" ]]; then
+    image_created="$(docker image inspect "$IMAGE" --format '{{.Created}}' 2>/dev/null || true)"
+    printf "Image ID:    %s\n" "${image_id#sha256:}"
+    printf "Image built: %s\n" "$image_created"
+  else
+    echo "Image ID:    missing (run: moz -u)"
+    exit_code=1
+  fi
+
+  echo ""
+  echo "Containers"
+  printf "  %-16s %s\n" "lobehub" "$(container_state lobehub)"
+  printf "  %-16s %s\n" "lobe-postgres" "$(container_state lobe-postgres)"
+  printf "  %-16s %s\n" "lobe-redis" "$(container_state lobe-redis)"
+  printf "  %-16s %s\n" "lobe-rustfs" "$(container_state lobe-rustfs)"
+
+  http_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "$app_url/signin" 2>/dev/null || echo "000")"
+  printf "\nHTTP /signin: %s\n" "$http_code"
+  if [[ "$http_code" != "200" && "$http_code" != "302" ]]; then
+    exit_code=1
+  fi
+
+  # Migration packaging inside the running app image
+  if docker inspect lobehub >/dev/null 2>&1; then
+    docker_cjs="$(docker exec lobehub sh -c 'test -f /app/docker.cjs && echo ok || echo missing' 2>/dev/null || echo unreachable)"
+    migrations_dir="$(docker exec lobehub sh -c 'test -d /app/migrations && echo ok || echo missing' 2>/dev/null || echo unreachable)"
+    printf "Auto-migrate: docker.cjs=%s migrations=%s\n" "$docker_cjs" "$migrations_dir"
+    if [[ "$docker_cjs" != "ok" || "$migrations_dir" != "ok" ]]; then
+      echo "  (broken packaging — app should refuse to start until next moz -u)"
+      exit_code=1
+    fi
+
+    migrate_log="$(docker logs lobehub 2>&1 | grep -iE 'database migration|DB Migration|Skipping DB migration|Refusing to start' | tail -3 || true)"
+    if [[ -n "$migrate_log" ]]; then
+      echo ""
+      echo "Migration log (recent):"
+      printf '%s\n' "$migrate_log" | sed 's/^/  /'
+    fi
+    if printf '%s\n' "$migrate_log" | grep -qiE 'Skipping DB migration|Refusing to start|Database migrate failed'; then
+      exit_code=1
+    fi
+  fi
+
+  expected_migrations="$(python3 -c "import json; print(len(json.load(open('$ROOT/packages/database/migrations/meta/_journal.json'))['entries']))" 2>/dev/null || echo "?")"
+  if docker inspect "$POSTGRES_CONTAINER" >/dev/null 2>&1 \
+    && [[ "$(docker inspect -f '{{.State.Status}}' "$POSTGRES_CONTAINER" 2>/dev/null || true)" == "running" ]]; then
+    applied_migrations="$(
+      docker exec "$POSTGRES_CONTAINER" psql -U postgres -d lobechat -Atc \
+        "SELECT count(*) FROM drizzle.__drizzle_migrations;" 2>/dev/null || echo "?"
+    )"
+    user_count="$(
+      docker exec "$POSTGRES_CONTAINER" psql -U postgres -d lobechat -Atc \
+        "SELECT count(*) FROM users;" 2>/dev/null || echo "?"
+    )"
+    admin_count="$(
+      docker exec "$POSTGRES_CONTAINER" psql -U postgres -d lobechat -Atc \
+        "SELECT count(*) FROM platform_admins;" 2>/dev/null || echo "n/a"
+    )"
+    printf "\nDB migrations: %s / %s applied\n" "$applied_migrations" "$expected_migrations"
+    printf "Users:         %s\n" "$user_count"
+    printf "Platform admins: %s\n" "$admin_count"
+    if [[ "$applied_migrations" =~ ^[0-9]+$ && "$expected_migrations" =~ ^[0-9]+$ ]]; then
+      if (( applied_migrations < expected_migrations )); then
+        echo "  ⚠️  DB behind repo — run: bun run db:migrate   (or moz -u after packaging fix)"
+        exit_code=1
+      fi
+    fi
+  else
+    echo ""
+    echo "DB:            postgres not running"
+    exit_code=1
+  fi
+
+  echo ""
+  if [[ $exit_code -eq 0 ]]; then
+    echo "Status: OK"
+  else
+    echo "Status: issues detected"
+  fi
+  return "$exit_code"
+}
 
 # One-time migration from a legacy external deploy dir. After deploy/.env exists, edit it directly.
 if [[ ! -f "$DEPLOY_DIR/.env" ]]; then
+  if [[ $STATUS -eq 1 ]]; then
+    echo "Missing $DEPLOY_DIR/.env — stack not configured yet." >&2
+    exit 1
+  fi
   if [[ -f "$LEGACY_DEPLOY_DIR/.env" ]]; then
     echo "Creating infra-only deploy env from legacy deploy dir → $DEPLOY_DIR/.env"
     require_cmd python3
@@ -144,6 +355,12 @@ PY
     echo "Missing $DEPLOY_DIR/.env — copy from docker-compose/deploy/.env.example.aico and configure infra secrets." >&2
     exit 1
   fi
+fi
+
+if [[ $STATUS -eq 1 ]]; then
+  set +e
+  show_status
+  exit $?
 fi
 
 if [[ $STOP -eq 1 ]]; then
@@ -188,54 +405,66 @@ if [[ $BUILD -eq 1 ]]; then
   STAGE="$(mktemp -d)"
   trap cleanup_stage EXIT
 
-  mkdir -p "$STAGE/.next" "$STAGE/public" "$STAGE/packages/database" \
-    "$STAGE/scripts/migrateServerDB" "$STAGE/scripts/_shared"
+  # Layout must match startServer.js + docker.cjs expectations:
+  #   /app/docker.cjs, /app/errorHint.js, /app/migrations
+  # (same as root Dockerfile / Dockerfile.prebuilt — not nested under scripts/)
+  mkdir -p "$STAGE/.next" "$STAGE/public" "$STAGE/scripts/_shared"
 
   cp -a "$ROOT/.next/standalone/." "$STAGE/"
   cp -a "$ROOT/.next/static" "$STAGE/.next/static"
   cp -a "$ROOT/public/_spa" "$ROOT/public/_spa-auth" "$ROOT/public/_spa-workbench" "$STAGE/public/"
-  cp -a "$ROOT/packages/database/migrations" "$STAGE/packages/database/"
-  cp "$ROOT/scripts/migrateServerDB/docker.cjs" "$ROOT/scripts/migrateServerDB/errorHint.js" \
-    "$STAGE/scripts/migrateServerDB/"
+  cp -a "$ROOT/packages/database/migrations" "$STAGE/migrations"
+  cp "$ROOT/scripts/migrateServerDB/docker.cjs" "$STAGE/docker.cjs"
+  cp "$ROOT/scripts/migrateServerDB/errorHint.js" "$STAGE/errorHint.js"
   cp -a "$ROOT/scripts/_shared/." "$STAGE/scripts/_shared/"
   cp "$ROOT/scripts/serverLauncher/startServer.js" "$STAGE/startServer.js"
   cp "$ROOT/scripts/docker/Dockerfile.staged" "$STAGE/Dockerfile"
 
   docker build -t "$IMAGE" -t "aico/lobehub:$TAG" "$STAGE"
+
+  echo "==> Verifying migration packaging in image"
+  for path in /app/docker.cjs /app/errorHint.js /app/migrations /app/startServer.js; do
+    docker run --rm --entrypoint sh "$IMAGE" -c "test -e '$path'" || {
+      echo "Error: image missing $path — auto-migrate would fail at boot" >&2
+      exit 1
+    }
+  done
+
   echo "==> Image ready: $IMAGE (also tagged aico/lobehub:$TAG)"
 fi
 
-if [[ $DEPLOY -eq 1 ]]; then
-  echo "==> Deploying from $DEPLOY_DIR"
-  cd "$DEPLOY_DIR"
-
-  # Stop legacy external deploy if still running
-  if [[ -f "$LEGACY_DEPLOY_DIR/docker-compose.yml" ]]; then
-    (cd "$LEGACY_DEPLOY_DIR" && docker compose down 2>/dev/null) || true
+if [[ $START_IF_NEEDED -eq 1 ]]; then
+  url="$(app_url)"
+  if is_app_running; then
+    echo "==> Already running ($CONTAINER_NAME)"
+    echo "App: $url"
+    echo "Tip: moz -i (info) · moz -r (restart) · moz -d (force redeploy) · moz -u (build+deploy)"
+    exit 0
   fi
+  echo "==> Not running — starting stack from $DEPLOY_DIR"
+  stop_legacy_deploy
+  compose_in_deploy_dir up -d
+  verify_deploy_health
+  exit 0
+fi
 
-  docker compose \
-    --env-file ../../.env \
-    --env-file .env \
-    -f docker-compose.yml \
-    -f docker-compose.aico.override.yml \
-    up -d --force-recreate lobe
-
-  echo "==> Waiting for container $CONTAINER_NAME..."
-  wait_for_container "$CONTAINER_NAME" 120
-
-  APP_PORT="$(grep -E '^LOBE_PORT=' "$DEPLOY_DIR/.env" | cut -d= -f2- || true)"
-  APP_URL="http://127.0.0.1:${APP_PORT:-3210}"
-
-  echo "==> Waiting for HTTP readiness at $APP_URL ..."
-  if wait_for_http "$APP_URL/signin" 120; then
-    echo "==> Deployment healthy"
-    docker logs "$CONTAINER_NAME" 2>&1 | tail -8
-    echo ""
-    echo "App: $APP_URL"
+if [[ $RESTART -eq 1 ]]; then
+  url="$(app_url)"
+  stop_legacy_deploy
+  if is_app_running; then
+    echo "==> Restarting containers from $DEPLOY_DIR"
+    compose_in_deploy_dir restart
   else
-    echo "==> Deployment failed readiness check" >&2
-    docker logs "$CONTAINER_NAME" 2>&1 | tail -30 >&2
-    exit 1
+    echo "==> Not running — starting stack from $DEPLOY_DIR"
+    compose_in_deploy_dir up -d
   fi
+  verify_deploy_health
+  exit 0
+fi
+
+if [[ $DEPLOY -eq 1 ]]; then
+  echo "==> Force-deploying from $DEPLOY_DIR"
+  stop_legacy_deploy
+  compose_in_deploy_dir up -d --force-recreate lobe
+  verify_deploy_health
 fi

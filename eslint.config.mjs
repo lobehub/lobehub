@@ -340,6 +340,14 @@ export default eslint(
       'unicorn/prefer-top-level-await': 0,
     },
   },
+  // Docker / Node CommonJS launchers (require() + legacy regex helpers)
+  {
+    files: ['scripts/serverLauncher/**/*.js', 'scripts/_shared/**/*.js'],
+    rules: {
+      '@typescript-eslint/no-require-imports': 0,
+      'regexp/no-unused-capturing-group': 0,
+    },
+  },
   // E2E and test files - allow console.log for debugging
   {
     files: ['e2e/**/*', '**/*.test.ts', '**/*.test.tsx'],

@@ -5,9 +5,13 @@
 #   ln -sf "$HOME/Aico/bin/moz" ~/.local/bin/moz
 #
 # Usage:
-#   moz        # start/redeploy
-#   moz -u     # build + deploy
-#   moz -s     # stop
+#   moz             # start if not running
+#   moz -u          # build + deploy
+#   moz -d          # force redeploy
+#   moz -b          # build only
+#   moz -r          # restart
+#   moz -i          # info
+#   moz -k          # kill (stop)
 
 set -euo pipefail
 
