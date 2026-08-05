@@ -115,12 +115,8 @@ vi.mock('@/store/agent', () => ({
   ) => selector({ activeAgentId: 'agt_test', agentMap: {} }),
 }));
 vi.mock('@/store/chat', () => ({
-  useChatStore: (
-    selector: (state: {
-      prefetchMessages: typeof prefetchMessagesMock;
-      topicLoadingIds: string[];
-    }) => unknown,
-  ) => selector({ prefetchMessages: prefetchMessagesMock, topicLoadingIds: [] }),
+  useChatStore: (selector: (state: { prefetchMessages: typeof prefetchMessagesMock }) => unknown) =>
+    selector({ prefetchMessages: prefetchMessagesMock }),
 }));
 vi.mock('@/store/chat/selectors', () => ({
   operationSelectors: {
@@ -129,6 +125,7 @@ vi.mock('@/store/chat/selectors', () => ({
     isAgentRuntimeRunningByContext: () => () => agentRuntimeRunningMock.value,
     isAgentRuntimeVisiblyRunningByContext: () => () => false,
     isTopicUnreadCompleted: () => () => topicUnreadCompletedMock.value,
+    isTopicVisiblyRunning: () => () => false,
   },
 }));
 vi.mock('@/store/electron', () => ({

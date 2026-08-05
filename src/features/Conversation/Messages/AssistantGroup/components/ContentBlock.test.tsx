@@ -12,6 +12,7 @@ const continueGenerationMock = vi.fn();
 const deleteDBMessageMock = vi.fn();
 const continueHeteroAfterErrorMock = vi.fn();
 const navigateMock = vi.fn();
+let isInReasoningMock = false;
 
 vi.mock('@lobehub/ui', () => ({
   Block: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
@@ -104,7 +105,9 @@ vi.mock('../../components/ImageFileListViewer', () => ({
   default: () => <div>images</div>,
 }));
 
-vi.mock('../../components/Reasoning', () => ({
+vi.mock('../../components/Reasoning', async (importOriginal) => ({
+  // keep the real hasRenderableReasoning predicate — these tests exercise it
+  ...(await importOriginal<Record<string, unknown>>()),
   default: () => <div>reasoning</div>,
 }));
 
@@ -121,7 +124,7 @@ vi.mock('../../../store', () => ({
     getDisplayMessageById: () => () => ({ parentId: 'user-1' }),
   },
   messageStateSelectors: {
-    isMessageInReasoning: () => () => false,
+    isMessageInReasoning: () => () => isInReasoningMock,
   },
   useConversationStore: (selector: (state: unknown) => unknown) =>
     selector({
@@ -144,6 +147,7 @@ describe('AssistantGroup ContentBlock', () => {
     deleteDBMessageMock.mockClear();
     continueHeteroAfterErrorMock.mockClear();
     navigateMock.mockClear();
+    isInReasoningMock = false;
   });
 
   it('resumes the run (not the no-op continueGeneration) when retrying a heterogeneous error in a group', () => {
@@ -203,6 +207,75 @@ describe('AssistantGroup ContentBlock', () => {
     );
 
     expect(screen.getByText('guide:claude-code:rate_limit')).toBeInTheDocument();
+  });
+
+  it('does not render an empty reasoning card for signature-only reasoning', () => {
+    // Some providers (e.g. DeepSeek over the Anthropic protocol) emit a thinking
+    // block with only a signature_delta and zero thinking text. The signature is
+    // persisted for multi-turn replay but must not render a card. See LOBE-12829.
+    render(
+      <ContentBlock
+        assistantId="assistant-1"
+        content="final answer"
+        id="block-1"
+        reasoning={{ signature: '395a9e64-8cfb-4e4b-a8b8-f11f5d5e2181' }}
+      />,
+    );
+
+    expect(screen.queryByText('reasoning')).not.toBeInTheDocument();
+    expect(screen.getByText('message content')).toBeInTheDocument();
+  });
+
+  it('renders reasoning when content is present alongside a signature', () => {
+    render(
+      <ContentBlock
+        assistantId="assistant-1"
+        content="final answer"
+        id="block-1"
+        reasoning={{ content: 'let me think', signature: 'sig' }}
+      />,
+    );
+
+    expect(screen.getByText('reasoning')).toBeInTheDocument();
+  });
+
+  it('does not render a reasoning card for whitespace-only content', () => {
+    render(
+      <ContentBlock
+        assistantId="assistant-1"
+        content="final answer"
+        id="block-1"
+        reasoning={{ content: '   ' }}
+      />,
+    );
+
+    expect(screen.queryByText('reasoning')).not.toBeInTheDocument();
+  });
+
+  it('renders multimodal reasoning that streams tempDisplayContent without content', () => {
+    // StreamingHandler emits { isMultimodal, tempDisplayContent } with no content
+    // while image reasoning parts stream — must not be treated as signature-only.
+    render(
+      <ContentBlock
+        assistantId="assistant-1"
+        content=""
+        id="block-1"
+        reasoning={{
+          isMultimodal: true,
+          tempDisplayContent: [{ image: 'data:image/png;base64,b64', type: 'image' }],
+        }}
+      />,
+    );
+
+    expect(screen.getByText('reasoning')).toBeInTheDocument();
+  });
+
+  it('keeps the streaming reasoning placeholder when no reasoning object exists yet', () => {
+    isInReasoningMock = true;
+
+    render(<ContentBlock assistantId="assistant-1" content="" id="block-1" />);
+
+    expect(screen.getByText('reasoning')).toBeInTheDocument();
   });
 
   it('renders the error below the content when a turn errors after streaming content', () => {

@@ -3,14 +3,15 @@
 import { Suspense } from 'react';
 import { createMemoryRouter, Outlet } from 'react-router';
 
-import Loading from '@/components/Loading/BrandTextLoading';
+import ContentLoading from '@/components/Loading/ContentLoading';
 import TabLocationReporter from '@/features/Electron/TabHost/TabLocationReporter';
 import { ErrorBoundary } from '@/utils/router';
 
 import { createMainAreaChildren } from './desktopRouter.config';
+import { withContentFallback } from './desktopRouter.shared';
 
 const TabRootLayout = () => (
-  <Suspense fallback={<Loading debugId="TabRootLayout > Outlet" />}>
+  <Suspense fallback={<ContentLoading />}>
     <Outlet />
     <TabLocationReporter />
   </Suspense>
@@ -20,7 +21,9 @@ export const createTabRouter = (initialUrl: string) =>
   createMemoryRouter(
     [
       {
-        children: createMainAreaChildren(),
+        // Per-tab routers bypass `createSharedDesktopRoutes`, so the main-area
+        // fallback rewrite has to be applied here too.
+        children: withContentFallback(createMainAreaChildren()),
         element: <TabRootLayout />,
         // The error element replaces `TabRootLayout`, so the reporter is repeated
         // here: the memory router has already advanced to the failing url, and

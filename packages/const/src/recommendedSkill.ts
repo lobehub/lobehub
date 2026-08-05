@@ -17,6 +17,8 @@ export const RECOMMENDED_SKILLS: RecommendedSkillItem[] = [
   { id: 'lobe-task', type: RecommendedSkillType.Builtin },
   { id: 'lobe-agent-documents', type: RecommendedSkillType.Builtin },
   { id: 'lobe-message', type: RecommendedSkillType.Builtin },
+  // Opt-in chat image generation: default-installed so Tools can pin it without Skill Store first.
+  { id: 'lobe-image-generation', type: RecommendedSkillType.Builtin },
   // LobeHub skills
   { id: 'notion', type: RecommendedSkillType.Lobehub },
   { id: 'posthog', type: RecommendedSkillType.Lobehub },

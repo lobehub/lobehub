@@ -58,7 +58,7 @@ HttpOnly, so an empty `document.cookie` does not establish signed-out state.
 | Render message-attached error UI   | In-memory chat dispatch                    | Safe when the temporary message has a unique id and is deleted |
 | Force a tool result                | `beforeToolCall` hook + `event.mock()`     | Local/in-memory hook mode only                                 |
 | Force a fetch failure              | Request boundary or narrow HMR injection   | Preserve dirty files byte-for-byte                             |
-| Verify first-load error            | Clear the relevant cache tier, then reload | A failed revalidation may intentionally keep settled data      |
+| Verify first-load error            | Clear the cache tier in the _new_ document | Clearing then reloading does not work — see "Cold SWR cache"   |
 | Diagnose Electron target confusion | CDP target list / raw CDP                  | Use a distinct agent-browser session per CDP port              |
 | Seed backend fixtures              | Public API first, raw SQL last             | Raw SQL must preserve product id and relation invariants       |
 
@@ -171,6 +171,83 @@ isolated local full stack. Seed the test user, ingest a representative public
 Acceptance fixture through the local CLI, and capture the same route in separate
 authenticated and storage-empty browser contexts. This proves both owner and
 shared-viewer rendering without depending on production browser cookies.
+
+### Which entry the dev Electron main window loads is NOT stable — measure it, never assume
+
+**Situation:** verifying anything that lives in `src/spa/entry.desktop.tsx` (bootstrap
+identity, adapter registration, boot marks) on an `electron-dev.sh` instance.
+
+**Doesn't work:** assuming any particular entry, in either direction. This has now been
+measured with two different results on the same helper:
+
+- Earlier: the main window's entry script was `app://renderer/src/spa/entry.web.tsx`
+  while the topicPopup window in the same instance loaded `entry.popup.tsx` — so the
+  main window fell through to the root `index.html`. Consequence at the time:
+  desktop-entry boot code never executed in dev, and a deletion there passed every dev
+  smoke test, which is how one such call was lost for a whole release.
+- 2026-08-05, on `feat/home-customize-modal`: the main window loaded
+  **`app://renderer/src/spa/entry.desktop.tsx`** — the fall-through did not reproduce.
+
+Mechanism not established in either direction, and no bisect was done, so do not
+assume the newer reading is permanent either. Treat the loaded entry as an unknown to
+be measured per run — that is the durable rule; the specific value is not.
+
+**Works:** before claiming anything about a desktop entry, read the loaded entry script
+and branch on it:
+
+```js
+[...document.querySelectorAll('script')].map((s) => s.src).find((s) => s.includes('entry.'));
+```
+
+If it is not the entry you are testing, the surface cannot prove your claim — fall back to
+a source-order regression test, and say in the report that the runtime path needs a
+packaged build (`DESKTOP_RENDERER_STATIC` / `resolveRendererFilePath` maps
+`apps/desktop/index.html`, `popup.html`, `overlay.html`).
+
+### Driving and probing a real Electron popup window
+
+**Situation:** verifying `entry.popup.tsx` behavior (its own HTML shell, no `BootShell`).
+
+**Works:** open the real window from the renderer store, then attach raw CDP to the
+popup's own target — the agent-browser daemon holds the main window's target, and one
+page target accepts only one websocket:
+
+```bash
+agent-browser --cdp 9222 eval '(async () => {
+  await window.__LOBE_STORES.global().openTopicInNewWindow("inbox","verify-popup");
+  return "requested"; })()'
+curl -s http://127.0.0.1:9222/json/list # pick the target whose url contains /popup/
+```
+
+Any `(agentId, topicId)` pair works — the popup boots regardless of whether the route
+resolves data, which is what makes this usable on a signed-out instance. For overlay
+claims, measure rather than eyeball: `getComputedStyle` for `pointer-events` / background
+alpha plus `document.elementFromPoint(x, y)` — a 50%-alpha scrim looks like a cosmetic
+tint in a screenshot while actually swallowing every click.
+
+### The debug proxy cannot reach a settled app — workspace `packages/*` dynamic imports fail cross-origin
+
+**Situation:** verifying frontend work through `/_dangerous_local_dev_proxy` (production
+page + production login + local Vite modules), needing a screenshot of the app after it
+has finished loading.
+
+**Doesn't work:** treating the resulting `ErrorBoundary` ("页面暂时不可用") as a defect in
+the change under test. The document origin is `https://app.lobehub.com`, and dynamic
+`import()` of workspace modules served from `http://localhost:9876` — `packages/builtin-tools/src/register.ts`,
+and intermittently `src/routes/**` — fails with `Failed to fetch dynamically imported module`.
+The same URLs return **200** to `curl` and to an in-page `fetch()`; only module scripts
+fail, because their cross-origin requirements are stricter. So the usual "is it reachable"
+probes all say yes while the app still dies.
+
+**Works:** treat this channel as good for boot-phase and pre-settle evidence only, and
+prove attribution rather than assuming it — `git stash -u` the whole change, reload the
+same proxy URL, and confirm the identical ErrorBoundary appears at HEAD. Report the
+settled-state check as blocked with that A/B attached instead of chasing the module
+graph. For a genuinely settled authenticated app, use Electron with an injected login
+snapshot; the local Vite entry (`http://localhost:9876/`) loads modules correctly but has
+no session, so it ends in the same error for a different reason. See also the two
+neighbouring entries on this proxy (loading-shell in an isolated context; no seeded
+agent-browser session).
 
 ### Reading a transitioned CSS property immediately after focus/hover
 
@@ -326,6 +403,67 @@ is what selects the Render component) and the tool message (`updateMessagePlugin
   (NOT `lobe-claude-code`) and PascalCase `apiName` (`TodoWrite`). All of this is
   in-memory only — a reload clears it; delete the temp topic at teardown.
 
+### Verifying a builtin-tool Render with no provider key — dispatch a fresh assistant+tool pair
+
+**Situation:** verifying a builtin tool's Render / Streaming component when the local
+env has no LLM provider key, so no real model can be made to emit that tool call
+(and update/remove-style APIs would need pre-existing entity ids anyway).
+
+**Doesn't work:** waiting for a real run, or reaching for Agent Mock when no case
+covers the tool. Note the neighbouring Agent Mock entry warns that "dispatching
+brand-new messages at the end of the list may never mount" — that holds for a
+long, already-populated mock topic, **not** for an empty conversation.
+
+**Works:** open a conversation with no messages (`/agent/<agentId>`, bucket
+`main_<agentId>_new`) and dispatch the pair straight in. The Render is selected from
+the **tool message's** `plugin.identifier` + `plugin.apiName`, and its `args` come
+from `safeParseJSON(plugin.arguments)` — so those three fields are the whole
+contract:
+
+```js
+const c = window.__LOBE_STORES.chat();
+c.internal_dispatchMessage({
+  type: 'createMessage',
+  id: aId,
+  value: {
+    role: 'assistant',
+    content: '',
+    meta: {},
+    tools: [
+      { apiName, arguments: argsJson, id: callId, identifier, result_msg_id: tId, type: 'builtin' },
+    ],
+  },
+});
+c.internal_dispatchMessage({
+  type: 'createMessage',
+  id: tId,
+  value: {
+    role: 'tool',
+    content: resultText,
+    parentId: aId,
+    tool_call_id: callId,
+    plugin: { apiName, arguments: argsJson, identifier, type: 'builtin' },
+    pluginState,
+  },
+});
+```
+
+Two things that decide what you actually see, both in
+`features/Conversation/Messages/AssistantGroup/Tool/`:
+
+- **The row is collapsed unless the manifest says otherwise.** `getRenderDisplayControl`
+  defaults to `'collapsed'`, so most tools need a click on the header before the card
+  mounts — a screenshot taken right after dispatch shows only the Inspector line.
+- **Truncating `arguments` into invalid JSON is how you reach the Streaming component.**
+  `isArgumentsStreaming` is literally `JSON.parse(requestArgs)` throwing, and
+  `forceShowStreamingRender` then auto-expands the row. Slicing the real args string
+  to \~55% is a faithful half-streamed payload and also exercises the card's
+  partial-data path.
+
+Toggling the row's first action button flips `showCustomToolRender`, which drops back
+to `FallbackArgumentRender` — the same branch an unregistered tool takes, so it is a
+faithful "before this change" contrast shot.
+
 ### Desktop theme follows the system appearance, not `settings.general.themeMode`
 
 **Situation:** capturing dark-mode evidence for a desktop UI change.
@@ -430,6 +568,56 @@ Prove the working-tree bundle is actually live first — read back a string that
 exists only in the working tree (e.g. a changed placeholder), never assume HMR
 applied.
 
+### Counting section instances across the Home rail collapse needs real visibility, not a rect
+
+**Situation:** asserting that a Home section moved between the rail and the main
+column rather than being duplicated or lost.
+
+**Doesn't work:** two independent traps, each of which inverts the verdict.
+
+- Filtering candidates by `getBoundingClientRect()` alone. The collapsed rail is
+  hidden with `visibility: hidden` after a transition, and a `visibility: hidden`
+  subtree **keeps its layout boxes** — so the rail's copy still measures non-zero
+  and every folded-in section reads as duplicated. This is the inverse of the
+  generic D12 phantom (zero-size decoy); here the stale node is full-size.
+- Collecting only leaf elements. The main column's `GroupBlock` renders its
+  subtitle as a `<span>` inside the title, so the title element has children,
+  while the rail's `RailCard` takes no subtitle and its title _is_ a leaf. A
+  leaf-only walk therefore finds a section in the rail and "loses" it in the main
+  column — reading exactly like the fold-in never happened.
+
+**Works:** match on the element's own direct text nodes and gate on
+`el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })`, then sort
+by viewport `y`:
+
+```js
+const own = [...el.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent.trim()).join('');
+if (!label.test(own)) continue;
+if (!el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) continue;
+```
+
+Assert both columns in the same pass — a claim about _moving_ is only settled by
+observing the source column go empty and the destination fill in one snapshot.
+
+### A worktree Electron run leaves a second `@types/react` that fails the worktree type-check
+
+**Situation:** running the Electron surface from a git worktree, which requires
+the `apps/desktop` standalone install (adapter §1), then running `bun run check --type`.
+
+**Doesn't work:** treating the resulting type errors as the branch's own. The
+desktop install brings its own `@types/react` (e.g. `19.2.18`) alongside the
+root's (`19.2.13`), and the two identities collide on every `lucide-react` icon
+`ref`, producing a cluster of "Two different types with this name exist, but they
+are unrelated" errors in files the branch never touched.
+
+**Works:** intersect the erroring files with the branch's changed-file list before
+drawing any conclusion, and confirm causality by A/B — moving
+`apps/desktop/node_modules` aside makes the cluster vanish. At teardown, remove
+`apps/desktop/node_modules` and re-run the root `pnpm install` to restore a clean
+`✓ types clean` baseline. **Do not run the A/B while the instance is live** — the
+Electron binary runs out of that directory, so parking it kills the instance;
+capture all UI evidence first.
+
 ### Managed command runners can reap `electron-dev.sh start` children after the helper returns
 
 **Situation:** `electron-dev.sh start` (legacy and pool forms) reports that CDP
@@ -455,6 +643,40 @@ LOBE_DESKTOP_VITE_PORT=5175 \
 Keep that command session open for the run. Confirm the CDP endpoint, project
 process path, `app-probe.sh ready`, renderer auth, server auth, and a raw-CDP
 screenshot before collecting evidence.
+
+### Cold SWR cache: clearing then reloading is undone by the outgoing page
+
+**Situation:** forcing a first-load / skeleton state for anything backed by the
+tiered SWR cache (`recent:*`, `topic:*`, `message:*`, …).
+
+**Doesn't work:** clearing `localStorage['lobechat-swr-cache:<scope>']` (and the
+`lobehub-local-data` IndexedDB) in the current document, then reloading. The cache
+provider registers `flushAll()` on `visibilitychange` and `pagehide`, so the reload
+itself makes the outgoing page write its in-memory cache straight back. The next
+document hydrates from a repopulated tier and renders settled data — which reads as
+"the loading state never happens" and can be mistaken for a product bug.
+
+```
+1. before clear      : true
+2. right after clear : false
+3. after reload      : true   <- the outgoing page re-flushed on pagehide
+```
+
+**Works:** clear at document start in the NEW document, before the provider
+hydrates:
+
+```js
+Page.addScriptToEvaluateOnNewDocument({
+  source: `Object.keys(localStorage).filter(k=>k.startsWith('lobechat-swr-cache'))
+             .forEach(k=>localStorage.removeItem(k));
+           indexedDB.deleteDatabase('lobehub-local-data');`,
+});
+```
+
+Assert the clear actually ran in the new document (set a flag in that script and
+read it back) rather than trusting the removal. Pair it with a warm control run: if
+the warm run renders data while the request is held paused and the cold run shows
+the skeleton, the cache tier is proven to be what the render reads.
 
 ### `app-probe.sh goto /` cannot reach the desktop Home route — seed the tab first
 
@@ -500,6 +722,196 @@ Then assert on `aside.innerText` line count plus a count of text-free rounded bo
 (the skeleton rows). Distinguish the two skeleton states explicitly: the whole panel
 collapsing to \~8 text-free rows is the nav-panel fallback, while fixed items present
 with only the list area shimmering is ordinary data loading.
+
+### Boot-phase UI cannot be observed by CDP polling — sample in-page, and mirror the timer
+
+**Situation:** asserting whether a transient boot-phase surface (a splash, a skeleton,
+a first-paint gate) appears between React's first commit and the app painting.
+
+**Doesn't work:** polling `Runtime.evaluate` from a CDP driver, even at a 50ms step.
+The desktop renderer's boot spends multi-second stretches in a single synchronous
+task, and every `Runtime.evaluate` queues behind it — the driver observes the state
+before the window and again after it, and reports the phase "never happened". CPU
+throttling makes it worse: it stretches the blocking task and the probe equally.
+
+**Works:** inject a pure observer with `Page.addScriptToEvaluateOnNewDocument` and
+sample from inside the page. Note `document.documentElement` does not exist yet in an
+on-new-document script, so a `MutationObserver` cannot be attached there — use
+`setInterval(check, 8)`. Record the largest gap between consecutive ticks: that gap
+is the main thread's longest blocking task, and a boot window with no intermediate
+sample is a blocked window, not a missing state.
+
+When the behavior under test is time-thresholded, also **mirror the product's own
+timer**: at the moment the observer first sees `#root` gain a child, schedule the same
+`setTimeout(…, N)` the component uses and record when it actually fires. On a blocked
+main thread it fires far later than `N` — which is the difference between "the
+threshold logic is wrong" and "the threshold never had a chance to run", and no
+screenshot can tell those apart.
+
+**When the driver has no CDP (claude-in-chrome, the debug proxy), deliver the same
+sampler through Vite instead**: a temporary `[AGENT-TEST]` block at the top of
+`src/spa/entry.{web,desktop}.tsx` runs at bundle-eval — early enough for every
+post-React phase — and needs no `Page.addScriptToEvaluateOnNewDocument`. Two things
+to get right in the phase predicate: scope any `[role="status"][aria-label="Loading"]`
+check with `.closest('#loading-screen')` so the **static HTML shell's own logo** is not
+counted as the React `BrandTextLoading` (they share the same role/label, and conflating
+them turns a clean boot into a false "the logo flashed"); and record the max gap between
+consecutive ticks — LobeHub's boot routinely shows a single 0.6–1.1s blocking task, so a
+phase with no sample inside it is a blocked window, not a missing state.
+
+### A global `indexedDB.open` stall holds the boot on web but kills the Electron renderer
+
+**Situation:** needing to freeze the boot at a pre-app phase long enough to capture it,
+by keeping the SWR cache hydration from ever completing.
+
+**Doesn't work on desktop:** replacing `indexedDB.open` with a never-settling stub
+breaks the Electron renderer outright — the local database adapter registered in
+`entry.desktop.tsx` needs IndexedDB, so the entry dies before React renders and the
+HTML loading screen stays up forever. The symptom reads as "the phase under test never
+appears", i.e. exactly like the product defect you were looking for.
+
+**Works:** use the stall only on the web entry, where it holds `CacheHydrationGate`
+for its full `HYDRATION_TIMEOUT` (about 8s) — ample for a screenshot plus
+`getBoundingClientRect` / `getComputedStyle` measurements over the same CDP
+connection. For desktop, do not stall storage: observe the natural boot with the
+in-page sampler above. Either way, disarm with
+`Page.removeScriptToEvaluateOnNewDocument` and reload before capturing the settled
+state, or the comparison shot is taken against a still-crippled runtime.
+
+### The desktop instance pins a previous run's server port, and its saved OAuth login expires
+
+**Situation:** starting an Electron dev instance for a surface that needs the local
+backend (any tRPC-backed panel), in a fresh worktree.
+
+**Doesn't work:** starting the dev server on the port `init-dev-env.sh` allocates
+for this worktree and assuming the app will follow. The desktop app is a thin
+client — `BackendProxyProtocolManager` proxies `app://renderer/trpc/*` to whatever
+`dataSyncConfig.remoteServerUrl` the seeded login snapshot carries, which is the
+port an _earlier_ run allocated. The mismatch surfaces as `app-probe.sh server-auth`
+returning **502** (proxy reached nothing), not as an auth error. And once the port
+matches, the snapshot's OAuth tokens are usually expired anyway — the app shows
+「登录已过期」 and `server-auth` returns **401**, while `auth` still reports
+`isSignedIn: true` from renderer state alone.
+
+**Works:** read the app's own target first, then start the server on that port:
+
+```bash
+agent-browser --cdp 9222 eval '(() => JSON.stringify(window.__LOBE_STORES.electron().dataSyncConfig))()'
+# → {"storageMode":"selfHost","remoteServerUrl":"http://localhost:3111","active":true}
+SERVER_PORT=3111 .agents/acceptance/scripts/init-dev-env.sh dev-next
+```
+
+For the expired login, do **not** drive the OAuth flow. The proxy forwards the
+Electron session's cookies alongside its `Oidc-Auth` header, and the server accepts
+a better-auth session cookie — so mint one for the seeded user and inject it over
+raw CDP:
+
+```bash
+curl -c cookie.jar -H 'Content-Type: application/json' -X POST \
+  "$SERVER_URL/api/auth/sign-in/email" \
+  --data '{"callbackURL":"/","email":"agent-testing@lobehub.com","password":"TestPassword123!"}'
+# then Network.setCookie better-auth.session_token / better-auth.session_data
+# for url http://localhost:<port>, domain localhost, httpOnly, on the renderer target
+```
+
+Gate on `app-probe.sh server-auth` returning `{"authenticated":true,"status":200}` —
+renderer `isSignedIn` alone never proves the server accepted anything.
+
+### `agent.updateAgentConfig` silently drops `agencyConfig.heterogeneousProvider`
+
+**Situation:** turning a test agent into a CLI-agent shape (Claude Code / Codex) so
+the heterogeneous chat input and its quota badges render.
+
+**Doesn't work:** `updateAgentConfigById(id, { agencyConfig: { heterogeneousProvider:
+{ type: 'claude-code', command: 'claude' } } })`. The store's optimistic write makes
+it look applied — reading `agentMap[id].agencyConfig` back returns the provider — but
+the DB row keeps only the sibling keys (`executionTarget` persists, the provider does
+not), so the next full reload drops it and the plain chat input comes back. Reads as
+"the agent isn't hetero" with no error anywhere.
+
+**Works:** seed the shape directly (public API first is the rule; this is the
+documented exception where the write path does not carry the field):
+
+```bash
+docker exec lobehub-agent-testing-postgres psql -U postgres -d postgres -tAc \
+  "update agents set agency_config = '{\"executionTarget\":\"local\",\"heterogeneousProvider\":{\"type\":\"claude-code\",\"command\":\"claude\"}}'::jsonb where id='<agentId>';"
+```
+
+Then cold-load: a plain reload keeps serving the agent config from the tiered SWR
+cache, so the renderer still shows the pre-write value (generic M18). Clear
+`lobechat-swr-cache*` + `lobehub-local-data` through
+`Page.addScriptToEvaluateOnNewDocument` and reload (see "Cold SWR cache" above),
+then assert `agentMap[id].agencyConfig` before drawing any conclusion.
+
+### An unconverged lockfile puts two copies of a dep in the graph — every route using it dies at the ErrorBoundary
+
+**Situation:** after rebasing onto a canary that bumped a shared UI dependency and
+running `pnpm install`, every route rendering the rich-text editor (agent profile,
+Home composer) fails with
+`LexicalComposerContext.useLexicalComposerContext: cannot find a LexicalComposerContext`
+and the SPA shows 页面暂时不可用.
+
+**Doesn't work:** reading it as a defect in the change under test, or as a stale
+Vite dep cache. Clearing `node_modules/.vite` (both root and `src/`) and a plain
+`pnpm install` both leave it broken, because the duplicate is in the resolution,
+not the cache.
+
+**Works:** attribute first, then measure the resolution.
+
+1. Attribution is cheap and decisive: load a route the branch definitely does not
+   touch that uses the same dependency. If it fails too, the change under test is
+   ruled out without checking out the base ref.
+
+2. The mechanism is two physical copies with different peer sets. The root
+   declares an exact-ish range while workspace packages declare a loose one, so a
+   dependency bump moves only the root:
+
+   ```bash
+   readlink node_modules/@lobehub/editor            # -> …editor@4.23.1_…ui@5.27.0
+   readlink packages/*/node_modules/@lobehub/editor # -> …editor@4.20.3_…ui@5.20.2
+   ```
+
+   A React context is module-scoped, so two copies means the provider and the
+   consumer read different context objects — the symptom is always "cannot find
+   the context", never a version error.
+
+3. `pnpm dedupe` converges them; clear the Vite dep caches and restart afterwards.
+
+**`pnpm-lock.yaml` is gitignored in this repo (`.gitignore`), so this divergence is
+always LOCAL install state — never something canary committed and never something to
+open a PR about.** A loose workspace range (`^4`) stays satisfied by the old version
+across incremental installs, so the drift accumulates silently in a long-lived
+checkout and appears right after a rebase that bumps the root range. Do not report it
+as a defect of the branch or of the base ref; note it as an environment finding and
+move on. Back up the lockfile before `dedupe` anyway — it is the only copy.
+
+### A fresh worktree installed with `--ignore-scripts` returns 500 on every `/trpc/lambda/*`
+
+**Situation:** bootstrapping a new git worktree for a run — `pnpm install` at the root,
+then `init-dev-env.sh dev`.
+
+**Doesn't work:** `pnpm install --ignore-scripts`. The server starts and serves the SPA
+normally, but Turbopack cannot instantiate `@icons-pack/react-simple-icons` (reached
+through `packages/const/src/composio.ts` → `packages/database/src/schemas/*`), so every
+`/trpc/lambda/*` route returns **500** while the page itself looks healthy. The CLI
+surfaces this only as `Unable to transform response from server`, which reads as an auth
+or API-key problem and sends you to `setup-auth.sh` instead of to the install. The Next
+log holds the real cause (`module factory is not available`), and its own suggested fix
+— clear the browser cache / service worker — is misleading here.
+
+**Works:** install without `--ignore-scripts`, and clear the stale Turbopack cache
+because the broken module graph is persisted:
+
+```bash
+.agents/acceptance/scripts/init-dev-env.sh stop-dev
+rm -rf .next && pnpm install # no --ignore-scripts
+.agents/acceptance/scripts/init-dev-env.sh dev
+```
+
+Gate on a real authenticated TRPC call rather than on the page rendering: a 200 from
+`$SERVER_URL/` proves nothing about the lambda routes. Remember `apps/cli` and
+`apps/desktop` are standalone installs (PROJECT.md §1), so each also needs its own
+`pnpm install` in a fresh worktree.
 
 ## Detailed references
 

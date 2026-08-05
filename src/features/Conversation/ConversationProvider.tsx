@@ -16,6 +16,7 @@ import {
   type ActionsBarConfig,
   type ConversationContext,
   type ConversationHooks,
+  type MessagesChangeMeta,
   type OperationState,
 } from './types';
 
@@ -63,8 +64,15 @@ export interface ConversationProviderProps {
    *
    * @param messages - The updated messages array
    * @param context - The context that this data belongs to (prevents race conditions)
+   * @param meta - Set when the messages are a fetched server snapshot; forward
+   *   it as `source` to ChatStore.replaceMessages so the SWR write-through can
+   *   skip fetch echoes (see MessagesChangeMeta)
    */
-  onMessagesChange?: (messages: UIChatMessage[], context: ConversationContext) => void;
+  onMessagesChange?: (
+    messages: UIChatMessage[],
+    context: ConversationContext,
+    meta?: MessagesChangeMeta,
+  ) => void;
   /**
    * External operation state (from ChatStore)
    *

@@ -41,6 +41,26 @@ describe('useSeedTabsOnBoot', () => {
     expect(activeUrl()).toBe('/agent/a#msg_2');
   });
 
+  it('restores the persisted session on a cold start carrying the main-process locale param', () => {
+    saveTabPages(PERSONAL_TAB_SCOPE, [{ id: 'a', lastVisited: 1, url: '/agent/a' }], 'a');
+    window.history.replaceState(null, '', '/?lng=zh-CN');
+
+    renderHook(() => useSeedTabsOnBoot());
+
+    expect(useElectronStore.getState().tabs).toHaveLength(1);
+    expect(useElectronStore.getState().activeTabId).toBe('a');
+  });
+
+  it('matches a persisted tab on a deep link whose query also carries the locale param', () => {
+    saveTabPages(PERSONAL_TAB_SCOPE, [{ id: 'a', lastVisited: 1, url: '/agent/a?topic=t1' }], null);
+    window.history.replaceState(null, '', '/agent/a?topic=t1&lng=zh-CN');
+
+    renderHook(() => useSeedTabsOnBoot());
+
+    expect(useElectronStore.getState().tabs).toHaveLength(1);
+    expect(activeUrl()).toBe('/agent/a?topic=t1');
+  });
+
   it('activates a persisted tab instead of adding one when the boot url matches', () => {
     saveTabPages(PERSONAL_TAB_SCOPE, [{ id: 'a', lastVisited: 1, url: '/agent/a' }], null);
     window.history.replaceState(null, '', '/agent/a');

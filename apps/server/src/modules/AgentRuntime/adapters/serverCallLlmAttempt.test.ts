@@ -460,4 +460,64 @@ describe('ServerCallLlmAttempt', () => {
       }),
     );
   });
+
+  it('records route and provider-boundary evidence with an empty completion', async () => {
+    const rawResponseBody = 'data: {"type":"message_delta"}\n\ndata: {"type":"message_stop"}\n\n';
+    const providerEvidence = {
+      providerRequest: {
+        apiMode: 'messages',
+        payload: { messages: [{ content: 'Final provider prompt', role: 'user' }] },
+        sentAt: 100,
+      },
+      providerResponse: {
+        eventCount: 5,
+        hasNonWhitespaceText: false,
+        hasNonWhitespaceThinking: false,
+        rawEvents: [
+          { delta: { stop_reason: 'end_turn' }, type: 'message_delta' },
+          { type: 'message_stop' },
+        ],
+        rawResponse: {
+          body: rawResponseBody,
+          byteLength: new TextEncoder().encode(rawResponseBody).byteLength,
+          status: 'captured',
+        },
+        requestId: 'request-1',
+        status: 200,
+        stopReason: 'end_turn',
+        thinkingChars: 1,
+      },
+    };
+    const routeEvidence = {
+      apiType: 'deepseek',
+      channelId: 'deepseek',
+      optionIndex: 0,
+      providerId: 'lobehub',
+      routerId: 'deepseek',
+      success: true,
+      totalOptions: 3,
+    };
+    const { attempt } = createAttempt(async ({ callback, diagnostics, metadata }) => {
+      Object.assign(diagnostics!, providerEvidence);
+      metadata!.routeAttempt = routeEvidence;
+      await callback?.onThinking?.(' ');
+      await callback?.onCompletion?.({
+        finishReason: 'end_turn',
+        text: '',
+        usage: { totalInputTokens: 206_384, totalOutputTokens: 1, totalTokens: 206_385 },
+      });
+    });
+
+    await expect(attempt.execute()).rejects.toMatchObject({
+      errorType: 'ModelEmptyCompletion',
+    });
+    expect(recordModelCompletionFailureMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runtime: {
+          provider: providerEvidence,
+          route: routeEvidence,
+        },
+      }),
+    );
+  });
 });

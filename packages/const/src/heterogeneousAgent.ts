@@ -10,7 +10,13 @@ export const HETERO_CONTINUE_PROMPT =
  * that keeps an agent on the cloud path must sanitize the model too, not just the
  * provider config.
  */
-export const HETEROGENEOUS_AGENT_MODEL_IDS = ['amp', 'claude-code', 'codex', 'opencode'] as const;
+export const HETEROGENEOUS_AGENT_MODEL_IDS = [
+  'amp',
+  'claude-code',
+  'codex',
+  'opencode',
+  'pi',
+] as const;
 
 const HETEROGENEOUS_AGENT_MODEL_ID_SET = new Set<string>(HETEROGENEOUS_AGENT_MODEL_IDS);
 

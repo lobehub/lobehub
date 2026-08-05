@@ -176,6 +176,15 @@ export class AgentMigrationRepo {
    * It copies the session's groupId to the agent's sessionGroupId
    */
   migrateSessionGroupId = async () => {
+    // Personal scope only. `sessions` are per-user rows and the join below does
+    // not filter by the caller, so inside a workspace this would copy some
+    // member's legacy per-session folder into the *shared*
+    // `agents.sessionGroupId` — arbitrarily, since which session wins depends
+    // on the join, and permanently, since the column is now what every
+    // member's sidebar reads. Workspace agents keep whatever the shared column
+    // already says; there is no legacy shared value to recover.
+    if (this.workspaceId) return;
+
     // Find all agents that need migration:
     // - Agent's sessionGroupId is NULL
     // - Agent's associated session has a groupId

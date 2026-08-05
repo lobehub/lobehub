@@ -4,6 +4,7 @@ import { createLogger } from '../../logger';
 import type { ToolDetector } from '../../toolDetector';
 import type { GrepContentParams, GrepContentResult } from '../../types';
 import { BaseContentSearch } from '../base';
+import { toAbsoluteMatchLine } from '../gitIgnore';
 
 const logger = createLogger('contentSearch:windows');
 
@@ -136,7 +137,14 @@ export class WindowsContentSearchImpl extends BaseContentSearch {
         logger.warn(`${logPrefix} rg exited with code ${exitCode}: ${stderr}`);
       }
 
-      const lines = stdout.trim().split('\n').filter(Boolean);
+      // Same normalisation as the unix impl: rg runs with `cwd = searchPath`
+      // and searches `.`, so its output is relative — make it absolute so the
+      // engine no longer decides the path shape callers receive.
+      const lines = stdout
+        .trim()
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => toAbsoluteMatchLine(searchPath, line));
       let matches: string[] = [];
       let totalMatches = 0;
 

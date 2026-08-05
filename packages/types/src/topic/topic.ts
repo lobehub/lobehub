@@ -624,6 +624,8 @@ export interface SharedTopicData {
     avatar?: string | null;
     backgroundColor?: string | null;
     marketIdentifier?: string | null;
+    /** Personal name; renderers resolve the label with `agentDisplayName`. */
+    name?: string | null;
     slug?: string | null;
     title?: string | null;
   };
@@ -636,6 +638,8 @@ export interface SharedTopicData {
       avatar: string | null;
       backgroundColor: string | null;
       id: string;
+      /** Personal name; renderers resolve the label with `agentDisplayName`. */
+      name?: string | null;
       title: string | null;
     }[];
     title?: string | null;

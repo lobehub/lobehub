@@ -55,8 +55,8 @@ const Conversation = memo<ConversationAreaProps>(({ mobile = false }) => {
       hasInitMessages={!!messages}
       messages={messages}
       operationState={operationState}
-      onMessagesChange={(messages, ctx) => {
-        replaceMessages(messages, { context: ctx });
+      onMessagesChange={(messages, ctx, meta) => {
+        replaceMessages(messages, { context: ctx, source: meta?.source });
       }}
     >
       <Flexbox

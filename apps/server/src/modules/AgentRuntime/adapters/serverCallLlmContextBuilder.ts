@@ -452,6 +452,7 @@ export const buildServerCallLlmContext = async ({
             avatar: editingConfig.avatar ?? undefined,
             backgroundColor: editingConfig.backgroundColor ?? undefined,
             description: editingConfig.description ?? undefined,
+            name: editingConfig.name ?? undefined,
             tags: editingConfig.tags ?? undefined,
             title: editingConfig.title ?? undefined,
           },
@@ -478,6 +479,9 @@ export const buildServerCallLlmContext = async ({
       COMPOSIO_SERVICES_LIST: composioServicesListStr,
       CREDS_LIST: credsListStr,
       language: serverLanguage,
+      // Only override the generator's 'en-US' locale fallback when the user info
+      // fetch actually resolved a language — an empty string would render blank.
+      ...(serverLanguage && { locale: serverLanguage }),
       memory_effort: memoryEffort,
       sandbox_enabled: sandboxEnabled,
       sandbox_uploaded_files: sandboxUploadedFiles,

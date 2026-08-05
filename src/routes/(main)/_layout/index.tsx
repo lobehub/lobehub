@@ -10,11 +10,12 @@ import { HotkeysProvider } from 'react-hotkeys-hook';
 import { Outlet } from 'react-router';
 
 import WorkspaceContextSlot from '@/business/client/WorkspaceContextSlot';
-import Loading from '@/components/Loading/BrandTextLoading';
+import ContentLoading from '@/components/Loading/ContentLoading';
 import { isDesktop } from '@/const/version';
 import { BANNER_HEIGHT } from '@/features/AlertBanner/CloudBanner';
 import DesktopBrowserGatewayBridge from '@/features/DesktopBrowserGatewayBridge';
 import DesktopFileMenuBridge from '@/features/DesktopFileMenuBridge';
+import DesktopLayoutContainer from '@/features/DesktopLayoutContainer';
 import DesktopNavigationBridge from '@/features/DesktopNavigationBridge';
 import AuthRequiredModal from '@/features/Electron/AuthRequiredModal';
 import OverlayCaptureUploader from '@/features/Electron/ScreenCapture/OverlayCaptureUploader';
@@ -35,7 +36,6 @@ import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfi
 import DesktopHome from '../home';
 import DesktopHomeLayout from '../home/_layout';
 import DesktopAutoOidcOnFirstOpen from './DesktopAutoOidcOnFirstOpen';
-import DesktopLayoutContainer from './DesktopLayoutContainer';
 import RegisterHotkeys from './RegisterHotkeys';
 import { styles } from './style';
 
@@ -83,7 +83,7 @@ const Layout: FC = () => {
               <DesktopHomeLayout>
                 <DesktopHome />
               </DesktopHomeLayout>
-              <Suspense fallback={<Loading debugId="DesktopMainLayout > Outlet" />}>
+              <Suspense fallback={<ContentLoading />}>
                 <Outlet />
               </Suspense>
             </DesktopLayoutContainer>

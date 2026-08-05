@@ -4,7 +4,7 @@ import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLin
 import type { LobeChatDatabase } from '@/database/type';
 import type { WechatOutboundAttachment } from '@/server/services/bot/platforms/wechat/sendAttachments';
 import { getInstallationStore } from '@/server/services/messenger/installations';
-import { getMessengerRouter } from '@/server/services/messenger/MessengerRouter';
+import { sendOutboundDirectMessage } from '@/server/services/messenger/outbound';
 import {
   getWechatPushWindowStatus,
   sendProactiveWechatMessage,
@@ -85,7 +85,7 @@ const sendAlwaysAvailableMessage = async (params: {
   if (!credentials) return { status: 'unavailable' };
 
   try {
-    await getMessengerRouter().sendDirectMessage({
+    await sendOutboundDirectMessage({
       content,
       credentials,
       platformUserId: link.platformUserId,

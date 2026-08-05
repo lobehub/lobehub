@@ -1,4 +1,4 @@
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, toast } from '@lobehub/ui/base-ui';
 import { CheckCheckIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -24,10 +24,14 @@ const MarkAllReadButton = memo<MarkAllReadButtonProps>(({ news }) => {
     setLoading(true);
     try {
       await resolveBriefsAsRead(news.map((brief) => brief.id));
+    } catch (error) {
+      // Without this the button just stops spinning and the pile stays put —
+      // the tRPC client only console.errors non-401 failures.
+      toast.error((error as Error)?.message || t('brief.actionFailed'));
     } finally {
       setLoading(false);
     }
-  }, [news, resolveBriefsAsRead]);
+  }, [news, resolveBriefsAsRead, t]);
 
   return (
     <Button

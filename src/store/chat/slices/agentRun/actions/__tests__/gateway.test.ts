@@ -515,7 +515,6 @@ describe('GatewayActionImpl', () => {
       const connectToGateway = vi.fn();
       const internalDispatchTopic = vi.fn();
       const internalReplaceTopicId = vi.fn();
-      const internalUpdateTopicLoading = vi.fn();
       const onOperationCancel = vi.fn();
       const replaceMessages = vi.fn();
       const refreshTopic = vi.fn().mockResolvedValue(undefined);
@@ -536,7 +535,6 @@ describe('GatewayActionImpl', () => {
         connectToGateway,
         internal_dispatchTopic: internalDispatchTopic,
         internal_replaceTopicId: internalReplaceTopicId,
-        internal_updateTopicLoading: internalUpdateTopicLoading,
         moveQueuedMessages,
         onOperationCancel,
         replaceMessages,
@@ -565,7 +563,6 @@ describe('GatewayActionImpl', () => {
         get,
         internalDispatchTopic,
         internalReplaceTopicId,
-        internalUpdateTopicLoading,
         mockClient,
         moveQueuedMessages,
         onOperationCancel,
@@ -989,7 +986,6 @@ describe('GatewayActionImpl', () => {
         completeOperation,
         connectToGateway,
         getOperationAbortSignal: vi.fn(() => controller.signal),
-        internal_updateTopicLoading: vi.fn(),
         onOperationCancel,
         replaceMessages: vi.fn(),
         startOperation,
@@ -1065,7 +1061,6 @@ describe('GatewayActionImpl', () => {
         associateMessageWithOperation: vi.fn(),
         connectToGateway: vi.fn(),
         internal_dispatchTopic: vi.fn(),
-        internal_updateTopicLoading: vi.fn(),
         moveQueuedMessages: vi.fn(),
         onOperationCancel,
         replaceMessages: vi.fn(),
@@ -1493,7 +1488,6 @@ describe('GatewayActionImpl', () => {
         ...state,
         associateMessageWithOperation: vi.fn(),
         connectToGateway: vi.fn(),
-        internal_updateTopicLoading: vi.fn(),
         onOperationCancel: vi.fn(),
         startOperation,
       })) as any;
@@ -1586,7 +1580,6 @@ describe('GatewayActionImpl', () => {
         connectToGateway: (params: any) => {
           captured.onSessionComplete = params.onSessionComplete;
         },
-        internal_updateTopicLoading: vi.fn(),
         onOperationCancel: vi.fn(),
         startOperation,
         updateTopicStatus,

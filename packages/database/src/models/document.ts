@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray, isNull, ne, notInArray, sum } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNull, ne, notInArray, sum } from 'drizzle-orm';
 
 import type { DocumentItem, NewDocument } from '../schemas';
 import { DOCUMENT_FOLDER_TYPE, documents, files, works } from '../schemas';
@@ -206,6 +206,12 @@ export class DocumentModel {
 
   findByFileId = async (fileId: string) => {
     return this.db.query.documents.findFirst({
+      // A file can legitimately own more than one document: `parseDocument`
+      // writes a page-editor copy next to the parse cache `parseFile` writes.
+      // Pick the oldest one explicitly instead of leaving the choice to the
+      // query plan, so repeated lookups keep returning the same content.
+      // `created_at` carries no uniqueness guarantee, so `id` breaks ties.
+      orderBy: [asc(documents.createdAt), asc(documents.id)],
       where: and(this.ownership(), eq(documents.fileId, fileId)),
     });
   };

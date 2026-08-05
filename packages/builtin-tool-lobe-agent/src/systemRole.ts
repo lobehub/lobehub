@@ -205,12 +205,12 @@ When working with plan/todo tools:
 </plan_and_todos>
 `;
 
-const visualAnalysisSection = `
-<visual_analysis>
-\`analyzeVisualMedia\` is only a fallback when the active model cannot inspect the requested image/video natively.
+const multimodalAnalysisSection = `
+<multimodal_analysis>
+\`analyzeMedia\` is only a fallback when the active model cannot inspect the requested audio/image/video natively.
 If the media is already visible in the current multimodal context, answer directly without this tool.
-Use it only for refs/URLs you cannot inspect directly, or when the active model lacks the needed image/video capability.
-</visual_analysis>
+Use it only for refs/URLs you cannot inspect directly, or when the active model lacks the needed audio/image/video capability.
+</multimodal_analysis>
 `;
 
 const askUserQuestionSection = `
@@ -225,11 +225,11 @@ const askUserQuestionSection = `
 </ask_user_question>
 `;
 
-// Sections independent of sub-agent dispatch (visual fallback + ask-user + plan/todo).
+// Sections independent of sub-agent dispatch (multimodal fallback + ask-user + plan/todo).
 // Kept as a base so contexts where callSubAgent is unavailable can drop the sub-agent
 // guidance without leaving dangling references to a tool the model can't call.
 const baseSystemPrompt = `Use Lobe Agent capabilities only when the active model needs built-in assistance. Prefer the active model's native capabilities whenever they are sufficient. Follow each tool's description and schema, and use tool results to answer the user directly.
-${visualAnalysisSection}
+${multimodalAnalysisSection}
 ${askUserQuestionSection}
 ${planTodoSection}`;
 

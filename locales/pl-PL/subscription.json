@@ -137,6 +137,8 @@
   "credits.memberBudget.defaultLimit": "Domyślny budżet członka",
   "credits.memberBudget.defaultLimitHint": "Członkowie bez niestandardowej reguły używają tego limitu w każdym cyklu rozliczeniowym.",
   "credits.memberBudget.desc": "Ogranicz liczbę kredytów workspace, które każdy członek może wykorzystać w bieżącym cyklu rozliczeniowym",
+  "credits.memberBudget.details.action": "Zobacz szczegóły",
+  "credits.memberBudget.details.title": "Wykorzystanie członka",
   "credits.memberBudget.effectiveBudget": "Efektywny budżet",
   "credits.memberBudget.empty": "Brak członków workspace",
   "credits.memberBudget.globalBadge": "Globalny",

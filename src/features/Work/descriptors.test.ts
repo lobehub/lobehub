@@ -27,6 +27,60 @@ describe('getWorkTypeDescriptor', () => {
     expect(descriptor.getOpenTarget(item)).toBeNull();
   });
 
+  describe('file open target', () => {
+    const baseFileItem = {
+      description: '/tmp/deck/slides.pptx',
+      id: 'work-file-1',
+      identifier: 'slides.pptx',
+      resourceId: 'user:topic:/tmp/deck/slides.pptx',
+      title: 'slides.pptx',
+      type: 'file',
+    };
+
+    it('prefers the in-app file preview when the summary metadata carries a fileId', () => {
+      const item = {
+        ...baseFileItem,
+        event: { metadata: { fileId: 'file-1', fileUrl: 'https://cdn.example.com/f/1' } },
+        url: 'https://cdn.example.com/f/1',
+      } as any;
+
+      expect(getWorkTypeDescriptor(item).getOpenTarget(item)).toEqual({
+        fileId: 'file-1',
+        kind: 'filePreview',
+        url: 'https://cdn.example.com/f/1',
+      });
+    });
+
+    it('omits the url fallback when the persisted url is not http(s)', () => {
+      const item = {
+        ...baseFileItem,
+        event: { metadata: { fileId: 'file-1', fileUrl: 'javascript:alert(1)' } },
+        url: null,
+      } as any;
+
+      expect(getWorkTypeDescriptor(item).getOpenTarget(item)).toEqual({
+        fileId: 'file-1',
+        kind: 'filePreview',
+        url: undefined,
+      });
+    });
+
+    it('falls back to the external url for list rows without version metadata', () => {
+      const item = { ...baseFileItem, url: 'https://cdn.example.com/f/1' } as any;
+
+      expect(getWorkTypeDescriptor(item).getOpenTarget(item)).toEqual({
+        kind: 'external',
+        url: 'https://cdn.example.com/f/1',
+      });
+    });
+
+    it('yields no target when neither fileId nor a safe url exists', () => {
+      const item = { ...baseFileItem, url: null } as any;
+
+      expect(getWorkTypeDescriptor(item).getOpenTarget(item)).toBeNull();
+    });
+  });
+
   it('still resolves a known type to its concrete descriptor', () => {
     const item = {
       description: 'Doc body',

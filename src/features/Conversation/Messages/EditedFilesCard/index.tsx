@@ -18,7 +18,8 @@ import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
 
-import { summarizeEditedFilesTotals } from './deriveEditedFiles';
+import { type OperationEditedFile, summarizeEditedFilesTotals } from './deriveEditedFiles';
+import { useOpenEditedFile } from './useOpenEditedFile';
 
 export const SINGLE_EDITED_FILE_ICON_SIZE = 40;
 
@@ -62,6 +63,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       pointer-events: auto;
       transform: translateX(0);
       opacity: 1;
+    }
+  `,
+  singleHeaderClickable: css`
+    cursor: pointer;
+
+    &:hover {
+      background: ${cssVar.colorFillQuaternary};
     }
   `,
   singleIcon: css`
@@ -125,6 +133,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   row: css`
     padding-block: 6px;
     padding-inline: 12px;
+
+    &:hover [data-view-changes],
+    &:focus-within [data-view-changes] {
+      pointer-events: auto;
+      transform: translateX(0);
+      opacity: 1;
+    }
   `,
   rowMain: css`
     min-height: 24px;
@@ -152,24 +167,30 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const EditedFileRow = memo<{ entry: EditedFileEntry }>(({ entry }) => {
+const EditedFileRow = memo<{ entry: EditedFileEntry; onOpen?: () => void }>(({ entry, onOpen }) => {
+  const { t } = useTranslation('chat');
   const [expanded, setExpanded] = useState(false);
   const hasDiff = entry.diffTexts.length > 0;
   const fileName = getFileName(entry.path);
   const language = getFileLanguage(entry.path);
 
+  // Preview when the file's content is reachable; otherwise the row keeps its
+  // legacy diff-toggle click so it never turns into a dead affordance.
+  const handleRowClick = onOpen ?? (hasDiff ? () => setExpanded((prev) => !prev) : undefined);
+  const clickable = !!handleRowClick;
+
   return (
-    <Flexbox className={cx(styles.row, hasDiff && styles.rowClickable)}>
+    <Flexbox className={cx(styles.row, clickable && styles.rowClickable)}>
       <Flexbox
         horizontal
         align={'center'}
-        aria-expanded={hasDiff ? expanded : undefined}
+        aria-expanded={onOpen ? undefined : hasDiff ? expanded : undefined}
         className={styles.rowMain}
         gap={10}
-        role={hasDiff ? 'button' : undefined}
-        tabIndex={hasDiff ? 0 : undefined}
-        onClick={hasDiff ? () => setExpanded((prev) => !prev) : undefined}
-        onKeyDown={hasDiff ? toggleOnKey(() => setExpanded((prev) => !prev)) : undefined}
+        role={clickable ? 'button' : undefined}
+        tabIndex={clickable ? 0 : undefined}
+        onClick={handleRowClick}
+        onKeyDown={handleRowClick ? toggleOnKey(handleRowClick) : undefined}
       >
         <KindDot kind={entry.kind} />
         <div className={styles.path}>
@@ -181,7 +202,26 @@ const EditedFileRow = memo<{ entry: EditedFileEntry }>(({ entry }) => {
           linesAdded={entry.linesAdded}
           linesDeleted={entry.linesDeleted}
         />
-        {hasDiff &&
+        {onOpen && hasDiff && (
+          <Button
+            data-view-changes
+            aria-expanded={expanded}
+            className={cx(styles.viewChanges, expanded && styles.viewChangesVisible)}
+            size={'small'}
+            type={'text'}
+            onClick={(event) => {
+              event.stopPropagation();
+              setExpanded((prev) => !prev);
+            }}
+            // Enter/Space on the button must not bubble into the row's own
+            // key handler, which would also open the file preview.
+            onKeyDown={(event) => event.stopPropagation()}
+          >
+            {t(expanded ? 'editedFiles.hideChanges' : 'editedFiles.viewChanges')}
+          </Button>
+        )}
+        {!onOpen &&
+          hasDiff &&
           (expanded ? (
             <ChevronDownIcon className={styles.chevron} size={14} />
           ) : (
@@ -209,7 +249,7 @@ const EditedFileRow = memo<{ entry: EditedFileEntry }>(({ entry }) => {
 EditedFileRow.displayName = 'EditedFileRow';
 
 interface EditedFilesCardProps {
-  entries: EditedFileEntry[];
+  entries: OperationEditedFile[];
 }
 
 export const getEditedFilesCardMode = (fileCount: number) => {
@@ -220,64 +260,81 @@ export const getEditedFilesCardMode = (fileCount: number) => {
 
 export const getEditedFileIconName = (filePath: string) => getFileName(filePath);
 
-const SingleEditedFileCard = memo<{ entry: EditedFileEntry }>(({ entry }) => {
-  const { t } = useTranslation('chat');
-  const [showDiff, setShowDiff] = useState(false);
-  const hasDiff = entry.diffTexts.length > 0;
-  const fileName = getFileName(entry.path);
-  const { displayPath } = getFilePathDisplayInfo(entry.path);
-  const language = getFileLanguage(entry.path);
+const SingleEditedFileCard = memo<{ entry: EditedFileEntry; onOpen?: () => void }>(
+  ({ entry, onOpen }) => {
+    const { t } = useTranslation('chat');
+    const [showDiff, setShowDiff] = useState(false);
+    const hasDiff = entry.diffTexts.length > 0;
+    const fileName = getFileName(entry.path);
+    const { displayPath } = getFilePathDisplayInfo(entry.path);
+    const language = getFileLanguage(entry.path);
 
-  return (
-    <Flexbox className={styles.card}>
-      <Flexbox horizontal align={'center'} className={styles.singleHeader} gap={10}>
-        <Center className={styles.singleIcon}>
-          <FileIcon fileName={getEditedFileIconName(entry.path)} size={24} />
-        </Center>
-        <Flexbox flex={1} gap={2}>
-          <Text ellipsis className={styles.singleTitle}>
-            {t('editedFiles.singleTitle', { path: displayPath })}
-          </Text>
-          <LineStats
-            hideZeroDeltas
-            className={styles.stats}
-            linesAdded={entry.linesAdded}
-            linesDeleted={entry.linesDeleted}
-          />
+    return (
+      <Flexbox className={styles.card}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={cx(styles.singleHeader, onOpen && styles.singleHeaderClickable)}
+          gap={10}
+          role={onOpen ? 'button' : undefined}
+          tabIndex={onOpen ? 0 : undefined}
+          onClick={onOpen}
+          onKeyDown={onOpen ? toggleOnKey(onOpen) : undefined}
+        >
+          <Center className={styles.singleIcon}>
+            <FileIcon fileName={getEditedFileIconName(entry.path)} size={24} />
+          </Center>
+          <Flexbox flex={1} gap={2}>
+            <Text ellipsis className={styles.singleTitle}>
+              {t('editedFiles.singleTitle', { path: displayPath })}
+            </Text>
+            <LineStats
+              hideZeroDeltas
+              className={styles.stats}
+              linesAdded={entry.linesAdded}
+              linesDeleted={entry.linesDeleted}
+            />
+          </Flexbox>
+          {hasDiff && (
+            <Button
+              data-view-changes
+              aria-expanded={showDiff}
+              className={cx(styles.viewChanges, showDiff && styles.viewChangesVisible)}
+              icon={<ArrowUpRightIcon size={14} />}
+              iconPosition={'end'}
+              size={'small'}
+              type={'text'}
+              onKeyDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                // The header itself may open the file preview — keep the diff
+                // toggle from also triggering it.
+                event.stopPropagation();
+                setShowDiff((prev) => !prev);
+              }}
+            >
+              {t(showDiff ? 'editedFiles.hideChanges' : 'editedFiles.viewChanges')}
+            </Button>
+          )}
         </Flexbox>
-        {hasDiff && (
-          <Button
-            data-view-changes
-            aria-expanded={showDiff}
-            className={cx(styles.viewChanges, showDiff && styles.viewChangesVisible)}
-            icon={<ArrowUpRightIcon size={14} />}
-            iconPosition={'end'}
-            size={'small'}
-            type={'text'}
-            onClick={() => setShowDiff((prev) => !prev)}
-          >
-            {t(showDiff ? 'editedFiles.hideChanges' : 'editedFiles.viewChanges')}
-          </Button>
+        {hasDiff && showDiff && (
+          <div className={styles.patch}>
+            {entry.diffTexts.map((patch, index) => (
+              <PatchDiff
+                fileName={fileName}
+                key={index}
+                language={language}
+                patch={patch}
+                showHeader={false}
+                variant={'borderless'}
+                viewMode={'unified'}
+              />
+            ))}
+          </div>
         )}
       </Flexbox>
-      {hasDiff && showDiff && (
-        <div className={styles.patch}>
-          {entry.diffTexts.map((patch, index) => (
-            <PatchDiff
-              fileName={fileName}
-              key={index}
-              language={language}
-              patch={patch}
-              showHeader={false}
-              variant={'borderless'}
-              viewMode={'unified'}
-            />
-          ))}
-        </div>
-      )}
-    </Flexbox>
-  );
-});
+    );
+  },
+);
 SingleEditedFileCard.displayName = 'SingleEditedFileCard';
 
 /**
@@ -289,9 +346,11 @@ SingleEditedFileCard.displayName = 'SingleEditedFileCard';
 const EditedFilesCard = memo<EditedFilesCardProps>(({ entries }) => {
   const { t } = useTranslation('chat');
   const [expanded, setExpanded] = useState(false);
+  const getOpenAction = useOpenEditedFile();
 
   if (entries.length === 0) return null;
-  if (entries.length === 1) return <SingleEditedFileCard entry={entries[0]} />;
+  if (entries.length === 1)
+    return <SingleEditedFileCard entry={entries[0]} onOpen={getOpenAction(entries[0])} />;
 
   const totals = summarizeEditedFilesTotals(entries);
 
@@ -328,7 +387,7 @@ const EditedFilesCard = memo<EditedFilesCardProps>(({ entries }) => {
       {expanded && (
         <Flexbox className={styles.list}>
           {entries.map((entry) => (
-            <EditedFileRow entry={entry} key={entry.path} />
+            <EditedFileRow entry={entry} key={entry.path} onOpen={getOpenAction(entry)} />
           ))}
         </Flexbox>
       )}

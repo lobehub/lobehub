@@ -165,7 +165,9 @@ describe('fetchClaudeCodeQuota', () => {
       status: 'ok',
       weekly: {
         resetsAt: Date.parse('2026-07-08T12:00:00Z'),
-        usedPercent: 62.5,
+        // Rounded like the readings we persist, so the panel cannot show one
+        // number live and another after ingest.
+        usedPercent: 63,
         windowMinutes: 10_080,
       },
     });
@@ -198,7 +200,7 @@ describe('fetchClaudeCodeQuota', () => {
     // resets_at in unix seconds; used_percentage instead of utilization
     vi.mocked(fetch).mockResolvedValue(
       okUsageResponse({
-        five_hour: { resets_at: 1_782_741_600, used_percentage: 140 },
+        five_hour: { resets_at: 1_783_002_600, used_percentage: 140 },
       }),
     );
 
@@ -207,7 +209,7 @@ describe('fetchClaudeCodeQuota', () => {
     expect(result.status).toBe('ok');
     // clamped to 100, seconds converted to ms
     expect(result.session).toEqual({
-      resetsAt: 1_782_741_600 * 1000,
+      resetsAt: 1_783_002_600 * 1000,
       usedPercent: 100,
       windowMinutes: 300,
     });
@@ -362,6 +364,56 @@ describe('fetchClaudeCodeQuota', () => {
         windowMinutes: 10_080,
       },
     });
+  });
+
+  it('reports a window whose reset already passed as refilled, not as spent', async () => {
+    setPlatform('linux');
+    vi.mocked(readFile).mockResolvedValue(credentialsJson(FRESH_EXPIRES_AT));
+    // Idle for over five hours: the usage API keeps echoing the last session
+    // window, whose reset is now in the past. That quota has refilled — showing
+    // its 96% would paint an exhausted meter over a free window.
+    vi.mocked(fetch).mockResolvedValue(
+      okUsageResponse({
+        five_hour: { resets_at: '2026-07-02T06:00:00Z', utilization: 96 },
+        seven_day: { resets_at: '2026-07-08T12:00:00Z', utilization: 13 },
+      }),
+    );
+
+    const result = await fetchClaudeCodeQuota();
+
+    expect(result.session).toEqual({ resetsAt: null, usedPercent: 0, windowMinutes: 300 });
+    expect(result.weekly).toMatchObject({ usedPercent: 13 });
+  });
+
+  it('keeps a scoped weekly the provider reports without a reset time', async () => {
+    setPlatform('linux');
+    vi.mocked(readFile).mockResolvedValue(credentialsJson(FRESH_EXPIRES_AT));
+    // An untouched model-scoped weekly reports `resets_at: null` — there is no
+    // window to project it into, but the plan does have the limit.
+    vi.mocked(fetch).mockResolvedValue(
+      okUsageResponse({
+        limits: [
+          {
+            is_active: false,
+            kind: 'weekly_scoped',
+            percent: 0,
+            resets_at: null,
+            scope: { model: { display_name: 'Fable', id: null }, surface: null },
+            severity: 'normal',
+          },
+        ],
+      }),
+    );
+
+    const result = await fetchClaudeCodeQuota();
+
+    expect(result.scopedWeekly).toEqual({
+      modelName: 'Fable',
+      window: { resetsAt: null, usedPercent: 0, windowMinutes: 10_080 },
+    });
+    expect(result.readings).toContainEqual(
+      expect.objectContaining({ limitType: 'weekly_scoped', resetsAt: null, scopeKey: 'Fable' }),
+    );
   });
 
   it('treats a 401 as an expired login', async () => {

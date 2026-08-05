@@ -533,6 +533,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
         expect.objectContaining({
           metadata: expect.objectContaining({ boundDeviceId: 'device-001' }),
         }),
+        undefined,
       );
     });
 
@@ -554,6 +555,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
       expect(mockCreateOperation.mock.calls[0][0].activeDeviceId).toBeUndefined();
       expect(topicMock.create).toHaveBeenCalledWith(
         expect.objectContaining({ metadata: undefined }),
+        undefined,
       );
     });
 
@@ -662,6 +664,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
         expect.objectContaining({
           metadata: expect.objectContaining({ boundDeviceId: 'device-001' }),
         }),
+        undefined,
       );
     });
   });

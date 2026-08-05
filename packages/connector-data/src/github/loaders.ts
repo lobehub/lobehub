@@ -1,6 +1,8 @@
 import { withConnectorRetry } from '../retry';
 import type { GitHubConnectorTransport, GitHubGraphQLClient } from './graphql/client';
 import {
+  CONTRIBUTED_REPOSITORY_METADATA_QUERY,
+  ContributedRepositoryMetadataQueryResponseSchema,
   CONTRIBUTIONS_QUERY,
   ContributionsQueryResponseSchema,
 } from './graphql/queries/contributions';
@@ -14,7 +16,10 @@ import {
   RepositoriesQueryResponseSchema,
 } from './graphql/queries/repositories';
 import type {
+  GitHubContributedRepository,
+  GitHubContributedRepositorySort,
   GitHubContribution,
+  GitHubContributionCollectionOptions,
   GitHubOrganization,
   GitHubPullRequest,
   GitHubRepository,
@@ -22,11 +27,35 @@ import type {
   GitHubUserProfile,
 } from './types';
 
-const MAX_CONTRIBUTIONS = 40;
 const MAX_CONTRIBUTORS = 5;
 const MAX_PROFILE_FIELD_LENGTH = 500;
 const MAX_PROFILE_README_SOURCE_CHARS = 40_000;
-const RECENT_CONTRIBUTION_WINDOW_MS = 180 * 24 * 60 * 60 * 1000;
+
+interface GitHubContributionOverview {
+  candidates: GitHubContributionCandidate[];
+  contributions: GitHubContribution[];
+  influentialRepositories: GitHubContributedRepository[];
+  repositories: GitHubContributedRepository[];
+}
+
+interface GitHubContributionCandidate extends GitHubContributedRepository {
+  nodeId: string;
+}
+
+const defaultGitHubContributionCollectionOptions = {
+  candidateRepositories: 100,
+  commitDaysPerRepository: 3,
+  maxInfluentialRepositories: 12,
+  maxRecentContributions: 40,
+  maxRepositories: 24,
+  recentEventsPerType: 10,
+  recentWindowDays: 90,
+  sort: 'contributions',
+  windowDays: 365,
+} as const satisfies Required<GitHubContributionCollectionOptions>;
+
+// GitHub GraphQL rejects connection page sizes above 100.
+const GITHUB_GRAPHQL_MAX_PAGE_SIZE = 100;
 
 const clean = (value: string | null | undefined) => {
   const normalized = value?.replaceAll('\u0000', '').trim();
@@ -167,16 +196,81 @@ export const loadRepositories = async (client: GitHubGraphQLClient) => {
   };
 };
 
-export const loadContributions = async (
+const normalizeCollectionOptions = (
+  options: GitHubContributionCollectionOptions,
+): Required<GitHubContributionCollectionOptions> => {
+  const merged = { ...defaultGitHubContributionCollectionOptions, ...options };
+  const boundedInteger = (value: number, maximum = GITHUB_GRAPHQL_MAX_PAGE_SIZE) =>
+    Math.min(maximum, Math.max(1, Math.floor(value)));
+
+  return {
+    ...merged,
+    candidateRepositories: boundedInteger(merged.candidateRepositories),
+    commitDaysPerRepository: boundedInteger(merged.commitDaysPerRepository),
+    maxInfluentialRepositories: boundedInteger(merged.maxInfluentialRepositories),
+    maxRecentContributions: boundedInteger(merged.maxRecentContributions, 1000),
+    maxRepositories: boundedInteger(merged.maxRepositories),
+    recentEventsPerType: boundedInteger(merged.recentEventsPerType),
+    recentWindowDays: boundedInteger(merged.recentWindowDays, 3650),
+    windowDays: boundedInteger(merged.windowDays, 3650),
+  };
+};
+
+const latestTimestamp = (left: string | undefined, right: string | undefined) => {
+  if (!left) return right;
+  if (!right) return left;
+  return left.localeCompare(right) >= 0 ? left : right;
+};
+
+const compareContributedRepositories = (
+  sort: GitHubContributedRepositorySort,
+  left: GitHubContributedRepository,
+  right: GitHubContributedRepository,
+) => {
+  const byStars = (right.stargazerCount ?? 0) - (left.stargazerCount ?? 0);
+  const byContributions = right.contributions.total - left.contributions.total;
+  const byRecent = String(right.lastContributionAt).localeCompare(String(left.lastContributionAt));
+
+  if (sort === 'contributions' && byContributions !== 0) return byContributions;
+  if (sort === 'recent' && byRecent !== 0) return byRecent;
+  if (sort === 'stars' && byStars !== 0) return byStars;
+  if (byContributions !== 0) return byContributions;
+  if (byRecent !== 0) return byRecent;
+  if (byStars !== 0) return byStars;
+  return left.nameWithOwner.localeCompare(right.nameWithOwner);
+};
+
+/**
+ * Loads a time-bounded GitHub activity overview and repository catalog.
+ *
+ * Use when:
+ * - Building user understanding from recent GitHub participation
+ * - Rendering repository prominence separately from chronological activity
+ *
+ * Expects:
+ * - GitHub contribution groups expose exact per-kind `totalCount` values for the time window
+ * - Repository candidates are ranked before metadata enrichment bounds the second request
+ *
+ * Returns:
+ * - Recent contribution samples plus a frequency-ranked, metadata-enriched repository shortlist
+ */
+export const loadContributionOverview = async (
   client: GitHubGraphQLClient,
-): Promise<GitHubContribution[]> => {
+  options: GitHubContributionCollectionOptions = {},
+): Promise<GitHubContributionOverview> => {
+  const config = normalizeCollectionOptions(options);
+  const now = Date.now();
   const response = await client.execute({
     operation: 'ConnectorDataGitHubContributions',
     query: CONTRIBUTIONS_QUERY,
     schema: ContributionsQueryResponseSchema,
     variables: {
-      contributionFirst: 10,
-      from: new Date(Date.now() - RECENT_CONTRIBUTION_WINDOW_MS).toISOString(),
+      commitDayFirst: config.commitDaysPerRepository,
+      contributionFirst: config.recentEventsPerType,
+      from: new Date(now - config.windowDays * 24 * 60 * 60 * 1000).toISOString(),
+      influentialFirst: config.maxInfluentialRepositories,
+      recentFrom: new Date(now - config.recentWindowDays * 24 * 60 * 60 * 1000).toISOString(),
+      repositoryFirst: config.candidateRepositories,
     },
   });
   const collection = response.viewer.contributionsCollection;
@@ -227,9 +321,120 @@ export const loadContributions = async (
     }
   }
 
-  return contributions
+  const recentContributions = contributions
     .sort((left, right) => String(right.occurredAt).localeCompare(String(left.occurredAt)))
-    .slice(0, MAX_CONTRIBUTIONS);
+    .slice(0, config.maxRecentContributions);
+  const annualRepositories = new Map<string, GitHubContributionCandidate>();
+  const recentRepositories = new Map<string, GitHubContributionCandidate>();
+  const ensureRepositoryReference = (
+    repositories: Map<string, GitHubContributionCandidate>,
+    repository: { id: string; nameWithOwner: string },
+  ) => {
+    const existing = repositories.get(repository.nameWithOwner);
+    if (existing) return existing;
+
+    const created: GitHubContributionCandidate = {
+      contributions: { commits: 0, issues: 0, pullRequests: 0, reviews: 0, total: 0 },
+      nameWithOwner: repository.nameWithOwner,
+      nodeId: repository.id,
+      topics: [],
+    };
+    repositories.set(created.nameWithOwner, created);
+    return created;
+  };
+
+  const mergeGroup = (
+    repositories: Map<string, GitHubContributionCandidate>,
+    group: {
+      contributions: { nodes: Array<{ occurredAt: string } | null>; totalCount: number };
+      repository: { id: string; nameWithOwner: string };
+    },
+    kind: keyof Omit<GitHubContributedRepository['contributions'], 'total'>,
+  ) => {
+    const repository = ensureRepositoryReference(repositories, group.repository);
+    repository.contributions[kind] = group.contributions.totalCount;
+    repository.contributions.total =
+      repository.contributions.commits +
+      repository.contributions.issues +
+      repository.contributions.pullRequests +
+      repository.contributions.reviews;
+    repository.lastContributionAt = latestTimestamp(
+      repository.lastContributionAt,
+      group.contributions.nodes[0]?.occurredAt,
+    );
+  };
+
+  const mergeRepositoryGroups = (
+    repositories: Map<string, GitHubContributionCandidate>,
+    groups: typeof response.viewer.recentContributionsCollection,
+  ) => {
+    for (const group of groups.commitContributionsByRepository) {
+      if (group) mergeGroup(repositories, group, 'commits');
+    }
+    for (const group of groups.issueContributionsByRepository) {
+      if (group) mergeGroup(repositories, group, 'issues');
+    }
+    for (const group of groups.pullRequestContributionsByRepository) {
+      if (group) mergeGroup(repositories, group, 'pullRequests');
+    }
+    for (const group of groups.pullRequestReviewContributionsByRepository) {
+      if (group) mergeGroup(repositories, group, 'reviews');
+    }
+  };
+
+  mergeRepositoryGroups(annualRepositories, collection);
+  mergeRepositoryGroups(recentRepositories, response.viewer.recentContributionsCollection);
+
+  const rankedRepositories = [...recentRepositories.values()]
+    .sort((left, right) => compareContributedRepositories('contributions', left, right))
+    .slice(0, config.maxRepositories);
+  const metadataResponse =
+    rankedRepositories.length > 0
+      ? await client.execute({
+          operation: 'ConnectorDataGitHubContributedRepositoryMetadata',
+          query: CONTRIBUTED_REPOSITORY_METADATA_QUERY,
+          schema: ContributedRepositoryMetadataQueryResponseSchema,
+          variables: { ids: rankedRepositories.map(({ nodeId }) => nodeId) },
+        })
+      : { nodes: [] };
+  const metadataByRepository = new Map(
+    metadataResponse.nodes.flatMap((repository) => {
+      if (!repository) return [];
+      const normalized = normalizeRepository(repository);
+      return [[normalized.nameWithOwner, normalized] as const];
+    }),
+  );
+  const attachContributionSummary = (
+    repository: Parameters<typeof normalizeRepository>[0],
+  ): GitHubContributedRepository => {
+    const normalized = normalizeRepository(repository);
+    const candidate = annualRepositories.get(normalized.nameWithOwner);
+    return {
+      ...normalized,
+      contributions: candidate?.contributions ?? {
+        commits: 0,
+        issues: 0,
+        pullRequests: 0,
+        reviews: 0,
+        total: 0,
+      },
+      lastContributionAt: candidate?.lastContributionAt,
+    };
+  };
+
+  return {
+    candidates: [...annualRepositories.values()],
+    contributions: recentContributions,
+    influentialRepositories: response.viewer.topRepositories.nodes
+      .flatMap((repository) => (repository ? [attachContributionSummary(repository)] : []))
+      .sort((left, right) => compareContributedRepositories('stars', left, right)),
+    repositories: rankedRepositories
+      .map(({ nodeId: _, ...repository }) => ({
+        ...repository,
+        ...metadataByRepository.get(repository.nameWithOwner),
+      }))
+      .sort((left, right) => compareContributedRepositories(config.sort, left, right)),
+  };
 };
 
 export const loadRepositoryContributors = async (

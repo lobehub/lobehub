@@ -9,6 +9,7 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useFetchAgentLabels } from '@/hooks/useFetchAgentLabels';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 
 import { useCreateMenuItems } from '../../hooks';
@@ -24,6 +25,8 @@ interface AgentProps {
 const Agent = memo<AgentProps>(({ itemKey }) => {
   const { t } = useTranslation('common');
   const { isRevalidating } = useFetchAgentList();
+  // Keep the label registry warm so the per-item "Labels" submenu opens populated.
+  useFetchAgentLabels();
   // In workspace mode the section pairs with the "Private" bucket, so the
   // public/shared agents are labeled "Public" to make the contrast obvious.
   // Personal mode has no such duality — keep the existing "Agents" label.

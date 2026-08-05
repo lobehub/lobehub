@@ -15,6 +15,7 @@ export * from './creds';
 export * from './device';
 export * from './discover';
 export * from './document';
+export * from './entityId';
 export * from './eval';
 export * from './export';
 export * from './fetch';

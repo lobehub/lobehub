@@ -40,6 +40,13 @@ export interface OpenLocalFileParams {
   allowExternalFilePreview?: boolean;
   deviceId?: string;
   filePath: string;
+  /**
+   * Present when the file lives in the topic's cloud sandbox instead of a local
+   * or device filesystem: content is fetched live via the sandbox
+   * `readLocalFile` tool scoped to this topic, read-only, and unavailable once
+   * the sandbox is recycled.
+   */
+  sandboxTopicId?: string;
   workingDirectory: string;
 }
 

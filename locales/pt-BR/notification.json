@@ -77,5 +77,7 @@
   "workspace_primary_ownership_transferred": "Você agora é o proprietário principal do espaço de trabalho \"{{workspaceName}}\". As responsabilidades de faturamento e privilégios principais foram transferidos para você.",
   "workspace_primary_ownership_transferred_title": "Você agora é o proprietário principal de {{workspaceName}}",
   "workspace_subscription_expired": "A assinatura do espaço de trabalho \"{{workspaceName}}\" terminou. Renove dentro de {{days}} dias para restaurar o acesso completo antes que o espaço de trabalho seja rebaixado.",
-  "workspace_subscription_expired_title": "Assinatura encerrada para {{workspaceName}}"
+  "workspace_subscription_expired_title": "Assinatura encerrada para {{workspaceName}}",
+  "workspace_waitlist_approved": "Seu acesso beta ao Workspace está pronto. Acesse o LobeHub para criar seu primeiro workspace e convidar sua equipe.",
+  "workspace_waitlist_approved_title": "Acesso beta ao Workspace aprovado"
 }

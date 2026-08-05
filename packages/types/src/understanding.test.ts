@@ -8,6 +8,7 @@ import type {
 import {
   OnboardingUnderstandingMessageMetadataSchema,
   OnboardingUnderstandingSessionSchema,
+  UnderstandingCompositionItemSchema,
   projectOnboardingUnderstandingSessionStatus,
 } from './understanding';
 
@@ -116,7 +117,6 @@ describe('projectOnboardingUnderstandingSessionStatus', () => {
     expect(projectOnboardingUnderstandingSessionStatus(session)).toBe(expected);
   });
 });
-
 describe('onboarding Understanding revision schemas', () => {
   /**
    * @example
@@ -177,7 +177,7 @@ describe('onboarding Understanding revision schemas', () => {
         profile: {
           description: 'Builds open-source infrastructure.',
           domains: ['open source'],
-          name: 'Neko',
+          name: 'Example User',
           pronoun: 'non-specific',
           roles: ['engineer'],
           summary: 'Open-source infrastructure engineer.',
@@ -199,5 +199,34 @@ describe('onboarding Understanding revision schemas', () => {
     });
 
     expect(proposal.success).toBe(true);
+  });
+});
+
+describe('UnderstandingCompositionItemSchema', () => {
+  /** @example expect(result.rank).toBe(91); */
+  it('normalizes persisted salience values to rank', () => {
+    expect(
+      UnderstandingCompositionItemSchema.parse({
+        description: 'Maintains reliable systems.',
+        salience: 91,
+        title: 'Maintainer',
+      }),
+    ).toEqual({
+      description: 'Maintains reliable systems.',
+      rank: 91,
+      title: 'Maintainer',
+    });
+  });
+
+  /** @example expect(result.rank).toBe(88); */
+  it('keeps rank authoritative when both field names are present', () => {
+    expect(
+      UnderstandingCompositionItemSchema.parse({
+        description: 'Builds developer tools.',
+        rank: 88,
+        salience: 12,
+        title: 'Tool builder',
+      }),
+    ).toMatchObject({ rank: 88 });
   });
 });

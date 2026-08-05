@@ -22,6 +22,7 @@ import { ThreadStatus } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useChatStore } from '@/store/chat/store';
+import { useUserStore } from '@/store/user';
 
 import { createGatewayEventHandler } from '../transports/gateway/gatewayEventHandler';
 import type { HeterogeneousAgentExecutorParams } from '../transports/hetero/heterogeneousAgentExecutor';
@@ -1679,6 +1680,36 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       });
     });
 
+    it('should inject local workspace context only when starting a native session', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+      const params = {
+        ...defaultParams,
+        heterogeneousProvider: {
+          command: 'codex',
+          systemContext: 'Follow the agent rules.',
+          type: 'codex' as const,
+        },
+        workingDirectory: '/Users/me/repo',
+      };
+
+      await executeHeterogeneousAgent(get, params);
+
+      expect(mockSendPrompt.mock.calls[0][0].systemContext).toContain(
+        "You are running on the user's own machine. Your working directory is `/Users/me/repo`.",
+      );
+
+      await executeHeterogeneousAgent(get, {
+        ...params,
+        resumeSessionId: 'codex-thread-existing',
+      });
+
+      const resumedSystemContext = mockSendPrompt.mock.calls[1][0].systemContext;
+      expect(resumedSystemContext).toBe('Follow the agent rules.');
+      expect(resumedSystemContext).not.toContain('## Workspace');
+      expect(resumedSystemContext).not.toContain('/Users/me/repo');
+    });
+
     it('should forward context selections as heterogeneous system context', async () => {
       const store = createMockStore();
       const get = vi.fn(() => store);
@@ -1762,6 +1793,33 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
             'model_reasoning_effort="xhigh"',
           ],
         }),
+      );
+    });
+
+    it('should pass the Codex app-server lab preference to the desktop session', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+      const previousLab = useUserStore.getState().preference.lab;
+      useUserStore.setState((state) => ({
+        preference: {
+          ...state.preference,
+          lab: { ...state.preference.lab, enableCodexAppServer: true },
+        },
+      }));
+
+      try {
+        await executeHeterogeneousAgent(get, {
+          ...defaultParams,
+          heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+        });
+      } finally {
+        useUserStore.setState((state) => ({
+          preference: { ...state.preference, lab: previousLab },
+        }));
+      }
+
+      expect(mockStartSession).toHaveBeenCalledWith(
+        expect.objectContaining({ useCodexAppServer: true }),
       );
     });
 
@@ -5643,6 +5701,42 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
           topicId: 'topic-1',
         }),
       );
+    });
+
+    // ── 5b. CLI-reported stop → non-error terminal, but still not a completion ──
+    it('a CLI-reported stop writes "active", fires NO notification and NO drain', async () => {
+      desktopFlag.value = true;
+      const updateTopicStatus = vi.fn();
+      const store = createMockStore({
+        activeTopicId: 'topic-1',
+        drainQueuedMessages: vi.fn(() => [{ content: 'queued', id: 'q1' }]),
+        updateTopicStatus,
+      });
+
+      // No abortController: the stop was reported by the CLI itself, so
+      // `isAborted()` is false and only the terminal's `interrupted` reason
+      // can distinguish this from a finished run.
+      await runToComplete(store, [
+        ccInit(),
+        ccText('msg_01', 'partial'),
+        {
+          errors: ['[ede_diagnostic] result_type=user last_content_type=n/a stop_reason=tool_use'],
+          is_error: true,
+          subtype: 'error_during_execution',
+          terminal_reason: 'aborted_streaming',
+          type: 'result',
+        },
+      ]);
+
+      // Not a failure: no error persisted, topic left neutral.
+      expect(mockUpdateMessageError).not.toHaveBeenCalled();
+      expect(updateTopicStatus).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'active', topicId: 'topic-1' }),
+      );
+      // Not a completion either: announcing it or draining the queue would
+      // treat the user's stop as a finished turn.
+      expect(mockShowNotification).not.toHaveBeenCalled();
+      expect(store.drainQueuedMessages).not.toHaveBeenCalled();
     });
 
     // ── 5. stuck-spinner regression: status reset must not wait on queued persistence ──

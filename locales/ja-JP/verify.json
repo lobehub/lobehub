@@ -200,6 +200,7 @@
   "acceptance.status.repairing": "修復中",
   "acceptance.status.verifying": "検証中",
   "acceptance.subject.document": "文書",
+  "acceptance.subject.standalone": "スタンドアロン",
   "acceptance.subject.task": "タスク",
   "acceptance.subject.topic": "トピック",
   "acceptance.surface.other": "その他",

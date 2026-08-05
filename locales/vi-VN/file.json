@@ -197,6 +197,8 @@
   "pageList.workspaceTitle": "Không gian làm việc",
   "portal.openInPageEditor": "Chỉnh sửa trong Trang",
   "preview.downloadFile": "Tải Xuống Tệp",
+  "preview.raw": "Thô",
+  "preview.render": "Xem trước",
   "preview.unsupportedFileAndContact": "Định dạng tệp này hiện không được hỗ trợ xem trực tuyến. Nếu bạn có yêu cầu xem trước, vui lòng <1>liên hệ với chúng tôi</1>.",
   "resource": "Tài Nguyên",
   "resourceList.batchCopyDescription": "Sao chép các tài nguyên đã chọn vào một không gian làm việc khác.",

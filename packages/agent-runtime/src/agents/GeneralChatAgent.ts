@@ -308,6 +308,12 @@ export class GeneralChatAgent implements Agent {
     let hasToolsCalling = false;
     let toolsCalling: ChatToolPayload[] = [];
     let parentMessageId = '';
+    /**
+     * `tool_call_id → existing tool message id` for pending rows the approval
+     * pause already wrote. Carried to `resolve_aborted_tools` so it settles
+     * those rows instead of inserting duplicates beside them.
+     */
+    let existingToolMessageIds: Record<string, string> | undefined;
 
     // Extract abort info based on current phase
     switch (context.phase) {
@@ -331,19 +337,25 @@ export class GeneralChatAgent implements Agent {
       case 'tools_batch_result': {
         const payload = context.payload as GeneralAgentCallToolResultPayload;
         parentMessageId = payload.parentMessageId;
-        // Check if there are pending tool messages
-        const pendingToolMessages = state.messages.filter(
-          (m: any) => m.role === 'tool' && m.pluginIntervention?.status === 'pending',
-        );
+        // Check if there are pending tool messages. Deliberately UN-scoped
+        // (unlike the loop guard): an abort must cancel every pending row it
+        // can see, including one whose owning assistant isn't in this state
+        // snapshot — leaving it pending strands it forever.
+        const pendingToolMessages = this.collectPendingToolMessages(state);
         if (pendingToolMessages.length > 0) {
           hasToolsCalling = true;
           toolsCalling = pendingToolMessages.map((m: any) => m.plugin).filter(Boolean);
+          existingToolMessageIds = Object.fromEntries(
+            pendingToolMessages
+              .filter((m: any) => m.plugin?.id && m.id)
+              .map((m: any) => [m.plugin.id, m.id]),
+          );
         }
         break;
       }
     }
 
-    return { hasToolsCalling, parentMessageId, toolsCalling };
+    return { existingToolMessageIds, hasToolsCalling, parentMessageId, toolsCalling };
   }
 
   /**
@@ -361,25 +373,102 @@ export class GeneralChatAgent implements Agent {
    * stored as either model-native `tool_calls` or persisted `tools`. All pending
    * tool messages legitimately belonging to this turn have
    * `parentId === currentAssistantId`.
+   *
+   * Two message shapes reach this method and BOTH must be handled:
+   *
+   * 1. **Raw shape** (client runtime, and any step that never round-tripped
+   *    through the DB): a `role: 'assistant'` row carrying `tools` /
+   *    `tool_calls`, followed by sibling `role: 'tool'` rows whose
+   *    `pluginIntervention.status` is the approval state.
+   * 2. **Parsed shape** (server runtime): `AgentRuntimeService` rebuilds
+   *    `state.messages` from the DB through `conversation-flow`'s `parse()` on
+   *    every step entry, and `FlatListBuilder` folds an assistant plus its tool
+   *    rows into ONE `role: 'assistantGroup'` virtual message. In that shape
+   *    there is no `role: 'assistant'` row carrying tools and no top-level
+   *    `role: 'tool'` row at all — the tool calls live in
+   *    `children[].tools[]`, each carrying `intervention` and `result_msg_id`.
+   *
+   * Matching only shape 1 made this guard a no-op on the entire server runtime:
+   * approving one tool of a parallel batch resumed the LLM immediately while the
+   * other N-1 tool rows were still `pending` with empty content, so the model
+   * saw blank tool results and (visibly, in reproduction) re-issued the whole
+   * batch. Every parallel-approval defect downstream of that — forked parent
+   * chains, duplicate batches — starts here.
    */
   private getCurrentTurnPendingToolMessages(state: AgentState): any[] {
-    let currentAssistantId: string | undefined;
-    for (let i = state.messages.length - 1; i >= 0; i--) {
-      const m = state.messages[i] as any;
+    const messages = (state.messages ?? []) as any[];
+
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+
+      // Shape 2 — parsed `assistantGroup`. Read the folded tool entries; their
+      // `result_msg_id` is the tool message id the approval flow addresses.
+      if (this.isFoldedAssistantGroup(m)) {
+        return this.pendingToolMessagesFromGroup(m);
+      }
+
+      // Shape 1 — raw assistant + sibling tool rows.
       if (m.role === 'assistant' && (m.tool_calls?.length > 0 || m.tools?.length > 0)) {
-        currentAssistantId = m.id;
-        break;
+        return messages.filter(
+          (t: any) =>
+            t.role === 'tool' && t.pluginIntervention?.status === 'pending' && t.parentId === m.id,
+        );
       }
     }
 
-    if (!currentAssistantId) return [];
+    return [];
+  }
 
-    return state.messages.filter(
-      (m: any) =>
-        m.role === 'tool' &&
-        m.pluginIntervention?.status === 'pending' &&
-        m.parentId === currentAssistantId,
+  /**
+   * Every pending tool message visible in `state.messages`, across BOTH shapes
+   * and WITHOUT turn scoping.
+   *
+   * Used by the abort path, whose contract is the inverse of the loop guard's:
+   * the guard must ignore stale rows so they can't park the loop forever, while
+   * an abort must resolve every pending row it can reach — including one whose
+   * owning assistant is absent from this snapshot — or that row stays `pending`
+   * with no runtime left to settle it.
+   */
+  private collectPendingToolMessages(state: AgentState): any[] {
+    const messages = (state.messages ?? []) as any[];
+
+    return messages.flatMap((m: any) => {
+      if (this.isFoldedAssistantGroup(m)) return this.pendingToolMessagesFromGroup(m);
+      if (m.role === 'tool' && m.pluginIntervention?.status === 'pending') return [m];
+      return [];
+    });
+  }
+
+  private isFoldedAssistantGroup(message: any): boolean {
+    return (
+      (message?.role === 'assistantGroup' || message?.role === 'supervisor') &&
+      (message.children ?? []).some((child: any) => child.tools?.length > 0)
     );
+  }
+
+  /**
+   * Normalize an `assistantGroup`'s folded tool entries back into the tool-row
+   * shape the rest of the runner expects (`plugin`, `pluginIntervention`,
+   * `parentId`), keeping only the pending ones.
+   */
+  private pendingToolMessagesFromGroup(group: any): any[] {
+    return (group.children ?? [])
+      .flatMap((child: any) => child.tools ?? [])
+      .filter((tool: any) => tool.intervention?.status === 'pending')
+      .map((tool: any) => {
+        // Drop the display-only fields FlatListBuilder merges onto the entry so
+        // `plugin` is a plain ChatToolPayload — the same shape the raw path
+        // produces, and what `request_human_approve` / `call_tool` expect.
+        const { intervention, result: _result, result_msg_id, ...plugin } = tool;
+        return {
+          id: result_msg_id,
+          parentId: group.id,
+          plugin: plugin as ChatToolPayload,
+          pluginIntervention: intervention,
+          role: 'tool',
+          tool_call_id: tool.id,
+        };
+      });
   }
 
   /**
@@ -458,15 +547,13 @@ export class GeneralChatAgent implements Agent {
     context: AgentRuntimeContext,
     state: AgentState,
   ): AgentInstruction | AgentInstruction[] {
-    const { hasToolsCalling, parentMessageId, toolsCalling } = this.extractAbortInfo(
-      context,
-      state,
-    );
+    const { existingToolMessageIds, hasToolsCalling, parentMessageId, toolsCalling } =
+      this.extractAbortInfo(context, state);
 
     // If there are pending tool calls, resolve them
     if (hasToolsCalling && toolsCalling.length > 0) {
       return {
-        payload: { parentMessageId, toolsCalling },
+        payload: { existingToolMessageIds, parentMessageId, toolsCalling },
         type: 'resolve_aborted_tools',
       };
     }
@@ -840,7 +927,10 @@ export class GeneralChatAgent implements Agent {
         const { hasToolsCalling, parentMessageId, toolsCalling, reason } =
           context.payload as HumanAbortPayload;
 
-        // If there are pending tool calls, resolve them
+        // If there are pending tool calls, resolve them. No
+        // `existingToolMessageIds` here on purpose: this phase is an abort
+        // DURING llm streaming, where the calls came off the stream and no tool
+        // row has been written yet — the executor must insert.
         if (hasToolsCalling && toolsCalling && toolsCalling.length > 0) {
           return {
             payload: { parentMessageId, toolsCalling },

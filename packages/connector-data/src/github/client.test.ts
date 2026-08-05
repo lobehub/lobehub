@@ -7,12 +7,33 @@ import type { GitHubConnectorTransport } from './graphql/client';
 const profileResult = {
   viewer: {
     bio: 'Building tools.',
-    company: '@lobehub',
+    company: '@acme',
     location: 'Shanghai',
     login: 'octocat',
     name: 'Octocat',
     pronouns: 'they/them',
-    websiteUrl: `https://lobehub.com/\u0000${'x'.repeat(600)}`,
+    websiteUrl: `https://example.com/\u0000${'x'.repeat(600)}`,
+  },
+};
+
+const contributedRepositoryNodes = {
+  external: {
+    description: 'Widely used external project',
+    forkCount: 500,
+    nameWithOwner: 'acme/external',
+    primaryLanguage: { name: 'Rust' },
+    pushedAt: '2026-07-16T00:00:00Z',
+    repositoryTopics: { nodes: [{ topic: { name: 'runtime' } }] },
+    stargazerCount: 100_000,
+  },
+  primary: {
+    description: 'AI framework',
+    forkCount: 3000,
+    nameWithOwner: 'acme/atlas',
+    primaryLanguage: { name: 'TypeScript' },
+    pushedAt: '2026-07-17T00:00:00Z',
+    repositoryTopics: { nodes: [{ topic: { name: 'agent' } }] },
+    stargazerCount: 70_000,
   },
 };
 
@@ -29,7 +50,7 @@ const createTransport = () => {
   const listUserOrganizations = vi.fn(async () => [
     {
       description: 'Making AI accessible.',
-      login: 'lobehub',
+      login: 'acme',
     },
   ]);
   const transport: GitHubConnectorTransport = {
@@ -48,7 +69,7 @@ const createTransport = () => {
                   description: 'AI framework',
                   forkCount: 3,
                   issues: { totalCount: 4 },
-                  nameWithOwner: 'lobehub/lobehub',
+                  nameWithOwner: 'acme/atlas',
                   primaryLanguage: { name: 'TypeScript' },
                   pullRequests: { totalCount: 5 },
                   repositoryTopics: { nodes: [{ topic: { name: 'ai' } }] },
@@ -88,8 +109,25 @@ const createTransport = () => {
                 {
                   contributions: {
                     nodes: [{ commitCount: 7, occurredAt: '2026-07-12T00:00:00Z' }],
+                    totalCount: 47,
                   },
-                  repository: { nameWithOwner: 'lobehub/lobehub' },
+                  repository: { id: 'repo-primary', nameWithOwner: 'acme/atlas' },
+                },
+              ],
+              issueContributionsByRepository: [
+                {
+                  contributions: {
+                    nodes: [{ occurredAt: '2026-06-01T00:00:00Z' }],
+                    totalCount: 2,
+                  },
+                  repository: { id: 'repo-primary', nameWithOwner: 'acme/atlas' },
+                },
+                {
+                  contributions: {
+                    nodes: [{ occurredAt: '2026-07-16T00:00:00Z' }],
+                    totalCount: 1,
+                  },
+                  repository: { id: 'repo-external', nameWithOwner: 'acme/external' },
                 },
               ],
               issueContributions: { nodes: [] },
@@ -98,15 +136,91 @@ const createTransport = () => {
                   {
                     occurredAt: '2026-07-10T00:00:00Z',
                     pullRequest: {
-                      repository: { nameWithOwner: 'lobehub/lobehub' },
+                      repository: { nameWithOwner: 'acme/atlas' },
                       title: 'Add understanding pipeline',
                     },
                   },
                 ],
               },
+              pullRequestContributionsByRepository: [
+                {
+                  contributions: {
+                    nodes: [{ occurredAt: '2026-07-10T00:00:00Z' }],
+                    totalCount: 12,
+                  },
+                  repository: { id: 'repo-primary', nameWithOwner: 'acme/atlas' },
+                },
+              ],
               pullRequestReviewContributions: { nodes: [] },
+              pullRequestReviewContributionsByRepository: [
+                {
+                  contributions: {
+                    nodes: [{ occurredAt: '2026-07-15T00:00:00Z' }],
+                    totalCount: 8,
+                  },
+                  repository: { id: 'repo-primary', nameWithOwner: 'acme/atlas' },
+                },
+              ],
+            },
+            recentContributionsCollection: {
+              commitContributionsByRepository: [
+                {
+                  contributions: {
+                    nodes: [{ commitCount: 7, occurredAt: '2026-07-12T00:00:00Z' }],
+                    totalCount: 47,
+                  },
+                  repository: { id: 'repo-primary', nameWithOwner: 'acme/atlas' },
+                },
+              ],
+              issueContributionsByRepository: [
+                {
+                  contributions: {
+                    nodes: [{ occurredAt: '2026-06-01T00:00:00Z' }],
+                    totalCount: 2,
+                  },
+                  repository: { id: 'repo-primary', nameWithOwner: 'acme/atlas' },
+                },
+                {
+                  contributions: {
+                    nodes: [{ occurredAt: '2026-07-16T00:00:00Z' }],
+                    totalCount: 1,
+                  },
+                  repository: { id: 'repo-external', nameWithOwner: 'acme/external' },
+                },
+              ],
+              pullRequestContributionsByRepository: [
+                {
+                  contributions: {
+                    nodes: [{ occurredAt: '2026-07-10T00:00:00Z' }],
+                    totalCount: 12,
+                  },
+                  repository: { id: 'repo-primary', nameWithOwner: 'acme/atlas' },
+                },
+              ],
+              pullRequestReviewContributionsByRepository: [
+                {
+                  contributions: {
+                    nodes: [{ occurredAt: '2026-07-15T00:00:00Z' }],
+                    totalCount: 8,
+                  },
+                  repository: { id: 'repo-primary', nameWithOwner: 'acme/atlas' },
+                },
+              ],
+            },
+            topRepositories: {
+              nodes: [contributedRepositoryNodes.external, contributedRepositoryNodes.primary],
             },
           },
+        };
+      }
+      if (operation === 'ConnectorDataGitHubContributedRepositoryMetadata') {
+        const ids = variables.ids as string[];
+        const repositories = {
+          'repo-external': contributedRepositoryNodes.external,
+          'repo-primary': contributedRepositoryNodes.primary,
+        };
+        return {
+          nodes: ids.map((id) => repositories[id as keyof typeof repositories] ?? null),
         };
       }
       if (operation === 'ConnectorDataGitHubProfileReadme') {
@@ -130,13 +244,13 @@ describe('createGitHubConnectorClient', () => {
 
     await expect(client.getUserProfile()).resolves.toEqual({
       bio: 'Building tools.',
-      company: '@lobehub',
+      company: '@acme',
       externalAccountId: '98765',
       location: 'Shanghai',
       login: 'octocat',
       name: 'Octocat',
       pronouns: 'they/them',
-      websiteUrl: `https://lobehub.com/${'x'.repeat(480)}...`,
+      websiteUrl: `https://example.com/${'x'.repeat(480)}...`,
     });
     expect(calls).toEqual([
       {
@@ -157,7 +271,7 @@ describe('createGitHubConnectorClient', () => {
         description: 'AI framework',
         forkCount: 3,
         issueCount: 4,
-        nameWithOwner: 'lobehub/lobehub',
+        nameWithOwner: 'acme/atlas',
         primaryLanguage: 'TypeScript',
         pullRequestCount: 5,
         stargazerCount: 70_000,
@@ -184,16 +298,58 @@ describe('createGitHubConnectorClient', () => {
       {
         count: 7,
         occurredAt: '2026-07-12T00:00:00Z',
-        repository: 'lobehub/lobehub',
+        repository: 'acme/atlas',
         title: '7 commits',
         type: 'commit',
       },
       {
         count: 1,
         occurredAt: '2026-07-10T00:00:00Z',
-        repository: 'lobehub/lobehub',
+        repository: 'acme/atlas',
         title: 'Add understanding pipeline',
         type: 'pull_request',
+      },
+    ]);
+    await expect(client.listContributedRepositories()).resolves.toEqual([
+      {
+        contributions: { commits: 47, issues: 2, pullRequests: 12, reviews: 8, total: 69 },
+        description: 'AI framework',
+        forkCount: 3000,
+        lastContributionAt: '2026-07-15T00:00:00Z',
+        nameWithOwner: 'acme/atlas',
+        primaryLanguage: 'TypeScript',
+        pushedAt: '2026-07-17T00:00:00Z',
+        stargazerCount: 70_000,
+        topics: ['agent'],
+      },
+      {
+        contributions: { commits: 0, issues: 1, pullRequests: 0, reviews: 0, total: 1 },
+        description: 'Widely used external project',
+        forkCount: 500,
+        lastContributionAt: '2026-07-16T00:00:00Z',
+        nameWithOwner: 'acme/external',
+        primaryLanguage: 'Rust',
+        pushedAt: '2026-07-16T00:00:00Z',
+        stargazerCount: 100_000,
+        topics: ['runtime'],
+      },
+    ]);
+    await expect(client.listInfluentialRepositories()).resolves.toMatchObject([
+      {
+        contributions: { commits: 0, issues: 1, pullRequests: 0, reviews: 0, total: 1 },
+        nameWithOwner: 'acme/external',
+        stargazerCount: 100_000,
+      },
+      {
+        contributions: { commits: 47, issues: 2, pullRequests: 12, reviews: 8, total: 69 },
+        nameWithOwner: 'acme/atlas',
+        stargazerCount: 70_000,
+      },
+    ]);
+    await expect(client.listPinnedContributedRepositories()).resolves.toMatchObject([
+      {
+        contributions: { commits: 47, issues: 2, pullRequests: 12, reviews: 8, total: 69 },
+        nameWithOwner: 'acme/atlas',
       },
     ]);
     expect(calls).toContainEqual({
@@ -203,9 +359,20 @@ describe('createGitHubConnectorClient', () => {
     expect(calls).toContainEqual({
       operation: 'ConnectorDataGitHubContributions',
       variables: {
+        commitDayFirst: 3,
         contributionFirst: 10,
-        from: '2026-01-18T12:34:56.789Z',
+        from: '2025-07-17T12:34:56.789Z',
+        influentialFirst: 12,
+        recentFrom: '2026-04-18T12:34:56.789Z',
+        repositoryFirst: 100,
       },
+    });
+    expect(
+      calls.filter(({ operation }) => operation === 'ConnectorDataGitHubContributions'),
+    ).toHaveLength(1);
+    expect(calls).toContainEqual({
+      operation: 'ConnectorDataGitHubContributedRepositoryMetadata',
+      variables: { ids: ['repo-primary', 'repo-external'] },
     });
   });
 
@@ -218,6 +385,44 @@ describe('createGitHubConnectorClient', () => {
     expect(
       calls.filter(({ operation }) => operation === 'ConnectorDataGitHubRepositories'),
     ).toHaveLength(1);
+  });
+
+  it('applies the configured contribution window, limits, and local ranking', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime('2026-07-17T12:34:56.789Z');
+    const { calls, transport } = createTransport();
+    const client = createGitHubConnectorClient({
+      contributionCollection: {
+        candidateRepositories: 5,
+        commitDaysPerRepository: 2,
+        maxRecentContributions: 1,
+        maxRepositories: 1,
+        recentEventsPerType: 5,
+        sort: 'contributions',
+        windowDays: 30,
+      },
+      transport,
+    });
+
+    await expect(client.listContributedRepositories()).resolves.toMatchObject([
+      { nameWithOwner: 'acme/atlas' },
+    ]);
+    await expect(client.listRecentContributions()).resolves.toHaveLength(1);
+    expect(calls).toContainEqual({
+      operation: 'ConnectorDataGitHubContributions',
+      variables: {
+        commitDayFirst: 2,
+        contributionFirst: 5,
+        from: '2026-06-17T12:34:56.789Z',
+        influentialFirst: 12,
+        recentFrom: '2026-04-18T12:34:56.789Z',
+        repositoryFirst: 5,
+      },
+    });
+    expect(calls).toContainEqual({
+      operation: 'ConnectorDataGitHubContributedRepositoryMetadata',
+      variables: { ids: ['repo-primary'] },
+    });
   });
 
   it('clears a rejected profile request so a later call can recover', async () => {
@@ -250,7 +455,7 @@ describe('createGitHubConnectorClient', () => {
     const { listRepositoryContributors, transport } = createTransport();
     const client = createGitHubConnectorClient({ transport });
 
-    await expect(client.listRepositoryContributors('lobehub/lobehub')).resolves.toEqual([
+    await expect(client.listRepositoryContributors('acme/atlas')).resolves.toEqual([
       { contributionCount: 9, login: 'octocat' },
       { contributionCount: 8, login: 'alice' },
       { contributionCount: 7, login: 'bob' },
@@ -258,9 +463,9 @@ describe('createGitHubConnectorClient', () => {
       { contributionCount: 5, login: 'dave' },
     ]);
     expect(listRepositoryContributors).toHaveBeenCalledWith({
-      owner: 'lobehub',
+      owner: 'acme',
       perPage: 5,
-      repository: 'lobehub',
+      repository: 'atlas',
     });
 
     await expect(client.listRepositoryContributors('invalid')).resolves.toEqual([]);
@@ -296,7 +501,7 @@ describe('createGitHubConnectorClient', () => {
     await expect(client.listUserOrganizations()).resolves.toEqual([
       {
         description: 'Making AI accessible.',
-        login: 'lobehub',
+        login: 'acme',
       },
     ]);
     expect(listUserOrganizations).toHaveBeenCalledWith({
@@ -323,7 +528,7 @@ describe('createGitHubConnectorClient', () => {
         typeof body === 'object' && body && 'query' in body
           ? { data: profileResult }
           : request.url.endsWith('/user/orgs?per_page=20')
-            ? [{ description: 'Making AI accessible.', login: 'lobehub' }]
+            ? [{ description: 'Building useful tools.', login: 'acme' }]
             : { id: 1, login: 'octocat' };
       return new Response(JSON.stringify(data), {
         headers: { 'content-type': 'application/json' },
@@ -344,7 +549,7 @@ describe('createGitHubConnectorClient', () => {
     ]);
 
     await expect(client.listUserOrganizations()).resolves.toEqual([
-      { description: 'Making AI accessible.', login: 'lobehub' },
+      { description: 'Building useful tools.', login: 'acme' },
     ]);
     expect(fetch.mock.calls.map(([input, init]) => new Request(input, init).url)).toContain(
       'https://api.github.com/user/orgs?per_page=20',
@@ -369,7 +574,7 @@ describe('createGitHubConnectorClient', () => {
         return Response.json({ id: 1, login: 'octocat' });
       }
       if (request.url.endsWith('/users/octocat/orgs?per_page=20')) {
-        return Response.json([{ description: 'Making AI accessible.', login: 'lobehub' }]);
+        return Response.json([{ description: 'Building useful tools.', login: 'acme' }]);
       }
       return new Response(null, { status: 404 });
     });
@@ -377,7 +582,7 @@ describe('createGitHubConnectorClient', () => {
     const client = createGitHubOAuthConnectorClient({ accessToken: 'production-token' });
 
     await expect(client.listUserOrganizations()).resolves.toEqual([
-      { description: 'Making AI accessible.', login: 'lobehub' },
+      { description: 'Building useful tools.', login: 'acme' },
     ]);
     expect(fetch.mock.calls.map(([input, init]) => new Request(input, init).url)).toEqual([
       'https://api.github.com/user/orgs?per_page=20',

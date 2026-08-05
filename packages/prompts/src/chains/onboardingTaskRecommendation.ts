@@ -139,6 +139,7 @@ export const chainOnboardingTaskRecommendation = (
   {
     content: [
       `Response language: ${input.responseLanguage}`,
+      `Write every user-visible title, instruction, and reason in ${input.responseLanguage}. Preserve repository names, product names, people names, identifiers, and code tokens when translating them would reduce accuracy.`,
       `Provider: ${input.providerId}`,
       `Return at most ${input.limit} recommendations.`,
       `Return one to ${input.writingGuide.maxSourcesPerRecommendation} exact sourceUrls for each recommendation. Every URL must appear verbatim in the supplied evidence. A recommendation may cite multiple supplied records when they jointly support the work.`,

@@ -10,7 +10,7 @@ import {
   Settings,
   ShapesIcon,
 } from 'lucide-react';
-import type { ReactElement } from 'react';
+import { cloneElement, isValidElement, type ReactElement, Suspense } from 'react';
 import type { RouteObject } from 'react-router';
 
 import {
@@ -18,6 +18,7 @@ import {
   BusinessDesktopRoutesWithoutMainLayout,
   BusinessResourceRoutes,
 } from '@/business/client/BusinessDesktopRoutes';
+import ContentLoading from '@/components/Loading/ContentLoading';
 import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import { agentsRouteMeta } from '@/features/AgentViewAll/routeMeta';
@@ -33,6 +34,7 @@ import {
 } from '@/routes/(main)/agent/features/routeMeta';
 import { groupProfileRouteMeta, groupRouteMeta } from '@/routes/(main)/group/features/routeMeta';
 import { settingsRouteMeta } from '@/routes/(main)/settings/features/routeMeta';
+import AppShellSkeleton, { APP_SHELL_FALLBACK_ID } from '@/spa/BootShell/AppShellSkeleton';
 import { loadRouteWithBuiltinToolSurfaces } from '@/spa/initialize/toolSurfaces';
 import { routeMeta } from '@/spa/router/routeMeta';
 import { SettingsTabs } from '@/store/global/initialState';
@@ -945,6 +947,15 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
                 ),
                 path: 'notification',
               },
+              // Channel detail level of the two-level notification settings —
+              // the page reads the channel id from the `sub` route param.
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/notification'),
+                  'Desktop > Workspace > Settings > Notification > Channel',
+                ),
+                path: 'notification/:sub',
+              },
               {
                 element: dynamicElement(
                   () => import('@/routes/(main)/[workspaceSlug]/settings/statistics'),
@@ -1041,6 +1052,13 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
               },
               {
                 element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/labels'),
+                  'Desktop > Workspace > Settings > Labels',
+                ),
+                path: 'labels',
+              },
+              {
+                element: dynamicElement(
                   () => import('@/routes/(main)/[workspaceSlug]/settings/storage'),
                   'Desktop > Workspace > Settings > Storage',
                 ),
@@ -1130,14 +1148,53 @@ export interface SharedDesktopRouteOptions {
  * Builds the common Web/Electron top-level route tree. Platform entry files
  * supply only the root children, runtime-only routes, and onboarding route.
  */
+/**
+ * Swap the brand-loading fallback for a content one across a route subtree.
+ *
+ * `dynamicElement` / `dynamicLayout` wrap every route element in their own
+ * `Suspense`, and that boundary is always nearer the suspending component than
+ * any outlet-level one — so a fallback set on the main layout's outlet never
+ * fires for route content, and the 100+ call sites would otherwise each need
+ * the option. Rewriting the elements once here keeps the main area consistent
+ * without touching routes outside it (mobile still wants the full-page brand
+ * loading, since its nav bar is inside the same boundary as its outlet).
+ */
+export const withContentFallback = (routes: RouteObject[]): RouteObject[] =>
+  routes.map((route) => {
+    const element =
+      isValidElement(route.element) && route.element.type === Suspense
+        ? // right that this couples to `dynamicElement` returning a bare Suspense.
+          // The alternative is the option on all 104 call sites; the coupling is
+          // guarded instead — `desktopRouter.sync.test.tsx` asserts every
+          // main-area fallback is `ContentLoading`, so if that shape ever changes
+          // the rewrite fails loudly rather than silently restoring the logo.
+          cloneElement(route.element as ReactElement<{ fallback: ReactElement }>, {
+            fallback: <ContentLoading />,
+          })
+        : route.element;
+
+    // `RouteObject` is a discriminated union of index / non-index routes, and
+    // spreading loses the discriminant — the copy keeps the original's shape.
+    return {
+      ...route,
+      ...(route.children && { children: withContentFallback(route.children) }),
+      element,
+    } as RouteObject;
+  });
+
 export const createSharedDesktopRoutes = ({
   mainAreaChildren,
   onboardingRoute,
   platformRoutes = [],
 }: SharedDesktopRouteOptions): RouteObject[] => [
   {
-    children: mainAreaChildren,
-    element: dynamicLayout(() => import('@/routes/(main)/_layout'), 'Desktop > Main > Layout'),
+    children: withContentFallback(mainAreaChildren),
+    // `BootShell` unmounts the moment the cache gate releases, which is often
+    // before this chunk resolves. Falling back to the same skeleton keeps the
+    // handoff invisible instead of flashing the brand logo a second time.
+    element: dynamicLayout(() => import('@/routes/(main)/_layout'), 'Desktop > Main > Layout', {
+      fallback: <AppShellSkeleton id={APP_SHELL_FALLBACK_ID} />,
+    }),
     errorElement: <ErrorBoundary />,
     path: '/',
   },

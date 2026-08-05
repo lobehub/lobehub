@@ -13,10 +13,10 @@ export const shouldShowHeteroModelSelector = ({
   isDesktopClient,
   providerType,
 }: ShouldShowHeteroModelSelectorParams): boolean => {
-  // OpenCode has no cloud-side model list — its selector needs a concrete
+  // OpenCode and Pi have no cloud-side model list — their selectors need a concrete
   // runtime to discover models from: the desktop itself, or an explicit bound
   // device that answers listHeterogeneousAgentModels.
-  if (providerType === 'opencode') {
+  if (providerType === 'opencode' || providerType === 'pi') {
     if (executionTarget === 'local') return isDesktopClient;
     return executionTarget === 'device' && !!boundDeviceId;
   }
