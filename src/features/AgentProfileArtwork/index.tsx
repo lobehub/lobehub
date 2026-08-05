@@ -136,6 +136,10 @@ const styles = createStaticStyles(({ css }) => ({
   generationTitle: css`
     font-weight: 500;
   `,
+  previewGenerationFeedback: css`
+    inset: 1px;
+    border-radius: calc(${cssVar.borderRadiusLG} - 1px);
+  `,
   visuallyHiddenInput: css`
     pointer-events: none;
 
@@ -273,6 +277,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
                   <Button
                     className={styles.generationActions}
                     size={'small'}
+                    type={'primary'}
                     onClick={() => void cancelAgentArtworkGeneration(agentId)}
                   >
                     {t('settingAgent.artwork.cancel')}
@@ -379,11 +384,13 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
                         </Tooltip>
                       ),
                       render: () => (
-                        <Flexbox gap={12} padding={12} width={332}>
+                        <Flexbox gap={16} padding={20} width={348}>
                           <Center className={styles.generatedPreview} height={156}>
                             <Avatar avatar={avatar || undefined} shape={'square'} size={112} />
                             {generating === 'avatar' ? (
-                              <Center className={styles.generationFeedback}>
+                              <Center
+                                className={`${styles.generationFeedback} ${styles.previewGenerationFeedback}`}
+                              >
                                 <Flexbox align={'center'} gap={10}>
                                   <NeuralNetworkLoading size={32} />
                                   <Flexbox align={'center'} gap={4}>
@@ -396,6 +403,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
                                     <Button
                                       className={styles.generationActions}
                                       size={'small'}
+                                      type={'primary'}
                                       onClick={() => void cancelAgentArtworkGeneration(agentId)}
                                     >
                                       {t('settingAgent.artwork.cancel')}
