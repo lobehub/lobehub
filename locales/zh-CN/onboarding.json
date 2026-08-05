@@ -107,6 +107,8 @@
   "interests.title2": "这将帮助我更好地了解你",
   "interests.title3": "慢慢来，我会逐渐了解你",
   "next": "下一步",
+  "proSettings.connectors.connectFailed": "无法开始连接，请重试。",
+  "proSettings.connectors.popupBlocked": "连接弹窗被阻止。请在浏览器中允许弹窗后继续。",
   "proSettings.connectors.title": "连接你常用的工具",
   "responseLanguage.hint": "切换后，助理回复语言会同步更新；界面语言也会随之切换",
   "responseLanguage.saveFailed": "保存失败，请重试。",

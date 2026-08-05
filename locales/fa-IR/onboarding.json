@@ -187,6 +187,8 @@
   "modeSelection.title2": "سبک یا حرفه‌ای — انتخاب با توئه!",
   "modeSelection.title3": "بهم بگو تا بتونم دقیقاً برات تنظیمش کنم~",
   "next": "بعدی",
+  "proSettings.connectors.connectFailed": "نتوانستیم اتصال را شروع کنیم. لطفاً دوباره تلاش کنید.",
+  "proSettings.connectors.popupBlocked": "پنجره اتصال مسدود شده است. برای ادامه، پاپ‌آپ‌ها را در مرورگر خود فعال کنید.",
   "proSettings.connectors.title": "ابزارهای مورد علاقه‌ات رو وصل کن",
   "proSettings.devMode.title": "حالت توسعه‌دهنده",
   "proSettings.model.fixed": "مدل پیش‌فرض در این محیط به {{provider}}/{{model}} تنظیم شده است.",
