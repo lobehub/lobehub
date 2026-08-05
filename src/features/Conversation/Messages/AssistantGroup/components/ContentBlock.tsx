@@ -51,8 +51,10 @@ const ContentBlock = memo<ContentBlockProps>(
     );
     const isHeteroError = isHeterogeneousAgentStatusGuideError(error?.body);
     const hasTools = !!tools?.length;
-    const showReasoning =
-      (!!reasoning && reasoning.content?.trim() !== '') || (!reasoning && isReasoning);
+    // A signature-only reasoning ({ signature } without content) is protocol state
+    // kept for multi-turn replay, not renderable thinking — don't show an empty
+    // "deep thought" card for it. See LOBE-12829.
+    const showReasoning = !!reasoning?.content?.trim() || (!reasoning && isReasoning);
     const hasContent = !!content && content !== LOADING_FLAT;
     const showMessageContent = hasContent || content === LOADING_FLAT || hasTools;
 
