@@ -1,4 +1,4 @@
-import { createVisualFileRef } from '@lobechat/const/visualRef';
+import { createMediaFileRef } from '@lobechat/const/mediaRef';
 import type { ChatAudioItem } from '@lobechat/types';
 
 const audioPrompt = (
@@ -7,7 +7,7 @@ const audioPrompt = (
   index: number,
   messageId?: string,
 ) => {
-  const ref = createVisualFileRef({ index, messageId, type: 'audio' });
+  const ref = createMediaFileRef({ index, messageId, type: 'audio' });
 
   return attachUrl
     ? `<audio ref="${ref}" name="${item.alt}" url="${item.url}"></audio>`

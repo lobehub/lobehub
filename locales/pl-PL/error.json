@@ -156,6 +156,7 @@
   "upload.networkError": "Sprawdź połączenie sieciowe i konfigurację CORS usługi przechowywania plików.",
   "upload.permissionDenied": "Nie masz uprawnień do przesyłania plików w tej przestrzeni roboczej.",
   "upload.storageBlock.billingUnavailable": "Nie można zweryfikować statusu rozliczeń Twojej subskrypcji. Spróbuj ponownie później lub zaktualizuj dane rozliczeniowe.",
+  "upload.storageBlock.cleanupFiles": "Zwolnij miejsce",
   "upload.storageBlock.monthlyCapReached": "Osiągnięto miesięczny limit wydatków na przechowywanie.",
   "upload.storageBlock.noPaymentMethod": "Dodaj metodę płatności, aby kontynuować przesyłanie.",
   "upload.storageBlock.overageNotEnabled": "Twoja przestrzeń dyskowa jest pełna. Włącz rozliczanie według zużycia, aby kontynuować przesyłanie.",

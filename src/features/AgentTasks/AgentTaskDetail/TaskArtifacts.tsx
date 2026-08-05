@@ -15,8 +15,8 @@ import { FileLock2Icon, FileTextIcon, MoreHorizontal, Package, Trash } from 'luc
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Time from '@/routes/(main)/home/features/components/Time';
-import { useDocumentStore } from '@/store/document';
+import { openDocumentModal } from '@/features/DocumentModal/loader';
+import Time from '@/features/Home/components/Time';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
@@ -30,7 +30,6 @@ const flattenWorkspace = (nodes: TaskDetailWorkspaceNode[]): TaskDetailWorkspace
 
 const ArtifactCard = memo<{ node: TaskDetailWorkspaceNode }>(({ node }) => {
   const { t } = useTranslation('chat');
-  const openDocumentPreview = useDocumentStore((s) => s.openDocumentPreview);
   const unpinDocument = useTaskStore((s) => s.unpinDocument);
   const activeTaskId = useTaskStore(taskDetailSelectors.activeTaskId);
   // Tombstone: the viewer lost access to the pinned document (switched back
@@ -77,7 +76,7 @@ const ArtifactCard = memo<{ node: TaskDetailWorkspaceNode }>(({ node }) => {
       paddingBlock={8}
       paddingInline={12}
       variant="outlined"
-      onClick={() => openDocumentPreview(node.documentId)}
+      onClick={() => void openDocumentModal(node.documentId)}
     >
       <Icon
         color={cssVar.colorTextSecondary}

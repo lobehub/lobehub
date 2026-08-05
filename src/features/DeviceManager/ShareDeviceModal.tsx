@@ -2,7 +2,14 @@
 
 import type { DeviceListItem, DeviceVisibility } from '@lobechat/types';
 import { Flexbox, Icon, Tag, Text } from '@lobehub/ui';
-import { Button, confirmModal, createModal, Select, useModalContext } from '@lobehub/ui/base-ui';
+import {
+  Button,
+  confirmModal,
+  createModal,
+  Select,
+  toast,
+  useModalContext,
+} from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { t } from 'i18next';
 import { CircleCheck, Lock, Users } from 'lucide-react';
@@ -12,7 +19,6 @@ import { useNavigate } from 'react-router';
 
 import { useWorkspaceOptionLabel } from '@/business/client/hooks/useWorkspaceOptionLabel';
 import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
-import { message } from '@/components/AntdStaticMethods';
 import { createWorkspaceLambdaClient } from '@/libs/trpc/client';
 
 import { refreshDeviceList } from './const';
@@ -187,7 +193,7 @@ const ShareDeviceContent = memo<ShareDeviceContentProps>(({ device }) => {
     } catch (error) {
       // Server messages (e.g. PRECONDITION_FAILED when the device dropped
       // offline mid-flow) are user-facing — surface them verbatim.
-      message.error(`${target.name}: ${(error as Error).message}`);
+      toast.error(`${target.name}: ${(error as Error).message}`);
     } finally {
       setSharing(false);
       setCanDismissByClickOutside?.(true);

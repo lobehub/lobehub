@@ -10,7 +10,7 @@
   "table.columns.duration": "المدة",
   "table.columns.model": "النموذج",
   "table.columns.spend": "الاعتمادات",
-  "table.columns.startTime": "تاريخ الإنشاء",
+  "table.columns.time": "الوقت",
   "table.columns.totalTokens": "استخدام الرموز",
   "table.columns.trigger.enums.agent_signal": "إشارة الوكيل",
   "table.columns.trigger.enums.api": "استدعاء API",
@@ -43,6 +43,10 @@
   "table.filters.reset": "إعادة تعيين",
   "table.filters.searchModel": "البحث عن النموذج",
   "table.filters.startDate": "تاريخ البدء",
+  "table.pagination.next": "الصفحة التالية",
+  "table.pagination.perPage": "{{size}} / الصفحة",
+  "table.pagination.prev": "الصفحة السابقة",
+  "table.pagination.range": "{{from}}-{{ar}} من {{total}} عنصر",
   "table.title": "تفاصيل استخدام الاعتمادات الحاسوبية",
   "table.totalToken.input": "المدخلات",
   "table.totalToken.output": "المخرجات",
@@ -66,8 +70,8 @@
   "usageStats.chart.title": "وقت إنفاق هذا الوكيل",
   "usageStats.chart.tokens": "الرمز",
   "usageStats.dimension": "البُعد",
-  "usageStats.entry": "الاستخدام والتكلفة",
+  "usageStats.entry": "الإحصائيات",
   "usageStats.range": "النطاق الزمني",
   "usageStats.rangeSuffix": "آخر {{count}} يوم",
-  "usageStats.title": "الاستخدام والتكلفة"
+  "usageStats.title": "الإحصائيات"
 }

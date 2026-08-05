@@ -111,9 +111,9 @@ describe('Conversation header action menu', () => {
 
     const { result } = renderHook(() => useMenu());
 
-    const popupItem = result.current.menuItems.find(
-      (item) => isActionItem(item) && item.key === 'openInPopupWindow',
-    );
+    const popupItem = result.current
+      .menuItems()
+      .find((item) => isActionItem(item) && item.key === 'openInPopupWindow');
 
     expect(popupItem).toBeDefined();
     if (!isActionItem(popupItem)) {
@@ -133,9 +133,9 @@ describe('Conversation header action menu', () => {
 
     const { result } = renderHook(() => useMenu());
 
-    const popupItem = result.current.menuItems.find(
-      (item) => isActionItem(item) && item.key === 'openInPopupWindow',
-    );
+    const popupItem = result.current
+      .menuItems()
+      .find((item) => isActionItem(item) && item.key === 'openInPopupWindow');
 
     expect(popupItem).toBeUndefined();
   });
@@ -145,9 +145,9 @@ describe('Conversation header action menu', () => {
 
     const { result } = renderHook(() => useMenu());
 
-    const topicInfoItem = result.current.menuItems.find(
-      (item) => isActionItem(item) && item.key === 'topic-info',
-    );
+    const topicInfoItem = result.current
+      .menuItems()
+      .find((item) => isActionItem(item) && item.key === 'topic-info');
 
     expect(topicInfoItem).toBeUndefined();
     expect(result.current.menuHeader).toBeDefined();

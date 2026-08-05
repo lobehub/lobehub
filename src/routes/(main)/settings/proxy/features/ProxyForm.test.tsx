@@ -138,6 +138,10 @@ vi.mock('@lobehub/ui/base-ui', () => ({
       onClick={() => onChange?.(!checked)}
     />
   ),
+  toast: {
+    error: toastErrorMock,
+    success: toastSuccessMock,
+  },
 }));
 
 vi.mock('@lobehub/ui', async () => {

@@ -6,6 +6,59 @@ import { flat as mdxFlat } from 'eslint-plugin-mdx';
 
 const tsconfigRootDir = fileURLToPath(new URL('.', import.meta.url));
 
+const baseRestrictedImportOptions = restrictedImports.rules['no-restricted-imports'][1];
+
+const performanceRestrictedImportPaths = [
+  {
+    message:
+      'Import the imperative facade from "@/features/ShareModal" so the modal implementation stays outside initial chunks.',
+    name: '@/features/ShareModal/Modal',
+  },
+];
+
+// On desktop the shell — every NavPanelPortal sidebar, the titlebar, the command
+// menu — renders as a sibling of TabHost, so React context binds these hooks to
+// the frozen root router while page content lives in per-tab memory routers.
+// A write then lands on a router no page reads and a read resolves the boot url,
+// silently and only on desktop. `Link` stays allowed: the convention is a real
+// href plus an onClick that preventDefaults into the navigation facade.
+const shellRouterRestrictedPaths = [
+  {
+    importNames: [
+      'useLocation',
+      'useMatch',
+      'useMatches',
+      'useNavigate',
+      'useParams',
+      'useSearchParams',
+    ],
+    message:
+      'Shell trees render outside the per-tab router. Read with useActiveLocation / useActiveRouteParams and navigate with useWorkspaceAwareNavigate. There is no active-tab twin for useSearchParams: express the write as a facade navigation, or move the url state into the route tree that owns it.',
+    name: 'react-router',
+  },
+  {
+    importNames: ['useQueryParam', 'useQueryState'],
+    message:
+      'useQueryState wraps useSearchParams, so it binds to the frozen root router here. Move the url state into the route tree that owns it, or write through the navigation facade.',
+    name: '@/hooks/useQueryParam',
+  },
+];
+
+const createRestrictedImportRule = ({ paths = [], patterns } = {}) => [
+  'error',
+  {
+    ...baseRestrictedImportOptions,
+    paths: [
+      ...(baseRestrictedImportOptions.paths ?? []),
+      ...performanceRestrictedImportPaths,
+      ...paths,
+    ],
+    ...(patterns?.length
+      ? { patterns: [...(baseRestrictedImportOptions.patterns ?? []), ...patterns] }
+      : {}),
+  },
+];
+
 export default eslint(
   {
     ignores: [
@@ -56,6 +109,162 @@ export default eslint(
     },
   },
   restrictedImports,
+  // Performance import boundaries. These restrictions preserve real import()
+  // seams instead of relying on component-level conditional rendering.
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': createRestrictedImportRule(),
+    },
+  },
+  {
+    files: ['src/features/Conversation/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': createRestrictedImportRule({
+        paths: [
+          {
+            message:
+              'Conversation internals must use stable subpaths such as "./store", "./ConversationProvider", or "./Messages" instead of the root barrel.',
+            name: '@/features/Conversation',
+          },
+        ],
+      }),
+    },
+  },
+  {
+    files: ['src/features/NavPanel/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': createRestrictedImportRule({
+        paths: shellRouterRestrictedPaths,
+        patterns: [
+          {
+            group: [
+              '@/routes/**/_layout/Sidebar',
+              '@/routes/**/_layout/Sidebar/**',
+              '@/routes/**/_layout/SideBar',
+              '@/routes/**/_layout/SideBar/**',
+            ],
+            message:
+              'NavPanel must not own route Sidebar implementations. Register route content through NavPanelPortal.',
+          },
+        ],
+      }),
+    },
+  },
+  {
+    files: [
+      'src/routes/**/_layout/Sidebar.{ts,tsx}',
+      'src/routes/**/_layout/Sidebar/**/*.{ts,tsx}',
+      'src/routes/**/_layout/SideBar.{ts,tsx}',
+      'src/routes/**/_layout/SideBar/**/*.{ts,tsx}',
+    ],
+    rules: {
+      'no-restricted-imports': createRestrictedImportRule({
+        paths: [
+          {
+            message:
+              'Route Sidebars must import NavPanelPortal from its dedicated subpath instead of the NavPanel host barrel.',
+            name: '@/features/NavPanel',
+          },
+          ...shellRouterRestrictedPaths,
+        ],
+      }),
+    },
+  },
+  {
+    // Sidebar/titlebar/command-menu trees the desktop shell renders outside TabHost.
+    // GenerationLayout is split deliberately: Body and Header are portal'd into the
+    // sidebar, while the layout root stays in the route tree and owns the url sync.
+    files: [
+      'src/features/AgentSidebar/**/*.{ts,tsx}',
+      'src/features/CommandMenu/**/*.{ts,tsx}',
+      'src/features/Electron/titlebar/**/*.{ts,tsx}',
+      'src/features/HomeSidebar/**/*.{ts,tsx}',
+      'src/features/Pages/PageLayout/Sidebar.{ts,tsx}',
+      'src/features/WorkspaceSetting/SideBar/**/*.{ts,tsx}',
+      'src/routes/(main)/(create)/features/GenerationLayout/Body/**/*.{ts,tsx}',
+      'src/routes/(main)/(create)/features/GenerationLayout/Header/**/*.{ts,tsx}',
+    ],
+    rules: {
+      'no-restricted-imports': createRestrictedImportRule({
+        paths: shellRouterRestrictedPaths,
+      }),
+    },
+  },
+  {
+    files: ['src/features/HomeInbox/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': createRestrictedImportRule({
+        paths: [
+          {
+            message:
+              'Load RunReplyEditor with import() after reply intent so the editor stays outside the home static closure.',
+            name: '@/features/AgentTasks/AgentTaskDetail/RunReplyEditor',
+          },
+          {
+            message:
+              'HomeInbox must not mount TopicChatDrawer; navigate to the topic or load an interaction-owned surface dynamically.',
+            name: '@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer',
+          },
+          {
+            message:
+              'HomeInbox must not mount TopicChatDrawer; navigate to the topic or load an interaction-owned surface dynamically.',
+            name: '@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer/index',
+          },
+          {
+            message:
+              'Use the imperative DocumentModal loader instead of statically importing the implementation.',
+            name: '@/features/DocumentModal',
+          },
+          {
+            message:
+              'Use the imperative DocumentModal loader instead of statically importing the implementation.',
+            name: '@/features/DocumentModal/index',
+          },
+        ],
+      }),
+    },
+  },
+  {
+    files: ['src/features/Home/**/*.{ts,tsx}', 'src/routes/(main)/home/**/*.{ts,tsx}'],
+    ignores: [
+      'src/routes/(main)/home/_layout/hooks/useCreateModal.tsx',
+      'src/features/Home/InputArea/EditorInput.tsx',
+    ],
+    rules: {
+      'no-restricted-imports': createRestrictedImportRule({
+        paths: [
+          {
+            message:
+              'Home cold-path modules must use stable Conversation subpaths instead of the root barrel that exports ChatInput.',
+            name: '@/features/Conversation',
+          },
+        ],
+        patterns: [
+          {
+            message:
+              'Home cold-path modules must not statically import ChatInput. Load an isolated editor entry with import().',
+            regex:
+              '^@/features/ChatInput(?:$|/(?!(?:store/initialState|utils/contextSelections)$).+)',
+          },
+        ],
+      }),
+    },
+  },
+  {
+    files: ['src/features/Home/InputArea/index.tsx'],
+    rules: {
+      'no-restricted-imports': createRestrictedImportRule({
+        paths: [
+          {
+            message:
+              'The home input must load EditorInput through useProgressiveEditor instead of adding it to the route static closure.',
+            name: './EditorInput',
+          },
+        ],
+      }),
+    },
+  },
   // Global rule overrides
   {
     rules: {

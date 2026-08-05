@@ -156,6 +156,7 @@
   "upload.networkError": "网络异常或跨域配置不正确。请检查文件存储服务的 CORS 设置后重试",
   "upload.permissionDenied": "您没有权限在此工作区上传文件。",
   "upload.storageBlock.billingUnavailable": "无法验证您的订阅账单状态。请稍后重试或更新您的账单信息。",
+  "upload.storageBlock.cleanupFiles": "清理文件",
   "upload.storageBlock.monthlyCapReached": "已达到月度存储消费上限。",
   "upload.storageBlock.noPaymentMethod": "请添加支付方式后继续上传。",
   "upload.storageBlock.overageNotEnabled": "存储空间已满。启用按量付费后可继续上传。",

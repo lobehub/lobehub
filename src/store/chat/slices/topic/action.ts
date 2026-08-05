@@ -3,12 +3,12 @@
 import { chainSummaryTitle } from '@lobechat/prompts';
 import { type ChatTopicMetadata, type MessageMapScope, type UIChatMessage } from '@lobechat/types';
 import { TraceNameMap } from '@lobechat/types';
+import { toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
-import { message } from '@/components/AntdStaticMethods';
 import { LOADING_FLAT } from '@/const/message';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { cronKeys, deviceKeys, topicKeys } from '@/libs/swr/keys';
@@ -57,6 +57,13 @@ const n = setNamespace('t');
 
 const STALE_RUNNING_TOPIC_TIMEOUT = 2 * 60 * 60 * 1000;
 const STALE_RUNNING_TOPIC_QUERY_PAGE_SIZE = 500;
+
+/**
+ * Max message prefetches fired per topic-list fetch for freshly-unread topics.
+ * Bounds the fan-out after a long-offline boot; see
+ * `#prefetchUnreadTopicMessages`.
+ */
+const UNREAD_TOPIC_PREFETCH_LIMIT = 5;
 
 type CronTopicsGroupWithJobInfo = {
   cronJob: unknown;
@@ -242,16 +249,12 @@ export class ChatTopicActionImpl {
 
     const newTitle = t('duplicateTitle', { ns: 'chat', title: topic?.title });
 
-    message.loading({
-      content: t('duplicateLoading', { ns: 'topic' }),
-      key: 'duplicateTopic',
-      duration: 0,
-    });
+    const loadingToast = toast.loading(t('duplicateLoading', { ns: 'topic' }));
 
     const newTopicId = await topicService.cloneTopic(id, newTitle);
     await refreshTopic();
-    message.destroy('duplicateTopic');
-    message.success(t('duplicateSuccess', { ns: 'topic' }));
+    loadingToast.close();
+    toast.success(t('duplicateSuccess', { ns: 'topic' }));
 
     await switchTopic(newTopicId);
   };
@@ -261,11 +264,7 @@ export class ChatTopicActionImpl {
 
     if (!activeAgentId) return;
 
-    message.loading({
-      content: t('importLoading', { ns: 'topic' }),
-      duration: 0,
-      key: 'importTopic',
-    });
+    const loadingToast = toast.loading(t('importLoading', { ns: 'topic' }));
 
     try {
       const result = await topicService.importTopic({
@@ -275,15 +274,15 @@ export class ChatTopicActionImpl {
       });
 
       await refreshTopic();
-      message.destroy('importTopic');
-      message.success(t('importSuccess', { count: result.messageCount, ns: 'topic' }));
+      loadingToast.close();
+      toast.success(t('importSuccess', { count: result.messageCount, ns: 'topic' }));
 
       await switchTopic(result.topicId);
 
       return result.topicId;
     } catch (error) {
-      message.destroy('importTopic');
-      message.error(t('importError', { ns: 'topic' }));
+      loadingToast.close();
+      toast.error(t('importError', { ns: 'topic' }));
       console.error('[importTopic] Failed:', error);
       return undefined;
     }
@@ -450,14 +449,20 @@ export class ChatTopicActionImpl {
       });
     }
 
-    // In-flight first-send optimistic rows (`tmp_topic_*`) are client-only, so
-    // any refetch landing mid-send (e.g. the fire-and-forget refreshTopic after
-    // a previous run's topic creation or terminal) would wipe them from the
-    // sidebar until the server returns the real topicId. Re-prepend the ones
-    // still in the bucket — they only ever leave it via replaceTopicId (send
-    // resolved) or deleteTopic (rollback), never via a fetch.
-    if (currentItems && currentItems.length > 0) {
-      const optimisticRows = currentItems.filter((item) => item.id.startsWith('tmp_topic_'));
+    // In-flight first-send optimistic rows are client-only, so any refetch
+    // landing mid-send (e.g. the fire-and-forget refreshTopic after a previous
+    // run's topic creation or terminal) would wipe them from the sidebar until
+    // the server confirms the topic. Re-prepend the ones still in the bucket —
+    // they only ever leave it via replaceTopicId (send resolved) or deleteTopic
+    // (rollback), never via a fetch.
+    //
+    // Membership comes from `creatingTopicIds`, not from the id string: the
+    // placeholder carries a real `tpc_…` id the server is asked to honour, so
+    // it is indistinguishable from a persisted one — and a prefix test would
+    // fail silently the next time the id format changes.
+    const creatingTopicIds = this.#get().creatingTopicIds;
+    if (currentItems && currentItems.length > 0 && creatingTopicIds.length > 0) {
+      const optimisticRows = currentItems.filter((item) => creatingTopicIds.includes(item.id));
       if (optimisticRows.length > 0) {
         const fetchedIds = new Set(next.map((item) => item.id));
         const surviving = optimisticRows.filter((item) => !fetchedIds.has(item.id));
@@ -466,6 +471,50 @@ export class ChatTopicActionImpl {
     }
 
     return next;
+  };
+
+  /**
+   * Warm the message cache for topics whose status just flipped to `unread` in
+   * a fetched topic list — i.e. runs that completed remotely / on another
+   * device / while the app was closed. Their local message bucket typically
+   * holds only the creation-time seed (the first user message), so without a
+   * prefetch the first click renders that partial list until the switch-time
+   * revalidation lands.
+   *
+   * Store-level on purpose: the sidebar item's own unread-prefetch effect only
+   * fires while that item is MOUNTED, which misses collapsed groups and rows
+   * outside the virtualized viewport. Locally-run topics don't need this path —
+   * streaming already filled their bucket, and `prefetchMessages`' running
+   * guard skips them while the terminal bookkeeping is still in flight.
+   *
+   * Capped so a boot after days offline doesn't fan out a request storm; the
+   * uncapped remainder still self-heals on click via the switch revalidation.
+   * `prefetchMessages` itself dedupes concurrent calls and skips
+   * server-verified or running contexts, so repeated onData fires are cheap.
+   */
+  #prefetchUnreadTopicMessages = (
+    fetchedTopics: ChatTopic[],
+    previousItems: ChatTopic[] | undefined,
+    context: { agentId?: string | null; groupId?: string | null },
+  ): void => {
+    // Message buckets for group scopes key on more than agentId/topicId; the
+    // canonical message:list prefetch only represents plain agent topics.
+    if (!context.agentId || context.groupId) return;
+
+    const previousStatus = new Map(previousItems?.map((item) => [item.id, item.status]) ?? []);
+    // First load (no previous items) sweeps every unread topic — those runs
+    // finished while the app was closed and nothing else will warm them.
+    const flipped = fetchedTopics.filter(
+      (item) => item.status === 'unread' && previousStatus.get(item.id) !== 'unread',
+    );
+
+    for (const topic of flipped.slice(0, UNREAD_TOPIC_PREFETCH_LIMIT)) {
+      void this.#get().prefetchMessages({
+        agentId: context.agentId,
+        scope: 'main',
+        topicId: topic.id,
+      });
+    }
   };
 
   /**
@@ -636,6 +685,55 @@ export class ChatTopicActionImpl {
     }
   };
 
+  /**
+   * Re-read a `scheduled` topic from the server and fold any dispatch back into
+   * the store. The cron dispatcher (`scheduledTopicDispatch`) mutates only the
+   * DB when `runAt` passes — status → 'running', `scheduledRun` cleared,
+   * `runningOperation` seeded, the parked error card cleared off the failed
+   * message — and no push channel tells a client that is already sitting on the
+   * topic. This is the pull side: `useScheduledRunWatch` calls it on topic entry
+   * and on a short poll around `runAt`.
+   *
+   * When the server has moved past `scheduled`, the fresh row is patched into
+   * the topic map (so `useGatewayReconnect` sees `runningOperation` and attaches
+   * to the live stream) and the message list is refetched (so the stale
+   * rate-limit card drops and the continuation's assistant row appears).
+   *
+   * Returns whether a dispatch was observed and folded in.
+   */
+  syncScheduledTopicRun = async (topicId: string): Promise<boolean> => {
+    const stored = topicSelectors.getTopicById(topicId)(this.#get());
+    // Only a topic the store believes is parked needs syncing; anything else
+    // already has a live update path (or isn't loaded in the active bucket).
+    if (stored?.status !== 'scheduled') return false;
+
+    const fresh = await topicService.getTopicDetail(topicId);
+    if (!fresh) return false;
+
+    // Server still parked — nothing to fold in.
+    if (fresh.status === 'scheduled' && fresh.metadata?.scheduledRun) return false;
+
+    // Re-check after the await: a topic/agent switch mid-flight means the
+    // active bucket no longer holds this row — don't patch a foreign bucket.
+    if (topicSelectors.getTopicById(topicId)(this.#get())?.status !== 'scheduled') return false;
+
+    this.#get().internal_dispatchTopic(
+      {
+        id: topicId,
+        type: 'updateTopic',
+        value: { metadata: fresh.metadata, status: fresh.status },
+      },
+      n('syncScheduledTopicRun'),
+    );
+
+    // The dispatcher also rewrote messages before handing off (cleared/deleted
+    // the failed step, created the continuation's placeholder), so the list
+    // must be refetched before the gateway reconnect anchors on it.
+    await this.#get().refreshMessages();
+
+    return true;
+  };
+
   useFetchTopicLinkedPullRequest = (
     topicId?: string,
     metadata?: ChatTopicMetadata,
@@ -776,6 +874,11 @@ export class ChatTopicActionImpl {
 
           const currentData = this.#get().topicDataMap[containerKey];
           const topics = this.#reconcileFetchedTopics(result.items, currentData?.items);
+
+          // Fire BEFORE the no-change early return below: on a cold boot the
+          // cached list arrives with no `currentData`, and that first delivery
+          // is exactly the sweep that must warm app-closed-while-running runs.
+          this.#prefetchUnreadTopicMessages(topics, currentData?.items, { agentId, groupId });
 
           const isRefreshingExpandedList =
             !!currentData &&
@@ -1492,6 +1595,32 @@ export class ChatTopicActionImpl {
    * user switched agents (see `updateTopicStatus`).
    */
   internal_dispatchTopic = (payload: ChatTopicDispatch, action?: any): void => {
+    // Track the optimistic-row lifecycle here, at the single funnel every
+    // add / replace / delete goes through, so a caller cannot register a
+    // placeholder and then forget to clear it.
+    if (payload.type === 'addTopic' && payload.optimistic && payload.value.id) {
+      const id = payload.value.id;
+      if (!this.#get().creatingTopicIds.includes(id)) {
+        this.#set(
+          (state) => ({ creatingTopicIds: [...state.creatingTopicIds, id] }),
+          false,
+          n('creatingTopic/register'),
+        );
+      }
+    } else if (
+      (payload.type === 'replaceTopicId' || payload.type === 'deleteTopic') && // The row is no longer client-only: either the server confirmed it, or
+      // the send rolled back and the row is gone.
+      this.#get().creatingTopicIds.includes(payload.id)
+    ) {
+      this.#set(
+        (state) => ({
+          creatingTopicIds: state.creatingTopicIds.filter((creating) => creating !== payload.id),
+        }),
+        false,
+        n('creatingTopic/release'),
+      );
+    }
+
     const { activeAgentId, activeGroupId } = this.#get();
     const scopedAgentId = payload.scope ? payload.agentId : (payload.agentId ?? activeAgentId);
     const scopedGroupId = payload.scope ? payload.groupId : (payload.groupId ?? activeGroupId);

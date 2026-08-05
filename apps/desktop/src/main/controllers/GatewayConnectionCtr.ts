@@ -3,11 +3,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { type DeviceControlDeps, executeDeviceRpc as runDeviceRpc } from '@lobechat/device-control';
-import type {
-  AgentRunRequestMessage,
-  GatewayMcpStdioParams,
-} from '@lobechat/device-gateway-client';
+import type { DeviceControlDeps } from '@lobechat/device-control';
+import type { AgentRunRequestMessage, GatewayMcpParams } from '@lobechat/device-gateway-client';
 import type {
   EditLocalFileParams,
   GatewayConnectionStatus,
@@ -197,7 +194,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
   // ─── Lifecycle ───
 
-  afterAppReady() {
+  afterFirstFrame() {
     const srv = this.service;
 
     srv.loadOrCreateDeviceId();
@@ -416,6 +413,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
    * desktop main process and the CLI daemon share one device RPC surface.
    */
   private async executeDeviceRpc(method: string, params: unknown): Promise<unknown> {
+    const { executeDeviceRpc: runDeviceRpc } = await import('@lobechat/device-control');
     return runDeviceRpc(method, params, this.deviceControlDeps);
   }
 
@@ -573,6 +571,14 @@ export default class GatewayConnectionCtr extends ControllerModule {
         return { content: JSON.stringify(result), state: result, success: true };
       }
 
+      case 'scanHeterogeneousAgents': {
+        const { scanHeterogeneousAgentsOnHost } =
+          await import('@lobechat/heterogeneous-agents/scanHost');
+        const agents = await scanHeterogeneousAgentsOnHost();
+        const result = { agents };
+        return { content: JSON.stringify(result), state: result, success: true };
+      }
+
       case 'runHeteroTask': {
         // runHeteroTask returns a pre-stringified JSON payload — pass it through
         // as `content` and surface the parsed shape as `state`.
@@ -605,26 +611,35 @@ export default class GatewayConnectionCtr extends ControllerModule {
   }
 
   /**
-   * Execute a stdio MCP tool call tunneled from the cloud server. The server
-   * can't spawn the user's local MCP binary, so it forwards the connection
-   * params (command/args/env); we run the call through the local MCP client,
-   * which spawns the stdio server on this machine.
+   * Execute an MCP tool call tunneled from the cloud server, for MCP servers
+   * only this machine can reach: stdio (the server can't spawn the user's
+   * local binary) and localhost / LAN HTTP endpoints (the server's fetch
+   * can't reach them). The connection params ride along; we run the call
+   * through the local MCP client.
    */
   private async executeMcpCall(mcpCall: {
     apiName: string;
     arguments: string;
     identifier: string;
-    params: GatewayMcpStdioParams;
+    params: GatewayMcpParams;
   }): Promise<BuiltinServerRuntimeOutput> {
-    const { apiName, arguments: args, params: stdioParams } = mcpCall;
+    const { apiName, arguments: args, params } = mcpCall;
+
+    if (params.type === 'http') {
+      return this.mcpCtr.runHttpMcpTool(
+        { auth: params.auth, headers: params.headers, name: params.name, url: params.url },
+        apiName,
+        args,
+      );
+    }
 
     return this.mcpCtr.runStdioMcpTool({
       args,
-      env: stdioParams.env,
+      env: params.env,
       params: {
-        args: stdioParams.args,
-        command: stdioParams.command,
-        name: stdioParams.name,
+        args: params.args,
+        command: params.command,
+        name: params.name,
       },
       toolName: apiName,
     });

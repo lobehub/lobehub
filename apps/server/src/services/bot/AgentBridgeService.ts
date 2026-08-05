@@ -738,7 +738,7 @@ export class AgentBridgeService {
     const timezone = await this.loadTimezone();
 
     // Make sure the person who triggered the run is a member of the reply
-    // thread, so the platform notifies them when the reply lands (LOBE-11632:
+    // thread, so the platform notifies them when the reply lands (
     // Discord's auto-created mention threads never add the mentioning user,
     // and pill rendering on the origin message proved unreliable — replies
     // were delivered but nobody was told). Fire-and-forget; never blocks.

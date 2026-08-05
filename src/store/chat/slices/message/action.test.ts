@@ -1398,6 +1398,25 @@ describe('chatMessage actions', () => {
       expect(mutate).not.toHaveBeenCalled();
     });
 
+    it("skips write-through for fetch-sourced echoes (source: 'fetch')", async () => {
+      // Regression: the Conversation store's SWR onData echoes fetched
+      // snapshots out through onMessagesChange → replaceMessages. At mount the
+      // echo carries the STALE cached list while the switch-time revalidation
+      // is in flight; writing it through the SWR cache trips SWR's mutation
+      // race guard, which discards the fresh result and locks the conversation
+      // on the stale/partial list.
+      const { result } = renderHook(() => useChatStore());
+
+      await act(async () => {
+        result.current.replaceMessages([{ id: 'm-echo', role: 'user', content: 'hi' }] as any, {
+          context: { agentId: 'wt-agent-3', topicId: 'wt-topic-3' },
+          source: 'fetch',
+        });
+      });
+
+      expect(mutate).not.toHaveBeenCalled();
+    });
+
     it('skips write-through while the context is streaming', async () => {
       const { result } = renderHook(() => useChatStore());
 
@@ -1655,6 +1674,56 @@ describe('chatMessage actions', () => {
 
       expect(messageService.getMessages).toHaveBeenCalledTimes(1);
       await expect(mountedQuery).resolves.toEqual(messages);
+    });
+
+    it('drops a prefetch result that resolves after the context started running', async () => {
+      // Regression: the running guard only ran when the prefetch STARTED. If the
+      // user opened that topic and submitted a follow-up before the request
+      // resolved, the pre-run server snapshot overwrote the freshly created
+      // user/assistant rows; subsequent streaming updates target ids that are no
+      // longer in the bucket and are silently dropped until terminal
+      // reconciliation. Mirrors the delivery-time guard `useFetchMessages`
+      // onData already applies.
+      const { result } = renderHook(() => useChatStore());
+
+      const context = {
+        agentId: 'prefetch-agent',
+        scope: 'main' as const,
+        topicId: 'raced-topic',
+      };
+      const key = messageMapKey(context);
+      const preRunSnapshot = [{ id: 'old-message', role: 'user', content: 'hi' }] as any;
+      const liveMessages = [
+        ...preRunSnapshot,
+        { id: 'new-user-message', role: 'user', content: 'follow-up' },
+        { id: 'new-assistant-message', role: 'assistant', content: '' },
+      ] as any;
+
+      let resolveRequest!: (value: UIChatMessage[]) => void;
+      (messageService.getMessages as Mock).mockReturnValue(
+        new Promise<UIChatMessage[]>((resolve) => {
+          resolveRequest = resolve;
+        }),
+      );
+
+      const prefetchPromise = result.current.prefetchMessages(context);
+      await Promise.resolve();
+      expect(messageService.getMessages).toHaveBeenCalledTimes(1);
+
+      // While the request is in flight: the user opens the topic and sends a
+      // follow-up — optimistic rows land in the bucket and a run starts.
+      await act(async () => {
+        useChatStore.setState({ dbMessagesMap: { [key]: liveMessages } });
+        result.current.startOperation({ type: 'execAgentRuntime', context });
+      });
+
+      await act(async () => {
+        resolveRequest(preRunSnapshot);
+        await prefetchPromise;
+      });
+
+      // The stale pre-run snapshot must not clobber the in-flight conversation.
+      expect(result.current.dbMessagesMap[key]).toEqual(liveMessages);
     });
   });
 

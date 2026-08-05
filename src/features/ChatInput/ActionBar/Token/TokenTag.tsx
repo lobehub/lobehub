@@ -153,6 +153,8 @@ const Token = memo(() => {
 
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
 
+  // Keep the composer quiet for regular users until context pressure is real;
+  // dev mode always shows the tag for inspection.
   if (!isDevMode && maxTokens > 0 && totalToken / maxTokens <= 0.5) return null;
 
   const content = (

@@ -66,7 +66,7 @@ export class OperationActionsImpl {
           context.operationId,
         );
       } else {
-        const { agentId, topicId, threadId, scope, isNew, groupId, documentId } = operation.context;
+        const { agentId, topicId, threadId, scope, groupId, documentId } = operation.context;
         log(
           '[internal_getConversationContext] get from operation %s: agentId=%s, topicId=%s, threadId=%s, scope=%s, groupId=%s, documentId=%s',
           context.operationId,
@@ -531,8 +531,11 @@ export class OperationActionsImpl {
       if (filter.groupId !== undefined) {
         matches = matches && op.context.groupId === filter.groupId;
       }
-      if (filter.agentId !== undefined) {
-        matches = matches && op.context.agentId === filter.agentId;
+      if (filter.scope !== undefined) {
+        matches = matches && op.context.scope === filter.scope;
+      }
+      if (filter.isNew !== undefined) {
+        matches = matches && op.context.isNew === filter.isNew;
       }
 
       if (matches) {

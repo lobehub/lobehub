@@ -1,4 +1,5 @@
 {
+  "description": "這些功能是實驗性的。我們可能會移除它們，而且它們可能存在錯誤。在使用過程中，我們非常期待您的回饋。",
   "features.agentGraphConfig.desc": "在代理配置檔的進階設定中顯示圖形運行時配置。",
   "features.agentGraphConfig.title": "代理圖形運行時配置",
   "features.agentSelfIteration.desc": "允許助理進行反思、建立自我認知，並透過持續的嘗試與互動不斷迭代提升。",
@@ -11,6 +12,8 @@
   "features.claudeCodeSdk.title": "Claude Code SDK 執行環境",
   "features.groupChat.desc": "啟用多智能體群組聊天編排功能。",
   "features.groupChat.title": "群組聊天（多智能體）",
+  "features.heteroSessionImport.desc": "在主題列表選單中新增「匯入本地代理會話」項目：掃描本地 Claude Code / Codex CLI 轉錄內容並將其匯入為主題，重新匯入時進行增量同步。",
+  "features.heteroSessionImport.title": "本地代理會話匯入",
   "features.imessage.desc": "透過本地 LobeHub Desktop BlueBubbles 橋接，將代理連接至 iMessage。",
   "features.imessage.title": "iMessage 通道",
   "features.inAppBrowser.desc": "在對話側邊欄中顯示瀏覽器標籤：嵌入式瀏覽器可直接開啟搜尋結果，並讓客服人員可見地瀏覽。",

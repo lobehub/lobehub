@@ -15,7 +15,14 @@ interface AboutListProps {
 const AboutList = memo<AboutListProps>(({ grid, items, ItemRender }) => {
   const content = items.map((item) => <ItemRender key={item.value} {...item} />);
 
-  if (!grid) return <Flexbox gap={8}>{content}</Flexbox>;
+  // Link rows (Contact / Legal) read as one line of links rather than a stacked
+  // list; wrap keeps them intact on narrow viewports.
+  if (!grid)
+    return (
+      <Flexbox horizontal align={'center'} gap={24} wrap={'wrap'}>
+        {content}
+      </Flexbox>
+    );
 
   return (
     <Grid gap={8} maxItemWidth={160} rows={5} width={'100%'}>

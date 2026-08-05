@@ -1,8 +1,7 @@
 'use client';
 
 import { Flexbox, Text } from '@lobehub/ui';
-import { Button, confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { Button, confirmModal, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ArrowLeft, Database, Pencil, Plus, Trash2 } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -95,7 +94,6 @@ const DatasetDetail = memo(() => {
   const { t } = useTranslation('eval');
   const { benchmarkId, datasetId } = useParams<{ benchmarkId: string; datasetId: string }>();
   const navigate = useWorkspaceAwareNavigate();
-  const { message } = App.useApp();
 
   const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
   const [search, setSearch] = useState('');
@@ -169,16 +167,16 @@ const DatasetDetail = memo(() => {
         onOk: async () => {
           try {
             await agentEvalService.deleteTestCase(testCase.id);
-            message.success(t('testCase.delete.success'));
+            toast.success(t('testCase.delete.success'));
             await handleRefresh();
           } catch {
-            message.error(t('testCase.delete.error'));
+            toast.error(t('testCase.delete.error'));
           }
         },
         title: t('common.delete'),
       });
     },
-    [handleRefresh, message, t],
+    [handleRefresh, t],
   );
 
   const handleDelete = useCallback(() => {
@@ -189,15 +187,15 @@ const DatasetDetail = memo(() => {
       onOk: async () => {
         try {
           await agentEvalService.deleteDataset(datasetId!);
-          message.success(t('dataset.delete.success'));
+          toast.success(t('dataset.delete.success'));
           navigate(`/eval/bench/${benchmarkId}`);
         } catch {
-          message.error(t('dataset.delete.error'));
+          toast.error(t('dataset.delete.error'));
         }
       },
       title: t('common.delete'),
     });
-  }, [benchmarkId, datasetId, message, navigate, t]);
+  }, [benchmarkId, datasetId, navigate, t]);
 
   // Skeleton → error → (resolved-null) blank, replacing a bare `return null`
   // that flashed blank on the happy path and stayed permanently blank on a

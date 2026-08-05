@@ -10,7 +10,7 @@
   "table.columns.duration": "지속 시간",
   "table.columns.model": "모델",
   "table.columns.spend": "사용 크레딧",
-  "table.columns.startTime": "생성 시간",
+  "table.columns.time": "시간",
   "table.columns.totalTokens": "토큰 사용량",
   "table.columns.trigger.enums.agent_signal": "에이전트 신호",
   "table.columns.trigger.enums.api": "API 호출",
@@ -43,6 +43,10 @@
   "table.filters.reset": "재설정",
   "table.filters.searchModel": "모델 검색",
   "table.filters.startDate": "시작 날짜",
+  "table.pagination.next": "다음 페이지",
+  "table.pagination.perPage": "{{size}} / 페이지",
+  "table.pagination.prev": "이전 페이지",
+  "table.pagination.range": "{{from}}-{{to}} / 총 {{total}} 항목",
   "table.title": "컴퓨팅 크레딧 사용 내역",
   "table.totalToken.input": "입력",
   "table.totalToken.output": "출력",
@@ -66,8 +70,8 @@
   "usageStats.chart.title": "이 에이전트가 소비한 시간",
   "usageStats.chart.tokens": "토큰",
   "usageStats.dimension": "차원",
-  "usageStats.entry": "사용량 및 비용",
+  "usageStats.entry": "통계",
   "usageStats.range": "시간 범위",
   "usageStats.rangeSuffix": "최근 {{count}}일",
-  "usageStats.title": "사용량 및 비용"
+  "usageStats.title": "통계"
 }

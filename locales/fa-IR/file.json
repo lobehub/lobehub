@@ -197,6 +197,8 @@
   "pageList.workspaceTitle": "فضای کاری",
   "portal.openInPageEditor": "ویرایش در صفحه",
   "preview.downloadFile": "دانلود فایل",
+  "preview.raw": "خام",
+  "preview.render": "پیش‌نمایش",
   "preview.unsupportedFileAndContact": "این فرمت فایل در حال حاضر برای پیش‌نمایش آنلاین پشتیبانی نمی‌شود. در صورت نیاز به پیش‌نمایش، لطفاً <1>با ما تماس بگیرید</1>.",
   "resource": "منبع",
   "resourceList.batchCopyDescription": "منابع انتخاب‌شده را به یک فضای کاری دیگر کپی کنید.",

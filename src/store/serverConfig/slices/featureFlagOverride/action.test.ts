@@ -119,13 +119,28 @@ describe('featureFlagOverride slice', () => {
       expect(store.getState()._featureFlagOverrides.showMarket).toBe(false);
     });
 
-    it('is a no-op outside development', () => {
+    it('hydrates overrides in production for an authorized DevDock session', () => {
       vi.stubEnv('NODE_ENV', 'production');
+      writeStorage({ showMarket: false });
       const store = createStore();
 
       act(() => store.getState().syncDevFlagOverrides());
 
-      expect(store.getState()._originalFeatureFlags).toBeNull();
+      expect(store.getState()._originalFeatureFlags).toEqual(baseFeatureFlags);
+      expect(store.getState().featureFlags.showMarket).toBe(false);
+    });
+
+    it('drops persisted attempts to override DevDock authorization', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      writeStorage({ enableDevDock: false, showMarket: false });
+      const store = createStore();
+
+      act(() => store.getState().syncDevFlagOverrides());
+
+      expect(store.getState()._featureFlagOverrides).toEqual({ showMarket: false });
+      expect(warn).toHaveBeenCalledWith(
+        '[DevFlagOverride] dropping unknown override key: enableDevDock',
+      );
     });
   });
 
@@ -172,14 +187,14 @@ describe('featureFlagOverride slice', () => {
       expect(readStorage()).toBeNull();
     });
 
-    it('is a no-op outside development', () => {
+    it('writes overrides in production for an authorized DevDock session', () => {
       const store = createStore();
       act(() => store.getState().syncDevFlagOverrides());
 
       vi.stubEnv('NODE_ENV', 'production');
       act(() => store.getState().setFlagOverride('showMarket', false));
 
-      expect(store.getState()._featureFlagOverrides).toEqual({});
+      expect(store.getState()._featureFlagOverrides).toEqual({ showMarket: false });
     });
   });
 
@@ -197,7 +212,7 @@ describe('featureFlagOverride slice', () => {
       expect(readStorage()).toBeNull();
     });
 
-    it('is a no-op outside development', () => {
+    it('resets overrides in production for an authorized DevDock session', () => {
       const store = createStore();
       act(() => store.getState().syncDevFlagOverrides());
       act(() => store.getState().setFlagOverride('showMarket', false));
@@ -205,7 +220,8 @@ describe('featureFlagOverride slice', () => {
       vi.stubEnv('NODE_ENV', 'production');
       act(() => store.getState().resetFlagOverrides());
 
-      expect(store.getState()._featureFlagOverrides.showMarket).toBe(false);
+      expect(store.getState()._featureFlagOverrides).toEqual({});
+      expect(store.getState().featureFlags).toEqual(baseFeatureFlags);
     });
   });
 });

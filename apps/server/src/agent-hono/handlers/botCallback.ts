@@ -40,7 +40,7 @@ export async function botCallback(c: Context): Promise<Response> {
   }
 
   // console (not debug) for completions only: arrival of the final-reply
-  // callback must be provable from production logs (LOBE-11632) — the debug
+  // callback must be provable from production logs — the debug
   // namespace above is not enabled in production, and steps are too chatty.
   if (type === 'completion') {
     console.info(

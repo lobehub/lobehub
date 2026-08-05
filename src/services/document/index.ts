@@ -289,11 +289,8 @@ export class DocumentService {
    * Thin wrapper around `setDocumentVisibility(id, 'public')`; kept for
    * existing callers.
    */
-  async publishDocumentToWorkspace(
-    id: string,
-    accessLevel?: 'view' | 'edit',
-  ): Promise<{ documentIds: string[] }> {
-    return lambdaClient.document.publishDocumentToWorkspace.mutate({ accessLevel, id });
+  async publishDocumentToWorkspace(id: string): Promise<{ documentIds: string[] }> {
+    return lambdaClient.document.publishDocumentToWorkspace.mutate({ id });
   }
 
   /**

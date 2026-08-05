@@ -33,8 +33,8 @@ vi.mock('react-router', () => ({
   useSearchParams: () => [{ get: mockSearchParamsGet }],
 }));
 
-vi.mock('@/components/AntdStaticMethods', () => ({
-  message: { error: mockMessageError, success: mockMessageSuccess },
+vi.mock('@lobehub/ui/base-ui', () => ({
+  toast: { error: mockMessageError, success: mockMessageSuccess },
 }));
 
 vi.mock('@/libs/better-auth/auth-client', () => ({

@@ -50,6 +50,7 @@ export class ElectronAppActionImpl {
           // Update the global agent context manager with relevant paths
           // We typically only need paths in the agent context for now.
           globalAgentContextManager.updateContext({
+            defaultShell: result.defaultShell,
             desktopPath: result.userPath!.desktop,
             documentsPath: result.userPath!.documents,
             downloadsPath: result.userPath!.downloads,

@@ -29,11 +29,17 @@ vi.mock('@lobechat/heterogeneous-agents/client', () => ({
             icon: () => <span>OpenCode Icon</span>,
             title: 'OpenCode',
           }
-        : {
-            command: 'codex',
-            icon: () => <span>Codex Icon</span>,
-            title: 'Codex',
-          },
+        : type === 'pi'
+          ? {
+              command: 'pi',
+              icon: () => <span>Pi Icon</span>,
+              title: 'Pi',
+            }
+          : {
+              command: 'codex',
+              icon: () => <span>Codex Icon</span>,
+              title: 'Codex',
+            },
   isRemoteHeterogeneousType: (type: string) => ['openclaw', 'hermes'].includes(type),
 }));
 
@@ -192,6 +198,32 @@ describe('HeterogeneousAgentStatusCard', () => {
     expect(screen.getByText('OpenCode CLI')).toBeInTheDocument();
     expect(screen.getByText('OpenCode CLI is unavailable')).toBeInTheDocument();
     expect(screen.getByText('opencode Install Guide')).toBeInTheDocument();
+  });
+
+  it('detects Pi and shows its install guide when unavailable', async () => {
+    detectHeterogeneousAgentCommand.mockResolvedValue({ available: false });
+
+    const provider = {
+      command: 'pi',
+      type: 'pi',
+    } satisfies HeterogeneousProviderConfig;
+
+    render(
+      <MemoryRouter>
+        <HeterogeneousAgentStatusCard provider={provider} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(detectHeterogeneousAgentCommand).toHaveBeenCalledWith({
+        agentType: 'pi',
+        command: 'pi',
+      });
+    });
+
+    expect(screen.getByText('Pi CLI')).toBeInTheDocument();
+    expect(screen.getByText('Pi CLI is unavailable')).toBeInTheDocument();
+    expect(screen.getByText('pi Install Guide')).toBeInTheDocument();
   });
 
   it('shows the embedded Claude Code install guide when the CLI is unavailable', async () => {

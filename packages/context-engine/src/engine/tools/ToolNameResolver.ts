@@ -1,3 +1,4 @@
+import { parseToolNameMaxLength } from '@lobechat/const/plugin';
 import { Md5 } from 'ts-md5';
 
 import type { ChatToolPayload, MessageToolCall } from '@/types/index';
@@ -26,9 +27,7 @@ const DEFAULT_TOOL_NAME_MAX_LENGTH = 64;
 const readEnvMaxLength = (): number => {
   try {
     const raw = typeof process === 'undefined' ? undefined : process.env?.TOOL_NAME_MAX_LENGTH;
-    if (raw === undefined || raw === '') return DEFAULT_TOOL_NAME_MAX_LENGTH;
-    const parsed = Number.parseInt(raw, 10);
-    return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_TOOL_NAME_MAX_LENGTH;
+    return parseToolNameMaxLength(raw) ?? DEFAULT_TOOL_NAME_MAX_LENGTH;
   } catch {
     return DEFAULT_TOOL_NAME_MAX_LENGTH;
   }

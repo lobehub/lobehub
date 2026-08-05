@@ -1,5 +1,6 @@
 'use client';
 
+import { agentDisplayName } from '@lobechat/types';
 import { Avatar, Flexbox, Markdown, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -49,7 +50,7 @@ const Body = memo(() => {
     <Flexbox align="center" flex={1} gap={16} padding={32} style={{ overflowY: 'auto' }}>
       <Avatar avatar={meta.avatar} background={meta.backgroundColor} shape="square" size={80} />
       <Text align="center" fontSize={24} weight="bold">
-        {meta.title || t('defaultSession', { ns: 'common' })}
+        {agentDisplayName(meta, t('defaultSession', { ns: 'common' }))}
       </Text>
       {meta.description && (
         <Text align="center" type="secondary">

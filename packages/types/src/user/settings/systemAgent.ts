@@ -16,6 +16,10 @@ export interface UserSystemAgentConfig {
   generationTopic: SystemAgentItem;
   historyCompress: SystemAgentItem;
   inputCompletion: SystemAgentItem;
+  /** Model used to turn onboarding evidence into background-safe task recommendations. */
+  onboardingTaskRecommender: SystemAgentItem;
+  /** Model used to synthesize connector evidence into the onboarding understanding. */
+  onboardingUnderstanding: SystemAgentItem;
   promptRewrite: PromptRewriteSystemAgent;
   thread: SystemAgentItem;
   topic: SystemAgentItem;

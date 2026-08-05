@@ -1,4 +1,5 @@
 import type { WorkspaceUserPreference } from '@lobechat/types';
+import { sql } from 'drizzle-orm';
 import {
   boolean,
   index,
@@ -26,9 +27,8 @@ export const workspaces = pgTable(
     name: varchar('name', { length: 255 }).notNull(),
     description: varchar('description', { length: 1000 }),
     avatar: text('avatar'),
-    // The user whose payment method backs the workspace's subscription. A
-    // workspace can have multiple `role='owner'` members; only this one is the
-    // Stripe-bound owner. Transferring the Stripe binding goes through
+    // The unique workspace Owner, whose payment method also backs the
+    // subscription. Ownership transfer atomically swaps Owner/Admin roles via
     // `WorkspaceModel.transferPrimaryOwnership`.
     primaryOwnerId: text('primary_owner_id')
       .references(() => users.id, { onDelete: 'cascade' })
@@ -72,6 +72,15 @@ export const workspaceMembers = pgTable(
     // user can be inserted into the same workspace multiple times.
     primaryKey({ columns: [t.workspaceId, t.userId] }),
     index('workspace_members_user_id_idx').on(t.userId),
+    // Owner is unique per workspace and bound to `workspaces.primary_owner_id`;
+    // it is only produced by ownership transfer, which demotes the previous
+    // owner in the same transaction. This partial index makes a second active
+    // owner unrepresentable rather than relying on that write path staying
+    // correct. Soft-deleted rows are excluded so a removed owner does not block
+    // the next one.
+    uniqueIndex('workspace_members_unique_active_owner_idx')
+      .on(t.workspaceId)
+      .where(sql`${t.role} = 'owner' AND ${t.deletedAt} IS NULL`),
   ],
 );
 

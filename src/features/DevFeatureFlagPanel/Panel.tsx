@@ -1,14 +1,17 @@
 'use client';
 
-import { ActionIcon, Flexbox, Input, Text } from '@lobehub/ui';
+import { Flexbox, Input, Text } from '@lobehub/ui';
 import { Button, Switch } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { snakeCase } from 'es-toolkit/compat';
-import { ListRestartIcon, XIcon } from 'lucide-react';
+import { ListRestartIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 
 import { useServerConfigStore } from '@/store/serverConfig';
-import { type FeatureFlagKey } from '@/store/serverConfig/slices/featureFlagOverride/action';
+import {
+  type FeatureFlagKey,
+  isFeatureFlagOverridable,
+} from '@/store/serverConfig/slices/featureFlagOverride/action';
 
 import FlagRow from './FlagRow';
 
@@ -16,25 +19,19 @@ const styles = createStaticStyles(({ css }) => ({
   body: css`
     overflow: auto;
     flex: 1;
+
+    min-height: 0;
     padding-block: 4px;
     padding-inline: 4px;
   `,
   container: css`
-    position: fixed;
-    z-index: 1099;
-    inset-block-end: 112px;
-    inset-inline-end: 16px;
-
     display: flex;
     flex-direction: column;
 
-    width: 380px;
-    height: min(70vh, 600px);
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 12px;
-
-    background: ${cssVar.colorBgElevated};
-    box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
+    width: 100%;
+    max-width: 720px;
+    height: 100%;
+    margin-inline: auto;
   `,
   empty: css`
     padding-block: 32px;
@@ -52,20 +49,10 @@ const styles = createStaticStyles(({ css }) => ({
     padding-inline: 12px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
-  header: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    justify-content: space-between;
-
-    padding-block: 10px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
   toolbar: css`
     display: flex;
-    flex-direction: column;
-    gap: 8px;
+    gap: 12px;
+    align-items: center;
 
     padding-block: 8px;
     padding-inline: 12px;
@@ -73,11 +60,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-interface PanelProps {
-  onClose: () => void;
-}
-
-const Panel = memo<PanelProps>(({ onClose }) => {
+const Panel = memo(() => {
   const originalFlags = useServerConfigStore((s) => s._originalFeatureFlags);
   const overrideCount = useServerConfigStore((s) => Object.keys(s._featureFlagOverrides).length);
   const overrides = useServerConfigStore((s) => s._featureFlagOverrides);
@@ -88,7 +71,9 @@ const Panel = memo<PanelProps>(({ onClose }) => {
 
   const flagKeys = useMemo<FeatureFlagKey[]>(() => {
     if (!originalFlags) return [];
-    return (Object.keys(originalFlags) as FeatureFlagKey[]).sort();
+    return (Object.keys(originalFlags) as (keyof typeof originalFlags)[])
+      .filter(isFeatureFlagOverridable)
+      .sort();
   }, [originalFlags]);
 
   const visibleKeys = useMemo(() => {
@@ -100,33 +85,23 @@ const Panel = memo<PanelProps>(({ onClose }) => {
     });
   }, [flagKeys, overrides, overriddenOnly, search]);
 
-  if (!originalFlags) return null;
+  if (!originalFlags)
+    return <div className={styles.empty}>Server feature flags are not loaded yet.</div>;
 
   return (
     <div className={styles.container}>
-      <div className={styles.header}>
-        <Flexbox gap={2}>
-          <Text strong style={{ fontSize: 13 }}>
-            Feature Flag Overrides
-          </Text>
-          <Text style={{ fontSize: 11 }} type={'secondary'}>
-            dev only · client-side · localStorage persisted
-          </Text>
-        </Flexbox>
-        <ActionIcon icon={XIcon} size={'small'} onClick={onClose} />
-      </div>
-
       <div className={styles.toolbar}>
         <Input
           allowClear
           placeholder={'Search flag name…'}
           size={'small'}
+          style={{ flex: 1 }}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
         <Flexbox horizontal align={'center'} gap={6}>
           <Switch checked={overriddenOnly} size={'small'} onChange={setOverriddenOnly} />
-          <Text style={{ fontSize: 12 }} type={'secondary'}>
+          <Text style={{ fontSize: 12, whiteSpace: 'nowrap' }} type={'secondary'}>
             overridden only
           </Text>
         </Flexbox>
@@ -142,7 +117,8 @@ const Panel = memo<PanelProps>(({ onClose }) => {
 
       <div className={styles.footer}>
         <Text style={{ fontSize: 11 }} type={'secondary'}>
-          {overrideCount} active override{overrideCount === 1 ? '' : 's'}
+          {overrideCount} active override{overrideCount === 1 ? '' : 's'} · client-side ·
+          localStorage persisted
         </Text>
         <Button
           disabled={overrideCount === 0}

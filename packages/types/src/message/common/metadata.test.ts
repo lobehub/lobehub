@@ -23,6 +23,15 @@ describe('MessageMetadataSchema', () => {
     expect(parsed).toEqual({ heteroMessageId: 'cc-1', heteroSessionId: 'sess-A' });
   });
 
+  it('preserves the operation id provenance stamp so it is not stripped on writes', () => {
+    const parsed = MessageMetadataSchema.parse({
+      operationId: 'op-1',
+      unknown: 'stripped',
+    });
+
+    expect(parsed).toEqual({ operationId: 'op-1' });
+  });
+
   it('preserves the durable heterogeneous tool-state watermark', () => {
     const parsed = MessageMetadataSchema.parse({
       heterogeneousToolStateOperationId: 'op-1',

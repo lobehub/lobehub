@@ -10,11 +10,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 
-import {
-  WorkspaceAgentPolicyCard,
-  WorkspaceAgentSelectionPolicyMenu,
-} from './WorkspaceAgentPolicyCard';
-import { getWorkspaceAgentSelectionPolicyLabelKeys } from './workspaceAgentSelectionPolicyLabels';
+import { WorkspaceAgentPolicyCard } from './WorkspaceAgentPolicyCard';
 
 interface WorkspaceAgentModelPolicyProps {
   agentId: string;
@@ -28,32 +24,10 @@ export const WorkspaceAgentModelPolicy = memo<WorkspaceAgentModelPolicyProps>(({
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   if (!agent?.workspaceId || !config) return null;
 
-  const isLocked = config.agencyConfig?.modelSelectionPolicy !== 'member';
-
-  const labelKeys = getWorkspaceAgentSelectionPolicyLabelKeys(agent.visibility === 'private');
-
+  // Whether members may switch this model is configured on the Agent's
+  // Permission page — this card only picks the model itself.
   return (
-    <WorkspaceAgentPolicyCard
-      icon={Bot}
-      title={t('settingAgent.modelPolicy.title')}
-      action={
-        <WorkspaceAgentSelectionPolicyMenu
-          disabled={!canEdit}
-          locked={isLocked}
-          lockedLabel={t(labelKeys.locked)}
-          unlockedLabel={t(labelKeys.unlocked)}
-          onChange={(locked) => {
-            if (!canEdit) return;
-
-            void updateAgentConfigById(agentId, {
-              agencyConfig: {
-                modelSelectionPolicy: locked ? 'fixed' : 'member',
-              },
-            });
-          }}
-        />
-      }
-    >
+    <WorkspaceAgentPolicyCard icon={Bot} title={t('settingAgent.modelPolicy.title')}>
       <ModelSelect
         disabled={!canEdit}
         style={{ width: '100%' }}

@@ -1,5 +1,7 @@
 import { type Context as OtContext } from '@lobechat/observability-otel/api';
 import { type ClientSecretPayload } from '@lobechat/types';
+import type { ClientMetadata } from '@lobechat/utils/server';
+import { parseClientMetadata } from '@lobechat/utils/server';
 import { parse } from 'cookie';
 import debug from 'debug';
 import { type NextRequest } from 'next/server';
@@ -8,7 +10,7 @@ import { auth } from '@/auth';
 import { canUseWorkspaceApiKeys } from '@/business/server/workspaceApiKey';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { ApiKeyModel } from '@/database/models/apiKey';
-import { hasWorkspaceOwnerAccess } from '@/database/models/workspace';
+import { hasWorkspaceAdminAccess } from '@/database/models/workspace';
 import { authEnv, LOBE_CHAT_OIDC_AUTH_HEADER } from '@/envs/auth';
 import { extractTraceContext } from '@/libs/observability/traceparent';
 import { assertOIDCUserActive, isOIDCUserInactiveError } from '@/libs/oidc-provider/access-control';
@@ -77,6 +79,7 @@ export interface OIDCAuth {
 
 export interface AuthContext {
   clientIp?: string | null;
+  clientMetadata?: ClientMetadata;
   jwtPayload?: ClientSecretPayload | null;
   marketAccessToken?: string;
   // Add OIDC authentication information
@@ -94,6 +97,7 @@ export interface AuthContext {
  * This is useful for testing when we don't want to mock Next.js' request/response
  */
 export const createContextInner = async (params?: {
+  clientMetadata?: ClientMetadata;
   clientIp?: string | null;
   marketAccessToken?: string;
   oidcAuth?: OIDCAuth | null;
@@ -107,6 +111,7 @@ export const createContextInner = async (params?: {
   const responseHeaders = new Headers();
 
   return {
+    clientMetadata: params?.clientMetadata || { type: 'unknown' },
     clientIp: params?.clientIp,
     marketAccessToken: params?.marketAccessToken,
     oidcAuth: params?.oidcAuth,
@@ -126,6 +131,8 @@ export type LambdaContext = Awaited<ReturnType<typeof createContextInner>>;
  * @link https://trpc.io/docs/v11/context
  */
 export const createLambdaContext = async (request: NextRequest): Promise<LambdaContext> => {
+  const clientMetadata = parseClientMetadata(request.headers);
+
   // we have a special header to debug the api endpoint in development mode
   // IT WON'T GO INTO PRODUCTION ANYMORE
   const isDebugApi = request.headers.get('lobe-auth-dev-backend-api') === '1';
@@ -133,6 +140,7 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
 
   if (process.env.NODE_ENV === 'development' && (isDebugApi || isMockUser)) {
     return createContextInner({
+      clientMetadata,
       userId: process.env.MOCK_DEV_USER_ID,
     });
   }
@@ -154,6 +162,7 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
   const workspaceId = request.headers.get('X-Workspace-Id')?.trim() || undefined;
 
   const commonContext = {
+    clientMetadata,
     clientIp,
     marketAccessToken,
     userAgent,
@@ -203,18 +212,18 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
     }
 
     // Same gates as the OpenAPI workspace middleware: workspace API keys are
-    // owner-only, so the issuer must still hold owner status (a demoted or
-    // removed owner's key stops working), and a workspace that loses the
+    // Admin-or-higher, so the issuer must still hold admin status (a demoted or
+    // removed admin's key stops working), and a workspace that loses the
     // workspace-API-key entitlement must not keep serving already-issued keys.
     if (apiKeyAuth.workspaceId) {
       const db = await getServerDB();
-      const isOwner = await hasWorkspaceOwnerAccess(db, {
+      const isAdmin = await hasWorkspaceAdminAccess(db, {
         userId: apiKeyAuth.userId,
         workspaceId: apiKeyAuth.workspaceId,
       });
 
-      if (!isOwner) {
-        log('Workspace API key issuer is no longer a workspace owner; rejecting request');
+      if (!isAdmin) {
+        log('Workspace API key issuer is no longer a workspace admin; rejecting request');
 
         return createContextInner({
           ...commonContext,

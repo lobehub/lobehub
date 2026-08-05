@@ -84,6 +84,7 @@ describe('buildWorkspaceAwarePath', () => {
     expect(buildWorkspaceAwarePath('/settings/skill', 'acme')).toBe('/acme/settings/skill');
     expect(buildWorkspaceAwarePath('/settings/connector', 'acme')).toBe('/acme/settings/connector');
     expect(buildWorkspaceAwarePath('/settings/devices', 'acme')).toBe('/acme/settings/devices');
+    expect(buildWorkspaceAwarePath('/settings/labels', 'acme')).toBe('/acme/settings/labels');
     expect(buildWorkspaceAwarePath('/settings/audit-log', 'acme')).toBe('/acme/settings/audit-log');
     expect(buildWorkspaceAwarePath('/settings/storage', 'acme')).toBe('/acme/settings/storage');
     expect(buildWorkspaceAwarePath('/settings/credential', 'acme')).toBe(
@@ -91,6 +92,11 @@ describe('buildWorkspaceAwarePath', () => {
     );
     // Legacy alias — prefixed, then the router redirects to `credential`.
     expect(buildWorkspaceAwarePath('/settings/creds', 'acme')).toBe('/acme/settings/creds');
+    expect(buildWorkspaceAwarePath('/settings/statistics', 'acme')).toBe(
+      '/acme/settings/statistics',
+    );
+    // Legacy alias — prefixed, then the router redirects to `statistics`.
+    expect(buildWorkspaceAwarePath('/settings/stats', 'acme')).toBe('/acme/settings/stats');
     expect(buildWorkspaceAwarePath('/settings/oauth-apps', 'acme')).toBe(
       '/acme/settings/oauth-apps',
     );

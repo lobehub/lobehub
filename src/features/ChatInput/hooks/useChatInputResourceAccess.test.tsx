@@ -45,6 +45,7 @@ describe('useChatInputResourceAccess', () => {
   it('does not throw when rendered without a ChatInput store Provider', () => {
     const { result } = renderHook(() => useChatInputResourceAccess());
 
+    expect(result.current.canShowControls).toBe(true);
     expect(result.current.canUseResource).toBe(true);
     expect(result.current.isGroupContext).toBe(false);
     // No bound agent to gate when there is no store.
@@ -59,7 +60,37 @@ describe('useChatInputResourceAccess', () => {
 
     const { result } = renderHook(() => useChatInputResourceAccess(), { wrapper });
 
+    expect(result.current.canShowControls).toBe(true);
     expect(result.current.canUseResource).toBe(true);
     expect(useResourceAccessMock).toHaveBeenLastCalledWith('agent', 'agent-1');
+  });
+
+  it('hides composer controls when the caller can only view the resource', () => {
+    useResourceAccessMock.mockReturnValueOnce({
+      canEditResource: false,
+      canManageResource: false,
+      canUseResource: false,
+      isAccessResolved: true,
+      isLoading: false,
+    });
+
+    const { result } = renderHook(() => useChatInputResourceAccess());
+
+    expect(result.current.canShowControls).toBe(false);
+    expect(result.current.canUseResource).toBe(false);
+  });
+
+  it('hides composer controls while resource access is unresolved', () => {
+    useResourceAccessMock.mockReturnValueOnce({
+      canEditResource: false,
+      canManageResource: false,
+      canUseResource: true,
+      isAccessResolved: false,
+      isLoading: true,
+    });
+
+    const { result } = renderHook(() => useChatInputResourceAccess());
+
+    expect(result.current.canShowControls).toBe(false);
   });
 });

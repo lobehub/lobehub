@@ -6,6 +6,7 @@ import {
   groupExecutionTargetDevices,
   isSharedExecutionTarget,
   parseExecutionTargetValue,
+  resolveExecutionTargetSelection,
 } from './index';
 
 const device = (overrides: Partial<DeviceListItem>): DeviceListItem =>
@@ -56,6 +57,54 @@ describe('ExecutionTargetPicker helpers', () => {
       privateWorkspace: [privateWorkspace],
       publicWorkspace: [publicWorkspace],
       workspace: [publicWorkspace],
+    });
+  });
+
+  describe('resolveExecutionTargetSelection', () => {
+    const publicDevice = device({
+      deviceId: 'public',
+      scope: 'workspace',
+      visibility: 'public',
+    });
+
+    it('resolves a bound device only while that device is still reachable', () => {
+      expect(
+        resolveExecutionTargetSelection({
+          boundDeviceId: 'public',
+          configuredTarget: 'device',
+          devices: [publicDevice],
+          isHeterogeneous: true,
+        }),
+      ).toEqual({ deviceId: 'public', target: 'device' });
+
+      // Device unshared / deleted / list still loading — there is nothing to fix.
+      expect(
+        resolveExecutionTargetSelection({
+          boundDeviceId: 'public',
+          configuredTarget: 'device',
+          devices: [],
+          isHeterogeneous: true,
+        }),
+      ).toBeUndefined();
+    });
+
+    it('falls back to "none" only for built-in-runtime agents with nothing stored', () => {
+      expect(resolveExecutionTargetSelection({ devices: [], isHeterogeneous: false })).toEqual({
+        target: 'none',
+      });
+      expect(
+        resolveExecutionTargetSelection({ devices: [], isHeterogeneous: true }),
+      ).toBeUndefined();
+    });
+
+    it('passes through a stored shared target', () => {
+      expect(
+        resolveExecutionTargetSelection({
+          configuredTarget: 'sandbox',
+          devices: [],
+          isHeterogeneous: true,
+        }),
+      ).toEqual({ target: 'sandbox' });
     });
   });
 

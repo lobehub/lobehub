@@ -7,7 +7,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { verifyService } from '@/services/verify';
 
-import { useVerifyReportBundle, useVerifyReportSummariesInfinite } from './hooks';
+import {
+  getAcceptanceBySubjectRefreshInterval,
+  useAcceptanceBySubject,
+  useRubrics,
+  useVerifyReportBundle,
+  useVerifyReportSummariesInfinite,
+} from './hooks';
 
 const useSWRInfiniteMock = vi.hoisted(() => vi.fn());
 
@@ -51,6 +57,34 @@ describe('Verify data hooks', () => {
 
     expect(secondMount.result.current.data).toBeNull();
     expect(getReportBundle).toHaveBeenCalledTimes(1);
+  });
+
+  it('loads an acceptance by its task subject identifier', async () => {
+    const getAcceptanceBySubject = vi
+      .spyOn(verifyService, 'getAcceptanceBySubject')
+      .mockResolvedValue({ id: 'acceptance-1' } as never);
+
+    const { result } = renderHook(() => useAcceptanceBySubject('task', 'T-231'), {
+      wrapper: createSWRWrapper(new Map()),
+    });
+
+    await waitFor(() => expect(result.current.data).toEqual({ id: 'acceptance-1' }));
+    expect(getAcceptanceBySubject).toHaveBeenCalledWith('task', 'T-231');
+  });
+
+  it('polls while a task has no acceptance and stops after one is created', () => {
+    expect(getAcceptanceBySubjectRefreshInterval(undefined)).toBe(2000);
+    expect(getAcceptanceBySubjectRefreshInterval(null)).toBe(2000);
+    expect(getAcceptanceBySubjectRefreshInterval({ id: 'acceptance-1' })).toBe(0);
+  });
+
+  it('does not request rubrics while rubric authoring is inactive', async () => {
+    const listRubrics = vi.spyOn(verifyService, 'listRubrics').mockResolvedValue([]);
+
+    renderHook(() => useRubrics(false), { wrapper: createSWRWrapper(new Map()) });
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+
+    expect(listRubrics).not.toHaveBeenCalled();
   });
 
   it('keeps loaded reports visible while SWR revalidates after a remount', () => {

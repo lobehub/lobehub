@@ -1,6 +1,6 @@
 import { CopyOutlined, EyeInvisibleOutlined, EyeOutlined } from '@ant-design/icons';
-import { Button } from '@lobehub/ui/base-ui';
-import { App, Flex } from 'antd';
+import { Button, toast } from '@lobehub/ui/base-ui';
+import { Flex } from 'antd';
 import { type FC } from 'react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,7 +12,6 @@ interface ApiKeyDisplayProps {
 const ApiKeyDisplay: FC<ApiKeyDisplayProps> = ({ apiKey }) => {
   const { t } = useTranslation('auth');
   const [isVisible, setIsVisible] = useState(false);
-  const { message } = App.useApp();
 
   const toggleVisibility = () => {
     setIsVisible(!isVisible);
@@ -23,9 +22,9 @@ const ApiKeyDisplay: FC<ApiKeyDisplayProps> = ({ apiKey }) => {
 
     try {
       await navigator.clipboard.writeText(apiKey);
-      message.success(t('apikey.display.copySuccess'));
+      toast.success(t('apikey.display.copySuccess'));
     } catch {
-      message.error(t('apikey.display.copyError'));
+      toast.error(t('apikey.display.copyError'));
     }
   };
 

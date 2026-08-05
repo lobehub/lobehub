@@ -1,4 +1,5 @@
 {
+  "description": "این ویژگی‌ها آزمایشی هستند. ممکن است آن‌ها را حذف کنیم و ممکن است دارای اشکالاتی باشند. خوشحال می‌شویم نظرات شما را هنگام استفاده از آن‌ها دریافت کنیم.",
   "features.agentGraphConfig.desc": "نمایش تنظیمات زمان اجرای نمودار در تنظیمات پیشرفته پروفایل عامل.",
   "features.agentGraphConfig.title": "پیکربندی زمان اجرای نمودار عامل",
   "features.agentSelfIteration.desc": "به دستیار امکان می‌دهد درباره عملکرد خود تأمل کند، خودآگاهی ایجاد کند و از طریق تلاش‌ها و تعاملات مداوم به طور پیوسته بهبود یابد.",
@@ -11,6 +12,8 @@
   "features.claudeCodeSdk.title": "محیط اجرایی Claude Code SDK",
   "features.groupChat.desc": "فعال‌سازی هماهنگی گفت‌وگوی گروهی چندعاملی.",
   "features.groupChat.title": "گفت‌وگوی گروهی (چندعاملی)",
+  "features.heteroSessionImport.desc": "افزودن گزینه \"وارد کردن جلسات عامل محلی\" به منوی لیست موضوعات: اسکن متن‌های Claude Code / Codex CLI محلی و وارد کردن آنها به عنوان موضوعات، با همگام‌سازی افزایشی در وارد کردن مجدد.",
+  "features.heteroSessionImport.title": "وارد کردن جلسات عامل محلی",
   "features.imessage.desc": "اتصال نمایندگان به iMessage از طریق پل BlueBubbles دسکتاپ LobeHub محلی.",
   "features.imessage.title": "کانال iMessage",
   "features.inAppBrowser.desc": "نمایش تب مرورگر در پانل کناری مکالمه: یک مرورگر داخلی که نتایج جستجو را در همانجا باز می‌کند و به نمایندگان اجازه می‌دهد به صورت قابل مشاهده مرور کنند.",

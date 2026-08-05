@@ -13,7 +13,7 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { getSessionStoreState } from '@/store/session';
 import * as toolStoreModule from '@/store/tool';
-import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
+import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/pageAgentRuntime';
 import { useUserStore } from '@/store/user';
 
 import { useChatStore } from '../../../../store';
@@ -472,6 +472,93 @@ describe('ConversationLifecycle actions', () => {
         expect(result.current.executeClientAgent).toHaveBeenCalled();
       });
 
+      it('should adopt the minted topic id for the whole send (no _new -> topic transition)', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const newBucketKey = messageMapKey({ agentId, topicId: null });
+        let resolveServerSend!: (value: any) => void;
+        const serverSendPromise = new Promise<any>((resolve) => {
+          resolveServerSend = resolve;
+        });
+        let resolveExecute!: () => void;
+        const executePromise = new Promise<void>((resolve) => {
+          resolveExecute = resolve;
+        });
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: undefined,
+            executeClientAgent: vi.fn().mockReturnValue(executePromise),
+            summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
+          });
+        });
+
+        let sentNewTopicId: string | undefined;
+        const sendMessageInServerSpy = vi
+          .spyOn(aiChatService, 'sendMessageInServer')
+          .mockImplementation((params: any) => {
+            sentNewTopicId = params.newTopic?.id;
+            return serverSendPromise;
+          });
+
+        let sendPromise!: ReturnType<typeof result.current.sendMessage>;
+        act(() => {
+          sendPromise = result.current.sendMessage({
+            context: { agentId, threadId: null, topicId: null },
+            message: 'first message',
+          });
+        });
+
+        await waitFor(() => expect(sendMessageInServerSpy).toHaveBeenCalled());
+
+        // The conversation adopted the minted id BEFORE the server answered:
+        // activeTopicId already points at it, the optimistic pair lives in the
+        // minted bucket (NOT `_new`), and the id is marked as creating. This is
+        // the invariant that keeps the conversation surface's contextKey stable
+        // for the whole send — the remount/blank-frame flicker cannot happen
+        // when the key never changes.
+        const midState = useChatStore.getState();
+        const mintedTopicId = midState.activeTopicId!;
+        expect(mintedTopicId).toMatch(/^tpc_/);
+        expect(sentNewTopicId).toBe(mintedTopicId);
+        expect(midState.creatingTopicIds).toContain(mintedTopicId);
+
+        const mintedBucketKey = messageMapKey({ agentId, topicId: mintedTopicId });
+        expect(midState.dbMessagesMap[mintedBucketKey]?.length).toBe(2);
+        expect(midState.dbMessagesMap[newBucketKey] ?? []).toEqual([]);
+
+        await act(async () => {
+          resolveServerSend({
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            isCreateNewTopic: true,
+            messages: [
+              createMockMessage({
+                id: TEST_IDS.USER_MESSAGE_ID,
+                role: 'user',
+                topicId: mintedTopicId,
+              }),
+              createMockMessage({
+                id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+                role: 'assistant',
+                topicId: mintedTopicId,
+              }),
+            ],
+            topicId: mintedTopicId,
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          });
+          resolveExecute();
+          await sendPromise;
+        });
+
+        const endState = useChatStore.getState();
+        // Same id end to end — nothing re-keyed, nothing remounted.
+        expect(endState.activeTopicId).toBe(mintedTopicId);
+        // Server confirmed: the id must leave the creating set so fetching and
+        // refetch reconciliation return to normal.
+        expect(endState.creatingTopicIds).not.toContain(mintedTopicId);
+      });
+
       it('should show an optimistic topic while the first message is still creating the server topic', async () => {
         const { result } = renderHook(() => useChatStore());
         const agentId = TEST_IDS.SESSION_ID;
@@ -527,7 +614,7 @@ describe('ConversationLifecycle actions', () => {
             title: '666',
           }),
         );
-        expect(optimisticTopic?.id).toMatch(/^tmp_topic_/);
+        expect(optimisticTopic?.id).toMatch(/^tpc_/);
         expect(useChatStore.getState().topicLoadingIds).toContain(optimisticTopic!.id);
 
         await act(async () => {
@@ -686,7 +773,7 @@ describe('ConversationLifecycle actions', () => {
         await waitFor(() => expect(executeGatewayAgentSpy).toHaveBeenCalled());
 
         const optimisticTopicId = useChatStore.getState().topicDataMap[topicKey]?.items[0]?.id;
-        expect(optimisticTopicId).toMatch(/^tmp_topic_/);
+        expect(optimisticTopicId).toMatch(/^tpc_/);
         expect(useChatStore.getState().topicLoadingIds).toContain(optimisticTopicId);
 
         await act(async () => {
@@ -982,9 +1069,7 @@ describe('ConversationLifecycle actions', () => {
         });
 
         await waitFor(() =>
-          expect(useChatStore.getState().topicDataMap[groupKey]?.items[0]?.id).toMatch(
-            /^tmp_topic_/,
-          ),
+          expect(useChatStore.getState().topicDataMap[groupKey]?.items[0]?.id).toMatch(/^tpc_/),
         );
 
         const optimisticTopic = useChatStore.getState().topicDataMap[groupKey]?.items[0];
@@ -1064,9 +1149,7 @@ describe('ConversationLifecycle actions', () => {
         });
 
         await waitFor(() =>
-          expect(useChatStore.getState().topicDataMap[topicKey]?.items[0]?.id).toMatch(
-            /^tmp_topic_/,
-          ),
+          expect(useChatStore.getState().topicDataMap[topicKey]?.items[0]?.id).toMatch(/^tpc_/),
         );
         const optimisticTopicId = useChatStore.getState().topicDataMap[topicKey]!.items[0].id;
 
@@ -1753,7 +1836,10 @@ describe('ConversationLifecycle actions', () => {
 
         expect(sendMessageInServerSpy).toHaveBeenCalledWith(
           expect.objectContaining({
+            // Exact object on purpose: `model` must still be absent. `id` is the
+            // client-minted message id the server is asked to honour.
             newAssistantMessage: {
+              id: expect.stringMatching(/^msg_/),
               provider: 'codex',
             },
           }),
@@ -1774,7 +1860,9 @@ describe('ConversationLifecycle actions', () => {
         });
 
         const { agentByIdSelectors } = await import('@/store/agent/selectors');
-        vi.spyOn(agentByIdSelectors, 'isWorkspaceAgentById').mockReturnValue(() => true);
+        vi.spyOn(agentByIdSelectors, 'getAgentById').mockReturnValue(
+          () => ({ visibility: 'public', workspaceId: 'workspace-1' }) as any,
+        );
         useUserStore.setState({
           workspaceUserPreference: {
             agentDeviceOverrides: {
@@ -1828,7 +1916,9 @@ describe('ConversationLifecycle actions', () => {
         });
 
         const { agentByIdSelectors } = await import('@/store/agent/selectors');
-        vi.spyOn(agentByIdSelectors, 'isWorkspaceAgentById').mockReturnValue(() => true);
+        vi.spyOn(agentByIdSelectors, 'getAgentById').mockReturnValue(
+          () => ({ visibility: 'public', workspaceId: 'workspace-1' }) as any,
+        );
 
         const executeGatewayAgent = vi.fn().mockResolvedValue(undefined);
         act(() => {
@@ -1856,6 +1946,58 @@ describe('ConversationLifecycle actions', () => {
 
         expect(executeGatewayAgent).toHaveBeenCalledTimes(1);
         expect(executeHeterogeneousAgentMock).not.toHaveBeenCalled();
+      });
+
+      it('uses the owner target and ignores a retained member override for a private Workspace Agent', async () => {
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              boundDeviceId: 'owner-device',
+              executionTarget: 'local',
+              executionTargetSelectionPolicy: 'fixed',
+              heterogeneousProvider: { command: 'codex', type: 'codex' },
+            },
+          },
+          agentMeta: { visibility: 'private', workspaceId: 'workspace-1' },
+        });
+        useUserStore.setState({
+          workspaceUserPreference: {
+            agentDeviceOverrides: {
+              [TEST_IDS.SESSION_ID]: {
+                boundDeviceId: 'stale-workspace-device',
+                executionTarget: 'device',
+              },
+            },
+          },
+        });
+
+        const executeGatewayAgent = vi.fn().mockResolvedValue(undefined);
+        act(() => {
+          useChatStore.setState({ executeGatewayAgent });
+        });
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          messages: [
+            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+          ],
+          topicId: TEST_IDS.TOPIC_ID,
+          topics: [],
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+        executeHeterogeneousAgentMock.mockResolvedValue(undefined);
+
+        const { result } = renderHook(() => useChatStore());
+        await act(async () => {
+          await result.current.sendMessage({
+            message: TEST_CONTENT.USER_MESSAGE,
+            context: createTestContext(),
+          });
+        });
+
+        expect(executeHeterogeneousAgentMock).toHaveBeenCalledTimes(1);
+        expect(executeGatewayAgent).not.toHaveBeenCalled();
       });
 
       it('should route new-topic heterogeneous streaming updates to the persisted topic key', async () => {
@@ -1979,6 +2121,81 @@ describe('ConversationLifecycle actions', () => {
             topicId: TEST_IDS.TOPIC_ID,
           }),
         );
+      });
+
+      it('should clear isNew on the runtime operation after a new thread is persisted', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const topicId = 'topic-existing';
+        const createdThreadId = 'thread-created';
+        const draftContext = {
+          agentId: TEST_IDS.SESSION_ID,
+          isNew: true,
+          scope: 'thread' as const,
+          sourceMessageId: 'source-message',
+          threadId: null,
+          threadType: 'continuation' as const,
+          topicId,
+        };
+        const userMessage = createMockMessage({
+          id: TEST_IDS.USER_MESSAGE_ID,
+          role: 'user',
+        });
+        const assistantMessage = createMockMessage({
+          id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          role: 'assistant',
+        });
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          createdThreadId,
+          messages: [userMessage, assistantMessage],
+          topicId,
+          topics: [],
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+        useChatStore.setState({
+          executeClientAgent: vi.fn(async ({ context, parentMessageId, parentOperationId }) => {
+            useChatStore.getState().startOperation({
+              context: { ...context, messageId: parentMessageId },
+              parentOperationId,
+              type: 'execAgentRuntime',
+            });
+          }),
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: draftContext,
+            message: 'create thread and keep streaming',
+          });
+        });
+
+        const runtimeOperation = Object.values(result.current.operations).find(
+          (operation) => operation.type === 'execAgentRuntime',
+        );
+        expect(runtimeOperation?.context).toEqual(
+          expect.objectContaining({
+            agentId: TEST_IDS.SESSION_ID,
+            isNew: false,
+            scope: 'thread',
+            threadId: createdThreadId,
+            topicId,
+          }),
+        );
+
+        act(() => {
+          const cancelled = result.current.cancelOperations({
+            agentId: TEST_IDS.SESSION_ID,
+            isNew: false,
+            scope: 'thread',
+            status: 'running',
+            threadId: createdThreadId,
+            topicId,
+            type: 'execAgentRuntime',
+          });
+          expect(cancelled).toEqual([runtimeOperation!.id]);
+        });
+        expect(result.current.operations[runtimeOperation!.id].status).toBe('cancelled');
       });
 
       it('should recover heterogeneous context selections from the persisted user message metadata', async () => {
@@ -2750,20 +2967,24 @@ describe('ConversationLifecycle actions', () => {
       it('should abort pending flat tool messages when user sends a new message', async () => {
         const { result } = renderHook(() => useChatStore());
         const agentId = TEST_IDS.SESSION_ID;
-        const key = messageMapKey({ agentId, topicId: null });
+        // Pending interventions only ever live in a real topic bucket now: a
+        // new-topic send adopts its minted id up front, so the `_new` bucket
+        // never holds messages.
+        const topicId = 'topic-pending';
+        const key = messageMapKey({ agentId, topicId });
 
         const pendingToolMsg = createMockMessage({
           id: 'tool-pending-1',
           role: 'tool',
           content: '',
           pluginIntervention: { status: 'pending' },
-          topicId: undefined,
+          topicId,
         });
 
         act(() => {
           useChatStore.setState({
             activeAgentId: agentId,
-            activeTopicId: undefined,
+            activeTopicId: topicId,
             messagesMap: { [key]: [pendingToolMsg] },
             dbMessagesMap: { [key]: [pendingToolMsg] },
           });
@@ -2788,7 +3009,7 @@ describe('ConversationLifecycle actions', () => {
         await act(async () => {
           await result.current.sendMessage({
             message: 'override pending interaction',
-            context: { agentId, topicId: null, threadId: null },
+            context: { agentId, topicId, threadId: null },
           });
         });
 
@@ -2821,12 +3042,15 @@ describe('ConversationLifecycle actions', () => {
       it('should abort pending interventions in group message children', async () => {
         const { result } = renderHook(() => useChatStore());
         const agentId = TEST_IDS.SESSION_ID;
-        const key = messageMapKey({ agentId, topicId: null });
+        // Same shift as the flat-tool case: messages only live in real topic
+        // buckets now, never in `_new`.
+        const topicId = 'topic-pending';
+        const key = messageMapKey({ agentId, topicId });
 
         const groupMsg = createMockMessage({
           id: 'group-1',
           role: 'assistant',
-          topicId: undefined,
+          topicId,
           children: [
             {
               id: 'child-1',
@@ -2848,7 +3072,7 @@ describe('ConversationLifecycle actions', () => {
         act(() => {
           useChatStore.setState({
             activeAgentId: agentId,
-            activeTopicId: undefined,
+            activeTopicId: topicId,
             messagesMap: { [key]: [groupMsg] },
             dbMessagesMap: { [key]: [groupMsg] },
           });
@@ -2873,7 +3097,7 @@ describe('ConversationLifecycle actions', () => {
         await act(async () => {
           await result.current.sendMessage({
             message: 'override group interaction',
-            context: { agentId, topicId: null, threadId: null },
+            context: { agentId, topicId, threadId: null },
           });
         });
 

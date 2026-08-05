@@ -1,12 +1,13 @@
 import { CHAT_GROUP_SESSION_ID_PREFIX } from '@lobechat/types';
+import { toast } from '@lobehub/ui/base-ui';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { message } from '@/components/AntdStaticMethods';
 import { setScopedMutate } from '@/libs/swr';
 import { agentConfigKeys } from '@/libs/swr/keys';
 import { agentService } from '@/services/agent';
 import { agentDocumentService } from '@/services/agentDocument';
+import { useGlobalStore } from '@/store/global';
 import { type LobeAgentConfig } from '@/types/agent';
 import { withSWR } from '~test-utils';
 
@@ -39,10 +40,8 @@ vi.mock('@/services/agentDocument', () => ({
   resolveAgentDocumentsContext: vi.fn(),
 }));
 
-vi.mock('@/components/AntdStaticMethods', () => ({
-  message: {
-    error: vi.fn(),
-  },
+vi.mock('@lobehub/ui/base-ui', () => ({
+  toast: { error: vi.fn() },
 }));
 
 // Mock sessionStore
@@ -178,6 +177,7 @@ describe('AgentSlice Actions', () => {
               backgroundColor: null,
               description: 'stale',
               id: 'agent-1',
+              name: null,
               title: 'Stale Agent',
             },
           ],
@@ -189,6 +189,36 @@ describe('AgentSlice Actions', () => {
       });
 
       expect(result.current.availableAgents).toBeUndefined();
+    });
+
+    it('should seed a personal name matching the user language', async () => {
+      vi.mocked(agentService.createAgent).mockResolvedValue({ agentId: 'agent-2' });
+      const status = useGlobalStore.getState().status;
+      useGlobalStore.setState({ status: { ...status, language: 'zh-CN' } });
+      const { result } = renderHook(() => useAgentStore());
+
+      try {
+        await act(async () => {
+          await result.current.createAgent({ config: { title: '健康助手' } });
+        });
+
+        const config = vi.mocked(agentService.createAgent).mock.calls[0][0].config!;
+        expect(config.title).toBe('健康助手');
+        expect(config.name).toMatch(/^\p{Script=Han}+$/u);
+      } finally {
+        useGlobalStore.setState({ status });
+      }
+    });
+
+    it('should keep a name the caller already provided', async () => {
+      vi.mocked(agentService.createAgent).mockResolvedValue({ agentId: 'agent-2' });
+      const { result } = renderHook(() => useAgentStore());
+
+      await act(async () => {
+        await result.current.createAgent({ config: { name: 'Ada', title: 'Math Tutor' } });
+      });
+
+      expect(vi.mocked(agentService.createAgent).mock.calls[0][0].config?.name).toBe('Ada');
     });
   });
 
@@ -225,6 +255,7 @@ describe('AgentSlice Actions', () => {
           backgroundColor: null,
           description: 'Helps with setup',
           id: 'agent-1',
+          name: null,
           title: 'Setup',
         },
       ]);
@@ -240,6 +271,7 @@ describe('AgentSlice Actions', () => {
             backgroundColor: null,
             description: 'Helps with setup',
             id: 'agent-1',
+            name: null,
             title: 'Setup',
           },
         ]);
@@ -288,6 +320,35 @@ describe('AgentSlice Actions', () => {
       // The background fetch only populates agentMap; it must not steal the active agent.
       expect(result.current.activeAgentId).toBe('routed-agent');
     });
+
+    it('replaces a stale profile snapshot so omitted editorData is cleared', async () => {
+      useAgentStore.setState({
+        activeAgentId: 'agent-1',
+        agentMap: {
+          'agent-1': {
+            editorData: { root: { children: [{ text: 'Old prompt' }] } },
+            id: 'agent-1',
+            systemRole: 'Old prompt',
+          } as any,
+        },
+      });
+      vi.mocked(agentService.getAgentConfigById).mockResolvedValue({
+        id: 'agent-1',
+        systemRole: 'New prompt from Agent Builder',
+      } as any);
+
+      renderHook(() => useAgentStore().useFetchAgentConfig(true, 'agent-1'), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => {
+        expect(useAgentStore.getState().agentMap['agent-1']).toEqual({
+          id: 'agent-1',
+          systemRole: 'New prompt from Agent Builder',
+        });
+      });
+      expect(useAgentStore.getState().agentMap['agent-1']).not.toHaveProperty('editorData');
+    });
   });
 
   describe('invalidateAvailableAgents', () => {
@@ -302,6 +363,7 @@ describe('AgentSlice Actions', () => {
               backgroundColor: null,
               description: 'stale',
               id: 'agent-1',
+              name: null,
               title: 'Stale Agent',
             },
           ],
@@ -535,7 +597,7 @@ describe('AgentSlice Actions', () => {
         });
       });
 
-      expect(message.error).toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalled();
       // Optimistic value must not survive a rejected write — refetch server truth.
       expect(refreshSpy).toHaveBeenCalledWith('agent-1');
       expect(result.current.saveStatus).toBe('idle');
@@ -557,7 +619,7 @@ describe('AgentSlice Actions', () => {
         ).rejects.toThrow('save failed');
       });
 
-      expect(message.error).not.toHaveBeenCalled();
+      expect(toast.error).not.toHaveBeenCalled();
       expect(result.current.saveStatus).toBe('idle');
     });
   });
@@ -690,6 +752,30 @@ describe('AgentSlice Actions', () => {
         { chatConfig: { historyCount: 10 } },
         expect.any(AbortSignal),
       );
+    });
+
+    // automatic corrections must not trigger phantom save-error toasts: some chatConfig writes are automatic corrections (e.g. forcing
+    // `searchMode: 'auto'` for a model whose builtin search can't be turned off).
+    // A rejected correction must not toast "your change was not applied" for a
+    // change the user never made, so the option has to reach the write funnel.
+    it('should forward update options through the chatConfig wrapper', async () => {
+      const { result } = renderHook(() => useAgentStore());
+
+      vi.mocked(agentService.updateAgentConfig).mockRejectedValue(new Error('save failed'));
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      act(() => {
+        useAgentStore.setState({ activeAgentId: 'agent-1' });
+      });
+
+      await act(async () => {
+        await result.current.updateAgentChatConfig(
+          { searchMode: 'auto' },
+          { showErrorMessage: false },
+        );
+      });
+
+      expect(toast.error).not.toHaveBeenCalled();
     });
   });
 
@@ -841,6 +927,7 @@ describe('AgentSlice Actions', () => {
               backgroundColor: null,
               description: 'Old Desc',
               id: 'agent-1',
+              name: null,
               title: 'Old Title',
             },
           ],

@@ -2,8 +2,10 @@
 import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { RbacModel } from '@/database/models/rbac';
 import {
   assertCanPerformResourceAction,
+  canPerformResourceAction,
   getResourceMeta,
 } from '@/server/services/resourcePermission';
 
@@ -13,11 +15,14 @@ import {
   assertCanUseMessageTargets,
   assertCanUseSessionTargets,
   assertCanUseTopicTargets,
+  assertCanViewTopicTargets,
+  filterUserIdsByTopicViewAccess,
 } from './conversationResourceGuard';
 import { getWorkspaceAgentParentGroupIds } from './workspaceAgentGuard';
 
 vi.mock('@/server/services/resourcePermission', () => ({
   assertCanPerformResourceAction: vi.fn(),
+  canPerformResourceAction: vi.fn(),
   getResourceMeta: vi.fn(),
 }));
 vi.mock('./workspaceAgentGuard', () => ({
@@ -26,17 +31,18 @@ vi.mock('./workspaceAgentGuard', () => ({
 
 const getResourceMetaMock = vi.mocked(getResourceMeta);
 const assertActionMock = vi.mocked(assertCanPerformResourceAction);
+const canPerformActionMock = vi.mocked(canPerformResourceAction);
 const getParentGroupIdsMock = vi.mocked(getWorkspaceAgentParentGroupIds);
 
 /** Minimal drizzle stub: every select().from().where() resolves `rows`. */
 const createDb = (rowsPerCall: any[][]) => {
   let call = 0;
   return {
-    select: () => ({
+    select: vi.fn(() => ({
       from: () => ({
         where: async () => rowsPerCall[call++] ?? [],
       }),
-    }),
+    })),
   } as any;
 };
 
@@ -77,6 +83,17 @@ describe('assertCanUseConversationTargets', () => {
         userId: 'user-1',
         workspaceId: 'ws-1',
       }),
+    );
+  });
+
+  it('forwards request-resolved permission grants', async () => {
+    await assertCanUseConversationTargets(
+      { ...baseCtx(createDb([])), grantedPermissions: ['ai_model:invoke:owner'] },
+      [{ agentId: 'agent-1' }],
+    );
+
+    expect(assertActionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ grantedPermissions: ['ai_model:invoke:owner'] }),
     );
   });
 
@@ -164,7 +181,57 @@ describe('assertCanUseTopicTargets', () => {
     await assertCanUseTopicTargets(baseCtx(db), ['t-1']);
 
     expect(assertActionMock).toHaveBeenCalledWith(
-      expect.objectContaining({ resourceId: 'group-1', resourceType: 'agentGroup' }),
+      expect.objectContaining({
+        action: 'use',
+        resourceId: 'group-1',
+        resourceType: 'agentGroup',
+      }),
+    );
+  });
+
+  it('can require read-only view access to the owning resource', async () => {
+    const db = createDb([[{ agentId: 'agent-1', groupId: null }]]);
+
+    await assertCanViewTopicTargets(baseCtx(db), ['t-1']);
+
+    expect(assertActionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'view', resourceId: 'agent-1', resourceType: 'agent' }),
+    );
+  });
+});
+
+describe('filterUserIdsByTopicViewAccess', () => {
+  it('resolves topic metadata and recipient grants once before evaluating users', async () => {
+    const db = createDb([[{ agentId: 'agent-1', groupId: null, sessionId: null }]]);
+    const grants = new Map([
+      ['user-1', ['agent:read:all']],
+      ['user-2', ['agent:read:all']],
+    ]);
+    const permissionsSpy = vi
+      .spyOn(RbacModel, 'getWorkspaceUsersPermissions')
+      .mockResolvedValueOnce(grants);
+    canPerformActionMock.mockImplementation(async ({ userId }) => userId === 'user-1');
+
+    await expect(
+      filterUserIdsByTopicViewAccess(
+        { db, workspaceId: 'ws-1' },
+        ['topic-1'],
+        ['user-1', 'user-2', 'former-user'],
+      ),
+    ).resolves.toEqual(['user-1']);
+
+    expect(db.select).toHaveBeenCalledTimes(1);
+    expect(getResourceMetaMock).toHaveBeenCalledTimes(1);
+    expect(permissionsSpy).toHaveBeenCalledTimes(1);
+    expect(permissionsSpy).toHaveBeenCalledWith({
+      db,
+      requireMembership: true,
+      userIds: ['user-1', 'user-2', 'former-user'],
+      workspaceId: 'ws-1',
+    });
+    expect(canPerformActionMock).toHaveBeenCalledTimes(2);
+    expect(canPerformActionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ effectiveAccessLevel: 'view', userId: 'user-1' }),
     );
   });
 });

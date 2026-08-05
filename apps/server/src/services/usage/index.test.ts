@@ -23,38 +23,51 @@ describe('UsageRecordService', () => {
   let mockDb: LobeChatDatabase;
   const userId = 'test-user-id';
 
-  // Helper function to setup query chain mock
+  // Helper function to setup query chain mock. The service fans out over the
+  // three derivation arms (topic / session / orphan); the mock returns rows
+  // from the topic arm (first innerJoin chain) and empties from the rest.
   const setupQueryChainMock = (mockMessages: any[]) => {
-    const mockOrderBy = vi.fn().mockResolvedValue(mockMessages);
-    const mockWhere = vi.fn().mockReturnValue({ orderBy: mockOrderBy });
-    const mockFrom = vi.fn().mockReturnValue({ where: mockWhere });
-    mockDb.select = vi.fn().mockReturnValue({ from: mockFrom });
+    let joinCalls = 0;
+    mockDb.select = vi.fn().mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        innerJoin: vi.fn().mockImplementation(() => {
+          const isTopicArm = joinCalls++ === 0;
+          return { where: vi.fn().mockResolvedValue(isTopicArm ? mockMessages : []) };
+        }),
+        where: vi.fn().mockResolvedValue([]),
+      }),
+    });
   };
 
-  // Variant that also captures the args passed to `.where(...)` so tests can
-  // assert what ended up in the composed WHERE clause.
+  // Variant that also captures the args passed to `.where(...)` (topic arm
+  // first) so tests can assert what ended up in the composed WHERE clause.
   const setupCapturingMock = (mockMessages: any[]) => {
     const whereArgs: unknown[] = [];
-    const mockOrderBy = vi.fn().mockResolvedValue(mockMessages);
-    const mockWhere = vi.fn().mockImplementation((arg: unknown) => {
-      whereArgs.push(arg);
-      return { orderBy: mockOrderBy };
+    let joinCalls = 0;
+    mockDb.select = vi.fn().mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        innerJoin: vi.fn().mockImplementation(() => {
+          const isTopicArm = joinCalls++ === 0;
+          return {
+            where: vi.fn().mockImplementation((arg: unknown) => {
+              whereArgs.push(arg);
+              return Promise.resolve(isTopicArm ? mockMessages : []);
+            }),
+          };
+        }),
+        where: vi.fn().mockImplementation((arg: unknown) => {
+          whereArgs.push(arg);
+          return Promise.resolve([]);
+        }),
+      }),
     });
-    const mockFrom = vi.fn().mockReturnValue({ where: mockWhere });
-    mockDb.select = vi.fn().mockReturnValue({ from: mockFrom });
     return { whereArgs };
   };
 
   beforeEach(() => {
-    // Create a fresh mock for each test
-    const mockOrderBy = vi.fn();
-    const mockWhere = vi.fn().mockReturnValue({ orderBy: mockOrderBy });
-    const mockFrom = vi.fn().mockReturnValue({ where: mockWhere });
-    const mockSelect = vi.fn().mockReturnValue({ from: mockFrom });
-
-    mockDb = {
-      select: mockSelect,
-    } as unknown as LobeChatDatabase;
+    mockDb = {} as unknown as LobeChatDatabase;
+    // Default: every arm resolves empty
+    setupQueryChainMock([]);
 
     service = new UsageRecordService(mockDb, userId);
   });

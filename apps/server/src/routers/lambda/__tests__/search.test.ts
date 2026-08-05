@@ -95,7 +95,21 @@ describe('searchRouter', () => {
     expect(getUserSettings).not.toHaveBeenCalled();
   });
 
-  it('preserves global search results when the community agent search rejects', async () => {
+  it('keeps untyped searches including the marketplace by default', async () => {
+    const localResult = { id: 'local-agent', title: 'Local Agent', type: 'agent' };
+    search.mockResolvedValue([localResult]);
+    getAssistantList.mockResolvedValue({ items: [] });
+    const caller = searchRouter.createCaller({ userId: 'test-user' } as any);
+
+    const result = await caller.query({ query: 'assistant' });
+
+    expect(result).toEqual([localResult]);
+    expect(getAssistantList).toHaveBeenCalled();
+    expect(getMcpList).toHaveBeenCalled();
+    expect(getPluginList).toHaveBeenCalled();
+  });
+
+  it('preserves untyped search results when the community agent search rejects', async () => {
     const localResult = { id: 'local-agent', title: 'Local Agent', type: 'agent' };
     search.mockResolvedValue([localResult]);
     getAssistantList.mockRejectedValue(new Error('Market unavailable'));
@@ -113,6 +127,21 @@ describe('searchRouter', () => {
       },
       { throwOnError: false },
     );
+  });
+
+  it('keeps the opted-out aggregate search DB-only: no marketplace calls, no market identity', async () => {
+    const localResult = { id: 'local-agent', title: 'Local Agent', type: 'agent' };
+    search.mockResolvedValue([localResult]);
+    const caller = searchRouter.createCaller({ userId: 'test-user' } as any);
+
+    const result = await caller.query({ includeMarketplace: false, query: 'assistant' });
+
+    expect(result).toEqual([localResult]);
+    expect(getAssistantList).not.toHaveBeenCalled();
+    expect(getMcpList).not.toHaveBeenCalled();
+    expect(getPluginList).not.toHaveBeenCalled();
+    expect(UserModel.findById).not.toHaveBeenCalled();
+    expect(getUserSettings).not.toHaveBeenCalled();
   });
 
   it('returns a typed error when the community agent market search fails', async () => {

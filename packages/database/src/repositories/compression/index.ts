@@ -5,7 +5,7 @@ import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { MessageGroupItem } from '../../schemas';
 import { messageGroups, messages } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { buildWorkspaceWhere } from '../../utils/workspace';
+import { buildMessageScopeWhere, buildTopicAnchoredScopeWhere } from '../../utils/messageScope';
 
 export interface CreateCompressionGroupParams {
   content: string;
@@ -47,11 +47,16 @@ export class CompressionRepository {
     this.workspaceId = workspaceId;
   }
 
+  // messages / message_groups carry only creation-time scope snapshots — the
+  // authoritative scope is derived from the owning topic (see messageScope.ts).
   private groupsOwnership = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messageGroups);
+    buildTopicAnchoredScopeWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      messageGroups,
+    );
 
   private messagesOwnership = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messages);
+    buildMessageScopeWhere({ userId: this.userId, workspaceId: this.workspaceId });
 
   /**
    * Create a compression group and mark messages as compressed

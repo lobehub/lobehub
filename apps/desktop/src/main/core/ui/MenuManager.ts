@@ -1,11 +1,16 @@
-import type { TrayNavigationSnapshot } from '@lobechat/electron-client-ipc';
-import type { Menu } from 'electron';
+import type {
+  PopupContextMenuParams,
+  PopupContextMenuResult,
+  TrayNavigationSnapshot,
+} from '@lobechat/electron-client-ipc';
+import type { BrowserWindow, Menu } from 'electron';
 
 import type { IMenuPlatform, MenuOptions } from '@/menus';
 import { createMenuImpl } from '@/menus';
 import { createLogger } from '@/utils/logger';
 
 import type { App } from '../App';
+import { closeNativeContextMenuPopup, popupNativeContextMenu } from './nativeContextMenu';
 
 // Create logger
 const logger = createLogger('core:MenuManager');
@@ -35,6 +40,20 @@ export class MenuManager {
     logger.debug(`Showing context menu of type: ${type}`);
     const menu = this.platformImpl.buildContextMenu(type, data);
     menu.popup(); // popup must be called in main process
+    return { success: true };
+  }
+
+  popupContextMenu(
+    params: PopupContextMenuParams,
+    window: BrowserWindow | null,
+  ): Promise<PopupContextMenuResult> {
+    logger.debug('Popping up native context menu');
+    return popupNativeContextMenu(params, window);
+  }
+
+  closePopupContextMenu() {
+    logger.debug('Closing native context menu popup');
+    closeNativeContextMenuPopup();
     return { success: true };
   }
 

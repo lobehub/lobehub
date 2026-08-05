@@ -1,4 +1,5 @@
 {
+  "description": "هذه الميزات تجريبية. قد نقوم بإزالتها، وقد تحتوي على أخطاء. يسعدنا تلقي ملاحظاتك أثناء استخدامها.",
   "features.agentGraphConfig.desc": "عرض تكوين وقت تشغيل الرسم البياني في إعدادات متقدمة لملف تعريف الوكيل.",
   "features.agentGraphConfig.title": "تكوين وقت تشغيل الرسم البياني للوكيل",
   "features.agentSelfIteration.desc": "السماح للمساعد بالتفكير الذاتي، وبناء الوعي الذاتي، والاستمرار في التطوير عبر المحاولات والتفاعلات المتواصلة.",
@@ -11,6 +12,8 @@
   "features.claudeCodeSdk.title": "وقت تشغيل Claude Code SDK",
   "features.groupChat.desc": "تمكين تنسيق الدردشة الجماعية متعددة الوكلاء.",
   "features.groupChat.title": "دردشة جماعية (متعددة الوكلاء)",
+  "features.heteroSessionImport.desc": "إضافة خيار \"استيراد جلسات الوكيل المحلي\" إلى قائمة مواضيع القائمة: قم بمسح نصوص Claude Code / Codex CLI المحلية واستيرادها كمواضيع، مع مزامنة تدريجية عند إعادة الاستيراد.",
+  "features.heteroSessionImport.title": "استيراد جلسات الوكيل المحلي",
   "features.imessage.desc": "ربط الوكلاء بـ iMessage من خلال جسر BlueBubbles المحلي لتطبيق LobeHub Desktop.",
   "features.imessage.title": "قناة iMessage",
   "features.inAppBrowser.desc": "عرض علامة تبويب المتصفح في لوحة الجانب للمحادثة: متصفح مدمج يفتح نتائج البحث في المكان ويتيح للوكلاء التصفح بشكل مرئي.",

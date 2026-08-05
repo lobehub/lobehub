@@ -1,16 +1,19 @@
 import { Block, Flexbox, Tag, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { App, Divider } from 'antd';
+import { Button, toast } from '@lobehub/ui/base-ui';
+import { Divider } from 'antd';
 import { cssVar, cx } from 'antd-style';
 import { memo, type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import BriefCardSummary from '@/features/DailyBrief/BriefCardSummary';
 import { styles as briefStyles } from '@/features/DailyBrief/style';
+import { homeType } from '@/features/Home/components/homeType';
 
 import { styles } from './style';
 
 interface RecommendationCardProps {
+  /** Rail rendering: one scannable line, the CTA is the row itself. */
+  compact?: boolean;
   ctaKey: string;
   descriptionKey: string;
   i18nValues?: Record<string, string>;
@@ -22,9 +25,9 @@ interface RecommendationCardProps {
 }
 
 export const RecommendationCard = memo<RecommendationCardProps>(
-  ({ ctaKey, descriptionKey, i18nValues, icon, onAction, tagKey, titleKey }) => {
+  ({ compact, ctaKey, descriptionKey, i18nValues, icon, onAction, tagKey, titleKey }) => {
     const { t } = useTranslation('home');
-    const { message } = App.useApp();
+
     const [loading, setLoading] = useState(false);
 
     const title = t(titleKey, { defaultValue: '', ...i18nValues });
@@ -39,11 +42,25 @@ export const RecommendationCard = memo<RecommendationCardProps>(
         await onAction();
       } catch (error) {
         console.error('[recommendations] action failed:', error);
-        message.error(t('common.error', { defaultValue: 'Something went wrong' }));
+        toast.error(t('common.error', { defaultValue: 'Something went wrong' }));
       } finally {
         setLoading(false);
       }
-    }, [loading, message, onAction, t]);
+    }, [loading, onAction, t]);
+
+    if (compact)
+      return (
+        <Button className={styles.compactRow} loading={loading} type={'text'} onClick={handleClick}>
+          <Flexbox horizontal align={'flex-start'} gap={10} style={{ width: '100%' }}>
+            <Flexbox flex={'none'} paddingBlock={2}>
+              {icon}
+            </Flexbox>
+            <Text className={cx(homeType.itemTitleProse, styles.compactTitle)} style={{ flex: 1 }}>
+              {title}
+            </Text>
+          </Flexbox>
+        </Button>
+      );
 
     return (
       <Block

@@ -485,6 +485,86 @@ describe('ConnectorModel', () => {
     });
   });
 
+  describe('markComposioConnectionUnavailable', () => {
+    /**
+     * @example
+     * A provider boundary confirms a deleted Composio account and transitions the connector
+     * from ACTIVE/connected to FAILED/error without disabling the user's toggle.
+     */
+    it('marks a Composio connector unavailable when the remote account no longer exists', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const created = await model.create({
+        identifier: 'gmail',
+        isEnabled: true,
+        metadata: {
+          composio: {
+            appSlug: 'gmail',
+            authConfigId: 'auth-config',
+            connectedAccountId: 'ca-deleted',
+            linkedByUserId: userId,
+            status: 'ACTIVE',
+          },
+          description: 'preserved metadata',
+        },
+        name: 'Gmail',
+        sourceType: 'marketplace',
+        status: 'connected',
+      });
+      const handled = await model.markComposioConnectionUnavailable(created.id, 'ca-deleted');
+
+      const found = await model.findById(created.id);
+      /** @example A scoped state transition returns true once it is persisted. */
+      expect(handled).toBe(true);
+      /** @example The connector is excluded from active source resolution. */
+      expect(found?.status).toBe('error');
+      /** @example Remote health does not overwrite the user's enabled preference. */
+      expect(found?.isEnabled).toBe(true);
+      /** @example Composio-specific health is projected into metadata for runtime readers. */
+      expect(found?.metadata?.composio?.status).toBe('FAILED');
+      /** @example Unrelated metadata survives the health transition. */
+      expect(found?.metadata?.description).toBe('preserved metadata');
+    });
+
+    /**
+     * @example
+     * A request for the replaced account cannot mark the newly connected account unavailable.
+     */
+    it('does not mark a replacement Composio account from a stale failure', async () => {
+      // ROOT CAUSE:
+      //
+      // Reconnect updates the existing connector row with a new connectedAccountId.
+      // An in-flight failure for the previous account used to update that row by ID alone.
+      //
+      // Before: the replacement account became FAILED/error.
+      // We fixed this by matching the failed connectedAccountId in the health UPDATE.
+      const model = new ConnectorModel(serverDB, userId);
+      const created = await model.create({
+        identifier: 'github',
+        isEnabled: true,
+        metadata: {
+          composio: {
+            appSlug: 'github',
+            authConfigId: 'auth-config',
+            connectedAccountId: 'ca-current',
+            linkedByUserId: userId,
+            status: 'ACTIVE',
+          },
+        },
+        name: 'GitHub',
+        sourceType: 'marketplace',
+        status: 'connected',
+      });
+
+      const handled = await model.markComposioConnectionUnavailable(created.id, 'ca-previous');
+      const found = await model.findById(created.id);
+
+      expect(handled).toBe(false);
+      expect(found?.status).toBe('connected');
+      expect(found?.metadata?.composio?.connectedAccountId).toBe('ca-current');
+      expect(found?.metadata?.composio?.status).toBe('ACTIVE');
+    });
+  });
+
   describe('delete', () => {
     it('deletes a connector owned by the user', async () => {
       const model = new ConnectorModel(serverDB, userId);

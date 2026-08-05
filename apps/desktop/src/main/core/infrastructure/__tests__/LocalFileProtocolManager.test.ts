@@ -34,6 +34,11 @@ vi.mock('node:fs/promises', () => ({
   stat: mockStat,
 }));
 
+vi.mock('node:os', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return { ...actual, default: actual, homedir: () => '/Users/alice' };
+});
+
 vi.mock('@/utils/logger', () => ({
   createLogger: () => ({
     debug: vi.fn(),
@@ -71,6 +76,16 @@ describe('LocalFileProtocolManager', () => {
   });
 
   it('serves a POSIX absolute path with the correct mime type', async () => {
+    // Real PNG signature + IHDR chunk header so file-type recognises it as
+    // an image. Without a binary-looking buffer the mime resolver's
+    // downgrade rule would (correctly) reclassify a `.png` with text body
+    // as text/plain.
+    const pngBytes = Buffer.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44,
+      0x52,
+    ]);
+    mockReadFile.mockResolvedValue(pngBytes);
+
     const manager = new LocalFileProtocolManager();
     manager.registerHandler();
     await manager.approveWorkspaceRoot('/Users/alice');
@@ -93,7 +108,47 @@ describe('LocalFileProtocolManager', () => {
     expect(mockReadFile).toHaveBeenCalledWith('/Users/alice/Pictures/cat.png');
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toBe('image/png');
-    expect(response.headers.get('Content-Length')).toBe('11'); // 'image-bytes'.length
+    expect(response.headers.get('Content-Length')).toBe(String(pngBytes.byteLength));
+  });
+
+  it('short-circuits oversized documents without reading them', async () => {
+    const oversized = 20 * 1024 * 1024 + 1;
+    mockStat.mockImplementation(async () => ({ isFile: () => true, size: oversized }));
+
+    const manager = new LocalFileProtocolManager();
+    manager.registerHandler();
+    await manager.approveWorkspaceRoot('/Users/alice/project');
+    const url = await manager.createPreviewUrl({
+      filePath: '/Users/alice/project/big.pdf',
+      workspaceRoot: '/Users/alice/project',
+    });
+    if (!url) throw new Error('Expected local file preview URL');
+
+    const handler = protocolHandlerRef.current;
+    const response = await handler({ headers: new Headers(), method: 'GET', url });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Type')).toBe('application/pdf');
+    expect(response.headers.get('X-Preview-Content-Size')).toBe(String(oversized));
+    expect(mockReadFile).not.toHaveBeenCalled();
+  });
+
+  it('expands ~ paths against the home directory', async () => {
+    const manager = new LocalFileProtocolManager();
+    manager.registerHandler();
+    await manager.approveWorkspaceRoot('/Users/alice');
+    const url = await manager.createPreviewUrl({
+      filePath: '~/report.md',
+      workspaceRoot: '/Users/alice',
+    });
+    if (!url) throw new Error('Expected local file preview URL');
+
+    const handler = protocolHandlerRef.current;
+    const response = await handler({ headers: new Headers(), method: 'GET', url });
+
+    expect(response.status).toBe(200);
+    expect(mockStat).toHaveBeenCalledWith('/Users/alice/report.md');
+    expect(mockReadFile).toHaveBeenCalledWith('/Users/alice/report.md');
   });
 
   it('serves source files as text through the localfile protocol', async () => {
@@ -117,6 +172,119 @@ describe('LocalFileProtocolManager', () => {
     expect(mockReadFile).toHaveBeenCalledWith('/Users/alice/project/App.tsx');
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toBe('text/plain; charset=utf-8');
+  });
+
+  it('serves relative HTML resources from a workspace-scoped preview session', async () => {
+    const manager = new LocalFileProtocolManager();
+    manager.registerHandler();
+    await manager.approveWorkspaceRoot('/Users/alice/project');
+    const url = await manager.createPreviewUrl({
+      filePath: '/Users/alice/project/pages/index.html',
+      resourceScope: 'workspace',
+      workspaceRoot: '/Users/alice/project',
+    });
+    if (!url) throw new Error('Expected workspace preview URL');
+
+    expect(url).toMatch(/^localfile:\/\/preview-[^/]+\/pages\/index\.html$/);
+
+    const resourceUrl = new URL('../assets/app.css', new URL('.', url)).toString();
+    const response = await protocolHandlerRef.current({
+      headers: new Headers(),
+      method: 'GET',
+      url: resourceUrl,
+    });
+
+    expect(mockStat).toHaveBeenCalledWith('/Users/alice/project/assets/app.css');
+    expect(mockReadFile).toHaveBeenCalledWith('/Users/alice/project/assets/app.css');
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    expect(response.headers.get('Cross-Origin-Resource-Policy')).toBe('cross-origin');
+  });
+
+  it('resolves root-relative HTML resources against the workspace root', async () => {
+    const manager = new LocalFileProtocolManager();
+    manager.registerHandler();
+    await manager.approveWorkspaceRoot('/Users/alice/project');
+    const url = await manager.createPreviewUrl({
+      filePath: '/Users/alice/project/pages/index.html',
+      resourceScope: 'workspace',
+      workspaceRoot: '/Users/alice/project',
+    });
+    if (!url) throw new Error('Expected workspace preview URL');
+
+    await protocolHandlerRef.current({
+      headers: new Headers(),
+      method: 'GET',
+      url: new URL('/assets/app.js', url).toString(),
+    });
+
+    expect(mockReadFile).toHaveBeenCalledWith('/Users/alice/project/assets/app.js');
+  });
+
+  it('rejects workspace preview resources whose symlinks escape the approved root', async () => {
+    mockRealpath.mockImplementation(async (filePath: string) =>
+      filePath === '/Users/alice/project/assets/private.txt'
+        ? '/Users/alice/.ssh/id_rsa'
+        : filePath,
+    );
+
+    const manager = new LocalFileProtocolManager();
+    manager.registerHandler();
+    await manager.approveWorkspaceRoot('/Users/alice/project');
+    const url = await manager.createPreviewUrl({
+      filePath: '/Users/alice/project/index.html',
+      resourceScope: 'workspace',
+      workspaceRoot: '/Users/alice/project',
+    });
+    if (!url) throw new Error('Expected workspace preview URL');
+
+    const response = await protocolHandlerRef.current({
+      headers: new Headers(),
+      method: 'GET',
+      url: new URL('/assets/private.txt', url).toString(),
+    });
+
+    expect(response.status).toBe(403);
+    expect(mockStat).not.toHaveBeenCalledWith('/Users/alice/.ssh/id_rsa');
+    expect(mockReadFile).not.toHaveBeenCalledWith('/Users/alice/.ssh/id_rsa');
+  });
+
+  it('rejects forged workspace preview sessions before resolving a path', async () => {
+    const manager = new LocalFileProtocolManager();
+    manager.registerHandler();
+
+    const response = await protocolHandlerRef.current({
+      headers: new Headers(),
+      method: 'GET',
+      url: 'localfile://preview-forged/assets/private.txt',
+    });
+
+    expect(response.status).toBe(403);
+    expect(mockRealpath).not.toHaveBeenCalled();
+    expect(mockStat).not.toHaveBeenCalled();
+    expect(mockReadFile).not.toHaveBeenCalled();
+  });
+
+  it('does not grant arbitrary workspace text files cross-origin read access', async () => {
+    const manager = new LocalFileProtocolManager();
+    manager.registerHandler();
+    await manager.approveWorkspaceRoot('/Users/alice/project');
+    const url = await manager.createPreviewUrl({
+      filePath: '/Users/alice/project/index.html',
+      resourceScope: 'workspace',
+      workspaceRoot: '/Users/alice/project',
+    });
+    if (!url) throw new Error('Expected workspace preview URL');
+
+    const response = await protocolHandlerRef.current({
+      headers: new Headers(),
+      method: 'GET',
+      url: new URL('/.env', url).toString(),
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Type')).toBe('text/plain; charset=utf-8');
+    expect(response.headers.has('Access-Control-Allow-Origin')).toBe(false);
   });
 
   it('does not mint image-only preview URLs for text files', async () => {
@@ -334,6 +502,63 @@ describe('LocalFileProtocolManager', () => {
       realPath: '/Users/alice/project/App.tsx',
     });
     expect(mockReadFile).toHaveBeenCalledWith('/Users/alice/project/App.tsx');
+  });
+
+  it('short-circuits oversized document preview reads without reading them', async () => {
+    const oversized = 20 * 1024 * 1024 + 1;
+    mockStat.mockImplementation(async () => ({ isFile: () => true, size: oversized }));
+
+    const manager = new LocalFileProtocolManager();
+    await manager.approveIndexedProjectRoot('/Users/alice/project');
+
+    const result = await manager.readPreviewFile({
+      filePath: '/Users/alice/project/report.pdf',
+      workspaceRoot: '/Users/alice/project',
+    });
+
+    expect(result).toEqual({
+      buffer: Buffer.alloc(0),
+      contentType: 'application/pdf',
+      oversized: true,
+      realPath: '/Users/alice/project/report.pdf',
+    });
+    expect(mockReadFile).not.toHaveBeenCalled();
+  });
+
+  it('rejects oversized documents on image-only preview reads without reading them', async () => {
+    const oversized = 20 * 1024 * 1024 + 1;
+    mockStat.mockImplementation(async () => ({ isFile: () => true, size: oversized }));
+
+    const manager = new LocalFileProtocolManager();
+    await manager.approveIndexedProjectRoot('/Users/alice/project');
+
+    const result = await manager.readPreviewFile({
+      accept: 'image',
+      filePath: '/Users/alice/project/report.docx',
+      workspaceRoot: '/Users/alice/project',
+    });
+
+    expect(result).toBeNull();
+    expect(mockReadFile).not.toHaveBeenCalled();
+  });
+
+  it('still reads oversized non-document files in full', async () => {
+    // Only document formats have a content-less fallback; an oversized image
+    // must keep the full read so the preview still renders.
+    const oversized = 20 * 1024 * 1024 + 1;
+    mockStat.mockImplementation(async () => ({ isFile: () => true, size: oversized }));
+    mockReadFile.mockResolvedValue(Buffer.from('big-image-bytes'));
+
+    const manager = new LocalFileProtocolManager();
+    await manager.approveIndexedProjectRoot('/Users/alice/project');
+
+    const result = await manager.readPreviewFile({
+      filePath: '/Users/alice/project/photo.png',
+      workspaceRoot: '/Users/alice/project',
+    });
+
+    expect(result?.oversized).toBeUndefined();
+    expect(mockReadFile).toHaveBeenCalledWith('/Users/alice/project/photo.png');
   });
 
   it('does not return text payloads for image-only preview reads', async () => {

@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as ModelRuntimeModule from '@/server/modules/ModelRuntime';
@@ -149,27 +150,11 @@ describe('FollowUpActionService.extract', () => {
     expect(result).toEqual({ chips: [], messageId: FOUND_MSG });
   });
 
-  const captureWhereOps = () => {
+  // The where clause is a composed drizzle SQL object now (derived message
+  // scope) — render it to SQL text + params for assertions.
+  const captureWhere = () => {
     const arg = queryFindFirstSpy.mock.calls[0][0];
-    const fakeTable = {
-      content: { col: 'content' },
-      createdAt: { col: 'createdAt' },
-      id: { col: 'id' },
-      role: { col: 'role' },
-      threadId: { col: 'threadId' },
-      topicId: { col: 'topicId' },
-      userId: { col: 'userId' },
-      workspaceId: { col: 'workspaceId' },
-    };
-    const ops = {
-      and: (...parts: any[]) => ({ op: 'and', parts }),
-      eq: (col: any, value: any) => ({ col, op: 'eq', value }),
-      isNotNull: (col: any) => ({ col, op: 'isNotNull' }),
-      isNull: (col: any) => ({ col, op: 'isNull' }),
-      ne: (col: any, value: any) => ({ col, op: 'ne', value }),
-    };
-    const result = arg.where(fakeTable, ops);
-    return { parts: result.parts as any[], table: fakeTable };
+    return new PgDialect().sqlToQuery(arg.where);
   };
 
   it('filters by threadId when provided (thread isolation)', async () => {
@@ -179,28 +164,26 @@ describe('FollowUpActionService.extract', () => {
       threadId: 'thread-A',
       topicId: TEST_TOPIC,
     });
-    const { parts, table } = captureWhereOps();
-    expect(parts).toContainEqual({ col: table.threadId, op: 'eq', value: 'thread-A' });
-    expect(parts.some((p) => p.op === 'isNull' && p.col === table.threadId)).toBe(false);
+    const { sql, params } = captureWhere();
+    expect(params).toContain('thread-A');
+    expect(sql).not.toContain('"messages"."thread_id" is null');
   });
 
   it('filters by isNull(threadId) when no threadId provided (main topic only)', async () => {
     queryFindFirstSpy.mockResolvedValue(undefined);
     await svc.extract({ modelConfig: MODEL_CONFIG, topicId: TEST_TOPIC });
-    const { parts, table } = captureWhereOps();
-    expect(parts).toContainEqual({ col: table.threadId, op: 'isNull' });
-    expect(parts.some((p) => p.op === 'eq' && p.col === table.threadId)).toBe(false);
+    const { sql } = captureWhere();
+    expect(sql).toContain('"messages"."thread_id" is null');
   });
 
-  it('filters personal mode by userId and null workspaceId', async () => {
+  it('derives personal-mode scope from the owning topic/session', async () => {
     queryFindFirstSpy.mockResolvedValue(undefined);
     await svc.extract({ modelConfig: MODEL_CONFIG, topicId: TEST_TOPIC });
-    const { parts, table } = captureWhereOps();
-    const ownership = parts.find((p) => p.op === 'and' && p.parts?.length === 2);
-    expect(ownership.parts).toEqual([
-      { col: table.userId, op: 'eq', value: TEST_USER },
-      { col: table.workspaceId, op: 'isNull' },
-    ]);
+    const { sql, params } = captureWhere();
+    // Scope comes from the anchors, not the row snapshots alone
+    expect(sql).toContain('"topics"');
+    expect(sql).toContain('"sessions"');
+    expect(params).toContain(TEST_USER);
   });
 
   it('filters workspace mode by workspaceId and forwards it to model runtime', async () => {
@@ -210,8 +193,8 @@ describe('FollowUpActionService.extract', () => {
 
     await svc.extract({ modelConfig: MODEL_CONFIG, topicId: TEST_TOPIC });
 
-    const { parts, table } = captureWhereOps();
-    expect(parts).toContainEqual({ col: table.workspaceId, op: 'eq', value: 'workspace-1' });
+    const { params } = captureWhere();
+    expect(params).toContain('workspace-1');
     expect(ModelRuntimeModule.initModelRuntimeFromDB).toHaveBeenCalledWith(
       dbMock,
       TEST_USER,

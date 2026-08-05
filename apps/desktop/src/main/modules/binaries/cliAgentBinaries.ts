@@ -99,6 +99,17 @@ export const opencodeBinary: BinarySpec = {
 };
 
 /**
+ * Pi coding agent CLI
+ * @see https://github.com/earendil-works/pi
+ */
+export const piBinary: BinarySpec = {
+  description: 'Pi - Minimal coding agent CLI',
+  detect: () => detectHeterogeneousCliCommand('pi', 'pi'),
+  name: 'pi',
+  priority: 5,
+};
+
+/**
  * Google Gemini CLI
  * @see https://github.com/google-gemini/gemini-cli
  */
@@ -106,7 +117,7 @@ export const geminiCliBinary: BinarySpec = defineValidatedBinary({
   candidates: ['gemini'],
   description: 'Gemini CLI - Google agentic coding CLI',
   name: 'gemini',
-  priority: 5,
+  priority: 6,
   validateKeywords: ['gemini'],
 });
 
@@ -118,7 +129,7 @@ export const qwenCodeBinary: BinarySpec = defineValidatedBinary({
   candidates: ['qwen'],
   description: 'Qwen Code - Alibaba Qwen agentic coding CLI',
   name: 'qwen',
-  priority: 6,
+  priority: 7,
   validateKeywords: ['qwen'],
 });
 
@@ -130,7 +141,7 @@ export const kimiCliBinary: BinarySpec = defineValidatedBinary({
   candidates: ['kimi'],
   description: 'Kimi CLI - Moonshot AI agentic coding CLI',
   name: 'kimi',
-  priority: 7,
+  priority: 8,
   validateKeywords: ['kimi'],
 });
 
@@ -141,7 +152,7 @@ export const kimiCliBinary: BinarySpec = defineValidatedBinary({
  */
 export const aiderBinary: BinarySpec = defineCommandBinary('aider', {
   description: 'Aider - AI pair programming in your terminal',
-  priority: 8,
+  priority: 9,
 });
 
 /**
@@ -152,6 +163,7 @@ export const cliAgentBinaries: BinarySpec[] = [
   codexBinary,
   ampBinary,
   opencodeBinary,
+  piBinary,
   geminiCliBinary,
   qwenCodeBinary,
   kimiCliBinary,

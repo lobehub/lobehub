@@ -1,6 +1,6 @@
 'use client';
 
-import { type AgentItem } from '@lobechat/types';
+import { agentDisplayName, type AgentItem } from '@lobechat/types';
 import { ModelIcon } from '@lobehub/icons';
 import { ActionIcon, Flexbox, Icon, Popover, Skeleton, Text } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
@@ -52,7 +52,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 type AgentPreview = Pick<
   AgentItem,
-  'avatar' | 'backgroundColor' | 'description' | 'model' | 'provider' | 'title'
+  'avatar' | 'backgroundColor' | 'description' | 'model' | 'name' | 'provider' | 'title'
 >;
 
 interface FetchedAgent extends Partial<AgentPreview> {
@@ -101,6 +101,7 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
       backgroundColor: fetched?.backgroundColor ?? agent?.backgroundColor,
       description: fetched?.description ?? agent?.description,
       model: fetched?.model ?? agent?.model,
+      name: fetched?.name ?? agent?.name,
       provider: fetched?.provider ?? agent?.provider,
       title: fetched?.title ?? agent?.title,
     };
@@ -130,7 +131,7 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
       navigate(`/agent/${agentId}/profile`);
     };
 
-    const hasDisplay = Boolean(merged.title || merged.avatar || merged.description);
+    const hasDisplay = Boolean(agentDisplayName(merged) || merged.avatar || merged.description);
     const showSkeleton = !hasDisplay && isLoading;
 
     const pluginCount = fetched?.plugins?.length ?? 0;
@@ -204,7 +205,7 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
         backgroundColor={merged.backgroundColor}
         description={merged.description}
         loading={isLoading && !merged.description}
-        title={merged.title || t('defaultSession', { ns: 'common' })}
+        title={agentDisplayName(merged, t('defaultSession', { ns: 'common' }))}
         headerAction={
           groupId && canConfigure ? (
             <Flexbox horizontal align="center" justify="flex-end" style={{ paddingBlockStart: 0 }}>

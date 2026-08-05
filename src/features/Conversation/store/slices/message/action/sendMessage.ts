@@ -21,7 +21,7 @@ export const sendMessage = (
 ) => {
   return async (params: SendMessageParams) => {
     const state = get();
-    const { context, hooks, displayMessages } = state;
+    const { context, editor, hooks, displayMessages } = state;
 
     // ===== Hook: onBeforeSendMessage =====
     if (hooks.onBeforeSendMessage) {
@@ -52,6 +52,7 @@ export const sendMessage = (
     const result = await chatStore.sendMessage({
       ...params,
       context,
+      inputEditor: editor,
       messages,
       onTopicCreated: hooks.onTopicCreated,
     });

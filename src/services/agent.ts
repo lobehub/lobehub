@@ -11,6 +11,8 @@ export interface AvailableAgentItem {
   backgroundColor: string | null;
   description: string | null;
   id: string;
+  /** Personal name; resolve the label with `agentDisplayName(item, fallback)`. */
+  name: string | null;
   title: string | null;
 }
 
@@ -28,7 +30,7 @@ type MarketAgentModel =
 type AgentMetaUpdate = Partial<
   Pick<
     AgentItem,
-    'avatar' | 'backgroundColor' | 'description' | 'marketIdentifier' | 'tags' | 'title'
+    'avatar' | 'backgroundColor' | 'description' | 'marketIdentifier' | 'name' | 'tags' | 'title'
   >
 >;
 
@@ -129,12 +131,12 @@ class AgentService {
    * the shared list. The inverse (public → private) goes through
    * {@link setAgentVisibility}.
    */
-  publishAgentToWorkspace = async (id: string, accessLevel?: 'use' | 'edit'): Promise<void> => {
-    await lambdaClient.agent.publishAgentToWorkspace.mutate({ accessLevel, id });
+  publishAgentToWorkspace = async (id: string): Promise<void> => {
+    await lambdaClient.agent.publishAgentToWorkspace.mutate({ id });
   };
 
   /**
-   * Bidirectional visibility switch (LOBE-11551). The server only allows the
+   * Bidirectional visibility switch. The server only allows the
    * agent's creator or a workspace owner to pull a published agent back to
    * private, and rejects builtin agents (LobeAI etc.) outright.
    */
@@ -242,6 +244,20 @@ class AgentService {
   };
 
   /**
+   * Resolve a url slug to its agent id. Returns `null` for an unknown slug and
+   * for one the caller can't see — the two are deliberately indistinguishable.
+   */
+  resolveAgentIdBySlug = async (slug: string): Promise<string | null> => {
+    const { agentId } = await lambdaClient.agent.resolveAgentIdBySlug.query({ slug });
+    return agentId;
+  };
+
+  /** Rename an agent's url slug (validated server-side; see `updateAgentSlug`). */
+  updateAgentSlug = async (agentId: string, slug: string) => {
+    return lambdaClient.agent.updateAgentSlug.mutate({ agentId, slug });
+  };
+
+  /**
    * Remove an agent and its associated session
    */
   removeAgent = async (agentId: string) => {
@@ -302,11 +318,25 @@ class AgentService {
     agentId: string,
     targetWorkspaceId: string | null,
     targetVisibility?: 'private' | 'public',
-    targetAccessLevel?: 'edit' | 'use',
   ): Promise<{ agentId: string; slug: string | null }> => {
     return lambdaClient.agent.transferAgent.mutate({
       agentId,
-      targetAccessLevel,
+      targetVisibility,
+      targetWorkspaceId,
+    });
+  };
+
+  /**
+   * Batch transfer: moves all agents in one request / one DB transaction
+   * instead of a serial per-agent call chain.
+   */
+  transferAgents = async (
+    agentIds: string[],
+    targetWorkspaceId: string | null,
+    targetVisibility?: 'private' | 'public',
+  ): Promise<{ agentId: string; slug: string | null }[]> => {
+    return lambdaClient.agent.transferAgents.mutate({
+      agentIds,
       targetVisibility,
       targetWorkspaceId,
     });

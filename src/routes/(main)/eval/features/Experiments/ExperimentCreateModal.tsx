@@ -8,7 +8,8 @@ import {
   Select,
   useModalContext,
 } from '@lobehub/ui/base-ui';
-import { App, Form, Input } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
+import { Form, Input } from 'antd';
 import { t } from 'i18next';
 import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -29,7 +30,7 @@ interface ExperimentModalContentProps extends ExperimentModalProps {
 const ExperimentModalContent = memo<ExperimentModalContentProps>(
   ({ experiment, formId, onLoadingChange, onSuccess }) => {
     const { t } = useTranslation('eval');
-    const { message } = App.useApp();
+
     const { close } = useModalContext();
     const [form] = Form.useForm();
     const createExperiment = useEvalStore((s) => s.createExperiment);
@@ -60,11 +61,11 @@ const ExperimentModalContent = memo<ExperimentModalContentProps>(
           ? await updateExperiment({ ...values, id: experiment.id })
           : await createExperiment(values);
 
-        message.success(experiment ? t('experiment.edit.success') : t('experiment.create.title'));
+        toast.success(experiment ? t('experiment.edit.success') : t('experiment.create.title'));
         close();
         onSuccess?.(result.id);
       } catch (error) {
-        message.error(
+        toast.error(
           error instanceof Error
             ? error.message
             : experiment

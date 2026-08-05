@@ -139,15 +139,15 @@ const ModeSelector = memo(() => {
   useBusinessAgentModeSync(agentId);
   const [open, setOpen] = useState(false);
   const { allowed: canCreateContent, reason } = usePermission('create_content');
-  // Per-resource General access: view-only members can't send, so switching the
-  // chat/agent mode (a shared agent-config write) is disabled too.
+  // Agent/Chat mode is a caller runtime preference for ordinary Workspace
+  // members; only members who cannot use the Agent are disabled.
   const { canUseResource, isGroupContext } = useChatInputResourceAccess();
   const disabled = !canCreateContent || !canUseResource;
   const disabledReason = !canCreateContent
     ? reason
     : t(isGroupContext ? 'input.viewOnlyGroup' : 'input.viewOnlyAgent');
 
-  const { canSelectAgentMode, currentMode, isAgentModeUnavailable } =
+  const { canSelectAgentMode, currentMode, isAgentModeUnavailable, isPreferenceLoading } =
     useEffectiveAgentMode(agentId);
   const CurrentIcon = currentMode === 'agent' ? InfinityIcon : MessageCircleIcon;
 
@@ -250,6 +250,8 @@ const ModeSelector = memo(() => {
       <Icon icon={ChevronDownIcon} size={12} />
     </div>
   );
+
+  if (isPreferenceLoading) return null;
 
   if (disabled)
     return (

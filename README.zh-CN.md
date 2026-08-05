@@ -309,7 +309,7 @@ API Key 是使用 LobeHub 进行大语言模型会话的必要信息，本节以
 
 |                                                                                                                                                   | 服务商       | 特性说明                                                        | Proxy 代理地址            | 链接                            |
 | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | --------------------------------------------------------------- | ------------------------- | ------------------------------- |
-| <img src="https://github-production-user-asset-6210df.s3.amazonaws.com/17870709/296272721-c3ac0bf3-e433-4496-89c4-ebdc20689c17.jpg" width="48" /> | **AiHubMix** | 使用 OpenAI 企业接口，全站模型价格为官方 **86 折**（含 GPT-4 ） | `https://aihubmix.com/v1` | [获取](https://lobe.li/XHnZIUP) |
+| <img src="https://resource.aihubmix.com/logo.png?v=1" width="48" /> | **AIHubMix** | 使用 OpenAI 企业接口，全站模型价格为官方 **86 折**（含 GPT-5.6 和 Claude Fable 5） | `https://aihubmix.com/v1` | [获取](https://console.aihubmix.com/token?aff=8DBz) |
 
 > \[!WARNING]
 >

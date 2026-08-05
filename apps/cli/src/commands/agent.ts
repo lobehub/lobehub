@@ -32,16 +32,22 @@ const readGraphConfig = async (graphFile: string): Promise<unknown> => {
   return result.data;
 };
 
-const readAgencyConfig = async (agencyConfigFile: string): Promise<Record<string, unknown>> => {
-  const content = await readFile(agencyConfigFile, 'utf8');
+const readJsonObjectFile = async (
+  filePath: string,
+  label: string,
+): Promise<Record<string, unknown>> => {
+  const content = await readFile(filePath, 'utf8');
   const parsed = JSON.parse(content);
 
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    throw new Error('agencyConfig JSON must be a plain object');
+    throw new Error(`${label} JSON must be a plain object`);
   }
 
   return parsed as Record<string, unknown>;
 };
+
+const readAgencyConfig = (agencyConfigFile: string): Promise<Record<string, unknown>> =>
+  readJsonObjectFile(agencyConfigFile, 'agencyConfig');
 
 export function registerAgentCommand(program: Command) {
   const agent = program.command('agent').description('Manage agents');
@@ -187,15 +193,22 @@ export function registerAgentCommand(program: Command) {
       '--agency-config-file <path>',
       'agencyConfig JSON file, deep-merged into the agent (send `null` to clear a nested key)',
     )
+    .option(
+      '--config-file <path>',
+      'Agent config JSON file for fields without a dedicated flag (openingMessage, openingQuestions, tags, avatar, params, chatConfig, …). Deep-merged server-side; identity fields (id/slug/userId/workspaceId/visibility) are rejected. Explicit flags win over this file.',
+    )
+    .option('--json [fields]', 'Output the updated agent as JSON, optionally selecting fields')
     .action(
       async (
         agentIdArg: string | undefined,
         options: {
           agencyConfigFile?: string;
+          configFile?: string;
           description?: string;
           disableGraph?: boolean;
           enableGraph?: boolean;
           graphFile?: string;
+          json?: string | boolean;
           model?: string;
           provider?: string;
           slug?: string;
@@ -204,6 +217,19 @@ export function registerAgentCommand(program: Command) {
         },
       ) => {
         const value: Record<string, any> = {};
+
+        // Read first so the explicit flags below overwrite it — the file is the
+        // broad brush, the flags are the precise correction.
+        if (options.configFile) {
+          try {
+            Object.assign(value, await readJsonObjectFile(options.configFile, 'agent config'));
+          } catch (error) {
+            log.error(`Failed to read agent config JSON: ${(error as Error).message}`);
+            process.exit(1);
+            return;
+          }
+        }
+
         if (options.title) value.title = options.title;
         if (options.description) value.description = options.description;
         if (options.model) value.model = options.model;
@@ -228,7 +254,11 @@ export function registerAgentCommand(program: Command) {
             return;
           }
         }
-        if (Object.keys(chatConfig).length > 0) value.chatConfig = chatConfig;
+        // Merged, not replaced: `--config-file` may carry other chatConfig keys
+        // and the graph flags should only override the ones they own.
+        if (Object.keys(chatConfig).length > 0) {
+          value.chatConfig = { ...(value.chatConfig as object | undefined), ...chatConfig };
+        }
 
         // agencyConfig is deep-merged server-side, so a nested key is removed by
         // sending it as `null` (e.g. `{ "heterogeneousProvider": null }`); omitted keys are kept.
@@ -244,7 +274,7 @@ export function registerAgentCommand(program: Command) {
 
         if (Object.keys(value).length === 0) {
           log.error(
-            'No changes specified. Use --title, --description, --model, --provider, --system-role, --graph-file, --enable-graph, --disable-graph, or --agency-config-file.',
+            'No changes specified. Use --title, --description, --model, --provider, --system-role, --graph-file, --enable-graph, --disable-graph, --agency-config-file, or --config-file.',
           );
           process.exit(1);
           return;
@@ -252,7 +282,14 @@ export function registerAgentCommand(program: Command) {
 
         const client = await getTrpcClient();
         const agentId = await resolveAgentId(client, { agentId: agentIdArg, slug: options.slug });
-        await client.agent.updateAgentConfig.mutate({ agentId, value });
+        const result: any = await client.agent.updateAgentConfig.mutate({ agentId, value });
+
+        if (options.json !== undefined) {
+          const fields = typeof options.json === 'string' ? options.json : undefined;
+          outputJson(result?.agent ?? result, fields);
+          return;
+        }
+
         console.log(`${pc.green('✓')} Updated agent ${pc.bold(agentId)}`);
       },
     );

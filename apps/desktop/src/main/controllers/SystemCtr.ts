@@ -1,13 +1,10 @@
+import { access, readdir } from 'node:fs/promises';
 import process from 'node:process';
 
 import type { ElectronAppState, ThemeMode } from '@lobechat/electron-client-ipc';
 import { app, dialog, nativeTheme, shell } from 'electron';
-import * as electronIs from 'electron-is';
-import { getFonts2 } from 'font-list';
-import { pathExists, readdir } from 'fs-extra';
 
 import { legacyLocalDbDir } from '@/const/dir';
-import { detectRepoType } from '@/utils/git';
 import { createLogger } from '@/utils/logger';
 import {
   getAccessibilityStatus,
@@ -18,6 +15,8 @@ import {
   requestMicrophoneAccess,
   requestScreenCaptureAccess,
 } from '@/utils/permissions';
+import * as electronIs from '@/utils/platform';
+import { getSystemLanguage, resolveUILocale } from '@/utils/system-language';
 
 import { ControllerModule, IpcMethod } from './index';
 
@@ -46,12 +45,15 @@ export default class SystemController extends ControllerModule {
    */
   @IpcMethod()
   async getAppState(): Promise<ElectronAppState> {
+    const { getShellInfo } = await import('@lobechat/local-file-shell/shell');
     const platform = process.platform;
     const arch = process.arch;
 
     return {
       // System Info
       arch,
+      // Tell the model which shell runCommand actually spawns (see local-file-shell).
+      defaultShell: (await getShellInfo()).displayName,
       isLinux: platform === 'linux',
       isMac: platform === 'darwin',
       isWindows: platform === 'win32',
@@ -196,6 +198,7 @@ export default class SystemController extends ControllerModule {
     }
 
     const folderPath = result.filePaths[0];
+    const { detectRepoType } = await import('@lobechat/local-file-shell/git');
     const repoType = await detectRepoType(folderPath);
 
     try {
@@ -216,13 +219,14 @@ export default class SystemController extends ControllerModule {
 
   @IpcMethod()
   getSystemLocale(): string {
-    return app.getLocale();
+    return getSystemLanguage();
   }
 
   @IpcMethod()
   async getSystemMonospaceFonts(): Promise<SystemMonospaceFont[]> {
     if (!this.systemMonospaceFontsPromise) {
-      this.systemMonospaceFontsPromise = getFonts2()
+      this.systemMonospaceFontsPromise = import('font-list')
+        .then(({ getFonts2 }) => getFonts2())
         .then((fonts) => {
           const families = new Map<string, SystemMonospaceFont>();
 
@@ -253,7 +257,7 @@ export default class SystemController extends ControllerModule {
   async updateLocale(locale: string) {
     this.app.storeManager.set('locale', locale);
 
-    await this.app.i18n.changeLanguage(locale === 'auto' ? app.getLocale() : locale);
+    await this.app.i18n.changeLanguage(resolveUILocale(locale));
     this.app.browserManager.broadcastToAllWindows('localeChanged', { locale });
 
     return { success: true };
@@ -278,12 +282,12 @@ export default class SystemController extends ControllerModule {
    */
   @IpcMethod()
   async hasLegacyLocalDb(): Promise<boolean> {
-    if (!(await pathExists(legacyLocalDbDir))) return false;
-
     try {
+      await access(legacyLocalDbDir);
       const entries = await readdir(legacyLocalDbDir);
       return entries.length > 0;
-    } catch {
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
       // If directory exists but cannot be read, treat as "used" to surface guidance.
       return true;
     }

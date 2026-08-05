@@ -62,7 +62,7 @@ When adding or changing SPA routes:
 1. In `src/routes/`, add only the route segment files (layout + page) that delegate to features.
 2. Implement layout and page content under `src/features/<Domain>/` and export from there.
 3. In route files, use `import { X } from '@/features/<Domain>'` (or `import Y from '@/features/<Domain>/...'`). Do not add new `features/` folders inside `src/routes/`.
-4. **Register the desktop route tree in both configs:** `src/spa/router/desktopRouter.config.tsx` and `src/spa/router/desktopRouter.config.desktop.tsx` must stay in sync (same paths and nesting). Updating only one can cause **blank screens** if the other build path expects the route. `desktopRouter.sync.test.tsx` guards this invariant — keep it passing.
+4. **Register shared desktop content routes once:** add common Web/Electron paths, nesting, metadata, lazy loaders, and `preloadId` values in `src/spa/router/desktopRouter.shared.tsx`. The thin `desktopRouter.config.tsx` and `desktopRouter.config.desktop.tsx` files contain only runtime differences: Web mounts the content tree directly, while Electron keeps slim root stubs and mounts the same tree in per-tab memory routers through `src/spa/router/tabRouter.tsx`. Add code to a platform adapter only when the route is genuinely platform-specific. `desktopRouter.sync.test.tsx` guards the shared behavior and explicit differences — keep it passing.
 
 See the **spa-routes** skill for the full convention and file-division rules.
 
@@ -125,8 +125,9 @@ bun run check [changed-files...]
 ### i18n
 
 - Add keys to a namespace file under `packages/locales/src/default/` (e.g. `agent.ts`, `auth.ts`)
-- Hand-write en-US + zh-CN for dev preview: author the English source in `packages/locales/src/default/*.ts`, mirror it to `locales/en-US/`, and hand-translate `locales/zh-CN/`.
-- Before opening the PR, run `bun run i18n` (slow) to fill the remaining locales with the script — don't hand-translate those.
+- Ship en-US and zh-CN by hand in the same PR: author the English source in `packages/locales/src/default/*.ts`, mirror it to `locales/en-US/`, and hand-translate `locales/zh-CN/`.
+- Leave all other locales to the daily CI workflow (`.github/workflows/auto-i18n.yml`), which runs `bun run i18n` and opens an automated translation PR. Missing locale keys fall back to English until that PR is merged.
+- Run `bun run i18n` manually only when the translated locales are needed immediately instead of waiting for the daily workflow. It is slow and requires `OPENAI_API_KEY`; don't hand-translate the generated locales.
 
 ### Code Style
 

@@ -7,7 +7,7 @@ import {
 import { Block, Flexbox, Tag } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ProductLogo } from '@/components/Branding';
@@ -17,6 +17,11 @@ import { useNewVersion } from '@/features/User/UserPanel/useNewVersion';
 import { autoUpdateService } from '@/services/electron/autoUpdate';
 import { useGlobalStore } from '@/store/global';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
+import {
+  advanceDevDockClickSequence,
+  INITIAL_DEV_DOCK_CLICK_SEQUENCE,
+  toggleDevDockUnlocked,
+} from '@/utils/devDockUnlock';
 
 import { APP_VERSION } from './appVersion';
 
@@ -43,6 +48,8 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
   // so a failed update check can surface a retry instead of silently rendering
   // nothing — which is indistinguishable from "up to date".
   const { enableCheckUpdates } = useServerConfigStore(featureFlagsSelectors);
+  const canAccessDevDock = useServerConfigStore((s) => s.canAccessDevDock);
+  const devDockClickSequence = useRef(INITIAL_DEV_DOCK_CLICK_SEQUENCE);
   const {
     error: updateCheckError,
     isValidating: isCheckingUpdate,
@@ -68,6 +75,16 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
   useWatchBroadcast('updaterStateChanged', (state: UpdaterState) => {
     setUpdaterState(state);
   });
+
+  const devDockGestureEnabled = import.meta.env.PROD && canAccessDevDock;
+
+  const handleVersionClick = () => {
+    if (!devDockGestureEnabled) return;
+
+    const result = advanceDevDockClickSequence(devDockClickSequence.current, Date.now());
+    devDockClickSequence.current = result.sequence;
+    if (result.completed) toggleDevDockUnlocked();
+  };
 
   const renderUpdateButton = () => {
     if (!isDesktop) {
@@ -157,7 +174,12 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
         <Flexbox align={'flex-start'} gap={6}>
           <div style={{ fontSize: 18, fontWeight: 'bolder' }}>{BRANDING_NAME}</div>
           <Flexbox gap={6} horizontal={!mobile}>
-            <Tag>v{APP_VERSION}</Tag>
+            <Tag
+              style={{ cursor: devDockGestureEnabled ? 'pointer' : 'default' }}
+              onClick={handleVersionClick}
+            >
+              v{APP_VERSION}
+            </Tag>
 
             {buildChannel && buildChannel !== 'stable' && (
               <Tag color={'gold'}>

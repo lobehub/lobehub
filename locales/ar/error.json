@@ -156,6 +156,7 @@
   "upload.networkError": "يرجى التحقق من اتصال الشبكة والتأكد من صحة إعدادات CORS لخدمة تخزين الملفات.",
   "upload.permissionDenied": "ليس لديك إذن لتحميل الملفات في هذه مساحة العمل.",
   "upload.storageBlock.billingUnavailable": "لا يمكن التحقق من حالة الفوترة الخاصة باشتراكك. يرجى المحاولة مرة أخرى لاحقًا أو تحديث تفاصيل الفوترة.",
+  "upload.storageBlock.cleanupFiles": "توفير مساحة",
   "upload.storageBlock.monthlyCapReached": "تم الوصول إلى الحد الأقصى للإنفاق الشهري على التخزين.",
   "upload.storageBlock.noPaymentMethod": "يرجى إضافة طريقة دفع لمتابعة التحميل.",
   "upload.storageBlock.overageNotEnabled": "مساحة التخزين ممتلئة. قم بتمكين الفوترة حسب الاستخدام لمتابعة التحميل.",

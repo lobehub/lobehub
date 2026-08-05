@@ -10,7 +10,7 @@
   "table.columns.duration": "Thời lượng",
   "table.columns.model": "Mô hình",
   "table.columns.spend": "Tín dụng",
-  "table.columns.startTime": "Thời gian tạo",
+  "table.columns.time": "Thời gian",
   "table.columns.totalTokens": "Sử dụng token",
   "table.columns.trigger.enums.agent_signal": "Tín hiệu đại lý",
   "table.columns.trigger.enums.api": "Gọi API",
@@ -43,6 +43,10 @@
   "table.filters.reset": "Đặt lại",
   "table.filters.searchModel": "Tìm kiếm mẫu",
   "table.filters.startDate": "Ngày bắt đầu",
+  "table.pagination.next": "Trang tiếp theo",
+  "table.pagination.perPage": "{{size}} / trang",
+  "table.pagination.prev": "Trang trước",
+  "table.pagination.range": "{{from}}-{{to}} trong tổng số {{total}} mục",
   "table.title": "Chi tiết sử dụng tín dụng tính toán",
   "table.totalToken.input": "Đầu vào",
   "table.totalToken.output": "Đầu ra",
@@ -66,8 +70,8 @@
   "usageStats.chart.title": "Khi tác nhân này đã chi tiêu",
   "usageStats.chart.tokens": "Token",
   "usageStats.dimension": "Kích thước",
-  "usageStats.entry": "Sử dụng & Chi phí",
+  "usageStats.entry": "Thống kê",
   "usageStats.range": "Khoảng thời gian",
   "usageStats.rangeSuffix": "{{count}} ngày qua",
-  "usageStats.title": "Sử dụng & Chi phí"
+  "usageStats.title": "Thống kê"
 }

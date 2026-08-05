@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import onboarding from '@/locales/default/onboarding';
 import setting from '@/locales/default/setting';
 
 describe('settings copy', () => {
@@ -9,7 +8,6 @@ describe('settings copy', () => {
     expect(setting['settingCommon.devMode.desc']).toBe(
       'Show technical details and manual controls for chats, models, and local tools. This does not change model responses.',
     );
-    expect(onboarding['proSettings.devMode.title']).toBe('Advanced tools');
   });
 
   it('uses non-repeating Advanced page group titles', () => {

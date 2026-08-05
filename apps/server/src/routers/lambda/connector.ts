@@ -201,7 +201,7 @@ export const connectorRouter = router({
    * `agentId` and is enriched with the owning agent's `agentTitle`/`agentAvatar`
    * for attribution badges. Scope-correct via `ConnectorModel.ownership()` (and
    * `AgentModel.ownership()` for the titles) — a workspace context only returns
-   * that workspace's agent connectors (LOBE-11681 / LOBE-11682).
+   * that workspace's agent connectors ( /).
    */
   listAgentBound: connectorProcedure.query(async ({ ctx }) => {
     const connectors = await ctx.connectorModel.queryAllAgentScoped();
@@ -218,7 +218,7 @@ export const connectorRouter = router({
     // plus their own private agents. A `user_connectors` row is scoped only by
     // `workspace_id`, so on its own it would surface connectors owned by another
     // member's PRIVATE agent. Gate on the visible-agent set so private-agent
-    // connector inventory never leaks across members (LOBE-11681).
+    // connector inventory never leaks across members.
     const agentMetas = agentIds.length > 0 ? await agentModel.getAgentAvatarsByIds(agentIds) : [];
     const agentMetaById = new Map(agentMetas.map((m) => [m.id, m]));
 
@@ -235,6 +235,7 @@ export const connectorRouter = router({
           return {
             ...rest,
             agentAvatar: meta?.avatar ?? null,
+            agentName: meta?.name ?? null,
             agentTitle: meta?.title ?? null,
             oidcConfig: safeOidcConfig,
             tools,
@@ -342,10 +343,14 @@ export const connectorRouter = router({
         sourceType: input.sourceType,
         status: ConnectorStatus.disconnected,
       });
-      return { id: existing.id };
+      // `isNew` lets clients tell a fresh row from an updated pre-existing one —
+      // client-side caches can't answer this reliably (the connector list may
+      // not be fetched yet), and rollback-on-sync-failure must never delete a
+      // connector the user already had.
+      return { id: existing.id, isNew: false };
     }
 
-    return ctx.connectorModel.create({
+    const created = await ctx.connectorModel.create({
       ...fields,
       agentId: agentId ?? null,
       identifier: input.identifier,
@@ -353,6 +358,7 @@ export const connectorRouter = router({
       sourceType: input.sourceType,
       status: ConnectorStatus.disconnected,
     });
+    return { id: created.id, isNew: true };
   }),
 
   /**
@@ -818,6 +824,48 @@ export const connectorRouter = router({
 
       await ctx.connectorToolModel.upsertMany(connectorId, syncInputs);
       return { connectorId, toolCount: syncInputs.length };
+    }),
+
+  /**
+   * Sync a client-fetched tool list into an EXISTING connector row. This is the
+   * install/refresh path for connectors the cloud server cannot reach itself:
+   * stdio MCP (the binary lives on the user's machine) and local/private-network
+   * HTTP endpoints. The desktop client connects locally, lists the tools, and
+   * reports them here — the server-side `syncTools` counterpart would otherwise
+   * try (and fail) to connect from the cloud (#16533).
+   *
+   * Also promotes the connector to `connected`, mirroring what
+   * `syncConnectorToolsById` does after a successful server-side sync.
+   */
+  syncToolsFromClientById: connectorWriteProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        tools: z.array(
+          z.object({
+            description: z.string().optional(),
+            inputSchema: z.record(z.string(), z.unknown()).optional(),
+            toolName: z.string(),
+          }),
+        ),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const target = await ctx.connectorModel.findById(input.id);
+      if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
+      // Same edit-class gate as `syncTools` — rewrites the connector's tool rows.
+      assertWorkspaceRowManageable(ctx, target.userId, 'connector');
+
+      const syncInputs = input.tools.map((t) => ({
+        crudType: inferCrudType(t.toolName),
+        description: t.description,
+        inputSchema: t.inputSchema,
+        toolName: t.toolName,
+      }));
+
+      await ctx.connectorToolModel.upsertMany(input.id, syncInputs);
+      await ctx.connectorModel.updateStatus(input.id, ConnectorStatus.connected);
+      return { toolCount: syncInputs.length };
     }),
 
   /**

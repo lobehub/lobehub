@@ -197,6 +197,8 @@
   "pageList.workspaceTitle": "Przestrzeń robocza",
   "portal.openInPageEditor": "Edytuj w stronie",
   "preview.downloadFile": "Pobierz plik",
+  "preview.raw": "Surowe",
+  "preview.render": "Podgląd",
   "preview.unsupportedFileAndContact": "Ten format pliku nie jest obecnie obsługiwany do podglądu online. Jeśli chcesz zgłosić zapotrzebowanie, <1>skontaktuj się z nami</1>.",
   "resource": "Zasób",
   "resourceList.batchCopyDescription": "Sklonuj wybrane zasoby do innej przestrzeni roboczej.",

@@ -12,6 +12,7 @@ import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { SessionModel } from '@/database/models/session';
 import { TaskModel } from '@/database/models/task';
 import { UserModel } from '@/database/models/user';
+import { WorkspaceUserSettingsModel } from '@/database/models/workspaceUserSettings';
 import { AgentService } from '@/server/services/agent';
 import { EditLockService } from '@/server/services/editLock';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
@@ -67,6 +68,10 @@ vi.mock('@/database/models/resourcePermission', () => ({
   ResourcePermissionModel: vi.fn(),
 }));
 
+vi.mock('@/database/models/workspaceUserSettings', () => ({
+  WorkspaceUserSettingsModel: vi.fn(),
+}));
+
 vi.mock('@/server/services/agent', () => ({
   AgentService: vi.fn(),
 }));
@@ -84,6 +89,9 @@ vi.mock('@/server/services/resourcePermission', () => ({
   })),
   canPerformResourceAction: vi.fn(),
   getResourceMeta: vi.fn(),
+  // `resourceConfigGuard` classifies collaborative builtins to exempt them from the
+  // parent-group cap; without this export the guard throws before any assertion.
+  isCollaborativeBuiltinAgent: vi.fn(() => false),
 }));
 
 describe('agentRouter', () => {
@@ -97,6 +105,7 @@ describe('agentRouter', () => {
   let knowledgeBaseModelMock: any;
   let agentServiceMock: any;
   let resourcePermissionModelMock: any;
+  let workspaceUserSettingsModelMock: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -107,17 +116,24 @@ describe('agentRouter', () => {
       workspaceId: 'ws-1',
     });
     resourcePermissionModelMock = {
+      getAccessLevel: vi.fn().mockResolvedValue(undefined),
       getEffectiveAccessLevel: vi.fn().mockResolvedValue('use'),
       removeAll: vi.fn(),
       setAccessLevel: vi.fn(),
     };
     vi.mocked(ResourcePermissionModel).mockImplementation(() => resourcePermissionModelMock);
+    workspaceUserSettingsModelMock = {
+      getPreference: vi.fn().mockResolvedValue({}),
+      updatePreference: vi.fn(),
+    };
+    vi.mocked(WorkspaceUserSettingsModel).mockImplementation(() => workspaceUserSettingsModelMock);
 
     agentModelMock = {
       createAgentFiles: vi.fn(),
       createAgentKnowledgeBase: vi.fn(),
       deleteAgentFile: vi.fn(),
       deleteAgentKnowledgeBase: vi.fn(),
+      duplicate: vi.fn(),
       findBySessionId: vi.fn(),
       getAgentAssignedKnowledge: vi.fn(),
       getAgentVisibility: vi.fn().mockResolvedValue(null),
@@ -237,6 +253,9 @@ describe('agentRouter', () => {
       expect(result).toEqual({
         avatar: 'avatar.png',
         id: 'agent-1',
+        // The model identity is part of the safe profile surface: use-only
+        // members see (and under `member` policy, switch) the model in chat.
+        model: 'private-model',
         openingMessage: 'Hello',
         title: 'Public title',
         userId: 'creator-1',
@@ -245,7 +264,6 @@ describe('agentRouter', () => {
       });
       expect(result).not.toHaveProperty('systemRole');
       expect(result).not.toHaveProperty('plugins');
-      expect(result).not.toHaveProperty('model');
     });
 
     it('returns the full config to a member who can edit', async () => {
@@ -465,6 +483,28 @@ describe('agentRouter', () => {
     });
   });
 
+  describe('duplicateAgent', () => {
+    it('allows a Workspace member to duplicate a public Agent without edit access', async () => {
+      agentModelMock.duplicate.mockResolvedValue({ agentId: 'copied-agent' });
+
+      const caller = agentRouter.createCaller({ ...mockCtx, workspaceId: 'ws-1' });
+      const result = await caller.duplicateAgent({ agentId: 'public-agent' });
+
+      expect(result).toEqual({ agentId: 'copied-agent' });
+      expect(assertCanEditResource).not.toHaveBeenCalled();
+      expect(agentModelMock.duplicate).toHaveBeenCalledWith('public-agent', undefined);
+      expect(resourcePermissionModelMock.setAccessLevel).toHaveBeenCalledWith(
+        'agent',
+        'copied-agent',
+        'use',
+        userId,
+      );
+      // Folder placement is shared state, carried by AgentModel.duplicate's
+      // `sessionGroupId` copy — no per-member bookkeeping on top.
+      expect(workspaceUserSettingsModelMock.updatePreference).not.toHaveBeenCalled();
+    });
+  });
+
   describe('publishAgentToWorkspace', () => {
     const wsCtx = () => ({ ...mockCtx, workspaceId: 'ws-1' });
 
@@ -481,6 +521,41 @@ describe('agentRouter', () => {
         'agent',
         'agent-1',
         'view',
+        userId,
+      );
+    });
+
+    it('keeps a level the creator set while the agent was still private', async () => {
+      agentModelMock.publishToWorkspace.mockResolvedValue({
+        id: 'agent-1',
+        visibility: 'public',
+      });
+      resourcePermissionModelMock.getAccessLevel.mockResolvedValue('edit');
+
+      const caller = agentRouter.createCaller(wsCtx());
+      await caller.publishAgentToWorkspace({ id: 'agent-1' });
+
+      expect(resourcePermissionModelMock.setAccessLevel).toHaveBeenCalledWith(
+        'agent',
+        'agent-1',
+        'edit',
+        userId,
+      );
+    });
+
+    it('falls back to the default when nothing was configured before publishing', async () => {
+      agentModelMock.publishToWorkspace.mockResolvedValue({
+        id: 'agent-1',
+        visibility: 'public',
+      });
+
+      const caller = agentRouter.createCaller(wsCtx());
+      await caller.publishAgentToWorkspace({ id: 'agent-1' });
+
+      expect(resourcePermissionModelMock.setAccessLevel).toHaveBeenCalledWith(
+        'agent',
+        'agent-1',
+        'use',
         userId,
       );
     });
@@ -540,7 +615,7 @@ describe('agentRouter', () => {
       expect(agentModelMock.setVisibility).toHaveBeenCalledWith('agent-1', 'private');
     });
 
-    it('rejects demotion while the agent supervises group chats visible to others (LOBE-11772)', async () => {
+    it('rejects demotion while the agent supervises group chats visible to others ', async () => {
       chatGroupModelMock.countGroupsBlockingAgentDemotion.mockResolvedValue(1);
 
       const caller = agentRouter.createCaller(wsCtx());
@@ -556,7 +631,7 @@ describe('agentRouter', () => {
       expect(agentModelMock.setVisibility).not.toHaveBeenCalled();
     });
 
-    it('rejects demotion of another member agent even for a workspace owner (LOBE-11760)', async () => {
+    it('rejects demotion of another member agent even for a workspace owner ', async () => {
       agentModelMock.getAgentVisibilityMeta.mockResolvedValue({
         slug: null,
         userId: 'other-member',
@@ -627,6 +702,25 @@ describe('agentRouter', () => {
         'agent',
         'agent-1',
         'use',
+        userId,
+      );
+    });
+
+    it('keeps a pre-publish level when promoting through setAgentVisibility', async () => {
+      agentModelMock.getAgentVisibilityMeta.mockResolvedValue({
+        slug: null,
+        userId,
+        visibility: 'private',
+      });
+      resourcePermissionModelMock.getAccessLevel.mockResolvedValue('edit');
+
+      const caller = agentRouter.createCaller(wsCtx());
+      await caller.setAgentVisibility({ id: 'agent-1', visibility: 'public' });
+
+      expect(resourcePermissionModelMock.setAccessLevel).toHaveBeenCalledWith(
+        'agent',
+        'agent-1',
+        'edit',
         userId,
       );
     });

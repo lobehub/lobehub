@@ -1,4 +1,3 @@
-export { PageAgentExecutor } from './executor';
 export { PageAgentInspectors } from './Inspector';
 export { PageAgentPlaceholders } from './Placeholder';
 export { PageAgentRenders } from './Render';

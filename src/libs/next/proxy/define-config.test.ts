@@ -12,10 +12,15 @@ vi.mock('@/auth', () => ({
 
 const { middleware } = defineConfig();
 
-const run = async (url: string) => {
-  const res = await middleware(new NextRequest(url));
+const run = async (url: string, userAgent?: string) => {
+  const res = await middleware(
+    new NextRequest(url, userAgent ? { headers: { 'user-agent': userAgent } } : undefined),
+  );
   return res?.headers.get('x-middleware-rewrite');
 };
+
+const MOBILE_USER_AGENT =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1';
 
 describe('defineConfig locale path-traversal hardening', () => {
   it('rewrites a normal locale into /spa-auth/<locale>', async () => {
@@ -44,5 +49,33 @@ describe('defineConfig locale path-traversal hardening', () => {
     expect(new URL(rewrite!).pathname).toMatch(
       /^\/spa\/[^/]+\/oauth-preview-e2e-20260716\/settings\/oauth-apps$/,
     );
+  });
+});
+
+describe('defineConfig Workbench SPA rewrite', () => {
+  it('routes Workbench-owned paths only for mobile devices', async () => {
+    const mobileAcceptance = await run(
+      'http://localhost:3010/acceptance/acceptance-1?hl=en-US',
+      MOBILE_USER_AGENT,
+    );
+    const desktopAcceptance = await run('http://localhost:3010/acceptance/acceptance-1?hl=en-US');
+
+    expect(new URL(mobileAcceptance!).pathname).toBe(
+      '/spa-workbench/en-US/acceptance/acceptance-1',
+    );
+    expect(new URL(desktopAcceptance!).pathname).toMatch(
+      /^\/spa\/[^/]+\/acceptance\/acceptance-1$/,
+    );
+  });
+
+  it('keeps the agent documents index in the Main Mobile SPA', async () => {
+    const detail = await run(
+      'http://localhost:3010/agent/agt_1/docs/doc_1?hl=en-US',
+      MOBILE_USER_AGENT,
+    );
+    const index = await run('http://localhost:3010/agent/agt_1/docs?hl=en-US', MOBILE_USER_AGENT);
+
+    expect(new URL(detail!).pathname).toBe('/spa-workbench/en-US/agent/agt_1/docs/doc_1');
+    expect(new URL(index!).pathname).toMatch(/^\/spa\/[^/]+\/agent\/agt_1\/docs$/);
   });
 });

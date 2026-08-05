@@ -1,8 +1,9 @@
 import { type ModalProps } from '@lobehub/ui';
 import { Flexbox, Input, stopPropagation } from '@lobehub/ui';
-import { App } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
+import { type InputRef } from 'antd';
 import { type MouseEvent } from 'react';
-import { memo, useState } from 'react';
+import { memo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ImperativeModal from '@/components/ImperativeModal';
@@ -11,7 +12,11 @@ import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
 
 interface CreateGroupModalProps extends ModalProps {
-  id: string;
+  /**
+   * Agent to move into the newly created group. Omitted when the modal is
+   * opened from the sidebar "create group" entry, which only creates the group.
+   */
+  id?: string;
   visibility?: 'private' | 'public';
 }
 
@@ -21,9 +26,13 @@ const CreateGroupModal = memo<CreateGroupModalProps>(
     const { allowed: canCreate } = usePermission('create_content');
 
     const toggleExpandSessionGroup = useGlobalStore((s) => s.toggleExpandSessionGroup);
-    const { message } = App.useApp();
+
     const [updateAgentGroup, addGroup] = useHomeStore((s) => [s.updateAgentGroup, s.addGroup]);
-    const [input, setInput] = useState('');
+    // The input stays uncontrolled: ImperativeModal renders this content through
+    // the global ModalHost, so a controlled value living in this component only
+    // reaches the DOM after an effect-driven update — the lag makes React reset
+    // the field mid-IME-composition and CJK input becomes impossible.
+    const inputRef = useRef<InputRef>(null);
     const [loading, setLoading] = useState(false);
 
     return (
@@ -35,23 +44,21 @@ const CreateGroupModal = memo<CreateGroupModalProps>(
           open={open}
           title={t('sessionGroup.createGroup')}
           width={400}
-          onCancel={(e) => {
-            setInput('');
-            onCancel?.(e);
-          }}
+          onCancel={onCancel}
           onOk={async (e: MouseEvent<HTMLButtonElement>) => {
             if (!canCreate) return;
 
+            const input = inputRef.current?.input?.value ?? '';
             if (input.length === 0 || input.length > 20 || input.trim() === '')
-              return message.warning(t('sessionGroup.tooLong'));
+              return toast.warning(t('sessionGroup.tooLong'));
 
             setLoading(true);
             const groupId = await addGroup(input, visibility);
-            await updateAgentGroup(id, groupId);
+            if (id) await updateAgentGroup(id, groupId);
             toggleExpandSessionGroup(groupId, true);
             setLoading(false);
 
-            message.success(t('sessionGroup.createSuccess'));
+            toast.success(t('sessionGroup.createSuccess'));
             onCancel?.(e);
           }}
         >
@@ -60,8 +67,7 @@ const CreateGroupModal = memo<CreateGroupModalProps>(
               autoFocus
               disabled={!canCreate}
               placeholder={t('sessionGroup.inputPlaceholder')}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
+              ref={inputRef}
             />
           </Flexbox>
         </ImperativeModal>

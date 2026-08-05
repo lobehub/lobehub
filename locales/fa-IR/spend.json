@@ -10,7 +10,7 @@
   "table.columns.duration": "مدت‌زمان",
   "table.columns.model": "مدل",
   "table.columns.spend": "اعتبار مصرف‌شده",
-  "table.columns.startTime": "تاریخ ایجاد",
+  "table.columns.time": "زمان",
   "table.columns.totalTokens": "میزان استفاده از توکن",
   "table.columns.trigger.enums.agent_signal": "سیگنال عامل",
   "table.columns.trigger.enums.api": "تماس API",
@@ -43,6 +43,10 @@
   "table.filters.reset": "بازنشانی",
   "table.filters.searchModel": "جستجوی مدل",
   "table.filters.startDate": "تاریخ شروع",
+  "table.pagination.next": "صفحه بعد",
+  "table.pagination.perPage": "{{size}} / صفحه",
+  "table.pagination.prev": "صفحه قبل",
+  "table.pagination.range": "{{from}}-{{to}} از {{total}} مورد",
   "table.title": "جزئیات مصرف اعتبار محاسباتی",
   "table.totalToken.input": "ورودی",
   "table.totalToken.output": "خروجی",
@@ -66,8 +70,8 @@
   "usageStats.chart.title": "زمانی که این عامل هزینه کرد",
   "usageStats.chart.tokens": "توکن",
   "usageStats.dimension": "بُعد",
-  "usageStats.entry": "استفاده و هزینه",
+  "usageStats.entry": "آمار",
   "usageStats.range": "بازه زمانی",
   "usageStats.rangeSuffix": "{{count}} روز گذشته",
-  "usageStats.title": "استفاده و هزینه"
+  "usageStats.title": "آمار"
 }

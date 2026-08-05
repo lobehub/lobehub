@@ -39,6 +39,9 @@ interface LocalFilePreviewKeyParams {
   allowExternalFile?: boolean;
   deviceId?: string;
   filePath: string;
+  resourceScope?: 'workspace';
+  /** Topic scope when the previewed file lives in the topic's cloud sandbox. */
+  sandboxTopicId?: string;
   workingDirectory: string;
 }
 
@@ -126,6 +129,10 @@ export const topicKeys = {
     containerKey,
     opts,
   ]),
+  scheduledRunWatch: def('topic:scheduledRunWatch', (topicId: string) => [
+    'topic:scheduledRunWatch',
+    topicId,
+  ]),
   search: def('topic:search', (keywords: string, agentId?: string, groupId?: string) => [
     'topic:search',
     keywords,
@@ -134,10 +141,54 @@ export const topicKeys = {
   ]),
 };
 
+// ---- topic comment ------------------------------------------------------
+export const topicCommentKeys = {
+  detail: def('topicComment:detail', (commentId: string) => ['topicComment:detail', commentId]),
+  replies: def(
+    'topicComment:replies',
+    (workspaceId: string | null, rootCommentId: string, cursor?: string) => [
+      'topicComment:replies',
+      workspaceId ?? '',
+      rootCommentId,
+      cursor ?? '',
+    ],
+  ),
+  summary: def('topicComment:summary', (topicId: string) => ['topicComment:summary', topicId]),
+  threads: def(
+    'topicComment:threads',
+    (workspaceId: string | null, topicId: string, messageId?: string, cursor?: string) => [
+      'topicComment:threads',
+      workspaceId ?? '',
+      topicId,
+      messageId ?? '',
+      cursor ?? '',
+    ],
+  ),
+  warmup: def('topicComment:warmup', (workspaceId: string, topicId: string) => [
+    'topicComment:warmup',
+    workspaceId,
+    topicId,
+  ]),
+};
+
 // ---- agent --------------------------------------------------------------
 export const agentKeys = {
   /** Sidebar agent list. */
   list: def('agent:list', (isLogin: boolean) => ['agent:list', isLogin]),
+};
+
+// ---- agent labels -------------------------------------------------------
+export const agentLabelKeys = {
+  /**
+   * Agent label registry (workspace-shared, or personal). Keyed by workspace:
+   * the registries are disjoint per scope, so a shared key would serve the
+   * previous workspace's labels across a switch.
+   */
+  list: def('agentLabel:list', (isLogin: boolean, workspaceId: string | null | undefined) => [
+    'agentLabel:list',
+    isLogin,
+    workspaceId ?? null,
+  ]),
 };
 
 // ---- agent builder (opening-suggestion chips) ---------------------------
@@ -197,6 +248,13 @@ export const recentKeys = {
     limit,
     scope,
   ]),
+  /** Home chat-only list; filtering happens before the server-side limit. */
+  topicList: def('recent:topicList', (limit: number, scope: string, view: 'mine' | 'team') => [
+    'recent:topicList',
+    limit,
+    scope,
+    view,
+  ]),
 };
 
 // ---- task ---------------------------------------------------------------
@@ -218,6 +276,12 @@ export const taskKeys = {
       visibility,
     ],
   ),
+  /**
+   * AgentSidebar task panel. Lives in the `task:` domain (not a `sidebar:`
+   * one) so the tiered cache provider persists it to IndexedDB and the second
+   * open renders from cache instead of a skeleton.
+   */
+  sidebarGroups: def('task:sidebarGroups', (agentId: string) => ['task:sidebarGroups', agentId]),
 };
 
 // ---- work ---------------------------------------------------------------
@@ -246,7 +310,12 @@ export const workKeys = {
 
 // ---- brief --------------------------------------------------------------
 export const briefKeys = {
-  list: def('brief:list', (isLogin: boolean) => ['brief:list', isLogin]),
+  /**
+   * Unresolved brief feed, keyed by login + identity scope. Briefs are per-user
+   * AND per-workspace rows, so an entry fetched in one scope must never be
+   * served in another — its ids are unreachable there.
+   */
+  list: def('brief:list', (isLogin: boolean, scope: string) => ['brief:list', isLogin, scope]),
 };
 
 // ---- home inbox ---------------------------------------------------------
@@ -715,6 +784,11 @@ export const chatToolKeys = {
 // header is `portal:` not `document:`.
 // =========================================================================
 
+// ---- api key (settings/apikey) -------------------------------------------
+export const apiKeyKeys = {
+  list: def('apiKey:list', () => ['apiKey:list']),
+};
+
 // ---- stats (settings/stats + user header counts) ------------------------
 export const statsKeys = {
   agentUsageStat: def(
@@ -763,6 +837,11 @@ export const messengerKeys = {
     tokenScopeKey,
   ]),
   peek: def('messenger:peek', (randomId: string) => ['messenger:peek', randomId]),
+  pushWindow: def('messenger:pushWindow', (platform: string, tenantId?: string) => [
+    'messenger:pushWindow',
+    platform,
+    tenantId ?? null,
+  ]),
 };
 
 // ---- verify (deliverable judging) ---------------------------------------
@@ -813,13 +892,19 @@ export const verifyKeys = {
 export const inboxKeys = {
   notifications: def(
     'inbox:notifications',
-    (cursor: string | undefined, unreadOnly: boolean | undefined) => [
+    // Keyed by context: the server scopes the inbox to the active workspace
+    // (null = personal), so cached pages must never be reused across contexts.
+    (workspaceId: string | null, cursor: string | undefined, unreadOnly: boolean | undefined) => [
       'inbox:notifications',
+      workspaceId,
       cursor,
       unreadOnly,
     ],
   ),
-  unreadCount: def('inbox:unreadCount', () => ['inbox:unreadCount']),
+  unreadCount: def('inbox:unreadCount', (workspaceId: string | null) => [
+    'inbox:unreadCount',
+    workspaceId,
+  ]),
 };
 
 // ---- share (shared topic / page) ----------------------------------------
@@ -863,14 +948,17 @@ export const localFileKeys = {
       allowExternalFile,
       deviceId,
       filePath,
+      resourceScope,
+      sandboxTopicId,
       workingDirectory,
     }: LocalFilePreviewKeyParams) => [
       'localFile:preview',
-      deviceId ?? 'local',
+      sandboxTopicId ? `sandbox:${sandboxTopicId}` : (deviceId ?? 'local'),
       filePath,
       workingDirectory,
       accept ?? 'any',
       allowExternalFile ? 'external' : 'workspace',
+      resourceScope ?? 'single-file',
     ],
   ),
   projectIndex: def('localFile:projectIndex', (deviceId: string | undefined, dirPath: string) => [
@@ -902,6 +990,18 @@ export const onboardingKeys = {
     'onboarding:agentHistoryTopics',
     agentId,
   ]),
+  analysisStatus: def('onboarding:analysisStatus', () => ['onboarding:analysisStatus']),
+  profile: def('onboarding:profile', () => ['onboarding:profile']),
+  suggestedTasks: def('onboarding:suggestedTasks', () => ['onboarding:suggestedTasks']),
+  understandingSession: def('onboarding:understandingSession', (topicId: string) => [
+    'onboarding:understandingSession',
+    topicId,
+  ]),
+  understandingStart: def('onboarding:understandingStart', (topicId: string) => [
+    'onboarding:understandingStart',
+    topicId,
+  ]),
+  understandingTopic: def('onboarding:understandingTopic', () => ['onboarding:understandingTopic']),
 };
 
 // ---- agent home / profile / signal (kept off the `agent:` idb tier) -----
@@ -999,9 +1099,6 @@ export const builtinAgentKeys = {
 export const imessageKeys = {
   bridgeStatus: def('imessage:bridgeStatus', () => ['imessage:bridgeStatus']),
 };
-export const sidebarKeys = {
-  taskGroups: def('sidebar:taskGroups', (agentId: string) => ['sidebar:taskGroups', agentId]),
-};
 // Desktop/electron IPC fetches — roots keep their existing `electron:getXxx` value.
 export const electronKeys = {
   appTrayVisible: def('electron:getAppTrayVisible', () => ['electron:getAppTrayVisible']),
@@ -1033,6 +1130,7 @@ export const swrKeys = {
   agentDocument: agentDocumentSWRKeys,
   agentHome: agentHomeKeys,
   agentKnowledge: agentKnowledgeKeys,
+  agentLabel: agentLabelKeys,
   agentProfile: agentProfileKeys,
   agentSignal: agentSignalKeys,
   aiModel: aiModelKeys,
@@ -1074,13 +1172,13 @@ export const swrKeys = {
   serverConfig: serverConfigKeys,
   session: sessionKeys,
   share: shareKeys,
-  sidebar: sidebarKeys,
   stats: statsKeys,
   task: taskKeys,
   taskTemplate: taskTemplateKeys,
   thread: threadKeys,
   tool: toolKeys,
   topic: topicKeys,
+  topicComment: topicCommentKeys,
   topicAction: topicActionKeys,
   user: userKeys,
   userMemory: userMemoryKeys,

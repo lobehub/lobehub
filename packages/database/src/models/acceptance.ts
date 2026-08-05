@@ -7,12 +7,13 @@ import type { LobeChatDatabase } from '../type';
 import { isUuid } from '../utils/uuid';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
-/** Statuses a user's decision produced — sticky until a new round re-opens the loop. */
-const TERMINAL_ACCEPTANCE_STATUSES = new Set<AcceptanceStatus>(['accepted', 'rejected']);
+/** Statuses a user's decision produced — sticky until explicitly re-opened. */
+const TERMINAL_ACCEPTANCE_STATUSES = new Set<AcceptanceStatus>(['accepted', 'closed', 'rejected']);
 
 /**
  * Owns the business-level acceptance aggregate (`acceptances`): one row per
- * subject (task / topic / document) carrying the user-facing lifecycle state.
+ * subject (task / topic / document / standalone delivery) carrying the
+ * user-facing lifecycle state.
  * The verify rounds chain onto it through `verify_runs.acceptance_id` +
  * `round_index`; this model deliberately holds no round pointers — root /
  * current / latest-report are all derived from that chain at read time.
@@ -82,7 +83,7 @@ export class AcceptanceModel {
   ensureForSubject = async (
     subjectType: AcceptanceSubjectType,
     subjectId: string,
-    defaults?: Partial<Pick<NewAcceptance, 'config' | 'requirement'>>,
+    defaults?: Partial<Pick<NewAcceptance, 'config' | 'metadata' | 'requirement'>>,
   ): Promise<AcceptanceItem> => {
     const existing = await this.findBySubject(subjectType, subjectId);
     if (existing) {
@@ -90,12 +91,25 @@ export class AcceptanceModel {
       // WITHOUT one (a first ingest that omitted it) accepts the first
       // non-empty statement a later round supplies, instead of staying blank
       // forever ("尚未记录该对象的验收目标").
-      if (!existing.requirement && defaults?.requirement) {
+      const nextRequirement = !existing.requirement ? defaults?.requirement : undefined;
+      const nextTitle =
+        !existing.metadata?.title && typeof defaults?.metadata?.title === 'string'
+          ? defaults.metadata.title
+          : undefined;
+      if (nextRequirement || nextTitle) {
+        const metadata = nextTitle ? { ...existing.metadata, title: nextTitle } : existing.metadata;
         await this.db
           .update(acceptances)
-          .set({ requirement: defaults.requirement })
+          .set({
+            metadata,
+            requirement: nextRequirement ?? existing.requirement,
+          })
           .where(eq(acceptances.id, existing.id));
-        return { ...existing, requirement: defaults.requirement };
+        return {
+          ...existing,
+          metadata,
+          requirement: nextRequirement ?? existing.requirement,
+        };
       }
       return existing;
     }
@@ -140,7 +154,7 @@ export class AcceptanceModel {
 
   /**
    * Move the user-facing lifecycle state. `completedAt` is stamped when the
-   * user's decision closes the loop (accepted / rejected) and cleared when a
+   * user's decision closes the loop (accepted / closed / rejected) and cleared when a
    * new round re-opens it.
    */
   updateStatus = async (id: string, status: AcceptanceStatus): Promise<void> => {

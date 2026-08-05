@@ -6,6 +6,7 @@ import path from 'node:path';
 import treeKill from 'tree-kill';
 
 import type { GetCommandOutputParams, GetCommandOutputResult, KillCommandResult } from '../types';
+import { decodeClixml } from './clixml';
 import { buildOutputPreview } from './utils';
 
 const DEFAULT_OBSERVATION_TIMEOUT_MS = 30_000;
@@ -36,6 +37,7 @@ export interface ShellProcess {
   exitCode: number | null;
   outputFiles: ShellOutputFiles;
   process: ChildProcess;
+  spawnError?: Error;
   startedAt?: number;
 }
 
@@ -152,7 +154,10 @@ export class ShellProcessManager {
     const { process: childProcess } = shellProcess;
 
     let exitCode = childProcess.exitCode ?? shellProcess.exitCode;
-    if (exitCode === null) {
+    // A signal-terminated child (killCommand on POSIX) never gets an exitCode
+    // and its 'exit' event has already fired — waiting would just burn the
+    // full observation timeout before returning the killed command's output.
+    if (exitCode === null && childProcess.signalCode == null) {
       const waitTimeout =
         typeof timeout === 'number' && Number.isFinite(timeout)
           ? Math.min(Math.max(Math.trunc(timeout), 0), MAX_OBSERVATION_TIMEOUT_MS)
@@ -205,7 +210,9 @@ export class ShellProcessManager {
       previewBytes.stderr,
     );
     let stdout = stdoutPreview.content;
-    let stderr = stderrPreview.content;
+    // PowerShell serializes non-stdout streams as CLIXML when stderr is
+    // redirected — decode the blocks back into readable messages.
+    let stderr = decodeClixml(stderrPreview.content);
 
     if (filter) {
       try {
@@ -228,7 +235,8 @@ export class ShellProcessManager {
 
     return {
       duration_ms: durationMs,
-      exit_code: exitCode ?? undefined,
+      error: shellProcess.spawnError?.message,
+      exit_code: shellProcess.spawnError ? undefined : (exitCode ?? undefined),
       output: stdout + stderr,
       output_files: {
         stderr: {
@@ -244,7 +252,7 @@ export class ShellProcessManager {
       },
       stderr,
       stdout,
-      success: true,
+      success: !shellProcess.spawnError,
     };
   }
 
@@ -256,8 +264,10 @@ export class ShellProcessManager {
 
     try {
       killProcessTree(shellProcess.process);
-      this.closeOutputFiles(shellProcess.outputFiles);
-      this.processes.delete(shell_id);
+      // Keep the registry entry: getCommandOutput after a kill must still be
+      // able to return the output produced before termination, exactly like a
+      // naturally-exited command. Output fds are closed by the 'close' handler
+      // registered in register(); the entry itself lives until cleanupAll().
       return { success: true };
     } catch (error) {
       return { error: (error as Error).message, success: false };

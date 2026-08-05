@@ -1,8 +1,8 @@
+import { toast } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 
 import { handleGenerationPromptModerationError } from '@/business/client/handleGenerationPromptModerationError';
 import { handleLobeHubModelDeprecatedError } from '@/business/client/handleLobeHubModelDeprecatedError';
-import { message } from '@/components/AntdStaticMethods';
 import { videoService } from '@/services/video';
 import { type StoreSetter } from '@/store/types';
 
@@ -55,9 +55,9 @@ export class CreateVideoActionImpl {
       !parameters.imageUrl &&
       !parameters.imageUrls?.length
     ) {
-      message.warning({
-        content: t('generation.validation.endFrameRequiresStartFrame', { ns: 'video' }),
-        duration: 3,
+      toast.warning({
+        description: t('generation.validation.endFrameRequiresStartFrame', { ns: 'video' }),
+        duration: 3000,
       });
       this.#set({ isCreating: false }, false, 'createVideo/endCreateVideo');
       return;

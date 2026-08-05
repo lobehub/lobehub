@@ -27,6 +27,7 @@ export {
   type MatchInput,
   type MatchResult,
   ModelEmptyError,
+  ModelRefusalError,
   parseErrorRef,
   refineErrorCode,
   type RefineErrorInput,
@@ -43,6 +44,7 @@ export { LobeBailianCodingPlanAI } from './providers/bailianCodingPlan';
 export { LobeBedrockAI } from './providers/bedrock';
 export { LobeBflAI } from './providers/bfl';
 export { LobeCerebrasAI } from './providers/cerebras';
+export { LobeChatGPTAI } from './providers/chatGPT';
 export { LobeCometAPIAI } from './providers/cometapi';
 export { LobeComfyUI } from './providers/comfyui';
 export { LobeDeepSeekAI } from './providers/deepseek';

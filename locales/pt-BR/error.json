@@ -156,6 +156,7 @@
   "upload.networkError": "Verifique sua conexão de rede e a configuração de CORS do serviço de armazenamento de arquivos.",
   "upload.permissionDenied": "Você não tem permissão para enviar arquivos neste espaço de trabalho.",
   "upload.storageBlock.billingUnavailable": "O status de cobrança da sua assinatura não pode ser verificado. Tente novamente mais tarde ou atualize seus dados de cobrança.",
+  "upload.storageBlock.cleanupFiles": "Liberar espaço",
   "upload.storageBlock.monthlyCapReached": "O limite mensal de gastos com armazenamento foi atingido.",
   "upload.storageBlock.noPaymentMethod": "Adicione um método de pagamento para continuar enviando arquivos.",
   "upload.storageBlock.overageNotEnabled": "Seu armazenamento está cheio. Ative a cobrança por uso para continuar enviando arquivos.",

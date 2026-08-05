@@ -1,1293 +1,929 @@
-# Probe / Mock Pattern Library — PROJECT layer (LobeHub)
-
-> **PROJECT layer — writable, LobeHub-specific.** Append project learnings here during runs (each: Situation / Doesn't work / Works). The generic, product-independent recipes live in the installed skill's `references/probe-mock-patterns.md` (read-only in this repo, updated by PR to `@lobehub/cli`) — read BOTH layers before any run that forces an error state or inspects runtime state. When an entry here turns out to be product-independent, genericize it (drop the LobeHub nouns) and PR it upstream.
-> Keep the original discipline: cite `file:line` for any mechanism claim; if you only saw a symptom, write "cause not established" rather than guess.
-
----
-
-## A. Forcing a fetch to FAIL (error-state testing)
-
-### A7. ✅ WORKS — render a message-attached error card (hetero guide, AsyncError) by in-memory store dispatch
-
-- To render an error state that lives on a **chat message** (e.g. the heterogeneous
-  `overloaded` guide card), no network fault or real agent run is
-  needed — inject the error straight into the chat store, **in-memory, no DB write**:
-  ```js
-  // agent-browser --cdp <port> eval --stdin
-  var c = window.__LOBE_STORES.chat();
-  var id = 'tmp_probe';
-  // 1. create a temp assistant message (in the ACTIVE conversation)
-  c.internal_dispatchMessage({
-    id,
-    type: 'createMessage',
-    value: { role: 'assistant', content: 'partial work UNIQUE_MARKER', provider: 'claude-code' },
-  });
-  // 2. attach the error whose `body.code` drives the card
-  c.internal_dispatchMessage({
-    id,
-    type: 'updateMessage',
-    value: {
-      error: {
-        type: 'AgentRuntimeError',
-        message: 'Overloaded',
-        body: {
-          agentType: 'claude-code',
-          code: 'overloaded',
-          message: 'Overloaded',
-        },
-      },
-    },
-  });
-  ```
-  This renders the real component (real i18n) in the running app. Clean up with
-  `internal_dispatchMessage({ id, type: 'deleteMessage' })`.
-- **`code` must be one of four values, or you get no guide card.**
-  `isHeterogeneousAgentStatusGuideError` (`src/features/Conversation/Error/heterogeneous.ts:13-31`)
-  requires `agentType` ∈ {`claude-code`, `codex`} **and** `code` ∈ {`auth_required`,
-  `cli_not_found`, `overloaded`, `rate_limit`}. Anything else falls through to the generic
-  error path. The switch
-  (`src/features/Electron/HeterogeneousAgent/StatusGuide/index.tsx:28-44`) maps AuthRequired →
-  `AuthRequiredState`, RateLimit → `RateLimitState`, Overloaded → `OverloadedState`,
-  **default → `CliInstallState`**. There is no `InterruptedState`, and `interrupted` is not a
-  `HeterogeneousAgentSessionErrorCode` at all (it is a `completionReason` / run-`status` value
-  elsewhere) — an earlier version of this note used it as the example, and it would have
-  rendered nothing of the sort.
-- **No persistence / no side effects**: `internal_dispatchMessage` is the optimistic
-  in-memory path (same as `optimisticCreateTmpMessage`). Nothing hits the DB, and a
-  reload clears it. Safe even against a **real** account's synced data — do it in an
-  isolated `electron-dev.sh start <id>` instance (copied login) to be extra safe.
-- **Suppress auto-actions on purpose**: the hetero auto-retry only arms when a retry scope
-  resolves. `src/features/Conversation/Error/index.tsx:260-262` computes
-  `retryScopeId ?? getDisplayMessageById(data.id)?.parentId`, and `useHeterogeneousAutoRetry`
-  gates on `!!scopeId`. A tmp message has no `parentId`, so the scope is `undefined` → the card
-  renders in its **manual** state (retry button, no countdown) and **does not auto-fire**
-  (won't spawn a real CLI). (There is no `getRetryScopeId` helper — an earlier version of this
-  note invented one. The mechanism is a plain `parentId` lookup, not an ancestor walk.) To
-  exercise the countdown live you'd need a real user→assistant chain; otherwise cover it with
-  the component RTL test.
-- **Gotcha — `messagesMap` landing is unreliable to assert; the render is the truth.**
-  `internal_dispatchMessage` (no explicit context) targets the active conversation and
-  the message may not show up where a naive `Object.keys(messagesMap)` scan looks, yet
-  it still renders. Verify by the DOM, not by the store map.
-- **Gotcha — `document.body.innerText` keyword match false-positives in long chats.**
-  The conversation's own text (and the right-hand diff/review panel) frequently contains
-  your assert strings (e.g. `连接中断`, `重试`, `Retry`). Match on a **unique injected
-  marker** instead, `scrollIntoView` its node, then **open the screenshot with Read** to
-  confirm the card (Case 1 rule). Find + scroll to the node:
-  ```js
-  var w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null),
-    n,
-    hit;
-  while ((n = w.nextNode())) {
-    if (n.nodeValue.indexOf('UNIQUE_MARKER') >= 0) {
-      hit = n;
-      break;
-    }
-  }
-  var el = hit.parentElement;
-  for (var i = 0; i < 6 && el.parentElement; i++) el = el.parentElement;
-  el.scrollIntoView({ block: 'center' });
-  ```
-
-### A8. ✅ WORKS — trigger a REAL failed load-more via store action when scroll/observer won't trip
-
-- **Situation**: verifying an infinite-scroll `loadMoreError` inline retry row. The
-  `IntersectionObserver` won't fire because the seed data is a short list that fits
-  the viewport without scrolling (virtua renders no scrollable overflow), so
-  `scrollTop = scrollHeight` scrolls nothing and `loadMore` is never called.
-- **Doesn't work**: scrolling any element to the bottom — with only 2 rows there is
-  no scroll container (`scrollHeight <= clientHeight`), and virtua's sentinel never
-  intersects.
-- **Works — two parts**:
-  1. **Force pagination with tiny seed data via HMR**: lower the component's page-size
-     const so a small dataset paginates. `AgentTopicManager` `PAGE_SIZE = 30` → `2`,
-     then an agent with 3 topics loads page-1 = 2, `hasMore = true`.
-  2. **Call the real store action directly** (bypasses the observer, but runs the real
-     fetch + real `catch`): `window.__LOBE_STORES.<store>` is a bound hook — CALL it to
-     get live state + actions (`.getState`/`.setState` are NOT exposed, C1).
-     ```js
-     // agent-browser --session <s> eval
-     var c = window.__LOBE_STORES.chat();
-     await c.loadMoreAgentTopicsView(); // hits the injected getTopics(current>0) throw
-     // → real catch sets agentTopicsViewMap[key].loadMoreError → inline AsyncError row renders
-     ```
-  Pair the service injection (A4, throw only when `params.current > 0` so page-1 loads
-  and page-2 fails) with a **call counter** to prove the observer gate does NOT loop:
-  `(globalThis).__loadMoreCalls = (…||0)+1` inside the throw; after the failure, wait a
-  few seconds and assert `window.__loadMoreCalls` stays `1` (no runaway re-trigger).
-- **Caveat**: calling the action directly proves the render + the real error code path +
-  no-runaway, but NOT the observer's `!loadMoreError` gate under real scroll (the gate
-  lives in the component's IntersectionObserver callback). To exercise the gate live you
-  need a real scrollable list — seed `> PAGE_SIZE` visible-source topics on one agent.
-- **Gotcha — the manager view filters by source (`来源: 对话`) by default.** The store's default
-  filter is `triggers: ['chat']` (`src/features/AgentTopicManager/store.ts:49-51`; the code calls
-  it the **trigger** filter, the UI labels it 来源 /source), so topics with a non-chat trigger
-  show `0` even though the agent owns them in the DB; click **清空筛选 / Clear filters** (or
-  `setStatus('all')` + clear) to reveal them.
-
----
-
-## C. Probing app / store runtime state
-
-### C0. A picker backed by a list store may need fixture hydration after direct-route entry
-
-- **Situation**: a modal reads candidate entities from a list store, while the test enters a
-  detail route directly. The detail route can render from its own entity/config store without
-  ever mounting the list fetcher, so the picker correctly renders an empty candidate list even
-  though fixture rows exist in the database.
-- **Doesn't work**: inserting database rows alone, or refreshing the detail store. Neither
-  hydrates a separate list store that has not mounted its fetch hook.
-- **Works**: first enter the canonical list/home surface and let its real fetch settle. If the
-  fixture deliberately bypasses normal creation and the list API still does not expose it,
-  use the existing C1b dev-only `setState` exposer to hydrate the list store with the exact
-  fixture shape, then exercise the real picker component and remove the exposer patch after
-  capture. Keep the report explicit that fixture hydration was test setup; validate the actual
-  mutation and created entity through the database or network boundary.
-
-### C1. `window.__LOBE_STORES.<name>` has no `.getState` — CALL it instead
-
-- **Doesn't work**: `window.__LOBE_STORES.page.getState()`. The exposed value is neither the
-  store nor the hook: `src/store/middleware/expose.ts:11` assigns
-  `window.__LOBE_STORES[name] = () => store.getState()`, a plain arrow function with no
-  `.getState` property.
-- **Works**: call it — `window.__LOBE_STORES.page()` returns the state snapshot, actions
-  included. An earlier version of this note said "state isn't readable from it", which was
-  wrong and contradicted C1b.
-
-### C1b. ✅ WORKS — expose `setState` via HMR to drive a REAL identity/scope change (login repro)
-
-- **Situation**: verifying behavior on an identity/cache-scope change (e.g. login,
-  `useCacheScope` = `${userId}:${workspaceId}`) on the ALREADY-LOADED app, without a
-  real OAuth flow. Cold-boot repro is timing-flaky under machine load; the faithful,
-  deterministic path is to flip `userId` on the live app.
-- **Doesn't work**: `window.__LOBE_STORES.user()` returns `getState()` (actions but no
-  `setState`); there is no public `setUserId` action to call.
-- **Works**: patch the dev-only exposer `src/store/middleware/expose.ts` (HMR) to also
-  attach `setState`, then drive the store from `eval`:
-  ```ts
-  // expose.ts, temporary — REMOVE after: git checkout -- src/store/middleware/expose.ts
-  const handle = () => store.getState();
-  (handle as any).setState = (store as any).setState;
-  window.__LOBE_STORES[name] = handle as any;
-  ```
-  `expose()` only runs at store creation, so reload the renderer once after the edit so
-  stores re-expose with the handle. Then:
-  ```js
-  var u = window.__LOBE_STORES.user;
-  var c = u().user || {};
-  u.setState({ user: Object.assign({}, c, { id: 'probe_scope_0705' }) }); // → scope flips
-  ```
-  In-memory only (no DB write); a reload restores the real id. Revert the file after.
-
-### C5. ✅ WORKS — main-process `logger.info` is invisible unless `DEBUG` is set
-
-- **Situation**: proving WHICH code path the Electron main process took (e.g. hetero
-  `ClaudeAgentSdkSession` vs the CLI-spawn `AgentStreamPipeline`). Both produce identical
-  user-visible output, so the verdict needs a main-process log line.
-- **Doesn't work**: grepping the instance log for the `logger.info('Starting Claude Code SDK
-session:')` line. In development `createLogger().info` routes to the `debug` package, which
-  prints nothing unless its namespace is enabled (only `console.error` shows up unconditionally).
-  Absence of the line is NOT evidence the branch didn't run.
-- **Works**: `export DEBUG='controllers:*'` before `electron-dev.sh start <id>`, then
-  `grep -oE "controllers:HeterogeneousAgentCtr INFO: [^']*" /tmp/lobe-electron-pool/instance-<id>.log`.
-  Don't trust the hetero tracing dir for this — it is gated and the copied golden profile ships
-  STALE trace sessions from months earlier that look like a fresh run.
-
-### C6. ✅ WORKS — read a topic's metadata (workingDirectoryConfig etc.) from the chat store, and reset to a fresh topic
-
-- **Doesn't work**: `chat().topicsMap[topicId]` / `chat().topicDataMap[topicId]` — there is
-  no per-topic-id map. `topicDataMap` is keyed by **view key** (`agent_<agentId>`), and each
-  value is a paginated view object (`{ items, total, hasMore, … }`), not a topic.
-- **Works** (verified while E2E-testing `git worktree add` side-effect recording):
-  ```js
-  var c = window.__LOBE_STORES.chat();
-  var view = c.topicDataMap['agent_' + agentId];
-  var topic = (view.items || []).find(function (x) {
-    return x.id === c.activeTopicId;
-  });
-  topic.metadata.workingDirectoryConfig; // ← e.g. git.activeWorktree written by recordGitCommandEffects
-  ```
-- **Fresh topic without touching the UI**: `await c.openNewTopicOrSaveTopic()` — with an
-  active topic it saves/exits to the agent's no-topic compose state (activeTopicId → null),
-  so the next send creates a new topic. Chain per-case fixtures this way instead of clicking
-  "Start New Topic". The contenteditable ref changes after the switch — re-run
-  `snapshot -i -C` before typing.
-- Full E2E loop this enabled: E11 fixture agent (`heterogeneousProvider: { type: 'claude-code' },
-executionTarget: 'local'` in `agencyConfig`) + one message per case asking CC to run a
-  specific shell command → poll `chat().operations` for `running === 0` → assert the
-  topic's metadata via the probe above. A real CC one-command turn completes in \~10–20s.
-
-### C7. DB-seeded task rows need a `task_`-prefixed id or `resolve()` silently misses them
-
-- **Situation**: seeding a `tasks` row directly in SQL for a router probe, with a
-  hand-written id like `tsk_foo`, then calling a task procedure — it 404s
-  ("Task not found") even though the row exists and the caller is a member.
-- **Doesn't work**: any id not starting with `task_`. `TaskModel.resolve()`
-  (`packages/database/src/models/task.ts:220-223`) only treats the input as a row
-  id when it starts with `task_`; everything else is upper-cased and looked up as
-  a workspace `identifier` (e.g. `T-1`), so `tsk_foo` becomes the identifier
-  lookup `TSK_FOO` → null.
-- **Works**: use the idGenerator prefix (`task_<suffix>`) for seeded ids, or pass
-  the row's `identifier` (`T-<seq>`) to the procedure instead.
-
-### C8. ✅ An agent-browser session can silently LOSE its seeded cookies — a 401, not `document.cookie`, is the signal
-
-- **Situation**: verifying an owner-only affordance (a link the server renders only for the
-  report's author). The page rendered without it, and the bundle came back `isOwner: false`
-  even though the row's `userId` matched the seeded user — which reads exactly like a bug in
-  the ownership check.
-- **Doesn't work**: `document.cookie` as the auth probe. Better Auth's session cookie is
-  **httpOnly**, so `document.cookie` is legitimately `[]` on a fully authenticated page —
-  `cookieCount: 0` proves nothing either way.
-- **Doesn't work**: trusting `setup-auth.sh web-seed`'s success line for the rest of the run.
-  It verified the session at `/`; the session can still be empty later (this run's page had
-  also drifted to `about:blank` at one point — see D14).
-- **Works**: probe the SERVER, not the document — call any authed procedure from the page and
-  read the status. `401` = no session reached the server; `200` = you are really signed in.
-  ```js
-  const r = await fetch(
-    base +
-      '/trpc/lambda/user.getUserState?input=' +
-      encodeURIComponent(JSON.stringify({ json: {} })),
-    { credentials: 'include' },
-  );
-  r.status; // 401 → re-seed; 200 → the session is live
-  ```
-  Recover with `agent-browser close --all` + `setup-auth.sh web-seed`, then re-open the route.
-  After re-seeding, the same bundle returned `isOwner: true` with the owner-only link rendered —
-  the code was correct all along.
-- **Why it matters**: an auth-scoped assertion (owner-only / permission-gated UI) fails
-  IDENTICALLY whether the gate is broken or the session is missing. Always establish that the
-  session is live (a 200 from an authed procedure) BEFORE concluding the gate is wrong —
-  otherwise you publish a false bug against your own change.
-
-### C9. A component-scoped "consumed" ref is not a one-shot guard once the component can remount
-
-- **Situation**: a persisted store field carries a one-shot request (`{ nonce, url }`) and the
-  consuming component guards against re-consumption with a `useRef` holding the last nonce.
-- **Why it silently breaks**: the ref dies with the component. Any change that starts remounting
-  the consumer (e.g. giving it a `key` that now varies per topic/session) resurrects the guard as
-  `undefined`, so a request that is still sitting in _persisted_ state is re-consumed on every
-  remount — and, on a fresh boot, once more. The symptom looks nothing like the cause: a page the
-  agent had just loaded gets navigated to a URL from days ago.
-- **Works**: retire the request in the store the moment it is consumed, so the one-shot is one-shot
-  across mounts and restarts. Watch the merge semantics — if the store patches with lodash `merge`,
-  clearing with `undefined` is a **no-op** and the field must be set to `null`.
-- **Test for it**: assert the field is `null` (not `undefined`) after the consume action; a test that
-  only checks "the request was acted on" passes in both the broken and fixed versions.
-
-### C11. Persisted SWR cache serves a STALE agent config after a direct DB write
-
-- **Situation**: seeding `agents.agency_config` or `agents.model` directly in Postgres, then using
-  the app to drive an assertion.
-- **Doesn't work**: reload or `internal_refreshAgentConfig`; IndexedDB/localStorage can retain the
-  previous config and make a fixture issue look like a product regression.
-- **Works**: cold-load by clearing browser storage/caches, re-seed auth, reopen, and assert the
-  fixture in `__LOBE_STORES.agent().agentMap[id]` before testing downstream behavior.
-
----
-
-## D. agent-browser / CDP mechanics
-
-- **D3. offline is `agent-browser set offline on|off`** (under `set`, with
-  `viewport`/`geo`/`headers`), not a top-level `offline` command.
-- **D6. The singleton hover action bar is hard to drive; its icons are
-  `div[role=button]`, NOT `<button>`.** The per-message action bar
-  (`SingletonMessageActionsBar`) is one portal that moves via DOM + a
-  freeze/commit `MutationObserver`, so it appears only while hovering and
-  re-hides on the next commit tick. Gotchas that wasted a run:
-  - `host.querySelectorAll('button')` returns 0 — the ActionIcon items render as
-    `<div role="button">`. Query `[role="button"]` (or the broad
-    `button,[role=button],[class*=ActionIcon]`).
-  - Between two evals the bar can vanish (commit tick). Do hover + inspect + act
-    in as few steps as possible.
-  - ✅ WORKS to open the overflow menu on a message and read its items:
-    ```bash
-    S="--session s9224 --cdp 9224"
-    agent-browser $S hover "#<messageId>" # ChatItem root id = message id
-    sleep 1.5
-    # click the LAST role=button in the host = the "…" overflow trigger
-    agent-browser $S eval '(function(){var h=document.querySelector("[data-singleton-message-action-bar-host]");var b=h&&h.querySelectorAll("[role=button]");if(!b||!b.length)return "no-bar";b[b.length-1].click();return "clicked";})()'
-    sleep 1
-    agent-browser $S screenshot /abs/menu.png
-    agent-browser $S eval '(function(){var t=[];document.querySelectorAll("[role=menuitem],li").forEach(function(i){var s=(i.innerText||"").trim();if(s)t.push(s);});return JSON.stringify(Array.from(new Set(t)));})()'
-    ```
-    A programmatic `.click()` on the ellipsis DOES open the antd dropdown (it sets
-    `data-popup-open`, which also freezes the bar so it won't vanish). The action
-    labels are localized (`分享`/`多选`/`删除` = share/select/del).
-- **D7. To get a _finished_ hetero (CC/Codex) turn that ENDS on a tool block**
-  (last child has tools → `getGroupLatestMessageWithoutTools` returns undefined,
-  the `!contentId` action-bar path): send a single long tool call (e.g.
-  `用 Bash 工具运行 sleep 20`) and, the moment the group's last child is a running
-  tool, call `stopGenerateMessage()` in the SAME eval to avoid the race where CC
-  appends a trailing text summary (which would give it a text last-block and a
-  defined contentId). Poll-then-stop-atomically:
-  ```bash
-  agent-browser $S eval '(function(){var c=window.__LOBE_STORES.chat();var t=c.activeTopicId;var a=c.messagesMap["main_"+c.activeAgentId+"_"+t]||[];var g=a.filter(m=>m.role==="assistantGroup").pop();var lc=g&&g.children&&g.children.at(-1);var running=Object.values(c.operations||{}).some(o=>o.status==="running");if(lc&&(lc.tools||[]).length&&running){c.stopGenerateMessage();return "STOPPED";}return "wait";})()'
-  ```
-- **D11. ✅ WORKS — catch a BRIEF blank/transient frame (sub-second) that screencast misses.**
-  Verifying a momentary full-screen blank (e.g. a React subtree unmounting to `null` for
-  \~150–350ms during a scope change): `Page.startScreencast` emits one frame when it starts and
-  then only on a VISUAL CHANGE, so a _static_ blank produces no further frames — you see a time
-  GAP in the manifest, not a blank image. (Measured: 3s of a static page → **1** frame, the
-  initial one; 6 background flips → **6** frames. The old note said "NO frame", which misses
-  the initial one and can look like the screencast never started.)
-  Single timed `cdp-screenshot` also loses the race (its own \~200ms latency
-  overshoots) and `captureScreenshot` can return the prior surface.
-  - **Works — two complementary probes**:
-    1. **DOM proof (deterministic)**: sample `document.getElementById('root').innerText.trim().length`
-       at 150/350/600ms after the trigger via one `eval` returning a Promise. A full unmount
-       drops it to `0`, then it recovers — unambiguous, load-independent. (Fixed vs broken:
-       `6064 → 0 → 5646` vs `6089 → 6002 → 6042` never-0.)
-    2. **Freeze the pixels**: to actually capture the blank image, keep the blank ON SCREEN
-       longer by re-triggering every \~80ms (e.g. flip `userId` to a fresh value each tick so a
-       `key={scope}` gate stays remounted), while firing raw CDP `Page.captureScreenshot` every
-       80ms over the same window. Blank frames come back tiny (\~34KB jpeg) vs content (\~294KB);
-       convert + Read one to confirm. (A raw-CDP forced capture DOES render a static frame; the
-       trick is holding the state, not the capture.)
-  - Byte-size is a reliable auto-flag for near-uniform frames (blank/loading), but two
-    different near-uniform states (dark loading-screen vs blank) can both be small — always
-    Read the frame to tell them apart (Case 1 rule).
-
-### D13. `record-electron-demo.sh` IS real 30fps capture — but raw avfoundation timestamps are unusable
-
-- **Don't assume the whole skill is 1-2 fps.** `record-gif.sh` and `record-app-screen.sh` are
-  CDP-screenshot loops (capped by screenshot latency). `record-electron-demo.sh` is different:
-  `ffmpeg -f avfoundation -framerate 30` (see `scripts/record-electron-demo.sh:152-153`) — a
-  true OS screen recording, fast enough for sub-second UI transitions.
-- **Doesn't work**: a naive `ffmpeg -f avfoundation -framerate 30 -i "1:" -t 14 out.mp4`.
-  Measured on one 14s capture: **133332 frames muxed into a 0.13s file at 4.7 Gbit/s, 79 MB**.
-  `-ss <n>` then fails with `Output file is empty, nothing was encoded`. Cause not established
-  (avfoundation's own PTS appear near-identical); the fix below is empirical.
-- **Works**: rebuild the time base — `-use_wallclock_as_timestamps 1` on the input plus
-  `-vf fps=20` on the output. Same 14s capture → **14.00s / 136 KB**.
-  ```bash
-  ffmpeg -y -use_wallclock_as_timestamps 1 -f avfoundation -framerate 30 -capture_cursor 0 \
-    -i "1:" -t 14 -vf "fps=20,scale=1200:-2" -c:v libx264 -crf 26 -pix_fmt yuv420p out.mp4
-  ```
-- **`ffprobe` may be absent even when `ffmpeg` is installed.** Validate with
-  `ffmpeg -v error -i out.mp4 -f null -` (silence = decodes fine) and read `Duration` from
-  `ffmpeg -i out.mp4 2>&1 | grep Duration`.
-- Being an OS capture it is subject to D10 (black frames when the display sleeps): gate with
-  `check-screen-recording.sh` and hold `caffeinate -dimsu` for the WHOLE run — re-check right
-  before recording if the run has been long, since the display can sleep mid-session.
-- **Pick evidence by what you're asserting, not by a rule.** A state transition lasting seconds
-  (a loading label flipping) is fine as a 2fps CDP GIF. Reach for 30fps OS capture only when the
-  asserted change is sub-second. And when the asserted quantity is a **prop, not a pixel** (e.g.
-  `animated = enableStream && transitionMode === 'fadeIn' && isGenerating`, see
-  `src/features/Conversation/Messages/useChatMarkdown.tsx:43`), record it with a timestamped
-  debug-global (C2) in the same render: failing to film a flicker proves nothing about whether it
-  flickers, whereas `0ms:true → 7386ms:false` pins the exact flip.
-
-### D15. Host-page CDP screenshot renders the `<webview>` region BLACK intermittently — guest DOM eval is ground truth
-
-- **Situation**: capturing evidence of an Electron in-app browser (`<webview>` in a sidebar).
-  Early `Page.captureScreenshot` shots of the host page included the guest's pixels; minutes
-  later the same command on the same target returned the webview region uniformly black
-  (byte-identical output across retries), while the app chrome around it rendered fine.
-- **Doesn't work**: concluding the embedded page went blank/failed from the host screenshot,
-  or retrying the host capture. The guest was healthy the whole time: an `agent-browser`
-  session following the webview target (E16) read `document.title` = the expected page and
-  full body text.
-- **Works**: treat the guest target as the source of truth — eval `title`/`innerText` in the
-  webview target for the assertion, and capture the guest's own pixels via a session pinned
-  to the `webview` target (`agent-browser screenshot` there) when the embedded page's visual
-  matters. Use host-page screenshots only for the app chrome around the webview. Cause of the
-  black compositing not established (OOPIF surface not composited into the host capture).
-
-### D20. ✅ Main-process `WebContentsView` pages are their own CDP page targets — they hijack target selection, AND they are the best pool probe
-
-- **Situation**: verifying an in-app browser whose pages are owned by the MAIN process as
-  `WebContentsView`s (not renderer `<webview>` guests — that is E16/D15, a different shape).
-- **Doesn't work**: assuming any tool that "just connects to the CDP port" lands on the app.
-  Every live page shows up in `/json/list` as its own `type: page` target, so both
-  `agent-browser` and `scripts/cdp-screenshot.sh` can silently attach to a _web page the app
-  is hosting_ instead of the app itself. Measured: `cdp-screenshot.sh` reported
-  `targetUrl: https://example.com/` and wrote that page's pixels while the intended evidence
-  was the app window; an `agent-browser get url` on the same port hung.
-- **Works — pin the target by URL prefix.** Raw CDP, pick the target whose `url` starts with
-  `app://renderer`, and evaluate against that:
-  ```js
-  const list = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
-  const target = list.find((t) => t.type === 'page' && t.url.startsWith('app://renderer'));
-  new WebSocket(target.webSocketDebuggerUrl); // → Runtime.evaluate
-  ```
-- **Works — the same property is the cheapest page-pool probe there is.** One live page ==
-  one `page` target, so `/json/list` filtered to non-`app://` URLs _is_ the pool's contents.
-  Use it to assert per-session isolation (N sessions → N coexisting pages, and a page that
-  should have survived an action is still listed) without adding any IPC or store probe:
-  ```bash
-  curl -s --noproxy '*' http://127.0.0.1: < cdp > /json/list \
-    | python3 -c "import json,sys; print([t['url'] for t in json.load(sys.stdin) if t['type']=='page'])"
-  ```
-- **Pixels still need an OS capture.** A `WebContentsView` does not composite into the host
-  page's `Page.captureScreenshot`, so app-window evidence that must _show the embedded page_
-  has to come from `capture-app-window.sh` (macOS `screencapture -l <windowid>`), which does
-  not require bringing the window to the front.
-
----
-
-## E. Env / ports
-
-- **E1. ⚠️ This item was wrong on both counts — do not trust its reasoning.**
-  It claimed `eval "$(init-dev-env.sh env)"` "can clobber `PATH`". It cannot: the `env`
-  subcommand prints only the keys in `env_keys()` (`init-dev-env.sh:178-204`), and the string
-  `PATH` does not appear anywhere in the script. It also told you to hardcode
-  `http://localhost:20874`; `SERVER_PORT` is **randomly allocated per workspace** in
-  20000-40000 (falling back to 3010) and persisted to `.records/env/agent-testing-ports.env`,
-  so `20874` was one machine's old port (this workspace is on 21912) and it appears nowhere
-  else in the repo. **Works**: read the port from that file, or export just the one var —
-  `export APP_URL="$(init-dev-env.sh env | sed -n 's/^APP_URL=//p')"`. Whatever broke
-  `awk`/`head` in the original run was never diagnosed.
-- **E2. SPA port is configurable to coexist with another worktree.** Vite binds
-  `SPA_PORT||9876`; Next proxies `VITE_DEV_PORT||9876`. Pass `SPA_PORT=9877` to
-  `init-dev-env.sh dev` (it exports `VITE_DEV_PORT=$SPA_PORT`) so both agree and
-  you don't fight a worktree already on 9876.
-
-### E3. Deep-linking to an authed SPA route — NOT reproduced; soft-nav is still the safer path
-
-- **Original claim**: after `setup-auth.sh web-seed`, a hard `open <app>/agent/<id>/docs`
-  redirects to `/signin?callbackUrl=...` while `/` stays authed.
-
-- **Did not reproduce** against the current dev server with a seeded web session
-  (`isSignedIn: true`, `userId: user_agent_testing_001`). Hard-loading `/settings/common` and
-  the note's exact shape `/agent/<real-id>/docs` both landed on the route itself, with no
-  `/signin` and no `callbackUrl`. Either it was fixed, or the original run's cookie state
-  differed. Don't budget for the bounce; check for it.
-
-- **Still true and still useful**: `app-probe.sh auth` "false-negatives" here because it talks
-  to the **Electron CDP endpoint on 9222**, not to your web browser session — it fails with
-  `All CDP discovery methods failed for 127.0.0.1:9222`. Read the auth state out of the page
-  instead: `window.__LOBE_STORES.user()` → `{ isSignedIn, user.id }`.
-
-- **Works**: hard-load `/` (authed), confirm by screenshot (not the app-probe auth
-  JSON — it false-negatives here, returns `isSignedIn:false` on an authed page),
-  then **client-side soft-nav** with no server round-trip:
-
-  ```bash
-  agent-browser eval "history.pushState({},'','/agent/<id>/docs'); window.dispatchEvent(new PopStateEvent('popstate')); 'nav'" --session lobehub-dev
-  ```
-
-  react-router picks up the popstate and renders the route in-context with the
-  already-hydrated auth. Right-panels that render at a _layout_ level do NOT see a
-  child route's `:param` via `useParams()` — read it from `location.pathname` if
-  you need it.
-
-### E4. ✅ WORKS — keep Electron pool `LOBE_IPC_ID` short
-
-- **Situation**: manually starting an isolated Electron dev instance with a
-  descriptive `LOBE_IPC_ID` such as `lobehub-desktop-dev-manual-selection-2`.
-  The main process builds a Unix socket path under `$TMPDIR`, and macOS rejects
-  overlong socket paths.
-- **Doesn't work**: long IPC ids can crash Electron at bootstrap with
-  `listen EINVAL ... <id>-electron-ipc.sock`, before any renderer/CDP evidence is
-  available.
-- **Works**: use the numeric `electron-dev.sh start <id>` pool path, or keep
-  manual IPC ids very short, e.g. `LOBE_IPC_ID=lhmsel2`.
-
-### E5. ✅ WORKS — no-Docker fallback stack for the isolated no-.env env
-
-- **Situation**: `init-dev-env.sh setup-db` needs Docker (paradedb + redis images), but
-  Docker Desktop's VM can wedge indefinitely (`no route to host` to 192.168.65.x, empty
-  vm/console.log). Verified working substitute:
-  - **Postgres**: local brew Postgres 17 (pgvector available). The only paradedb-specific
-    migrations are `0090_enable_pg_search` / `0093_add_bm25_indexes_with_icu` — no-op them
-    in the worktree (`SELECT 1;`), everything else applies clean.
-  - **Redis is a hard dependency of Better Auth sign-in** — with a dead REDIS\_URL the seed
-    login 500s (`[Better Auth]: Error: Connection is closed`). `brew install redis`,
-    `redis-server --port 6380 --daemonize yes`.
-  - **S3**: `s3rver` (npm) on 29000 with a CORS config for the bucket. Its presigned-URL
-    validation only accepts key id `S3RVER` (secret `S3RVER`) — `allowMismatchedSignatures`
-    does NOT rescue an unknown access key id (403 on the browser preflight). Set the dev
-    server's `S3_ACCESS_KEY_ID/S3_SECRET_ACCESS_KEY=S3RVER`, `S3_ENABLE_PATH_STYLE=1`,
-    `S3_PUBLIC_DOMAIN=http://127.0.0.1:29000/<bucket>`.
-
-### E6. code-inspector-plugin breaks Turbopack compile of Next-served authed pages
-
-- **Situation**: the first AUTHENTICATED render of a Next-served (non-SPA) page whose client
-  graph pulls the chat store dies in `next dev` (Turbopack) with Build Error `Resource path
-"worker/browser/createWorker.ts" needs to be on project filesystem` (chain: layout →
-  GlobalProvider/Query → trpc client → image/chat store → python-interpreter worker).
-  Unauthenticated curl 302s BEFORE the client graph compiles, so it false-passes; a fresh
-  no-lockfile `pnpm install` can resolve a broken plugin version.
-- **Works**: `E2E=1` (or `TEST=1`) — `defineConfig`'s `isTest` skips `codeInspectorPlugin`,
-  the only thing it gates. Webpack mode (`next dev --webpack`) is NOT a viable fallback
-  (react version mismatch when two next versions are hoisted; `zlib-sync` unresolved for
-  discord.js).
-
-### E8. ✅ WORKS — a git-worktree checkout needs its OWN `pnpm install`, not a symlinked `node_modules`
-
-- **Situation**: verifying a UI change from a `git worktree` (e.g. `.claude/worktrees/<name>`), which
-  starts with no `node_modules`.
-- **Doesn't work**: symlinking the main checkout's `node_modules` (root and/or `apps/desktop`) into the
-  worktree. The workspace links inside it point `@lobechat/*` at the MAIN checkout's `packages/`, which
-  sits on a different branch — the Electron main build then dies with
-  `[MISSING_EXPORT] "X" is not exported by "../../packages/<pkg>/src/..."`. Renderer source resolves from
-  the worktree while packages resolve from the main repo, so the two disagree.
-- **Works**: run `pnpm install` at the worktree root AND `cd apps/desktop && pnpm install` (standalone,
-  not in the workspace). \~5 min total, mostly hardlinked from the store.
-- **Also**: a Vite dev server left over from an earlier failed `electron-dev.sh start <id>` is REUSED by
-  the retry (`CDP already reachable … Skipping start`) and can keep serving pre-edit module text. If the
-  DOM shows markup that contradicts the source, curl the dev server for the file and grep for a token you
-  just added (`curl -s 127.0.0.1:<vitePort>/src/path/File.tsx | grep -c myNewSymbol`) before blaming the
-  code. `electron-dev.sh stop <id>` then start again to get a clean server.
-
-### E8b. The standalone `apps/desktop` install BREAKS the root workspace's type resolution — re-run the root install after it
-
-- **Situation**: a worktree set up per E8 (`pnpm install` at the root, then
-  `cd apps/desktop && pnpm install`). Everything runs — Electron boots, the renderer serves live
-  code — but a full `bun run type-check` that passed BEFORE the desktop install now fails with
-  dozens of errors that have nothing to do with the change under test:
-  `Module '"@lobechat/types"' has no exported member 'MetaData' | 'HotkeyId' | …` plus
-  `Type 'UserHotkeyConfig' is missing the following properties from type 'UserHotkeyConfig'` —
-  the same name on both sides, i.e. **two copies of `@lobechat/types` in one program**.
-- **Doesn't work**: chasing it as a code defect, or checking the symlink
-  (`node_modules/@lobechat/types → ../../packages/types` looks correct) and `packages/types/node_modules`
-  (its deps are all present). Both look fine while the program still sees two instances.
-- **Cause**: `apps/desktop` is NOT in the root pnpm workspace (see E8). Its standalone install
-  re-resolves the `packages/*` links from its own lockfile and rewrites shared package deps under
-  `packages/*/node_modules`, leaving the root workspace pointing at a second instance.
-- **Works**: run `pnpm install` at the worktree root ONE MORE TIME, after the desktop install
-  (\~1.5 min, mostly cached). Type-check goes back to 0 errors and Electron keeps working.
-  So the safe order is: root install → desktop install → root install again. And never publish a
-  "type-check failed" verdict from a worktree until you've re-run the root install — the failure is
-  environmental, and the error text (a type "missing properties from" itself) is the tell.
-
-### E9. Electron dev's FIRST cold boot sits on the splash with an empty `#root` for 1–3 minutes
-
-- **Situation**: after `electron-dev.sh start <id>`, `app-probe.sh auth` returns `isSignedIn:false`,
-  `#root` has providers but `innerText.length === 0`, and the screenshot is just the LobeHub splash. The
-  main log shows `Proactive token refresh failed` / `invalid_grant`.
-- **Doesn't work**: concluding the copied login state expired. That refresh error is a red herring — the
-  app recovers, and `RENDERER_WAIT_S` (60s) can expire while Vite is still on
-  `[optimizer] bundling dependencies`, which ends in `optimized dependencies changed. reloading`.
-- **Works**: poll until the DOM actually has content instead of sleeping a fixed amount:
-  ```bash
-  until [ "$(agent-browser --session s \
-    '(function(){return String(document.getElementById("root").innerText.trim().length>50)})()' < port > --cdp < port > eval \
-    | tr -d '"')" = "true" ]; do sleep 5; done
-  ```
-  Also note `zsh does NOT word-split unquoted vars` — `S="--session x --cdp 9226"; agent-browser $S eval`
-  fails with `Unknown command`. Inline the flags or use an array.
-
-### E10. ✅ WORKS — stop the main process from yanking the renderer back to its last tab
-
-- **Situation**: driving the SPA to a specific route for a screenshot. `history.pushState` + `popstate`
-  lands correctly, then \~15–20s later `location.pathname` snaps back to whatever tab the main process
-  has stored (e.g. `/devtools/claude-code`). A hard `location.href` nav is reverted the same way.
-- **Cause**: the main process broadcasts `navigate`, and `src/features/DesktopNavigationBridge` obeys it.
-- **Works**: HMR-neutralize the bridge for the run, then revert:
-  ```tsx
-  // src/features/DesktopNavigationBridge/index.tsx — [AGENT-TEST] REMOVE
-  useWatchBroadcast('navigate', () => {
-    void handleNavigate;
-  });
-  ```
-  `git checkout -- src/features/DesktopNavigationBridge/index.tsx` afterwards; `grep -rn AGENT-TEST src/`
-  must come back empty.
-
-### E11. ✅ WORKS — drive the working-directory / git-status ControlBar without the native dir picker
-
-- The picker opens a native dialog, but the same write path is reachable from the store. With no active
-  topic, `commit()` persists to `agencyConfig.workingDirByDevice[deviceId]`:
-  ```js
-  const a = window.__LOBE_STORES.agent(),
-    d = window.__LOBE_STORES.device();
-  const did = window.__LOBE_STORES.electron().gatewayDeviceInfo.deviceId;
-  const entry = { path: '/abs/repo', repoType: 'git' };
-  await a.updateAgentConfigById(agentId, {
-    agencyConfig: { workingDirByDevice: { [did]: entry } },
-  });
-  await d.updateDeviceCwd(did, entry, { setDefault: false }); // so the entry exists → sourcePath resolves
-  ```
-  Create a throwaway agent with `agent().createAgent({ title })` and delete it afterwards with
-  `session().removeSession(agentId)` (there is no `deleteAgent` on the agent store) plus
-  `device().removeDeviceWorkingDir(did, path)` — otherwise the fixture cwd lingers in the real account.
-- **Identify icons precisely**: lucide renders `svg.lucide.lucide-git-fork`. Several git icons live in the
-  same bar (the dir picker's `DirIcon` is `git-branch`, the review toggle is `git-compare`), so scope the
-  assertion to the trigger: `document.querySelector('[role=button][aria-label="Worktrees"]') svg`, and
-  still open the PNG to confirm (Case 1).
-
-### E14. ✅ WORKS — Electron pool instance boots BLANK because the copied golden login is dead
-
-- **Situation**: `electron-dev.sh start <id>` seeds userData from the golden dev profile,
-  but the app renders an empty `#root` (innerText length 0, only the LobeHub watermark) and
-  `app-probe.sh auth` returns `isSignedIn:false`. The instance log shows
-  `Refresh response missing access_token or refresh_token { error: 'invalid_grant' }`.
-- **Cause (measured, not guessed)**: OIDC refresh tokens are single-use. Every prior
-  `start <id>` copied the same golden profile and consumed/rotated its refresh token, so the
-  copy's token is already dead. A blank shell here is an AUTH failure, not a render bug —
-  read the instance log before chasing the SPA.
-- **Doesn't work**: pointing `LOBE_GOLDEN_PROFILE` at the packaged app's profile
-  (`~/Library/Application Support/LobeHub`) — the pool instance's startup refresh will rotate
-  that token too and log the user out of their real desktop app.
-- **Works — inject a valid credential the app already owns, no new OAuth grant**:
-  the prod lambda accepts any of the user's valid OIDC access tokens via the `Oidc-Auth`
-  header, and the CLI keeps one in `~/.lobehub`. Extract it with the CLI's own
-  `getValidToken()` (it auto-refreshes), then override the single main-process accessor:
-  ```ts
-  // apps/desktop/src/main/controllers/RemoteServerConfigCtr.ts — [AGENT-TEST] REMOVE
-  async getAccessToken(): Promise<string | null> {
-    if (process.env.LOBE_TEST_ACCESS_TOKEN) return process.env.LOBE_TEST_ACCESS_TOKEN;
-    ...
-  ```
-  `export LOBE_TEST_ACCESS_TOKEN=...` before `electron-dev.sh start <id>` (the script forwards
-  the shell env). This authenticates BOTH the renderer (BackendProxyProtocolManager injects the
-  same token) and any main-process fetch, so the whole app comes up signed in. Revert with
-  `git checkout --` + `grep -rn AGENT-TEST` afterwards, and never echo the token.
-- **Works — alternative, no source edit, when you can approve a browser prompt**: seed a
-  PRISTINE profile so the app takes the signed-out path and renders the real login screen
-  instead of hanging:
-  ```bash
-  mkdir -p /tmp/empty-golden
-  LOBE_GOLDEN_PROFILE=/tmp/empty-golden ./electron-dev.sh start <id>
-  ```
-  Drive onboarding (`开始` → `下一步` ×2 → `登录 LobeHub Cloud`). The device-code flow opens the
-  browser and auto-approves against an existing app.lobehub.com session, giving the instance its
-  OWN token — so it never rotates the one the user's resident app holds.
-- **Why the blank shell has no login button**: the failed refresh leaves `isUserStateInit:false`
-  (with `isLoaded:true, user:null`), and the desktop first-frame gate waits on it forever. Every
-  route — `/`, `/desktop-onboarding` — renders empty. Reloading, soft-navving, and waiting all
-  fail to resolve it, so it reads exactly like a Case-1 blank page.
-- **Gotcha**: a worktree installed with `pnpm install --ignore-scripts` has NO electron binary
-  (`node_modules/.pnpm/electron@*/node_modules/electron/dist` missing). Fix with
-  `cd apps/desktop && pnpm rebuild electron`. Also remember `apps/desktop` and `apps/cli` are
-  NOT in the root pnpm workspace — install inside each.
-- **Gotcha**: `electron-dev.sh restart <id>` keeps the userData dir, but a device-code session
-  did NOT survive it — budget for one more login after any restart (e.g. when a main-process
-  change forces one, see E9).
-
-### E15. Main-process code changes need a restart; Vite HMR only covers the renderer
-
-- Adapters under `packages/heterogeneous-agents` run in the **main** process
-  (JSONL framing + adapter + `toStreamEvent`). Editing one and reloading the
-  renderer verifies nothing — the old adapter is still running.
-- Prove which code each process has before trusting a run:
-  ```bash
-  # renderer: vite serves working-tree src (VITE_BASE + id)
-  curl -s --noproxy '*' "http://127.0.0.1:<vitePort>/src/<path>.ts" | grep -c '<marker>'
-  # main: rebuilt on start into the desktop dist bundle
-  grep -c '<marker>' apps/desktop/dist/main/index.js
-  ```
-
-### E16. agent-browser session silently re-targets to a newly created `<webview>` guest
-
-- **Situation**: driving an Electron app over CDP while the app itself spawns a `<webview>`
-  (in-app browser). After the guest mounts, `eval` on the SAME session suddenly returns the
-  guest page's DOM (`__LOBE_STORES` undefined, app selectors empty) — looks like the app broke.
-- **Doesn't work**: assuming a session stays pinned to the app target; also assuming
-  `document.querySelectorAll('webview').length === 0` means "no webview" (you may be evaluating
-  INSIDE the guest).
-- **Works**: `curl -s localhost:<cdp>/json/list` to see targets (`page` = app, `webview` =
-  guest), then use **separate session names** per target (`--session app-x` re-picks the `page`
-  target; the old session keeps following the guest — handy for driving the embedded page).
-  Verify with `get url` (`app://` vs the site URL) before trusting any eval result.
-
-### E17. Dev-mode main-process `logger.warn/debug` is invisible without DEBUG env — probe with console.log
-
-- **Situation**: adding a temporary probe log in Electron main code and watching the dev
-  instance log; nothing prints, which reads as "code path never runs".
-- **Doesn't work**: `createLogger(ns).warn/debug` in development — it routes to the `debug`
-  package, which is silent unless `DEBUG=<ns>` was set when the process started.
-- **Works**: temporary probes use `console.log('[AGENT-TEST] …')` (always reaches the instance
-  log via stdout); confirm the rebuilt bundle actually contains the probe string
-  (`grep "<probe>" apps/desktop/dist/main/index.js`) before interpreting silence.
-
-### E18. Cloud-connected desktop routes even `local` agents to the SERVER runtime — force client with `disableGatewayMode`
-
-- **Situation**: verifying a **client-only** builtin tool (`executors: ['client']`) via a real agent turn on the desktop. The agent's `executionTarget` is `local` and the tool-enable gate (`isLocalSystemEnabled` = runtime `local`) passes, so it _looks_ like it will run client-side.
-- **Doesn't work**: sending the message as-is. On a cloud-connected desktop, gateway mode is on by default, so the run dispatches to `execServerAgentRuntime` (server/queue path) even for a `local` agent. The client-only tool isn't executable there — the model flails and returns a non-answer (e.g. "browser closed") with no real tool effect. Confirm the path by reading the running op's `type` in `window.__LOBE_STORES.chat().operations` (`execServerAgentRuntime` = server; `executeToolCall` = client).
-- **Works**: set the agent's `chatConfig.disableGatewayMode = true` (via `agentStore.updateAgentChatConfigById(id, { disableGatewayMode: true })`) before sending. The run then goes through `executeToolCall` (client runtime); the composer's runtime chip flips to "Local device" and the client executor runs. The gate (`isLocalSystemEnabled`) and the transport (`disableGatewayMode`) are INDEPENDENT — enabling the tool does not force client execution.
-
-### E19. Desktop has no classic session store — reconfigure the existing agent, don't `createSession`
-
-- **Situation**: wanting a throwaway agent for a real-turn test without polluting the user's agent.
-- **Doesn't work**: `sessionStore.createSession({...})` — the desktop app doesn't use the classic session store (`sessions` is `[]`, `activeId` is `'inbox'`); agents are a server-backed model in `agentStore.agentMap` keyed by `agt_...`. The created session never becomes the active agent.
-- **Works**: back up the active agent's full config (`model`, `provider`, `agencyConfig`, relevant `chatConfig`), reconfigure it in place (`updateAgentConfigById` + `updateAgentChatConfigById`), run the test, then restore every field and clear any injected key-vault entry. Also: `chat.sendMessage` requires `context: { agentId, topicId, isNew }` or it throws `Cannot destructure property 'agentId' of 'context'`. Reads right after an `updateAgent*` can be stale — re-read after \~1.5s to confirm persistence.
-
-### E20. Killing the dev server mid-write corrupts `.next/dev` — every route 404s and `/` ↔ `/signin` ping-pong
-
-- **Situation**: after `init-dev-env.sh clean` (or any kill) and a restart, the whole app is broken: `/` 302s to `/signin`, `/signin` 307s back to `/` (`ERR_TOO_MANY_REDIRECTS` in the browser, `redirect count exceeded` in the dev server's own prewarm), and even API routes like `/api/auth/sign-in/email` return the app-router not-found. It looks like an auth/OIDC misconfiguration.
-- **Cause**: a corrupt Turbopack build in `.next/dev` — the route manifest is gone, so every path falls through to `GlobalNotFound`, whose redirect collides with the middleware's.
-- **Works**: `rm -rf .next` then restart. Diagnose it in one step: if `/signin` does not return 200, the routes are not compiled — stop debugging auth.
-
-### E21. ✅ WORKS — a QStash-protected workflow endpoint can't be curl'd; publish through local QStash to get a signed delivery
-
-- **Situation**: driving a cron-style workflow handler under `/api/workflows/**` (e.g. a dispatcher you want to fire on demand instead of waiting for its schedule).
-- **Doesn't work**: `curl -X POST <app>/api/workflows/<...>` → `{"error":"Invalid signature"}` / HTTP 401. The `qstashAuth` middleware verifies the Upstash signature whenever `QSTASH_CURRENT_SIGNING_KEY` is set — and `init-dev-env.sh` exports it, so the local env DOES verify. (Do not "fix" this by unsetting the key: you would then be testing an unauthenticated path that production doesn't have.)
-- **Works**: start local QStash (`init-dev-env.sh qstash`) and publish to the endpoint with the QStash client — QStash signs the delivery, so the handler sees exactly the production shape:
-  ```ts
-  // must live INSIDE the repo (a script under /tmp cannot resolve @upstash/qstash)
-  import { Client } from '@upstash/qstash';
-  const client = new Client({ baseUrl: process.env.QSTASH_URL!, token: process.env.QSTASH_TOKEN! });
-  await client.publishJSON({
-    body: { dryRun: false },
-    url: `${process.env.APP_URL}/api/workflows/<path>`,
-  });
-  ```
-  Run it with `eval "$(init-dev-env.sh env)" && bunx tsx ./scripts/<probe>.mts`, then read the outcome from **DB side effects**, not the HTTP body — QStash swallows the response. (A claim/lease row, a status transition, or new message rows are all observable; the handler's JSON return is not.)
-- **Time-travel a schedule instead of waiting**: for a "runs at T" feature, `UPDATE ... SET metadata = jsonb_set(metadata, '{...,runAt}', '"<past ISO>"')` and then fire the dispatcher. Cheaper and more deterministic than sleeping until the real due time.
-
-### E22. Local dev env has no `JWKS_KEY` — every hetero agent run dies at `signOperationJwt`
-
-- **Situation**: a real Claude Code / Codex run in the local no-`.env` env fails immediately with `Failed to sign operation JWT for hetero agent` (`apps/server/src/services/aiAgent/index.ts`). Nothing in the UI explains it; the topic just fails.
-- **Cause**: `signOperationJwt` → `getSigningKey()` → `getJwksKey()` needs the `JWKS_KEY` RSA JWK, and `init-dev-env.sh` does not export one.
-- **Works**: the repo ships a generator — `JWKS_KEY="$(node scripts/generate-oidc-jwk.mjs)" ./.agents/acceptance/scripts/init-dev-env.sh dev`. Must be present at dev-server **start** (it is read from `process.env`), so a running server has to be restarted.
-- **Note the failure is downstream-honest**: with `JWKS_KEY` set, the run proceeds and then fails at the hetero _sandbox_ (`Hetero sandbox spawn failed / unauthorized`) unless the agent has a real Claude Code token. Those are two different walls — don't read the second as the first.
-
-### E25. Electron `will-attach-webview` params carry NO custom attributes — identity via data-\* never arrives
-
-- **Situation**: a main-process controller needs to know WHICH renderer feature a mounting
-  `<webview>` belongs to (e.g. a per-conversation session id), and the renderer put it in a
-  custom `data-*` attribute on the element.
-- **Doesn't work**: reading `params['data-…']` in `will-attach-webview`. Measured live: params
-  only contains the standard set (`instanceId, partition, src, httpreferrer, useragent,
-nodeintegration, plugins, disablewebsecurity, allowpopups, preload, …`). The handler silently
-  no-ops and — trap — a unit test that mocks params WITH the custom key passes green.
-- **Works**: two-channel design. (1) Recognition/hardening keyed off the **`partition`
-  attribute** set by the renderer (it IS forwarded); (2) identity bound after mount via an
-  explicit IPC — renderer listens for the webview's `dom-ready`, calls
-  `attach({ sessionId, webContentsId: el.getWebContentsId() })`, main process
-  `webContents.fromId()` + validates the guest's session belongs to the expected partition.
-
-### E26. ✅ Next dev does NOT hot-reload `apps/server/**` — you are testing STALE compiled server code
-
-- **Situation**: verifying a working-tree change inside `apps/server/src/**` (an agent-runtime
-  service, a tool executor, a router) against a `bun run dev` server that was started before the
-  edit. The app behaves normally, the feature simply does nothing.
-- **Doesn't work**: assuming HMR covers it because `@/server/*` maps to `apps/server/src/*` in
-  `tsconfig.json` (source, no `dist`), so it "should" recompile. It does not, at least for large
-  service files. Measured: a `console.error` added at the top of a code path that demonstrably ran
-  (child ops were created, the DB rows appeared) printed **zero** lines across four separate runs;
-  after a dev-server restart, the same line printed on the first run. The whole feature under test
-  had never executed once.
-- **Why this is a trap and not a nuisance**: the failure mode is silent and looks exactly like a
-  logic bug. You will go hunting in your own diff for a fault that is not there.
-- **Works**: after ANY edit under `apps/server/**`, restart the dev server before drawing a
-  conclusion. If a run "should" have hit your code and didn't, prove the server is running your
-  code FIRST — drop a `console.error` on the path and restart — before debugging the code itself.
-
-### E27. ✅ `source`-ing an unquoted JSON env var silently corrupts it (JWKS\_KEY → gateway auth\_failed)
-
-- **Situation**: writing an env file for the local gateway loop with
-  `JWKS_KEY={"keys":[{"kty":"RSA",...}]}` on one line, then `set -a; source that-file`.
-- **Doesn't work**: the shell strips every double quote from an unquoted assignment, so the process
-  receives `{keys:[{kty:RSA,...}]}` — invalid JSON. `getJwksKey()` (`packages/trpc/src/utils/internalJwt.ts:13-20`)
-  throws on `JSON.parse`, `signUserJWT` throws, and the server hands the client an **empty** gateway
-  token. The browser sends `{"token":"","type":"auth"}` and the gateway answers `auth_failed`.
-- **What makes it genuinely deceptive**: `local-gateway-setup.sh` and `local-gateway-probe.mjs` read
-  `JWKS_KEY` out of the file with a **regex**, not by sourcing it — so both are unaffected. The probe
-  cheerfully prints `✅ auth_success` while the real browser path is broken. A green probe is NOT
-  evidence the app's own token works.
-- **Works**: single-quote the value in the env file (`export JWKS_KEY='{"keys":[...]}'`) and prove the
-  round-trip before starting the server:
-  ```bash
-  (source env-file && node -e 'JSON.parse(process.env.JWKS_KEY); console.log("ok")')
-  ```
-  To diagnose an `auth_failed`, hook `ws.send` in the page and read the token the client actually
-  sends — an empty string means the SERVER failed to sign, not that the gateway rejected a signature.
-
-### E28. The chat input silently refuses to send when the agent's model is retired
-
-- **Situation**: driving a real turn (store `sendMessage` or type+Enter). The call resolves, no error
-  is thrown, `activeTopicId` stays `null`, and no `agent_operations` row appears. Nothing in the dev
-  server log — the request is never even issued.
-- **Cause**: the composer shows a small inline warning ("当前模型已下线。请选择其他模型后继续使用。")
-  and disables send. A model id that was valid a while ago (e.g. `deepseek-chat`) can be retired from
-  the model bank while the agent row still points at it.
-- **Works**: read the actually-enabled models out of the store before configuring a fixture agent —
-  `window.__LOBE_STORES.aiInfra().enabledChatModelList` → `[{id: provider, children: [{id: model}]}]` —
-  and pick one from there. Also: a send that "resolves fine but creates no operation" is a UI-gate
-  symptom; **screenshot the composer** instead of re-reading your store call.
-
-### E29. Fresh-worktree `seed-user` dies on `Cannot find module 'bcryptjs'` — NODE\_PATH into .pnpm fixes it
-
-- **Situation**: in a fresh git-worktree install, `init-dev-env.sh seed-user`
-  (which runs `node <<'NODE'` from the repo root) throws MODULE\_NOT\_FOUND for
-  `bcryptjs`, even though `pnpm install` succeeded.
-- **Cause not fully established**: `bcryptjs` exists in `node_modules/.pnpm/`
-  but is not linked at the repo-root `node_modules` top level in that install
-  (`pg` was linked, `bcryptjs` wasn't), so a root-cwd stdin script can't
-  resolve it.
-- **Works**: prefix the call with
-  `NODE_PATH="$PWD/node_modules/.pnpm/bcryptjs@<ver>/node_modules"` (check the
-  exact version dir first). CJS stdin scripts honor NODE\_PATH; seeding then
-  completes normally.
-- Same run also (re)confirmed: `init-dev-env.sh dev` ports are DYNAMIC (e.g.
-  next on 33803, vite on 32459) — never hardcode 3010; re-run
-  `scripts/test-env.sh` after the server is up, it reads the ports-file. And
-  the `os error 35` agent-browser daemon wedge (D8) recovers with
-  `agent-browser close --all` + re-running `setup-auth.sh web-seed`.
-
-### E30. ✅ "Failed to fetch dynamically imported module" points at the WRONG file — the failure is downstream
-
-- **Situation**: the SPA renders as a Case-1 blank page; console names a dynamic-import route module.
-- **Doesn't work**: investigating only the named module. It may return 200 because the actual failure
-  is in its transitive import graph; changing `?t=` values are ordinary HMR invalidation.
-- **Works**: take and read a screenshot. Vite's HMR overlay contains the real transform/import error.
-  After a rebase or pull, refresh dependencies and restart before treating the blank SPA as a code bug.
-
-### E31. Web agent turns run the CLIENT runtime — no `agent_operations` row will appear
-
-- **Situation**: driving a real web turn and polling `agent_operations` for the run.
-- **Doesn't work**: waiting for a server operation when the web surface dispatched the client runtime.
-- **Works**: use client observables (`messages.model`, thread ids, and chat-store operations) for web;
-  use CLI/server execution and `agent_operations` for the server runtime. A change affecting both paths
-  needs evidence from both paths.
-
----
-
-- **E5. s3rver CORS allowed-origins must match the dev server port you actually use — a mismatch renders as "文档加载失败" in the evidence viewer while s3rver logs the GET as 200.**
-  Situation: `init-dev-env.sh s3` configures the bucket's CORS from the resolved ports (persisted ports file, e.g. 26938/9876). If you then run the dev server on override ports (`SERVER_PORT=3010 SPA_PORT=9877`), the browser's cross-origin fetch of a file evidence (presigned `127.0.0.1:29000` URL) is CORS-blocked; `useTextFileLoader` shows the failed state even though `curl` and the s3rver log both say 200.
-  Doesn't work: retrying in the same page after fixing CORS — SWR caches the rejected fetch for the same presigned URL; the drawer stays on the error/loading state.
-  Works: restart s3 with the same overrides (`SERVER_PORT=3010 SPA_PORT=9877 init-dev-env.sh s3` — it logs `replaced cors config for bucket`), then do a full page reload before reopening the evidence drawer.
-
-- **E6. The persisted ports file may belong to ANOTHER worktree's live dev server.**
-  Situation: `.records/env/agent-testing-ports.env` said 26938 and a server answered there — but it was `.claude/worktrees/<other>/`'s instance serving that worktree's code (check `ps` for the listener's `next dev` path). Testing main-repo changes against it silently tests the wrong code, and `init-dev-env.sh dev` reusing the file dies with EADDRINUSE.
-  Works: trace the listener's cwd first (`lsof -nP -iTCP:<port>`, then `ps -o command -p <pid>`); if it is another worktree's, leave it alone and start your own instance with `SERVER_PORT`/`SPA_PORT` env overrides (they do not rewrite the ports file). Remember `seed-user` rewrites `agent-testing-cli.env`'s `LOBEHUB_SERVER` — restore it in teardown if another session may still source it.
-
-- **E7. The managed local Postgres kept its container but LOST all app data between two dev-server sessions in one day (cause not established).**
-  Situation: round-1 fixtures (tasks, acceptances, verify runs/evidence) were verified present via psql; after `pnpm install` (which bumped workspace deps) and a dev-server restart, the same container answered with empty `tasks`/`acceptances` tables while `verify_runs` held only the new round's row. No `setup-db`/`clean-db` ran in between.
-  Works: treat local fixture data as disposable — recreate the subject task and re-ingest instead of debugging; assert presence with psql right before UI steps, not from memory of an earlier round.
-
-## F. Fixture-seeding by raw SQL
-
-### F1. Seeding a shared topic by raw SQL: messages MUST carry `agent_id`, or the share page renders skeletons forever
-
-- **Situation**: fixture-seeding a `/share/t/<id>` page (topics + messages + `topic_shares`
-  rows inserted directly). `share.getSharedTopic` returns fine, but the message list stays on
-  skeletons; `message.getMessages` with `topicShareId` returns `[]`.
-- **Cause**: the client passes `agentId` in the query context and `MessageModel.query` filters
-  on it — messages inserted with `agent_id` NULL are silently excluded (no error anywhere).
-- **Works**: set `agent_id` on every seeded message row (matching the topic's `agent_id`).
-  Probe the endpoint directly before blaming the UI:
-  `/trpc/lambda/message.getMessages?input={"json":{"topicId":..,"topicShareId":..,"agentId":..}}`.
-
-### F2. Seeded share topics also need `topics.agent_id`, or the client never fires the message fetch
-
-- **Situation**: same setup as F1, but the failure is one layer earlier — metadata (title)
-  renders while `message.getMessages` never even appears in network requests.
-- **Doesn't work**: assuming the fetch failed — it was never fired. `useFetchMessages`
-  gates on `!!context.agentId && !!context.topicId`
-  (`src/store/chat/slices/message/actions/query.ts:268`), and the share page passes
-  `agentId: data.agentId ?? ''` — a topic seeded without `agent_id` yields `''` → SWR key
-  is null → no request, silent skeleton (a Case-1 lookalike with no error anywhere).
-- **Works**: seed an `agents` row and set `topics.agent_id` (and `messages.agent_id`)
-  before opening the share page. Verify the fetch actually fired via
-  `agent-browser network requests | grep getMessages`, not by waiting on the UI.
-
----
-
-## Post-migration findings preserved from canary
-
-### E32. ✅ WORKS — driving `heteroIngest`/`heteroFinish` directly needs an OIDC token, and bun's spawn-ENOENT message differs from node's
-
-- **Situation**: E2E-testing the hetero server-ingest chain by running `lh hetero exec --topic <t> --operation-id <op>` manually (the exact command a device daemon spawns), against a local dev
-  server, with the seeded CLI API key.
-- **Doesn't work**: the seeded `LOBE_API_KEY`. `heteroAuthedProcedure` requires `ctx.oidcAuth`
-  (`packages/trpc/src/lambda/middleware/heteroOperationAuth.ts`) — an API key never populates it, so
-  `heteroFinish` 401s. Also note the local no-`.env` env has no `JWKS_KEY` (E22), so the server
-  cannot even validate a JWT until restarted with one.
-- **Works** — production-shape auth in three steps:
-  1. `node scripts/generate-oidc-jwk.mjs > /tmp/jwks.json`
-  2. restart the dev server with `JWKS_KEY="$(cat /tmp/jwks.json)"` (must be present at start)
-  3. sign a 4h `hetero-operation` JWT with the SAME key via `signOperationJwt(<userId>)`
-     (`packages/trpc/src/utils/internalJwt.ts`; run a small `.mts` inside the repo with `bunx tsx`),
-     then run the CLI with `LOBEHUB_JWT=<token> LOBEHUB_SERVER=<app-url>` — the CLI forwards it as
-     the `Oidc-Auth` header.
-     The fixture side needs `topics.metadata.runningOperation = { operationId, assistantMessageId }`
-     seeded, and the operationId must embed real ids (`op_<ts>_agt_<id>_tpc_<id>_<suffix>`).
-- **Bonus trap**: under bun, a spawn failure reads `ENOENT: no such file or directory,
-posix_spawn '<cmd>'` — NOT node's `spawn <cmd> ENOENT`. Any stderr-text pattern keyed to the node
-  format silently misses on bun; classification/assertions should key on the raw error's
-  `err.code === 'ENOENT'` (runtime-agnostic) and treat text matching as fallback only.
-- **Persistence shape worth knowing**: a process-level failure that produced ZERO stream events
-  never creates op state, so `HeterogeneousPersistenceHandler.finish` early-returns — the message
-  error is written by `CompletionLifecycle.completeOperation`'s onError branch instead
-  (`body: messageError.body ?? { message }`). Assert on `messages.error`, not on which writer ran.
-
-### E33. ✅ WORKS — keep the Electron supervisor session alive in process-reaping runners
-
-- **Situation**: `electron-dev.sh start <id>` reports `Ready`, but CDP and the Vite port disappear
-  immediately after the shell command returns. The Electron log contains no crash or product error.
-- **Doesn't work**: repeatedly restarting and treating the vanished CDP endpoint as an app crash.
-- **Works**: keep the launcher shell alive for the test session (for example, run `start` followed by
-  a short periodic wait loop in the same PTY), drive CDP from a second shell, then stop with
-  `electron-dev.sh stop <id>` and terminate the holder. Some execution harnesses reap descendants when
-  the command cell closes even though the launcher normally survives an interactive terminal.
-
-### F3. ✅ WORKS — render the `/verify-im` messenger bind SUCCESS state without a real platform token
-
-- **Situation**: verifying the messenger verify page's success card (`SuccessCard`) for
-  Telegram/Slack/Discord. A real bind needs a live bot issuing a `random_id` link token —
-  unavailable in an isolated env.
-- **Works**: take the page's own refresh-after-link path instead. With a signed-in user, seed
-  (1) a `messenger_account_links` row for (user, platform, tenant\_id='') and (2) an enabled
-  `system_bot_providers` row for the platform — `credentials` must be encrypted with
-  `KeyVaultsGateKeeper.initWithEnvKey()` (same `KEY_VAULTS_SECRET` as the dev server), e.g.
-  telegram `{ botToken, botUsername }`. Then open
-  `/verify-im?random_id=<anything>&im_type=<platform>`: the peek-token query fails, but the
-  existing-link lookup succeeds and the page falls through to the real success card
-  (`shouldShowSingleAccountSuccess` — existing link + no active token → success).
-- `botUsername` drives the "Open in <platform>" deep-link CTA; re-encrypt the credentials
-  WITHOUT it to exercise the no-deep-link fallback. Note the platform config is cached
-  in-process for 30s (`packages/app-config/src/messenger.ts` CACHE\_TTL\_MS) — wait out the TTL
-  after editing the row before reloading.
-- Locale for evidence shots: `window.__LOBE_STORES.global().switchLocale('zh-CN')` then reload.
-
-### D21. ✅ WORKS — when `click @ref` reports Done but the React onClick never fires, click via `eval` `element.click()`
-
-**Situation**: on a dense list row (acceptance check rows with hover-revealed ActionIcons and
-expanded-area buttons), `agent-browser click @ref` returned `✓ Done` but no TRPC mutation fired and
-no state changed — the pointer click seemingly landed on an overlaying/other element. Repeated for
-both hover icons and regular buttons inside the row.
-
-**Doesn't work**: re-snapshotting and clicking the fresh `@ref`; the command still reports success
-with no effect (so the failure is silent — always verify the click by its observable side effect,
-e.g. the network request or a DB row, never by the driver's `Done`).
-
-**Works**: locate the element in-page and call the DOM `element.click()` via `eval` — React's
-synthetic onClick fires reliably:
+# LobeHub Probe & Mock Guide
+
+This is the project-layer entry point for LobeHub acceptance probes. Read it
+together with the agent-testing skill's generic `references/probe-mock-patterns.md`.
+Product-independent rules belong upstream; LobeHub routes, stores, services, env
+variables, and fixtures belong here.
+
+## Choose the least invasive mechanism
+
+1. **Use a supported command** in `scripts/app-probe.sh` for read-only app state.
+2. **Use a public store action or API** when the behavior must execute real product
+   logic.
+3. **Use an agent-runtime hook** for tool-call mocks. `beforeToolCall` is the
+   supported mock boundary; browser HMR patches are not the default for runtime
+   tools.
+4. **Use a narrowly scoped temporary injection** only when no stable boundary
+   exists. Snapshot dirty files first, mark the injection, and prove exact cleanup.
+5. **Use the historical field notes** for rare environment or renderer failures.
+
+Never infer a passed UI state from a state probe alone. A visual claim still needs
+an opened and inspected screenshot.
+
+## Supported probes
 
 ```bash
-agent-browser --session "(()=>{const b=[...document.querySelectorAll('button')]
-  .find(x=>x.textContent.trim()==='<label>'); b.click(); return 'clicked'})()" < s > eval
+PROBE=.agents/acceptance/scripts/app-probe.sh
+
+$PROBE ready                      # app root + exposed-store readiness
+$PROBE auth                       # renderer auth state
+$PROBE server-auth                # authenticated server request (200 vs 401)
+$PROBE route                      # current SPA route
+$PROBE stores                     # exposed store names
+$PROBE ops                        # chat operation summary
+$PROBE wait-ops [timeout-seconds] # wait until no operation is running
+$PROBE topic                      # active topic + metadata from the paged view
+$PROBE goto /settings             # full navigation, then report route
+$PROBE errors-install             # begin console.error capture
+$PROBE errors                     # read captured console errors
 ```
 
-Scope the query to the intended row/container first (climb from a unique text node, stop before the
-ancestor contains other rows' text) — a page-wide `find(...)` picks the FIRST match and can submit
-an action against the wrong row. For drag interactions (annotation canvases), dispatch synthetic
-`MouseEvent`s (`mousedown/mousemove/mouseup` with `bubbles:true` and computed `clientX/Y`) on the
-target element.
-
-### E34. Shell proxy env (HTTP\_PROXY=127.0.0.1:7890) inherited by the dev server breaks auth with silent 307 loops
-
-**Situation**: `init-dev-env.sh dev` launched from a shell where a system proxy (Clash etc.) exported
-`HTTP_PROXY`/`HTTPS_PROXY`. The server booted fine, pages served, but `POST /api/auth/sign-in/email`
-returned a bare `307 → /` with NO `set-cookie` (body = Next `__next_error__` page), the boot prewarm
-logged `redirect count exceeded`, and `setup-auth.sh web-seed` failed with "sign-in succeeded but no
-cookies were written" (307 matches its `^[23]` success check).
-
-**Doesn't work**: retrying the seed, restarting the agent-browser daemon — the failure is in the
-server process env, not the client.
-
-**Works**: strip proxy vars when starting the dev server:
+Target Electron by default. For a web session:
 
 ```bash
-env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy -u ALL_PROXY -u all_proxy \
-  -u NO_PROXY -u no_proxy ./.agents/acceptance/scripts/init-dev-env.sh dev
+AB_TARGET="--session lobehub-dev" $PROBE ready
 ```
 
-Symptom fingerprint: every auth POST answers 307 in \~25ms with `application-code` time present, and
-the prewarm warning mentions `redirect count exceeded`.
+Prefer `server-auth` over `document.cookie`: Better Auth session cookies are
+HttpOnly, so an empty `document.cookie` does not establish signed-out state.
 
-### C12. A globally installed `lh` ingest-report can silently create an ORPHAN verify run (no acceptance attach) when the branch's CLI contract is newer
+## Decision table
 
-- **Situation**: publishing/ingesting a report while verifying a branch that extends the verify CLI
-  (e.g. adds `--subject` / acceptance attach). The global `lh` accepted the report, returned a
-  `verifyRunId`, and printed no error — but the run's `acceptance_id` was NULL, so it never appeared
-  on the acceptance page, which reads as "my ingest didn't show up / the page is stale".
-- **Doesn't work**: trusting a green `verifyRunId` from the global CLI as proof of attachment, or
-  passing `--subject` to it (`error: unknown option '--subject'` is the tell that it predates the
-  branch contract).
-- **Works**: run the branch's own CLI from the worktree — `cd apps/cli && bun src/index.ts verify
-ingest-report <dir> --subject topic:<id> …` — and verify attachment in the DB
-  (`select acceptance_id from verify_runs where id='<runId>'`) before driving the UI against it.
+| Goal                               | Preferred boundary                         | Notes                                                          |
+| ---------------------------------- | ------------------------------------------ | -------------------------------------------------------------- |
+| Confirm app/store mount            | `app-probe.sh ready`                       | Distinguishes an unmounted shell from a ready SPA              |
+| Confirm identity                   | `auth` then `server-auth`                  | Renderer state and server session are separate claims          |
+| Inspect a running agent turn       | `ops` / `wait-ops`                         | Proves operation state, not which server runtime executed      |
+| Read active topic metadata         | `topic`                                    | `topicDataMap` is keyed by `agent_<id>`, not topic id          |
+| Render message-attached error UI   | In-memory chat dispatch                    | Safe when the temporary message has a unique id and is deleted |
+| Force a tool result                | `beforeToolCall` hook + `event.mock()`     | Local/in-memory hook mode only                                 |
+| Force a fetch failure              | Request boundary or narrow HMR injection   | Preserve dirty files byte-for-byte                             |
+| Verify first-load error            | Clear the cache tier in the _new_ document | Clearing then reloading does not work — see "Cold SWR cache"   |
+| Diagnose Electron target confusion | CDP target list / raw CDP                  | Use a distinct agent-browser session per CDP port              |
+| Seed backend fixtures              | Public API first, raw SQL last             | Raw SQL must preserve product id and relation invariants       |
 
-### D22. ✅ WORKS — driving the manual-approval intervention chain (批准 / 提交 cards) in web chat
+## Project-specific recipes
 
-- **Situation**: a real agent turn under the default manual-approval mode stops at an
-  intervention card (`lobe-activator → 激活工具`, `Task Tools → createTask`, …) after EVERY tool
-  call. `snapshot -i` does not reliably expose the card's option rows / submit button as refs,
-  and one turn can chain 4–5 sequential interventions — a fixed approve-once script stalls.
-- **Doesn't work**: matching the option row by exact text `批准` (the row nests the label; the
-  filtered element list often misses it), or assuming one approval finishes the turn.
-- **Works**: the "approve" option is pre-selected by default, so clicking the card's **提交**
-  button alone approves. Loop until quiescent: each round, find the LAST visible element whose
-  text includes `提交` via `eval`, tag it `data-probe`, click through agent-browser (trusted
-  input), then poll `chat().operations` for zero `running` AND no remaining 提交 button before
-  declaring the turn done. Log which tool each round approved by grabbing the last visible
-  `… → …` header text. One creation turn (activate + createTask + setTaskVerify + runTask)
-  took 5 approvals.
-- **Also measured (fixture note)**: a task's verify requirement is visible to the RUNNER agent,
-  which will optimize toward the acceptance criteria (a "200 字，no code" instruction with a
-  "≥1500 字 + Python code" requirement produced a 3.5k-char deliverable) — a contradictory-criteria
-  fixture still fails verification, but not for the reason you scripted; assert on the verifier's
-  recorded rationale, not on your intended contradiction.
+### Task CLI polling with seeded API-key auth
 
-### E35. A listening port is NOT the product under test — another project's dev server can own it
+**Situation:** A local acceptance run is driven through `lh task run` with the
+seeded `LOBEHUB_CLI_API_KEY`, and the test needs to observe the asynchronous
+repair lifecycle.
 
-- **Situation**: `.env` says `PORT=<n>`, something answers on `<n>`, and a prior session recorded
-  "dev server running on `<n>`" — so the run plans a mere restart.
-- **Doesn't work**: trusting liveness (an HTTP response, an open socket) as identity. A sibling
-  project's dev server started on the same port responds happily; every request then exercises the
-  wrong codebase, and hook/DB assertions fail in ways that read as product bugs.
-- **Works**: fingerprint the app before using it: `ps -o command= -p <pid>` of the listener shows the
-  repo path in the `next dev`/`node` command line, and an unauthenticated `GET /` redirect is a
-  cheap signature (this repo's better-auth redirects to `/signin`; a Clerk app redirects to
-  `/login` with `x-clerk-*` headers). If it is the wrong app, free the port and start the right
-  server — and re-verify with the same fingerprint after boot.
+**Doesn't work:** `lh task run <id> --follow` switches to `/webapi/*`, which
+requires OIDC and rejects API-key auth after the task has already started.
+Likewise, `lh acceptance view task:T-N` does not currently resolve a task
+identifier to its internal subject id.
 
-### C13. better-auth email-verification cannot be completed from the outside — treat real-mail paths as blocked
+**Works:** Start the task without `--follow`, poll with `lh task view T-N`, and
+query the aggregate with `lh acceptance view task:<internal-task-id>`. The start
+response and task activity expose the operation and topic ids; the Acceptance
+bundle exposes the repair round and final rollup.
 
-- **Situation**: an assertion requires a REAL email-verification event (e.g. a hook that only fires
-  on better-auth verification routes), and the test inbox does not exist.
-- **Doesn't work**: recovering the token from the database. The `/verify-email` link token is a
-  signed JWT that is never stored; the email-otp OTP did not appear in the `verifications` table
-  either (only unrelated OIDC rows), and the send endpoint returns `{"success":true}` regardless.
-  Flipping `email_verified` in the DB is a fixture, not a verification — route-gated hooks
-  correctly ignore it (which is itself a useful negative check).
-- **Works**: mark the case `blocked` and cover the path with unit tests, or run the flow with a
-  real receivable mailbox (staging/prod smoke). Use the DB flip only to unblock downstream
-  fixtures, and assert it does NOT produce the event as a bonus authenticity check.
+### Message-attached heterogeneous-agent errors
 
-### E36. Desktop main-process `logger.info` is invisible in dev without `DEBUG`
+Inject a temporary assistant message through
+`chat().internal_dispatchMessage`, then attach an `AgentRuntimeError`. Supported
+guide codes are `auth_required`, `cli_not_found`, `overloaded`, and `rate_limit`;
+other values follow the generic error path. Use a unique content marker, verify the
+real rendered card, and delete the temporary message afterward.
 
-- **Situation**: verifying desktop main-process behavior (e.g. perf probes in a manager/module) by
-  reading the dev log.
-- **Doesn't work**: expecting `createLogger(ns).info(...)` lines in `/tmp/electron-dev.log` from a
-  plain dev start — in dev (`app.isPackaged` false) `info` only goes through the `debug` package,
-  which is silent unless its namespace is enabled.
-- **Works**: start the instance with the namespace enabled, e.g.
-  `DEBUG="screenCapture:*" electron-dev.sh restart`, then grep the log. In packaged builds the same
-  lines land in electron-log's file instead.
+### Infinite-scroll failure states
 
-### E37. osascript keystrokes go to the frontmost app — never send Escape
+When the fixture is too short for the observer to fire, call the real load-more
+store action rather than pretending to scroll. This covers the request, catch
+path, and rendered retry row; it does not prove the observer gate itself. Use a
+scrollable fixture when the observer behavior is the claim.
 
-- **Situation**: driving a desktop flow with synthetic keys (global shortcut trigger is fine — it's
-  registered globally), then trying to dismiss a window with `key code 53` (Escape).
-- **Doesn't work**: the Escape lands on whatever app is frontmost — typically the terminal running
-  the agent session, which interprets it as an interrupt and kills the agent's own turn.
-- **Works**: close app surfaces in-band instead: eval the app's own close IPC via CDP on that
-  window's target (`window.electronAPI.invoke('...close')`), or click its close affordance. Reserve
-  synthetic keys for globally-registered shortcuts that don't depend on focus.
+### Store exposure
 
-### E38. Bimodal timings from a globalShortcut handler = idle-event-loop stall (and `setTimeout` probes mask it)
+`window.__LOBE_STORES.<name>` is a function returning the current state. Call it:
 
-- **Situation**: timing a flow triggered from an Electron `globalShortcut` callback; measurements
-  are wildly bimodal (sub-ms vs multi-second) and "fix" themselves when extra probes are added.
-- **Doesn't work**: attributing the multi-second gap to whatever awaited call sits at that milestone
-  (it may be a cached no-op), or keeping a `setTimeout(0)` diagnostic probe while re-measuring — a
-  pending timer wakes the loop and hides the stall entirely.
-- **Works**: bracket the suspect `await` with markers plus one `queueMicrotask` and one
-  `setTimeout(0)` marker ONCE to classify the stall, then remove them and re-measure. If the
-  continuation only runs when an external event arrives (a CDP poll, mouse move), the cause is the
-  native-callback context not draining microtasks on an idle loop — fix by deferring the handler
-  body via `setImmediate` at the registration site, then verify variance collapses.
+```js
+window.__LOBE_STORES.chat();
+```
 
-### E39. `apps/desktop` installed with `--ignore-scripts` breaks EVERY native module, not just electron
+It intentionally does not expose Zustand's `getState` or `setState`. If a test
+repeatedly needs mutation, add a dev-only supported action or fixture command
+instead of normalizing temporary `setState` HMR patches.
 
-- **Situation**: a worktree where `apps/desktop` was installed with `pnpm install --ignore-scripts`
-  (e.g. to save time). Electron then crashes at boot before any window appears.
-- **Doesn't work**: `pnpm rebuild electron` alone. It fixes the missing `electron/dist` but the app
-  still dies in `node-mac-permissions` with `Could not locate the bindings file ... permissions.node`
-  and `ELIFECYCLE Command failed with exit code 7` — every other native addon is unbuilt too.
-- **Works**: re-run a plain `pnpm install` (no `--ignore-scripts`) inside `apps/desktop`, then follow
-  E8b and re-run the ROOT install afterwards. Order: root → desktop (with scripts) → root again.
+### In-SPA navigation that preserves instrumentation
 
-### E40. `electron-dev.sh`: the saved snapshot beats `LOBE_GOLDEN_PROFILE`, and the seeded login targets LOCAL dev
+`app-probe.sh goto` and `location.assign("app://renderer/…")` perform a FULL
+reload — any `window.fetch` wrapper or debug global installed via `eval` is
+wiped, and its absence reads as "the request never fired". To change route while
+keeping instrumentation alive, drive react-router through history:
 
-- **Situation**: wanting a pristine (signed-out) instance to log into PRODUCTION with the user's real
-  account, per E14's "no source edit" path.
-- **Doesn't work**: setting only `LOBE_GOLDEN_PROFILE=/tmp/empty-golden`. The script seeds from the
-  saved snapshot first (`LOGIN_STATE_DIR`, default `~/.lobehub/agent-testing/electron-login`) and only
-  falls back to the golden profile when no snapshot exists — the log still says
-  "Seeding userData from saved login state" and you get the old login back.
-- **Also worth knowing**: that seeded agent-testing login is bound to a LOCAL dev server —
-  `ud-<id>/lobehub-settings.json` has `dataSyncConfig.remoteServerUrl = http://localhost:3010`. With
-  nothing on 3010 the app shows `Authentication failed: signature verification failed` plus
-  `BackendProxy upstream fetch failed (net::ERR_CONNECTION_REFUSED)`, and the renderer sits at
-  `isLoaded:true, isUserStateInit:false, isSignedIn:false` — an E14 lookalike that is really a
-  wrong-server problem. Read `ud-<id>/lobehub-settings.json` before blaming the token.
-- **Works** (pristine + production login): point BOTH at empty dirs and keep the real snapshot safe —
-  ```bash
-  LOBE_GOLDEN_PROFILE=/tmp/empty-golden LOBE_LOGIN_STATE_DIR=/tmp/empty-loginstate \
-    SKIP_LOGIN_SAVE=1 .agents/acceptance/scripts/electron-dev.sh start <id>
-  ```
-  The instance lands on `/desktop-onboarding`; drive 开始 → 下一步 ×2 → 登录 LobeHub Cloud and the
-  device-code flow auto-approves against the browser's existing app.lobehub.com session. A pristine
-  profile defaults to production, so `remoteServerUrl` stays unset. `SKIP_LOGIN_SAVE=1` keeps `stop`
-  from overwriting the user's real snapshot.
+```js
+history.pushState({}, '', '/settings/apikey');
+dispatchEvent(new PopStateEvent('popstate'));
+```
 
-### C14. Read a topic's hetero binding straight from the server — the store's paginated view usually lacks it
+This remounts the route component (SWR revalidates, list fetch observable by the
+wrapper) without recreating the JS context. Leave-and-return with this pattern is
+the way to capture a page's first-load request after installing a fetch wrapper.
 
-- **Situation**: needing a topic's `heteroSessionId` / `workingDirectory` to reason about whether a
-  turn will `--resume`.
-- **Doesn't work**: `chat().topicDataMap['agent_<agentId>'].items.find(...)` — the view is paginated,
-  so any topic past the first page is simply absent (`found:false`) even while it is the ACTIVE topic.
-  UI messages in `messagesMap` also carry `metadata.heteroSessionId` only on rows the current session
-  produced, so an old conversation yields `{}`.
-- **Works**: call the server from the page —
-  `fetch('/trpc/lambda/topic.getTopicDetail?input=' + encodeURIComponent(JSON.stringify({json:{id:'<topicId>'}})), {credentials:'include'})`
-  and read `result.data.json.metadata`. That returns the authoritative `heteroSessionId`,
-  `workingDirectory`, and `heteroSessionIdByWorkingDirectory`.
-- **Why it matters**: `resolveHeteroResume` silently drops `--resume` when the bound `workingDirectory`
-  differs from the device's current cwd (`cwd_changed`) or is absent (`missing_bound_cwd`). The turn
-  then SUCCEEDS with a brand-new CC session and no error — context loss with no visible symptom. To
-  detect it, compare the CC session id before/after a turn (or diff `~/.claude/projects/*/*.jsonl`):
-  a new file per turn, each containing only its own user message, means resume never happened.
+### Safe mutation-error injection against a real (cloud) account
 
-## Seeded workspace agents: RBAC roles + real API creation are both required
+To exercise a mutation error branch when the app points at the user's real cloud
+backend, replace the react-query `mutationFn` body with an immediate
+`Promise.reject(...)` via HMR — the mutation then fails before ANY network call,
+so clicking a real row (even the user's own data) has zero server effect. Switch
+error shapes through a window flag (e.g. plain `Error` vs
+`{ data: { code: 'FORBIDDEN' } }`) and prove HMR liveness with a module-level
+marker before clicking. Snapshot the dirty file first and restore byte-identically
+(cmp), never `git checkout --`.
 
-- **Situation:** verifying workspace UI with a hand-seeded workspace (raw SQL
-  inserts into `workspaces` / `workspace_members` / `agents`).
-- **Doesn't work:** topics load but `agent.getAgentConfigById` fails FORBIDDEN —
-  the cloud RBAC middleware reads `rbac_user_roles → roles → role_permissions →
-permissions`, which raw member rows never create. And even after RBAC, a raw
-  SQL `agents` row renders "助理不可用" (missing real config).
-- **Works:** ① provision RBAC with the official util —
-  `seedWorkspaceRoles(db, wsId)` + `assignWorkspaceRoleToUser(...)` from
-  `packages/database/src/utils/seedWorkspaceRoles.ts` (run with bun from inside
-  `packages/database`); ② create agents through the real API from the authed
-  page (`POST /trpc/lambda/agent.createAgent` with the `X-Workspace-Id` header,
-  `visibility: 'public' | 'private'`), then repoint seeded topics' `agent_id`.
+### Runtime proof
 
-## Duplicate @lobehub/ui instances crash the conversation route in dev
+Client and server agent runtimes can produce the same visible result. Prove the
+runtime with a server-only artifact: operation row, queue step, or enabled
+main/server log namespace. Renderer state alone is not sufficient.
 
-- **Situation:** after a floating-range `pnpm install` (this repo has no
-  lockfile), `node_modules/.pnpm` can hold two `@lobehub/ui@X` peer-hash
-  instances. The workspace agent conversation route then dies in the error
-  boundary with `Please wrap your app with <ConfigProvider> (or <MotionProvider>)` thrown from `TypewriterEffect` — the two instances carry
-  two React contexts. The sidebar-only routes may still work, which disguises
-  the cause; clearing `node_modules/.vite` does NOT fix it.
-- **Doesn't work:** clearing the Vite deps cache, restarting the dev server,
-  `pnpm dedupe @lobehub/ui` (peer sets differ, instances survive).
-- **Works:** temporarily add `resolve: { dedupe: ['@lobehub/ui', 'antd-style',
-'motion', 'react', 'react-dom'] }` to the cloud root `vite.config.ts` +
-  `rm -rf node_modules/.vite`, and REVERT the config after capturing evidence
-  (snapshot the file first — it may carry uncommitted edits).
+### A new module needs a renderer reload, not HMR, before probing the fix
 
-### C15. Desktop dev renderer dies on canary when `apps/desktop/stubs/types` lags `packages/types`
+**Situation:** verifying a source fix in the running Electron dev instance
+(`electron-dev.sh`) right after editing.
 
-- **Situation**: `electron-dev.sh start` reaches CDP but the SPA never becomes interactive;
-  `/tmp/electron-dev.log` shows `SyntaxError: The requested module '/apps/desktop/stubs/types/src/index.ts'
-does not provide an export named 'MAX_ANALYSIS_...'`.
-- **Doesn't work**: waiting longer, reinstalling deps, or reloading — the stub file genuinely lacks
-  exports that canary code now imports (the stub is hand-synced and drifts).
-- **Works**: snapshot the stub (`cp ... /tmp/...bak`), append the missing `export const` lines copied
-  from `packages/types` (grep the missing name there for the real value), reload, and RESTORE the stub
-  at teardown. PR #17436 removes the stub entirely; delete this entry once it lands.
+**Doesn't work:** editing a component and probing a few seconds later. When the
+edit adds a **new module** (extracting a hook into its own file), the desktop
+Vite renderer can keep serving the previous module graph, so the probe reports
+the old behavior. Read as "the fix does not work" — a false negative that looks
+exactly like a logic bug in the change under test.
 
-### C16. agent-browser daemon hangs against Electron CDP — fall back to raw CDP over `ws`
+**Works:** force a full renderer navigation (`app-probe.sh goto <route>`) after
+adding or moving a module, then re-probe. Confirm the new code is live by a
+structural signal (a renamed component in the fiber chain, a new class in the
+computed cascade) before concluding anything about behavior.
 
-- **Situation**: mid-run, every `agent-browser --cdp 9222` call (eval/snapshot/fill) times out while
-  `curl http://localhost:9222/json` answers instantly — the daemon connection is wedged, not the app.
-- **Doesn't work**: retrying agent-browser commands; they queue behind the wedged connection.
-- **Works**: a \~30-line node script (repo has `ws`) that picks a target from `/json` by URL substring
-  and speaks `Runtime.evaluate` (`awaitPromise:true, returnByValue:true`) / `Page.captureScreenshot`
-  directly. Key targets: the SPA renderer is `app://renderer/...`; each in-app-browser page
-  (WebContentsView) is its OWN page target (match by its site URL). See
-  `.records/guest-eval.mjs` / `.records/guest-shot.mjs` from the 2026-07-22 browser-panel run.
-- **Evidence caveat**: a renderer-target `Page.captureScreenshot` does NOT contain WebContentsView
-  content (black hole where the page is), and the guest target's screenshot contains ONLY the page.
-  For a composite (panel chrome + embedded page + in-page overlays) use OS capture with the window
-  bounds from System Events: `screencapture -x -R"x,y,w,h"` — works even when the window sits on a
-  secondary display at negative coordinates (where `capture-app-window.sh` fails with "could not
-  create image from window").
+### Production debug proxy stays on the development loading shell in an isolated browser
 
-### C17. Signing Electron into the LOCAL dev server (OIDC), fully agent-driven
+**Situation:** verifying a public SPA route with local frontend code against the
+production backend through `/_dangerous_local_dev_proxy`.
 
-- **Situation**: recreated test DB (or fresh profile) → Electron signed out; the saved snapshot's
-  refresh token fails `signature verification failed`; the app must log into `localhost:3010`.
-- **Doesn't work**: `requestAuthorization({ storageMode: 'cloud' })` — that targets production
-  app.lobehub.com. Also the plain dev server rejects `/oidc/auth` with "OIDC is not enabled".
-- **Works**, end to end:
-  1. Dev server needs `JWKS_KEY` (that is what flips `ENABLE_OIDC`): generate once with
-     `node scripts/generate-oidc-jwk.mjs`, export, restart dev.
-  2. Restart Electron with `DEBUG='controllers:AuthCtr*'` — in dev, `logger.info` only reaches the
-     terminal via the `debug` namespace, and the log line `Constructed authorization URL: ...` is the
-     only place to harvest the PKCE authorize URL (shell.openExternal races it into the user's
-     default browser, which just bounces to signin).
-  3. FIRST write the target into the app config — `remoteServerService.setRemoteServerConfig({
-active: true, remoteServerUrl: 'http://localhost:<port>', storageMode: 'selfHost' })` — THEN
-     trigger `requestAuthorization({ storageMode: 'selfHost', remoteServerUrl: ... })` via CDP eval.
-     `requestAuthorization` success only sets `active: true`; it never writes `remoteServerUrl`, so
-     without the explicit config write the BackendProxy keeps routing every renderer call to the OLD
-     server (symptom: main log says "Authorization successful" + token valid, renderer stays signed
-     out, and the 401/502 stack paths point at the wrong repo's `.next/dev`). Grep the authorize URL
-     from `/tmp/electron-dev.log`, open it in the seeded web session, click 确认登录；the consent is
-     remembered, so later rounds complete without a click. Note the 60s polling window — if the web
-     session must first do a full password login, the handoff times out; warm the session before
-     triggering. After config + auth, reload the renderer; `app-probe.sh auth` flips signed-in.
-  4. The desktop app expects the backend at a FIXED `localhost:3010`; if `init-dev-env.sh` allocated a
-     different port, pin `ALLOC_SERVER_PORT=3010` in `.records/env/agent-testing-ports.env` and restart.
+**Doesn't work:** treating a successful Vite connection or the route's debug ID
+as proof that the product page loaded. In a fresh, signed-out automation context,
+the proxy can remain on the development loading shell without a useful page error;
+its screenshot is blank except for the debug marker.
 
-### C18. React 19 UI ignores bare `el.click()` from CDP — dispatch the full pointer sequence
+**Works:** visually reject the loading-shell screenshot, then use the adapter's
+isolated local full stack. Seed the test user, ingest a representative public
+Acceptance fixture through the local CLI, and capture the same route in separate
+authenticated and storage-empty browser contexts. This proves both owner and
+shared-viewer rendering without depending on production browser cookies.
 
-- **Situation**: driving LobeHub UI (ActionIcon, dropdown items) via `Runtime.evaluate`; `el.click()`
-  silently does nothing (no handler fires, no error).
-- **Works**: dispatch `pointerdown → mousedown → pointerup → mouseup → click` (all
-  `{bubbles:true, cancelable:true, view:window}`, PointerEvent for pointer\*). This is what the
-  browser-panel run used for the camera button, the "+" dropdown trigger, and its menu items.
+### The dev Electron main window runs the WEB entry — desktop-entry boot code is unverifiable in dev
 
-### C19. Legacy `electron-dev.sh start` runs on the USER'S OWN dev profile — and parallel sessions fight over ports and dev servers
+**Situation:** verifying anything that lives in `src/spa/entry.desktop.tsx` (bootstrap
+identity, adapter registration, boot marks) on an `electron-dev.sh` instance.
 
-- **Situation**: two agent-testing sessions (different worktrees/repos) run at the same time on one
-  machine; or a run mutates login state that later turns out to belong to the user.
-- **What bites**:
-  1. **Legacy (no-instance-id) `electron-dev.sh start` uses the default userData**
-     (`~/Library/Application Support/lobehub-desktop-dev`) — the user's own dev-app profile, not an
-     isolated copy. Any selfHost re-auth you drive overwrites their `dataSyncConfig` and tokens.
-     Prefer the pool form (`start <id>`), which copies login state into an isolated dir; if legacy
-     mode was used, tell the user their dev-app login/server config was changed.
-  2. **Cross-session port fights**: each workspace allocates ports independently from the same bases
-     (3010/9876/5173), so two sessions can end up killing each other's listeners — the visible
-     symptom is your `bun run dev` tree dying with SIGTERM ("Polite quit request") seconds-to-minutes
-     after start, repeatedly, with no error of its own. `nohup`/`disown` does not help (the killer
-     targets the process, not your task tree).
-- **Works**: give YOUR stack unique ports by editing `.records/env/agent-testing-ports.env`
-  (`ALLOC_SERVER_PORT`, `ALLOC_SPA_PORT`) to values far from the common bases (e.g. 3111 / 25999),
-  restart, and re-point the Electron app at the new server (see C17 step 3). Also check
-  `lsof -iTCP:<port>` plus the listener's `ps` cwd before blaming your own code — a listener from
-  ANOTHER repo checkout answering on "your" port produces confusing wrong-stack error traces.
+**Doesn't work:** assuming the desktop instance loads the desktop entry. Measured on a
+live dev instance, the **main window's entry script is `app://renderer/src/spa/entry.web.tsx`**,
+while the **topicPopup window in the same instance correctly loads `entry.popup.tsx`**.
+So Vite dev does resolve some MPA paths but the main window falls through to the root
+`index.html`. (Mechanism not established — do not repeat the plausible-sounding
+"`ViteRendererFallback` is a dumb proxy so everything falls back" explanation; the popup
+result falsifies it.) Consequence: desktop-entry boot code never executes in dev, and a
+deletion there passes every dev smoke test — which is exactly how one such call was lost
+for a whole release.
 
-### E41. ✅ Electron main crashes with `electron.app undefined` — the agent harness leaks `ELECTRON_RUN_AS_NODE=1`
+**Works:** before claiming anything about a desktop entry, read the loaded entry script
+and branch on it:
 
-- **Situation**: `electron-dev.sh start` fails repeatedly; the instance log shows
-  `TypeError: Cannot read properties of undefined (reading 'setName')` at `electron.app.setName(...)`
-  with a plain `Node.js v24.x` banner, and the dev watcher then tears everything down. Rebuilding
-  electron / reinstalling deps does not help; the same script worked in earlier sessions.
-- **Cause (measured)**: the Claude Code agent session itself runs under Electron and its shell
-  snapshot exports `ELECTRON_RUN_AS_NODE=1`. Every child inherits it, so the spawned Electron
-  binary boots as PLAIN NODE — `require('electron')` returns a path string, `electron.app` is
-  undefined. Whether a session carries the variable depends on how that session was started,
-  which is why the symptom appears "randomly" across sessions.
-- **Works**: strip it at the launch site: `env -u ELECTRON_RUN_AS_NODE .agents/acceptance/scripts/electron-dev.sh start <id>`.
-  Check `env | grep ELECTRON` FIRST whenever an Electron dev boot dies before any window appears.
-- **Also learned this run**:
-  - Background holder tasks die when the agent session process cycles (context compaction spawns a
-    new process and reaps the old task tree) — every "mystery SIGTERM" of Electron/dev-server today
-    traced to session-lifetime, not to sibling sessions or a human. macOS has no `setsid(1)`;
-    daemonize with python `os.fork()+os.setsid()` double-fork AND keep the leader alive, or accept
-    the session-bound lifetime and re-start per session.
-  - Running the full-stack web dev (`init-dev-env.sh dev`) and the desktop instance vite
-    concurrently from ONE worktree makes both optimizers share `<root>/node_modules/.vite` —
-    two cold optimizers clobber each other and dynamic imports 504 (`Outdated Optimize Dep`)
-    indefinitely. Boot them sequentially (let one finish bundling before starting the other).
+```js
+[...document.querySelectorAll('script')].map((s) => s.src).find((s) => s.includes('entry.'));
+```
 
-### Concurrent agent-browser cleanup must stay session-scoped
+If it is not the entry you are testing, the surface cannot prove your claim — fall back to
+a source-order regression test, and say in the report that the runtime path needs a
+packaged build (`DESKTOP_RENDERER_STATIC` / `resolveRendererFilePath` maps
+`apps/desktop/index.html`, `popup.html`, `overlay.html`).
 
-- **Situation:** A follow-up Web verification starts while unrelated
-  `agent-browser` sessions are also running on the same machine. New sessions
-  may hang if another task is concurrently restarting its browser daemon.
-- **Doesn't work:** Running `agent-browser close --all` or killing every
-  `agent-browser`/Chrome process. That destroys unrelated verification work and
-  can race with another task recreating the daemon.
-- **Works:** Close only the exact session names created by the current run,
-  wait for the competing daemon restart to settle, then create one fresh,
-  uniquely named session and reload the seeded auth state.
+### Driving and probing a real Electron popup window
 
-### E42. A dev server launched as a SANDBOXED background task gets SIGTERM-reaped \~1–2 min in — launch it unsandboxed
+**Situation:** verifying `entry.popup.tsx` behavior (its own HTML shell, no `BootShell`).
 
-- **Situation**: starting `init-dev-env.sh dev` / bare `bun run dev` as a background task from an
-  agent harness whose Bash tool sandboxes commands by default. The server boots, serves a few
-  requests, then dies with exit 143; bun logs `terminated by signal SIGTERM (Polite quit request)`.
-  Reproduced 3× in one run (recorded-PID path, bare unrecorded launch — both die), which
-  masquerades as "another session keeps killing my server" when a parallel run is also active.
-- **Doesn't work**: escaping the shared PID bookkeeping (bare `bun run dev` instead of the script)
-  — the killer is not `stop-dev`; the sandbox supervisor reaps the background task's process tree
-  shortly after the spawning tool call returns. Also note the kill can land mid-write and corrupt
-  `.next` (E20 follows: /signin 307 ping-pong, auth POST without set-cookie).
-- **Works**: launch the long-lived dev server with sandboxing disabled for that one command
-  (e.g. the harness's dangerously-disable-sandbox flag). Measured: the same command that died
-  at \~1–2 min three times survived 60s+ probes and the whole run once unsandboxed.
+**Works:** open the real window from the renderer store, then attach raw CDP to the
+popup's own target — the agent-browser daemon holds the main window's target, and one
+page target accepts only one websocket:
+
+```bash
+agent-browser --cdp 9222 eval '(async () => {
+  await window.__LOBE_STORES.global().openTopicInNewWindow("inbox","verify-popup");
+  return "requested"; })()'
+curl -s http://127.0.0.1:9222/json/list # pick the target whose url contains /popup/
+```
+
+Any `(agentId, topicId)` pair works — the popup boots regardless of whether the route
+resolves data, which is what makes this usable on a signed-out instance. For overlay
+claims, measure rather than eyeball: `getComputedStyle` for `pointer-events` / background
+alpha plus `document.elementFromPoint(x, y)` — a 50%-alpha scrim looks like a cosmetic
+tint in a screenshot while actually swallowing every click.
+
+### The debug proxy cannot reach a settled app — workspace `packages/*` dynamic imports fail cross-origin
+
+**Situation:** verifying frontend work through `/_dangerous_local_dev_proxy` (production
+page + production login + local Vite modules), needing a screenshot of the app after it
+has finished loading.
+
+**Doesn't work:** treating the resulting `ErrorBoundary` ("页面暂时不可用") as a defect in
+the change under test. The document origin is `https://app.lobehub.com`, and dynamic
+`import()` of workspace modules served from `http://localhost:9876` — `packages/builtin-tools/src/register.ts`,
+and intermittently `src/routes/**` — fails with `Failed to fetch dynamically imported module`.
+The same URLs return **200** to `curl` and to an in-page `fetch()`; only module scripts
+fail, because their cross-origin requirements are stricter. So the usual "is it reachable"
+probes all say yes while the app still dies.
+
+**Works:** treat this channel as good for boot-phase and pre-settle evidence only, and
+prove attribution rather than assuming it — `git stash -u` the whole change, reload the
+same proxy URL, and confirm the identical ErrorBoundary appears at HEAD. Report the
+settled-state check as blocked with that A/B attached instead of chasing the module
+graph. For a genuinely settled authenticated app, use Electron with an injected login
+snapshot; the local Vite entry (`http://localhost:9876/`) loads modules correctly but has
+no session, so it ends in the same error for a different reason. See also the two
+neighbouring entries on this proxy (loading-shell in an isolated context; no seeded
+agent-browser session).
+
+### Reading a transitioned CSS property immediately after focus/hover
+
+**Situation:** asserting that a `:focus-within` / `:hover` rule reveals a
+control.
+
+**Doesn't work:** `getComputedStyle(el).opacity` read in the same tick as the
+focus call, or in a separate `agent-browser eval` that races the re-render which
+mounts the control. Both return the pre-transition `0` while the rule is in fact
+matching.
+
+**Works:** focus and read inside one `eval`, wait past the transition duration,
+and assert the untransitioned property too (`width`) plus
+`el.matches('<selector>:focus-within')` so a mid-transition value cannot be
+mistaken for a non-matching rule.
+
+### Locale regression tests and desktop resource scanning
+
+**Situation:** a locale-copy change needs a focused regression assertion while
+the Electron dev renderer imports locale resources from the default resource tree.
+
+**Doesn't work:** placing `*.test.ts` beside files in
+`packages/locales/src/default/`. The desktop resource scan can include that module
+in the renderer graph, which makes Vite optimize and execute `vitest` in the app.
+
+**Works:** keep the assertion under the consuming feature's test directory and
+import the locale resource there. Restart the isolated Electron instance after a
+bad scan because the optimized dependency graph can remain poisoned.
+
+### Desktop tab switching is not `activateTab` alone — drive the real tab element
+
+**Situation:** benchmarking or driving a desktop tab switch from an `eval`
+payload, using `window.__LOBE_STORES.electron().activateTab(id)`.
+
+**Doesn't work:** on the single-router shell, `activateTab` only writes
+`activeTabId`; navigation is a second step performed by the TabBar
+(`handleActivate` = `activateTab(id)` + `startTransition(navigate(url))`). Calling
+the store action alone leaves `location.pathname` on the previous route, so the
+run measures a no-op — visible as a tiny settle time, \~4 DOM mutations, and zero
+long tasks, which reads like an impossibly fast surface rather than a broken
+probe. The per-tab-router shell does switch content from the store action alone,
+so the same payload is a real switch on one build and a no-op on the other:
+any A/B built on it is invalid.
+
+**Works:** drive the tab element the user actually clicks, and assert the
+navigation happened.
+
+```js
+const all = [...document.querySelectorAll('[data-insp-path*="TabBar/TabItem.tsx"]')].filter(
+  (e) => e.getBoundingClientRect().width > 100,
+);
+// two nested nodes per tab match — keep only the outermost
+const roots = all
+  .filter((e) => !all.some((o) => o !== e && o.contains(e)))
+  .sort((a, b) => a.getBoundingClientRect().x - b.getBoundingClientRect().x);
+// roots[i] aligns 1:1 with store tabs[i]; verify roots.length === tabs.length
+roots[idx].click();
+```
+
+`el.click()` reaches the React `onClick` here (this is not a controlled input, so
+the generic D11 trusted-input caveat does not apply). Always record
+`location.pathname` before and after and keep a `navigated` flag on every sample —
+that flag is what catches a payload that silently stopped switching.
+
+### Clicking an already-active tab is a no-op — a desynced tab can never be re-entered by clicking
+
+**Situation:** a probe adds a tab with `addTab(url)` and then clicks it to enter that route.
+
+**Doesn't work:** `addTab` already activates the new tab, so the later click lands on the _active_ tab
+and the shell does nothing. On the single-router shell this can leave `activeTabId` pointing at a tab
+whose URL names one topic while `location.pathname` and `chat().activeTopicId` still name another —
+after which no amount of clicking recovers it, and every downstream assertion reads the wrong page.
+Symptom: the probe's final `location.pathname` is not the tab you clicked, with no error anywhere.
+
+**Works:** after `addTab`, enter the route with a full navigation
+(`app-probe.sh goto <url>`) before starting the trials, and assert the three values agree before
+measuring:
+
+```js
+const st = window.__LOBE_STORES.electron();
+const chat = window.__LOBE_STORES.chat();
+const tab = (st.tabs || []).find((t) => t.id === st.activeTabId);
+// tab.url, location.pathname and chat.activeTopicId must all point at the same topic
+```
+
+### Attributing switch work to hidden keep-alive trees — classify on BOTH sides of the action
+
+**Situation:** measuring what a per-tab keep-alive shell costs while a tab is hidden.
+
+**Doesn't work:** collecting the hidden slots (the `display: none` children of the TabHost root) _before_
+the switch and classifying every mutation against that list. The switch is precisely what makes the
+target tab visible, and that tab was hidden when the list was captured — so the incoming tab's own
+render, which is necessary user-visible work, is counted as hidden-tree work. This produced a confident
+"\~44% of switch work happens off-screen" that was pure artefact, and it survived review because the
+number looked plausible.
+
+**Works:** classify against the intersection — slots hidden **before** the switch that are **still
+hidden after** it:
+
+```js
+const before = hiddenSlots(); // display:none children of the TabHost root
+/* click the tab, observe mutations */
+const after = hiddenSlots();
+const stillHidden = before.filter((s) => after.includes(s));
+```
+
+Measured this way, still-hidden slots produced **0** mutations in 6/6 switches: React
+`<Activity mode="hidden">` keeps state, tears down effects, and commits nothing while hidden.
+
+**General rule:** when a measurement classifies work by a property that the measured action itself
+changes (visible/hidden, active/inactive, mounted/unmounted), capture the classification on both sides
+and use the intersection. Otherwise the action's own effect lands in the wrong bucket.
+
+### Agent Mock playback leaves `pluginState` empty — backfill it before capturing pluginState-driven renders
+
+**Situation:** verifying a builtin-tool Render/Inspector (lobe-agent todos, plans —
+anything reading `message.pluginState`) with DevDock → Agent Mock case playback as
+the deterministic driver (no LLM).
+
+**Doesn't work:** capturing right after playback. The mock pipeline writes each
+tool step's `result` into the tool message `content` only and never sets
+`pluginState`, so a Render keyed off `pluginState` mounts empty (expanded rows
+show nothing) and inspectors fall to their no-data fallback. Reads as "the new
+rendering is broken" when the components are fine. Also note: consecutive todo
+tool rows are folded into the latest by the conversation UI, so early-state rows
+may never mount.
+
+**Works:** after playback completes, backfill in-memory from each message's own
+result JSON, at the layer the Render actually reads:
+
+```js
+const c = window.__LOBE_STORES.chat();
+const msgs = c.dbMessagesMap['main_<agentId>_<topicId>'];
+for (const m of msgs.filter((m) => m.role === 'tool' && m.plugin)) {
+  const parsed = JSON.parse(m.content);
+  if (parsed?.todos)
+    c.internal_dispatchMessage({
+      type: 'updatePluginState',
+      id: m.id,
+      key: 'todos',
+      value: parsed.todos,
+    });
+}
+```
+
+To render a payload the case doesn't cover (another builtin tool, a specific
+state), payload-swap an already-MOUNTED mock row in place — update BOTH the
+assistant's `tools[]` entry (`updateMessageTools`, keyed by `tool_call_id`; this
+is what selects the Render component) and the tool message (`updateMessagePlugin`
+
+- `replaceMessagePluginState`). Dispatching brand-new messages at the end of the
+  list may never mount. Claude Code builtin payloads use `identifier: 'claude-code'`
+  (NOT `lobe-claude-code`) and PascalCase `apiName` (`TodoWrite`). All of this is
+  in-memory only — a reload clears it; delete the temp topic at teardown.
+
+### Verifying a builtin-tool Render with no provider key — dispatch a fresh assistant+tool pair
+
+**Situation:** verifying a builtin tool's Render / Streaming component when the local
+env has no LLM provider key, so no real model can be made to emit that tool call
+(and update/remove-style APIs would need pre-existing entity ids anyway).
+
+**Doesn't work:** waiting for a real run, or reaching for Agent Mock when no case
+covers the tool. Note the neighbouring Agent Mock entry warns that "dispatching
+brand-new messages at the end of the list may never mount" — that holds for a
+long, already-populated mock topic, **not** for an empty conversation.
+
+**Works:** open a conversation with no messages (`/agent/<agentId>`, bucket
+`main_<agentId>_new`) and dispatch the pair straight in. The Render is selected from
+the **tool message's** `plugin.identifier` + `plugin.apiName`, and its `args` come
+from `safeParseJSON(plugin.arguments)` — so those three fields are the whole
+contract:
+
+```js
+const c = window.__LOBE_STORES.chat();
+c.internal_dispatchMessage({
+  type: 'createMessage',
+  id: aId,
+  value: {
+    role: 'assistant',
+    content: '',
+    meta: {},
+    tools: [
+      { apiName, arguments: argsJson, id: callId, identifier, result_msg_id: tId, type: 'builtin' },
+    ],
+  },
+});
+c.internal_dispatchMessage({
+  type: 'createMessage',
+  id: tId,
+  value: {
+    role: 'tool',
+    content: resultText,
+    parentId: aId,
+    tool_call_id: callId,
+    plugin: { apiName, arguments: argsJson, identifier, type: 'builtin' },
+    pluginState,
+  },
+});
+```
+
+Two things that decide what you actually see, both in
+`features/Conversation/Messages/AssistantGroup/Tool/`:
+
+- **The row is collapsed unless the manifest says otherwise.** `getRenderDisplayControl`
+  defaults to `'collapsed'`, so most tools need a click on the header before the card
+  mounts — a screenshot taken right after dispatch shows only the Inspector line.
+- **Truncating `arguments` into invalid JSON is how you reach the Streaming component.**
+  `isArgumentsStreaming` is literally `JSON.parse(requestArgs)` throwing, and
+  `forceShowStreamingRender` then auto-expands the row. Slicing the real args string
+  to \~55% is a faithful half-streamed payload and also exercises the card's
+  partial-data path.
+
+Toggling the row's first action button flips `showCustomToolRender`, which drops back
+to `FallbackArgumentRender` — the same branch an unregistered tool takes, so it is a
+faithful "before this change" contrast shot.
+
+### Desktop theme follows the system appearance, not `settings.general.themeMode`
+
+**Situation:** capturing dark-mode evidence for a desktop UI change.
+
+**Doesn't work:** `window.__LOBE_STORES.user().updateGeneralConfig({ themeMode: 'dark' })`.
+The setting persists (reading it back returns `dark`, and it survives a restart),
+but `document.documentElement.dataset.theme` stays `light` and every token keeps its
+light value. Restarting the instance does not apply it either. Treating the stored
+setting as proof of the rendered theme yields evidence captured in the wrong theme.
+
+**Works:** assert `document.documentElement.dataset.theme` — never the stored
+setting — before capturing any theme-dependent evidence. The renderer tracks the OS
+appearance, so switching it means changing the user's macOS system setting, which is
+outside the harness's remit: mark the dark case untested and say why, rather than
+flipping a device-level preference. Note the setting write is not free — it syncs to
+the account and affects other surfaces; restore it (`auto`) at teardown if you set it.
+
+### A node reference captured before a re-render is silently dead — re-query per assertion
+
+**Situation:** asserting several tab-strip interactions (close, pin, switch) in one
+`agent-browser eval` payload, reusing the element list collected at the top.
+
+**Doesn't work:** collecting `roots` once and then acting on `roots[0]`, `roots[1]`, …
+in sequence. Each action that mutates the tab list re-renders the strip, so every
+reference collected earlier now points at a detached node. Dispatching to a detached
+node throws nothing and changes nothing — React never sees it — so the assertion reads
+as "this interaction does not work". In this catalogue's first occurrence it produced a
+confident "middle-click does not close a pinned tab" that was purely an artefact of the
+stale reference, and it survived review because the number looked plausible.
+
+**Works:** one assertion per `eval`, re-querying the strip each time. When several must
+share a payload, re-query between actions and assert `el.isConnected` before dispatch.
+The same applies to any probe whose own action re-renders the tree it is measuring.
+
+### `eval` declarations persist in the page global scope
+
+**Situation:** running several `agent-browser eval` payloads against one renderer.
+
+**Doesn't work:** a bare top-level `const els = …` in a second payload fails with
+`SyntaxError: Identifier 'els' has already been declared`, because each `eval`
+shares the page's global scope.
+
+**Works:** wrap every payload in an IIFE (`(() => { … })()`), or attach state to a
+single namespaced `window.__X` object.
+
+### Shared agent-browser session names can cross-wire concurrent acceptance runs
+
+**Situation:** a Web acceptance run uses the adapter's default `lobehub-dev`
+session while another local run is active against a different port.
+
+**Doesn't work:** reusing `lobehub-dev` and trusting the URL printed immediately
+after `open`. Another process can steer the same session between commands, so a
+later click or screenshot lands on a different acceptance and port.
+
+**Works:** create a run-specific session name and load the seeded auth state
+directly:
+
+```bash
+RUN_SESSION=visualization-acceptance
+agent-browser --session "$RUN_SESSION" \
+  --state ~/.lobehub-agent-testing/web-state.json open "$SERVER_URL/acceptance"
+```
+
+Then assert `get url` and `app-probe.sh auth` on that exact session before
+capturing evidence.
+
+### Leftover React Scan instrumentation poisons every screenshot
+
+**Situation:** capturing UI evidence in a dev instance the user (or an earlier
+round) had DevTools / the DevDock open on.
+
+**Doesn't work:** deleting the overlay canvas (`html > canvas`) once and
+screenshotting. React Scan re-creates it on the next render pass, so a probe that
+reports `0 canvases` a few seconds later is only measuring that nothing
+re-rendered in that window — the outlines return the moment the app updates.
+`localStorage` is also not a reliable read: `react-scan-options.enabled` and
+`LOBE_DEV_DOCK_UI.reactScan` can both say `false` while the instrumentation is
+live, because it was enabled at runtime and never written back.
+
+**Works:** inject a capture-time style rule instead of removing nodes —
+`html > canvas { display: none !important; }` appended to `documentElement`. It
+survives re-creation, touches no product code or styles, and disappears on
+reload. Remove it at teardown. Disclose it in the report: it suppresses a dev
+overlay, which is a capture-time adjustment a reviewer should know about.
+
+### Production-backend web runs have no seeded agent-browser session
+
+**Situation:** verifying frontend-only work against real production data through
+`bun run dev:spa`'s `_dangerous_local_dev_proxy` URL.
+
+**Doesn't work:** the adapter's Web evidence path (`agent-browser --session
+lobehub-dev` seeded by `setup-auth.sh web-seed`) authenticates against the LOCAL
+server. There is no sanctioned way to give that session a production login —
+`setup-auth.sh web`'s Chrome-cookie injection is explicitly forbidden against
+production.
+
+**Works:** drive the proxy in the user's already-authenticated Chrome (the
+`claude-in-chrome` tooling), and compensate for the weaker evidence channel with
+DOM measurements (`getBoundingClientRect` / `getComputedStyle`) alongside every
+screenshot, plus an independent server-side check through `lh` in a clean env.
+Prove the working-tree bundle is actually live first — read back a string that
+exists only in the working tree (e.g. a changed placeholder), never assume HMR
+applied.
+
+### Counting section instances across the Home rail collapse needs real visibility, not a rect
+
+**Situation:** asserting that a Home section moved between the rail and the main
+column rather than being duplicated or lost.
+
+**Doesn't work:** two independent traps, each of which inverts the verdict.
+
+- Filtering candidates by `getBoundingClientRect()` alone. The collapsed rail is
+  hidden with `visibility: hidden` after a transition, and a `visibility: hidden`
+  subtree **keeps its layout boxes** — so the rail's copy still measures non-zero
+  and every folded-in section reads as duplicated. This is the inverse of the
+  generic D12 phantom (zero-size decoy); here the stale node is full-size.
+- Collecting only leaf elements. The main column's `GroupBlock` renders its
+  subtitle as a `<span>` inside the title, so the title element has children,
+  while the rail's `RailCard` takes no subtitle and its title _is_ a leaf. A
+  leaf-only walk therefore finds a section in the rail and "loses" it in the main
+  column — reading exactly like the fold-in never happened.
+
+**Works:** match on the element's own direct text nodes and gate on
+`el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })`, then sort
+by viewport `y`:
+
+```js
+const own = [...el.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent.trim()).join('');
+if (!label.test(own)) continue;
+if (!el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) continue;
+```
+
+Assert both columns in the same pass — a claim about _moving_ is only settled by
+observing the source column go empty and the destination fill in one snapshot.
+
+### A worktree Electron run leaves a second `@types/react` that fails the worktree type-check
+
+**Situation:** running the Electron surface from a git worktree, which requires
+the `apps/desktop` standalone install (adapter §1), then running `bun run check --type`.
+
+**Doesn't work:** treating the resulting type errors as the branch's own. The
+desktop install brings its own `@types/react` (e.g. `19.2.18`) alongside the
+root's (`19.2.13`), and the two identities collide on every `lucide-react` icon
+`ref`, producing a cluster of "Two different types with this name exist, but they
+are unrelated" errors in files the branch never touched.
+
+**Works:** intersect the erroring files with the branch's changed-file list before
+drawing any conclusion, and confirm causality by A/B — moving
+`apps/desktop/node_modules` aside makes the cluster vanish. At teardown, remove
+`apps/desktop/node_modules` and re-run the root `pnpm install` to restore a clean
+`✓ types clean` baseline. **Do not run the A/B while the instance is live** — the
+Electron binary runs out of that directory, so parking it kills the instance;
+capture all UI evidence first.
+
+### Managed command runners can reap `electron-dev.sh start` children after the helper returns
+
+**Situation:** `electron-dev.sh start` (legacy and pool forms) reports that CDP
+and the renderer are ready, but the CDP port closes immediately after the helper
+command returns. The Electron log contains a normal renderer mount and no crash;
+changing from the saved login snapshot to the fresh golden profile does not alter
+the exit. The cause is not established.
+
+**Doesn't work:** retrying the helper with another pool id or changing the auth
+seed. Both instances become interactive during the helper's readiness loop and
+are gone before the next command can connect.
+
+**Works:** use the documented multi-instance Model B command in a long-lived PTY
+with the same isolated userData, Vite port, IPC id, and CDP port:
+
+```bash
+LOBE_DESKTOP_VITE_PORT=5175 \
+  LOBE_DESKTOP_USER_DATA_DIR=/tmp/lobe-electron-pool/ud-2 \
+  LOBE_IPC_ID=lobehub-desktop-dev-2 \
+  pnpm -C apps/desktop dev -- --remote-debugging-port=9224
+```
+
+Keep that command session open for the run. Confirm the CDP endpoint, project
+process path, `app-probe.sh ready`, renderer auth, server auth, and a raw-CDP
+screenshot before collecting evidence.
+
+### Cold SWR cache: clearing then reloading is undone by the outgoing page
+
+**Situation:** forcing a first-load / skeleton state for anything backed by the
+tiered SWR cache (`recent:*`, `topic:*`, `message:*`, …).
+
+**Doesn't work:** clearing `localStorage['lobechat-swr-cache:<scope>']` (and the
+`lobehub-local-data` IndexedDB) in the current document, then reloading. The cache
+provider registers `flushAll()` on `visibilitychange` and `pagehide`, so the reload
+itself makes the outgoing page write its in-memory cache straight back. The next
+document hydrates from a repopulated tier and renders settled data — which reads as
+"the loading state never happens" and can be mistaken for a product bug.
+
+```
+1. before clear      : true
+2. right after clear : false
+3. after reload      : true   <- the outgoing page re-flushed on pagehide
+```
+
+**Works:** clear at document start in the NEW document, before the provider
+hydrates:
+
+```js
+Page.addScriptToEvaluateOnNewDocument({
+  source: `Object.keys(localStorage).filter(k=>k.startsWith('lobechat-swr-cache'))
+             .forEach(k=>localStorage.removeItem(k));
+           indexedDB.deleteDatabase('lobehub-local-data');`,
+});
+```
+
+Assert the clear actually ran in the new document (set a flag in that script and
+read it back) rather than trusting the removal. Pair it with a warm control run: if
+the warm run renders data while the request is held paused and the cold run shows
+the skeleton, the cache tier is proven to be what the render reads.
+
+### `app-probe.sh goto /` cannot reach the desktop Home route — seed the tab first
+
+**Situation:** driving the Electron shell to the Home route (`/`) to check the nav
+panel there.
+
+**Doesn't work:** `app-probe.sh goto /` prints `"/"` but the renderer stays on the
+previous route. `goto` is a full reload, and the desktop shell restores the active
+tab's persisted url on boot — every non-root route survives that restore, so `goto`
+appears to work for `/tasks`, `/agents`, `/settings` and silently fails only for
+`/`. The follow-up probe then describes the old page with no error anywhere.
+
+**Works:** create and activate a Home tab first, then navigate:
+
+```js
+window.__LOBE_STORES.electron().addTab('/'); // addTab also activates it
+```
+
+```bash
+.agents/acceptance/scripts/app-probe.sh goto /
+```
+
+Assert `location.pathname` after the reload rather than trusting `goto`'s echo.
+
+### Anchor nav-panel assertions on `#nav-panel-drawer`, not a `data-insp-path` match
+
+**Situation:** asserting what the left nav panel renders on a given route.
+
+**Doesn't work:** `document.querySelector('[data-insp-path*="NavPanelDraggable"]')`.
+It resolves during a settled render but returns `null` in the seconds after a full
+reload, and the usual `|| document.body` fallback then reads
+`document.body.innerText === ''` (generic C4) — which looks exactly like an empty
+panel and turns a normal loading window into a false regression.
+
+**Works:** the panel is the `<aside>` sibling of the stable drawer anchor:
+
+```js
+const drawer = document.getElementById('nav-panel-drawer');
+const aside = drawer && [...drawer.parentElement.children].find((c) => c.tagName === 'ASIDE');
+```
+
+Then assert on `aside.innerText` line count plus a count of text-free rounded boxes
+(the skeleton rows). Distinguish the two skeleton states explicitly: the whole panel
+collapsing to \~8 text-free rows is the nav-panel fallback, while fixed items present
+with only the list area shimmering is ordinary data loading.
+
+### Boot-phase UI cannot be observed by CDP polling — sample in-page, and mirror the timer
+
+**Situation:** asserting whether a transient boot-phase surface (a splash, a skeleton,
+a first-paint gate) appears between React's first commit and the app painting.
+
+**Doesn't work:** polling `Runtime.evaluate` from a CDP driver, even at a 50ms step.
+The desktop renderer's boot spends multi-second stretches in a single synchronous
+task, and every `Runtime.evaluate` queues behind it — the driver observes the state
+before the window and again after it, and reports the phase "never happened". CPU
+throttling makes it worse: it stretches the blocking task and the probe equally.
+
+**Works:** inject a pure observer with `Page.addScriptToEvaluateOnNewDocument` and
+sample from inside the page. Note `document.documentElement` does not exist yet in an
+on-new-document script, so a `MutationObserver` cannot be attached there — use
+`setInterval(check, 8)`. Record the largest gap between consecutive ticks: that gap
+is the main thread's longest blocking task, and a boot window with no intermediate
+sample is a blocked window, not a missing state.
+
+When the behavior under test is time-thresholded, also **mirror the product's own
+timer**: at the moment the observer first sees `#root` gain a child, schedule the same
+`setTimeout(…, N)` the component uses and record when it actually fires. On a blocked
+main thread it fires far later than `N` — which is the difference between "the
+threshold logic is wrong" and "the threshold never had a chance to run", and no
+screenshot can tell those apart.
+
+**When the driver has no CDP (claude-in-chrome, the debug proxy), deliver the same
+sampler through Vite instead**: a temporary `[AGENT-TEST]` block at the top of
+`src/spa/entry.{web,desktop}.tsx` runs at bundle-eval — early enough for every
+post-React phase — and needs no `Page.addScriptToEvaluateOnNewDocument`. Two things
+to get right in the phase predicate: scope any `[role="status"][aria-label="Loading"]`
+check with `.closest('#loading-screen')` so the **static HTML shell's own logo** is not
+counted as the React `BrandTextLoading` (they share the same role/label, and conflating
+them turns a clean boot into a false "the logo flashed"); and record the max gap between
+consecutive ticks — LobeHub's boot routinely shows a single 0.6–1.1s blocking task, so a
+phase with no sample inside it is a blocked window, not a missing state.
+
+### A global `indexedDB.open` stall holds the boot on web but kills the Electron renderer
+
+**Situation:** needing to freeze the boot at a pre-app phase long enough to capture it,
+by keeping the SWR cache hydration from ever completing.
+
+**Doesn't work on desktop:** replacing `indexedDB.open` with a never-settling stub
+breaks the Electron renderer outright — the local database adapter registered in
+`entry.desktop.tsx` needs IndexedDB, so the entry dies before React renders and the
+HTML loading screen stays up forever. The symptom reads as "the phase under test never
+appears", i.e. exactly like the product defect you were looking for.
+
+**Works:** use the stall only on the web entry, where it holds `CacheHydrationGate`
+for its full `HYDRATION_TIMEOUT` (about 8s) — ample for a screenshot plus
+`getBoundingClientRect` / `getComputedStyle` measurements over the same CDP
+connection. For desktop, do not stall storage: observe the natural boot with the
+in-page sampler above. Either way, disarm with
+`Page.removeScriptToEvaluateOnNewDocument` and reload before capturing the settled
+state, or the comparison shot is taken against a still-crippled runtime.
+
+### The desktop instance pins a previous run's server port, and its saved OAuth login expires
+
+**Situation:** starting an Electron dev instance for a surface that needs the local
+backend (any tRPC-backed panel), in a fresh worktree.
+
+**Doesn't work:** starting the dev server on the port `init-dev-env.sh` allocates
+for this worktree and assuming the app will follow. The desktop app is a thin
+client — `BackendProxyProtocolManager` proxies `app://renderer/trpc/*` to whatever
+`dataSyncConfig.remoteServerUrl` the seeded login snapshot carries, which is the
+port an _earlier_ run allocated. The mismatch surfaces as `app-probe.sh server-auth`
+returning **502** (proxy reached nothing), not as an auth error. And once the port
+matches, the snapshot's OAuth tokens are usually expired anyway — the app shows
+「登录已过期」 and `server-auth` returns **401**, while `auth` still reports
+`isSignedIn: true` from renderer state alone.
+
+**Works:** read the app's own target first, then start the server on that port:
+
+```bash
+agent-browser --cdp 9222 eval '(() => JSON.stringify(window.__LOBE_STORES.electron().dataSyncConfig))()'
+# → {"storageMode":"selfHost","remoteServerUrl":"http://localhost:3111","active":true}
+SERVER_PORT=3111 .agents/acceptance/scripts/init-dev-env.sh dev-next
+```
+
+For the expired login, do **not** drive the OAuth flow. The proxy forwards the
+Electron session's cookies alongside its `Oidc-Auth` header, and the server accepts
+a better-auth session cookie — so mint one for the seeded user and inject it over
+raw CDP:
+
+```bash
+curl -c cookie.jar -H 'Content-Type: application/json' -X POST \
+  "$SERVER_URL/api/auth/sign-in/email" \
+  --data '{"callbackURL":"/","email":"agent-testing@lobehub.com","password":"TestPassword123!"}'
+# then Network.setCookie better-auth.session_token / better-auth.session_data
+# for url http://localhost:<port>, domain localhost, httpOnly, on the renderer target
+```
+
+Gate on `app-probe.sh server-auth` returning `{"authenticated":true,"status":200}` —
+renderer `isSignedIn` alone never proves the server accepted anything.
+
+### `agent.updateAgentConfig` silently drops `agencyConfig.heterogeneousProvider`
+
+**Situation:** turning a test agent into a CLI-agent shape (Claude Code / Codex) so
+the heterogeneous chat input and its quota badges render.
+
+**Doesn't work:** `updateAgentConfigById(id, { agencyConfig: { heterogeneousProvider:
+{ type: 'claude-code', command: 'claude' } } })`. The store's optimistic write makes
+it look applied — reading `agentMap[id].agencyConfig` back returns the provider — but
+the DB row keeps only the sibling keys (`executionTarget` persists, the provider does
+not), so the next full reload drops it and the plain chat input comes back. Reads as
+"the agent isn't hetero" with no error anywhere.
+
+**Works:** seed the shape directly (public API first is the rule; this is the
+documented exception where the write path does not carry the field):
+
+```bash
+docker exec lobehub-agent-testing-postgres psql -U postgres -d postgres -tAc \
+  "update agents set agency_config = '{\"executionTarget\":\"local\",\"heterogeneousProvider\":{\"type\":\"claude-code\",\"command\":\"claude\"}}'::jsonb where id='<agentId>';"
+```
+
+Then cold-load: a plain reload keeps serving the agent config from the tiered SWR
+cache, so the renderer still shows the pre-write value (generic M18). Clear
+`lobechat-swr-cache*` + `lobehub-local-data` through
+`Page.addScriptToEvaluateOnNewDocument` and reload (see "Cold SWR cache" above),
+then assert `agentMap[id].agencyConfig` before drawing any conclusion.
+### An unconverged lockfile puts two copies of a dep in the graph — every route using it dies at the ErrorBoundary
+
+**Situation:** after rebasing onto a canary that bumped a shared UI dependency and
+running `pnpm install`, every route rendering the rich-text editor (agent profile,
+Home composer) fails with
+`LexicalComposerContext.useLexicalComposerContext: cannot find a LexicalComposerContext`
+and the SPA shows 页面暂时不可用.
+
+**Doesn't work:** reading it as a defect in the change under test, or as a stale
+Vite dep cache. Clearing `node_modules/.vite` (both root and `src/`) and a plain
+`pnpm install` both leave it broken, because the duplicate is in the resolution,
+not the cache.
+
+**Works:** attribute first, then measure the resolution.
+
+1. Attribution is cheap and decisive: load a route the branch definitely does not
+   touch that uses the same dependency. If it fails too, the change under test is
+   ruled out without checking out the base ref.
+
+2. The mechanism is two physical copies with different peer sets. The root
+   declares an exact-ish range while workspace packages declare a loose one, so a
+   dependency bump moves only the root:
+
+   ```bash
+   readlink node_modules/@lobehub/editor            # -> …editor@4.23.1_…ui@5.27.0
+   readlink packages/*/node_modules/@lobehub/editor # -> …editor@4.20.3_…ui@5.20.2
+   ```
+
+   A React context is module-scoped, so two copies means the provider and the
+   consumer read different context objects — the symptom is always "cannot find
+   the context", never a version error.
+
+3. `pnpm dedupe` converges them; clear the Vite dep caches and restart afterwards.
+
+**`pnpm-lock.yaml` is gitignored in this repo (`.gitignore`), so this divergence is
+always LOCAL install state — never something canary committed and never something to
+open a PR about.** A loose workspace range (`^4`) stays satisfied by the old version
+across incremental installs, so the drift accumulates silently in a long-lived
+checkout and appears right after a rebase that bumps the root range. Do not report it
+as a defect of the branch or of the base ref; note it as an environment finding and
+move on. Back up the lockfile before `dedupe` anyway — it is the only copy.
+
+### A fresh worktree installed with `--ignore-scripts` returns 500 on every `/trpc/lambda/*`
+
+**Situation:** bootstrapping a new git worktree for a run — `pnpm install` at the root,
+then `init-dev-env.sh dev`.
+
+**Doesn't work:** `pnpm install --ignore-scripts`. The server starts and serves the SPA
+normally, but Turbopack cannot instantiate `@icons-pack/react-simple-icons` (reached
+through `packages/const/src/composio.ts` → `packages/database/src/schemas/*`), so every
+`/trpc/lambda/*` route returns **500** while the page itself looks healthy. The CLI
+surfaces this only as `Unable to transform response from server`, which reads as an auth
+or API-key problem and sends you to `setup-auth.sh` instead of to the install. The Next
+log holds the real cause (`module factory is not available`), and its own suggested fix
+— clear the browser cache / service worker — is misleading here.
+
+**Works:** install without `--ignore-scripts`, and clear the stale Turbopack cache
+because the broken module graph is persisted:
+
+```bash
+.agents/acceptance/scripts/init-dev-env.sh stop-dev
+rm -rf .next && pnpm install # no --ignore-scripts
+.agents/acceptance/scripts/init-dev-env.sh dev
+```
+
+Gate on a real authenticated TRPC call rather than on the page rendering: a 200 from
+`$SERVER_URL/` proves nothing about the lambda routes. Remember `apps/cli` and
+`apps/desktop` are standalone installs (PROJECT.md §1), so each also needs its own
+`pnpm install` in a fresh worktree.
+
+## Detailed references
+
+- [Probe field notes](./references/probe-field-notes.md) — all historical
+  LobeHub findings, original identifiers, commands, and failure analysis.
+- [Auth](./references/auth.md) — per-surface auth injection and recovery.
+- [Dev server](./references/dev-server.md) — local stack and restart behavior.
+- [Multi-instance Electron](./references/multi-instance.md) — pool, ports, CDP
+  sessions, and user-data isolation.
+- [Agent gateway](./references/agent-gateway.md) — closed-loop gateway probes.
+
+## Adding a new learning
+
+- Add a command or option to `app-probe.sh` when the probe is read-only,
+  repeatable, and has a stable output contract. Add a smoke test with it.
+- Add a concise recipe here when it is a recurring decision or supported
+  mechanism.
+- Add a field note only for a narrow incident, including Situation / Doesn't
+  work / Works and evidence for every mechanism claim.
+- Promote product-independent findings to the generic skill layer rather than
+  duplicating them here.

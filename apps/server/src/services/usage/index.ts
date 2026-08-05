@@ -1,8 +1,8 @@
 import dayjs from 'dayjs';
 import debug from 'debug';
-import { asc, desc, eq } from 'drizzle-orm';
+import { and, eq, isNull, type SQL } from 'drizzle-orm';
 
-import { messages } from '@/database/schemas';
+import { messages, sessions, topics } from '@/database/schemas';
 import { type LobeChatDatabase } from '@/database/type';
 import { genRangeWhere, genWhere } from '@/database/utils/genWhere';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
@@ -32,6 +32,25 @@ export class UsageRecordService {
   }
 
   /**
+   * `messages.user_id`/`workspace_id` are creation-time snapshots that go
+   * stale after agent transfers — usage reads derive scope from the owning
+   * topic/session instead, fanned out over the three derivation arms so each
+   * stays index-bounded (same strategy as `MessageModel.count`).
+   */
+  private scopeArms = () => {
+    const ctx = { userId: this.userId, workspaceId: this.workspaceId };
+    return {
+      orphan: and(
+        isNull(messages.topicId),
+        isNull(messages.sessionId),
+        buildWorkspaceWhere(ctx, messages),
+      ) as SQL,
+      sessionOwned: and(isNull(messages.topicId), buildWorkspaceWhere(ctx, sessions)) as SQL,
+      topicOwned: buildWorkspaceWhere(ctx, topics),
+    };
+  };
+
+  /**
    * @description Find usage records by date range.
    * @param agentId Optional agent id to attribute usage to a single agent.
    */
@@ -40,31 +59,42 @@ export class UsageRecordService {
     endAt: string,
     agentId?: string,
   ): Promise<UsageRecordItem[]> => {
-    const spends = await this.db
-      .select({
-        createdAt: messages.createdAt,
-        id: messages.id,
-        metadata: messages.metadata,
-        model: messages.model,
-        provider: messages.provider,
-        role: messages.role,
-        updatedAt: messages.createdAt,
-        usage: messages.usage,
-        userId: messages.userId,
-      })
-      .from(messages)
-      .where(
-        genWhere([
-          buildWorkspaceWhere(
-            { userId: this.userId, workspaceId: this.workspaceId },
-            { userId: messages.userId, workspaceId: messages.workspaceId },
-          ),
-          eq(messages.role, 'assistant'),
-          agentId ? eq(messages.agentId, agentId) : undefined,
-          genRangeWhere([startAt, endAt], messages.createdAt, (date) => date.toDate()),
-        ]),
-      )
-      .orderBy(desc(messages.createdAt));
+    const selection = {
+      createdAt: messages.createdAt,
+      id: messages.id,
+      metadata: messages.metadata,
+      model: messages.model,
+      provider: messages.provider,
+      role: messages.role,
+      updatedAt: messages.createdAt,
+      usage: messages.usage,
+      userId: messages.userId,
+    };
+    const conditions = [
+      eq(messages.role, 'assistant'),
+      agentId ? eq(messages.agentId, agentId) : undefined,
+      genRangeWhere([startAt, endAt], messages.createdAt, (date) => date.toDate()),
+    ];
+    const { topicOwned, sessionOwned, orphan } = this.scopeArms();
+    const [byTopic, bySession, orphans] = await Promise.all([
+      this.db
+        .select(selection)
+        .from(messages)
+        .innerJoin(topics, eq(topics.id, messages.topicId))
+        .where(genWhere([topicOwned, ...conditions])),
+      this.db
+        .select(selection)
+        .from(messages)
+        .innerJoin(sessions, eq(sessions.id, messages.sessionId))
+        .where(genWhere([sessionOwned, ...conditions])),
+      this.db
+        .select(selection)
+        .from(messages)
+        .where(genWhere([orphan, ...conditions])),
+    ]);
+    const spends = [...byTopic, ...bySession, ...orphans].sort(
+      (a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0),
+    );
     return spends.map((spend) => {
       const metadata = spend.metadata as MessageMetadata;
       // Prefer the dedicated `usage` column, then the canonical nested
@@ -225,27 +255,38 @@ export class UsageRecordService {
     endAt: string,
     granularity: AgentUsageGranularity = 'day',
   ): Promise<AgentUsageStats> => {
-    const rows = await this.db
-      .select({
-        createdAt: messages.createdAt,
-        metadata: messages.metadata,
-        model: messages.model,
-        provider: messages.provider,
-        usage: messages.usage,
-      })
-      .from(messages)
-      .where(
-        genWhere([
-          buildWorkspaceWhere(
-            { userId: this.userId, workspaceId: this.workspaceId },
-            { userId: messages.userId, workspaceId: messages.workspaceId },
-          ),
-          eq(messages.role, 'assistant'),
-          eq(messages.agentId, agentId),
-          genRangeWhere([startAt, endAt], messages.createdAt, (date) => date.toDate()),
-        ]),
-      )
-      .orderBy(asc(messages.createdAt));
+    const selection = {
+      createdAt: messages.createdAt,
+      metadata: messages.metadata,
+      model: messages.model,
+      provider: messages.provider,
+      usage: messages.usage,
+    };
+    const conditions = [
+      eq(messages.role, 'assistant'),
+      eq(messages.agentId, agentId),
+      genRangeWhere([startAt, endAt], messages.createdAt, (date) => date.toDate()),
+    ];
+    const { topicOwned, sessionOwned, orphan } = this.scopeArms();
+    const [byTopic, bySession, orphans] = await Promise.all([
+      this.db
+        .select(selection)
+        .from(messages)
+        .innerJoin(topics, eq(topics.id, messages.topicId))
+        .where(genWhere([topicOwned, ...conditions])),
+      this.db
+        .select(selection)
+        .from(messages)
+        .innerJoin(sessions, eq(sessions.id, messages.sessionId))
+        .where(genWhere([sessionOwned, ...conditions])),
+      this.db
+        .select(selection)
+        .from(messages)
+        .where(genWhere([orphan, ...conditions])),
+    ]);
+    const rows = [...byTopic, ...bySession, ...orphans].sort(
+      (a, b) => (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0),
+    );
 
     const bucketStart = (date: Date) =>
       granularity === 'week' ? dayjs(date).startOf('week') : dayjs(date).startOf('day');

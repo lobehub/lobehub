@@ -6,28 +6,21 @@ import type {
   BrowserSidebarPickedElement,
   BrowserSidebarPickElementParams,
   BrowserSidebarPickElementResult,
+  BrowserSidebarRegisterWebviewParams,
   BrowserSidebarResult,
   BrowserSidebarSessionParams,
   BrowserSidebarState,
-  BrowserSidebarViewportParams,
 } from '@lobechat/electron-client-ipc';
-import type { BrowserWindow, WebContents } from 'electron';
-import {
-  app as electronApp,
-  BrowserWindow as ElectronBrowserWindow,
-  session as electronSession,
-  shell,
-} from 'electron';
+import type { WebContents } from 'electron';
+import { session as electronSession, shell, webContents as electronWebContents } from 'electron';
 
 import type { AgentOverlayLabels } from '@/modules/browser/agentOverlayScript';
-import { BrowserPagePool } from '@/modules/browser/BrowserPagePool';
 import type { PickedElementPayload } from '@/modules/browser/elementPickerScript';
 import {
   ELEMENT_PICKER_CANCEL_SCRIPT,
   elementPickerScript,
 } from '@/modules/browser/elementPickerScript';
 import { importChromeLoginData } from '@/modules/browser/importChromeLoginData';
-import { getIpcContext } from '@/utils/ipc/base';
 import { createLogger } from '@/utils/logger';
 
 import { ControllerModule, IpcMethod } from './index';
@@ -86,20 +79,28 @@ const isSupportedNavigationUrl = (url: string): boolean => {
 };
 
 /**
- * Owns the in-app browser pages. Each page is a main-process `WebContentsView`,
- * not a renderer `<webview>`: page lifetime must not depend on a React component
- * being mounted, otherwise a background agent has no page of its own and its
- * `navigate` ends up hijacking whichever page the user is looking at.
- *
- * The renderer only reports where the panel is on screen (`setViewport`); the
- * pool hosts the matching view in the window that reported it.
+ * Owns the privileged operations for renderer-retained `<webview>` guests.
+ * The renderer keeps each guest mounted in either the visible browser pane or
+ * an off-screen host; the main process registers its WebContents so agent tools
+ * can continue driving it without coupling page lifetime to the visible pane.
  */
 export default class BrowserSidebarCtr extends ControllerModule {
   static override readonly groupName = 'browserSidebar';
 
   private partitionConfigured = false;
-  private pagePool?: BrowserPagePool;
+  private pages = new Map<
+    string,
+    {
+      error?: string;
+      faviconUrl?: string;
+      isLoading: boolean;
+      title: string;
+      url: string;
+      webContentsId: number;
+    }
+  >();
   private overlayLabels: AgentOverlayLabels = DEFAULT_OVERLAY_LABELS;
+  private wiredWebContents = new Set<number>();
   /**
    * Bumped on every cancel, per session. `pickElement` awaits a pre-cancel
    * before injecting its picker, so a `cancelElementPick` (e.g. the pane
@@ -110,21 +111,8 @@ export default class BrowserSidebarCtr extends ControllerModule {
    */
   private pickCancelSeqs = new Map<string, number>();
 
-  beforeAppReady() {
-    electronApp.on('before-quit', () => this.disposePool());
-
-    // The parking window is a real BrowserWindow, so while it is alive the app
-    // never sees `window-all-closed` — and never quits on Windows/Linux. Tear the
-    // pool down once the last app window has gone.
-    electronApp.on('browser-window-created', (_event, window) => {
-      window.once('closed', () => {
-        if (!this.pagePool) return;
-        const appWindows = ElectronBrowserWindow.getAllWindows().filter(
-          (candidate) => !candidate.isDestroyed() && !this.pagePool!.isParkingWindow(candidate),
-        );
-        if (appWindows.length === 0) this.disposePool();
-      });
-    });
+  afterAppReady() {
+    this.configureBrowserSession();
   }
 
   /** One-shot capture of the visible page, returned as a data URL so the renderer can attach it to the chat input. */
@@ -147,8 +135,7 @@ export default class BrowserSidebarCtr extends ControllerModule {
   /**
    * Starts the in-page element picker and stays pending until the user clicks an
    * element or the pick dies (Escape, restart, navigation). The picker UI lives
-   * inside the guest page — a WebContentsView paints above all renderer DOM, so
-   * no highlight drawn by the panel could sit on top of the page.
+   * inside the guest page so it tracks the page DOM and viewport precisely.
    */
   @IpcMethod()
   pickElement(params: BrowserSidebarPickElementParams): Promise<BrowserSidebarPickElementResult> {
@@ -302,11 +289,14 @@ export default class BrowserSidebarCtr extends ControllerModule {
       return { error: `Unsupported URL: ${url}`, success: false };
     }
 
-    const page = this.pool.ensure(params.sessionId);
+    const page = this.pages.get(params.sessionId);
+    const webContents = this.getSessionWebContents(params.sessionId);
+    if (!page || !webContents) return { error: 'Browser is not ready', success: false };
+
     page.url = url;
     page.error = undefined;
 
-    await page.view.webContents.loadURL(url).catch((error: Error) => {
+    await webContents.loadURL(url).catch((error: Error) => {
       // A superseded navigation rejects here; the did-fail-load handler already
       // records anything worth surfacing.
       logger.debug(`Navigation to ${url} did not settle cleanly: ${error.message}`);
@@ -345,27 +335,25 @@ export default class BrowserSidebarCtr extends ControllerModule {
     });
   }
 
-  /**
-   * The renderer reports the panel rect (in its own window's coordinates) on every
-   * layout change; a missing/degenerate rect means "nobody is looking at this
-   * page", which parks it rather than destroying it.
-   *
-   * The rect is hosted in the *sender's* window, not the main one: the agent route
-   * also renders in standalone `chatSingle` windows, and placing the view in the
-   * main window would leave the standalone panel blank and paint the page over the
-   * wrong window.
-   */
+  /** Register (or activate) the retained guest owned by the calling renderer. */
   @IpcMethod()
-  setViewport(params: BrowserSidebarViewportParams): BrowserSidebarResult {
-    const { rect, sessionId } = params;
-    const host = this.getSenderWindow();
-
-    if (!rect || rect.width < 1 || rect.height < 1 || !host) {
-      this.pool.hide(sessionId, host);
-      return { success: true };
+  registerWebview(params: BrowserSidebarRegisterWebviewParams): BrowserSidebarResult {
+    const webContents = electronWebContents.fromId(params.webContentsId);
+    if (!webContents || webContents.isDestroyed()) {
+      return { error: 'Browser webview is not ready', success: false };
     }
 
-    this.pool.show(sessionId, rect, host);
+    const previous = this.pages.get(params.sessionId);
+    this.pages.set(params.sessionId, {
+      error: previous?.error,
+      faviconUrl: previous?.faviconUrl,
+      isLoading: webContents.isLoading(),
+      title: webContents.getTitle() || previous?.title || '',
+      url: webContents.getURL() || previous?.url || DEFAULT_BROWSER_URL,
+      webContentsId: params.webContentsId,
+    });
+    this.wirePage(params.sessionId, webContents);
+    this.updateSnapshot(params.sessionId);
     return { success: true };
   }
 
@@ -378,40 +366,14 @@ export default class BrowserSidebarCtr extends ControllerModule {
 
   /** Accessors for sibling controllers (BrowserControlCtr drives the pages). */
   getSessionWebContents(sessionId: string): WebContents | undefined {
-    return this.pagePool?.webContentsOf(sessionId);
-  }
-
-  /** Mark a page as in use so the memory cap doesn't discard it mid-automation. */
-  touchPage(sessionId: string): void {
-    this.pagePool?.touch(sessionId);
+    const page = this.pages.get(sessionId);
+    if (!page) return undefined;
+    const webContents = electronWebContents.fromId(page.webContentsId);
+    return webContents && !webContents.isDestroyed() ? webContents : undefined;
   }
 
   getOverlayLabels(): AgentOverlayLabels {
     return this.overlayLabels;
-  }
-
-  private get pool(): BrowserPagePool {
-    if (this.pagePool) return this.pagePool;
-
-    this.configureBrowserSession();
-    this.pagePool = new BrowserPagePool({
-      onPageChanged: (sessionId) => this.updateSnapshot(sessionId),
-      partition: BROWSER_PARTITION,
-    });
-
-    return this.pagePool;
-  }
-
-  private disposePool(): void {
-    this.pagePool?.dispose();
-    this.pagePool = undefined;
-  }
-
-  /** The window whose renderer made the current IPC call. */
-  private getSenderWindow(): BrowserWindow | undefined {
-    const sender = getIpcContext()?.sender;
-    if (!sender || sender.isDestroyed()) return undefined;
-    return ElectronBrowserWindow.fromWebContents(sender) ?? undefined;
   }
 
   private configureBrowserSession(): void {
@@ -439,28 +401,24 @@ export default class BrowserSidebarCtr extends ControllerModule {
   }
 
   private snapshot(sessionId: string): BrowserSidebarState {
-    const page = this.pagePool?.get(sessionId);
+    const page = this.pages.get(sessionId);
     const webContents = this.getSessionWebContents(sessionId);
-    // A page the pool discarded to stay under its memory cap still reports its
-    // URL, so the panel keeps showing it and the next visit reloads it there
-    // rather than dropping the user on a blank pane.
-    const discarded = this.pagePool?.discardedRecord(sessionId);
 
     return {
       attached: !!webContents,
       canGoBack: webContents?.canGoBack() ?? false,
       canGoForward: webContents?.canGoForward() ?? false,
       error: page?.error,
-      faviconUrl: page?.faviconUrl || discarded?.faviconUrl,
+      faviconUrl: page?.faviconUrl,
       isLoading: webContents?.isLoading() ?? page?.isLoading ?? false,
       sessionId,
-      title: webContents?.getTitle() || page?.title || discarded?.title || '',
-      url: webContents?.getURL() || page?.url || discarded?.url || DEFAULT_BROWSER_URL,
+      title: webContents?.getTitle() || page?.title || '',
+      url: webContents?.getURL() || page?.url || DEFAULT_BROWSER_URL,
     };
   }
 
   private updateSnapshot(sessionId: string): void {
-    const page = this.pagePool?.get(sessionId);
+    const page = this.pages.get(sessionId);
     const webContents = this.getSessionWebContents(sessionId);
 
     if (page && webContents) {
@@ -473,6 +431,59 @@ export default class BrowserSidebarCtr extends ControllerModule {
       'browserSidebarStateChanged',
       this.snapshot(sessionId),
     );
+  }
+
+  private wirePage(sessionId: string, webContents: WebContents): void {
+    if (this.wiredWebContents.has(webContents.id)) return;
+    this.wiredWebContents.add(webContents.id);
+
+    const changed = () => this.updateSnapshot(sessionId);
+    webContents.setWindowOpenHandler(({ url }) => {
+      if (HTTP_URL_PATTERN.test(url)) {
+        void webContents.loadURL(url).catch((error) => {
+          logger.error(`Failed to open URL in browser page ${sessionId}: ${url}`, error);
+        });
+      }
+      return { action: 'deny' };
+    });
+    webContents.on('page-title-updated', changed);
+    webContents.on('page-favicon-updated', (_event, favicons) => {
+      const page = this.pages.get(sessionId);
+      if (page) page.faviconUrl = favicons[0];
+      changed();
+    });
+    webContents.on('did-navigate', changed);
+    webContents.on('did-navigate-in-page', changed);
+    webContents.on('did-start-loading', () => {
+      const page = this.pages.get(sessionId);
+      if (page) {
+        page.error = undefined;
+        page.isLoading = true;
+      }
+      changed();
+    });
+    webContents.on('did-stop-loading', () => {
+      const page = this.pages.get(sessionId);
+      if (page) page.isLoading = false;
+      changed();
+    });
+    webContents.on('did-fail-load', (_event, code, description, url, isMainFrame) => {
+      if (!isMainFrame || code === -3) return;
+      const page = this.pages.get(sessionId);
+      if (page) {
+        page.error = description;
+        page.isLoading = false;
+        page.url = url || page.url;
+      }
+      changed();
+    });
+    webContents.once('destroyed', () => {
+      this.wiredWebContents.delete(webContents.id);
+      if (this.pages.get(sessionId)?.webContentsId === webContents.id) {
+        this.pages.delete(sessionId);
+        this.updateSnapshot(sessionId);
+      }
+    });
   }
 
   private async withPage<T extends BrowserSidebarResult>(

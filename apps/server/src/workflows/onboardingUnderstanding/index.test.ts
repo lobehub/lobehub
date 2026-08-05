@@ -33,6 +33,7 @@ describe('OnboardingUnderstandingWorkflow', () => {
     const { OnboardingUnderstandingWorkflow } = await import('.');
     const payload = {
       providers: [{ id: 'github', revision: 1 }],
+      responseLanguage: 'zh-CN',
       sessionId: 'session:1',
       topicId: 'topic-1',
       userId: 'user-1',
@@ -56,6 +57,7 @@ describe('OnboardingUnderstandingWorkflow', () => {
           { id: 'gmail', revision: 1 },
           { id: 'github', revision: 1 },
         ],
+        responseLanguage: 'zh-CN',
         sessionId: 'session-1',
         topicId: 'topic-1',
         userId: 'user-1',
@@ -66,6 +68,32 @@ describe('OnboardingUnderstandingWorkflow', () => {
     expect(triggerMock).toHaveBeenCalledWith(
       expect.objectContaining({ workflowRunId: 'initial-session-1' }),
     );
+  });
+
+  /**
+   * @example
+   * expect(trigger.url).toContain('process-collected');
+   */
+  it('triggers a direct rewrite for feedback-only revisions', async () => {
+    const { OnboardingUnderstandingWorkflow } = await import('.');
+    const payload = {
+      responseLanguage: 'zh-CN',
+      sessionId: 'session-1',
+      sourceFingerprint: 'github@1',
+      topicId: 'topic-1',
+      userId: 'user-1',
+    };
+
+    await OnboardingUnderstandingWorkflow.triggerWriting(payload, {
+      workflowRunId: 'feedback-session-1-revision-2',
+    });
+
+    expect(triggerMock).toHaveBeenCalledWith({
+      body: payload,
+      headers: { traceparent: 'trace-1' },
+      url: 'http://internal:3011/api/workflows/onboarding/understanding/process-collected',
+      workflowRunId: 'feedback-session-1-revision-2',
+    });
   });
 
   it('rejects triggering when workflow configuration is unavailable', async () => {
@@ -79,6 +107,7 @@ describe('OnboardingUnderstandingWorkflow', () => {
     await expect(
       OnboardingUnderstandingWorkflow.triggerProviders({
         providers: [{ id: 'github', revision: 1 }],
+        responseLanguage: 'zh-CN',
         sessionId: 'session-1',
         topicId: 'topic-1',
         userId: 'user-1',

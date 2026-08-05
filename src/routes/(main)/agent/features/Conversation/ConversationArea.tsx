@@ -16,9 +16,11 @@ import {
   ForwardMessageDispatcher,
   MessageForwardFooter,
 } from '@/features/Conversation/MessageForward';
+import { useAgentContext } from '@/features/Conversation/useAgentContext';
 import { mergeConversationHooks } from '@/features/Conversation/utils/mergeConversationHooks';
 import { useGatewayReconnect } from '@/hooks/useGatewayReconnect';
 import { useOperationState } from '@/hooks/useOperationState';
+import { useScheduledRunWatch } from '@/hooks/useScheduledRunWatch';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -31,7 +33,6 @@ import MainChatInput from './MainChatInput';
 import MessageFromUrl from './MainChatInput/MessageFromUrl';
 import ThreadHydration from './ThreadHydration';
 import { useActionsBarConfig } from './useActionsBarConfig';
-import { useAgentContext } from './useAgentContext';
 
 const log = debug('lobe-render:agent:ConversationArea');
 
@@ -96,6 +97,11 @@ const Conversation = memo(() => {
   );
   useGatewayReconnect(context.topicId, runningOperation);
 
+  // While the topic is parked as `scheduled`, pull the cron dispatch into the
+  // store when `runAt` passes — nothing pushes it, and the reconnect above
+  // can't fire until the synced `runningOperation` lands in the topic map.
+  useScheduledRunWatch(context.topicId);
+
   const agentChatConfig = useAgentStore(chatConfigByIdSelectors.getChatConfigById(context.agentId));
   const chatFollowUpHooks = useChatFollowUp({
     agentChatConfig,
@@ -118,8 +124,8 @@ const Conversation = memo(() => {
       hooks={hooks}
       messages={messages}
       operationState={operationState}
-      onMessagesChange={(messages, ctx) => {
-        replaceMessages(messages, { context: ctx });
+      onMessagesChange={(messages, ctx, meta) => {
+        replaceMessages(messages, { context: ctx, source: meta?.source });
       }}
     >
       <Flexbox

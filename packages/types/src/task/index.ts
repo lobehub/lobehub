@@ -155,6 +155,10 @@ export interface TaskSchedulerContext {
   // QStash messageId (or LocalScheduler scheduleId) for the next tick. Used to
   // cancel when the user wants an interval change to take effect immediately.
   tickMessageId?: string;
+  // Generation token carried by the currently active tick. A delivered tick
+  // must match this value so a failed best-effort cancellation cannot create
+  // a second heartbeat chain.
+  tickToken?: string;
 }
 
 /**
@@ -163,7 +167,8 @@ export interface TaskSchedulerContext {
  * cleared on the next successful run so the UI only shows the *current* error —
  * this pocket is append-style history that a later success does NOT wipe. It
  * exists so "the morning check silently didn't fire" is diagnosable after the
- * fact instead of being masked by a later manual success (LOBE-11390).
+ * fact instead of being masked by a later manual success (paused tasks were
+ * silently overwritten to "scheduled" with error cleared on next success).
  */
 export interface TaskLifecycleAudit {
   // Monotonic lifetime count of failed runs (never reset on success).
@@ -353,6 +358,8 @@ export interface TaskDetailActivityAgent {
   avatar: string | null;
   backgroundColor: string | null;
   id: string;
+  /** Personal name; renderers resolve the label with `agentDisplayName(agent, fallback)`. */
+  name?: string | null;
   title: string | null;
 }
 
@@ -439,8 +446,12 @@ export interface TaskDetailData {
   heartbeat?: {
     interval?: number | null;
     lastAt?: string | null;
+    /** When the currently pending heartbeat tick was enqueued. */
+    scheduledAt?: string | null;
     timeout?: number | null;
   };
+  /** Stable database identity used by subject-bound aggregates such as Acceptance. */
+  id?: string;
   identifier: string;
   instruction: string;
   name?: string | null;

@@ -11,6 +11,8 @@ export interface SettingsSearchContext {
   hideDocs: boolean;
   isDesktop: boolean;
   isLogin: boolean;
+  /** Whether the app is running on Windows (for Windows-only settings) */
+  isWindows: boolean;
   showAiImage: boolean;
 }
 
@@ -48,6 +50,7 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<SettingsTabs, string[]>> = {
   [SettingsTabs.About]: ['about', 'version', 'changelog', 'feedback', 'help'],
   [SettingsTabs.Advanced]: ['advanced', 'developer', 'diagnostics'],
   [SettingsTabs.APIKey]: ['api key', 'apikey', 'token', 'secret'],
+  [SettingsTabs.Labels]: ['label', 'labels', 'tag', 'tags', 'group', 'grouping'],
   [SettingsTabs.Appearance]: [
     'appearance',
     'theme',
@@ -138,6 +141,7 @@ export const TAB_SEARCH_KEYWORDS_KEYS: Partial<Record<SettingsTabs, string>> = {
   [SettingsTabs.Credits]: 'settingsSearch.tabKeywords.credits',
   [SettingsTabs.Creds]: 'settingsSearch.tabKeywords.creds',
   [SettingsTabs.Devices]: 'settingsSearch.tabKeywords.devices',
+  [SettingsTabs.Labels]: 'settingsSearch.tabKeywords.labels',
   [SettingsTabs.Hotkey]: 'settingsSearch.tabKeywords.hotkey',
   [SettingsTabs.Memory]: 'settingsSearch.tabKeywords.memory',
   [SettingsTabs.Messenger]: 'settingsSearch.tabKeywords.messenger',
@@ -302,6 +306,26 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     labelKey: 'settingAppearance.terminal.fontFamily.title',
     tab: SettingsTabs.Appearance,
     visible: (ctx) => ctx.isDesktop,
+  },
+  // System Tools
+  {
+    anchor: 'system-tools-shell',
+    descKey: 'settingSystemTools.shell.mode.desc',
+    keywords: [
+      'shell',
+      'bash',
+      'git bash',
+      'gitbash',
+      'powershell',
+      'pwsh',
+      'cmd',
+      'terminal',
+      'command line',
+      'windows shell',
+    ],
+    labelKey: 'settingSystemTools.shell.mode.title',
+    tab: SettingsTabs.SystemTools,
+    visible: (ctx) => ctx.isDesktop && ctx.isWindows,
   },
   // Advanced
   {

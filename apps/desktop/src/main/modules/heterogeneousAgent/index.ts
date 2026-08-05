@@ -2,6 +2,7 @@ import { ampDriver } from './drivers/amp';
 import { claudeCodeDriver } from './drivers/claudeCode';
 import { codexDriver } from './drivers/codex';
 import { opencodeDriver } from './drivers/opencode';
+import { piDriver } from './drivers/pi';
 import type { HeterogeneousAgentDriver } from './types';
 
 const heterogeneousAgentDrivers: Record<string, HeterogeneousAgentDriver> = {
@@ -9,6 +10,7 @@ const heterogeneousAgentDrivers: Record<string, HeterogeneousAgentDriver> = {
   'claude-code': claudeCodeDriver,
   'codex': codexDriver,
   'opencode': opencodeDriver,
+  'pi': piDriver,
 };
 
 export const getHeterogeneousAgentDriver = (agentType: string): HeterogeneousAgentDriver => {

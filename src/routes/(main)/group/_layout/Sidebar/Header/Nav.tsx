@@ -5,14 +5,14 @@ import { BotPromptIcon } from '@lobehub/ui/icons';
 import { MessageSquarePlusIcon, SearchIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
 import urlJoin from 'url-join';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
+import { useActiveLocation } from '@/hooks/useActiveLocation';
+import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
-import { usePathname } from '@/libs/router/navigation';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
@@ -21,9 +21,9 @@ import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfi
 const Nav = memo(() => {
   const { t } = useTranslation('chat');
   const { t: tTopic } = useTranslation('topic');
-  const params = useParams();
+  const params = useActiveRouteParams();
   const groupId = params.gid;
-  const pathname = usePathname();
+  const { pathname } = useActiveLocation();
   const isProfileActive = pathname.includes('/profile');
   const router = useQueryRoute();
   const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);

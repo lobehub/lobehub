@@ -1,9 +1,9 @@
-import type { ModelExtendParams } from '@lobechat/model-runtime';
 import {
   applyModelExtendParams,
+  type ModelExtendParams,
   resolveDefaultEnableAdaptiveThinkingForModel,
   resolveDefaultThinkingLevelForModel,
-} from '@lobechat/model-runtime';
+} from '@lobechat/model-runtime/utils/modelExtendParams';
 import type { LobeAgentChatConfig } from '@lobechat/types';
 
 import { aiModelSelectors, getAiInfraStoreState } from '@/store/aiInfra';
@@ -24,8 +24,8 @@ export interface ModelParamsContext {
  * Resolves extended parameters for model runtime based on model capabilities and chat config.
  *
  * Looks up the model's supported `extendParams` from the aiInfra store, then delegates the
- * actual resolution to the shared `applyModelExtendParams` (in `@lobechat/model-runtime`) so the
- * client chat service and the server-side agent runtime stay in sync.
+ * actual resolution to the shared `applyModelExtendParams` so the client chat service and the
+ * server-side agent runtime stay in sync.
  */
 export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendParams => {
   const { model, provider, chatConfig } = ctx;

@@ -1,6 +1,7 @@
 import { validateVideoFileSize } from '@lobechat/utils/client';
 import { type ItemType } from '@lobehub/ui';
 import { Icon, Tooltip } from '@lobehub/ui';
+import { toast } from '@lobehub/ui/base-ui';
 import { Upload } from 'antd';
 import { css, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -8,13 +9,12 @@ import { ArrowRight, FileUp, FolderUp, ImageUp, LibraryBig, Paperclip } from 'lu
 import { memo, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { message } from '@/components/AntdStaticMethods';
 import FileIcon from '@/components/FileIcon';
 import RepoIcon from '@/components/LibIcon';
 import TipGuide from '@/components/TipGuide';
 import { openAttachKnowledgeModal } from '@/features/LibraryModal';
+import { useMediaUploadAbility } from '@/hooks/useMediaUploadAbility';
 import { usePermission } from '@/hooks/usePermission';
-import { useVisualMediaUploadAbility } from '@/hooks/useVisualMediaUploadAbility';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useFileStore } from '@/store/file';
@@ -56,7 +56,7 @@ const FileUpload = memo(() => {
   const agentId = useAgentId();
   const { model, provider } = useEffectiveModel(agentId);
 
-  const { canUploadImage, canUploadVideo, canUploadAudio } = useVisualMediaUploadAbility(
+  const { canUploadImage, canUploadVideo, canUploadAudio } = useMediaUploadAbility(
     model,
     provider,
     agentId,
@@ -147,7 +147,7 @@ const FileUpload = memo(() => {
             // Validate video file size
             const validation = validateVideoFileSize(file);
             if (!validation.isValid) {
-              message.error(
+              toast.error(
                 t('upload.validation.videoSizeExceeded', {
                   actualSize: validation.actualSize,
                   maxSize: validation.maxSize,
@@ -187,7 +187,7 @@ const FileUpload = memo(() => {
             // Validate video file size
             const validation = validateVideoFileSize(file);
             if (!validation.isValid) {
-              message.error(
+              toast.error(
                 t('upload.validation.videoSizeExceeded', {
                   actualSize: validation.actualSize,
                   maxSize: validation.maxSize,

@@ -6,6 +6,7 @@ import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { getSystemLanguage } from '@/utils/client/systemLanguage';
 
 import { resolveEffectiveWorkingDirectory } from '../effectiveWorkingDirectory';
 import { globalAgentContextManager } from '../GlobalAgentContextManager';
@@ -132,7 +133,7 @@ export const VARIABLE_GENERATORS = {
    * | `{{user_agent}}` | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36 Edg/132.0.0.0 |
    *
    */
-  language: () => (typeof navigator !== 'undefined' ? navigator.language : ''),
+  language: () => (typeof navigator !== 'undefined' ? getSystemLanguage() : ''),
   platform: () => (typeof navigator !== 'undefined' ? navigator.platform : ''),
   user_agent: () => (typeof navigator !== 'undefined' ? navigator.userAgent : ''),
 
@@ -162,9 +163,15 @@ export const VARIABLE_GENERATORS = {
    * | `{{videosPath}}` | /Users/username/Videos |
    * | `{{userDataPath}}` | /Users/username/Library/Application Support/LobeChat |
    * | `{{workingDirectory}}` | /Users/username/Projects/my-project |
+   * | `{{defaultShell}}` | PowerShell 7+ (pwsh) |
    *
    */
   homePath: () => globalAgentContextManager.getContext().homePath ?? '',
+  // Fallback keeps the surrounding prompt sentence readable when the desktop
+  // context has not (yet) provided the detected shell.
+  defaultShell: () =>
+    globalAgentContextManager.getContext().defaultShell ??
+    'the platform default shell (PowerShell on Windows, /bin/sh on macOS/Linux)',
   desktopPath: () => globalAgentContextManager.getContext().desktopPath ?? '',
   documentsPath: () => globalAgentContextManager.getContext().documentsPath ?? '',
   downloadsPath: () => globalAgentContextManager.getContext().downloadsPath ?? '',

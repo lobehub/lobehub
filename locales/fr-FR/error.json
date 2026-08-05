@@ -156,6 +156,7 @@
   "upload.networkError": "Veuillez vérifier votre connexion réseau et la configuration CORS du service de stockage.",
   "upload.permissionDenied": "Vous n'avez pas la permission de téléverser des fichiers dans cet espace de travail.",
   "upload.storageBlock.billingUnavailable": "Le statut de facturation de votre abonnement ne peut pas être vérifié. Veuillez réessayer plus tard ou mettre à jour vos informations de facturation.",
+  "upload.storageBlock.cleanupFiles": "Libérer de l'espace",
   "upload.storageBlock.monthlyCapReached": "Le plafond de dépenses mensuel de stockage a été atteint.",
   "upload.storageBlock.noPaymentMethod": "Veuillez ajouter un moyen de paiement pour continuer à téléverser.",
   "upload.storageBlock.overageNotEnabled": "Votre stockage est plein. Activez la facturation à l'utilisation pour continuer à téléverser.",

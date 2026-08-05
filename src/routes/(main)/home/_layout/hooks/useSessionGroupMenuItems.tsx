@@ -1,6 +1,6 @@
+import type { SFSymbol } from '@lobechat/electron-client-ipc';
 import { Icon } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { type ItemType } from 'antd/es/menu/interface';
 import { FolderCogIcon, FolderPenIcon, Trash } from 'lucide-react';
 import { useCallback, useState } from 'react';
@@ -14,13 +14,15 @@ import { useAgentStore } from '@/store/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useHomeStore } from '@/store/home';
 
+type MenuItem = NonNullable<ItemType> & { sfSymbol?: SFSymbol };
+
 /**
  * Hook for generating menu items for session group containers
  * Used in List/Group/Actions.tsx
  */
 export const useSessionGroupMenuItems = () => {
   const { t } = useTranslation(['chat', 'common']);
-  const { message } = App.useApp();
+
   const groupTemplates = useGroupTemplates();
   const { allowed: canCreate } = usePermission('create_content');
   const { allowed: canEdit } = usePermission('edit_own_content');
@@ -36,13 +38,14 @@ export const useSessionGroupMenuItems = () => {
    * Rename group menu item
    */
   const renameGroupMenuItem = useCallback(
-    (groupId: string, groupName: string, anchor: HTMLElement | null): ItemType => {
+    (groupId: string, groupName: string, anchor: HTMLElement | null): MenuItem => {
       const iconElement = <Icon icon={FolderPenIcon} />;
       return {
         disabled: !canEdit,
         icon: iconElement,
         key: 'rename',
         label: t('sessionGroup.rename'),
+        sfSymbol: 'pencil',
         onClick: (info: any) => {
           info.domEvent?.stopPropagation();
           if (!canEdit) return;
@@ -57,32 +60,36 @@ export const useSessionGroupMenuItems = () => {
   );
 
   /**
-   * Config group menu item
+   * Config group menu item.
+   *
+   * Deliberately NOT edit-gated: Category Management is also where a member
+   * shows a Category back in their own sidebar, and that show/hide layer is
+   * personal. The editing controls inside the modal carry their own
+   * `canEdit` gate, so opening it grants nothing.
    */
   const configGroupMenuItem = useCallback(
-    (onOpenConfig: () => void): ItemType => {
+    (onOpenConfig: () => void): MenuItem => {
       const iconElement = <Icon icon={FolderCogIcon} />;
       return {
-        disabled: !canEdit,
         icon: iconElement,
         key: 'config',
         label: t('sessionGroup.config'),
+        sfSymbol: 'folder.badge.gearshape',
         onClick: (info: any) => {
           info.domEvent?.stopPropagation();
-          if (!canEdit) return;
 
           onOpenConfig();
         },
       };
     },
-    [canEdit, t],
+    [t],
   );
 
   /**
    * Delete group menu item with confirmation modal
    */
   const deleteGroupMenuItem = useCallback(
-    (groupId: string): ItemType => {
+    (groupId: string): MenuItem => {
       const trashIcon = <Icon icon={Trash} />;
       return {
         danger: true,
@@ -90,6 +97,7 @@ export const useSessionGroupMenuItems = () => {
         icon: trashIcon,
         key: 'delete',
         label: t('delete', { ns: 'common' }),
+        sfSymbol: 'trash',
         onClick: (info: any) => {
           info.domEvent?.stopPropagation();
           if (!canEdit) return;
@@ -114,30 +122,30 @@ export const useSessionGroupMenuItems = () => {
    * Create agent in group menu item
    */
   const createAgentInGroupMenuItem = useCallback(
-    (groupId: string, _isPinned?: boolean): ItemType => {
+    (groupId: string, _isPinned?: boolean): MenuItem => {
       const iconElement = <Icon icon={FolderPenIcon} />;
       return {
         disabled: !canCreate,
         icon: iconElement,
         key: 'createAgent',
         label: t('newAgent'),
+        sfSymbol: 'plus.bubble',
         onClick: async (info: any) => {
           info.domEvent?.stopPropagation();
           if (!canCreate) return;
 
-          const key = 'createNewAgent';
-          message.loading({ content: t('sessionGroup.creatingAgent'), duration: 0, key });
+          const creatingToast = toast.loading(t('sessionGroup.creatingAgent'));
           setIsCreatingAgent(true);
 
           try {
             await storeCreateAgent({ groupId });
             await refreshAgentList();
 
-            message.destroy(key);
-            message.success({ content: t('sessionGroup.createAgentSuccess') });
+            creatingToast.close();
+            toast.success(t('sessionGroup.createAgentSuccess'));
           } catch (error) {
-            message.destroy(key);
-            message.error({ content: t('sessionGroup.createGroupFailed') });
+            creatingToast.close();
+            toast.error(t('sessionGroup.createGroupFailed'));
             throw error;
           } finally {
             setIsCreatingAgent(false);
@@ -145,7 +153,7 @@ export const useSessionGroupMenuItems = () => {
         },
       };
     },
-    [canCreate, t, message, storeCreateAgent, refreshAgentList],
+    [canCreate, t, storeCreateAgent, refreshAgentList],
   );
 
   /**
@@ -159,13 +167,14 @@ export const useSessionGroupMenuItems = () => {
         onCancel: () => void;
         onConfirm: (selectedAgents: string[]) => Promise<void>;
       }) => void,
-    ): ItemType => {
+    ): MenuItem => {
       const iconElement = <Icon icon={FolderPenIcon} />;
       return {
         disabled: !canCreate,
         icon: iconElement,
         key: 'createGroupChat',
         label: t('newGroupChat'),
+        sfSymbol: 'person.2',
         onClick: async (info: any) => {
           info.domEvent?.stopPropagation();
           if (!canCreate) return;
@@ -184,7 +193,7 @@ export const useSessionGroupMenuItems = () => {
                 );
               } catch (error) {
                 console.error('Failed to create group:', error);
-                message.error({ content: t('sessionGroup.createGroupFailed') });
+                toast.error(t('sessionGroup.createGroupFailed'));
               } finally {
                 setIsCreatingGroup(false);
               }
@@ -193,7 +202,7 @@ export const useSessionGroupMenuItems = () => {
         },
       };
     },
-    [canCreate, t, message, createGroup],
+    [canCreate, t, createGroup],
   );
 
   /**
@@ -257,13 +266,13 @@ export const useSessionGroupMenuItems = () => {
         return true;
       } catch (error) {
         console.error('Failed to create group from template:', error);
-        message.error({ content: t('sessionGroup.createGroupFailed') });
+        toast.error(t('sessionGroup.createGroupFailed'));
         return false;
       } finally {
         setIsCreatingGroup(false);
       }
     },
-    [canCreate, groupTemplates, storeCreateAgent, refreshAgentList, createGroup, message, t],
+    [canCreate, groupTemplates, storeCreateAgent, refreshAgentList, createGroup, t],
   );
 
   /**
@@ -289,13 +298,13 @@ export const useSessionGroupMenuItems = () => {
         return true;
       } catch (error) {
         console.error('Failed to create group:', error);
-        message.error({ content: t('sessionGroup.createGroupFailed') });
+        toast.error(t('sessionGroup.createGroupFailed'));
         return false;
       } finally {
         setIsCreatingGroup(false);
       }
     },
-    [canCreate, createGroup, message, t],
+    [canCreate, createGroup, t],
   );
 
   return {

@@ -1,12 +1,13 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Empty, Spin } from 'antd';
+import { Empty } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import ListSkeleton from '@/components/ListSkeleton';
 import { lambdaQuery } from '@/libs/trpc/client';
 import CredItem from '@/routes/(main)/settings/creds/features/CredItem';
 
@@ -39,7 +40,7 @@ interface PersonalCredsSectionProps {
  * list container; this component renders only the list body.
  *
  * Rows are share-only — no "..." action menu. Editing/deleting here is gated
- * by the owner-only `manage_provider_key` workspace permission, which the
+ * by the Admin-or-higher `manage_provider_key` workspace permission, which the
  * caller's own credentials shouldn't answer to, so for most members the menu
  * could only ever render disabled; CRUD lives on the personal settings page.
  *
@@ -69,11 +70,7 @@ const PersonalCredsSection: FC<PersonalCredsSectionProps> = ({ onWorkspaceCredsC
       errorVariant={'block'}
       isEmpty={credentials.length === 0}
       isLoading={isLoading}
-      loading={
-        <Flexbox align={'center'} justify={'center'} style={{ padding: 32 }}>
-          <Spin />
-        </Flexbox>
-      }
+      loading={<ListSkeleton paddingInline={0} />}
       onRetry={() => refetch()}
     >
       <Flexbox gap={0}>

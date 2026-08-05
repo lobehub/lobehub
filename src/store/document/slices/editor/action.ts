@@ -2,10 +2,10 @@
 
 import type { IEditor } from '@lobehub/editor';
 import type { EditorState as LobehubEditorState } from '@lobehub/editor/react';
+import { toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
 
-import { message } from '@/components/AntdStaticMethods';
 import { EMPTY_EDITOR_STATE } from '@/libs/editor/constants';
 import { isValidEditorData } from '@/libs/editor/isValidEditorData';
 import { documentService } from '@/services/document';
@@ -362,7 +362,7 @@ export class EditorActionImpl {
       // A view-level workspace member has no edit right on this document
       // (FORBIDDEN). Tell the user instead of silently dropping the edit.
       if (errorCode === 'FORBIDDEN') {
-        message.error(t('permission.saveNoEditPermission', { ns: 'setting' }));
+        toast.error(t('permission.saveNoEditPermission', { ns: 'setting' }));
       }
       if (!lockBlocked) console.error('[DocumentStore] Failed to save:', error);
       internal_dispatchDocument({

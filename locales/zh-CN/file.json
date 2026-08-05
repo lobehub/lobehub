@@ -197,6 +197,8 @@
   "pageList.workspaceTitle": "工作区",
   "portal.openInPageEditor": "在文稿中编辑",
   "preview.downloadFile": "下载文件",
+  "preview.raw": "原文",
+  "preview.render": "预览",
   "preview.unsupportedFileAndContact": "此文件格式暂不支持在线预览，如有预览诉求，欢迎<1>反馈给我们</1>",
   "resource": "资源",
   "resourceList.batchCopyDescription": "您可以拷贝到有权限创建资源的个人账户或工作区。",

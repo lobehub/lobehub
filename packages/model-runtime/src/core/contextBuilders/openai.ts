@@ -4,8 +4,14 @@ import type OpenAI from 'openai';
 import { toFile } from 'openai';
 
 import { disableStreamModels, systemToUserModels } from '../../providers/openai/modelId';
-import type { ChatStreamPayload, OpenAIChatMessage, UserMessageContentPart } from '../../types';
+import type {
+  ChatStreamPayload,
+  MessageToolCall,
+  OpenAIChatMessage,
+  UserMessageContentPart,
+} from '../../types';
 import { isDeepSeekThinkingEligibleModel } from '../../utils/modelParse';
+import { resolveScopedSignature, type SignatureScope } from '../../utils/signatureScope';
 import { parseDataUri } from '../../utils/uriParser';
 
 export type ExtendedChatCompletionContentPart = {
@@ -19,7 +25,10 @@ type ConvertMessageContentOptions = {
   forceImageBase64?: boolean;
   forceVideoBase64?: boolean;
   model?: string;
+  provider?: string;
+  reasoningSignatureScope?: SignatureScope;
   strictToolPairing?: boolean;
+  thoughtSignatureScope?: SignatureScope;
 };
 
 const isDeepSeekModel = (model: string | undefined) =>
@@ -158,7 +167,20 @@ export const convertOpenAIMessages = async (
 
       // Add optional fields if they exist
       if (msg.name !== undefined) result.name = msg.name;
-      if (msg.tool_calls !== undefined) result.tool_calls = msg.tool_calls;
+      if (msg.tool_calls !== undefined) {
+        result.tool_calls = msg.tool_calls.map((toolCall: MessageToolCall) => {
+          if (!toolCall.thoughtSignature) return toolCall;
+
+          const { thoughtSignature, ...rest } = toolCall;
+          const resolvedSignature = resolveScopedSignature(
+            thoughtSignature,
+            options?.thoughtSignatureScope,
+            'thought_signature',
+          );
+
+          return resolvedSignature ? { ...rest, thoughtSignature: resolvedSignature } : rest;
+        });
+      }
       if (msg.tool_call_id !== undefined) result.tool_call_id = msg.tool_call_id;
       if (msg.function_call !== undefined) result.function_call = msg.function_call;
 
@@ -223,13 +245,64 @@ export const convertOpenAIResponseInputs = async (
   const inputGroups = await Promise.all(
     messages.map(async (message) => {
       const items: OpenAI.Responses.ResponseInputItem[] = [];
+      const reasoning = message.reasoning;
 
-      // if message has reasoning, add it as a separate reasoning item
-      if (message.reasoning?.content) {
-        items.push({
-          summary: [{ text: message.reasoning.content, type: 'summary_text' }],
-          type: 'reasoning',
-        } as OpenAI.Responses.ResponseReasoningItem);
+      /**
+       * Resolve persisted Responses reasoning items for stateless replay. Encrypted
+       * items must all match the current signature scope — a single foreign-scope item
+       * would make OpenAI reject the whole request, so fail closed to the legacy path.
+       */
+      const resolveResponseItems = (): OpenAI.Responses.ResponseReasoningItem[] | undefined => {
+        const responseItems = reasoning?.responseItems;
+        if (!responseItems?.length) return undefined;
+
+        const resolved: OpenAI.Responses.ResponseReasoningItem[] = [];
+        for (const item of responseItems) {
+          if (item.encrypted_content) {
+            const encryptedContent = resolveScopedSignature(
+              item.encrypted_content,
+              options?.reasoningSignatureScope,
+              'reasoning',
+            );
+            if (!encryptedContent) return undefined;
+
+            resolved.push({
+              ...item,
+              encrypted_content: encryptedContent,
+            } as OpenAI.Responses.ResponseReasoningItem);
+          } else {
+            /**
+             * Without encrypted content the server cannot look the item up by id in a
+             * stateless request, so drop the id and replay the visible summary only.
+             */
+            const { id: _id, ...rest } = item;
+            resolved.push(rest as unknown as OpenAI.Responses.ResponseReasoningItem);
+          }
+        }
+
+        return resolved;
+      };
+
+      const replayableResponseItems = resolveResponseItems();
+
+      if (replayableResponseItems) {
+        // Replay complete reasoning items verbatim and in original stream order.
+        items.push(...replayableResponseItems);
+      } else {
+        const encryptedContent = resolveScopedSignature(
+          reasoning?.signature,
+          options?.reasoningSignatureScope,
+          'reasoning',
+        );
+
+        // Preserve encrypted reasoning state for stateless Responses API requests.
+        if (reasoning?.content || encryptedContent) {
+          items.push({
+            encrypted_content: encryptedContent,
+            summary: reasoning?.content ? [{ text: reasoning.content, type: 'summary_text' }] : [],
+            type: 'reasoning',
+          } as OpenAI.Responses.ResponseReasoningItem);
+        }
       }
 
       // if message is assistant messages with tool calls , transform it to function type item
@@ -378,13 +451,16 @@ export const convertOpenAIResponseInputs = async (
         return items;
       }
 
+      const {
+        model: _model,
+        provider: _provider,
+        reasoning: _reasoning,
+        ...responseMessage
+      } = message;
       const item = {
-        ...message,
+        ...responseMessage,
         content,
       } as OpenAI.Responses.ResponseInputItem;
-
-      // remove reasoning field from the message item
-      delete (item as any).reasoning;
 
       items.push(item);
       return items;

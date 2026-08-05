@@ -70,6 +70,7 @@ import { UserMemorySourceBenchmarkLoCoMoModel } from '@/database/models/userMemo
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
 import { asyncTasks } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
+import { buildMessageScopeWhere } from '@/database/utils/messageScope';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { OtelWorkflowClient } from '@/libs/qstash';
 import { getServerGlobalConfig } from '@/server/globalConfig';
@@ -77,6 +78,7 @@ import { type MemoryAgentConfig } from '@/server/globalConfig/parseMemoryExtract
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { S3 } from '@/server/modules/S3';
+import { getUserScopedAiProviderRuntimeState } from '@/server/services/aiProviderAccess';
 import {
   AsyncTaskError,
   type AsyncTaskErrorBody,
@@ -1370,9 +1372,7 @@ export class MemoryExtractionExecutor {
         role: messages.role,
       })
       .from(messages)
-      .where(
-        and(buildWorkspaceWhere({ userId, workspaceId }, messages), eq(messages.topicId, topicId)),
-      )
+      .where(and(buildMessageScopeWhere({ userId, workspaceId }), eq(messages.topicId, topicId)))
       .orderBy(asc(messages.createdAt));
 
     const conversation = rows
@@ -2376,7 +2376,11 @@ export class MemoryExtractionExecutor {
     const db = await this.db;
     const aiInfraRepos = new AiInfraRepos(db, userId, this.aiProviderConfig, workspaceId);
 
-    return aiInfraRepos.getAiProviderRuntimeState(KeyVaultsGateKeeper.getUserKeyVaults);
+    return getUserScopedAiProviderRuntimeState(
+      userId,
+      () => aiInfraRepos.getAiProviderRuntimeState(KeyVaultsGateKeeper.getUserKeyVaults),
+      { throwOnUnresolvedAccess: true },
+    );
   }
 
   private async resolveRuntimeKeyVaults(

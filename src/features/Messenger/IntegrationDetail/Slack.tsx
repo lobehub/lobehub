@@ -10,6 +10,7 @@ import AsyncError from '@/components/AsyncError';
 import { usePermission } from '@/hooks/usePermission';
 
 import { createMessengerLinkModal } from '../LinkModal';
+import { MessengerPushSection } from './MessengerPush';
 import {
   ConnectionRow,
   DetailLayout,
@@ -64,6 +65,10 @@ const SlackDetail = memo<SlackDetailProps>(({ appId, botUsername, name, onBack }
   const { installations, links, tenantNameByTenantId } = data;
   const hasInstallations = installations.length > 0;
   const hasLinks = links.length > 0;
+  const pushTargets = links.map((link) => ({
+    label: tenantNameByTenantId.get(link.tenantId) || link.tenantId,
+    tenantId: link.tenantId,
+  }));
 
   const handleOpenLink = () =>
     createMessengerLinkModal({ appId, botUsername, name, platform: 'slack' });
@@ -92,6 +97,11 @@ const SlackDetail = memo<SlackDetailProps>(({ appId, botUsername, name, onBack }
       headerAction={headerAction}
       name={name}
       platform="slack"
+      extraSections={
+        hasLinks ? (
+          <MessengerPushSection name={name} platform="slack" targets={pushTargets} />
+        ) : undefined
+      }
       onBack={onBack}
     >
       {installations.map((install) => (

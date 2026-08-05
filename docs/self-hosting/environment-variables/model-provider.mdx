@@ -818,26 +818,26 @@ NewAPI is a multi-provider model aggregation service that supports automatic mod
 - Default: `-`
 - Example: `-all,+cerebras-model-1,+cerebras-model-2=cerebras-special`
 
-## AiHubMix
+## AIHubMix
 
 ### `AIHUBMIX_API_KEY`
 
 - Type: Required
-- Description: This is the API key you applied for in the AiHubMix service.
+- Description: This is the API key you applied for in the AIHubMix service.
 - Default: -
 - Example: `sk-xxxxxx...xxxxxx`
 
 ### `AIHUBMIX_PROXY_URL`
 
 - Type: Optional
-- Description: The base URL of the AiHubMix gateway. Point this at a mirror or backup endpoint; defaults to the official gateway when unset.
+- Description: The base URL of the AIHubMix gateway. Point this at a mirror or backup endpoint; defaults to the official gateway when unset.
 - Default: `https://aihubmix.com`
 - Example: `https://your-aihubmix-endpoint.com`
 
 ### `AIHUBMIX_MODEL_LIST`
 
 - Type: Optional
-- Description: Used to control the AiHubMix model list. Use `+` to add a model, `-` to hide a model, and `model_name=display_name` to customize the display name of a model. Separate multiple entries with commas. The definition syntax follows the same rules as other providers' model lists.
+- Description: Used to control the AIHubMix model list. Use `+` to add a model, `-` to hide a model, and `model_name=display_name` to customize the display name of a model. Separate multiple entries with commas. The definition syntax follows the same rules as other providers' model lists.
 - Default: `-`
 - Example: `-all,+claude-opus-4-1-20250805,+claude-opus-4-20250514=claude-opus-4`
 

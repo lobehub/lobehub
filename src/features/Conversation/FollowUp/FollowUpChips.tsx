@@ -4,10 +4,9 @@ import type { FollowUpChip } from '@lobechat/types';
 import { Reply } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 
-import { useConversationStore } from '@/features/Conversation';
+import { messageStateSelectors, useConversationStore } from '@/features/Conversation/store';
 import { followUpActionSelectors, useFollowUpActionStore } from '@/store/followUpAction';
 
-import { messageStateSelectors } from '../store';
 import { styles } from './style';
 
 interface FollowUpChipsProps {

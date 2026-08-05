@@ -27,7 +27,7 @@ export interface ListHeterogeneousAgentModelsParams {
   command?: string;
   cwd?: string;
   env?: Record<string, string>;
-  type: 'opencode';
+  type: 'opencode' | 'pi';
 }
 
 export interface HeterogeneousAgentModelCatalogSuccess {
@@ -136,7 +136,7 @@ const CODEX_FAST_SERVICE_TIER_VALUES = ['fast', 'priority'] as const;
  *
  * Two families of hetero agents are supported:
  *
- * - **Local CLI** (`amp` | `claude-code` | `codex` | `opencode`): spawned as a child
+ * - **Local CLI** (`amp` | `claude-code` | `codex` | `opencode` | `pi`): spawned as a child
  *   process on the desktop or a connected device; uses `command`, `args`, `env`,
  *   `systemContext`.
  *
@@ -188,7 +188,7 @@ export interface HeterogeneousProviderConfig {
    */
   systemContext?: string;
   /** Agent runtime type. */
-  type: 'amp' | 'claude-code' | 'codex' | 'hermes' | 'opencode' | 'openclaw';
+  type: 'amp' | 'claude-code' | 'codex' | 'hermes' | 'opencode' | 'openclaw' | 'pi';
 }
 
 interface ClaudeCodeSelectionSource {
@@ -208,6 +208,7 @@ const CODEX_CONFIG_FLAGS = ['-c', '--config'] as const;
 const CODEX_MODEL_FLAGS = ['-m', '--model'] as const;
 const HETERO_EXEC_AGENT_ARG_FLAG = '--agent-arg';
 const OPENCODE_MODEL_FLAGS = ['-m', '--model'] as const;
+const PI_MODEL_FLAGS = ['--model'] as const;
 
 const hasCliFlag = (args: string[], flag: string): boolean =>
   args.some((arg) => arg === flag || arg.startsWith(`${flag}=`));
@@ -426,8 +427,8 @@ export const codexModelSupportsFastSpeed = (model: string): boolean =>
  * For `claude-code` and `codex`, the chat-input selector persists explicit
  * `model` + `effort` selections on the provider config; this is the single
  * place that maps those stored settings onto provider-specific argv for direct
- * local desktop spawns. OpenCode currently has no dedicated selector, but a
- * programmatically stored `model` is forwarded using its native `--model` flag.
+ * local desktop spawns. OpenCode and Pi use their device-local model catalogs
+ * and forward the selected provider/model id using the native `--model` flag.
  * Missing/default settings are resolved by the UI helpers for display only.
  * They are not appended here because CLI overrides must not mask each CLI's
  * own settings/env/account defaults. User-authored `args` win, so there is
@@ -444,7 +445,8 @@ export const buildHeteroSpawnArgs = (
   if (
     provider.type !== 'claude-code' &&
     provider.type !== 'codex' &&
-    provider.type !== 'opencode'
+    provider.type !== 'opencode' &&
+    provider.type !== 'pi'
   ) {
     return provider.args;
   }
@@ -491,6 +493,17 @@ export const buildHeteroSpawnArgs = (
     }
   }
 
+  if (provider.type === 'pi') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, PI_MODEL_FLAGS)
+    ) {
+      extraArgs.push('--model', model);
+    }
+  }
+
   if (extraArgs.length === 0) return provider.args;
   return [...baseArgs, ...extraArgs];
 };
@@ -513,7 +526,8 @@ export const buildHeteroExecArgs = (
     provider.type !== 'amp' &&
     provider.type !== 'claude-code' &&
     provider.type !== 'codex' &&
-    provider.type !== 'opencode'
+    provider.type !== 'opencode' &&
+    provider.type !== 'pi'
   ) {
     return provider.args;
   }
@@ -569,6 +583,17 @@ export const buildHeteroExecArgs = (
     }
   }
 
+  if (provider.type === 'pi') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, PI_MODEL_FLAGS)
+    ) {
+      selectorArgs.push('--model', model);
+    }
+  }
+
   const args = [...wrapperArgs, ...selectorArgs];
   return args.length > 0 ? args : undefined;
 };
@@ -602,8 +627,8 @@ export type ExecutionTargetSelectionPolicy = 'fixed' | 'member';
  * Controls whether a workspace agent always uses its shared model or lets
  * each member choose a personal model for that agent.
  *
- * Missing values intentionally resolve to `fixed` for backwards
- * compatibility: existing shared agents keep the model their author chose.
+ * Missing values resolve contextually: public Workspace Agents inherit the
+ * current `member` default, while personal/private Agents remain fixed.
  */
 export type AgentModelSelectionPolicy = 'fixed' | 'member';
 
@@ -632,9 +657,10 @@ export interface LobeAgentAgencyConfig {
   executionTargetSelectionPolicy?: ExecutionTargetSelectionPolicy;
   heterogeneousProvider?: HeterogeneousProviderConfig;
   /**
-   * Workspace model-selection policy. `fixed` (and an omitted value) keeps
-   * the shared agent model authoritative; `member` enables a per-user model
-   * override stored in `workspace_user_settings.preference`.
+   * Workspace model-selection policy. `fixed` keeps the shared agent model
+   * authoritative; `member` enables a per-user model override stored in
+   * `workspace_user_settings.preference`. Missing values on public Workspace
+   * Agents resolve to `member` for legacy rows.
    */
   modelSelectionPolicy?: AgentModelSelectionPolicy;
   /**
@@ -682,13 +708,13 @@ export interface LobeAgentAgencyConfig {
 /**
  * Explicit defaults written when a workspace agent is created.
  *
- * The values intentionally differ: the shared model stays authoritative by
- * default, while each member may choose their own execution environment.
- * Runtime fallbacks for legacy rows without these fields remain unchanged.
+ * Members may choose their own model and execution environment by default.
+ * Legacy public Workspace rows without a model policy resolve to the same
+ * `member` default at runtime.
  */
 export const DEFAULT_WORKSPACE_AGENT_SELECTION_POLICIES = {
   executionTargetSelectionPolicy: 'member',
-  modelSelectionPolicy: 'fixed',
+  modelSelectionPolicy: 'member',
 } as const satisfies Pick<
   LobeAgentAgencyConfig,
   'executionTargetSelectionPolicy' | 'modelSelectionPolicy'
@@ -729,6 +755,38 @@ export const resolveAgencyConfig = (
     ...(hasTarget ? { executionTarget: override.executionTarget } : {}),
     ...(hasDevice ? { boundDeviceId: override.boundDeviceId } : {}),
   };
+};
+
+export interface AgentAgencyConfigContext {
+  /** Author/admin callers manage the shared config instead of using member overrides. */
+  canManage?: boolean;
+  visibility?: 'private' | 'public';
+  workspaceId?: string | null;
+}
+
+/**
+ * Resolve an Agent's effective agency config in its ownership context.
+ *
+ * Member execution-target policies and overrides apply only after a Workspace
+ * Agent is public. A Private Agent remains owner-configurable: its shared
+ * execution target is used directly, while the stored selection policy is
+ * retained only as the policy that will take effect if the Agent is published.
+ */
+export const resolveAgentAgencyConfig = (
+  agencyConfig: LobeAgentAgencyConfig | null | undefined,
+  override: Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'> | null | undefined,
+  context: AgentAgencyConfigContext,
+): LobeAgentAgencyConfig | undefined => {
+  const isPublicWorkspaceAgent =
+    !!context.workspaceId && context.visibility !== 'private' && context.canManage !== true;
+
+  if (isPublicWorkspaceAgent) return resolveAgencyConfig(agencyConfig, override);
+
+  const base = agencyConfig ?? undefined;
+  if (!base?.executionTargetSelectionPolicy) return base;
+
+  const { executionTargetSelectionPolicy, ...ownerConfig } = base;
+  return executionTargetSelectionPolicy ? ownerConfig : base;
 };
 
 /**

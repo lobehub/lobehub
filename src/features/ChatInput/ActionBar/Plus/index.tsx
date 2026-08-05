@@ -3,6 +3,7 @@
 import { validateVideoFileSize } from '@lobechat/utils/client';
 import type { IconProps } from '@lobehub/ui';
 import { Icon, Popover, Tag } from '@lobehub/ui';
+import { toast } from '@lobehub/ui/base-ui';
 import { GlobeOffIcon, SkillsIcon } from '@lobehub/ui/icons';
 import { Upload } from 'antd';
 import { css, cssVar, cx } from 'antd-style';
@@ -25,11 +26,10 @@ import type { ReactNode } from 'react';
 import { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { message } from '@/components/AntdStaticMethods';
 import { openAttachKnowledgeModal } from '@/features/LibraryModal';
 import { useIsDark } from '@/hooks/useIsDark';
+import { useMediaUploadAbility } from '@/hooks/useMediaUploadAbility';
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
-import { useVisualMediaUploadAbility } from '@/hooks/useVisualMediaUploadAbility';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
@@ -285,7 +285,7 @@ const stripPopoverContent = (items?: ActionDropdownMenuItems): ActionDropdownMen
     return nextItem;
   }) ?? [];
 
-const PlusAction = memo(() => {
+const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuItems => {
   const { t } = useTranslation('chat');
   const { t: tEditor } = useTranslation('editor');
   const { t: tSetting } = useTranslation('setting');
@@ -294,7 +294,6 @@ const PlusAction = memo(() => {
   const agentId = useAgentId();
   const { canConfigureResource } = useChatInputResourceAccess();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
-  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   // Topic acceptance (lab): a "new acceptance item" entry in the "+" menu, so a
   // topic's checklist starts from here instead of an always-on strip above the
@@ -333,25 +332,24 @@ const PlusAction = memo(() => {
   const isMemoryEnabled = useMemoryEnabled(agentId);
   const [showTypoBar, setShowTypoBar] = useChatInputStore((s) => [s.showTypoBar, s.setShowTypoBar]);
   const editor = useChatInputStore((s) => s.editor);
-  const { canUploadImage, canUploadVideo, canUploadAudio } = useVisualMediaUploadAbility(
+  const { canUploadImage, canUploadVideo, canUploadAudio } = useMediaUploadAbility(
     model,
     provider,
     agentId,
   );
   const enableFC = useModelSupportToolUse(model, provider);
   const handleOpenKnowledge = useCallback(() => {
-    setDropdownOpen(false);
+    close();
     openAttachKnowledgeModal();
-  }, []);
+  }, [close]);
   const {
     enabledCount: knowledgeEnabledCount,
     footer: knowledgeFooter,
     items: knowledgeItems,
   } = useKnowledgeControls({ openAttachKnowledgeModal: handleOpenKnowledge });
-  const closeDropdown = useCallback(() => setDropdownOpen(false), []);
+  const closeDropdown = useCallback(() => close(), [close]);
   const {
     autoCount: skillAutoCount,
-    editPluginDrawer: skillEditPluginDrawer,
     marketFooter: skillMarketFooter,
     marketHeader: skillMarketHeader,
     marketItems: skillItems,
@@ -402,16 +400,16 @@ const PlusAction = memo(() => {
   );
 
   const handleToggleParams = useCallback(() => {
-    setDropdownOpen(false);
+    close();
     if (isParamsPanelActive) {
       toggleRightPanel(false);
       return;
     }
     setWorkingSidebarTab('params');
     toggleRightPanel(true);
-  }, [isParamsPanelActive, setWorkingSidebarTab, toggleRightPanel]);
+  }, [close, isParamsPanelActive, setWorkingSidebarTab, toggleRightPanel]);
 
-  const items: ActionDropdownMenuItems = useMemo(() => {
+  const items = useMemo<ActionDropdownMenuItems>(() => {
     const renderActive = (label: string, active: boolean) =>
       active ? (
         <div className={cx(activeLabel)}>
@@ -490,7 +488,7 @@ const PlusAction = memo(() => {
               if (file.type.startsWith('audio') && !canUploadAudio) return false;
               const validation = validateVideoFileSize(file);
               if (!validation.isValid) {
-                message.error(
+                toast.error(
                   t('upload.validation.videoSizeExceeded', {
                     actualSize: validation.actualSize,
                     maxSize: validation.maxSize,
@@ -498,7 +496,7 @@ const PlusAction = memo(() => {
                 );
                 return false;
               }
-              setDropdownOpen(false);
+              close();
               editor?.focus();
               await upload([file], agentId);
               return false;
@@ -778,25 +776,32 @@ const PlusAction = memo(() => {
     skillMarketFooter,
     skillMarketHeader,
     upload,
+    close,
   ]);
 
+  return items;
+};
+
+/**
+ * The trigger stays hook-free: every store subscription and the whole item tree
+ * live in `usePlusMenuItems`, which ActionDropdown only invokes from inside the
+ * popup — so opening a conversation no longer pays for a menu nobody opened.
+ */
+const PlusAction = memo(() => {
+  const { t } = useTranslation('chat');
+
   return (
-    <>
-      <ChatInputAction
-        icon={PlusIcon}
-        open={dropdownOpen}
-        size={{ blockSize: 32, borderRadius: 16, size: 18 }}
-        title={t('plus.tooltip')}
-        tooltipProps={{ placement: 'top' }}
-        dropdown={{
-          menu: { items },
-          minWidth: 220,
-          placement: 'topLeft',
-        }}
-        onOpenChange={setDropdownOpen}
-      />
-      {skillEditPluginDrawer}
-    </>
+    <ChatInputAction
+      icon={PlusIcon}
+      size={{ blockSize: 32, borderRadius: 16, size: 18 }}
+      title={t('plus.tooltip')}
+      tooltipProps={{ placement: 'top' }}
+      dropdown={{
+        menu: { useItems: usePlusMenuItems },
+        minWidth: 220,
+        placement: 'topLeft',
+      }}
+    />
   );
 });
 

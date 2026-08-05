@@ -3,6 +3,8 @@ import type { ComponentType } from 'react';
 
 export interface StaticRouteMeta {
   icon?: LucideIcon;
+  /** Optional Electron tab label when it should differ from the document title. */
+  tabTitleKey?: string;
   titleKey?: string;
 }
 

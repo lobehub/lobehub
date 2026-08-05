@@ -93,6 +93,36 @@ describe('LocalSystemExecutionRuntime.globFiles', () => {
       scope: '/tmp',
     });
   });
+
+  it('applies the agent-facing default glob limit', async () => {
+    const service = createService({
+      globFiles: vi.fn().mockResolvedValue({ files: [], success: true, total_files: 0 }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    await runtime.globFiles({ directory: '/tmp', pattern: '**/*' });
+
+    expect(service.globFiles).toHaveBeenCalledWith({
+      limit: 1000,
+      pattern: '**/*',
+      scope: '/tmp',
+    });
+  });
+
+  it('caps oversized agent-facing glob limits without changing the file search service', async () => {
+    const service = createService({
+      globFiles: vi.fn().mockResolvedValue({ files: [], success: true, total_files: 0 }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    await runtime.globFiles({ directory: '/tmp', limit: 5000, pattern: '**/*' });
+
+    expect(service.globFiles).toHaveBeenCalledWith({
+      limit: 1000,
+      pattern: '**/*',
+      scope: '/tmp',
+    });
+  });
 });
 
 describe('LocalSystemExecutionRuntime.grepContent', () => {

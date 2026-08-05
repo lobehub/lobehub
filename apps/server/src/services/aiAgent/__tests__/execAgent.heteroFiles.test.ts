@@ -5,7 +5,9 @@ import { AiAgentService } from '../index';
 const {
   mockDeviceFindByDeviceId,
   mockDeviceFindWorkspaceDeviceById,
+  mockBuildRemoteDeviceHeteroContext,
   mockDispatchAgentRun,
+  mockGetHeterogeneousResumeSessionId,
   mockMessageCreate,
   mockResolveAttachmentsByFileIds,
   mockSpawnHeteroSandbox,
@@ -13,9 +15,11 @@ const {
   mockPublishAgentRuntimeInit,
   mockPublishAgentRuntimeEnd,
 } = vi.hoisted(() => ({
+  mockBuildRemoteDeviceHeteroContext: vi.fn().mockReturnValue('device context'),
   mockDeviceFindByDeviceId: vi.fn(),
   mockDeviceFindWorkspaceDeviceById: vi.fn(),
   mockDispatchAgentRun: vi.fn().mockResolvedValue({ success: true }),
+  mockGetHeterogeneousResumeSessionId: vi.fn().mockResolvedValue(undefined),
   mockIngestAttachment: vi.fn(),
   mockMessageCreate: vi.fn(),
   mockPublishAgentRuntimeEnd: vi.fn().mockResolvedValue('end-event-id'),
@@ -143,7 +147,7 @@ vi.mock('@/server/services/market', () => ({
 
 vi.mock('@/server/services/heterogeneousAgent', () => ({
   HeterogeneousAgentService: vi.fn().mockImplementation(() => ({
-    getHeterogeneousResumeSessionId: vi.fn().mockResolvedValue(undefined),
+    getHeterogeneousResumeSessionId: mockGetHeterogeneousResumeSessionId,
   })),
 }));
 
@@ -190,7 +194,7 @@ vi.mock('@/server/services/deviceGateway', () => ({
 }));
 
 vi.mock('@/server/services/heterogeneousAgent/remoteDeviceHeteroContext', () => ({
-  buildRemoteDeviceHeteroContext: vi.fn().mockReturnValue('device context'),
+  buildRemoteDeviceHeteroContext: mockBuildRemoteDeviceHeteroContext,
 }));
 
 describe('AiAgentService.execAgent - hetero early-exit file attachments', () => {
@@ -207,6 +211,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     mockResolveAttachmentsByFileIds.mockResolvedValue({ ...emptyResolvedAttachments });
     mockSpawnHeteroSandbox.mockResolvedValue(undefined);
     mockDispatchAgentRun.mockResolvedValue({ success: true });
+    mockGetHeterogeneousResumeSessionId.mockResolvedValue(undefined);
     mockDeviceFindByDeviceId.mockResolvedValue({ defaultCwd: '/Users/alice/repo' });
     mockDeviceFindWorkspaceDeviceById.mockResolvedValue(undefined);
     mockIngestAttachment.mockReset();
@@ -369,6 +374,30 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     const dispatchParams = mockDispatchAgentRun.mock.calls[0][0];
     expect(dispatchParams).toEqual(expect.objectContaining({ deviceId: 'device-1' }));
     expect(dispatchParams.args).toEqual(['--model', 'opus', '--effort', 'high']);
+  });
+
+  it('does not reinject the device workspace note when resuming a native session', async () => {
+    mockGetHeterogeneousResumeSessionId.mockResolvedValue('native-session-existing');
+    heteroAgentConfig.agencyConfig = {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: { type: 'codex' },
+    } as any;
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Continue on my device',
+    });
+
+    expect(mockBuildRemoteDeviceHeteroContext).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: undefined }),
+    );
+    expect(mockDispatchAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resumeSessionId: 'native-session-existing',
+        systemContext: 'device context',
+      }),
+    );
   });
 
   it('dispatches OpenCode to a bound device with its model args', async () => {

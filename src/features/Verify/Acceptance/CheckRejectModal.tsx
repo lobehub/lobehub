@@ -186,6 +186,8 @@ interface CheckRejectModalProps {
   /** Stable key (the check id) for the refresh-surviving draft cache. */
   draftKey?: string;
   evidence: RejectableEvidence[];
+  /** Feedback already typed in the focused detail before opening annotation. */
+  initialComment?: string;
   /** Perform the reject; resolve true to close, false to stay open. */
   onConfirm: (value: {
     annotations: AcceptanceReviewAnnotation[];
@@ -194,12 +196,22 @@ interface CheckRejectModalProps {
   }) => Promise<boolean>;
 }
 
+export const mergeRejectComments = (initialComment = '', storedComment = '') => {
+  const initial = initialComment.trim();
+  const stored = storedComment.trim();
+  if (!initial) return stored;
+  if (!stored || stored === initial) return initial;
+  return `${initial}\n\n${stored}`;
+};
+
 const CheckRejectContent = memo<CheckRejectModalProps>(
-  ({ checkTitle, draftKey, evidence, onConfirm }) => {
+  ({ checkTitle, draftKey, evidence, initialComment, onConfirm }) => {
     const { t: translate } = useTranslation('verify');
     const { close } = useModalContext();
     const [draft] = useState(() => readDraft(draftKey));
-    const [comment, setComment] = useState(draft?.comment ?? '');
+    const [comment, setComment] = useState(() =>
+      mergeRejectComments(initialComment, draft?.comment),
+    );
     const [loading, setLoading] = useState(false);
     const [activeEvidenceId, setActiveEvidenceId] = useState(evidence[0]?.id);
     const [annotations, setAnnotations] = useState<DraftAnnotationEntry[]>(

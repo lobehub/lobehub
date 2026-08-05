@@ -127,6 +127,11 @@ export const messages = pgTable(
     clientId: text('client_id'),
 
     // foreign keys
+    /**
+     * Creation-time snapshot of the author. NOT a scope filter: a message's
+     * authoritative scope is derived from its topic/session (see
+     * `buildMessageScopeWhere`), so agent transfers never rewrite this column.
+     */
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
@@ -149,6 +154,10 @@ export const messages = pgTable(
     messageGroupId: varchar255('message_group_id').references(() => messageGroups.id, {
       onDelete: 'cascade',
     }),
+    /**
+     * Creation-time snapshot of the workspace. NOT a scope filter — see
+     * `userId` above; derive scope via `buildMessageScopeWhere` instead.
+     */
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
     ...timestamps,
   },

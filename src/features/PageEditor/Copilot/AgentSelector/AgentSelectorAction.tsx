@@ -1,3 +1,4 @@
+import { agentDisplayName } from '@lobechat/types';
 import { Center, Flexbox, Popover } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { ChevronsUpDownIcon } from 'lucide-react';
@@ -99,7 +100,7 @@ const AgentSelectorAction = memo<AgentSelectorActionProps>(({ onAgentChange }) =
         <AgentItem
           active={agent.id === agentId}
           agentId={agent.id}
-          agentTitle={agent.title || t('untitledAgent', { ns: 'chat' })}
+          agentTitle={agentDisplayName(agent, t('untitledAgent', { ns: 'chat' }))}
           avatar={agent.avatar}
           key={agent.id}
           onAgentChange={handleAgentChange}

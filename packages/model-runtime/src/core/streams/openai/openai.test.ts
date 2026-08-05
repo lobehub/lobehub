@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { AgentRuntimeErrorType } from '../../../types/error';
+import { serializeScopedSignature, type SignatureScope } from '../../../utils/signatureScope';
 import { FIRST_CHUNK_ERROR_KEY } from '../protocol';
 import { OpenAIStream } from './openai';
 
@@ -1195,11 +1196,18 @@ describe('OpenAIStream', () => {
       });
 
       const onToolCallMock = vi.fn();
+      const thoughtSignatureScope: SignatureScope = { fingerprint: 'a'.repeat(32) };
+      const persistedSignature = serializeScopedSignature(
+        'ErEDCq4DAdHtim...',
+        thoughtSignatureScope,
+        'thought_signature',
+      )!;
 
       const protocolStream = OpenAIStream(mockOpenAIStream, {
         callbacks: {
           onToolsCalling: onToolCallMock,
         },
+        payload: { thoughtSignatureScope },
       });
 
       const decoder = new TextDecoder();
@@ -1214,7 +1222,7 @@ describe('OpenAIStream', () => {
         'id: or-123\n',
         'event: tool_calls\n',
         // thoughtSignature should be preserved in the output
-        `data: [{"function":{"arguments":"{}","name":"github__get_me"},"id":"call_123","index":0,"type":"function","thoughtSignature":"ErEDCq4DAdHtim..."}]\n\n`,
+        `data: [{"function":{"arguments":"{}","name":"github__get_me"},"id":"call_123","index":0,"type":"function","thoughtSignature":"${persistedSignature}"}]\n\n`,
       ]);
 
       // Verify the callback receives thoughtSignature
@@ -1224,7 +1232,7 @@ describe('OpenAIStream', () => {
             function: { arguments: '{}', name: 'github__get_me' },
             id: 'call_123',
             index: 0,
-            thoughtSignature: 'ErEDCq4DAdHtim...',
+            thoughtSignature: persistedSignature,
             type: 'function',
           },
         ],
@@ -1232,7 +1240,7 @@ describe('OpenAIStream', () => {
           {
             function: { arguments: '{}', name: 'github__get_me' },
             id: 'call_123',
-            thoughtSignature: 'ErEDCq4DAdHtim...',
+            thoughtSignature: persistedSignature,
             type: 'function',
           },
         ],

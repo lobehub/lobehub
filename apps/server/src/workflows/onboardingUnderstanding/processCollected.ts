@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import {
   StaleUnderstandingRevisionError,
   StaleUnderstandingSessionError,
@@ -17,7 +19,10 @@ import {
   ProcessCollectedUnderstandingPayloadSchema,
 } from './types';
 
-type CollectedService = Pick<UnderstandingService, 'failWriting' | 'processCollected'>;
+type CollectedService = Pick<
+  UnderstandingService,
+  'failDetailedPersona' | 'failWriting' | 'processCollected'
+>;
 
 type CollectedWorkflowContext = Pick<
   WorkflowContext<ProcessCollectedUnderstandingPayload>,
@@ -26,6 +31,10 @@ type CollectedWorkflowContext = Pick<
 
 interface CollectedWorkflowDependencies {
   createService?: (userId: string) => Promise<CollectedService>;
+  triggerDetailedPersona?: (
+    input: ProcessCollectedUnderstandingPayload,
+    options: { workflowRunId: string },
+  ) => Promise<unknown>;
 }
 
 const createService = async (userId: string) =>
@@ -43,10 +52,11 @@ export const processCollectedUnderstanding = async (
 ) => {
   const payload = ProcessCollectedUnderstandingPayloadSchema.parse(context.requestPayload);
   const service = await (dependencies.createService ?? createService)(payload.userId);
-  return context.run('collected:process', async () => {
+  const result = await context.run('collected:process', async () => {
     try {
       return await service.processCollected({
         expectedSourceFingerprint: payload.sourceFingerprint,
+        responseLanguage: payload.responseLanguage,
         sessionId: payload.sessionId,
         topicId: payload.topicId,
       });
@@ -57,6 +67,24 @@ export const processCollectedUnderstanding = async (
       throw error;
     }
   });
+  const triggerDetailedPersona = dependencies.triggerDetailedPersona;
+  if (result.published && triggerDetailedPersona) {
+    await context.run('collected:trigger-detailed-persona', () =>
+      triggerDetailedPersona(payload, {
+        workflowRunId: `onboarding-understanding-detailed-${createHash('sha256')
+          .update(payload.sessionId)
+          .update('\0')
+          .update(payload.sourceFingerprint)
+          .update('\0')
+          .update(String(result.generationRevision))
+          .update('\0')
+          .update(String(result.feedbackRevision))
+          .digest('hex')
+          .slice(0, 32)}`,
+      }),
+    );
+  }
+  return result;
 };
 
 export const failRunningUnderstandingWriting = async (
@@ -71,7 +99,14 @@ export const failRunningUnderstandingWriting = async (
       sourceFingerprint: payload.sourceFingerprint,
       topicId: payload.topicId,
     });
-    if (!failed) return { failed: false as const };
+    if (!failed) {
+      const detailedFailed = await service.failDetailedPersona({
+        sessionId: payload.sessionId,
+        sourceFingerprint: payload.sourceFingerprint,
+        topicId: payload.topicId,
+      });
+      return { failed: Boolean(detailedFailed) };
+    }
   } catch (error) {
     if (isStaleSession(error)) return { failed: false as const };
     throw error;

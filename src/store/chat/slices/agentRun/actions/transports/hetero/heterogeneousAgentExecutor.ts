@@ -10,6 +10,7 @@ import {
   type HeterogeneousAgentSessionError,
   HeterogeneousAgentSessionErrorCode,
   OPENCODE_CLI_INSTALL_DOCS_URL,
+  PI_CLI_INSTALL_DOCS_URL,
 } from '@lobechat/electron-client-ipc';
 import {
   createMainAgentRunState,
@@ -43,9 +44,9 @@ import {
   ThreadType,
 } from '@lobechat/types';
 import { createNanoId } from '@lobechat/utils';
+import { toast } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 
-import { message as antdMessage } from '@/components/AntdStaticMethods';
 import {
   removeHeteroSessionIdForWorkingDirectory,
   setHeteroSessionIdForWorkingDirectory,
@@ -94,11 +95,13 @@ const CLI_AUTH_REQUIRED_PATTERNS = [
   /not authenticated/i,
   /\bunauthorized\b/i,
   /\b401\b/,
+  /no api key found/i,
+  /no models available/i,
 ] as const;
 const AMP_AUTH_REQUIRED_PATTERNS = [/please (?:log|sign) in/i, /amp_api_key/i] as const;
 
 const buildCliAuthRequiredSessionError = (
-  agentType: 'amp' | 'claude-code' | 'codex' | 'opencode',
+  agentType: 'amp' | 'claude-code' | 'codex' | 'opencode' | 'pi',
   rawMessage: string,
 ): HeterogeneousAgentSessionError => {
   switch (agentType) {
@@ -142,6 +145,15 @@ const buildCliAuthRequiredSessionError = (
         stderr: rawMessage,
       };
     }
+    case 'pi': {
+      return {
+        agentType,
+        code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+        docsUrl: PI_CLI_INSTALL_DOCS_URL,
+        message: 'Pi could not authenticate. Run `pi`, use `/login`, then retry.',
+        stderr: rawMessage,
+      };
+    }
   }
 };
 
@@ -155,7 +167,8 @@ const maybeClassifyCliAuthRequiredError = (
     agentType !== 'amp' &&
     agentType !== 'claude-code' &&
     agentType !== 'codex' &&
-    agentType !== 'opencode'
+    agentType !== 'opencode' &&
+    agentType !== 'pi'
   ) {
     return;
   }
@@ -210,6 +223,9 @@ const getDefaultHeterogeneousCommand = (agentType: string): string => {
     }
     case 'opencode': {
       return 'opencode';
+    }
+    case 'pi': {
+      return 'pi';
     }
     default: {
       return 'claude';
@@ -1125,7 +1141,7 @@ export const executeHeterogeneousAgent = async (
     completed = true;
     fallbackPromise = (async () => {
       await clearStaleResumeMetadata().catch(console.error);
-      antdMessage?.info?.(t('heteroAgent.resumeReset.resumeFailed', { ns: 'chat' }));
+      toast?.info?.(t('heteroAgent.resumeReset.resumeFailed', { ns: 'chat' }));
       await executeHeterogeneousAgent(get, { ...params, resumeSessionId: undefined });
     })();
 
@@ -1933,6 +1949,7 @@ export const executeHeterogeneousAgent = async (
       env: sessionEnv,
       resumeSessionId,
       useClaudeCodeSdk: labPreferSelectors.enableClaudeCodeSdk(useUserStore.getState()),
+      useCodexAppServer: labPreferSelectors.enableCodexAppServer(useUserStore.getState()),
     });
 
     // Attribute the run to the login the FINAL env actually resolves to (an
@@ -2204,6 +2221,16 @@ export const executeHeterogeneousAgent = async (
           }
 
           const isErrorTerminal = deferredTerminalEvent?.type === 'error';
+          // A run can also end WITHOUT failing and without completing: a stop
+          // terminates as `agent_runtime_end { reason: 'interrupted' }` (see
+          // the CC adapter). Everything gated on "not an error" must gate on
+          // this instead, or a stopped run would drain the queue and fire a
+          // "run finished" notification.
+          const isCleanCompletion =
+            !isErrorTerminal &&
+            isCompletedRuntimeEnd(
+              (deferredTerminalEvent?.data as { reason?: string } | undefined)?.reason,
+            );
 
           // Reset the sidebar "running" status BEFORE awaiting the persist queue.
           // Topic status is independent of message persistence, so a stalled queue
@@ -2212,10 +2239,9 @@ export const executeHeterogeneousAgent = async (
           // this guards against. Content persistence + the terminal forward still
           // wait for queued reducer state so terminal never flushes stale content.
           {
-            const reason = (deferredTerminalEvent?.data as { reason?: string } | undefined)?.reason;
             if (isErrorTerminal) {
               writeTopicStatus('failed');
-            } else if (!isAborted() && isCompletedRuntimeEnd(reason)) {
+            } else if (!isAborted() && isCleanCompletion) {
               // Clean completion: the viewer sees 'active'; a background topic gets
               // the unread badge (markTopicUnread self-guards on activeTopicId).
               if (get().activeTopicId === context.topicId) writeTopicStatus('active');
@@ -2324,8 +2350,10 @@ export const executeHeterogeneousAgent = async (
           // showNotification + setBadgeCount fan-out for non-client runtimes. We pass
           // the in-memory accumulated content (the store snapshot isn't durable yet);
           // the shared helper strips markdown + caps length + resolves the title.
-          // Skip for aborted runs and for error terminations.
-          if (!isAborted() && !isErrorTerminal) {
+          // Skip for aborted runs and for error terminations — including a run
+          // the CLI itself reported as stopped (`interrupted`), which is not a
+          // finished run and must not announce itself as one.
+          if (!isAborted() && isCleanCompletion) {
             await runLifecycle.afterRunComplete({
               context,
               notification: { content: finalContent },
@@ -2394,7 +2422,9 @@ export const executeHeterogeneousAgent = async (
       agentSystemContext: heterogeneousProvider.systemContext,
       contextSelections,
       pageSelections,
-      workingDirectory,
+      // The native CLI session already retains its workspace context. Reinjecting this note on
+      // every resumed turn makes it accumulate in persistent Codex/Claude conversations.
+      workingDirectory: resumeSessionId ? undefined : workingDirectory,
     });
 
     // When resuming, hand main the prior turns so it can rebuild a Claude Code
@@ -2459,7 +2489,14 @@ export const executeHeterogeneousAgent = async (
     // Cast: TS narrows the closure-mutated `deferredTerminalEvent` back to
     // `null` in linear flow (it can't see writes from the async IPC handler).
     const terminalEvent = deferredTerminalEvent as AgentStreamEvent | null;
-    if (!isAborted() && terminalEvent?.type !== 'error') {
+    // A stop reported by the CLI itself terminates as `agent_runtime_end
+    // { reason: 'interrupted' }` rather than an error, so testing for "not an
+    // error" is no longer enough — that would drain the queue on a stop the
+    // user made, which is exactly what this guard exists to prevent.
+    const drainableTerminal =
+      terminalEvent?.type !== 'error' &&
+      isCompletedRuntimeEnd((terminalEvent?.data as { reason?: string } | undefined)?.reason);
+    if (!isAborted() && drainableTerminal) {
       const contextKey = messageMapKey(context);
       const remainingQueued = get().drainQueuedMessages?.(contextKey) ?? [];
       if (remainingQueued.length > 0) {

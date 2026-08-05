@@ -64,7 +64,7 @@ const ActionToolbar = memo<ActionToolbarProps>(
       s.toggleExpandInputActionbar,
     ]);
     const enableRichRender = useUserStore(labPreferSelectors.enableInputMarkdown);
-    const { canConfigureResource } = useChatInputResourceAccess();
+    const { canConfigureResource, canShowControls } = useChatInputResourceAccess();
 
     const leftActions = useChatInputStore((s) => {
       const actions = s.leftActions.filter((item) => (enableRichRender ? true : item !== 'typo'));
@@ -82,6 +82,8 @@ const ActionToolbar = memo<ActionToolbarProps>(
       () => ({ borderRadius, dropdownPlacement }),
       [borderRadius, dropdownPlacement],
     );
+
+    if (!canShowControls) return null;
 
     return (
       <ActionBarContext value={contextValue}>

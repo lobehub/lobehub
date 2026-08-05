@@ -78,9 +78,10 @@ type MentionOption = ISlashMenuOption | ISlashSectionOption;
 
 const InputEditor = memo<{
   defaultRows?: number;
+  initialContent?: string;
   placeholder?: ReactNode;
   placeholderVariant?: PlaceholderVariant;
-}>(({ defaultRows = 2, placeholder, placeholderVariant }) => {
+}>(({ defaultRows = 2, initialContent = '', placeholder, placeholderVariant }) => {
   const { t } = useTranslation('chat');
   const mobile = useServerConfigStore((s) => s.isMobile);
   const [
@@ -162,7 +163,9 @@ const InputEditor = memo<{
   const fuse = useMemo(
     () =>
       new Fuse(allMentionItems, {
-        keys: ['key', 'label', 'metadata.topicTitle'],
+        // Agent labels are ReactNodes (name + role + description), which Fuse
+        // skips — their searchable text lives in `metadata.label`/`searchText`.
+        keys: ['key', 'label', 'metadata.label', 'metadata.searchText', 'metadata.topicTitle'],
         threshold: 0.3,
       }),
     [allMentionItems],
@@ -467,8 +470,10 @@ const InputEditor = memo<{
         path: String(option.metadata.path ?? ''),
       });
     } else {
+      // Agent options carry a ReactNode label; the chip needs the plain name
+      // kept in `metadata.label`. Other types (member) still use `label` itself.
       editor.dispatchCommand(INSERT_MENTION_COMMAND, {
-        label: String(option.label),
+        label: String(option.metadata?.label ?? option.label),
         metadata: option.metadata,
       });
     }
@@ -542,7 +547,7 @@ const InputEditor = memo<{
         autoFocus
         pasteAsPlainText
         className={className}
-        content={''}
+        content={initialContent}
         editable={canCreateContent && canUseResource}
         editor={editor}
         getPopupContainer={() => (slashMenuRef as any)?.current ?? null}

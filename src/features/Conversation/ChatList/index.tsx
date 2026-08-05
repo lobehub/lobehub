@@ -20,7 +20,7 @@ import SkeletonList from '../components/SkeletonList';
 import MessageItem from '../Messages';
 import type { WorkflowExpandLevelDefault } from '../Messages/AssistantGroup/components/WorkflowCollapse';
 import { MessageActionProvider } from '../Messages/Contexts/MessageActionProvider';
-import { dataSelectors, useConversationStore } from '../store';
+import { dataSelectors, inputSelectors, useConversationStore } from '../store';
 import AgentSignalReceiptList from './components/AgentSignalReceiptList';
 import { RefreshError } from './components/RefreshError';
 import VirtualizedList from './components/VirtualizedList';
@@ -97,8 +97,19 @@ const ChatList = memo<ChatListProps>(
     // mid-fan-out and clobber the in-memory streamed state with a stale
     // assistant placeholder.
     const isStreaming = useChatStore(operationSelectors.isAgentRuntimeRunningByContext(context));
+    // A client-minted topic whose server row does not exist yet (first-send
+    // window) must not be fetched: the query would legitimately return an empty
+    // list and `onData` would wipe the optimistic messages already on screen.
+    // Cleared when the server confirms the topic (`replaceTopicId`), at which
+    // point fetching resumes as normal.
+    const isCreatingTopic = useChatStore(
+      (s) => !!context.topicId && s.creatingTopicIds.includes(context.topicId),
+    );
     const { enableAgentSelfIteration } = useServerConfigStore(featureFlagsSelectors);
-    const messagesSWR = useFetchMessages(context, { revalidateOnFocus: !isStreaming, skipFetch });
+    const messagesSWR = useFetchMessages(context, {
+      revalidateOnFocus: !isStreaming,
+      skipFetch: skipFetch || isCreatingTopic,
+    });
     const refreshError = useMessageRefreshError({
       error: messagesSWR.error,
       identity: getMessageListCacheIdentity(context),
@@ -107,6 +118,7 @@ const ChatList = memo<ChatListProps>(
     });
     const displayMessages = useConversationStore(dataSelectors.displayMessages);
     const displayMessageIds = useConversationStore(dataSelectors.displayMessageIds);
+    const overlayHeight = useConversationStore(inputSelectors.chatInputOverlayHeight);
     const latestMessageId = displayMessageIds.at(-1);
 
     // Skip fetching notebook and memories for share pages (they require authentication)
@@ -198,7 +210,9 @@ const ChatList = memo<ChatListProps>(
       (showWelcome || displayMessageIds.length === 0) && welcome ? (
         <WideScreenContainer
           style={{
+            boxSizing: 'border-box',
             height: '100%',
+            paddingBottom: overlayHeight > 0 ? overlayHeight + 12 : undefined,
           }}
           wrapperStyle={{
             minHeight: '100%',

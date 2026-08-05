@@ -6,7 +6,7 @@ import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { isDev } from '@/utils/env';
 
 import { contextSelectors, useConversationStore } from '../../store';
-import { type ChatItemProps } from '../type';
+import type { ChatItemProps } from '../type';
 
 export interface ActionsProps {
   actionAddon?: ChatItemProps['actionAddon'];
@@ -14,7 +14,7 @@ export interface ActionsProps {
   placement?: ChatItemProps['placement'];
 }
 
-const Actions = memo<ActionsProps>(({ placement, actionAddon, actions }) => {
+const Actions = memo<ActionsProps>(({ actionAddon, placement, actions }) => {
   const onboardingAgentId = useAgentStore(builtinAgentSelectors.webOnboardingAgentId);
   const conversationAgentId = useConversationStore(contextSelectors.agentId);
   if (!isDev && onboardingAgentId && conversationAgentId === onboardingAgentId) return null;
@@ -24,14 +24,18 @@ const Actions = memo<ActionsProps>(({ placement, actionAddon, actions }) => {
     <Flexbox
       align={'center'}
       direction={'horizontal'}
-      gap={8}
-      role="menubar"
+      gap={4}
       style={{
         alignSelf: isUser ? 'flex-end' : 'flex-start',
       }}
     >
-      {actionAddon}
-      {actions && <Flexbox role="menubar">{actions}</Flexbox>}
+      {!isUser && actionAddon}
+      {actions && (
+        <Flexbox horizontal align={'center'} role="menubar">
+          {actions}
+        </Flexbox>
+      )}
+      {isUser && actionAddon}
     </Flexbox>
   );
 });
