@@ -6,6 +6,7 @@ import { aiProviderSelectors } from '@/store/aiInfra/selectors';
 import { AsyncTaskStatus } from '@/types/asyncTask';
 
 import type { AgentArtworkKind } from './utils';
+import { selectAgentArtworkModel } from './utils';
 
 const POLL_INTERVAL = 1500;
 const POLL_LIMIT = 120;
@@ -40,10 +41,11 @@ export const useGenerateAgentArtwork = () => {
   const enabledImageModelList = useAiInfraStore(aiProviderSelectors.enabledImageModelList);
 
   const generate = async (kind: AgentArtworkKind, prompt: string) => {
-    const provider = enabledImageModelList[0];
-    const model = provider?.children[0];
+    const selection = selectAgentArtworkModel(enabledImageModelList);
 
-    if (!provider || !model) throw new Error('No image generation model is available');
+    if (!selection) throw new Error('No image generation model is available');
+
+    const { model, provider } = selection;
 
     const generationTopicId = await generationTopicService.createTopic(
       'image',

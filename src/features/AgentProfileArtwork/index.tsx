@@ -1,10 +1,10 @@
 'use client';
 
-import { ActionIcon, Center, Flexbox, Icon, Skeleton, Text, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Alert, Avatar, Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { Button, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ImagePlus, SparklesIcon, Trash2, UploadIcon } from 'lucide-react';
-import { memo, Suspense, useCallback, useRef, useState } from 'react';
+import { ImageIcon, Trash2, UploadIcon, WandSparkles } from 'lucide-react';
+import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import EmojiPicker from '@/components/EmojiPicker';
@@ -32,9 +32,9 @@ const styles = createStaticStyles(({ css }) => ({
 
     overflow: hidden;
 
-    width: 100%;
+    width: calc(100% + 32px);
     height: 160px;
-    border-radius: ${cssVar.borderRadiusLG};
+    margin-inline: -16px;
 
     background: ${cssVar.colorFillTertiary};
     background-position: center;
@@ -56,10 +56,22 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
   emptyBackground: css`
-    color: ${cssVar.colorTextTertiary};
+    pointer-events: none;
+
+    position: absolute;
+    inset: -48px;
+    transform: scale(1.16);
+
+    opacity: 0.72;
+    filter: blur(36px) saturate(1.2);
   `,
   generatedAction: css`
     width: 100%;
+  `,
+  generatedPreview: css`
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+    background: ${cssVar.colorFillQuaternary};
   `,
   scrim: css`
     position: absolute;
@@ -100,6 +112,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
     const backgroundInputRef = useRef<HTMLInputElement>(null);
     const [avatarUploading, setAvatarUploading] = useState(false);
     const [backgroundUploading, setBackgroundUploading] = useState(false);
+    const [generationError, setGenerationError] = useState<'avatar' | 'background' | null>(null);
     const [generating, setGenerating] = useState<'avatar' | 'background' | null>(null);
     const backgroundUrl = resolveAgentBackground(background);
 
@@ -132,6 +145,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
       async (kind: 'avatar' | 'background') => {
         if (!canEdit || !canGenerate) return;
 
+        setGenerationError(null);
         setGenerating(kind);
         try {
           const url = await generate(
@@ -142,7 +156,8 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
           else onBackgroundChange(url);
         } catch (error) {
           console.error('Failed to generate agent artwork:', error);
-          toast.error(t('settingAgent.artwork.generateFailed'));
+          setGenerationError(kind);
+          if (kind === 'background') toast.error(t('settingAgent.artwork.generateFailed'));
         } finally {
           setGenerating(null);
         }
@@ -169,11 +184,13 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
         >
           {backgroundUrl ? <div className={styles.scrim} /> : null}
           {!backgroundUrl ? (
-            <Center className={styles.emptyBackground} height={'100%'}>
-              <Flexbox horizontal align={'center'} gap={8}>
-                <ImagePlus size={18} />
-                <Text>{t('settingAgent.artwork.background.empty')}</Text>
-              </Flexbox>
+            <Center className={styles.emptyBackground}>
+              <Avatar
+                emojiScaleWithBackground
+                avatar={avatar || undefined}
+                shape={'square'}
+                size={640}
+              />
             </Center>
           ) : null}
           {canEdit ? (
@@ -195,7 +212,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
                 <Tooltip title={t('settingAgent.artwork.background.generate')}>
                   <ActionIcon
                     glass
-                    icon={SparklesIcon}
+                    icon={WandSparkles}
                     loading={generating === 'background'}
                     onClick={() => void generateArtwork('background')}
                   />
@@ -237,22 +254,35 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
                 ? [
                     {
                       label: (
-                        <Tooltip title={t('settingAgent.artwork.avatar.generate')}>
-                          <Icon icon={SparklesIcon} size={{ size: 20, strokeWidth: 2.5 }} />
+                        <Tooltip title={t('settingAgent.artwork.avatar.image')}>
+                          <Icon icon={ImageIcon} size={{ size: 20, strokeWidth: 2.5 }} />
                         </Tooltip>
                       ),
                       render: () => (
-                        <Flexbox padding={12} width={332}>
-                          <Suspense fallback={<Skeleton.Button block />}>
-                            <Button
-                              className={styles.generatedAction}
-                              icon={SparklesIcon}
-                              loading={generating === 'avatar'}
-                              onClick={() => void generateArtwork('avatar')}
-                            >
-                              {t('settingAgent.artwork.avatar.generateAction')}
-                            </Button>
-                          </Suspense>
+                        <Flexbox gap={12} padding={12} width={332}>
+                          <Center className={styles.generatedPreview} height={156}>
+                            <Avatar
+                              emojiScaleWithBackground
+                              avatar={avatar || undefined}
+                              shape={'square'}
+                              size={112}
+                            />
+                          </Center>
+                          <Button
+                            className={styles.generatedAction}
+                            icon={WandSparkles}
+                            loading={generating === 'avatar'}
+                            onClick={() => void generateArtwork('avatar')}
+                          >
+                            {t('settingAgent.artwork.avatar.generateAction')}
+                          </Button>
+                          {generationError === 'avatar' ? (
+                            <Alert
+                              showIcon
+                              title={t('settingAgent.artwork.generateFailed')}
+                              type={'error'}
+                            />
+                          ) : null}
                         </Flexbox>
                       ),
                       value: 'generate',

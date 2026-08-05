@@ -39,6 +39,8 @@ const AgentHeader = memo(() => {
       paddingBlock={'16px 0'}
       style={{
         cursor: 'default',
+        marginInline: -16,
+        width: 'calc(100% + 32px)',
       }}
       onClick={(e) => {
         e.stopPropagation();

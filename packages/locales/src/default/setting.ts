@@ -738,6 +738,7 @@ export default {
   'settingAgent.avatar.title': 'Avatar',
   'settingAgent.artwork.avatar.generate': 'Generate avatar',
   'settingAgent.artwork.avatar.generateAction': 'Generate from Agent Profile',
+  'settingAgent.artwork.avatar.image': 'Image avatar',
   'settingAgent.artwork.background.empty': 'Add a background to give this Agent a visual identity',
   'settingAgent.artwork.background.generate': 'Generate background',
   'settingAgent.artwork.background.remove': 'Remove background',
