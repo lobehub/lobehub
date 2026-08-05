@@ -998,8 +998,9 @@ const googleImageModels: AIImageModelCard[] = [
       approximatePricePerImage: 0.067,
       units: [
         { name: 'imageOutput', rate: 60, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
   },

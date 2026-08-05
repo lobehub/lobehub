@@ -181,6 +181,9 @@ describe('Google Gemini 3.1 Flash Image models', () => {
     const googleModels = LOBE_DEFAULT_MODEL_LIST.filter(
       (model) => model.providerId === ModelProvider.Google,
     );
+    const stableImageModel = googleModels.find(
+      (model) => model.id === 'gemini-3.1-flash-image:image',
+    );
 
     expect(googleModels).toEqual(
       expect.arrayContaining([
@@ -204,6 +207,14 @@ describe('Google Gemini 3.1 Flash Image models', () => {
           id: 'gemini-3.1-flash-image-preview:image',
           type: 'image',
         }),
+      ]),
+    );
+    expect(stableImageModel?.pricing?.units).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'textInput', rate: 0.5 }),
+        expect.objectContaining({ name: 'imageInput', rate: 0.5 }),
+        expect.objectContaining({ name: 'textOutput', rate: 3 }),
+        expect.objectContaining({ name: 'imageOutput', rate: 60 }),
       ]),
     );
   });
