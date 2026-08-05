@@ -205,15 +205,20 @@ export const buildServerVirtualSubAgentRunner = (
   if (!agentId || !topicId) return undefined;
 
   const parentAgentConfig = state.metadata?.agentConfig as LobeAgentConfig | undefined;
+  // The model the parent run ACTUALLY uses. `metadata.agentConfig` alone is not
+  // enough: when a run continues a topic whose model was switched, execAgent
+  // keeps the topic-pinned model only in `modelRuntimeConfig` while the
+  // metadata config retains the agent default.
+  const parentEffectiveModel =
+    state.modelRuntimeConfig ?? state.metadata?.modelRuntimeConfig ?? parentAgentConfig;
 
   return {
     run: async ({ agentId: targetAgentId, description, instruction, timeout }) => {
       // This runner serves two tools, and only one of them may swap the model:
       //   - `callSubAgent` names no agent, so the child is an anonymous clone of
       //     the parent — it takes the parent's `agencyConfig.subagent` override,
-      //     or follows the parent's effective model when none is configured
-      //     (`state.metadata.agentConfig` is already resolved, so it carries the
-      //     model the parent run actually uses).
+      //     or follows the parent's effective (topic-pinned) model when none is
+      //     configured.
       //   - `callAgent` names an existing agent, which carries a model the user
       //     configured on it. Overriding that would discard a deliberate choice,
       //     the same way forcing a group member onto the sub-agent default would.
@@ -221,7 +226,7 @@ export const buildServerVirtualSubAgentRunner = (
       // re-derive it from the parent config.
       const subAgentModel = targetAgentId
         ? undefined
-        : resolveSubAgentModel(parentAgentConfig?.agencyConfig?.subagent, parentAgentConfig);
+        : resolveSubAgentModel(parentAgentConfig?.agencyConfig?.subagent, parentEffectiveModel);
       // Thinking / reasoning-effort overrides configured for the sub-agent
       // model; same callSubAgent-only carve-out as the model above.
       const subAgentChatConfig = targetAgentId
