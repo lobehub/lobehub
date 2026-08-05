@@ -196,7 +196,28 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
     await expect(caller.addManualCredit({ amountToman: 1000, orgId: 'any' })).rejects.toMatchObject(
       { code: 'FORBIDDEN' },
     );
+    await expect(
+      caller.addManualUserCredit({ amountToman: 1000, email: 'stranger@rbac.test' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     await expect(caller.listUserWallets()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('platform admin can manually credit a B2C user wallet by email', async () => {
+    const platformCaller = platformAdminRouter.createCaller(createTestContext(platformId));
+    const result = await platformCaller.addManualUserCredit({
+      amountToman: 50_000,
+      description: 'Support credit',
+      email: 'stranger@rbac.test',
+    });
+    expect(result.userId).toBe(strangerId);
+    expect(result.transaction.type).toBe('manual_credit');
+    expect(Number(result.wallet.balanceToman)).toBe(50_000);
+    expect(Number(result.wallet.balanceMicroUsd)).toBeGreaterThan(0);
+
+    const wallets = await platformCaller.listUserWallets();
+    const wallet = wallets.find((w) => w.userId === strangerId);
+    expect(wallet).toBeTruthy();
+    expect(Number(wallet!.balanceToman)).toBe(50_000);
   });
 
   it('platform admin can suspend; member procedures still reachable on model (enforcement gap covered elsewhere)', async () => {

@@ -27,15 +27,19 @@ const PERSIAN_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
 const ARABIC_INDIC_DIGITS = '٠١٢٣٤٥٦٧٨٩';
 
 const toAsciiDigits = (value: string): string =>
-  value.replaceAll(/[۰-۹٠-٩]/g, (ch) => {
-    const persian = PERSIAN_DIGITS.indexOf(ch);
-    if (persian >= 0) return String(persian);
-    const arabic = ARABIC_INDIC_DIGITS.indexOf(ch);
-    return arabic >= 0 ? String(arabic) : ch;
-  });
+  [...value]
+    .map((ch) => {
+      const persian = PERSIAN_DIGITS.indexOf(ch);
+      if (persian >= 0) return String(persian);
+      const arabic = ARABIC_INDIC_DIGITS.indexOf(ch);
+      return arabic >= 0 ? String(arabic) : ch;
+    })
+    .join('');
 
 const stripPhoneNoise = (value: string): string =>
-  toAsciiDigits(value).replaceAll(/[\s\-()]/g, '').trim();
+  toAsciiDigits(value)
+    .replaceAll(/[\s\-()]/g, '')
+    .trim();
 
 /** Normalizes an Iranian mobile number to E.164. Throws `INVALID_PHONE` if implausible. */
 export const normalizeIranianPhoneForFingerprint = (raw: string): string => {
@@ -66,7 +70,9 @@ const isUniqueConstraintViolation = (error: unknown): boolean =>
   Boolean(error && typeof error === 'object' && (error as { code?: string }).code === '23505');
 
 export const fingerprintPhone = (phone: string): string =>
-  createHash('sha256').update(`phone:${normalizeIranianPhoneForFingerprint(phone)}`).digest('hex');
+  createHash('sha256')
+    .update(`phone:${normalizeIranianPhoneForFingerprint(phone)}`)
+    .digest('hex');
 
 export const fingerprintEmail = (email: string): string =>
   createHash('sha256').update(`email:${email.trim().toLowerCase()}`).digest('hex');
@@ -134,6 +140,60 @@ export class AicoBillingModel {
           fxRateTomanPerUsd: params.fxRateTomanPerUsd,
           gatewayRefId: params.gatewayRefId ?? `mock_${Date.now()}`,
           type: 'topup',
+          userId: params.userId,
+        })
+        .returning();
+
+      const [wallet] = await tx
+        .update(userWallets)
+        .set({
+          balanceMicroUsd: sql`${userWallets.balanceMicroUsd} + ${params.amountMicroUsd}`,
+          balanceToman: sql`${userWallets.balanceToman} + ${params.amountToman}`,
+          isActive: true,
+        })
+        .where(eq(userWallets.userId, params.userId))
+        .returning();
+
+      return { transaction: txRow, wallet };
+    });
+  };
+
+  /**
+   * Platform-admin manual credit onto a B2C user wallet (not mock topup).
+   * Amounts must be positive integers; FX rate is stored for audit.
+   */
+  manualCreditUser = async (params: {
+    amountMicroUsd: number;
+    amountToman: number;
+    createdByUserId: string;
+    description?: string;
+    fxRateTomanPerUsd: number;
+    userId: string;
+  }) => {
+    if (!Number.isInteger(params.amountToman) || params.amountToman <= 0) {
+      throw new Error('AMOUNT_TOMAN_MUST_BE_POSITIVE_INTEGER');
+    }
+    if (!Number.isInteger(params.amountMicroUsd) || params.amountMicroUsd <= 0) {
+      throw new Error('AMOUNT_MICRO_USD_MUST_BE_POSITIVE_INTEGER');
+    }
+    if (!Number.isInteger(params.fxRateTomanPerUsd) || params.fxRateTomanPerUsd <= 0) {
+      throw new Error('INVALID_FX_RATE');
+    }
+
+    return this.db.transaction(async (tx) => {
+      await tx.insert(userWallets).values({ userId: params.userId }).onConflictDoNothing({
+        target: userWallets.userId,
+      });
+
+      const [txRow] = await tx
+        .insert(walletTransactions)
+        .values({
+          amountMicroUsd: params.amountMicroUsd,
+          amountToman: params.amountToman,
+          createdByUserId: params.createdByUserId,
+          description: params.description ?? 'Manual credit',
+          fxRateTomanPerUsd: params.fxRateTomanPerUsd,
+          type: 'manual_credit',
           userId: params.userId,
         })
         .returning();
@@ -364,7 +424,10 @@ export class AicoBillingModel {
     } catch (error) {
       if (!isUniqueConstraintViolation(error)) throw error;
       const constraint = (error as { constraint?: string }).constraint ?? '';
-      throw new Error(constraint.includes('user_id') ? 'TRIAL_ALREADY_USED' : 'TRIAL_PHONE_ALREADY_USED');
+      throw new Error(
+        constraint.includes('user_id') ? 'TRIAL_ALREADY_USED' : 'TRIAL_PHONE_ALREADY_USED',
+        { cause: error },
+      );
     }
   };
 

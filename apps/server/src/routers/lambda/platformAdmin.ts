@@ -141,13 +141,14 @@ export const platformAdminRouter = router({
     .mutation(async ({ ctx, input }) => {
       try {
         const { rate: fxRate } = await getTomanPerUsd();
-        const amountMicroUsd = Number(tomanToMicroUsd(input.amountToman, fxRate));
+        const fxRateTomanPerUsd = Math.round(fxRate);
+        const amountMicroUsd = Number(tomanToMicroUsd(input.amountToman, fxRateTomanPerUsd));
         const result = await ctx.organizationModel.addManualCredit({
           amountMicroUsd,
           amountToman: input.amountToman,
           createdByUserId: ctx.userId,
           description: input.description,
-          fxRateTomanPerUsd: fxRate,
+          fxRateTomanPerUsd,
           orgId: input.orgId,
           type: 'manual_credit',
         });
@@ -169,6 +170,73 @@ export const platformAdminRouter = router({
         throw new TRPCError({
           code: 'BAD_REQUEST',
           message: error instanceof Error ? error.message : 'Failed to add credit',
+        });
+      }
+    }),
+
+  addManualUserCredit: platformProcedure
+    .input(
+      z.object({
+        amountToman: z.number().int().positive().max(100_000_000),
+        description: z.string().max(500).optional(),
+        email: z.string().email().optional(),
+        publicCode: z.string().min(1).max(32).optional(),
+        userId: z.string().min(1).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      let userId = input.userId;
+      if (!userId && input.email) {
+        userId = (await ctx.organizationModel.findUserIdByEmail(input.email)) ?? undefined;
+      }
+      if (!userId && input.publicCode) {
+        userId = (await ctx.organizationModel.getUserIdByPublicCode(input.publicCode)) ?? undefined;
+      }
+      if (!userId) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'userId, email, or publicCode of an existing user is required',
+        });
+      }
+
+      try {
+        const { rate: fxRate } = await getTomanPerUsd();
+        const fxRateTomanPerUsd = Math.round(fxRate);
+        if (!Number.isFinite(fxRateTomanPerUsd) || fxRateTomanPerUsd <= 0) {
+          throw new Error('INVALID_FX_RATE');
+        }
+        const amountMicroUsd = Number(tomanToMicroUsd(input.amountToman, fxRateTomanPerUsd));
+        const result = await ctx.billingModel.manualCreditUser({
+          amountMicroUsd,
+          amountToman: input.amountToman,
+          createdByUserId: ctx.userId,
+          description: input.description,
+          fxRateTomanPerUsd,
+          userId,
+        });
+
+        // Same as mock topup: ensure the user can spend the new balance.
+        const keyService = new AicoOpenRouterKeyService(ctx.serverDB);
+        await keyService.ensureUserKey(userId);
+
+        return {
+          transaction: {
+            ...result.transaction,
+            amountMicroUsd: String(result.transaction.amountMicroUsd ?? 0),
+            amountToman: tomanString(result.transaction.amountToman ?? 0),
+            amountUsd: microUsdToDecimalString(result.transaction.amountMicroUsd ?? 0),
+          },
+          userId,
+          wallet: {
+            balanceMicroUsd: String(result.wallet.balanceMicroUsd ?? 0),
+            balanceToman: tomanString(result.wallet.balanceToman ?? 0),
+            balanceUsd: microUsdToDecimalString(result.wallet.balanceMicroUsd ?? 0),
+          },
+        };
+      } catch (error) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: error instanceof Error ? error.message : 'Failed to add user credit',
         });
       }
     }),
@@ -253,20 +321,26 @@ export const platformAdminRouter = router({
         .optional(),
     )
     .query(async ({ ctx }) => {
-      const [txs, wallets, orgBalanceMicroUsd, totalOpenRouterCostMicroUsd, fx] = await Promise.all([
-        ctx.billingModel.listRecentTransactions(200),
-        ctx.billingModel.listAllWallets(),
-        ctx.organizationModel.getTotalWalletBalanceMicroUsd(),
-        ctx.billingModel.sumUsageCostMicroUsd(),
-        getTomanPerUsd(),
-      ]);
+      const [txs, wallets, orgBalanceMicroUsd, totalOpenRouterCostMicroUsd, fx] = await Promise.all(
+        [
+          ctx.billingModel.listRecentTransactions(200),
+          ctx.billingModel.listAllWallets(),
+          ctx.organizationModel.getTotalWalletBalanceMicroUsd(),
+          ctx.billingModel.sumUsageCostMicroUsd(),
+          getTomanPerUsd(),
+        ],
+      );
       const topups = txs.filter((t) => t.type === 'topup' || t.type === 'manual_credit');
       const totalRevenueToman = topups.reduce((sum, t) => sum + Number(t.amountToman || 0), 0);
       const totalMicroCredited = topups.reduce((sum, t) => sum + Number(t.amountMicroUsd || 0), 0);
-      const b2cBalanceMicroUsd = wallets.reduce((sum, w) => sum + Number(w.balanceMicroUsd || 0), 0);
+      const b2cBalanceMicroUsd = wallets.reduce(
+        (sum, w) => sum + Number(w.balanceMicroUsd || 0),
+        0,
+      );
       // Approximate margin in toman using integer FX (floored).
-      const costTomanEstimate =
-        Number((BigInt(totalOpenRouterCostMicroUsd) * BigInt(fx.rate)) / 1_000_000n);
+      const costTomanEstimate = Number(
+        (BigInt(totalOpenRouterCostMicroUsd) * BigInt(fx.rate)) / 1_000_000n,
+      );
       const marginToman = totalRevenueToman - costTomanEstimate;
 
       return {
