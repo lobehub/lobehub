@@ -101,7 +101,8 @@ export const SignInEmailStep = ({
       {sessionExpired && (
         <Alert
           showIcon
-          description={t('betterAuth.signin.sessionExpired')}
+          message={t('betterAuth.signin.sessionExpired')}
+          style={{ marginBlockEnd: 12 }}
           type="warning"
           variant="filled"
         />

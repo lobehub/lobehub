@@ -2,8 +2,8 @@
 
 import { type ErrorShape, type ImportFileUploadState } from '@lobechat/types';
 import { ImportStage } from '@lobechat/types';
-import { Alert, Center, Flexbox } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Center } from '@lobehub/ui';
+import { Button, toast } from '@lobehub/ui/base-ui';
 import { Upload } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { ImportIcon } from 'lucide-react';
@@ -71,7 +71,28 @@ const DataImporter = memo<DataImporterProps>(({ children, onFinishImport }) => {
   const [importResults, setImportResults] = useState<ImportResults | undefined>();
   const [showImportModal, setShowImportModal] = useState(false);
   const [importPgData, setImportPgData] = useState<ImportPgDataStructure | undefined>(undefined);
-  const [configError, setConfigError] = useState<string>();
+  const [hasConfigError, setHasConfigError] = useState(false);
+
+  // Keeps the import modal in place on a bad file so the retry stays one click
+  // away; the reason itself is transient and belongs to the toast.
+  const handleBeforeUpload = useCallback(
+    async (file: File) => {
+      const result = await parseConfigFile(file);
+
+      if (!result.success) {
+        setHasConfigError(true);
+        toast.error({ description: result.error, title: t('importModal.error.invalidConfig') });
+        return false;
+      }
+
+      setHasConfigError(false);
+      setImportPgData(result.data);
+      setShowImportModal(true);
+
+      return false;
+    },
+    [t],
+  );
 
   const dataSource = useMemo(() => {
     if (!importResults) return;
@@ -160,25 +181,26 @@ const DataImporter = memo<DataImporterProps>(({ children, onFinishImport }) => {
       <DataStyleModal
         icon={ImportIcon}
         title={t('importModal.title')}
-        width={isFinished || configError ? 600 : 400}
+        width={isFinished ? 600 : 400}
         open={
-          !!configError ||
+          hasConfigError ||
           (importState !== ImportStage.Start && importState !== ImportStage.Finished)
         }
+        onOpenChange={(open) => {
+          if (!open) setHasConfigError(false);
+        }}
       >
-        {configError ? (
-          <Center padding={32}>
-            <Flexbox gap={16} width={'100%'}>
-              <Alert
-                description={configError}
-                title={t('importModal.error.invalidConfig')}
-                type="error"
-                variant="filled"
-              />
-              <Button onClick={() => setConfigError(undefined)}>
-                {t('importModal.error.selectAnotherFile')}
-              </Button>
-            </Flexbox>
+        {hasConfigError ? (
+          <Center gap={24} padding={40}>
+            <Upload
+              accept={'application/json'}
+              beforeUpload={handleBeforeUpload}
+              className={cx(styles.wrapper)}
+              maxCount={1}
+              showUploadList={false}
+            >
+              <Button>{t('importModal.error.selectAnotherFile')}</Button>
+            </Upload>
           </Center>
         ) : (
           content
@@ -186,22 +208,10 @@ const DataImporter = memo<DataImporterProps>(({ children, onFinishImport }) => {
       </DataStyleModal>
       <Upload
         accept={'application/json'}
+        beforeUpload={handleBeforeUpload}
         className={cx(styles.wrapper)}
         maxCount={1}
         showUploadList={false}
-        beforeUpload={async (file) => {
-          const result = await parseConfigFile(file);
-          if (!result.success) {
-            setConfigError(result.error);
-            return false;
-          }
-
-          setConfigError(undefined);
-          setImportPgData(result.data);
-          setShowImportModal(true);
-
-          return false;
-        }}
       >
         {/* a very hackable solution: add a pseudo before to have a large hot zone */}
         <div className={cx(styles.children)}>{children}</div>
