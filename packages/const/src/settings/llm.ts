@@ -1,5 +1,5 @@
 import { DEFAULT_PROVIDER } from '@lobechat/business-const';
-import type { LobeAgentAgencyConfig } from '@lobechat/types';
+import type { LobeAgentAgencyConfig, LobeAgentChatConfig } from '@lobechat/types';
 
 export { DEFAULT_MINI_MODEL, DEFAULT_MODEL } from '@lobechat/business-const';
 
@@ -52,6 +52,18 @@ export const resolveSubAgentModel = (
  * cleared override falls back to the parent value, mirroring how a nulled
  * `subagent.model` falls back to following the parent model.
  */
+/**
+ * The chatConfig override to apply to a spawned sub-agent, gated on an explicit
+ * `subagent.model`: the thinking / reasoning-effort overrides are configured in
+ * the UI under the chosen override model, so once the model is cleared (back to
+ * follow-parent) a stale `chatConfig` left behind by older writers must not
+ * silently keep changing the sub-agent's behavior or cost.
+ */
+export const getSubAgentChatConfigOverride = (
+  subagent: LobeAgentAgencyConfig['subagent'],
+): Partial<LobeAgentChatConfig> | undefined =>
+  subagent?.model ? (subagent.chatConfig ?? undefined) : undefined;
+
 export const resolveSubAgentChatConfig = <T extends object>(
   parentChatConfig: T | null | undefined,
   override: Partial<T> | null | undefined,

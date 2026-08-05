@@ -1,7 +1,7 @@
 import { type AgentState } from '@lobechat/agent-runtime';
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { dispatchWorkRegistrationIntent } from '@lobechat/builtin-tools/workRegistration';
-import { resolveSubAgentModel } from '@lobechat/const';
+import { getSubAgentChatConfigOverride, resolveSubAgentModel } from '@lobechat/const';
 import { type OperationToolSet } from '@lobechat/context-engine';
 import { type ToolType } from '@lobechat/observability-otel/modules/agent-runtime';
 import {
@@ -231,7 +231,7 @@ export const buildServerVirtualSubAgentRunner = (
       // model; same callSubAgent-only carve-out as the model above.
       const subAgentChatConfig = targetAgentId
         ? undefined
-        : parentAgentConfig?.agencyConfig?.subagent?.chatConfig;
+        : getSubAgentChatConfigOverride(parentAgentConfig?.agencyConfig?.subagent);
 
       // 1. Create the pending placeholder tool message (mirrors the normal
       //    tool-message shape in call_tool) that anchors the isolation thread

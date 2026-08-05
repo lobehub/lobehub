@@ -1,6 +1,7 @@
 import { DEFAULT_PROVIDER } from '@lobechat/business-const';
 import {
   DEFAULT_SUB_AGENT_MODEL,
+  getSubAgentChatConfigOverride,
   resolveSubAgentChatConfig,
   resolveSubAgentModel,
 } from '@lobechat/const';
@@ -108,6 +109,23 @@ describe('resolveSubAgentModel', () => {
 
   it('ignores a provider-only config rather than pairing it with a foreign model', () => {
     expect(resolveSubAgentModel({ provider: 'openai' }, PARENT)).toEqual(PARENT);
+  });
+});
+
+describe('getSubAgentChatConfigOverride', () => {
+  const CHAT_CONFIG = { thinkingLevel: 'low' } as any;
+
+  it('forwards the chatConfig while an explicit sub-agent model is configured', () => {
+    expect(getSubAgentChatConfigOverride({ chatConfig: CHAT_CONFIG, model: 'gpt-5.4' })).toEqual(
+      CHAT_CONFIG,
+    );
+  });
+
+  it('drops a stale chatConfig once the model override is cleared or absent', () => {
+    // A follow-parent sub-agent must not silently keep old thinking overrides.
+    expect(getSubAgentChatConfigOverride({ chatConfig: CHAT_CONFIG, model: null })).toBeUndefined();
+    expect(getSubAgentChatConfigOverride({ chatConfig: CHAT_CONFIG })).toBeUndefined();
+    expect(getSubAgentChatConfigOverride(undefined)).toBeUndefined();
   });
 });
 

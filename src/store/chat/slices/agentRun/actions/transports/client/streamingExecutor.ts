@@ -15,7 +15,12 @@ import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { createPathScopeAudit } from '@lobechat/builtin-tool-local-system';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { manualModeExcludeToolIds } from '@lobechat/builtin-tools';
-import { isDesktop, resolveSubAgentChatConfig, resolveSubAgentModel } from '@lobechat/const';
+import {
+  getSubAgentChatConfigOverride,
+  isDesktop,
+  resolveSubAgentChatConfig,
+  resolveSubAgentModel,
+} from '@lobechat/const';
 import { type ToolsEngine } from '@lobechat/context-engine';
 import { buildTaskDetailPrompt, buildTaskListPrompt } from '@lobechat/prompts';
 import {
@@ -1036,7 +1041,9 @@ export class StreamingExecutorActionImpl {
       const parentEffectiveModel =
         topicSelectors.getTopicModelById(topicId)(this.#get()) ?? parentAgentConfig;
       const runtimeResult = await this.#get().executeClientAgent({
-        chatConfigOverride: parentAgentConfig?.agencyConfig?.subagent?.chatConfig,
+        chatConfigOverride: getSubAgentChatConfigOverride(
+          parentAgentConfig?.agencyConfig?.subagent,
+        ),
         context: subContext,
         isSubAgent: true,
         messages: subMessages,
