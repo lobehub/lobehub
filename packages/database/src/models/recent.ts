@@ -1,6 +1,7 @@
 import type { ChatTopicStatus, TaskStatus } from '@lobechat/types';
 import { and, desc, eq, inArray, isNotNull, isNull, ne, not, or, sql } from 'drizzle-orm';
 import { unionAll } from 'drizzle-orm/pg-core';
+import removeMarkdown from 'remove-markdown';
 
 import { agents, DOCUMENT_FOLDER_TYPE, documents, messages, tasks, topics } from '../schemas';
 import type { LobeChatDatabase } from '../type';
@@ -34,6 +35,16 @@ const TOOL_DOCUMENT_SOURCE_TYPES = ['agent', 'agent-signal', 'file', 'web'] as c
 const TASK_FINAL_STATUSES = ['completed', 'canceled'];
 const TOPIC_INBOX_STATUSES: ChatTopicStatus[] = ['running', 'unread'];
 const LAST_MESSAGE_PREVIEW_LENGTH = 2000;
+
+// Best-effort markdown → plain text; previews render in a plain-text row, so
+// syntax noise (**, #, []() …) would show up literally.
+const toPlainTextPreview = (markdown: string): string => {
+  try {
+    return removeMarkdown(markdown).trimEnd();
+  } catch {
+    return markdown;
+  }
+};
 
 export class RecentModel {
   private userId: string;
@@ -74,10 +85,6 @@ export class RecentModel {
           ? topics.description
           : sql<string | null>`NULL`.as('description'),
         id: topics.id,
-        // Previews are fetched in a second batched query scoped to the final
-        // page — inlining the subquery here would evaluate it for every topic
-        // the user owns before the sort/limit prunes to `limit` rows.
-        lastAssistantMessage: sql<string | null>`NULL`.as('last_assistant_message'),
         metadata: sql<any>`${topics.metadata}`.as('metadata'),
         routeGroupId: sql<string | null>`${topics.groupId}`.as('route_group_id'),
         routeId: sql<string | null>`${topics.agentId}`.as('route_id'),
@@ -109,7 +116,6 @@ export class RecentModel {
       .select({
         description: sql<string | null>`NULL`.as('description'),
         id: documents.id,
-        lastAssistantMessage: sql<string | null>`NULL`.as('last_assistant_message'),
         metadata: sql<any>`NULL`.as('metadata'),
         routeGroupId: sql<string | null>`NULL`.as('route_group_id'),
         routeId: sql<string | null>`NULL`.as('route_id'),
@@ -139,7 +145,6 @@ export class RecentModel {
       .select({
         description: sql<string | null>`NULL`.as('description'),
         id: tasks.id,
-        lastAssistantMessage: sql<string | null>`NULL`.as('last_assistant_message'),
         metadata: sql<any>`NULL`.as('metadata'),
         routeGroupId: sql<string | null>`NULL`.as('route_group_id'),
         routeId: sql<string | null>`${tasks.assigneeAgentId}`.as('route_id'),
@@ -162,6 +167,9 @@ export class RecentModel {
       .orderBy(desc(sql`updated_at`))
       .limit(limit);
 
+    // Previews are fetched in a second batched query scoped to the final page
+    // — inlining a correlated subquery in the topic arm would evaluate it for
+    // every topic the user owns before the sort/limit prunes to `limit` rows.
     const previewByTopicId = withTopicPreview
       ? await this.queryLastAssistantPreviews(
           rows.filter((row) => row.type === 'topic').map((row) => row.id),
@@ -209,7 +217,9 @@ export class RecentModel {
       .orderBy(messages.topicId, desc(messages.createdAt));
 
     return new Map(
-      rows.filter((row) => row.topicId !== null).map((row) => [row.topicId!, row.value]),
+      rows
+        .filter((row) => row.topicId !== null)
+        .map((row) => [row.topicId!, toPlainTextPreview(row.value)]),
     );
   };
 }
