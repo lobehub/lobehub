@@ -1,5 +1,6 @@
 import { ToolNameResolver } from '@lobechat/context-engine';
 import { pluginPrompts } from '@lobechat/prompts';
+import { resolveModelScopedChatConfig } from '@lobechat/types';
 import { Center, Flexbox, Tooltip } from '@lobehub/ui';
 import { TokenTag } from '@lobehub/ui/chat';
 import { cssVar } from 'antd-style';
@@ -56,13 +57,14 @@ const Token = memo(() => {
     hasEnabledKnowledgeBases,
   ] = useAgentStore((s) => {
     const chatConfig = chatConfigByIdSelectors.getChatConfigById(agentId)(s);
+    const modelChatConfig = resolveModelScopedChatConfig(chatConfig, provider, model);
 
     return [
       s.activeAgentId,
       agentByIdSelectors.getAgentSystemRoleById(agentId)(s),
       chatConfig.enableAgentMode,
       chatConfig.searchMode,
-      chatConfig.useModelBuiltinSearch,
+      modelChatConfig.useModelBuiltinSearch,
       chatConfigByIdSelectors.getSkillActivateModeById(agentId)(s),
       chatConfig.memory?.enabled,
       chatConfigByIdSelectors.getRuntimeModeById(agentId)(s),

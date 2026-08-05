@@ -4,7 +4,7 @@ import {
   resolveDefaultEnableAdaptiveThinkingForModel,
   resolveDefaultThinkingLevelForModel,
 } from '@lobechat/model-runtime/utils/modelExtendParams';
-import type { LobeAgentChatConfig } from '@lobechat/types';
+import { type LobeAgentChatConfig, resolveModelScopedChatConfig } from '@lobechat/types';
 
 import { aiModelSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 
@@ -43,5 +43,9 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
 
   const modelExtendParams = aiModelSelectors.modelExtendParams(model, provider)(aiInfraStoreState);
 
-  return applyModelExtendParams({ chatConfig, extendParams: modelExtendParams, model });
+  return applyModelExtendParams({
+    chatConfig: resolveModelScopedChatConfig(chatConfig, provider, model),
+    extendParams: modelExtendParams,
+    model,
+  });
 };

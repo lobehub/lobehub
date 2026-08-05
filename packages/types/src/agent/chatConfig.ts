@@ -1,3 +1,4 @@
+import type { ExtendParamsType } from 'model-bank';
 import { z } from 'zod';
 
 import type { SearchMode } from '../search';
@@ -25,6 +26,12 @@ export interface AgentSelfIterationChatConfig {
     enabled?: boolean;
   };
 }
+
+export type ModelScopedChatConfig = Partial<
+  Pick<LobeAgentChatConfig, ExtendParamsType | 'useModelBuiltinSearch'>
+>;
+
+export type ModelScopedChatConfigs = Record<string, Record<string, ModelScopedChatConfig>>;
 
 export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIterationChatConfig {
   codexMaxReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
@@ -130,6 +137,8 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
   imageResolution2?: '512' | '1K' | '2K' | '4K';
   inputTemplate?: string;
   kimiK3ReasoningEffort?: 'low' | 'high' | 'max';
+  /** Model-specific settings, grouped by provider then model ID. */
+  modelConfigs?: ModelScopedChatConfigs;
   /**
    * Effort level for Claude Opus 4.7 and later (adds xhigh tier between high and max)
    */
@@ -209,6 +218,16 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
   useModelBuiltinSearch?: boolean;
 }
 
+/** Resolve model-specific settings while keeping legacy Agent-level values as fallback. */
+export const resolveModelScopedChatConfig = (
+  chatConfig: LobeAgentChatConfig,
+  provider: string,
+  model: string,
+): LobeAgentChatConfig => ({
+  ...chatConfig,
+  ...chatConfig.modelConfigs?.[provider]?.[model],
+});
+
 /**
  * Zod schema for RuntimeEnvConfig
  */
@@ -267,6 +286,9 @@ export const AgentChatConfigSchema = z
     grok4_5ReasoningEffort: z.enum(['low', 'medium', 'high']).optional(),
     hy3ReasoningEffort: z.enum(['no_think', 'low', 'high']).optional(),
     kimiK3ReasoningEffort: z.enum(['low', 'high', 'max']).optional(),
+    modelConfigs: z
+      .record(z.string(), z.record(z.string(), z.record(z.string(), z.unknown())))
+      .optional(),
     ring2_6ReasoningEffort: z.enum(['high', 'xhigh']).optional(),
     historyCount: z.number().optional(),
     imageAspectRatio: z.string().optional(),

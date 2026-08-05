@@ -71,6 +71,7 @@ import {
   RequestTrigger,
   resolveAgentAgencyConfig,
   resolveAgentModelConfig,
+  resolveModelScopedChatConfig,
   ThreadStatus,
   ThreadType,
 } from '@lobechat/types';
@@ -2728,7 +2729,9 @@ export class AiAgentService {
     const activeModelAbilities = activeModelMetadata?.abilities as ModelAbilities | undefined;
     const searchDecision = resolveServerSearchDecision({
       builtinModels,
-      chatConfig: agentConfig.chatConfig ?? undefined,
+      chatConfig: agentConfig.chatConfig
+        ? resolveModelScopedChatConfig(agentConfig.chatConfig, provider, model)
+        : undefined,
       hasModelAbilitiesOverride:
         !!activeModelAbilities && Object.keys(activeModelAbilities).length > 0,
       model,

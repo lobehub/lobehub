@@ -1,7 +1,7 @@
 import type { ChatStreamPayload } from '@lobechat/model-runtime';
 import { mergeModelRuntimeHooks } from '@lobechat/model-runtime';
 import type { LobeAgentChatConfig, LobeAgentConfig, UserSystemAgentConfig } from '@lobechat/types';
-import { RequestTrigger } from '@lobechat/types';
+import { RequestTrigger, resolveModelScopedChatConfig } from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
 
 import { getBusinessModelRuntimeHooks } from '@/business/server/model-runtime';
@@ -550,7 +550,11 @@ export class ChatService extends BaseService {
       }
 
       // 3. Merge config: user config > Agent config > default config
-      const mergedChatConfig = this.mergeChatConfig(agentConfig, params.chatConfig);
+      const resolvedAgentConfig =
+        !params.chatConfig && agentConfig && modelConfig.model && modelConfig.provider
+          ? resolveModelScopedChatConfig(agentConfig, modelConfig.provider, modelConfig.model)
+          : agentConfig;
+      const mergedChatConfig = this.mergeChatConfig(resolvedAgentConfig, params.chatConfig);
 
       // 3. Build search parameters
       const searchParams = this.buildSearchParams(mergedChatConfig);

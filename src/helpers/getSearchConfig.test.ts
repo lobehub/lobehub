@@ -103,6 +103,28 @@ describe('getSearchConfig', () => {
     });
   });
 
+  it('should use the current model builtin-search preference', () => {
+    vi.mocked(chatConfigByIdSelectors.getChatConfigById).mockReturnValue(
+      () =>
+        ({
+          modelConfigs: {
+            openai: {
+              'gpt-4': { useModelBuiltinSearch: true },
+              'gpt-4-mini': { useModelBuiltinSearch: false },
+            },
+          },
+          searchMode: 'on',
+          useModelBuiltinSearch: false,
+        }) as any,
+    );
+    vi.mocked(aiInfraSelectors.aiModelSelectors.modelBuiltinSearchImpl).mockReturnValue(
+      () => 'params',
+    );
+
+    expect(getSearchConfig('gpt-4', provider).useModelSearch).toBe(true);
+    expect(getSearchConfig('gpt-4-mini', provider).useModelSearch).toBe(false);
+  });
+
   it('should use model search when model has builtin search and it is enabled', () => {
     vi.mocked(chatConfigByIdSelectors.getChatConfigById).mockReturnValue(
       () =>

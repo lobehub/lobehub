@@ -72,6 +72,35 @@ describe('resolveModelExtendParams', () => {
     });
   });
 
+  it('should resolve extended parameters from the current provider and model', () => {
+    vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
+      () => true,
+    );
+    vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+      'reasoningEffort',
+    ]);
+
+    const chatConfig = createChatConfig({
+      modelConfigs: {
+        openai: {
+          'gpt-5-a': { reasoningEffort: 'high' },
+          'gpt-5-b': { reasoningEffort: 'medium' },
+        },
+      },
+      reasoningEffort: 'low',
+    });
+
+    expect(
+      resolveModelExtendParams({ chatConfig, model: 'gpt-5-a', provider: 'openai' }),
+    ).toMatchObject({ reasoning_effort: 'high' });
+    expect(
+      resolveModelExtendParams({ chatConfig, model: 'gpt-5-b', provider: 'openai' }),
+    ).toMatchObject({ reasoning_effort: 'medium' });
+    expect(
+      resolveModelExtendParams({ chatConfig, model: 'gpt-5-c', provider: 'openai' }),
+    ).toMatchObject({ reasoning_effort: 'low' });
+  });
+
   describe('reasoning configuration', () => {
     describe('enableReasoning param', () => {
       beforeEach(() => {
@@ -458,6 +487,25 @@ describe('resolveModelExtendParams', () => {
       });
     });
 
+    it.each([
+      ['glm5_2ReasoningEffort', 'glm5_2ReasoningEffort', 'max', 'glm-5.2'],
+      ['grok4_5ReasoningEffort', 'grok4_5ReasoningEffort', 'high', 'grok-4.5'],
+    ] as const)('uses the shared resolver for %s', (extendParam, configKey, value, model) => {
+      vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
+        () => true,
+      );
+      vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+        extendParam,
+      ]);
+
+      const result = resolveModelExtendParams({
+        chatConfig: { [configKey]: value } as any,
+        model,
+        provider: 'test-provider',
+      });
+
+      expect(result.reasoning_effort).toBe(value);
+    });
     describe('reasoningMode param', () => {
       beforeEach(() => {
         vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(

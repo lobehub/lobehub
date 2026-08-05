@@ -7,7 +7,7 @@ import {
   isKimiAlwaysPreserveThinkingModel,
   type ModelExtendParams,
 } from '@lobechat/model-runtime';
-import type { UIChatMessage } from '@lobechat/types';
+import { resolveModelScopedChatConfig, type UIChatMessage } from '@lobechat/types';
 import { type ExtendParamsType, ModelProvider } from 'model-bank';
 
 import { AiModelModel } from '@/database/models/aiModel';
@@ -44,12 +44,15 @@ export const resolveServerCallLlmContextHints = async ({
   provider,
 }: ResolveServerCallLlmContextHintsInput): Promise<ServerCallLlmContextHints> => {
   const agentConfig = ctx.agentConfig;
+  const modelChatConfig = agentConfig?.chatConfig
+    ? resolveModelScopedChatConfig(agentConfig.chatConfig, provider, model)
+    : undefined;
   const { loadModels } = await import('@/business/client/model-bank/loadModels');
   const builtinModels = await loadModels();
 
   const preserveThinkingConfigured =
-    typeof agentConfig?.chatConfig?.preserveThinking === 'boolean'
-      ? agentConfig.chatConfig.preserveThinking
+    typeof modelChatConfig?.preserveThinking === 'boolean'
+      ? modelChatConfig.preserveThinking
       : undefined;
   const preserveThinkingRequested = preserveThinkingConfigured === true;
 
@@ -124,7 +127,7 @@ export const resolveServerCallLlmContextHints = async ({
   // forces reasoning history in the payload builder — suppressing it there
   // would reintroduce the 400/answer-hidden behavior.
   const deepseekV4ThinkingDisabled =
-    isDeepSeekV4FamilyModel(model) && agentConfig?.chatConfig?.deepseekV4ReasoningEffort === 'none';
+    isDeepSeekV4FamilyModel(model) && modelChatConfig?.deepseekV4ReasoningEffort === 'none';
   const deepseekForcesPreserveThinking =
     isDeepSeekThinkingEligibleModel(model) && !deepseekV4ThinkingDisabled;
   const modelForcesPreserveThinking = kimiForcesPreserveThinking || deepseekForcesPreserveThinking;
@@ -143,9 +146,9 @@ export const resolveServerCallLlmContextHints = async ({
       ? preserveThinkingConfigured
       : undefined;
 
-  const resolvedModelExtendParams = agentConfig?.chatConfig
+  const resolvedModelExtendParams = modelChatConfig
     ? applyModelExtendParams({
-        chatConfig: agentConfig.chatConfig,
+        chatConfig: modelChatConfig,
         extendParams: modelExtendParams as ExtendParamsType[] | undefined,
         model,
       })

@@ -1,3 +1,4 @@
+import { resolveModelScopedChatConfig } from '@lobechat/types';
 import { resolveSearchDecision, type SearchDecision } from 'model-bank';
 
 import { getAgentStoreState } from '@/store/agent';
@@ -34,10 +35,12 @@ export const getSearchConfig = (
     provider,
   )(aiInfraStoreState);
 
+  const modelChatConfig = resolveModelScopedChatConfig(chatConfig, provider, model);
+
   return resolveSearchDecision({
     modelSearchImpl,
     providerSearchMode,
     searchMode: chatConfig.searchMode,
-    useModelBuiltinSearch: chatConfig.useModelBuiltinSearch,
+    useModelBuiltinSearch: modelChatConfig.useModelBuiltinSearch,
   });
 };

@@ -1,3 +1,4 @@
+import { resolveModelScopedChatConfig } from '@lobechat/types';
 import { Center, Flexbox, Icon } from '@lobehub/ui';
 import { GlobeOffIcon } from '@lobehub/ui/icons';
 import { Divider } from 'antd';
@@ -106,10 +107,12 @@ const Controls = memo(() => {
   const { allowed: canCreate } = usePermission('create_content');
 
   const { model, provider } = useEffectiveModel(agentId);
-  const [useModelBuiltinSearch, searchMode] = useAgentStore((s) => [
-    chatConfigByIdSelectors.getUseModelBuiltinSearchById(agentId)(s),
-    chatConfigByIdSelectors.getChatConfigById(agentId)(s).searchMode,
-  ]);
+  const [useModelBuiltinSearch, searchMode] = useAgentStore((s) => {
+    const chatConfig = chatConfigByIdSelectors.getChatConfigById(agentId)(s);
+    const modelChatConfig = resolveModelScopedChatConfig(chatConfig, provider, model);
+
+    return [modelChatConfig.useModelBuiltinSearch, chatConfig.searchMode];
+  });
 
   const supportFC = useAiInfraStore(aiModelSelectors.isModelSupportToolUse(model, provider));
   const isProviderHasBuiltinSearchConfig = useAiInfraStore(

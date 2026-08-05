@@ -1,5 +1,6 @@
 'use client';
 
+import { resolveModelScopedChatConfig } from '@lobechat/types';
 import { validateVideoFileSize } from '@lobechat/utils/client';
 import type { IconProps } from '@lobehub/ui';
 import { Icon, Popover, Tag } from '@lobehub/ui';
@@ -322,11 +323,16 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   const skillActivateMode = useAgentStore((s) =>
     chatConfigByIdSelectors.getSkillActivateModeById(agentId)(s),
   );
-  const [searchMode, useModelBuiltinSearch, disableGatewayMode] = useAgentStore((s) => [
-    chatConfigByIdSelectors.getSearchModeById(agentId)(s),
-    chatConfigByIdSelectors.getUseModelBuiltinSearchById(agentId)(s),
-    chatConfigByIdSelectors.getChatConfigById(agentId)(s).disableGatewayMode,
-  ]);
+  const [searchMode, useModelBuiltinSearch, disableGatewayMode] = useAgentStore((s) => {
+    const chatConfig = chatConfigByIdSelectors.getChatConfigById(agentId)(s);
+    const modelChatConfig = resolveModelScopedChatConfig(chatConfig, provider, model);
+
+    return [
+      chatConfig.searchMode,
+      modelChatConfig.useModelBuiltinSearch,
+      chatConfig.disableGatewayMode,
+    ];
+  });
   const isGatewayModeEnabled = (disableGatewayMode ?? defaultDisableGatewayMode) !== true;
 
   const isMemoryEnabled = useMemoryEnabled(agentId);
@@ -382,14 +388,23 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   const handleSelectSearch = useCallback(
     async (option: 'off' | 'app' | 'provider') => {
       if (option === 'off') {
-        await updateAgentChatConfig({ searchMode: 'off', useModelBuiltinSearch: false });
+        await updateAgentChatConfig({
+          modelConfigs: { [provider]: { [model]: { useModelBuiltinSearch: false } } },
+          searchMode: 'off',
+        });
       } else if (option === 'app') {
-        await updateAgentChatConfig({ searchMode: 'auto', useModelBuiltinSearch: false });
+        await updateAgentChatConfig({
+          modelConfigs: { [provider]: { [model]: { useModelBuiltinSearch: false } } },
+          searchMode: 'auto',
+        });
       } else {
-        await updateAgentChatConfig({ searchMode: 'auto', useModelBuiltinSearch: true });
+        await updateAgentChatConfig({
+          modelConfigs: { [provider]: { [model]: { useModelBuiltinSearch: true } } },
+          searchMode: 'auto',
+        });
       }
     },
-    [updateAgentChatConfig],
+    [model, provider, updateAgentChatConfig],
   );
 
   const handleToggleGatewayMode = useCallback(

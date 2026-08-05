@@ -149,4 +149,23 @@ describe('ControlsForm', () => {
       }),
     );
   });
+
+  it('should prefer the current model configuration over the Agent fallback', () => {
+    testState.agentState.config = {
+      enableReasoning: false,
+      modelConfigs: {
+        openai: {
+          'gpt-4': { enableReasoning: true },
+        },
+      },
+    };
+
+    render(<ControlsForm model="gpt-4" provider="openai" />);
+
+    expect(testState.setFieldsValue).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        enableReasoning: true,
+      }),
+    );
+  });
 });

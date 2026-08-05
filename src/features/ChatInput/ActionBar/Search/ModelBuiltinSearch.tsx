@@ -1,3 +1,4 @@
+import { resolveModelScopedChatConfig } from '@lobechat/types';
 import { Exa, Google } from '@lobehub/icons';
 import { Flexbox, Icon } from '@lobehub/ui';
 import { Switch } from '@lobehub/ui/base-ui';
@@ -42,8 +43,13 @@ const ModelBuiltinSearch = memo<ModelBuiltinSearchProps>(({ disabled }) => {
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
   const { model, provider } = useEffectiveModel(agentId);
-  const checked = useAgentStore((s) =>
-    chatConfigByIdSelectors.getUseModelBuiltinSearchById(agentId)(s),
+  const checked = useAgentStore(
+    (s) =>
+      resolveModelScopedChatConfig(
+        chatConfigByIdSelectors.getChatConfigById(agentId)(s),
+        provider,
+        model,
+      ).useModelBuiltinSearch,
   );
 
   const [isLoading, setLoading] = useState(false);
@@ -63,7 +69,9 @@ const ModelBuiltinSearch = memo<ModelBuiltinSearchProps>(({ disabled }) => {
       onClick={async () => {
         if (disabled) return;
         setLoading(true);
-        await updateAgentChatConfig({ useModelBuiltinSearch: !checked });
+        await updateAgentChatConfig({
+          modelConfigs: { [provider]: { [model]: { useModelBuiltinSearch: !checked } } },
+        });
         setLoading(false);
       }}
     >
