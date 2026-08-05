@@ -1,5 +1,5 @@
 import { Icon } from '@lobehub/ui';
-import { Building2, Shield, Wallet } from 'lucide-react';
+import { Building2, Wallet } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { type MenuProps } from '@/components/Menu';
@@ -7,7 +7,8 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
 /**
  * Aico billing / org surfaces in the user avatar menu.
- * Personal-only routes (`/wallet`, `/org`, `/platform`) — never workspace-prefixed.
+ * Personal-only routes (`/wallet`, `/org`) — never workspace-prefixed.
+ * `/platform` stays reachable by URL only (no menu entry).
  */
 export default function useBusinessMenuItems(isSignin: boolean | undefined): MenuProps['items'] {
   const { t } = useTranslation('aico');
@@ -31,15 +32,6 @@ export default function useBusinessMenuItems(isSignin: boolean | undefined): Men
       label: (
         <WorkspaceLink escape to="/org">
           {t('nav.org')}
-        </WorkspaceLink>
-      ),
-    },
-    {
-      icon: <Icon icon={Shield} />,
-      key: 'aico-platform',
-      label: (
-        <WorkspaceLink escape to="/platform">
-          {t('nav.platform')}
         </WorkspaceLink>
       ),
     },

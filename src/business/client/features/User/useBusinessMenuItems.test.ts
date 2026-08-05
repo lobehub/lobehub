@@ -19,7 +19,7 @@ describe('useBusinessMenuItems', () => {
     expect(result.current).toEqual([]);
   });
 
-  it('exposes wallet, org, and platform links when signed in', () => {
+  it('exposes wallet and org links when signed in (platform is URL-only)', () => {
     const { result } = renderHook(() => useBusinessMenuItems(true));
     const keys = (result.current ?? []).map((item) =>
       item && typeof item === 'object' && 'key' in item ? item.key : undefined,
@@ -27,6 +27,6 @@ describe('useBusinessMenuItems', () => {
 
     expect(keys).toContain('aico-wallet');
     expect(keys).toContain('aico-org');
-    expect(keys).toContain('aico-platform');
+    expect(keys).not.toContain('aico-platform');
   });
 });
