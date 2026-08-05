@@ -159,14 +159,18 @@ export default {
   'platform.created': 'Organization created',
   'platform.creditFailed': 'Failed to add credit',
   'platform.creditSubmit': 'Add credit',
+  'platform.creditUserAction': 'Credit',
   'platform.credited': 'Credit added',
   'platform.description': 'Description',
   'platform.forbiddenDesc': 'Only platform admins can open this page.',
   'platform.forbiddenTitle': 'Access denied',
   'platform.managerEmail': 'Manager email (existing user)',
   'platform.managerRole': 'Role',
-  'platform.manualCredit': 'Manual credit',
+  'platform.manualCredit': 'Manual org credit',
   'platform.manualCreditHint': 'Credits org USD wallet at the live FX rate at purchase time.',
+  'platform.manualUserCredit': 'Manual user credit',
+  'platform.manualUserCreditHint':
+    'Credits a B2C user USD wallet at the live FX rate. Provide email and/or select a wallet user.',
   'platform.modelsCount': 'Models in catalog',
   'platform.modelsFetchNow': 'Fetch OpenRouter models now',
   'platform.modelsHint':
@@ -204,6 +208,13 @@ export default {
   'platform.trialSaved': 'Trial settings saved',
   'platform.trialTitle': 'Trial configuration',
   'platform.usdCredited': 'USD credited',
+  'platform.userCreditFailed': 'Failed to add user credit',
+  'platform.userCreditSubmit': 'Add user credit',
+  'platform.userCreditTargetRequired': 'Provide a user email or select a wallet user.',
+  'platform.userCredited': 'User credit added',
+  'platform.userEmail': 'User email',
+  'platform.userId': 'User wallet',
+  'platform.userIdPlaceholder': 'Select from B2C wallets (optional if email set)',
 
   'provider.managed.desc':
     'Models are provided by {{brandName}}. Usage is billed from your wallet or organization credit — no API key setup is required.',

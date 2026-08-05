@@ -44,6 +44,12 @@ export const PlatformAdminPanel = () => {
   const [tab, setTab] = useState('overview');
   const [createForm] = Form.useForm<{ managerEmail: string; name: string }>();
   const [creditForm] = Form.useForm<{ amountToman: number; description?: string; orgId: string }>();
+  const [userCreditForm] = Form.useForm<{
+    amountToman: number;
+    description?: string;
+    email?: string;
+    userId?: string;
+  }>();
   const [assignForm] = Form.useForm<{
     managerEmail: string;
     orgId: string;
@@ -72,8 +78,9 @@ export const PlatformAdminPanel = () => {
   const { data: trialConfig, mutate: mutateTrial } = useClientDataSWR('aico-trial-config', () =>
     lambdaClient.platformAdmin.getTrialConfig.query(),
   );
-  const { data: userWallets } = useClientDataSWR('aico-user-wallets', () =>
-    lambdaClient.platformAdmin.listUserWallets.query(),
+  const { data: userWallets, mutate: mutateUserWallets } = useClientDataSWR(
+    'aico-user-wallets',
+    () => lambdaClient.platformAdmin.listUserWallets.query(),
   );
   const { data: modelSync, mutate: mutateModelSync } = useClientDataSWR(
     'aico-openrouter-model-sync',
@@ -534,6 +541,24 @@ export const PlatformAdminPanel = () => {
                   title: t('platform.columns.key'),
                   render: (v: boolean) => (v ? '✓' : '—'),
                 },
+                {
+                  key: 'actions',
+                  title: t('platform.columns.actions'),
+                  render: (_, row) => (
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        userCreditForm.setFieldsValue({
+                          email: undefined,
+                          userId: row.userId,
+                        });
+                        setTab('credits');
+                      }}
+                    >
+                      {t('platform.creditUserAction')}
+                    </Button>
+                  ),
+                },
               ]}
             />
           </Flexbox>
@@ -541,51 +566,127 @@ export const PlatformAdminPanel = () => {
       )}
 
       {tab === 'credits' && (
-        <Block className={styles.section} variant="outlined">
-          <Flexbox gap={16}>
-            <Text strong>{t('platform.manualCredit')}</Text>
-            <Text type="secondary">{t('platform.manualCreditHint')}</Text>
-            <Form
-              form={creditForm}
-              layout="vertical"
-              onFinish={async (values) => {
-                setBusy(true);
-                try {
-                  await lambdaClient.platformAdmin.addManualCredit.mutate(values);
-                  toast.success(t('platform.credited'));
-                  await Promise.all([mutate(), mutateFinancials()]);
-                } catch (err) {
-                  toastAicoError(err, t, 'platform.creditFailed');
-                } finally {
-                  setBusy(false);
-                }
-              }}
-            >
-              <Form.Item label={t('platform.orgId')} name="orgId" rules={[{ required: true }]}>
-                <Select
-                  style={{ width: '100%' }}
-                  options={(data?.items || []).map((o) => ({
-                    label: `${o.name}${o.publicCode ? ` · ${o.publicCode}` : ''}`,
-                    value: o.id,
-                  }))}
-                />
-              </Form.Item>
-              <Form.Item
-                label={t('platform.amountToman')}
-                name="amountToman"
-                rules={[{ required: true }]}
+        <Flexbox gap={16}>
+          <Block className={styles.section} variant="outlined">
+            <Flexbox gap={16}>
+              <Text strong>{t('platform.manualCredit')}</Text>
+              <Text type="secondary">{t('platform.manualCreditHint')}</Text>
+              <Form
+                form={creditForm}
+                layout="vertical"
+                onFinish={async (values) => {
+                  setBusy(true);
+                  try {
+                    await lambdaClient.platformAdmin.addManualCredit.mutate(values);
+                    toast.success(t('platform.credited'));
+                    await Promise.all([mutate(), mutateFinancials()]);
+                  } catch (err) {
+                    toastAicoError(err, t, 'platform.creditFailed');
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
               >
-                <InputNumber min={1} style={{ width: '100%' }} />
-              </Form.Item>
-              <Form.Item label={t('platform.description')} name="description">
-                <Input />
-              </Form.Item>
-              <Button htmlType="submit" loading={busy} type="primary">
-                {t('platform.creditSubmit')}
-              </Button>
-            </Form>
-          </Flexbox>
-        </Block>
+                <Form.Item label={t('platform.orgId')} name="orgId" rules={[{ required: true }]}>
+                  <Select
+                    style={{ width: '100%' }}
+                    options={(data?.items || []).map((o) => ({
+                      label: `${o.name}${o.publicCode ? ` · ${o.publicCode}` : ''}`,
+                      value: o.id,
+                    }))}
+                  />
+                </Form.Item>
+                <Form.Item
+                  label={t('platform.amountToman')}
+                  name="amountToman"
+                  rules={[{ required: true }]}
+                >
+                  <InputNumber min={1} style={{ width: '100%' }} />
+                </Form.Item>
+                <Form.Item label={t('platform.description')} name="description">
+                  <Input />
+                </Form.Item>
+                <Button htmlType="submit" loading={busy} type="primary">
+                  {t('platform.creditSubmit')}
+                </Button>
+              </Form>
+            </Flexbox>
+          </Block>
+
+          <Block className={styles.section} variant="outlined">
+            <Flexbox gap={16}>
+              <Text strong>{t('platform.manualUserCredit')}</Text>
+              <Text type="secondary">{t('platform.manualUserCreditHint')}</Text>
+              <Form
+                form={userCreditForm}
+                layout="vertical"
+                onFinish={async (values) => {
+                  if (!values.email && !values.userId) {
+                    toast.error(t('platform.userCreditTargetRequired'));
+                    return;
+                  }
+                  setBusy(true);
+                  try {
+                    await lambdaClient.platformAdmin.addManualUserCredit.mutate({
+                      amountToman: values.amountToman,
+                      description: values.description,
+                      email: values.email || undefined,
+                      userId: values.userId || undefined,
+                    });
+                    toast.success(t('platform.userCredited'));
+                    userCreditForm.resetFields(['amountToman', 'description']);
+                    await Promise.all([mutateUserWallets(), mutateFinancials()]);
+                  } catch (err) {
+                    toastAicoError(err, t, 'platform.userCreditFailed');
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                <Flexbox horizontal gap={12} style={{ flexWrap: 'wrap' }}>
+                  <Form.Item
+                    label={t('platform.userEmail')}
+                    name="email"
+                    rules={[{ type: 'email' }]}
+                    style={{ flex: 1, minWidth: 220 }}
+                  >
+                    <Input placeholder="user@example.com" />
+                  </Form.Item>
+                  <Form.Item
+                    label={t('platform.userId')}
+                    name="userId"
+                    style={{ flex: 1, minWidth: 200 }}
+                  >
+                    <Select
+                      allowClear
+                      showSearch
+                      optionFilterProp="label"
+                      placeholder={t('platform.userIdPlaceholder')}
+                      style={{ width: '100%' }}
+                      options={(userWallets || []).map((w) => ({
+                        label: `${w.publicCode ? `${w.publicCode} · ` : ''}${w.userId.slice(0, 14)} · ${usd(w.balanceUsd)}`,
+                        value: w.userId,
+                      }))}
+                    />
+                  </Form.Item>
+                </Flexbox>
+                <Form.Item
+                  label={t('platform.amountToman')}
+                  name="amountToman"
+                  rules={[{ required: true }]}
+                >
+                  <InputNumber min={1} style={{ width: '100%' }} />
+                </Form.Item>
+                <Form.Item label={t('platform.description')} name="description">
+                  <Input />
+                </Form.Item>
+                <Button htmlType="submit" loading={busy} type="primary">
+                  {t('platform.userCreditSubmit')}
+                </Button>
+              </Form>
+            </Flexbox>
+          </Block>
+        </Flexbox>
       )}
     </Flexbox>
   );
