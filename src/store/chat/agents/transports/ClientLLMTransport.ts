@@ -145,6 +145,16 @@ class ClientLLMRetryPolicy implements LLMRetryPolicy {
       },
       { operationId: this.operationId },
     );
+
+    // callLlm only invokes onError for the terminal attempt. End the operation
+    // here so Stop/loading clear with the message error, not after outer completeRun.
+    const operation = this.get().operations[this.operationId];
+    if (operation?.status === 'running') {
+      this.get().failOperation(this.operationId, {
+        message: localizedError.message || 'LLM execution failed',
+        type: String(localizedError.type ?? 'runtime_error'),
+      });
+    }
   }
 
   onRetry(_input: LLMRetryInput) {
