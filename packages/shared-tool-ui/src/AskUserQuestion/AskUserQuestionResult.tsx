@@ -8,12 +8,13 @@ import type { AskUserQuestionItem } from './types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   // Codex-style flat summary: the question keeps the body text color and the
-  // answer drops to secondary — the exchange reads as a quiet process record,
-  // not an interactive control. No chips, icons, or borders.
+  // answer drops to tertiary — the exchange reads as a quiet process record,
+  // not an interactive control. No chips, icons, or borders. Tertiary (not
+  // secondary) so the question/answer hierarchy stays legible at a glance.
   answer: css`
     font-size: 14px;
     line-height: 1.5;
-    color: ${cssVar.colorTextSecondary};
+    color: ${cssVar.colorTextTertiary};
     overflow-wrap: anywhere;
   `,
   container: css`
@@ -66,6 +67,21 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   questionContent: css`
     min-width: 0;
   `,
+  // Mirrors OptionCard's recommended pill so the marker reads the same in the
+  // form and in the completed summary.
+  recommendedBadge: css`
+    flex-shrink: 0;
+
+    padding-block: 1px;
+    padding-inline: 8px;
+    border-radius: 999px;
+
+    font-size: 11px;
+    line-height: 18px;
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorFillSecondary};
+  `,
   titleRow: css`
     display: flex;
     flex-wrap: wrap;
@@ -82,6 +98,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 export interface AskUserQuestionResultLabels {
   noAnswer: string;
   notAnswered: string;
+  /** Badge text for a chosen option carrying the recommended marker. */
+  recommendedTag: string;
 }
 
 interface QuestionAnswerProps {
@@ -89,32 +107,40 @@ interface QuestionAnswerProps {
   index?: number;
   notAnswered: string;
   question: AskUserQuestionItem;
+  recommendedTag: string;
 }
 
-const QuestionAnswer = memo<QuestionAnswerProps>(({ question, answer, index, notAnswered }) => {
-  const labels: string[] = Array.isArray(answer) ? answer : answer ? [answer] : [];
+const QuestionAnswer = memo<QuestionAnswerProps>(
+  ({ question, answer, index, notAnswered, recommendedTag }) => {
+    const labels: string[] = Array.isArray(answer) ? answer : answer ? [answer] : [];
+    const isRecommended = (label: string) =>
+      question.options.some((o) => o.label === label && o.recommended);
 
-  return (
-    <Flexbox align="flex-start" gap={8} horizontal={!!index}>
-      {!!index && <span className={styles.ordinal}>{`Q${index}`}</span>}
-      <Flexbox className={styles.questionContent} flex={1} gap={4}>
-        <div className={index ? styles.titleRow : undefined}>
-          <span className={styles.question}>{question.question}</span>
-          {!!index && question.header && <span className={styles.header}>{question.header}</span>}
-        </div>
-        {labels.length > 0 ? (
-          labels.map((label) => (
-            <span className={styles.answer} key={label}>
-              {label}
-            </span>
-          ))
-        ) : (
-          <span className={styles.unanswered}>{notAnswered}</span>
-        )}
+    return (
+      <Flexbox align="flex-start" gap={8} horizontal={!!index}>
+        {!!index && <span className={styles.ordinal}>{`Q${index}`}</span>}
+        <Flexbox className={styles.questionContent} flex={1} gap={4}>
+          <div className={index ? styles.titleRow : undefined}>
+            <span className={styles.question}>{question.question}</span>
+            {!!index && question.header && <span className={styles.header}>{question.header}</span>}
+          </div>
+          {labels.length > 0 ? (
+            labels.map((label) => (
+              <Flexbox horizontal align="center" gap={8} key={label}>
+                <span className={styles.answer}>{label}</span>
+                {isRecommended(label) && (
+                  <span className={styles.recommendedBadge}>{recommendedTag}</span>
+                )}
+              </Flexbox>
+            ))
+          ) : (
+            <span className={styles.unanswered}>{notAnswered}</span>
+          )}
+        </Flexbox>
       </Flexbox>
-    </Flexbox>
-  );
-});
+    );
+  },
+);
 
 QuestionAnswer.displayName = 'AskUserQuestionResultQuestionAnswer';
 
@@ -174,6 +200,7 @@ export const AskUserQuestionResult = memo<AskUserQuestionResultProps>(
             key={`${question.question}-${index}`}
             notAnswered={labels.notAnswered}
             question={question}
+            recommendedTag={labels.recommendedTag}
           />
         ))}
         {isError && <Text type="warning">{labels.noAnswer}</Text>}
