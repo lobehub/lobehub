@@ -4,7 +4,7 @@ import { normalizeInterestsForStorage } from '@lobechat/const';
 import { Block, Flexbox, Icon, Input, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { BriefcaseIcon, Undo2Icon } from 'lucide-react';
+import { BriefcaseIcon } from 'lucide-react';
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,6 +14,7 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import LobeMessage from '../components/LobeMessage';
 import type { InterestAreaKey } from '../config';
 import { INTEREST_AREAS } from '../config';
+import OnboardingBackButton from './OnboardingBackButton';
 
 interface InterestsStepProps {
   onBack: () => void;
@@ -152,15 +153,7 @@ const InterestsStep = memo<InterestsStepProps>(({ onBack, onNext }) => {
         />
       )}
       <Flexbox horizontal justify={'space-between'} style={{ marginTop: 32 }}>
-        <Button
-          disabled={isNavigating}
-          icon={Undo2Icon}
-          style={{ color: cssVar.colorTextDescription }}
-          type={'text'}
-          onClick={handleBack}
-        >
-          {t('back')}
-        </Button>
+        <OnboardingBackButton disabled={isNavigating} onClick={handleBack} />
         <Button disabled={isNavigating} type={'primary'} onClick={handleNext}>
           {t('next')}
         </Button>

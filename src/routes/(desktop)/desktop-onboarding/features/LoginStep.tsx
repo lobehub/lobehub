@@ -6,7 +6,7 @@ import { Alert, Center, Flexbox, Icon, Input, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
-import { Cloud, Server, Undo2Icon } from 'lucide-react';
+import { Cloud, Server } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
@@ -15,6 +15,7 @@ import { OFFICIAL_SITE } from '@/const/url';
 import { isDesktop } from '@/const/version';
 import UserInfo from '@/features/User/UserInfo';
 import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
+import OnboardingBackButton from '@/routes/onboarding/features/OnboardingBackButton';
 import { remoteServerService } from '@/services/electron/remoteServer';
 import { electronSystemService } from '@/services/electron/system';
 import { useElectronStore } from '@/store/electron';
@@ -321,14 +322,10 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
         </Flexbox>
 
         <Flexbox horizontal justify={'space-between'} style={{ marginTop: 32 }}>
-          <Button
-            icon={Undo2Icon}
-            style={{ color: cssVar.colorTextDescription }}
-            type={'text'}
+          <OnboardingBackButton
+            i18nNs={'desktop-onboarding'}
             onClick={() => handleBackToLoginMethods(method)}
-          >
-            {t('back')}
-          </Button>
+          />
           <Button type={'primary'} onClick={onNext}>
             {t('next')}
           </Button>
@@ -564,14 +561,7 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
       </Flexbox>
       {canStart() && (
         <Flexbox horizontal justify={'space-between'} style={{ marginTop: 32 }}>
-          <Button
-            icon={Undo2Icon}
-            style={{ color: cssVar.colorTextDescription }}
-            type={'text'}
-            onClick={onBack}
-          >
-            {t('back')}
-          </Button>
+          <OnboardingBackButton i18nNs={'desktop-onboarding'} onClick={onBack} />
           <Button type={'primary'} onClick={onNext}>
             {t('next')}
           </Button>

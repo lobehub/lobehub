@@ -11,11 +11,11 @@ import {
   Mic,
   MonitorCog,
   SquareArrowOutUpRight,
-  Undo2Icon,
 } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import OnboardingBackButton from '@/routes/onboarding/features/OnboardingBackButton';
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 import LobeMessage from '../components/LobeMessage';
@@ -211,14 +211,7 @@ const PermissionsStep = memo<PermissionsStepProps>(({ onBack, onNext }) => {
       </Block>
       <OnboardingFooterActions
         left={
-          <Button
-            icon={Undo2Icon}
-            style={{ color: cssVar.colorTextDescription }}
-            type={'text'}
-            onClick={onBack}
-          >
-            {t('back')}
-          </Button>
+          <OnboardingBackButton i18nNs={'desktop-onboarding'} onClick={onBack} />
         }
         right={
           <Button type={'primary'} onClick={onNext}>

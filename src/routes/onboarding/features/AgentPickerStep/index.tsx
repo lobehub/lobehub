@@ -7,8 +7,6 @@ import type {
 import { getTemplatesByCategoryPriority } from '@lobechat/builtin-tool-web-onboarding/agentMarketplace';
 import { Flexbox, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
-import { Undo2Icon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router';
@@ -27,6 +25,7 @@ import { consumeOnboardingCallbackUrl } from '@/utils/onboardingRedirect';
 
 import LobeMessage from '../../components/LobeMessage';
 import { interestsToCategoryHints } from '../../interestCategoryMap';
+import OnboardingBackButton from '../OnboardingBackButton';
 import AgentCard from './AgentCard';
 import CategoryFilter, { type ActiveCategory } from './CategoryFilter';
 import AgentPickerSkeleton from './Skeleton';
@@ -191,15 +190,7 @@ const AgentPickerStep = memo<AgentPickerStepProps>(({ onBack }) => {
 
       <div className={styles.footer}>
         {showBack ? (
-          <Button
-            disabled={!!pending}
-            icon={Undo2Icon}
-            style={{ color: cssVar.colorTextDescription }}
-            type={'text'}
-            onClick={handleBack}
-          >
-            {t('back')}
-          </Button>
+          <OnboardingBackButton disabled={!!pending} onClick={handleBack} />
         ) : (
           <span />
         )}

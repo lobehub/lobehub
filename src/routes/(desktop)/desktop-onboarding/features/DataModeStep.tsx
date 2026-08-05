@@ -3,10 +3,11 @@
 import { Block, Checkbox, Empty, Flexbox, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { HeartHandshake, Undo2Icon } from 'lucide-react';
+import { HeartHandshake } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import OnboardingBackButton from '@/routes/onboarding/features/OnboardingBackButton';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
@@ -117,14 +118,7 @@ const DataModeStep = memo<DataModeStepProps>(({ onBack, onNext }) => {
       </Text>
       <OnboardingFooterActions
         left={
-          <Button
-            icon={Undo2Icon}
-            style={{ color: cssVar.colorTextDescription }}
-            type={'text'}
-            onClick={onBack}
-          >
-            {t('back')}
-          </Button>
+          <OnboardingBackButton i18nNs={'desktop-onboarding'} onClick={onBack} />
         }
         right={
           <Button type={'primary'} onClick={onNext}>
