@@ -21,6 +21,7 @@ Aico-owned overlay. **Do not edit** upstream LobeHub skills under `.agents/skill
 | Git branch / commit / push / `gh pr create` mechanics           | `pr` skill (untouched upstream) |
 | Plane MCP tools, states, Persian comment format                 | `plane` skill                   |
 | Dual trackers, no-search policy, finish-job, Aico PR body rules | **this skill** (`aico-ship`)    |
+| Sync `upstream/canary` while keeping Aico fork changes          | `aico-upstream-sync`            |
 
 When `pr` says to search GitHub issues or link Linear (`LOBE-xxx`), **ignore that for Aico**. This fork tracks work with Plane + GitHub issues created from Cursor.
 
