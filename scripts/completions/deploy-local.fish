@@ -1,0 +1,11 @@
+complete -c deploy-local.sh -s h -l help -d 'Show help'
+complete -c deploy-local.sh -s u -l up -l ship -d 'Build from source, then deploy'
+complete -c deploy-local.sh -s d -l deploy-only -d 'Redeploy existing image (default)'
+complete -c deploy-local.sh -s b -l build-only -d 'Build image only (skip deploy)'
+complete -c deploy-local.sh -s s -l stop -l down -d 'Stop deployment containers'
+
+complete -c deploy-local -s h -l help -d 'Show help'
+complete -c deploy-local -s u -l up -l ship -d 'Build from source, then deploy'
+complete -c deploy-local -s d -l deploy-only -d 'Redeploy existing image (default)'
+complete -c deploy-local -s b -l build-only -d 'Build image only (skip deploy)'
+complete -c deploy-local -s s -l stop -l down -d 'Stop deployment containers'

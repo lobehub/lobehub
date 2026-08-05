@@ -1,0 +1,26 @@
+# Production hardening overlay for docker-compose/deploy/docker-compose.yml
+#
+# Usage:
+#   docker compose -f docker-compose.yml \
+#     -f path/to/docker-compose.production.override.yml up -d
+#
+# Changes:
+#   - Bind lobe to localhost only (reverse proxy handles public traffic)
+#   - Remove Postgres, Redis, RustFS admin from public host ports
+#   - Keep RustFS S3 port for browser uploads (proxy s3.example.com → this port)
+
+services:
+  lobe:
+    ports:
+      - '127.0.0.1:${LOBE_PORT:-3210}:3210'
+
+  postgresql:
+    ports: []
+
+  redis:
+    ports: []
+
+  rustfs:
+    ports:
+      - '127.0.0.1:${RUSTFS_PORT:-9000}:9000'
+      # Admin console (9001) not exposed — use docker exec if needed

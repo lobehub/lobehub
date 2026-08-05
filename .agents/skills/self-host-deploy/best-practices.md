@@ -1,0 +1,284 @@
+# Production Best Practices
+
+Use this checklist after initial deploy. Items marked **required** block a safe production launch.
+
+---
+
+## Pre-launch checklist
+
+```
+Security
+- [ ] HTTPS on APP_URL (required)
+- [ ] AUTH_SECRET rotated — not setup.sh default (required)
+- [ ] KEY_VAULTS_SECRET rotated (required)
+- [ ] .env mode 600, not in git (required)
+- [ ] Postgres/Redis not exposed to internet (required)
+- [ ] AUTH_ALLOWED_EMAILS set (recommended for private teams)
+- [ ] Firewall: only 80/443 public (required)
+
+Networking
+- [ ] APP_URL = exact public URL (scheme + host, no trailing slash)
+- [ ] INTERNAL_APP_URL = http://localhost:3210 (required in Docker)
+- [ ] S3_ENDPOINT = browser-reachable HTTPS domain (required for chat images)
+- [ ] AUTH_TRUSTED_ORIGINS includes APP_URL
+
+SPA / CDN
+- [ ] /_spa/assets/* returns 200 (required)
+- [ ] /_spa-auth/assets/* returns 200 (required)
+- [ ] CDN passes all /_spa* paths to origin unchanged
+- [ ] verify-deployment.sh passes
+
+Operations
+- [ ] Automated DB backup cron
+- [ ] Image tag pinned (not bare :latest in prod)
+- [ ] Disk alert configured
+- [ ] Update runbook documented
+```
+
+---
+
+## 1. Secrets & access control
+
+### Rotate all auto-generated secrets
+
+`setup.sh` secrets are fine for dev. **Before going public**, regenerate:
+
+```bash
+openssl rand -base64 32 # AUTH_SECRET
+openssl rand -base64 32 # KEY_VAULTS_SECRET
+openssl rand -base64 24 # POSTGRES_PASSWORD
+openssl rand -base64 24 # RUSTFS_SECRET_KEY
+```
+
+Update `.env`, then: `docker compose up -d --force-recreate`
+
+### Restrict who can sign up
+
+```env
+# Only these emails can log in (comma-separated)
+AUTH_ALLOWED_EMAILS=you@company.com,team@company.com
+
+# Or SSO-only (disable email/password registration)
+AUTH_DISABLE_EMAIL_PASSWORD=1
+AUTH_SSO_PROVIDERS=google,github
+```
+
+### Protect `.env`
+
+```bash
+chmod 600 .env
+echo ".env" >> .gitignore # must never be committed
+```
+
+---
+
+## 2. Network hardening
+
+### Do not expose internal services
+
+Default compose publishes Postgres (`5432`), Redis (`6379`), and RustFS admin (`9001`) to the host. **Remove these in production** — containers talk over the internal `lobe-network` bridge.
+
+Use the production override:
+
+```bash
+docker compose -f docker-compose.yml \
+  -f .claude/skills/self-host-deploy/templates/docker-compose.production.override.yml \
+  up -d
+```
+
+Or manually delete `ports:` blocks from `postgresql`, `redis`, and `rustfs` (keep only what the reverse proxy needs).
+
+### Bind app to localhost
+
+Only the reverse proxy should reach the app:
+
+```yaml
+# production override — lobe service
+ports:
+  - '127.0.0.1:${LOBE_PORT:-3210}:3210'
+```
+
+### Firewall
+
+```bash
+# UFW example
+ufw allow 22/tcp
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw enable
+```
+
+### URL variables (critical)
+
+| Variable               | Production value           | Why                                       |
+| ---------------------- | -------------------------- | ----------------------------------------- |
+| `APP_URL`              | `https://chat.example.com` | OAuth callbacks, emails, browser links    |
+| `INTERNAL_APP_URL`     | `http://localhost:3210`    | In-container async jobs bypass CDN        |
+| `S3_ENDPOINT`          | `https://s3.example.com`   | Browser uploads images via presigned URLs |
+| `AUTH_TRUSTED_ORIGINS` | `https://chat.example.com` | Better Auth origin validation             |
+
+Never set `S3_ENDPOINT=http://rustfs:9000` — browsers cannot resolve Docker service names.
+
+---
+
+## 3. Reverse proxy & CDN
+
+### Required headers
+
+```nginx
+proxy_set_header Host              $host;
+proxy_set_header X-Real-IP         $remote_addr;
+proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto $scheme;   # required for HTTPS detection
+proxy_http_version 1.1;
+proxy_set_header Upgrade           $http_upgrade;
+proxy_set_header Connection        "upgrade";
+```
+
+### SPA asset rules
+
+| Path                       | Cache                         | Notes                                         |
+| -------------------------- | ----------------------------- | --------------------------------------------- |
+| `/_spa/assets/*`           | `immutable, max-age=31536000` | Hashed filenames — safe to cache forever      |
+| `/_spa-auth/assets/*`      | same                          | Auth SPA chunks                               |
+| `/`, `/signin`, `/agent/*` | `no-cache`                    | HTML shell — must not be stale across deploys |
+| `/api/*`, `/trpc/*`        | `no-cache`                    | Dynamic API                                   |
+
+**Never** let CDN "optimize" or rewrite `/_spa*/assets/*.js`. If icons return 200 but JS returns 500, the CDN is misconfigured.
+
+### Cloudflare / ArvanCloud
+
+- SSL mode: **Full (strict)** when origin has valid cert
+- Disable "Rocket Loader" / JS optimization for `/_spa*`
+- Page Rules: bypass cache for `/api/*`, `/trpc/*`, `/signin*`
+- After deploy: purge cache for `/_spa*` **or** rely on hashed filenames (preferred)
+
+---
+
+## 4. Docker & releases
+
+### Pin image versions
+
+```yaml
+# Bad — unpredictable updates
+image: lobehub/lobehub
+
+# Good — pin to digest or semver tag
+image: lobehub/lobehub:1.x.x
+```
+
+Custom builds: tag with git SHA.
+
+```bash
+docker build -t aico/lobehub:$(git rev-parse --short HEAD) .
+```
+
+### Safe update procedure
+
+```bash
+# 1. Backup
+docker compose exec postgresql pg_dump -U postgres lobechat > backup-pre-update.sql
+
+# 2. Pull / rebuild
+docker compose pull # official image
+# OR docker build --no-cache -t aico/lobehub:NEW .
+
+# 3. Deploy
+docker compose up -d --force-recreate lobe
+
+# 4. Verify
+bash .claude/skills/self-host-deploy/scripts/verify-deployment.sh https://chat.example.com
+
+# 5. Rollback if needed
+docker compose down
+# restore image tag / backup
+docker compose up -d
+```
+
+### Resource limits (recommended)
+
+```yaml
+lobe:
+  deploy:
+    resources:
+      limits:
+        cpus: '4'
+        memory: 8G
+      reservations:
+        cpus: '1'
+        memory: 2G
+```
+
+---
+
+## 5. Backups & monitoring
+
+### Automated DB backup (cron)
+
+```bash
+# /etc/cron.daily/lobehub-backup
+#!/bin/bash
+BACKUP_DIR=/var/backups/lobehub
+mkdir -p "$BACKUP_DIR"
+docker compose -f /path/to/lobehub/docker-compose.yml \
+  exec -T postgresql pg_dump -U postgres lobechat \
+  | gzip > "$BACKUP_DIR/lobechat-$(date +%F).sql.gz"
+find "$BACKUP_DIR" -name '*.sql.gz' -mtime +14 -delete
+```
+
+### What to monitor
+
+| Signal                        | Alert threshold           |
+| ----------------------------- | ------------------------- |
+| HTTP 5xx on `APP_URL`         | Any sustained             |
+| Disk usage on `./data` volume | > 80%                     |
+| `docker compose ps` unhealthy | Any service               |
+| `/_spa/assets/*.js`           | Not HTTP 200 after deploy |
+| Container restarts            | > 3/hour                  |
+
+Optional: Grafana stack in `docker-compose/production/grafana/`.
+
+---
+
+## 6. Post-deploy bootstrap
+
+### Platform admin (do once)
+
+```bash
+# 1. Sign up first user via UI
+# 2. Get user id
+docker exec lobe-postgres psql -U postgres -d lobechat -c \
+  "SELECT id, email FROM users ORDER BY created_at LIMIT 5;"
+
+# 3. Grant admin (id column required)
+docker exec lobe-postgres psql -U postgres -d lobechat -c \
+  "INSERT INTO platform_admins (id, user_id)
+   VALUES ('padm_' || substr(md5(random()::text || clock_timestamp()::text), 1, 12), 'USER_ID')
+   ON CONFLICT (user_id) DO NOTHING;"
+```
+
+Prefer tRPC `platformAdmin.addPlatformAdmin` when you already have an admin session.
+
+---
+
+## 7. Staging before production
+
+Mirror production topology in staging:
+
+1. Same reverse proxy + CDN setup
+2. Run `verify-deployment.sh` against staging URL
+3. Test: sign-up, chat, image upload, OAuth callback
+4. Deploy to production only after verify passes
+
+---
+
+## 8. Common anti-patterns
+
+| Anti-pattern                               | Why it's bad                       | Fix                          |
+| ------------------------------------------ | ---------------------------------- | ---------------------------- |
+| `APP_URL=http://IP:3210` with public users | OAuth breaks, mixed content        | Use domain + HTTPS           |
+| Exposed Postgres on 5432                   | Brute-force / data leak            | Remove port mapping          |
+| `docker compose pull` without backup       | No rollback path                   | Backup first                 |
+| CDN caching HTML                           | Stale SPA chunk refs after deploy  | `no-cache` on HTML routes    |
+| Skipping `build:spa:copy` in custom builds | 500 on `/_spa/assets/*`            | Full `build:docker` pipeline |
+| Same secrets dev → prod                    | Compromised dev = compromised prod | Rotate per environment       |

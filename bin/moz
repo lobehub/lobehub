@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Short deploy command for local Aico Docker.
+#
+# Install once:
+#   ln -sf "$HOME/Aico/bin/moz" ~/.local/bin/moz
+#
+# Usage:
+#   moz        # start/redeploy
+#   moz -u     # build + deploy
+#   moz -s     # stop
+
+set -euo pipefail
+
+resolve_script_path() {
+  local source="${BASH_SOURCE[0]}"
+  while [[ -L "$source" ]]; do
+    local dir
+    dir="$(cd -P "$(dirname "$source")" && pwd)"
+    source="$(readlink "$source")"
+    [[ "$source" != /* ]] && source="$dir/$source"
+  done
+  cd -P "$(dirname "$source")" && pwd
+}
+
+ROOT="$(resolve_script_path)/.."
+ROOT="$(cd "$ROOT" && pwd)"
+exec "$ROOT/scripts/deploy-local.sh" "$@"

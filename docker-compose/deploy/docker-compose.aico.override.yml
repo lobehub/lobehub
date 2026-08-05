@@ -1,0 +1,13 @@
+# Use a locally built Aico image instead of the upstream Docker Hub image.
+#
+#   scripts/deploy-local.sh          # build + deploy
+#   docker compose -f docker-compose.yml -f docker-compose.aico.override.yml up -d
+
+services:
+  lobe:
+    image: aico/lobehub:local
+    pull_policy: never
+    # App config lives in repo root .env; deploy/.env keeps infra-only values.
+    env_file:
+      - ../../.env
+      - .env
