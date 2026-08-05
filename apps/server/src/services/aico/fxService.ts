@@ -3,6 +3,7 @@ import { aicoEnv } from '@/envs/aico';
 export type FxRateSource = 'live' | 'env';
 
 export interface TomanPerUsdRate {
+  /** Positive integer toman per 1 USD — safe for BigInt / integer money math. */
   rate: number;
   source: FxRateSource;
 }
@@ -12,6 +13,18 @@ const LIVE_FX_URL = 'https://open.er-api.com/v6/latest/USD';
 const FETCH_TIMEOUT_MS = 4000;
 
 let cached: { expiresAt: number; rate: number } | null = null;
+
+/**
+ * Live FX feeds return floats (e.g. IRR/10 → 126510.0632387). Integer money
+ * math and `BigInt(rate)` require a positive integer toman-per-USD.
+ */
+export const toIntegerTomanPerUsd = (rate: number): number => {
+  const rounded = Math.round(rate);
+  if (!Number.isFinite(rounded) || rounded <= 0) {
+    throw new Error('INVALID_FX_RATE');
+  }
+  return rounded;
+};
 
 /** Allows tests to swap the live-fetch implementation without network access. */
 let fetchLiveRateImpl = async (): Promise<number> => {
@@ -36,6 +49,7 @@ let fetchLiveRateImpl = async (): Promise<number> => {
  * Toman-per-USD rate for topup conversion. Tries a live lookup (15min cache),
  * falling back to `AICO_TOMAN_PER_USD` on any failure — USD wallet balances
  * are the source of truth, so a stale/fallback FX rate never blocks a topup.
+ * Always returns an integer rate so callers can safely use BigInt / FX math.
  */
 export const getTomanPerUsd = async (): Promise<TomanPerUsdRate> => {
   const now = Date.now();
@@ -44,11 +58,11 @@ export const getTomanPerUsd = async (): Promise<TomanPerUsdRate> => {
   }
 
   try {
-    const rate = await fetchLiveRateImpl();
+    const rate = toIntegerTomanPerUsd(await fetchLiveRateImpl());
     cached = { expiresAt: now + CACHE_TTL_MS, rate };
     return { rate, source: 'live' };
   } catch {
-    return { rate: aicoEnv.AICO_TOMAN_PER_USD, source: 'env' };
+    return { rate: toIntegerTomanPerUsd(aicoEnv.AICO_TOMAN_PER_USD), source: 'env' };
   }
 };
 
