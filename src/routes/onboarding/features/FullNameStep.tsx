@@ -2,9 +2,8 @@
 
 import { SendButton } from '@lobehub/editor/react';
 import { Flexbox, Icon, Input } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { SignatureIcon, Undo2Icon } from 'lucide-react';
+import { SignatureIcon } from 'lucide-react';
 import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -13,6 +12,7 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
 import LobeMessage from '../components/LobeMessage';
+import OnboardingBackButton from './OnboardingBackButton';
 
 interface FullNameStepProps {
   onBack: () => void;
@@ -86,17 +86,7 @@ const FullNameStep = memo<FullNameStepProps>(({ onBack, onNext }) => {
         />
       </Flexbox>
       <Flexbox horizontal justify={'flex-start'} style={{ marginTop: 32 }}>
-        <Button
-          disabled={isNavigating}
-          icon={Undo2Icon}
-          type={'text'}
-          style={{
-            color: cssVar.colorTextDescription,
-          }}
-          onClick={handleBack}
-        >
-          {t('back')}
-        </Button>
+        <OnboardingBackButton disabled={isNavigating} onClick={handleBack} />
       </Flexbox>
     </Flexbox>
   );

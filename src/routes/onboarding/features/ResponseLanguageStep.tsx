@@ -2,9 +2,8 @@
 
 import { SendButton } from '@lobehub/editor/react';
 import { Flexbox, Text } from '@lobehub/ui';
-import { Button, Select } from '@lobehub/ui/base-ui';
+import { Select } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { Undo2Icon } from 'lucide-react';
 import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,6 +13,7 @@ import { useGlobalStore } from '@/store/global';
 import { useUserStore } from '@/store/user';
 
 import LobeMessage from '../components/LobeMessage';
+import OnboardingBackButton from './OnboardingBackButton';
 
 interface ResponseLanguageStepProps {
   onBack: () => void;
@@ -121,17 +121,7 @@ const ResponseLanguageStep = memo<ResponseLanguageStepProps>(({ onBack, onNext }
         </Text>
       )}
       <Flexbox horizontal justify={'flex-start'} style={{ marginTop: 32 }}>
-        <Button
-          disabled={isNavigating}
-          icon={Undo2Icon}
-          type={'text'}
-          style={{
-            color: cssVar.colorTextDescription,
-          }}
-          onClick={handleBack}
-        >
-          {t('back')}
-        </Button>
+        <OnboardingBackButton disabled={isNavigating} onClick={handleBack} />
       </Flexbox>
     </Flexbox>
   );
