@@ -250,6 +250,24 @@ describe('AssistantGroup ContentBlock', () => {
     expect(screen.queryByText('reasoning')).not.toBeInTheDocument();
   });
 
+  it('renders multimodal reasoning that streams tempDisplayContent without content', () => {
+    // StreamingHandler emits { isMultimodal, tempDisplayContent } with no content
+    // while image reasoning parts stream — must not be treated as signature-only.
+    render(
+      <ContentBlock
+        assistantId="assistant-1"
+        content=""
+        id="block-1"
+        reasoning={{
+          isMultimodal: true,
+          tempDisplayContent: [{ image: 'data:image/png;base64,b64', type: 'image' }],
+        }}
+      />,
+    );
+
+    expect(screen.getByText('reasoning')).toBeInTheDocument();
+  });
+
   it('keeps the streaming reasoning placeholder when no reasoning object exists yet', () => {
     isInReasoningMock = true;
 

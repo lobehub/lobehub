@@ -53,8 +53,13 @@ const ContentBlock = memo<ContentBlockProps>(
     const hasTools = !!tools?.length;
     // A signature-only reasoning ({ signature } without content) is protocol state
     // kept for multi-turn replay, not renderable thinking — don't show an empty
-    // "deep thought" card for it. See LOBE-12829.
-    const showReasoning = !!reasoning?.content?.trim() || (!reasoning && isReasoning);
+    // "deep thought" card for it. Multimodal reasoning streams image parts via
+    // tempDisplayContent without content, so count those as renderable too.
+    // See LOBE-12829.
+    const showReasoning =
+      !!reasoning?.content?.trim() ||
+      !!reasoning?.tempDisplayContent?.length ||
+      (!reasoning && isReasoning);
     const hasContent = !!content && content !== LOADING_FLAT;
     const showMessageContent = hasContent || content === LOADING_FLAT || hasTools;
 
