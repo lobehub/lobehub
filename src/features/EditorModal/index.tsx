@@ -1,34 +1,12 @@
-import { type IEditor } from '@lobehub/editor';
-import { useEditor } from '@lobehub/editor/react';
 import { Button, createModal, ModalFooter, useModalContext } from '@lobehub/ui/base-ui';
-import { lazy, memo, type ReactNode, Suspense, useEffect, useState } from 'react';
+import { lazy, memo, type ReactNode, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const EditorCanvas = lazy(() => import('./EditorCanvas'));
+import type { EditorRef } from './type';
 
-type EditorRef = { current?: IEditor };
-
-interface EditorModalContentProps {
-  editorData?: unknown;
-  editorRef: EditorRef;
-  value?: string;
-}
-
-const EditorModalContent = memo<EditorModalContentProps>(({ editorData, editorRef, value }) => {
-  const editor = useEditor();
-
-  useEffect(() => {
-    editorRef.current = editor;
-  }, [editor, editorRef]);
-
-  return (
-    <Suspense fallback={<div style={{ minHeight: '50vh' }} />}>
-      <EditorCanvas defaultValue={value} editor={editor} editorData={editorData} />
-    </Suspense>
-  );
-});
-
-EditorModalContent.displayName = 'EditorModalContent';
+// The editor package is heavy and this module is imported statically by hot
+// paths (every chat message row), so the half that pulls it in stays lazy.
+const EditorModalContent = lazy(() => import('./EditorModalContent'));
 
 interface EditorModalFooterProps {
   editorRef: EditorRef;
@@ -87,7 +65,11 @@ export const openEditorModal = ({
   const editorRef: EditorRef = {};
 
   return createModal({
-    content: <EditorModalContent editorData={editorData} editorRef={editorRef} value={value} />,
+    content: (
+      <Suspense fallback={<div style={{ minHeight: '50vh' }} />}>
+        <EditorModalContent editorData={editorData} editorRef={editorRef} value={value} />
+      </Suspense>
+    ),
     footer: <EditorModalFooter editorRef={editorRef} okText={okText} onConfirm={onConfirm} />,
     onOpenChange: (open) => {
       if (!open) onClose?.();

@@ -19,7 +19,7 @@ import {
 import EditingPopover from '@/features/EditingPopover';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { openLabelFormModal } from '@/features/WorkspaceSetting/Labels/LabelFormModal';
-import { openCreateAgentModal } from '@/routes/(main)/home/_layout/hooks/useCreateModal';
+import type { OpenCreateAgentModalOptions } from '@/routes/(main)/home/_layout/hooks/useCreateModal';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
@@ -151,21 +151,34 @@ const CreateModalRenderer = memo<CreateModalRendererProps>(
 
     // Mounted only while the modal should be open, so the open/close bridge is
     // just this component's lifetime — the panel itself lives in the ModalHost.
-    const openModalRef = useRef<() => ReturnType<typeof openCreateAgentModal>>(undefined);
-    openModalRef.current = () =>
-      openCreateAgentModal({
-        agentId: inboxAgentId,
-        type,
-        onClosed: onClose,
-        onCreateBlank: handleCreateBlank,
-        onOpenSkills: handleOpenSkills,
-        onSubmit: handleSubmit,
-        onTryInLobeAI: handleTryInLobeAI,
-      });
+    const openArgsRef = useRef<OpenCreateAgentModalOptions>(undefined);
+    openArgsRef.current = {
+      agentId: inboxAgentId,
+      type,
+      onClosed: onClose,
+      onCreateBlank: handleCreateBlank,
+      onOpenSkills: handleOpenSkills,
+      onSubmit: handleSubmit,
+      onTryInLobeAI: handleTryInLobeAI,
+    };
 
     useEffect(() => {
-      const instance = openModalRef.current!();
-      return () => instance.close();
+      // Imported here rather than at module scope so the create-agent chunk (it
+      // pulls in the whole ChatInput stack) still loads only when the modal opens.
+      let cancelled = false;
+      let instance: ModalInstance | undefined;
+
+      void import('@/routes/(main)/home/_layout/hooks/useCreateModal').then(
+        ({ openCreateAgentModal }) => {
+          if (cancelled) return;
+          instance = openCreateAgentModal(openArgsRef.current!);
+        },
+      );
+
+      return () => {
+        cancelled = true;
+        instance?.close();
+      };
     }, []);
 
     return null;
