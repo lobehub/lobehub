@@ -122,12 +122,14 @@ export const acceptanceRouter = router({
         requirement: z.string().max(2000).optional(),
         subjectId: z.string(),
         subjectType: subjectTypeSchema,
+        title: z.string().trim().min(1).max(500).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       try {
         return await ctx.acceptanceService.ensureForSubject(input.subjectType, input.subjectId, {
           requirement: input.requirement,
+          title: input.title,
         });
       } catch (error) {
         throw new TRPCError({

@@ -2,6 +2,16 @@ import type { ChatToolPayloadWithResult, ToolIntervention, UIChatMessage } from 
 
 export interface PendingIntervention {
   apiName: string;
+  /**
+   * Id of the assistant turn that emitted this tool call.
+   *
+   * The list itself spans the WHOLE conversation, so any consumer that wants to
+   * act on "this parallel batch" (e.g. approve-all) must group by this field
+   * first — two pending calls can belong to different turns, and resolving them
+   * together would execute them under one anchor with unrelated results.
+   * `undefined` means the owner could not be determined; treat such an entry as
+   * its own group rather than folding it in with the others.
+   */
   assistantGroupId?: string;
   identifier: string;
   intervention: ToolIntervention & { status: 'pending' };
@@ -25,6 +35,8 @@ export const getPendingInterventions = (
     ) {
       pending.push({
         apiName: msg.plugin.apiName,
+        // A standalone tool row parents directly to its calling assistant.
+        assistantGroupId: msg.parentId,
         identifier: msg.plugin.identifier,
         intervention: msg.pluginIntervention as ToolIntervention & { status: 'pending' },
         requestArgs: msg.plugin.arguments || '',
@@ -43,6 +55,30 @@ export const getPendingInterventions = (
   }
 
   return pending;
+};
+
+/**
+ * Narrow a whole-conversation pending list down to ONE parallel batch — the
+ * calls emitted by the same assistant turn as `active`.
+ *
+ * `getPendingInterventions` walks every message, so its length says nothing
+ * about batch membership: an abandoned approval from an earlier turn sits in
+ * the same list as this turn's calls. Any bulk action must group first —
+ * resolving across turns hands the server a set it executes under one assistant
+ * anchor and continues the model once with unrelated results, running a tool the
+ * user never meant to release into this turn.
+ *
+ * An entry whose owner cannot be resolved is its own batch: unknown owners must
+ * not collapse into one pseudo-group.
+ */
+export const getInterventionBatch = (
+  interventions: PendingIntervention[],
+  active: PendingIntervention | undefined,
+): PendingIntervention[] => {
+  if (!active) return [];
+  const owner = active.assistantGroupId;
+  if (!owner) return [active];
+  return interventions.filter((i) => i.assistantGroupId === owner);
 };
 
 const collectPendingTools = (

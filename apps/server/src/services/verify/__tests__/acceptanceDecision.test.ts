@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   attachToAcceptance: vi.fn(),
   findById: vi.fn(),
   findRunById: vi.fn(),
+  ensureForSubject: vi.fn(),
   listByAcceptance: vi.fn(),
   setDecision: vi.fn(),
   taskResolve: vi.fn(),
@@ -15,6 +16,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/database/models/acceptance', () => ({
   AcceptanceModel: vi.fn(() => ({
+    ensureForSubject: mocks.ensureForSubject,
     findById: mocks.findById,
     updateStatus: mocks.updateStatus,
   })),
@@ -50,6 +52,21 @@ describe('AcceptanceService decision gating', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.listByAcceptance.mockResolvedValue([{ id: 'run-1', roundIndex: 1 }]);
+  });
+
+  it('creates a standalone acceptance without resolving a LobeHub task, topic, or document', async () => {
+    mocks.ensureForSubject.mockResolvedValue({ id: 'acc-standalone' });
+
+    await service().ensureForSubject('standalone', 'external-delivery-1', {
+      requirement: 'The external delivery works',
+      title: 'External delivery',
+    });
+
+    expect(mocks.taskResolve).not.toHaveBeenCalled();
+    expect(mocks.ensureForSubject).toHaveBeenCalledWith('standalone', 'external-delivery-1', {
+      metadata: { title: 'External delivery' },
+      requirement: 'The external delivery works',
+    });
   });
 
   it.each(['pending', 'planned', 'verifying', 'repairing'])(

@@ -62,7 +62,7 @@ export const defaultToolIds = [
  * These are core system tools that the agent needs to function properly.
  *
  * `lobe-agent` is listed first: its built-in capabilities (plan + todo management,
- * sub-agent dispatch, visual-media fallback) should be available on every agent-mode turn,
+ * sub-agent dispatch, multimodal fallback) should be available on every agent-mode turn,
  * not gated behind explicit injection. NOTE: these rules only apply in agent mode — chat
  * mode (`enableAgentMode === false`) drops `alwaysOnToolIds` entirely. In manual
  * skill-activate mode the discovery tools in `manualModeExcludeToolIds` are still removed

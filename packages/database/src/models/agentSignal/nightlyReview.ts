@@ -188,6 +188,7 @@ export class AgentSignalNightlyReviewModel {
         firstActivityAt: sql<Date>`MIN(${messages.createdAt})`.mapWith(parseAggregateTimestamp),
         lastActivityAt: sql<Date>`MAX(${messages.createdAt})`.mapWith(parseAggregateTimestamp),
         messageCount: count(messages.id),
+        name: agents.name,
         slug: agents.slug,
         timezone: sql<string>`COALESCE(${userSettings.general}->>'timezone', 'UTC')`,
         title: agents.title,
@@ -225,7 +226,7 @@ export class AgentSignalNightlyReviewModel {
           ),
         ),
       )
-      .groupBy(agents.id, agents.title, agents.slug, userSettings.general)
+      .groupBy(agents.id, agents.title, agents.name, agents.slug, userSettings.general)
       .orderBy(sql`MAX(${messages.createdAt}) DESC`);
 
     const rows = await (options.limit !== undefined ? query.limit(options.limit) : query);

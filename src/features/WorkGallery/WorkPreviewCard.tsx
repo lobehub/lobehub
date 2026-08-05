@@ -92,9 +92,13 @@ const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen }) => {
     item.id;
   const description = descriptor.getDescription(item);
   // Same clickability gating as WorkSummaryCard: no open target or an orphaned
-  // (deleted-task) Work renders inert.
+  // (deleted-task) Work renders inert. The gallery has no chat portal, so a
+  // filePreview target is only actionable here through its persisted URL
+  // fallback — without one the card must not offer a dead click.
   const taskDeleted = item.resourceType === 'task' && item.taskDeleted;
-  const clickable = !!descriptor.getOpenTarget(item) && !taskDeleted;
+  const openTarget = descriptor.getOpenTarget(item);
+  const actionable = !!openTarget && (openTarget.kind !== 'filePreview' || !!openTarget.url);
+  const clickable = actionable && !taskDeleted;
 
   return (
     <Flexbox

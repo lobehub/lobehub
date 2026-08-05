@@ -137,6 +137,8 @@
   "credits.memberBudget.defaultLimit": "Presupuesto predeterminado por miembro",
   "credits.memberBudget.defaultLimitHint": "Los miembros sin una regla personalizada usan este límite en cada ciclo de facturación.",
   "credits.memberBudget.desc": "Limita cuántos créditos del espacio de trabajo puede usar cada miembro en el ciclo de facturación actual",
+  "credits.memberBudget.details.action": "Ver detalles",
+  "credits.memberBudget.details.title": "Uso del miembro",
   "credits.memberBudget.effectiveBudget": "Presupuesto efectivo",
   "credits.memberBudget.empty": "Aún no hay miembros en el espacio de trabajo",
   "credits.memberBudget.globalBadge": "Global",

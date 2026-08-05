@@ -1,4 +1,5 @@
 import { DEFAULT_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
+import { agentDisplayName } from '@lobechat/types';
 import { Avatar, Block, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { memo } from 'react';
@@ -106,9 +107,10 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ bare, brief }) => {
             shape={'circle'}
             size={28}
             style={{ flex: 'none' }}
-            title={
-              agent.title || (isInbox ? t('inbox.title', { ns: 'chat' }) : t('defaultSession'))
-            }
+            title={agentDisplayName(
+              agent,
+              isInbox ? t('inbox.title', { ns: 'chat' }) : t('defaultSession'),
+            )}
           />
         )}
         <Flexbox flex={1} gap={6} style={{ minWidth: 0 }}>

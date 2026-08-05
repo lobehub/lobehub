@@ -20,7 +20,7 @@ const Agent = memo<PropsWithChildren>(() => {
   const [isLoading, isInbox, title, avatar, backgroundColor] = useAgentStore((s) => [
     agentSelectors.isAgentConfigLoading(s),
     builtinAgentSelectors.isInboxAgent(s),
-    agentSelectors.currentAgentTitle(s),
+    agentSelectors.currentAgentDisplayName(s),
     agentSelectors.currentAgentAvatar(s),
     agentSelectors.currentAgentBackgroundColor(s),
   ]);

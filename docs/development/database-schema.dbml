@@ -337,7 +337,7 @@ table agent_eval_test_cases {
 
 table agent_label_assignments {
   id uuid [pk, not null, default: `gen_random_uuid()`]
-  label_id text [not null]
+  label_id uuid [not null]
   agent_id text [not null]
   user_id text [not null]
   workspace_id text
@@ -353,7 +353,7 @@ table agent_label_assignments {
 }
 
 table agent_labels {
-  id text [pk, not null]
+  id uuid [pk, not null, default: `gen_random_uuid()`]
   name text [not null]
   description text
   color text

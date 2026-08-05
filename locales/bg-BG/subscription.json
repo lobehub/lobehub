@@ -137,6 +137,8 @@
   "credits.memberBudget.defaultLimit": "Стандартен бюджет за членове",
   "credits.memberBudget.defaultLimitHint": "Членовете без персонализирано правило използват този лимит за всеки цикъл на фактуриране.",
   "credits.memberBudget.desc": "Ограничете колко кредити на работното пространство може да използва всеки член в текущия цикъл на фактуриране",
+  "credits.memberBudget.details.action": "Вижте подробности",
+  "credits.memberBudget.details.title": "Използване от членове",
   "credits.memberBudget.effectiveBudget": "Ефективен бюджет",
   "credits.memberBudget.empty": "Все още няма членове на работното пространство",
   "credits.memberBudget.globalBadge": "Глобално",

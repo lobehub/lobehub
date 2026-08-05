@@ -186,6 +186,7 @@ export class ClientToolExecutionActionImpl {
           workingDirectory: resolveEffectiveWorkingDirectory(
             this.#get(),
             topicId ?? operation?.context?.topicId,
+            agentId ?? operation?.context?.agentId,
           ),
         };
 

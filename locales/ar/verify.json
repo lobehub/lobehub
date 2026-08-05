@@ -200,6 +200,7 @@
   "acceptance.status.repairing": "الإصلاح قيد التنفيذ",
   "acceptance.status.verifying": "التحقق قيد التنفيذ",
   "acceptance.subject.document": "مستند",
+  "acceptance.subject.standalone": "مستقل",
   "acceptance.subject.task": "مهمة",
   "acceptance.subject.topic": "موضوع",
   "acceptance.surface.other": "أخرى",

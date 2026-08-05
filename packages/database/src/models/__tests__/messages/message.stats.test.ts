@@ -801,10 +801,12 @@ describe('MessageModel Statistics Tests', () => {
         { id: 's-t3', count: 3 },
         { id: 's-t4', count: 4 },
       ];
-      await serverDB.insert(topics).values([
-        ...topicRows.map((t) => ({ id: t.id, userId, agentId, title: t.id })),
-        { id: 's-other', userId, agentId: otherAgentId, title: 'other' },
-      ]);
+      await serverDB
+        .insert(topics)
+        .values([
+          ...topicRows.map((t) => ({ id: t.id, userId, agentId, title: t.id })),
+          { id: 's-other', userId, agentId: otherAgentId, title: 'other' },
+        ]);
 
       const msgRows = topicRows.flatMap((t) =>
         Array.from({ length: t.count }).map((_, i) => ({
@@ -821,7 +823,14 @@ describe('MessageModel Statistics Tests', () => {
         // assistant messages in agentId topics — excluded by role=user
         { id: 's-t1-a', userId, role: 'assistant', content: 'a', agentId, topicId: 's-t1' },
         // other agent's topic
-        { id: 's-other-u', userId, role: 'user', content: 'x', agentId: otherAgentId, topicId: 's-other' },
+        {
+          id: 's-other-u',
+          userId,
+          role: 'user',
+          content: 'x',
+          agentId: otherAgentId,
+          topicId: 's-other',
+        },
         // other user must not leak
         { id: 's-leak', userId: otherUserId, role: 'user', content: 'leak', topicId: 's-t1' },
       ]);

@@ -11,6 +11,8 @@ export interface AvailableAgentItem {
   backgroundColor: string | null;
   description: string | null;
   id: string;
+  /** Personal name; resolve the label with `agentDisplayName(item, fallback)`. */
+  name: string | null;
   title: string | null;
 }
 
@@ -28,7 +30,7 @@ type MarketAgentModel =
 type AgentMetaUpdate = Partial<
   Pick<
     AgentItem,
-    'avatar' | 'backgroundColor' | 'description' | 'marketIdentifier' | 'tags' | 'title'
+    'avatar' | 'backgroundColor' | 'description' | 'marketIdentifier' | 'name' | 'tags' | 'title'
   >
 >;
 
@@ -239,6 +241,20 @@ class AgentService {
    */
   getBuiltinAgent = async (slug: string) => {
     return lambdaClient.agent.getBuiltinAgent.query({ slug });
+  };
+
+  /**
+   * Resolve a url slug to its agent id. Returns `null` for an unknown slug and
+   * for one the caller can't see — the two are deliberately indistinguishable.
+   */
+  resolveAgentIdBySlug = async (slug: string): Promise<string | null> => {
+    const { agentId } = await lambdaClient.agent.resolveAgentIdBySlug.query({ slug });
+    return agentId;
+  };
+
+  /** Rename an agent's url slug (validated server-side; see `updateAgentSlug`). */
+  updateAgentSlug = async (agentId: string, slug: string) => {
+    return lambdaClient.agent.updateAgentSlug.mutate({ agentId, slug });
   };
 
   /**

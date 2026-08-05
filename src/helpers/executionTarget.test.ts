@@ -21,6 +21,10 @@ const openCodeCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgency
   heterogeneousProvider: { command: 'opencode', type: 'opencode' },
   ...over,
 });
+const piCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({
+  heterogeneousProvider: { command: 'pi', type: 'pi' },
+  ...over,
+});
 
 describe('resolveWorkspaceScoped', () => {
   it('preserves shared-row coercion until a workspace member explicitly selects a target', () => {
@@ -143,6 +147,7 @@ describe('resolveExecutionTarget', () => {
     it.each([
       ['Amp', ampCfg],
       ['OpenCode', openCodeCfg],
+      ['Pi', piCfg],
     ] as const)('keeps an unconfigured %s agent pending on web', (_name, providerCfg) => {
       expect(
         resolveExecutionTarget(providerCfg(), {
@@ -175,6 +180,17 @@ describe('resolveExecutionTarget', () => {
       for (const executionTarget of ['sandbox', 'local'] as const) {
         expect(
           resolveExecutionTarget(openCodeCfg({ executionTarget }), {
+            clientExecutionAvailable: false,
+            isHetero: true,
+          }),
+        ).toBe('none');
+      }
+    });
+
+    it('normalizes unsupported Pi sandbox and unbound web-local targets to pending', () => {
+      for (const executionTarget of ['sandbox', 'local'] as const) {
+        expect(
+          resolveExecutionTarget(piCfg({ executionTarget }), {
             clientExecutionAvailable: false,
             isHetero: true,
           }),

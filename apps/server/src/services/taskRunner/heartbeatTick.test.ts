@@ -90,6 +90,26 @@ describe('runHeartbeatTick', () => {
     expect(mockRunner.runTask).not.toHaveBeenCalled();
   });
 
+  it('skips a stale tick whose generation token no longer matches', async () => {
+    mockSelectTask.mockResolvedValue([
+      baseTask({ context: { scheduler: { tickToken: 'tick-current' } } }),
+    ]);
+
+    const outcome = await runHeartbeatTick(taskId, userId, 'tick-old');
+
+    expect(outcome).toEqual({ ran: false, reason: 'stale-tick' });
+    expect(mockRunner.runTask).not.toHaveBeenCalled();
+  });
+
+  it('allows legacy tokenless ticks when no active generation is stored', async () => {
+    mockSelectTask.mockResolvedValue([baseTask({ context: {} })]);
+    mockRunner.runTask.mockResolvedValue(undefined);
+
+    const outcome = await runHeartbeatTick(taskId, userId);
+
+    expect(outcome).toEqual({ ran: true, taskIdentifier: 'T-1' });
+  });
+
   it('returns in-flight when runTask raises a CONFLICT', async () => {
     mockSelectTask.mockResolvedValue([baseTask()]);
     mockRunner.runTask.mockRejectedValue(new TRPCError({ code: 'CONFLICT', message: 'busy' }));

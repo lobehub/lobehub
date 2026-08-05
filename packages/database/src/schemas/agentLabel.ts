@@ -1,7 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { boolean, index, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
-import { idGenerator } from '../utils/idGenerator';
 import { timestamps } from './_helpers';
 import { agents } from './agent';
 import { users } from './user';
@@ -16,10 +15,7 @@ import { workspaces } from './workspace';
 export const agentLabels = pgTable(
   'agent_labels',
   {
-    id: text('id')
-      .primaryKey()
-      .$defaultFn(() => idGenerator('agentLabels'))
-      .notNull(),
+    id: uuid('id').defaultRandom().notNull().primaryKey(),
     name: text('name').notNull(),
     description: text('description'),
     /** Display color as a CSS hex value, e.g. `#F5A623` */
@@ -72,7 +68,7 @@ export const agentLabelAssignments = pgTable(
   'agent_label_assignments',
   {
     id: uuid('id').defaultRandom().notNull().primaryKey(),
-    labelId: text('label_id')
+    labelId: uuid('label_id')
       .references(() => agentLabels.id, { onDelete: 'cascade' })
       .notNull(),
     agentId: text('agent_id')

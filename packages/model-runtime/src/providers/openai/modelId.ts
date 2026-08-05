@@ -1,4 +1,4 @@
-export type OpenAIModelIdSource = 'openRouter' | 'openai';
+export type OpenAIModelIdSource = 'codex' | 'openRouter' | 'openai';
 
 export interface ParsedOpenAIModelId {
   family: 'gpt';
@@ -54,19 +54,42 @@ export const responsesAPIModels = new Set([
 const GPT_MODEL_PATTERN =
   /^gpt-(\d+)(?:\.(\d+))?(?:\b|[-.:])(?:-([a-z][a-z0-9]*(?:-[a-z][a-z0-9]*)*))?/;
 
+/**
+ * Codex-compatible gateways namespace OpenAI models as `codex/gpt-*`. These models still use
+ * the Responses contract, so capability detection must preserve that namespace separately from
+ * OpenRouter's `openai/*` model IDs.
+ *
+ * @see https://github.com/lobehub/lobehub/issues/17831
+ */
+const CODEX_MODEL_PREFIX = 'codex/';
+const OPENROUTER_OPENAI_MODEL_PREFIX = 'openai/';
+
 const normalizeOpenAIModelId = (model: string): string | undefined => {
   const normalized = model.trim().toLowerCase();
   if (!normalized) return;
 
-  return normalized.startsWith('openai/') ? normalized.slice('openai/'.length) : normalized;
+  if (normalized.startsWith(CODEX_MODEL_PREFIX)) {
+    return normalized.slice(CODEX_MODEL_PREFIX.length);
+  }
+
+  return normalized.startsWith(OPENROUTER_OPENAI_MODEL_PREFIX)
+    ? normalized.slice(OPENROUTER_OPENAI_MODEL_PREFIX.length)
+    : normalized;
 };
 
 const extractOpenAIModelId = (model: string): ExtractedOpenAIModelId | undefined => {
   const normalized = model.trim().toLowerCase();
   if (!normalized) return;
 
-  if (normalized.startsWith('openai/')) {
-    return { normalizedModelId: normalized.slice('openai/'.length), source: 'openRouter' };
+  if (normalized.startsWith(CODEX_MODEL_PREFIX)) {
+    return { normalizedModelId: normalized.slice(CODEX_MODEL_PREFIX.length), source: 'codex' };
+  }
+
+  if (normalized.startsWith(OPENROUTER_OPENAI_MODEL_PREFIX)) {
+    return {
+      normalizedModelId: normalized.slice(OPENROUTER_OPENAI_MODEL_PREFIX.length),
+      source: 'openRouter',
+    };
   }
 
   if (normalized.startsWith('gpt-')) {
@@ -114,9 +137,9 @@ const isGPT5Model = (model: string): ParsedOpenAIModelId | undefined => {
   return parsed;
 };
 
-const isNativeGPT5Model = (model: string): ParsedOpenAIModelId | undefined => {
+const isGPT5ResponsesEndpointModel = (model: string): ParsedOpenAIModelId | undefined => {
   const parsed = isGPT5Model(model);
-  if (!parsed || parsed.source !== 'openai') return;
+  if (!parsed || parsed.source === 'openRouter') return;
 
   return parsed;
 };
@@ -127,7 +150,7 @@ const hasModifier = (parsed: ParsedOpenAIModelId, modifier: string): boolean =>
 const baseGPT5MiniResponsesModels = new Set(['gpt-5-mini', 'gpt-5-mini-2025-08-07']);
 
 export const isGPT5ResponsesModel = (model: string): boolean => {
-  const parsed = isNativeGPT5Model(model);
+  const parsed = isGPT5ResponsesEndpointModel(model);
   if (!parsed) return false;
 
   if (hasModifier(parsed, 'chat')) return false;
@@ -141,12 +164,12 @@ export const isResponsesAPIModel = (model: string): boolean =>
   responsesAPIModels.has(model) || isGPT5ResponsesModel(model);
 
 export const isGPT5ProResponsesModel = (model: string): boolean => {
-  const parsed = isNativeGPT5Model(model);
+  const parsed = isGPT5ResponsesEndpointModel(model);
   return !!parsed && hasModifier(parsed, 'pro');
 };
 
 export const supportsGPT5ResponsesReasoningEffortNone = (model: string): boolean => {
-  const parsed = isNativeGPT5Model(model);
+  const parsed = isGPT5ResponsesEndpointModel(model);
   if (!parsed || parsed.minorVersion === undefined) return false;
 
   return !hasModifier(parsed, 'pro');

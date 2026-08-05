@@ -197,6 +197,8 @@
   "pageList.workspaceTitle": "Spazio di lavoro",
   "portal.openInPageEditor": "Modifica nella pagina",
   "preview.downloadFile": "Scarica file",
+  "preview.raw": "Grezzo",
+  "preview.render": "Anteprima",
   "preview.unsupportedFileAndContact": "Questo formato di file non è attualmente supportato per l'anteprima online. Se desideri richiedere il supporto, <1>contattaci</1>.",
   "resource": "Risorsa",
   "resourceList.batchCopyDescription": "Clona le risorse selezionate in un altro spazio di lavoro.",

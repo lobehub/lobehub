@@ -48,9 +48,12 @@ const ListConfig = memo<ListConfigProps>(
     const groupingOptions = useMemo<Array<{ label: string; value: AgentGroupBy }>>(
       () => [
         { label: t('agentViewAll.groupBy.none'), value: 'none' },
-        { label: t('agentViewAll.groupBy.author'), value: 'author' },
+        ...(showAuthor
+          ? [{ label: t('agentViewAll.groupBy.author'), value: 'author' as const }]
+          : []),
+        { label: t('agentViewAll.groupBy.label'), value: 'label' },
       ],
-      [t],
+      [showAuthor, t],
     );
     const orderOptions = useMemo<Array<{ label: string; value: AgentOrderBy }>>(
       () => [
@@ -64,24 +67,20 @@ const ListConfig = memo<ListConfigProps>(
     );
 
     const formItems: FormItemProps[] = [
-      ...(showAuthor
-        ? [
-            {
-              children: (
-                <Select
-                  options={groupingOptions}
-                  size={'small'}
-                  style={{ width: 150 }}
-                  value={options.groupBy}
-                  onChange={(value: AgentGroupBy) => {
-                    setOptions((prev) => ({ ...prev, groupBy: value }));
-                  }}
-                />
-              ),
-              label: t('agentViewAll.form.grouping'),
-            } satisfies FormItemProps,
-          ]
-        : []),
+      {
+        children: (
+          <Select
+            options={groupingOptions}
+            size={'small'}
+            style={{ width: 150 }}
+            value={options.groupBy}
+            onChange={(value: AgentGroupBy) => {
+              setOptions((prev) => ({ ...prev, groupBy: value }));
+            }}
+          />
+        ),
+        label: t('agentViewAll.form.grouping'),
+      },
       {
         children: (
           <Flexbox horizontal align={'center'} gap={8}>

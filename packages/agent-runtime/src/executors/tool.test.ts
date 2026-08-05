@@ -441,7 +441,9 @@ describe('tool executors', () => {
 
     expect(createToolMessage).not.toHaveBeenCalled();
     expect(host.transports.messages.updateToolMessage).not.toHaveBeenCalled();
-    expect(result.nextContext?.payload).toMatchObject({ parentMessageId: 'client-tool-msg' });
+    // The transport-persisted row is still just tool output hanging off the
+    // calling assistant; the spine anchor stays that assistant.
+    expect(result.nextContext?.payload).toMatchObject({ parentMessageId: 'assistant-msg-1' });
   });
 
   it('publishes and rethrows tool-message persist errors', async () => {
@@ -460,6 +462,141 @@ describe('tool executors', () => {
       error,
       phase: 'tool_message_persist',
       stepIndex: 2,
+    });
+  });
+
+  describe('parallel batch parent chain', () => {
+    // The next assistant turn hangs off `nextContext.parentMessageId`. A step is
+    // ONE LLM call, and a batch's tool rows are inline data of the call that
+    // emitted them — so the anchor is that assistant, never a tool row. Picking
+    // a tool row made the spine depend on which promise settled last: the parent
+    // chain forked, and a DFS over the parentId forest (how a topic is ordered
+    // for reading) emitted the losing tools after the rest of the conversation.
+    const batchOf = (ids: string[]): Extract<AgentInstruction, { type: 'call_tools_batch' }> => ({
+      payload: {
+        parentMessageId: 'assistant-msg-1',
+        toolsCalling: ids.map((id) => createToolCall(id)),
+      },
+      type: 'call_tools_batch',
+    });
+
+    it('anchors the next turn on the assistant that emitted the batch, not a tool row', async () => {
+      // Finish order is deliberately the reverse of declaration order.
+      const delays: Record<string, number> = { 'call-a': 30, 'call-b': 20, 'call-c': 0 };
+      runTool = vi.fn().mockImplementation(async (tool: { id: string }) => {
+        await new Promise((resolve) => setTimeout(resolve, delays[tool.id] ?? 0));
+        return {
+          attempts: 1,
+          result: { content: `result ${tool.id}`, executionTime: 1, state: {}, success: true },
+        };
+      });
+      createToolMessage = vi
+        .fn()
+        .mockImplementation(async ({ tool_call_id }: { tool_call_id: string }) => ({
+          id: `tool-msg-${tool_call_id}`,
+        }));
+      host.transports.tools!.run = runTool;
+      host.transports.messages.createToolMessage = createToolMessage;
+
+      const result = await callToolsBatch(host)(
+        batchOf(['call-a', 'call-b', 'call-c']),
+        createState(),
+      );
+
+      expect(result.nextContext?.phase).toBe('tools_batch_result');
+      expect(result.nextContext?.payload).toMatchObject({
+        parentMessageId: 'assistant-msg-1',
+      });
+    });
+
+    it('is stable across runs regardless of which tool resolves first', async () => {
+      const parents: string[] = [];
+
+      for (const delays of [
+        { 'call-a': 0, 'call-b': 10, 'call-c': 20 },
+        { 'call-a': 20, 'call-b': 0, 'call-c': 10 },
+        { 'call-a': 10, 'call-b': 20, 'call-c': 0 },
+      ]) {
+        host.transports.tools!.run = vi.fn().mockImplementation(async (tool: { id: string }) => {
+          await new Promise((resolve) => setTimeout(resolve, (delays as any)[tool.id] ?? 0));
+          return {
+            attempts: 1,
+            result: { content: 'ok', executionTime: 1, state: {}, success: true },
+          };
+        });
+        host.transports.messages.createToolMessage = vi
+          .fn()
+          .mockImplementation(async ({ tool_call_id }: { tool_call_id: string }) => ({
+            id: `tool-msg-${tool_call_id}`,
+          }));
+
+        const result = await callToolsBatch(host)(
+          batchOf(['call-a', 'call-b', 'call-c']),
+          createState(),
+        );
+        parents.push((result.nextContext?.payload as any).parentMessageId);
+      }
+
+      expect(parents).toEqual(['assistant-msg-1', 'assistant-msg-1', 'assistant-msg-1']);
+    });
+
+    it('keeps the assistant anchor when a tool in the batch fails', async () => {
+      host.transports.tools!.run = vi.fn().mockImplementation(async (tool: { id: string }) => {
+        if (tool.id === 'call-c') throw new Error('tool blew up');
+        if (tool.id === 'call-a') await new Promise((resolve) => setTimeout(resolve, 20));
+        return {
+          attempts: 1,
+          result: { content: 'ok', executionTime: 1, state: {}, success: true },
+        };
+      });
+      host.transports.messages.createToolMessage = vi
+        .fn()
+        .mockImplementation(async ({ tool_call_id }: { tool_call_id: string }) => ({
+          id: `tool-msg-${tool_call_id}`,
+        }));
+
+      const result = await callToolsBatch(host)(
+        batchOf(['call-a', 'call-b', 'call-c']),
+        createState(),
+      );
+
+      // A tool row was never the anchor, so a tool that produced no message
+      // can't leave the spine empty either.
+      expect(result.nextContext?.payload).toMatchObject({
+        parentMessageId: 'assistant-msg-1',
+      });
+    });
+
+    it('fills existing pending rows in place when resuming an approved batch', async () => {
+      const updateToolMessage = vi.fn().mockResolvedValue(undefined);
+      host.transports.messages.updateToolMessage = updateToolMessage;
+      host.transports.messages.createToolMessage = createToolMessage;
+
+      const instruction: Extract<AgentInstruction, { type: 'call_tools_batch' }> = {
+        payload: {
+          existingToolMessageIds: { 'call-a': 'pending-msg-a', 'call-b': 'pending-msg-b' },
+          parentMessageId: 'assistant-msg-1',
+          toolsCalling: [createToolCall('call-a'), createToolCall('call-b')],
+        },
+        type: 'call_tools_batch',
+      };
+
+      const result = await callToolsBatch(host)(instruction, createState());
+
+      // Creating fresh rows here would strand the approved-but-empty originals
+      // under the same assistant.
+      expect(createToolMessage).not.toHaveBeenCalled();
+      expect(updateToolMessage).toHaveBeenCalledWith(
+        'pending-msg-a',
+        expect.objectContaining({ content: 'Tool result' }),
+      );
+      expect(updateToolMessage).toHaveBeenCalledWith(
+        'pending-msg-b',
+        expect.objectContaining({ content: 'Tool result' }),
+      );
+      // Resuming an approved batch continues from the assistant that emitted
+      // it, exactly like a batch that never paused.
+      expect(result.nextContext?.payload).toMatchObject({ parentMessageId: 'assistant-msg-1' });
     });
   });
 
@@ -594,6 +731,70 @@ describe('tool executors', () => {
       const registeredIntent = registerWork.mock.calls[0][0].intent;
       expect(registeredIntent.data).toEqual(skillIntent.data);
       expect(registeredIntent.args).toEqual(skillIntent.args);
+    });
+  });
+
+  describe('todo state forwarding', () => {
+    // Todo-mutating tools (lobe-agent createTodos/updateTodos) persist their own
+    // copy into a plan document that only exists after `createPlan`. Message
+    // history is the store that always exists, so the run context must carry it
+    // — otherwise `updateTodos` reloads an empty list and silently drops every
+    // index-based operation.
+    const stateWithTodos = () =>
+      createState({
+        messages: [
+          {
+            content: 'todo tool result',
+            id: 'tool-msg-0',
+            plugin: { apiName: 'createTodos', identifier: 'lobe-agent', type: 'builtin' },
+            pluginState: {
+              todos: {
+                items: [
+                  { status: 'completed', text: 'env setup' },
+                  { status: 'todo', text: 'run case 1' },
+                ],
+                updatedAt: '2026-07-09T00:00:00.000Z',
+              },
+            },
+            role: 'tool',
+          },
+        ] as unknown as AgentState['messages'],
+      });
+
+    it('forwards todos rebuilt from message history to the tool transport', async () => {
+      const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
+        payload: {
+          parentMessageId: 'assistant-msg-1',
+          toolCalling: createToolCall('tool-call-1', 'lobe-agent'),
+        },
+        type: 'call_tool',
+      };
+
+      await callTool(host)(instruction, stateWithTodos());
+
+      expect(runTool).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          currentTodos: [
+            { status: 'completed', text: 'env setup' },
+            { status: 'todo', text: 'run case 1' },
+          ],
+        }),
+      );
+    });
+
+    it('leaves currentTodos undefined when no todo state exists yet', async () => {
+      const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
+        payload: {
+          parentMessageId: 'assistant-msg-1',
+          toolCalling: createToolCall(),
+        },
+        type: 'call_tool',
+      };
+
+      await callTool(host)(instruction, createState());
+
+      expect(runTool.mock.calls[0][1].currentTodos).toBeUndefined();
     });
   });
 });

@@ -24,6 +24,7 @@ const singleEntry = {
   linesAdded: 7,
   linesDeleted: 2,
   path: '/workspace/Acceptance/index.tsx',
+  sandboxBacked: false,
   sourceToolCallIds: ['tool-1'],
 };
 

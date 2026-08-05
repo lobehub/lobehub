@@ -435,6 +435,49 @@ const isAgentVisiblyRunning =
   };
 
 /**
+ * Whether a turn is visibly in progress for a topic on THIS client — the whole
+ * send → run pipeline (see INPUT_LOADING_OPERATION_TYPES), matched by the
+ * operation context's topicId regardless of agent/group/thread.
+ *
+ * Drives the sidebar topic spinner. Persisted `topic.status === 'running'`
+ * covers runs owned by other clients / the server; this covers what status
+ * cannot: client-mode runs (which never persist a status) and the startup
+ * window of gateway/hetero runs before the server writes `running`.
+ */
+const isTopicVisiblyRunning =
+  (topicId: string) =>
+  (s: ChatStoreState): boolean => {
+    for (const type of INPUT_LOADING_OPERATION_TYPES) {
+      const operationIds = s.operationsByType[type] || [];
+      const hasRunning = operationIds.some((id) => {
+        const op = s.operations[id];
+        return op && isVisiblyRunningOperation(op) && op.context.topicId === topicId;
+      });
+      if (hasRunning) return true;
+    }
+    return false;
+  };
+
+/**
+ * Topic ids with a visibly-running turn on this client. Set form of
+ * `isTopicVisiblyRunning` for list-level consumers (byStatus grouping, project
+ * group badges). Builds a new Set per call — subscribe with an equality fn or
+ * use it inside a selector that already recomputes per store change.
+ */
+const visiblyRunningTopicIds = (s: ChatStoreState): Set<string> => {
+  const ids = new Set<string>();
+  for (const type of INPUT_LOADING_OPERATION_TYPES) {
+    for (const id of s.operationsByType[type] || []) {
+      const op = s.operations[id];
+      if (op && isVisiblyRunningOperation(op) && op.context.topicId) {
+        ids.add(op.context.topicId);
+      }
+    }
+  }
+  return ids;
+};
+
+/**
  * Check if agent runtime is running (including both main window and thread)
  * Checks all AI runtime operation types (see AI_RUNTIME_OPERATION_TYPES)
  * Excludes operations that are aborting (cleaning up after cancellation)
@@ -890,7 +933,9 @@ export const operationSelectors = {
   isRegenerating,
   isSendingMessage,
   isTopicUnreadCompleted,
+  isTopicVisiblyRunning,
   unreadCompletedCountForTopics,
+  visiblyRunningTopicIds,
 
   // Message Queue
   getQueuedMessages,

@@ -265,7 +265,8 @@ const groupedTopicsForSidebar =
     // though their persisted status says otherwise — that's the one client-only
     // overlay (see resolveStatusBucket). Unread is now a persisted status, so it
     // buckets straight from `topic.status`.
-    const loadingTopicIds = groupMode === 'byStatus' ? new Set(s.topicLoadingIds) : undefined;
+    const loadingTopicIds =
+      groupMode === 'byStatus' ? operationSelectors.visiblyRunningTopicIds(s) : undefined;
     return buildGroupedTopics(limitedTopics, getGroupFn(groupMode, sortBy, loadingTopicIds));
   };
 

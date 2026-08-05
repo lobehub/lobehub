@@ -137,6 +137,8 @@
   "credits.memberBudget.defaultLimit": "بودجه پیش‌فرض اعضا",
   "credits.memberBudget.defaultLimitHint": "اعضایی که قانون سفارشی ندارند، در هر دوره صورتحساب از این محدودیت استفاده می‌کنند.",
   "credits.memberBudget.desc": "محدود کردن تعداد اعتبارهای فضای کاری که هر عضو می‌تواند در دوره صورتحساب فعلی استفاده کند",
+  "credits.memberBudget.details.action": "مشاهده جزئیات",
+  "credits.memberBudget.details.title": "استفاده اعضا",
   "credits.memberBudget.effectiveBudget": "بودجه مؤثر",
   "credits.memberBudget.empty": "هنوز هیچ عضوی در فضای کاری وجود ندارد",
   "credits.memberBudget.globalBadge": "جهانی",

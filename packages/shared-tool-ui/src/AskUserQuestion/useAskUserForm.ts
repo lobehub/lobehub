@@ -89,6 +89,25 @@ export const useAskUserForm = ({
   }, [countdownEnabled]);
   const expired = countdownEnabled ? now >= deadline : false;
 
+  /**
+   * Submit `payload` exactly as given. Used by the Submit button (with the
+   * user's picks/text), the single-select select-to-submit path, and the
+   * timeout fallback (option 1 of each unanswered question merged in).
+   */
+  const submitWith = useCallback(
+    async (payload: Record<string, string | string[]>) => {
+      if (!onInteractionAction || submitting) return;
+      setSubmitting(true);
+      try {
+        await onInteractionAction({ payload, type: 'submit' });
+      } catch (err) {
+        console.error('[AskUserQuestion] submit failed:', err);
+        setSubmitting(false);
+      }
+    },
+    [onInteractionAction, submitting],
+  );
+
   const handleToggle = useCallback(
     (q: AskUserQuestionItem, label: string) => {
       let nextPicks: Record<string, string | string[]>;
@@ -116,16 +135,30 @@ export const useAskUserForm = ({
       if (nextCustom !== custom) setCustom(nextCustom);
       writeDraft({ custom: nextCustom, escapeActive, escapeText, picks: nextPicks });
 
-      // Single-select auto-advance to the next still-unanswered question, so
-      // the user sweeps through without re-clicking the tabs.
-      if (!q.multiSelect && questions.length > 1) {
-        const next = questions.findIndex(
-          (qq) => qq.question !== q.question && !isQuestionAnswered(qq, nextPicks, nextCustom),
-        );
-        if (next >= 0) setActiveTab(String(next));
+      if (!q.multiSelect) {
+        // Codex-style select-to-submit: the pick that completes the form sends
+        // it right away — no extra Submit press for single-select flows. Gated
+        // on the question having been unanswered so revisiting an already
+        // answered question only updates the pick and never fires a surprise
+        // submit while the user is reviewing.
+        const wasUnanswered = !isQuestionAnswered(q, picks, custom);
+        const allAnswered = questions.every((qq) => isQuestionAnswered(qq, nextPicks, nextCustom));
+        if (wasUnanswered && allAnswered) {
+          void submitWith(buildSubmitPayload(questions, nextPicks, nextCustom));
+          return;
+        }
+
+        // Auto-advance to the next still-unanswered question, so the user
+        // sweeps through without re-clicking the tabs.
+        if (questions.length > 1) {
+          const next = questions.findIndex(
+            (qq) => qq.question !== q.question && !isQuestionAnswered(qq, nextPicks, nextCustom),
+          );
+          if (next >= 0) setActiveTab(String(next));
+        }
       }
     },
-    [picks, custom, escapeActive, escapeText, questions, writeDraft],
+    [picks, custom, escapeActive, escapeText, questions, submitWith, writeDraft],
   );
 
   const handleCustomChange = useCallback(
@@ -146,25 +179,6 @@ export const useAskUserForm = ({
       writeDraft({ custom: nextCustom, escapeActive, escapeText, picks: nextPicks });
     },
     [picks, custom, escapeActive, escapeText, writeDraft],
-  );
-
-  /**
-   * Submit `payload` exactly as given. Used by the Submit button (with the
-   * user's picks/text) and the timeout fallback (option 1 of each unanswered
-   * question merged in).
-   */
-  const submitWith = useCallback(
-    async (payload: Record<string, string | string[]>) => {
-      if (!onInteractionAction || submitting) return;
-      setSubmitting(true);
-      try {
-        await onInteractionAction({ payload, type: 'submit' });
-      } catch (err) {
-        console.error('[AskUserQuestion] submit failed:', err);
-        setSubmitting(false);
-      }
-    },
-    [onInteractionAction, submitting],
   );
 
   const handleEscapeTextChange = useCallback(

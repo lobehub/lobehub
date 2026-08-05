@@ -9,6 +9,7 @@ import {
   isDesktop,
 } from '@lobechat/const';
 import {
+  agentDisplayName,
   type AgentMode,
   type KnowledgeItem,
   type LobeAgentConfig,
@@ -37,6 +38,13 @@ const currentAgentData = (s: AgentStoreState) =>
   s.activeAgentId ? s.agentMap[s.activeAgentId] : undefined;
 
 const currentAgentTitle = (s: AgentStoreState) => currentAgentData(s)?.title;
+
+/**
+ * The label to show for the active agent: personal name first, role as the
+ * fallback. Use this for rendering; `currentAgentTitle` stays the raw role for
+ * anything that edits or reasons about it.
+ */
+const currentAgentDisplayName = (s: AgentStoreState) => agentDisplayName(currentAgentData(s));
 
 const getDefaultAvatarByAgentId = (s: AgentStoreState, agentId?: string) => {
   const inboxAgentId = builtinAgentSelectors.inboxAgentId(s);
@@ -71,6 +79,7 @@ const currentAgentMeta = (s: AgentStoreState): MetaData => {
     backgroundColor: data?.backgroundColor || DEFAULT_BACKGROUND_COLOR,
     description: data?.description || undefined,
     marketIdentifier: data?.marketIdentifier || undefined,
+    name: data?.name || undefined,
     tags: data?.tags,
     title: data?.title || undefined,
   };
@@ -91,6 +100,7 @@ const getAgentMetaById =
       backgroundColor: data.backgroundColor || DEFAULT_BACKGROUND_COLOR,
       description: data.description || undefined,
       marketIdentifier: data.marketIdentifier || undefined,
+      name: data.name || undefined,
       tags: data.tags,
       title: data.title || undefined,
     };
@@ -361,6 +371,7 @@ export const agentSelectors = {
   currentAgentTTS,
   currentAgentTTSVoice,
   currentAgentTags,
+  currentAgentDisplayName,
   currentAgentTitle,
   currentAgentVisibility,
   currentAgentWorkingDirectory,

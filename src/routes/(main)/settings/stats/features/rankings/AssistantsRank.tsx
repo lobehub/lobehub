@@ -1,4 +1,5 @@
 import { AGENT_CHAT_URL } from '@lobechat/const';
+import { agentDisplayName } from '@lobechat/types';
 import { BarList } from '@lobehub/charts';
 import { ActionIcon, Avatar } from '@lobehub/ui';
 import { MaximizeIcon } from 'lucide-react';
@@ -41,7 +42,7 @@ export const AssistantsRank = memo<{ mobile?: boolean }>(({ mobile }) => {
     return {
       icon: (
         <Avatar
-          alt={item.title || t('defaultAgent', { ns: 'chat' })}
+          alt={agentDisplayName(item, t('defaultAgent', { ns: 'chat' }))}
           avatar={item.avatar || DEFAULT_AVATAR}
           background={item.backgroundColor || undefined}
           size={20}
@@ -52,7 +53,7 @@ export const AssistantsRank = memo<{ mobile?: boolean }>(({ mobile }) => {
         <Link href={link} style={{ color: 'inherit' }}>
           {isInbox
             ? t('inbox.title', { ns: 'chat' })
-            : item.title || t('defaultAgent', { ns: 'chat' })}
+            : agentDisplayName(item, t('defaultAgent', { ns: 'chat' }))}
         </Link>
       ),
       value: item.count,

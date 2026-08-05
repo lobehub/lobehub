@@ -137,6 +137,8 @@
   "credits.memberBudget.defaultLimit": "Standardmitgliedsbudget",
   "credits.memberBudget.defaultLimitHint": "Mitglieder ohne benutzerdefinierte Regel verwenden dieses Limit in jedem Abrechnungszeitraum.",
   "credits.memberBudget.desc": "Begrenzen Sie, wie viele Arbeitsbereichs-Credits jedes Mitglied im aktuellen Abrechnungszeitraum verwenden kann",
+  "credits.memberBudget.details.action": "Details anzeigen",
+  "credits.memberBudget.details.title": "Mitgliedsnutzung",
   "credits.memberBudget.effectiveBudget": "Effektives Budget",
   "credits.memberBudget.empty": "Noch keine Mitglieder im Arbeitsbereich",
   "credits.memberBudget.globalBadge": "Global",

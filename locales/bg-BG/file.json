@@ -197,6 +197,8 @@
   "pageList.workspaceTitle": "Работно пространство",
   "portal.openInPageEditor": "Редактирай в страница",
   "preview.downloadFile": "Изтегли файл",
+  "preview.raw": "Суров",
+  "preview.render": "Преглед",
   "preview.unsupportedFileAndContact": "Този файлов формат не се поддържа за онлайн преглед. Ако имате нужда от поддръжка, <1>свържете се с нас</1>.",
   "resource": "Ресурс",
   "resourceList.batchCopyDescription": "Клонирайте избраните ресурси в друго работно пространство.",

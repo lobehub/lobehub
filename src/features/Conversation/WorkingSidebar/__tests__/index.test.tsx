@@ -86,6 +86,8 @@ const globalStore = vi.hoisted(() => ({
   toggleTerminalPanel: vi.fn(),
   setWorkingSidebarTab: vi.fn(),
   status: {
+    portalWidth: 400 as number | undefined,
+    portalWidths: undefined as Record<string, number> | undefined,
     showRightPanel: true,
     workingSidebarTab: 'params' as string | undefined,
     workingSidebarTabRequest: undefined as { nonce: number; tab: string } | undefined,
@@ -168,6 +170,8 @@ vi.mock('@/store/global', () => ({
 }));
 vi.mock('@/store/global/selectors', () => ({
   systemStatusSelectors: {
+    portalWidth: (s: typeof globalStore) => s.status.portalWidth || 400,
+    portalWidths: (s: typeof globalStore) => s.status.portalWidths,
     workingSidebarWidth: (s: typeof globalStore) => s.status.workingSidebarWidth || 360,
   },
 }));

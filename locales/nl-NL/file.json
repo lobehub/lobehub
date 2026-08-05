@@ -197,6 +197,8 @@
   "pageList.workspaceTitle": "Werkruimte",
   "portal.openInPageEditor": "Bewerken in pagina",
   "preview.downloadFile": "Bestand downloaden",
+  "preview.raw": "Ruw",
+  "preview.render": "Voorbeeld",
   "preview.unsupportedFileAndContact": "Dit bestandsformaat wordt momenteel niet ondersteund voor online voorbeeldweergave. Heb je een verzoek? <1>Neem contact met ons op</1>.",
   "resource": "Bron",
   "resourceList.batchCopyDescription": "Kloon geselecteerde bronnen naar een andere werkruimte.",

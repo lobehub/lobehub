@@ -34,7 +34,8 @@ const toBriefItem = (act: TaskDetailActivity): BriefItem | null => {
           avatar: act.agent.avatar,
           backgroundColor: act.agent.backgroundColor,
           id: act.agent.id,
-          title: act.agent.title,
+          name: act.agent.name ?? null,
+          title: act.agent.title ?? null,
         }
       : null,
     agentId: act.agentId ?? null,

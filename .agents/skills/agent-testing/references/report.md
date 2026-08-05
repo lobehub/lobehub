@@ -95,10 +95,18 @@ table — those double up on the page. It carries only the non-duplicate narrati
      ]
      ```
 
+     `comparison` is a nested **object** on each half. Writing it flat —
+     `{ "path": "…", "comparison": "topic-row", "role": "before" }` — is the
+     usual slip, and it does not pair: `role` is read from inside `comparison`,
+     never from the evidence item itself.
+
      The verify page renders a complete pair with each screenshot under its own
      tinted band — red for `before`, green for `after`. A group contains exactly one
      `before` and one `after`, and **both halves need the same string `id`**; a half
      without an `id` can never pair. Incomplete groups render as ordinary evidence.
+     `acceptance run ingest` warns on every malformed `comparison` it drops —
+     treat that warning as a failed publish and re-ingest a corrected round,
+     exactly as with a skipped evidence upload.
 
      Two fields are worth setting on every pair:
 
@@ -186,6 +194,10 @@ from the current one.
    `commit`, `surfaces`, `entry`) and write the one-paragraph verdict into
    `summary.conclusion`. The page pairs each check with its evidence inline, so you
    don't hand-build a table. `report.md` holds only the narrative tail.
+
+   **`scenario` is a closed enum, not a description** — see the table below. The
+   scaffold pre-fills `coding`; a one-line summary of what the run covers belongs in
+   `context`, never in `scenario`.
 
 5. **Set the verdict** in both `report.md` and `result.json`. Describe key visual
    outcomes in prose; the published acceptance URL is the only visual pointer in
@@ -310,7 +322,9 @@ REQUIRED on every ingest:**
     }
   ],
   "commit": "abc1234",
+  "context": "Nested task tree API behind the new repository method",
   "createdAt": "2026-06-11T15:30:00+08:00",
+  "entry": "<cli> task list --tree",
   "interactionCost": {
     "model": "goms-klm@lobe-v1",
     "scope": "user-equivalent",
@@ -346,6 +360,7 @@ REQUIRED on every ingest:**
     "title": "feat(task): nested task tree",
     "url": "https://github.com/<org>/<repo>/pull/17152"
   },
+  "scenario": "coding",
   "summary": {
     "total": 2,
     "passed": 2,
@@ -398,6 +413,25 @@ to `desktop`. Anything else fails the ingest:
 
 `entry` is the command or URL exercised (`<cli> task list --tree`, `/chat/settings`)
 — **not** a PR title and not a description of the change.
+
+`scenario` is a **closed set** — `coding` | `writing` | `research` | `generic` —
+naming what KIND of delivery was verified, because the page renders a different
+scope header for each. It defaults to `coding` when omitted, and an out-of-set value
+**fails the ingest** rather than being stored:
+
+| value      | the delivery under verification                            |
+| ---------- | ---------------------------------------------------------- |
+| `coding`   | a software change (branch / commit / surfaces under test)  |
+| `writing`  | a written deliverable (manuscript / chapters / documents)  |
+| `research` | a research deliverable (question / sources / claims)       |
+| `generic`  | anything else — no modeled scope; `context` is an open bag |
+
+It is **not** a free-text summary of the run. Writing the sentence you would say
+out loud ("verify the memory tool renders…") is the easy mistake — the scaffold
+pre-fills `coding`, so overwriting it with prose turns a working file into a hard
+ingest failure at the very last step. That sentence belongs in `context`, which is
+the scenario's own scope bag and is rendered next to `scenario` in the page's scope
+header; for a non-`coding` scenario it also carries that scenario's modeled fields.
 
 ### Structured visualizations
 

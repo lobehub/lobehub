@@ -368,7 +368,8 @@ export const acceptances = pgTable(
 
     /**
      * Polymorphic accepted object. No FK on purpose: an acceptance may target task,
-     * topic, document, or future subject types without reshaping this aggregate.
+     * topic, document, standalone delivery, or future subject types without
+     * reshaping this aggregate.
      * Subject existence/ownership is validated in the service that creates it.
      */
     subjectType: text('subject_type', { enum: acceptanceSubjectTypes }).notNull(),

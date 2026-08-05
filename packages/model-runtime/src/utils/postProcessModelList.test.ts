@@ -113,6 +113,26 @@ describe('postProcessModelList', () => {
     });
   });
 
+  it('generates the stable Gemini 3.1 Flash image model from dynamic chat metadata', async () => {
+    const result = await postProcessModelList([
+      {
+        displayName: 'Nano Banana 2',
+        enabled: true,
+        id: 'gemini-3.1-flash-image',
+      },
+    ]);
+
+    expect(result).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          enabled: true,
+          id: 'gemini-3.1-flash-image:image',
+          type: 'image',
+        }),
+      ]),
+    );
+  });
+
   it('should handle models that partially match whitelist patterns', async () => {
     const modelsWithPartialMatch: ChatModelCard[] = [
       {

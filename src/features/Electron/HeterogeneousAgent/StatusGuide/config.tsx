@@ -7,8 +7,10 @@ import {
   CODEX_CLI_INSTALL_DOCS_URL,
   OPENCODE_CLI_INSTALL_COMMANDS,
   OPENCODE_CLI_INSTALL_DOCS_URL,
+  PI_CLI_INSTALL_COMMANDS,
+  PI_CLI_INSTALL_DOCS_URL,
 } from '@lobechat/electron-client-ipc';
-import { Amp, ClaudeCode, Codex, OpenCode } from '@lobehub/icons';
+import { Amp, ClaudeCode, Codex, OpenCode, Pi } from '@lobehub/icons';
 
 import {
   type HeterogeneousAgentGuideConfig,
@@ -48,6 +50,14 @@ export const HETEROGENEOUS_AGENT_GUIDE_CONFIG = {
     signInCommand: 'opencode auth login',
     title: 'OpenCode',
     translationPrefix: 'opencodeInstallGuide',
+  },
+  'pi': {
+    docsUrl: PI_CLI_INSTALL_DOCS_URL,
+    icon: Pi,
+    installCommands: PI_CLI_INSTALL_COMMANDS,
+    signInCommand: 'pi',
+    title: 'Pi',
+    translationPrefix: 'piInstallGuide',
   },
 } as const satisfies Record<SupportedHeterogeneousAgentType, HeterogeneousAgentGuideConfig>;
 

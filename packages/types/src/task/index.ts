@@ -155,6 +155,10 @@ export interface TaskSchedulerContext {
   // QStash messageId (or LocalScheduler scheduleId) for the next tick. Used to
   // cancel when the user wants an interval change to take effect immediately.
   tickMessageId?: string;
+  // Generation token carried by the currently active tick. A delivered tick
+  // must match this value so a failed best-effort cancellation cannot create
+  // a second heartbeat chain.
+  tickToken?: string;
 }
 
 /**
@@ -354,6 +358,8 @@ export interface TaskDetailActivityAgent {
   avatar: string | null;
   backgroundColor: string | null;
   id: string;
+  /** Personal name; renderers resolve the label with `agentDisplayName(agent, fallback)`. */
+  name?: string | null;
   title: string | null;
 }
 
@@ -440,6 +446,8 @@ export interface TaskDetailData {
   heartbeat?: {
     interval?: number | null;
     lastAt?: string | null;
+    /** When the currently pending heartbeat tick was enqueued. */
+    scheduledAt?: string | null;
     timeout?: number | null;
   };
   /** Stable database identity used by subject-bound aggregates such as Acceptance. */

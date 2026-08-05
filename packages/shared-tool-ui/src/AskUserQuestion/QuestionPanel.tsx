@@ -46,9 +46,17 @@ interface QuestionPanelProps {
   /** The free-text "write your own" value for this question. */
   customValue: string;
   disabled: boolean;
+  /** 0-based keyboard cursor over the option rows (↑/↓ navigation), if any. */
+  highlightedIndex?: number;
   /** Tag shown next to the header when the question is multi-select. */
   multiSelectTag: string;
   onCustomChange: (q: AskUserQuestionItem, value: string) => void;
+  /**
+   * Arrow-key hand-off from the free-text row back into the option list:
+   * `prev` fires on ↑ at the very start of the text, `next` on ↓ with the box
+   * empty — anywhere else the arrows keep their native caret behavior.
+   */
+  onCustomNavigate?: (direction: 'next' | 'prev') => void;
   /**
    * Submit the whole form from the free-text box on Enter (Shift+Enter still
    * inserts a newline). Pass `undefined` while submit is unavailable so Enter
@@ -57,14 +65,16 @@ interface QuestionPanelProps {
   onPressEnter?: () => void;
   onToggle: (q: AskUserQuestionItem, label: string) => void;
   question: AskUserQuestionItem;
+  /** Badge text for options carrying the "(Recommended)" label marker. */
+  recommendedTag: string;
 }
 
 /**
  * A single question: its header/title, the numbered options, and a trailing
  * free-text box so the user can answer in their own words instead of picking.
  *
- * Presentational and i18n-free — the two visible strings come in as props so
- * the panel stays app-decoupled and reusable across surfaces.
+ * Presentational and i18n-free — the visible strings come in as props so the
+ * panel stays app-decoupled and reusable across surfaces.
  */
 export const QuestionPanel = memo<QuestionPanelProps>(
   ({
@@ -73,10 +83,13 @@ export const QuestionPanel = memo<QuestionPanelProps>(
     customValue,
     customPlaceholder,
     disabled,
+    highlightedIndex,
     multiSelectTag,
     onToggle,
     onCustomChange,
+    onCustomNavigate,
     onPressEnter,
+    recommendedTag,
   }) => {
     const isOptionSelected = (label: string): boolean =>
       question.multiSelect ? Array.isArray(answer) && answer.includes(label) : answer === label;
@@ -98,9 +111,11 @@ export const QuestionPanel = memo<QuestionPanelProps>(
             <OptionCard
               description={opt.description}
               disabled={disabled}
+              highlighted={highlightedIndex === optIdx}
               index={optIdx + 1}
               key={opt.label}
               label={opt.label}
+              recommendedText={opt.recommended ? recommendedTag : undefined}
               selected={isOptionSelected(opt.label)}
               onToggle={() => onToggle(question, opt.label)}
             />
@@ -118,9 +133,27 @@ export const QuestionPanel = memo<QuestionPanelProps>(
               variant="filled"
               onChange={(e) => onCustomChange(question, e.target.value)}
               onKeyDown={(e) => {
-                // The IME guard keeps CJK composition confirms from submitting.
-                if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return;
+                // The IME guard keeps CJK composition confirms from acting.
+                if (e.nativeEvent.isComposing) return;
                 if (e.metaKey || e.ctrlKey || e.altKey) return;
+                const el = e.currentTarget;
+                if (e.key === 'ArrowUp' && onCustomNavigate) {
+                  if (el.selectionStart === 0 && el.selectionEnd === 0) {
+                    e.preventDefault();
+                    el.blur();
+                    onCustomNavigate('prev');
+                  }
+                  return;
+                }
+                if (e.key === 'ArrowDown' && onCustomNavigate) {
+                  if (!el.value) {
+                    e.preventDefault();
+                    el.blur();
+                    onCustomNavigate('next');
+                  }
+                  return;
+                }
+                if (e.key !== 'Enter' || e.shiftKey) return;
                 if (!onPressEnter) return;
                 e.preventDefault();
                 onPressEnter();

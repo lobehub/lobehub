@@ -197,6 +197,8 @@
   "pageList.workspaceTitle": "ワークスペース",
   "portal.openInPageEditor": "ドキュメントで編集",
   "preview.downloadFile": "ファイルをダウンロード",
+  "preview.raw": "生データ",
+  "preview.render": "プレビュー",
   "preview.unsupportedFileAndContact": "このファイル形式はオンラインプレビューをサポートしていません。プレビューのリクエストがある場合は、ぜひ<1>ご連絡ください</1>。",
   "resource": "リソース",
   "resourceList.batchCopyDescription": "選択したリソースを別のワークスペースにクローンします。",

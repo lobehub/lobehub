@@ -175,3 +175,51 @@ describe('Google rolling model aliases', () => {
     expect(flashLiteLatest?.settings?.disabledParams).toEqual(['temperature', 'top_p']);
   });
 });
+
+describe('Google Gemini 3.1 Flash Image models', () => {
+  it('registers stable IDs without removing the preview compatibility cards', () => {
+    const googleModels = LOBE_DEFAULT_MODEL_LIST.filter(
+      (model) => model.providerId === ModelProvider.Google,
+    );
+    const stableImageModel = googleModels.find(
+      (model) => model.id === 'gemini-3.1-flash-image:image',
+    );
+
+    expect(googleModels).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          enabled: true,
+          id: 'gemini-3.1-flash-image',
+          releasedAt: '2026-05-28',
+          type: 'chat',
+        }),
+        expect.objectContaining({
+          enabled: true,
+          id: 'gemini-3.1-flash-image:image',
+          releasedAt: '2026-05-28',
+          type: 'image',
+        }),
+        expect.objectContaining({
+          enabled: true,
+          id: 'gemini-3.1-flash-image-preview',
+          releasedAt: '2026-02-26',
+          type: 'chat',
+        }),
+        expect.objectContaining({
+          enabled: true,
+          id: 'gemini-3.1-flash-image-preview:image',
+          releasedAt: '2026-02-26',
+          type: 'image',
+        }),
+      ]),
+    );
+    expect(stableImageModel?.pricing?.units).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'textInput', rate: 0.5 }),
+        expect.objectContaining({ name: 'imageInput', rate: 0.5 }),
+        expect.objectContaining({ name: 'textOutput', rate: 3 }),
+        expect.objectContaining({ name: 'imageOutput', rate: 60 }),
+      ]),
+    );
+  });
+});
