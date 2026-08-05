@@ -70,7 +70,6 @@ import { UserMemorySourceBenchmarkLoCoMoModel } from '@/database/models/userMemo
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
 import { asyncTasks } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
-import { buildMessageScopeWhere } from '@/database/utils/messageScope';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { OtelWorkflowClient } from '@/libs/qstash';
 import { getServerGlobalConfig } from '@/server/globalConfig';
@@ -1372,7 +1371,9 @@ export class MemoryExtractionExecutor {
         role: messages.role,
       })
       .from(messages)
-      .where(and(buildMessageScopeWhere({ userId, workspaceId }), eq(messages.topicId, topicId)))
+      .where(
+        and(buildWorkspaceWhere({ userId, workspaceId }, messages), eq(messages.topicId, topicId)),
+      )
       .orderBy(asc(messages.createdAt));
 
     const conversation = rows

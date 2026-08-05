@@ -1,15 +1,4 @@
-import {
-  and,
-  desc,
-  eq,
-  inArray,
-  isNull,
-  ne,
-  or,
-  type SQL,
-  sql,
-  type SQLWrapper,
-} from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, ne, type SQL, sql, type SQLWrapper } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import {
@@ -21,15 +10,12 @@ import {
   knowledgeBaseFiles,
   knowledgeBases,
   messages,
-  sessions,
   topics,
   userMemories,
-  workspaceMembers,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { sanitizeBm25Query } from '../../utils/bm25';
 import { normalizeInboxAgentMeta, normalizeInboxAgentTitle } from '../../utils/inboxAgent';
-import { buildMessageScopeJoinWhere } from '../../utils/messageScope';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
 export type SearchResultType =
@@ -743,40 +729,6 @@ export class SearchRepo {
 
     const candidateLimit = limit * RECENCY_CANDIDATE_MULTIPLIER;
 
-    // messages.user_id/workspace_id are creation-time snapshots — a message's
-    // authoritative scope is derived from its owning topic/session
-    // (buildMessageScopeJoinWhere), and that check MUST live above the scan:
-    // joins inside the scan break TopN, and ParadeDB rejects the EXISTS form
-    // outright ("Unsupported query shape"). The scan keeps only a fast-field
-    // author/tenant BOUND that over-covers the derived scope:
-    //  - personal mode: `user_id = me` (pushdown-able → TopN + real scores).
-    //    Approximation: teammate-authored rows inside topics transferred INTO
-    //    a personal scope fall outside the bound (rare by construction).
-    //  - workspace mode: workspace snapshot rows OR rows authored by any
-    //    member (covers content transferred in by a member; the member list
-    //    is inlined as literals — a subquery here would degrade the scan the
-    //    same way EXISTS does). Plan quality matches upstream workspace mode
-    //    (already non-TopN until LOBE-12381).
-    let scanBound: SQL;
-    if (this.workspaceId) {
-      const memberRows = await this.db
-        .select({ userId: workspaceMembers.userId })
-        .from(workspaceMembers)
-        .where(
-          and(
-            eq(workspaceMembers.workspaceId, this.workspaceId),
-            isNull(workspaceMembers.deletedAt),
-          ),
-        );
-      const memberIds = memberRows.map((row) => row.userId);
-      scanBound = or(
-        buildWorkspaceWhere(this.scope, messages),
-        memberIds.length > 0 ? inArray(messages.userId, memberIds) : undefined,
-      ) as SQL;
-    } else {
-      scanBound = eq(messages.userId, this.userId) as SQL;
-    }
-
     const hits = this.db
       .select({
         agentId: messages.agentId,
@@ -787,16 +739,14 @@ export class SearchRepo {
         model: messages.model,
         role: messages.role,
         score: sql<number>`paradedb.score(${messages.id})`.as('score'),
-        sessionId: messages.sessionId,
         topicId: messages.topicId,
         updatedAt: messages.updatedAt,
-        userId: messages.userId,
         workspaceId: messages.workspaceId,
       })
       .from(messages)
       .where(
         and(
-          scanBound,
+          this.scanScopeWhere(messages),
           ne(messages.role, 'tool'),
           agentId && !this.liftsAgentFilter ? eq(messages.agentId, agentId) : undefined,
           sql`${messages.content} @@@ ${bm25Query}`,
@@ -805,16 +755,11 @@ export class SearchRepo {
       .orderBy(sql`paradedb.score(${messages.id}) DESC`)
       // `agent_id` is not a BM25 field, so where the scan's score order is real
       // its filter lives above the scan and the pool deepens to compensate. See
-      // the scan-shape invariant and `liftsAgentFilter` above. The derived
-      // scope check above the scan drops rows in every mode now, so the pool
-      // over-fetches in workspace mode too.
+      // the scan-shape invariant and `liftsAgentFilter` above.
       .limit(
         agentId && this.liftsAgentFilter
           ? AGENT_SCOPE_CANDIDATE_POOL
-          : Math.max(
-              candidateLimit * WORKSPACE_FILTER_CANDIDATE_MULTIPLIER,
-              WORKSPACE_FILTER_MIN_CANDIDATES,
-            ),
+          : this.scanCandidateLimit(candidateLimit),
       )
       .as('message_hits');
 
@@ -836,13 +781,9 @@ export class SearchRepo {
       })
       .from(hits)
       .leftJoin(agents, eq(hits.agentId, agents.id))
-      .leftJoin(topics, eq(topics.id, hits.topicId))
-      .leftJoin(sessions, eq(sessions.id, hits.sessionId))
       .where(
         and(
-          // Authoritative derived scope — topic first, then session, then the
-          // orphan rows' own snapshot columns.
-          buildMessageScopeJoinWhere(this.scope, hits),
+          this.liftedScopeWhere(hits.workspaceId),
           agentId ? eq(hits.agentId, agentId) : undefined,
         ),
       )

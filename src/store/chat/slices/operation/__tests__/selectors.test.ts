@@ -679,6 +679,62 @@ describe('Operation Selectors', () => {
     });
   });
 
+  describe('topic running selectors', () => {
+    it('should report a topic running while a send/run op with its id is visibly running', () => {
+      const { result } = renderHook(() => useChatStore());
+      let sendOpId = '';
+
+      act(() => {
+        sendOpId = result.current.startOperation({
+          type: 'sendMessage',
+          context: { agentId: 'agent1', topicId: 'topic1' },
+        }).operationId;
+      });
+
+      expect(operationSelectors.isTopicVisiblyRunning('topic1')(result.current)).toBe(true);
+      expect(operationSelectors.isTopicVisiblyRunning('other')(result.current)).toBe(false);
+      expect(operationSelectors.visiblyRunningTopicIds(result.current)).toEqual(
+        new Set(['topic1']),
+      );
+
+      act(() => {
+        result.current.completeOperation(sendOpId);
+      });
+
+      expect(operationSelectors.isTopicVisiblyRunning('topic1')(result.current)).toBe(false);
+      expect(operationSelectors.visiblyRunningTopicIds(result.current).size).toBe(0);
+    });
+
+    it('should not report a topic running during the masked terminal tail', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        // Visible output done, run still doing terminal bookkeeping — the
+        // sidebar shows the unread dot in this window, not the spinner.
+        result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: 'agent1', topicId: 'topic1' },
+          metadata: { visibleLoadingDone: true },
+        });
+      });
+
+      expect(operationSelectors.isTopicVisiblyRunning('topic1')(result.current)).toBe(false);
+    });
+
+    it('should ignore ops whose type is not part of the send/run pipeline', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.startOperation({
+          type: 'callLLM',
+          context: { agentId: 'agent1', topicId: 'topic1' },
+        });
+      });
+
+      expect(operationSelectors.isTopicVisiblyRunning('topic1')(result.current)).toBe(false);
+    });
+  });
+
   describe('visible loading selectors', () => {
     it('should hide a no-tool terminal tail without unblocking the operation', () => {
       const { result } = renderHook(() => useChatStore());

@@ -73,14 +73,11 @@ export class RecentModel {
         value: sql<string>`left(${messages.content}, ${LAST_MESSAGE_PREVIEW_LENGTH + 1})`,
       })
       .from(messages)
-      // No scope predicate on `messages`: its user_id/workspace_id are
-      // creation-time snapshots that go stale after an agent transfer, and the
-      // correlation to `topics.id` already inherits the topic arm's scope check
-      // below — which is the message's authoritative scope (see messageScope.ts).
       .where(
         and(
           eq(messages.topicId, topics.id),
           eq(messages.role, 'assistant'),
+          buildWorkspaceWhere(scope, messages),
           ne(messages.content, ''),
         ),
       )

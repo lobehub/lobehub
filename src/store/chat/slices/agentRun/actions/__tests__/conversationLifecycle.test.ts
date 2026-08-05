@@ -9,6 +9,7 @@ import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
 import * as agentGroupStore from '@/store/agentGroup';
 import { setPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
+import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { getSessionStoreState } from '@/store/session';
@@ -615,7 +616,12 @@ describe('ConversationLifecycle actions', () => {
           }),
         );
         expect(optimisticTopic?.id).toMatch(/^tpc_/);
-        expect(useChatStore.getState().topicLoadingIds).toContain(optimisticTopic!.id);
+        // The running sendMessage operation (context carries the minted topic
+        // id) drives the sidebar spinner while the server round-trip is in
+        // flight.
+        expect(
+          operationSelectors.isTopicVisiblyRunning(optimisticTopic!.id)(useChatStore.getState()),
+        ).toBe(true);
 
         await act(async () => {
           resolveServerSend({
@@ -645,15 +651,20 @@ describe('ConversationLifecycle actions', () => {
         const finalTopics = useChatStore.getState().topicDataMap[topicKey]?.items ?? [];
         expect(finalTopics).toEqual([expect.objectContaining({ id: newTopicId })]);
         expect(finalTopics.some((topic) => topic.id === optimisticTopic?.id)).toBe(false);
-        expect(useChatStore.getState().topicLoadingIds).not.toContain(optimisticTopic!.id);
-        expect(useChatStore.getState().topicLoadingIds).toContain(newTopicId);
 
         await act(async () => {
           resolveExecute();
           await sendPromise;
         });
 
-        expect(useChatStore.getState().topicLoadingIds).not.toContain(newTopicId);
+        // Send settled: no operation left running for either id, so the
+        // sidebar spinner is off.
+        expect(operationSelectors.isTopicVisiblyRunning(newTopicId)(useChatStore.getState())).toBe(
+          false,
+        );
+        expect(
+          operationSelectors.isTopicVisiblyRunning(optimisticTopic!.id)(useChatStore.getState()),
+        ).toBe(false);
       });
 
       it('should snapshot the agent model onto the newTopic (top-level) when the send creates the topic', async () => {
@@ -710,7 +721,7 @@ describe('ConversationLifecycle actions', () => {
         );
       });
 
-      it('should release the migrated topicLoadingIds owner after a gateway send creates the topic', async () => {
+      it('should stop the sidebar spinner after a gateway send creates the topic', async () => {
         const { result } = renderHook(() => useChatStore());
         const agentId = TEST_IDS.SESSION_ID;
         const topicKey = topicMapKey({ agentId });
@@ -721,8 +732,7 @@ describe('ConversationLifecycle actions', () => {
             new Promise<any>((resolve) => {
               resolveGateway = () => {
                 // Mimic executeGatewayAgent's contract: execAgentTask resolves
-                // the optimistic topic via internal_replaceTopicId, migrating
-                // its topicLoadingIds owner onto the real topic id, and the
+                // the optimistic topic via internal_replaceTopicId, and the
                 // parent sendMessage op is completed once phase-1 init is done
                 // (without this the leaked running op pollutes later tests —
                 // resetTestEnvironment does not clear `operations`).
@@ -774,7 +784,10 @@ describe('ConversationLifecycle actions', () => {
 
         const optimisticTopicId = useChatStore.getState().topicDataMap[topicKey]?.items[0]?.id;
         expect(optimisticTopicId).toMatch(/^tpc_/);
-        expect(useChatStore.getState().topicLoadingIds).toContain(optimisticTopicId);
+        // The running sendMessage op keeps the spinner on during phase-1 init.
+        expect(
+          operationSelectors.isTopicVisiblyRunning(optimisticTopicId!)(useChatStore.getState()),
+        ).toBe(true);
 
         await act(async () => {
           resolveGateway();
@@ -786,13 +799,17 @@ describe('ConversationLifecycle actions', () => {
         });
 
         // From here the run spinner is owned by the persisted
-        // `status === 'running'`; the migrated creation owner must be released
-        // or the sidebar spinner sticks forever (the #16745 regression).
-        expect(useChatStore.getState().topicLoadingIds).not.toContain(newTopicId);
-        expect(useChatStore.getState().topicLoadingIds).not.toContain(optimisticTopicId);
+        // `status === 'running'` — no client-side operation may keep spinning
+        // for either id, or the sidebar spinner sticks after the run.
+        expect(operationSelectors.isTopicVisiblyRunning(newTopicId)(useChatStore.getState())).toBe(
+          false,
+        );
+        expect(
+          operationSelectors.isTopicVisiblyRunning(optimisticTopicId!)(useChatStore.getState()),
+        ).toBe(false);
       });
 
-      it('should hold the migrated topicLoadingIds owner through a hetero new-topic run and release it at the end', async () => {
+      it('should keep the sidebar spinner on through a hetero new-topic run and stop it at the end', async () => {
         mockConstEnv.isDesktop = true;
         setupMockSelectors({
           agentConfig: {
@@ -847,10 +864,17 @@ describe('ConversationLifecycle actions', () => {
         } as any);
 
         let resolveExecutor!: () => void;
-        executeHeterogeneousAgentMock.mockReturnValue(
-          new Promise<void>((resolve) => {
-            resolveExecutor = resolve;
-          }),
+        executeHeterogeneousAgentMock.mockImplementation(
+          (_getStore: unknown, opts: { operationId: string }) =>
+            new Promise<void>((resolve) => {
+              resolveExecutor = () => {
+                // The real executor settles its execHeterogeneousAgent op at
+                // the terminal; without this the leaked running op would keep
+                // the spinner on (and pollute later tests).
+                useChatStore.getState().completeOperation(opts.operationId);
+                resolve();
+              };
+            }),
         );
 
         let sendPromise!: ReturnType<typeof result.current.sendMessage>;
@@ -864,10 +888,12 @@ describe('ConversationLifecycle actions', () => {
         await waitFor(() => expect(executeHeterogeneousAgentMock).toHaveBeenCalled());
 
         // The executor only writes the persisted `status === 'running'` (the
-        // run spinner's other driver) after startSession resolves — the
-        // migrated creation owner must stay held while the executor starts up,
-        // or the sidebar spinner blanks during a slow CLI startup.
-        expect(useChatStore.getState().topicLoadingIds).toContain(newTopicId);
+        // run spinner's other driver) after startSession resolves — the running
+        // execHeterogeneousAgent operation must keep the spinner on while the
+        // executor starts up, or it blanks during a slow CLI startup.
+        expect(operationSelectors.isTopicVisiblyRunning(newTopicId)(useChatStore.getState())).toBe(
+          true,
+        );
 
         await act(async () => {
           resolveExecutor();
@@ -878,7 +904,9 @@ describe('ConversationLifecycle actions', () => {
           await Promise.resolve();
         });
 
-        expect(useChatStore.getState().topicLoadingIds).not.toContain(newTopicId);
+        expect(operationSelectors.isTopicVisiblyRunning(newTopicId)(useChatStore.getState())).toBe(
+          false,
+        );
       });
 
       it('should keep a gateway optimistic topic in its pending repo project group', async () => {
@@ -1007,8 +1035,7 @@ describe('ConversationLifecycle actions', () => {
         });
 
         expect(useChatStore.getState().topicDataMap[topicKey]?.items ?? []).toEqual([]);
-        expect(useChatStore.getState().topicLoadingIds).toEqual([]);
-        expect(useChatStore.getState().topicLoadingIdCounts).toEqual({});
+        expect(operationSelectors.visiblyRunningTopicIds(useChatStore.getState()).size).toBe(0);
       });
 
       it('should show a group optimistic topic in the group topic bucket', async () => {

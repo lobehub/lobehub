@@ -1,6 +1,7 @@
 import { AGENT_CHAT_URL } from '@lobechat/const';
 import { AccordionItem, ActionIcon, Center, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
+import isEqual from 'fast-deep-equal';
 import { FolderClosedIcon, FolderOpenIcon, type LucideIcon, PlusIcon } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -216,10 +217,9 @@ const GroupItem = memo<GroupItemComponentProps>(
     const isDeviceMode = effectiveTarget === 'device' && !!agencyConfig?.boundDeviceId;
     const canAddTopic = (isDesktop || isDeviceMode) && !!workingDirectory;
 
-    const loadingTopicIds = useChatStore((s) => s.topicLoadingIds);
-    const statusCounts = useMemo(
-      () => getProjectTopicStatusCounts(children, new Set(loadingTopicIds)),
-      [children, loadingTopicIds],
+    const statusCounts = useChatStore(
+      (s) => getProjectTopicStatusCounts(children, operationSelectors.visiblyRunningTopicIds(s)),
+      isEqual,
     );
     const childTopicIds = useMemo(() => children.map((topic) => topic.id), [children]);
     const unreadCount = useChatStore(
