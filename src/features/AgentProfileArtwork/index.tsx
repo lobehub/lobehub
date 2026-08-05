@@ -36,7 +36,7 @@ const styles = createStaticStyles(({ css }) => ({
     height: 160px;
     margin-inline: -16px;
 
-    background: ${cssVar.colorFillTertiary};
+    background: transparent;
     background-position: center;
     background-size: cover;
   `,

@@ -52,7 +52,7 @@ export const buildAgentArtworkPrompt = ({
   const subject = identity || 'a capable, friendly AI agent';
 
   if (kind === 'avatar') {
-    return `Create a distinctive square profile icon for this AI agent: ${subject}. Single centered subject, simple silhouette, polished editorial illustration, calm colors, high contrast, no words, no letters, no logo, no border, suitable for a small app avatar.`;
+    return `Create a distinctive square profile icon for this AI agent: ${subject}. Single centered subject, simple silhouette, polished editorial illustration, calm colors, high contrast. Fill the entire square canvas edge to edge with the artwork: use a full-bleed composition with no white background, no white matte, no empty margin, no padding, no frame, and no border. No words, no letters, no logo. The result must remain clear as a small app avatar.`;
   }
 
   return `Create a wide cinematic profile cover for this AI agent: ${subject}. Abstract editorial environment that expresses the agent's role, calm premium visual language, generous negative space, balanced composition, no person portrait, no words, no letters, no logo, no border.`;

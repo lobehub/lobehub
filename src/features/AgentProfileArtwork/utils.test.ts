@@ -38,8 +38,10 @@ describe('buildAgentArtworkPrompt', () => {
     });
 
     expect(prompt).toContain('Coco. Coding assistant');
+    expect(prompt).toContain('full-bleed composition');
+    expect(prompt).toContain('no white background');
     expect(prompt).toContain('square profile icon');
-    expect(prompt).toContain('no words');
+    expect(prompt.toLowerCase()).toContain('no words');
   });
 
   it('builds a wide background prompt', () => {

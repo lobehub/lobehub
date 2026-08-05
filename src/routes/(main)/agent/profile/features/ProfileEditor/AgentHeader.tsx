@@ -66,7 +66,7 @@ const AgentHeader = memo(() => {
       {/* Identity Section — display only. Editing all three fields happens in a
           form modal; inline inputs crowded the header and left no room for a
           per-field label or error. */}
-      <Flexbox flex={1} gap={4} paddingInline={24} style={{ minWidth: 0 }}>
+      <Flexbox flex={1} gap={8} paddingInline={24} style={{ minWidth: 0 }}>
         {/* The headline is the NAME slot. It does not borrow the role the way
             list surfaces do — the role has its own line right below, and falling
             back would print it twice (an agent titled "Lobe AI" read
