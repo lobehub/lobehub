@@ -1,0 +1,19 @@
+{
+  "action.connect.button": "Hubungkan {{provider}}",
+  "action.connect.error": "Koneksi gagal, silakan coba lagi.",
+  "action.connect.popupBlocked": "Popup koneksi diblokir. Izinkan popup di browser Anda untuk melanjutkan.",
+  "action.connect.short": "Hubungkan",
+  "action.connecting": "Menunggu otorisasi...",
+  "action.create.error": "Gagal membuat tugas. Silakan coba lagi.",
+  "action.create.success": "Tugas terjadwal ditambahkan. Temukan di Lobe AI.",
+  "action.createButton": "Tambah tugas",
+  "action.creating": "Membuat...",
+  "action.dismiss.error": "Gagal menutup. Silakan coba lagi.",
+  "action.dismiss.tooltip": "Tidak tertarik",
+  "action.refresh.button": "Muat Ulang",
+  "card.templateTag": "Templat",
+  "schedule.daily": "Setiap hari pukul {{time}}",
+  "schedule.editableAfterCreateTooltip": "Anda dapat menyesuaikan jadwal setelah membuat tugas.",
+  "schedule.weekly": "Setiap {{weekday}} pukul {{time}}",
+  "section.title": "Coba tugas terjadwal ini"
+}

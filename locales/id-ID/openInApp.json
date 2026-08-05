@@ -1,0 +1,8 @@
+{
+  "dropdownLabel": "Buka direktori kerja di",
+  "errors.appNotInstalled": "{{appName}} tidak terinstal",
+  "errors.launchFailed": "Gagal membuka di {{appName}}: {{error}}",
+  "errors.pathNotFound": "Path tidak ditemukan: {{path}}",
+  "errors.unknown": "kesalahan tidak dikenal",
+  "tooltip": "Buka di {{appName}}"
+}
