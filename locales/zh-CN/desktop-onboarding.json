@@ -43,6 +43,7 @@
   "screen3.title3": "您可以随时在设置中进行管理",
   "screen4.badge": "隐私",
   "screen4.description": "选择您希望如何共享数据。您的选择将帮助我们改进，您也可以随时在设置中更改。",
+  "screen4.errors.saveFailed": "无法保存您的选择，请重试。",
   "screen4.footerNote": "您可以随时在设置中更改",
   "screen4.navigation.next": "继续",
   "screen4.privacy.description": "不共享匿名使用数据，也不会上传性能、模型使用或功能交互等统计信息。",

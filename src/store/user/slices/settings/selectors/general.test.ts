@@ -24,9 +24,27 @@ describe('settingsSelectors', () => {
         isDevMode: false,
         isLiteMode: false,
         mermaidTheme: 'lobe-theme',
-        telemetry: true,
+        telemetry: false,
         transitionMode: 'fadeIn',
       });
+    });
+  });
+
+  describe('telemetry', () => {
+    it('defaults to disabled without an explicit choice', () => {
+      expect(userGeneralSettingsSelectors.telemetry(initialState as UserStore)).toBe(false);
+    });
+
+    it('uses the legacy preference only when the current setting is absent', () => {
+      const legacyConsent = merge(initialState, {
+        preference: { telemetry: true },
+      });
+      const currentDenial = merge(legacyConsent, {
+        settings: { general: { telemetry: false } },
+      });
+
+      expect(userGeneralSettingsSelectors.telemetry(legacyConsent as UserStore)).toBe(true);
+      expect(userGeneralSettingsSelectors.telemetry(currentDenial as UserStore)).toBe(false);
     });
   });
 

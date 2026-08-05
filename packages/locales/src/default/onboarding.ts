@@ -159,6 +159,7 @@ export default {
   'telemetry.rows.privacy.desc':
     'We use anonymized data to continuously improve the experience. You can change this anytime in your privacy preferences.',
   'telemetry.rows.privacy.title': "Let's Make {{appName}} Even Better Together",
+  'telemetry.saveFailed': 'Failed to save your choice. Please try again.',
   'telemetry.terms': 'Terms of Service',
   'telemetry.title': "Hey there, I'm {{name}}",
   'telemetry.title2': 'Nice to meet you~',

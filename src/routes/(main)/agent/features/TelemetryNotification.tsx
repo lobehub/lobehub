@@ -27,16 +27,16 @@ const TelemetryNotification = memo<{ mobile?: boolean }>(({ mobile }) => {
   const { t } = useTranslation('common');
   const isPreferenceInit = useUserStore(preferenceSelectors.isPreferenceInit);
 
-  const [useCheckTrace, updatePreference] = useUserStore((s) => [
+  const [useCheckTrace, updateGeneralConfig] = useUserStore((s) => [
     s.useCheckTrace,
-    s.updatePreference,
+    s.updateGeneralConfig,
   ]);
 
   const { data: showModal, mutate } = useCheckTrace(isPreferenceInit);
 
-  const updateTelemetry = (telemetry: boolean) => {
-    updatePreference({ telemetry });
-    mutate();
+  const updateTelemetry = async (telemetry: boolean) => {
+    await updateGeneralConfig({ telemetry });
+    await mutate();
   };
 
   return (
@@ -67,7 +67,7 @@ const TelemetryNotification = memo<{ mobile?: boolean }>(({ mobile }) => {
           <Button
             type={'primary'}
             onClick={() => {
-              updateTelemetry(true);
+              void updateTelemetry(true);
             }}
           >
             {t('telemetry.allow')}
@@ -75,7 +75,7 @@ const TelemetryNotification = memo<{ mobile?: boolean }>(({ mobile }) => {
           <Button
             type={'text'}
             onClick={() => {
-              updateTelemetry(false);
+              void updateTelemetry(false);
             }}
           >
             {t('telemetry.deny')}

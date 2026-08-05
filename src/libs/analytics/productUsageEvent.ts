@@ -15,6 +15,9 @@ export const trackProductUsageEvent = async (
   event: AnalyticsEvent,
   options: TrackProductUsageEventOptions = {},
 ) => {
+  // Privacy boundary: telemetry consent is not permission to send identity or content.
+  // Callers must use categorical/count metrics only—never account/object IDs, profile
+  // fields, free-form user input, prompts, chat text, or Agent metadata values.
   if (!isProductUsageEventEnabled()) return false;
 
   const analytics = options.analytics ?? getSingletonAnalyticsOptional();

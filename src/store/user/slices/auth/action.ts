@@ -1,4 +1,5 @@
 import { type SSOProvider } from '@lobechat/types';
+import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
 
 import { clearActiveScopeKey } from '@/libs/swr/useCacheScope';
 import { type StoreSetter } from '@/store/types';
@@ -70,6 +71,8 @@ export class UserAuthActionImpl {
     } catch {
       // Best-effort: don't block sign-out if the cleanup request fails
     }
+
+    await getSingletonAnalyticsOptional()?.reset();
 
     const { signOut } = await import('@/libs/better-auth/auth-client');
     await signOut({

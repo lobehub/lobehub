@@ -22,7 +22,12 @@ const mockBetterAuthClient = vi.hoisted(() => ({
   signOut: vi.fn().mockResolvedValue({}),
 }));
 
+const analyticsReset = vi.hoisted(() => vi.fn());
+
 vi.mock('@/libs/better-auth/auth-client', () => mockBetterAuthClient);
+vi.mock('@lobehub/analytics', () => ({
+  getSingletonAnalyticsOptional: () => ({ reset: analyticsReset }),
+}));
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -57,6 +62,7 @@ describe('createAuthSlice', () => {
         await result.current.logout();
       });
 
+      expect(analyticsReset).toHaveBeenCalledOnce();
       expect(mockBetterAuthClient.signOut).toHaveBeenCalled();
     });
   });

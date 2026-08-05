@@ -4,40 +4,31 @@ import { Block, Checkbox, Empty, Flexbox, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { HeartHandshake, Undo2Icon } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useTelemetrySubmit } from '@/features/Onboarding';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import LobeMessage from '../components/LobeMessage';
 import OnboardingFooterActions from '../components/OnboardingFooterActions';
 
-type DataMode = 'share' | 'privacy';
-
 interface DataModeStepProps {
   onBack: () => void;
-  onNext: () => void;
+  onNext: () => Promise<void> | void;
 }
 
 const DataModeStep = memo<DataModeStepProps>(({ onBack, onNext }) => {
   const { t } = useTranslation('desktop-onboarding');
-  const telemetryEnabled = useUserStore(userGeneralSettingsSelectors.telemetry);
+  const persistedTelemetryEnabled = useUserStore(userGeneralSettingsSelectors.telemetry);
   const updateGeneralConfig = useUserStore((s) => s.updateGeneralConfig);
-  const [selectedMode, setSelectedMode] = useState<DataMode>(
-    telemetryEnabled ? 'share' : 'privacy',
-  );
-
-  const setMode = useCallback(
-    (mode: DataMode) => {
-      setSelectedMode(mode);
-      const nextTelemetry = mode === 'share';
-      if (telemetryEnabled !== nextTelemetry) {
-        void updateGeneralConfig({ telemetry: nextTelemetry });
-      }
-    },
-    [telemetryEnabled, updateGeneralConfig],
-  );
+  const { handleSubmit, hasSaveError, isSaving, setTelemetryEnabled, telemetryEnabled } =
+    useTelemetrySubmit({
+      initialTelemetryEnabled: persistedTelemetryEnabled,
+      onNext,
+      updateGeneralConfig,
+    });
 
   const checkIcon = (
     <Checkbox
@@ -62,11 +53,11 @@ const DataModeStep = memo<DataModeStepProps>(({ onBack, onNext }) => {
           flex={1}
           gap={16}
           padding={16}
-          style={{ borderColor: selectedMode === 'share' ? cssVar.colorSuccess : undefined }}
+          style={{ borderColor: telemetryEnabled ? cssVar.colorSuccess : undefined }}
           variant={'outlined'}
-          onClick={() => setMode('share')}
+          onClick={() => setTelemetryEnabled(true)}
         >
-          {selectedMode === 'share' && checkIcon}
+          {telemetryEnabled && checkIcon}
           <Empty
             description={t('screen4.share.description')}
             icon={HeartHandshake}
@@ -99,11 +90,11 @@ const DataModeStep = memo<DataModeStepProps>(({ onBack, onNext }) => {
           flex={1}
           gap={6}
           padding={16}
-          style={{ borderColor: selectedMode === 'privacy' ? cssVar.colorSuccess : undefined }}
+          style={{ borderColor: !telemetryEnabled ? cssVar.colorSuccess : undefined }}
           variant={'outlined'}
-          onClick={() => setMode('privacy')}
+          onClick={() => setTelemetryEnabled(false)}
         >
-          {selectedMode === 'privacy' && checkIcon}
+          {!telemetryEnabled && checkIcon}
           <Text strong fontSize={18}>
             {t('screen4.privacy.title')}
           </Text>
@@ -115,9 +106,15 @@ const DataModeStep = memo<DataModeStepProps>(({ onBack, onNext }) => {
       <Text color={cssVar.colorTextSecondary} fontSize={12} style={{ marginTop: 16 }}>
         {t('screen4.footerNote')}
       </Text>
+      {hasSaveError && (
+        <Text color={cssVar.colorError} fontSize={12}>
+          {t('screen4.errors.saveFailed')}
+        </Text>
+      )}
       <OnboardingFooterActions
         left={
           <Button
+            disabled={isSaving}
             icon={Undo2Icon}
             style={{ color: cssVar.colorTextDescription }}
             type={'text'}
@@ -127,7 +124,7 @@ const DataModeStep = memo<DataModeStepProps>(({ onBack, onNext }) => {
           </Button>
         }
         right={
-          <Button type={'primary'} onClick={onNext}>
+          <Button disabled={isSaving} loading={isSaving} type={'primary'} onClick={handleSubmit}>
             {t('next')}
           </Button>
         }

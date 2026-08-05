@@ -307,24 +307,17 @@ export const store: StateCreator<Store, [['zustand/devtools', never]]> = (set, g
     await get().dispatchConfig({ config, type: 'update' });
   },
   setAgentMeta: async (meta) => {
-    const { dispatchMeta, id, meta: currentMeta } = get();
-    const mergedMeta = merge(currentMeta, meta);
+    const { dispatchMeta, id } = get();
 
     try {
       const analytics = getSingletonAnalyticsOptional();
       if (analytics) {
+        // Privacy boundary: only record that metadata changed. Metadata values, account IDs,
+        // and Agent/session IDs must never be included, even after telemetry consent.
         analytics.track({
           name: 'agent_meta_updated',
           properties: {
-            assistant_avatar: mergedMeta.avatar,
-            assistant_background_color: mergedMeta.backgroundColor,
-            assistant_description: mergedMeta.description,
-            assistant_name: mergedMeta.title,
-            assistant_tags: mergedMeta.tags,
             is_inbox: id === 'inbox',
-            session_id: id || 'unknown',
-            timestamp: Date.now(),
-            user_id: useUserStore.getState().user?.id || 'anonymous',
           },
         });
       }

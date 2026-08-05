@@ -28,10 +28,8 @@ const needsOnboarding = (s: Pick<UserStore, 'onboarding'>) => !s.onboarding?.fin
  * Whether the shared-prefix steps have been completed.
  *
  * Only `responseLanguage` is checked: completing the shared prefix is marked
- * by writing it on the language step. Telemetry can't be used as a signal
- * because `setSettings` strips fields that match the default
- * (DEFAULT_COMMON_SETTINGS.telemetry === true), so a user who keeps the
- * default-on choice never persists telemetry to s.settings.
+ * by writing it on the language step. Telemetry is a user preference and must
+ * not be overloaded as an onboarding completion marker.
  */
 const commonStepsCompleted = (s: Pick<UserStore, 'settings'>) =>
   s.settings?.general?.responseLanguage !== undefined;

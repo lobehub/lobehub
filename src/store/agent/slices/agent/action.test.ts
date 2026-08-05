@@ -13,6 +13,12 @@ import { withSWR } from '~test-utils';
 
 import { useAgentStore } from '../../store';
 
+const analyticsTrack = vi.hoisted(() => vi.fn());
+
+vi.mock('@lobehub/analytics', () => ({
+  getSingletonAnalyticsOptional: () => ({ track: analyticsTrack }),
+}));
+
 // Mock zustand/traditional for store testing
 vi.mock('zustand/traditional');
 
@@ -166,7 +172,7 @@ describe('AgentSlice Actions', () => {
 
   describe('createAgent', () => {
     it('should invalidate cached available agents after creating an agent', async () => {
-      vi.mocked(agentService.createAgent).mockResolvedValue({ agentId: 'agent-2' });
+      vi.mocked(agentService.createAgent).mockResolvedValue({ agentId: 'private-agent-id' });
       const { result } = renderHook(() => useAgentStore());
 
       act(() => {
@@ -185,10 +191,16 @@ describe('AgentSlice Actions', () => {
       });
 
       await act(async () => {
-        await result.current.createAgent({ config: { title: 'New Agent' } });
+        await result.current.createAgent({
+          config: { tags: ['private-tag'], title: 'Private Agent Name' },
+        });
       });
 
       expect(result.current.availableAgents).toBeUndefined();
+      expect(analyticsTrack).toHaveBeenCalledWith({ name: 'new_agent_created' });
+      expect(JSON.stringify(analyticsTrack.mock.calls)).not.toContain('private-agent-id');
+      expect(JSON.stringify(analyticsTrack.mock.calls)).not.toContain('Private Agent Name');
+      expect(JSON.stringify(analyticsTrack.mock.calls)).not.toContain('private-tag');
     });
 
     it('should seed a personal name matching the user language', async () => {

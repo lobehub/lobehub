@@ -1,6 +1,5 @@
 import { isDesktop } from '@lobechat/const';
 import type { UserGeneralConfig } from '@lobechat/types';
-import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 import { type PartialDeep } from 'type-fest';
@@ -81,12 +80,13 @@ export class CommonActionImpl {
     return useSWR<boolean>(
       shouldFetch ? userKeys.checkTrace() : null,
       () => {
-        const telemetry = userGeneralSettingsSelectors.telemetry(this.#get());
+        const state = this.#get();
+        const telemetry = state.settings.general?.telemetry ?? state.preference.telemetry;
 
-        // if user have set the telemetry, return false
+        // Do not prompt again after either the current or legacy setting has an explicit choice.
         if (typeof telemetry === 'boolean') return Promise.resolve(false);
 
-        return Promise.resolve(this.#get().isUserCanEnableTrace);
+        return Promise.resolve(state.isUserCanEnableTrace);
       },
       {
         revalidateOnFocus: false,
@@ -194,15 +194,6 @@ export class CommonActionImpl {
                 .updateGeneralConfig(autoDetectedGeneralConfig)
                 .catch(() => {});
             }
-
-            //analytics
-            const analytics = getSingletonAnalyticsOptional();
-            analytics?.identify(data.userId || '', {
-              email: data.email,
-              firstName: data.firstName,
-              lastName: data.lastName,
-              username: data.username,
-            });
           }
         },
       },

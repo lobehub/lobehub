@@ -141,7 +141,7 @@ describe('checkTelemetryEnabled', () => {
       expect(result).toEqual({ telemetryEnabled: false });
     });
 
-    it('should use preference.telemetry when settings.general.telemetry is not false', async () => {
+    it('should prefer the current setting over the deprecated preference', async () => {
       mockGetUserSettings.mockResolvedValue({
         general: { telemetry: true },
       });
@@ -152,9 +152,8 @@ describe('checkTelemetryEnabled', () => {
         userId: 'test-user',
       });
 
-      // preference.telemetry is checked when settings.general.telemetry is not false
-      expect(result).toEqual({ telemetryEnabled: false });
-      expect(mockGetUserPreference).toHaveBeenCalled();
+      expect(result).toEqual({ telemetryEnabled: true });
+      expect(mockGetUserPreference).not.toHaveBeenCalled();
     });
 
     it('should not call getUserPreference when settings.general.telemetry is explicitly false', async () => {
@@ -174,7 +173,7 @@ describe('checkTelemetryEnabled', () => {
   });
 
   describe('default value', () => {
-    it('should default to true when settings is null', async () => {
+    it('should default to false when settings is null', async () => {
       mockGetUserSettings.mockResolvedValue(null);
 
       const result = await checkTelemetryEnabled({
@@ -182,11 +181,10 @@ describe('checkTelemetryEnabled', () => {
         userId: 'test-user',
       });
 
-      // Default to true (enabled) unless explicitly disabled
-      expect(result).toEqual({ telemetryEnabled: true });
+      expect(result).toEqual({ telemetryEnabled: false });
     });
 
-    it('should default to true when general is null', async () => {
+    it('should default to false when general is null', async () => {
       mockGetUserSettings.mockResolvedValue({
         general: null,
       });
@@ -196,8 +194,7 @@ describe('checkTelemetryEnabled', () => {
         userId: 'test-user',
       });
 
-      // Default to true (enabled) unless explicitly disabled
-      expect(result).toEqual({ telemetryEnabled: true });
+      expect(result).toEqual({ telemetryEnabled: false });
     });
   });
 

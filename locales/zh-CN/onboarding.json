@@ -125,6 +125,7 @@
   "telemetry.rows.evolve.title": "进化 · 越用越懂你",
   "telemetry.rows.privacy.desc": "我们使用匿名数据持续优化体验。你可随时在隐私设置中调整",
   "telemetry.rows.privacy.title": "一起让 {{appName}} 变得更好",
+  "telemetry.saveFailed": "无法保存你的选择，请重试。",
   "telemetry.terms": "服务条款",
   "telemetry.title": "嘿，你好，我是 {{name}}",
   "telemetry.title2": "很高兴见到你",

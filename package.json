@@ -296,7 +296,7 @@
     "@lobechat/tool-runtime": "workspace:*",
     "@lobechat/utils": "workspace:*",
     "@lobechat/web-crawler": "workspace:*",
-    "@lobehub/analytics": "^1.6.3",
+    "@lobehub/analytics": "^1.6.4",
     "@lobehub/charts": "^5.4.0",
     "@lobehub/desktop-ipc-typings": "workspace:*",
     "@lobehub/editor": "^4.23.0",

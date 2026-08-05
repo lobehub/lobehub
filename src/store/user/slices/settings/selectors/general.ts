@@ -31,7 +31,8 @@ const currentResponseLanguage = (s: UserStore): Locales => {
 
   return normalizeLocale(getSystemLanguage());
 };
-const telemetry = (s: UserStore) => generalConfig(s).telemetry;
+const telemetry = (s: UserStore) =>
+  s.settings.general?.telemetry ?? s.preference.telemetry ?? generalConfig(s).telemetry;
 const enableAutoScrollOnStreaming = (s: UserStore) =>
   generalConfig(s).enableAutoScrollOnStreaming ?? true;
 const enableMessageLinkIcon = (s: UserStore) => generalConfig(s).enableMessageLinkIcon ?? true;

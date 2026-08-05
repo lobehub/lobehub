@@ -21,10 +21,15 @@ vi.mock('@/services/user', () => ({
 
 describe('SettingsAction', () => {
   describe('importAppSettings', () => {
-    it('should import app settings', async () => {
+    it('should import app settings without changing the current telemetry consent', async () => {
       const { result } = renderHook(() => useUserStore());
+
+      await act(async () => {
+        await result.current.updateGeneralConfig({ telemetry: true });
+      });
+
       const newSettings: UserSettings = merge(DEFAULT_SETTINGS, {
-        general: { themeMode: 'dark' },
+        general: { telemetry: false, timezone: 'Asia/Shanghai' },
       });
 
       // Mock the internal setSettings function call
@@ -35,17 +40,58 @@ describe('SettingsAction', () => {
         await result.current.importAppSettings(newSettings);
       });
 
-      // Assert that setSettings was called with the correct settings
-      expect(setSettingsSpy).toHaveBeenCalledWith(newSettings);
+      const importedSettings = setSettingsSpy.mock.calls.at(-1)?.[0];
+      expect(importedSettings?.general).not.toHaveProperty('telemetry');
+      expect(importedSettings?.general?.timezone).toBe('Asia/Shanghai');
+      expect(newSettings.general.telemetry).toBe(false);
 
-      // Assert that the state has been updated
-      expect(userService.updateUserSettings).toHaveBeenCalledWith(
-        { general: { themeMode: 'dark' } },
+      expect(userService.updateUserSettings).toHaveBeenLastCalledWith(
+        { general: { telemetry: true, timezone: 'Asia/Shanghai' } },
         expect.any(AbortSignal),
       );
 
       // Restore the spy
       setSettingsSpy.mockRestore();
+    });
+  });
+
+  describe('importUrlShareSettings', () => {
+    it('should apply shared settings without enabling telemetry', async () => {
+      const { result } = renderHook(() => useUserStore());
+
+      await act(async () => {
+        await result.current.updateGeneralConfig({ telemetry: false });
+      });
+
+      await act(async () => {
+        await result.current.importUrlShareSettings(
+          JSON.stringify({ general: { telemetry: true, timezone: 'Asia/Shanghai' } }),
+        );
+      });
+
+      expect(userService.updateUserSettings).toHaveBeenLastCalledWith(
+        { general: { telemetry: false, timezone: 'Asia/Shanghai' } },
+        expect.any(AbortSignal),
+      );
+    });
+
+    it('should ignore invalid shared general settings without clearing telemetry consent', async () => {
+      const { result } = renderHook(() => useUserStore());
+
+      await act(async () => {
+        await result.current.updateGeneralConfig({ telemetry: false });
+      });
+
+      await act(async () => {
+        await result.current.importUrlShareSettings(
+          JSON.stringify({ general: null, memory: { enabled: false } }),
+        );
+      });
+
+      expect(userService.updateUserSettings).toHaveBeenLastCalledWith(
+        { general: { telemetry: false }, memory: { enabled: false } },
+        expect.any(AbortSignal),
+      );
     });
   });
 
@@ -104,6 +150,63 @@ describe('SettingsAction', () => {
 
       expect(userService.updateUserSettings).toHaveBeenLastCalledWith(
         expect.objectContaining({ memory: { enabled: true } }),
+        expect.any(AbortSignal),
+      );
+    });
+
+    it('should persist an explicit telemetry denial even though false is the default', async () => {
+      const { result } = renderHook(() => useUserStore());
+
+      await act(async () => {
+        await result.current.updateGeneralConfig({ telemetry: false });
+      });
+
+      expect(userService.updateUserSettings).toHaveBeenLastCalledWith(
+        { general: { telemetry: false } },
+        expect.any(AbortSignal),
+      );
+    });
+
+    it('should preserve an explicit telemetry denial during later general setting updates', async () => {
+      const { result } = renderHook(() => useUserStore());
+
+      await act(async () => {
+        await result.current.updateGeneralConfig({ telemetry: false });
+        await result.current.updateGeneralConfig({ fontSize: 12 });
+      });
+
+      expect(userService.updateUserSettings).toHaveBeenLastCalledWith(
+        { general: { fontSize: 12, telemetry: false } },
+        expect.any(AbortSignal),
+      );
+    });
+
+    it('should roll back a failed optimistic update so telemetry persistence can be retried', async () => {
+      const { result } = renderHook(() => useUserStore());
+      const saveError = new Error('save failed');
+      const updateUserSettings = vi.mocked(userService.updateUserSettings);
+      updateUserSettings.mockClear().mockRejectedValueOnce(saveError);
+
+      let caughtError: unknown;
+      await act(async () => {
+        try {
+          await result.current.updateGeneralConfig({ telemetry: true });
+        } catch (error) {
+          caughtError = error;
+        }
+      });
+
+      expect(caughtError).toBe(saveError);
+      expect(result.current.settings.general?.telemetry).toBeUndefined();
+      expect(updateUserSettings).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        await result.current.updateGeneralConfig({ telemetry: true });
+      });
+
+      expect(updateUserSettings).toHaveBeenCalledTimes(2);
+      expect(updateUserSettings).toHaveBeenLastCalledWith(
+        { general: { telemetry: true } },
         expect.any(AbortSignal),
       );
     });

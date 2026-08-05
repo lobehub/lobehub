@@ -50,10 +50,12 @@ describe('useSettingsSearchAnalytics', () => {
     const queryEvents = eventsByName('settings_search_query');
     expect(queryEvents).toHaveLength(1);
     expect(queryEvents[0].properties).toMatchObject({
-      query: '图片',
+      query_length: 2,
       result_count: 1,
       sequence: 1,
     });
+    expect(queryEvents[0].properties).not.toHaveProperty('query');
+    expect(JSON.stringify(queryEvents)).not.toContain('图片');
 
     // Re-render with the same query must not report a duplicate
     rerender({ query: '图片' });
@@ -71,10 +73,10 @@ describe('useSettingsSearchAnalytics', () => {
     expect(clickEvents).toHaveLength(1);
     expect(clickEvents[0].properties).toMatchObject({
       position: 2,
-      query: 'theme',
       result_key: 'item-appearance-theme',
       result_type: 'item',
     });
+    expect(clickEvents[0].properties).not.toHaveProperty('query');
   });
 
   it('reports abandonment on unmount without a click, but not after a click', () => {
@@ -87,9 +89,10 @@ describe('useSettingsSearchAnalytics', () => {
     expect(abandonedEvents).toHaveLength(1);
     expect(abandonedEvents[0].properties).toMatchObject({
       had_results: false,
-      last_query: 'nonexistent',
       query_count: 1,
     });
+    expect(abandonedEvents[0].properties).not.toHaveProperty('last_query');
+    expect(JSON.stringify(abandonedEvents)).not.toContain('nonexistent');
 
     trackMock.mockClear();
     const clicked = [makeResult('provider-openai')];
@@ -103,7 +106,7 @@ describe('useSettingsSearchAnalytics', () => {
     expect(eventsByName('settings_search_abandoned')).toHaveLength(0);
   });
 
-  it('redacts token-like queries but keeps real length metadata', () => {
+  it('never sends search content, including credentials', () => {
     const secret = 'sk-proj-Abc123XyzSecretValue';
     const results = [makeResult('tab-system-apikey')];
     const { result } = renderHook(() => useSettingsSearchAnalytics(secret, results));
@@ -112,51 +115,14 @@ describe('useSettingsSearchAnalytics', () => {
     const queryEvents = eventsByName('settings_search_query');
     expect(queryEvents).toHaveLength(1);
     expect(queryEvents[0].properties).toMatchObject({
-      query: '[redacted]',
       query_length: secret.length,
     });
+    expect(queryEvents[0].properties).not.toHaveProperty('query');
 
     result.current.trackResultClick(results[0], 1);
     const clickEvents = eventsByName('settings_search_result_clicked');
-    expect(clickEvents[0].properties!.query).toBe('[redacted]');
-  });
-
-  it('redacts punctuated secrets like JWTs and base64 tokens', () => {
-    const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.sflKxwRJSMeKKF2QT4fwpM';
-    renderHook(() => useSettingsSearchAnalytics(jwt, []));
-    vi.advanceTimersByTime(1000);
-
-    const queryEvents = eventsByName('settings_search_query');
-    expect(queryEvents).toHaveLength(1);
-    expect(queryEvents[0].properties).toMatchObject({
-      query: '[redacted]',
-      query_length: jwt.length,
-    });
-  });
-
-  it('redacts secrets embedded in surrounding text', () => {
-    renderHook(() =>
-      useSettingsSearchAnalytics('{"apiKey": "sk-proj-abc123def456"}', [makeResult('tab-a-b')]),
-    );
-    vi.advanceTimersByTime(1000);
-
-    expect(eventsByName('settings_search_query')[0].properties!.query).toBe('[redacted]');
-  });
-
-  it('does not redact hyphenated words containing a prefix substring', () => {
-    renderHook(() => useSettingsSearchAnalytics('risk-control settings', [makeResult('tab-a-b')]));
-    vi.advanceTimersByTime(1000);
-
-    expect(eventsByName('settings_search_query')[0].properties!.query).toBe(
-      'risk-control settings',
-    );
-  });
-
-  it('does not redact ordinary short queries', () => {
-    renderHook(() => useSettingsSearchAnalytics('dark mode', [makeResult('tab-a-b')]));
-    vi.advanceTimersByTime(1000);
-
-    expect(eventsByName('settings_search_query')[0].properties!.query).toBe('dark mode');
+    expect(clickEvents[0].properties).not.toHaveProperty('query');
+    expect(JSON.stringify([...queryEvents, ...clickEvents])).not.toContain(secret);
   });
 
   it('holds the settle timer while the index is loading and reports the final count', () => {
@@ -175,7 +141,8 @@ describe('useSettingsSearchAnalytics', () => {
 
     const queryEvents = eventsByName('settings_search_query');
     expect(queryEvents).toHaveLength(1);
-    expect(queryEvents[0].properties).toMatchObject({ query: 'zhuti', result_count: 1 });
+    expect(queryEvents[0].properties).toMatchObject({ result_count: 1 });
+    expect(queryEvents[0].properties).not.toHaveProperty('query');
   });
 
   it('does not report abandonment when no query ever settled', () => {

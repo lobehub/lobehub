@@ -9,6 +9,12 @@ import { LobeSessionType } from '@/types/session';
 
 import { sessionSelectors } from './selectors';
 
+const analyticsTrack = vi.hoisted(() => vi.fn());
+
+vi.mock('@lobehub/analytics', () => ({
+  getSingletonAnalyticsOptional: () => ({ track: analyticsTrack }),
+}));
+
 // Mock sessionService 和其他依赖项
 vi.mock('@/services/session', () => ({
   sessionService: {
@@ -62,6 +68,7 @@ describe('SessionAction', () => {
       await act(async () => {
         createdSessionId = await result.current.createSession({
           config: { chatConfig: { enableHistoryCount: true } },
+          meta: { tags: ['private-tag'], title: 'Private Agent Name' },
         });
       });
 
@@ -70,6 +77,10 @@ describe('SessionAction', () => {
       expect(call[1]).toMatchObject({ config: { chatConfig: { enableHistoryCount: true } } });
 
       expect(createdSessionId).toBe(newSessionId);
+      expect(analyticsTrack).toHaveBeenCalledWith({ name: 'new_agent_created' });
+      expect(JSON.stringify(analyticsTrack.mock.calls)).not.toContain(newSessionId);
+      expect(JSON.stringify(analyticsTrack.mock.calls)).not.toContain('Private Agent Name');
+      expect(JSON.stringify(analyticsTrack.mock.calls)).not.toContain('private-tag');
     });
 
     it('should create a new session but not switch to it if isSwitchSession is false', async () => {

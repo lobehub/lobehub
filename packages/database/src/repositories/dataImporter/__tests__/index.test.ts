@@ -32,8 +32,17 @@ afterEach(async () => {
 describe('DataImporter', () => {
   describe('import userSettings', () => {
     const data = userSettingsData as ImportPgDataStructure;
-    it('should import userSettings correctly', async () => {
-      const result = await importer.importPgData(data);
+    it('should import userSettings without importing telemetry consent', async () => {
+      const importedUserSettings = {
+        ...data.data.userSettings[0],
+        general: { fontSize: 12, telemetry: true },
+      };
+      const importData = {
+        ...data,
+        data: { ...data.data, userSettings: [importedUserSettings] },
+      };
+
+      const result = await importer.importPgData(importData);
 
       expect(result.success).toBe(true);
       expect(result.results.userSettings).toMatchObject({ added: 1, errors: 0, skips: 0 });
@@ -43,18 +52,30 @@ describe('DataImporter', () => {
       });
       expect(res).toHaveLength(1);
       expect(res[0].general).toEqual({ fontSize: 12 });
+      expect(importedUserSettings.general.telemetry).toBe(true);
     });
 
-    it('should merge exist userSettings correctly', async () => {
+    it('should preserve existing telemetry consent when merging userSettings', async () => {
       await clientDB.transaction(async (tx) => {
-        await tx.insert(Schema.userSettings).values({ id: userId, general: { fontSize: 24 } });
+        await tx
+          .insert(Schema.userSettings)
+          .values({ id: userId, general: { fontSize: 24, telemetry: false } });
         await tx
           .update(Schema.userSettings)
-          .set({ general: { fontSize: 24 } })
+          .set({ general: { fontSize: 24, telemetry: false } })
           .where(eq(Schema.userSettings.id, userId));
       });
 
-      const result = await importer.importPgData(data);
+      const importedUserSettings = {
+        ...data.data.userSettings[0],
+        general: { fontSize: 12, telemetry: true },
+      };
+      const importData = {
+        ...data,
+        data: { ...data.data, userSettings: [importedUserSettings] },
+      };
+
+      const result = await importer.importPgData(importData);
 
       expect(result.success).toBe(true);
       expect(result.results.userSettings).toMatchObject({
@@ -68,7 +89,33 @@ describe('DataImporter', () => {
         where: eq(Schema.userSettings.id, userId),
       });
       expect(res).toHaveLength(1);
-      expect(res[0].general).toEqual({ fontSize: 12 });
+      expect(res[0].general).toEqual({ fontSize: 12, telemetry: false });
+      expect(importedUserSettings.general.telemetry).toBe(true);
+    });
+
+    it('should preserve existing telemetry consent when imported general settings are null', async () => {
+      await clientDB
+        .insert(Schema.userSettings)
+        .values({ id: userId, general: { fontSize: 24, telemetry: false } });
+
+      const importedUserSettings = {
+        ...data.data.userSettings[0],
+        general: null,
+      };
+      const importData = {
+        ...data,
+        data: { ...data.data, userSettings: [importedUserSettings] },
+      };
+
+      const result = await importer.importPgData(importData);
+
+      expect(result.success).toBe(true);
+
+      const res = await clientDB.query.userSettings.findMany({
+        where: eq(Schema.userSettings.id, userId),
+      });
+      expect(res[0].general).toEqual({ telemetry: false });
+      expect(importedUserSettings.general).toBeNull();
     });
   });
 

@@ -1,4 +1,5 @@
 import type { ImporterEntryData, ImportPgDataStructure, ImportResultData } from '@lobechat/types';
+import { isRecord } from '@lobechat/utils/object';
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { uuid } from '@/utils/uuid';
@@ -14,6 +15,16 @@ interface ImportResult {
   skips: number;
   updated?: number;
 }
+
+const stripImportedTelemetryConsent = (importedGeneral: unknown, currentGeneral?: unknown) => {
+  if (!isRecord(importedGeneral)) return importedGeneral;
+
+  const { telemetry: _, ...general } = importedGeneral;
+
+  if (!isRecord(currentGeneral) || typeof currentGeneral.telemetry !== 'boolean') return general;
+
+  return { ...general, telemetry: currentGeneral.telemetry };
+};
 
 type ConflictStrategy = 'skip' | 'override' | 'merge';
 
@@ -502,6 +513,7 @@ export class DataImporterRepos {
         // Special table processing
         if (tableName === 'userSettings') {
           newRecord.id = this.userId;
+          newRecord.general = stripImportedTelemetryConsent(newRecord.general);
         }
 
         // Process relation fields (foreign key references)
@@ -649,6 +661,12 @@ export class DataImporterRepos {
 
                 case 'merge': {
                   // Merge data
+                  if (tableName === 'userSettings') {
+                    record.newRecord.general = stripImportedTelemetryConsent(
+                      isRecord(record.newRecord.general) ? record.newRecord.general : {},
+                      exists.general,
+                    );
+                  }
                   await trx
                     .update(table)
                     .set(record.newRecord)

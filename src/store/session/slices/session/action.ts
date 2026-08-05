@@ -15,8 +15,8 @@ import { getChatGroupStoreState } from '@/store/agentGroup';
 import { evictMessageCache } from '@/store/chat/utils/evictMessageCache';
 import { type SessionStore } from '@/store/session';
 import { type StoreSetter } from '@/store/types';
-import { getUserStoreState, useUserStore } from '@/store/user';
-import { settingsSelectors, userProfileSelectors } from '@/store/user/selectors';
+import { useUserStore } from '@/store/user';
+import { settingsSelectors } from '@/store/user/selectors';
 import {
   type ChatSessionList,
   type LobeAgentSession,
@@ -74,17 +74,10 @@ export class SessionActionImpl {
     // Track new agent creation analytics
     const analytics = getSingletonAnalyticsOptional();
     if (analytics) {
-      const userStore = getUserStoreState();
-      const userId = userProfileSelectors.userId(userStore);
-
+      // Privacy boundary: record the action only. Account/session IDs and user-authored
+      // Agent names or tags must never be included, even after telemetry consent.
       analytics.track({
         name: 'new_agent_created',
-        properties: {
-          assistant_name: newSession.meta?.title || 'Untitled Agent',
-          assistant_tags: newSession.meta?.tags || [],
-          session_id: id,
-          user_id: userId || 'anonymous',
-        },
       });
     }
 

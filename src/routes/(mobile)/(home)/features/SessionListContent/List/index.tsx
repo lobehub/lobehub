@@ -7,10 +7,8 @@ import { Link } from 'react-router';
 import { AGENT_CHAT_URL } from '@/const/index';
 import { useNavigateToAgent } from '@/hooks/useNavigateToAgent';
 import { useServerConfigStore } from '@/store/serverConfig';
-import { getSessionStoreState, useSessionStore } from '@/store/session';
-import { sessionGroupSelectors, sessionSelectors } from '@/store/session/selectors';
-import { getUserStoreState } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/selectors';
+import { useSessionStore } from '@/store/session';
+import { sessionSelectors } from '@/store/session/selectors';
 import { type LobeSessions } from '@/types/session';
 
 import SkeletonList from '../../SkeletonList';
@@ -48,33 +46,15 @@ const SessionList = memo<SessionListProps>(({ dataSource, groupId, showAddButton
             e.preventDefault();
             navigateToAgent((res as any).config?.id);
 
-            // Enhanced analytics tracking
             if (analytics) {
-              const userStore = getUserStoreState();
-              const sessionStore = getSessionStoreState();
-
-              const userId = userProfileSelectors.userId(userStore);
-              const session = sessionSelectors.getSessionById(id)(sessionStore);
-
-              if (session) {
-                const sessionGroupId = session.group || 'default';
-                const group = sessionGroupSelectors.getGroupById(sessionGroupId)(sessionStore);
-                const groupName =
-                  group?.name || (sessionGroupId === 'default' ? 'Default' : 'Unknown');
-
-                analytics?.track({
-                  name: 'switch_session',
-                  properties: {
-                    assistant_name: session.meta?.title || 'Untitled Agent',
-                    assistant_tags: session.meta?.tags || [],
-                    group_id: sessionGroupId,
-                    group_name: groupName,
-                    session_id: id,
-                    spm: 'homepage.chat.session_list_item.click',
-                    user_id: userId || 'anonymous',
-                  },
-                });
-              }
+              // Privacy boundary: session switching is an anonymous action metric. Never attach
+              // account/session IDs, group names, or user-authored Agent metadata.
+              analytics.track({
+                name: 'switch_session',
+                properties: {
+                  spm: 'homepage.chat.session_list_item.click',
+                },
+              });
             }
           }}
         >

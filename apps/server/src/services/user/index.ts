@@ -3,7 +3,6 @@ import { type LobeChatDatabase } from '@lobechat/database';
 
 import { initNewUserForBusiness } from '@/business/server/user';
 import { UserModel } from '@/database/models/user';
-import { initializeServerAnalytics } from '@/libs/analytics';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { FileS3 } from '@/server/modules/S3';
 
@@ -33,22 +32,6 @@ export class UserService {
         console.error('Failed to init new user for business');
       }
     }
-
-    const analytics = await initializeServerAnalytics();
-    analytics?.identify(user.id, {
-      email: user.email ?? undefined,
-      firstName: user.firstName ?? undefined,
-      lastName: user.lastName ?? undefined,
-      phone: user.phone ?? undefined,
-      username: user.username ?? undefined,
-    });
-    analytics?.track({
-      name: 'user_register_completed',
-      properties: {
-        spm: 'user_service.init_user.user_created',
-      },
-      userId: user.id,
-    });
   }
 
   getUserApiKeys = async (id: string) => {

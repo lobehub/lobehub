@@ -22,7 +22,7 @@ export interface TelemetryResult {
  * 1. Environment variable TELEMETRY_DISABLED=1 → telemetryEnabled: false (highest priority)
  * 2. User settings from database user_settings.general.telemetry (new location)
  * 3. User preference from database users.preference.telemetry (old location, deprecated)
- * 4. Default to true if not explicitly set
+ * 4. Default to false until the user explicitly opts in
  */
 export const checkTelemetryEnabled = async (ctx: TelemetryContext): Promise<TelemetryResult> => {
   // Priority 1: Check environment variable (highest priority)
@@ -42,8 +42,8 @@ export const checkTelemetryEnabled = async (ctx: TelemetryContext): Promise<Tele
     const settings = await userModel.getUserSettings();
     const generalConfig = settings?.general as UserGeneralConfig | null | undefined;
 
-    if (generalConfig?.telemetry === false) {
-      return { telemetryEnabled: false };
+    if (typeof generalConfig?.telemetry === 'boolean') {
+      return { telemetryEnabled: generalConfig.telemetry };
     }
 
     // Priority 3: Check user preference (old location: preference.telemetry)
@@ -53,8 +53,8 @@ export const checkTelemetryEnabled = async (ctx: TelemetryContext): Promise<Tele
       return { telemetryEnabled: preference?.telemetry };
     }
 
-    // Priority 4: Default to true if not explicitly set
-    return { telemetryEnabled: true };
+    // Priority 4: Default to disabled until the user explicitly opts in
+    return { telemetryEnabled: false };
   } catch {
     // If fetching user settings fails, default to disabled
     return { telemetryEnabled: false };
