@@ -1,5 +1,13 @@
 const IMAGE_SOURCE_PATTERN = /^(?:https?:\/\/|\/|data:image\/)/i;
 
+export const openFilePicker = (input: HTMLInputElement): void => {
+  try {
+    input.showPicker();
+  } catch {
+    input.click();
+  }
+};
+
 /**
  * Agent `backgroundColor` historically stored CSS colors. It now stores the
  * profile cover image without requiring a database migration. Only image-like

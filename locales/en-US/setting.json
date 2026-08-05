@@ -690,6 +690,7 @@
   "settingAgent.artwork.background.remove": "Remove background",
   "settingAgent.artwork.background.upload": "Upload background",
   "settingAgent.artwork.generateFailed": "Could not generate the image. Try again.",
+  "settingAgent.artwork.generatingHint": "This usually takes about 60 seconds. You can keep editing while it finishes.",
   "settingAgent.artwork.retry": "Try again",
   "settingAgent.artwork.sizeExceeded": "Image must be smaller than 1 MB",
   "settingAgent.artwork.uploadFailed": "Could not upload the image. Try again.",

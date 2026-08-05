@@ -1,9 +1,30 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { selectAgentArtworkModel } from '@/store/agent/slices/artwork/utils';
 import type { EnabledProviderWithModels } from '@/types/aiProvider';
 
-import { resolveAgentBackground } from './utils';
+import { openFilePicker, resolveAgentBackground } from './utils';
+
+describe('openFilePicker', () => {
+  it('uses the native picker while preserving click as a compatibility fallback', () => {
+    const input = document.createElement('input');
+    const click = vi.spyOn(input, 'click').mockImplementation(() => {});
+    const showPicker = vi.fn();
+    input.showPicker = showPicker;
+
+    openFilePicker(input);
+
+    expect(showPicker).toHaveBeenCalledOnce();
+    expect(click).not.toHaveBeenCalled();
+
+    showPicker.mockImplementation(() => {
+      throw new Error('showPicker is unavailable');
+    });
+    openFilePicker(input);
+
+    expect(click).toHaveBeenCalledOnce();
+  });
+});
 
 const createProvider = (id: string, modelIds: string[]): EnabledProviderWithModels => ({
   children: modelIds.map((modelId) => ({ abilities: {}, id: modelId })),

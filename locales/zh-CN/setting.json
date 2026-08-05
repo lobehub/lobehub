@@ -690,6 +690,7 @@
   "settingAgent.artwork.background.remove": "移除背景",
   "settingAgent.artwork.background.upload": "上传背景",
   "settingAgent.artwork.generateFailed": "暂时无法生成图片，请重试",
+  "settingAgent.artwork.generatingHint": "通常需要约 60 秒，生成期间可以继续编辑其他内容",
   "settingAgent.artwork.retry": "重试",
   "settingAgent.artwork.sizeExceeded": "图片大小不能超过 1 MB",
   "settingAgent.artwork.uploadFailed": "暂时无法上传图片，请重试",

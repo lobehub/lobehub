@@ -4,7 +4,7 @@ import { ActionIcon, Alert, Avatar, Center, Flexbox, Icon, Text, Tooltip } from 
 import { Button, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ImageIcon, Trash2, UploadIcon, WandSparkles } from 'lucide-react';
-import { memo, useCallback, useRef, useState } from 'react';
+import { memo, useCallback, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import EmojiPicker from '@/components/EmojiPicker';
@@ -15,7 +15,7 @@ import { useAiInfraStore } from '@/store/aiInfra';
 import { aiProviderSelectors } from '@/store/aiInfra/selectors';
 import { useFileStore } from '@/store/file';
 
-import { resolveAgentBackground } from './utils';
+import { openFilePicker, resolveAgentBackground } from './utils';
 
 const MAX_ARTWORK_SIZE = 1024 * 1024;
 
@@ -35,6 +35,18 @@ const styles = createStaticStyles(({ css }) => ({
       outline: none;
     }
   `,
+  avatarGenerating: css`
+    pointer-events: none;
+
+    position: absolute;
+    z-index: 3;
+    inset: 4px;
+
+    border-radius: ${cssVar.borderRadiusLG};
+
+    background: color-mix(in srgb, ${cssVar.colorBgContainer} 82%, transparent);
+    backdrop-filter: blur(8px);
+  `,
   background: css`
     position: relative;
 
@@ -43,6 +55,7 @@ const styles = createStaticStyles(({ css }) => ({
     width: calc(100% + 32px);
     height: 160px;
     margin-inline: -16px;
+    border-radius: ${cssVar.borderRadiusLG};
 
     background: transparent;
     background-position: center;
@@ -105,10 +118,32 @@ const styles = createStaticStyles(({ css }) => ({
     z-index: 3;
     inset: 0;
 
+    padding: 16px;
+
     color: ${cssVar.colorText};
 
-    background: ${cssVar.colorBgMask};
-    backdrop-filter: blur(8px);
+    background: color-mix(in srgb, ${cssVar.colorBgContainer} 88%, transparent);
+    backdrop-filter: blur(12px);
+  `,
+  generationHint: css`
+    font-size: 13px;
+    color: ${cssVar.colorTextSecondary};
+    text-align: center;
+  `,
+  generationTitle: css`
+    font-weight: 500;
+  `,
+  visuallyHiddenInput: css`
+    pointer-events: none;
+
+    position: fixed;
+
+    overflow: hidden;
+
+    width: 1px;
+    height: 1px;
+
+    opacity: 0;
   `,
   scrim: css`
     position: absolute;
@@ -153,11 +188,20 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
     const generateAgentArtwork = useAgentStore((s) => s.generateAgentArtwork);
     const generation = useAgentStore(agentArtworkSelectors.generationByAgentId(agentId));
     const backgroundInputRef = useRef<HTMLInputElement>(null);
+    const backgroundInputId = useId();
     const [avatarUploading, setAvatarUploading] = useState(false);
     const [backgroundUploading, setBackgroundUploading] = useState(false);
     const generating = generation?.status === 'generating' ? generation.kind : null;
     const generationError = generation?.status === 'error' ? generation.kind : null;
+    const backgroundGenerationActive = generation?.kind === 'background';
     const backgroundUrl = resolveAgentBackground(background);
+
+    const openBackgroundFilePicker = useCallback(() => {
+      const input = backgroundInputRef.current;
+      if (!input) return;
+
+      openFilePicker(input);
+    }, []);
 
     const upload = useCallback(
       async (kind: 'avatar' | 'background', file: File) => {
@@ -207,7 +251,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
     return (
       <div style={{ paddingBlockEnd: 36, position: 'relative' }}>
         <div
-          className={`${styles.background} ${!backgroundUrl ? styles.compactBackground : ''} agent-background`}
+          className={`${styles.background} ${!backgroundUrl && !backgroundGenerationActive ? styles.compactBackground : ''} agent-background`}
           style={{ backgroundImage: backgroundUrl ? `url(${backgroundUrl})` : undefined }}
         >
           {backgroundUrl ? <div className={styles.scrim} /> : null}
@@ -215,7 +259,14 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
             <Center className={styles.generationFeedback}>
               <Flexbox align={'center'} gap={10}>
                 <NeuralNetworkLoading size={32} />
-                <Text>{t('settingAgent.artwork.background.generating')}</Text>
+                <Flexbox align={'center'} gap={4}>
+                  <Text className={styles.generationTitle}>
+                    {t('settingAgent.artwork.background.generating')}
+                  </Text>
+                  <Text className={styles.generationHint}>
+                    {t('settingAgent.artwork.generatingHint')}
+                  </Text>
+                </Flexbox>
               </Flexbox>
             </Center>
           ) : generationError === 'background' ? (
@@ -232,7 +283,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
               </Flexbox>
             </Center>
           ) : null}
-          {!backgroundUrl && canEdit ? (
+          {!backgroundUrl && canEdit && !backgroundGenerationActive ? (
             <Center className={styles.emptyBackgroundActions}>
               <Flexbox align={'center'} gap={8}>
                 <Text className={styles.emptyBackgroundHint}>
@@ -243,7 +294,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
                     icon={UploadIcon}
                     loading={backgroundUploading}
                     size={'small'}
-                    onClick={() => backgroundInputRef.current?.click()}
+                    onClick={openBackgroundFilePicker}
                   >
                     {t('settingAgent.artwork.background.upload')}
                   </Button>
@@ -261,7 +312,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
               </Flexbox>
             </Center>
           ) : null}
-          {canEdit ? (
+          {canEdit && !backgroundGenerationActive ? (
             <Flexbox
               horizontal
               className={styles.backgroundActions}
@@ -273,7 +324,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
                   glass
                   icon={UploadIcon}
                   loading={backgroundUploading}
-                  onClick={() => backgroundInputRef.current?.click()}
+                  onClick={openBackgroundFilePicker}
                 />
               </Tooltip>
               {canGenerate ? (
@@ -293,24 +344,13 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
               ) : null}
             </Flexbox>
           ) : null}
-          <input
-            hidden
-            accept="image/*"
-            ref={backgroundInputRef}
-            type="file"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              event.target.value = '';
-              if (file) void upload('background', file);
-            }}
-          />
         </div>
         <div className={styles.avatar}>
           <EmojiPicker
             allowModelAvatar
             allowDelete={canEdit && !!avatar}
             allowUpload={canEdit}
-            loading={avatarUploading || generating === 'avatar'}
+            loading={avatarUploading}
             locale={locale}
             open={canEdit ? undefined : false}
             popupClassName={`${styles.avatarPicker} agent-avatar-artwork-picker`}
@@ -335,7 +375,14 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
                               <Center className={styles.generationFeedback}>
                                 <Flexbox align={'center'} gap={10}>
                                   <NeuralNetworkLoading size={32} />
-                                  <Text>{t('settingAgent.artwork.avatar.generating')}</Text>
+                                  <Flexbox align={'center'} gap={4}>
+                                    <Text className={styles.generationTitle}>
+                                      {t('settingAgent.artwork.avatar.generating')}
+                                    </Text>
+                                    <Text className={styles.generationHint}>
+                                      {t('settingAgent.artwork.generatingHint')}
+                                    </Text>
+                                  </Flexbox>
                                 </Flexbox>
                               </Center>
                             ) : null}
@@ -374,7 +421,26 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
               });
             }}
           />
+          {generating === 'avatar' ? (
+            <Center className={styles.avatarGenerating}>
+              <NeuralNetworkLoading size={28} />
+            </Center>
+          ) : null}
         </div>
+        <input
+          accept="image/*"
+          aria-label={t('settingAgent.artwork.background.upload')}
+          className={styles.visuallyHiddenInput}
+          id={backgroundInputId}
+          ref={backgroundInputRef}
+          tabIndex={-1}
+          type="file"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = '';
+            if (file) void upload('background', file);
+          }}
+        />
       </div>
     );
   },
