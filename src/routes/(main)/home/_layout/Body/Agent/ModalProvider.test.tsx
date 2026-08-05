@@ -4,7 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentModalProvider, useAgentModal } from './ModalProvider';
 
 const mocks = vi.hoisted(() => ({
+  closeCreateAgentModal: vi.fn(),
   createAgent: vi.fn(),
+  createAgentModalProps: undefined as
+    | {
+        onCreateBlank: () => Promise<void> | void;
+        onOpenSkills?: (identifier: string) => void;
+      }
+    | undefined,
   navigate: vi.fn(),
   refreshAgentList: vi.fn(),
   sendAsAgent: vi.fn(),
@@ -39,25 +46,17 @@ vi.mock('@/features/EditingPopover', () => ({
 }));
 
 vi.mock('@/routes/(main)/home/_layout/hooks/useCreateModal', () => ({
-  CreateAgentModal: ({
-    open,
-    onCreateBlank,
-    onOpenSkills,
-  }: {
+  openCreateAgentModal: (props: {
     onCreateBlank: () => Promise<void> | void;
     onOpenSkills?: (identifier: string) => void;
-    open: boolean;
-  }) =>
-    open ? (
-      <>
-        <button type="button" onClick={() => void onCreateBlank()}>
-          Start Blank
-        </button>
-        <button type="button" onClick={() => onOpenSkills?.('product-requirements-writer')}>
-          View in Skills
-        </button>
-      </>
-    ) : null,
+  }) => {
+    mocks.createAgentModalProps = props;
+    return { close: mocks.closeCreateAgentModal };
+  },
+}));
+
+vi.mock('@/features/WorkspaceSetting/Labels/LabelFormModal', () => ({
+  openLabelFormModal: vi.fn(),
 }));
 
 vi.mock('@/store/agent', () => ({
@@ -104,7 +103,7 @@ vi.mock('./Modals/ConfigGroupModal', () => ({
 }));
 
 vi.mock('./Modals/CreateGroupModal', () => ({
-  default: () => null,
+  openCreateGroupModal: vi.fn(),
 }));
 
 const OpenCreateAgentModalButton = () => {
@@ -135,6 +134,7 @@ const renderProvider = () =>
 describe('AgentModalProvider', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.createAgentModalProps = undefined;
     mocks.createAgent.mockResolvedValue({ agentId: 'agent-new' });
   });
 
@@ -146,7 +146,8 @@ describe('AgentModalProvider', () => {
     renderProvider();
 
     fireEvent.click(screen.getByText('Open create agent modal'));
-    fireEvent.click(await screen.findByText('Start Blank'));
+    await waitFor(() => expect(mocks.createAgentModalProps).toBeDefined());
+    await mocks.createAgentModalProps!.onCreateBlank();
 
     await waitFor(() => {
       expect(mocks.createAgent).toHaveBeenCalledWith({ groupId: undefined });
@@ -160,7 +161,8 @@ describe('AgentModalProvider', () => {
     renderProvider();
 
     fireEvent.click(screen.getByText('Open create agent modal'));
-    fireEvent.click(await screen.findByText('View in Skills'));
+    await waitFor(() => expect(mocks.createAgentModalProps).toBeDefined());
+    mocks.createAgentModalProps!.onOpenSkills?.('product-requirements-writer');
 
     expect(mocks.navigate).toHaveBeenCalledWith(
       '/settings/skill?skill=product-requirements-writer',
