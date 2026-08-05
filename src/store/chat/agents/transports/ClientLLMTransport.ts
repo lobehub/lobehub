@@ -154,6 +154,24 @@ class ClientLLMRetryPolicy implements LLMRetryPolicy {
         message: localizedError.message || 'LLM execution failed',
         type: String(localizedError.type ?? 'runtime_error'),
       });
+
+      // Match completeRun's client failed-path topic reset. streamingExecutor
+      // writes status:'running' at start; without this, the sidebar keeps the
+      // spinner until the outer loop later reaches completeRun.
+      const { agentId, groupId, scope, topicId } = operation.context;
+      if (topicId && scope !== 'sub_agent') {
+        void this.get()
+          .updateTopicStatus?.({
+            agentId,
+            groupId,
+            ...(scope === 'group' || scope === 'group_agent' ? { scope } : {}),
+            status: 'active',
+            topicId,
+          })
+          ?.catch((error) => {
+            console.error('[ClientLLMTransport] topic status reset failed:', error);
+          });
+      }
     }
   }
 

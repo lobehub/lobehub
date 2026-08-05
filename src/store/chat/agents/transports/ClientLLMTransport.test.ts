@@ -63,10 +63,10 @@ vi.mock('../StreamingHandler', () => ({
   },
 }));
 
-const createTransport = () => {
+const createTransport = (context: Record<string, unknown> = {}) => {
   const operation = {
     abortController: new AbortController(),
-    context: { agentId: 'agent-1', topicId: 'topic-1' },
+    context: { agentId: 'agent-1', topicId: 'topic-1', ...context },
     status: 'running',
   };
   const store = {
@@ -78,6 +78,7 @@ const createTransport = () => {
     internal_transformToolCalls: vi.fn((calls: unknown) => calls),
     operations: { 'op-1': operation },
     startOperation: vi.fn(() => ({ operationId: 'reasoning-op' })),
+    updateTopicStatus: vi.fn().mockResolvedValue(undefined),
   } as unknown as ChatStore;
 
   return {
@@ -165,6 +166,36 @@ describe('ClientLLMTransport.retryPolicy.onError · terminal operation teardown'
       message: 'The content may contain prohibited content. Please adjust it and try again.',
       type: 'ProviderContentPolicyViolation',
     });
+    expect(store.updateTopicStatus).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      groupId: undefined,
+      status: 'active',
+      topicId: 'topic-1',
+    });
+  });
+
+  it('resets group-scoped topic status with the operation scope', () => {
+    const { store, transport } = createTransport({
+      groupId: 'group-1',
+      scope: 'group',
+    });
+
+    transport.retryPolicy.onError?.({
+      error: {
+        message: 'The content may contain prohibited content. Please adjust it and try again.',
+        type: 'ProviderContentPolicyViolation',
+      },
+      events: [],
+      interrupted: false,
+    });
+
+    expect(store.updateTopicStatus).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      groupId: 'group-1',
+      scope: 'group',
+      status: 'active',
+      topicId: 'topic-1',
+    });
   });
 
   it('does not fail the operation when the run was interrupted by the user', () => {
@@ -178,6 +209,7 @@ describe('ClientLLMTransport.retryPolicy.onError · terminal operation teardown'
 
     expect(store.internal_dispatchMessage).not.toHaveBeenCalled();
     expect(store.failOperation).not.toHaveBeenCalled();
+    expect(store.updateTopicStatus).not.toHaveBeenCalled();
   });
 
   it('does not fail an operation that is no longer running', () => {
@@ -195,5 +227,22 @@ describe('ClientLLMTransport.retryPolicy.onError · terminal operation teardown'
 
     expect(store.internal_dispatchMessage).toHaveBeenCalled();
     expect(store.failOperation).not.toHaveBeenCalled();
+    expect(store.updateTopicStatus).not.toHaveBeenCalled();
+  });
+
+  it('does not reset topic status for nested sub-agent operations', () => {
+    const { store, transport } = createTransport({ scope: 'sub_agent' });
+
+    transport.retryPolicy.onError?.({
+      error: {
+        message: 'The content may contain prohibited content. Please adjust it and try again.',
+        type: 'ProviderContentPolicyViolation',
+      },
+      events: [],
+      interrupted: false,
+    });
+
+    expect(store.failOperation).toHaveBeenCalled();
+    expect(store.updateTopicStatus).not.toHaveBeenCalled();
   });
 });
