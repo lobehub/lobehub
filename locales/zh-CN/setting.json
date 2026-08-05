@@ -683,6 +683,7 @@
   "settingAgent.artwork.avatar.generateAction": "根据助理档案生成",
   "settingAgent.artwork.avatar.image": "图片头像",
   "settingAgent.artwork.background.empty": "添加背景，让助理拥有更鲜明的视觉形象",
+  "settingAgent.artwork.background.emptyHint": "添加封面图片",
   "settingAgent.artwork.background.generate": "生成背景",
   "settingAgent.artwork.background.remove": "移除背景",
   "settingAgent.artwork.background.upload": "上传背景",

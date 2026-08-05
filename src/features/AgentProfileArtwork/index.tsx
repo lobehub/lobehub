@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Alert, Avatar, Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Alert, Avatar, Center, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { Button, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ImageIcon, Trash2, UploadIcon, WandSparkles } from 'lucide-react';
@@ -55,15 +55,24 @@ const styles = createStaticStyles(({ css }) => ({
       opacity: 1;
     }
   `,
-  emptyBackground: css`
-    pointer-events: none;
-
+  avatarPicker: css`
+    .ant-tabs-tab:has([id$='-tab-generate']) {
+      order: -1;
+    }
+  `,
+  emptyBackgroundActions: css`
     position: absolute;
-    inset: -48px;
-    transform: scale(1.16);
+    inset: 0;
+    opacity: 0;
+    transition: opacity ${cssVar.motionDurationFast};
 
-    opacity: 0.72;
-    filter: blur(36px) saturate(1.2);
+    .agent-background:hover &,
+    .agent-background:focus-within & {
+      opacity: 1;
+    }
+  `,
+  emptyBackgroundHint: css`
+    color: ${cssVar.colorTextSecondary};
   `,
   generatedAction: css`
     width: 100%;
@@ -183,14 +192,33 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
           style={{ backgroundImage: backgroundUrl ? `url(${backgroundUrl})` : undefined }}
         >
           {backgroundUrl ? <div className={styles.scrim} /> : null}
-          {!backgroundUrl ? (
-            <Center className={styles.emptyBackground}>
-              <Avatar
-                emojiScaleWithBackground
-                avatar={avatar || undefined}
-                shape={'square'}
-                size={640}
-              />
+          {!backgroundUrl && canEdit ? (
+            <Center className={styles.emptyBackgroundActions}>
+              <Flexbox align={'center'} gap={8}>
+                <Text className={styles.emptyBackgroundHint}>
+                  {t('settingAgent.artwork.background.emptyHint')}
+                </Text>
+                <Flexbox horizontal gap={8}>
+                  <Button
+                    icon={UploadIcon}
+                    loading={backgroundUploading}
+                    size={'small'}
+                    onClick={() => backgroundInputRef.current?.click()}
+                  >
+                    {t('settingAgent.artwork.background.upload')}
+                  </Button>
+                  {canGenerate ? (
+                    <Button
+                      icon={WandSparkles}
+                      loading={generating === 'background'}
+                      size={'small'}
+                      onClick={() => void generateArtwork('background')}
+                    >
+                      {t('settingAgent.artwork.background.generate')}
+                    </Button>
+                  ) : null}
+                </Flexbox>
+              </Flexbox>
             </Center>
           ) : null}
           {canEdit ? (
@@ -198,7 +226,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
               horizontal
               className={styles.backgroundActions}
               gap={4}
-              style={{ opacity: backgroundUrl ? undefined : 1 }}
+              style={{ display: backgroundUrl ? undefined : 'none' }}
             >
               <Tooltip title={t('settingAgent.artwork.background.upload')}>
                 <ActionIcon
@@ -245,6 +273,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
             loading={avatarUploading || generating === 'avatar'}
             locale={locale}
             open={canEdit ? undefined : false}
+            popupClassName={`${styles.avatarPicker} agent-avatar-artwork-picker`}
             popupProps={{ placement: 'bottomLeft' }}
             shape={'square'}
             size={72}
@@ -261,12 +290,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
                       render: () => (
                         <Flexbox gap={12} padding={12} width={332}>
                           <Center className={styles.generatedPreview} height={156}>
-                            <Avatar
-                              emojiScaleWithBackground
-                              avatar={avatar || undefined}
-                              shape={'square'}
-                              size={112}
-                            />
+                            <Avatar avatar={avatar || undefined} shape={'square'} size={112} />
                           </Center>
                           <Button
                             className={styles.generatedAction}
@@ -293,6 +317,14 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
             onChange={(value) => onAvatarChange(value)}
             onDelete={() => onAvatarChange(null)}
             onUpload={(file) => upload('avatar', file)}
+            onOpenChange={(open) => {
+              if (!open || !canGenerate) return;
+
+              requestAnimationFrame(() => {
+                const tabs = document.querySelectorAll('.agent-avatar-artwork-picker [role="tab"]');
+                (tabs.item(tabs.length - 1) as HTMLElement | null)?.click();
+              });
+            }}
           />
         </div>
       </div>
