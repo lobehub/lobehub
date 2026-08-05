@@ -22,7 +22,7 @@ const MAX_ARTWORK_SIZE = 1024 * 1024;
 const styles = createStaticStyles(({ css }) => ({
   avatar: css`
     position: absolute;
-    z-index: 2;
+    z-index: 4;
     inset-block-end: 0;
     inset-inline-start: 24px;
 
@@ -130,6 +130,9 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextSecondary};
     text-align: center;
   `,
+  generationActions: css`
+    margin-block-start: 4px;
+  `,
   generationTitle: css`
     font-weight: 500;
   `,
@@ -186,6 +189,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
       (state) => aiProviderSelectors.enabledImageModelList(state).length > 0,
     );
     const generateAgentArtwork = useAgentStore((s) => s.generateAgentArtwork);
+    const cancelAgentArtworkGeneration = useAgentStore((s) => s.cancelAgentArtworkGeneration);
     const generation = useAgentStore(agentArtworkSelectors.generationByAgentId(agentId));
     const backgroundInputRef = useRef<HTMLInputElement>(null);
     const backgroundInputId = useId();
@@ -266,6 +270,13 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
                   <Text className={styles.generationHint}>
                     {t('settingAgent.artwork.generatingHint')}
                   </Text>
+                  <Button
+                    className={styles.generationActions}
+                    size={'small'}
+                    onClick={() => void cancelAgentArtworkGeneration(agentId)}
+                  >
+                    {t('settingAgent.artwork.cancel')}
+                  </Button>
                 </Flexbox>
               </Flexbox>
             </Center>
@@ -382,19 +393,27 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
                                     <Text className={styles.generationHint}>
                                       {t('settingAgent.artwork.generatingHint')}
                                     </Text>
+                                    <Button
+                                      className={styles.generationActions}
+                                      size={'small'}
+                                      onClick={() => void cancelAgentArtworkGeneration(agentId)}
+                                    >
+                                      {t('settingAgent.artwork.cancel')}
+                                    </Button>
                                   </Flexbox>
                                 </Flexbox>
                               </Center>
                             ) : null}
                           </Center>
-                          <Button
-                            className={styles.generatedAction}
-                            icon={WandSparkles}
-                            loading={generating === 'avatar'}
-                            onClick={() => void generateArtwork('avatar')}
-                          >
-                            {t('settingAgent.artwork.avatar.generateAction')}
-                          </Button>
+                          {generating !== 'avatar' ? (
+                            <Button
+                              className={styles.generatedAction}
+                              icon={WandSparkles}
+                              onClick={() => void generateArtwork('avatar')}
+                            >
+                              {t('settingAgent.artwork.avatar.generateAction')}
+                            </Button>
+                          ) : null}
                           {generationError === 'avatar' ? (
                             <Alert
                               showIcon

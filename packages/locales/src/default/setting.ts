@@ -746,6 +746,7 @@ export default {
   'settingAgent.artwork.background.generating': 'Creating a matching background…',
   'settingAgent.artwork.background.remove': 'Remove background',
   'settingAgent.artwork.background.upload': 'Upload background',
+  'settingAgent.artwork.cancel': 'Cancel generation',
   'settingAgent.artwork.generateFailed': 'Could not generate the image. Try again.',
   'settingAgent.artwork.generatingHint':
     'This usually takes about 60 seconds. You can keep editing while it finishes.',

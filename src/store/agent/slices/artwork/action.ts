@@ -16,7 +16,23 @@ import { selectAgentArtworkModel } from './utils';
 const POLL_INTERVAL = 1500;
 const POLL_LIMIT = 120;
 
-const wait = (duration: number) => new Promise((resolve) => setTimeout(resolve, duration));
+const wait = (duration: number, signal: AbortSignal) =>
+  new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(resolve, duration);
+    signal.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timeout);
+        reject(signal.reason);
+      },
+      { once: true },
+    );
+  });
+
+interface AgentArtworkGenerationJob {
+  controller: AbortController;
+  generationId?: string;
+}
 
 type Setter = StoreSetter<AgentStore>;
 
@@ -24,6 +40,7 @@ export const createAgentArtworkSlice = (set: Setter, get: () => AgentStore, _api
   new AgentArtworkActionImpl(set, get, _api);
 
 export class AgentArtworkActionImpl {
+  readonly #generationJobs = new Map<string, AgentArtworkGenerationJob>();
   readonly #get: () => AgentStore;
   readonly #set: Setter;
 
@@ -33,8 +50,13 @@ export class AgentArtworkActionImpl {
     this.#get = get;
   }
 
-  #getGeneratedImageUrl = async (generationId: string, asyncTaskId: string) => {
+  #getGeneratedImageUrl = async (
+    generationId: string,
+    asyncTaskId: string,
+    signal: AbortSignal,
+  ) => {
     for (let count = 0; count < POLL_LIMIT; count += 1) {
+      signal.throwIfAborted();
       const result = await generationService.getGenerationStatus(generationId, asyncTaskId);
 
       if (result.status === AsyncTaskStatus.Success) {
@@ -51,10 +73,23 @@ export class AgentArtworkActionImpl {
         throw new Error(detail || 'Image generation failed');
       }
 
-      await wait(POLL_INTERVAL);
+      await wait(POLL_INTERVAL, signal);
     }
 
     throw new Error('Image generation timed out');
+  };
+
+  cancelAgentArtworkGeneration = async (agentId: string): Promise<void> => {
+    const job = this.#generationJobs.get(agentId);
+    if (!job) {
+      this.#setGenerationState(agentId, undefined);
+      return;
+    }
+
+    job.controller.abort(new DOMException('Agent artwork generation cancelled', 'AbortError'));
+    this.#setGenerationState(agentId, undefined);
+
+    if (job.generationId) await generationService.deleteGeneration(job.generationId);
   };
 
   #setGenerationState = (agentId: string, value: AgentArtworkGenerationState | undefined) => {
@@ -74,6 +109,8 @@ export class AgentArtworkActionImpl {
   generateAgentArtwork = async (input: AgentArtworkPromptInput): Promise<void> => {
     if (this.#get().agentArtworkGenerationMap[input.id]?.status === 'generating') return;
 
+    const job: AgentArtworkGenerationJob = { controller: new AbortController() };
+    this.#generationJobs.set(input.id, job);
     this.#setGenerationState(input.id, { kind: input.kind, status: 'generating' });
 
     try {
@@ -108,13 +145,25 @@ export class AgentArtworkActionImpl {
         throw new Error('Image generation could not be started');
       }
 
-      const url = await this.#getGeneratedImageUrl(generationId, asyncTaskId);
+      job.generationId = generationId;
+      if (job.controller.signal.aborted) {
+        await generationService.deleteGeneration(generationId);
+        job.controller.signal.throwIfAborted();
+      }
+      const url = await this.#getGeneratedImageUrl(
+        generationId,
+        asyncTaskId,
+        job.controller.signal,
+      );
+      job.controller.signal.throwIfAborted();
       await this.#get().updateAgentMetaById(
         input.id,
         input.kind === 'avatar' ? { avatar: url } : { backgroundColor: url },
       );
       this.#setGenerationState(input.id, undefined);
     } catch (error) {
+      if (job.controller.signal.aborted) return;
+
       console.error('Failed to generate agent artwork:', error);
       this.#setGenerationState(input.id, {
         error: error instanceof Error ? error.message : 'Image generation failed',
@@ -122,6 +171,8 @@ export class AgentArtworkActionImpl {
         status: 'error',
       });
       throw error;
+    } finally {
+      if (this.#generationJobs.get(input.id) === job) this.#generationJobs.delete(input.id);
     }
   };
 }

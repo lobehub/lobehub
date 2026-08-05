@@ -11,7 +11,7 @@ import { useAgentStore } from '../../store';
 vi.mock('zustand/traditional');
 
 vi.mock('@/services/generation', () => ({
-  generationService: { getGenerationStatus: vi.fn() },
+  generationService: { deleteGeneration: vi.fn(), getGenerationStatus: vi.fn() },
 }));
 
 vi.mock('@/services/generationTopic', () => ({
@@ -100,5 +100,50 @@ describe('AgentArtworkAction', () => {
       kind: 'avatar',
       status: 'error',
     });
+  });
+
+  it('cancels polling, deletes the generation, and clears the loading state', async () => {
+    vi.mocked(generationTopicService.createTopic).mockResolvedValue('topic-1');
+    vi.mocked(imageService.createImage).mockResolvedValue({
+      data: { generations: [{ asyncTaskId: 'task-1', id: 'generation-1' }] },
+      success: true,
+    } as never);
+    vi.mocked(generationService.getGenerationStatus).mockResolvedValue({
+      status: AsyncTaskStatus.Processing,
+    } as never);
+    const updateAgentMetaById = vi.fn().mockResolvedValue(undefined);
+    useAgentStore.setState({ updateAgentMetaById });
+
+    const promise = useAgentStore.getState().generateAgentArtwork(input);
+    await vi.waitFor(() => expect(generationService.getGenerationStatus).toHaveBeenCalled());
+    await useAgentStore.getState().cancelAgentArtworkGeneration('agent-a');
+    await promise;
+
+    expect(generationService.deleteGeneration).toHaveBeenCalledWith('generation-1');
+    expect(updateAgentMetaById).not.toHaveBeenCalled();
+    expect(useAgentStore.getState().agentArtworkGenerationMap?.['agent-a']).toBeUndefined();
+  });
+
+  it('deletes a generation that starts after cancellation was requested', async () => {
+    let finishCreateImage: (value: unknown) => void = () => {};
+    vi.mocked(generationTopicService.createTopic).mockResolvedValue('topic-1');
+    vi.mocked(imageService.createImage).mockReturnValue(
+      new Promise((resolve) => {
+        finishCreateImage = resolve;
+      }) as never,
+    );
+
+    const promise = useAgentStore.getState().generateAgentArtwork(input);
+    await vi.waitFor(() => expect(imageService.createImage).toHaveBeenCalled());
+    await useAgentStore.getState().cancelAgentArtworkGeneration('agent-a');
+    finishCreateImage({
+      data: { generations: [{ asyncTaskId: 'task-1', id: 'generation-1' }] },
+      success: true,
+    });
+    await promise;
+
+    expect(generationService.deleteGeneration).toHaveBeenCalledWith('generation-1');
+    expect(generationService.getGenerationStatus).not.toHaveBeenCalled();
+    expect(useAgentStore.getState().agentArtworkGenerationMap?.['agent-a']).toBeUndefined();
   });
 });

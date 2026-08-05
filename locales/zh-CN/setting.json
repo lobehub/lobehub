@@ -689,6 +689,7 @@
   "settingAgent.artwork.background.generating": "正在生成与头像协调的背景…",
   "settingAgent.artwork.background.remove": "移除背景",
   "settingAgent.artwork.background.upload": "上传背景",
+  "settingAgent.artwork.cancel": "取消生成",
   "settingAgent.artwork.generateFailed": "暂时无法生成图片，请重试",
   "settingAgent.artwork.generatingHint": "通常需要约 60 秒，生成期间可以继续编辑其他内容",
   "settingAgent.artwork.retry": "重试",
