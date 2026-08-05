@@ -45,7 +45,7 @@ interface UserMessageContentPartVideo {
   video_url: { url: string };
 }
 interface UserMessageContentPartAudio {
-  audio_url: { url: string };
+  audio_url: { durationMs?: number; url: string };
   type: 'audio_url';
 }
 

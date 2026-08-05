@@ -21,6 +21,17 @@ export type ExtendedChatCompletionContentPart = {
   };
 };
 
+type InternalAudioContentPart = {
+  audio_url: {
+    durationMs?: number;
+    url: string;
+  };
+  type: 'audio_url';
+};
+
+type ConvertibleMessageContentPart =
+  ExtendedChatCompletionContentPart | InternalAudioContentPart | OpenAI.ChatCompletionContentPart;
+
 type ConvertMessageContentOptions = {
   forceImageBase64?: boolean;
   forceVideoBase64?: boolean;
@@ -42,9 +53,14 @@ const isInternalThinkingContentPart = (
 ): content is Extract<UserMessageContentPart, { type: 'thinking' }> => content.type === 'thinking';
 
 export const convertMessageContent = async (
-  content: OpenAI.ChatCompletionContentPart | ExtendedChatCompletionContentPart,
+  content: ConvertibleMessageContentPart,
   options?: ConvertMessageContentOptions,
-): Promise<OpenAI.ChatCompletionContentPart | ExtendedChatCompletionContentPart> => {
+): Promise<ConvertibleMessageContentPart> => {
+  if (content.type === 'audio_url') {
+    // durationMs is an internal estimation hint, not part of provider request schemas.
+    return { audio_url: { url: content.audio_url.url }, type: 'audio_url' };
+  }
+
   if (content.type === 'image_url') {
     const { type } = parseDataUri(content.image_url.url);
 

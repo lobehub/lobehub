@@ -35,6 +35,18 @@ describe('convertMessageContent', () => {
     expect(result).toEqual(content);
   });
 
+  it('should strip internal audio estimation fields from provider content', async () => {
+    const result = await convertMessageContent({
+      audio_url: { durationMs: 2500, url: 'https://example.com/audio.mp3' },
+      type: 'audio_url',
+    });
+
+    expect(result).toEqual({
+      audio_url: { url: 'https://example.com/audio.mp3' },
+      type: 'audio_url',
+    });
+  });
+
   it('should convert image URL to base64 when necessary', async () => {
     // 设置环境变量
     process.env.LLM_VISION_IMAGE_USE_BASE64 = '1';

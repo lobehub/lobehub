@@ -1,5 +1,6 @@
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { ChatAudioItem, ChatFileItem, ChatImageItem, ChatVideoItem } from '@lobechat/types';
+import { readAudioDurationMs } from '@lobechat/utils/audio';
 import debug from 'debug';
 
 import { FileModel } from '@/database/models/file';
@@ -113,7 +114,13 @@ export const resolveAttachmentsByFileIds = async ({
       continue;
     }
     if (fileType.startsWith('audio')) {
-      result.audioList.push({ alt: file.name || 'audio', id: file.id, url: resolvedUrl });
+      const durationMs = readAudioDurationMs(file.metadata);
+      result.audioList.push({
+        alt: file.name || 'audio',
+        ...(durationMs === undefined ? {} : { durationMs }),
+        id: file.id,
+        url: resolvedUrl,
+      });
       continue;
     }
     if (entry.parseError) {
