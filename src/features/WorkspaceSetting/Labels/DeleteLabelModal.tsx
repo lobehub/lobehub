@@ -49,6 +49,7 @@ const DeleteLabelContent = memo<DeleteLabelContentProps>(({ label }) => {
   };
 
   const handleArchive = async () => {
+    if (loading || archiving) return;
     setArchiving(true);
     try {
       await updateAgentLabel(label.id, { archived: true });
@@ -74,19 +75,22 @@ const DeleteLabelContent = memo<DeleteLabelContentProps>(({ label }) => {
         <Text>{t('workspaceSetting.labels.delete.confirmHint')}</Text>
         <Input
           autoFocus
+          disabled={loading || archiving}
           placeholder={DELETE_CONFIRM_WORD}
           value={confirmText}
           onChange={(e) => setConfirmText(e.target.value)}
           onPressEnter={handleDelete}
         />
       </Flexbox>
+      {/* Archive and Delete both mutate the same label, so each locks the other
+          out — `loading` alone only disables the button that owns it. */}
       <ModalFooter style={{ justifyContent: 'space-between' }}>
-        <Button loading={archiving} onClick={handleArchive}>
+        <Button disabled={loading} loading={archiving} onClick={handleArchive}>
           {t('workspaceSetting.labels.actions.archive')}
         </Button>
         <Flexbox horizontal gap={8}>
           <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>
-          <Button danger disabled={!armed} loading={loading} onClick={handleDelete}>
+          <Button danger disabled={!armed || archiving} loading={loading} onClick={handleDelete}>
             {t('delete', { ns: 'common' })}
           </Button>
         </Flexbox>
