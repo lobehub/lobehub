@@ -30,6 +30,14 @@ describe('ElectronAppActionImpl', () => {
       expect(globalAgentContextManager.getContext().defaultShell).toBe('Git Bash');
     });
 
+    it('syncs arch into the global agent context so {{arch}} renders in the prompt', () => {
+      act(() => {
+        useElectronStore.getState().updateElectronAppState({ arch: 'arm64' });
+      });
+
+      expect(globalAgentContextManager.getContext().arch).toBe('arm64');
+    });
+
     it('syncs user paths into the global agent context', () => {
       act(() => {
         useElectronStore.getState().updateElectronAppState({

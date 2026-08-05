@@ -166,8 +166,10 @@ export const VARIABLE_GENERATORS = {
    * | `{{workingDirectory}}` | /Users/username/Projects/my-project |
    * | `{{defaultShell}}` | PowerShell 7+ (pwsh) |
    * | `{{shellSyntaxGuidance}}` | Write PowerShell syntax; ... |
+   * | `{{arch}}` | arm64 |
    *
    */
+  arch: () => globalAgentContextManager.getContext().arch ?? '',
   homePath: () => globalAgentContextManager.getContext().homePath ?? '',
   // Fallback keeps the surrounding prompt sentence readable when the desktop
   // context has not (yet) provided the detected shell.

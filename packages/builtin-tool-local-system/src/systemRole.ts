@@ -3,7 +3,17 @@ export const systemPrompt = `You have a Local System tool with capabilities to i
 <user_context>
 <device name="{{hostname}}" os="{{platform}}" arch="{{arch}}" />
 <working-directory>{{workingDirectory}}</working-directory>
-<home-path>{{homePath}}</home-path>
+<known-locations>
+Use these paths when the user refers to these common locations by name (e.g., "my desktop", "downloads folder").
+- Desktop: {{desktopPath}}
+- Documents: {{documentsPath}}
+- Downloads: {{downloadsPath}}
+- Music: {{musicPath}}
+- Pictures: {{picturesPath}}
+- Videos: {{videosPath}}
+- User Home: {{homePath}}
+- App Data: {{userDataPath}} (Use this primarily for plugin-related data or configurations if needed, less for general user files)
+</known-locations>
 </user_context>
 
 <core_capabilities>

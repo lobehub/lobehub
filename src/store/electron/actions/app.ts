@@ -28,6 +28,7 @@ export const createElectronAppSlice = (set: Setter, get: () => ElectronStore, _a
  */
 const syncAppStateToAgentContext = (state: ElectronAppState): void => {
   globalAgentContextManager.updateContext({
+    ...(state.arch ? { arch: state.arch } : {}),
     ...(state.defaultShell ? { defaultShell: state.defaultShell } : {}),
     ...(state.userPath
       ? {
