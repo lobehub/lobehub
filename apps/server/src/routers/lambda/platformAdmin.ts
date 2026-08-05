@@ -332,20 +332,22 @@ export const platformAdminRouter = router({
       );
       const topups = txs.filter((t) => t.type === 'topup' || t.type === 'manual_credit');
       const totalRevenueToman = topups.reduce((sum, t) => sum + Number(t.amountToman || 0), 0);
-      const totalMicroCredited = topups.reduce((sum, t) => sum + Number(t.amountMicroUsd || 0), 0);
-      const b2cBalanceMicroUsd = wallets.reduce(
-        (sum, w) => sum + Number(w.balanceMicroUsd || 0),
-        0,
+      const totalMicroCredited = Math.trunc(
+        topups.reduce((sum, t) => sum + Number(t.amountMicroUsd || 0), 0),
       );
+      const b2cBalanceMicroUsd = Math.trunc(
+        wallets.reduce((sum, w) => sum + Number(w.balanceMicroUsd || 0), 0),
+      );
+      // SUM/driver may yield a float; FX is integer toman/USD from getTomanPerUsd.
+      const costMicroUsd = Math.trunc(Number(totalOpenRouterCostMicroUsd) || 0);
+      const fxRate = Math.round(fx.rate);
       // Approximate margin in toman using integer FX (floored).
-      const costTomanEstimate = Number(
-        (BigInt(totalOpenRouterCostMicroUsd) * BigInt(fx.rate)) / 1_000_000n,
-      );
+      const costTomanEstimate = Number((BigInt(costMicroUsd) * BigInt(fxRate)) / 1_000_000n);
       const marginToman = totalRevenueToman - costTomanEstimate;
 
       return {
-        b2bBalanceMicroUsd: String(orgBalanceMicroUsd),
-        b2bBalanceUsd: microUsdToDecimalString(orgBalanceMicroUsd),
+        b2bBalanceMicroUsd: String(Math.trunc(Number(orgBalanceMicroUsd) || 0)),
+        b2bBalanceUsd: microUsdToDecimalString(Math.trunc(Number(orgBalanceMicroUsd) || 0)),
         b2cBalanceMicroUsd: String(b2cBalanceMicroUsd),
         b2cBalanceUsd: microUsdToDecimalString(b2cBalanceMicroUsd),
         b2cWalletCount: wallets.length,
@@ -362,9 +364,9 @@ export const platformAdminRouter = router({
           userId: t.userId,
         })),
         to: null as string | null,
-        totalOpenRouterCostMicroUsd: String(totalOpenRouterCostMicroUsd),
-        totalOpenRouterCostUsd: microUsdToDecimalString(totalOpenRouterCostMicroUsd),
-        totalRevenueToman: String(totalRevenueToman),
+        totalOpenRouterCostMicroUsd: String(costMicroUsd),
+        totalOpenRouterCostUsd: microUsdToDecimalString(costMicroUsd),
+        totalRevenueToman: String(Math.trunc(totalRevenueToman)),
         totalUsdCredited: microUsdToDecimalString(totalMicroCredited),
       };
     }),
