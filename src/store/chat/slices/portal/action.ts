@@ -7,7 +7,12 @@ import { type StoreSetter } from '@/store/types';
 import { type PortalArtifact } from '@/types/artifact';
 
 import { topicSelectors } from '../topic/selectors';
-import { createLocalFileScopeKey, createLocalFileTabId, getLocalFileTabId } from './helpers';
+import {
+  createLocalFileScopeKey,
+  createLocalFileTabId,
+  createSandboxLocalFileScopeKey,
+  getLocalFileTabId,
+} from './helpers';
 import { type OpenLocalFileParams, type PortalFile, type PortalViewData } from './initialState';
 import { PortalViewType } from './initialState';
 
@@ -34,8 +39,14 @@ const findLocalFileById = <T extends OpenLocalFileParams & { id?: string }>(
       openLocalFiles.find((file) => file.filePath === id))
     : undefined;
 
+// Sandbox tabs carry no client-side working directory, so their fallback scope
+// (used when the active topic has no cwd) is keyed by the serving topic —
+// otherwise every unscoped topic shares one global scope and overwrites the
+// others' activation.
 const getLocalFileEntryScopeKey = (file: OpenLocalFileParams): string =>
-  createLocalFileScopeKey(file.workingDirectory);
+  file.sandboxTopicId
+    ? createSandboxLocalFileScopeKey(file.sandboxTopicId)
+    : createLocalFileScopeKey(file.workingDirectory);
 
 const getLocalFilesInEntryScope = <T extends OpenLocalFileParams & { id?: string }>(
   openLocalFiles: T[],
@@ -46,6 +57,20 @@ const getCurrentLocalFileScopeKey = (state: ChatStore): string | undefined => {
   const workingDirectory = topicSelectors.currentTopicWorkingDirectory(state);
 
   return workingDirectory ? createLocalFileScopeKey(workingDirectory) : undefined;
+};
+
+// Mirrors the selector's `isLocalFileInCurrentScope`: sandbox tabs carry no
+// client-side working directory, so they are scoped by their serving topic
+// rather than the cwd match — bulk-close actions must group them the same way
+// the tab strip renders them.
+const isLocalFileVisibleInScope = <T extends OpenLocalFileParams>(
+  state: ChatStore,
+  currentScopeKey: string,
+  file: T,
+): boolean => {
+  if (file.allowExternalFilePreview) return true;
+  if (file.sandboxTopicId) return file.sandboxTopicId === state.activeTopicId;
+  return getLocalFileEntryScopeKey(file) === currentScopeKey;
 };
 
 const getLocalFileCloseScope = <T extends OpenLocalFileParams & { id?: string }>({
@@ -60,8 +85,7 @@ const getLocalFileCloseScope = <T extends OpenLocalFileParams & { id?: string }>
   const currentScopeKey = getCurrentLocalFileScopeKey(state);
   const targetEntryScopeKey = getLocalFileEntryScopeKey(target);
   const targetIsVisibleInCurrentScope =
-    !!currentScopeKey &&
-    (target.allowExternalFilePreview || targetEntryScopeKey === currentScopeKey);
+    !!currentScopeKey && isLocalFileVisibleInScope(state, currentScopeKey, target);
 
   if (!currentScopeKey || !targetIsVisibleInCurrentScope) {
     return {
@@ -71,10 +95,7 @@ const getLocalFileCloseScope = <T extends OpenLocalFileParams & { id?: string }>
   }
 
   return {
-    files: openLocalFiles.filter(
-      (file) =>
-        file.allowExternalFilePreview || getLocalFileEntryScopeKey(file) === currentScopeKey,
-    ),
+    files: openLocalFiles.filter((file) => isLocalFileVisibleInScope(state, currentScopeKey, file)),
     scopeKey: currentScopeKey,
   };
 };
@@ -83,7 +104,12 @@ const getLocalFileActivationScopeKey = (state: ChatStore, file: OpenLocalFilePar
   const entryScopeKey = getLocalFileEntryScopeKey(file);
   const currentScopeKey = getCurrentLocalFileScopeKey(state);
 
-  return file.allowExternalFilePreview && currentScopeKey ? currentScopeKey : entryScopeKey;
+  // External and sandbox tabs render inside the current topic's scope (the
+  // visibility filter exempts them from the cwd match), so their activation
+  // must land in that scope too — otherwise a cwd topic keeps showing its
+  // previously active tab after the open.
+  const rendersInCurrentScope = file.allowExternalFilePreview || !!file.sandboxTopicId;
+  return rendersInCurrentScope && currentScopeKey ? currentScopeKey : entryScopeKey;
 };
 
 const resolveActiveLocalFile = <T extends OpenLocalFileParams & { id?: string }>(
@@ -485,14 +511,16 @@ export class ChatPortalActionImpl {
     allowExternalFilePreview,
     deviceId,
     filePath,
+    sandboxTopicId,
     workingDirectory,
   }: OpenLocalFileParams): void => {
     const { activeLocalFileIdsByScope, openLocalFiles } = this.#get();
-    const id = createLocalFileTabId({ deviceId, filePath, workingDirectory });
+    const id = createLocalFileTabId({ deviceId, filePath, sandboxTopicId, workingDirectory });
     const exists = openLocalFiles.some((f) => getLocalFileTabId(f) === id);
     const nextFile = {
       ...(allowExternalFilePreview === undefined ? {} : { allowExternalFilePreview }),
       ...(deviceId ? { deviceId } : {}),
+      ...(sandboxTopicId ? { sandboxTopicId } : {}),
       filePath,
       id,
       workingDirectory,

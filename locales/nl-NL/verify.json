@@ -200,6 +200,7 @@
   "acceptance.status.repairing": "Reparatie bezig",
   "acceptance.status.verifying": "Bezig met verificatie",
   "acceptance.subject.document": "Document",
+  "acceptance.subject.standalone": "Op zichzelf staand",
   "acceptance.subject.task": "Taak",
   "acceptance.subject.topic": "Onderwerp",
   "acceptance.surface.other": "Overig",

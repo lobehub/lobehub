@@ -12,6 +12,7 @@ import {
   type ActionsBarConfig,
   type ConversationContext,
   type ConversationHooks,
+  type MessagesChangeMeta,
   type OperationState,
 } from './types';
 
@@ -35,7 +36,11 @@ export interface StoreUpdaterProps {
   /**
    * Callback when messages are fetched or changed internally
    */
-  onMessagesChange?: (messages: UIChatMessage[], context: ConversationContext) => void;
+  onMessagesChange?: (
+    messages: UIChatMessage[],
+    context: ConversationContext,
+    meta?: MessagesChangeMeta,
+  ) => void;
   /**
    * External operation state (from ChatStore)
    */
@@ -90,9 +95,12 @@ const StoreUpdater = memo<StoreUpdaterProps>(
           messagesInit: false,
         });
 
-        // If messages are already available, sync them immediately
+        // If messages are already available, sync them immediately.
+        // skipOnMessagesChange: this is external → internal sync; echoing back
+        // through onMessagesChange would re-write the SWR cache with the (possibly
+        // partial) bucket and discard an in-flight switch-time revalidation.
         if (messages) {
-          storeApi.getState().replaceMessages(messages);
+          storeApi.getState().replaceMessages(messages, { skipOnMessagesChange: true });
           storeApi.setState({ messagesInit: true });
         }
       }
@@ -118,7 +126,10 @@ const StoreUpdater = memo<StoreUpdaterProps>(
         );
 
         prevMessagesRef.current = messages;
-        storeApi.getState().replaceMessages(messages);
+        // External → internal sync: never echo back through onMessagesChange
+        // (would poison the SWR cache with the possibly-partial bucket and
+        // discard an in-flight revalidation — see DataAction.replaceMessages).
+        storeApi.getState().replaceMessages(messages, { skipOnMessagesChange: true });
       }
     }, [messages, storeApi, contextKey]);
 

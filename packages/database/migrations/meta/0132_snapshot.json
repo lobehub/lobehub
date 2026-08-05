@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "af1f956e-2d18-416b-8fe9-71b9f55d7c7f",
+  "id": "d3a87170-86d7-4e73-a701-69d472c7df3e",
   "policies": {},
   "prevId": "5a333ec6-5c77-42a5-bfb5-54801d512f7c",
   "roles": {},
@@ -3061,7 +3061,7 @@
         },
         "label_id": {
           "name": "label_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
@@ -3208,9 +3208,10 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": true,
-          "notNull": true
+          "notNull": true,
+          "default": "gen_random_uuid()"
         },
         "name": {
           "name": "name",

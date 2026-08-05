@@ -37,6 +37,7 @@ const LabsForm = memo(() => {
     enablePlatformAgent,
     enableImessage,
     enableClaudeCodeSdk,
+    enableCodexAppServer,
     enableHeteroSessionImport,
     enableMessageTextSelectionActions,
     enableOAuthApps,
@@ -54,6 +55,7 @@ const LabsForm = memo(() => {
     labPreferSelectors.enablePlatformAgent(s),
     labPreferSelectors.enableImessage(s),
     labPreferSelectors.enableClaudeCodeSdk(s),
+    labPreferSelectors.enableCodexAppServer(s),
     labPreferSelectors.enableHeteroSessionImport(s),
     labPreferSelectors.enableMessageTextSelectionActions(s),
     labPreferSelectors.enableOAuthApps(s),
@@ -178,8 +180,8 @@ const LabsForm = memo(() => {
     } satisfies FormItemProps,
   ];
 
-  // Desktop-only experiments: iMessage bridge, the Claude Code SDK runtime, and
-  // the in-app browser (renderer-retained Electron webviews).
+  // Desktop-only experiments: local agent runtimes, iMessage bridge, and the
+  // in-app browser (renderer-retained Electron webviews).
   const desktopItems: FormItemProps[] = [
     {
       children: (
@@ -205,6 +207,19 @@ const LabsForm = memo(() => {
       className: styles.labItem,
       desc: tLabs('features.claudeCodeSdk.desc'),
       label: tLabs('features.claudeCodeSdk.title'),
+      minWidth: undefined,
+    },
+    {
+      children: (
+        <Switch
+          checked={enableCodexAppServer}
+          loading={!isPreferenceInit}
+          onChange={(checked: boolean) => updateLab({ enableCodexAppServer: checked })}
+        />
+      ),
+      className: styles.labItem,
+      desc: tLabs('features.codexAppServer.desc'),
+      label: tLabs('features.codexAppServer.title'),
       minWidth: undefined,
     },
     // rides on the Claude Code hetero-agent stack: scans local CLI

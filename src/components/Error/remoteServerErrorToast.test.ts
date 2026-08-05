@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { remoteServerErrorToast } from './remoteServerErrorToast';
 
@@ -13,34 +13,30 @@ vi.mock('i18next', () => ({
 }));
 
 beforeEach(() => {
-  vi.useFakeTimers();
   toastError.mockClear();
 });
 
-afterEach(() => {
-  vi.useRealTimers();
-});
-
 describe('remoteServerErrorToast', () => {
-  it('shows the same errorType at most once per interval', () => {
+  it('reuses one toast id per errorType so repeats collapse instead of stacking', () => {
     remoteServerErrorToast('RemoteServerTimeout');
     remoteServerErrorToast('RemoteServerTimeout');
     remoteServerErrorToast('RemoteServerTimeout');
 
-    expect(toastError).toHaveBeenCalledTimes(1);
-    expect(toastError).toHaveBeenCalledWith({
+    expect(toastError).toHaveBeenCalledTimes(3);
+    expect(new Set(toastError.mock.calls.map(([options]) => options.id)).size).toBe(1);
+    expect(toastError).toHaveBeenLastCalledWith({
+      id: 'remote-server-network-error-RemoteServerTimeout',
       title: 'translated_response.RemoteServerTimeout',
     });
-
-    vi.advanceTimersByTime(10_000);
-    remoteServerErrorToast('RemoteServerTimeout');
-    expect(toastError).toHaveBeenCalledTimes(2);
   });
 
-  it('debounces per errorType independently', () => {
+  it('gives each errorType its own id', () => {
     remoteServerErrorToast('RemoteServerDNSFailed');
     remoteServerErrorToast('RemoteServerOffline');
 
-    expect(toastError).toHaveBeenCalledTimes(2);
+    expect(toastError.mock.calls.map(([options]) => options.id)).toEqual([
+      'remote-server-network-error-RemoteServerDNSFailed',
+      'remote-server-network-error-RemoteServerOffline',
+    ]);
   });
 });

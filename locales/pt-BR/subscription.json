@@ -137,6 +137,8 @@
   "credits.memberBudget.defaultLimit": "Orçamento padrão por membro",
   "credits.memberBudget.defaultLimitHint": "Membros sem uma regra personalizada usam este limite a cada ciclo de faturamento.",
   "credits.memberBudget.desc": "Limite quantos créditos do workspace cada membro pode usar no ciclo de faturamento atual",
+  "credits.memberBudget.details.action": "Ver detalhes",
+  "credits.memberBudget.details.title": "Uso do membro",
   "credits.memberBudget.effectiveBudget": "Orçamento efetivo",
   "credits.memberBudget.empty": "Ainda não há membros no workspace",
   "credits.memberBudget.globalBadge": "Global",

@@ -12,15 +12,40 @@ const parseJsonString = (value: unknown): unknown => {
   }
 };
 
+/**
+ * Convention-based recommendation marker (see `AskUserQuestionOption.recommended`).
+ * Accepts ASCII/fullwidth parens and the English/Chinese wording models emit.
+ * Surrounding whitespace is handled with `trimEnd()` instead of `\s*` in the
+ * pattern — the label is model-controlled input, and ambiguous `\s*` around an
+ * end anchor makes the scan polynomial (CodeQL js/polynomial-redos).
+ */
+const RECOMMENDED_SUFFIX = /[(（](?:recommended|推荐)[)）]$/i;
+
+const stripRecommendedSuffix = (rawLabel: string): string => {
+  const trimmed = rawLabel.trimEnd();
+  const match = RECOMMENDED_SUFFIX.exec(trimmed);
+
+  return match ? trimmed.slice(0, match.index).trimEnd() : rawLabel;
+};
+
 const normalizeOption = (value: unknown): AskUserQuestionOption | undefined => {
   const option = toRecord(value);
-  const label = pickString(option?.label);
+  const rawLabel = pickString(option?.label);
 
-  if (!label) return;
+  if (!rawLabel) return;
 
+  const strippedLabel = stripRecommendedSuffix(rawLabel);
+  // Only treat the suffix as a marker when something remains — a label that IS
+  // "(Recommended)" stays verbatim rather than collapsing to an empty option.
+  const recommended = strippedLabel.length > 0 && strippedLabel !== rawLabel;
+  const label = recommended ? strippedLabel : rawLabel;
   const description = pickString(option?.description);
 
-  return description ? { description, label } : { label };
+  return {
+    label,
+    ...(description ? { description } : {}),
+    ...(recommended ? { recommended } : {}),
+  };
 };
 
 const isQuestionOption = (

@@ -107,8 +107,9 @@ vi.mock('@/store/agent', () => ({
 
 vi.mock('@/store/chat', () => ({
   getChatStoreState: () => ({}),
-  useChatStore: (selector: (state: { activeAgentId: string }) => unknown) =>
-    selector({ activeAgentId: 'agt_old' }),
+  useChatStore: (
+    selector: (state: { activeAgentId: string; creatingTopicIds: string[] }) => unknown,
+  ) => selector({ activeAgentId: 'agt_old', creatingTopicIds: [] }),
 }));
 
 vi.mock('@/store/chat/selectors', () => ({

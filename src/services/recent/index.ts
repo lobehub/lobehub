@@ -6,8 +6,9 @@ class RecentService {
     limit?: number,
     types?: RecentItem['type'][],
     withTopicPreview?: boolean,
+    mineOnly?: boolean,
   ): Promise<RecentItem[]> => {
-    return lambdaClient.recent.getAll.query({ limit, types, withTopicPreview });
+    return lambdaClient.recent.getAll.query({ limit, mineOnly, types, withTopicPreview });
   };
 }
 

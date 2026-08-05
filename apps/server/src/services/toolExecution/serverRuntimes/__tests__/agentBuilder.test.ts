@@ -173,6 +173,34 @@ describe('agentBuilderRuntime', () => {
         success: true,
       });
     });
+
+    it('applies metadata nested under config instead of reporting a successful no-op', async () => {
+      mockGetAgentConfigById.mockResolvedValue({ id: 'agent-1', plugins: [] });
+
+      const runtime = createRuntime();
+      const params = {
+        config: {
+          meta: {
+            avatar: '🤖',
+            title: 'GitHub PR/Issue Manager',
+          },
+        },
+      } as unknown as Parameters<typeof runtime.updateConfig>[0];
+      const result = await runtime.updateConfig(params, {
+        editingAgentId: 'agent-1',
+        toolManifestMap: {},
+      });
+
+      expect(result).toMatchObject({
+        state: { agentId: 'agent-1', success: true },
+        success: true,
+      });
+      expect(mockUpdateAgent).toHaveBeenCalledWith('agent-1', {
+        avatar: '🤖',
+        title: 'GitHub PR/Issue Manager',
+      });
+      expect(mockUpdateConfig).not.toHaveBeenCalled();
+    });
   });
 
   describe('updatePrompt', () => {

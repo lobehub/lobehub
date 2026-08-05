@@ -1,11 +1,11 @@
 'use client';
 
 import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
-import { Drawer } from 'antd';
-import { cssVar } from 'antd-style';
+import { DrawerPopup, DrawerPortal, DrawerRoot } from '@lobehub/ui/base-ui';
+import { createStaticStyles } from 'antd-style';
 import { XIcon } from 'lucide-react';
-import type { ReactNode, Ref } from 'react';
-import { cloneElement, isValidElement, memo, Suspense, useCallback, useState } from 'react';
+import type { ReactNode } from 'react';
+import { memo, Suspense, useEffect, useState } from 'react';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 
@@ -13,6 +13,30 @@ import SkeletonList from './components/SkeletonList';
 import { NAV_PANEL_RIGHT_DRAWER_ID } from './constants';
 import { OverlayContainerContext } from './OverlayContainer';
 import SideBarHeaderLayout from './SideBarHeaderLayout';
+
+const DRAWER_WIDTH = 280;
+
+// Stays under the base-ui floating tier (1100) so dropdowns and popovers raised
+// from inside the panel still paint above it.
+const DRAWER_Z_INDEX = 1000;
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  body: css`
+    overflow: hidden auto;
+    flex: 1;
+    min-height: 0;
+    background: ${cssVar.colorBgLayout};
+  `,
+  panel: css`
+    border-inline: 1px solid ${cssVar.colorBorderSecondary};
+    background: ${cssVar.colorBgLayout};
+    box-shadow: 4px 0 8px -2px rgb(0 0 0 / 4%);
+  `,
+  popup: css`
+    position: absolute;
+    overflow: hidden;
+  `,
+}));
 
 interface SideBarDrawerProps {
   action?: ReactNode;
@@ -23,79 +47,35 @@ interface SideBarDrawerProps {
   title?: ReactNode;
 }
 
-interface DrawerRenderNodeProps {
-  containerRef?: Ref<HTMLDivElement>;
-}
-
-const setRef = <T,>(ref: Ref<T> | undefined, value: T | null) => {
-  if (!ref) return;
-
-  if (typeof ref === 'function') {
-    ref(value);
-    return;
-  }
-
-  (ref as { current: T | null }).current = value;
-};
-
 const SideBarDrawer = memo<SideBarDrawerProps>(
   ({ subHeader, open, onClose, children, title, action }) => {
-    const size = 280;
-
     const [overlayContainer, setOverlayContainer] = useState<HTMLDivElement | null>(null);
+    const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null);
 
-    const renderDrawerContent = useCallback((node: ReactNode) => {
-      if (!isValidElement<DrawerRenderNodeProps>(node)) return node;
-
-      const originalContainerRef = node.props.containerRef;
-
-      // Intentionally hook rc-drawer's section ref so dropdown portals stay inside the real drawer content.
-      // eslint-disable-next-line @eslint-react/no-clone-element
-      return cloneElement(node, {
-        containerRef: (instance: HTMLDivElement | null) => {
-          setOverlayContainer((current) => (current === instance ? current : instance));
-          setRef(originalContainerRef, instance);
-        },
-      });
+    useEffect(() => {
+      setPortalContainer(document.querySelector<HTMLElement>(`#${NAV_PANEL_RIGHT_DRAWER_ID}`));
     }, []);
 
     return (
       <OverlayContainerContext value={overlayContainer}>
-        <Drawer
-          destroyOnHidden
-          closable={false}
-          drawerRender={renderDrawerContent}
-          getContainer={() => document.querySelector(`#${NAV_PANEL_RIGHT_DRAWER_ID}`)!}
-          mask={false}
+        <DrawerRoot
+          modal={false}
           open={open}
-          placement="left"
-          size={size}
-          rootStyle={{
-            bottom: 0,
-            overflow: 'hidden',
-            position: 'absolute',
-            top: 0,
-            width: `${size}px`,
+          zIndex={DRAWER_Z_INDEX}
+          onOpenChange={(nextOpen, eventDetails) => {
+            if (nextOpen || eventDetails.reason === 'outside-press') return;
+            onClose();
           }}
-          styles={{
-            body: {
-              background: cssVar.colorBgLayout,
-              padding: 0,
-            },
-            header: {
-              background: cssVar.colorBgLayout,
-              borderBottom: 'none',
-              padding: 0,
-            },
-            wrapper: {
-              borderLeft: `1px solid ${cssVar.colorBorderSecondary}`,
-              borderRight: `1px solid ${cssVar.colorBorderSecondary}`,
-              boxShadow: `4px 0 8px -2px rgba(0,0,0,.04)`,
-              zIndex: 0,
-            },
-          }}
-          title={
-            <>
+        >
+          <DrawerPortal container={portalContainer}>
+            <DrawerPopup
+              flush
+              className={styles.popup}
+              panelClassName={styles.panel}
+              placement={'left'}
+              ref={setOverlayContainer}
+              width={DRAWER_WIDTH}
+            >
               <SideBarHeaderLayout
                 showBack={false}
                 showTogglePanelButton={false}
@@ -126,20 +106,20 @@ const SideBarDrawer = memo<SideBarDrawerProps>(
                 }
               />
               {subHeader}
-            </>
-          }
-          onClose={onClose}
-        >
-          <Suspense
-            fallback={
-              <Flexbox gap={1} paddingBlock={1} paddingInline={4}>
-                <SkeletonList rows={3} />
-              </Flexbox>
-            }
-          >
-            {children}
-          </Suspense>
-        </Drawer>
+              <div className={styles.body}>
+                <Suspense
+                  fallback={
+                    <Flexbox gap={1} paddingBlock={1} paddingInline={4}>
+                      <SkeletonList rows={3} />
+                    </Flexbox>
+                  }
+                >
+                  {children}
+                </Suspense>
+              </div>
+            </DrawerPopup>
+          </DrawerPortal>
+        </DrawerRoot>
       </OverlayContainerContext>
     );
   },

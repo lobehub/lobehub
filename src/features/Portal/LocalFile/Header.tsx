@@ -26,6 +26,11 @@ const Header = memo(() => {
   const navigate = useWorkspaceAwareNavigate();
   const params = useParams<{ aid?: string; topicId?: string }>();
   const activeLocalFilePath = useChatStore(chatPortalSelectors.activeLocalFilePath);
+  // Sandbox-backed tabs point at paths inside the cloud sandbox, not the local
+  // filesystem — "show in system" would open an unrelated folder or fail.
+  const isSandboxFile = useChatStore(
+    (s) => !!chatPortalSelectors.currentLocalFile(s)?.sandboxTopicId,
+  );
   const [canGoBack, goBack, clearPortalStack] = useChatStore((s) => [
     chatPortalSelectors.canGoBack(s),
     s.goBack,
@@ -55,7 +60,7 @@ const Header = memo(() => {
       }
       right={
         <Fragment>
-          {isDesktop && activeLocalFilePath && (
+          {isDesktop && activeLocalFilePath && !isSandboxFile && (
             <ActionIcon
               icon={FolderOpen}
               size={DESKTOP_HEADER_ICON_SMALL_SIZE}

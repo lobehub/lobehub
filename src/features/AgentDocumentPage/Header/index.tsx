@@ -1,5 +1,6 @@
 'use client';
 
+import { agentDisplayName } from '@lobechat/types';
 import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
 import { DropdownMenu } from '@lobehub/ui/base-ui';
 import { cssVar, cx } from 'antd-style';
@@ -58,7 +59,7 @@ const Header = memo<HeaderProps>(
               onClick={onBack}
             >
               <Text style={{ color: cssVar.colorTextSecondary }}>
-                {meta.title || t('untitledAgent', { ns: 'chat' })}
+                {agentDisplayName(meta, t('untitledAgent', { ns: 'chat' }))}
               </Text>
             </Flexbox>
             <Text style={{ color: cssVar.colorTextQuaternary, flexShrink: 0 }}>/</Text>

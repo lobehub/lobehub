@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getMessengerTelegramConfig } from '@/config/messenger';
 import { createCallerFactory } from '@/libs/trpc/lambda';
 import { createContextInner } from '@/libs/trpc/lambda/context';
 
@@ -217,6 +218,18 @@ const buildSlackInstall = () => ({
   updatedAt: new Date('2026-05-06T00:00:00.000Z'),
 });
 
+const buildTelegramLink = () => ({
+  activeAgentId: 'agent-1',
+  applicationId: null,
+  createdAt: new Date('2026-07-16T08:19:53.630Z'),
+  id: 'telegram-link',
+  platform: 'telegram',
+  platformUserId: '8616838555',
+  tenantId: '',
+  userId: 'user-1',
+  workspaceId: null,
+});
+
 const createSelectBuilder = <T>(result: T) => {
   const builder = {
     from: vi.fn(() => builder),
@@ -245,6 +258,7 @@ describe('messengerRouter.listMyInstallations', () => {
     mockGetServerDB.mockResolvedValue(serverDB);
     mockInitWithEnvKey.mockResolvedValue({ kind: 'gatekeeper' });
     mockListAccountLinks.mockResolvedValue([]);
+    vi.mocked(getMessengerTelegramConfig).mockResolvedValue(null);
   });
 
   it('keeps active Slack installations visible', async () => {
@@ -319,6 +333,23 @@ describe('messengerRouter.listMyInstallations', () => {
         tenantId: 'wechat-user',
       }),
     ]);
+  });
+
+  // Telegram is an env/DB-backed singleton with no `messenger_installations`
+  // row, and it stays absent here on purpose: this procedure doubles as
+  // send-target discovery for the client tool adapter, which cannot act on a
+  // `messengerInstallationId` (LOBE-12706). Surfacing the singleton would let
+  // the model pick a target that then fails with `No enabled bot found for
+  // platform "telegram"`. Reaching the user themselves goes through
+  // `sendMessengerPush` and never consults this list.
+  it('omits Telegram even when the deployment is configured and the user has linked', async () => {
+    mockListByInstallerUserId.mockResolvedValue([]);
+    mockListAccountLinks.mockResolvedValue([buildTelegramLink()]);
+    vi.mocked(getMessengerTelegramConfig).mockResolvedValue({ botToken: 'tg-token' });
+
+    const caller = createCaller(await createContextInner({ userId: 'user-1' }));
+
+    expect(await caller.listMyInstallations()).toEqual([]);
   });
 });
 

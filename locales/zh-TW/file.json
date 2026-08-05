@@ -197,6 +197,8 @@
   "pageList.workspaceTitle": "工作區",
   "portal.openInPageEditor": "在文件中編輯",
   "preview.downloadFile": "下載檔案",
+  "preview.raw": "原始",
+  "preview.render": "預覽",
   "preview.unsupportedFileAndContact": "此檔案格式暫不支援線上預覽，如有預覽需求，歡迎<1>反饋給我們</1>",
   "resource": "資源",
   "resourceList.batchCopyDescription": "將選定的資源複製到另一個工作區。",

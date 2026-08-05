@@ -10,6 +10,21 @@ export {
   isRemoteHeterogeneousType,
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
 } from './config';
+export type {
+  HeteroErrorAttribution,
+  HeteroErrorCategory,
+  HeteroErrorKind,
+  HeteroErrorSeverity,
+  HeteroErrorSpec,
+  HeteroGuideCode,
+} from './errors';
+export {
+  formatHeteroErrorId,
+  getHeteroErrorSpec,
+  HETERO_CATEGORY_NUMERIC_PREFIX,
+  HETERO_ERROR_SPECS,
+  isUserSideHeteroError,
+} from './errors';
 export { HETEROGENEOUS_TYPE_LABELS } from './labels';
 export type {
   CreateAssistantIntent,

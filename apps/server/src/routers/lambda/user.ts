@@ -191,6 +191,7 @@ const userProcedure = authedProcedure.use(serverDatabase).use(async ({ ctx, next
       // only feed `getUserState`'s user-lifetime onboarding gates (hasConversation /
       // canEnablePWAGuide / canEnableTrace), which are per-user, not per-workspace.
       messageModel: new MessageModel(ctx.serverDB, ctx.userId),
+      createOnboardingService: () => new OnboardingService(ctx.serverDB, ctx.userId),
       sessionModel: new SessionModel(ctx.serverDB, ctx.userId),
       userModel: new UserModel(ctx.serverDB, ctx.userId),
     },
@@ -688,9 +689,7 @@ export const userRouter = router({
     }),
 
   resetAgentOnboarding: userProcedure.mutation(async ({ ctx }) => {
-    const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
-
-    return onboardingService.reset();
+    return ctx.createOnboardingService().reset();
   }),
 
   updateAgentOnboarding: userProcedure
@@ -700,7 +699,7 @@ export const userRouter = router({
     }),
 
   updateOnboarding: userProcedure.input(UserOnboardingSchema).mutation(async ({ ctx, input }) => {
-    return ctx.userModel.updateUser({ onboarding: input });
+    return ctx.createOnboardingService().updateOnboarding(input);
   }),
 
   updatePreference: userProcedure.input(UserPreferenceSchema).mutation(async ({ ctx, input }) => {

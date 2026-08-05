@@ -22,6 +22,7 @@
     "@lobechat/types": "workspace:*",
     "@lobechat/utils": "workspace:*",
     "random-words": "^2.0.1",
+    "remove-markdown": "^0.6.4",
     "ts-md5": "^2.0.1",
     "type-fest": "^5.7.0",
     "ws": "^8.21.0"

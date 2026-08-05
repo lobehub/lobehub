@@ -12,6 +12,9 @@ export const CONVERSATION_SPACER_TRANSITION_MS = 200;
 
 const SCROLL_SHRINK_END_DELAY_MS = 150;
 
+/** The one `scrollToPinned` reason that is allowed to animate — see `scrollToPinned`. */
+const SEND_SCROLL_REASON = 'send';
+
 // -------- pure helpers --------
 
 export const calculateConversationSpacerHeight = (
@@ -304,9 +307,15 @@ const usePinController = ({
         return;
       }
 
-      log('scrollToPinned (%s) index=%d', reason, pin.index);
+      // Only the initial send scroll animates. Settle re-pins fire while the
+      // content height is still changing (e.g. the workflow collapse at turn
+      // completion); a smooth scroll there is itself a visible slide, so the
+      // correction must land in the same frame to stay imperceptible.
+      const smooth = reason === SEND_SCROLL_REASON;
+
+      log('scrollToPinned (%s) index=%d smooth=%s', reason, pin.index, smooth);
       // pin.index is a message index; the header slot row shifts virtua rows.
-      scrollToIndex(pin.index + headerOffset, { align: 'start', smooth: true });
+      scrollToIndex(pin.index + headerOffset, { align: 'start', smooth });
     },
     [headerOffset, virtuaRef],
   );
@@ -524,7 +533,7 @@ export const useConversationScroll = ({
 
     // Scroll immediately. If virtuaRef isn't ready yet, the spacerLayoutVersion
     // bumps that follow mount+measurement will retry.
-    scrollToPinned('send');
+    scrollToPinned(SEND_SCROLL_REASON);
 
     requestAnimationFrame(() => {
       updateSpacerHeight();

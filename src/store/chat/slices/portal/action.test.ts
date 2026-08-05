@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { projectFileService } from '@/services/projectFile';
 import { useChatStore } from '@/store/chat';
+import { chatPortalSelectors } from '@/store/chat/selectors';
+import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 
 import { createLocalFileScopeKey, createLocalFileTabId } from './helpers';
 import { PortalViewType } from './initialState';
@@ -481,6 +483,97 @@ describe('chatDockSlice', () => {
         },
       ]);
       expect(result.current.activeLocalFilePath).toBe('/tmp/worktree-switcher-demo.html');
+    });
+
+    // Regression: sandbox tabs are visible in the current topic's cwd scope
+    // (the selector exempts them from the cwd match), so their activation must
+    // land in that scope — previously it landed in the empty-cwd scope and the
+    // portal kept showing the topic's previously active local file.
+    it('activates a sandbox tab within the current topic cwd scope', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: 'agent-1',
+          activeTopicId: 'topic-a',
+          topicDataMap: {
+            [topicMapKey({ agentId: 'agent-1' })]: {
+              currentPage: 1,
+              hasMore: false,
+              items: [{ id: 'topic-a', metadata: { workingDirectory: '/project-a' } }],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        } as never);
+      });
+
+      act(() => {
+        result.current.openLocalFile({
+          filePath: '/project-a/a.ts',
+          workingDirectory: '/project-a',
+        });
+      });
+
+      act(() => {
+        result.current.openLocalFile({
+          filePath: '/work/notes.md',
+          sandboxTopicId: 'topic-a',
+          workingDirectory: '',
+        });
+      });
+
+      expect(
+        result.current.activeLocalFileIdsByScope?.[createLocalFileScopeKey('/project-a')],
+      ).toBe(
+        createLocalFileTabId({
+          filePath: '/work/notes.md',
+          sandboxTopicId: 'topic-a',
+          workingDirectory: '',
+        }),
+      );
+    });
+
+    it('keeps per-topic sandbox activation when topics have no cwd', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        useChatStore.setState({ activeAgentId: 'agent-1', activeTopicId: 'topic-a' } as never);
+      });
+
+      act(() => {
+        result.current.openLocalFile({
+          filePath: '/work/a.md',
+          sandboxTopicId: 'topic-a',
+          workingDirectory: '',
+        });
+      });
+
+      act(() => {
+        useChatStore.setState({ activeTopicId: 'topic-b' } as never);
+      });
+
+      act(() => {
+        result.current.openLocalFile({
+          filePath: '/work/b.md',
+          sandboxTopicId: 'topic-b',
+          workingDirectory: '',
+        });
+      });
+
+      // Back in topic-a, its own sandbox tab must stay active even though the
+      // legacy global active id now points at topic-b's tab.
+      act(() => {
+        useChatStore.setState({ activeTopicId: 'topic-a' } as never);
+      });
+
+      expect(chatPortalSelectors.activeLocalFileId(useChatStore.getState())).toBe(
+        createLocalFileTabId({
+          filePath: '/work/a.md',
+          sandboxTopicId: 'topic-a',
+          workingDirectory: '',
+        }),
+      );
     });
 
     it('should keep same file path from different device context as separate tabs', () => {
@@ -970,6 +1063,57 @@ describe('chatDockSlice', () => {
       expect(result.current.openLocalFiles.map((f) => f.filePath)).toEqual([
         '/project-b/a.ts',
         '/project-a/b.ts',
+      ]);
+    });
+
+    it('groups sandbox tabs by serving topic when closing others in a cwd scope', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: 'agent-1',
+          activeTopicId: 'topic-a',
+          topicDataMap: {
+            [topicMapKey({ agentId: 'agent-1' })]: {
+              currentPage: 1,
+              hasMore: false,
+              items: [{ id: 'topic-a', metadata: { workingDirectory: '/project-a' } }],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        } as never);
+      });
+
+      act(() => {
+        result.current.openLocalFile({
+          filePath: '/project-a/a.ts',
+          workingDirectory: '/project-a',
+        });
+        result.current.openLocalFile({
+          filePath: '/work/notes.md',
+          sandboxTopicId: 'topic-a',
+          workingDirectory: '',
+        });
+        // Hidden in topic-a: served by another topic's sandbox.
+        result.current.openLocalFile({
+          filePath: '/work/other.md',
+          sandboxTopicId: 'topic-b',
+          workingDirectory: '',
+        });
+      });
+
+      act(() => {
+        result.current.closeOtherLocalFileTabs(
+          localFileTabId({ filePath: '/project-a/a.ts', workingDirectory: '/project-a' }),
+        );
+      });
+
+      // The visible sandbox tab (topic-a) closes with the scope; the hidden
+      // topic-b sandbox tab survives.
+      expect(result.current.openLocalFiles.map((f) => f.filePath)).toEqual([
+        '/project-a/a.ts',
+        '/work/other.md',
       ]);
     });
   });

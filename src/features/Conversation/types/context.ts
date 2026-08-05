@@ -30,6 +30,23 @@ export interface ConversationContext extends BaseConversationContext {
 export type ConversationMetadata<T = Record<string, any>> = T;
 
 /**
+ * Metadata passed alongside `onMessagesChange` so the handler can tell WHERE
+ * the messages came from.
+ *
+ * `source: 'fetch'` — a server snapshot delivered by the conversation SWR sync
+ * (cache hydration or revalidation completion), as opposed to an internal
+ * mutation (edit / delete / stream dispatch). Handlers forwarding into
+ * `ChatStore.replaceMessages` must pass this through as `source` so the SWR
+ * write-through skips it: re-writing the cache with the (possibly stale)
+ * snapshot while the mount-time revalidation is in flight trips SWR's mutation
+ * race guard, which discards the fresh result and locks the conversation on
+ * the stale list.
+ */
+export interface MessagesChangeMeta {
+  source: 'fetch';
+}
+
+/**
  * Common metadata types
  */
 export interface KnowledgeBaseMetadata {

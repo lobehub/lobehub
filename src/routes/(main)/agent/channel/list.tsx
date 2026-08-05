@@ -1,5 +1,6 @@
 'use client';
 
+import { agentDisplayName } from '@lobechat/types';
 import { Avatar, Block, Flexbox, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles, responsive, useTheme } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -120,7 +121,7 @@ const PlatformGrid = memo<PlatformGridProps>(
     const { t } = useTranslation(['agent', 'common']);
     const theme = useTheme();
     const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId), isEqual);
-    const agentName = meta.title || t('defaultSession', { ns: 'common' });
+    const agentName = agentDisplayName(meta, t('defaultSession', { ns: 'common' }));
 
     const getPlatformDescription = (id: string, name: string) => {
       switch (id) {

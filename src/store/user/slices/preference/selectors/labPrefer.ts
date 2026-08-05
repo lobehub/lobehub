@@ -12,6 +12,7 @@ export const labPreferSelectors = {
   enableArtifactDeployment: (s: UserState): boolean =>
     s.preference.lab?.enableArtifactDeployment ?? false,
   enableClaudeCodeSdk: (s: UserState): boolean => s.preference.lab?.enableClaudeCodeSdk ?? false,
+  enableCodexAppServer: (s: UserState): boolean => s.preference.lab?.enableCodexAppServer ?? false,
   enableHeteroSessionImport: (s: UserState): boolean =>
     s.preference.lab?.enableHeteroSessionImport ?? false,
   enableImessage: (s: UserState): boolean => s.preference.lab?.enableImessage ?? false,

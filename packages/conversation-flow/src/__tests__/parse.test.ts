@@ -269,6 +269,500 @@ describe('parse', () => {
       expect(ids.indexOf('first-question')).toBeLessThan(ids.indexOf('status-user'));
     });
 
+    it('should keep the branch containing the latest user turn after parallel tool continuations', () => {
+      const messages: Message[] = [
+        { content: 'root', createdAt: 0, id: 'root-user', role: 'user', updatedAt: 0 },
+        {
+          agentId: 'agent-1',
+          content: 'run tools in parallel',
+          createdAt: 1,
+          id: 'root-assistant',
+          parentId: 'root-user',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'inspect',
+              arguments: '{}',
+              id: 'call-active',
+              identifier: 'internal',
+              result_msg_id: 'tool-active',
+              type: 'default',
+            },
+            {
+              apiName: 'inspect',
+              arguments: '{}',
+              id: 'call-stale',
+              identifier: 'internal',
+              result_msg_id: 'tool-stale',
+              type: 'default',
+            },
+          ],
+          updatedAt: 1,
+        },
+        {
+          content: 'active tool result',
+          createdAt: 2,
+          id: 'tool-active',
+          parentId: 'root-assistant',
+          role: 'tool',
+          tool_call_id: 'call-active',
+          updatedAt: 2,
+        },
+        {
+          content: 'stale tool result',
+          createdAt: 3,
+          id: 'tool-stale',
+          parentId: 'root-assistant',
+          role: 'tool',
+          tool_call_id: 'call-stale',
+          updatedAt: 3,
+        },
+        {
+          agentId: 'agent-2',
+          content: 'active nested continuation',
+          createdAt: 4,
+          id: 'active-head',
+          parentId: 'tool-active',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'inspect',
+              arguments: '{}',
+              id: 'call-branch',
+              identifier: 'internal',
+              result_msg_id: 'tool-branch',
+              type: 'default',
+            },
+          ],
+          updatedAt: 4,
+        },
+        {
+          agentId: 'agent-2',
+          content: 'stale nested continuation',
+          createdAt: 5,
+          id: 'stale-head',
+          parentId: 'tool-stale',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'inspect',
+              arguments: '{}',
+              id: 'call-stale-nested',
+              identifier: 'internal',
+              result_msg_id: 'tool-stale-nested',
+              type: 'default',
+            },
+          ],
+          updatedAt: 5,
+        },
+        {
+          content: 'active nested result',
+          createdAt: 6,
+          id: 'tool-branch',
+          parentId: 'active-head',
+          role: 'tool',
+          tool_call_id: 'call-branch',
+          updatedAt: 6,
+        },
+        {
+          content: 'stale nested result',
+          createdAt: 7,
+          id: 'tool-stale-nested',
+          parentId: 'stale-head',
+          role: 'tool',
+          tool_call_id: 'call-stale-nested',
+          updatedAt: 7,
+        },
+        {
+          agentId: 'agent-2',
+          content: 'old continuation',
+          createdAt: 8,
+          id: 'old-continuation',
+          parentId: 'tool-branch',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'inspect',
+              arguments: '{}',
+              id: 'call-old',
+              identifier: 'internal',
+              result_msg_id: 'tool-old',
+              type: 'default',
+            },
+          ],
+          updatedAt: 8,
+        },
+        {
+          agentId: 'agent-2',
+          content: 'current continuation',
+          createdAt: 9,
+          id: 'current-continuation',
+          parentId: 'tool-branch',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'inspect',
+              arguments: '{}',
+              id: 'call-current',
+              identifier: 'internal',
+              result_msg_id: 'tool-current',
+              type: 'default',
+            },
+          ],
+          updatedAt: 9,
+        },
+        {
+          content: 'old result',
+          createdAt: 10,
+          id: 'tool-old',
+          parentId: 'old-continuation',
+          role: 'tool',
+          tool_call_id: 'call-old',
+          updatedAt: 10,
+        },
+        {
+          content: 'current result',
+          createdAt: 11,
+          id: 'tool-current',
+          parentId: 'current-continuation',
+          role: 'tool',
+          tool_call_id: 'call-current',
+          updatedAt: 11,
+        },
+        {
+          agentId: 'agent-2',
+          content: 'old branch answer',
+          createdAt: 12,
+          id: 'old-answer',
+          parentId: 'tool-old',
+          role: 'assistant',
+          updatedAt: 12,
+        },
+        {
+          agentId: 'agent-2',
+          content: '...',
+          createdAt: 13,
+          id: 'current-answer',
+          parentId: 'tool-current',
+          role: 'assistant',
+          updatedAt: 13,
+        },
+        {
+          agentId: 'agent-2',
+          content: 'stale parallel answer',
+          createdAt: 14,
+          id: 'stale-parallel-answer',
+          parentId: 'tool-stale-nested',
+          role: 'assistant',
+          updatedAt: 14,
+        },
+        {
+          content: 'current user request',
+          createdAt: 15,
+          id: 'current-user',
+          parentId: 'current-answer',
+          role: 'user',
+          updatedAt: 15,
+        },
+        {
+          agentId: 'agent-2',
+          content: '...',
+          createdAt: 16,
+          id: 'current-placeholder',
+          parentId: 'current-user',
+          role: 'assistant',
+          updatedAt: 16,
+        },
+      ];
+
+      const result = parse(messages);
+      const ids = result.flatList.map((message) => message.id);
+
+      expect(ids).toContain('current-user');
+      expect(ids.indexOf('stale-head')).toBeLessThan(ids.indexOf('current-user'));
+      expect(ids.at(-1)).toBe('current-placeholder');
+
+      expect(result.contextTree.map((node) => node.id)).toEqual([
+        'root-user',
+        'root-assistant',
+        'active-head',
+        'current-user',
+        'current-placeholder',
+      ]);
+      expect(result.contextTree.find((node) => node.id === 'active-head')).toMatchObject({
+        children: [{ id: 'active-head' }, { id: 'current-continuation' }, { id: 'current-answer' }],
+        type: 'assistantGroup',
+      });
+    });
+
+    it('should resolve same-agent continuations across tool parents by the latest user branch', () => {
+      const messages: Message[] = [
+        { content: 'root', createdAt: 0, id: 'root-user', role: 'user', updatedAt: 0 },
+        {
+          agentId: 'agent-1',
+          content: 'run tools in parallel',
+          createdAt: 1,
+          id: 'root-assistant',
+          parentId: 'root-user',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'inspect',
+              arguments: '{}',
+              id: 'call-active',
+              identifier: 'internal',
+              result_msg_id: 'tool-active',
+              type: 'default',
+            },
+            {
+              apiName: 'inspect',
+              arguments: '{}',
+              id: 'call-stale',
+              identifier: 'internal',
+              result_msg_id: 'tool-stale',
+              type: 'default',
+            },
+          ],
+          updatedAt: 1,
+        },
+        {
+          content: 'active tool result',
+          createdAt: 2,
+          id: 'tool-active',
+          parentId: 'root-assistant',
+          role: 'tool',
+          tool_call_id: 'call-active',
+          updatedAt: 2,
+        },
+        {
+          content: 'stale tool result',
+          createdAt: 3,
+          id: 'tool-stale',
+          parentId: 'root-assistant',
+          role: 'tool',
+          tool_call_id: 'call-stale',
+          updatedAt: 3,
+        },
+        {
+          agentId: 'agent-1',
+          content: 'stale continuation',
+          createdAt: 4,
+          id: 'stale-continuation',
+          parentId: 'tool-stale',
+          role: 'assistant',
+          updatedAt: 4,
+        },
+        {
+          agentId: 'agent-1',
+          content: 'active continuation',
+          createdAt: 5,
+          id: 'active-continuation',
+          parentId: 'tool-active',
+          role: 'assistant',
+          updatedAt: 5,
+        },
+        {
+          content: 'current user request',
+          createdAt: 6,
+          id: 'current-user',
+          parentId: 'active-continuation',
+          role: 'user',
+          updatedAt: 6,
+        },
+        {
+          agentId: 'agent-1',
+          content: '...',
+          createdAt: 7,
+          id: 'current-placeholder',
+          parentId: 'current-user',
+          role: 'assistant',
+          updatedAt: 7,
+        },
+      ];
+
+      const result = parse(messages);
+
+      expect(result.flatList.map((message) => message.id)).toEqual([
+        'root-user',
+        'root-assistant',
+        'current-user',
+        'current-placeholder',
+      ]);
+
+      expect(result.contextTree.map((node) => node.id)).toEqual([
+        'root-user',
+        'root-assistant',
+        'current-user',
+        'current-placeholder',
+      ]);
+      expect(result.contextTree.find((node) => node.id === 'root-assistant')).toMatchObject({
+        children: [{ id: 'root-assistant' }, { id: 'active-continuation' }],
+        type: 'assistantGroup',
+      });
+    });
+
+    it('should hide previous continuations while an optimistic branch is being created', () => {
+      const messages: Message[] = [
+        { content: 'root', createdAt: 0, id: 'root-user', role: 'user', updatedAt: 0 },
+        {
+          agentId: 'agent-1',
+          content: 'run a tool',
+          createdAt: 1,
+          id: 'root-assistant',
+          metadata: { activeBranchIndex: 2 },
+          parentId: 'root-user',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'inspect',
+              arguments: '{}',
+              id: 'call-1',
+              identifier: 'internal',
+              result_msg_id: 'tool-1',
+              type: 'default',
+            },
+          ],
+          updatedAt: 1,
+        },
+        {
+          content: 'tool result',
+          createdAt: 2,
+          id: 'tool-1',
+          parentId: 'root-assistant',
+          role: 'tool',
+          tool_call_id: 'call-1',
+          updatedAt: 2,
+        },
+        {
+          agentId: 'agent-1',
+          content: 'old continuation',
+          createdAt: 3,
+          id: 'old-continuation',
+          parentId: 'root-assistant',
+          role: 'assistant',
+          updatedAt: 3,
+        },
+        {
+          agentId: 'agent-1',
+          content: 'current continuation',
+          createdAt: 4,
+          id: 'current-continuation',
+          parentId: 'root-assistant',
+          role: 'assistant',
+          updatedAt: 4,
+        },
+      ];
+
+      const result = parse(messages);
+
+      expect(result.flatList.map((message) => message.id)).toEqual(['root-user', 'root-assistant']);
+      expect(result.flatList[1]).toMatchObject({
+        children: [{ id: 'root-assistant' }],
+        role: 'assistantGroup',
+      });
+      expect(result.contextTree).toMatchObject([
+        { id: 'root-user', type: 'message' },
+        { children: [{ id: 'root-assistant' }], id: 'root-assistant', type: 'assistantGroup' },
+      ]);
+    });
+
+    it('should resolve post-tool continuations in the non-tool branch index space', () => {
+      const messages: Message[] = [
+        { content: 'root', createdAt: 0, id: 'root-user', role: 'user', updatedAt: 0 },
+        {
+          agentId: 'agent-1',
+          content: 'run tools',
+          createdAt: 1,
+          id: 'root-assistant',
+          metadata: { activeBranchIndex: 1 },
+          parentId: 'root-user',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'inspect',
+              arguments: '{}',
+              id: 'call-1',
+              identifier: 'internal',
+              result_msg_id: 'tool-1',
+              type: 'default',
+            },
+            {
+              apiName: 'inspect',
+              arguments: '{}',
+              id: 'call-2',
+              identifier: 'internal',
+              result_msg_id: 'tool-2',
+              type: 'default',
+            },
+          ],
+          updatedAt: 1,
+        },
+        {
+          content: 'first tool result',
+          createdAt: 2,
+          id: 'tool-1',
+          parentId: 'root-assistant',
+          role: 'tool',
+          tool_call_id: 'call-1',
+          updatedAt: 2,
+        },
+        {
+          content: 'second tool result',
+          createdAt: 3,
+          id: 'tool-2',
+          parentId: 'root-assistant',
+          role: 'tool',
+          tool_call_id: 'call-2',
+          updatedAt: 3,
+        },
+        {
+          content: 'old first tool continuation',
+          createdAt: 4,
+          id: 'tool-user-1',
+          parentId: 'tool-1',
+          role: 'user',
+          updatedAt: 4,
+        },
+        {
+          content: 'old second tool continuation',
+          createdAt: 5,
+          id: 'tool-user-2',
+          parentId: 'tool-2',
+          role: 'user',
+          updatedAt: 5,
+        },
+        {
+          content: 'first direct branch',
+          createdAt: 6,
+          id: 'direct-user-1',
+          parentId: 'root-assistant',
+          role: 'user',
+          updatedAt: 6,
+        },
+        {
+          content: 'active direct branch',
+          createdAt: 7,
+          id: 'direct-user-2',
+          parentId: 'root-assistant',
+          role: 'user',
+          updatedAt: 7,
+        },
+      ];
+
+      const result = parse(messages);
+
+      expect(result.flatList.map((message) => message.id)).toEqual([
+        'root-user',
+        'root-assistant',
+        'direct-user-2',
+      ]);
+      expect(result.contextTree.map((node) => node.id)).toEqual([
+        'root-user',
+        'root-assistant',
+        'direct-user-2',
+      ]);
+    });
+
     it('should interleave continuations from sibling tool results by child creation time', () => {
       const time = (seconds: number) =>
         new Date(`2026-01-01T00:01:${String(seconds).padStart(2, '0')}.000Z`).getTime();

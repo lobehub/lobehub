@@ -10,6 +10,11 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import { TaskService } from './index';
 
+const { cancelScheduled, scheduleNextTopic } = vi.hoisted(() => ({
+  cancelScheduled: vi.fn(),
+  scheduleNextTopic: vi.fn(),
+}));
+
 vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn(),
 }));
@@ -36,6 +41,10 @@ vi.mock('@/server/services/aiAgent', () => ({
   AiAgentService: vi.fn().mockImplementation(() => ({
     interruptTask: vi.fn(),
   })),
+}));
+
+vi.mock('@/server/services/taskScheduler', () => ({
+  createTaskSchedulerModule: () => ({ cancelScheduled, scheduleNextTopic }),
 }));
 
 // Attachment resolver hits FileModel + DocumentService + FileService — stub it
@@ -94,6 +103,8 @@ describe('TaskService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    cancelScheduled.mockResolvedValue(undefined);
+    scheduleNextTopic.mockResolvedValue('tick-new');
     mockTaskTopicModel.findRunningByTaskIds.mockResolvedValue([]);
     (AgentModel as any).mockImplementation(() => mockAgentModel);
     (TaskModel as any).mockImplementation(() => mockTaskModel);
@@ -1095,6 +1106,7 @@ describe('TaskService', () => {
         assigneeAgentId: null,
         assigneeUserId: null,
         createdAt: null,
+        context: { scheduler: { scheduledAt: '2024-01-01T12:00:05.000Z' } },
         description: null,
         error: null,
         heartbeatInterval: 30,
@@ -1127,6 +1139,7 @@ describe('TaskService', () => {
       expect(result?.heartbeat).toEqual({
         interval: 30,
         lastAt: '2024-01-01T12:00:00.000Z',
+        scheduledAt: '2024-01-01T12:00:05.000Z',
         timeout: 60,
       });
     });
@@ -1372,16 +1385,94 @@ describe('TaskService', () => {
       expect(mockTaskModel.updateContext).not.toHaveBeenCalled();
     });
 
-    it('does NOT stamp for heartbeat-mode tasks', async () => {
-      const prev = baseTask({ status: 'backlog', automationMode: 'heartbeat' });
-      const next = baseTask({ status: 'scheduled', automationMode: 'heartbeat' });
+    it('seeds the first heartbeat tick when a user starts a heartbeat schedule', async () => {
+      const prev = baseTask({
+        automationMode: 'heartbeat',
+        context: {},
+        heartbeatInterval: 3600,
+        status: 'backlog',
+      });
+      const next = baseTask({
+        automationMode: 'heartbeat',
+        heartbeatInterval: 3600,
+        status: 'scheduled',
+      });
       mockTaskModel.resolve.mockResolvedValue(prev);
       mockTaskModel.updateStatus.mockResolvedValue(next);
 
       const service = new TaskService(db, userId);
       await service.updateStatus({ id: 'T-1', status: 'scheduled' as any });
 
-      expect(mockTaskModel.updateContext).not.toHaveBeenCalled();
+      expect(scheduleNextTopic).toHaveBeenCalledWith({
+        delay: 3600,
+        taskId: 'task-1',
+        tickToken: expect.any(String),
+        userId,
+      });
+      expect(mockTaskModel.updateContext).toHaveBeenCalledWith('task-1', {
+        scheduler: {
+          consecutiveFailures: 0,
+          scheduledAt: expect.any(String),
+          tickMessageId: 'tick-new',
+          tickToken: expect.any(String),
+        },
+      });
+    });
+
+    it('replaces a stale heartbeat tick when a user restarts the schedule', async () => {
+      const prev = baseTask({
+        automationMode: 'heartbeat',
+        context: { scheduler: { consecutiveFailures: 2, tickMessageId: 'tick-old' } },
+        heartbeatInterval: 3600,
+        status: 'paused',
+      });
+      const next = baseTask({
+        automationMode: 'heartbeat',
+        heartbeatInterval: 3600,
+        status: 'scheduled',
+      });
+      mockTaskModel.resolve.mockResolvedValue(prev);
+      mockTaskModel.updateStatus.mockResolvedValue(next);
+
+      const service = new TaskService(db, userId);
+      await service.updateStatus({ id: 'T-1', status: 'scheduled' as any });
+
+      expect(cancelScheduled).toHaveBeenCalledWith('tick-old');
+      expect(mockTaskModel.updateContext).toHaveBeenCalledWith(
+        'task-1',
+        expect.objectContaining({
+          scheduler: expect.objectContaining({ consecutiveFailures: 2, tickMessageId: 'tick-new' }),
+        }),
+      );
+    });
+
+    it('restores the previous status when the first heartbeat tick cannot be published', async () => {
+      const prev = baseTask({
+        automationMode: 'heartbeat',
+        context: {},
+        heartbeatInterval: 3600,
+        status: 'paused',
+      });
+      const next = baseTask({
+        automationMode: 'heartbeat',
+        heartbeatInterval: 3600,
+        status: 'scheduled',
+      });
+      mockTaskModel.resolve.mockResolvedValue(prev);
+      mockTaskModel.updateStatus.mockResolvedValue(next);
+      scheduleNextTopic.mockRejectedValueOnce(new Error('qstash unavailable'));
+
+      const service = new TaskService(db, userId);
+
+      await expect(service.updateStatus({ id: 'T-1', status: 'scheduled' as any })).rejects.toThrow(
+        'qstash unavailable',
+      );
+      expect(mockTaskModel.updateStatus).toHaveBeenNthCalledWith(1, 'task-1', 'scheduled', {});
+      expect(mockTaskModel.updateStatus).toHaveBeenNthCalledWith(2, 'task-1', 'paused');
+      expect(mockTaskModel.updateContext).toHaveBeenCalledWith('task-1', {
+        scheduler: { tickToken: expect.any(String) },
+      });
+      expect(mockTaskModel.update).toHaveBeenCalledWith('task-1', { context: {} });
     });
 
     it('does NOT stamp when the new status is not scheduled', async () => {

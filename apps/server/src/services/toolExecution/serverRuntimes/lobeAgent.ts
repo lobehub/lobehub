@@ -1,18 +1,19 @@
 import type {
+  AnalyzeMediaParams,
   CallSubAgentParams,
-  VisualFileItem,
-  VisualSourceMessage,
+  MediaFileItem,
+  MediaSourceMessage,
 } from '@lobechat/builtin-tool-lobe-agent';
 import {
-  buildAnalyzeVisualMediaContent,
-  createUrlVisualFileItems,
-  createVisualFileItems,
-  formatVisualMediaUrlValidationError,
-  hasUserVisualFiles,
+  buildAnalyzeMediaContent,
+  createMediaFileItems,
+  createUrlMediaFileItems,
+  formatMediaUrlValidationError,
+  hasUserMediaFiles,
   LobeAgentIdentifier,
-  normalizeAnalyzeVisualMediaInput,
-  selectVisualFileItems,
-  validateVisualMediaUrls,
+  normalizeAnalyzeMediaInput,
+  selectMediaFileItems,
+  validateMediaUrls,
 } from '@lobechat/builtin-tool-lobe-agent';
 import { PlanExecutionRuntime } from '@lobechat/builtin-tool-lobe-agent/planRuntime';
 import { UserInteractionExecutionRuntime } from '@lobechat/builtin-tool-user-interaction/executionRuntime';
@@ -30,12 +31,6 @@ import { FileService } from '@/server/services/file';
 import type { ToolExecutionContext } from '../types';
 import { createServerPlanRuntimeService } from './lobeAgentPlan';
 import type { ServerRuntimeRegistration } from './types';
-
-interface AnalyzeVisualMediaParams {
-  question: string;
-  refs?: string[];
-  urls?: string[];
-}
 
 interface LobeAgentRuntimeContext {
   agentId?: string | null;
@@ -71,7 +66,7 @@ const getModelAbilities = async (model: string, provider: string) => {
   )?.abilities;
 };
 
-interface ServerVisualSourceMessage extends VisualSourceMessage {
+interface ServerMediaSourceMessage extends MediaSourceMessage {
   agentId?: string | null;
   groupId?: string | null;
   sessionId?: string | null;
@@ -122,20 +117,33 @@ class LobeAgentExecutionRuntime {
 
   // ==================== Plan / Todo (delegated to PlanExecutionRuntime) ====================
 
-  createPlan = (params: any) =>
-    this.planRuntime.createPlan(params, { messageId: this.messageId, topicId: this.topicId });
+  /**
+   * Todo APIs read their prior state from `ctx.currentTodos` (rebuilt from
+   * message history by the runtime executors). Without it the runtime falls back
+   * to the topic's plan document, which only exists once `createPlan` has run —
+   * so a plain `createTodos` → `updateTodos` sequence would see an empty list,
+   * drop every index-based operation, and answer "No operations applied.".
+   */
+  private planContext = (ctx?: ToolExecutionContext) => ({
+    currentTodos: ctx?.currentTodos,
+    messageId: this.messageId,
+    topicId: this.topicId,
+  });
 
-  updatePlan = (params: any) =>
-    this.planRuntime.updatePlan(params, { messageId: this.messageId, topicId: this.topicId });
+  createPlan = (params: any, ctx?: ToolExecutionContext) =>
+    this.planRuntime.createPlan(params, this.planContext(ctx));
 
-  createTodos = (params: any) =>
-    this.planRuntime.createTodos(params, { messageId: this.messageId, topicId: this.topicId });
+  updatePlan = (params: any, ctx?: ToolExecutionContext) =>
+    this.planRuntime.updatePlan(params, this.planContext(ctx));
 
-  updateTodos = (params: any) =>
-    this.planRuntime.updateTodos(params, { messageId: this.messageId, topicId: this.topicId });
+  createTodos = (params: any, ctx?: ToolExecutionContext) =>
+    this.planRuntime.createTodos(params, this.planContext(ctx));
 
-  clearTodos = (params: any) =>
-    this.planRuntime.clearTodos(params, { messageId: this.messageId, topicId: this.topicId });
+  updateTodos = (params: any, ctx?: ToolExecutionContext) =>
+    this.planRuntime.updateTodos(params, this.planContext(ctx));
+
+  clearTodos = (params: any, ctx?: ToolExecutionContext) =>
+    this.planRuntime.clearTodos(params, this.planContext(ctx));
 
   // ==================== Sub-agent (async suspend/resume) ====================
 
@@ -201,7 +209,7 @@ class LobeAgentExecutionRuntime {
 
   private queryScopeMessages = (
     messageModel: MessageModel,
-    sourceMessage: ServerVisualSourceMessage,
+    sourceMessage: ServerMediaSourceMessage,
     postProcessUrl: (
       path: string | null,
       file: { fileType: string; id?: string | null },
@@ -236,16 +244,14 @@ class LobeAgentExecutionRuntime {
     return Promise.resolve([sourceMessage]);
   };
 
-  analyzeVisualMedia = async (
-    params: AnalyzeVisualMediaParams,
-  ): Promise<BuiltinServerRuntimeOutput> => {
-    const provider = toolsEnv.VISUAL_UNDERSTANDING_PROVIDER;
-    const model = toolsEnv.VISUAL_UNDERSTANDING_MODEL;
+  analyzeMedia = async (params: AnalyzeMediaParams): Promise<BuiltinServerRuntimeOutput> => {
+    const provider = toolsEnv.MULTIMODAL_UNDERSTANDING_PROVIDER;
+    const model = toolsEnv.MULTIMODAL_UNDERSTANDING_MODEL;
 
     if (!provider || !model) {
       return buildError(
-        'Visual understanding is not configured. Set VISUAL_UNDERSTANDING_PROVIDER and VISUAL_UNDERSTANDING_MODEL.',
-        'VISUAL_UNDERSTANDING_NOT_CONFIGURED',
+        'Multimodal understanding is not configured. Set MULTIMODAL_UNDERSTANDING_PROVIDER and MULTIMODAL_UNDERSTANDING_MODEL.',
+        'MULTIMODAL_UNDERSTANDING_NOT_CONFIGURED',
       );
     }
 
@@ -253,24 +259,24 @@ class LobeAgentExecutionRuntime {
       return buildError('question is required.', 'INVALID_ARGUMENTS');
     }
 
-    const { requestedRefs, requestedUrls } = normalizeAnalyzeVisualMediaInput(
+    const { requestedRefs, requestedUrls } = normalizeAnalyzeMediaInput(
       params as unknown as Record<PropertyKey, unknown>,
     );
     if (requestedRefs.length === 0 && requestedUrls.length === 0) {
       return buildError(
-        'Either refs or urls is required and must include at least one visual file ref or media URL.',
+        'Either refs or urls is required and must include at least one media file ref or media URL.',
         'INVALID_ARGUMENTS',
       );
     }
 
-    const urlValidation = validateVisualMediaUrls(requestedUrls);
-    const urlValidationError = formatVisualMediaUrlValidationError(urlValidation);
+    const urlValidation = validateMediaUrls(requestedUrls);
+    const urlValidationError = formatMediaUrlValidationError(urlValidation);
     if (urlValidationError) {
-      return buildError(urlValidationError, 'UNSUPPORTED_VISUAL_MEDIA_URLS');
+      return buildError(urlValidationError, 'UNSUPPORTED_MEDIA_URLS');
     }
 
-    const selectedUrlItems = createUrlVisualFileItems(urlValidation.validUrls);
-    let selectedRefItems: VisualFileItem[] = [];
+    const selectedUrlItems = createUrlMediaFileItems(urlValidation.validUrls);
+    let selectedRefItems: MediaFileItem[] = [];
 
     if (requestedRefs.length > 0) {
       const fileService = new FileService(this.db, this.userId, this.workspaceId);
@@ -283,13 +289,13 @@ class LobeAgentExecutionRuntime {
         postProcessUrl,
       });
 
-      const visualMessages = sourceMessage
+      const mediaMessages = sourceMessage
         ? await this.queryScopeMessages(messageModel, sourceMessage, postProcessUrl)
         : [];
-      const orderedVisualMessages = [
-        ...(sourceMessage && hasUserVisualFiles(sourceMessage) ? [sourceMessage] : []),
-        ...visualMessages.filter(
-          (message) => message.id !== sourceMessage?.id && hasUserVisualFiles(message),
+      const orderedMediaMessages = [
+        ...(sourceMessage && hasUserMediaFiles(sourceMessage) ? [sourceMessage] : []),
+        ...mediaMessages.filter(
+          (message) => message.id !== sourceMessage?.id && hasUserMediaFiles(message),
         ),
       ];
 
@@ -300,26 +306,23 @@ class LobeAgentExecutionRuntime {
         );
       }
 
-      const visualItems = orderedVisualMessages.flatMap((message) =>
-        createVisualFileItems(message, message.imageList, message.videoList),
+      const mediaItems = orderedMediaMessages.flatMap((message) =>
+        createMediaFileItems(message, message.imageList, message.videoList, message.audioList),
       );
 
-      if (visualItems.length === 0) {
-        return buildError(
-          'No visual files are attached to the current message.',
-          'NO_VISUAL_FILES',
-        );
+      if (mediaItems.length === 0) {
+        return buildError('No media files are attached to the current message.', 'NO_MEDIA_FILES');
       }
 
-      const { availableRefs, invalidRefs, selected } = selectVisualFileItems(
-        visualItems,
+      const { availableRefs, invalidRefs, selected } = selectMediaFileItems(
+        mediaItems,
         requestedRefs,
       );
 
       if (invalidRefs.length > 0) {
         return buildError(
-          `Unknown visual file refs: ${invalidRefs.join(', ')}. Available refs: ${availableRefs.join(', ')}.`,
-          'UNKNOWN_VISUAL_FILE_REFS',
+          `Unknown media file refs: ${invalidRefs.join(', ')}. Available refs: ${availableRefs.join(', ')}.`,
+          'UNKNOWN_MEDIA_FILE_REFS',
         );
       }
 
@@ -329,24 +332,32 @@ class LobeAgentExecutionRuntime {
     const selectedItems = [...selectedRefItems, ...selectedUrlItems];
 
     if (selectedItems.length === 0) {
-      return buildError('No visual files selected.', 'NO_VISUAL_FILES_SELECTED');
+      return buildError('No media files selected.', 'NO_MEDIA_FILES_SELECTED');
     }
 
     const abilities = await getModelAbilities(model, provider);
+    const hasAudios = selectedItems.some((item) => item.type === 'audio');
     const hasImages = selectedItems.some((item) => item.type === 'image');
     const hasVideos = selectedItems.some((item) => item.type === 'video');
 
+    if (hasAudios && abilities?.audio === false) {
+      return buildError(
+        `Configured multimodal understanding model "${provider}/${model}" does not support audio understanding.`,
+        'MULTIMODAL_MODEL_AUDIO_UNSUPPORTED',
+      );
+    }
+
     if (hasImages && abilities?.vision === false) {
       return buildError(
-        `Configured visual understanding model "${provider}/${model}" does not support image vision.`,
-        'VISUAL_MODEL_IMAGE_UNSUPPORTED',
+        `Configured multimodal understanding model "${provider}/${model}" does not support image vision.`,
+        'MULTIMODAL_MODEL_IMAGE_UNSUPPORTED',
       );
     }
 
     if (hasVideos && abilities?.video === false) {
       return buildError(
-        `Configured visual understanding model "${provider}/${model}" does not support video understanding.`,
-        'VISUAL_MODEL_VIDEO_UNSUPPORTED',
+        `Configured multimodal understanding model "${provider}/${model}" does not support video understanding.`,
+        'MULTIMODAL_MODEL_VIDEO_UNSUPPORTED',
       );
     }
 
@@ -356,7 +367,7 @@ class LobeAgentExecutionRuntime {
     const payload = {
       messages: [
         {
-          content: buildAnalyzeVisualMediaContent(selectedItems, params.question),
+          content: buildAnalyzeMediaContent(selectedItems, params.question),
           role: 'user' as const,
         },
       ],
@@ -377,7 +388,7 @@ class LobeAgentExecutionRuntime {
         },
       },
       metadata: {
-        trigger: RequestTrigger.VisualAnalysis,
+        trigger: RequestTrigger.MultimodalAnalysis,
       },
     });
 
@@ -389,7 +400,7 @@ class LobeAgentExecutionRuntime {
         files: selectedItems.map(({ ref, id, type, name }) => ({ id, name, ref, type })),
         model,
         provider,
-        trigger: RequestTrigger.VisualAnalysis,
+        trigger: RequestTrigger.MultimodalAnalysis,
         usage,
       },
       success: true,

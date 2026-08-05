@@ -1,4 +1,67 @@
-import type { NotificationSettings } from '@lobechat/types';
+import type {
+  IMNotificationChannelSettings,
+  IMPlatformNotificationSettings,
+  NotificationChannelSettings,
+  NotificationSettings,
+} from '@lobechat/types';
+
+/**
+ * Merge one channel-settings patch over the stored value, keeping sibling
+ * `items` categories and leaves intact.
+ */
+const mergeChannelSettings = (
+  current: NotificationChannelSettings | undefined,
+  patch: NotificationChannelSettings,
+): NotificationChannelSettings => {
+  const mergedItems: Record<string, Record<string, boolean>> = {
+    ...current?.items,
+    ...patch.items,
+  };
+  const items = patch.items
+    ? Object.fromEntries(
+        Object.keys(mergedItems).map((category) => [
+          category,
+          { ...current?.items?.[category], ...mergedItems[category] },
+        ]),
+      )
+    : current?.items;
+  return {
+    ...current,
+    ...patch,
+    ...(items ? { items } : {}),
+  };
+};
+
+/**
+ * The `im` channel nests per-platform channel settings — merge each patched
+ * platform with the same channel-level semantics so toggling one platform's
+ * switch never wipes that platform's other toggles or its sibling platforms.
+ */
+const mergeIMSettings = (
+  current: IMNotificationChannelSettings | undefined,
+  patch: IMNotificationChannelSettings,
+): IMNotificationChannelSettings => {
+  const platforms = patch.platforms
+    ? (Object.fromEntries(
+        Object.keys({ ...current?.platforms, ...patch.platforms })
+          .map((platform) => {
+            const platformPatch = patch.platforms?.[platform];
+            return [
+              platform,
+              platformPatch
+                ? mergeChannelSettings(current?.platforms?.[platform], platformPatch)
+                : current?.platforms?.[platform],
+            ] as const;
+          })
+          .filter(([, value]) => value !== undefined),
+      ) as Record<string, IMPlatformNotificationSettings>)
+    : current?.platforms;
+  return {
+    ...current,
+    ...patch,
+    ...(platforms ? { platforms } : {}),
+  };
+};
 
 /**
  * Merge a notification-settings patch over the stored bag without dropping
@@ -17,25 +80,12 @@ export const mergeNotificationSettings = (
   const next: NotificationSettings = { ...current };
   for (const [channel, channelPatch] of Object.entries(patch)) {
     if (!channelPatch) continue;
-    const key = channel as keyof NotificationSettings;
-    const currentChannel = next[key];
-    const mergedItems: Record<string, Record<string, boolean>> = {
-      ...currentChannel?.items,
-      ...channelPatch.items,
-    };
-    const items = channelPatch.items
-      ? Object.fromEntries(
-          Object.keys(mergedItems).map((category) => [
-            category,
-            { ...currentChannel?.items?.[category], ...mergedItems[category] },
-          ]),
-        )
-      : currentChannel?.items;
-    next[key] = {
-      ...currentChannel,
-      ...channelPatch,
-      ...(items ? { items } : {}),
-    };
+    if (channel === 'im') {
+      next.im = mergeIMSettings(next.im, channelPatch as IMNotificationChannelSettings);
+      continue;
+    }
+    const key = channel as keyof Omit<NotificationSettings, 'im'>;
+    next[key] = mergeChannelSettings(next[key], channelPatch as NotificationChannelSettings);
   }
   return next;
 };

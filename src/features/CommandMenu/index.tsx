@@ -133,8 +133,9 @@ const CommandMenuContent = memo<CommandMenuContentProps>(({ isClosing, onClose }
           <Command.List ref={listRef}>
             {/* Hide cmdk's Empty when we have search results or are loading them,
                since force-mounted items aren't counted by cmdk's internal filter.
-               The unfiltered search view also always renders the permanent
-               marketplace entries, so it is never truly empty. */}
+               The unfiltered search view also renders the marketplace fallback
+               entries whenever the search settles with no results, so it is
+               never truly empty. */}
             {!(
               hasSearch &&
               (searchResults.length > 0 ||

@@ -1,49 +1,24 @@
 'use client';
 
-import { Flexbox, Icon, Text } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
-import { Check, PenLine } from 'lucide-react';
+import { Flexbox, Text } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
 import type { AskUserQuestionItem } from './types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  // Codex-style flat summary: the question keeps the body text color and the
+  // answer drops to tertiary — the exchange reads as a quiet process record,
+  // not an interactive control. No chips, icons, or borders. Tertiary (not
+  // secondary) so the question/answer hierarchy stays legible at a glance.
   answer: css`
     font-size: 14px;
-    font-weight: 500;
-    line-height: 1.5;
-    color: ${cssVar.colorText};
-    overflow-wrap: anywhere;
-  `,
-  answerContent: css`
-    min-width: 0;
-  `,
-  answerIcon: css`
-    flex-shrink: 0;
-    margin-block-start: 3px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  answerIconSelected: css`
-    color: ${cssVar.colorSuccess};
-  `,
-  answerRow: css`
-    box-sizing: border-box;
-    width: fit-content;
-    max-width: 100%;
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-radius: 8px;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  container: css`
-    padding-block: 8px 4px;
-  `,
-  description: css`
-    font-size: 12px;
     line-height: 1.5;
     color: ${cssVar.colorTextTertiary};
     overflow-wrap: anywhere;
+  `,
+  container: css`
+    padding-block: 8px 4px;
   `,
   divider: css`
     align-self: stretch;
@@ -86,11 +61,26 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 14px;
     font-weight: 400;
     line-height: 1.5;
-    color: ${cssVar.colorTextSecondary};
+    color: ${cssVar.colorText};
     overflow-wrap: anywhere;
   `,
   questionContent: css`
     min-width: 0;
+  `,
+  // Mirrors OptionCard's recommended pill so the marker reads the same in the
+  // form and in the completed summary.
+  recommendedBadge: css`
+    flex-shrink: 0;
+
+    padding-block: 1px;
+    padding-inline: 8px;
+    border-radius: 999px;
+
+    font-size: 11px;
+    line-height: 18px;
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorFillSecondary};
   `,
   titleRow: css`
     display: flex;
@@ -99,14 +89,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: baseline;
   `,
   unanswered: css`
-    width: fit-content;
-    max-width: 100%;
-    padding-block: 8px;
-    padding-inline: 12px;
-    border: 1px dashed ${cssVar.colorBorderSecondary};
-    border-radius: 8px;
-
-    font-size: 12px;
+    font-size: 14px;
     line-height: 1.5;
     color: ${cssVar.colorTextQuaternary};
   `,
@@ -115,77 +98,49 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 export interface AskUserQuestionResultLabels {
   noAnswer: string;
   notAnswered: string;
+  /** Badge text for a chosen option carrying the recommended marker. */
+  recommendedTag: string;
 }
-
-interface AnswerLineProps {
-  description?: string;
-  icon: typeof Check;
-  selected?: boolean;
-  text: string;
-}
-
-const AnswerLine = memo<AnswerLineProps>(({ icon, text, description, selected }) => (
-  <Flexbox horizontal align="flex-start" className={styles.answerRow} gap={12}>
-    <Icon
-      className={cx(styles.answerIcon, selected && styles.answerIconSelected)}
-      icon={icon}
-      size={14}
-    />
-    <Flexbox className={styles.answerContent} flex={1} gap={4}>
-      <span className={styles.answer}>{text}</span>
-      {description && <span className={styles.description}>{description}</span>}
-    </Flexbox>
-  </Flexbox>
-));
-
-AnswerLine.displayName = 'AskUserQuestionResultAnswerLine';
 
 interface QuestionAnswerProps {
   answer?: string | string[];
   index?: number;
   notAnswered: string;
   question: AskUserQuestionItem;
+  recommendedTag: string;
 }
 
-const QuestionAnswer = memo<QuestionAnswerProps>(({ question, answer, index, notAnswered }) => {
-  const labels: string[] = Array.isArray(answer) ? answer : answer ? [answer] : [];
-  const optionByLabel = new Map(question.options.map((option) => [option.label, option]));
+const QuestionAnswer = memo<QuestionAnswerProps>(
+  ({ question, answer, index, notAnswered, recommendedTag }) => {
+    const labels: string[] = Array.isArray(answer) ? answer : answer ? [answer] : [];
+    const isRecommended = (label: string) =>
+      question.options.some((o) => o.label === label && o.recommended);
 
-  return (
-    <Flexbox align="flex-start" gap={8} horizontal={!!index}>
-      {!!index && <span className={styles.ordinal}>{`Q${index}`}</span>}
-      <Flexbox className={styles.questionContent} flex={1} gap={8}>
-        <div className={index ? styles.titleRow : undefined}>
-          <span className={styles.question}>{question.question}</span>
-          {!!index && question.header && <span className={styles.header}>{question.header}</span>}
-        </div>
-        {labels.length > 0 ? (
-          <Flexbox gap={8}>
-            {labels.map((label) => {
-              const option = optionByLabel.get(label);
-
-              return (
-                <AnswerLine
-                  selected
-                  icon={Check}
-                  key={label}
-                  text={label}
-                  description={
-                    option?.description && option.description !== label
-                      ? option.description
-                      : undefined
-                  }
-                />
-              );
-            })}
-          </Flexbox>
-        ) : (
-          <span className={styles.unanswered}>{notAnswered}</span>
-        )}
+    return (
+      <Flexbox align="flex-start" gap={8} horizontal={!!index}>
+        {!!index && <span className={styles.ordinal}>{`Q${index}`}</span>}
+        <Flexbox className={styles.questionContent} flex={1} gap={4}>
+          <div className={index ? styles.titleRow : undefined}>
+            <span className={styles.question}>{question.question}</span>
+            {!!index && question.header && <span className={styles.header}>{question.header}</span>}
+          </div>
+          {labels.length > 0 ? (
+            labels.map((label) => (
+              <Flexbox horizontal align="center" gap={8} key={label}>
+                <span className={styles.answer}>{label}</span>
+                {isRecommended(label) && (
+                  <span className={styles.recommendedBadge}>{recommendedTag}</span>
+                )}
+              </Flexbox>
+            ))
+          ) : (
+            <span className={styles.unanswered}>{notAnswered}</span>
+          )}
+        </Flexbox>
       </Flexbox>
-    </Flexbox>
-  );
-});
+    );
+  },
+);
 
 QuestionAnswer.displayName = 'AskUserQuestionResultQuestionAnswer';
 
@@ -230,7 +185,7 @@ export const AskUserQuestionResult = memo<AskUserQuestionResultProps>(
             </Flexbox>
           ))}
           {multiple && <div className={styles.divider} />}
-          <AnswerLine icon={PenLine} text={freeformText} />
+          <span className={styles.answer}>{freeformText}</span>
           {isError && <Text type="warning">{labels.noAnswer}</Text>}
         </Flexbox>
       );
@@ -245,6 +200,7 @@ export const AskUserQuestionResult = memo<AskUserQuestionResultProps>(
             key={`${question.question}-${index}`}
             notAnswered={labels.notAnswered}
             question={question}
+            recommendedTag={labels.recommendedTag}
           />
         ))}
         {isError && <Text type="warning">{labels.noAnswer}</Text>}

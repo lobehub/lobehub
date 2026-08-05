@@ -11,7 +11,7 @@ import ErrorMessageExtra, {
 import ErrorContent from '../../../ChatItem/components/ErrorContent';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../../store';
 import ImageFileListViewer from '../../components/ImageFileListViewer';
-import Reasoning from '../../components/Reasoning';
+import Reasoning, { hasRenderableReasoning } from '../../components/Reasoning';
 import { Tools } from '../Tools';
 import MessageContent from './MessageContent';
 import type { RenderableAssistantContentBlock } from './types';
@@ -51,8 +51,7 @@ const ContentBlock = memo<ContentBlockProps>(
     );
     const isHeteroError = isHeterogeneousAgentStatusGuideError(error?.body);
     const hasTools = !!tools?.length;
-    const showReasoning =
-      (!!reasoning && reasoning.content?.trim() !== '') || (!reasoning && isReasoning);
+    const showReasoning = hasRenderableReasoning(reasoning) || (!reasoning && isReasoning);
     const hasContent = !!content && content !== LOADING_FLAT;
     const showMessageContent = hasContent || content === LOADING_FLAT || hasTools;
 

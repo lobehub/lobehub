@@ -115,7 +115,8 @@ export class SessionService {
     return lambdaClient.sessionGroup.removeSessionGroup.mutate({ id, removeChildren });
   };
 
-  updateSessionGroup = (id: string, value: Partial<SessionGroupItem>) => {
+  /** Rename / reorder only — scope fields are rejected server-side. */
+  updateSessionGroup = (id: string, value: Partial<Pick<SessionGroupItem, 'name' | 'sort'>>) => {
     return lambdaClient.sessionGroup.updateSessionGroup.mutate({ id, value });
   };
 

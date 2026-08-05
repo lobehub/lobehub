@@ -45,6 +45,9 @@ import type {
   MessengerInfo,
   MessengerLinkInfo,
   MessengerPlatformInfo,
+  MessengerPushPlatformType,
+  MessengerPushStatus,
+  MessengerPushWorkspaceOption,
   PinMessageParams,
   PinMessageState,
   PlatformInfo,
@@ -60,6 +63,8 @@ import type {
   SendDirectMessageState,
   SendMessageParams,
   SendMessageState,
+  SendMessengerPushParams,
+  SendMessengerPushState,
   SetMessengerActiveAgentParams,
   SetMessengerActiveAgentState,
   ToggleBotParams,
@@ -120,6 +125,9 @@ export type {
   MessengerInfo,
   MessengerLinkInfo,
   MessengerPlatformInfo,
+  MessengerPushPlatformType,
+  MessengerPushStatus,
+  MessengerPushWorkspaceOption,
   PinMessageParams,
   PinMessageState,
   PlatformInfo,
@@ -136,6 +144,8 @@ export type {
   SendMessageAttachment,
   SendMessageParams,
   SendMessageState,
+  SendMessengerPushParams,
+  SendMessengerPushState,
   SetMessengerActiveAgentParams,
   SetMessengerActiveAgentState,
   ToggleBotParams,
@@ -205,6 +215,16 @@ export interface BotProviderQuery {
   /** User's workspace-scoped System Bot installs. */
   listMessengers?: () => Promise<MessengerInfo[]>;
   listPlatforms: () => Promise<PlatformInfo[]>;
+  /**
+   * Proactively push a message to the caller's own linked messenger DM.
+   * Mirrors `messenger.sendMessengerPush` — the runtime resolves Slack
+   * workspace ambiguity BEFORE calling this, so the handler only sees
+   * deliverable requests.
+   */
+  sendMessengerPush?: (params: SendMessengerPushParams) => Promise<{
+    remaining?: number;
+    status: Exclude<MessengerPushStatus, 'needs_workspace_selection'>;
+  }>;
   /** Change which agent receives inbound IM on a link. */
   setMessengerActiveAgent?: (params: SetMessengerActiveAgentParams) => Promise<void>;
   toggleBot: (botId: string, enabled: boolean) => Promise<void>;
@@ -938,6 +958,123 @@ export class MessageExecutionRuntime {
       };
     } catch (e) {
       return { content: `unlinkMessenger error: ${(e as Error).message}`, success: false };
+    }
+  }
+
+  // ==================== Proactive Messenger Push ====================
+
+  /**
+   * Resolve the Slack workspace a push should target when the caller didn't
+   * pass `tenantId`. Returns the single linked tenantId, or the candidate
+   * list when the choice is ambiguous (the user linked several workspaces).
+   */
+  private async resolveSlackPushTenant(): Promise<
+    { tenantId?: string } | { workspaces: MessengerPushWorkspaceOption[] }
+  > {
+    const links = (await this.botProvider!.listMessengerLinks?.()) ?? [];
+    const slackTenantIds = links
+      .filter((link) => link.platform === 'slack' && link.tenantId)
+      .map((link) => link.tenantId!);
+    if (slackTenantIds.length <= 1) return { tenantId: slackTenantIds[0] };
+
+    // Enrich with workspace names so the agent can present readable choices;
+    // installs may be missing (installed by a teammate) — fall back to the id.
+    const installs = await this.botProvider!.listMessengers?.().catch(() => []);
+    const nameByTenant = new Map(
+      (installs ?? [])
+        .filter((install) => install.platform === 'slack')
+        .map((install) => [install.tenantId, install.tenantName]),
+    );
+    return {
+      workspaces: slackTenantIds.map((tenantId) => ({
+        tenantId,
+        tenantName: nameByTenant.get(tenantId) || undefined,
+      })),
+    };
+  }
+
+  async sendMessengerPush(params: SendMessengerPushParams): Promise<BuiltinServerRuntimeOutput> {
+    if (!this.botProvider?.sendMessengerPush) {
+      return { content: 'sendMessengerPush is not available.', success: false };
+    }
+    const platform = params.platform as MessengerPushPlatformType;
+    try {
+      let tenantId = params.tenantId;
+
+      // Slack links can span several workspaces — never pick one silently.
+      if (platform === 'slack' && tenantId === undefined) {
+        const resolved = await this.resolveSlackPushTenant();
+        if ('workspaces' in resolved) {
+          const lines = resolved.workspaces.map(
+            (w) => `- ${w.tenantName ?? w.tenantId} (tenantId: ${w.tenantId})`,
+          );
+          return {
+            content:
+              `The user's Slack account is linked to ${resolved.workspaces.length} workspaces:\n${lines.join('\n')}\n\n` +
+              'Ask the user which workspace to push to, then call sendMessengerPush again with that tenantId.',
+            state: {
+              platform,
+              status: 'needs_workspace_selection',
+              workspaces: resolved.workspaces,
+            } satisfies SendMessengerPushState,
+            success: true,
+          };
+        }
+        tenantId = resolved.tenantId;
+      }
+
+      const result = await this.botProvider.sendMessengerPush({
+        content: params.content,
+        platform,
+        tenantId,
+      });
+      const state: SendMessengerPushState = {
+        platform,
+        remaining: result.remaining,
+        status: result.status,
+        tenantId,
+      };
+
+      switch (result.status) {
+        case 'sent': {
+          const quota =
+            platform === 'wechat' && result.remaining !== undefined
+              ? ` (${result.remaining} sends left in the current WeChat window)`
+              : '';
+          return {
+            content: `Message pushed to the user's ${platform} DM${quota}.`,
+            state,
+            success: true,
+          };
+        }
+        case 'queued': {
+          return {
+            // Queued is a success: delivery is deferred, not dropped. The
+            // agent must relay the "message the bot first" step to the user.
+            content:
+              'The WeChat send window is closed or its quota is exhausted, so the message was queued. ' +
+              'Tell the user to send any message to the LobeHub WeChat bot first — the queued push will be delivered right after their message opens a new window.',
+            state,
+            success: true,
+          };
+        }
+        case 'unlinked': {
+          return {
+            content: `The user has no linked ${platform} account for the LobeHub System Bot. Ask them to open Settings → Messenger and connect ${platform} first.`,
+            state,
+            success: false,
+          };
+        }
+        default: {
+          return {
+            content: `Proactive push to ${platform} is currently unavailable — the platform is not configured on this deployment or delivery failed. Do not retry immediately; surface this to the user.`,
+            state,
+            success: false,
+          };
+        }
+      }
+    } catch (e) {
+      return { content: `sendMessengerPush error: ${(e as Error).message}`, success: false };
     }
   }
 }

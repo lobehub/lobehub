@@ -60,26 +60,29 @@ export const useSessionGroupMenuItems = () => {
   );
 
   /**
-   * Config group menu item
+   * Config group menu item.
+   *
+   * Deliberately NOT edit-gated: Category Management is also where a member
+   * shows a Category back in their own sidebar, and that show/hide layer is
+   * personal. The editing controls inside the modal carry their own
+   * `canEdit` gate, so opening it grants nothing.
    */
   const configGroupMenuItem = useCallback(
     (onOpenConfig: () => void): MenuItem => {
       const iconElement = <Icon icon={FolderCogIcon} />;
       return {
-        disabled: !canEdit,
         icon: iconElement,
         key: 'config',
         label: t('sessionGroup.config'),
         sfSymbol: 'folder.badge.gearshape',
         onClick: (info: any) => {
           info.domEvent?.stopPropagation();
-          if (!canEdit) return;
 
           onOpenConfig();
         },
       };
     },
-    [canEdit, t],
+    [t],
   );
 
   /**

@@ -12,10 +12,10 @@ import QuotaAccountSwitcher from './QuotaAccountSwitcher';
 import type { FetchQuotaOptions, QuotaWindowItem } from './QuotaMenu';
 import QuotaMenu, { createQuotaSourceKey } from './QuotaMenu';
 import {
-  buildClaudeSnapshotFromWindows,
+  buildClaudePanelSnapshot,
   hasRenderableWindow,
   isQuotaStale,
-  newestSeenAt,
+  newestCapturedAt,
 } from './quotaViewModel';
 
 /**
@@ -96,7 +96,9 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
       let account = deviceId
         ? claude.find((a) => a.externalAccountId === trustedExternalAccountId)
         : (claude.find((a) => a.id === pinnedId) ?? claude[0]);
-      let windows = account ? await agentQuotaService.getWindows(account.id).catch(() => []) : [];
+      let readings = account
+        ? await agentQuotaService.getLatestReadings(account.id).catch(() => [])
+        : [];
 
       // 2) Throttled live refresh + ingest. Paint the persisted windows before
       // awaiting the live fetch so the panel never blocks on it.
@@ -107,8 +109,8 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
         (deviceId && !trustedExternalAccountId) ||
         isQuotaStale(account?.updatedAt, Date.now(), QUOTA_REFRESH_MS)
       ) {
-        if (account && windows.length > 0) {
-          const interim = buildClaudeSnapshotFromWindows(account, windows);
+        if (account && readings.length > 0) {
+          const interim = buildClaudePanelSnapshot(account, readings, null);
           if (hasRenderableWindow(interim)) options?.onInterim?.(interim);
         }
         live = await fetchClaudeCodeQuotaSnapshot({ deviceId, env, force }).catch(() => null);
@@ -121,15 +123,15 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
           // readings we already persisted echoed back (same capturedAt).
           // Snapshots are append-only, so re-ingesting an echo would duplicate
           // history rows and rerun calibration without new evidence — skip it.
-          const newestCapturedAt = live.readings.reduce((max, r) => Math.max(max, r.capturedAt), 0);
+          const liveCapturedAt = live.readings.reduce((max, r) => Math.max(max, r.capturedAt), 0);
           const matchingAccount = claude.find(
             (candidate) => candidate.externalAccountId === externalAccountId,
           );
-          const matchingWindows = matchingAccount
-            ? await agentQuotaService.getWindows(matchingAccount.id).catch(() => [])
+          const matchingReadings = matchingAccount
+            ? await agentQuotaService.getLatestReadings(matchingAccount.id).catch(() => [])
             : [];
           const isCachedEcho =
-            !!matchingAccount && newestCapturedAt <= newestSeenAt(matchingWindows);
+            !!matchingAccount && liveCapturedAt <= newestCapturedAt(matchingReadings);
 
           if (!isCachedEcho) {
             await agentQuotaService
@@ -141,28 +143,24 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
               claude.find((a) => a.externalAccountId === externalAccountId) ??
               claude.find((a) => a.id === pinnedId) ??
               claude[0];
-            windows = account
-              ? await agentQuotaService.getWindows(account.id).catch(() => windows)
-              : windows;
+            readings = account
+              ? await agentQuotaService.getLatestReadings(account.id).catch(() => readings)
+              : readings;
           } else {
             account = matchingAccount;
-            windows = matchingWindows;
+            readings = matchingReadings;
           }
         }
       }
 
-      // 3) Persisted view wins — it survives a failed live fetch. Otherwise fall
-      // back to the live snapshot: identity may be unresolvable (no
-      // oauthAccount.accountUuid in ~/.claude.json, while the quota itself comes
-      // from the keychain), every reading may lack a usable reset and project to
-      // zero windows, or every persisted window may have already reset (a device
-      // offline since yesterday). Note the last case is invisible in the row
-      // count — ask the built snapshot, not `windows.length`, or a live sample
-      // that failed to persist loses to an empty panel.
-      const persisted =
-        account && windows.length > 0 ? buildClaudeSnapshotFromWindows(account, windows) : null;
-      if (persisted && hasRenderableWindow(persisted)) return persisted;
-      return live ?? persisted ?? unavailableSnapshot();
+      // 3) The persisted view survives a failed live fetch, and an attributable
+      // live sample fills what it has no reading for (an ingest that failed, a
+      // limit this account has no history for) — merged per limit, newest
+      // reading wins. With no account resolved at all there is nothing to
+      // attribute the sample to, so the live snapshot stands on its own.
+      const merged = account ? buildClaudePanelSnapshot(account, readings, live) : null;
+      if (merged && hasRenderableWindow(merged)) return merged;
+      return live ?? merged ?? unavailableSnapshot();
     },
     [deviceId, env, agentId],
   );

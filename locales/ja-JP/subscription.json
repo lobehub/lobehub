@@ -137,6 +137,8 @@
   "credits.memberBudget.defaultLimit": "デフォルトのメンバー予算",
   "credits.memberBudget.defaultLimitHint": "カスタムルールがないメンバーは、各請求サイクルでこの制限を使用します。",
   "credits.memberBudget.desc": "現在の請求サイクルで各メンバーが使用できるワークスペースクレジットの上限を設定します",
+  "credits.memberBudget.details.action": "詳細を表示",
+  "credits.memberBudget.details.title": "メンバー使用状況",
   "credits.memberBudget.effectiveBudget": "有効な予算",
   "credits.memberBudget.empty": "まだワークスペースメンバーがいません",
   "credits.memberBudget.globalBadge": "グローバル",

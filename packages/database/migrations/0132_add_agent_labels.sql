@@ -1,6 +1,14 @@
+-- A previous revision of this migration created both tables with a text `id`
+-- (prefixed nanoid). Any database that applied it would otherwise keep the old
+-- column type, because the journal tag is unchanged and the CREATE statements
+-- below are guarded by IF NOT EXISTS. Dropping first is safe: both tables are
+-- new, empty, and the feature they back is not live. Assignments go first so
+-- the foreign key to agent_labels is gone before that table is dropped.
+DROP TABLE IF EXISTS "agent_label_assignments";--> statement-breakpoint
+DROP TABLE IF EXISTS "agent_labels";--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "agent_label_assignments" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"label_id" text NOT NULL,
+	"label_id" uuid NOT NULL,
 	"agent_id" text NOT NULL,
 	"user_id" text NOT NULL,
 	"workspace_id" text,
@@ -10,7 +18,7 @@ CREATE TABLE IF NOT EXISTS "agent_label_assignments" (
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "agent_labels" (
-	"id" text PRIMARY KEY NOT NULL,
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"name" text NOT NULL,
 	"description" text,
 	"color" text,

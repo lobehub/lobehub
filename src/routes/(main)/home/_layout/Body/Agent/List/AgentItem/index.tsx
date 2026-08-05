@@ -1,4 +1,4 @@
-import { type SidebarAgentItem } from '@lobechat/types';
+import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
 import { ActionIcon, Icon } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Loader2, PinIcon } from 'lucide-react';
@@ -79,7 +79,7 @@ interface AgentItemProps {
 }
 
 const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate }) => {
-  const { id, avatar, backgroundColor, title, pinned, slug, userId, visibility } = item;
+  const { id, avatar, backgroundColor, pinned, slug, userId, visibility } = item;
   // Unread count is server-computed (topics.status === 'unread') and carried on
   // the sidebar list item, so it stays accurate across agents whose topics
   // aren't loaded into the chat store on this client.
@@ -95,8 +95,11 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate }) 
   // Separate loading state from chat store - only show loading for this specific agent
   const isLoading = useChatStore(operationSelectors.isAgentVisiblyRunning(id));
 
-  // Get display title with fallback
-  const displayTitle = title || t('untitledAgent');
+  // Name-first label with fallback (see agentDisplayName)
+  const displayTitle = agentDisplayName(item, t('untitledAgent'));
+  // When the personal name won the label, the role would otherwise be invisible —
+  // keep it beside the name as a muted tag. No tag when the label already IS the role.
+  const roleTag = item.name?.trim() && item.title?.trim() ? item.title : undefined;
 
   const agentUrl = usePreservedAgentUrl(id);
 
@@ -206,7 +209,16 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate }) 
         icon={avatarIcon}
         key={id}
         style={style}
-        title={displayTitle}
+        title={
+          roleTag ? (
+            <>
+              {displayTitle}
+              <span style={{ fontSize: 12, marginInlineStart: 6, opacity: 0.6 }}>{roleTag}</span>
+            </>
+          ) : (
+            displayTitle
+          )
+        }
         onDoubleClick={handleDoubleClick}
         onDragEnd={handleDragEnd}
         onDragStart={handleDragStart}

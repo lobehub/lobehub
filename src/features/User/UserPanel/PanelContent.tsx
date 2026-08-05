@@ -2,6 +2,7 @@ import { Flexbox } from '@lobehub/ui';
 import { type FC } from 'react';
 
 import BusinessPanelContent from '@/business/client/features/User/BusinessPanelContent';
+import UserPanelAccountSection from '@/business/client/features/User/UserPanelAccountSection';
 import UserPanelStatistics from '@/business/client/features/User/UserPanelStatistics';
 import UserPanelWorkspaceSection from '@/business/client/features/User/UserPanelWorkspaceSection';
 import Menu, { type MenuProps } from '@/components/Menu';
@@ -70,6 +71,8 @@ const PanelContent: FC<{ closePopover: () => void }> = ({ closePopover }) => {
       )}
 
       <Menu items={[...(mainItems ?? []), ...(logoutItems ?? [])]} onClick={handleMenuClick} />
+
+      <UserPanelAccountSection onNavigate={closePopover} />
     </Flexbox>
   );
 };

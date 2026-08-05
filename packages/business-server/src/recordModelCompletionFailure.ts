@@ -1,5 +1,10 @@
 export type ModelCompletionFailureReason = 'empty_completion' | 'refusal';
 
+export interface ModelCompletionFailureRuntimeEvidence {
+  provider?: unknown;
+  route?: unknown;
+}
+
 export interface RecordModelCompletionFailureParams {
   attempt: number;
   maxAttempts: number;
@@ -15,6 +20,8 @@ export interface RecordModelCompletionFailureParams {
   request: unknown;
   /** Full normalized completion output and callback evidence. */
   response: unknown;
+  /** Provider-boundary and route evidence captured for this exact call. */
+  runtime?: ModelCompletionFailureRuntimeEvidence;
   stepIndex: number;
   topicId?: string;
   trigger?: unknown;

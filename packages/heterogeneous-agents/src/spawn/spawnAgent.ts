@@ -10,7 +10,7 @@ import type { AgentPromptInput, BuildAgentInputOptions } from './input';
 import { buildAgentInput } from './input';
 
 export interface SpawnAgentOptions {
-  /** Agent type key (`'amp'` | `'claude-code'` | `'codex'` | `'opencode'`). */
+  /** Agent type key (`'amp'` | `'claude-code'` | `'codex'` | `'opencode'` | `'pi'`). */
   agentType: string;
   /**
    * Override the CLI binary name. Defaults to the agent's standard executable.
@@ -177,6 +177,7 @@ export const AMP_BASE_ARGS = [
 ] as const;
 
 export const OPENCODE_BASE_ARGS = ['run', '--format', 'json', '--thinking', '--auto'] as const;
+export const PI_BASE_ARGS = ['--mode', 'json'] as const;
 
 const hasAnyFlag = (args: string[], flags: readonly string[]) =>
   args.some((arg) => flags.includes(arg as (typeof flags)[number]));
@@ -233,6 +234,13 @@ const buildOpenCodeArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawn
   ...extraArgs,
 ];
 
+const buildPiArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawnArgsParams) => [
+  ...PI_BASE_ARGS,
+  ...(resumeSessionId ? ['--session-id', resumeSessionId] : []),
+  ...inputArgs,
+  ...extraArgs,
+];
+
 const buildSpawnArgs = (params: BuildSpawnArgsParams): string[] => {
   switch (params.agentType) {
     case 'amp': {
@@ -246,6 +254,9 @@ const buildSpawnArgs = (params: BuildSpawnArgsParams): string[] => {
     }
     case 'opencode': {
       return buildOpenCodeArgs(params);
+    }
+    case 'pi': {
+      return buildPiArgs(params);
     }
     default: {
       throw new Error(`spawnAgent: unsupported agent type "${params.agentType}"`);
@@ -263,6 +274,9 @@ const defaultCommand = (agentType: string): string => {
     }
     case 'opencode': {
       return 'opencode';
+    }
+    case 'pi': {
+      return 'pi';
     }
     default: {
       return 'claude';
@@ -298,7 +312,7 @@ const killProcessTree = (proc: ChildProcess, signal: NodeJS.Signals): void => {
 };
 
 /**
- * Spawn an external agent CLI (Amp, Claude Code, Codex, or OpenCode) and yield its stream as
+ * Spawn an external agent CLI (Amp, Claude Code, Codex, OpenCode, or Pi) and yield its stream as
  * unified `AgentStreamEvent`s. Used by `lh hetero exec` for both standalone
  * terminal runs and (later) sandbox-driven runs that ingest into the server.
  *

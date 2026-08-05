@@ -324,6 +324,27 @@ describe('chatDockSelectors', () => {
     });
   });
 
+  describe('openLocalFiles scope filter', () => {
+    // Regression: sandbox tabs open with `workingDirectory: ''`, so the cwd
+    // filter of a project-scoped topic dropped them and the portal cleared
+    // right after opening. They are scoped by their sandbox topic instead.
+    it('keeps sandbox tabs of the active topic visible in a cwd-scoped topic', () => {
+      const state = createState({
+        ...createTopicState('topic-a', { 'topic-a': '/project-a' }),
+        openLocalFiles: [
+          { filePath: '/project-a/a.ts', workingDirectory: '/project-a' },
+          { filePath: '/work/notes.md', sandboxTopicId: 'topic-a', workingDirectory: '' },
+          { filePath: '/work/other.md', sandboxTopicId: 'topic-b', workingDirectory: '' },
+        ],
+      } as Partial<ChatStoreState>);
+
+      expect(chatPortalSelectors.openLocalFiles(state).map((file) => file.filePath)).toEqual([
+        '/project-a/a.ts',
+        '/work/notes.md',
+      ]);
+    });
+  });
+
   describe('currentLocalFile', () => {
     it('should return undefined when activeLocalFilePath is undefined', () => {
       expect(chatPortalSelectors.currentLocalFile(createState())).toBeUndefined();

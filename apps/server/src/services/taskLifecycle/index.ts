@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { BRANDING_URL } from '@lobechat/business-const';
 import { TRACING_SCENARIOS } from '@lobechat/const';
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
@@ -566,6 +568,7 @@ export class TaskLifecycleService {
 
     try {
       const scheduler = createTaskSchedulerModule();
+      const tickToken = randomUUID();
 
       // Cancel any prior tick (defensive — we usually wouldn't have one
       // pending here, since the prior tick has already fired to bring us
@@ -577,6 +580,7 @@ export class TaskLifecycleService {
       const tickMessageId = await scheduler.scheduleNextTopic({
         delay: task.heartbeatInterval,
         taskId: task.id,
+        tickToken,
         userId: this.userId,
       });
 
@@ -585,6 +589,7 @@ export class TaskLifecycleService {
           consecutiveFailures,
           scheduledAt: new Date().toISOString(),
           tickMessageId,
+          tickToken,
         },
       });
 

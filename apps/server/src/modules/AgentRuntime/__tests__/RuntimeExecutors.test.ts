@@ -2218,31 +2218,31 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         expect(mockFindPlanDocuments).not.toHaveBeenCalled();
       });
 
-      it.each([
-        { items: [], updatedAt: 'canonical-clear' },
-        [],
-      ])('treats canonical and legacy empty message states as clear tombstones', async (todos) => {
-        mockFindPlanDocuments.mockResolvedValue([
-          {
-            metadata: {
-              todos: { items: [{ status: 'todo', text: 'Stale metadata task' }] },
+      it.each([{ items: [], updatedAt: 'canonical-clear' }, []])(
+        'treats canonical and legacy empty message states as clear tombstones',
+        async (todos) => {
+          mockFindPlanDocuments.mockResolvedValue([
+            {
+              metadata: {
+                todos: { items: [{ status: 'todo', text: 'Stale metadata task' }] },
+              },
+              updatedAt: new Date(),
             },
-            updatedAt: new Date(),
-          },
-        ]);
+          ]);
 
-        const content = await callWithMessages(
-          [
-            { content: 'cleared', pluginState: { todos }, role: 'tool' },
-            { content: 'Continue', role: 'user' },
-          ],
-          stateWithLobeAgent(),
-        );
+          const content = await callWithMessages(
+            [
+              { content: 'cleared', pluginState: { todos }, role: 'tool' },
+              { content: 'Continue', role: 'user' },
+            ],
+            stateWithLobeAgent(),
+          );
 
-        expect(content).not.toContain('<todo_context>');
-        expect(content).not.toContain('Stale metadata task');
-        expect(mockFindPlanDocuments).not.toHaveBeenCalled();
-      });
+          expect(content).not.toContain('<todo_context>');
+          expect(content).not.toContain('Stale metadata task');
+          expect(mockFindPlanDocuments).not.toHaveBeenCalled();
+        },
+      );
 
       it.each([
         {
@@ -4149,7 +4149,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       expect(result.newState.messages[2].id).toBe('tool-msg-1');
     });
 
-    it('should return last tool message ID as parentMessageId in nextContext', async () => {
+    it('anchors the next turn on the calling assistant, not the last tool message', async () => {
       let callCount = 0;
       mockMessageModel.create.mockImplementation(() => {
         callCount++;
@@ -4184,9 +4184,12 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
       const result = await executors.call_tools_batch!(instruction, state);
 
-      // parentMessageId should be the last created tool message ID
+      // A step is one LLM call, and the batch's tool rows are inline data of
+      // that call — so the continuation anchors on the assistant that emitted
+      // the batch. Anchoring on a tool row made the spine depend on which tool
+      // `Promise.all` settled last.
       const payload = result.nextContext!.payload as { parentMessageId?: string };
-      expect(payload.parentMessageId).toBe('created-tool-msg-2');
+      expect(payload.parentMessageId).toBe('assistant-msg-123');
       expect(result.nextContext!.phase).toBe('tools_batch_result');
     });
 
