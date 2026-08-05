@@ -43,6 +43,8 @@ const styles = createStaticStyles(({ css }) => ({
     background: transparent;
     background-position: center;
     background-size: cover;
+
+    transition: height ${cssVar.motionDurationMid};
   `,
   backgroundActions: css`
     position: absolute;
@@ -63,6 +65,9 @@ const styles = createStaticStyles(({ css }) => ({
     .ant-tabs-tab:has([id$='-tab-generate']) {
       order: -1;
     }
+  `,
+  compactBackground: css`
+    height: 80px;
   `,
   emptyBackgroundActions: css`
     position: absolute;
@@ -192,7 +197,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
     return (
       <div style={{ paddingBlockEnd: 36, position: 'relative' }}>
         <div
-          className={`${styles.background} agent-background`}
+          className={`${styles.background} ${!backgroundUrl ? styles.compactBackground : ''} agent-background`}
           style={{ backgroundImage: backgroundUrl ? `url(${backgroundUrl})` : undefined }}
         >
           {backgroundUrl ? <div className={styles.scrim} /> : null}
