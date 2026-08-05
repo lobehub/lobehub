@@ -1,0 +1,28 @@
+# Package a host-built Aico tree into a runnable production image.
+# Prerequisite: DOCKER=true bun run build:docker
+#
+#   docker build -f Dockerfile.prebuilt --ignorefile .dockerignore.prebuilt -t aico/lobehub:local .
+
+FROM node:24-slim
+
+WORKDIR /app
+
+ENV NODE_ENV=production \
+    NODE_OPTIONS="--dns-result-order=ipv4first" \
+    MIDDLEWARE_REWRITE_THROUGH_LOCAL=1 \
+    HOSTNAME=0.0.0.0 \
+    PORT=3210
+
+COPY .next/standalone ./
+COPY .next/static ./.next/static
+COPY public/_spa ./public/_spa
+COPY public/_spa-auth ./public/_spa-auth
+COPY public/_spa-workbench ./public/_spa-workbench
+COPY packages/database/migrations ./migrations
+COPY scripts/migrateServerDB/docker.cjs ./docker.cjs
+COPY scripts/migrateServerDB/errorHint.js ./errorHint.js
+COPY scripts/serverLauncher/startServer.js ./startServer.js
+COPY scripts/_shared ./scripts/_shared
+
+EXPOSE 3210
+CMD ["node", "startServer.js"]

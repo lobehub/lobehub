@@ -1,0 +1,11 @@
+FROM node:24-slim
+WORKDIR /app
+RUN ln -sf /usr/local/bin/node /bin/node
+ENV NODE_ENV=production \
+    NODE_OPTIONS="--dns-result-order=ipv4first" \
+    MIDDLEWARE_REWRITE_THROUGH_LOCAL=1 \
+    HOSTNAME=0.0.0.0 \
+    PORT=3210
+COPY . .
+EXPOSE 3210
+CMD ["node", "startServer.js"]
