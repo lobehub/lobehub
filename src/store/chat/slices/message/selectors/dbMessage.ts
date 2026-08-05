@@ -1,5 +1,8 @@
+import {
+  extractActivatedSkillsFromMessages,
+  extractTodosFromMessages,
+} from '@lobechat/agent-runtime';
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
-import { SkillsIdentifier } from '@lobechat/builtin-tool-skills';
 import {
   type StepActivatedSkill,
   type StepContextTodos,
@@ -28,7 +31,12 @@ import { messageMapKey } from '../../../utils/messageMapKey';
  * Get the current chat key for accessing dbMessagesMap
  */
 export const currentDbChatKey = (s: ChatStoreState) =>
-  messageMapKey({ agentId: s.activeAgentId, topicId: s.activeTopicId });
+  messageMapKey({
+    agentId: s.activeAgentId,
+    groupId: s.activeGroupId,
+    threadId: s.activeThreadId,
+    topicId: s.activeTopicId,
+  });
 
 /**
  * Get raw messages from database by key
@@ -116,14 +124,18 @@ const dbUserMessages = (s: ChatStoreState) => {
 };
 
 /**
- * Get all file attachments from user messages
+ * Get all file attachments from user messages.
+ *
+ * Tombstoned entries (the viewer lost access to the file — empty
+ * name/type/url) are excluded: list/preview consumers have nothing to render
+ * or open for them; only the message bubble shows a no-access placeholder.
  */
 const dbUserFiles = (s: ChatStoreState) => {
   const userMessages = dbUserMessages(s);
   return userMessages
     .filter((m) => m.fileList && m.fileList.length > 0)
     .flatMap((m) => m.fileList)
-    .filter(Boolean);
+    .filter((f) => !!f && !f.inaccessible);
 };
 
 // ============= DB Message Counting ========== //
@@ -202,52 +214,7 @@ export const selectActivatedToolIdsFromMessages = (
  */
 export const selectActivatedSkillsFromMessages = (
   messages: UIChatMessage[],
-): StepActivatedSkill[] | undefined => {
-  const skillsMap = new Map<string, StepActivatedSkill>();
-
-  for (const msg of messages) {
-    if (
-      msg.role !== 'tool' ||
-      !(
-        msg.plugin?.identifier === SkillsIdentifier ||
-        msg.plugin?.identifier === LobeActivatorIdentifier
-      )
-    )
-      continue;
-
-    // Direct activateSkill calls — state has top-level id/name
-    if (msg.plugin?.apiName === 'activateSkill' && msg.pluginState?.id && msg.pluginState?.name) {
-      const id = msg.pluginState.id as string;
-      skillsMap.set(id, {
-        description: msg.pluginState.description as string | undefined,
-        id,
-        name: msg.pluginState.name as string,
-      });
-    }
-
-    // activateTools fallback — skills nested in pluginState.activatedSkills[]
-    if (
-      msg.plugin?.apiName === 'activateTools' &&
-      Array.isArray(msg.pluginState?.activatedSkills)
-    ) {
-      for (const skill of msg.pluginState.activatedSkills as Array<{
-        description?: string;
-        id?: string;
-        name?: string;
-      }>) {
-        if (skill.id && skill.name) {
-          skillsMap.set(skill.id, {
-            description: skill.description,
-            id: skill.id,
-            name: skill.name,
-          });
-        }
-      }
-    }
-  }
-
-  return skillsMap.size > 0 ? [...skillsMap.values()] : undefined;
-};
+): StepActivatedSkill[] | undefined => extractActivatedSkillsFromMessages(messages);
 
 // ============= Todos Selectors ========== //
 
@@ -271,34 +238,7 @@ export const selectActivatedSkillsFromMessages = (
  */
 export const selectTodosFromMessages = (
   messages: UIChatMessage[],
-): StepContextTodos | undefined => {
-  // Search from newest to oldest
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const msg = messages[i];
-
-    if (msg.role === 'tool' && msg.pluginState?.todos) {
-      const todos = msg.pluginState.todos as { items?: unknown[]; updatedAt?: string };
-
-      // Handle the todos structure: { items: TodoItem[], updatedAt: string }
-      if (typeof todos === 'object' && 'items' in todos && Array.isArray(todos.items)) {
-        return {
-          items: todos.items as StepContextTodos['items'],
-          updatedAt: todos.updatedAt || new Date().toISOString(),
-        };
-      }
-
-      // Legacy format: direct array of TodoItem[]
-      if (Array.isArray(todos)) {
-        return {
-          items: todos as StepContextTodos['items'],
-          updatedAt: new Date().toISOString(),
-        };
-      }
-    }
-  }
-
-  return undefined;
-};
+): StepContextTodos | undefined => extractTodosFromMessages(messages);
 
 /**
  * Select todos from the current agent turn only — messages after the last

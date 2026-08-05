@@ -73,7 +73,7 @@ describe('useInboxUnreadCount', () => {
 
     expect(result.current.enabled).toBe(true);
     expect(mocks.useClientPollingSWR).toHaveBeenCalledWith(
-      inboxKeys.unreadCount(),
+      inboxKeys.unreadCount(null),
       expect.any(Function),
       {
         dedupingInterval: INBOX_UNREAD_COUNT_DEDUPING_INTERVAL,
@@ -82,11 +82,11 @@ describe('useInboxUnreadCount', () => {
     );
   });
 
-  it('keeps the 10 second polling timer while deduping repeated requests', () => {
-    expect(INBOX_UNREAD_COUNT_REFRESH_INTERVAL).toBe(10_000);
+  it('polls unread count once per minute while deduping repeated requests', () => {
+    expect(INBOX_UNREAD_COUNT_REFRESH_INTERVAL).toBe(60_000);
     expect(INBOX_UNREAD_COUNT_DEDUPING_INTERVAL).toBe(30_000);
-    expect(INBOX_UNREAD_COUNT_DEDUPING_INTERVAL).toBeGreaterThan(
-      INBOX_UNREAD_COUNT_REFRESH_INTERVAL,
+    expect(INBOX_UNREAD_COUNT_REFRESH_INTERVAL).toBeGreaterThan(
+      INBOX_UNREAD_COUNT_DEDUPING_INTERVAL,
     );
   });
 });

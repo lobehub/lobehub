@@ -1,8 +1,16 @@
 import type { AsyncTaskError, AsyncTaskStatus } from '../asyncTask';
 
+export interface GenerationTopicCreator {
+  avatar?: string | null;
+  fullName?: string | null;
+  id: string;
+  username?: string | null;
+}
+
 export interface ImageGenerationTopic {
   coverUrl?: string | null;
   createdAt: Date;
+  creator?: GenerationTopicCreator | null;
   id: string;
   title?: string | null;
   updatedAt: Date;
@@ -85,6 +93,7 @@ export interface GenerationBatch {
   avgLatencyMs?: number | null;
   config?: GenerationConfig;
   createdAt: Date;
+  creator?: GenerationTopicCreator | null;
   generations: Generation[];
   height?: number | null;
   id: string;

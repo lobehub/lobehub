@@ -6,6 +6,13 @@ export interface KnowledgeItemStatus extends FileParsingTask {
   id: string;
 }
 
+export interface FileUploader {
+  avatar?: string | null;
+  fullName?: string | null;
+  id: string;
+  username?: string | null;
+}
+
 export interface FileListItem {
   chunkCount: number | null;
   chunkingError: any | null;
@@ -35,6 +42,12 @@ export interface FileListItem {
   slug?: string | null;
   sourceType: string;
   updatedAt: Date;
+  /**
+   * The user who uploaded the file. Populated by the server list query when
+   * available; falls back to `null` for rows without a joinable user (rare,
+   * e.g. deleted accounts) or when the caller doesn't need it.
+   */
+  uploader?: FileUploader | null;
   url: string;
   userId?: string | null;
   /**

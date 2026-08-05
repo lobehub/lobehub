@@ -308,15 +308,28 @@ export class AgentRuntimeCoordinator {
     operationId: string,
     stepIndex: number,
     ttlSeconds?: number,
+    ownerId?: string,
   ): Promise<boolean> {
-    return this.stateManager.tryClaimStep(operationId, stepIndex, ttlSeconds);
+    return this.stateManager.tryClaimStep(operationId, stepIndex, ttlSeconds, ownerId);
   }
 
   /**
    * Release the step execution lock.
    */
-  async releaseStepLock(operationId: string, stepIndex: number): Promise<void> {
-    return this.stateManager.releaseStepLock(operationId, stepIndex);
+  async releaseStepLock(operationId: string, stepIndex: number, ownerId?: string): Promise<void> {
+    return this.stateManager.releaseStepLock(operationId, stepIndex, ownerId);
+  }
+
+  /**
+   * Extend the step execution lock if it is still owned by this worker.
+   */
+  async refreshStepLock(
+    operationId: string,
+    stepIndex: number,
+    ttlSeconds: number,
+    ownerId?: string,
+  ): Promise<boolean> {
+    return this.stateManager.refreshStepLock(operationId, stepIndex, ttlSeconds, ownerId);
   }
 
   /**

@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   resourceManagerState: {
     category: 'all' as FilesTabs,
     libraryId: undefined as string | undefined,
+    listVisibility: 'private' as const,
     searchQuery: null as string | null,
     sorter: 'createdAt' as const,
     sortType: 'desc' as SortType,
@@ -32,6 +33,10 @@ vi.mock('@/routes/(main)/resource/features/store', () => ({
 }));
 
 vi.mock('@/routes/(main)/resource/features/store/selectors', () => ({
+  getResourceQueryVisibility: (
+    libraryId: string | undefined,
+    visibility: 'private' | 'workspace',
+  ) => (libraryId ? undefined : visibility === 'private' ? 'private' : 'public'),
   sortFileList: (items: unknown[]) => items,
 }));
 
@@ -77,6 +82,7 @@ describe('ResourceExplorer', () => {
     vi.clearAllMocks();
     mocks.resourceManagerState.category = FilesTabs.All;
     mocks.resourceManagerState.libraryId = undefined;
+    mocks.resourceManagerState.listVisibility = 'private';
     mocks.resourceManagerState.searchQuery = null;
     mocks.resourceManagerState.sorter = 'createdAt';
     mocks.resourceManagerState.sortType = SortType.Desc;
@@ -93,6 +99,20 @@ describe('ResourceExplorer', () => {
         libraryId: undefined,
         parentId: null,
         showFilesInKnowledgeBase: false,
+      }),
+    );
+  });
+
+  it('does not reuse the resource-home visibility filter inside a library', () => {
+    mocks.resourceManagerState.libraryId = 'kb-shared';
+    mocks.resourceManagerState.listVisibility = 'private';
+
+    render(<ResourceExplorer />);
+
+    expect(mocks.useFetchResources).toHaveBeenCalledWith(
+      expect.objectContaining({
+        libraryId: 'kb-shared',
+        visibility: undefined,
       }),
     );
   });

@@ -139,6 +139,45 @@ describe('DeviceGateway', () => {
       expect(mockClient.queryDeviceList).toHaveBeenCalledWith('user-1', undefined);
     });
 
+    /**
+     * The gateway promises no channel order, but every consumer reads
+     * `channels[0]` as the device's current connection — the settings row's
+     * "Connected {time}", a ghost row's `lastSeen`/hostname/platform — while
+     * `sortDevicesByActivity` ranks by the freshest channel. Leave the pool raw
+     * and a multi-channel device gets ranked by one connection and labelled
+     * with another, which reads as a broken sort.
+     */
+    it('sorts channels newest-first so channels[0] is the current connection', async () => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+      const older = Date.parse('2025-01-15T10:30:00Z');
+      const newest = Date.parse('2025-03-20T08:00:00Z');
+      const middle = Date.parse('2025-02-01T12:00:00Z');
+      mockClient.queryDeviceList.mockResolvedValue([
+        {
+          // Deliberately unordered, with the newest NOT first.
+          channels: [
+            { channel: 'cli', connectedAt: older, connectionId: 'conn-old' },
+            { channel: 'desktop', connectedAt: newest, connectionId: 'conn-new' },
+            { channel: 'mobile', connectedAt: middle, connectionId: 'conn-mid' },
+          ],
+          connectedAt: older,
+          deviceId: 'dev-1',
+          hostname: 'my-laptop',
+          platform: 'darwin',
+        },
+      ]);
+
+      const proxy = new DeviceGateway();
+      const result = await proxy.queryDeviceList('user-1');
+
+      expect(result[0]?.channels?.map((c) => c.connectionId)).toEqual([
+        'conn-new',
+        'conn-mid',
+        'conn-old',
+      ]);
+    });
+
     it('tolerates a legacy gateway response without channels', async () => {
       mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
       mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
@@ -443,7 +482,7 @@ describe('DeviceGateway', () => {
       mockClient.invokeRpc.mockResolvedValue({
         data: {
           instructions: [{ content: '# Rules', source: 'AGENTS.md' }],
-          // Device returns rich ProjectSkillItems; only name/description/path survive.
+          // Device returns rich ProjectSkillItems; only prompt metadata survives.
           skills: [
             {
               description: 'spa',
@@ -451,7 +490,20 @@ describe('DeviceGateway', () => {
               files: ['SKILL.md'],
               name: 'spa-routes',
               path: '/proj/.agents/skills/spa-routes/SKILL.md',
+              previewRoot: '/proj',
+              scope: 'project',
               skillDir: '/proj/.agents/skills/spa-routes',
+              source: '.agents/skills',
+            },
+            {
+              description: 'device',
+              fileCount: 2,
+              files: ['SKILL.md', 'refs.md'],
+              name: 'device-writer',
+              path: '/home/.agents/skills/device-writer/SKILL.md',
+              previewRoot: '/home/.agents/skills',
+              scope: 'device',
+              skillDir: '/home/.agents/skills/device-writer',
               source: '.agents/skills',
             },
           ],
@@ -473,6 +525,13 @@ describe('DeviceGateway', () => {
             description: 'spa',
             name: 'spa-routes',
             path: '/proj/.agents/skills/spa-routes/SKILL.md',
+            scope: 'project',
+          },
+          {
+            description: 'device',
+            name: 'device-writer',
+            path: '/home/.agents/skills/device-writer/SKILL.md',
+            scope: 'device',
           },
         ],
       });
@@ -588,6 +647,8 @@ describe('DeviceGateway', () => {
             files: ['SKILL.md'],
             name: 'spa-routes',
             path: '/proj/.agents/skills/spa-routes/SKILL.md',
+            previewRoot: '/proj',
+            scope: 'project',
             skillDir: '/proj/.agents/skills/spa-routes',
             source: '.agents/skills',
           },

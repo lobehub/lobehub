@@ -1,5 +1,5 @@
 import type { VerifyEvidence } from '@lobechat/types';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 
 import { verifyCheckResults, verifyEvidence } from '../schemas/verify';
 import type { LobeChatDatabase } from '../type';
@@ -10,6 +10,9 @@ type CreateVerifyEvidence = Omit<VerifyEvidence, 'id' | 'createdAt'>;
 
 /** An evidence row annotated with the run-stable `checkItemId` of its result. */
 export type VerifyEvidenceForRun = VerifyEvidence & { checkItemId: string };
+
+/** An evidence row annotated with both its check item and the round it came from. */
+export type VerifyEvidenceForRuns = VerifyEvidenceForRun & { verifyRunId: string };
 
 export class VerifyEvidenceModel {
   private readonly db: LobeChatDatabase;
@@ -84,6 +87,33 @@ export class VerifyEvidenceModel {
       .orderBy(asc(verifyEvidence.createdAt));
 
     return rows.map((r) => ({ ...r.evidence, checkItemId: r.checkItemId }));
+  };
+
+  /**
+   * All evidence across several verification rounds in one query, each row
+   * carrying its result's `checkItemId` and the round (`verifyRunId`) it was
+   * captured in — the acceptance union joins a whole round chain at once.
+   */
+  listByRuns = async (verifyRunIds: string[]): Promise<VerifyEvidenceForRuns[]> => {
+    if (verifyRunIds.length === 0) return [];
+
+    const rows = await this.db
+      .select({
+        checkItemId: verifyCheckResults.checkItemId,
+        evidence: verifyEvidence,
+        verifyRunId: verifyCheckResults.verifyRunId,
+      })
+      .from(verifyEvidence)
+      .innerJoin(verifyCheckResults, eq(verifyEvidence.checkResultId, verifyCheckResults.id))
+      .where(and(inArray(verifyCheckResults.verifyRunId, verifyRunIds), this.ownership()))
+      .orderBy(asc(verifyEvidence.createdAt));
+
+    return rows.map((r) => ({
+      ...r.evidence,
+      checkItemId: r.checkItemId,
+      // The join filter guarantees a run id; the column is only nullable for legacy rows.
+      verifyRunId: r.verifyRunId!,
+    }));
   };
 
   delete = async (id: string) => {

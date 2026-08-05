@@ -1,5 +1,6 @@
 import type {
   ShowTrayNotificationParams,
+  TrayNavigationSnapshot,
   UpdateTrayIconParams,
   UpdateTrayTooltipParams,
 } from '@lobechat/electron-client-ipc';
@@ -37,6 +38,13 @@ export default class TrayMenuCtr extends ControllerModule {
     this.app.trayManager.setAppTrayVisible(visible);
 
     return { success: true };
+  }
+
+  @IpcMethod()
+  updateNavigationSnapshot(snapshot: TrayNavigationSnapshot) {
+    this.app.trayManager.updateNavigationSnapshot(snapshot);
+
+    return { success: true as const };
   }
 
   /**

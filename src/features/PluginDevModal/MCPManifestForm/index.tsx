@@ -1,6 +1,7 @@
-import { Alert, Button, Flexbox, FormItem, Input, InputPassword } from '@lobehub/ui';
+import { Alert, Flexbox, FormItem, Input, InputPassword } from '@lobehub/ui';
+import { Button, RadioGroup } from '@lobehub/ui/base-ui';
 import { type FormInstance } from 'antd';
-import { Divider, Form, Radio } from 'antd';
+import { Divider, Form } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -252,7 +253,7 @@ const MCPManifestForm = ({
                 label={t('dev.mcp.auth.label')}
                 name={AUTH_TYPE}
               >
-                <Radio.Group
+                <RadioGroup
                   style={{ width: '100%' }}
                   options={[
                     {

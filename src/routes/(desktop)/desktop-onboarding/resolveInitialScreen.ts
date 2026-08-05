@@ -17,9 +17,7 @@ interface ResolveInitialScreenInput {
  *
  * 1. `requested` from the URL — explicit deep-link wins.
  * 2. `saved` — a mid-flow user resumes where they left off.
- * 3. `Login` if the user has *ever* completed onboarding (returning user after
- *    sign-out / token expiry — Welcome / Permissions / DataMode are first-run
- *    screens and would force the whole flow again).
+ * 3. `Login` if the user has previously completed onboarding.
  * 4. `Welcome` for first-time users.
  *
  * On non-macOS, `Permissions` is rewritten to `DataMode` since the macOS-only

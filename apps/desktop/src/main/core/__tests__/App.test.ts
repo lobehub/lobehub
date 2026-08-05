@@ -1,6 +1,8 @@
+import { app as electronApp, ipcMain } from 'electron';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Import after mocks are set up
+import LocalDatabaseService from '../../services/LocalDatabaseSrv';
 import { App } from '../App';
 
 const mockPathExistsSync = vi.fn();
@@ -45,13 +47,6 @@ vi.mock('electron', () => ({
   },
 }));
 
-// electron-devtools-installer accesses electron.app.getPath at import-time in node env;
-// mock it to avoid side effects in unit tests
-vi.mock('electron-devtools-installer', () => ({
-  REACT_DEVELOPER_TOOLS: 'REACT_DEVELOPER_TOOLS',
-  default: vi.fn(),
-}));
-
 vi.mock('fs-extra', () => ({
   pathExistsSync: (...args: any[]) => mockPathExistsSync(...args),
 }));
@@ -73,7 +68,7 @@ vi.mock('~common/routes', () => ({
 }));
 
 // Mock other dependencies
-vi.mock('electron-is', () => ({
+vi.mock('@/utils/platform', () => ({
   macOS: vi.fn(() => false),
   windows: vi.fn(() => false),
 }));
@@ -196,6 +191,36 @@ describe('App', () => {
       const storagePath = appInstance.appStoragePath;
 
       expect(storagePath).toBe('/mock/storage/path');
+    });
+  });
+
+  describe('service lifecycle', () => {
+    it('destroys registered services before quitting', () => {
+      appInstance = new App();
+      const databaseService = appInstance.getService(LocalDatabaseService);
+      const destroy = vi.spyOn(databaseService, 'destroy');
+      const beforeQuitHandler = vi
+        .mocked(electronApp.on)
+        .mock.calls.findLast(([event]) => (event as string) === 'before-quit')?.[1] as () => void;
+
+      beforeQuitHandler();
+
+      expect(destroy).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe('desktop bootstrap identity', () => {
+    it('responds through the registered controller without an elided runtime symbol', () => {
+      appInstance = new App();
+      const listener = vi
+        .mocked(ipcMain.on)
+        .mock.calls.findLast(
+          ([channel]) => channel === 'desktop:get-bootstrap-identity',
+        )?.[1] as (event: { returnValue?: unknown }) => void;
+      const event: { returnValue?: unknown } = {};
+
+      expect(() => listener(event)).not.toThrow();
+      expect(event.returnValue).toEqual({ isIdentityResolved: true });
     });
   });
 });

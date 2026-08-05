@@ -1,7 +1,9 @@
 import type { IEditor } from '@lobehub/editor';
+import { KEY_ESCAPE_COMMAND } from 'lexical';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useAgentStore } from '@/store/agent';
+import { systemAgentSelectors } from '@/store/user/selectors';
 
 import { getInputHistory } from '../inputHistoryStorage';
 import { createStore, selectors } from '.';
@@ -89,6 +91,44 @@ describe('ChatInput store actions', () => {
 
     expect(getInputHistory()).toEqual([]);
     expect(editor.getDocument).not.toHaveBeenCalled();
+  });
+
+  it('clears the input-completion ghost before sending when autocomplete is enabled', () => {
+    vi.spyOn(systemAgentSelectors, 'inputCompletion').mockReturnValue({ enabled: true } as any);
+
+    const dispatchCommand = vi.fn();
+    const editor = {
+      cleanDocument: vi.fn(),
+      dispatchCommand,
+      focus: vi.fn(),
+      getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : { root: {} })),
+    };
+    const store = createStore({
+      editor: editor as unknown as IEditor,
+      onSend: vi.fn(),
+    });
+
+    store.getState().handleSendButton();
+
+    expect(dispatchCommand).toHaveBeenCalledWith(KEY_ESCAPE_COMMAND, expect.any(Object));
+  });
+
+  it('does not dispatch escape on send when autocomplete is disabled', () => {
+    const dispatchCommand = vi.fn();
+    const editor = {
+      cleanDocument: vi.fn(),
+      dispatchCommand,
+      focus: vi.fn(),
+      getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : { root: {} })),
+    };
+    const store = createStore({
+      editor: editor as unknown as IEditor,
+      onSend: vi.fn(),
+    });
+
+    store.getState().handleSendButton();
+
+    expect(dispatchCommand).not.toHaveBeenCalled();
   });
 
   it('does not record history when no send handler is configured', () => {

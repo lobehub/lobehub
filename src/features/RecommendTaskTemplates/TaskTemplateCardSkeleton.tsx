@@ -8,11 +8,31 @@ import { styles as briefStyles } from '@/features/DailyBrief/style';
 import { styles } from './style';
 
 interface TaskTemplateCardSkeletonProps {
+  compact?: boolean;
   descriptionRows?: number;
 }
 
 export const TaskTemplateCardSkeleton = memo<TaskTemplateCardSkeletonProps>(
-  ({ descriptionRows = 1 }) => {
+  ({ compact, descriptionRows = 1 }) => {
+    if (compact)
+      return (
+        <Flexbox
+          horizontal
+          align={'center'}
+          data-testid={'task-template-card-skeleton'}
+          gap={10}
+          paddingBlock={6}
+        >
+          <Skeleton.Avatar
+            active
+            shape={'square'}
+            size={20}
+            style={{ borderRadius: cssVar.borderRadius, flex: 'none' }}
+          />
+          <Skeleton.Button active style={{ height: 16, width: '70%' }} />
+        </Flexbox>
+      );
+
     return (
       <Block
         className={cx(briefStyles.card, styles.card)}

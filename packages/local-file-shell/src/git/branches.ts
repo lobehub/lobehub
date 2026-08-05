@@ -19,7 +19,7 @@ const log = createLogger('local-file-shell:git');
 const execFileAsync = promisify(execFile);
 
 /** Reject obviously invalid branch refs early to avoid a confusing git error. */
-const isInvalidBranchRef = (name: string): boolean =>
+export const isInvalidBranchRef = (name: string): boolean =>
   /[\s~^:?*[\\]/.test(name) || name.startsWith('-') || name.includes('..');
 
 /**

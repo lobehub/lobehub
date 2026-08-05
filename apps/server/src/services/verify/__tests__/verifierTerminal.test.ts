@@ -48,7 +48,7 @@ describe('settleVerifierCheckFromTerminal', () => {
     ]);
   });
 
-  it('marks a still-running verifier result failed/uncertain and finalizes the parent run', async () => {
+  it('marks a still-running verifier result `errored` (no verdict) and finalizes the parent run', async () => {
     await settleVerifierCheckFromTerminal(
       db,
       'u',
@@ -62,18 +62,18 @@ describe('settleVerifierCheckFromTerminal', () => {
       'ws',
     );
 
-    expect(updateByCheckItemMock).toHaveBeenCalledWith(
-      'run-1',
-      'check-1',
-      expect.objectContaining({
-        status: 'failed',
-        toulmin: {
-          limitation: 'Verifier failed before submitting a verdict: InvalidProviderAPIKey',
-        },
-        verdict: 'uncertain',
-        verifierOperationId: 'verifier-op',
-      }),
-    );
+    // A verifier that terminated without a verdict is an infra failure, not a
+    // delivery judgment — recorded as `errored` with no verdict so it never gates
+    // delivery or seeds a repair round.
+    const written = updateByCheckItemMock.mock.calls[0][2];
+    expect(written).toMatchObject({
+      status: 'errored',
+      toulmin: {
+        limitation: 'Verifier failed before submitting a verdict: InvalidProviderAPIKey',
+      },
+      verifierOperationId: 'verifier-op',
+    });
+    expect(written.verdict).toBeUndefined();
     expect(recomputeMock).toHaveBeenCalledWith('parent-op');
     expect(finalizeVerifyRunMock).toHaveBeenCalledWith(db, 'u', 'parent-op', {}, 'ws');
   });

@@ -11,10 +11,11 @@ import {
   hasUserVisualFiles,
   LobeAgentIdentifier,
   normalizeAnalyzeVisualMediaInput,
-  PlanExecutionRuntime,
   selectVisualFileItems,
   validateVisualMediaUrls,
 } from '@lobechat/builtin-tool-lobe-agent';
+import { PlanExecutionRuntime } from '@lobechat/builtin-tool-lobe-agent/planRuntime';
+import { UserInteractionExecutionRuntime } from '@lobechat/builtin-tool-user-interaction/executionRuntime';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { ChatStreamPayload } from '@lobechat/model-runtime';
 import { consumeStreamUntilDone } from '@lobechat/model-runtime';
@@ -89,6 +90,10 @@ class LobeAgentExecutionRuntime {
   private topicId?: string;
   private planRuntime: PlanExecutionRuntime;
   private workspaceId?: string;
+  // Reused from the standalone user-interaction tool. askUserQuestion is
+  // human-intervention 'always', so the user's UI answer normally becomes the
+  // tool result; this runtime is only the fallback executor.
+  private interactionRuntime = new UserInteractionExecutionRuntime();
 
   constructor(context: LobeAgentRuntimeContext) {
     this.agentId = context.agentId;
@@ -110,22 +115,40 @@ class LobeAgentExecutionRuntime {
     );
   }
 
+  // ==================== Ask User Question ====================
+
+  askUserQuestion = (params: unknown): Promise<BuiltinServerRuntimeOutput> =>
+    this.interactionRuntime.askUserQuestion(params);
+
   // ==================== Plan / Todo (delegated to PlanExecutionRuntime) ====================
 
-  createPlan = (params: any) =>
-    this.planRuntime.createPlan(params, { messageId: this.messageId, topicId: this.topicId });
+  /**
+   * Todo APIs read their prior state from `ctx.currentTodos` (rebuilt from
+   * message history by the runtime executors). Without it the runtime falls back
+   * to the topic's plan document, which only exists once `createPlan` has run —
+   * so a plain `createTodos` → `updateTodos` sequence would see an empty list,
+   * drop every index-based operation, and answer "No operations applied.".
+   */
+  private planContext = (ctx?: ToolExecutionContext) => ({
+    currentTodos: ctx?.currentTodos,
+    messageId: this.messageId,
+    topicId: this.topicId,
+  });
 
-  updatePlan = (params: any) =>
-    this.planRuntime.updatePlan(params, { messageId: this.messageId, topicId: this.topicId });
+  createPlan = (params: any, ctx?: ToolExecutionContext) =>
+    this.planRuntime.createPlan(params, this.planContext(ctx));
 
-  createTodos = (params: any) =>
-    this.planRuntime.createTodos(params, { messageId: this.messageId, topicId: this.topicId });
+  updatePlan = (params: any, ctx?: ToolExecutionContext) =>
+    this.planRuntime.updatePlan(params, this.planContext(ctx));
 
-  updateTodos = (params: any) =>
-    this.planRuntime.updateTodos(params, { messageId: this.messageId, topicId: this.topicId });
+  createTodos = (params: any, ctx?: ToolExecutionContext) =>
+    this.planRuntime.createTodos(params, this.planContext(ctx));
 
-  clearTodos = (params: any) =>
-    this.planRuntime.clearTodos(params, { messageId: this.messageId, topicId: this.topicId });
+  updateTodos = (params: any, ctx?: ToolExecutionContext) =>
+    this.planRuntime.updateTodos(params, this.planContext(ctx));
+
+  clearTodos = (params: any, ctx?: ToolExecutionContext) =>
+    this.planRuntime.clearTodos(params, this.planContext(ctx));
 
   // ==================== Sub-agent (async suspend/resume) ====================
 
@@ -161,7 +184,7 @@ class LobeAgentExecutionRuntime {
       return buildError('instruction is required.', 'INVALID_ARGUMENTS');
     }
 
-    const { started, error, threadId, subOperationId } = await ctx.subAgent.run({
+    const { started, error, threadId, subOperationId, toolMessageId } = await ctx.subAgent.run({
       description,
       instruction,
       timeout,
@@ -182,7 +205,9 @@ class LobeAgentExecutionRuntime {
       // No tool_result yet — the bridge fills this in when the sub-op completes.
       content: '',
       deferred: true,
-      state: { status: 'pending', subOperationId, threadId },
+      // `toolMessageId` rides along so the runtime's pause chunk can tell the
+      // client which row to fetch; the client never sees it as tool state.
+      state: { status: 'pending', subOperationId, threadId, toolMessageId },
       success: true,
     };
   };

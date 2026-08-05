@@ -97,6 +97,7 @@ const cleanRecord = (record?: Record<string, string>): Record<string, string> | 
 const CustomConnectorModal = memo<CustomConnectorModalProps>(
   ({ open, onClose, connectorId, legacyPlugin, onEditSuccess }) => {
     const createConnector = useToolStore((s) => s.createConnector);
+    const deleteConnector = useToolStore((s) => s.deleteConnector);
     const updateConnector = useToolStore((s) => s.updateConnector);
     const getConnectorForEdit = useToolStore((s) => s.getConnectorForEdit);
     const startConnectorOAuth = useToolStore((s) => s.startConnectorOAuth);
@@ -200,7 +201,10 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
       };
     }, [isEditMode, isMigrationMode, legacyPlugin, connector, editFetchedData]);
 
-    const handleSave = async (value: LobeToolCustomPlugin, ctx?: { oauthPopup?: Window | null }) => {
+    const handleSave = async (
+      value: LobeToolCustomPlugin,
+      ctx?: { oauthPopup?: Window | null },
+    ) => {
       // ── Migration mode ────────────────────────────────────────────────────
       // Promote a legacy `user_installed_plugins.type='customPlugin'` row into
       // a `user_connectors` row. Server `connector.create` is idempotent on
@@ -218,7 +222,14 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         // `legacyPlugin` via `editValue`, so anything the user edited (or left
         // alone) is already inside `value`. Hand it to the orchestrator.
         const result = await executeLegacyMigrationSave(legacyPlugin, value, {
-          createConnector,
+          // The migration orchestrator predates the server-reported `isNew`
+          // and still keys its rollback on `hasExistingConnector` below.
+          createConnector: async (payload) => (await createConnector(payload)).id,
+          deleteConnector,
+          // Read fresh so the rollback only deletes a connector this migration
+          // created, never one the idempotent upsert merely updated.
+          hasExistingConnector: (id) =>
+            Boolean(connectorSelectors.connectorByIdentifier(id)(useToolStore.getState())),
           syncConnectorTools,
           uninstallCustomPlugin,
         });
@@ -269,7 +280,7 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         // submitted before `connector` resolves, but this keeps it safe.
         const headers = cleanRecord(mcp.headers);
         if (connector) {
-          const nextMetadata: Record<string, unknown> = { ...(connector.metadata ?? {}) };
+          const nextMetadata: Record<string, unknown> = { ...connector.metadata };
           if (headers) nextMetadata.customHeaders = headers;
           else delete nextMetadata.customHeaders;
           patch.metadata = nextMetadata;
@@ -325,7 +336,11 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         mcpServerUrl: isHttp ? mcp.url?.trim() : undefined,
         mcpStdioConfig: isHttp
           ? undefined
-          : { args: mcp.args ?? [], command: (mcp.command ?? '').trim(), env: cleanRecord(mcp.env) },
+          : {
+              args: mcp.args ?? [],
+              command: (mcp.command ?? '').trim(),
+              env: cleanRecord(mcp.env),
+            },
         name: identifier,
         sourceType: ConnectorSourceType.custom,
       };
@@ -338,7 +353,7 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
 
         const clientId = mcp.auth?.clientId?.trim();
         try {
-          const newConnectorId = await createConnector({
+          const { id: newConnectorId } = await createConnector({
             ...base,
             oidcConfig: {
               clientId: clientId || undefined,
@@ -375,12 +390,26 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
           : undefined;
       const headers = cleanRecord(mcp.headers);
 
-      const newConnectorId = await createConnector({
+      // `connector.create` is an idempotent upsert on (user, identifier);
+      // `isNew` is the server's verdict on whether this row was freshly
+      // created. A client-cache lookup is NOT a safe substitute: before
+      // `fetchConnectors` completes it reports "absent" for a connector the
+      // server already has, and the rollback below must never delete a
+      // connector the user already had.
+      const { id: newConnectorId, isNew } = await createConnector({
         ...base,
         credentials,
         metadata: headers ? { customHeaders: headers } : undefined,
       });
-      await syncConnectorTools(newConnectorId);
+      try {
+        await syncConnectorTools(newConnectorId);
+      } catch (e) {
+        // Tool sync failed (MCP server unreachable, bad command, …): roll the
+        // freshly created row back so the user isn't left with an "installed"
+        // connector that has 0 tools and an empty permissions page (#16533).
+        if (isNew) await deleteConnector(newConnectorId);
+        throw e;
+      }
     };
 
     // In migration mode the Delete button must actually uninstall the legacy

@@ -1,7 +1,5 @@
-import {
-  RemoteDeviceExecutionRuntime,
-  RemoteDeviceIdentifier,
-} from '@lobechat/builtin-tool-remote-device';
+import { RemoteDeviceIdentifier } from '@lobechat/builtin-tool-remote-device';
+import { RemoteDeviceExecutionRuntime } from '@lobechat/builtin-tool-remote-device/executionRuntime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type ToolExecutionContext } from '../../types';
@@ -17,10 +15,12 @@ vi.mock('@/server/services/deviceGateway', () => ({
 // Mock the DeviceModel so the runtime's DB-backed lookups are observable.
 const mockQueryPersonal = vi.fn();
 const mockQueryWorkspaceDevices = vi.fn();
+const mockQueryWorkspaceHiddenDeviceIds = vi.fn();
 vi.mock('@/database/models/device', () => ({
   DeviceModel: vi.fn().mockImplementation(() => ({
     queryPersonal: mockQueryPersonal,
     queryWorkspaceDevices: mockQueryWorkspaceDevices,
+    queryWorkspaceHiddenDeviceIds: mockQueryWorkspaceHiddenDeviceIds,
   })),
 }));
 
@@ -45,6 +45,8 @@ beforeEach(() => {
   mockQueryPersonal.mockResolvedValue([]);
   mockQueryWorkspaceDevices.mockReset();
   mockQueryWorkspaceDevices.mockResolvedValue([]);
+  mockQueryWorkspaceHiddenDeviceIds.mockReset();
+  mockQueryWorkspaceHiddenDeviceIds.mockResolvedValue([]);
 });
 
 describe('remoteDeviceRuntime', () => {

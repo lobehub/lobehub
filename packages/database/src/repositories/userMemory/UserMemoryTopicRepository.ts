@@ -2,7 +2,7 @@ import { and, asc, eq } from 'drizzle-orm';
 
 import { messages } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { buildWorkspaceWhere } from '../../utils/workspace';
+import { buildMessageScopeWhere } from '../../utils/messageScope';
 
 /**
  * Maximum character length for the query string used in memory search
@@ -39,7 +39,11 @@ export class UserMemoryTopicRepository {
       .from(messages)
       .where(
         and(
-          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messages),
+          // Memory extraction only reads what THIS user wrote — user_id is the
+          // author snapshot, which stays valid across agent transfers; the
+          // derived predicate keeps the topic-scope check transfer-safe.
+          buildMessageScopeWhere({ userId: this.userId, workspaceId: this.workspaceId }),
+          eq(messages.userId, this.userId),
           eq(messages.topicId, topicId),
           eq(messages.role, 'user'),
         ),

@@ -284,7 +284,13 @@ const useSpacerHeight = ({
 // ---------------------------------------------------------------------------
 type PinState = { index: number; seenActive: boolean } | null;
 
-const usePinController = ({ virtuaRef }: { virtuaRef: RefObject<VListHandle | null> }) => {
+const usePinController = ({
+  headerOffset,
+  virtuaRef,
+}: {
+  headerOffset: number;
+  virtuaRef: RefObject<VListHandle | null>;
+}) => {
   const pinRef = useRef<PinState>(null);
 
   const scrollToPinned = useCallback(
@@ -299,9 +305,10 @@ const usePinController = ({ virtuaRef }: { virtuaRef: RefObject<VListHandle | nu
       }
 
       log('scrollToPinned (%s) index=%d', reason, pin.index);
-      scrollToIndex(pin.index, { align: 'start', smooth: true });
+      // pin.index is a message index; the header slot row shifts virtua rows.
+      scrollToIndex(pin.index + headerOffset, { align: 'start', smooth: true });
     },
-    [virtuaRef],
+    [headerOffset, virtuaRef],
   );
 
   const clearPin = useCallback((reason: string) => {
@@ -403,6 +410,12 @@ const useScrollShrink = ({
 // ---------------------------------------------------------------------------
 export interface UseConversationScrollOptions {
   dataSource: string[];
+  /**
+   * Number of synthetic rows prepended to the VList before the messages
+   * (e.g. the headerSlot spacer). The pin targets message indices, so virtua
+   * calls translate by this offset.
+   */
+  headerOffset?: number;
   isSecondLastMessageFromUser: boolean;
   virtuaRef: RefObject<VListHandle | null>;
 }
@@ -424,6 +437,7 @@ export interface UseConversationScrollResult {
 
 export const useConversationScroll = ({
   dataSource,
+  headerOffset = 0,
   isSecondLastMessageFromUser,
   virtuaRef,
 }: UseConversationScrollOptions): UseConversationScrollResult => {
@@ -475,7 +489,7 @@ export const useConversationScroll = ({
     userMessageIndex,
   });
 
-  const { clearPin, pinRef, scrollToPinned } = usePinController({ virtuaRef });
+  const { clearPin, pinRef, scrollToPinned } = usePinController({ headerOffset, virtuaRef });
 
   const { onScrollOffset, prevScrollOffsetRef } = useScrollShrink({
     clearPin,

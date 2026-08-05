@@ -31,6 +31,8 @@ export interface NonHeteroSubAgentDispatchContext {
   inPortalThread?: boolean;
   /** Current gateway mode status (`chatStore.isGatewayModeEnabled()`). */
   isGatewayMode: boolean;
+  /** Parent agent is workspace-scoped — see `RuntimeSelectionContext.isWorkspaceAgent`. */
+  isWorkspaceAgent?: boolean;
   /**
    * Messages passed to the client-side runner.
    * Typically the current conversation messages plus a virtual instruction
@@ -78,6 +80,7 @@ export async function dispatchNonHeteroSubAgent(
     boundDeviceId: ctx.boundDeviceId,
     heterogeneousProvider: ctx.heterogeneousProvider,
     isGatewayMode: ctx.isGatewayMode,
+    isWorkspaceAgent: ctx.isWorkspaceAgent,
     parentRuntime: ctx.parentRuntime,
   });
 
@@ -101,10 +104,10 @@ export async function dispatchNonHeteroSubAgent(
     }
 
     case 'gateway': {
-      // Switch agentId to the target agent so the gateway runs the correct one.
-      // The gateway loads conversation history from the topic DB, so we do NOT
-      // pass the client-side message array. The instruction becomes a real user
-      // message created on the server.
+      // Execute with the target agent, but route persisted/streamed messages to
+      // the parent conversation. This keeps speaker identity and conversation
+      // ownership separate instead of hiding cross-agent replies in another
+      // messageMap bucket.
       await store.executeGatewayAgent({
         context: {
           ...ctx.conversationContext,
@@ -113,6 +116,7 @@ export async function dispatchNonHeteroSubAgent(
           subAgentId: intent.targetAgentId,
         },
         message: intent.instruction,
+        messageContext: ctx.conversationContext,
         parentOperationId: ctx.parentOperationId,
       });
       break;

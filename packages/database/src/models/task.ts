@@ -17,6 +17,7 @@ import {
   isNull,
   ne,
   notInArray,
+  or,
   type SQL,
   sql,
 } from 'drizzle-orm';
@@ -26,14 +27,15 @@ import { merge } from '@/utils/merge';
 
 import { documents } from '../schemas/file';
 import type { NewTaskComment, TaskCommentItem } from '../schemas/task';
-import { taskComments, taskDependencies, taskDocuments, tasks } from '../schemas/task';
+import { taskComments, taskDependencies, taskDocuments, tasks, taskTopics } from '../schemas/task';
+import { works } from '../schemas/work';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
 /**
  * Ownership helpers in this model come in three flavors. Choose by USE CASE,
- * not by table — picking the wrong one is how LOBE-10946's `seq` allocation
- * hotfix got introduced (see git log).
+ * not by table — picking the wrong one led to a `seq` allocation hotfix
+ * (see git log).
  *
  * ┌────────────────────┬──────────────────────────────────────────────┬────────────────────────┐
  * │ Helper             │ Use for                                      │ Visibility-aware?      │
@@ -245,30 +247,41 @@ export class TaskModel {
     return updated[0] || null;
   }
 
+  /**
+   * Delete a task. This does NOT touch the task's Work artifact: the Work
+   * lifecycle is driven by the deleteTask tool call at the tool-execution
+   * dispatch layer (which calls `WorkModel.deleteTaskWork`), so non-tool deletes
+   * (UI / CLI / deleteAll) deliberately leave the Work as an orphan for the UI
+   * to render as "resource deleted" from its version snapshot. See.
+   */
   async delete(id: string): Promise<boolean> {
-    const result = await this.db
+    const deleted = await this.db
       .delete(tasks)
       .where(and(eq(tasks.id, id), this.ownership()))
-      .returning();
+      .returning({ id: tasks.id });
 
-    return result.length > 0;
+    return deleted.length > 0;
   }
 
   /**
-   * Promote a task and its full subtree to a new visibility. Combined with the
-   * router-level guard (LOBE-11027), the only legal transition is
-   * `private → public` — there is no `public → private` path.
+   * Move a task and its full subtree to a new visibility (both directions —
+   * added the `public → private` demotion; the router gates who
+   * may call it).
    *
-   * Cascades inside a single transaction across structural rows only:
+   * Cascades inside a single transaction:
    *   - the root task and every descendant in `tasks`;
    *   - `task_dependencies` and `task_documents` whose `task_id` is in the set.
    *
-   * `task_topics` and `task_comments` are deliberately **not** cascaded
-   * (LOBE-11028). They are event-shaped historical rows whose visibility was
-   * fixed at write time; promoting the task to public must not retroactively
-   * expose runs and discussions that happened while the task was private.
-   * Topics / comments created after promotion inherit the task's then-current
-   * visibility through their own create paths.
+   * `task_topics` and `task_comments` are direction-sensitive. Their
+   * `visibility` column is a write-time mirror of the parent task used as a
+   * JOIN-free authorization proxy, so:
+   *   - `private → public` deliberately does **not** cascade them: promoting
+   *     the task must not retroactively expose runs and discussions that
+   *     happened while it was private. Rows created after promotion inherit
+   *     the task's then-current visibility through their own create paths.
+   *   - `public → private` **does** cascade them: leaving public-era rows
+   *     public would let workspace members keep reading/operating historical
+   *     topics and comments of a task they can no longer see.
    *
    * Returns `null` if the root task is not visible to the current caller
    * (either missing or owned by another workspace member). Callers should
@@ -315,12 +328,106 @@ export class TaskModel {
         .set({ visibility })
         .where(and(inArray(taskDocuments.taskId, taskIds), this.docsOwnership()));
 
+      // Work is a denormalized resource projection. Keep its indexed visibility
+      // mirror in the same transaction as the task subtree so gallery/list
+      // queries cannot observe a stale public row after demotion.
+      await tx
+        .update(works)
+        .set({ visibility })
+        .where(
+          and(
+            eq(works.resourceType, 'task'),
+            inArray(works.resourceId, taskIds),
+            buildWorkspaceWhere(
+              { userId: this.userId, workspaceId: this.workspaceId },
+              { userId: works.userId, workspaceId: works.workspaceId },
+            ),
+          ),
+        );
+
+      // Demotion-only cascade for the event-shaped child rows (see docstring):
+      // their visibility mirrors the task, so pulling the task back to private
+      // must also pull public-era topics/comments out of workspace scope.
+      if (visibility === 'private') {
+        await tx
+          .update(taskTopics)
+          .set({ visibility })
+          .where(and(inArray(taskTopics.taskId, taskIds), this.topicsOwnership()));
+
+        await tx
+          .update(taskComments)
+          .set({ visibility })
+          .where(and(inArray(taskComments.taskId, taskIds), this.commentsOwnership()));
+      }
+
       return updated ?? null;
     });
   }
 
-  async deleteAll(): Promise<number> {
-    const result = await this.db.delete(tasks).where(this.ownership()).returning();
+  /**
+   * Count workspace tasks that would break if the given agent were demoted to
+   * private:
+   *   - public tasks assigned to it — a public task must never reference a
+   *     private agent (`assertAgentVisibilityCompat`);
+   *   - tasks created by anyone other than the agent's owner (any visibility)
+   *     — after demotion those creators can no longer resolve the assignee,
+   *     so their runs and assignee updates fail.
+   * Deliberately workspace-wide and visibility-blind (NOT `ownership()`):
+   * other members' private tasks are invisible to the caller but still lose
+   * their assignee. Backs the router-level agent demotion guard.
+   */
+  async countTasksBlockingAgentDemotion(
+    assigneeAgentId: string,
+    agentOwnerUserId: string,
+  ): Promise<number> {
+    if (!this.workspaceId) return 0;
+    const [row] = await this.db
+      .select({ count: sql<number>`count(*)` })
+      .from(tasks)
+      .where(
+        and(
+          eq(tasks.workspaceId, this.workspaceId),
+          eq(tasks.assigneeAgentId, assigneeAgentId),
+          or(eq(tasks.visibility, 'public'), ne(tasks.createdByUserId, agentOwnerUserId)),
+        ),
+      );
+    return Number(row?.count ?? 0);
+  }
+
+  /**
+   * Whether the subtree rooted at `rootTaskId` (root excluded) contains tasks
+   * created by someone other than `creatorUserId`. Deliberately workspace-wide
+   * and visibility-blind: other members' private subtasks are invisible to the
+   * caller but would still be fractured by a public→private demotion (each row
+   * stays owned by its creator, so the root creator loses those descendants
+   * while their creators keep orphaned children whose parent is hidden).
+   * Backs the router-level task demotion guard.
+   */
+  async subtreeHasOtherCreators(rootTaskId: string, creatorUserId: string): Promise<boolean> {
+    if (!this.workspaceId) return false;
+    const result = await this.db.execute(sql`
+      WITH RECURSIVE task_tree AS (
+        SELECT id, created_by_user_id FROM tasks
+          WHERE id = ${rootTaskId} AND workspace_id = ${this.workspaceId}
+        UNION ALL
+        SELECT t.id, t.created_by_user_id FROM tasks t
+        JOIN task_tree tt ON t.parent_task_id = tt.id
+      )
+      SELECT 1 AS hit FROM task_tree
+      WHERE id <> ${rootTaskId} AND created_by_user_id <> ${creatorUserId}
+      LIMIT 1
+    `);
+    return result.rows.length > 0;
+  }
+
+  /** See {@link delete}: bulk task deletion likewise leaves Work artifacts intact. */
+  async deleteAll(options?: { restrictToCreator?: boolean }): Promise<number> {
+    // `restrictToCreator` narrows the workspace-wide sweep to rows the caller
+    // created (non-owner members); owners/personal mode keep the full scope.
+    const where = options?.restrictToCreator
+      ? and(this.ownership(), eq(tasks.createdByUserId, this.userId))
+      : this.ownership();
+    const result = await this.db.delete(tasks).where(where).returning();
 
     return result.length;
   }
@@ -791,6 +898,15 @@ export class TaskModel {
       workspaceId: taskDependencies.workspaceId,
     });
 
+  /** Only used by the demotion cascade in {@link updateVisibility} — regular
+   *  taskTopics reads/writes live in `TaskTopicModel`. */
+  private topicsOwnership = () =>
+    this.childOwnership({
+      userId: taskTopics.userId,
+      visibility: taskTopics.visibility,
+      workspaceId: taskTopics.workspaceId,
+    });
+
   async addDependency(taskId: string, dependsOnId: string, type: string = 'blocks'): Promise<void> {
     const visibility = await this.getTaskVisibility(taskId);
     await this.db
@@ -955,7 +1071,16 @@ export class TaskModel {
         title: documents.title,
       })
       .from(taskDocuments)
-      .innerJoin(documents, eq(taskDocuments.documentId, documents.id))
+      // Guard the referenced document too: the junction's visibility column is
+      // a write-time mirror of the TASK, so a document independently switched
+      // back to private would otherwise still leak its title here.
+      .innerJoin(
+        documents,
+        and(
+          eq(taskDocuments.documentId, documents.id),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents),
+        ),
+      )
       .where(
         and(
           eq(taskDocuments.taskId, taskId),
@@ -979,6 +1104,15 @@ export class TaskModel {
       ? sql`td.workspace_id = ${this.workspaceId}
             AND (td.visibility = 'public' OR td.user_id = ${this.userId})`
       : sql`td.user_id = ${this.userId} AND td.workspace_id IS NULL`;
+    // Guard the referenced document row itself: `td.visibility` is a
+    // write-time mirror of the TASK's visibility, so a document independently
+    // switched back to private would otherwise still leak its title/metadata
+    // through this join. A guarded-out document keeps its junction row but
+    // joins as NULL → surfaced as an inaccessible tombstone node.
+    const documentVisibility = this.workspaceId
+      ? sql`d.workspace_id = ${this.workspaceId}
+            AND (d.visibility IS NULL OR d.visibility = 'public' OR d.user_id = ${this.userId})`
+      : sql`d.user_id = ${this.userId} AND d.workspace_id IS NULL`;
     const result = await this.db.execute(sql`
       WITH RECURSIVE task_tree AS (
         SELECT id, identifier FROM tasks WHERE id = ${rootTaskId} AND ${rootOwnership}
@@ -988,11 +1122,12 @@ export class TaskModel {
         WHERE ${recursiveOwnership}
       )
       SELECT td.*, tt.id as source_task_id, tt.identifier as source_task_identifier,
+             d.id as document_ref_id,
              d.title as document_title, d.file_type as document_file_type, d.parent_id as document_parent_id,
              d.total_char_count as document_char_count, d.updated_at as document_updated_at
       FROM task_documents td
       JOIN task_tree tt ON td.task_id = tt.id
-      LEFT JOIN documents d ON td.document_id = d.id
+      LEFT JOIN documents d ON td.document_id = d.id AND ${documentVisibility}
       WHERE ${docsOwnership}
       ORDER BY td.created_at
     `);
@@ -1004,17 +1139,22 @@ export class TaskModel {
 
     for (const row of result.rows as any[]) {
       const docId = row.document_id;
+      // Join miss = the viewer lost access to the document (switched back to
+      // private) or it was deleted. Emit a titleless tombstone so the UI can
+      // render a no-access placeholder instead of leaking the title.
+      const inaccessible = row.document_ref_id === null;
       docIds.add(docId);
       nodeMap[docId] = {
-        charCount: row.document_char_count,
+        charCount: inaccessible ? null : row.document_char_count,
         createdAt: row.created_at,
-        fileType: row.document_file_type,
-        parentId: row.document_parent_id,
+        fileType: inaccessible ? '' : row.document_file_type,
+        inaccessible: inaccessible || undefined,
+        parentId: inaccessible ? null : row.document_parent_id,
         pinnedBy: row.pinned_by,
         sourceTaskId: row.source_task_id,
         sourceTaskIdentifier: row.source_task_id !== rootTaskId ? row.source_task_identifier : null,
-        title: row.document_title || 'Untitled',
-        updatedAt: row.document_updated_at,
+        title: inaccessible ? '' : row.document_title || 'Untitled',
+        updatedAt: inaccessible ? null : row.document_updated_at,
       };
     }
 
@@ -1175,10 +1315,21 @@ export class TaskModel {
    *   - `currentTopicId` (topic ownership is also moving but the link is
    *     reset to avoid surfacing a stale active topic in the new scope)
    */
+  /**
+   * Whether the task subtree contains rows created by someone else. Transfers
+   * rehome every cascaded row, so non-owner members must not move a task tree
+   * that carries teammates' subtasks.
+   */
+  async subtreeHasForeignRows(taskId: string): Promise<boolean> {
+    const subtree = await this.collectTaskSubtree(taskId, this.db);
+    return subtree.some((task) => task.createdByUserId !== this.userId);
+  }
+
   async transferTo(
     taskId: string,
     targetWorkspaceId: string | null,
     targetUserId: string,
+    targetVisibility?: 'private' | 'public',
   ): Promise<{ taskIds: string[] }> {
     return this.db.transaction(async (trx) => {
       const scoped = new TaskModel(trx as LobeChatDatabase, this.userId, this.workspaceId);
@@ -1186,6 +1337,11 @@ export class TaskModel {
       if (subtree.length === 0) throw new Error('Task not found');
 
       const ids = subtree.map((t) => t.id);
+
+      // Visibility only applies when landing in a workspace. In personal scope
+      // every row is implicitly private and the field is ignored.
+      const visibilityUpdate =
+        targetWorkspaceId && targetVisibility ? { visibility: targetVisibility } : {};
 
       // Reallocate identifier + seq in target scope to avoid collisions.
       const baseSeq = await this.nextSeqIn(
@@ -1208,23 +1364,26 @@ export class TaskModel {
             seq,
             updatedAt: new Date(),
             workspaceId: targetWorkspaceId,
+            ...visibilityUpdate,
           })
           .where(eq(tasks.id, task.id));
       }
 
-      // Update child tables that key off taskId.
+      // Update child tables that key off taskId. Child rows mirror the parent
+      // task's visibility (see schema comments on task_deps / task_docs /
+      // task_comments) so cascade the new visibility here too.
       const ownershipUpdate = { userId: targetUserId, workspaceId: targetWorkspaceId };
       await (trx as LobeChatDatabase)
         .update(taskDependencies)
-        .set(ownershipUpdate)
+        .set({ ...ownershipUpdate, ...visibilityUpdate })
         .where(inArray(taskDependencies.taskId, ids));
       await (trx as LobeChatDatabase)
         .update(taskDocuments)
-        .set(ownershipUpdate)
+        .set({ ...ownershipUpdate, ...visibilityUpdate })
         .where(inArray(taskDocuments.taskId, ids));
       await (trx as LobeChatDatabase)
         .update(taskComments)
-        .set(ownershipUpdate)
+        .set({ ...ownershipUpdate, ...visibilityUpdate })
         .where(inArray(taskComments.taskId, ids));
 
       return { taskIds: ids };
@@ -1241,11 +1400,16 @@ export class TaskModel {
     taskId: string,
     targetWorkspaceId: string | null,
     targetUserId: string,
+    targetVisibility?: 'private' | 'public',
   ): Promise<{ rootId: string }> {
     return this.db.transaction(async (trx) => {
       const scoped = new TaskModel(trx as LobeChatDatabase, this.userId, this.workspaceId);
       const subtree = await scoped.collectTaskSubtree(taskId, trx as LobeChatDatabase);
       if (subtree.length === 0) throw new Error('Task not found');
+
+      // Visibility only applies when landing in a workspace.
+      const visibilityOverride =
+        targetWorkspaceId && targetVisibility ? { visibility: targetVisibility } : {};
 
       // BFS clone — parent inserted before children, so we always know the
       // new parentTaskId by the time we reach the child.
@@ -1299,6 +1463,7 @@ export class TaskModel {
             status: 'backlog',
             totalTopics: 0,
             workspaceId: targetWorkspaceId,
+            ...visibilityOverride,
           } as NewTask)
           .returning({ id: tasks.id })) as { id: string }[];
 

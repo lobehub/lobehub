@@ -7,7 +7,9 @@ import { createStaticStyles } from 'antd-style';
 import { BookOpenIcon, ListIcon, Settings2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+import urlJoin from 'url-join';
 
+import { GITHUB, GITHUB_ISSUES } from '@/const/url';
 import { ModelNavKey } from '@/types/discover';
 
 const styles = createStaticStyles(({ css, cssVar }) => {
@@ -75,18 +77,13 @@ const Nav = memo<NavProps>(({ mobile, setActiveTab, activeTab = ModelNavKey.Over
         </a>
         <a
           className={styles.link}
-          href="https://github.com/lobehub/lobe-chat/tree/main/src/config/aiModels"
+          href={urlJoin(GITHUB, 'tree/main/src/config/aiModels')}
           rel="noreferrer"
           target="_blank"
         >
           {t('mcp.details.nav.viewSourceCode')}
         </a>
-        <a
-          className={styles.link}
-          href="https://github.com/lobehub/lobe-chat/issues/new/choose"
-          rel="noreferrer"
-          target="_blank"
-        >
+        <a className={styles.link} href={GITHUB_ISSUES} rel="noreferrer" target="_blank">
           {t('mcp.details.nav.reportIssue')}
         </a>
       </Flexbox>

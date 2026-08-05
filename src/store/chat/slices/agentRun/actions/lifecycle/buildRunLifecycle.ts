@@ -5,6 +5,7 @@ import debug from 'debug';
 
 import type { AgentRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
+import { snapshotTopicWorkingDirGit } from '@/store/chat/slices/agentRun/actions/lifecycle/snapshotWorkingDirGit';
 import type { ChatStore } from '@/store/chat/store';
 import { notifyDesktopAgentCompleted } from '@/store/chat/utils/desktopNotification';
 import { markdownToTxt } from '@/utils/markdownToTxt';
@@ -136,7 +137,7 @@ export const buildRunLifecycle = (
   adapter: RunAdapterContext,
 ): AgentRunLifecycle => {
   const { context, parentMessageId, parentMessageType } = adapter;
-  const { agentId, topicId, threadId, groupId } = context;
+  const { agentId, topicId, threadId, groupId, workspaceSlug } = context;
   const messageKey = messageMapKey(context);
   const contextKey = messageKey;
 
@@ -183,6 +184,12 @@ export const buildRunLifecycle = (
       const { isCreateNewTopic, topicId, assistantMessageId } = event;
       if (!topicId) return;
 
+      // Snapshot the working directory's live branch + linked PR onto the topic.
+      // Anchored HERE (send) rather than in the ControlBar's mount effect so that
+      // merely opening a topic never re-stamps its historical branch/PR. Slow gh
+      // leg → fire-and-forget; it only patches topic metadata, idempotently.
+      void snapshotTopicWorkingDirGit(get, { agentId, topicId }).catch(() => {});
+
       // Dev-only fast path: slice the first user message instead of calling the
       // LLM. Only honored in non-production builds. Relocated verbatim.
       const shouldSliceTopicTitle =
@@ -202,8 +209,16 @@ export const buildRunLifecycle = (
         console.info('[dev] sliced topic title (NEXT_PUBLIC_DEV_DISABLE_AUTO_TOPIC=1):', title);
       };
 
+      // Key off the EVENT's context, not the adapter's send-time `context`.
+      // `context` (= operationContext captured at dispatch) still carries a null
+      // topicId for a just-created topic, so its key points at the empty
+      // main-scope bucket; gateway/hetero persist the conversation under the real
+      // topicId (`event.context` — `{ ...operationContext, topicId }`). Reading
+      // the stale key summarizes nothing and emits a degenerate "空对话标题"
+      // title. `event.context` also carries groupId/threadId, so group topics
+      // keep reading their real messages (the #16289 fix).
       const readStoreChats = () =>
-        displayMessageSelectors.getDisplayMessagesByKey(messageMapKey({ agentId, topicId }))(get());
+        displayMessageSelectors.getDisplayMessagesByKey(messageMapKey(event.context))(get());
 
       // New topic → always title. Use caller-provided messages when present
       // (client's freshly-created rows aren't in the store under topicId yet);
@@ -241,13 +256,28 @@ export const buildRunLifecycle = (
       if (adapter.runScope === 'sub_agent') return;
       if (!isDesktop) return;
 
-      const notificationContext = { agentId, groupId, topicId };
+      const notificationContext = { agentId, groupId, topicId, workspaceSlug };
 
       if (adapter.runtimeType === 'client') {
         // CLIENT: notify only OUTSIDE tool-calling mode; content comes from the
         // in-memory store. No badge (preserves the prior client behavior).
+        //
+        // Anchor to the assistant message THIS run produced (walk from
+        // parentMessageId), NOT a positional findLast on the topic. On a later
+        // turn the fresh assistant can still be settling into messagesMap while
+        // the previous turn's assistant is the last populated one — a naive
+        // findLast then surfaces the PRIOR turn's reply as the notification body.
+        // Mirror emitComplete's dual-map (messagesMap → dbMessagesMap) lookup so
+        // the body is pinned to this run's freshest persisted content.
         const finalMessages = get().messagesMap[messageKey] || [];
-        const lastAssistant = finalMessages.findLast((m) => m.role === 'assistant');
+        const dbMessages = get().dbMessagesMap[messageKey] || [];
+        const assistantId =
+          findCompletionAssistantMessageId(finalMessages, parentMessageId, parentMessageType) ??
+          findCompletionAssistantMessageId(dbMessages, parentMessageId, parentMessageType);
+        const lastAssistant = assistantId
+          ? (finalMessages.find((m) => m.id === assistantId) ??
+            dbMessages.find((m) => m.id === assistantId))
+          : undefined;
         if (!lastAssistant?.content || lastAssistant?.tools) return;
 
         await notifyDesktopAgentCompleted(get, {
@@ -269,7 +299,7 @@ export const buildRunLifecycle = (
 
       await notifyDesktopAgentCompleted(get, {
         badge: true,
-        content: event.notification?.content ?? fallbackContent,
+        content: event.notification?.content || fallbackContent,
         context: notificationContext,
       });
     },
@@ -291,6 +321,39 @@ export const buildRunLifecycle = (
             topicId: completedOp.context.topicId,
           });
         }
+      };
+
+      // The client transport persists `status: 'running'` at run start
+      // (streamingExecutor) but, unlike gateway (see gateway.ts onSessionComplete),
+      // had no terminal write that flips it back for the topic the user is
+      // watching — `markTopicUnread` early-returns on the active topic, so the
+      // persisted status stayed `running` forever and stuck both the sidebar
+      // spinner and the home "任务正在执行" card. Mirror gateway's rule here: a
+      // clean completion the user isn't watching is owned by `markTopicUnread`
+      // (status: 'unread'); every OTHER case (viewing, error, abort) force-resets
+      // to 'active'. Client + top-level + real topic only — sub-agents never wrote
+      // 'running', and gateway/hetero own their own reset.
+      const resetActiveTopicRunningStatus = () => {
+        if (adapter.runtimeType !== 'client') return;
+        if (adapter.runScope === 'sub_agent') return;
+        if (!topicId) return;
+        const viewing = get().activeTopicId === topicId;
+        // Not-viewing clean success is owned by `markTopicUnread` (→ 'unread');
+        // skip so the two never race over the status field.
+        if (!viewing && disposition === 'success') return;
+        // Carry the group scope through, exactly like the start-write does. Without
+        // it `updateTopicStatus` auto-derives `group_agent` from agentId+groupId and
+        // the optimistic in-memory patch lands in the wrong bucket, leaving the
+        // VISIBLE group topic's sidebar spinner stuck until the next refetch.
+        void get().updateTopicStatus?.({
+          agentId,
+          groupId,
+          ...(context.scope === 'group' || context.scope === 'group_agent'
+            ? { scope: context.scope }
+            : {}),
+          status: 'active',
+          topicId,
+        });
       };
 
       // 1. afterCompletion callbacks — fire on ALL terminal states (tools that
@@ -380,6 +443,10 @@ export const buildRunLifecycle = (
         // Parked states never reach `completeRun` — the executor routes them to
         // `onRunParked`.
       }
+
+      // Runs past the requeue early-return, so a run that continues into a queued
+      // follow-up (which writes 'running' again) is never reset mid-flight.
+      resetActiveTopicRunningStatus();
 
       emitComplete(operationId, runtimeStatus);
 

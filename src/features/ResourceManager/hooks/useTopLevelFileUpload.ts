@@ -16,8 +16,8 @@ import { useFileStore } from '@/store/file';
  *   mode picks visibility (`'private'` → private drawer, `'workspace'` →
  *   team share). No modal, no prompt.
  * - **inside a library or folder**: leave visibility `undefined`; the server
- *   inherits the parent document's visibility so a private folder's uploads
- *   stay private, and a workspace folder's uploads stay workspace-shared.
+ *   resolves it from the parent document or library boundary so uploads stay
+ *   in the same private/workspace-visible scope.
  * - **personal mode** (no `activeWorkspaceId`): also `undefined`; personal
  *   rows have no visibility column semantics.
  */

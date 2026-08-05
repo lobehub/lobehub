@@ -3,11 +3,13 @@
 import { type BlockProps, type GenericItemType, type IconProps } from '@lobehub/ui';
 import { Block, Center, ContextMenuTrigger, Flexbox, Icon, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { type ReactNode } from 'react';
+import { type FocusEvent, type PointerEvent, type ReactNode } from 'react';
 import { memo } from 'react';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { isModifierClick } from '@/utils/navigation';
+
+import { type LazyActions, useLazyActions } from './useLazyActions';
 
 const ACTION_CLASS_NAME = 'nav-item-actions';
 
@@ -23,7 +25,8 @@ const styles = createStaticStyles(({ css }) => ({
       opacity: 0;
       transition: opacity 0.2s ${cssVar.motionEaseOut};
 
-      &:has([data-popup-open]) {
+      &:has([data-popup-open]),
+      &:focus-within {
         width: unset;
         opacity: 1;
       }
@@ -44,7 +47,15 @@ export interface NavItemSlots {
 }
 
 export interface NavItemProps extends Omit<BlockProps, 'children' | 'title'> {
-  actions?: ReactNode;
+  /**
+   * Pass a thunk to defer mounting until the row is first pointed at or focused.
+   * Actions are invisible until `:hover` anyway, and an overlay-bearing action (a
+   * dropdown, a popover) costs a dozen fibers per row — enough to matter in a
+   * list. Focus counts as well as the pointer: a keyboard user tabs to the row
+   * and must still find the actions in the tab order. Once mounted it stays
+   * mounted, so an open popup survives the pointer leaving the row.
+   */
+  actions?: LazyActions;
   active?: boolean;
   contextMenuItems?: GenericItemType[] | (() => GenericItemType[]);
   /**
@@ -89,8 +100,26 @@ const NavItem = memo<NavItemProps>(
     loading,
     extra,
     slots,
+    style,
+    onFocus,
+    onPointerEnter,
     ...rest
   }) => {
+    const { mount: mountLazyActions, node: renderedActions } = useLazyActions(actions);
+
+    const handlePointerEnter = (e: PointerEvent<HTMLDivElement>) => {
+      mountLazyActions();
+      onPointerEnter?.(e);
+    };
+
+    // Focus, not just the pointer: a keyboard user reaches the row by tabbing,
+    // which never fires `pointerenter`. Without this the actions would be absent
+    // from the tab order entirely rather than merely invisible.
+    const handleFocus = (e: FocusEvent<HTMLDivElement>) => {
+      mountLazyActions();
+      onFocus?.(e);
+    };
+
     const iconColor = active ? cssVar.colorText : cssVar.colorTextDescription;
     const textColor = titleColor ?? (active ? cssVar.colorText : cssVar.colorTextSecondary);
     const variant = active ? 'filled' : 'borderless';
@@ -101,9 +130,19 @@ const NavItem = memo<NavItemProps>(
       ? {
           as: 'a' as const,
           href,
-          style: { color: 'inherit', textDecoration: 'none' },
         }
       : {};
+
+    const mergedStyle =
+      href || disabled || style
+        ? {
+            ...(href ? { color: 'inherit', textDecoration: 'none' } : undefined),
+            // `disabled` only blocks the click by itself — dim the row so the
+            // blocked state is visible instead of a silently dead button.
+            ...(disabled ? { cursor: 'not-allowed', opacity: 0.5 } : undefined),
+            ...style,
+          }
+        : undefined;
 
     const Content = (
       <Block
@@ -113,8 +152,9 @@ const NavItem = memo<NavItemProps>(
         clickable={!disabled}
         gap={8}
         height={description ? undefined : 36}
-        paddingBlock={description ? 4 : undefined}
+        paddingBlock={description ? 8 : undefined}
         paddingInline={4}
+        style={mergedStyle}
         variant={variant}
         onClick={(e) => {
           // Always prevent default <a> navigation for normal clicks to avoid full page reload.
@@ -127,9 +167,19 @@ const NavItem = memo<NavItemProps>(
         }}
         {...linkProps}
         {...rest}
+        onFocus={handleFocus}
+        onPointerEnter={handlePointerEnter}
       >
         {icon && (
-          <Center flex={'none'} height={28} width={28}>
+          <Center
+            flex={'none'}
+            // With a description the row is two lines tall; align the leading icon
+            // to the title's first line (match its line-height) instead of letting
+            // it center across both lines, which drops it into the gap.
+            height={description ? 22 : 28}
+            style={description ? { alignSelf: 'flex-start' } : undefined}
+            width={28}
+          >
             {loading ? (
               <NeuralNetworkLoading size={iconSize} />
             ) : (
@@ -142,7 +192,7 @@ const NavItem = memo<NavItemProps>(
         <Flexbox horizontal align={'center'} flex={1} gap={8} style={{ overflow: 'hidden' }}>
           {titlePrefix}
           {description ? (
-            <Flexbox flex={1} gap={1} style={{ overflow: 'hidden' }}>
+            <Flexbox flex={1} gap={3} style={{ overflow: 'hidden' }}>
               <Text color={textColor} ellipsis={{ tooltipWhenOverflow: true }}>
                 {title}
               </Text>
@@ -182,7 +232,7 @@ const NavItem = memo<NavItemProps>(
                   e.stopPropagation();
                 }}
               >
-                {actions}
+                {renderedActions}
               </Flexbox>
             )}
           </Flexbox>

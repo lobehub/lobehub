@@ -1,5 +1,6 @@
 'use client';
 
+import { agentDisplayName } from '@lobechat/types';
 import { Flexbox, SearchBar, Skeleton, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -51,13 +52,15 @@ const AvailableAgentList = memo<AvailableAgentListProps>(({ agents, isLoading })
   // store so we can bucket the modal's flat list into private/workspace
   // sections without changing the shared `AvailableAgentItem` payload.
   const privateGroups = useHomeStore(homeAgentListSelectors.privateAgentGroups, isEqual);
+  const privatePinned = useHomeStore(homeAgentListSelectors.privatePinnedAgents, isEqual);
   const privateUngrouped = useHomeStore(homeAgentListSelectors.privateUngroupedAgents, isEqual);
   const privateAgentIds = useMemo(() => {
     const ids = new Set<string>();
     for (const g of privateGroups) for (const a of g.items) ids.add(a.id);
+    for (const a of privatePinned) ids.add(a.id);
     for (const a of privateUngrouped) ids.add(a.id);
     return ids;
-  }, [privateGroups, privateUngrouped]);
+  }, [privateGroups, privatePinned, privateUngrouped]);
 
   const handleSearchChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
@@ -69,7 +72,7 @@ const AvailableAgentList = memo<AvailableAgentListProps>(({ agents, isLoading })
 
     const searchLower = searchTerm.toLowerCase();
     return agents.filter((agent) => {
-      const title = agent.title || '';
+      const title = agentDisplayName(agent) ?? '';
       const description = agent.description || '';
       return (
         title.toLowerCase().includes(searchLower) || description.toLowerCase().includes(searchLower)

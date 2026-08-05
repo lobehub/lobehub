@@ -7,13 +7,13 @@ import { AsyncTaskStatus } from '@/types/asyncTask';
 // ---- hoisted mocks (available inside vi.mock factories) ----
 
 const {
-  mockAfter,
   mockCreateVideo,
   mockFindUserById,
   mockGenerationTopicFindById,
   mockIsLobeHubModelAvailable,
   mockProcessBackgroundVideoPolling,
   mockResolveBusinessModelMapping,
+  mockAfter,
   mockServerDB,
   mockTransaction,
 } = vi.hoisted(() => {
@@ -27,13 +27,13 @@ const {
   const mockProcessBackgroundVideoPolling = vi.fn().mockResolvedValue(undefined);
   const mockResolveBusinessModelMapping = vi.fn();
   return {
-    mockAfter,
     mockCreateVideo,
     mockFindUserById,
     mockGenerationTopicFindById,
     mockIsLobeHubModelAvailable,
     mockProcessBackgroundVideoPolling,
     mockResolveBusinessModelMapping,
+    mockAfter,
     mockServerDB,
     mockTransaction,
   };
@@ -86,7 +86,9 @@ vi.mock('@lobechat/business-model-bank/model-config', () => ({
 vi.mock('@/business/server/video-generation/getVideoFreeQuota', () => ({
   getVideoFreeQuota: vi.fn().mockResolvedValue({ remaining: 10 }),
 }));
-vi.mock('next/server', () => ({ after: (cb: () => void) => mockAfter(cb) }));
+vi.mock('@/server/utils/scheduleAfterResponse', () => ({
+  after: (cb: () => void) => mockAfter(cb),
+}));
 vi.mock('@/server/services/generation/videoBackgroundPolling', () => ({
   processBackgroundVideoPolling: mockProcessBackgroundVideoPolling,
 }));
@@ -270,7 +272,7 @@ describe('videoRouter', () => {
         inferenceId: 'inf-2',
         status: AsyncTaskStatus.Processing,
       });
-      // Polling: should trigger background polling via after()
+      // Polling: should trigger background polling after the response.
       expect(mockAfter).toHaveBeenCalled();
       expect(mockProcessBackgroundVideoPolling).toHaveBeenCalled();
     });

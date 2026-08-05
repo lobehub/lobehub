@@ -6,13 +6,17 @@ import type {
   GitWorkingTreePatches,
 } from '@lobechat/electron-client-ipc';
 import type {
+  DeviceGitAddWorktreeResult,
   DeviceGitAheadBehind,
   DeviceGitBranchListItem,
   DeviceGitCheckoutResult,
   DeviceGitDeleteBranchResult,
   DeviceGitLinkedPullRequest,
+  DeviceGitLinkedPullRequestLookupStatus,
+  DeviceGitRemoveWorktreeResult,
   DeviceGitRenameBranchResult,
   DeviceGitSyncResult,
+  DeviceGitUpstreamRef,
   DeviceGitWorkingTreeStatus,
   DeviceGitWorktreeListItem,
 } from '@lobechat/types';
@@ -24,6 +28,7 @@ import { electronGitService } from '@/services/electron/git';
 export interface GitBranchSummary {
   branch?: string;
   detached?: boolean;
+  upstream?: DeviceGitUpstreamRef;
 }
 
 /** Linked-PR summary for a branch — the result of the expensive `gh` leg. */
@@ -31,6 +36,8 @@ export interface GitLinkedPRSummary {
   extraCount?: number;
   ghMissing?: boolean;
   pullRequest?: DeviceGitLinkedPullRequest | null;
+  pullRequestStatus?: DeviceGitLinkedPullRequestLookupStatus;
+  upstream?: DeviceGitUpstreamRef;
 }
 
 /**
@@ -103,6 +110,43 @@ class GitService {
       : electronGitService.deleteGitBranch({ branch, path });
   }
 
+  /** Remove a worktree from a working directory's repository. */
+  removeGitWorktree({
+    deviceId,
+    path,
+    worktreePath,
+  }: {
+    deviceId?: string;
+    path: string;
+    worktreePath: string;
+  }): Promise<DeviceGitRemoveWorktreeResult> {
+    return deviceId
+      ? lambdaClient.device.removeGitWorktree.mutate({ deviceId, path, worktreePath })
+      : electronGitService.removeGitWorktree({ path, worktreePath });
+  }
+
+  /**
+   * Add a linked worktree on a fresh branch to a working directory's repository.
+   * A remote device derives the target path server-side from `path` + `branch`
+   * (never trusting a client-supplied absolute path), so `worktreePath` is only
+   * forwarded on the local IPC route where this machine owns the filesystem.
+   */
+  addGitWorktree({
+    branch,
+    deviceId,
+    path,
+    worktreePath,
+  }: {
+    branch: string;
+    deviceId?: string;
+    path: string;
+    worktreePath: string;
+  }): Promise<DeviceGitAddWorktreeResult> {
+    return deviceId
+      ? lambdaClient.device.addGitWorktree.mutate({ branch, deviceId, path })
+      : electronGitService.addGitWorktree({ branch, path, worktreePath });
+  }
+
   /** Pull (`--ff-only`) the current branch of a working directory. */
   pullGitBranch({
     deviceId,
@@ -145,31 +189,45 @@ class GitService {
     const info = deviceId
       ? await lambdaClient.device.gitBranch.query({ deviceId, path })
       : await electronGitService.getGitBranch(path);
-    return { branch: info?.branch, detached: info?.detached };
+    return { branch: info?.branch, detached: info?.detached, upstream: info?.upstream };
   }
 
   /**
-   * PR linked to `branch` on a GitHub repo. Shells out to `gh pr list` (8s
-   * timeout), so callers throttle this far more aggressively than the branch
-   * read. Returns `undefined` when nothing is linked / the lookup is skipped.
+   * PR linked to `branch` on a GitHub repo. Shells out to `gh` (8s timeout), so
+   * callers throttle this far more aggressively than the branch read. Includes
+   * merged/closed PRs so persisted snapshots can refresh after GitHub changes
+   * outside the app.
+   *
+   * `branch` is the LOCAL branch; the device resolves the remote ref it publishes
+   * to and queries GitHub under that, falling back to a commit→PR lookup. It
+   * reports the ref it landed on as `upstream` — persist that, not the local name.
    */
   async getLinkedPullRequest({
     branch,
     deviceId,
     path,
+    pullRequestNumber,
   }: {
     branch: string;
     deviceId?: string;
     path: string;
+    pullRequestNumber?: number;
   }): Promise<GitLinkedPRSummary | undefined> {
     const pr = deviceId
-      ? await lambdaClient.device.gitLinkedPullRequest.query({ branch, deviceId, path })
-      : await electronGitService.getLinkedPullRequest({ branch, path });
+      ? await lambdaClient.device.gitLinkedPullRequest.query({
+          branch,
+          deviceId,
+          path,
+          pullRequestNumber,
+        })
+      : await electronGitService.getLinkedPullRequest({ branch, path, pullRequestNumber });
     if (!pr) return undefined;
     return {
       extraCount: pr.extraCount,
       ghMissing: pr.status === 'gh-missing',
       pullRequest: pr.pullRequest,
+      pullRequestStatus: pr.status,
+      upstream: pr.upstream,
     };
   }
 

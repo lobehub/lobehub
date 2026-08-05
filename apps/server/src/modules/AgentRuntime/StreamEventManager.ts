@@ -360,6 +360,65 @@ export class StreamEventManager {
   }
 
   /**
+   * Single bounded read — the long-poll primitive (see `IStreamEventManager`).
+   * One `XREAD BLOCK`, no loop: returns events after `lastEventId` (blocking up
+   * to `blockMs` for the first), or an empty list on timeout. The returned
+   * `lastEventId` is always a CONCRETE stream id, never the `'$'` sentinel — the
+   * caller threads it into its next call to stay gap-free.
+   *
+   * `lastEventId` defaults to `'$'` (only events published after this call
+   * lands) so a fresh poll doesn't replay history. We resolve `'$'` to the
+   * stream's current tail id BEFORE blocking, because Redis re-evaluates `'$'`
+   * as "the tail at read time" on every `XREAD`: returning `'$'` unchanged on a
+   * timeout would re-anchor the next poll to whatever the tail is by then,
+   * silently skipping any event published in the gap between this call resolving
+   * and the next one being issued. Pinning a concrete id (the last entry now, or
+   * `'0'` on an empty/absent stream) closes that gap.
+   */
+  async readEventsOnce(
+    operationId: string,
+    lastEventId: string = '$',
+    blockMs: number = 25_000,
+  ): Promise<{ events: StreamEvent[]; lastEventId: string }> {
+    const streamKey = `${this.STREAM_PREFIX}:${operationId}`;
+
+    // Resolve the '$' sentinel to a concrete tail id up front (see doc above).
+    // A timeout on a blocking XREAD means nothing was appended after this id, so
+    // it is still the true tail — safe to hand back for the next poll.
+    let fromId = lastEventId;
+    if (fromId === '$') {
+      const tail = await this.redis.xrevrange(streamKey, '+', '-', 'COUNT', 1);
+      fromId = tail.length > 0 ? tail[0][0] : '0';
+    }
+
+    const results = await this.redis.xread('BLOCK', blockMs, 'STREAMS', streamKey, fromId);
+    if (!results || results.length === 0) return { events: [], lastEventId: fromId };
+
+    const [, messages] = results[0];
+    const events: StreamEvent[] = [];
+    let currentLastId = fromId;
+
+    for (const [id, fields] of messages) {
+      const eventData: any = {};
+      for (let i = 0; i < fields.length; i += 2) {
+        const key = fields[i];
+        const value = fields[i + 1];
+        if (key === 'data') {
+          eventData[key] = JSON.parse(value);
+        } else if (key === 'stepIndex' || key === 'timestamp') {
+          eventData[key] = parseInt(value);
+        } else {
+          eventData[key] = value;
+        }
+      }
+      events.push({ ...eventData, id } as StreamEvent);
+      currentLastId = id;
+    }
+
+    return { events, lastEventId: currentLastId };
+  }
+
+  /**
    * Get stream event history
    */
   async getStreamHistory(operationId: string, count: number = 100): Promise<StreamEvent[]> {

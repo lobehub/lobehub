@@ -1,4 +1,5 @@
 export * from './blob';
+export * from './compression';
 export * from './context';
 export * from './host';
 export * from './lifecycle';

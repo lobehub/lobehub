@@ -10,6 +10,9 @@
 #   ./record-app-screen.sh stop                   # Stop and save
 #   ./record-app-screen.sh status                 # Check recording state
 #
+# Run this from the CONSUMER repo root — output goes to .records/ under the
+# current working directory, not relative to this script's own location.
+#
 # Outputs to .records/ directory:
 #   .records/<name>.mp4   — Video assembled from screenshots (~2 fps)
 #   .records/<name>/      — Screenshots every SCREENSHOT_INTERVAL seconds
@@ -25,17 +28,13 @@
 #   VIDEO_FRAME_INTERVAL  — Seconds between video frames (default: 0.5)
 #
 # Examples:
-#   ./electron-dev.sh start
-#   ./record-app-screen.sh start gateway-demo
+#   record-app-screen.sh start gateway-demo
 #   # ... run automation via agent-browser ...
-#   ./record-app-screen.sh stop
+#   record-app-screen.sh stop
 #
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
-
-RECORDS_DIR="$PROJECT_DIR/.records"
+RECORDS_DIR="$(pwd)/.records"
 PID_FILE="/tmp/record-app-screen.pids"
 STATE_FILE="/tmp/record-app-screen.state"
 

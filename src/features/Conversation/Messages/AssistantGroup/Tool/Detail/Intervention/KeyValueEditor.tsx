@@ -1,6 +1,7 @@
-import { ActionIcon, Button, Flexbox, Icon, Input } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, Input } from '@lobehub/ui';
+import { Button, toast } from '@lobehub/ui/base-ui';
 import { type FormInstance } from 'antd';
-import { App, Form } from 'antd';
+import { Form } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { LucidePlus, LucideTrash } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
@@ -69,7 +70,7 @@ const formListToRecord = (list: KeyValueItem[]): Record<string, any> => {
 const KeyValueEditor = memo<KeyValueEditorProps>(({ initialValue = {}, onFinish, onCancel }) => {
   const { t } = useTranslation(['tool', 'common']);
   const [form] = Form.useForm();
-  const { message } = App.useApp();
+
   const formRef = useRef<FormInstance>(null);
 
   useEffect(() => {
@@ -86,7 +87,7 @@ const KeyValueEditor = memo<KeyValueEditorProps>(({ initialValue = {}, onFinish,
       await onFinish?.(record);
     } catch (errorInfo) {
       console.error('Validation Failed:', errorInfo);
-      message.error(t('updateArgs.formValidationFailed') || 'Please check the form for errors.');
+      toast.error(t('updateArgs.formValidationFailed') || 'Please check the form for errors.');
     }
     setUpdating(false);
   };
@@ -183,10 +184,9 @@ const KeyValueEditor = memo<KeyValueEditorProps>(({ initialValue = {}, onFinish,
             <Form.Item style={{ marginBottom: 0, marginTop: 8 }}>
               <Flexbox horizontal gap={8} justify={'space-between'}>
                 <Button
-                  color={'default'}
                   icon={<Icon icon={LucidePlus} />}
                   size={'small'}
-                  variant="filled"
+                  type="fill"
                   onClick={() => add({ id: `new-${Date.now()}`, key: '', value: '' })}
                 >
                   {t('updateArgs.form.add')}

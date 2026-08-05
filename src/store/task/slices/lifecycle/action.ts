@@ -1,9 +1,14 @@
 import type { TaskDetailData, TaskStatus } from '@lobechat/types';
+import debug from 'debug';
 
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
+import { runMutation } from '@/store/utils/runMutation';
+import { saveToast } from '@/store/utils/saveToast';
 
 import type { TaskStore } from '../../store';
+
+const log = debug('lobe-store:task-lifecycle');
 
 type Setter = StoreSetter<TaskStore>;
 
@@ -35,21 +40,42 @@ export class TaskLifecycleSliceActionImpl {
   runTask = async (
     id: string,
     params?: { continueTopicId?: string; prompt?: string },
-  ): Promise<void> => {
+    options?: { throwOnError?: boolean },
+  ): Promise<Awaited<ReturnType<typeof taskService.run>> | null> => {
     this.#get().internal_dispatchTaskDetail({
       id,
       type: 'updateTaskDetail',
       value: { error: null, status: 'running' },
     });
 
+    let result: Awaited<ReturnType<typeof taskService.run>>;
     try {
-      await taskService.run(id, params);
-      await this.#get().internal_refreshTaskDetail(id);
-      await this.#get().refreshTaskList();
+      result = await taskService.run(id, params);
     } catch (error) {
-      console.error('[TaskStore] Failed to run task:', error);
-      await this.#get().internal_refreshTaskDetail(id);
+      log('Failed to run task %s: %O', id, error);
+      try {
+        await this.#get().internal_refreshTaskDetail(id);
+      } catch (refreshError) {
+        log('Failed to refresh task %s after run failure: %O', id, refreshError);
+      }
+      if (options?.throwOnError) throw error;
+      return null;
     }
+
+    // The server-side execution has already succeeded. Cache refreshes are
+    // best-effort and must not turn that success into a retryable run failure,
+    // because retrying would create a duplicate execution.
+    const refreshResults = await Promise.allSettled([
+      this.#get().internal_refreshTaskDetail(id),
+      this.#get().refreshTaskList(),
+    ]);
+    for (const refreshResult of refreshResults) {
+      if (refreshResult.status === 'rejected') {
+        log('Failed to refresh task %s after successful run: %O', id, refreshResult.reason);
+      }
+    }
+
+    return result;
   };
 
   runReadySubtasks = async (parentTaskId: string) => {
@@ -94,19 +120,22 @@ export class TaskLifecycleSliceActionImpl {
       type: 'updateTaskDetail',
       value: { status, ...extraUpdate },
     });
-    this.#set({ taskSaveStatus: 'saving' }, false, 'transitionStatus/saving');
-
-    try {
-      await taskService.updateStatus(id, status, error);
-      this.#set({ taskSaveStatus: 'saved' }, false, 'transitionStatus/saved');
-      await this.#get().internal_refreshTaskDetail(id);
-      await this.#get().refreshTaskList();
-    } catch (error) {
-      console.error(`[TaskStore] Failed to transition task to ${status}:`, error);
-      this.#set({ taskSaveStatus: 'idle' }, false, 'transitionStatus/error');
-      await this.#get().internal_refreshTaskDetail(id);
-      throw error;
-    }
+    await runMutation(this.#set, this.#get, {
+      mutate: async () => {
+        await taskService.updateStatus(id, status, error);
+        await this.#get().internal_refreshTaskDetail(id);
+        await this.#get().refreshTaskList();
+      },
+      name: 'transitionStatus',
+      onError: async (err) => {
+        console.error(`[TaskStore] Failed to transition task to ${status}:`, err);
+        await this.#get().internal_refreshTaskDetail(id);
+        saveToast(err, {
+          retry: () => void this.#transitionStatus(id, status, extraUpdate, error),
+        });
+      },
+      setStatus: (s) => this.#get().internal_setTaskSaveStatus(id, s),
+    });
   };
 }
 

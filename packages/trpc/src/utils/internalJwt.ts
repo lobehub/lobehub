@@ -80,18 +80,28 @@ export const signInternalJWT = async (): Promise<string> => {
 };
 
 /**
- * Sign a short-lived OIDC-compatible JWT for a given user.
+ * Sign an OIDC-compatible JWT for a given user.
  * Used by server-side sandbox execution to authenticate CLI commands.
- * The token contains `sub: userId` and passes standard OIDC JWT validation.
+ * The token contains `sub: userId` and passes standard OIDC JWT validation
+ * (its `cli-sandbox` purpose is accepted by `oidcAuth`, unlike the narrow
+ * `hetero-operation` token), so the sandbox's nested `lh` calls can reach
+ * user-scoped endpoints (e.g. file upload).
+ *
+ * Defaults to a short 5-minute expiry for one-shot command auth; long-running
+ * callers (e.g. a hetero CC/Codex sandbox run that streams for hours) pass a
+ * run-length `expiration` so the token doesn't lapse mid-run.
  */
-export const signUserJWT = async (userId: string): Promise<string> => {
+export const signUserJWT = async (
+  userId: string,
+  expiration: string | number = '5m',
+): Promise<string> => {
   const { key, kid } = await getSigningKey();
 
   return new SignJWT({ purpose: 'cli-sandbox' })
     .setProtectedHeader({ alg: 'RS256', kid })
     .setSubject(userId)
     .setIssuedAt()
-    .setExpirationTime('5m')
+    .setExpirationTime(expiration)
     .sign(key);
 };
 

@@ -3,6 +3,7 @@
 import { memo, useLayoutEffect } from 'react';
 import { useParams } from 'react-router';
 
+import { GroupNotFoundGuard } from '@/features/GroupNotFound';
 import { useFetchTopics } from '@/hooks/useFetchTopics';
 import { useInitGroupConfig } from '@/hooks/useInitGroupConfig';
 import GroupConversation from '@/routes/(main)/group/features/Conversation';
@@ -33,7 +34,11 @@ const PopupGroupTopicPage = memo(() => {
 
   if (!gid || !tid) return null;
 
-  return <GroupConversation />;
+  return (
+    <GroupNotFoundGuard>
+      <GroupConversation />
+    </GroupNotFoundGuard>
+  );
 });
 
 PopupGroupTopicPage.displayName = 'PopupGroupTopicPage';

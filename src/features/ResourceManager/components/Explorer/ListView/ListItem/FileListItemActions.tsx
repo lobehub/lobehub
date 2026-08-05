@@ -1,5 +1,6 @@
 import type { IAsyncTaskError } from '@lobechat/types';
-import { Button, Flexbox, stopPropagation } from '@lobehub/ui';
+import { Flexbox, stopPropagation } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import type { ItemType } from 'antd/es/menu/interface';
 import { isNull } from 'es-toolkit/compat';
 import { FileBoxIcon } from 'lucide-react';

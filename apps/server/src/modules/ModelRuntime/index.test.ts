@@ -576,6 +576,20 @@ describe('buildPayloadFromKeyVaults', () => {
       });
     });
 
+    it('ChatGPT: returns the OAuth access token and account id', () => {
+      const keyVaults = {
+        oauthAccessToken: 'oauth-access-token',
+        oauthAccountId: 'chatgpt-account-id',
+      };
+      const payload = buildPayloadFromKeyVaults(keyVaults, ModelProvider.ChatGPT);
+
+      expect(payload).toEqual({
+        apiKey: 'oauth-access-token',
+        chatgptAccountId: 'chatgpt-account-id',
+        runtimeProvider: ModelProvider.ChatGPT,
+      });
+    });
+
     it('Azure: returns apiKey, baseURL and runtimeProvider', () => {
       const keyVaults = {
         apiKey: 'azure-api-key',

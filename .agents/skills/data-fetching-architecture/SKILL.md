@@ -269,12 +269,58 @@ export const createBenchmarkSlice: StateCreator<EvalStore, any, [], BenchmarkAct
 
 1. **SWR keys as constants** at top of file
 2. **useClientDataSWR** for all data fetching (never useEffect)
-3. **onSuccess callback** updates store state
+3. **onSuccess/onData callback** updates store state
 4. **Refresh methods** use `mutate()` to invalidate cache
-5. **Loading states** in initialState, updated in onSuccess
+5. **Loading states** in initialState, updated in onSuccess/onData
 6. **Mutations** call service, then refresh relevant cache
 
 ---
+
+## Async Failure Boundary Contract
+
+Every read hook returns an SWR response that includes `error` and `mutate`; the surface must
+consume them. A success-only init flag (`!isInit`, `!map[id]`, `data ?? []`) is not enough:
+when the request fails, that flag often never flips, so the UI paints a permanent skeleton,
+a fake empty state, a false `NotFound`, or a confident zero-value metric.
+
+Use the shared UI primitives:
+
+- `AsyncBoundary` for normal loading / error / empty / data surfaces.
+- `AsyncError` for custom layouts, detail pages, inline load-more failures, or metrics.
+
+Core precedence for first-load failures:
+
+```tsx
+const { data, error, isLoading, mutate } = useFetchXxx();
+
+return (
+  <AsyncBoundary
+    data={data}
+    empty={<EmptyState />}
+    error={error}
+    isEmpty={!error && data?.length === 0}
+    isLoading={isLoading}
+    onRetry={() => {
+      void mutate();
+    }}
+  >
+    <List items={data ?? []} />
+  </AsyncBoundary>
+);
+```
+
+Rules:
+
+- Check `error` before empty / `NotFound` / zero defaults. Error is not a kind of empty.
+- Keep already-loaded content on background revalidation failures; only replace the surface
+  when there is no settled data to preserve.
+- For detail maps, don't put the error branch after `if (!map[id]) return <Skeleton/>`.
+  First-load failures never populate the map, making that error branch unreachable.
+- For infinite scroll / load-more, persist a per-bucket `loadMoreError` and render an
+  inline Retry row. Do not let an `IntersectionObserver` silently retry while the error is
+  still unresolved.
+- For merged fetched + static lists, branch on the fetched slice's `error` before merging.
+  Static fallback rows can make a failed fetch look like a plausible partial catalog.
 
 ## Layer 3: Component Usage
 
@@ -600,9 +646,12 @@ See `store-data-structures` for details.
 ### Step 4: Component Usage
 
 - [ ] Use store hooks (NOT useEffect)
+- [ ] Destructure and consume `error` / `mutate`; wrap first-load surfaces in `AsyncBoundary`
+      or render `AsyncError` before empty / `NotFound` / zero defaults
 - [ ] List pages: access `xxxList` array
 - [ ] Detail pages: access `xxxDetailMap[id]`
 - [ ] Use loading states for UI feedback
+- [ ] Infinite-scroll failures persist as a visible tail Retry row, not a silent `catch`
 
 **Mental model:** Types → Service → Reducer → Slice → Component 🎯
 

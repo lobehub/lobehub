@@ -3,8 +3,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   DESKTOP_ONBOARDING_EVER_COMPLETED_KEY,
   getDesktopOnboardingEverCompleted,
+  getDesktopOnboardingScreen,
   setDesktopOnboardingEverCompleted,
 } from './storage';
+import { DesktopOnboardingScreen } from './types';
 
 describe('desktop-onboarding storage', () => {
   beforeEach(() => {
@@ -29,6 +31,17 @@ describe('desktop-onboarding storage', () => {
     it('returns false when localStorage holds an unrelated value', () => {
       window.localStorage.setItem(DESKTOP_ONBOARDING_EVER_COMPLETED_KEY, '0');
       expect(getDesktopOnboardingEverCompleted()).toBe(false);
+    });
+  });
+
+  describe('saved screen', () => {
+    it('ignores positions persisted by the previous flow order', () => {
+      window.localStorage.setItem(
+        'lobechat:desktop:onboarding:screen:v2',
+        DesktopOnboardingScreen.Login,
+      );
+
+      expect(getDesktopOnboardingScreen()).toBeNull();
     });
   });
 });

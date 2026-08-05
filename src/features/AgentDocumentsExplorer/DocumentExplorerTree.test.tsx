@@ -29,7 +29,12 @@ vi.mock('@lobehub/ui', () => ({
     </button>
   ),
   Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  Icon: () => <span />,
   Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
+}));
+
+vi.mock('@lobehub/ui/icons', () => ({
+  SkillsIcon: () => null,
 }));
 
 vi.mock('@lobehub/ui/base-ui', () => ({
@@ -134,6 +139,8 @@ vi.mock('@/features/ExplorerTree', () => {
   };
 
   return {
+    DISABLE_ROW_TEXT_SELECTION_CSS: '',
+    DOCUMENT_TREE_ICON_CSS: '',
     ExplorerTree,
     FOLDER_ICON_CSS: '',
     HIDE_POINTER_FOCUS_RING_CSS: '',

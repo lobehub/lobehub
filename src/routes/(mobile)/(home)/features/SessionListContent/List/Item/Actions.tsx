@@ -1,6 +1,5 @@
 import { ActionIcon, DropdownMenu, Icon } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { type ItemType } from 'antd/es/menu/interface';
 import isEqual from 'fast-deep-equal';
 import {
@@ -25,6 +24,7 @@ import { useSessionStore } from '@/store/session';
 import { sessionHelpers } from '@/store/session/helpers';
 import { sessionGroupSelectors, sessionSelectors } from '@/store/session/selectors';
 import { SessionDefaultGroup } from '@/types/index';
+import { isForbiddenError, isOwnerOnlyForbiddenError } from '@/utils/forbiddenError';
 
 interface ActionProps {
   group: string | undefined;
@@ -59,8 +59,6 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
     s.pinAgentGroup,
     s.removeAgentGroup,
   ]);
-
-  const { message } = App.useApp();
 
   const isDefault = group === SessionDefaultGroup.Default;
 
@@ -174,12 +172,22 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
               confirmModal({
                 okButtonProps: { danger: true },
                 onOk: async () => {
-                  if (parentType === 'group') {
-                    await removeAgentGroup(id);
-                    message.success(t('confirmRemoveGroupSuccess'));
-                  } else {
-                    await removeSession(id);
-                    message.success(t('confirmRemoveSessionSuccess'));
+                  try {
+                    if (parentType === 'group') {
+                      await removeAgentGroup(id);
+                      toast.success(t('confirmRemoveGroupSuccess'));
+                    } else {
+                      await removeSession(id);
+                      toast.success(t('confirmRemoveSessionSuccess'));
+                    }
+                  } catch (error) {
+                    toast.error(
+                      isOwnerOnlyForbiddenError(error)
+                        ? t('deleteSharedOwnerOnly', { ns: 'common' })
+                        : isForbiddenError(error)
+                          ? t('manageOnlyCreator', { ns: 'common' })
+                          : t('operationFailed', { ns: 'common' }),
+                    );
                   }
                 },
                 title:
@@ -212,7 +220,6 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
       sessionType,
       t,
       updateSessionGroup,
-      message,
     ],
   );
 

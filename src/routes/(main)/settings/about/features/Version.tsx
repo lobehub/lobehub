@@ -4,9 +4,10 @@ import {
   type UpdaterState,
   useWatchBroadcast,
 } from '@lobechat/electron-client-ipc';
-import { Block, Button, Flexbox, Tag } from '@lobehub/ui';
+import { Block, Flexbox, Tag } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ProductLogo } from '@/components/Branding';
@@ -15,6 +16,12 @@ import { CURRENT_VERSION } from '@/const/version';
 import { useNewVersion } from '@/features/User/UserPanel/useNewVersion';
 import { autoUpdateService } from '@/services/electron/autoUpdate';
 import { useGlobalStore } from '@/store/global';
+import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
+import {
+  advanceDevDockClickSequence,
+  INITIAL_DEV_DOCK_CLICK_SEQUENCE,
+  toggleDevDockUnlocked,
+} from '@/utils/devDockUnlock';
 
 import { APP_VERSION } from './appVersion';
 
@@ -26,14 +33,28 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
   const hasNewVersion = useNewVersion();
-  const [latestVersion, serverVersion, useCheckServerVersion] = useGlobalStore((s) => [
-    s.latestVersion,
-    s.serverVersion,
-    s.useCheckServerVersion,
-  ]);
+  const [latestVersion, serverVersion, useCheckServerVersion, useCheckLatestVersion] =
+    useGlobalStore((s) => [
+      s.latestVersion,
+      s.serverVersion,
+      s.useCheckServerVersion,
+      s.useCheckLatestVersion,
+    ]);
   const { t } = useTranslation(['common', 'setting']);
 
   useCheckServerVersion();
+
+  // Read the shared latest-version check state (deduped by key, no extra fetch)
+  // so a failed update check can surface a retry instead of silently rendering
+  // nothing — which is indistinguishable from "up to date".
+  const { enableCheckUpdates } = useServerConfigStore(featureFlagsSelectors);
+  const canAccessDevDock = useServerConfigStore((s) => s.canAccessDevDock);
+  const devDockClickSequence = useRef(INITIAL_DEV_DOCK_CLICK_SEQUENCE);
+  const {
+    error: updateCheckError,
+    isValidating: isCheckingUpdate,
+    mutate: recheckUpdate,
+  } = useCheckLatestVersion(enableCheckUpdates);
 
   const showServerVersion = serverVersion && serverVersion !== CURRENT_VERSION;
   const isDesktop = useMemo(() => !!getElectronIpc(), []);
@@ -55,6 +76,16 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
     setUpdaterState(state);
   });
 
+  const devDockGestureEnabled = import.meta.env.PROD && canAccessDevDock;
+
+  const handleVersionClick = () => {
+    if (!devDockGestureEnabled) return;
+
+    const result = advanceDevDockClickSequence(devDockClickSequence.current, Date.now());
+    devDockClickSequence.current = result.sequence;
+    if (result.completed) toggleDevDockUnlocked();
+  };
+
   const renderUpdateButton = () => {
     if (!isDesktop) {
       if (hasNewVersion) {
@@ -64,6 +95,14 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
               {t('upgradeVersion.action')}
             </Button>
           </a>
+        );
+      }
+      // A failed update check must not read as "up to date" — offer a retry.
+      if (updateCheckError) {
+        return (
+          <Button block={mobile} loading={isCheckingUpdate} onClick={() => recheckUpdate()}>
+            {t('checkForUpdates')}
+          </Button>
         );
       }
       return null;
@@ -135,7 +174,12 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
         <Flexbox align={'flex-start'} gap={6}>
           <div style={{ fontSize: 18, fontWeight: 'bolder' }}>{BRANDING_NAME}</div>
           <Flexbox gap={6} horizontal={!mobile}>
-            <Tag>v{APP_VERSION}</Tag>
+            <Tag
+              style={{ cursor: devDockGestureEnabled ? 'pointer' : 'default' }}
+              onClick={handleVersionClick}
+            >
+              v{APP_VERSION}
+            </Tag>
 
             {buildChannel && buildChannel !== 'stable' && (
               <Tag color={'gold'}>

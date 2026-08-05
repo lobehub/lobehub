@@ -14,25 +14,16 @@ export function registerTtsCommand(parent: Command) {
     .option('--voice <voice>', 'Voice name', 'alloy')
     .option('--speed <n>', 'Speed multiplier (0.25-4.0)', '1')
     .option('--model <model>', 'TTS model', 'tts-1')
-    .option('--backend <backend>', 'TTS backend: openai, microsoft, edge', 'openai')
     .action(
       async (
         text: string,
         options: {
-          backend: string;
           model: string;
           output: string;
           speed: string;
           voice: string;
         },
       ) => {
-        const backends = ['openai', 'microsoft', 'edge'];
-        if (!backends.includes(options.backend)) {
-          log.error(`Invalid backend. Must be one of: ${backends.join(', ')}`);
-          process.exit(1);
-          return;
-        }
-
         const { serverUrl, headers } = await getAuthInfo();
 
         const payload: Record<string, any> = {
@@ -46,7 +37,7 @@ export function registerTtsCommand(parent: Command) {
           voice: options.voice,
         };
 
-        const res = await fetch(`${serverUrl}/webapi/tts/${options.backend}`, {
+        const res = await fetch(`${serverUrl}/webapi/tts/openai`, {
           body: JSON.stringify(payload),
           headers,
           method: 'POST',

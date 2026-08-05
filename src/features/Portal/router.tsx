@@ -6,6 +6,9 @@ import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 
+import { Acceptance } from './Acceptance';
+import { AcceptanceCheck } from './AcceptanceCheck';
+import { AgentDetail } from './AgentDetail';
 import { Artifacts } from './Artifacts';
 import Header from './components/Header';
 import { Document } from './Document';
@@ -18,11 +21,16 @@ import { Notebook } from './Notebook';
 import { Plugins } from './Plugins';
 import { TaskDetail } from './TaskDetail';
 import { Thread } from './Thread';
+import { TopicComments, TopicCommentThread } from './TopicComments';
 import { type PortalImpl } from './type';
+import { VerifyReport } from './VerifyReport';
 import { VerifyResult } from './VerifyResult';
 
 // View type to component mapping
 const VIEW_COMPONENTS: Record<PortalViewType, PortalImpl> = {
+  [PortalViewType.Acceptance]: Acceptance,
+  [PortalViewType.AcceptanceCheck]: AcceptanceCheck,
+  [PortalViewType.AgentDetail]: AgentDetail,
   [PortalViewType.Home]: {
     Body: HomeBody,
     Title: HomeTitle,
@@ -36,8 +44,11 @@ const VIEW_COMPONENTS: Record<PortalViewType, PortalImpl> = {
   [PortalViewType.ToolUI]: Plugins,
   [PortalViewType.TaskDetail]: TaskDetail,
   [PortalViewType.Thread]: Thread,
+  [PortalViewType.TopicCommentThread]: TopicCommentThread,
+  [PortalViewType.TopicComments]: TopicComments,
   [PortalViewType.GroupThread]: GroupThread,
   [PortalViewType.VerifyResult]: VerifyResult,
+  [PortalViewType.VerifyReport]: VerifyReport,
 };
 
 // Default Home component

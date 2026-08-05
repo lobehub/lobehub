@@ -1,10 +1,8 @@
-import {
-  CredsExecutionRuntime,
-  CredsIdentifier,
-  type ICredsService,
-} from '@lobechat/builtin-tool-creds';
+import { CredsIdentifier, type ICredsService } from '@lobechat/builtin-tool-creds';
+import { CredsExecutionRuntime } from '@lobechat/builtin-tool-creds/executionRuntime';
 import debug from 'debug';
 
+import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import { MarketService } from '@/server/services/market';
 
 import { type ServerRuntimeRegistration } from './types';
@@ -17,9 +15,22 @@ const log = debug('lobe-server:creds-runtime');
  */
 class ServerCredsService implements ICredsService {
   private marketService: MarketService;
+  private workspaceId?: string;
 
-  constructor(marketService: MarketService) {
+  constructor(marketService: MarketService, workspaceId?: string) {
     this.marketService = marketService;
+    this.workspaceId = workspaceId;
+  }
+
+  /**
+   * Inside a workspace, reads/writes must hit the workspace's shared organization
+   * credentials, never the operator's personal creds. Falls back to
+   * the personal `market.creds` namespace outside a workspace.
+   */
+  private credsAccessor() {
+    return this.workspaceId
+      ? this.marketService.market.organizations.creds({ workspaceId: this.workspaceId })
+      : this.marketService.market.creds;
   }
 
   async getByKey(
@@ -36,7 +47,7 @@ class ServerCredsService implements ICredsService {
     log('getByKey: key=%s, decrypt=%s', key, options?.decrypt);
 
     // First find the credential by key from the list
-    const listResult = await this.marketService.market.creds.list();
+    const listResult = await this.credsAccessor().list();
     const cred = listResult.data?.find((c) => c.key === key);
 
     if (!cred) {
@@ -44,7 +55,7 @@ class ServerCredsService implements ICredsService {
     }
 
     // Then get the full credential with optional decryption
-    const result = await this.marketService.market.creds.get(cred.id, {
+    const result = await this.credsAccessor().get(cred.id, {
       decrypt: options?.decrypt,
     });
 
@@ -98,6 +109,8 @@ class ServerCredsService implements ICredsService {
   }> {
     log('injectCreds: keys=%O, topicId=%s', params.keys, params.topicId);
 
+    // Market's generic inject endpoint resolves organization credentials from
+    // the workspaceId signed into this service's trusted-client token.
     const result = await this.marketService.market.creds.inject({
       keys: params.keys,
       sandbox: params.sandbox,
@@ -115,7 +128,7 @@ class ServerCredsService implements ICredsService {
   }> {
     log('listCreds');
 
-    const result = await this.marketService.market.creds.list();
+    const result = await this.credsAccessor().list();
 
     log('listCreds success: %d credentials', result.data?.length || 0);
 
@@ -131,7 +144,7 @@ class ServerCredsService implements ICredsService {
   }): Promise<{ id: number }> {
     log('saveKVCred: key=%s, name=%s, type=%s', params.key, params.name, params.type);
 
-    const result = await this.marketService.market.creds.createKV(params);
+    const result = await this.credsAccessor().createKV(params);
 
     log('saveKVCred success: id=%d', result.id);
 
@@ -144,19 +157,36 @@ class ServerCredsService implements ICredsService {
  * Per-request runtime (needs userId, topicId)
  */
 export const credsRuntime: ServerRuntimeRegistration = {
-  factory: (context) => {
+  factory: async (context) => {
     if (!context.userId) {
       throw new Error('userId is required for Creds execution');
     }
 
+    if (context.workspaceId) {
+      if (!context.serverDB) {
+        throw new Error('serverDB is required for workspace Creds execution');
+      }
+
+      const membership = await new WorkspaceMemberModel(context.serverDB, context.userId).getMember(
+        context.workspaceId,
+        context.userId,
+      );
+      if (!membership) {
+        throw new Error('Workspace membership is required for workspace Creds execution');
+      }
+    }
+
     log(
-      'Creating CredsExecutionRuntime for userId=%s, topicId=%s',
+      'Creating CredsExecutionRuntime for userId=%s, topicId=%s, workspaceId=%s',
       context.userId,
       context.topicId,
+      context.workspaceId,
     );
 
-    const marketService = new MarketService({ userInfo: { userId: context.userId } });
-    const credsService = new ServerCredsService(marketService);
+    const marketService = new MarketService({
+      userInfo: { userId: context.userId, workspaceId: context.workspaceId },
+    });
+    const credsService = new ServerCredsService(marketService, context.workspaceId);
 
     return new CredsExecutionRuntime(credsService, {
       topicId: context.topicId,

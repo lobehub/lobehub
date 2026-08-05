@@ -15,54 +15,59 @@ tags:
 
 Selectors are data retrieval modules under the LobeHub data flow development framework. Their role is to extract data from the store using specific business logic for consumption by components.
 
-Taking `src/store/plugin/selectors.ts` as an example:
+Taking `src/store/tool/slices/plugin/selectors.ts` as an example:
 
-This TypeScript code snippet defines an object named `pluginSelectors`, which contains a series of selector functions used to retrieve data from the plugin storage state. Selectors are functions that extract and derive data from a Redux store (or similar state management library). This specific example is for managing the state related to the frontend application's plugin system.
+This TypeScript code snippet defines an object named `pluginSelectors`, which contains a series of selector functions used to retrieve data from the plugin storage state. Selectors are functions that extract and derive data from a zustand store. This specific example is for managing the state related to the frontend application's plugin system.
 
 Here are some key points to note:
 
-- `enabledSchema`: A function that returns an array of `ChatCompletionFunctions` filtered based on the enabled plugin list `enabledPlugins`. It appends the plugin identifier as a prefix to the API names to ensure uniqueness and uses the `uniqBy` function from the es-toolkit library to remove duplicates.
-- `onlinePluginStore`: Returns the current online plugin list.
-- `pluginList`: Returns the list of plugins, including custom plugins and standard plugins.
+- `getCustomPluginById`: Returns the custom plugin based on the plugin ID.
+- `getInstalledPluginById`: Returns the installed plugin based on the plugin ID.
 - `getPluginMetaById`: Returns the plugin metadata based on the plugin ID.
-- `getDevPluginById`: Returns information about the custom plugins in development.
-- `getPluginManifestById`: Returns the plugin manifest based on the plugin ID.
 - `getPluginSettingsById`: Returns the plugin settings based on the plugin ID.
-- `getPluginManifestLoadingStatus`: Returns the loading status of the plugin manifest (loading, success, or error) based on the plugin ID.
-- `isCustomPlugin`: Checks if the plugin with the given ID is a custom plugin.
-- `displayPluginList`: Returns a processed plugin list, including author, avatar, creation time, description, homepage URL, identifier, and title.
-- `hasPluginUI`: Determines if the plugin has UI components based on the plugin ID.
+- `getToolManifestById`: Returns the plugin manifest based on the plugin ID.
+- `installedCustomPluginMetaList`: Returns metadata for all installed custom plugins.
+- `installedPluginManifestList`: Returns the manifests of all installed plugins.
+- `installedPluginMetaList`: Returns a processed metadata list for all installed plugins.
+- `installedPlugins`: Returns the list of all installed plugins.
+- `isPluginHasUI`: Determines if the plugin has UI components based on the plugin ID.
+- `isPluginInstalled`: Checks if the plugin with the given ID is installed.
+- `storeAndInstallPluginsIdList`: Returns the identifiers of all installed plugins.
 
 Selectors are highly modular and maintainable. By encapsulating complex state selection logic in separate functions, they make the code more concise and intuitive when accessing state data in other parts of the application. Additionally, by using TypeScript, each function can have clear input and output types, which helps improve code reliability and development efficiency.
 
-Taking the `displayPluginList` method as an example, its code is as follows:
+Taking the `installedPluginMetaList` method as an example, its code is as follows:
 
 ```ts
-const pluginList = (s: PluginStoreState) => [...s.pluginList, ...s.customPluginList];
+const installedPlugins = (s: ToolStoreState) => s.installedPlugins;
 
-const displayPluginList = (s: PluginStoreState) =>
-  pluginList(s).map((p) => ({
-    author: p.author,
-    avatar: p.meta?.avatar,
-    createAt: p.createAt,
-    desc: pluginHelpers.getPluginDesc(p.meta),
-    homepage: p.homepage,
-    identifier: p.identifier,
-    title: pluginHelpers.getPluginTitle(p.meta),
-  }));
+const installedPluginMetaList = (s: ToolStoreState) =>
+  installedPlugins(s)
+    // Filter out Composio plugins (they have their own display location)
+    .filter((p) => !p.customParams?.composio)
+    .filter((plugin) => isInstalledPluginAvailableInCurrentEnv(plugin))
+    .map<InstallPluginMeta>((p) => ({
+      author: p.manifest?.author,
+      createdAt: p.manifest?.createdAt,
+      homepage: p.manifest?.homepage,
+      identifier: p.identifier,
+      runtimeType: p.runtimeType,
+      type: p.source || p.type,
+      ...getPluginMetaById(p.identifier)(s),
+    }));
 ```
 
-- `pluginList` method: Used to retrieve the list of all plugins from the plugin state storage `PluginStoreState`. It creates a new plugin list by combining two arrays: `pluginList` and `customPluginList`.
-- `displayPluginList` method: Calls the `pluginList` method to retrieve the merged plugin list and transforms the `title` and `desc` into text displayed on the UI.
+- `installedPlugins` selector: Used to retrieve the raw list of all installed plugins from the tool state storage `ToolStoreState`.
+- `installedPluginMetaList` selector: Calls the `installedPlugins` selector, filters out Composio plugins and plugins unavailable in the current environment, and maps the remaining entries into the metadata shape consumed by the UI.
 
 In components, the final consumed data can be directly obtained by importing:
 
 ```tsx | pure
-import { usePluginStore } from '@/store/plugin';
-import { pluginSelectors } from '@/store/plugin/selectors';
+import { useToolStore } from '@/store/tool';
+import { pluginSelectors } from '@/store/tool/selectors';
 
-const Render = ({ plugins }) => {
-  const list = usePluginStore(pluginSelectors.displayPluginList);
+const Render = () => {
+  const list = useToolStore(pluginSelectors.installedPluginMetaList);
 
   return <> ...
 </>;

@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Avatar, Block, DropdownMenu, Flexbox, Icon, Modal, Tag } from '@lobehub/ui';
+import { ActionIcon, Avatar, Block, DropdownMenu, Flexbox, Icon, Tag } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -8,6 +8,7 @@ import { DownloadIcon, Loader2, MoreVerticalIcon, Plus, Trash2 } from 'lucide-re
 import { lazy, memo, Suspense, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import { usePermission } from '@/hooks/usePermission';
 import { agentSkillService } from '@/services/skill';
 import { useToolStore } from '@/store/tool';
@@ -162,7 +163,7 @@ const MarketSkillItem = memo<DiscoverSkillItem>(({ name, icon, description, iden
           {renderAction()}
         </Block>
       </Flexbox>
-      <Modal
+      <ImperativeModal
         destroyOnHidden
         footer={null}
         open={detailOpen}
@@ -174,7 +175,7 @@ const MarketSkillItem = memo<DiscoverSkillItem>(({ name, icon, description, iden
         <Suspense fallback={<div style={{ height: '100%' }} />}>
           <MarketSkillDetail identifier={identifier} />
         </Suspense>
-      </Modal>
+      </ImperativeModal>
     </>
   );
 });

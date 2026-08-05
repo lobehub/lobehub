@@ -114,7 +114,7 @@ Our search service is a metasearch engine with automatic engine selection. Provi
     2. Consider trying alternative categories or query terms.
     3. If the search was language-specific and failed (especially for technical, scientific, or non-regional topics), try rewriting the query or searching again using English.
     4. If needed, explain the issue to the user and suggest alternative search terms or strategies.
-- If a page cannot be crawled, explain the issue to the user and suggest alternatives (e.g., trying a different source from search results).
+- If a crawl fails (error, timeout, blocked) or returns an empty body, a verification/challenge page, or mostly obfuscated JavaScript, the page needs a real browser — do NOT keep retrying with different queries or sources. When the agent-browser skill is available, activate it and re-fetch the page with it. Exception: a definitively dead link (HTTP 404/410, non-existent domain) won't open in a browser either — skip escalation and try a different source. When in doubt, escalate: anti-bot walls often masquerade as timeouts or generic errors. Only when no browser path exists, explain the issue to the user and suggest alternatives (e.g., trying a different source from search results).
 - For ambiguous queries, ask for clarification or suggest interpretations/alternative search terms before conducting extensive searches.
 - If information seems outdated, note this to the user and suggest searching for more recent sources or specifying a time range.
 </error_handling>

@@ -8,22 +8,13 @@ import {
   INBOX_SESSION_ID,
 } from '@lobechat/const';
 import { KnowledgeType } from '@lobechat/types';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { type AgentStoreState } from '@/store/agent/initialState';
 import { initialAgentSliceState } from '@/store/agent/slices/agent/initialState';
 import { initialBuiltinAgentSliceState } from '@/store/agent/slices/builtin';
 
 import { agentSelectors, currentAgentConfig } from './selectors';
-
-// Mock VoiceList
-vi.mock('@lobehub/tts', () => ({
-  VoiceList: class {
-    static openaiVoiceOptions = [{ value: 'alloy' }];
-    edgeVoiceOptions = [{ value: 'edge-voice' }];
-    microsoftVoiceOptions = [{ value: 'microsoft-voice' }];
-  },
-}));
 
 const createState = (overrides: Partial<AgentStoreState> = {}): AgentStoreState => ({
   ...initialAgentSliceState,
@@ -233,6 +224,51 @@ describe('agentSelectors', () => {
 
       expect(agentSelectors.currentAgentPlugins(state)).toEqual([]);
     });
+
+    it('should exclude disabled entries in a mixed-shape plugins array', () => {
+      const state = createState({
+        activeAgentId: 'agent-1',
+        agentMap: {
+          'agent-1': {
+            plugins: [
+              'plugin-1',
+              { identifier: 'plugin-2', mode: 'disabled' },
+              { identifier: 'plugin-3', mode: 'pinned' },
+            ],
+          } as any,
+        },
+      });
+
+      expect(agentSelectors.currentAgentPlugins(state)).toEqual(['plugin-1', 'plugin-3']);
+    });
+  });
+
+  describe('currentAgentDisabledPlugins', () => {
+    it('returns only the disabled identifiers from a mixed-shape plugins array', () => {
+      const state = createState({
+        activeAgentId: 'agent-1',
+        agentMap: {
+          'agent-1': {
+            plugins: [
+              'plugin-1',
+              { identifier: 'plugin-2', mode: 'disabled' },
+              { identifier: 'plugin-3', mode: 'pinned' },
+            ],
+          } as any,
+        },
+      });
+
+      expect(agentSelectors.currentAgentDisabledPlugins(state)).toEqual(['plugin-2']);
+    });
+
+    it('returns an empty array when there are no plugins', () => {
+      const state = createState({
+        activeAgentId: 'agent-1',
+        agentMap: { 'agent-1': {} },
+      });
+
+      expect(agentSelectors.currentAgentDisabledPlugins(state)).toEqual([]);
+    });
   });
 
   describe('currentAgentKnowledgeBases', () => {
@@ -386,6 +422,36 @@ describe('agentSelectors', () => {
 
       expect(agentSelectors.isAgentConfigLoading(state)).toBe(false);
     });
+
+    it('should return false when agent is marked not-found (settled, not loading)', () => {
+      const state = createState({
+        activeAgentId: 'agent-1',
+        agentMap: {},
+        agentNotFoundMap: { 'agent-1': true },
+      });
+
+      expect(agentSelectors.isAgentConfigLoading(state)).toBe(false);
+    });
+  });
+
+  describe('isCurrentAgentNotFound', () => {
+    it('should return false when no activeAgentId', () => {
+      const state = createState({ agentNotFoundMap: { 'agent-1': true } });
+
+      expect(agentSelectors.isCurrentAgentNotFound(state)).toBe(false);
+    });
+
+    it('should reflect the active agent not-found flag', () => {
+      const state = createState({
+        activeAgentId: 'agent-1',
+        agentNotFoundMap: { 'agent-1': true },
+      });
+
+      expect(agentSelectors.isCurrentAgentNotFound(state)).toBe(true);
+      expect(agentSelectors.isCurrentAgentNotFound(createState({ activeAgentId: 'agent-1' }))).toBe(
+        false,
+      );
+    });
   });
 
   describe('currentKnowledgeIds', () => {
@@ -466,7 +532,7 @@ describe('agentSelectors', () => {
   });
 
   describe('currentAgentTTSVoice', () => {
-    it('should return openai voice when ttsService is openai', () => {
+    it('should return openai voice', () => {
       const state = createState({
         activeAgentId: 'agent-1',
         agentMap: {
@@ -476,33 +542,7 @@ describe('agentSelectors', () => {
         },
       });
 
-      expect(agentSelectors.currentAgentTTSVoice('en-US')(state)).toBe('nova');
-    });
-
-    it('should return edge voice when ttsService is edge', () => {
-      const state = createState({
-        activeAgentId: 'agent-1',
-        agentMap: {
-          'agent-1': {
-            tts: { ttsService: 'edge', voice: { edge: 'edge-custom' } },
-          },
-        },
-      });
-
-      expect(agentSelectors.currentAgentTTSVoice('en-US')(state)).toBe('edge-custom');
-    });
-
-    it('should return microsoft voice when ttsService is microsoft', () => {
-      const state = createState({
-        activeAgentId: 'agent-1',
-        agentMap: {
-          'agent-1': {
-            tts: { ttsService: 'microsoft', voice: { microsoft: 'microsoft-custom' } },
-          },
-        },
-      });
-
-      expect(agentSelectors.currentAgentTTSVoice('en-US')(state)).toBe('microsoft-custom');
+      expect(agentSelectors.currentAgentTTSVoice(state)).toBe('nova');
     });
 
     it('should return default voice when no voice specified', () => {
@@ -515,7 +555,7 @@ describe('agentSelectors', () => {
         },
       });
 
-      expect(agentSelectors.currentAgentTTSVoice('en-US')(state)).toBe('alloy');
+      expect(agentSelectors.currentAgentTTSVoice(state)).toBe('alloy');
     });
   });
 

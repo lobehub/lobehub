@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type {
   TaskContext,
   TaskDetailActivity,
@@ -6,6 +8,7 @@ import type {
   TaskDetailSubtask,
   TaskDetailWorkspaceNode,
   TaskItem,
+  TaskSchedulerContext,
   TaskStatus,
   TaskTopicHandoff,
   WorkspaceData,
@@ -13,7 +16,6 @@ import type {
 import { TRPCError } from '@trpc/server';
 
 import { AgentModel } from '@/database/models/agent';
-import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
@@ -21,12 +23,12 @@ import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { AiAgentService } from '../aiAgent';
-import { BriefService } from '../brief';
 import { extractFileIdsFromEditorData } from '../file/extractFileIdsFromEditorData';
 import { resolveAttachmentMetadata } from '../file/resolveAttachments';
 import { type SubtaskGraphPlan, TaskGraphService } from '../taskGraph';
 import { type ReviewResult, TaskReviewService } from '../taskReview';
 import { TaskRunnerService } from '../taskRunner';
+import { createTaskSchedulerModule } from '../taskScheduler';
 
 const emptyWorkspace: WorkspaceData = { nodeMap: {}, tree: [] };
 const UNTITLED_TOPIC_TITLE = 'Untitled';
@@ -88,8 +90,6 @@ export interface RunReadySubtasksResult {
 
 export class TaskService {
   private agentModel: AgentModel;
-  private briefModel: BriefModel;
-  private briefService: BriefService;
   private db: LobeChatDatabase;
   private taskModel: TaskModel;
   private taskTopicModel: TaskTopicModel;
@@ -106,8 +106,6 @@ export class TaskService {
     this.taskModel = new TaskModel(db, userId, workspaceId);
     this.taskTopicModel = new TaskTopicModel(db, userId, workspaceId);
     this.topicModel = new TopicModel(db, userId, workspaceId);
-    this.briefModel = new BriefModel(db, userId, workspaceId);
-    this.briefService = new BriefService(db, userId, workspaceId);
   }
 
   /**
@@ -157,8 +155,8 @@ export class TaskService {
     // we have to assert here even though the inference path can't.
     this.assertAgentVisibilityCompat(createData.visibility, agentVisibility);
 
-    // Invariant: a subtask can never be more public than its parent (LOBE-10962
-    // #3). Otherwise workspace members see an orphaned child whose parent is
+    // Invariant: a subtask can never be more public than its parent.
+    // Otherwise workspace members see an orphaned child whose parent is
     // hidden, leaking the existence of a private task. The inference path
     // already inherits parent visibility, but the explicit-override path can
     // produce a `Private parent + Public child` combo if the caller insists.
@@ -387,6 +385,60 @@ export class TaskService {
       });
     }
 
+    // Heartbeat ticks are one-shot delayed messages that re-arm themselves
+    // after each run. Seed the very first message when a user starts/restarts
+    // the schedule; otherwise a fresh heartbeat task has no event capable of
+    // reaching the lifecycle re-arm path.
+    if (
+      status === 'scheduled' &&
+      task.automationMode === 'heartbeat' &&
+      task.heartbeatInterval &&
+      task.heartbeatInterval > 0 &&
+      resolved.status !== 'running' &&
+      resolved.status !== 'scheduled'
+    ) {
+      const scheduler = createTaskSchedulerModule();
+      const schedulerContext = (resolved.context as TaskContext | null)?.scheduler as
+        TaskSchedulerContext | undefined;
+      const previousTickMessageId = schedulerContext?.tickMessageId;
+      const tickToken = randomUUID();
+      let tickMessageId: string | undefined;
+
+      try {
+        // Invalidate the previous generation before publishing. This closes
+        // the race where an old QStash delivery arrives while the replacement
+        // message is being created.
+        await this.taskModel.updateContext(task.id, { scheduler: { tickToken } });
+        tickMessageId = await scheduler.scheduleNextTopic({
+          delay: task.heartbeatInterval,
+          taskId: task.id,
+          tickToken,
+          userId: this.userId,
+        });
+
+        await this.taskModel.updateContext(task.id, {
+          scheduler: {
+            consecutiveFailures: schedulerContext?.consecutiveFailures ?? 0,
+            scheduledAt: new Date().toISOString(),
+            tickMessageId,
+            tickToken,
+          },
+        });
+      } catch (error) {
+        // Never expose a scheduled status without a persisted tick. Restore
+        // the user-visible state and cancel a newly published message when
+        // persistence was the failing step.
+        if (tickMessageId) await scheduler.cancelScheduled(tickMessageId).catch(() => undefined);
+        await this.taskModel.update(task.id, { context: resolved.context });
+        await this.taskModel.updateStatus(task.id, resolved.status);
+        throw error;
+      }
+
+      if (previousTickMessageId) {
+        await scheduler.cancelScheduled(previousTickMessageId).catch(() => undefined);
+      }
+    }
+
     const unlocked: string[] = [];
     const paused: string[] = [];
     let allSubtasksDone = false;
@@ -516,17 +568,17 @@ export class TaskService {
       task = { ...task, error: null };
     }
 
-    const [allDescendants, dependencies, directTopics, briefs, comments, workspace] =
-      await Promise.all([
-        this.taskModel.findAllDescendants(task.id),
-        this.taskModel.getDependencies(task.id),
-        this.taskTopicModel
-          .findWithHandoff(task.id, TASK_DETAIL_DIRECT_TOPIC_LIMIT)
-          .catch(() => []),
-        this.briefModel.findByTaskId(task.id).catch(() => []),
-        this.taskModel.getComments(task.id).catch(() => []),
-        this.taskModel.getTreePinnedDocuments(task.id).catch(() => emptyWorkspace),
-      ]);
+    // Brief hidden: the task detail activity feed no longer carries
+    // brief-type activities — the UI converges on Task Run. Briefs are therefore
+    // not fetched/enriched here (see the omitted brief spread below). The brief
+    // lifecycle, model and data are untouched; revert this to bring them back.
+    const [allDescendants, dependencies, directTopics, comments, workspace] = await Promise.all([
+      this.taskModel.findAllDescendants(task.id),
+      this.taskModel.getDependencies(task.id),
+      this.taskTopicModel.findWithHandoff(task.id, TASK_DETAIL_DIRECT_TOPIC_LIMIT).catch(() => []),
+      this.taskModel.getComments(task.id).catch(() => []),
+      this.taskModel.getTreePinnedDocuments(task.id).catch(() => emptyWorkspace),
+    ]);
 
     const allDescendantIds = allDescendants.map((s) => s.id);
     const descendantTaskMap = new Map(allDescendants.map((s) => [s.id, s]));
@@ -688,6 +740,7 @@ export class TaskService {
           createdAt: doc?.createdAt ? new Date(doc.createdAt).toISOString() : undefined,
           documentId: node.id,
           fileType: doc?.fileType,
+          inaccessible: doc?.inaccessible,
           size: doc?.charCount,
           sourceTaskId: doc?.sourceTaskId,
           sourceTaskIdentifier: doc?.sourceTaskIdentifier,
@@ -713,10 +766,6 @@ export class TaskService {
       const topicAgentId = t.agentId ?? t.sourceTaskAssigneeAgentId ?? task.assigneeAgentId;
       if (topicAgentId) agentIds.add(topicAgentId);
     }
-    // Briefs may have an agentId
-    for (const b of briefs) {
-      if (b.agentId) agentIds.add(b.agentId);
-    }
     // Comments have authorAgentId or authorUserId
     for (const c of comments) {
       if (c.authorAgentId) agentIds.add(c.authorAgentId);
@@ -726,12 +775,7 @@ export class TaskService {
     if (task.createdByAgentId) agentIds.add(task.createdByAgentId);
     else if (task.createdByUserId) userIds.add(task.createdByUserId);
 
-    const [authorMap, enrichedBriefs] = await Promise.all([
-      this.resolveAuthors(agentIds, userIds),
-      this.briefService
-        .enrichBriefAgentOnly(briefs)
-        .catch(() => briefs.map((b) => ({ ...b, agent: null }))),
-    ]);
+    const authorMap = await this.resolveAuthors(agentIds, userIds);
 
     const creatorId = task.createdByAgentId ?? task.createdByUserId;
     const createdActivity: TaskDetailActivity | null =
@@ -751,6 +795,9 @@ export class TaskService {
         return {
           author: topicAgentId ? authorMap.get(topicAgentId) : undefined,
           completedAt: toISO(t.completedAt),
+          // Raw last assistant message of the run, shown alongside
+          // the synthesized summary on the run card.
+          content: handoff?.content,
           id: t.topicId ?? undefined,
           operationId: t.operationId ?? null,
           runningOperation: t.metadata?.runningOperation ?? null,
@@ -765,29 +812,7 @@ export class TaskService {
           type: 'topic' as const,
         };
       }),
-      ...enrichedBriefs.map((b) => ({
-        actions: b.actions ?? undefined,
-        agent: b.agent,
-        agentId: b.agentId,
-        artifacts: b.artifacts ?? undefined,
-        author: b.agentId ? authorMap.get(b.agentId) : undefined,
-        briefType: b.type,
-        createdAt: toISO(b.createdAt),
-        cronJobId: b.cronJobId,
-        id: b.id,
-        priority: b.priority,
-        readAt: toISO(b.readAt),
-        resolvedAction: b.resolvedAction,
-        resolvedAt: toISO(b.resolvedAt),
-        resolvedComment: b.resolvedComment,
-        summary: b.summary,
-        taskId: b.taskId,
-        time: toISO(b.createdAt),
-        title: b.title,
-        topicId: b.topicId,
-        type: 'brief' as const,
-        userId: b.userId,
-      })),
+      // Brief activities intentionally omitted — see the fetch note above.
       ...comments.map((c) => {
         const ids = commentFileIdsMap[c.id] ?? [];
         const files = ids.map((id) => fileById.get(id)).filter((f) => !!f);
@@ -813,6 +838,7 @@ export class TaskService {
     });
 
     const taskConfig = task.config ? (task.config as Record<string, unknown>) : undefined;
+    const taskContext = task.context ? (task.context as TaskContext) : undefined;
     const scheduleConfig = (taskConfig?.schedule ?? {}) as { maxExecutions?: number | null };
 
     return {
@@ -821,6 +847,7 @@ export class TaskService {
       checkpoint: this.taskModel.getCheckpointConfig(task),
       config: taskConfig,
       createdAt: task.createdAt ? new Date(task.createdAt).toISOString() : undefined,
+      createdByUserId: task.createdByUserId,
       dependencies: dependencies.map((d) => {
         const info = depIdToInfo.get(d.dependsOnId);
         return {
@@ -838,9 +865,11 @@ export class TaskService {
           ? {
               interval: task.heartbeatInterval,
               lastAt: task.lastHeartbeatAt ? new Date(task.lastHeartbeatAt).toISOString() : null,
+              scheduledAt: taskContext?.scheduler?.scheduledAt,
               timeout: task.heartbeatTimeout,
             }
           : undefined,
+      id: task.id,
       identifier: task.identifier,
       instruction: task.instruction,
       name: task.name,

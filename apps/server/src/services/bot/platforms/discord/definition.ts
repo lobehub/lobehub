@@ -1,3 +1,5 @@
+import { channelDocUrl } from '@lobechat/const';
+
 import type { PlatformDefinition } from '../types';
 import { DiscordClientFactory } from './client';
 import { DEFAULT_DISCORD_CONNECTION_MODE } from './const';
@@ -10,7 +12,7 @@ export const discord: PlatformDefinition = {
   description: 'Connect a Discord bot',
   documentation: {
     portalUrl: 'https://discord.com/developers/applications',
-    setupGuideUrl: 'https://lobehub.com/docs/usage/channels/discord',
+    setupGuideUrl: channelDocUrl('discord'),
   },
   schema,
   clientFactory: new DiscordClientFactory(),

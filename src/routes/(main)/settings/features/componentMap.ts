@@ -10,6 +10,9 @@ export const componentMap = {
   [SettingsTabs.Advanced]: dynamic(() => import('../advanced'), {
     loading: loading('Settings > Advanced'),
   }),
+  [SettingsTabs.Labs]: dynamic(() => import('../labs'), {
+    loading: loading('Settings > Labs'),
+  }),
   [SettingsTabs.Appearance]: dynamic(() => import('../appearance'), {
     loading: loading('Settings > Appearance'),
   }),
@@ -49,6 +52,9 @@ export const componentMap = {
   [SettingsTabs.Devices]: dynamic(() => import('../devices'), {
     loading: loading('Settings > Devices'),
   }),
+  [SettingsTabs.Labels]: dynamic(() => import('../labels'), {
+    loading: loading('Settings > Labels'),
+  }),
   // Profile related tabs
   [SettingsTabs.Profile]: dynamic(() => import('../profile'), {
     loading: loading('Settings > Profile'),
@@ -62,6 +68,9 @@ export const componentMap = {
   [SettingsTabs.APIKey]: dynamic(() => import('../apikey'), {
     loading: loading('Settings > APIKey'),
   }),
+  [SettingsTabs.OAuthApps]: dynamic(() => import('../oauth-apps'), {
+    loading: loading('Settings > OAuthApps'),
+  }),
   [SettingsTabs.Creds]: dynamic(() => import('../creds'), {
     loading: loading('Settings > Creds'),
   }),
@@ -70,6 +79,9 @@ export const componentMap = {
   }),
   [SettingsTabs.Skill]: dynamic(() => import('../skill'), {
     loading: loading('Settings > Skill'),
+  }),
+  [SettingsTabs.Connector]: dynamic(() => import('../connector'), {
+    loading: loading('Settings > Connector'),
   }),
 
   [SettingsTabs.Plans]: dynamic(() => import('@/business/client/BusinessSettingPages/Plans'), {

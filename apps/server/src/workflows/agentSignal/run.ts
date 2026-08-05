@@ -25,7 +25,7 @@ import { and, desc, eq, isNull, lte } from 'drizzle-orm';
 
 import { MessageModel } from '@/database/models/message';
 import { getServerDB } from '@/database/server';
-import { buildWorkspaceWhere } from '@/database/utils/workspace';
+import { buildMessageScopeWhere } from '@/database/utils/messageScope';
 import { extractTraceContext } from '@/libs/observability/traceparent';
 import { isAgentSignalEnabledForUser } from '@/server/services/agentSignal/featureGate';
 import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observability/traceEvents';
@@ -312,7 +312,7 @@ const buildFeedbackSourceSerializedContext = async (
     limit: 10,
     orderBy: [desc(messages.createdAt)],
     where: and(
-      buildWorkspaceWhere({ userId: input.userId, workspaceId: input.workspaceId }, messages),
+      buildMessageScopeWhere({ userId: input.userId, workspaceId: input.workspaceId }),
       eq(messages.topicId, sourceEvent.payload.topicId),
       lte(messages.createdAt, contextEndAt),
       threadScopeFilter,
@@ -470,7 +470,7 @@ export const runAgentSignalWorkflow = async (
   // opening the top-level workflow span, otherwise each workflow run starts a fresh trace.
   // Source/context:
   // - `src/app/(backend)/middleware/auth/index.ts` performs extract/inject for normal backend APIs
-  // - `src/server/workflows-hono/agent-signal/index.ts` wires `serve(...)` directly to
+  // - `apps/server/src/workflows-hono/agent-signal/index.ts` wires `serve(...)` directly to
   //   `runAgentSignalWorkflow(...)`
   // Removal condition:
   // - Safe to remove only if the workflow entry stack gains a shared request middleware that

@@ -380,6 +380,64 @@ describe('Group', () => {
     expect(screen.queryByTestId('answer-segment')).not.toBeInTheDocument();
   });
 
+  it('keeps a non-latest finished turn’s final answer visible outside the fold', () => {
+    render(
+      <Group
+        enableProcessFold
+        id="assistant-1"
+        isLatestItem={false}
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: 'Running the checks.',
+            id: 'block-1',
+            tools: [
+              { apiName: 'bash', id: 'tool-1', result: { content: 'ok' } } as any,
+              { apiName: 'bash', id: 'tool-2', result: { content: 'ok' } } as any,
+            ],
+          }),
+          blk({ content: 'Here is the final answer.', id: 'block-2' }),
+        ]}
+      />,
+    );
+
+    const fold = screen.getByTestId('process-fold');
+    const answer = screen.getByTestId('answer-segment');
+    // Folding only ever collapses the process; the final answer stays a visible
+    // sibling for every turn, latest or not — never swallowed into the fold.
+    expect(fold.contains(answer)).toBe(false);
+    expect(fold.contains(screen.getByTestId('workflow-segment'))).toBe(true);
+    expect(fold).toHaveAttribute('data-step-count', '2');
+  });
+
+  it('keeps the latest finished turn’s final answer visible outside the fold', () => {
+    render(
+      <Group
+        enableProcessFold
+        isLatestItem
+        id="assistant-1"
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: 'Running the checks.',
+            id: 'block-1',
+            tools: [
+              { apiName: 'bash', id: 'tool-1', result: { content: 'ok' } } as any,
+              { apiName: 'bash', id: 'tool-2', result: { content: 'ok' } } as any,
+            ],
+          }),
+          blk({ content: 'Here is the final answer.', id: 'block-2' }),
+        ]}
+      />,
+    );
+
+    const fold = screen.getByTestId('process-fold');
+    const answer = screen.getByTestId('answer-segment');
+    // Latest turn: the answer stays out of the fold so it reads without expanding.
+    expect(fold.contains(answer)).toBe(false);
+    expect(fold.contains(screen.getByTestId('workflow-segment'))).toBe(true);
+  });
+
   it('keeps assistant runtime errors outside the workflow collapse', () => {
     const { container } = render(
       <Group
@@ -476,6 +534,55 @@ describe('Group', () => {
             id: 'block-1',
             tools: [{ apiName: 'bash', id: 'tool-1', result: { content: 'done' } } as any],
           }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId('tail-running')).toHaveAttribute('data-id', 'assistant-1');
+  });
+
+  it('does not add a tail indicator when the inline segment ends on a LOADING_FLAT placeholder', () => {
+    // The settled tool is followed by a LOADING_FLAT placeholder that stays
+    // inside the inline segment; that block mounts MessageContent and renders
+    // its OWN running line, so the tail must NOT stack a second identical one.
+    mockIsGenerating = true;
+    render(
+      <Group
+        isLatestItem
+        id="assistant-1"
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: '',
+            id: 'block-1',
+            tools: [{ apiName: 'bash', id: 'tool-1', result: { content: 'done' } } as any],
+          }),
+          blk({ content: LOADING_FLAT, id: 'block-2' }),
+        ]}
+      />,
+    );
+
+    expect(screen.queryByTestId('tail-running')).not.toBeInTheDocument();
+  });
+
+  it('keeps the tail indicator when the trailing block is a blank content:"" shell', () => {
+    // The gateway emits an empty `content: ''` assistant shell on stream_start.
+    // ContentBlock does NOT mount MessageContent for it (no text/LOADING_FLAT/
+    // tools), so it renders no running line of its own — the tail must stay to
+    // fill the gap after the settled tool until the first content chunk lands.
+    mockIsGenerating = true;
+    render(
+      <Group
+        isLatestItem
+        id="assistant-1"
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: '',
+            id: 'block-1',
+            tools: [{ apiName: 'bash', id: 'tool-1', result: { content: 'done' } } as any],
+          }),
+          blk({ content: '', id: 'block-2' }),
         ]}
       />,
     );

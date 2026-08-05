@@ -4,6 +4,22 @@ import { describe, expect, it } from 'vitest';
 import { resolveHeteroResume } from '../transports/hetero/heteroResume';
 
 describe('resolveHeteroResume', () => {
+  it('resumes from the session scoped to the current cwd', () => {
+    const metadata: ChatTopicMetadata = {
+      heteroSessionId: 'session-latest-other-cwd',
+      heteroSessionIdByWorkingDirectory: {
+        '/Users/me/projA': 'session-proj-a',
+        '/Users/me/projB': 'session-proj-b',
+      },
+      workingDirectory: '/Users/me/projB',
+    };
+
+    expect(resolveHeteroResume(metadata, '/Users/me/projA')).toEqual({
+      cwdChanged: false,
+      resumeSessionId: 'session-proj-a',
+    });
+  });
+
   it('resumes when saved cwd matches current cwd', () => {
     const metadata: ChatTopicMetadata = {
       heteroSessionId: 'session-123',

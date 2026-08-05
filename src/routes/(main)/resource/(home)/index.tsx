@@ -4,6 +4,8 @@ import { memo, useLayoutEffect } from 'react';
 import { useLocation, useSearchParams } from 'react-router';
 
 import ResourceManager from '@/features/ResourceManager';
+import WorkGallery from '@/features/WorkGallery';
+import { parseWorkGalleryKey } from '@/features/WorkGallery/const';
 import { FilesTabs } from '@/types/files';
 
 import { useInitFileCheck } from '../features/hooks/useInitFileCheck';
@@ -18,6 +20,9 @@ const ResourceHomePage = memo(() => {
   ]);
 
   const categoryParam = (searchParams.get('category') as FilesTabs) || FilesTabs.All;
+  // `?works=<type>` switches the content area to the cross-topic Work gallery,
+  // independent of the file explorer (which stays keyed on `?category=`).
+  const worksKey = parseWorkGalleryKey(searchParams.get('works'));
 
   // Clear libraryId when on home route using useLayoutEffect
   // useLayoutEffect runs synchronously before browser paint, ensuring state is cleared
@@ -45,6 +50,8 @@ const ResourceHomePage = memo(() => {
 
   // Sync file view mode from URL
   useInitFileCheck();
+
+  if (worksKey) return <WorkGallery galleryKey={worksKey} />;
 
   return <ResourceManager />;
 });

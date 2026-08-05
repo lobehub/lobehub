@@ -1,11 +1,16 @@
 import { isParkedStatus } from '@lobechat/agent-runtime';
+import { deserializeParts } from '@lobechat/utils';
+import { isRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 
+import { notifyAgentRunCompleted } from '@/business/server/agent-run/notifyAgentRunCompleted';
 import {
   AgentOperationModel,
+  type ChildUsageRollup,
   type RecordOperationStartParams,
 } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
+import { recomputeTopicUsage } from '@/database/models/topicUsage';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import { type LobeChatDatabase } from '@/database/type';
 import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorForState';
@@ -16,8 +21,20 @@ import { extractSelfIterationCompletionPayload } from '@/server/services/agentSi
 import { instantiateVerifyPlanOnStart, runVerifyOnCompletion } from '@/server/services/verify';
 
 import { hookDispatcher, type SerializedHook } from './hooks';
+import { registerWorksForOperation } from './workRegistration';
 
 const log = debug('lobe-server:completion-lifecycle');
+
+/**
+ * Terminal reasons this lifecycle treats as a successful completion: the run
+ * produced a deliverable, even when it was stopped by a step/cost cap rather
+ * than finishing naturally. `persistCompletion` stores all three with
+ * status='done', and success-side effects (assistant-content recovery,
+ * file-Work registration) must cover the capped reasons too — gating them on
+ * `reason === 'done'` alone silently drops capped runs' artifacts.
+ */
+export const isSuccessLikeCompletionReason = (reason: string): boolean =>
+  reason === 'done' || reason === 'max_steps' || reason === 'cost_limit';
 
 type SignalEvent = { [key: string]: unknown; type: string };
 
@@ -209,6 +226,26 @@ export class CompletionLifecycle {
     // dispatchHooks call (when the op resumes and truly ends) overwrites both.
     const completedAt = isParkedStatus(status) ? undefined : new Date();
 
+    // Fold every child operation's spend (callSubAgent children, isolated group
+    // members) into the parent's totals, so an op's row accounts for the whole
+    // tree it forked rather than only the tokens its own turns burned.
+    //
+    // Re-derived from the child rows on every write instead of accumulated onto
+    // this one: `recordCompletion` is a wholesale SET, and this method runs again
+    // each time the op parks and resumes — an additive rollup would multiply. The
+    // SUM is exact however often it re-runs.
+    //
+    // Skipped for sub-agents and group members themselves: nested sub-agents are
+    // rejected up front, so a child never has children of its own and the query
+    // would always return zero.
+    const rollup =
+      metadata?.isSubAgent === true ? undefined : await this.sumChildUsage(operationId);
+
+    const add = (own: number | null | undefined, child: number): number | null => {
+      if (!child) return own ?? null;
+      return (own ?? 0) + child;
+    };
+
     try {
       await this.agentOperationModel.recordCompletion(operationId, {
         completedAt,
@@ -216,7 +253,7 @@ export class CompletionLifecycle {
         cost: state?.cost ?? null,
         error: state?.error ?? null,
         interruption: state?.interruption ?? null,
-        llmCalls: state?.usage?.llm?.apiCalls ?? null,
+        llmCalls: add(state?.usage?.llm?.apiCalls, rollup?.llmCalls ?? 0),
         // Backfill the executed model/provider when the terminal state carries
         // them. The in-process runtime sets neither on `state` (the op already
         // holds them from recordStart) so these stay undefined and recordCompletion
@@ -229,16 +266,46 @@ export class CompletionLifecycle {
         provider: state?.provider,
         status,
         stepCount: state?.stepCount ?? null,
-        toolCalls: state?.usage?.tools?.totalCalls ?? null,
-        totalCost: state?.cost?.total ?? null,
-        totalInputTokens: state?.usage?.llm?.tokens?.input ?? null,
-        totalOutputTokens: state?.usage?.llm?.tokens?.output ?? null,
-        totalTokens: state?.usage?.llm?.tokens?.total ?? null,
+        toolCalls: add(state?.usage?.tools?.totalCalls, rollup?.toolCalls ?? 0),
+        totalCost: add(state?.cost?.total, rollup?.totalCost ?? 0),
+        totalInputTokens: add(state?.usage?.llm?.tokens?.input, rollup?.totalInputTokens ?? 0),
+        totalOutputTokens: add(state?.usage?.llm?.tokens?.output, rollup?.totalOutputTokens ?? 0),
+        totalTokens: add(state?.usage?.llm?.tokens?.total, rollup?.totalTokens ?? 0),
         traceS3Key,
+        // The `usage` / `cost` blobs stay the op's OWN accumulator, un-rolled-up:
+        // they are the runtime's counter, and the executor reads them back as state
+        // (the cost-limit gate compares `state.cost.total` against the budget). Only
+        // the scalar columns — the reporting surface — carry the whole tree.
         usage: state?.usage ?? null,
       });
     } catch (error) {
       log('[%s] Failed to persist operation completion (non-fatal): %O', operationId, error);
+    }
+
+    // The topic rollup's tool / human-interaction stats derive from the
+    // operation rows written above (`recomputeTopicUsage` reads their usage/cost
+    // blobs), but its usual trigger is the assistant message's usage write,
+    // which can land BEFORE this terminal persist. Refresh here so this op's
+    // tool spend shows up without waiting for the next message mutation.
+    // Idempotent (pure derived projection) and non-fatal.
+    if (topicId) {
+      try {
+        await this.serverDB.transaction((trx) =>
+          recomputeTopicUsage(trx, this.userId, topicId, this.workspaceId),
+        );
+      } catch (error) {
+        log('[%s] Failed to recompute topic usage rollup (non-fatal): %O', operationId, error);
+      }
+    }
+  }
+
+  /** Best-effort child-usage rollup — a DB hiccup must not fail the completion write. */
+  private async sumChildUsage(operationId: string): Promise<ChildUsageRollup | undefined> {
+    try {
+      return await this.agentOperationModel.sumChildUsage(operationId);
+    } catch (error) {
+      log('[%s] Failed to sum child operation usage (non-fatal): %O', operationId, error);
+      return undefined;
     }
   }
 
@@ -438,6 +505,64 @@ export class CompletionLifecycle {
   }
 
   /**
+   * Register the operation's Works: entity files edited this round
+   * (pptx/xlsx/docx/pdf, …) as `file` Works — one version per operation,
+   * exported from the sandbox — plus github issue/PR Works recovered from
+   * hetero / device shell records (codex / claude-code / lobe-local-system
+   * `gh` runs), which never pass the skill-tool registration hook.
+   *
+   * Idempotent per state object: only when EVERY candidate registered (the
+   * returned outcome reports `failed === 0`) is a `_fileWorksRegistered` marker
+   * stamped onto `state.metadata` so the dispatchHooks backstop (which receives
+   * the same state later in the request) skips the duplicate scan. A PARTIAL
+   * failure leaves the marker unset so the backstop re-runs and retries just the
+   * failed candidates — file registration is idempotent per (operation, file)
+   * via a DB existence probe, github registration per (work, toolCallId) via
+   * the version write's unique guard, so a QStash retry that lost the marker is
+   * safe.
+   *
+   * The gateway/queue executor calls this BEFORE the terminal
+   * `coordinator.saveStepResult`: that save publishes `agent_runtime_end`,
+   * whose `uiMessages` snapshot the client adopts as the settled message list —
+   * Work rows must exist by then or the file-Work card stays absent until a
+   * manual refresh. When entity edits are present, the executor suppresses the
+   * early `visible_output_end`, so perceived loading covers export and
+   * registration until the terminal snapshot is published.
+   *
+   * Awaited, NOT fire-and-forget: on serverless the runtime can freeze the
+   * moment the response is sent, silently dropping any still-pending background
+   * write. Fully self-guarded — a failure only logs, never throws. Both a thrown
+   * whole-function failure AND a partial per-file failure (outcome `failed > 0`)
+   * leave the marker unset so a later call retries the outstanding files.
+   */
+  async registerFileWorks(operationId: string, state: any): Promise<void> {
+    if (state?.metadata?._fileWorksRegistered) return;
+    try {
+      const outcome = await registerWorksForOperation({
+        // The round's final assistant message — the shell github scan stamps the
+        // Work display anchor onto it for hetero runs (see registerWorksForOperation).
+        assistantMessageId: state?.metadata?.assistantMessageId ?? null,
+        // Live terminal totals: on the pre-snapshot path the op row's cost/usage
+        // columns are not persisted yet (recordCompletion runs later), so the
+        // registration must not rely on reading them back from the DB.
+        finalCost: state?.cost ?? null,
+        finalUsage: state?.usage ?? null,
+        operationId,
+        serverDB: this.serverDB,
+        userId: state?.metadata?.userId || this.userId,
+        workspaceId: this.workspaceId,
+      });
+      // Stamp the idempotency marker ONLY when nothing failed. A partial failure
+      // (some files exported/registered, others did not) must NOT be recorded as
+      // a completed registration, or the dispatchHooks backstop would skip the
+      // retry and the user gets neither a Work nor the edited-files fallback.
+      if (state?.metadata && outcome.failed === 0) state.metadata._fileWorksRegistered = true;
+    } catch (error) {
+      log('[%s] registerWorksForOperation failed (non-fatal): %O', operationId, error);
+    }
+  }
+
+  /**
    * The single terminal-completion entry for every path that does NOT have the
    * in-process runtime's rich `state` in hand: heterogeneous CLI exit
    * (`heteroFinish`), remote-agent done signal (`agentNotify`), and synchronous
@@ -471,12 +596,18 @@ export class CompletionLifecycle {
     // status (the async-tool resume CAS reads it) but must NOT fire `onComplete`
     // or unregister hooks — the op resumes under this same id and reaches its
     // real terminal state later, which is when consumers should be notified.
-    // (`waiting_for_human` differs: its resume runs under a NEW operationId, so
-    // firing + unregistering on the park is correct there.)
+    // (`waiting_for_human` also resumes under the same operationId, but its
+    // park DOES fire `onComplete` — hook consumers surface the approval request
+    // as the run's outcome; the final completion re-dispatches with the
+    // serialized hooks carried on `metadata._hooks`.)
     const isAsyncToolPark = reason === 'waiting_for_async_tool';
 
     try {
-      const { event, metadata } = this.buildLifecycleEvent(operationId, state, reason);
+      const { assistantMessageId, event, metadata } = this.buildLifecycleEvent(
+        operationId,
+        state,
+        reason,
+      );
 
       // Finalize the agent_operations row before user hooks fire so
       // downstream consumers see the row in its terminal shape.
@@ -484,7 +615,56 @@ export class CompletionLifecycle {
 
       if (isAsyncToolPark) return;
 
+      // `lastAssistantContent` comes off the Redis-backed `state.messages`,
+      // while the assistant message row is persisted through a separate
+      // `messageModel.update` path. When the two diverge (state entry empty
+      // but the DB row holds the full reply — Discord bot completions
+      // arrived with no content while the app showed the reply), consumers
+      // like the IM bot callback silently drop the reply. Recover from the DB
+      // row — the same source of truth the app UI renders — before dispatch.
+      if (
+        isSuccessLikeCompletionReason(reason) &&
+        !event.lastAssistantContent?.trim() &&
+        !event.attachments?.length
+      ) {
+        const recovered = await this.recoverLastAssistantContent(
+          operationId,
+          assistantMessageId,
+          metadata?.userId || this.userId,
+        );
+        if (recovered) event.lastAssistantContent = recovered;
+      }
+
       await hookDispatcher.dispatch(operationId, 'onComplete', event, metadata._hooks);
+
+      // Recall the user when a run finishes with a deliverable while they may be
+      // away (push / inbox). Fires on every success-like terminal — `done` plus
+      // the step/cost caps, which still produce a reply worth recalling — to
+      // match the desktop completion notification, which notifies on any clean
+      // (non-abort, non-error) terminal. Fire-and-forget through the
+      // `@/business` slot; the default implementation is a no-op. Sub-agent /
+      // group-member completions are internal steps of a parent run, never a
+      // user-facing recall — in-group members carry `orchestrationRole: 'member'`
+      // WITHOUT `isSubAgent` (see execAgentMember), so guard both.
+      if (
+        isSuccessLikeCompletionReason(reason) &&
+        metadata?.isSubAgent !== true &&
+        metadata?.orchestrationRole !== 'member'
+      ) {
+        void notifyAgentRunCompleted({
+          agentId: event.agentId || undefined,
+          duration: event.duration,
+          lastAssistantContent: event.lastAssistantContent,
+          operationId,
+          topicId: event.topicId,
+          userId: metadata?.userId || this.userId,
+          // Personal runs leave this undefined ⇒ bare deep link; workspace
+          // runs carry the id so the business slot can slug-prefix the URL.
+          workspaceId: this.workspaceId,
+        }).catch((error) =>
+          log('[%s] Completion notification failed (non-fatal): %O', operationId, error),
+        );
+      }
 
       // Delivery checker: on a successful completion, run the confirmed verify
       // plan against the deliverable. Fire-and-forget and self-guarded — a run
@@ -521,6 +701,24 @@ export class CompletionLifecycle {
           },
           this.workspaceId,
         );
+      }
+
+      // Register entity files edited this round as `file` Works. On the
+      // gateway/queue path this already ran BEFORE the terminal snapshot (see
+      // `registerFileWorks`) and no-ops via the state marker; here it is the
+      // backstop for every other terminal path (in-process runtime, hetero
+      // completions, already-terminal early exits). Guarded on success-LIKE
+      // reasons, not `done` alone: a run stopped by a step/cost cap still
+      // produced its edits and persists as status='done'.
+      //
+      // `waiting_for_human` deliberately does NOT register: the approval resume
+      // continues the SAME operationId (`processHumanIntervention` reschedules
+      // it), so pre-park edits are covered by the real terminal completion's
+      // scan. Registering at the park would persist `_fileWorksRegistered` into
+      // the park snapshot — skipping the terminal registration entirely — and
+      // freeze per-(op, file) versions at pre-approval content.
+      if (isSuccessLikeCompletionReason(reason)) {
+        await this.registerFileWorks(operationId, state);
       }
 
       if (reason === 'error') {
@@ -568,9 +766,56 @@ export class CompletionLifecycle {
     }
   }
 
+  /**
+   * Load the final assistant message row from the DB and return its text
+   * content, for completions whose Redis-side state carried no assistant
+   * text (see the DB recovery note in {@link dispatchHooks}). Non-fatal: any
+   * failure just leaves the event as-built.
+   */
+  private async recoverLastAssistantContent(
+    operationId: string,
+    assistantMessageId: string | undefined,
+    userId: string,
+  ): Promise<string | undefined> {
+    if (!assistantMessageId) return undefined;
+
+    try {
+      const messageModel =
+        userId === this.userId
+          ? this.messageModel
+          : new MessageModel(this.serverDB, userId, this.workspaceId);
+      const row = await messageModel.findById(assistantMessageId);
+      const raw = typeof row?.content === 'string' ? row.content : undefined;
+      if (!raw?.trim()) return undefined;
+
+      // Multimodal rows store `content` as serialized MessageContentPart[]
+      // (see callLlmFinalizer / serializePartsForStorage) — sending
+      // that verbatim would deliver raw JSON to the bot channel. Gate on the
+      // row's `metadata.isMultimodal` flag (the same signal the app UI uses
+      // in DisplayContent) rather than sniffing the string, so a legitimate
+      // plain-text reply that happens to be a JSON array is preserved as-is.
+      // Extract only the text parts; an image-only row recovers nothing.
+      const content = extractTextFromMessage(row);
+      if (!content?.trim()) return undefined;
+
+      // console (not debug) so state/DB divergence stays visible in
+      // production logs — the silent variant of this is what made
+      // the Discord bot empty-reply issue hard to diagnose.
+      console.warn(
+        `[CompletionLifecycle][${operationId}] completion event had no assistant text; recovered ${content.length} chars from message ${assistantMessageId}`,
+      );
+      return content;
+    } catch (error) {
+      log('[%s] recoverLastAssistantContent failed (non-fatal): %O', operationId, error);
+      return undefined;
+    }
+  }
+
   private buildLifecycleEvent(operationId: string, state: any, reason: string) {
     const metadata = state?.metadata || {};
-    const messages: any[] = Array.isArray(state?.messages) ? state.messages : [];
+    const messages = normalizeCompletionMessages(
+      Array.isArray(state?.messages) ? state.messages : [],
+    );
 
     // Pull text content off the **final** assistant turn. Content may be a
     // plain string or an OpenAI-style multimodal part array; for the array
@@ -580,10 +825,7 @@ export class CompletionLifecycle {
     // the turn has any text — so an image-only or tool-output final turn
     // doesn't fall through to an earlier assistant message and ship stale
     // text alongside the current attachments.
-    const lastAssistantMessage = messages
-      .slice()
-      .reverse()
-      .find((m: { content?: unknown; id?: string; role: string }) => m.role === 'assistant');
+    const lastAssistantMessage = findLastAssistantMessage(messages);
     const lastAssistantContent = lastAssistantMessage
       ? extractTextFromMessageContent(lastAssistantMessage.content)
       : undefined;
@@ -691,7 +933,7 @@ const buildAttachmentFromUrl = (
  * Pull text out of a message's `content` field. Accepts both string and
  * OpenAI-style multimodal arrays `[{ type: 'text', text }, { type: 'image_url', image_url: { url } }]`.
  */
-const extractTextFromMessageContent = (content: unknown): string | undefined => {
+export const extractTextFromMessageContent = (content: unknown): string | undefined => {
   if (typeof content === 'string') return content || undefined;
   if (!Array.isArray(content)) return undefined;
   const parts: string[] = [];
@@ -706,6 +948,96 @@ const extractTextFromMessageContent = (content: unknown): string | undefined => 
   const joined = parts.join('');
   return joined || undefined;
 };
+
+/**
+ * Extract text from either an in-memory message or a DB-rehydrated row.
+ * Persisted multimodal content is serialized, so only deserialize when the
+ * row's explicit metadata flag identifies that storage representation.
+ */
+export const extractTextFromMessage = (message: unknown): string | undefined => {
+  if (!isRecord(message)) return undefined;
+
+  const metadata = isRecord(message.metadata) ? message.metadata : undefined;
+  const content =
+    typeof message.content === 'string' && metadata?.isMultimodal === true
+      ? (deserializeParts(message.content) ?? message.content)
+      : message.content;
+
+  return extractTextFromMessageContent(content);
+};
+
+/**
+ * Expand display-only assistant groups back into the assistant/tool sequence
+ * expected by terminal lifecycle consumers.
+ *
+ * DB rehydration runs conversation-flow parsing, which folds an entire tool
+ * chain — including its final toolless assistant turn — into one
+ * `assistantGroup` whose own content is empty. Completion hooks must inspect
+ * the persisted leaf turns rather than that virtual wrapper, otherwise they
+ * lose both the final text and the message id used by DB recovery.
+ */
+export const normalizeCompletionMessages = (
+  messages: unknown[],
+): Record<PropertyKey, unknown>[] => {
+  const normalized: Record<PropertyKey, unknown>[] = [];
+
+  for (const message of messages) {
+    if (!isRecord(message)) continue;
+
+    const isAssistantGroup = message.role === 'assistantGroup' || message.role === 'supervisor';
+    if (!isAssistantGroup) {
+      normalized.push(message);
+      continue;
+    }
+
+    if (!Array.isArray(message.children) || message.children.length === 0) {
+      normalized.push({ ...message, role: 'assistant' });
+      continue;
+    }
+
+    const groupStartIndex = normalized.length;
+    for (const child of message.children) {
+      if (!isRecord(child) || child.council) continue;
+
+      normalized.push({ ...child, role: 'assistant' });
+
+      if (!Array.isArray(child.tools)) continue;
+      for (const tool of child.tools) {
+        if (!isRecord(tool) || !isRecord(tool.result)) continue;
+
+        normalized.push({
+          content: tool.result.content,
+          id: tool.result.id,
+          role: 'tool',
+          tool_call_id: tool.id,
+        });
+      }
+    }
+
+    // A virtual group containing only non-message blocks (for example a
+    // council block) still marks the latest assistant boundary. Preserve an
+    // empty leaf so completion never falls back to stale text from an older
+    // turn.
+    if (normalized.length === groupStartIndex) {
+      normalized.push({ ...message, role: 'assistant' });
+    }
+  }
+
+  return normalized;
+};
+
+/**
+ * Find the final assistant boundary after display-only groups have been
+ * normalized. Match by role rather than content so an empty/image-only final
+ * turn never falls through to stale text from an earlier assistant message.
+ */
+export const findLastAssistantMessage = (
+  messages: Record<PropertyKey, unknown>[],
+): Record<PropertyKey, unknown> | undefined =>
+  messages
+    .slice()
+    .reverse()
+    .find((message) => message.role === 'assistant');
 
 /**
  * Extract image/file parts from a message's `content` array. Each entry is

@@ -67,14 +67,21 @@ const CommentInput = memo<{ taskId: string }>(({ taskId }) => {
 
   return (
     <Flexbox className={styles.commentInputCard} gap={6}>
-      <Flexbox horizontal align={'center'} gap={8}>
+      <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0, width: '100%' }}>
         <Avatar avatar={userAvatar} size={24} style={{ flexShrink: 0 }} />
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: '1 1 0', minWidth: 0, overflow: 'hidden' }}>
           <EditorCanvas
             editor={editor}
             floatingToolbar={false}
             placeholder={t('taskDetail.commentPlaceholder')}
-            style={{ fontSize: 14, minHeight: 24, paddingBlock: 0 }}
+            style={{
+              fontSize: 14,
+              maxWidth: '100%',
+              minHeight: 24,
+              overflow: 'hidden',
+              paddingBlock: 0,
+              whiteSpace: 'normal',
+            }}
             onContentChange={handleContentChange}
             onPressEnter={({ event }) => {
               if (!canEditTask) return true;

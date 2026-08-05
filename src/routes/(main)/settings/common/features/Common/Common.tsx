@@ -4,14 +4,17 @@ import { type FormGroupItemType } from '@lobehub/ui';
 import { Flexbox, Form, Icon, ImageSelect, Skeleton } from '@lobehub/ui';
 import { Select, Tabs } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
-import { Ban, Gauge, Loader2Icon, Monitor, Moon, Mouse, Sun, Waves } from 'lucide-react';
+import { Ban, Gauge, Monitor, Moon, Mouse, Sun, Waves } from 'lucide-react';
 import { useTheme as useNextThemesTheme } from 'next-themes';
-import { memo, useState } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AutoSaveHint from '@/components/Editor/AutoSaveHint';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { imageUrl } from '@/const/url';
 import { isDesktop } from '@/const/version';
+import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
+import { useSaveState } from '@/hooks/useSaveState';
 import { localeOptions } from '@/locales/resources';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -27,7 +30,7 @@ const Common = memo(() => {
   const language = useGlobalStore(systemStatusSelectors.language);
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
   const [switchLocale, isStatusInit] = useGlobalStore((s) => [s.switchLocale, s.isStatusInit]);
-  const [loading, setLoading] = useState(false);
+  const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
 
   // Use the theme value from next-themes, default to 'system'
   const currentTheme = theme || 'system';
@@ -71,7 +74,11 @@ const Common = memo(() => {
             onChange={(value) => setTheme(value === 'auto' ? 'system' : value)}
           />
         ),
-        label: t('settingCommon.themeMode.title'),
+        label: (
+          <SettingsSearchAnchor id={'appearance-theme-mode'}>
+            {t('settingCommon.themeMode.title')}
+          </SettingsSearchAnchor>
+        ),
         minWidth: undefined,
       },
       {
@@ -90,7 +97,11 @@ const Common = memo(() => {
             />
           </Flexbox>
         ),
-        label: t('settingCommon.lang.title'),
+        label: (
+          <SettingsSearchAnchor id={'appearance-language'}>
+            {t('settingCommon.lang.title')}
+          </SettingsSearchAnchor>
+        ),
       },
       {
         children: (
@@ -114,8 +125,11 @@ const Common = memo(() => {
             ]}
           />
         ),
-        desc: t('settingAppearance.animationMode.desc'),
-        label: t('settingAppearance.animationMode.title'),
+        label: (
+          <SettingsSearchAnchor id={'appearance-animation'}>
+            {t('settingAppearance.animationMode.title')}
+          </SettingsSearchAnchor>
+        ),
         minWidth: undefined,
         name: 'animationMode',
         valuePropName: 'activeKey',
@@ -137,8 +151,11 @@ const Common = memo(() => {
             ]}
           />
         ),
-        desc: t('settingAppearance.contextMenuMode.desc'),
-        label: t('settingAppearance.contextMenuMode.title'),
+        label: (
+          <SettingsSearchAnchor id={'appearance-context-menu'}>
+            {t('settingAppearance.contextMenuMode.title')}
+          </SettingsSearchAnchor>
+        ),
         minWidth: undefined,
         name: 'contextMenuMode',
         valuePropName: 'activeKey',
@@ -156,16 +173,19 @@ const Common = memo(() => {
                 width: '50%',
               }}
               onChange={(value) => {
-                setSettings({ general: { responseLanguage: value ?? '' } });
+                save(() => setSettings({ general: { responseLanguage: value ?? '' } }));
               }}
             />
           </Flexbox>
         ),
-        desc: t('settingCommon.responseLanguage.desc'),
-        label: t('settingCommon.responseLanguage.title'),
+        label: (
+          <SettingsSearchAnchor id={'appearance-response-language'}>
+            {t('settingCommon.responseLanguage.title')}
+          </SettingsSearchAnchor>
+        ),
       },
     ],
-    extra: loading && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />,
+    extra: <AutoSaveHint lastUpdatedTime={lastSavedAt} saveStatus={saveStatus} onRetry={retry} />,
     title: t('settingCommon.title'),
   };
 
@@ -176,11 +196,7 @@ const Common = memo(() => {
       items={[themeFormGroup]}
       itemsType={'group'}
       variant={'filled'}
-      onValuesChange={async (v) => {
-        setLoading(true);
-        await setSettings({ general: v });
-        setLoading(false);
-      }}
+      onValuesChange={(v) => save(() => setSettings({ general: v }))}
       {...FORM_STYLE}
     />
   );

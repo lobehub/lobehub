@@ -9,6 +9,7 @@ export type {
   MainRecordUsageIntent,
   MainResolveToolResultIntent,
   MainStreamContentIntent,
+  MainUpdateToolStateIntent,
   PersistAssistantIntent,
   SetErrorIntent,
 } from './types';

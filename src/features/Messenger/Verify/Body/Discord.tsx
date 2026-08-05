@@ -37,6 +37,7 @@ const DiscordBody = memo<DiscordBodyProps>(
       return (
         <SuccessCard
           openBotUrl={appId ? buildDiscordOpenBotUrl(appId) : null}
+          platform="discord"
           platformLabel={platformLabel}
         />
       );

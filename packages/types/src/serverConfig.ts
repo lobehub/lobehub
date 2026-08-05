@@ -1,7 +1,5 @@
 import type { PartialDeep } from 'type-fest';
 
-import type { IFeatureFlagsState } from '@/config/featureFlags';
-
 import type { ChatModelCard } from './llm';
 import type {
   GlobalLLMProviderKey,
@@ -9,6 +7,41 @@ import type {
   UserImageConfig,
   UserServiceModelConfig,
 } from './user/settings';
+
+/**
+ * Resolved server feature flags, keyed for the client. The canonical mapping
+ * lives in `@lobechat/app-config`'s `mapFeatureFlagsEnvToState`, whose explicit
+ * return-type annotation pins it to this interface — add a flag there and the
+ * compiler forces the field to be added here (and vice versa).
+ *
+ * Deliberately a `type` alias: aliases carry an implicit index signature, so
+ * existing `as Record<string, unknown>` conversions keep compiling.
+ */
+export type IFeatureFlagsState = {
+  enableAgentOnboarding: boolean | undefined;
+  enableAgentSelfIteration: boolean | undefined;
+  enableAuthCaptcha: boolean | undefined;
+  enableCheckUpdates: boolean | undefined;
+  enableDevDock: boolean | undefined;
+  enableKnowledgeBase: boolean | undefined;
+  enableOnboardingV2: boolean | undefined;
+  enableRAGEval: boolean | undefined;
+  enableSTT: boolean | undefined;
+  enableStorageOverage: boolean | undefined;
+  enableWorkspace: boolean | undefined;
+  hideDocs: boolean | undefined;
+  hideGitHub: boolean | undefined;
+  isAgentEditable: boolean | undefined;
+  showAiImage: boolean | undefined;
+  showApiKeyManage: boolean | undefined;
+  showChangelog: boolean | undefined;
+  showCloudPromotion: boolean | undefined;
+  showMarket: boolean | undefined;
+  showOpenAIApiKey: boolean | undefined;
+  showOpenAIProxyUrl: boolean | undefined;
+  showProvider: boolean | undefined;
+  showWelcomeSuggest: boolean | undefined;
+};
 
 export type GlobalMemoryLayer = 'activity' | 'context' | 'experience' | 'identity' | 'preference';
 
@@ -84,6 +117,15 @@ export interface GlobalServerConfig {
   telemetry: {
     langfuse?: boolean;
   };
+  /**
+   * `TOOL_NAME_MAX_LENGTH`: the length at which a function-call tool name gets
+   * compressed to an opaque `MD5HASH_…`, `0` disabling that compression.
+   * Exposed to the client because the client-driven chat path builds the tool
+   * payload in the browser, where the server env isn't visible — without this
+   * the var would only take effect in gateway (server-run) mode.
+   * Undefined means "not configured": the default (64) applies.
+   */
+  toolNameMaxLength?: number;
   visualUnderstanding?: VisualUnderstandingConfig;
 }
 

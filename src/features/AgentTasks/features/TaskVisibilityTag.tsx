@@ -9,7 +9,7 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { usePermission } from '@/hooks/usePermission';
 import { useTaskStore } from '@/store/task';
 
-import { renderMenuExtra } from './menuExtra';
+import { renderMenuCheck } from './menuExtra';
 import { getTaskVisibilityDefaultLabel, getTaskVisibilityLabelKey } from './taskVisibilityLabel';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -48,7 +48,7 @@ interface TaskVisibilityTagProps {
   disableDropdown?: boolean;
   /** When set, treats the chip as locked: dropdown is suppressed and a
    *  tooltip explains why. Used by the create form when the selected agent
-   *  is private (see LOBE-10961). */
+   *  is private (a private agent can only run private tasks). */
   lockedReason?: string;
   /** Controlled mode (e.g. create form): caller owns the state. */
   onChange?: (next: 'private' | 'public') => void;
@@ -101,11 +101,11 @@ const TaskVisibilityTag = memo<TaskVisibilityTagProps>(
 
     const menuItems = useMemo<DropdownItem[]>(
       () =>
-        VISIBILITY_OPTIONS.map((option, index) => {
+        VISIBILITY_OPTIONS.map((option) => {
           const OptionIcon = option === 'private' ? LockIcon : UsersIcon;
           const isCurrent = option === visibility;
           return {
-            extra: renderMenuExtra(String(index + 1), isCurrent),
+            extra: renderMenuCheck(isCurrent),
             icon: <Icon color={cssVar.colorTextSecondary} icon={OptionIcon} size={16} />,
             key: option,
             label: t(getTaskVisibilityLabelKey(option) as never, {

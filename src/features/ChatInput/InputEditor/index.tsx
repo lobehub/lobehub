@@ -3,7 +3,6 @@ import { HotkeyEnum, KeyEnum } from '@lobechat/const/hotkeys';
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import {
   chainInputCompletion,
-  escapeXmlAttr,
   INPUT_COMPLETION_PROMPT_VERSION,
   INPUT_COMPLETION_SCHEMA_NAME,
 } from '@lobechat/prompts';
@@ -27,6 +26,7 @@ import { aiChatService } from '@/services/aiChat';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
+import { useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import {
   labPreferSelectors,
@@ -38,6 +38,8 @@ import {
 import { useAgentId } from '../hooks/useAgentId';
 import { useChatInputDraft } from '../hooks/useChatInputDraft';
 import { useChatInputHistory } from '../hooks/useChatInputHistory';
+import { useChatInputResourceAccess } from '../hooks/useChatInputResourceAccess';
+import { useEffectiveModel } from '../hooks/useEffectiveModel';
 import { useChatInputStore, useStoreApi } from '../store';
 import {
   INSERT_ACTION_TAG_COMMAND,
@@ -46,11 +48,12 @@ import {
 } from './ActionTag';
 import { createInputCompletionError, isInputCompletionAbortError } from './inputCompletionError';
 import InputHistoryPopup, { getHistoryPreviewText } from './InputHistoryPopup';
+import { INSERT_LOCAL_FILE_TAG_COMMAND } from './LocalFileTag';
 import { mentionFilledClassName } from './mentionStyle';
 import Placeholder, { type PlaceholderVariant } from './Placeholder';
 import { CHAT_INPUT_EMBED_PLUGINS, createChatInputRichPlugins } from './plugins';
 import { INSERT_REFER_TOPIC_COMMAND } from './ReferTopic';
-import { useLocalFileMention } from './useLocalFileMention';
+import { useLocalFileTag } from './useLocalFileTag';
 import { useMentionCategories } from './useMentionCategories';
 
 const className = cx(
@@ -75,10 +78,12 @@ type MentionOption = ISlashMenuOption | ISlashSectionOption;
 
 const InputEditor = memo<{
   defaultRows?: number;
+  initialContent?: string;
   placeholder?: ReactNode;
   placeholderVariant?: PlaceholderVariant;
-}>(({ defaultRows = 2, placeholder, placeholderVariant }) => {
+}>(({ defaultRows = 2, initialContent = '', placeholder, placeholderVariant }) => {
   const { t } = useTranslation('chat');
+  const mobile = useServerConfigStore((s) => s.isMobile);
   const [
     editor,
     slashMenuRef,
@@ -108,6 +113,9 @@ const InputEditor = memo<{
   const restoredDraftEditorRef = useRef<IEditor | null>(null);
   const state = useEditorState(editor);
   const { allowed: canCreateContent } = usePermission('create_content');
+  // view-level General access on the bound agent/group = full read-only input,
+  // matching the workspace-viewer treatment (ChatInputNotice explains why).
+  const { canUseResource } = useChatInputResourceAccess();
   const hotkey = useUserStore(settingsSelectors.getHotkeyById(HotkeyEnum.AddUserMessage));
   const userId = useUserStore(userProfileSelectors.userId);
   const { enableScope, disableScope } = useHotkeysContext();
@@ -133,13 +141,12 @@ const InputEditor = memo<{
   const categories = useMentionCategories();
 
   // Get agent's model info for vision support check and handle paste upload
-  const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
-  const provider = useAgentStore((s) => agentByIdSelectors.getAgentModelProviderById(agentId)(s));
+  const { model, provider } = useEffectiveModel(agentId);
   const heterogeneousType = useAgentStore(
     (s) => agentByIdSelectors.getAgencyConfigById(agentId)(s)?.heterogeneousProvider?.type,
   );
 
-  const { enableLocalFileMention, searchLocalFiles } = useLocalFileMention();
+  const { enableLocalFileTag, searchLocalFiles } = useLocalFileTag();
 
   const allMentionItems = useMemo(() => categories.flatMap((c) => c.items), [categories]);
   const mentionSections = useMemo<ISlashSectionOption[]>(
@@ -156,7 +163,9 @@ const InputEditor = memo<{
   const fuse = useMemo(
     () =>
       new Fuse(allMentionItems, {
-        keys: ['key', 'label', 'metadata.topicTitle'],
+        // Agent labels are ReactNodes (name + role + description), which Fuse
+        // skips — their searchable text lives in `metadata.label`/`searchText`.
+        keys: ['key', 'label', 'metadata.label', 'metadata.searchText', 'metadata.topicTitle'],
         threshold: 0.3,
       }),
     [allMentionItems],
@@ -211,7 +220,7 @@ const InputEditor = memo<{
     [categories, fuse, mentionSections, searchLocalFiles, t],
   );
 
-  const enableMention = isMentionEnabled && (allMentionItems.length > 0 || enableLocalFileMention);
+  const enableMention = isMentionEnabled && (allMentionItems.length > 0 || enableLocalFileTag);
   const heterogeneousName = heterogeneousType
     ? (HETEROGENEOUS_TYPE_LABELS[heterogeneousType] ?? heterogeneousType)
     : undefined;
@@ -435,13 +444,9 @@ const InputEditor = memo<{
     if (mention.metadata?.type === 'topic') {
       return `<refer_topic name="${mention.metadata.topicTitle}" id="${mention.metadata.topicId}" />`;
     }
-    if (mention.metadata?.type === 'localFile') {
-      const name = escapeXmlAttr(String(mention.metadata.name ?? mention.label));
-      const path = escapeXmlAttr(String(mention.metadata.path ?? ''));
-      const isDirectory = mention.metadata.isDirectory ? ' isDirectory' : '';
-
-      return `<localFile name="${name}" path="${path}"${isDirectory} />`;
-    }
+    // localFile references are their own node (LocalFileTagNode) and serialize
+    // via that plugin's always-registered markdown writer — they never reach this
+    // generic mention writer, which is only wired up when mentionOption is enabled.
     return `<mention name="${mention.label}" id="${mention.metadata.id}" />`;
   }, []);
 
@@ -458,9 +463,17 @@ const InputEditor = memo<{
         type: String(option.metadata.actionType),
       };
       editor.dispatchCommand(INSERT_ACTION_TAG_COMMAND, payload);
+    } else if (option.metadata?.type === 'localFile') {
+      editor.dispatchCommand(INSERT_LOCAL_FILE_TAG_COMMAND, {
+        isDirectory: !!option.metadata.isDirectory,
+        name: String(option.metadata.name ?? option.label),
+        path: String(option.metadata.path ?? ''),
+      });
     } else {
+      // Agent options carry a ReactNode label; the chip needs the plain name
+      // kept in `metadata.label`. Other types (member) still use `label` itself.
       editor.dispatchCommand(INSERT_MENTION_COMMAND, {
-        label: String(option.label),
+        label: String(option.metadata?.label ?? option.label),
         metadata: option.metadata,
       });
     }
@@ -534,8 +547,8 @@ const InputEditor = memo<{
         autoFocus
         pasteAsPlainText
         className={className}
-        content={''}
-        editable={canCreateContent}
+        content={initialContent}
+        editable={canCreateContent && canUseResource}
         editor={editor}
         getPopupContainer={() => (slashMenuRef as any)?.current ?? null}
         {...{ slashPlacement }}
@@ -558,6 +571,7 @@ const InputEditor = memo<{
           )
         }
         style={{
+          fontSize: mobile ? 16 : undefined,
           minHeight: defaultRows > 1 ? defaultRows * 23 : undefined,
         }}
         onCompositionEnd={({ event }) => compositionProps.onCompositionEnd(event)}

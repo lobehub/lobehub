@@ -1,12 +1,14 @@
 'use client';
 
+import { agentDisplayName } from '@lobechat/types';
 import { Flexbox, SearchBar, Text, TextArea } from '@lobehub/ui';
-import { Button, Modal } from '@lobehub/ui/base-ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import AgentAvatar from '@/routes/(main)/home/_layout/Body/Agent/List/AgentItem/Avatar';
 import { useHomeStore } from '@/store/home';
@@ -117,7 +119,9 @@ const ForwardModal = memo<ForwardModalProps>(({ open, onClose }) => {
     const trimmed = keyword.trim().toLowerCase();
     return agents
       .filter((agent) => agent.type === 'agent' && agent.id !== currentAgentId)
-      .filter((agent) => !trimmed || (agent.title || '').toLowerCase().includes(trimmed));
+      .filter(
+        (agent) => !trimmed || (agentDisplayName(agent) ?? '').toLowerCase().includes(trimmed),
+      );
   }, [agents, currentAgentId, keyword]);
 
   const selectedAgents = useMemo(
@@ -148,7 +152,7 @@ const ForwardModal = memo<ForwardModalProps>(({ open, onClose }) => {
   const avatarOf = (avatar: unknown) => (typeof avatar === 'string' ? avatar : undefined);
 
   return (
-    <Modal
+    <ImperativeModal
       destroyOnHidden
       footer={null}
       open={open}
@@ -185,7 +189,7 @@ const ForwardModal = memo<ForwardModalProps>(({ open, onClose }) => {
                     <SelectCircle checked={checked} />
                     <AgentAvatar avatar={avatarOf(agent.avatar)} />
                     <Text ellipsis style={{ flex: 1 }}>
-                      {agent.title || t('untitledAgent')}
+                      {agentDisplayName(agent, t('untitledAgent'))}
                     </Text>
                   </Flexbox>
                 );
@@ -241,7 +245,7 @@ const ForwardModal = memo<ForwardModalProps>(({ open, onClose }) => {
           </Flexbox>
         </Flexbox>
       </Flexbox>
-    </Modal>
+    </ImperativeModal>
   );
 });
 

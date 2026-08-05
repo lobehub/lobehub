@@ -1,7 +1,10 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
-import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import {
+  requireWorkspaceRoleWhenScoped,
+  wsCompatProcedure,
+} from '@/business/server/trpc-middlewares/workspaceAuth';
 import { FileModel } from '@/database/models/file';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
@@ -9,7 +12,11 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { FileService } from '@/server/services/file';
 
-const asrProcedure = wsCompatProcedure.use(serverDatabase);
+// Transcription spends provider quota — workspace viewers (read-only, no model
+// invoke permission) are gated out; personal mode passes through unrestricted.
+const asrProcedure = wsCompatProcedure
+  .use(serverDatabase)
+  .use(requireWorkspaceRoleWhenScoped('member'));
 
 // Inline base64 is only for short clips. The whole request must fit inside the
 // platform body limit (≈4.5MB on serverless deploys) and base64 inflates bytes

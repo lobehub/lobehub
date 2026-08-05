@@ -1,15 +1,16 @@
 'use client';
 
 import { Center, Flexbox, Icon, Input, Text, TextArea, Tooltip } from '@lobehub/ui';
-import { confirmModal, Modal } from '@lobehub/ui/base-ui';
+import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { type UploadProps } from 'antd';
-import { App, Form, Upload } from 'antd';
+import { Form, Upload } from 'antd';
 import { cssVar } from 'antd-style';
 import { CircleHelp, Globe, ImagePlus, Trash2 } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import EmojiPicker from '@/components/EmojiPicker';
+import ImperativeModal from '@/components/ImperativeModal';
 import { lambdaClient } from '@/libs/trpc/client';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
@@ -70,7 +71,7 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
     isFirstTimeSetup = false,
   }) => {
     const { t } = useTranslation('marketAuth');
-    const { message } = App.useApp();
+
     const [form] = Form.useForm<FormValues>();
     const [loading, setLoading] = useState(false);
     const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
@@ -128,7 +129,7 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
         };
         fetchProfiles();
       }
-    }, [open, isFirstTimeSetup, githubConnect.fetchProfile, twitterConnect.fetchProfile]);
+    }, [open, isFirstTimeSetup, githubConnect, twitterConnect]);
 
     // Reset form when modal opens
     useEffect(() => {
@@ -165,7 +166,7 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
     const handleAvatarUpload = useCallback(
       async (file: File) => {
         if (file.size > MAX_FILE_SIZE) {
-          message.error(t('profileSetup.errors.fileTooLarge'));
+          toast.error(t('profileSetup.errors.fileTooLarge'));
           return;
         }
 
@@ -177,12 +178,12 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
           }
         } catch (error) {
           console.error('[ProfileSetupModal] Avatar upload failed:', error);
-          message.error(t('profileSetup.errors.uploadFailed'));
+          toast.error(t('profileSetup.errors.uploadFailed'));
         } finally {
           setAvatarUploading(false);
         }
       },
-      [uploadWithProgress, message, t],
+      [uploadWithProgress, t],
     );
 
     // Handle avatar delete
@@ -196,7 +197,7 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
         const file = options.file as File;
 
         if (file.size > MAX_FILE_SIZE) {
-          message.error(t('profileSetup.errors.fileTooLarge'));
+          toast.error(t('profileSetup.errors.fileTooLarge'));
           options.onError?.(new Error('File too large'));
           return;
         }
@@ -210,13 +211,13 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
           }
         } catch (error) {
           console.error('[ProfileSetupModal] Banner upload failed:', error);
-          message.error(t('profileSetup.errors.uploadFailed'));
+          toast.error(t('profileSetup.errors.uploadFailed'));
           options.onError?.(error as Error);
         } finally {
           setBannerUploading(false);
         }
       },
-      [uploadWithProgress, message, t],
+      [uploadWithProgress, t],
     );
 
     // Handle banner delete
@@ -227,7 +228,7 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
     const doSubmit = useCallback(async () => {
       // If not in automatic authorization mode, need to validate accessToken
       if (!enableMarketTrustedClient && !accessToken) {
-        message.error(t('profileSetup.errors.notAuthenticated'));
+        toast.error(t('profileSetup.errors.notAuthenticated'));
         return;
       }
 
@@ -258,7 +259,7 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
           userName: values.userName,
         });
 
-        message.success(t('profileSetup.success'));
+        toast.success(t('profileSetup.success'));
         // Cast result.user to MarketUserProfile with required fields
         const userProfile: MarketUserProfile = {
           avatarUrl: result.user?.avatarUrl || avatarUrl || null,
@@ -302,9 +303,9 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
             errorMessage.toLowerCase().includes('already taken') ||
             errorMessage.includes('CONFLICT')
           ) {
-            message.error(t('profileSetup.errors.usernameTaken'));
+            toast.error(t('profileSetup.errors.usernameTaken'));
           } else {
-            message.error(t('profileSetup.errors.updateFailed'));
+            toast.error(t('profileSetup.errors.updateFailed'));
           }
         }
       } finally {
@@ -318,7 +319,6 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
       form,
       githubConnect.profile,
       twitterConnect.profile,
-      message,
       onClose,
       onShowClaimResources,
       onSuccess,
@@ -359,7 +359,7 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
     }, [isFirstTimeSetup, onClose]);
 
     return (
-      <Modal
+      <ImperativeModal
         centered
         cancelButtonProps={isFirstTimeSetup ? { style: { display: 'none' } } : undefined}
         cancelText={t('profileSetup.cancel')}
@@ -620,7 +620,7 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
             </>
           )}
         </Form>
-      </Modal>
+      </ImperativeModal>
     );
   },
 );

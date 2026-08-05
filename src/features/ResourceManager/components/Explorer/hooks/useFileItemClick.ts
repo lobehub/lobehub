@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
-import { useSearchParams } from 'react-router';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 
 export interface UseFileItemClickOptions {
@@ -25,18 +25,27 @@ export const useFileItemClick = ({
   onOpen,
 }: UseFileItemClickOptions) => {
   const navigate = useWorkspaceAwareNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  // Read/write the URL through the active-tab facade rather than
+  // `useSearchParams`: this hook also runs in the library sidebar, which Electron
+  // portals into the shell's frozen root router.
+  const { search } = useActiveLocation();
   const setMode = useResourceManagerStore((s) => s.setMode);
   const setCurrentViewItemId = useResourceManagerStore((s) => s.setCurrentViewItemId);
 
   const handleClick = useCallback(() => {
+    const selectFile = () => {
+      const newParams = new URLSearchParams(search);
+      newParams.set('file', id);
+      navigate({ search: `?${newParams.toString()}` }, { replace: true });
+    };
+
     if (isFolder) {
       // Navigate to folder using slug-based routing (Google Drive style)
       const folderSlug = slug || id;
 
       if (libraryId) {
         // Preserve existing query parameters (view and sort preferences)
-        const newParams = new URLSearchParams(searchParams);
+        const newParams = new URLSearchParams(search);
         // Remove 'file' parameter when navigating to folder
         newParams.delete('file');
 
@@ -49,27 +58,13 @@ export const useFileItemClick = ({
       setCurrentViewItemId(id);
       setMode('page');
       // Update URL query parameter for shareable links
-      setSearchParams(
-        (prev) => {
-          const newParams = new URLSearchParams(prev);
-          newParams.set('file', id);
-          return newParams;
-        },
-        { replace: true },
-      );
+      selectFile();
     } else {
       // Set mode to editor for regular files
       setCurrentViewItemId(id);
       setMode('editor');
       // Update URL query parameter for shareable links
-      setSearchParams(
-        (prev) => {
-          const newParams = new URLSearchParams(prev);
-          newParams.set('file', id);
-          return newParams;
-        },
-        { replace: true },
-      );
+      selectFile();
       // Call onOpen if provided for backwards compatibility
       onOpen?.(id);
     }
@@ -80,8 +75,7 @@ export const useFileItemClick = ({
     libraryId,
     isPage,
     navigate,
-    searchParams,
-    setSearchParams,
+    search,
     setMode,
     setCurrentViewItemId,
     onOpen,

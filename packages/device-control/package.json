@@ -4,7 +4,10 @@
   "private": true,
   "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./project-file-index": "./src/projectFileIndex.ts",
+    "./skill-directory": "./src/skillDirectory.ts",
+    "./workspace": "./src/workspace.ts"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -13,11 +16,14 @@
     "test:coverage": "bunx vitest run --coverage"
   },
   "dependencies": {
+    "@lobechat/heterogeneous-agents": "workspace:*",
     "@lobechat/local-file-shell": "workspace:*",
+    "@lobechat/utils": "workspace:*",
     "fast-glob": "^3.3.3",
+    "fflate": "^0.8.3",
     "gray-matter": "^4.0.3"
   },
   "devDependencies": {
-    "vitest": "3.2.4"
+    "vitest": "3.2.6"
   }
 }

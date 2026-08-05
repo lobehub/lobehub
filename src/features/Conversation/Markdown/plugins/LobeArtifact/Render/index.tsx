@@ -112,7 +112,7 @@ const Render = memo<ArtifactProps>(({ identifier, title, type, language, childre
           )}
           {hasChildren && (
             <Flexbox horizontal className={styles.desc}>
-              {identifier} ·{' '}
+              {identifier} ·&nbsp;
               <Flexbox horizontal gap={2}>
                 {!isArtifactTagClosed && (
                   <div>

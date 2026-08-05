@@ -146,7 +146,7 @@ moved into Profile (PasswordRow / SSO / Email). Dead surface to prune.
     L1 procedure** (`layer-1-static.md` step 3) to ask this cross-surface check on every surface
     — this gap was under-framed as "dead copy" in the first pass because L1 is structurally
     blind to an entry point that was never built (no `file:line`).
-  - review-checklist **"Single-source the nav/tab catalog"** (gap ⑦).
+  - deep-review `reuse-architecture` dimension **"single-source the nav/tab catalog"** (gap ⑦).
 - **Noted, not yet landed:** breadcrumb that doesn't deepen per tab (⑧-adjacent) — promote
   if a second surface repeats it.
 

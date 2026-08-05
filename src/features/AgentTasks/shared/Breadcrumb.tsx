@@ -1,3 +1,4 @@
+import { agentDisplayName } from '@lobechat/types';
 import { Icon, Text } from '@lobehub/ui';
 import { Breadcrumb as AntBreadcrumb } from 'antd';
 import { ChevronRight } from 'lucide-react';
@@ -62,7 +63,7 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
               type={taskId ? undefined : 'secondary'}
               weight={500}
             >
-              {agentMeta.title}
+              {agentDisplayName(agentMeta)}
             </Text>
           ),
         }

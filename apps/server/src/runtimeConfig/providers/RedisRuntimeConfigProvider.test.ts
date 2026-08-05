@@ -75,6 +75,37 @@ describe('RedisRuntimeConfigProvider', () => {
     expect(getMock).toHaveBeenCalledTimes(1);
   });
 
+  it('should re-read missing snapshots when null caching is disabled', async () => {
+    const getMock = vi
+      .fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          data: { enabled: true },
+          updatedAt: '2026-07-22T00:00:00.000Z',
+          version: 1,
+        }),
+      );
+
+    getRedisConfigMock.mockReturnValue({ enabled: true });
+    initializeRedisMock.mockResolvedValue({ get: getMock });
+
+    const provider = new RedisRuntimeConfigProvider({
+      ...testDomain,
+      cacheNullSnapshots: false,
+    });
+
+    await expect(provider.getSnapshot({ id: 'user-1', scope: 'user' })).resolves.toBeNull();
+    await expect(provider.getSnapshot({ id: 'user-1', scope: 'user' })).resolves.toEqual({
+      data: { enabled: true },
+      updatedAt: '2026-07-22T00:00:00.000Z',
+      version: 1,
+    });
+
+    expect(initializeRedisMock).toHaveBeenCalledTimes(2);
+    expect(getMock).toHaveBeenCalledTimes(2);
+  });
+
   it('should proactively evict expired selector cache entries', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-04-23T00:00:00.000Z'));

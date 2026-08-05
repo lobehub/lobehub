@@ -5,11 +5,16 @@ import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 import About from './features/About';
 import Analytics from './features/Analytics';
 
-const Page = ({ mobile }: { mobile?: boolean }) => {
+interface PageProps {
+  mobile?: boolean;
+  showSettingHeader?: boolean;
+}
+
+const Page = ({ mobile, showSettingHeader = true }: PageProps) => {
   const { t } = useTranslation('setting');
   return (
     <>
-      <SettingHeader title={t('tab.about')} />
+      {showSettingHeader && <SettingHeader title={t('tab.about')} />}
       <About mobile={mobile} />
       <Analytics />
     </>

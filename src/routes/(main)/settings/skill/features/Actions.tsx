@@ -1,12 +1,11 @@
-import { Button, DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { Space } from 'antd';
+import { DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
+import { Button, confirmModal } from '@lobehub/ui/base-ui';
 import { MoreHorizontalIcon, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import McpSettingsModal from '@/features/MCP/MCPSettings/McpSettingsModal';
-import PluginDetailModal from '@/features/PluginDetailModal';
+import { createMcpSettingsModal } from '@/features/MCP/MCPSettings/McpSettingsModal';
+import { createPluginDetailModal } from '@/features/PluginDetailModal';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -34,7 +33,6 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
 
   const isCustomPlugin = type === 'customPlugin';
   const { t } = useTranslation('plugin');
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const plugin = useToolStore(pluginSelectors.getToolManifestById(identifier));
   const { allowed: canCreate } = usePermission('create_content');
   const { allowed: canEdit } = usePermission('edit_own_content');
@@ -45,7 +43,6 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
   const hasSettings = pluginHelpers.isSettingSchemaNonEmpty(plugin?.settings);
 
   const [showModal, setModal] = useState(false);
-  const [mcpSettingsOpen, setMcpSettingsOpen] = useState(false);
 
   const isCommunityMCP = !isCustomPlugin && isMCP;
   const showConfigureButton = isCustomPlugin || isMCP || hasSettings;
@@ -58,9 +55,13 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
         if (isCustomPlugin) {
           setModal(true);
         } else if (isCommunityMCP) {
-          setMcpSettingsOpen(true);
+          createMcpSettingsModal({ identifier });
         } else {
-          setSettingsOpen(true);
+          createPluginDetailModal({
+            id: identifier,
+            schema: plugin?.settings,
+            tab: 'settings',
+          });
         }
       }}
     >
@@ -72,7 +73,7 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
     <>
       <Flexbox horizontal align={'center'} gap={8} onClick={stopPropagation}>
         {installed ? (
-          <Space.Compact>
+          <Flexbox horizontal gap={4}>
             {showConfigureButton &&
               (isCustomPlugin ? (
                 <EditCustomPlugin identifier={identifier} open={showModal} onOpenChange={setModal}>
@@ -107,9 +108,9 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
                 },
               ]}
             >
-              <Button icon={MoreHorizontalIcon} loading={installing} />
+              <Button icon={<Icon icon={MoreHorizontalIcon} />} loading={installing} />
             </DropdownMenu>
-          </Space.Compact>
+          </Flexbox>
         ) : (
           <Button
             disabled={!canCreate || !canEdit}
@@ -127,20 +128,6 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
           </Button>
         )}
       </Flexbox>
-      <PluginDetailModal
-        id={identifier}
-        open={settingsOpen}
-        schema={plugin?.settings}
-        tab="settings"
-        onClose={() => {
-          setSettingsOpen(false);
-        }}
-      />
-      <McpSettingsModal
-        identifier={identifier}
-        open={mcpSettingsOpen}
-        onClose={() => setMcpSettingsOpen(false)}
-      />
     </>
   );
 });

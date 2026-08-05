@@ -24,6 +24,17 @@ set -euo pipefail
 PROCESS="${1:?Usage: capture-app-window.sh <process_name> <output_path>}"
 OUTPUT="${2:?Usage: capture-app-window.sh <process_name> <output_path>}"
 
+# Preflight: OS screen capture returns a fully-black image when Screen Recording
+# permission is missing OR the display is asleep/locked/screensavered. Fail fast with
+# remediation instead of silently writing a black artifact. Set SKIP_SCREEN_CHECK=1 to bypass.
+if [ "${SKIP_SCREEN_CHECK:-0}" != "1" ]; then
+  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+  if ! "$SCRIPT_DIR/check-screen-recording.sh"; then
+    echo "[capture] Aborting: OS screen capture would be black. Fix the above, or wrap the run in 'caffeinate -dimsu' to keep the display awake." >&2
+    exit 1
+  fi
+fi
+
 # Find the CGWindowID for the target process using Swift + CGWindowList
 # Pass process name via environment variable (swift -e doesn't support -- args)
 WINDOW_ID=$(TARGET_PROCESS="$PROCESS" swift -e '

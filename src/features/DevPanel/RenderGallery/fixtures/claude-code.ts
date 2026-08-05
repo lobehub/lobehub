@@ -40,6 +40,14 @@ export default defineFixtures({
       name: 'Edit',
     },
     {
+      description: 'Create a new git worktree or enter an existing one.',
+      name: 'EnterWorktree',
+    },
+    {
+      description: 'Leave the active Claude Code worktree and optionally remove it.',
+      name: 'ExitWorktree',
+    },
+    {
       description: 'Find files by glob pattern.',
       name: 'Glob',
     },
@@ -160,6 +168,12 @@ export default defineFixtures({
           ],
         },
         label: 'Multi question',
+        pluginState: {
+          askUserAnswers: {
+            'How deep should this audit round go?': 'L1 + L2 (screenshots)',
+            'Which surfaces should the audit cover?': ['Chat surface', 'Onboarding'],
+          },
+        },
       },
       {
         args: {
@@ -181,6 +195,92 @@ export default defineFixtures({
           ],
         },
         label: 'Single question',
+        pluginState: {
+          askUserAnswers: { 'How should I handle the legacy module?': 'Minimal fix' },
+        },
+      },
+      {
+        args: {
+          questions: [
+            {
+              header: 'Approach',
+              options: [
+                {
+                  description: 'Ship the minimal fix now and file a follow-up for the refactor.',
+                  label: 'Minimal fix',
+                },
+                {
+                  description: 'Refactor the module properly before fixing. Slower but cleaner.',
+                  label: 'Refactor first',
+                },
+              ],
+              question: 'How should I handle the legacy module?',
+            },
+          ],
+        },
+        label: 'Freeform reply',
+        pluginState: {
+          askUserAnswers: {
+            __freeform__:
+              "Neither — delete the module, nothing calls it any more. I'll confirm with a grep first.",
+          },
+        },
+      },
+      {
+        args: {
+          questions: [
+            {
+              header: 'Approach',
+              options: [
+                {
+                  description: 'Ship the minimal fix now and file a follow-up for the refactor.',
+                  label: 'Minimal fix',
+                },
+              ],
+              question: 'How should I handle the legacy module?',
+            },
+          ],
+        },
+        // No `askUserAnswers` — an older message persisted before structured
+        // storage, or a skipped/cancelled flow. Exercises the placeholder row.
+        label: 'No structured answer',
+      },
+      {
+        // Four questions: the Inspector caps its header chips at 3 and folds the
+        // rest into `+N` so the row can't crowd out the tool's own actions.
+        args: {
+          questions: [
+            {
+              header: 'Audit level',
+              options: [{ description: 'Read the code only.', label: 'L1 only' }],
+              question: 'How deep should this audit round go?',
+            },
+            {
+              header: 'Scope',
+              options: [{ description: 'The chat conversation pane.', label: 'Chat surface' }],
+              question: 'Which surfaces should the audit cover?',
+            },
+            {
+              header: 'Report target',
+              options: [{ description: 'Publish to the verify channel.', label: '/verify' }],
+              question: 'Where should the report go?',
+            },
+            {
+              header: 'On failure',
+              options: [{ description: 'Leave the environment up for inspection.', label: 'Stop' }],
+              question: 'If a check fails, roll back automatically?',
+            },
+          ],
+        },
+        label: 'Inspector overflow (4 questions)',
+        pluginState: {
+          askUserAnswers: {
+            'How deep should this audit round go?': 'L1 only',
+            'If a check fails, roll back automatically?': 'Stop',
+            'Where should the report go?': '/verify',
+            'Which surfaces should the audit cover?': 'Chat surface',
+          },
+        },
       },
     ]),
     Agent: single({
@@ -242,6 +342,44 @@ export default defineFixtures({
         old_string: "path: 'tasks',",
       },
     }),
+    EnterWorktree: variants([
+      {
+        args: { name: 'worktree-icon-in-worktree' },
+        content:
+          'Created worktree at /workspace/.claude/worktrees/worktree-icon-in-worktree on branch worktree-worktree-icon-in-worktree.',
+        label: 'Create named',
+      },
+      {
+        args: {
+          path: '/workspace/.claude/worktrees/existing-feature-with-a-long-descriptive-name',
+        },
+        content:
+          'Entered existing worktree at /workspace/.claude/worktrees/existing-feature-with-a-long-descriptive-name.',
+        label: 'Enter existing',
+      },
+      {
+        args: {},
+        content: 'Created worktree with a generated name.',
+        label: 'Create generated',
+      },
+    ]),
+    ExitWorktree: variants([
+      {
+        args: { action: 'keep' },
+        content: 'Left the worktree. The worktree and branch remain on disk.',
+        label: 'Keep on disk',
+      },
+      {
+        args: { action: 'remove' },
+        content: 'Removed the worktree and branch.',
+        label: 'Remove clean',
+      },
+      {
+        args: { action: 'remove', discard_changes: true },
+        content: 'Removed the worktree and discarded 3 files and 1 commit.',
+        label: 'Discard changes',
+      },
+    ]),
     Glob: single({
       args: { path: 'src/routes', pattern: '**/index.tsx' },
       content: 'src/routes/(main)/agent/index.tsx\nsrc/routes/(main)/devtools/index.tsx',

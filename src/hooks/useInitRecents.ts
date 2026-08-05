@@ -1,3 +1,4 @@
+import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
@@ -7,9 +8,10 @@ import { authSelectors } from '@/store/user/selectors';
 export const useInitRecents = () => {
   const useFetchRecents = useHomeStore((s) => s.useFetchRecents);
   const isLogin = useUserStore(authSelectors.isLogin);
+  const scope = useCacheScope();
   const recentPageSize = useGlobalStore(systemStatusSelectors.recentPageSize);
 
-  const { isValidating, data, ...rest } = useFetchRecents(isLogin, recentPageSize);
+  const { isValidating, data, ...rest } = useFetchRecents(isLogin, recentPageSize, scope);
 
   return {
     ...rest,

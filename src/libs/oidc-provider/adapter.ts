@@ -237,11 +237,29 @@ class OIDCAdapter {
           target: (table as any).id,
         });
       log('[%s] Successfully upserted record: %s', this.name, id);
+
+      if (this.name === 'AccessToken' || this.name === 'DeviceCode') {
+        this.stampClientLastUsed(payload.clientId);
+      }
     } catch (error) {
       log('[%s] ERROR upserting record: %O', this.name, error);
       console.error(`[OIDC Adapter] Error upserting ${this.name}:`, error);
       throw error;
     }
+  }
+
+  private stampClientLastUsed(clientId?: string): void {
+    if (!clientId || !clientId.startsWith('lca_')) return;
+
+    // last_used_at is a best-effort UX signal for user-created OAuth clients;
+    // a failed stamp must never break token issuance, so swallow all errors.
+    void this.db
+      .update(oidcClients)
+      .set({ lastUsedAt: new Date() })
+      .where(eq(oidcClients.id, clientId))
+      .then(undefined, (error: unknown) => {
+        log('[%s] Failed to stamp last_used_at for client %s: %O', this.name, clientId, error);
+      });
   }
 
   /**
@@ -275,8 +293,12 @@ class OIDCAdapter {
 
       // Special handling for client model
       if (this.name === 'Client') {
+        if (model.enabled === false) {
+          log('[Client] Client %s is disabled, treating as not found', id);
+          return undefined;
+        }
         log('[Client] Converting client record to expected format');
-        return {
+        const clientMetadata: Record<string, any> = {
           application_type: model.applicationType,
           client_id: model.id,
           client_secret: model.clientSecret,
@@ -291,6 +313,14 @@ class OIDCAdapter {
           token_endpoint_auth_method: model.tokenEndpointAuthMethod,
           tos_uri: model.tosUri,
         };
+        // oidc-provider's client schema treats any non-undefined value as "provided" and
+        // rejects null for optional string fields (`must be a non-empty string if provided`),
+        // so nullable DB columns must be stripped instead of passed through.
+        for (const key of Object.keys(clientMetadata)) {
+          if (clientMetadata[key] === null || clientMetadata[key] === undefined)
+            delete clientMetadata[key];
+        }
+        return clientMetadata;
       }
 
       // If record has expired, return undefined

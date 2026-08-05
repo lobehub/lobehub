@@ -1,0 +1,276 @@
+import debug from 'debug';
+import type { Context } from 'hono';
+
+import {
+  getBotFeatureBlockedMessage,
+  isBotFeatureAccessAllowed,
+} from '@/business/server/bot/featureAccess';
+import { getServerDB } from '@/database/core/db-adaptor';
+import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
+import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
+import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import type { BotPlatformRuntimeContext } from '@/server/services/bot/platforms';
+import {
+  platformRegistry,
+  resolveBotProviderConfig,
+  resolveConnectionMode,
+} from '@/server/services/bot/platforms';
+import { GatewayService } from '@/server/services/gateway';
+import { BotConnectQueue } from '@/server/services/gateway/botConnectQueue';
+import {
+  BOT_RUNTIME_STATUSES,
+  updateBotRuntimeStatus,
+} from '@/server/services/gateway/runtimeStatus';
+import { after } from '@/server/utils/scheduleAfterResponse';
+
+const log = debug('lobe-server:bot:gateway:cron');
+
+// A single gateway invocation keeps persistent bots alive for one
+// serverless cron window. Keep this aligned with BotConnectQueue.EXPIRE_MS
+// so connect requests queued during the same window can still be consumed.
+const GATEWAY_DURATION_MS = 600_000; // 10 minutes
+const POLL_INTERVAL_MS = 30_000; // 30 seconds
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const waitUntil = (task: Promise<unknown>) => {
+  after(() => task);
+};
+
+function createRuntimeContext(): BotPlatformRuntimeContext {
+  return {
+    appUrl: process.env.APP_URL,
+    redisClient: getAgentRuntimeRedisClient() as any,
+  };
+}
+
+function createGatewayBot(
+  platform: string,
+  applicationId: string,
+  credentials: Record<string, string>,
+  settings: Record<string, unknown> | null | undefined,
+) {
+  const definition = platformRegistry.getPlatform(platform);
+  if (!definition) {
+    throw new Error(`Unsupported platform: ${platform}`);
+  }
+
+  const { config } = resolveBotProviderConfig(definition, {
+    applicationId,
+    credentials,
+    settings,
+  });
+
+  return platformRegistry.createClient(platform, config, createRuntimeContext());
+}
+
+/**
+ * Paid-gate check shared by the provider loop and the connect queue. Blocked
+ * providers are skipped and surfaced as failed so the settings UI explains why
+ * the bot is not running, mirroring GatewayService.syncGatewayConnections.
+ */
+async function ensureBotFeatureAccess(
+  platform: string,
+  provider: { applicationId: string; userId: string; workspaceId?: string | null },
+  action: 'manage' | 'runtime',
+): Promise<boolean> {
+  const allowed = await isBotFeatureAccessAllowed({
+    action,
+    applicationId: provider.applicationId,
+    platform,
+    userId: provider.userId,
+    workspaceId: provider.workspaceId ?? undefined,
+  });
+
+  if (!allowed) {
+    await updateBotRuntimeStatus({
+      applicationId: provider.applicationId,
+      errorMessage: getBotFeatureBlockedMessage(
+        platform,
+        provider.workspaceId ? 'workspace' : 'personal',
+      ),
+      platform,
+      status: BOT_RUNTIME_STATUSES.failed,
+    });
+    log('Skipping paid-gated provider platform=%s appId=%s', platform, provider.applicationId);
+  }
+
+  return allowed;
+}
+
+async function processConnectQueue(remainingMs: number): Promise<number> {
+  const queue = new BotConnectQueue();
+  const items = await queue.popAll();
+
+  if (items.length === 0) return 0;
+
+  log('Processing %d queued connect requests', items.length);
+
+  const serverDB = await getServerDB();
+  const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+  let processed = 0;
+
+  for (const item of items) {
+    try {
+      const definition = platformRegistry.getPlatform(item.platform);
+      if (!definition) {
+        log('Skipping queued unknown platform=%s appId=%s', item.platform, item.applicationId);
+        await queue.remove(item.platform, item.applicationId);
+        continue;
+      }
+
+      const provider = await AgentBotProviderModel.findEnabledByPlatformAndAppId(
+        serverDB,
+        item.platform,
+        item.applicationId,
+        gateKeeper,
+      );
+
+      if (!provider) {
+        log('No enabled provider found for queued %s appId=%s', item.platform, item.applicationId);
+        await queue.remove(item.platform, item.applicationId);
+        continue;
+      }
+
+      const effectiveMode = resolveConnectionMode(definition, provider.settings);
+      if (effectiveMode === 'webhook') {
+        log(
+          'Skipping queued webhook-mode provider platform=%s appId=%s',
+          item.platform,
+          item.applicationId,
+        );
+        await queue.remove(item.platform, item.applicationId);
+        continue;
+      }
+
+      // Queued connects are user-initiated reconnects (startClient), so they
+      // take the manage-mode gate; the provider loop below only keeps
+      // already-running listeners alive and stays on the runtime gate.
+      if (!(await ensureBotFeatureAccess(item.platform, provider, 'manage'))) {
+        await queue.remove(item.platform, item.applicationId);
+        continue;
+      }
+
+      const bot = createGatewayBot(
+        item.platform,
+        provider.applicationId,
+        provider.credentials,
+        provider.settings,
+      );
+
+      await bot.start({
+        durationMs: remainingMs,
+        waitUntil,
+      });
+
+      processed++;
+      log('Started queued bot platform=%s appId=%s', item.platform, item.applicationId);
+    } catch (err) {
+      log(
+        'Failed to start queued bot platform=%s appId=%s: %O',
+        item.platform,
+        item.applicationId,
+        err,
+      );
+    }
+
+    await queue.remove(item.platform, item.applicationId);
+  }
+
+  return processed;
+}
+
+/**
+ * Cron-driven gateway entry point. Runs once per Vercel cron tick and keeps
+ * persistent bot connections alive for a 10-minute window after the response.
+ *
+ * Auth: `bearerSecretAuth(CRON_SECRET)` on the route.
+ */
+export async function gatewayCron(c: Context): Promise<Response> {
+  // When the external message gateway is enabled, sync connections via gateway.
+  if (process.env.MESSAGE_GATEWAY_URL && process.env.MESSAGE_GATEWAY_SERVICE_TOKEN) {
+    const service = new GatewayService();
+
+    if (service.useMessageGateway) {
+      await service.ensureRunning();
+      return c.json({ ensureRunning: true });
+    }
+  }
+
+  const platforms = platformRegistry.listPlatforms();
+
+  const serverDB = await getServerDB();
+  const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+
+  let started = 0;
+  let total = 0;
+  const stats: Array<{ platform: string; started: number; total: number }> = [];
+
+  for (const platform of platforms) {
+    const providers = await AgentBotProviderModel.findEnabledByPlatform(
+      serverDB,
+      platform.id,
+      gateKeeper,
+    );
+
+    log('Found %d enabled %s providers', providers.length, platform.name);
+
+    let platformStarted = 0;
+    let platformTotal = 0;
+
+    for (const provider of providers) {
+      const { applicationId, credentials, settings } = provider;
+
+      // Per-provider mode overrides the platform default. Webhook providers
+      // never need a persistent listener even if the platform default is gateway.
+      const effectiveMode = resolveConnectionMode(platform, settings);
+      if (effectiveMode === 'webhook') {
+        log('Skipping webhook-mode provider platform=%s appId=%s', platform.id, applicationId);
+        continue;
+      }
+
+      if (!(await ensureBotFeatureAccess(platform.id, provider, 'runtime'))) continue;
+
+      platformTotal++;
+      total++;
+
+      try {
+        const bot = createGatewayBot(platform.id, applicationId, credentials, settings);
+
+        await bot.start({
+          durationMs: GATEWAY_DURATION_MS,
+          waitUntil,
+        });
+
+        platformStarted++;
+        started++;
+        log('Started gateway listener for platform=%s appId=%s', platform.id, applicationId);
+      } catch (err) {
+        log(
+          'Failed to start gateway listener for platform=%s appId=%s: %O',
+          platform.id,
+          applicationId,
+          err,
+        );
+      }
+    }
+
+    stats.push({ platform: platform.id, started: platformStarted, total: platformTotal });
+  }
+
+  const queued = await processConnectQueue(GATEWAY_DURATION_MS);
+
+  after(async () => {
+    const pollEnd = Date.now() + GATEWAY_DURATION_MS;
+
+    while (Date.now() < pollEnd) {
+      await sleep(POLL_INTERVAL_MS);
+      if (Date.now() >= pollEnd) break;
+
+      const remainingMs = pollEnd - Date.now();
+      await processConnectQueue(remainingMs);
+    }
+  });
+
+  return c.json({ platforms: stats, queued, started, total });
+}

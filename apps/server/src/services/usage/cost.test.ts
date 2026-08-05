@@ -19,6 +19,7 @@ describe('computeMessageCostSplit', () => {
 
     expect(split.totalCost).toBe(0.42);
     expect(split.inputCost).toBe(0.42);
+    expect(split.cachedInputCost).toBe(0);
     expect(split.outputCost).toBe(0);
     expect(split.cacheWriteCost).toBe(0);
     expect(split.cacheSavings).toBe(0);
@@ -37,9 +38,12 @@ describe('computeMessageCostSplit', () => {
     const split = computeMessageCostSplit(usage, priced.providerId, priced.id, 1.5);
 
     expect(split.totalCost).toBeCloseTo(1.5, 6);
-    // input (incl. cache-read) + output + cache-write must sum back to the billed total
-    expect(split.inputCost + split.outputCost + split.cacheWriteCost).toBeCloseTo(1.5, 6);
+    // input + cached input + output + cache-write must sum back to the billed total
+    expect(
+      split.inputCost + split.cachedInputCost + split.outputCost + split.cacheWriteCost,
+    ).toBeCloseTo(1.5, 6);
     expect(split.inputCost).toBeGreaterThan(0);
+    expect(split.cachedInputCost).toBeGreaterThan(0);
     expect(split.outputCost).toBeGreaterThan(0);
   });
 

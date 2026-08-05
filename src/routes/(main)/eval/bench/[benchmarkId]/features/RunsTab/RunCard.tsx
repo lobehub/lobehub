@@ -1,7 +1,6 @@
 import type { AgentEvalRunListItem } from '@lobechat/types';
 import { type DropdownItem, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   AlertTriangle,
@@ -182,7 +181,7 @@ interface RunCardProps {
 
 const RunCard = memo<RunCardProps>(({ benchmarkId, run, onRefresh, onEdit }) => {
   const { t } = useTranslation('eval');
-  const { message } = App.useApp();
+
   const deleteRun = useEvalStore((s) => s.deleteRun);
   const startRun = useEvalStore((s) => s.startRun);
   const abortRun = useEvalStore((s) => s.abortRun);
@@ -217,7 +216,7 @@ const RunCard = memo<RunCardProps>(({ benchmarkId, run, onRefresh, onEdit }) => 
           await startRun(run.id, run.status !== 'idle');
           await onRefresh?.();
         } catch (error: any) {
-          message.error(error?.message || 'Failed to start run');
+          toast.error(error?.message || 'Failed to start run');
         }
       },
       title: t('run.actions.start'),

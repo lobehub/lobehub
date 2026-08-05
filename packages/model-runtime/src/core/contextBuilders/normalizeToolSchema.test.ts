@@ -93,6 +93,38 @@ describe('normalizeToolJsonSchema', () => {
     expect(result.additionalProperties.items).toEqual({});
   });
 
+  // xAI/grok variant — property carrying an empty enum
+  it('drops an empty enum constraint', () => {
+    const result = normalizeToolJsonSchema({
+      properties: {
+        sort: { enum: [], type: 'string' },
+      },
+      type: 'object',
+    });
+
+    expect('enum' in result.properties.sort).toBe(false);
+    expect(result.properties.sort.type).toBe('string');
+  });
+
+  it('keeps a non-empty enum untouched', () => {
+    const result = normalizeToolJsonSchema({
+      enum: ['asc', 'desc'],
+      type: 'string',
+    });
+
+    expect(result.enum).toEqual(['asc', 'desc']);
+  });
+
+  it('drops empty enums nested inside combinators and items', () => {
+    const result = normalizeToolJsonSchema({
+      anyOf: [{ enum: [], type: 'string' }],
+      items: { enum: [] },
+    });
+
+    expect('enum' in result.anyOf[0]).toBe(false);
+    expect('enum' in result.items).toBe(false);
+  });
+
   it('keeps boolean additionalProperties untouched (a valid, accepted form)', () => {
     expect(normalizeToolJsonSchema({ additionalProperties: false, type: 'object' })).toEqual({
       additionalProperties: false,

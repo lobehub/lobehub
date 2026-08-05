@@ -49,6 +49,15 @@ describe('TodoListStore', () => {
 
       expect(state.items[0].id).not.toBe(state.items[1].id);
     });
+
+    it('should fall back to empty items when defaultItems is not an array', () => {
+      // `defaultItems` ultimately derives from untrusted model tool-call args
+      // (and may be a partial parse while streaming), so a non-array value must
+      // not crash store init.
+      const store = createTodoListStore({ foo: 'bar' } as unknown as TodoItem[]);
+
+      expect(store.getState().items).toEqual([]);
+    });
   });
 
   describe('addItem', () => {

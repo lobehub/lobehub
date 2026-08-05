@@ -1,4 +1,5 @@
-import { useLocation, useParams } from 'react-router';
+import { useActiveLocation } from '@/hooks/useActiveLocation';
+import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 
 /**
  * Hook to extract folder slug from URL
@@ -10,8 +11,10 @@ import { useLocation, useParams } from 'react-router';
  * - /knowledge -> { knowledgeBaseId: null, currentFolderSlug: null, isInKnowledgeBase: false }
  */
 export const useFolderPath = () => {
-  const params = useParams<{ id: string; slug?: string }>();
-  const location = useLocation();
+  // Active-tab variants, not the raw router hooks: `LibraryHierarchy` renders in
+  // the sidebar, which Electron portals into the shell's frozen root router.
+  const params = useActiveRouteParams<{ id: string; slug?: string }>();
+  const location = useActiveLocation();
 
   // Extract knowledge base ID from params
   const knowledgeBaseId = params.id || null;

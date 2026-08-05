@@ -435,6 +435,60 @@ describe('resolveModelExtendParams', () => {
       });
     });
 
+    describe('gpt5_6ReasoningEffort param', () => {
+      beforeEach(() => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
+          () => true,
+        );
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'gpt5_6ReasoningEffort',
+        ]);
+      });
+
+      it('should set max reasoning_effort for GPT-5.6', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            gpt5_6ReasoningEffort: 'max',
+          } as any,
+          model: 'gpt-5.6-sol',
+          provider: 'openai',
+        });
+
+        expect(result.reasoning_effort).toBe('max');
+      });
+    });
+
+    describe('reasoningMode param', () => {
+      beforeEach(() => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
+          () => true,
+        );
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'reasoningMode',
+        ]);
+      });
+
+      it('should set Pro mode for GPT-5.6', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: { reasoningMode: 'pro' },
+          model: 'gpt-5.6-sol',
+          provider: 'openai',
+        });
+
+        expect(result.reasoning).toEqual({ mode: 'pro' });
+      });
+
+      it('should omit the default Standard mode', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: { reasoningMode: 'standard' },
+          model: 'gpt-5.6-sol',
+          provider: 'openai',
+        });
+
+        expect(result.reasoning).toBeUndefined();
+      });
+    });
+
     describe('gpt5_2ProReasoningEffort param', () => {
       beforeEach(() => {
         vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
@@ -638,6 +692,29 @@ describe('thinking configuration', () => {
       expect(result.thinkingLevel).toBe('medium');
     });
 
+    it.each(['minimal', 'low', 'medium', 'high'] as const)(
+      'should forward the %s thinkingLevel for Gemini 3.6 Flash',
+      (thinkingLevel) => {
+        const result = resolveModelExtendParams({
+          chatConfig: { thinkingLevel } as any,
+          model: 'gemini-3.6-flash',
+          provider: 'google',
+        });
+
+        expect(result.thinkingLevel).toBe(thinkingLevel);
+      },
+    );
+
+    it('should use the Gemini 3.6 Flash default thinkingLevel when not configured', () => {
+      const result = resolveModelExtendParams({
+        chatConfig: {} as any,
+        model: 'gemini-3.6-flash',
+        provider: 'google',
+      });
+
+      expect(result.thinkingLevel).toBe('medium');
+    });
+
     it('should reuse thinkingLevel for Gemini 3.1 Flash-Lite models', () => {
       const result = resolveModelExtendParams({
         chatConfig: {
@@ -650,10 +727,32 @@ describe('thinking configuration', () => {
       expect(result.thinkingLevel).toBe('medium');
     });
 
+    it('should reuse thinkingLevel for Gemini 3.5 Flash-Lite', () => {
+      const result = resolveModelExtendParams({
+        chatConfig: {
+          thinkingLevel: 'high',
+        } as any,
+        model: 'gemini-3.5-flash-lite',
+        provider: 'google',
+      });
+
+      expect(result.thinkingLevel).toBe('high');
+    });
+
     it('should use the Flash-Lite default thinkingLevel when not configured', () => {
       const result = resolveModelExtendParams({
         chatConfig: {} as any,
         model: 'gemini-3.1-flash-lite-preview',
+        provider: 'google',
+      });
+
+      expect(result.thinkingLevel).toBe('minimal');
+    });
+
+    it('should use the Gemini 3.5 Flash-Lite default thinkingLevel when not configured', () => {
+      const result = resolveModelExtendParams({
+        chatConfig: {} as any,
+        model: 'gemini-3.5-flash-lite',
         provider: 'google',
       });
 

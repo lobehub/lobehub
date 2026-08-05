@@ -7,4 +7,6 @@ export const selectors = {
   lockHolderId: (s: Store) => s.lockState.holderId,
   lockPending: (s: Store) => s.lockState.pending,
   lockedByOther: (s: Store) => s.lockState.lockedByOther,
+  promptLastUpdatedTime: (s: Store) => s.promptLastUpdatedTime,
+  promptSaveStatus: (s: Store) => s.promptSaveStatus,
 };

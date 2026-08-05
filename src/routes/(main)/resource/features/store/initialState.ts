@@ -19,6 +19,8 @@ export type SelectAllState = 'all' | 'loaded' | 'none';
  */
 export type ResourceListVisibilityFilter = 'private' | 'workspace';
 
+export const DEFAULT_WORKSPACE_LIST_VISIBILITY: ResourceListVisibilityFilter = 'private';
+
 export interface State {
   /**
    * Current file category filter
@@ -60,6 +62,11 @@ export interface State {
    */
   selectedFileIds: string[];
   /**
+   * Total rows in the role-scoped select-all query. In a workspace this is
+   * caller-owned rows for members and the full visible result set for owners.
+   */
+  selectionTotal?: number;
+  /**
    * Field to sort files by
    */
   sorter: 'name' | 'createdAt' | 'size';
@@ -77,11 +84,14 @@ export const initialState: State = {
   category: FilesTabs.All,
   currentViewItemId: undefined,
   libraryId: undefined,
+  // Personal mode keeps the historical neutral value; workspace mode hydrates
+  // to DEFAULT_WORKSPACE_LIST_VISIBILITY when no saved preference exists.
   listVisibility: 'workspace',
   mode: 'explorer',
   pendingRenameItemId: null,
   searchQuery: null,
   selectAllState: 'none',
+  selectionTotal: undefined,
   selectedFileIds: [],
   sortType: SortType.Desc,
   sorter: 'createdAt',

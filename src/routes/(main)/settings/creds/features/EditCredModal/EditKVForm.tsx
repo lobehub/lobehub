@@ -1,7 +1,8 @@
 'use client';
 
 import { type UserCredSummary } from '@lobechat/types';
-import { Button, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { useMutation } from '@tanstack/react-query';
 import { Form, Input, Spin } from 'antd';
 import { createStaticStyles } from 'antd-style';
@@ -11,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
 
-import { useCredsApi } from '../useCredsApi';
+import { type CredsApi } from '../useCredsApi';
 
 const styles = createStaticStyles(({ css }) => ({
   footer: css`
@@ -29,6 +30,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 interface EditKVFormProps {
   cred: UserCredSummary;
+  credsApi: CredsApi;
   onCancel: () => void;
   onSuccess: () => void;
 }
@@ -39,12 +41,11 @@ interface FormValues {
   name: string;
 }
 
-const EditKVForm: FC<EditKVFormProps> = ({ cred, onCancel, onSuccess }) => {
+const EditKVForm: FC<EditKVFormProps> = ({ cred, credsApi, onCancel, onSuccess }) => {
   const { t } = useTranslation('setting');
   const { allowed: canManageCredentials } = usePermission('manage_provider_key');
   const [form] = Form.useForm<FormValues>();
   const [isLoading, setIsLoading] = useState(true);
-  const credsApi = useCredsApi();
 
   // Fetch decrypted values on mount
   useEffect(() => {

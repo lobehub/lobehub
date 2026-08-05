@@ -1,16 +1,24 @@
 // @vitest-environment node
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
+import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import { ChatGroupModel } from '../../models/chatGroup';
+import {
+  TOPIC_COMMENT_TOPIC_NOT_FOUND,
+  TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS,
+  TopicCommentModel,
+} from '../../models/topicComment';
 import { agents } from '../../schemas/agent';
 import { chatGroups, chatGroupsAgents } from '../../schemas/chatGroup';
-import { messagePlugins, messages } from '../../schemas/message';
+import { messageGroups, messagePlugins, messages } from '../../schemas/message';
 import { threads, topics } from '../../schemas/topic';
+import { topicCommentMentions, topicComments } from '../../schemas/topicComment';
 import { users } from '../../schemas/user';
 import { workspaces } from '../../schemas/workspace';
 import type { LobeChatDatabase } from '../../type';
+import { MESSAGE_TRANSFER_HAS_FOREIGN_AUTHORS } from '../../utils/messageScope';
 import { AgentGroupRepository } from './index';
 
 const userId = 'agent-group-test-user';
@@ -19,6 +27,7 @@ const otherUserId = 'other-agent-group-user';
 let agentGroupRepo: AgentGroupRepository;
 
 const serverDB: LobeChatDatabase = await getTestDB();
+const isServerDB = process.env.TEST_SERVER_DB === '1';
 
 beforeEach(async () => {
   // Clean up
@@ -350,6 +359,123 @@ describe('AgentGroupRepository', () => {
       expect(result!.agents).toEqual([
         expect.objectContaining({ isSupervisor: true, title: 'Supervisor', virtual: true }),
       ]);
+    });
+
+    describe('member agent demoted to private ', () => {
+      const workspaceId = 'agent-group-demotion-ws';
+
+      beforeEach(async () => {
+        await serverDB.insert(workspaces).values({
+          id: workspaceId,
+          name: 'Demotion WS',
+          primaryOwnerId: userId,
+          slug: workspaceId,
+        });
+        await serverDB.insert(chatGroups).values({
+          id: 'ws-demotion-group',
+          title: 'WS demotion group',
+          userId,
+          visibility: 'public',
+          workspaceId,
+        });
+        await serverDB.insert(agents).values([
+          {
+            id: 'ws-supervisor',
+            title: 'Supervisor',
+            userId,
+            virtual: true,
+            visibility: 'public',
+            workspaceId,
+          },
+          {
+            id: 'ws-public-member',
+            title: 'Public member',
+            userId,
+            visibility: 'public',
+            workspaceId,
+          },
+          {
+            id: 'ws-demoted-member',
+            systemRole: 'secret prompt',
+            title: 'Demoted member',
+            userId,
+            visibility: 'private',
+            workspaceId,
+          },
+        ]);
+        await serverDB.insert(chatGroupsAgents).values([
+          {
+            agentId: 'ws-supervisor',
+            chatGroupId: 'ws-demotion-group',
+            order: -1,
+            role: 'supervisor',
+            userId,
+            workspaceId,
+          },
+          {
+            agentId: 'ws-public-member',
+            chatGroupId: 'ws-demotion-group',
+            order: 0,
+            role: 'participant',
+            userId,
+            workspaceId,
+          },
+          {
+            agentId: 'ws-demoted-member',
+            chatGroupId: 'ws-demotion-group',
+            order: 1,
+            role: 'participant',
+            userId,
+            workspaceId,
+          },
+        ]);
+      });
+
+      it('hides the private member config from another workspace member', async () => {
+        const viewerRepo = new AgentGroupRepository(serverDB, otherUserId, workspaceId);
+
+        const result = await viewerRepo.findByIdWithAgents('ws-demotion-group');
+
+        expect(result!.agents.map((a) => a.id)).toEqual(['ws-supervisor', 'ws-public-member']);
+        expect(JSON.stringify(result)).not.toContain('secret prompt');
+        expect(result!.supervisorAgentId).toBe('ws-supervisor');
+      });
+
+      it('keeps the private member visible to its owner', async () => {
+        const ownerRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
+
+        const result = await ownerRepo.findByIdWithAgents('ws-demotion-group');
+
+        expect(result!.agents.map((a) => a.id)).toEqual([
+          'ws-supervisor',
+          'ws-public-member',
+          'ws-demoted-member',
+        ]);
+      });
+
+      it('does not auto-create a duplicate supervisor when the supervisor row is not visible', async () => {
+        // Out-of-sync legacy data: a group published while its supervisor row
+        // stayed private (publishToWorkspace now keeps them in sync).
+        await serverDB
+          .update(agents)
+          .set({ visibility: 'private' })
+          .where(eq(agents.id, 'ws-supervisor'));
+
+        const viewerRepo = new AgentGroupRepository(serverDB, otherUserId, workspaceId);
+        const result = await viewerRepo.findByIdWithAgents('ws-demotion-group');
+
+        // Supervisor existence is judged on raw rows: no duplicate is created,
+        // and the group-owned supervisor stays in the roster so that
+        // `supervisorAgentId` always resolves to a member entry.
+        expect(result!.supervisorAgentId).toBe('ws-supervisor');
+        expect(result!.agents.map((a) => a.id)).toEqual(['ws-supervisor', 'ws-public-member']);
+
+        const supervisorRows = await serverDB
+          .select()
+          .from(chatGroupsAgents)
+          .where(eq(chatGroupsAgents.chatGroupId, 'ws-demotion-group'));
+        expect(supervisorRows.filter((r) => r.role === 'supervisor')).toHaveLength(1);
+      });
     });
 
     it('should inject group-supervisor slug for supervisor agent', async () => {
@@ -1434,6 +1560,21 @@ describe('AgentGroupRepository', () => {
         userId,
         workspaceId,
       });
+      const originalCommentUpdatedAt = new Date('2024-01-02T03:04:05.000Z');
+      await serverDB.insert(topicComments).values({
+        authorUserId: userId,
+        clientId: 'transfer-comment-client',
+        content: 'team note',
+        id: 'transfer-comment',
+        topicId: 'transfer-topic',
+        updatedAt: originalCommentUpdatedAt,
+        workspaceId,
+      });
+      await serverDB.insert(topicCommentMentions).values({
+        commentId: 'transfer-comment',
+        mentionedUserId: userId,
+        workspaceId,
+      });
 
       const wsRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
       const result = await wsRepo.transferToWorkspace('transfer-group', targetWorkspaceId, userId);
@@ -1467,7 +1608,203 @@ describe('AgentGroupRepository', () => {
       expect(topic!.workspaceId).toBe(targetWorkspaceId);
       expect(thread!.workspaceId).toBe(targetWorkspaceId);
       expect(message!.workspaceId).toBe(targetWorkspaceId);
+
+      // Comments denormalize the topic's workspaceId — they must follow the move
+      const [comment] = await serverDB
+        .select()
+        .from(topicComments)
+        .where(eq(topicComments.id, 'transfer-comment'));
+      const [mention] = await serverDB
+        .select()
+        .from(topicCommentMentions)
+        .where(eq(topicCommentMentions.commentId, 'transfer-comment'));
+      expect(comment.workspaceId).toBe(targetWorkspaceId);
+      expect(comment.updatedAt).toEqual(originalCommentUpdatedAt);
+      expect(mention.workspaceId).toBe(targetWorkspaceId);
     });
+
+    it('flags teammate-authored comments as foreign transfer rows', async () => {
+      await serverDB.insert(chatGroups).values({
+        id: 'guard-group',
+        title: 'Guard Group',
+        userId,
+        workspaceId,
+      });
+      await serverDB.insert(topics).values({
+        groupId: 'guard-group',
+        id: 'guard-group-topic',
+        title: 'Own Topic',
+        userId,
+        workspaceId,
+      });
+
+      const wsRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
+
+      // Caller's own comment — not foreign
+      await serverDB.insert(topicComments).values({
+        authorUserId: userId,
+        clientId: 'guard-group-own',
+        content: 'my note',
+        id: 'tcm-group-guard-own',
+        topicId: 'guard-group-topic',
+        workspaceId,
+      });
+      expect(await wsRepo.transferHasForeignRows('guard-group')).toBe(false);
+
+      // A teammate's comment on the caller's own topic — foreign
+      await serverDB.insert(topicComments).values({
+        authorUserId: otherUserId,
+        clientId: 'guard-group-teammate',
+        content: 'teammate note',
+        id: 'tcm-group-guard-teammate',
+        topicId: 'guard-group-topic',
+        workspaceId,
+      });
+      expect(await wsRepo.transferHasForeignRows('guard-group')).toBe(true);
+    });
+
+    it('flags topic-only teammate messages and message groups as foreign transfer rows', async () => {
+      await serverDB.insert(chatGroups).values({
+        id: 'anchor-guard-group',
+        title: 'Anchor Guard Group',
+        userId,
+        workspaceId,
+      });
+      await serverDB.insert(topics).values({
+        groupId: 'anchor-guard-group',
+        id: 'anchor-guard-group-topic',
+        title: 'Own Topic',
+        userId,
+        workspaceId,
+      });
+
+      const wsRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
+
+      // Caller's own topic-only message — not foreign
+      await serverDB.insert(messages).values({
+        id: 'anchor-guard-group-own',
+        role: 'user',
+        topicId: 'anchor-guard-group-topic',
+        userId,
+        workspaceId,
+      });
+      expect(await wsRepo.transferHasForeignRows('anchor-guard-group')).toBe(false);
+
+      // A teammate's message carrying ONLY a topicId (no groupId/sessionId)
+      // follows the transferred topic under derived scope — the direct
+      // groupId probe alone cannot see it
+      await serverDB.insert(messages).values({
+        id: 'anchor-guard-group-teammate',
+        role: 'user',
+        topicId: 'anchor-guard-group-topic',
+        userId: otherUserId,
+        workspaceId,
+      });
+      expect(await wsRepo.transferHasForeignRows('anchor-guard-group')).toBe(true);
+
+      // Same for a teammate's message group anchored to the caller's topic
+      await serverDB.delete(messages).where(eq(messages.id, 'anchor-guard-group-teammate'));
+      expect(await wsRepo.transferHasForeignRows('anchor-guard-group')).toBe(false);
+      await serverDB.insert(messageGroups).values({
+        id: 'anchor-guard-group-mg',
+        topicId: 'anchor-guard-group-topic',
+        userId: otherUserId,
+        workspaceId,
+      });
+      expect(await wsRepo.transferHasForeignRows('anchor-guard-group')).toBe(true);
+    });
+
+    it('rechecks topic-anchored teammate rows inside the group transfer transaction', async () => {
+      await serverDB.insert(chatGroups).values({
+        id: 'locked-guard-group',
+        title: 'Locked Guard Group',
+        userId,
+        workspaceId,
+      });
+      await serverDB.insert(topics).values({
+        groupId: 'locked-guard-group',
+        id: 'locked-guard-group-topic',
+        title: 'Own Topic',
+        userId,
+        workspaceId,
+      });
+      // Teammate topic-only row present when the transaction rechecks under
+      // the topic lock (the precheck is deliberately skipped here).
+      await serverDB.insert(messages).values({
+        id: 'locked-guard-group-msg',
+        role: 'user',
+        topicId: 'locked-guard-group-topic',
+        userId: otherUserId,
+        workspaceId,
+      });
+
+      const wsRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
+      await expect(
+        wsRepo.transferToWorkspace('locked-guard-group', null, userId, undefined, {
+          rejectForeignMessageAuthors: true,
+        }),
+      ).rejects.toThrow(MESSAGE_TRANSFER_HAS_FOREIGN_AUTHORS);
+
+      // The rejection rolled the whole transfer back
+      const [topic] = await serverDB
+        .select()
+        .from(topics)
+        .where(eq(topics.id, 'locked-guard-group-topic'));
+      expect(topic.workspaceId).toBe(workspaceId);
+    });
+
+    it.skipIf(!isServerDB)(
+      'serializes comment creation with the authoritative group transfer check',
+      async () => {
+        const targetWorkspaceId = 'agent-group-race-target-ws';
+        await serverDB.insert(workspaces).values({
+          id: targetWorkspaceId,
+          name: 'Race Target Workspace',
+          primaryOwnerId: userId,
+          slug: targetWorkspaceId,
+        });
+        const wsRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
+        const commenterModel = new TopicCommentModel(serverDB, otherUserId, workspaceId);
+
+        for (let i = 0; i < 10; i++) {
+          const groupId = `transfer-group-race-${i}`;
+          const topicId = `transfer-group-race-topic-${i}`;
+          await serverDB.insert(chatGroups).values({
+            id: groupId,
+            title: `Race Group ${i}`,
+            userId,
+            workspaceId,
+          });
+          await serverDB.insert(topics).values({
+            groupId,
+            id: topicId,
+            title: `Race Topic ${i}`,
+            userId,
+            workspaceId,
+          });
+
+          const outcomes = await Promise.allSettled([
+            wsRepo.transferToWorkspace(groupId, targetWorkspaceId, userId, undefined, {
+              rejectForeignTopicCommentAuthors: true,
+            }),
+            commenterModel.createWithMentions({
+              clientId: `transfer-group-race-comment-${i}`,
+              content: 'concurrent teammate comment',
+              topicId,
+            }),
+          ]);
+
+          expect(outcomes.map(({ status }) => status).sort()).toEqual(['fulfilled', 'rejected']);
+          const rejection = outcomes.find(
+            (outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected',
+          );
+          expect([
+            TOPIC_COMMENT_TOPIC_NOT_FOUND,
+            TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS,
+          ]).toContain(rejection?.reason.message);
+        }
+      },
+    );
 
     it('copies a workspace group and all members into the target scope', async () => {
       const targetWorkspaceId = 'agent-group-copy-target-ws';

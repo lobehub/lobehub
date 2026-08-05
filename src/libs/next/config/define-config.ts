@@ -60,6 +60,8 @@ export function defineConfig(config: CustomNextConfig) {
 
   const nextConfig: NextConfig = {
     ...(isStandaloneMode ? standaloneConfig : {}),
+    // Stop `next dev` from auto-injecting the nextjs-agent-rules block into AGENTS.md.
+    agentRules: false,
     assetPrefix,
 
     compiler: {
@@ -369,10 +371,22 @@ export function defineConfig(config: CustomNextConfig) {
       rules: {
         ...(isTest
           ? void 0
-          : codeInspectorPlugin({
-              bundler: 'turbopack',
-              hotKeys: ['altKey', 'ctrlKey'],
-            })),
+          : // Narrow the plugin's `**/*.{jsx,tsx,js,ts,mjs,mts}` rule to JSX
+            // files only. The broad glob also matches Turbopack-internal
+            // virtual assets like `[turbopack-ecmascript]/worker/browser/createWorker.ts`
+            // (injected for `new Worker(new URL(...))`), which the webpack
+            // loader shim then tries to read from disk — any page whose module
+            // graph pulls in a web worker dies with "Reading source code for
+            // parsing failed". The inspector only instruments JSX elements, so
+            // jsx/tsx keeps click-to-source fully functional.
+            Object.fromEntries(
+              Object.entries(
+                codeInspectorPlugin({
+                  bundler: 'turbopack',
+                  hotKeys: ['altKey', 'ctrlKey'],
+                }) as Record<string, unknown>,
+              ).map(([glob, rule]) => [glob.replace('{jsx,tsx,js,ts,mjs,mts}', '{jsx,tsx}'), rule]),
+            )),
         '*.md': {
           as: '*.js',
           loaders: ['raw-loader'],

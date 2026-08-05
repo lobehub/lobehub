@@ -1,49 +1,53 @@
 'use client';
 
+import { TodoInspectorSummary } from '@lobechat/shared-tool-ui/components';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Icon, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { Plus } from 'lucide-react';
-import { memo } from 'react';
+import { cx } from 'antd-style';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { oneLineEllipsis, shinyTextStyles } from '@/styles';
+import { inspectorTextStyles, shinyTextStyles } from '@/styles';
 
 import type { CreateTodosParams, CreateTodosState } from '../../../types';
-
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  title: css`
-    margin-inline-end: 8px;
-    color: ${cssVar.colorText};
-  `,
-}));
+import {
+  computeTodoSummary,
+  normalizeTodoItems,
+  TODO_SUMMARY_LABEL_KEYS,
+} from '../../components/todoSummary';
 
 export const CreateTodosInspector = memo<
   BuiltinInspectorProps<CreateTodosParams, CreateTodosState>
->(({ args, partialArgs, isArgumentsStreaming }) => {
+>(({ args, partialArgs, pluginState, isArgumentsStreaming, isLoading }) => {
   const { t } = useTranslation('plugin');
 
-  const adds = args?.adds || partialArgs?.adds || [];
-  const items = args?.items || [];
-  const count = adds.length || items.length;
+  const summary = useMemo(() => {
+    // Prefer the executed result state, then saved items, then streaming adds
+    const stateItems = normalizeTodoItems(pluginState?.todos);
+    if (stateItems.length > 0) return computeTodoSummary(stateItems);
 
-  if (isArgumentsStreaming && count === 0) {
+    const items = args?.items || [];
+    if (items.length > 0) return computeTodoSummary(items);
+
+    const adds = args?.adds || partialArgs?.adds || [];
+    return computeTodoSummary(adds.map((text) => ({ status: 'todo' as const, text })));
+  }, [args, partialArgs, pluginState]);
+
+  if (isArgumentsStreaming && summary.total === 0) {
     return (
-      <div className={cx(oneLineEllipsis, shinyTextStyles.shinyText)}>
+      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
         <span>{t('builtins.lobe-agent.apiName.createTodos')}</span>
       </div>
     );
   }
 
   return (
-    <div className={cx(oneLineEllipsis, isArgumentsStreaming && shinyTextStyles.shinyText)}>
-      <span className={styles.title}>{t('builtins.lobe-agent.apiName.createTodos')}</span>
-      {count > 0 && (
-        <Text code as={'span'} color={cssVar.colorSuccess} fontSize={12}>
-          <Icon icon={Plus} size={12} />
-          {count}
-        </Text>
+    <div
+      className={cx(
+        inspectorTextStyles.root,
+        (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
       )}
+    >
+      <TodoInspectorSummary label={t(TODO_SUMMARY_LABEL_KEYS[summary.state])} summary={summary} />
     </div>
   );
 });

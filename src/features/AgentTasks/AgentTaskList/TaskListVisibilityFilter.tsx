@@ -12,6 +12,8 @@ import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
 import type { TaskListVisibilityFilter as Filter } from '@/store/task/slices/list/initialState';
 
+import { renderMenuCheck } from '../features/menuExtra';
+
 const FILTER_OPTIONS: Array<{ icon: typeof Globe; key: Filter; labelKey: string }> = [
   {
     icon: LockIcon,
@@ -51,6 +53,7 @@ const TaskListVisibilityFilter = memo(() => {
       FILTER_OPTIONS.map((option) => {
         const OptionIcon = option.icon;
         return {
+          extra: renderMenuCheck(option.key === visibility),
           icon: <Icon color={cssVar.colorTextSecondary} icon={OptionIcon} size={16} />,
           key: option.key,
           label: t(option.labelKey as never),
@@ -60,7 +63,7 @@ const TaskListVisibilityFilter = memo(() => {
           },
         };
       }),
-    [setListVisibility, t],
+    [setListVisibility, t, visibility],
   );
 
   if (!activeWorkspaceId) return null;

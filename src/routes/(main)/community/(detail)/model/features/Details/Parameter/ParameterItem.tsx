@@ -3,10 +3,13 @@ import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+import urlJoin from 'url-join';
+
+import { USAGE_DOCUMENTS } from '@/const/url';
 
 import Statistic from '../../../../../components/Statistic';
 
-const DEFAULT_DOC_URL = 'https://lobehub.com/docs/usage/agents/model';
+const DEFAULT_DOC_URL = urlJoin(USAGE_DOCUMENTS, 'agents/model');
 
 export interface ParameterItemProps {
   defaultValue: string | number;

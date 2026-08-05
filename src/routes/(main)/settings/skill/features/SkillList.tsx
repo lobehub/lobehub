@@ -20,6 +20,7 @@ import type React from 'react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
@@ -35,6 +36,7 @@ import { connectorSelectors } from '@/store/tool/slices/connector';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 import { type LobeToolType } from '@/types/tool/tool';
 
+import AgentConnectorItem from './AgentConnectorItem';
 import AgentSkillItem from './AgentSkillItem';
 import BuiltinSkillItem from './BuiltinSkillItem';
 import ComposioSkillItem from './ComposioSkillItem';
@@ -103,6 +105,9 @@ const SkillList = memo<SkillListProps>(
     const customConnectors = useToolStore(connectorSelectors.customConnectors, isEqual);
     const isConnectorsInit = useToolStore((s) => s.isConnectorsInit);
     const fetchConnectors = useToolStore((s) => s.fetchConnectors);
+    const agentBoundConnectors = useToolStore(connectorSelectors.agentBoundConnectors, isEqual);
+    const isAgentBoundInit = useToolStore((s) => s.isAgentBoundInit);
+    const fetchAgentBoundConnectors = useToolStore((s) => s.fetchAgentBoundConnectors);
     const allBuiltinTools = useToolStore((s) => s.builtinTools, isEqual);
     const uninstalledBuiltinTools = useToolStore(
       builtinToolSelectors.uninstalledBuiltinTools,
@@ -122,16 +127,34 @@ const SkillList = memo<SkillListProps>(
     ]);
 
     useFetchInstalledPlugins();
-    useFetchLobehubSkillConnections(isLobehubSkillEnabled);
-    useFetchUserComposioConnections(isComposioEnabled);
-    useFetchAgentSkills(true);
-    useFetchUninstalledBuiltinTools(true);
+    // Keep each SWR handle so a failed skill fetch surfaces error + Retry instead
+    // of a fake-empty list (each hook syncs into the store only on success —
+    //
+    const lobehubSkillsSWR = useFetchLobehubSkillConnections(isLobehubSkillEnabled);
+    const composioSWR = useFetchUserComposioConnections(isComposioEnabled);
+    const agentSkillsSWR = useFetchAgentSkills(true);
+    const builtinToolsSWR = useFetchUninstalledBuiltinTools(true);
+    const skillsError =
+      lobehubSkillsSWR.error ?? composioSWR.error ?? agentSkillsSWR.error ?? builtinToolsSWR.error;
+    const reloadSkills = () => {
+      void lobehubSkillsSWR.mutate();
+      void composioSWR.mutate();
+      void agentSkillsSWR.mutate();
+      void builtinToolsSWR.mutate();
+    };
 
     // Load custom connectors (new connector store) so user-added OAuth MCP
     // connectors appear in the Connectors tab list.
     useEffect(() => {
       if (!isConnectorsInit) fetchConnectors();
     }, [isConnectorsInit, fetchConnectors]);
+
+    // Load agent-owned connectors (across all agents) for the Agent Connectors
+    // section — connector view only.
+    const isConnectorView = viewMode === 'connector';
+    useEffect(() => {
+      if (isConnectorView && !isAgentBoundInit) fetchAgentBoundConnectors();
+    }, [isConnectorView, isAgentBoundInit, fetchAgentBoundConnectors]);
 
     const getLobehubSkillServerByProvider = (providerId: string) => {
       return allLobehubSkillServers.find((server) => server.identifier === providerId);
@@ -206,32 +229,27 @@ const SkillList = memo<SkillListProps>(
           }
         }
 
-        // Also add connected Lobehub skills that are not in RECOMMENDED_SKILLS
+        // Also add every other Lobehub skill provider so users can discover and
+        // connect integrations beyond the curated RECOMMENDED_SKILLS set —
+        // otherwise a provider like Vercel or Linear never appears until it's
+        // already connected, and a disconnected one has no way to be found.
         if (isLobehubSkillEnabled) {
-          for (const server of allLobehubSkillServers) {
-            if (
-              server.status === LobehubSkillStatus.CONNECTED &&
-              !addedLobehubIds.has(server.identifier)
-            ) {
-              const provider = getLobehubSkillProviderById(server.identifier);
-              if (provider) {
-                integrationItems.push({ provider, type: 'lobehub' });
-              }
+          for (const provider of LOBEHUB_SKILL_PROVIDERS) {
+            if (!addedLobehubIds.has(provider.id)) {
+              integrationItems.push({ provider, type: 'lobehub' });
+              addedLobehubIds.add(provider.id);
             }
           }
         }
 
-        // Also add connected Composio skills that are not in RECOMMENDED_SKILLS
+        // Also add every other Composio app so users can discover and connect
+        // integrations beyond the curated RECOMMENDED_SKILLS set — otherwise an
+        // app like Jira never appears until it's already connected.
         if (isComposioEnabled) {
-          for (const server of allComposioServers) {
-            if (
-              server.status === ComposioServerStatus.ACTIVE &&
-              !addedComposioIds.has(server.identifier)
-            ) {
-              const serverType = getComposioAppByIdentifier(server.identifier);
-              if (serverType) {
-                integrationItems.push({ serverType, type: 'composio' });
-              }
+          for (const serverType of COMPOSIO_APP_TYPES) {
+            if (!addedComposioIds.has(serverType.identifier)) {
+              integrationItems.push({ serverType, type: 'composio' });
+              addedComposioIds.add(serverType.identifier);
             }
           }
         }
@@ -327,7 +345,18 @@ const SkillList = memo<SkillListProps>(
       marketAgentSkills.length > 0 ||
       userAgentSkills.length > 0 ||
       communityMCPs.length > 0 ||
-      customMCPs.length > 0;
+      customMCPs.length > 0 ||
+      agentBoundConnectors.length > 0;
+
+    // A failed fetch must read as a failure with Retry, never as the "no skills"
+    // empty (error gated ahead of empty).
+    if (skillsError && !hasAnySkills) {
+      return (
+        <Center className={styles.container} paddingBlock={48}>
+          <AsyncError error={skillsError} variant={'block'} onRetry={reloadSkills} />
+        </Center>
+      );
+    }
 
     if (!hasAnySkills) {
       return (
@@ -430,8 +459,6 @@ const SkillList = memo<SkillListProps>(
       );
     };
 
-    const isConnectorView = viewMode === 'connector';
-
     // Connectors tab: tools/MCP items (provide API-level permissions)
     // Skills tab: prompt/agent-based skills (show description/content)
     const hasBuiltinTools = builtinToolItems.length > 0 && isConnectorView;
@@ -447,6 +474,8 @@ const SkillList = memo<SkillListProps>(
     const hasCustomSkills = userAgentSkills.length > 0 && !isConnectorView;
     // Lobehub/Composio OAuth skills go in Connectors tab (they provide tools)
     const hasCommunityConnectors = communitySkillItems.length > 0 && isConnectorView;
+    // Agent-owned connectors (across all agents) — connector view only.
+    const hasAgentConnectors = isConnectorView && agentBoundConnectors.length > 0;
 
     return (
       <div className={styles.container}>
@@ -553,6 +582,20 @@ const SkillList = memo<SkillListProps>(
               {renderCustomConnectors()}
               {renderCustomMCPs()}
             </>,
+          )}
+
+        {hasAgentConnectors &&
+          renderSection(
+            'agentConnectors',
+            t('skillGroup.agentConnectors', 'Agent Connectors'),
+            agentBoundConnectors.map((c) => (
+              <AgentConnectorItem
+                connector={c}
+                isSelected={selectedIdentifier === c.id}
+                key={c.id}
+                onSelect={onSelect ? () => onSelect(c.id, 'agent-connector') : undefined}
+              />
+            )),
           )}
 
         {hasCustomSkills &&

@@ -115,10 +115,13 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     width: 100%;
   `,
   // The user request that triggered the tool call — context for the approval.
+  // Rendered with the same Markdown component as the User chat bubble, so
+  // formatting / skill tags read consistently. A long request scrolls inside a
+  // capped body rather than hard-truncating, so the full context stays reachable.
   userRequest: css`
     display: flex;
-    gap: 6px;
-    align-items: baseline;
+    flex-direction: column;
+    gap: 4px;
 
     padding-block: 8px;
     padding-inline: 12px;
@@ -126,20 +129,23 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
 
     background: ${cssVar.colorFillQuaternary};
   `,
+  userRequestBody: css`
+    overflow-y: auto;
+    max-height: 120px;
+
+    /* Trim the Markdown block's outer margins so it sits flush in the strip. */
+    p:first-child {
+      margin-block-start: 0;
+    }
+
+    p:last-child {
+      margin-block-end: 0;
+    }
+  `,
   userRequestLabel: css`
     flex-shrink: 0;
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
-  `,
-  userRequestText: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
   `,
   // Top-center fixed wrapper. The wrapper ignores pointer events so it never
   // blocks the page; only the cards / pill re-enable them.

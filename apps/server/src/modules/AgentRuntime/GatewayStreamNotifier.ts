@@ -182,6 +182,14 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     return this.inner.subscribeStreamEvents(operationId, lastEventId, onEvents, signal);
   }
 
+  async readEventsOnce(
+    operationId: string,
+    lastEventId?: string,
+    blockMs?: number,
+  ): Promise<{ events: StreamEvent[]; lastEventId: string }> {
+    return this.inner.readEventsOnce(operationId, lastEventId, blockMs);
+  }
+
   async getStreamHistory(operationId: string, count?: number): Promise<StreamEvent[]> {
     return this.inner.getStreamHistory(operationId, count);
   }

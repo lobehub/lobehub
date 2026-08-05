@@ -1,12 +1,13 @@
-import { Button, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
 import NotFound from '@/components/404';
+import AsyncError from '@/components/AsyncError';
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
 import Loading from '@/components/Loading/BrandTextLoading';
-import DocumentPreviewModal from '@/features/DocumentModal/Preview';
 import NavHeader from '@/features/NavHeader';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import WideScreenContainer from '@/features/WideScreenContainer';
@@ -34,7 +35,23 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ taskId, showTaskAgentPanelTo
     s.toggleTaskAgentPanel,
   ]);
 
-  const { isInitialLoading, isNotFound } = useActiveTaskDetail(taskId);
+  const { isInitialLoading, isNotFound, error, onRetry } = useActiveTaskDetail(taskId);
+
+  // A transient fetch failure (network / 500) is not a 404 — keep the URL and
+  // offer Reload instead of the terminal "task was deleted" dead-end below.
+  if (error) {
+    return (
+      <Flexbox flex={1} height={'100%'} style={{ minHeight: 0, position: 'relative' }}>
+        <NavHeader
+          left={<Breadcrumb taskId={taskId} />}
+          styles={{ left: { paddingLeft: 4, gap: 8 } }}
+        />
+        <Flexbox flex={1} style={{ minHeight: 0, overflowY: 'auto' }}>
+          <AsyncError error={error} variant={'page'} onRetry={onRetry} />
+        </Flexbox>
+      </Flexbox>
+    );
+  }
 
   if (isNotFound) {
     return (
@@ -65,7 +82,9 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ taskId, showTaskAgentPanelTo
           <>
             <Breadcrumb taskId={taskId} />
             <TaskDetailHeaderActions />
-            {saveStatus === 'saving' ? <AutoSaveHint saveStatus={saveStatus} /> : undefined}
+            {saveStatus === 'saving' || saveStatus === 'failed' ? (
+              <AutoSaveHint saveStatus={saveStatus} />
+            ) : undefined}
           </>
         }
         right={
@@ -90,7 +109,6 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ taskId, showTaskAgentPanelTo
         </WideScreenContainer>
       </Flexbox>
       <TopicChatDrawer />
-      <DocumentPreviewModal />
     </Flexbox>
   );
 });

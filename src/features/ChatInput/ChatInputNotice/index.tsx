@@ -1,69 +1,54 @@
 'use client';
 
 import { Alert } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
-import { memo, useState } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-
-import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
-import { useSelectExecutionTarget } from '@/features/ChatInput/hooks/useSelectExecutionTarget';
 
 import { useChatInputNotice } from './useChatInputNotice';
 
-const styles = createStaticStyles(({ css }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   alert: css`
-    /* @lobehub/ui's root style sets align-items: flex-start, top-aligning the
-     * action button against the (shorter) icon+text row instead of centering
-     * it. */
+    flex: 0 1 auto;
+
+    /* The Alert root already flex-gaps icon and content; without zeroing the
+       icon margin below the two would stack into a ~14px gap. */
+    gap: 6px !important;
+
+    /* Keep the icon centered against the single-line title. */
     align-items: center !important;
 
-    /* Antd's alert section defaults to flex: 1, stretching to fill all
-     * leftover width and pushing the action button to the far edge. Shrink
-     * it to content so the action sits right next to the message. */
-    .ant-alert-section {
-      flex: 0 1 auto !important;
+    min-width: 0;
+    max-width: min(560px, 52vw);
+    padding-block: 4px !important;
+    padding-inline: 8px 10px !important;
+    border-radius: ${cssVar.borderRadius};
+
+    .ant-alert-content {
+      min-width: 0;
     }
 
-    /* The rendered title class is .ant-alert-title (not .ant-alert-message,
-     * which this version of antd no longer emits) — matching line-height to
-     * the icon's forced height keeps them vertically aligned. */
+    .ant-alert-message,
     .ant-alert-title {
+      overflow: hidden;
+
       font-size: 12px;
       line-height: 18px !important;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .ant-alert-icon {
+      flex: none;
       height: 18px !important;
+      margin-inline-end: 0 !important;
+    }
+
+    @media (width <= 768px) {
+      max-width: 100%;
     }
   `,
 }));
-
-const SwitchToLocalAction = memo(() => {
-  const { t } = useTranslation('chat');
-  const agentId = useAgentId();
-  const selectExecutionTarget = useSelectExecutionTarget(agentId);
-  const [loading, setLoading] = useState(false);
-
-  const handleClick = async () => {
-    setLoading(true);
-    try {
-      await selectExecutionTarget('local');
-    } finally {
-      // The notice unmounts once the target switches; guard in case it doesn't
-      // (e.g. a hetero agent with no resolvable local device).
-      setLoading(false);
-    }
-  };
-
-  return (
-    <Button loading={loading} size={'small'} type={'primary'} onClick={handleClick}>
-      {t('input.switchToLocal')}
-    </Button>
-  );
-});
-
-SwitchToLocalAction.displayName = 'SwitchToLocalAction';
 
 const ChatInputNotice = memo(() => {
   const { t } = useTranslation('chat');
@@ -73,7 +58,6 @@ const ChatInputNotice = memo(() => {
 
   return (
     <Alert
-      action={notice.action === 'switchToLocal' ? <SwitchToLocalAction /> : undefined}
       classNames={{ alert: cx(styles.alert) }}
       style={{ fontSize: 12 }}
       title={t(notice.key)}

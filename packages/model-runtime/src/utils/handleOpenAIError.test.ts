@@ -61,6 +61,33 @@ describe('handleOpenAIError', () => {
       expect(result.errorResult).toEqual({ error: errorObject });
       expect(result.message).toBe(apiError.message);
     });
+
+    it('should classify OpenAI content_filter APIError as provider content policy violation', () => {
+      const apiError = new OpenAI.APIError(
+        400,
+        {
+          error: {
+            code: 'content_filter',
+            message: 'The provider blocked this prompt.',
+            type: 'content_filter',
+          },
+        },
+        'content filter',
+        undefined,
+      );
+
+      const result = handleOpenAIError(apiError);
+
+      expect(result.errorResult).toEqual({
+        error: {
+          code: 'content_filter',
+          message: 'The provider blocked this prompt.',
+          type: 'content_filter',
+        },
+      });
+      expect(result.message).toBe(apiError.message);
+      expect(result.RuntimeError).toBe(AgentRuntimeErrorType.ProviderContentPolicyViolation);
+    });
   });
 
   describe('Non-OpenAI error handling', () => {

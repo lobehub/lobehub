@@ -1,11 +1,15 @@
 import type { TaskDetailData, TaskVerifyConfig } from '@lobechat/types';
 
+import type { SaveStatus } from '@/types/saveState';
+
 import type { TaskStoreState } from '../initialState';
 
 const activeTaskId = (s: TaskStoreState) => s.activeTaskId;
 
 const activeTaskDetail = (s: TaskStoreState): TaskDetailData | undefined =>
   s.activeTaskId ? s.taskDetailMap[s.activeTaskId] : undefined;
+
+const activeTaskDatabaseId = (s: TaskStoreState) => activeTaskDetail(s)?.id;
 
 const taskDetailById = (id: string) => (s: TaskStoreState) => s.taskDetailMap[id];
 
@@ -21,7 +25,12 @@ const activeTaskPriority = (s: TaskStoreState) => activeTaskDetail(s)?.priority 
 const activeTaskVisibility = (s: TaskStoreState): 'private' | 'public' =>
   activeTaskDetail(s)?.visibility ?? 'public';
 
+const activeTaskCreatedByUserId = (s: TaskStoreState) => activeTaskDetail(s)?.createdByUserId;
+
 const activeTaskInstruction = (s: TaskStoreState) => activeTaskDetail(s)?.instruction;
+
+const activeTaskInstructionRevision = (s: TaskStoreState) =>
+  (s.activeTaskId ? s.taskInstructionRevisionMap[s.activeTaskId] : undefined) ?? 0;
 
 const activeTaskEditorData = (s: TaskStoreState) => activeTaskDetail(s)?.editorData;
 
@@ -96,14 +105,29 @@ const canCancelActiveTask = (s: TaskStoreState): boolean => {
   return ['backlog', 'paused', 'running', 'scheduled'].includes(detail.status);
 };
 
-const taskSaveStatus = (s: TaskStoreState) => s.taskSaveStatus;
+// Save status is keyed per task, so switching tasks reads the target task's own
+// status (defaulting to 'idle') instead of a stale 'failed' from a prior task.
+const taskSaveStatus = (s: TaskStoreState): SaveStatus =>
+  (s.activeTaskId ? s.taskSaveStatusMap[s.activeTaskId] : undefined) ?? 'idle';
 
 const activeTopicDrawerTopicId = (s: TaskStoreState) => s.activeTopicDrawerTopicId;
+
+/**
+ * Which agent the open run drawer talks to. A run opened from a task detail
+ * inherits the task's agent; one opened from the home inbox carries its own,
+ * since the topic may have no parent task.
+ */
+const topicDrawerAgentId = (s: TaskStoreState) =>
+  s.activeTopicDrawerAgentId ?? activeTaskAgentId(s);
+
+const topicDrawerTitle = (s: TaskStoreState) => s.activeTopicDrawerTitle;
 
 export const taskDetailSelectors = {
   activeTaskAgentId,
   activeTaskAutomationMode,
   activeTaskCheckpoint,
+  activeTaskCreatedByUserId,
+  activeTaskDatabaseId,
   activeTaskModel,
   activeTaskDependencies,
   activeTaskDescription,
@@ -113,6 +137,7 @@ export const taskDetailSelectors = {
   activeTaskFiles,
   activeTaskId,
   activeTaskInstruction,
+  activeTaskInstructionRevision,
   activeTaskName,
   activeTaskParent,
   activeTaskPeriodicInterval,
@@ -135,4 +160,6 @@ export const taskDetailSelectors = {
   isTaskDetailLoading,
   taskDetailById,
   taskSaveStatus,
+  topicDrawerAgentId,
+  topicDrawerTitle,
 };

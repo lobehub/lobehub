@@ -1,6 +1,7 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
+import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
 import { A, Tooltip } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import type { MouseEvent } from 'react';
@@ -86,10 +87,10 @@ const Render = memo<MarkdownElementProps<LocalFileLinkProperties>>(({ node }) =>
 
   const handleClick = useCallback(
     (event: MouseEvent<HTMLAnchorElement>) => {
+      // `parsed` is only non-null on desktop, where a local path has no meaningful
+      // modifier-click behaviour — always take over the click.
       if (!parsed) return;
-      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-        return;
-      }
+      if (event.button !== 0) return;
 
       event.preventDefault();
       openLocalFile({
@@ -103,7 +104,12 @@ const Render = memo<MarkdownElementProps<LocalFileLinkProperties>>(({ node }) =>
 
   return (
     <Tooltip mouseEnterDelay={0.1} placement={'topLeft'} title={title}>
-      <A className={styles.link} href={linkHref} onClick={handleClick}>
+      <A
+        {...(parsed ? { [RENDERER_HANDLED_LINK_ATTR]: 'true' } : {})}
+        className={styles.link}
+        href={linkHref}
+        onClick={handleClick}
+      >
         <span aria-hidden className={styles.icon}>
           <FileIcon fileName={iconFileName} size={16} variant={'raw'} />
         </span>

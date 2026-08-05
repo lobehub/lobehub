@@ -239,7 +239,9 @@ type SystemStrings = {
   errorCommandConnectionClosed: string;
   errorContentModeration: string;
   errorEmptyCompletion: string;
+  errorModelRefusal: string;
   errorHarnessInternal: string;
+  errorInsufficientCredits: string;
   errorLocationNotSupported: string;
   errorModelNotFound: string;
   errorNoAvailableProvider: string;
@@ -305,9 +307,13 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
     errorContentModeration:
       "**Blocked by the content-safety filter.**\nThe model provider's safety filter rejected the request or response. Please rephrase and try again.",
     errorEmptyCompletion:
-      "**The model returned an empty response.**\nThe model finished without producing any output. Please try again, or switch to a different model in the agent's settings.",
+      "**The model provider returned an empty response.**\nEven without visible content, this request may still incur charges. You can retry, or switch models in the agent's settings and try again.",
+    errorModelRefusal:
+      '**The model declined to answer this request.**\nTry rephrasing it, or switch models in the agent settings and try again.',
     errorHarnessInternal:
       '**Something went wrong on our side.**\nThe agent run hit an internal error, which has been logged. Please try again — if it keeps happening, share the Operation ID below with support.',
+    errorInsufficientCredits:
+      "**Not enough credits.**\nYour remaining credits can't cover this model's estimated cost. Please top up credits or upgrade your plan on the LobeHub website, or switch to a less expensive model in the agent's settings.",
     errorInvalidProviderAPIKey:
       "**Invalid or missing API key.**\nThe configured model provider rejected its API key. Please verify the key in the agent's provider settings (it may be expired, revoked, or mistyped) and try again.",
     errorLocationNotSupported:
@@ -380,9 +386,13 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
     errorContentModeration:
       '**被内容安全策略拦截**\n模型 Provider 的安全策略拒绝了本次请求或回复。请调整内容后重试。',
     errorEmptyCompletion:
-      '**模型未返回任何内容**\n模型执行结束但没有产生输出。请重试，或在 Agent 设置中切换到其他模型。',
+      '**模型供应商返回了空内容**\n即使没有可显示的内容，本次请求仍可能产生费用。你可以重试，或在 Agent 设置中切换模型后再试。',
+    errorModelRefusal:
+      '**模型拒绝回答该请求**\n请尝试调整表述，或在 Agent 设置中切换其他模型后重试。',
     errorHarnessInternal:
       '**我们这边出了点问题**\nAgent 执行遇到内部错误，已记录。请重试；如果持续出现，请把下方 Operation ID 提供给支持人员。',
+    errorInsufficientCredits:
+      '**积分余额不足**\n剩余积分不足以覆盖本次模型调用的预估费用。请前往 LobeHub 网页端充值积分或升级订阅计划，或在 Agent 设置中切换到费用更低的模型。',
     errorInvalidProviderAPIKey:
       '**API Key 无效或缺失**\n所配置的模型 Provider 拒绝了 API Key，可能已过期、被吊销或填写错误。请到 Agent 的 Provider 设置中检查并更新 API Key 后重试。',
     errorLocationNotSupported:
@@ -447,6 +457,9 @@ const FRIENDLY_ERROR_BY_TYPE: Record<string, keyof SystemStrings> = {
   // ── user-fixable config / input (attribution: user) ──
   ContentModeration: 'errorContentModeration',
   ExceededContextWindow: 'errorExceededContextWindow',
+  // Cloud-managed credits: balance is positive but below the model's estimated
+  // cost, so the fix is topping up / upgrading — not editing the input.
+  InsufficientBudgetForModel: 'errorInsufficientCredits',
   InsufficientQuota: 'errorQuotaLimitReached',
   InvalidProviderAPIKey: 'errorInvalidProviderAPIKey',
   LocationNotSupportError: 'errorLocationNotSupported',
@@ -456,7 +469,9 @@ const FRIENDLY_ERROR_BY_TYPE: Record<string, keyof SystemStrings> = {
   QuotaLimitReached: 'errorQuotaLimitReached',
   // ── transient provider / capacity (attribution: provider) ──
   ModelEmptyCompletion: 'errorEmptyCompletion',
+  ModelRefusal: 'errorModelRefusal',
   NoAvailableChannel: 'errorProviderUnavailable',
+  ProviderContentPolicyViolation: 'errorContentModeration',
   ProviderServiceUnavailable: 'errorProviderUnavailable',
   RateLimitExceeded: 'errorRateLimited',
   // ── network / infra (attribution: system) ──

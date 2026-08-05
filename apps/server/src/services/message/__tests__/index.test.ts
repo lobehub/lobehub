@@ -28,6 +28,7 @@ describe('MessageService', () => {
       updateMessageRAG: vi.fn(),
       updateMetadata: vi.fn(),
       updatePluginState: vi.fn(),
+      updateToolMessage: vi.fn(),
     } as any;
 
     mockFileService = {
@@ -220,6 +221,110 @@ describe('MessageService', () => {
       expect(mockMessageModel.update).toHaveBeenCalledWith(messageId, value);
       expect(mockMessageModel.query).toHaveBeenCalled();
       expect(result).toEqual({ messages: mockMessages, success: true });
+    });
+  });
+
+  describe('batchMutate', () => {
+    it('quietly applies create/update/tool updates without querying messages', async () => {
+      vi.mocked(mockMessageModel.create).mockResolvedValue({ id: 'msg-created' } as any);
+      vi.mocked(mockMessageModel.update).mockResolvedValue({ success: true } as any);
+      vi.mocked(mockMessageModel.updateToolMessage).mockResolvedValue({ success: true } as any);
+
+      const result = await messageService.batchMutate([
+        {
+          message: { content: '', id: 'msg-created', role: 'assistant', topicId: 'topic-1' } as any,
+          type: 'createMessage',
+        },
+        {
+          id: 'msg-created',
+          type: 'updateMessage',
+          value: { content: 'hello' } as any,
+        },
+        {
+          id: 'tool-1',
+          type: 'updateToolMessage',
+          value: { content: 'tool result' },
+        },
+      ]);
+
+      expect(mockMessageModel.create).toHaveBeenCalledWith(
+        { content: '', id: 'msg-created', role: 'assistant', topicId: 'topic-1' },
+        'msg-created',
+      );
+      expect(mockMessageModel.update).toHaveBeenCalledWith('msg-created', { content: 'hello' });
+      expect(mockMessageModel.updateToolMessage).toHaveBeenCalledWith('tool-1', {
+        content: 'tool result',
+      });
+      expect(mockMessageModel.query).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        results: [
+          { id: 'msg-created', index: 0, success: true, type: 'createMessage' },
+          { id: 'msg-created', index: 1, success: true, type: 'updateMessage' },
+          { id: 'tool-1', index: 2, success: true, type: 'updateToolMessage' },
+        ],
+        success: true,
+      });
+    });
+
+    it('returns per-operation failures without throwing away later operations', async () => {
+      vi.mocked(mockMessageModel.create).mockRejectedValueOnce(new Error('create failed'));
+      vi.mocked(mockMessageModel.update).mockResolvedValue({ success: true } as any);
+
+      const result = await messageService.batchMutate([
+        {
+          message: { content: '', id: 'missing-assistant', role: 'assistant' } as any,
+          type: 'createMessage',
+        },
+        {
+          id: 'still-runs',
+          type: 'updateMessage',
+          value: { content: 'still runs' } as any,
+        },
+      ]);
+
+      expect(mockMessageModel.update).toHaveBeenCalledWith('still-runs', {
+        content: 'still runs',
+      });
+      expect(result).toEqual({
+        results: [
+          {
+            error: 'create failed',
+            id: 'missing-assistant',
+            index: 0,
+            success: false,
+            type: 'createMessage',
+          },
+          { id: 'still-runs', index: 1, success: true, type: 'updateMessage' },
+        ],
+        success: false,
+      });
+    });
+
+    it('surfaces the driver cause of a failed write, not the drizzle query wrapper', async () => {
+      // Drizzle wraps the driver error: its own message is the whole failed
+      // statement + params, while the actionable part (violated constraint,
+      // SQLSTATE) only lives on `cause`. A subagent row written ahead of its
+      // parent lands here, and the caller needs to see *why* to act on it.
+      const driverError = Object.assign(
+        new Error('insert or update on table "messages" violates foreign key constraint'),
+        { code: '23503', constraint: 'messages_parent_id_messages_id_fk' },
+      );
+      const drizzleError = Object.assign(new Error('Failed query: insert into "messages" ...'), {
+        cause: driverError,
+      });
+      vi.mocked(mockMessageModel.create).mockRejectedValueOnce(drizzleError);
+
+      const result = await messageService.batchMutate([
+        {
+          message: { content: '', id: 'orphan', parentId: 'not-yet-written', role: 'user' } as any,
+          type: 'createMessage',
+        },
+      ]);
+
+      expect(result.success).toBe(false);
+      expect(result.results[0].error).toBe(
+        'messages_parent_id_messages_id_fk | 23503 | insert or update on table "messages" violates foreign key constraint',
+      );
     });
   });
 

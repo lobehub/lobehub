@@ -52,6 +52,7 @@ const buildDevice = (overrides: {
   platform: null,
   registered: true,
   scope: overrides.scope,
+  visibility: overrides.scope === 'workspace' ? 'public' : null,
   workingDirs: [],
 });
 

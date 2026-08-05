@@ -30,18 +30,15 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock('@/features/Conversation', () => ({
+vi.mock('@/features/Conversation/store', () => ({
+  dataSelectors: {
+    getDisplayMessageById: (id: string) => () => ({ content: messageContent, id }),
+  },
   useConversationStore: (selector: (s: unknown) => unknown) =>
     selector({
       deleteMessage: deleteMessageMock,
       updateMessageError: updateMessageErrorMock,
     }),
-}));
-
-vi.mock('@/features/Conversation/store', () => ({
-  dataSelectors: {
-    getDisplayMessageById: (id: string) => () => ({ content: messageContent, id }),
-  },
 }));
 
 describe('ErrorContent dismiss behavior', () => {

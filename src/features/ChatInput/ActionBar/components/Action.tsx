@@ -1,6 +1,6 @@
 'use client';
 
-import { type ActionIconProps, type PopoverTrigger } from '@lobehub/ui';
+import type { ActionIconProps, PopoverTrigger } from '@lobehub/ui';
 import { ActionIcon } from '@lobehub/ui';
 import { isUndefined } from 'es-toolkit/compat';
 import { memo } from 'react';
@@ -10,12 +10,12 @@ import { usePermission } from '@/hooks/usePermission';
 import { useServerConfigStore } from '@/store/serverConfig';
 
 import { useActionBarContext } from '../context';
-import { type ActionDropdownProps } from './ActionDropdown';
+import type { ActionDropdownProps } from './ActionDropdown';
 import ActionDropdown from './ActionDropdown';
-import { type ActionPopoverProps } from './ActionPopover';
+import type { ActionPopoverProps } from './ActionPopover';
 import ActionPopover from './ActionPopover';
 
-interface ActionProps extends Omit<ActionIconProps, 'popover'> {
+export interface ActionProps extends Omit<ActionIconProps, 'popover'> {
   dropdown?: Omit<ActionDropdownProps, 'children'>;
   onOpenChange?: (open: boolean) => void;
   open?: boolean;

@@ -11,7 +11,7 @@ import { chatService } from '@/services/chat';
 import * as agentConfigResolver from '@/services/chat/mecha/agentConfigResolver';
 import { useAgentStore } from '@/store/agent';
 import { useAiInfraStore } from '@/store/aiInfra';
-import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
+import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/pageAgentRuntime';
 
 import { useChatStore } from '../../../../store';
 import { messageMapKey } from '../../../../utils/messageMapKey';
@@ -32,6 +32,10 @@ const agentSignalBridgeMock = vi.hoisted(() => ({
 
 vi.mock('@/utils/localStorage', () => {
   class AsyncLocalStorage<State> {
+    getFromLocalStorageSync(): State {
+      return {} as State;
+    }
+
     async getFromLocalStorage(): Promise<State> {
       return {} as State;
     }
@@ -132,6 +136,53 @@ const mockInternalCreateAgentState = (value: ReturnType<typeof realCreateAgentSt
   });
 };
 
+const spyOnClientLLMStream = (
+  implementation: (input: {
+    initialContext?: unknown;
+    onFinish?: (...args: any[]) => Promise<void>;
+    params: Record<string, any>;
+    trace?: unknown;
+  }) => Promise<void> = async ({ onFinish }) => {
+    await onFinish?.(TEST_CONTENT.AI_RESPONSE, {});
+  },
+) => {
+  vi.spyOn(chatService, 'buildAssistantMessageContext').mockImplementation(
+    async (params, options) => ({
+      options: options ?? {},
+      params: { ...params, messages: params.messages as any } as any,
+    }),
+  );
+
+  return vi.spyOn(chatService, 'getChatCompletion').mockImplementation(async (params, options) => {
+    const onFinish = async (...args: any[]) => {
+      const content = args[0];
+      if (content) options?.onMessageHandle?.({ text: content, type: 'text' } as any);
+      await options?.onFinish?.(args[0], args[1]);
+    };
+    await implementation({
+      initialContext: options?.initialContext,
+      onFinish,
+      params,
+      trace: options?.trace,
+    });
+    return new Response();
+  });
+};
+
+const seedDbMessages = (
+  context: Parameters<typeof messageMapKey>[0],
+  messages: UIChatMessage[],
+) => {
+  act(() => {
+    useChatStore.setState((state) => ({
+      dbMessagesMap: {
+        ...state.dbMessagesMap,
+        [messageMapKey(context)]: messages,
+      },
+    }));
+  });
+};
+
 beforeEach(() => {
   resetTestEnvironment();
   setupMockSelectors();
@@ -140,6 +191,9 @@ beforeEach(() => {
 
   act(() => {
     useAgentStore.setState({ availableAgents: [] });
+    // executeClientAgent waits for the aiProvider runtime-state before building
+    // tools; mark it ready so that guard is a no-op in these tests.
+    useAiInfraStore.setState({ isInitAiProviderRuntimeState: true });
     useChatStore.setState({
       refreshMessages: vi.fn(),
       executeClientAgent: vi.fn(),
@@ -169,12 +223,11 @@ describe('StreamingExecutor actions', () => {
         topicId: TEST_IDS.TOPIC_ID,
       } as UIChatMessage;
       const messages = [userMessage];
+      seedDbMessages({ agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID }, messages);
 
-      const streamSpy = vi
-        .spyOn(chatService, 'createAssistantMessageStream')
-        .mockImplementation(async ({ onFinish }) => {
-          await onFinish?.(TEST_CONTENT.AI_RESPONSE, {} as any);
-        });
+      const streamSpy = spyOnClientLLMStream(async ({ onFinish }) => {
+        await onFinish?.(TEST_CONTENT.AI_RESPONSE, {} as any);
+      });
 
       await act(async () => {
         await result.current.executeClientAgent({
@@ -187,6 +240,10 @@ describe('StreamingExecutor actions', () => {
 
       // Verify agent runtime executed successfully
       expect(streamSpy).toHaveBeenCalled();
+      expect(result.current.refreshMessages).toHaveBeenCalledWith({
+        agentId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+      });
 
       // Verify operation was completed
       const operations = Object.values(result.current.operations);
@@ -207,6 +264,93 @@ describe('StreamingExecutor actions', () => {
       streamSpy.mockRestore();
     });
 
+    it('writes topics.status=running at run start so off-conversation surfaces see it', async () => {
+      act(() => {
+        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
+      });
+
+      const { result } = renderHook(() => useChatStore());
+      const updateTopicStatusSpy = vi
+        .spyOn(result.current, 'updateTopicStatus')
+        .mockResolvedValue(undefined as any);
+
+      const streamSpy = vi
+        .spyOn(chatService, 'createAssistantMessageStream')
+        .mockImplementation(async ({ onFinish }) => {
+          await onFinish?.(TEST_CONTENT.AI_RESPONSE, {} as any);
+        });
+
+      await act(async () => {
+        await result.current.executeClientAgent({
+          context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
+          messages: [
+            {
+              id: TEST_IDS.USER_MESSAGE_ID,
+              role: 'user',
+              content: TEST_CONTENT.USER_MESSAGE,
+              sessionId: TEST_IDS.SESSION_ID,
+              topicId: TEST_IDS.TOPIC_ID,
+            } as UIChatMessage,
+          ],
+          parentMessageId: TEST_IDS.USER_MESSAGE_ID,
+          parentMessageType: 'user',
+        });
+      });
+
+      expect(updateTopicStatusSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentId: TEST_IDS.SESSION_ID,
+          status: 'running',
+          topicId: TEST_IDS.TOPIC_ID,
+        }),
+      );
+
+      updateTopicStatusSpy.mockRestore();
+      streamSpy.mockRestore();
+    });
+
+    it('does not write a running status for a sub-agent run (it shares the topic)', async () => {
+      act(() => {
+        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
+      });
+
+      const { result } = renderHook(() => useChatStore());
+      const updateTopicStatusSpy = vi
+        .spyOn(result.current, 'updateTopicStatus')
+        .mockResolvedValue(undefined as any);
+
+      const streamSpy = vi
+        .spyOn(chatService, 'createAssistantMessageStream')
+        .mockImplementation(async ({ onFinish }) => {
+          await onFinish?.(TEST_CONTENT.AI_RESPONSE, {} as any);
+        });
+
+      await act(async () => {
+        await result.current.executeClientAgent({
+          context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
+          isSubAgent: true,
+          messages: [
+            {
+              id: TEST_IDS.USER_MESSAGE_ID,
+              role: 'user',
+              content: TEST_CONTENT.USER_MESSAGE,
+              sessionId: TEST_IDS.SESSION_ID,
+              topicId: TEST_IDS.TOPIC_ID,
+            } as UIChatMessage,
+          ],
+          parentMessageId: TEST_IDS.USER_MESSAGE_ID,
+          parentMessageType: 'user',
+        });
+      });
+
+      expect(updateTopicStatusSpy).not.toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'running' }),
+      );
+
+      updateTopicStatusSpy.mockRestore();
+      streamSpy.mockRestore();
+    });
+
     it('should stop agent runtime loop when operation is cancelled before step execution', async () => {
       act(() => {
         useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
@@ -221,31 +365,30 @@ describe('StreamingExecutor actions', () => {
         topicId: TEST_IDS.TOPIC_ID,
       } as UIChatMessage;
 
+      seedDbMessages({ agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID }, [userMessage]);
       let streamCallCount = 0;
       let cancelDuringFirstCall = false;
-      const streamSpy = vi
-        .spyOn(chatService, 'createAssistantMessageStream')
-        .mockImplementation(async ({ onFinish }) => {
-          streamCallCount++;
+      const streamSpy = spyOnClientLLMStream(async ({ onFinish }) => {
+        streamCallCount++;
 
-          // Cancel during the first LLM call to simulate mid-execution cancellation
-          if (streamCallCount === 1) {
-            const operations = Object.values(result.current.operations);
-            const execOperation = operations.find((op) => op.type === 'execAgentRuntime');
-            if (execOperation) {
-              act(() => {
-                result.current.cancelOperation(execOperation.id, 'user_cancelled');
-              });
-              cancelDuringFirstCall = true;
-            }
+        // Cancel during the first LLM call to simulate mid-execution cancellation
+        if (streamCallCount === 1) {
+          const operations = Object.values(result.current.operations);
+          const execOperation = operations.find((op) => op.type === 'execAgentRuntime');
+          if (execOperation) {
+            act(() => {
+              result.current.cancelOperation(execOperation.id, 'user_cancelled');
+            });
+            cancelDuringFirstCall = true;
           }
+        }
 
-          await onFinish?.(TEST_CONTENT.AI_RESPONSE, {
-            toolCalls: [
-              { id: 'tool-1', type: 'function', function: { name: 'test', arguments: '{}' } },
-            ],
-          } as any);
-        });
+        await onFinish?.(TEST_CONTENT.AI_RESPONSE, {
+          toolCalls: [
+            { id: 'tool-1', type: 'function', function: { name: 'test', arguments: '{}' } },
+          ],
+        } as any);
+      });
 
       await act(async () => {
         await result.current.executeClientAgent({
@@ -278,35 +421,34 @@ describe('StreamingExecutor actions', () => {
         topicId: TEST_IDS.TOPIC_ID,
       } as UIChatMessage;
 
+      seedDbMessages({ agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID }, [userMessage]);
       let streamCallCount = 0;
       let cancelledAfterStep = false;
 
-      const streamSpy = vi
-        .spyOn(chatService, 'createAssistantMessageStream')
-        .mockImplementation(async ({ onFinish }) => {
-          streamCallCount++;
+      const streamSpy = spyOnClientLLMStream(async ({ onFinish }) => {
+        streamCallCount++;
 
-          // First call - LLM returns tool calls
-          if (streamCallCount === 1) {
-            await onFinish?.(TEST_CONTENT.AI_RESPONSE, {
-              toolCalls: [
-                { id: 'tool-1', type: 'function', function: { name: 'test', arguments: '{}' } },
-              ],
-            } as any);
+        // First call - LLM returns tool calls
+        if (streamCallCount === 1) {
+          await onFinish?.(TEST_CONTENT.AI_RESPONSE, {
+            toolCalls: [
+              { id: 'tool-1', type: 'function', function: { name: 'test', arguments: '{}' } },
+            ],
+          } as any);
 
-            // Cancel immediately after LLM step completes
-            // This triggers the after-step cancellation check
-            await new Promise((resolve) => setTimeout(resolve, 20));
-            const operations = Object.values(result.current.operations);
-            const execOperation = operations.find((op) => op.type === 'execAgentRuntime');
-            if (execOperation && execOperation.status === 'running') {
-              act(() => {
-                result.current.cancelOperation(execOperation.id, 'user_cancelled');
-              });
-              cancelledAfterStep = true;
-            }
+          // Cancel immediately after LLM step completes
+          // This triggers the after-step cancellation check
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          const operations = Object.values(result.current.operations);
+          const execOperation = operations.find((op) => op.type === 'execAgentRuntime');
+          if (execOperation && execOperation.status === 'running') {
+            act(() => {
+              result.current.cancelOperation(execOperation.id, 'user_cancelled');
+            });
+            cancelledAfterStep = true;
           }
-        });
+        }
+      });
 
       await act(async () => {
         await result.current.executeClientAgent({
@@ -368,11 +510,10 @@ describe('StreamingExecutor actions', () => {
         topicId: TEST_IDS.TOPIC_ID,
       } as UIChatMessage;
 
-      const streamSpy = vi
-        .spyOn(chatService, 'createAssistantMessageStream')
-        .mockImplementation(async ({ onFinish }) => {
-          await onFinish?.(TEST_CONTENT.AI_RESPONSE, {} as any);
-        });
+      seedDbMessages({ agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID }, [userMessage]);
+      const streamSpy = spyOnClientLLMStream(async ({ onFinish }) => {
+        await onFinish?.(TEST_CONTENT.AI_RESPONSE, {} as any);
+      });
 
       await act(async () => {
         await result.current.executeClientAgent({
@@ -414,11 +555,10 @@ describe('StreamingExecutor actions', () => {
         topicId: TEST_IDS.TOPIC_ID,
       } as UIChatMessage;
 
-      const streamSpy = vi
-        .spyOn(chatService, 'createAssistantMessageStream')
-        .mockImplementation(async ({ onFinish }) => {
-          await onFinish?.(TEST_CONTENT.AI_RESPONSE, {} as any);
-        });
+      seedDbMessages({ agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID }, [userMessage]);
+      const streamSpy = spyOnClientLLMStream(async ({ onFinish }) => {
+        await onFinish?.(TEST_CONTENT.AI_RESPONSE, {} as any);
+      });
 
       await act(async () => {
         await result.current.executeClientAgent({
@@ -451,43 +591,42 @@ describe('StreamingExecutor actions', () => {
         topicId: TEST_IDS.TOPIC_ID,
       } as UIChatMessage;
 
+      seedDbMessages({ agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID }, [userMessage]);
       let cancelledAfterLLM = false;
       let streamCallCount = 0;
 
-      const streamSpy = vi
-        .spyOn(chatService, 'createAssistantMessageStream')
-        .mockImplementation(async ({ onFinish }) => {
-          streamCallCount++;
+      const streamSpy = spyOnClientLLMStream(async ({ onFinish }) => {
+        streamCallCount++;
 
-          // First call - LLM returns with tool calls
-          if (streamCallCount === 1) {
-            await onFinish?.(TEST_CONTENT.AI_RESPONSE, {
-              toolCalls: [
-                {
-                  id: 'tool-1',
-                  type: 'function',
-                  function: { name: 'weatherQuery', arguments: '{"city":"Beijing"}' },
-                },
-                {
-                  id: 'tool-2',
-                  type: 'function',
-                  function: { name: 'calculator', arguments: '{"expression":"1+1"}' },
-                },
-              ],
-            } as any);
+        // First call - LLM returns with tool calls
+        if (streamCallCount === 1) {
+          await onFinish?.(TEST_CONTENT.AI_RESPONSE, {
+            toolCalls: [
+              {
+                id: 'tool-1',
+                type: 'function',
+                function: { name: 'weatherQuery', arguments: '{"city":"Beijing"}' },
+              },
+              {
+                id: 'tool-2',
+                type: 'function',
+                function: { name: 'calculator', arguments: '{"expression":"1+1"}' },
+              },
+            ],
+          } as any);
 
-            // User cancels after LLM completes but before tool execution
-            await new Promise((resolve) => setTimeout(resolve, 20));
-            const operations = Object.values(result.current.operations);
-            const execOperation = operations.find((op) => op.type === 'execAgentRuntime');
-            if (execOperation && execOperation.status === 'running') {
-              act(() => {
-                result.current.cancelOperation(execOperation.id, 'user_cancelled');
-              });
-              cancelledAfterLLM = true;
-            }
+          // User cancels after LLM completes but before tool execution
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          const operations = Object.values(result.current.operations);
+          const execOperation = operations.find((op) => op.type === 'execAgentRuntime');
+          if (execOperation && execOperation.status === 'running') {
+            act(() => {
+              result.current.cancelOperation(execOperation.id, 'user_cancelled');
+            });
+            cancelledAfterLLM = true;
           }
-        });
+        }
+      });
 
       await act(async () => {
         await result.current.executeClientAgent({
@@ -533,7 +672,8 @@ describe('StreamingExecutor actions', () => {
         topicId: contextTopicId,
       } as UIChatMessage;
 
-      const streamSpy = vi.spyOn(chatService, 'createAssistantMessageStream');
+      seedDbMessages({ agentId: contextSessionId, topicId: contextTopicId }, [userMessage]);
+      const streamSpy = spyOnClientLLMStream();
 
       await act(async () => {
         await result.current.executeClientAgent({
@@ -546,6 +686,7 @@ describe('StreamingExecutor actions', () => {
 
       // Verify trace was called with context topicId, not active ones
       expect(streamSpy).toHaveBeenCalledWith(
+        expect.any(Object),
         expect.objectContaining({
           trace: expect.objectContaining({
             topicId: contextTopicId,
@@ -877,24 +1018,24 @@ describe('StreamingExecutor actions', () => {
       const capturedInitialContexts: any[] = [];
       let streamCallCount = 0;
 
-      const streamSpy = vi
-        .spyOn(chatService, 'createAssistantMessageStream')
-        .mockImplementation(async ({ onFinish, initialContext }) => {
-          streamCallCount++;
-          capturedInitialContexts.push(initialContext);
+      seedDbMessages({ agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID }, [userMessage]);
 
-          if (streamCallCount === 1) {
-            // First LLM call returns tool calls
-            await onFinish?.(TEST_CONTENT.AI_RESPONSE, {
-              toolCalls: [
-                { id: 'tool-1', type: 'function', function: { name: 'test', arguments: '{}' } },
-              ],
-            } as any);
-          } else {
-            // Second LLM call (after tool execution) returns final response
-            await onFinish?.('Final response', {} as any);
-          }
-        });
+      const streamSpy = spyOnClientLLMStream(async ({ onFinish, initialContext }) => {
+        streamCallCount++;
+        capturedInitialContexts.push(initialContext);
+
+        if (streamCallCount === 1) {
+          // First LLM call returns tool calls
+          await onFinish?.(TEST_CONTENT.AI_RESPONSE, {
+            toolCalls: [
+              { id: 'tool-1', type: 'function', function: { name: 'test', arguments: '{}' } },
+            ],
+          } as any);
+        } else {
+          // Second LLM call (after tool execution) returns final response
+          await onFinish?.('Final response', {} as any);
+        }
+      });
 
       // Mock internal_createAgentState to include initialContext
       const mockInitialContext = {
@@ -955,28 +1096,28 @@ describe('StreamingExecutor actions', () => {
       const capturedInitialContexts: any[] = [];
       let streamCallCount = 0;
 
-      const streamSpy = vi
-        .spyOn(chatService, 'createAssistantMessageStream')
-        .mockImplementation(async ({ onFinish, initialContext }) => {
-          streamCallCount++;
-          capturedInitialContexts.push(initialContext);
+      seedDbMessages({ agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID }, [userMessage]);
 
-          if (streamCallCount < 3) {
-            // Return tool calls to continue the loop
-            await onFinish?.(TEST_CONTENT.AI_RESPONSE, {
-              toolCalls: [
-                {
-                  id: `tool-${streamCallCount}`,
-                  type: 'function',
-                  function: { name: 'test', arguments: '{}' },
-                },
-              ],
-            } as any);
-          } else {
-            // Final response without tool calls
-            await onFinish?.('Final response', {} as any);
-          }
-        });
+      const streamSpy = spyOnClientLLMStream(async ({ onFinish, initialContext }) => {
+        streamCallCount++;
+        capturedInitialContexts.push(initialContext);
+
+        if (streamCallCount < 3) {
+          // Return tool calls to continue the loop
+          await onFinish?.(TEST_CONTENT.AI_RESPONSE, {
+            toolCalls: [
+              {
+                id: `tool-${streamCallCount}`,
+                type: 'function',
+                function: { name: 'test', arguments: '{}' },
+              },
+            ],
+          } as any);
+        } else {
+          // Final response without tool calls
+          await onFinish?.('Final response', {} as any);
+        }
+      });
 
       const mockInitialContext = {
         pageEditor: {
@@ -1534,25 +1675,25 @@ describe('StreamingExecutor actions', () => {
         }),
       } as any);
 
-      const streamSpy = vi
-        .spyOn(chatService, 'createAssistantMessageStream')
-        .mockImplementation(async ({ onFinish, params }) => {
-          expect(params.resolvedAgentConfig.enabledToolIds).toEqual([
-            'lobe-artifacts',
-            'lobe-notebook',
-          ]);
-          expect(params.resolvedAgentConfig.tools).toEqual([
-            {
-              function: { name: 'lobe-artifacts____create' },
-              type: 'function',
-            },
-            {
-              function: { name: 'lobe-notebook____createDocument' },
-              type: 'function',
-            },
-          ]);
-          await onFinish?.(TEST_CONTENT.AI_RESPONSE, {} as any);
-        });
+      seedDbMessages({ agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID }, [userMessage]);
+
+      const streamSpy = spyOnClientLLMStream(async ({ onFinish, params }) => {
+        expect(params.resolvedAgentConfig.enabledToolIds).toEqual([
+          'lobe-artifacts',
+          'lobe-notebook',
+        ]);
+        expect(params.resolvedAgentConfig.tools).toEqual([
+          {
+            function: { name: 'lobe-artifacts____create' },
+            type: 'function',
+          },
+          {
+            function: { name: 'lobe-notebook____createDocument' },
+            type: 'function',
+          },
+        ]);
+        await onFinish?.(TEST_CONTENT.AI_RESPONSE, {} as any);
+      });
 
       await act(async () => {
         await result.current.executeClientAgent({
@@ -2181,6 +2322,9 @@ describe('StreamingExecutor actions', () => {
         });
         operationId = res.operationId;
       });
+      const updateTopicStatusSpy = vi
+        .spyOn(result.current, 'updateTopicStatus')
+        .mockResolvedValue(undefined as any);
 
       // Mock internal_createAgentState to return waiting_for_human status
       mockInternalCreateAgentState({
@@ -2198,7 +2342,13 @@ describe('StreamingExecutor actions', () => {
         agentConfig: createMockResolvedAgentConfig(),
       });
       vi.spyOn(agentRuntime.AgentRuntime.prototype, 'step').mockResolvedValue({
-        events: [],
+        events: [
+          {
+            operationId,
+            pendingToolsCalling: [],
+            type: 'human_approve_required',
+          },
+        ],
         newState: createMockRuntimeState(operationId!, 'waiting_for_human'),
         nextContext: undefined,
       });
@@ -2221,6 +2371,13 @@ describe('StreamingExecutor actions', () => {
       // 1. User can see the tool intervention UI without loading indicator
       // 2. A new operation will be created when user approves/rejects
       expect(result.current.operations[operationId!].status).toBe('completed');
+      expect(updateTopicStatusSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentId: TEST_IDS.SESSION_ID,
+          status: 'waitingForHuman',
+          topicId: TEST_IDS.TOPIC_ID,
+        }),
+      );
       // Parked ≠ terminal: NO `client.runtime.complete` is emitted — the run has
       // not ended, it is waiting for human approval — parked states do not emit
       // mis-emitted a terminal `cancelled` complete signal.
@@ -2651,7 +2808,12 @@ describe('StreamingExecutor actions', () => {
               ...state.messagesMap,
               [messageMapKey({ agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID })]: [
                 {
+                  // The completion notification now anchors its body to THIS run's
+                  // assistant (findCompletionAssistantMessageId walks parentMessageId),
+                  // not a positional findLast — so the seeded assistant must descend
+                  // from the run's parentMessageId (TEST_IDS.USER_MESSAGE_ID) to be found.
                   ...createMockMessage({ id: 'assistant-notif', role: 'assistant' }),
+                  parentId: TEST_IDS.USER_MESSAGE_ID,
                   ...overrides,
                 },
               ],

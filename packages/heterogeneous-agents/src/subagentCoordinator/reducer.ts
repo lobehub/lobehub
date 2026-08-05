@@ -341,6 +341,7 @@ const reduceToolsChunk = (
     content: run.accContent || undefined,
     kind: 'persistToolBatch',
     reasoning: run.accReasoning || undefined,
+    subagentMessageId: run.currentSubagentMessageId || undefined,
     threadId: run.threadId,
     tools: run.toolState.payloads.map((p) => ({
       isNew: newToolMsgIds.includes(run.toolState.toolMsgIdByCallId.get(p.id)!),
@@ -385,6 +386,33 @@ export const reduce = (
     }
     if (data.chunkType === 'reasoning' && typeof data.reasoning === 'string' && data.reasoning) {
       return reduceTextChunk(state, subCtx, 'reasoning', data.reasoning, ctx);
+    }
+    if (
+      data.chunkType === 'tool_state' &&
+      data.snapshotMode === 'replace' &&
+      typeof data.toolCallId === 'string' &&
+      data.toolCallId.length > 0 &&
+      Number.isInteger(data.snapshotSeq) &&
+      data.snapshotSeq > 0 &&
+      typeof data.pluginState === 'object' &&
+      data.pluginState !== null &&
+      !Array.isArray(data.pluginState)
+    ) {
+      const owner = findRunByInnerToolCallId(state, data.toolCallId);
+      if (!owner) return { intents: [], state };
+
+      return {
+        intents: [
+          {
+            kind: 'updateToolState',
+            pluginState: data.pluginState,
+            snapshotSeq: data.snapshotSeq,
+            threadId: owner.run.threadId,
+            toolCallId: data.toolCallId,
+          },
+        ],
+        state,
+      };
     }
     if (data.chunkType === 'tools_calling') {
       const tools = (data.toolsCalling as ToolCallPayload[] | undefined) ?? [];
@@ -438,6 +466,7 @@ export const reduce = (
           messageId: run.currentAssistantId,
           model: data.model,
           provider: data.provider,
+          subagentMessageId: run.currentSubagentMessageId || undefined,
           threadId: run.threadId,
           usage: data.usage,
         },

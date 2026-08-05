@@ -1,14 +1,14 @@
 'use client';
 
 import { InboxOutlined } from '@ant-design/icons';
-import { Button } from '@lobehub/ui';
+import { Button, toast } from '@lobehub/ui/base-ui';
 import { useMutation } from '@tanstack/react-query';
-import { Form, Input, message, Upload } from 'antd';
+import { Form, Input, Upload } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useCredsApi } from '../useCredsApi';
+import { type CredsApi } from '../useCredsApi';
 
 const styles = createStaticStyles(({ css }) => ({
   footer: css`
@@ -20,6 +20,7 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface FileCredFormProps {
+  credsApi: CredsApi;
   disabled?: boolean;
   onBack: () => void;
   onSuccess: () => void;
@@ -31,13 +32,12 @@ interface FormValues {
   name: string;
 }
 
-const FileCredForm: FC<FileCredFormProps> = ({ disabled, onBack, onSuccess }) => {
+const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onBack, onSuccess }) => {
   const { t } = useTranslation('setting');
   const [form] = Form.useForm<FormValues>();
   const [fileHashId, setFileHashId] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string>('');
   const [isUploading, setIsUploading] = useState(false);
-  const credsApi = useCredsApi();
 
   const createMutation = useMutation({
     mutationFn: async (values: FormValues) => {
@@ -75,7 +75,7 @@ const FileCredForm: FC<FileCredFormProps> = ({ disabled, onBack, onSuccess }) =>
       }
       const base64 = btoa(binary);
 
-      // Upload via TRPC (personal or workspace, based on active CredsApi context)
+      // Upload via TRPC (personal or workspace, based on the credsApi passed in by the caller)
       const result = await credsApi.client.uploadFile.mutate({
         file: base64,
         fileName: file.name,
@@ -84,10 +84,10 @@ const FileCredForm: FC<FileCredFormProps> = ({ disabled, onBack, onSuccess }) =>
 
       setFileName(result.fileName);
       setFileHashId(result.fileHashId);
-      message.success(t('creds.file.uploadSuccess'));
+      toast.success(t('creds.file.uploadSuccess'));
     } catch (error) {
       console.error('[FileCredForm] Upload failed:', error);
-      message.error(error instanceof Error ? error.message : t('creds.file.uploadFailed'));
+      toast.error(error instanceof Error ? error.message : t('creds.file.uploadFailed'));
     } finally {
       setIsUploading(false);
     }
@@ -99,7 +99,7 @@ const FileCredForm: FC<FileCredFormProps> = ({ disabled, onBack, onSuccess }) =>
     if (disabled) return;
 
     if (!fileHashId) {
-      message.error(t('creds.form.fileRequired'));
+      toast.error(t('creds.form.fileRequired'));
       return;
     }
     createMutation.mutate(values);

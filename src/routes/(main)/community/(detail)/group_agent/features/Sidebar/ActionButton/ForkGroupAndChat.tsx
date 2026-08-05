@@ -1,15 +1,13 @@
 'use client';
 
-import { Button, Flexbox } from '@lobehub/ui';
-import { Select } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { Flexbox } from '@lobehub/ui';
+import { Button, Select, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { customAlphabet } from 'nanoid/non-secure';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
-import { useActiveWorkspace } from '@/business/client/hooks/useActiveWorkspace';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
@@ -20,10 +18,6 @@ import { discoverService } from '@/services/discover';
 import { marketApiService } from '@/services/marketApi';
 import { useAgentGroupStore } from '@/store/agentGroup';
 
-import {
-  isMarketOrgSetupRequiredError,
-  promptMarketOrgSetup,
-} from '../../../../../utils/marketOrgSetup';
 import { useDetailContext } from '../../DetailProvider';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -92,15 +86,13 @@ const ForkGroupAndChat = memo<{ mobile?: boolean }>(() => {
     memberAgents = [],
   } = useDetailContext();
   const [isLoading, setIsLoading] = useState(false);
-  const { message } = App.useApp();
+
   const { t } = useTranslation('discover');
   const navigate = useWorkspaceAwareNavigate();
   const loadGroups = useAgentGroupStore((s) => s.loadGroups);
   const { isAuthenticated, signIn } = useMarketAuth();
   const { allowed: canCreate } = usePermission('create_content');
   const activeWorkspaceId = useActiveWorkspaceId();
-  const activeWorkspace = useActiveWorkspace();
-  const isWorkspaceOwner = activeWorkspace?.role === 'owner';
   const [visibility, setVisibility] = useState<ForkTarget>('private');
 
   const meta = {
@@ -130,13 +122,13 @@ const ForkGroupAndChat = memo<{ mobile?: boolean }>(() => {
 
       if (existingGroupId) {
         // User has already forked this group, navigate to existing fork
-        message.info(t('fork.alreadyForked'));
+        toast.info(t('fork.alreadyForked'));
         navigate(urlJoin('/group', existingGroupId));
         return;
       }
 
       if (!config) {
-        message.error(
+        toast.error(
           t('groupAgents.noConfig', { defaultValue: 'Group configuration not available' }),
         );
         return;
@@ -148,24 +140,16 @@ const ForkGroupAndChat = memo<{ mobile?: boolean }>(() => {
       // Same rationale as ForkAndChat.tsx — workspace forks must carry an
       // org `actAs` so Market accepts the request; the local chat group
       // still lands in the user's Private bucket via `visibility: 'private'`
-      // on the groupConfig below. When the workspace has no Community
-      // profile yet we prompt the user (role-aware) and abort the fork.
+      // on the groupConfig below. Freshly created workspaces get the Market
+      // org provisioned upfront in `workspace.create` / the Stripe webhook;
+      // `autoProvision: true` is a best-effort backfill for historical
+      // workspaces without a mirror.
       let actAs: number | undefined;
       if (activeWorkspaceId) {
-        try {
-          const { marketAccountId } =
-            await lambdaClient.workspace.ensureMarketOrganization.mutate();
-          actAs = marketAccountId;
-        } catch (error) {
-          if (isMarketOrgSetupRequiredError(error)) {
-            promptMarketOrgSetup({
-              isOwner: isWorkspaceOwner,
-              onSetup: () => navigate('/community/workspace'),
-            });
-            return;
-          }
-          throw error;
-        }
+        const { marketAccountId } = await lambdaClient.workspace.ensureMarketOrganization.mutate({
+          autoProvision: true,
+        });
+        actAs = marketAccountId;
       }
 
       // Step 2: Fork the group via Market API
@@ -276,13 +260,13 @@ const ForkGroupAndChat = memo<{ mobile?: boolean }>(() => {
         source: location.pathname,
       });
 
-      message.success(t('fork.success'));
+      toast.success(t('fork.success'));
 
       // Step 8: Navigate to chat
       navigate(urlJoin('/group', result.groupId));
     } catch (error: any) {
       console.error('Fork group failed:', error);
-      message.error(t('fork.failed'));
+      toast.error(t('fork.failed'));
     } finally {
       setIsLoading(false);
     }

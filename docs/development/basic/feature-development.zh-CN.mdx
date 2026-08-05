@@ -97,9 +97,9 @@ export interface LobeAgentConfig {
 +-------------------+--------------------------------------+------------------------------------------------------+
 | Client Service    | src/services/                        | 封装前端可复用的业务逻辑，一般涉及多个后端请求(tRPC)  |
 | WebAPI            | src/app/(backend)/webapi/            | REST API 端点                                         |
-| tRPC Router       | src/server/routers/                  | tRPC 入口，校验输入，路由到 service                   |
-| Server Service    | src/server/services/                 | 服务端业务逻辑，可访问数据库                          |
-| Server Module     | src/server/modules/                  | 服务端模块，不直接访问数据库                          |
+| tRPC Router       | apps/server/src/routers/             | tRPC 入口，校验输入，路由到 service                   |
+| Server Service    | apps/server/src/services/            | 服务端业务逻辑，可访问数据库                          |
+| Server Module     | apps/server/src/modules/             | 服务端模块，不直接访问数据库                          |
 | Repository        | packages/database/src/repositories/  | 封装复杂查询、跨表操作                                |
 | DB Model          | packages/database/src/models/        | 封装单表的 CRUD 操作                                  |
 +-------------------+--------------------------------------+------------------------------------------------------+
@@ -115,7 +115,7 @@ export class SessionService {
 }
 ```
 
-**tRPC Router** 是后端入口（`src/server/routers/lambda/`），校验输入后调用 Server Service 处理业务逻辑：
+**tRPC Router** 是后端入口（`apps/server/src/routers/lambda/`），校验输入后调用 Server Service 处理业务逻辑：
 
 ```typescript
 export const sessionRouter = router({
@@ -152,7 +152,7 @@ LobeHub 使用 [zustand](https://zustand.docs.pmnd.rs/getting-started/introducti
 
 #### 更新 AgentSetting/store
 
-首先我们更新 initialState，阅读 `src/features/AgentSetting/store/initialState.ts` 后得知初始 agent 配置保存在 `src/const/settings/agent.ts` 中的 `DEFAULT_AGENT_CONFIG`：
+首先我们更新 initialState，阅读 `src/features/AgentSetting/store/initialState.ts` 后得知初始 agent 配置保存在 `packages/const/src/settings/agent.ts` 中的 `DEFAULT_AGENT_CONFIG`：
 
 ```diff
 export const DEFAULT_AGENT_CONFIG: LobeAgentConfig = {
@@ -199,7 +199,7 @@ export const store: StateCreator<Store, [['zustand/devtools', never]]> = (set, g
 
 在展示组件中我们使用 `src/store/agent` 获取当前 agent 配置，简单加两个 selectors：
 
-更新 `src/store/agent/slices/chat/selectors/agent.ts`：
+更新 `src/store/agent/selectors/selectors.ts`：
 
 ```diff
 +const openingQuestions = (s: AgentStoreState) =>
@@ -218,10 +218,10 @@ export const agentSelectors = {
 
 LobeHub 是国际化项目，使用 [react-i18next](https://github.com/i18next/react-i18next) 作为 i18n 框架。新增的 UI 文案需要：
 
-1. 在 `src/locales/default/` 对应的 namespace 文件中添加 key（默认语言为英文）：
+1. 在 `packages/locales/src/default/` 对应的 namespace 文件中添加 key（默认语言为英文）：
 
 ```typescript
-// src/locales/default/setting.ts
+// packages/locales/src/default/setting.ts
 export default {
   // ...
   'settingOpening.title': 'Opening Settings',
@@ -234,9 +234,9 @@ export default {
 };
 ```
 
-2. 如果新增了 namespace，需要在 `src/locales/default/index.ts` 中导出
+2. 如果新增了 namespace，需要在 `packages/locales/src/default/index.ts` 中导出
 3. 开发预览时手动翻译 `locales/zh-CN/` 和 `locales/en-US/` 对应的 JSON 文件
-4. CI 会自动运行 `pnpm i18n` 生成其他语言的翻译
+4. CI 会自动运行 `bun run i18n` 生成其他语言的翻译
 
 key 的命名规范为扁平的 dot notation：`{feature}.{context}.{action|status}`。
 
@@ -298,35 +298,27 @@ const OpeningQuestions = memo(() => {
 - 通过 `setAgentConfig` action 更新配置
 - 使用 `useTranslation('setting')` 获取 i18n 文案
 
-同时我们需要将用户设置的开场配置展示出来，这个是在 chat 页面，对应组件在 `src/app/[variants]/(main)/chat/(workspace)/@conversation/features/ChatList/WelcomeChatItem/WelcomeMessage.tsx`：
+同时我们需要将用户设置的开场配置展示在 chat 页面。Agent 会话使用 `src/features/AgentHome`（`AgentInfo.tsx` 读 `openingMessage`，`OpeningQuestions.tsx` 渲染问题列表）；群聊有对应欢迎区 `src/routes/(main)/group/features/Conversation/AgentWelcome`。**不要**改 `src/features/Onboarding/Agent/WelcomeMessage.tsx` —— 那只是 onboarding 流程。
 
 ```typescript
-const WelcomeMessage = () => {
-  const { t } = useTranslation('chat');
+// src/features/AgentHome/AgentInfo.tsx（简化）
+const AgentInfo = () => {
+  const { t } = useTranslation(['chat', 'welcome']);
 
-  // 从 store/agent 获取当前开场配置
-  const openingMessage = useAgentStore(agentSelectors.openingMessage);
-  const openingQuestions = useAgentStore(agentSelectors.openingQuestions);
-
-  const meta = useSessionStore(sessionMetaSelectors.currentAgentMeta, isEqual);
+  // 优先会话作用域下的 agent 配置（openingMessage 在 agent config 上）
+  const openingMessage = useAgentStore(
+    (s) => agentSelectors.getAgentConfigById(agentId)(s)?.openingMessage || '',
+  );
 
   const message = useMemo(() => {
-    // 用户设置了就用用户设置的
     if (openingMessage) return openingMessage;
-    return !!meta.description ? agentSystemRoleMsg : agentMsg;
-  }, [openingMessage, agentSystemRoleMsg, agentMsg, meta.description]);
+    return t('agentDefaultMessageWithSystemRole', { name: displayTitle });
+  }, [openingMessage, displayTitle, t]);
 
-  return openingQuestions.length > 0 ? (
-    <Flexbox>
-      <ChatItem avatar={meta} message={message} placement="left" />
-      {/* 渲染引导性问题 */}
-      <OpeningQuestions questions={openingQuestions} />
-   
-</Flexbox>
-  ) : (
-    <ChatItem avatar={meta} message={message} placement="left" />
-  );
+  // 渲染头像 + Markdown(message) ...
 };
+
+// src/features/AgentHome/index.tsx 组装 AgentInfo + OpeningQuestions
 ```
 
 ## 五、测试
@@ -350,7 +342,7 @@ cd packages/database && bunx vitest run --silent='passed-only' '[file]'
 建议先本地跑下相关测试，看哪些失败了再针对性更新。例如：
 
 ```bash
-bunx vitest run --silent='passed-only' 'src/store/agent/slices/chat/selectors/agent.test.ts'
+bunx vitest run --silent='passed-only' 'src/store/agent/selectors/selectors.test.ts'
 ```
 
 如果只是想确认现有测试是否通过而不想本地跑，也可以直接查看 GitHub Actions 的测试结果。

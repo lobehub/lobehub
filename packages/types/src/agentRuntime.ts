@@ -12,6 +12,8 @@ export enum RequestTrigger {
   Notify = 'notify',
   Onboarding = 'onboarding',
   Openapi = 'openapi',
+  /** A run the user deferred to a future time (`topic.metadata.scheduledRun`). */
+  Scheduled = 'scheduled',
   SemanticSearch = 'semantic_search',
   SignupEmailLLMReview = 'signup_email_llm_review',
   Topic = 'topic',
@@ -125,6 +127,13 @@ export const AgentRuntimeErrorType = {
    * tokens, no text, and no tool calls.
    */
   ModelEmptyCompletion: 'ModelEmptyCompletion',
+  /**
+   * The model explicitly refused an otherwise empty completion. This stays
+   * separate from ModelEmptyCompletion so users receive an actionable refusal
+   * message and operations can distinguish intentional provider behavior from
+   * unexplained blank responses.
+   */
+  ModelRefusal: 'ModelRefusal',
   /**
    * A persistence-layer query / transaction failed (Drizzle "Failed query:
    * …"). Harness-side: the DB write/read or txn could not complete and

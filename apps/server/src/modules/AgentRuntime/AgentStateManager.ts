@@ -6,9 +6,16 @@ import {
 import debug from 'debug';
 import { type Redis } from 'ioredis';
 
+import { hasNonPersistedMessage } from './messagePersistence';
 import { getAgentRuntimeRedisClient } from './redis';
+import { stripFinalStateInEventData } from './StreamEventManager';
 
 const log = debug('lobe-server:agent-runtime:agent-state-manager');
+
+const REFRESH_OWNED_LOCK_SCRIPT =
+  "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('expire', KEYS[1], ARGV[2]) else return 0 end";
+const RELEASE_OWNED_LOCK_SCRIPT =
+  "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
 
 export interface StepResult {
   events?: AgentEvent[];
@@ -61,13 +68,44 @@ export class AgentStateManager {
   }
 
   /**
+   * Serialize an AgentState for Redis persistence, dropping the `messages`
+   * array first.
+   *
+   * `messages` is the dominant size driver of the serialized state — long
+   * topics inline tool results and base64 media, pushing the blob past
+   * Upstash's 10MB single-request limit, which throws and drops the op
+   * outright (StateStorePersistError). It is also fully reconstructible: the
+   * canonical rows live in the DB and every step rehydrates `state.messages`
+   * from there on entry (`AgentRuntimeService.rehydrateStateMessagesFromDB`),
+   * while the few out-of-band readers fall back to a DB query. So we never
+   * serialize it into the persisted blob.
+   *
+   * Keep this in sync with the stream-event strip in `StreamEventManager`
+   * (`stripStateForStream`) and the `done`-event strip in
+   * `OperationTraceRecorder` — all drop the same reconstructible payload.
+   *
+   * Exception: when the working set carries a non-persisted (ephemeral /
+   * suppressed) message — one with no DB row — the array is NOT reconstructible
+   * from a query, so persist it in full. These ops are rare and short-lived
+   * (group-member supervisor turns); the size win is forgone to avoid losing
+   * the prompt.
+   */
+  private serializeStateForPersist(state: AgentState): string {
+    if (hasNonPersistedMessage((state as { messages?: unknown }).messages)) {
+      return JSON.stringify(state);
+    }
+    const { messages: _messages, ...rest } = state as AgentState & { messages?: unknown };
+    return JSON.stringify(rest);
+  }
+
+  /**
    * Save Agent state
    */
   async saveAgentState(operationId: string, state: AgentState): Promise<void> {
     const stateKey = `${this.STATE_PREFIX}:${operationId}`;
 
     try {
-      const serializedState = JSON.stringify(state);
+      const serializedState = this.serializeStateForPersist(state);
       await this.redis.setex(stateKey, this.DEFAULT_TTL, serializedState);
 
       // Update metadata
@@ -119,7 +157,11 @@ export class AgentStateManager {
     try {
       // Save latest state
       const stateKey = `${this.STATE_PREFIX}:${operationId}`;
-      pipeline.setex(stateKey, this.DEFAULT_TTL, JSON.stringify(stepResult.newState));
+      pipeline.setex(
+        stateKey,
+        this.DEFAULT_TTL,
+        this.serializeStateForPersist(stepResult.newState),
+      );
 
       // Save step history
       const stepsKey = `${this.STEPS_PREFIX}:${operationId}`;
@@ -140,7 +182,14 @@ export class AgentStateManager {
       if (stepResult.events && stepResult.events.length > 0) {
         const eventsKey = `${this.EVENTS_PREFIX}:${operationId}`;
 
-        pipeline.lpush(eventsKey, JSON.stringify(stepResult.events));
+        // A terminal `done` event carries the full `finalState` (incl. messages
+        // + tool-set), so strip those reconstructible fields before persisting —
+        // same chokepoint the stream path uses — otherwise this lpush is a
+        // second route to Upstash's 10MB limit on long topics.
+        pipeline.lpush(
+          eventsKey,
+          JSON.stringify(stepResult.events.map(stripFinalStateInEventData)),
+        );
         pipeline.ltrim(eventsKey, 0, 199); // Keep events from most recent 200 steps
         pipeline.expire(eventsKey, this.DEFAULT_TTL);
       }
@@ -424,19 +473,20 @@ export class AgentStateManager {
     }
   }
 
-  private stepLockKey(operationId: string, stepIndex: number): string {
-    return `agent_runtime_step_lock:${operationId}:${stepIndex}`;
+  private executionLockKey(operationId: string): string {
+    return `agent_runtime_operation_lock:${operationId}`;
   }
 
   async tryClaimStep(
     operationId: string,
-    stepIndex: number,
+    _stepIndex: number,
     ttlSeconds: number = 35,
+    ownerId: string = Date.now().toString(),
   ): Promise<boolean> {
     try {
       const result = await this.redis.set(
-        this.stepLockKey(operationId, stepIndex),
-        Date.now().toString(),
+        this.executionLockKey(operationId),
+        ownerId,
         'EX',
         ttlSeconds,
         'NX',
@@ -450,9 +500,42 @@ export class AgentStateManager {
     }
   }
 
-  async releaseStepLock(operationId: string, stepIndex: number): Promise<void> {
+  async refreshStepLock(
+    operationId: string,
+    _stepIndex: number,
+    ttlSeconds: number,
+    ownerId?: string,
+  ): Promise<boolean> {
     try {
-      await this.redis.del(this.stepLockKey(operationId, stepIndex));
+      const key = this.executionLockKey(operationId);
+      if (!ownerId) {
+        return (await this.redis.expire(key, ttlSeconds)) === 1;
+      }
+
+      const result = await this.redis.eval(
+        REFRESH_OWNED_LOCK_SCRIPT,
+        1,
+        key,
+        ownerId,
+        ttlSeconds.toString(),
+      );
+
+      return result === 1;
+    } catch (error) {
+      console.error('Failed to refresh step lock:', error);
+      return false;
+    }
+  }
+
+  async releaseStepLock(operationId: string, _stepIndex: number, ownerId?: string): Promise<void> {
+    try {
+      const key = this.executionLockKey(operationId);
+      if (!ownerId) {
+        await this.redis.del(key);
+        return;
+      }
+
+      await this.redis.eval(RELEASE_OWNED_LOCK_SCRIPT, 1, key, ownerId);
     } catch (error) {
       console.error('Failed to release step lock:', error);
     }

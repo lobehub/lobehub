@@ -1,4 +1,4 @@
-export { ClaudeCodeAdapter } from './adapters';
+export { AmpAdapter, ClaudeCodeAdapter } from './adapters';
 export type {
   HeterogeneousAgentType,
   LocalHeterogeneousAgentType,
@@ -10,6 +10,21 @@ export {
   isRemoteHeterogeneousType,
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
 } from './config';
+export type {
+  HeteroErrorAttribution,
+  HeteroErrorCategory,
+  HeteroErrorKind,
+  HeteroErrorSeverity,
+  HeteroErrorSpec,
+  HeteroGuideCode,
+} from './errors';
+export {
+  formatHeteroErrorId,
+  getHeteroErrorSpec,
+  HETERO_CATEGORY_NUMERIC_PREFIX,
+  HETERO_ERROR_SPECS,
+  isUserSideHeteroError,
+} from './errors';
 export { HETEROGENEOUS_TYPE_LABELS } from './labels';
 export type {
   CreateAssistantIntent,
@@ -21,11 +36,14 @@ export type {
   MainRecordUsageIntent,
   MainResolveToolResultIntent,
   MainStreamContentIntent,
+  MainUpdateToolStateIntent,
   PersistAssistantIntent,
   SetErrorIntent,
 } from './mainAgentCoordinator';
 export { createMainAgentRunState, reduceMainAgent } from './mainAgentCoordinator';
 export { createAdapter, listAgentTypes } from './registry';
+export type { HeterogeneousAgentScanMap, HeterogeneousAgentScanStatus } from './scan/types';
+export { isHeteroStatusGuideErrorData } from './spawn/classifyProcessFailure';
 export type {
   CreateMessageIntent,
   CreateThreadIntent,
@@ -40,6 +58,7 @@ export type {
   SubagentReduceCtx,
   SubagentRunSnapshot,
   SubagentRunsState,
+  UpdateToolStateIntent,
 } from './subagentCoordinator';
 export {
   createSubagentRunsState,
@@ -62,4 +81,5 @@ export type {
   ToolCallPayload,
   ToolEndData,
   ToolResultData,
+  ToolStateChunkData,
 } from './types';

@@ -4,14 +4,19 @@ import { gt, parse, valid } from 'semver';
 import type { SWRResponse } from 'swr';
 
 import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { CURRENT_VERSION, isDesktop } from '@/const/version';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useOnlyFetchOnceSWR } from '@/libs/swr';
 import { globalKeys } from '@/libs/swr/keys';
 import { globalService } from '@/services/global';
 import { getElectronStoreState } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
 import type { SystemStatus } from '@/store/global/initialState';
-import { DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS } from '@/store/global/initialState';
+import {
+  DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS,
+  DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS,
+} from '@/store/global/initialState';
 import type { StoreSetter } from '@/store/types';
 import type { LocaleMode } from '@/types/locale';
 import { switchLang } from '@/utils/client/switchLang';
@@ -42,8 +47,6 @@ export class GlobalGeneralActionImpl {
   }
 
   openAgentInNewWindow = async (agentId: string): Promise<void> => {
-    const url = `/agent/${agentId}${isDesktop ? '?mode=single' : ''}`;
-
     if (isDesktop) {
       try {
         const { ensureElectronIpc } = await import('@/utils/electron/ipc');
@@ -63,18 +66,18 @@ export class GlobalGeneralActionImpl {
       }
     } else {
       // Open in popup window for browser
+      const browserUrl = buildWorkspaceAwarePath(`/agent/${agentId}`, getActiveWorkspaceSlug());
       const width = 1200;
       const height = 800;
       const left = (window.screen.width - width) / 2;
       const top = (window.screen.height - height) / 2;
       const features = `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,status=yes`;
-      window.open(url, `agent_${agentId}`, features);
+      window.open(browserUrl, `agent_${agentId}`, features);
     }
   };
 
   openTopicInNewWindow = async (agentId: string, topicId: string): Promise<void> => {
     const popupPath = `/popup/agent/${agentId}/${topicId}`;
-    const browserUrl = AGENT_CHAT_TOPIC_URL(agentId, topicId);
 
     if (isDesktop) {
       try {
@@ -94,6 +97,10 @@ export class GlobalGeneralActionImpl {
       }
     } else {
       // Open in popup window for browser
+      const browserUrl = buildWorkspaceAwarePath(
+        AGENT_CHAT_TOPIC_URL(agentId, topicId),
+        getActiveWorkspaceSlug(),
+      );
       const width = 1200;
       const height = 800;
       const left = (window.screen.width - width) / 2;
@@ -105,7 +112,6 @@ export class GlobalGeneralActionImpl {
 
   openGroupTopicInNewWindow = async (groupId: string, topicId: string): Promise<void> => {
     const popupPath = `/popup/group/${groupId}/${topicId}`;
-    const browserUrl = GROUP_CHAT_TOPIC_URL(groupId, topicId);
 
     if (isDesktop) {
       try {
@@ -124,6 +130,10 @@ export class GlobalGeneralActionImpl {
         console.error('Error opening group topic in new window:', error);
       }
     } else {
+      const browserUrl = buildWorkspaceAwarePath(
+        GROUP_CHAT_TOPIC_URL(groupId, topicId),
+        getActiveWorkspaceSlug(),
+      );
       const width = 1200;
       const height = 800;
       const left = (window.screen.width - width) / 2;
@@ -154,11 +164,13 @@ export class GlobalGeneralActionImpl {
     }
   };
 
-  updateResourceManagerColumnWidth = (column: 'name' | 'date' | 'size', width: number): void => {
-    const currentWidths = this.#get().status.resourceManagerColumnWidths || {
-      date: 160,
-      name: 574,
-      size: 140,
+  updateResourceManagerColumnWidth = (
+    column: 'name' | 'date' | 'size' | 'uploader',
+    width: number,
+  ): void => {
+    const currentWidths = {
+      ...DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS,
+      ...this.#get().status.resourceManagerColumnWidths,
     };
 
     this.#get().updateSystemStatus({
@@ -167,6 +179,36 @@ export class GlobalGeneralActionImpl {
         [column]: width,
       },
     });
+  };
+
+  /**
+   * Replace the workspace overlay's sidebar-layout fields wholesale. An
+   * absent field is DELETED from the overlay (falling back to "untouched"
+   * defaults) — `updateSystemStatus` deep-merges and can neither delete keys
+   * nor drop a field the incoming server preference no longer carries.
+   */
+  setWorkspaceSidebarOverlay = (layout: {
+    hiddenSidebarSections?: string[];
+    sidebarItems?: string[];
+  }): void => {
+    if (!this.#get().isStatusInit) return;
+    const status = this.#get().status;
+    const {
+      hiddenSidebarSections: _hidden,
+      sidebarItems: _items,
+      ...rest
+    } = status.workspace ?? {};
+    const workspace = {
+      ...rest,
+      ...(layout.hiddenSidebarSections
+        ? { hiddenSidebarSections: layout.hiddenSidebarSections }
+        : {}),
+      ...(layout.sidebarItems ? { sidebarItems: layout.sidebarItems } : {}),
+    };
+    if (isEqual(status.workspace ?? {}, workspace)) return;
+    const nextStatus = { ...status, workspace };
+    this.#set({ status: nextStatus }, false, n('setWorkspaceSidebarOverlay'));
+    this.#get().statusStorage.saveToLocalStorage(nextStatus);
   };
 
   resetSidebarCustomization = (): void => {

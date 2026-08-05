@@ -8,8 +8,10 @@ import {
   SkillStoreExecutionRuntime,
   type SkillStoreRuntimeService,
 } from '@lobechat/builtin-tool-skill-store/executionRuntime';
+import { RBAC_PERMISSIONS } from '@lobechat/const/rbac';
 import debug from 'debug';
 
+import { RbacModel } from '@/database/models/rbac';
 import { UserModel } from '@/database/models/user';
 import {
   emitToolOutcomeSafely,
@@ -256,7 +258,43 @@ export const skillStoreRuntime: ServerRuntimeRegistration = {
       log('Failed to fetch market accessToken for user %s: %O', context.userId, error);
     }
 
-    const importer = new SkillImporter(context.serverDB, context.userId);
+    // Importing inside a workspace writes the SHARED workspace skill catalog.
+    // This server-runtime path is reached via aiAgentWriteProcedure
+    // (message:create) and does NOT pass through agentSkillsRouter's
+    // withScopedPermission('agent:update') write gate, so an approve-only member
+    // (chat/tool-approval rights but no skill-management grant) could otherwise
+    // mutate the shared catalog by approving an import. Gate the workspace scope
+    // on the same permission; fall back to personal scope when the caller lacks
+    // it (safe direction — mirrors the pre-workspace behavior for that member and
+    // never touches the shared catalog without authorization).
+    let importWorkspaceId = context.workspaceId;
+    if (importWorkspaceId) {
+      try {
+        const rbac = new RbacModel(context.serverDB, context.userId);
+        const canManageWorkspaceSkills = await rbac.hasAnyPermission(
+          [RBAC_PERMISSIONS.AGENT_UPDATE_ALL, RBAC_PERMISSIONS.AGENT_UPDATE_OWNER],
+          { workspaceId: importWorkspaceId },
+        );
+        if (!canManageWorkspaceSkills) {
+          log(
+            'User %s lacks agent:update in workspace %s; importing skill into personal scope',
+            context.userId,
+            importWorkspaceId,
+          );
+          importWorkspaceId = undefined;
+        }
+      } catch (error) {
+        // Fail safe: never write the shared workspace catalog on an unverified
+        // permission check.
+        log(
+          'Failed to verify workspace skill-write permission; falling back to personal scope: %O',
+          error,
+        );
+        importWorkspaceId = undefined;
+      }
+    }
+
+    const importer = new SkillImporter(context.serverDB, context.userId, importWorkspaceId);
     const marketService = new MarketService({
       accessToken: marketAccessToken,
       userInfo: { userId: context.userId },

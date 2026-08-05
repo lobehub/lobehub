@@ -2,7 +2,21 @@ import { fileManagerSelectors, useFileStore } from '@/store/file';
 import { type FileListItem } from '@/types/files';
 import { SortType } from '@/types/files';
 
-import { type SelectAllState, type State } from './initialState';
+import type { ResourceListVisibilityFilter, SelectAllState, State } from './initialState';
+
+/**
+ * The Private / Workspace switch scopes the resource home only. Once the user
+ * enters a concrete library, the library and server ownership rules define the
+ * visible pool; reusing the home filter there can hide the entire library.
+ */
+export const getResourceQueryVisibility = (
+  libraryId: string | undefined,
+  listVisibility: ResourceListVisibilityFilter,
+): 'private' | 'public' | undefined => {
+  if (libraryId) return undefined;
+
+  return listVisibility === 'private' ? 'private' : 'public';
+};
 
 /**
  * Sort a file list based on sort settings

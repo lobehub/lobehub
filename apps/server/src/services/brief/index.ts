@@ -19,6 +19,9 @@ export type BriefWithAgent = BriefItem & {
   agent: AgentAvatarInfo | null;
   /** Agents related to this brief, ordered with the direct producing agent before task-tree agents. */
   agents: AgentAvatarInfo[];
+  /** Parent task's workspace-scoped ref (`T-12`) — lets an inbox row name the task it belongs to. */
+  taskIdentifier?: string | null;
+  taskName?: string | null;
   /** Parent task's runtime status — `scheduled` marks a task parked between automated runs. */
   taskStatus: TaskStatus | null;
 };
@@ -158,17 +161,30 @@ export class BriefService {
   async listUnresolved(): Promise<BriefWithAgent[]> {
     const rows = await this.briefModel.listUnresolvedEnriched();
     return rows.map(
-      ({ brief, agentRowId, agentAvatar, agentBackgroundColor, agentTitle, taskStatus }) => ({
+      ({
+        brief,
+        agentRowId,
+        agentAvatar,
+        agentBackgroundColor,
+        agentName,
+        agentTitle,
+        taskIdentifier,
+        taskName,
+        taskStatus,
+      }) => ({
         ...brief,
         agent: agentRowId
           ? {
               avatar: agentAvatar,
               backgroundColor: agentBackgroundColor,
               id: agentRowId,
+              name: agentName,
               title: agentTitle,
             }
           : null,
         agents: [],
+        taskIdentifier,
+        taskName,
         taskStatus: (taskStatus as TaskStatus) ?? null,
       }),
     );

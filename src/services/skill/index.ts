@@ -87,7 +87,8 @@ class AgentSkillService {
 
   // ===== Delete =====
 
-  async deleteSkill(id: string): Promise<{ success: boolean }> {
+  // Server keeps delete idempotent: a missing row resolves to undefined.
+  async deleteSkill(id: string): Promise<{ success: boolean } | undefined> {
     return lambdaClient.agentSkills.delete.mutate({ id });
   }
 }

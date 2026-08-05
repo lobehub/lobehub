@@ -1,17 +1,18 @@
-import { ActionIcon, Block, Button, Flexbox, Text } from '@lobehub/ui';
-import { Modal } from '@lobehub/ui/base-ui';
+import { ActionIcon, Block, Flexbox, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { Blocks, CheckCircle2, Lightbulb, PencilLineIcon, RefreshCw, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import {
   type ActionKeys,
   type ChatInputEditor,
   ChatInputProvider,
   DesktopChatInput,
 } from '@/features/ChatInput';
-import { useRandomQuestions } from '@/routes/(main)/home/features/SuggestQuestions/useRandomQuestions';
+import { useRandomQuestions } from '@/features/Home/SuggestQuestions/useRandomQuestions';
 import { agentSkillService } from '@/services/skill';
 import { useToolStore } from '@/store/tool';
 import type { DiscoverSkillItem } from '@/types/discover';
@@ -531,7 +532,7 @@ export const CreateAgentModal = memo<CreateAgentModalProps>(
     );
 
     return (
-      <Modal
+      <ImperativeModal
         centered
         destroyOnHidden
         closable={false}
@@ -620,7 +621,7 @@ export const CreateAgentModal = memo<CreateAgentModalProps>(
             )}
           </Flexbox>
         )}
-      </Modal>
+      </ImperativeModal>
     );
   },
 );

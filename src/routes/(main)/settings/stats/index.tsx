@@ -10,6 +10,7 @@ import { Brain, UserIcon } from 'lucide-react';
 import { memo, type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncBoundary from '@/components/AsyncBoundary';
 import { useClientDataSWR } from '@/libs/swr';
 import { statsKeys } from '@/libs/swr/keys';
 import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
@@ -45,10 +46,12 @@ interface StatsSettingProps {
   mobile?: boolean;
   /** Resolve userId → display info. Required when `enableUserDimension` is true. */
   resolveUser?: UserDisplayResolver;
+  /** Render the standard personal-settings title and divider. */
+  showSettingHeader?: boolean;
 }
 
 const StatsSetting = memo<StatsSettingProps>(
-  ({ mobile, headerNode, enableUserDimension, resolveUser }) => {
+  ({ mobile, headerNode, enableUserDimension, resolveUser, showSettingHeader = true }) => {
     const { t, i18n } = useTranslation('auth');
     dayjs.locale(i18n.language);
 
@@ -56,7 +59,7 @@ const StatsSetting = memo<StatsSettingProps>(
     const [dateRange, setDateRange] = useState<dayjs.Dayjs>(dayjs(new Date()));
     const [dateStrings, setDateStrings] = useState<string>();
 
-    const { data, isLoading, mutate } = useClientDataSWR(statsKeys.usageStat(), async () =>
+    const { data, isLoading, error, mutate } = useClientDataSWR(statsKeys.usageStat(), async () =>
       usageService.findAndGroupByDay(dateStrings),
     );
 
@@ -79,7 +82,7 @@ const StatsSetting = memo<StatsSettingProps>(
 
     return (
       <>
-        <SettingHeader title={t('tab.stats')} />
+        {showSettingHeader && <SettingHeader title={t('tab.stats')} />}
         {/* ========== Header Section ========== */}
         <FormGroup
           collapsible={false}
@@ -149,19 +152,21 @@ const StatsSetting = memo<StatsSettingProps>(
             title: { lineHeight: '35px' },
           }}
         >
-          <UsageCards
-            data={data}
-            groupBy={groupBy}
-            isLoading={isLoading}
-            resolveUser={resolveUser}
-          />
-          <Divider />
-          <UsageTrends
-            data={data}
-            groupBy={groupBy}
-            isLoading={isLoading}
-            resolveUser={resolveUser}
-          />
+          <AsyncBoundary data={data} error={error} errorVariant={'block'} onRetry={() => mutate()}>
+            <UsageCards
+              data={data}
+              groupBy={groupBy}
+              isLoading={isLoading}
+              resolveUser={resolveUser}
+            />
+            <Divider />
+            <UsageTrends
+              data={data}
+              groupBy={groupBy}
+              isLoading={isLoading}
+              resolveUser={resolveUser}
+            />
+          </AsyncBoundary>
           <div style={{ height: 24 }} />
           <UsageTable dateStrings={dateStrings} />
         </FormGroup>

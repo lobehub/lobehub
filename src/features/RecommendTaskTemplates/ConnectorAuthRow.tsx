@@ -1,5 +1,6 @@
 import type { TaskTemplateConnectorReference } from '@lobechat/const';
-import { Button, Flexbox, Icon, Image, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Image, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -55,7 +56,7 @@ export const ConnectorAuthRow = memo<ConnectorAuthRowProps>(({ disabled, spec, o
         disabled={disabled}
         loading={isConnecting}
         size={'small'}
-        variant={'text'}
+        type={'text'}
         onClick={handleConnect}
       >
         {t('taskTemplate.action.connect.short')}

@@ -22,7 +22,7 @@ function resolveElectronBinary(): string {
 /**
  * Resolve the CLI script path inside packaged resources.
  */
-function resolveCliScript(): string {
+export function resolveCliScript(): string {
   if (app.isPackaged) {
     return path.join(process.resourcesPath, 'bin', 'lobe-cli.js');
   }

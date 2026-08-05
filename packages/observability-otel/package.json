@@ -13,6 +13,7 @@
     "./modules/upstash-workflow": "./src/modules/upstash-workflow/index.ts"
   },
   "dependencies": {
+    "@lobechat/utils": "workspace:*",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/auto-instrumentations-node": "^0.76.0",
     "@opentelemetry/exporter-metrics-otlp-http": "^0.208.0",

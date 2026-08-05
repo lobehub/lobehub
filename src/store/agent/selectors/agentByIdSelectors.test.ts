@@ -57,10 +57,29 @@ describe('agentByIdSelectors', () => {
       expect(context.config).toMatchObject({
         chatConfig: undefined,
         model: undefined,
-        plugins: undefined,
+        // getActivePluginIds always normalizes to an array, even for a
+        // missing/undefined raw plugins field.
+        plugins: [],
         provider: undefined,
         systemRole: undefined,
       });
+    });
+
+    it('excludes disabled entries from the builder context plugins, in a mixed-shape array', () => {
+      const state = createState({
+        agentMap: {
+          'agent-1': {
+            model: 'gpt-4o',
+            plugins: ['search', { identifier: 'lobe-web-browsing', mode: 'disabled' }],
+            provider: 'openai',
+            systemRole: 'You are a helper',
+          } as any,
+        },
+      });
+
+      const context = agentByIdSelectors.getAgentBuilderContextById('agent-1')(state);
+
+      expect(context.config).toMatchObject({ plugins: ['search'] });
     });
   });
 
@@ -179,13 +198,43 @@ describe('agentByIdSelectors', () => {
         },
       });
 
-      expect(agentByIdSelectors.getAgentTTSVoiceById('agent-1', 'en-US')(state)).toBe('nova');
+      expect(agentByIdSelectors.getAgentTTSVoiceById('agent-1')(state)).toBe('nova');
     });
 
     it('falls back to a default voice when the agent config is missing', () => {
       const state = createState({ agentMap: {} });
 
-      expect(agentByIdSelectors.getAgentTTSVoiceById('missing', 'en-US')(state)).toBeTruthy();
+      expect(agentByIdSelectors.getAgentTTSVoiceById('missing')(state)).toBe('alloy');
+    });
+  });
+
+  describe('isAgentNotFoundById', () => {
+    it('returns true only for agents flagged in agentNotFoundMap', () => {
+      const state = createState({ agentNotFoundMap: { 'agent-gone': true } });
+
+      expect(agentByIdSelectors.isAgentNotFoundById('agent-gone')(state)).toBe(true);
+      expect(agentByIdSelectors.isAgentNotFoundById('agent-1')(state)).toBe(false);
+      expect(agentByIdSelectors.isAgentNotFoundById('')(state)).toBe(false);
+    });
+  });
+
+  describe('isAgentConfigLoadingById', () => {
+    it('reports loading while the config is absent from agentMap', () => {
+      const state = createState({ agentMap: {} });
+
+      expect(agentByIdSelectors.isAgentConfigLoadingById('agent-1')(state)).toBe(true);
+    });
+
+    it('settles once the config lands in agentMap', () => {
+      const state = createState({ agentMap: { 'agent-1': { id: 'agent-1' } } });
+
+      expect(agentByIdSelectors.isAgentConfigLoadingById('agent-1')(state)).toBe(false);
+    });
+
+    it('settles when the agent is marked not-found (no access / deleted)', () => {
+      const state = createState({ agentMap: {}, agentNotFoundMap: { 'agent-gone': true } });
+
+      expect(agentByIdSelectors.isAgentConfigLoadingById('agent-gone')(state)).toBe(false);
     });
   });
 });

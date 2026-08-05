@@ -9,7 +9,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useCredsApi } from '../useCredsApi';
+import { type CredsApi } from '../useCredsApi';
 
 const { Text } = Typography;
 
@@ -125,11 +125,18 @@ const KVRow: FC<KVRowProps> = ({ keyName, value }) => {
 
 export interface ViewCredModalContentProps {
   cred: UserCredSummary;
+  /**
+   * Bound explicitly by the caller (rendered inline, inside CredsApiProvider)
+   * instead of read via useCredsApi() here — this content tree is portaled by
+   * createModal() to a global ModalHost that sits outside CredsApiProvider,
+   * so a local useCredsApi() call would silently fall back to the personal
+   * (market.creds) API even on the workspace creds page.
+   */
+  credsApi: CredsApi;
 }
 
-const ViewCredModalContent: FC<ViewCredModalContentProps> = ({ cred }) => {
+const ViewCredModalContent: FC<ViewCredModalContentProps> = ({ cred, credsApi }) => {
   const { t } = useTranslation('setting');
-  const credsApi = useCredsApi();
 
   const { data, isLoading, error } = useQuery({
     queryFn: () =>

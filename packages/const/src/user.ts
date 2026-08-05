@@ -1,11 +1,6 @@
 import type { UserPreference } from '@lobechat/types';
 
-/**
- * Current onboarding flow version.
- * Increment this value when the onboarding flow changes significantly,
- * which will trigger existing users to go through onboarding again.
- */
-export const CURRENT_ONBOARDING_VERSION = 1;
+export const CURRENT_ONBOARDING_VERSION = 2;
 
 export const DEFAULT_PREFERENCE: UserPreference = {
   guide: {
@@ -13,10 +8,11 @@ export const DEFAULT_PREFERENCE: UserPreference = {
     topic: true,
   },
   lab: {
-    enableAgentDocumentFloatingChatPanel: false,
+    enableAgentGraphConfig: false,
     enableAgentSelfIteration: false,
-    enableFleet: false,
     enableInputMarkdown: true,
+    enableMessageTextSelectionActions: false,
+    enableOAuthApps: false,
     enablePlatformAgent: false,
   },
   topicGroupMode: 'byTime',

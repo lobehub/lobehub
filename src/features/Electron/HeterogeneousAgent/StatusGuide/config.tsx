@@ -1,10 +1,16 @@
 import {
+  AMP_CLI_INSTALL_COMMANDS,
+  AMP_CLI_INSTALL_DOCS_URL,
   CLAUDE_CODE_CLI_INSTALL_COMMANDS,
   CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
   CODEX_CLI_INSTALL_COMMANDS,
   CODEX_CLI_INSTALL_DOCS_URL,
+  OPENCODE_CLI_INSTALL_COMMANDS,
+  OPENCODE_CLI_INSTALL_DOCS_URL,
+  PI_CLI_INSTALL_COMMANDS,
+  PI_CLI_INSTALL_DOCS_URL,
 } from '@lobechat/electron-client-ipc';
-import { ClaudeCode, Codex } from '@lobehub/icons';
+import { Amp, ClaudeCode, Codex, OpenCode, Pi } from '@lobehub/icons';
 
 import {
   type HeterogeneousAgentGuideConfig,
@@ -13,6 +19,14 @@ import {
 } from './types';
 
 export const HETEROGENEOUS_AGENT_GUIDE_CONFIG = {
+  'amp': {
+    docsUrl: AMP_CLI_INSTALL_DOCS_URL,
+    icon: Amp,
+    installCommands: AMP_CLI_INSTALL_COMMANDS,
+    signInCommand: 'amp login',
+    title: 'Amp',
+    translationPrefix: 'ampInstallGuide',
+  },
   'claude-code': {
     docsUrl: CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
     icon: ClaudeCode,
@@ -28,6 +42,22 @@ export const HETEROGENEOUS_AGENT_GUIDE_CONFIG = {
     signInCommand: 'codex',
     title: 'Codex',
     translationPrefix: 'codexInstallGuide',
+  },
+  'opencode': {
+    docsUrl: OPENCODE_CLI_INSTALL_DOCS_URL,
+    icon: OpenCode,
+    installCommands: OPENCODE_CLI_INSTALL_COMMANDS,
+    signInCommand: 'opencode auth login',
+    title: 'OpenCode',
+    translationPrefix: 'opencodeInstallGuide',
+  },
+  'pi': {
+    docsUrl: PI_CLI_INSTALL_DOCS_URL,
+    icon: Pi,
+    installCommands: PI_CLI_INSTALL_COMMANDS,
+    signInCommand: 'pi',
+    title: 'Pi',
+    translationPrefix: 'piInstallGuide',
   },
 } as const satisfies Record<SupportedHeterogeneousAgentType, HeterogeneousAgentGuideConfig>;
 

@@ -105,7 +105,7 @@ describe('DocumentModel — private/public cross-user isolation', () => {
   });
 
   describe('workspace mode — public agent gate (callerAgentVisibility)', () => {
-    // Closes the LOBE-11055 read-path leak: a workspace-public agent must not
+    // Guards against a read-path leak: a workspace-public agent must not
     // read the caller's own private documents even though it runs under the
     // caller's session. Mirrors the task side's `assertAgentVisibilityCompat`
     // (public task ≠ private agent).
@@ -222,7 +222,7 @@ describe('DocumentModel.create — workspace visibility defaults', () => {
     expect(created.visibility).toBe('private');
   });
 
-  it('inherits the parent visibility for a nested document', async () => {
+  it('does not inherit visibility from a parent document', async () => {
     const callerA = new DocumentModel(serverDB, userA, workspaceId);
     const root = await callerA.create({
       fileType: 'custom/folder',
@@ -232,14 +232,14 @@ describe('DocumentModel.create — workspace visibility defaults', () => {
       totalCharCount: 0,
       totalLineCount: 0,
     });
-    expect(root.visibility).toBe('private');
+    await callerA.setVisibility(root.id, 'public');
 
     const child = await callerA.create({
       fileType: 'text/plain',
       parentId: root.id,
       source: 'inline',
       sourceType: 'api',
-      title: 'inherited-child',
+      title: 'independent-child',
       totalCharCount: 0,
       totalLineCount: 0,
     });
@@ -262,7 +262,7 @@ describe('DocumentModel.create — workspace visibility defaults', () => {
 });
 
 describe('DocumentModel.publishToWorkspace', () => {
-  it('cascades the whole subtree to public in a single transaction', async () => {
+  it('publishes only the selected document', async () => {
     const callerA = new DocumentModel(serverDB, userA, workspaceId);
     const root = await callerA.create({
       fileType: 'custom/folder',
@@ -295,12 +295,10 @@ describe('DocumentModel.publishToWorkspace', () => {
     expect(grandchild.visibility).toBe('private');
 
     const result = await callerA.publishToWorkspace(root.id);
-    expect(result.documentIds.sort()).toEqual([root.id, child.id, grandchild.id].sort());
-
-    for (const id of [root.id, child.id, grandchild.id]) {
-      const row = await callerA.findById(id);
-      expect(row?.visibility).toBe('public');
-    }
+    expect(result.documentIds).toEqual([root.id]);
+    expect((await callerA.findById(root.id))?.visibility).toBe('public');
+    expect((await callerA.findById(child.id))?.visibility).toBe('private');
+    expect((await callerA.findById(grandchild.id))?.visibility).toBe('private');
   });
 
   it("refuses to flip another user's private subtree", async () => {
@@ -344,8 +342,103 @@ describe('DocumentModel.publishToWorkspace', () => {
   });
 });
 
-describe('DocumentModel.update — workspace parent-id move guard', () => {
-  it('rejects moving a private document under a workspace parent (use publish instead)', async () => {
+describe('DocumentModel.setVisibility', () => {
+  it('makes only the selected public document private', async () => {
+    const callerA = new DocumentModel(serverDB, userA, workspaceId);
+    const root = await callerA.create({
+      fileType: 'custom/folder',
+      source: '',
+      sourceType: 'api',
+      title: 'unpub-root',
+      totalCharCount: 0,
+      totalLineCount: 0,
+    });
+    const child = await callerA.create({
+      fileType: 'text/plain',
+      parentId: root.id,
+      source: 'inline',
+      sourceType: 'api',
+      title: 'unpub-child',
+      totalCharCount: 0,
+      totalLineCount: 0,
+    });
+    await callerA.publishToWorkspace(root.id);
+    await callerA.publishToWorkspace(child.id);
+
+    const result = await callerA.setVisibility(root.id, 'private');
+    expect(result.documentIds).toEqual([root.id]);
+    expect((await callerA.findById(root.id))?.visibility).toBe('private');
+    expect((await callerA.findById(child.id))?.visibility).toBe('public');
+  });
+
+  it('refuses to flip another member’s public subtree (ownership scope filter)', async () => {
+    const callerA = new DocumentModel(serverDB, userA, workspaceId);
+    const ownerRoot = await callerA.create({
+      fileType: 'custom/folder',
+      source: '',
+      sourceType: 'api',
+      title: 'other-owner-root',
+      totalCharCount: 0,
+      totalLineCount: 0,
+      visibility: 'public',
+    });
+
+    // B can see the row (it's public), but the user_id guard inside setVisibility
+    // makes the update a no-op. Ownership scope on collectSubtree also finds it.
+    const callerB = new DocumentModel(serverDB, userB, workspaceId);
+    await expect(callerB.setVisibility(ownerRoot.id, 'private')).rejects.toThrow(/not found/i);
+
+    const row = await callerA.findById(ownerRoot.id);
+    expect(row?.visibility).toBe('public');
+  });
+
+  it('is idempotent when the subtree already sits at the target visibility', async () => {
+    const callerA = new DocumentModel(serverDB, userA, workspaceId);
+    const root = await callerA.create({
+      fileType: 'custom/folder',
+      source: '',
+      sourceType: 'api',
+      title: 'idem-root',
+      totalCharCount: 0,
+      totalLineCount: 0,
+    });
+    await callerA.setVisibility(root.id, 'public');
+
+    const publicRow = await callerA.findById(root.id);
+    expect(publicRow?.visibility).toBe('public');
+
+    // second flip to the same target: guard filters everything, no rows touched
+    const result = await callerA.setVisibility(root.id, 'public');
+    expect(result.documentIds).toEqual([root.id]);
+
+    const stillPublic = await callerA.findById(root.id);
+    expect(stillPublic?.visibility).toBe('public');
+  });
+
+  it('refuses to flip a workspace document from a personal (no-workspace) context', async () => {
+    const callerA = new DocumentModel(serverDB, userA, workspaceId);
+    const root = await callerA.create({
+      fileType: 'custom/folder',
+      source: '',
+      sourceType: 'api',
+      title: 'ws-scoped-root',
+      totalCharCount: 0,
+      totalLineCount: 0,
+    });
+
+    // Same user, but personal scope (workspace_id IS NULL) — ownership() must
+    // exclude the workspace row so a wrong-context request can't bypass the
+    // workspace's RBAC / resource_permissions flow.
+    const personalCaller = new DocumentModel(serverDB, userA);
+    await expect(personalCaller.setVisibility(root.id, 'public')).rejects.toThrow(/not found/i);
+
+    const row = await callerA.findById(root.id);
+    expect(row?.visibility).toBe('private');
+  });
+});
+
+describe('DocumentModel.update — independent parent visibility', () => {
+  it('allows moving a private document under a public parent', async () => {
     const callerA = new DocumentModel(serverDB, userA, workspaceId);
     const privateRoot = await callerA.create({
       fileType: 'custom/folder',
@@ -365,12 +458,13 @@ describe('DocumentModel.update — workspace parent-id move guard', () => {
       visibility: 'public',
     });
 
-    await expect(callerA.update(privateRoot.id, { parentId: publicRoot.id })).rejects.toThrow(
-      /publishToWorkspace/,
-    );
+    await expect(
+      callerA.update(privateRoot.id, { parentId: publicRoot.id }),
+    ).resolves.toBeDefined();
+    expect((await callerA.findById(privateRoot.id))?.visibility).toBe('private');
   });
 
-  it('rejects moving a workspace document under a private parent (no demote)', async () => {
+  it('allows moving a public document under a private parent', async () => {
     const callerA = new DocumentModel(serverDB, userA, workspaceId);
     const privateRoot = await callerA.create({
       fileType: 'custom/folder',
@@ -390,9 +484,10 @@ describe('DocumentModel.update — workspace parent-id move guard', () => {
       visibility: 'public',
     });
 
-    await expect(callerA.update(publicRoot.id, { parentId: privateRoot.id })).rejects.toThrow(
-      /demoting/i,
-    );
+    await expect(
+      callerA.update(publicRoot.id, { parentId: privateRoot.id }),
+    ).resolves.toBeDefined();
+    expect((await callerA.findById(publicRoot.id))?.visibility).toBe('public');
   });
 
   it('allows moving within the same visibility bucket', async () => {

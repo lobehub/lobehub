@@ -1,4 +1,5 @@
 import { DEFAULT_AVATAR } from '@lobechat/const';
+import { agentDisplayName } from '@lobechat/types';
 import { Avatar, Tag } from '@lobehub/ui';
 import { Command } from 'cmdk';
 import { ArrowLeft, X } from 'lucide-react';
@@ -47,7 +48,7 @@ const CommandInput = memo(() => {
 
   const getPlaceholder = () => {
     if (hasSelectedAgent) {
-      return t('cmdk.askAgentPlaceholder', { agent: selectedAgent.title });
+      return t('cmdk.askAgentPlaceholder', { agent: agentDisplayName(selectedAgent) });
     }
     if (page === 'ask-ai') {
       return t('cmdk.aiModePlaceholder');
@@ -72,7 +73,7 @@ const CommandInput = memo(() => {
                 />
               }
             >
-              {activeAgentMeta?.title || t('defaultAgent')}
+              {agentDisplayName(activeAgentMeta, t('defaultAgent'))}
             </Tag>
           ) : (
             menuContext !== 'general' && <Tag className={styles.contextTag}>{contextName}</Tag>
@@ -105,7 +106,7 @@ const CommandInput = memo(() => {
             }
             onClose={() => setSelectedAgent(undefined)}
           >
-            {selectedAgent.title}
+            {agentDisplayName(selectedAgent)}
           </Tag>
         )}
         <Command.Input

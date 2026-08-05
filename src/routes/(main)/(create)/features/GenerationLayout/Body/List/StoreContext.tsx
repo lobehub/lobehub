@@ -12,6 +12,7 @@ export interface GenerationTopicStoreSlice {
   loadingGenerationTopicIds: string[];
   openNewGenerationTopic: () => void;
   removeGenerationTopic: (id: string) => Promise<void>;
+  setGenerationTopicVisibility: (id: string, visibility: 'private' | 'public') => Promise<void>;
   setNewGenerationTopicVisibility: (visibility: 'private' | 'public') => void;
   switchGenerationTopic: (topicId: string) => void;
   useFetchGenerationTopics: (enabled: boolean) => SWRResponse<ImageGenerationTopic[]>;

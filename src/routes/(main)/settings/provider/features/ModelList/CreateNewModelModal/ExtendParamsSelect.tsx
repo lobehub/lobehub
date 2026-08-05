@@ -1,6 +1,6 @@
 import { Flexbox, Popover } from '@lobehub/ui';
-import { Select } from '@lobehub/ui/base-ui';
-import { Space, Switch, Tag, theme, Typography } from 'antd';
+import { Select, Switch } from '@lobehub/ui/base-ui';
+import { Space, Tag, theme, Typography } from 'antd';
 import { type ExtendParamsType } from 'model-bank';
 import { memo, type ReactNode, type SyntheticEvent, useMemo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
@@ -13,15 +13,19 @@ import GPT5ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/Co
 import GPT51ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GPT51ReasoningEffortSlider';
 import GPT52ProReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GPT52ProReasoningEffortSlider';
 import GPT52ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GPT52ReasoningEffortSlider';
+import { GPT56ReasoningEffortSlider } from '@/features/ModelSwitchPanel/components/ControlsForm/GPT56ReasoningEffortSlider';
 import Grok43ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Grok43ReasoningEffortSlider';
+import Grok45ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Grok45ReasoningEffortSlider';
 import Grok420ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Grok420ReasoningEffortSlider';
 import Hy3ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Hy3ReasoningEffortSlider';
 import ImageAspectRatio2Select from '@/features/ModelSwitchPanel/components/ControlsForm/ImageAspectRatio2Select';
 import ImageAspectRatioSelect from '@/features/ModelSwitchPanel/components/ControlsForm/ImageAspectRatioSelect';
 import ImageResolution2Slider from '@/features/ModelSwitchPanel/components/ControlsForm/ImageResolution2Slider';
 import ImageResolutionSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ImageResolutionSlider';
+import { KimiK3ReasoningEffortSlider } from '@/features/ModelSwitchPanel/components/ControlsForm/KimiK3ReasoningEffortSlider';
 import Opus47EffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Opus47EffortSlider';
 import ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ReasoningEffortSlider';
+import ReasoningModeSegmented from '@/features/ModelSwitchPanel/components/ControlsForm/ReasoningModeSegmented';
 import ReasoningTokenSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ReasoningTokenSlider';
 import ReasoningTokenSlider32k from '@/features/ModelSwitchPanel/components/ControlsForm/ReasoningTokenSlider32k';
 import ReasoningTokenSlider80k from '@/features/ModelSwitchPanel/components/ControlsForm/ReasoningTokenSlider80k';
@@ -86,6 +90,10 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
     key: 'reasoningEffort',
   },
   {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.reasoningMode.hint',
+    key: 'reasoningMode',
+  },
+  {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.gpt5ReasoningEffort.hint',
     key: 'gpt5ReasoningEffort',
   },
@@ -96,6 +104,10 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
   {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.gpt5_2ReasoningEffort.hint',
     key: 'gpt5_2ReasoningEffort',
+  },
+  {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.gpt5_6ReasoningEffort.hint',
+    key: 'gpt5_6ReasoningEffort',
   },
   {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.gpt5_2ProReasoningEffort.hint',
@@ -114,8 +126,16 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
     key: 'grok4_3ReasoningEffort',
   },
   {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.grok4_5ReasoningEffort.hint',
+    key: 'grok4_5ReasoningEffort',
+  },
+  {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.hy3ReasoningEffort.hint',
     key: 'hy3ReasoningEffort',
+  },
+  {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.reasoningEffort.hint',
+    key: 'kimiK3ReasoningEffort',
   },
   {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.ring2_6ReasoningEffort.hint',
@@ -188,10 +208,13 @@ const TITLE_KEY_ALIASES: Partial<Record<ExtendParamsType, ExtendParamsType>> = {
   gpt5_1ReasoningEffort: 'reasoningEffort',
   gpt5_2ProReasoningEffort: 'reasoningEffort',
   gpt5_2ReasoningEffort: 'reasoningEffort',
+  gpt5_6ReasoningEffort: 'reasoningEffort',
   glm5_2ReasoningEffort: 'reasoningEffort',
   grok4_20ReasoningEffort: 'reasoningEffort',
   grok4_3ReasoningEffort: 'reasoningEffort',
+  grok4_5ReasoningEffort: 'reasoningEffort',
   hy3ReasoningEffort: 'reasoningEffort',
+  kimiK3ReasoningEffort: 'reasoningEffort',
   ring2_6ReasoningEffort: 'reasoningEffort',
   imageAspectRatio2: 'imageAspectRatio',
   imageResolution2: 'imageResolution',
@@ -238,6 +261,7 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
     tag: 'reasoning_effort',
   },
   gpt5_2ReasoningEffort: { labelSuffix: ' (GPT-5.2)', previewWidth: 300, tag: 'reasoning_effort' },
+  gpt5_6ReasoningEffort: { labelSuffix: ' (GPT-5.6)', previewWidth: 340, tag: 'reasoning_effort' },
   glm5_2ReasoningEffort: { labelSuffix: ' (GLM-5.2)', previewWidth: 240, tag: 'reasoning_effort' },
   grok4_20ReasoningEffort: {
     labelSuffix: ' (Grok 4.20)',
@@ -249,9 +273,19 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
     previewWidth: 300,
     tag: 'reasoning_effort',
   },
+  grok4_5ReasoningEffort: {
+    labelSuffix: ' (Grok 4.5)',
+    previewWidth: 300,
+    tag: 'reasoning_effort',
+  },
   hy3ReasoningEffort: {
     labelSuffix: ' (Hy3 preview)',
     previewWidth: 300,
+    tag: 'reasoning_effort',
+  },
+  kimiK3ReasoningEffort: {
+    labelSuffix: ' (Kimi K3)',
+    previewWidth: 260,
     tag: 'reasoning_effort',
   },
   ring2_6ReasoningEffort: {
@@ -269,6 +303,7 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
     previewWidth: 460,
     tag: 'preserve_thinking',
   },
+  reasoningMode: { labelSuffix: ' (GPT-5.6)', previewWidth: 280, tag: 'reasoning.mode' },
   reasoningBudgetToken: { previewWidth: 350, tag: 'thinking.budget_tokens' },
   reasoningBudgetToken32k: {
     labelSuffix: ' (32k)',
@@ -416,10 +451,13 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
       gpt5_1ReasoningEffort: <GPT51ReasoningEffortSlider value="none" />,
       gpt5_2ProReasoningEffort: <GPT52ProReasoningEffortSlider value="medium" />,
       gpt5_2ReasoningEffort: <GPT52ReasoningEffortSlider value="none" />,
+      gpt5_6ReasoningEffort: <GPT56ReasoningEffortSlider value="medium" />,
       glm5_2ReasoningEffort: <GLM52ReasoningEffortSlider value="max" />,
       grok4_20ReasoningEffort: <Grok420ReasoningEffortSlider value="medium" />,
       grok4_3ReasoningEffort: <Grok43ReasoningEffortSlider value="low" />,
+      grok4_5ReasoningEffort: <Grok45ReasoningEffortSlider value="high" />,
       hy3ReasoningEffort: <Hy3ReasoningEffortSlider value="high" />,
+      kimiK3ReasoningEffort: <KimiK3ReasoningEffortSlider value="max" />,
       ring2_6ReasoningEffort: <Ring26ReasoningEffortSlider value="high" />,
       imageAspectRatio: <ImageAspectRatioSelect value="1:1" />,
       imageAspectRatio2: <ImageAspectRatio2Select value="1:1" />,
@@ -430,6 +468,7 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
       reasoningBudgetToken32k: <ReasoningTokenSlider32k defaultValue={1 * 1024} />,
       reasoningBudgetToken80k: <ReasoningTokenSlider80k defaultValue={1 * 1024} />,
       reasoningEffort: <ReasoningEffortSlider value="medium" />,
+      reasoningMode: <ReasoningModeSegmented value="standard" />,
       step3_5ReasoningEffort: <Step3_5ReasoningEffortSlider value="low" />,
       textVerbosity: <TextVerbositySlider value="medium" />,
       thinking: <ThinkingSlider value="auto" />,

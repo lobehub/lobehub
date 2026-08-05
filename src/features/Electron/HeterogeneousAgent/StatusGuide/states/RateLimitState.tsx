@@ -1,4 +1,6 @@
 import { Flexbox, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
+import { CalendarClock, Play, RotateCcw } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,20 +18,24 @@ const extractTimezoneLabel = (value?: string) => {
 const RateLimitState = ({
   config,
   error,
+  onDismiss,
   onOpenSystemTools,
   onRetry,
+  schedule,
   variant,
 }: HeterogeneousAgentGuideStateProps) => {
   const { t, i18n } = useTranslation('chat');
   const rawErrorDetails = error?.stderr || error?.message;
   const dateLocale = i18n.resolvedLanguage || i18n.language || undefined;
+  // Prefer the persisted scheduled reset time so the "已安排" copy stays stable
+  // even if the live error payload is missing it on reload.
+  const effectiveResetsAt = schedule?.resetsAt ?? error?.rateLimitInfo?.resetsAt;
   const timezoneLabel = useMemo(
     () => extractTimezoneLabel(rawErrorDetails) || Intl.DateTimeFormat().resolvedOptions().timeZone,
     [rawErrorDetails],
   );
   const formattedResetAt = useMemo(() => {
-    const resetsAt = error?.rateLimitInfo?.resetsAt;
-    if (!resetsAt) return;
+    if (!effectiveResetsAt) return;
 
     try {
       return new Intl.DateTimeFormat(dateLocale, {
@@ -37,18 +43,18 @@ const RateLimitState = ({
         minute: '2-digit',
         ...(timezoneLabel ? { timeZone: timezoneLabel } : {}),
         weekday: 'short',
-      }).format(new Date(resetsAt * 1000));
+      }).format(new Date(effectiveResetsAt * 1000));
     } catch {
       try {
         return new Intl.DateTimeFormat(dateLocale, {
           dateStyle: 'medium',
           timeStyle: 'short',
-        }).format(new Date(resetsAt * 1000));
+        }).format(new Date(effectiveResetsAt * 1000));
       } catch {
         return;
       }
     }
-  }, [dateLocale, error?.rateLimitInfo?.resetsAt, timezoneLabel]);
+  }, [dateLocale, effectiveResetsAt, timezoneLabel]);
   const rateLimitTypeLabel = useMemo(() => {
     const rateLimitType = error?.rateLimitInfo?.rateLimitType;
     if (!rateLimitType) return;
@@ -57,17 +63,20 @@ const RateLimitState = ({
       return t('cliRateLimitGuide.limitTypes.weekCycle');
     }
 
+    if (rateLimitType === 'five_hour') {
+      return t('cliRateLimitGuide.limitTypes.fiveHourCycle');
+    }
+
     return rateLimitType.replaceAll('_', ' ');
   }, [error?.rateLimitInfo?.rateLimitType, t]);
-  const relativeResetText = useMemo(() => {
-    const resetsAt = error?.rateLimitInfo?.resetsAt;
-    if (!resetsAt) return;
+  // The "~X h Y m" duration string, reused both for the header hint and the
+  // scheduling action/label copy.
+  const relativeDuration = useMemo(() => {
+    if (!effectiveResetsAt) return;
 
-    const now = Date.now();
-    const diffMs = Math.max(0, resetsAt * 1000 - now);
+    const diffMs = Math.max(0, effectiveResetsAt * 1000 - Date.now());
     const totalMinutes = Math.floor(diffMs / 60_000);
-
-    if (totalMinutes <= 0) return t('cliRateLimitGuide.relative.soon');
+    if (totalMinutes <= 0) return;
 
     const days = Math.floor(totalMinutes / (24 * 60));
     const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
@@ -80,27 +89,96 @@ const RateLimitState = ({
       parts.push(t('cliRateLimitGuide.relative.minute', { count: minutes }));
     }
 
-    return parts.length > 0
-      ? t('cliRateLimitGuide.resetInApprox', { duration: parts.slice(0, 2).join(' ') })
-      : t('cliRateLimitGuide.relative.soon');
-  }, [error?.rateLimitInfo?.resetsAt, t]);
+    return parts.length > 0 ? parts.slice(0, 2).join(' ') : undefined;
+  }, [effectiveResetsAt, t]);
+  const relativeResetText = useMemo(() => {
+    if (!effectiveResetsAt) return;
+    if (!relativeDuration) return t('cliRateLimitGuide.relative.soon');
+    return t('cliRateLimitGuide.resetInApprox', { duration: relativeDuration });
+  }, [effectiveResetsAt, relativeDuration, t]);
+
+  const scheduleActions = useMemo(() => {
+    if (!schedule) return;
+
+    if (schedule.isScheduled) {
+      return (
+        <Flexbox horizontal gap={8} justify="flex-end" style={{ flexWrap: 'wrap' }}>
+          <Button size="small" onClick={schedule.onCancel}>
+            {t('cliRateLimitGuide.schedule.cancel')}
+          </Button>
+          <Button icon={<Play size={14} />} size="small" type="primary" onClick={schedule.onRunNow}>
+            {t('cliRateLimitGuide.schedule.runNow')}
+          </Button>
+        </Flexbox>
+      );
+    }
+
+    return (
+      <Flexbox horizontal gap={8} justify="flex-end" style={{ flexWrap: 'wrap' }}>
+        {onRetry && (
+          <Button icon={<RotateCcw size={14} />} size="small" onClick={onRetry}>
+            {t('cliRateLimitGuide.schedule.retryNow')}
+          </Button>
+        )}
+        <Button
+          icon={<CalendarClock size={14} />}
+          size="small"
+          type="primary"
+          onClick={schedule.onSchedule}
+        >
+          {relativeDuration
+            ? t('cliRateLimitGuide.schedule.continueAfter', { duration: relativeDuration })
+            : t('cliRateLimitGuide.schedule.continueAfterReset')}
+        </Button>
+      </Flexbox>
+    );
+  }, [onRetry, relativeDuration, schedule, t]);
+
+  const isScheduled = Boolean(schedule?.isScheduled);
+  const title = isScheduled
+    ? relativeDuration
+      ? t('cliRateLimitGuide.schedule.titleForApprox', {
+          duration: relativeDuration,
+          name: config.title,
+        })
+      : t('cliRateLimitGuide.schedule.titleAfterReset', { name: config.title })
+    : t('cliRateLimitGuide.title', { name: config.title });
 
   return (
     <GuideShell
-      headerDescription={<Text type="secondary">{t('cliRateLimitGuide.afterReset')}</Text>}
       icon={<config.icon size={24} />}
-      title={t('cliRateLimitGuide.title', { name: config.title })}
+      title={title}
       variant={variant}
       actions={
-        <GuideActions
-          retryLabel={t('cliRateLimitGuide.actions.retry')}
-          openSystemToolsLabel={
-            onRetry ? undefined : t('cliRateLimitGuide.actions.openSystemTools')
-          }
-          onOpenSystemTools={onRetry ? undefined : onOpenSystemTools}
-          onRetry={onRetry}
-        />
+        scheduleActions ?? (
+          <GuideActions
+            retryLabel={t('cliRateLimitGuide.actions.retry')}
+            openSystemToolsLabel={
+              onRetry ? undefined : t('cliRateLimitGuide.actions.openSystemTools')
+            }
+            onOpenSystemTools={onRetry ? undefined : onOpenSystemTools}
+            onRetry={onRetry}
+          />
+        )
       }
+      headerDescription={
+        !isScheduled && (
+          <Text type="secondary">
+            {t(
+              rateLimitTypeLabel
+                ? 'cliRateLimitGuide.afterResetWithLimitType'
+                : 'cliRateLimitGuide.afterReset',
+              {
+                limitType: rateLimitTypeLabel,
+                resetAt: formattedResetAt
+                  ? `${formattedResetAt}${timezoneLabel ? ` (${timezoneLabel})` : ''}`
+                  : t('cliRateLimitGuide.resetUnknown'),
+              },
+            )}
+          </Text>
+        )
+      }
+      onDismiss={onDismiss}
     >
       <Flexbox gap={8}>
         {formattedResetAt && (

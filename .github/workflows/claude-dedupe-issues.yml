@@ -22,12 +22,26 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
+
+      - name: Check whether issue should be deduped
+        id: dedupe-preflight
+        run: bun run .github/scripts/should-run-dedupe.ts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+          GITHUB_REPOSITORY_NAME: ${{ github.event.repository.name }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number }}
+
       - name: Copy security prompt
+        if: steps.dedupe-preflight.outputs.should_dedupe == 'true'
         run: |
           mkdir -p /tmp/claude-prompts
           cp .claude/prompts/security-rules.md /tmp/claude-prompts/
 
       - name: Run Claude Code slash command
+        if: steps.dedupe-preflight.outputs.should_dedupe == 'true'
         uses: anthropics/claude-code-action@v1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}

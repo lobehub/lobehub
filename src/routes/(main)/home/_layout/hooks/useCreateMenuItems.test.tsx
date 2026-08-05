@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import { act, renderHook } from '@testing-library/react';
+import { act, render, renderHook, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useCreateMenuItems } from './useCreateMenuItems';
@@ -15,38 +15,20 @@ const loadGroupsMock = vi.hoisted(() => vi.fn());
 const createNewPageMock = vi.hoisted(() => vi.fn());
 const messageErrorMock = vi.hoisted(() => vi.fn());
 const navigateMock = vi.hoisted(() => vi.fn());
+const openConnectAgentModalMock = vi.hoisted(() => vi.fn());
+const openCreateGroupModalMock = vi.hoisted(() => vi.fn());
+const agentModalMock = vi.hoisted(() => ({
+  current: undefined as { openCreateGroupModal: (id?: string, v?: string) => void } | undefined,
+}));
 
 vi.mock('@lobechat/const', () => ({
   isDesktop: true,
 }));
 
-vi.mock('@lobechat/heterogeneous-agents/client', () => ({
-  HETEROGENEOUS_AGENT_CLIENT_CONFIGS: [
-    {
-      avatar: 'claude-avatar',
-      command: 'claude',
-      icon: () => null,
-      iconId: 'ClaudeCode',
-      menuKey: 'newClaudeCodeAgent',
-      menuLabelKey: 'newClaudeCodeAgent',
-      title: 'Claude Code',
-      type: 'claude-code',
-    },
-    {
-      avatar: 'avatar',
-      command: 'codex',
-      icon: () => null,
-      iconId: 'Codex',
-      menuKey: 'newCodexAgent',
-      menuLabelKey: 'newCodexAgent',
-      title: 'Codex',
-      type: 'codex',
-    },
-  ],
-}));
-
 vi.mock('@lobehub/ui', () => ({
+  Flexbox: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
   Icon: () => null,
+  Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
 }));
 
 vi.mock('@lobehub/ui/icons', () => ({
@@ -83,8 +65,12 @@ vi.mock('@/components/ChatGroupWizard/templates', () => ({
   useGroupTemplates: () => [],
 }));
 
+vi.mock('@/features/ConnectAgent', () => ({
+  openConnectAgentModal: openConnectAgentModalMock,
+}));
+
 vi.mock('@/routes/(main)/home/_layout/Body/Agent/ModalProvider', () => ({
-  useOptionalAgentModal: () => undefined,
+  useOptionalAgentModal: () => agentModalMock.current,
 }));
 
 vi.mock('@/services/chatGroup', () => ({
@@ -124,17 +110,6 @@ vi.mock('@/store/page', () => ({
     }),
 }));
 
-vi.mock('@/store/user', () => ({
-  useUserStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ preference: { lab: {} } }),
-}));
-
-vi.mock('@/store/user/selectors', () => ({
-  labPreferSelectors: {
-    enablePlatformAgent: () => false,
-  },
-}));
-
 const isActionItem = (
   item: unknown,
 ): item is {
@@ -146,9 +121,10 @@ const isActionItem = (
 describe('useCreateMenuItems', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    agentModalMock.current = undefined;
   });
 
-  it('adds the market agent entry to the top-level create menu', async () => {
+  it('adds Agent-list and Market entries while omitting Page creation', async () => {
     const { result } = renderHook(() => useCreateMenuItems());
 
     const items = result.current.createTopLevelMenuItems();
@@ -163,13 +139,28 @@ describe('useCreateMenuItems', () => {
     expect(itemKeys).toEqual([
       'newAgent',
       'newGroupChat',
-      'newPage',
       'divider',
-      'newClaudeCodeAgent',
-      'newCodexAgent',
+      'newPlatformAgent',
       'divider',
+      'addAgentFromList',
       'addAgentFromMarket',
     ]);
+
+    const listItem = items.find((item) => isActionItem(item) && item.key === 'addAgentFromList');
+
+    if (!isActionItem(listItem)) {
+      throw new Error('Expected Agent-list menu item');
+    }
+
+    expect(listItem.label).toBe('addAgentFromList');
+
+    const listStopPropagation = vi.fn();
+    await act(async () => {
+      await listItem.onClick?.({ domEvent: { stopPropagation: listStopPropagation } });
+    });
+
+    expect(listStopPropagation).toHaveBeenCalled();
+    expect(navigateMock).toHaveBeenCalledWith('/agents');
 
     const marketItem = items.find(
       (item) => isActionItem(item) && item.key === 'addAgentFromMarket',
@@ -182,6 +173,7 @@ describe('useCreateMenuItems', () => {
     expect(marketItem.label).toBe('addAgentFromMarket');
 
     const stopPropagation = vi.fn();
+    navigateMock.mockClear();
     await act(async () => {
       await marketItem.onClick?.({ domEvent: { stopPropagation } });
     });
@@ -190,71 +182,104 @@ describe('useCreateMenuItems', () => {
     expect(navigateMock).toHaveBeenCalledWith('/community/agent');
   });
 
-  it('creates the Claude Code agent normally when the CLI is available', async () => {
+  it('opens the agent list on the Private tab for the private bucket', async () => {
     const { result } = renderHook(() => useCreateMenuItems());
 
-    const claudeItem = result.current
-      .createHeterogeneousAgentMenuItems()
-      .find((item) => isActionItem(item) && item.key === 'newClaudeCodeAgent');
+    const listItem = result.current.createAgentListMenuItem({ visibility: 'private' });
 
-    if (!isActionItem(claudeItem)) {
-      throw new Error('Expected Claude Code menu item');
+    if (!isActionItem(listItem)) {
+      throw new Error('Expected Agent-list menu item');
     }
 
+    expect(listItem.key).toBe('addPrivateAgentFromList');
+
+    navigateMock.mockClear();
     await act(async () => {
-      await claudeItem.onClick?.({ domEvent: { stopPropagation: vi.fn() } });
+      await listItem.onClick?.({ domEvent: { stopPropagation: vi.fn() } });
     });
 
-    expect(createAgentMock).toHaveBeenCalledWith({
-      config: {
-        agencyConfig: {
-          heterogeneousProvider: {
-            command: 'claude',
-            type: 'claude-code',
-          },
-        },
-        avatar: 'claude-avatar',
-        provider: 'claude-code',
-        systemRole: '',
-        title: 'Claude Code',
-      },
-      groupId: undefined,
-    });
-    expect(refreshAgentListMock).toHaveBeenCalled();
-    expect(navigateMock).toHaveBeenCalledWith('/agent/agent-codex');
+    expect(navigateMock).toHaveBeenCalledWith('/agents?tab=private');
   });
 
-  it('creates the Codex agent normally without preflight interception', async () => {
+  it('opens the naming modal when creating a category inside the modal provider', async () => {
+    agentModalMock.current = { openCreateGroupModal: openCreateGroupModalMock };
+
     const { result } = renderHook(() => useCreateMenuItems());
 
-    const codexItem = result.current
-      .createHeterogeneousAgentMenuItems()
-      .find((item) => isActionItem(item) && item.key === 'newCodexAgent');
+    const groupItem = result.current.createSessionGroupMenuItem({ visibility: 'private' });
 
-    if (!isActionItem(codexItem)) {
-      throw new Error('Expected Codex menu item');
+    if (!isActionItem(groupItem)) {
+      throw new Error('Expected session group menu item');
     }
 
     await act(async () => {
-      await codexItem.onClick?.({ domEvent: { stopPropagation: vi.fn() } });
+      await groupItem.onClick?.({ domEvent: { stopPropagation: vi.fn() } });
     });
 
-    expect(createAgentMock).toHaveBeenCalledWith({
-      config: {
-        agencyConfig: {
-          heterogeneousProvider: {
-            command: 'codex',
-            type: 'codex',
-          },
-        },
-        avatar: 'avatar',
-        provider: 'codex',
-        systemRole: '',
-        title: 'Codex',
-      },
-      groupId: undefined,
+    expect(openCreateGroupModalMock).toHaveBeenCalledWith(undefined, 'private');
+    expect(addGroupMock).not.toHaveBeenCalled();
+  });
+
+  it('falls back to default-name creation without the modal provider', async () => {
+    const { result } = renderHook(() => useCreateMenuItems());
+
+    const groupItem = result.current.createSessionGroupMenuItem();
+
+    if (!isActionItem(groupItem)) {
+      throw new Error('Expected session group menu item');
+    }
+
+    await act(async () => {
+      await groupItem.onClick?.({ domEvent: { stopPropagation: vi.fn() } });
     });
-    expect(refreshAgentListMock).toHaveBeenCalled();
-    expect(navigateMock).toHaveBeenCalledWith('/agent/agent-codex');
+
+    expect(addGroupMock).toHaveBeenCalledWith('sessionGroup.newGroup', undefined);
+    expect(openCreateGroupModalMock).not.toHaveBeenCalled();
+  });
+
+  it('uses an action-oriented label for category management', () => {
+    const { result } = renderHook(() => useCreateMenuItems());
+
+    const configItem = result.current.configMenuItem(vi.fn());
+
+    if (!isActionItem(configItem)) {
+      throw new Error('Expected category management menu item');
+    }
+
+    expect(configItem.label).toBe('sessionGroup.manageCategory');
+  });
+
+  it('opens the connect wizard and renders its explanatory label', async () => {
+    const { result } = renderHook(() => useCreateMenuItems());
+    const connectItem = result.current.createConnectAgentMenuItem();
+
+    if (!isActionItem(connectItem)) throw new Error('Expected Connect Agent menu item');
+
+    render(<>{connectItem.label}</>);
+    expect(screen.getByText('newPlatformAgent')).toBeTruthy();
+    expect(screen.getByText('newPlatformAgentDesc')).toBeTruthy();
+
+    await act(async () => {
+      await connectItem.onClick?.({ domEvent: { stopPropagation: vi.fn() } });
+    });
+    expect(openConnectAgentModalMock).toHaveBeenCalledWith(undefined);
+  });
+
+  it('threads groupId and visibility into the connect wizard', async () => {
+    const { result } = renderHook(() => useCreateMenuItems());
+    const connectItem = result.current.createConnectAgentMenuItem({
+      groupId: 'group-1',
+      visibility: 'private',
+    });
+
+    if (!isActionItem(connectItem)) throw new Error('Expected Connect Agent menu item');
+
+    await act(async () => {
+      await connectItem.onClick?.({ domEvent: { stopPropagation: vi.fn() } });
+    });
+    expect(openConnectAgentModalMock).toHaveBeenCalledWith({
+      groupId: 'group-1',
+      visibility: 'private',
+    });
   });
 });

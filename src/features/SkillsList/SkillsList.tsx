@@ -1,4 +1,5 @@
 import { EMPTY_ARRAY } from '@lobechat/const';
+import type { SFSymbol } from '@lobechat/electron-client-ipc';
 import {
   ContextMenuTrigger,
   Flexbox,
@@ -27,6 +28,8 @@ export interface SkillListItem {
   files?: string[];
   id: string;
   name: string;
+  /** Filesystem skill scope when the row comes from a device scan. */
+  scope?: 'device' | 'project';
 }
 
 /**
@@ -43,6 +46,7 @@ export interface SkillRowAction {
   key: string;
   label: string;
   onClick: (item: SkillListItem) => void;
+  sfSymbol?: SFSymbol;
   /** Hover-icon tooltip; falls back to `label`. Use for "coming soon" hints. */
   tooltip?: string;
 }
@@ -339,7 +343,7 @@ const SkillRow = memo<SkillRowProps>(
     }, []);
 
     const contextMenuItems = useCallback(
-      (): GenericItemType[] =>
+      (): (GenericItemType & { sfSymbol?: SFSymbol })[] =>
         actions.map((action) => ({
           danger: action.danger,
           disabled: action.disabled,
@@ -347,6 +351,7 @@ const SkillRow = memo<SkillRowProps>(
           key: action.key,
           label: action.label,
           onClick: () => action.onClick(item),
+          sfSymbol: action.sfSymbol,
         })),
       [actions, item],
     );

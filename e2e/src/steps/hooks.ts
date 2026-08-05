@@ -66,6 +66,7 @@ Before(async function (this: CustomWorld, { pickle }) {
       tag.name.startsWith('@COMMUNITY-') ||
       tag.name.startsWith('@AGENT-') ||
       tag.name.startsWith('@HOME-') ||
+      tag.name.startsWith('@OIDC-') ||
       tag.name.startsWith('@PAGE-') ||
       tag.name.startsWith('@ROUTES-'),
   );
@@ -96,6 +97,7 @@ After(async function (this: CustomWorld, { pickle, result }) {
         tag.name.startsWith('@COMMUNITY-') ||
         tag.name.startsWith('@AGENT-') ||
         tag.name.startsWith('@HOME-') ||
+        tag.name.startsWith('@OIDC-') ||
         tag.name.startsWith('@PAGE-') ||
         tag.name.startsWith('@ROUTES-'),
     )

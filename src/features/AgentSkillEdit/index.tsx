@@ -3,8 +3,9 @@
 import { isDesktop } from '@lobechat/const';
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { type SkillResourceTreeNode } from '@lobechat/types';
-import { Button, Drawer, Flexbox } from '@lobehub/ui';
-import { Alert, App, Form as AForm, Popconfirm, Skeleton } from 'antd';
+import { Drawer, Flexbox } from '@lobehub/ui';
+import { Button, toast } from '@lobehub/ui/base-ui';
+import { Alert, Form as AForm, Popconfirm, Skeleton } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -60,7 +61,7 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
   const { t } = useTranslation('setting');
   const { t: tp } = useTranslation('plugin');
   const { t: tc } = useTranslation('common');
-  const { message } = App.useApp();
+
   const { allowed: canEdit } = usePermission('edit_own_content');
 
   const [selectedFile, setSelectedFile] = useState('SKILL.md');
@@ -94,7 +95,7 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
         id: skillId,
         manifest: { description: values.description },
       });
-      message.success(t('agentSkillEdit.saveSuccess'));
+      toast.success(t('agentSkillEdit.saveSuccess'));
       onClose();
     } finally {
       setSaving(false);
@@ -104,7 +105,7 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
   const handleDelete = async () => {
     if (!canEdit) return;
     await deleteAgentSkill(skillId);
-    message.success(tp('dev.deleteSuccess'));
+    toast.success(tp('dev.deleteSuccess'));
     onClose();
   };
 

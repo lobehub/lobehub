@@ -27,6 +27,13 @@ type GenerationBatchColumns = Pick<
   'generationTopicId' | 'userId' | 'workspaceId'
 >;
 
+interface BatchUser {
+  avatar: string | null;
+  fullName: string | null;
+  id: string;
+  username: string | null;
+}
+
 export class GenerationBatchModel {
   private db: LobeChatDatabase;
   private userId: string;
@@ -143,11 +150,19 @@ export class GenerationBatchModel {
             asyncTask: true,
           },
         },
+        user: {
+          columns: {
+            avatar: true,
+            fullName: true,
+            id: true,
+            username: true,
+          },
+        },
       },
     });
 
     log('Found %d generation batches with generations for topic %s', results.length, topicId);
-    return results as GenerationBatchWithGenerations[];
+    return results as unknown as GenerationBatchWithGenerations[];
   }
 
   async queryGenerationBatchesByTopicIdWithGenerations(
@@ -193,9 +208,16 @@ export class GenerationBatchModel {
           })(),
         ]);
 
+        const batchUser = (batch as GenerationBatchWithGenerations & { user?: BatchUser }).user;
         return {
           config,
           createdAt: batch.createdAt,
+          creator: {
+            avatar: batchUser?.avatar ?? null,
+            fullName: batchUser?.fullName ?? null,
+            id: batch.userId,
+            username: batchUser?.username ?? null,
+          },
           generations,
           height: batch.height,
           id: batch.id,

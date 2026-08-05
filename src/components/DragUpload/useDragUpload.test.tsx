@@ -1,6 +1,5 @@
+import { toast } from '@lobehub/ui/base-ui';
 import { act, renderHook } from '@testing-library/react';
-import type * as AntdModule from 'antd';
-import { App } from 'antd';
 import { type Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,21 +12,8 @@ import { getContainer, useDragUpload } from './useDragUpload';
 // Mock the hooks and components
 vi.mock('@/hooks/useVisualMediaUploadAbility');
 vi.mock('@/store/agent');
-vi.mock('antd', async () => {
-  const actual = await vi.importActual<typeof AntdModule>('antd');
-  const mockWarning = vi.fn();
-
-  return {
-    ...actual,
-    App: {
-      ...actual.App,
-      useApp: () => ({
-        message: {
-          warning: mockWarning,
-        },
-      }),
-    },
-  };
+vi.mock('@lobehub/ui/base-ui', () => {
+  return { toast: { warning: vi.fn() } };
 });
 
 describe('useDragUpload', () => {
@@ -237,7 +223,7 @@ describe('useDragUpload', () => {
     });
 
     expect(mockOnUploadFiles).toHaveBeenCalledWith([mockImageFile]);
-    expect(App.useApp().message.warning).not.toHaveBeenCalled();
+    expect(toast.warning).not.toHaveBeenCalled();
   });
 
   it('should allow image files when visual understanding fallback is enabled', async () => {
@@ -267,7 +253,7 @@ describe('useDragUpload', () => {
     });
 
     expect(mockOnUploadFiles).toHaveBeenCalledWith([mockImageFile]);
-    expect(App.useApp().message.warning).not.toHaveBeenCalled();
+    expect(toast.warning).not.toHaveBeenCalled();
   });
 });
 

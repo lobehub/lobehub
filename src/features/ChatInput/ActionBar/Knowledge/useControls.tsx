@@ -24,7 +24,7 @@ const styles = createStaticStyles(({ css }) => ({
     cursor: pointer;
 
     display: flex;
-    gap: 8px;
+    gap: 12px;
     align-items: center;
 
     /* width 320 + margin-inline -12 anchors the submenu to 320px (matching the skill
@@ -127,19 +127,20 @@ export const useControls = ({
     ...fileItems,
   ];
 
-  const footer = (
-    <button
-      className={cx(styles.viewMore)}
-      type="button"
-      onClick={(event) => {
-        event.stopPropagation();
-        openAttachKnowledgeModal();
-      }}
-    >
-      <Icon icon={LibraryBig} size={16} />
-      <span className={cx(styles.viewMoreLabel)}>{t('knowledgeBase.viewMore')}</span>
-    </button>
-  );
+  const footer =
+    relatedGroups.length > 0 ? (
+      <button
+        className={cx(styles.viewMore)}
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          openAttachKnowledgeModal();
+        }}
+      >
+        <Icon color={cssVar.colorTextSecondary} icon={LibraryBig} size={14} />
+        <span className={cx(styles.viewMoreLabel)}>{t('knowledgeBase.viewMore')}</span>
+      </button>
+    ) : null;
 
   return { enabledCount, footer, items: relatedGroups } satisfies KnowledgeControls;
 };

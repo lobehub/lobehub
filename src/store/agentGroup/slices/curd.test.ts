@@ -13,6 +13,7 @@ import { useAgentGroupStore } from '../store';
 // Mock dependencies
 vi.mock('@/services/chatGroup', () => ({
   chatGroupService: {
+    getGroupDetail: vi.fn(),
     updateGroup: vi.fn(),
   },
 }));
@@ -126,22 +127,31 @@ describe('ChatGroupCurdSlice', () => {
   });
 
   describe('useFetchGroupDetail', () => {
-    it('should remove stale local group data when detail revalidation reports not found', () => {
+    it('should remove stale local group data and mark not-found when detail revalidation reports not found', async () => {
+      vi.mocked(chatGroupService.getGroupDetail).mockResolvedValue(null as any);
+
       const { result } = renderHook(() => useAgentGroupStore());
 
       act(() => {
         result.current.useFetchGroupDetail(true, 'group-1');
       });
 
-      const swrOptions = vi.mocked(useClientDataSWRWithSync).mock.calls.at(-1)?.[2];
-      const onError = swrOptions?.onError as ((error: Error) => void) | undefined;
+      const swrCall = vi.mocked(useClientDataSWRWithSync).mock.calls.at(-1);
+      const fetcher = swrCall?.[1] as (() => Promise<unknown>) | undefined;
+      const swrOptions = swrCall?.[2];
+      const onData = swrOptions?.onData as ((data: unknown) => void) | undefined;
 
+      // "Gone / no access" resolves to null (settled 404 state) instead of throwing.
+      await act(async () => {
+        await expect(fetcher?.()).resolves.toBeNull();
+      });
       act(() => {
-        onError?.(new Error('Group group-1 not found'));
+        onData?.(null);
       });
 
       expect(result.current.groupMap['group-1']).toBeUndefined();
       expect(result.current.groups.some((group) => group.id === 'group-1')).toBe(false);
+      expect(result.current.groupNotFoundMap['group-1']).toBe(true);
     });
   });
 
@@ -236,6 +246,46 @@ describe('ChatGroupCurdSlice', () => {
       });
 
       expect(mutate).toHaveBeenCalledWith(['group:detail', 'group-1']);
+    });
+
+    it('keeps an explicit metadata update bound to its original group', async () => {
+      let resolveUpdate: (() => void) | undefined;
+      vi.mocked(chatGroupService.updateGroup).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveUpdate = () => resolve({} as any);
+          }),
+      );
+      act(() => {
+        useAgentGroupStore.setState({
+          activeGroupId: 'group-1',
+          groupMap: {
+            'group-1': createMockGroup({ id: 'group-1', title: 'Group One' }),
+            'group-2': createMockGroup({ id: 'group-2', title: 'Group Two' }),
+          },
+        });
+      });
+      const { result } = renderHook(() => useAgentGroupStore());
+
+      let updatePromise!: Promise<void>;
+      act(() => {
+        updatePromise = result.current.updateGroupMetaById('group-1', { title: 'Group One Draft' });
+      });
+      act(() => {
+        useAgentGroupStore.setState({ activeGroupId: 'group-2' });
+      });
+
+      await act(async () => {
+        resolveUpdate?.();
+        await updatePromise;
+      });
+
+      expect(chatGroupService.updateGroup).toHaveBeenCalledExactlyOnceWith('group-1', {
+        title: 'Group One Draft',
+      });
+      expect(mutate).toHaveBeenCalledWith(['group:detail', 'group-1']);
+      expect(result.current.groupMap['group-1']?.title).toBe('Group One Draft');
+      expect(result.current.groupMap['group-2']?.title).toBe('Group Two');
     });
   });
 });

@@ -924,20 +924,6 @@ describe('FileManagerActions', () => {
     });
   });
 
-  describe('removeAllFiles', () => {
-    it('should call fileService.removeAllFiles', async () => {
-      const { result } = renderHook(() => useStore());
-
-      const removeSpy = vi.spyOn(fileService, 'removeAllFiles').mockResolvedValue(undefined);
-
-      await act(async () => {
-        await result.current.removeAllFiles();
-      });
-
-      expect(removeSpy).toHaveBeenCalled();
-    });
-  });
-
   describe('removeFileItem', () => {
     it('should remove file and refresh list', async () => {
       const { result } = renderHook(() => useStore());

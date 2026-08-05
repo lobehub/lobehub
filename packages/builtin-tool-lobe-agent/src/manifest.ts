@@ -183,6 +183,47 @@ export const LobeAgentManifest: BuiltinToolManifest = {
       },
     },
 
+    // ==================== Ask User Question ====================
+    {
+      description: 'Ask the user one or more clarifying questions with multiple-choice options.',
+      humanIntervention: 'always',
+      name: LobeAgentApiName.askUserQuestion,
+      renderDisplayControl: 'collapsed',
+      parameters: {
+        properties: {
+          questions: {
+            items: {
+              properties: {
+                header: { type: 'string' },
+                multiSelect: { type: 'boolean' },
+                options: {
+                  items: {
+                    properties: {
+                      description: { type: 'string' },
+                      label: { type: 'string' },
+                    },
+                    required: ['label', 'description'],
+                    type: 'object',
+                  },
+                  maxItems: 4,
+                  minItems: 2,
+                  type: 'array',
+                },
+                question: { type: 'string' },
+              },
+              required: ['header', 'question', 'options'],
+              type: 'object',
+            },
+            maxItems: 4,
+            minItems: 1,
+            type: 'array',
+          },
+        },
+        required: ['questions'],
+        type: 'object',
+      },
+    },
+
     // ==================== Sub-Agent ====================
     {
       description:

@@ -106,7 +106,7 @@ const PopoverContent = memo<PopoverContentProps>(({ items, onOpenStore, onClose 
           tabIndex={0}
           onClick={() => {
             onClose?.();
-            navigate('/settings/skill');
+            navigate('/settings/connector');
           }}
         >
           <div className={toolsListStyles.itemIcon}>

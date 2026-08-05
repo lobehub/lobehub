@@ -7,6 +7,7 @@ import {
 } from '@lobechat/builtin-tool-agent-management';
 import { isDesktop, LOADING_FLAT } from '@lobechat/const';
 import { formatSelectedSkillsContext, formatSelectedToolsContext } from '@lobechat/context-engine';
+import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { chainCompressContext } from '@lobechat/prompts';
 import type {
   ChatImageItem,
@@ -20,17 +21,30 @@ import type {
   SendMessageServerResponse,
   UIChatMessage,
 } from '@lobechat/types';
-import { nanoid } from '@lobechat/utils';
+import {
+  getWorkingDirEffectivePath,
+  getWorkingDirSourcePath,
+  resolveAgentAgencyConfig,
+} from '@lobechat/types';
+import { generateEntityId, nanoid } from '@lobechat/utils';
+import { toast } from '@lobehub/ui/base-ui';
 import { TRPCClientError } from '@trpc/client';
 import { t } from 'i18next';
 
-import { message as antdMessage } from '@/components/AntdStaticMethods';
+import { type ChatInputEditor } from '@/features/ChatInput';
+import {
+  resolveAgentWorkingDirectory,
+  resolveAgentWorkingDirectoryConfig,
+} from '@/helpers/agentWorkingDirectory';
+import { resolveExecutionTarget, resolveWorkspaceScoped } from '@/helpers/executionTarget';
+import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 import { agentService } from '@/services/agent';
 import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
 import { resolveSelectedSkillsWithContent } from '@/services/chat/mecha/skillPreload';
 import { resolveSelectedToolsWithContent } from '@/services/chat/mecha/toolPreload';
 import { messageService } from '@/services/message';
+import { topicService } from '@/services/topic';
 import { getAgentStoreState, useAgentStore } from '@/store/agent';
 import {
   agentByIdSelectors,
@@ -50,7 +64,7 @@ import { buildRunLifecycle } from '@/store/chat/slices/agentRun/actions/lifecycl
 import type { RunScope } from '@/store/chat/slices/agentRun/actions/lifecycle/types';
 import { resolveHeteroResume } from '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume';
 import type { OperationType, QueuedFile } from '@/store/chat/slices/operation/types';
-import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
+import { QUEUE_BLOCKING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { chatPortalSelectors } from '@/store/chat/slices/portal/selectors';
 import { type ChatStore } from '@/store/chat/store';
@@ -64,12 +78,15 @@ import {
   hasRunningCompressionOperation,
 } from '@/store/chat/utils/compression';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { snapshotAgentModel } from '@/store/chat/utils/snapshotAgentModel';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { getElectronStoreState } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
+import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/pageAgentRuntime';
 import { type StoreSetter } from '@/store/types';
+import { getUserStoreState } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 import { useUserMemoryStore } from '@/store/userMemory';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
@@ -86,6 +103,8 @@ import {
   parseSingleAgentMentionDirectRoute,
   processCommands,
 } from './commandBus';
+import { resolveExistingTopicForRun } from './resolveExistingTopic';
+
 /**
  * Extended params for sendMessage with context
  */
@@ -95,6 +114,12 @@ export interface SendMessageWithContextParams extends SendMessageParams {
    * Contains sessionId, topicId, and threadId
    */
   context: ConversationContext;
+  /**
+   * Editor owned by the calling ConversationProvider. Embedded conversations
+   * must not fall back to ChatStore's global editor, which may belong to a
+   * sibling panel.
+   */
+  inputEditor?: ChatInputEditor | null;
   /**
    * Called as soon as the backend reports a newly created topic id, so callers
    * with an isolated topic scope (e.g. Task Manager) can switch their UI to the
@@ -127,6 +152,9 @@ type SendMessageServerResponseMeta = SendMessageServerResponse & {
 interface OptimisticTopicPlaceholder {
   id: string;
   metadata?: ChatTopicMetadata;
+  /** Pinned model snapshot — top-level `topics.model` column, not metadata. */
+  model?: string;
+  provider?: string;
   title: string;
 }
 
@@ -149,10 +177,7 @@ const isAbortError = (error: unknown, abortController?: AbortController) =>
 const createAbortError = () =>
   Object.assign(new Error('Compression cancelled'), { name: 'AbortError' });
 
-const QUEUE_BLOCKING_OPERATION_TYPES = new Set<OperationType>([
-  ...AI_RUNTIME_OPERATION_TYPES,
-  'sendMessage',
-]);
+const QUEUE_BLOCKING_OPERATION_TYPE_SET = new Set<OperationType>(QUEUE_BLOCKING_OPERATION_TYPES);
 
 const attachSendTimeMetadataToUserMessage = (
   messages: UIChatMessage[],
@@ -235,6 +260,8 @@ export class ConversationLifecycleActionImpl {
     metadata,
     onlyAddUserMessage,
     context,
+    contextSelections,
+    inputEditor,
     messages: inputMessages,
     parentId: inputParentId,
     pageSelections,
@@ -242,6 +269,7 @@ export class ConversationLifecycleActionImpl {
   }: SendMessageWithContextParams): Promise<SendMessageResult | undefined> => {
     let editorData = inputEditorData;
     const { executeClientAgent, mainInputEditor } = this.#get();
+    const targetInputEditor = inputEditor ?? mainInputEditor;
     const { agentId } = context;
     const selectedSkills = parseSelectedSkillsFromEditorData(editorData);
     const selectedTools = parseSelectedToolsFromEditorData(editorData);
@@ -266,13 +294,32 @@ export class ConversationLifecycleActionImpl {
 
     if (!agentId) return;
 
-    const agentConfig = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
-    const heterogeneousProvider = agentConfig?.agencyConfig?.heterogeneousProvider;
+    const agentState = getAgentStoreState();
+    const agentConfig = agentSelectors.getAgentConfigById(agentId)(agentState);
+    const agent = agentByIdSelectors.getAgentById(agentId)(agentState);
+    const currentUserId = userProfileSelectors.userId(getUserStoreState());
+    const isAuthor = !!currentUserId && agent?.userId === currentUserId;
+    const usesWorkspaceMemberSelection =
+      !!agent?.workspaceId && agent.visibility !== 'private' && !isAuthor;
+    const deviceOverride = usesWorkspaceMemberSelection
+      ? getUserStoreState().workspaceUserPreference.agentDeviceOverrides?.[agentId]
+      : undefined;
+    const workspaceScoped = resolveWorkspaceScoped(usesWorkspaceMemberSelection, deviceOverride);
+    // Runtime selection must use the same per-user device override as the
+    // switcher. A workspace-local pick is intentionally private to this member
+    // and is therefore safe to execute in-process on their desktop.
+    const agencyConfig = resolveAgentAgencyConfig(agentConfig?.agencyConfig, deviceOverride, {
+      canManage: isAuthor,
+      visibility: agent?.visibility,
+      workspaceId: agent?.workspaceId,
+    });
+    const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
     const runtimeType = selectRuntimeType({
-      boundDeviceId: agentConfig?.agencyConfig?.boundDeviceId,
-      executionTarget: agentConfig?.agencyConfig?.executionTarget,
+      boundDeviceId: agencyConfig?.boundDeviceId,
+      executionTarget: agencyConfig?.executionTarget,
       heterogeneousProvider,
       isGatewayMode: this.#get().isGatewayModeEnabled(agentId),
+      isWorkspaceAgent: workspaceScoped,
       // Callers that need to pin the runtime (e.g. task topics that were
       // started server-side via runTask) pass `forceRuntime` to override
       // the agent's local/cloud preference.
@@ -289,6 +336,7 @@ export class ConversationLifecycleActionImpl {
       messages: inputMessages,
       parentId: inputParentId,
       pageSelections,
+      contextSelections,
     });
 
     // /compact — directly compress context without sending any message
@@ -357,6 +405,29 @@ export class ConversationLifecycleActionImpl {
         ? pageAgentRuntime.getCurrentDocId()
         : undefined;
 
+    // Whether this send has to create the topic. From here on this flag — NOT
+    // `!operationContext.topicId` — is the "new topic" test: the conversation
+    // adopts its client-minted topic id below, so the context CARRIES a topicId
+    // for a topic that does not exist on the server yet.
+    const willCreateNewTopic = !context.topicId;
+
+    /**
+     * The id this send's topic will be created under, minted up front and
+     * adopted by the WHOLE send: the operation context, the optimistic message
+     * bucket, `activeTopicId` and the sidebar row all use it from the first
+     * frame, and the server honours it verbatim (`newTopic.id` / `clientIds`).
+     *
+     * This is what removes the `_new` → topic transition — the conversation's
+     * `contextKey` never changes, so the conversation surface never remounts
+     * and the virtualized list never repaints from an empty viewport (the
+     * first-send "messages vanish for a frame" flicker).
+     *
+     * Isolated-topic callers keep the legacy flow (they re-subscribe via
+     * `onTopicCreated` and never render the main conversation surface).
+     */
+    const mintedTopicId =
+      willCreateNewTopic && !context.isolatedTopic ? generateEntityId('topics') : undefined;
+
     const operationContext = {
       ...context,
       ...(isCreatingNewThread && { threadId: undefined }),
@@ -366,6 +437,7 @@ export class ConversationLifecycleActionImpl {
       // is kept for back-compat.
       ...(isGroupSupervisor && { isSupervisor: true, orchestrationRole: 'supervisor' as const }),
       ...(activePageDocumentId ? { documentId: activePageDocumentId } : {}),
+      ...(mintedTopicId ? { topicId: mintedTopicId } : {}),
     };
 
     const fileIdList = files?.map((f) => f.id);
@@ -380,9 +452,13 @@ export class ConversationLifecycleActionImpl {
       ? await materializeLocalSystemToolSnapshots(localFileReferences)
       : [];
     const userMessageMetadata =
-      metadata || pageSelections?.length || localSystemToolSnapshots.length
+      metadata ||
+      contextSelections?.length ||
+      pageSelections?.length ||
+      localSystemToolSnapshots.length
         ? {
             ...metadata,
+            ...(contextSelections?.length ? { contextSelections } : undefined),
             ...(pageSelections?.length ? { pageSelections } : undefined),
             ...(localSystemToolSnapshots.length ? { localSystemToolSnapshots } : undefined),
           }
@@ -414,10 +490,40 @@ export class ConversationLifecycleActionImpl {
     // a fast second Enter must queue on `main_<agent>_new` instead of starting
     // topic B.
     const currentContextKey = messageMapKey(operationContext);
-    const contextOpIds = this.#get().operationsByContext[currentContextKey] || [];
-    const runningQueueBlockingOp = contextOpIds
-      .map((id) => this.#get().operations[id])
-      .find((op) => op && QUEUE_BLOCKING_OPERATION_TYPES.has(op.type) && op.status === 'running');
+    // A new-topic send must ALSO queue behind a send that is still creating its
+    // topic for this same conversation surface. That earlier send's operation is
+    // registered under ITS minted topic's bucket (the context adopted the id up
+    // front), so probing only this send's key would miss it — a fast second
+    // Enter would start a concurrent topic instead of queueing. `creatingTopicIds`
+    // names exactly those in-flight buckets.
+    const queueCandidateKeys = [
+      currentContextKey,
+      ...(willCreateNewTopic
+        ? [
+            // The pre-mint `_new` key: ops that predate topic adoption (or any
+            // legacy caller) still register here.
+            messageMapKey({ ...operationContext, topicId: null }),
+            ...this.#get().creatingTopicIds.map((creatingId) =>
+              messageMapKey({ ...operationContext, topicId: creatingId }),
+            ),
+          ].filter((key) => key !== currentContextKey)
+        : []),
+    ];
+    const findRunningBlockingOp = (key: string) =>
+      (this.#get().operationsByContext[key] || [])
+        .map((id) => this.#get().operations[id])
+        .find(
+          (op) => op && QUEUE_BLOCKING_OPERATION_TYPE_SET.has(op.type) && op.status === 'running',
+        );
+    let queueTargetKey = currentContextKey;
+    let runningQueueBlockingOp: ReturnType<typeof findRunningBlockingOp>;
+    for (const key of queueCandidateKeys) {
+      runningQueueBlockingOp = findRunningBlockingOp(key);
+      if (runningQueueBlockingOp) {
+        queueTargetKey = key;
+        break;
+      }
+    }
 
     if (runningQueueBlockingOp) {
       // Snapshot file previews so the tray can render thumbnails AND the
@@ -431,7 +537,7 @@ export class ConversationLifecycleActionImpl {
       }));
 
       this.#get().enqueueMessage(
-        currentContextKey,
+        queueTargetKey,
         {
           id: nanoid(),
           content: message,
@@ -449,7 +555,11 @@ export class ConversationLifecycleActionImpl {
     }
 
     if (onlyAddUserMessage) {
-      await this.#get().addUserMessage({ message, fileList: fileIdList });
+      await this.#get().addUserMessage({
+        message,
+        fileList: fileIdList,
+        metadata: userMessageMetadata,
+      });
 
       return;
     }
@@ -475,9 +585,14 @@ export class ConversationLifecycleActionImpl {
       parentId = displayMessageSelectors.findLastMessageId(lastMessage.id)(this.#get());
     }
 
-    // Create operation for send message first, so we can use operationId for optimistic updates
-    const tempId = 'tmp_' + nanoid();
-    const tempAssistantId = 'tmp_' + nanoid();
+    // Mint the ids this turn will live under, up front. These are the FINAL
+    // ids: the server honours them verbatim (`newUserMessage.id` /
+    // `newAssistantMessage.id`), so the optimistic rows never have to be
+    // re-keyed when the response lands. That is what keeps the conversation's
+    // identity — and therefore the mounted message list — stable across the
+    // whole send.
+    const tempId = generateEntityId('messages');
+    const tempAssistantId = generateEntityId('messages');
     const { operationId, abortController } = this.#get().startOperation({
       type: 'sendMessage',
       context: { ...operationContext, messageId: tempId },
@@ -561,42 +676,6 @@ export class ConversationLifecycleActionImpl {
     this.#get().associateMessageWithOperation(tempId, operationId);
     this.#get().associateMessageWithOperation(tempAssistantId, operationId);
 
-    const existingTopic = operationContext.topicId
-      ? topicSelectors.getTopicById(operationContext.topicId)(this.#get())
-      : undefined;
-    const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
-    const agentWorkingDirectory =
-      runtimeType === 'hetero' && heterogeneousProvider
-        ? agentByIdSelectors.getAgentWorkingDirectoryById(
-            agentId,
-            currentDeviceId,
-          )(getAgentStoreState())
-        : undefined;
-    const workingDirectory = existingTopic?.metadata?.workingDirectory || agentWorkingDirectory;
-    const pendingTopicRepos =
-      runtimeType === 'gateway' && !operationContext.topicId && operationContext.agentId
-        ? getPendingTopicRepos(operationContext.agentId)
-        : [];
-    // Example: a pending repo topic without this metadata renders under "No directory"
-    // until the server topic replaces `tmp_topic_*`.
-    const optimisticTopicMetadata: ChatTopicMetadata | undefined =
-      pendingTopicRepos.length > 0
-        ? { repos: pendingTopicRepos, workingDirectory: pendingTopicRepos[0] }
-        : workingDirectory
-          ? { workingDirectory }
-          : undefined;
-
-    const optimisticTopic: OptimisticTopicPlaceholder | undefined =
-      !operationContext.topicId && !context.isolatedTopic
-        ? {
-            id: `tmp_topic_${nanoid()}`,
-            ...(optimisticTopicMetadata ? { metadata: optimisticTopicMetadata } : {}),
-            title: newTopicTitle,
-          }
-        : undefined;
-    let optimisticTopicActive = false;
-    let optimisticTopicResolved = false;
-
     // Group main topic lists are keyed by `group_${groupId}`. Keeping the
     // supervisor agent id here would write "group first message" placeholders
     // into `group_agent_${groupId}_${agentId}`, invisible to the group sidebar.
@@ -608,20 +687,180 @@ export class ConversationLifecycleActionImpl {
       agentId: topicListAgentId,
       groupId: operationContext.groupId ?? undefined,
     };
+    // A topic created by this send pins the model it was started with, same as
+    // the manual createTopic/saveToTopic and Gateway (AiAgentService) paths. The
+    // snapshot goes to the top-level `topics.model`/`provider` columns (config
+    // source of truth) — generation and ChatInput display resolve from it
+    // (topicSelectors.getTopicModelById).
+    const newTopicModelSnapshot = willCreateNewTopic
+      ? snapshotAgentModel(operationContext.agentId)
+      : undefined;
+
+    // Adopt the minted topic id NOW, synchronously with the optimistic message
+    // dispatch above: insert the sidebar row and point `activeTopicId` at it in
+    // the same React commit that shows the optimistic pair. The conversation's
+    // contextKey is therefore final from its very first painted frame — nothing
+    // remounts when the server later confirms the topic, which is the flicker
+    // this whole flow used to have. Everything after this point (cwd
+    // resolution, the runtime branches) awaits, so it must come before them.
+    if (mintedTopicId) {
+      this.#get().internal_dispatchTopic(
+        {
+          ...optimisticTopicScope,
+          optimistic: true,
+          type: 'addTopic',
+          value: {
+            id: mintedTopicId,
+            ...newTopicModelSnapshot,
+            ...(operationContext.groupId ? {} : { sessionId: operationContext.agentId }),
+            title: newTopicTitle,
+          },
+        },
+        'sendMessage/optimisticCreateTopic',
+      );
+      this.#get().internal_updateTopicLoading(mintedTopicId, true);
+      await this.#get().switchTopic(mintedTopicId, { skipRefreshMessage: true });
+    }
+
+    // The topic list store is paginated — a deep-linked older topic can be the
+    // ACTIVE topic yet miss `getTopicById`. For hetero runs that miss used to
+    // silently resolve the agent/device default cwd instead of the topic's
+    // bound workingDirectory and drop `--resume` (fresh CLI session, context
+    // lost, no error) — fall back to the server row. A topic this send is
+    // about to create has no server row, so the lookup is skipped entirely.
+    const existingTopic = await resolveExistingTopicForRun({
+      fetchTopicDetail: (id) => topicService.getTopicDetail(id),
+      isHetero: !!heterogeneousProvider,
+      storeTopic:
+        operationContext.topicId && !willCreateNewTopic
+          ? topicSelectors.getTopicById(operationContext.topicId)(this.#get())
+          : undefined,
+      topicId: willCreateNewTopic ? undefined : operationContext.topicId,
+    });
+    const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
+    // Resolve the cwd for every hetero-provider run that lands on a MACHINE
+    // (in-process `hetero` runtime, or a gateway dispatch whose effective
+    // target routes to a device) — the server can only honour a cwd the client
+    // resolved (per-user legacy slot included) if it rides along as the new
+    // topic's initial metadata. Sandbox/none targets must NOT resolve one: the
+    // desktop/home fallback is a local machine path that doesn't exist in an
+    // ephemeral cloud sandbox and would pollute the topic's metadata.
+    const heteroEffectiveTarget = heterogeneousProvider
+      ? resolveExecutionTarget(agencyConfig, {
+          clientExecutionAvailable: isDesktop,
+          isHetero: true,
+          workspaceScoped,
+        })
+      : undefined;
+    const resolvesHeteroCwd =
+      !!heterogeneousProvider &&
+      (heteroEffectiveTarget === 'local' ||
+        heteroEffectiveTarget === 'device' ||
+        heteroEffectiveTarget === 'auto');
+    // Same precedence as `getAgentWorkingDirectoryById`, but over the MERGED
+    // config — the selector reads the raw shared row internally, which could
+    // fall back to a cwd registered for another member's device. Desktop/home
+    // is the only neutral last resort.
+    const heteroCwdContext =
+      resolvesHeteroCwd && isDesktop ? globalAgentContextManager.getContext() : undefined;
+    const heteroCwdParams = resolvesHeteroCwd
+      ? {
+          agencyConfig,
+          currentDeviceId,
+          fallback: heteroCwdContext?.desktopPath ?? heteroCwdContext?.homePath,
+          legacyAgentWorkingDirectory: agentState.localAgentWorkingDirectoryMap[agentId],
+          workspaceScoped,
+        }
+      : undefined;
+    const agentWorkingDirectory = heteroCwdParams
+      ? resolveAgentWorkingDirectory(heteroCwdParams)
+      : undefined;
+    const agentWorkingDirectoryConfig = heteroCwdParams
+      ? resolveAgentWorkingDirectoryConfig(heteroCwdParams)
+      : undefined;
+    // Heterogeneous CLI agents (Claude Code, Codex, …) store sessions per-cwd
+    // (`~/.claude/projects/<encoded-cwd>/`). Anchor their session cwd to the
+    // SOURCE repo, NOT the selected worktree, so switching worktree keeps cwd +
+    // sessionId consistent and never drops the conversation context. The active
+    // worktree lives only in `workingDirectoryConfig.git.activeWorktree` as a
+    // record. The per-cwd session store is a LOCAL CLI trait — remote platform
+    // agents (openclaw / hermes) run through the gateway with no such
+    // constraint, so they (like non-hetero runtimes) keep the effective
+    // (worktree) path.
+    const isLocalCliHetero =
+      !!heterogeneousProvider && !isRemoteHeterogeneousType(heterogeneousProvider.type);
+    const resolveWorkingDirPath = isLocalCliHetero
+      ? getWorkingDirSourcePath
+      : getWorkingDirEffectivePath;
+    const workingDirectory =
+      resolveWorkingDirPath(existingTopic?.metadata?.workingDirectoryConfig) ??
+      existingTopic?.metadata?.workingDirectory ??
+      agentWorkingDirectory;
+    const workingDirectoryConfig =
+      existingTopic?.metadata?.workingDirectoryConfig ??
+      (existingTopic?.metadata?.workingDirectory
+        ? { path: existingTopic.metadata.workingDirectory }
+        : agentWorkingDirectoryConfig);
+    const pendingTopicRepos =
+      runtimeType === 'gateway' && willCreateNewTopic && operationContext.agentId
+        ? getPendingTopicRepos(operationContext.agentId)
+        : [];
+    // Example: a pending repo topic without this metadata renders under "No
+    // directory" until the server row lands.
+    const optimisticTopicMetadata: ChatTopicMetadata | undefined =
+      pendingTopicRepos.length > 0
+        ? {
+            repos: pendingTopicRepos,
+            workingDirectory: pendingTopicRepos[0],
+            workingDirectoryConfig: { path: pendingTopicRepos[0], repoType: 'github' },
+          }
+        : workingDirectory
+          ? {
+              workingDirectory,
+              ...(workingDirectoryConfig ? { workingDirectoryConfig } : {}),
+            }
+          : undefined;
+
+    // The sidebar row was already inserted (title + model) before the awaits
+    // above; the cwd/repos metadata only resolves here, so patch it on now.
+    // `optimisticTopic` keeps carrying the full snapshot for the resolve /
+    // rollback helpers below.
+    const optimisticTopic: OptimisticTopicPlaceholder | undefined = mintedTopicId
+      ? {
+          id: mintedTopicId,
+          ...(optimisticTopicMetadata ? { metadata: optimisticTopicMetadata } : {}),
+          ...newTopicModelSnapshot,
+          title: newTopicTitle,
+        }
+      : undefined;
+    let optimisticTopicActive = false;
+    let optimisticTopicResolved = false;
 
     const addResolvedTopicPlaceholder = (
       topicId: string,
       title: string,
       action: string,
-      metadata?: ChatTopicMetadata,
+      extra?: {
+        metadata?: ChatTopicMetadata;
+        model?: string;
+        /**
+         * True only for the client-only placeholder inserted before the server
+         * has created the topic. The topic slice keeps those ids so a refetch
+         * landing mid-send re-prepends the row instead of wiping it.
+         */
+        optimistic?: boolean;
+        provider?: string;
+      },
     ) => {
       this.#get().internal_dispatchTopic(
         {
           ...optimisticTopicScope,
+          ...(extra?.optimistic ? { optimistic: true } : {}),
           type: 'addTopic',
           value: {
             id: topicId,
-            ...(metadata ? { metadata } : {}),
+            ...(extra?.metadata ? { metadata: extra.metadata } : {}),
+            ...(extra?.model ? { model: extra.model, provider: extra.provider } : {}),
             ...(operationContext.groupId ? {} : { sessionId: operationContext.agentId }),
             title,
           },
@@ -636,7 +875,11 @@ export class ConversationLifecycleActionImpl {
           topicId,
           title || t('defaultTitle', { ns: 'topic' }),
           'sendMessage/reconcileOptimisticTopic/add',
-          optimisticTopic?.metadata,
+          {
+            metadata: optimisticTopic?.metadata,
+            model: optimisticTopic?.model,
+            provider: optimisticTopic?.provider,
+          },
         );
         return;
       }
@@ -647,6 +890,9 @@ export class ConversationLifecycleActionImpl {
         previousId: optimisticTopic.id,
         value: {
           ...(optimisticTopic.metadata ? { metadata: optimisticTopic.metadata } : {}),
+          ...(optimisticTopic.model
+            ? { model: optimisticTopic.model, provider: optimisticTopic.provider }
+            : {}),
           ...(operationContext.groupId ? {} : { sessionId: operationContext.agentId }),
           title: title || t('defaultTitle', { ns: 'topic' }),
         },
@@ -670,20 +916,27 @@ export class ConversationLifecycleActionImpl {
     };
 
     if (optimisticTopic) {
-      // Input "666" used to leave the sidebar unchanged until the server returned
-      // a topicId; insert a temporary topic so the new conversation is visible immediately.
-      addResolvedTopicPlaceholder(
-        optimisticTopic.id,
-        optimisticTopic.title,
-        'sendMessage/optimisticCreateTopic',
-        optimisticTopic.metadata,
-      );
-      this.#get().internal_updateTopicLoading(optimisticTopic.id, true);
+      // The row itself (title + model, marked `optimistic`) was inserted before
+      // the awaits above so it shares the first paint with the optimistic
+      // messages. The cwd/repos metadata only resolved after those awaits —
+      // patch it on now instead of re-adding the row (an addTopic here would
+      // unshift a duplicate).
+      if (optimisticTopic.metadata) {
+        this.#get().internal_dispatchTopic(
+          {
+            ...optimisticTopicScope,
+            id: optimisticTopic.id,
+            type: 'updateTopic',
+            value: { metadata: optimisticTopic.metadata },
+          },
+          'sendMessage/optimisticTopicMetadata',
+        );
+      }
       optimisticTopicActive = true;
     }
 
     // Store editor state in operation metadata for cancel restoration
-    const jsonState = inputEditorData ?? mainInputEditor?.getJSONState();
+    const jsonState = inputEditorData ?? targetInputEditor?.getJSONState();
     this.#get().updateOperationMetadata(operationId, {
       inputEditorTempState: jsonState,
       inputSendErrorMsg: undefined,
@@ -712,10 +965,21 @@ export class ConversationLifecycleActionImpl {
             // from the agent's requested model. Persist only the runtime
             // provider up front; the adapter backfills the actual model later
             // if the CLI reports it.
-            newAssistantMessage: { provider: heterogeneousProvider.type },
-            newTopic: !operationContext.topicId
+            newAssistantMessage: {
+              id: tempAssistantId,
+              provider: heterogeneousProvider.type,
+            },
+            newTopic: willCreateNewTopic
               ? {
-                  metadata: workingDirectory ? { workingDirectory } : undefined,
+                  // Same id the optimistic sidebar row already uses.
+                  id: optimisticTopic?.id,
+                  metadata: workingDirectory
+                    ? {
+                        workingDirectory,
+                        ...(workingDirectoryConfig ? { workingDirectoryConfig } : {}),
+                      }
+                    : undefined,
+                  ...newTopicModelSnapshot,
                   title: newTopicTitle,
                   topicMessageIds: messages.map((m) => m.id),
                 }
@@ -724,7 +988,9 @@ export class ConversationLifecycleActionImpl {
               content: message,
               editorData,
               files: fileIdList,
+              id: tempId,
               metadata: userMessageMetadata,
+              contextSelections,
               pageSelections,
               parentId,
             },
@@ -734,7 +1000,10 @@ export class ConversationLifecycleActionImpl {
               operationContext.groupId ?? undefined,
             ),
             topicPageSize: systemStatusSelectors.topicPageSize(useGlobalStore.getState()),
-            topicId: operationContext.topicId ?? undefined,
+            // While creating, the topic exists only client-side — the server
+            // sees `newTopic` (with the minted id) and no topicId, exactly the
+            // shape an older client sends.
+            topicId: willCreateNewTopic ? undefined : (operationContext.topicId ?? undefined),
           },
           abortController,
         );
@@ -753,14 +1022,28 @@ export class ConversationLifecycleActionImpl {
         return;
       }
 
-      // Update context with server-created topicId
+      // Update context with server-created topicId. Once the server has returned a
+      // persisted topic, the hetero stream must target the real topic bucket; keeping
+      // `isNew` would route chunks to `main_<agent>_<topic>_new`.
+      const heteroTopicId = heteroData.topicId ?? operationContext.topicId;
+      const shouldResolveNewTopicKey = !!heteroTopicId && operationContext.scope !== 'thread';
       const heteroContext = {
         ...operationContext,
-        topicId: heteroData.topicId ?? operationContext.topicId,
+        // startOperation inherits from the parent op before merging this context.
+        // Use an explicit false so the child exec op does not inherit `isNew: true`.
+        ...(shouldResolveNewTopicKey ? { isNew: false } : {}),
+        topicId: heteroTopicId,
       };
       const heteroResponseMeta = heteroData as SendMessageServerResponseMeta;
       const heteroMessageKey = messageMapKey(heteroContext);
       this.#get().moveQueuedMessages(currentContextKey, heteroMessageKey);
+      // Legacy queue location: follow-ups enqueued behind an op still
+      // registered under the pre-mint `_new` key.
+      if (willCreateNewTopic)
+        this.#get().moveQueuedMessages(
+          messageMapKey({ ...operationContext, topicId: null }),
+          heteroMessageKey,
+        );
       const heteroMessages = heteroResponseMeta.__isPartialMessages
         ? mergePartialPersistedMessages(
             this.#get().messagesMap[heteroMessageKey] || [],
@@ -796,13 +1079,17 @@ export class ConversationLifecycleActionImpl {
           clearNewKey: true,
           skipRefreshMessage: true,
         });
+        // resolveOptimisticTopic migrated the optimistic topic's loading owner
+        // onto the real id; it is released in the executor `finally` below —
+        // NOT here — because the persisted `status === 'running'` (the run
+        // spinner's other driver) is only written after startSession resolves,
+        // so releasing before the executor takes over would blank the sidebar
+        // spinner during a slow CLI startup.
       }
 
-      // Clean up temp messages
-      this.#get().internal_dispatchMessage(
-        { ids: [tempId, tempAssistantId], type: 'deleteMessages' },
-        { operationId },
-      );
+      // No temp-message cleanup: the optimistic rows were created under the very
+      // ids the server just persisted, so `replaceMessages` above already
+      // reconciled them in place. Deleting them here would delete the real ones.
 
       // Complete sendMessage operation, start ACP execution as child operation
       this.#get().completeOperation(operationId);
@@ -830,9 +1117,12 @@ export class ConversationLifecycleActionImpl {
       // branch returns early (line 498) and never reaches that clear.
       this.#get().updateOperationMetadata(operationId, { inputEditorTempState: null });
 
-      if (heteroData.topicId && !optimisticTopicResolved) {
-        this.#get().internal_updateTopicLoading(heteroData.topicId, true);
-      }
+      // Sidebar "running" spinner for hetero runs is driven off the persisted
+      // `topic.status === 'running'` (written by the executor's writeTopicStatus,
+      // and bucketed by resolveStatusBucket) — no separate client-only
+      // `topicLoadingIds` overlay, which used to desync: it cleared on the
+      // linear sendPrompt path (below) while `status` stayed 'running' when the
+      // executor's onComplete stalled, leaving the topic spinning after finish.
 
       // Start heterogeneous agent execution
       const { operationId: heteroOpId } = this.#get().startOperation({
@@ -852,31 +1142,46 @@ export class ConversationLifecycleActionImpl {
         // may already be cleared by this point, so we read from DB instead)
         const userMsg = heteroData.messages.find((m: any) => m.id === heteroData.userMessageId);
         const persistedImageList = userMsg?.imageList;
+        const persistedMetadata = userMsg?.metadata as MessageMetadata | undefined;
+        const effectiveContextSelections = contextSelections?.length
+          ? contextSelections
+          : persistedMetadata?.contextSelections;
+        const effectivePageSelections = pageSelections?.length
+          ? pageSelections
+          : persistedMetadata?.pageSelections;
 
         // Read heterogeneous-agent session id from topic metadata for multi-turn
         // resume. `resolveHeteroResume` drops the sessionId when the saved cwd
         // doesn't match the current one, so CC doesn't emit
         // "No conversation found with session ID".
-        const topic = heteroContext.topicId
-          ? topicSelectors.getTopicById(heteroContext.topicId)(this.#get())
-          : undefined;
+        // Store lookup first (freshest optimistic edits), but fall back to the
+        // server row resolved above — the paginated store misses deep-linked
+        // older topics, and a miss here silently dropped `--resume` even when
+        // the cwd resolution already used the topic's bound workingDirectory.
+        const topic =
+          (heteroContext.topicId
+            ? topicSelectors.getTopicById(heteroContext.topicId)(this.#get())
+            : undefined) ?? existingTopic;
         const { cwdChanged, resumeSessionId } = resolveHeteroResume(
           topic?.metadata,
           workingDirectory,
         );
         if (cwdChanged) {
-          antdMessage.info(t('heteroAgent.resumeReset.cwdChanged', { ns: 'chat' }));
+          toast.info(t('heteroAgent.resumeReset.cwdChanged', { ns: 'chat' }));
         }
 
         await executeHeterogeneousAgent(() => this.#get(), {
           assistantMessageId: heteroData.assistantMessageId,
           context: heteroContext,
+          contextSelections: effectiveContextSelections,
           heterogeneousProvider,
           imageList: persistedImageList?.length ? persistedImageList : undefined,
           message,
           operationId: heteroOpId,
+          pageSelections: effectivePageSelections,
           resumeSessionId,
           workingDirectory,
+          workingDirectoryConfig,
         });
       } catch (e) {
         console.error('[HeterogeneousAgent] Execution failed:', e);
@@ -884,9 +1189,17 @@ export class ConversationLifecycleActionImpl {
           message: e instanceof Error ? e.message : 'Unknown error',
           type: 'HeterogeneousAgentError',
         });
+      } finally {
+        // Release the creation owner migrated by resolveOptimisticTopic (run
+        // end no longer clears topicLoadingIds since #16745, so without this
+        // the sidebar spinner sticks forever). Held until the run settles so
+        // the spinner stays continuous through the pre-`running` startup gap;
+        // it can't mask `waitingForHuman` — the sidebar item renders that
+        // state with higher priority than the running icon.
+        if (optimisticTopic && optimisticTopicResolved && heteroData.topicId) {
+          this.#get().internal_updateTopicLoading(heteroData.topicId, false);
+        }
       }
-
-      if (heteroData.topicId) this.#get().internal_updateTopicLoading(heteroData.topicId, false);
 
       return {
         assistantMessageId: heteroData.assistantMessageId,
@@ -895,7 +1208,15 @@ export class ConversationLifecycleActionImpl {
     }
 
     // ── Gateway mode: skip sendMessageInServer, let execAgentTask handle everything ──
-    if (runtimeType === 'gateway') {
+    // A single-agent @mention (`directMentionRoute`) is the exception: the current
+    // agent acts as a pure deterministic router and never runs an LLM turn itself, so
+    // there is nothing to execute on the gateway. We let it fall through to the client
+    // message-persistence path below, where `#executeDirectMentionRoute` emits the
+    // callAgent tool call and dispatches the *target* agent via
+    // `dispatchNonHeteroSubAgent` — which re-selects the runtime and runs the target on
+    // the gateway when gateway mode is enabled. Routing the supervisor through the
+    // gateway here would drop the mention entirely (execAgentTask carries no mention data).
+    if (runtimeType === 'gateway' && !directMentionRoute) {
       try {
         // Pass `sendMessage` as `parentOperationId` so executeGatewayAgent
         // completes it the instant phase-1 init finishes (after the child
@@ -903,12 +1224,41 @@ export class ConversationLifecycleActionImpl {
         // input loading state would drop during the execAgentTask round-trip
         // and the send button would flicker back to "send".
         const result = await this.#get().executeGatewayAgent({
-          context: operationContext,
+          // The ids this send's optimistic rows already render under. The
+          // server honours them, so the gateway path converges on the same ids
+          // instead of minting its own — same contract as sendMessageInServer.
+          clientIds: {
+            assistantMessageId: tempAssistantId,
+            topicId: optimisticTopic?.id,
+            userMessageId: tempId,
+          },
+          // Execution context: what the SERVER should act on. While creating,
+          // the topic exists only client-side, so the server must see no
+          // topicId (that is what makes execAgent create it — under
+          // `clientIds.topicId`). The message context below keeps the minted id
+          // so streamed messages land in the bucket already on screen.
+          context: willCreateNewTopic
+            ? { ...operationContext, topicId: undefined }
+            : operationContext,
+          messageContext: operationContext,
           fileIds: fileIdList,
           message,
           metadata: requestMetadata,
           parentOperationId: operationId,
           optimisticTopic,
+          // Forward @-mentioned tool ids so the server runtime enables them for
+          // this run — the gateway/server path otherwise never sees the mention
+          // selection (only the client runtime did). Omit when empty.
+          selectedToolIds:
+            selectedTools.length > 0 ? selectedTools.map((tool) => tool.identifier) : undefined,
+          // Forward @-mentioned agents so the server supervisor can delegate to
+          // them (multi-mention). Mirrors the client runtime's `initialContext`
+          // injection: the server enables the callAgent tool and injects the
+          // mentioned-agents delegation context so the supervisor calls them.
+          // Omit when empty (single-mention takes the client path above and never
+          // reaches here). Non-group only — group @member mentions are handled by
+          // the group orchestration path, not agent-management delegation.
+          mentionedAgents: hasMentionedAgents ? mentionedAgents : undefined,
           // Pass temp message IDs so the UI doesn't show a blank loading
           // state while waiting for the first step_start event to replace
           // messages with the server's real IDs.
@@ -920,11 +1270,24 @@ export class ConversationLifecycleActionImpl {
         // the new topic, so the shared hook reads the persisted conversation from
         // the store and titles it. Fire-and-forget.
         if (result.topicId) {
+          // executeGatewayAgent resolved the optimistic topic row via
+          // internal_replaceTopicId, which migrates its topicLoadingIds owner
+          // onto the real topic id. From here the run spinner is owned by the
+          // persisted `status === 'running'` (#16745 removed the transports'
+          // run-end topicLoadingIds clears), so release the migrated creation
+          // owner now — with no release left downstream, the sidebar spinner
+          // would stick forever after the run completes.
+          // No `optimisticTopicResolved = true` here: the gateway branch
+          // returns before the client-mode code that reads it.
+          if (optimisticTopic && optimisticTopicActive) {
+            this.#get().internal_updateTopicLoading(result.topicId, false);
+            optimisticTopicActive = false;
+          }
           void sendRunLifecycle
             .afterUserMessagePersisted({
               assistantMessageId: result.assistantMessageId,
               context: { ...operationContext, topicId: result.topicId },
-              isCreateNewTopic: !operationContext.topicId,
+              isCreateNewTopic: willCreateNewTopic,
               operationId,
               runId: operationId,
               runScope: sendRunScope,
@@ -964,8 +1327,7 @@ export class ConversationLifecycleActionImpl {
     let data: SendMessageServerResponse | undefined;
     const isCreatedTopicResponse = (response?: SendMessageServerResponse) =>
       Boolean(
-        response &&
-        (response.isCreateNewTopic || (!operationContext.topicId && !!response.topicId)),
+        response && (response.isCreateNewTopic || (willCreateNewTopic && !!response.topicId)),
       );
 
     try {
@@ -1004,13 +1366,16 @@ export class ConversationLifecycleActionImpl {
             content: persistedContent,
             editorData,
             files: fileIdList,
+            id: tempId,
             metadata: userMessageMetadata,
+            contextSelections,
             pageSelections,
             parentId,
           },
           preloadMessages: undefined,
-          // if there is topicId, then add topicId to message
-          topicId: topicId ?? undefined,
+          // While creating, the topic exists only client-side — the server
+          // sees `newTopic` (with the minted id) and no topicId.
+          topicId: willCreateNewTopic ? undefined : (topicId ?? undefined),
           topicFilter: this.#getTopicFilter(
             topicListAgentId,
             operationContext.groupId ?? undefined,
@@ -1024,8 +1389,11 @@ export class ConversationLifecycleActionImpl {
                 type: newThread.type,
               }
             : undefined,
-          newTopic: !topicId
+          newTopic: willCreateNewTopic
             ? {
+                ...newTopicModelSnapshot,
+                // Same id the optimistic sidebar row already uses.
+                id: optimisticTopic?.id,
                 topicMessageIds: forceNewTopicFromExisting ? [] : messages.map((m) => m.id),
                 title: newTopicTitle,
               }
@@ -1034,6 +1402,7 @@ export class ConversationLifecycleActionImpl {
           // Pass groupId for group chat scenarios
           groupId: operationContext.groupId ?? undefined,
           newAssistantMessage: {
+            id: tempAssistantId,
             // Pass isSupervisor metadata for group orchestration
             metadata: operationContext.isSupervisor
               ? { isSupervisor: true, orchestrationRole: 'supervisor' as const }
@@ -1078,11 +1447,14 @@ export class ConversationLifecycleActionImpl {
         this.#get().updateOperationMetadata(operationId, { createdTopicId: data.topicId });
         void Promise.resolve(this.#get().refreshTopic()).catch(console.error);
       } else if (operationContext.topicId) {
-        // Optimistically update topic's updatedAt so sidebar re-groups immediately
+        // Optimistically bump the sort key (`sortUpdatedAt`, the sidebar's activity-time
+        // sort/group key) so the topic jumps to the top immediately, before the SWR
+        // refetch returns the server's fresh `topicActivityAt`. Bumping `updatedAt` here
+        // would no longer reorder anything — the sidebar sorts by `sortUpdatedAt`.
         this.#get().internal_dispatchTopic({
           type: 'updateTopic',
           id: operationContext.topicId,
-          value: { updatedAt: Date.now() },
+          value: { sortUpdatedAt: Date.now() },
         });
       }
 
@@ -1110,11 +1482,19 @@ export class ConversationLifecycleActionImpl {
       // Create final context with updated topicId/threadId from server response
       const finalContext = {
         ...operationContext,
+        isNew: data.createdThreadId || isCreateNewTopic ? false : operationContext.isNew,
         threadId: finalThreadId,
         topicId: finalTopicId,
       };
       const finalMessageKey = messageMapKey(finalContext);
       this.#get().moveQueuedMessages(currentContextKey, finalMessageKey);
+      // Legacy queue location: follow-ups enqueued behind an op still
+      // registered under the pre-mint `_new` key.
+      if (willCreateNewTopic)
+        this.#get().moveQueuedMessages(
+          messageMapKey({ ...operationContext, topicId: null }),
+          finalMessageKey,
+        );
       const persistedMessages = attachSendTimeMetadataToUserMessage(
         data.messages,
         data.userMessageId,
@@ -1165,15 +1545,19 @@ export class ConversationLifecycleActionImpl {
           this.#get().updateOperationMetadata(operationId, { inputSendErrorMsg: e.message });
           const op = this.#get().operations[operationId];
           if (op?.metadata.inputEditorTempState) {
-            this.#get().mainInputEditor?.setJSONState(op.metadata.inputEditorTempState);
+            targetInputEditor?.setJSONState(op.metadata.inputEditorTempState);
           } else {
-            this.#get().mainInputEditor?.setDocument('markdown', message);
+            targetInputEditor?.setDocument('markdown', message);
           }
         }
       }
     } finally {
-      // A new topic was created, or the user cancelled the message (or it failed), so data is absent here
-      if (isCreatedTopicResponse(data) || !data) {
+      // Roll the optimistic pair back only when the send did not land (cancel or
+      // failure). On success there is nothing to clean up: the rows were created
+      // under the ids the server persisted, so `replaceMessages` reconciled them
+      // in place — and for a brand-new topic `switchTopic({ clearNewKey: true })`
+      // drops the now-empty `_new` bucket anyway.
+      if (!data) {
         this.#get().internal_dispatchMessage(
           { type: 'deleteMessages', ids: [tempId, tempAssistantId] },
           { operationId },
@@ -1221,6 +1605,10 @@ export class ConversationLifecycleActionImpl {
 
     const execContext = {
       ...operationContext,
+      // The persisted topic/thread is now the identity of this conversation.
+      // Clear the draft marker before creating the child runtime operation so
+      // Stop from the re-rendered ConversationProvider matches it.
+      isNew: data.createdThreadId || isCreatedTopicResponse(data) ? false : operationContext.isNew,
       topicId: data.topicId ?? operationContext.topicId,
       threadId: data.createdThreadId ?? operationContext.threadId,
     };
@@ -1323,6 +1711,7 @@ export class ConversationLifecycleActionImpl {
             parentOperationId: operationId,
             inPortalThread: !!data.createdThreadId,
             skipCreateFirstMessage: true,
+            userMessageId: data.userMessageId,
           });
         }
 
@@ -1479,6 +1868,9 @@ export class ConversationLifecycleActionImpl {
           heterogeneousProvider: parentAgentConfig?.agencyConfig?.heterogeneousProvider,
           inPortalThread,
           isGatewayMode: this.#get().isGatewayModeEnabled(context.agentId),
+          isWorkspaceAgent: context.agentId
+            ? agentByIdSelectors.isWorkspaceAgentById(context.agentId)(getAgentStoreState())
+            : false,
           messages: messagesWithInstruction,
           parentOperationId: operationId,
         },

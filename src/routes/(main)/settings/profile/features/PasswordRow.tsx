@@ -1,6 +1,6 @@
 'use client';
 
-import { Button } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -41,6 +41,7 @@ const PasswordRow = () => {
 
   return (
     <ProfileRow
+      anchor={'profile-password'}
       label={t('profile.password')}
       action={
         <Button loading={sending} size="small" onClick={handleChangePassword}>

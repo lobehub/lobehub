@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 
 import ChatInputNotice from '@/features/ChatInput/ChatInputNotice';
 import { useChatInputStore } from '@/features/ChatInput/store';
-import { LayoutContainerContext } from '@/routes/(main)/_layout/DesktopLayoutContainer/LayoutContainerContext';
+import { LayoutContainerContext } from '@/features/DesktopLayoutContainer/LayoutContainerContext';
 import { useChatStore } from '@/store/chat';
 import { chatSelectors } from '@/store/chat/selectors';
 import { fileChatSelectors, useFileStore } from '@/store/file';
@@ -24,6 +24,8 @@ import ControlBar from '../ControlBar';
 import InputEditor from '../InputEditor';
 import { useSkillDrop } from '../InputEditor/ActionTag/useSkillDrop';
 import { type PlaceholderVariant } from '../InputEditor/Placeholder';
+import { useTopicDrop } from '../InputEditor/ReferTopic/useTopicDrop';
+import { useWorkspaceFileDrop } from '../InputEditor/useWorkspaceFileDrop';
 import SendArea from '../SendArea';
 import TypoBar from '../TypoBar';
 import ContextContainer from './ContextContainer';
@@ -58,6 +60,19 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     border: none;
     border-radius: 0 !important;
   `,
+  leftActions: css`
+    flex: none;
+    min-width: 0;
+
+    > * {
+      flex: none !important;
+    }
+  `,
+  leftSlot: css`
+    overflow: hidden;
+    flex: 1;
+    min-width: 0;
+  `,
 }));
 
 interface DesktopChatInputProps extends ActionToolbarProps {
@@ -76,6 +91,7 @@ interface DesktopChatInputProps extends ActionToolbarProps {
   controlBarSlot?: ReactNode;
   extentHeaderContent?: ReactNode;
   hidden?: boolean;
+  initialContent?: string;
   inputContainerProps?: ChatInputProps;
   /**
    * Swap the action bar and send area for skeleton placeholders while
@@ -105,6 +121,7 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
     extraActionItems,
     dropdownPlacement,
     hidden,
+    initialContent,
     isConfigLoading = false,
     leftContent,
     placeholder,
@@ -130,8 +147,27 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
 
     const chatKey = useChatStore(chatSelectors.currentChatKey);
 
+    // The ControlBar (or the custom slot standing in for it) hosts the
+    // context-window token tag; without one, SendArea keeps it beside Send.
+    const hasControlBar = Boolean(controlBarSlot) || showControlBar;
+
     const setExpand = useChatInputStore((s) => s.setExpand);
     const skillDrop = useSkillDrop();
+    const topicDrop = useTopicDrop();
+    const workspaceFileDrop = useWorkspaceFileDrop();
+
+    // Fan a single drag event out to every custom-MIME drop handler. Each one
+    // no-ops unless its own MIME is present, so ordering is irrelevant.
+    const handleDragOver = (event: React.DragEvent) => {
+      skillDrop.onDragOver(event);
+      topicDrop.onDragOver(event);
+      workspaceFileDrop.onDragOver(event);
+    };
+    const handleDrop = (event: React.DragEvent) => {
+      skillDrop.onDrop(event);
+      topicDrop.onDrop(event);
+      workspaceFileDrop.onDrop(event);
+    };
 
     useEffect(() => {
       if (editor) editor.focus();
@@ -156,6 +192,27 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
         style={{ height: 32, minWidth: 64, width: 64 }}
       />
     ) : null;
+    const noticeNode = !isConfigLoading && <ChatInputNotice />;
+    const leftSlotContent = (
+      <Flexbox horizontal align={'center'} className={styles.leftActions}>
+        {leftContent ?? (
+          <ActionBar
+            disableCollapse
+            borderRadius={borderRadius}
+            dropdownPlacement={dropdownPlacement}
+            extraActionItems={extraActionItems}
+          />
+        )}
+      </Flexbox>
+    );
+    const leftSlot = noticeNode ? (
+      <Flexbox horizontal align={'center'} className={styles.leftSlot} gap={4}>
+        {leftSlotContent}
+        {noticeNode}
+      </Flexbox>
+    ) : (
+      leftSlotContent
+    );
 
     const content = (
       <Flexbox
@@ -163,10 +220,9 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
         gap={8}
         paddingBlock={expand ? 0 : showFootnote ? '0 12px' : '0 8px'}
         style={{ display: hidden ? 'none' : undefined }}
-        onDragOver={skillDrop.onDragOver}
-        onDrop={skillDrop.onDrop}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
       >
-        {!isConfigLoading && <ChatInputNotice />}
         <ChatInput
           data-testid="chat-input"
           defaultHeight={chatInputHeight || 32}
@@ -178,27 +234,18 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
           footer={
             compact ? undefined : (
               <ChatInputActionBar
+                left={loadingLeftSlot ?? leftSlot}
                 style={actionBarStyle ?? { paddingRight: 8 }}
-                left={
-                  loadingLeftSlot ??
-                  leftContent ?? (
-                    <ActionBar
-                      borderRadius={borderRadius}
-                      dropdownPlacement={dropdownPlacement}
-                      extraActionItems={extraActionItems}
-                    />
-                  )
-                }
                 right={
                   loadingRightSlot ??
                   rightContent ??
                   (sendAreaPrefix ? (
                     <Flexbox horizontal align={'center'} gap={6}>
                       {sendAreaPrefix}
-                      <SendArea />
+                      <SendArea hideContextWindow={hasControlBar} />
                     </Flexbox>
                   ) : (
-                    <SendArea />
+                    <SendArea hideContextWindow={hasControlBar} />
                   ))
                 }
               />
@@ -217,7 +264,11 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
           {...inputContainerProps}
           className={cx(expand && styles.inputFullscreen, inputContainerProps?.className)}
         >
-          <InputEditor placeholder={placeholder} placeholderVariant={placeholderVariant} />
+          <InputEditor
+            initialContent={initialContent}
+            placeholder={placeholder}
+            placeholderVariant={placeholderVariant}
+          />
         </ChatInput>
         {controlBarSlot ?? (showControlBar && <ControlBar />)}
         {showFootnote && !expand && (

@@ -10,7 +10,7 @@ import { localFileService } from '@/services/electron/localFileService';
  * electron-vs-lambda decision never leaks up. (Parallels `projectFileService`.)
  */
 class ProjectSkillService {
-  /** List `.agents/skills` / `.claude/skills` for a working directory. */
+  /** List project and execution-device `.agents/skills` / `.claude/skills`. */
   async listProjectSkills({
     deviceId,
     scope,

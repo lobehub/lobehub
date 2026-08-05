@@ -671,6 +671,30 @@ describe('SessionModel', () => {
       expect(await serverDB.select().from(sessions).where(eq(sessions.id, '1'))).toHaveLength(0);
       expect(await serverDB.select().from(sessions).where(eq(sessions.id, '2'))).toHaveLength(1);
     });
+
+    it('should report orphan-deleted agent ids so callers can clean permission rows', async () => {
+      await serverDB.insert(sessions).values([
+        { id: '1', userId },
+        { id: '2', userId },
+      ]);
+      await serverDB.insert(agents).values([
+        { id: 'orphaned', userId },
+        { id: 'still-linked', userId },
+      ]);
+      await serverDB.insert(agentsToSessions).values([
+        { agentId: 'orphaned', sessionId: '1', userId },
+        { agentId: 'still-linked', sessionId: '1', userId },
+        { agentId: 'still-linked', sessionId: '2', userId },
+      ]);
+
+      const { orphanedAgentIds } = await sessionModel.delete('1');
+
+      expect(orphanedAgentIds).toEqual(['orphaned']);
+      expect(await serverDB.select().from(agents).where(eq(agents.id, 'orphaned'))).toHaveLength(0);
+      expect(
+        await serverDB.select().from(agents).where(eq(agents.id, 'still-linked')),
+      ).toHaveLength(1);
+    });
   });
 
   describe('batchDelete', () => {

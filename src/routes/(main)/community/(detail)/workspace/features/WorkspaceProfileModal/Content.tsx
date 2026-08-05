@@ -2,20 +2,10 @@
 
 import { OFFICIAL_URL } from '@lobechat/const';
 import type { CollapseProps } from '@lobehub/ui';
-import {
-  Button,
-  Center,
-  Collapse,
-  Flexbox,
-  Icon,
-  Input,
-  Text,
-  TextArea,
-  Tooltip,
-} from '@lobehub/ui';
-import { useModalContext } from '@lobehub/ui/base-ui';
+import { Center, Collapse, Flexbox, Icon, Input, Text, TextArea, Tooltip } from '@lobehub/ui';
+import { Button, toast, useModalContext } from '@lobehub/ui/base-ui';
 import type { UploadProps } from 'antd';
-import { App, Form, Input as AntInput, Upload } from 'antd';
+import { Form, Input as AntInput, Upload } from 'antd';
 import { cssVar } from 'antd-style';
 import { CircleHelp, Globe, ImagePlus, Loader2, Trash2 } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
@@ -70,7 +60,7 @@ type NamespaceAvailability = 'available' | 'checking' | 'idle' | 'taken';
 
 export const Content = memo<ContentProps>(({ user, onSuccess }) => {
   const { t } = useTranslation('discover');
-  const { message } = App.useApp();
+
   const { close } = useModalContext();
   const [form] = Form.useForm<FormValues>();
   const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
@@ -129,7 +119,7 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
   const handleAvatarUpload = useCallback(
     async (file: File) => {
       if (file.size > MAX_FILE_SIZE) {
-        message.error(t('user.workspaceProfile.errors.fileTooLarge'));
+        toast.error(t('user.workspaceProfile.errors.fileTooLarge'));
         return;
       }
 
@@ -137,7 +127,7 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
       try {
         const result = await uploadWithProgress({ file });
         if (!result?.url) {
-          message.error(t('user.workspaceProfile.errors.uploadFailed'));
+          toast.error(t('user.workspaceProfile.errors.uploadFailed'));
           return;
         }
         setAvatarUrl(
@@ -145,12 +135,12 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
         );
       } catch (error) {
         console.error('[WorkspaceProfileModal] Avatar upload failed:', error);
-        message.error(t('user.workspaceProfile.errors.uploadFailed'));
+        toast.error(t('user.workspaceProfile.errors.uploadFailed'));
       } finally {
         setAvatarUploading(false);
       }
     },
-    [message, t, uploadWithProgress],
+    [t, uploadWithProgress],
   );
 
   const handleBannerUpload: UploadProps['customRequest'] = useCallback(
@@ -158,7 +148,7 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
       const file = options.file as File;
 
       if (file.size > MAX_FILE_SIZE) {
-        message.error(t('user.workspaceProfile.errors.fileTooLarge'));
+        toast.error(t('user.workspaceProfile.errors.fileTooLarge'));
         options.onError?.(new Error('File too large'));
         return;
       }
@@ -167,7 +157,7 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
       try {
         const result = await uploadWithProgress({ file });
         if (!result?.url) {
-          message.error(t('user.workspaceProfile.errors.uploadFailed'));
+          toast.error(t('user.workspaceProfile.errors.uploadFailed'));
           options.onError?.(new Error('Upload failed'));
           return;
         }
@@ -178,13 +168,13 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
         options.onSuccess?.(result);
       } catch (error) {
         console.error('[WorkspaceProfileModal] Banner upload failed:', error);
-        message.error(t('user.workspaceProfile.errors.uploadFailed'));
+        toast.error(t('user.workspaceProfile.errors.uploadFailed'));
         options.onError?.(error as Error);
       } finally {
         setBannerUploading(false);
       }
     },
-    [message, t, uploadWithProgress],
+    [t, uploadWithProgress],
   );
 
   const handleSave = useCallback(async () => {
@@ -193,7 +183,7 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
     const values = await form.validateFields();
 
     if (isSetup && namespaceAvailability === 'taken') {
-      message.error(t('user.workspaceProfile.fields.namespace.taken'));
+      toast.error(t('user.workspaceProfile.fields.namespace.taken'));
       return;
     }
 
@@ -216,7 +206,7 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
         await updateCommunityWorkspaceProfile(profile);
       }
 
-      message.success(
+      toast.success(
         t(isSetup ? 'user.workspaceProfile.setup.success' : 'user.workspaceProfile.success'),
       );
       await onSuccess?.();
@@ -227,27 +217,16 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
       // live check and submit) as a taken-handle message instead of a generic one.
       if (isSetup && isCommunityWorkspaceNamespaceTakenError(error)) {
         setNamespaceAvailability('taken');
-        message.error(t('user.workspaceProfile.fields.namespace.taken'));
+        toast.error(t('user.workspaceProfile.fields.namespace.taken'));
       } else {
-        message.error(
+        toast.error(
           t(isSetup ? 'user.workspaceProfile.setup.failed' : 'user.workspaceProfile.failed'),
         );
       }
     } finally {
       setLoading(false);
     }
-  }, [
-    avatarUrl,
-    bannerUrl,
-    close,
-    form,
-    isSetup,
-    loading,
-    message,
-    namespaceAvailability,
-    onSuccess,
-    t,
-  ]);
+  }, [avatarUrl, bannerUrl, close, form, isSetup, loading, namespaceAvailability, onSuccess, t]);
 
   const optionalItems = useMemo<CollapseProps['items']>(
     () => [

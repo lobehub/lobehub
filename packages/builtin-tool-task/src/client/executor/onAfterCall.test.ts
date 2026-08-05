@@ -5,7 +5,13 @@ import { TaskApiName } from '../../types';
 const mocks = vi.hoisted(() => ({
   getChatStoreState: vi.fn(),
   getTaskStoreState: vi.fn(),
+  internalRefreshTaskDetail: vi.fn(),
   openTaskDetail: vi.fn(),
+  refreshConversation: vi.fn(),
+  refreshTaskList: vi.fn(),
+  refreshVersions: vi.fn(),
+  registerTask: vi.fn(),
+  updateVerifyConfig: vi.fn(),
 }));
 
 vi.mock('@/store/chat', () => ({
@@ -21,7 +27,17 @@ vi.mock('@/store/task/slices/detail/reducer', () => ({
 }));
 
 vi.mock('@/services/task', () => ({
-  taskService: {},
+  taskService: {
+    updateVerifyConfig: mocks.updateVerifyConfig,
+  },
+}));
+
+vi.mock('@/services/work', () => ({
+  workService: {
+    refreshConversation: mocks.refreshConversation,
+    refreshVersions: mocks.refreshVersions,
+    registerTask: mocks.registerTask,
+  },
 }));
 
 // Imported after mocks so the executor module resolves the stubbed stores.
@@ -29,12 +45,18 @@ const { taskExecutor } = await import('./index');
 
 describe('TaskExecutor.onAfterCall — portal auto-open', () => {
   beforeEach(() => {
-    mocks.openTaskDetail.mockClear();
+    vi.clearAllMocks();
+    mocks.internalRefreshTaskDetail.mockResolvedValue(undefined);
+    mocks.refreshConversation.mockResolvedValue(undefined);
+    mocks.refreshTaskList.mockResolvedValue(undefined);
+    mocks.refreshVersions.mockResolvedValue(undefined);
+    mocks.registerTask.mockResolvedValue({ id: 'work-1' });
+    mocks.updateVerifyConfig.mockResolvedValue(undefined);
     mocks.getChatStoreState.mockReturnValue({ openTaskDetail: mocks.openTaskDetail });
     mocks.getTaskStoreState.mockReturnValue({
       activeTaskId: undefined,
-      internal_refreshTaskDetail: vi.fn().mockResolvedValue(undefined),
-      refreshTaskList: vi.fn().mockResolvedValue(undefined),
+      internal_refreshTaskDetail: mocks.internalRefreshTaskDetail,
+      refreshTaskList: mocks.refreshTaskList,
       taskDetailMap: {},
     });
   });
@@ -67,5 +89,33 @@ describe('TaskExecutor.onAfterCall — portal auto-open', () => {
     } as any);
 
     expect(mocks.openTaskDetail).not.toHaveBeenCalled();
+  });
+
+  // Note: Work registration is no longer done inside the executor. It now runs
+  // at the tool-execution dispatch layer (`invokeExecutor`), driven by the
+  // manifest `work` config — covered by the dispatch-layer + shared-extractor
+  // tests instead.
+  it('applies verify config and refreshes the task detail', async () => {
+    const result = await taskExecutor.setTaskVerify(
+      {
+        enabled: true,
+        identifier: 'TASK-1',
+        requirement: 'Ship tested output',
+      },
+      { agentId: 'agent-1' } as any,
+    );
+
+    expect(result.success).toBe(true);
+    expect(mocks.updateVerifyConfig).toHaveBeenCalledWith({
+      id: 'TASK-1',
+      verify: {
+        enabled: true,
+        requirement: 'Ship tested output',
+      },
+    });
+    expect(mocks.internalRefreshTaskDetail).toHaveBeenCalledWith('TASK-1');
+    // The executor itself no longer registers Work or touches the work caches.
+    expect(mocks.registerTask).not.toHaveBeenCalled();
+    expect(mocks.refreshVersions).not.toHaveBeenCalled();
   });
 });

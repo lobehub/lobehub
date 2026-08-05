@@ -1,5 +1,6 @@
 import { CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
-import { Button, Flexbox, stopPropagation, Tooltip } from '@lobehub/ui';
+import { Flexbox, stopPropagation, Tooltip } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { isNull } from 'es-toolkit/compat';
 import { FileBoxIcon, Folder } from 'lucide-react';

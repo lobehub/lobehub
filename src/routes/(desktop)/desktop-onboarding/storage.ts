@@ -3,7 +3,8 @@ import { isDesktopOnboardingScreen } from './types';
 
 export const DESKTOP_ONBOARDING_COMPLETED_KEY = 'lobechat:desktop:onboarding:completed:v1';
 export const DESKTOP_ONBOARDING_EVER_COMPLETED_KEY = 'lobechat:desktop:onboarding:everCompleted:v1';
-export const DESKTOP_ONBOARDING_SCREEN_KEY = 'lobechat:desktop:onboarding:screen:v1';
+// v3 resets persisted positions created while Login preceded Welcome.
+export const DESKTOP_ONBOARDING_SCREEN_KEY = 'lobechat:desktop:onboarding:screen:v3';
 
 /**
  * Check if user has completed onboarding in this session

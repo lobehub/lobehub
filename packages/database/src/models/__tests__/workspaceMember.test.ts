@@ -3,7 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { users, workspaceInvitations, workspaceMembers, workspaces } from '../../schemas';
+import { devices, users, workspaceInvitations, workspaceMembers, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { WorkspaceMemberModel } from '../workspaceMember';
 
@@ -44,9 +44,9 @@ describe('WorkspaceMemberModel', () => {
     it('adds a member with an explicit role', async () => {
       const model = new WorkspaceMemberModel(serverDB, inviterId);
 
-      const result = await model.addMember({ role: 'owner', userId: memberId, workspaceId });
+      const result = await model.addMember({ role: 'admin', userId: memberId, workspaceId });
 
-      expect(result.role).toBe('owner');
+      expect(result.role).toBe('admin');
     });
 
     it('upserts the role and revives a soft-deleted member on conflict', async () => {
@@ -56,9 +56,9 @@ describe('WorkspaceMemberModel', () => {
       await model.removeMember(workspaceId, memberId);
 
       // soft-deleted now; re-adding should revive and update the role
-      const revived = await model.addMember({ role: 'owner', userId: memberId, workspaceId });
+      const revived = await model.addMember({ role: 'admin', userId: memberId, workspaceId });
 
-      expect(revived.role).toBe('owner');
+      expect(revived.role).toBe('admin');
       expect(revived.deletedAt).toBeNull();
 
       // composite PK guarantees a single row per (workspace, user)
@@ -72,7 +72,7 @@ describe('WorkspaceMemberModel', () => {
     it('falls back to the default role when reviving without an explicit role', async () => {
       const model = new WorkspaceMemberModel(serverDB, inviterId);
 
-      await model.addMember({ role: 'owner', userId: memberId, workspaceId });
+      await model.addMember({ role: 'admin', userId: memberId, workspaceId });
       const revived = await model.addMember({ userId: memberId, workspaceId });
 
       expect(revived.role).toBe('member');
@@ -182,6 +182,58 @@ describe('WorkspaceMemberModel', () => {
         .where(eq(workspaceMembers.workspaceId, otherWorkspaceId));
       expect(row.deletedAt).toBeNull();
     });
+
+    it('drops the departing member private + shared-from-personal devices, keeps shared infra', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await model.addMember({ userId: memberId, workspaceId });
+      await serverDB.insert(devices).values([
+        // their private enrollment — dropped
+        {
+          deviceId: 'dep-private',
+          identitySource: 'machine-id',
+          userId: memberId,
+          visibility: 'private',
+          workspaceId,
+        },
+        // shared from their personal list (even if published) — dropped
+        {
+          deviceId: 'dep-shared',
+          identitySource: 'machine-id',
+          sharedFromDeviceId: 'dep-personal',
+          userId: memberId,
+          visibility: 'public',
+          workspaceId,
+        },
+        // public machine they enrolled directly (shared infra) — stays
+        {
+          deviceId: 'team-box',
+          identitySource: 'machine-id',
+          userId: memberId,
+          visibility: 'public',
+          workspaceId,
+        },
+        // their personal row — untouched
+        { deviceId: 'dep-personal', identitySource: 'machine-id', userId: memberId },
+        // same-shape rows in another workspace — untouched
+        {
+          deviceId: 'other-ws-private',
+          identitySource: 'machine-id',
+          userId: memberId,
+          visibility: 'private',
+          workspaceId: otherWorkspaceId,
+        },
+      ]);
+
+      const { removedDeviceIds } = await model.removeMember(workspaceId, memberId);
+
+      // surfaced so callers can best-effort unenroll live gateway sockets
+      expect(removedDeviceIds.sort()).toEqual(['dep-private', 'dep-shared']);
+
+      const remaining = (await serverDB.select({ deviceId: devices.deviceId }).from(devices))
+        .map((d) => d.deviceId)
+        .sort();
+      expect(remaining).toEqual(['dep-personal', 'other-ws-private', 'team-box']);
+    });
   });
 
   describe('updateMemberRole', () => {
@@ -189,10 +241,10 @@ describe('WorkspaceMemberModel', () => {
       const model = new WorkspaceMemberModel(serverDB, inviterId);
       await model.addMember({ role: 'member', userId: memberId, workspaceId });
 
-      await model.updateMemberRole(workspaceId, memberId, 'owner');
+      await model.updateMemberRole(workspaceId, memberId, 'admin');
 
       const found = await model.getMember(workspaceId, memberId);
-      expect(found?.role).toBe('owner');
+      expect(found?.role).toBe('admin');
     });
 
     it('does not update the role of a soft-deleted member', async () => {
@@ -200,7 +252,7 @@ describe('WorkspaceMemberModel', () => {
       await model.addMember({ role: 'member', userId: memberId, workspaceId });
       await model.removeMember(workspaceId, memberId);
 
-      await model.updateMemberRole(workspaceId, memberId, 'owner');
+      await model.updateMemberRole(workspaceId, memberId, 'admin');
 
       const [row] = await serverDB
         .select()
@@ -228,9 +280,9 @@ describe('WorkspaceMemberModel', () => {
       const model = new WorkspaceMemberModel(serverDB, inviterId);
       const before = Date.now();
 
-      const result = await model.createInvitation({ role: 'owner', workspaceId });
+      const result = await model.createInvitation({ role: 'admin', workspaceId });
 
-      expect(result.role).toBe('owner');
+      expect(result.role).toBe('admin');
       expect(result.email).toBeNull();
       const expectedMs = INVITATION_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
       const diff = result.expiresAt.getTime() - before;

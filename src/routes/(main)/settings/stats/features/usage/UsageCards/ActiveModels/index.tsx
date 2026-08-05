@@ -1,10 +1,11 @@
 import { ModelIcon, ProviderIcon } from '@lobehub/icons';
-import { ActionIcon, Avatar, Flexbox, Modal } from '@lobehub/ui';
+import { ActionIcon, Avatar, Flexbox } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { MaximizeIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import StatisticCard from '@/components/StatisticCard';
 import TitleWithPercentage from '@/components/StatisticCard/TitleWithPercentage';
 import { type UsageLog } from '@/types/usage/usageRecord';
@@ -121,14 +122,14 @@ const ActiveModels = memo<UsageChartProps>(({ data, isLoading, groupBy, resolveU
           value: formatNumber(iconList?.length ?? 0),
         }}
       />
-      <Modal
+      <ImperativeModal
         footer={null}
         open={open}
         title={t(tableTitleI18n(groupBy ?? GroupBy.Model))}
         onCancel={() => setOpen(false)}
       >
         <ModelTable data={data} groupBy={groupBy} isLoading={isLoading} resolveUser={resolveUser} />
-      </Modal>
+      </ImperativeModal>
     </>
   );
 });

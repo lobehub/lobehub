@@ -1,10 +1,11 @@
 import { z } from 'zod';
 
+import { type ClientAllocatableEntity, entityIdPattern } from './entityId';
 import type { UIChatMessage } from './message';
 import type { MessageMetadata } from './message/common';
 import { ChatToolPayloadSchema, MessageMetadataSchema } from './message/common';
-import type { CreateMessageParams, PageSelection } from './message/ui/params';
-import { PageSelectionSchema } from './message/ui/params';
+import type { ContextSelection, CreateMessageParams, PageSelection } from './message/ui/params';
+import { ContextSelectionSchema, PageSelectionSchema } from './message/ui/params';
 import type { OpenAIChatMessage } from './openai/chat';
 import type { LobeUniformTool } from './tool';
 import { LobeUniformToolSchema } from './tool';
@@ -14,10 +15,18 @@ import { ThreadType } from './topic/thread';
 
 export interface SendNewMessage {
   content: string;
+  /** Generic context selections attached to this message */
+  contextSelections?: ContextSelection[];
   /** Lexical editor JSON state for rich text rendering */
   editorData?: Record<string, any>;
   // if message has attached with files, then add files to message and the agent
   files?: string[];
+  /**
+   * Id the client already rendered this message under. Honoured verbatim by the
+   * server, so the optimistic row never has to be re-keyed. Omit to let the
+   * server mint one (the pre-client-id behaviour).
+   */
+  id?: string;
   metadata?: MessageMetadata;
   /** Page selections attached to this message (for Ask AI functionality) */
   pageSelections?: PageSelection[];
@@ -55,6 +64,12 @@ export interface SendMessageServerParams {
   groupId?: string;
   newAssistantMessage: {
     /**
+     * Id the client already rendered this message under. Honoured verbatim by
+     * the server, so the optimistic row never has to be re-keyed. Omit to let
+     * the server mint one (the pre-client-id behaviour).
+     */
+    id?: string;
+    /**
      * Message metadata (e.g., isSupervisor for group orchestration)
      */
     metadata?: Record<string, unknown>;
@@ -68,6 +83,12 @@ export interface SendMessageServerParams {
   newThread?: CreateThreadWithMessageParams;
   newTopic?: {
     /**
+     * Id the client already rendered this topic under (sidebar row, message
+     * bucket, active-topic pointer). Honoured verbatim by the server so the
+     * topic never changes id mid-flight. Omit to let the server mint one.
+     */
+    id?: string;
+    /**
      * Topic metadata persisted at creation time. For CC/heterogeneous
      * agents this carries `workingDirectory` so the topic is bound to a
      * project from the moment it's created (used by By-Project grouping
@@ -75,6 +96,9 @@ export interface SendMessageServerParams {
      * post-execution metadata write which can be skipped on cancel/error.
      */
     metadata?: ChatTopicMetadata;
+    /** Pinned model snapshot for the new topic (top-level `topics.model` column). */
+    model?: string;
+    provider?: string;
     title?: string;
     topicMessageIds?: string[];
     trigger?: string;
@@ -125,18 +149,37 @@ const SendPreloadMessageSchema = z.object({
   tools: z.array(ChatToolPayloadSchema).optional(),
 });
 
+/**
+ * A client-minted primary key for a row this request creates.
+ *
+ * Optional on purpose: an older client that sends nothing keeps the previous
+ * behaviour (the server mints the id), so the two can be deployed independently.
+ * When present it is honoured verbatim, which is what removes the
+ * placeholder-id → real-id swap from the whole send flow.
+ *
+ * The pattern is the gate: an unvalidated client primary key would let a caller
+ * submit arbitrary strings — look-alike ids, oversized values, or content that
+ * leaks into logs and URLs.
+ */
+const clientEntityId = (entity: ClientAllocatableEntity) =>
+  z.string().regex(entityIdPattern(entity)).optional();
+
 export const AiSendMessageServerSchema = z.object({
   agentId: z.string().optional(),
   groupId: z.string().optional(),
   newAssistantMessage: z.object({
-    metadata: z.record(z.unknown()).optional(),
+    id: clientEntityId('messages'),
+    metadata: z.record(z.string(), z.unknown()).optional(),
     model: z.string().optional(),
     provider: z.string().optional(),
   }),
   newThread: CreateThreadWithMessageSchema.optional(),
   newTopic: z
     .object({
+      id: clientEntityId('topics'),
       metadata: z.custom<ChatTopicMetadata>().optional(),
+      model: z.string().optional(),
+      provider: z.string().optional(),
       title: z.string().optional(),
       topicMessageIds: z.array(z.string()).optional(),
       trigger: z.string().optional(),
@@ -145,8 +188,10 @@ export const AiSendMessageServerSchema = z.object({
   preloadMessages: z.array(SendPreloadMessageSchema).optional(),
   newUserMessage: z.object({
     content: z.string(),
-    editorData: z.record(z.unknown()).optional(),
+    contextSelections: z.array(ContextSelectionSchema).optional(),
+    editorData: z.record(z.string(), z.unknown()).optional(),
     files: z.array(z.string()).optional(),
+    id: clientEntityId('messages'),
     metadata: MessageMetadataSchema.optional(),
     pageSelections: z.array(PageSelectionSchema).optional(),
     parentId: z.string().optional(),

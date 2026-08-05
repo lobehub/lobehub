@@ -1,9 +1,17 @@
-import { ThreadStatus, ThreadType } from '@lobechat/types';
+import { RequestTrigger, ThreadStatus, ThreadType } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { messages, sessions, threads, topics, users } from '../../schemas';
+import {
+  agentOperations,
+  messages,
+  sessions,
+  threads,
+  topics,
+  users,
+  workspaces,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { ThreadModel } from '../thread';
 
@@ -244,6 +252,55 @@ describe('ThreadModel', () => {
       expect(thread.metadata?.totalToolCalls).toBeUndefined();
       expect(thread.metadata?.model).toBeUndefined();
     });
+
+    it('hides agent-signal isolation threads from topic thread lists', async () => {
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(threads).values([
+          {
+            id: 'visible-subagent-thread',
+            status: ThreadStatus.Active,
+            title: 'Visible subagent',
+            topicId,
+            type: ThreadType.Isolation,
+            userId,
+          },
+          {
+            id: 'agent-signal-thread',
+            status: ThreadStatus.Active,
+            title: 'Agent Signal Skill',
+            topicId,
+            type: ThreadType.Isolation,
+            userId,
+          },
+        ]);
+        await tx.insert(agentOperations).values({
+          id: 'agent-signal-operation',
+          status: 'done',
+          threadId: 'agent-signal-thread',
+          topicId,
+          trigger: RequestTrigger.AgentSignal,
+          userId,
+        });
+      });
+
+      const result = await threadModel.queryByTopicId(topicId);
+
+      expect(result.map((thread) => thread.id)).toEqual(['visible-subagent-thread']);
+    });
+
+    it('hides marked onboarding Understanding writing threads from topic thread lists', async () => {
+      await serverDB.insert(threads).values({
+        id: 'understanding-thread',
+        metadata: { onboardingUnderstanding: { kind: 'writing' } },
+        status: ThreadStatus.Pending,
+        topicId,
+        type: ThreadType.Isolation,
+        userId,
+      });
+
+      expect(await threadModel.queryByTopicId(topicId)).toEqual([]);
+      expect(await threadModel.findById('understanding-thread')).toBeDefined();
+    });
   });
 
   describe('findById', () => {
@@ -415,6 +472,48 @@ describe('ThreadModel', () => {
 
       expect(userThreads).toHaveLength(0);
       expect(otherUserThreads).toHaveLength(1);
+    });
+
+    it('should only clear the caller own threads in workspace mode', async () => {
+      const workspaceId = 'thread-delete-workspace';
+      const workspaceThreadModel = new ThreadModel(serverDB, userId, workspaceId);
+
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(workspaces).values({
+          id: workspaceId,
+          name: 'Thread Delete Workspace',
+          primaryOwnerId: userId,
+          slug: workspaceId,
+        });
+        await tx.insert(topics).values({ id: 'ws-topic', userId, workspaceId });
+        await tx.insert(threads).values([
+          {
+            id: 'ws-thread-mine',
+            topicId: 'ws-topic',
+            type: ThreadType.Standalone,
+            status: ThreadStatus.Active,
+            userId,
+            workspaceId,
+          },
+          {
+            id: 'ws-thread-other',
+            topicId: 'ws-topic',
+            type: ThreadType.Standalone,
+            status: ThreadStatus.Active,
+            userId: otherUserId,
+            workspaceId,
+          },
+        ]);
+      });
+
+      await workspaceThreadModel.deleteAll();
+
+      const remaining = await serverDB
+        .select()
+        .from(threads)
+        .where(eq(threads.workspaceId, workspaceId));
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].userId).toBe(otherUserId);
     });
   });
 });

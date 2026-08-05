@@ -76,6 +76,83 @@ describe('CodexFileChangeTracker', () => {
     expect((enriched.item as any).diffText).toContain(`diff --git a${addPath} b${addPath}`);
   });
 
+  it('does not synthesize a whole-file diff when an update starts without a path snapshot', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'codex-file-change-tracker-'));
+    tempDirs.push(dir);
+
+    const updatePath = path.join(dir, 'existing.ts');
+    await writeFile(updatePath, 'line one\nline two\nline three\n', 'utf8');
+
+    const tracker = new CodexFileChangeTracker();
+
+    await tracker.track({
+      item: {
+        changes: [],
+        id: 'item_missing_snapshot',
+        type: 'file_change',
+      },
+      type: 'item.started',
+    });
+
+    await writeFile(updatePath, 'line one\nline two updated\nline three\n', 'utf8');
+
+    const enriched = await tracker.track({
+      item: {
+        changes: [{ kind: 'update', path: updatePath }],
+        id: 'item_missing_snapshot',
+        type: 'file_change',
+      },
+      type: 'item.completed',
+    });
+
+    expect(enriched.item).toMatchObject({
+      changes: [{ kind: 'update', linesAdded: 0, linesDeleted: 0, path: updatePath }],
+      linesAdded: 0,
+      linesDeleted: 0,
+    });
+    expect(enriched.item).not.toHaveProperty('diffText');
+    expect(enriched.item.changes?.[0]).not.toHaveProperty('diffText');
+  });
+
+  it('does not synthesize a whole-file diff when an update snapshot says the file is missing', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'codex-file-change-tracker-'));
+    tempDirs.push(dir);
+
+    const updatePath = path.join(dir, 'large-existing.md');
+    const tracker = new CodexFileChangeTracker();
+
+    await tracker.track({
+      item: {
+        changes: [{ kind: 'update', path: updatePath }],
+        id: 'item_missing_file_snapshot',
+        type: 'file_change',
+      },
+      type: 'item.started',
+    });
+
+    const originalContent = Array.from({ length: 1200 }, (_, index) => `line ${index + 1}`).join(
+      '\n',
+    );
+    await writeFile(updatePath, `${originalContent}\nnew 1\nnew 2\nnew 3\nnew 4\nnew 5\n`, 'utf8');
+
+    const enriched = await tracker.track({
+      item: {
+        changes: [{ kind: 'update', linesAdded: 5, linesDeleted: 0, path: updatePath }],
+        id: 'item_missing_file_snapshot',
+        type: 'file_change',
+      },
+      type: 'item.completed',
+    });
+
+    expect(enriched.item).toMatchObject({
+      changes: [{ kind: 'update', linesAdded: 5, linesDeleted: 0, path: updatePath }],
+      linesAdded: 5,
+      linesDeleted: 0,
+    });
+    expect(enriched.item).not.toHaveProperty('diffText');
+    expect(enriched.item.changes?.[0]).not.toHaveProperty('diffText');
+  });
+
   it('treats rename changes as metadata-only and keeps line stats at zero', async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'codex-file-change-tracker-'));
     tempDirs.push(dir);

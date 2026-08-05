@@ -1,3 +1,4 @@
+import { withOtelMetricsForUpstashWorkflows } from '@lobechat/observability-otel/modules/upstash-workflow';
 import { serve } from '@upstash/workflow/nextjs';
 import debug from 'debug';
 
@@ -10,7 +11,7 @@ import { resolveAgentEvalRunWorkspace } from '@/server/workflows/agentEvalRun/ut
 const log = debug('lobe-server:workflows:resume-thread-trajectory');
 
 export const { POST } = serve<ResumeThreadTrajectoryPayload>(
-  async (context) => {
+  withOtelMetricsForUpstashWorkflows(async (context) => {
     const payload = context.requestPayload ?? {};
     const { runId, testCaseId, threadId, topicId, userId } = payload;
 
@@ -45,7 +46,7 @@ export const { POST } = serve<ResumeThreadTrajectoryPayload>(
     );
 
     return { success: true, testCaseId, threadId, topicId };
-  },
+  }),
   {
     flowControl: {
       key: 'agent-eval-run.resume-thread-trajectory',

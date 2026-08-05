@@ -1,35 +1,25 @@
 'use client';
 
-import { ActionIcon, Flexbox, Skeleton } from '@lobehub/ui';
-import { Plus } from 'lucide-react';
+import { Grid, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 
-const borderRadius = 6;
-
-const SkeletonList = memo(() => {
+const SkeletonList = memo<{ count?: number }>(({ count = 6 }) => {
   return (
-    <Flexbox align="center" gap={6} width={'100%'}>
-      <ActionIcon
-        icon={Plus}
-        variant={'filled'}
-        size={{
-          blockSize: 48,
-          size: 20,
-        }}
-      />
-
-      {Array.from({ length: 5 }).map((_, index) => (
-        <div key={index}>
-          <Skeleton.Avatar
-            active
-            size={48}
-            style={{
-              borderRadius,
-            }}
-          />
-        </div>
+    <Grid gap={4} maxItemWidth={64} padding={6} rows={6} width={'100%'}>
+      {Array.from({ length: count }).map((_, index) => (
+        <Skeleton.Button
+          active
+          block
+          key={index}
+          style={{
+            aspectRatio: 1,
+            borderRadius: 4,
+            height: 'auto',
+            minWidth: 0,
+          }}
+        />
       ))}
-    </Flexbox>
+    </Grid>
   );
 });
 

@@ -28,6 +28,14 @@ in-memory store alone doesn't count.
 > an empty editor on mount (`useChatInputDraft.ts:32-43`), flushes on unmount (`:30`), and
 > **removes** the draft on send (`ChatInput/store/action.ts:85`) — durable across reload/crash,
 > scoped per topic so drafts never bleed, with 50-entry LRU eviction (`draftStorage.ts:108-126`).
+> ❌ **Channel** (`/agent/:aid/channel`) is the **master-detail** form of this trap: the detail
+> credential form is an in-memory antd `Form`, and selecting another platform in the list runs
+> `form.resetFields()` (`channel/detail/index.tsx:77,245-251`) with **no dirty-guard and no
+> persistence** — pasting a bot token + app secret then clicking a sibling platform (or reloading)
+> **silently wipes** it. Worst-case content, too: secrets copied from a third-party console, the
+> least recreatable input there is. A shared form instance reset on the active-item change is the
+> common shape — the switch that _looks_ like navigation-within is a destructive exit for the
+> editor. ✅ Warn on a dirty switch/exit, or back the draft to storage keyed by `agentId+platform`.
 
 **Checklist**
 

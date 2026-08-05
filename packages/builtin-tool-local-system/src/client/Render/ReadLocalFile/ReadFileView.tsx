@@ -1,6 +1,6 @@
 import { useToolRenderCapabilities } from '@lobechat/shared-tool-ui';
 import type { ReadFileState } from '@lobechat/tool-runtime';
-import { ActionIcon, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, Image, Markdown, PreviewGroup, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { AlignLeft, Asterisk, ExternalLink, FolderOpen } from 'lucide-react';
 import React, { memo } from 'react';
@@ -94,6 +94,7 @@ const ReadFileView = memo<ReadFileState>(
     fileType,
     charCount,
     content,
+    images,
     totalLines,
     totalCharCount,
     loc,
@@ -198,7 +199,20 @@ const ReadFileView = memo<ReadFileState>(
           className={styles.previewBox}
           style={{ height: isHtml ? 240 : undefined, maxHeight: 240 }}
         >
-          {isHtml ? (
+          {images && images.length > 0 ? (
+            <PreviewGroup>
+              <Flexbox horizontal gap={8} style={{ flexWrap: 'wrap', padding: 8 }}>
+                {images.map((image, index) => (
+                  <Image
+                    alt={filename || image.mediaType || ''}
+                    key={image.url || index}
+                    src={image.url}
+                    style={{ borderRadius: 8, maxHeight: 224, objectFit: 'contain' }}
+                  />
+                ))}
+              </Flexbox>
+            </PreviewGroup>
+          ) : isHtml ? (
             <InlineHtmlPreview content={content} />
           ) : fileType === 'md' ? (
             <Markdown style={{ overflow: 'auto' }}>{content}</Markdown>

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ChatStore } from '@/store/chat/store';
 
+import { messageMapKey } from '../../../../utils/messageMapKey';
 import type { AgentRuntimeType } from '../dispatch/agentDispatcher';
 import { buildRunLifecycle } from './buildRunLifecycle';
 import type { RunCompleteEvent, RunTerminalStatus, UserMessagePersistedEvent } from './types';
@@ -15,8 +16,28 @@ vi.mock('@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge', () =
   emitClientAgentSignalSourceEvent: agentSignalBridgeMock.emitClientAgentSignalSourceEvent,
 }));
 
+const desktopNotificationMock = vi.hoisted(() => ({
+  notifyDesktopAgentCompleted: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('@/store/chat/utils/desktopNotification', () => ({
+  notifyDesktopAgentCompleted: desktopNotificationMock.notifyDesktopAgentCompleted,
+}));
+
+// Force the desktop branch of afterRunComplete on (isDesktop is false in the
+// test env). Only afterRunComplete reads isDesktop, and it early-returns for
+// sub_agent runs before the check, so this is inert for every other test.
+vi.mock('@lobechat/const', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return { ...actual, isDesktop: true };
+});
+
 const OP = 'op1';
-const CONTEXT: ConversationContext = { agentId: 'a1', topicId: 't1' } as ConversationContext;
+const CONTEXT: ConversationContext = {
+  agentId: 'a1',
+  topicId: 't1',
+  workspaceSlug: 'team',
+} as ConversationContext;
 
 const makeStore = (afterCompletionCallbacks?: Array<() => void>) => {
   const store = {
@@ -33,7 +54,7 @@ const makeStore = (afterCompletionCallbacks?: Array<() => void>) => {
     messagesMap: {},
     operations: {
       [OP]: {
-        context: { agentId: 'a1', topicId: 't1' },
+        context: CONTEXT,
         metadata: afterCompletionCallbacks ? { runtimeHooks: { afterCompletionCallbacks } } : {},
         status: 'running',
       },
@@ -42,6 +63,7 @@ const makeStore = (afterCompletionCallbacks?: Array<() => void>) => {
     summaryTopicTitle: vi.fn(),
     // topicDataMap / messagesMap reads default to empty (no topic, no messages).
     topicDataMap: {},
+    updateTopicStatus: vi.fn(async () => {}),
   };
   return { get: (() => store) as unknown as () => ChatStore, store };
 };
@@ -74,6 +96,7 @@ const completeEvent = (
 
 beforeEach(() => {
   agentSignalBridgeMock.emitClientAgentSignalSourceEvent.mockClear();
+  desktopNotificationMock.notifyDesktopAgentCompleted.mockClear();
 });
 
 describe('buildRunLifecycle.completeRun — transport-driven disposition', () => {
@@ -144,6 +167,89 @@ describe('buildRunLifecycle.completeRun — transport-driven disposition', () =>
   });
 });
 
+// The client transport persists `status: 'running'` at run start; without a
+// terminal reset for the topic the user is viewing, both the sidebar spinner and
+// the home "running" card would stay stuck after the reply finished (the
+// `markTopicUnread` reset early-returns on the active topic). Mirrors gateway's
+// onSessionComplete `viewing || !succeeded → 'active'` rule.
+describe('buildRunLifecycle.completeRun — client resets a viewed topic out of `running`', () => {
+  it('client success while VIEWING the topic force-resets its status to `active`', async () => {
+    const { get, store } = makeStore(); // activeTopicId === 't1' (viewing)
+    await lifecycle('client', get).completeRun(completeEvent('client', { runtimeStatus: 'done' }));
+
+    expect(store.updateTopicStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ agentId: 'a1', status: 'active', topicId: 't1' }),
+    );
+  });
+
+  it('client success on a VIEWED group topic routes the reset to the group bucket (scope: group)', async () => {
+    // A group run's start-write passes scope: 'group'; the reset must too, or the
+    // optimistic patch derives `group_agent` and misses the visible group row.
+    const { get, store } = makeStore();
+    const groupContext = {
+      agentId: 'a1',
+      groupId: 'g1',
+      scope: 'group',
+      topicId: 't1',
+    } as ConversationContext;
+    await buildRunLifecycle(get, {
+      context: groupContext,
+      parentMessageId: 'u1',
+      parentMessageType: 'user',
+      runId: OP,
+      runScope: 'top_level',
+      runtimeType: 'client',
+    }).completeRun({
+      context: groupContext,
+      operationId: OP,
+      runId: OP,
+      runScope: 'top_level',
+      runtimeStatus: 'done',
+      runtimeType: 'client',
+    });
+
+    expect(store.updateTopicStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: 'group', status: 'active', topicId: 't1' }),
+    );
+  });
+
+  it('client success while NOT viewing leaves the reset to markTopicUnread (no `active` write)', async () => {
+    const { get, store } = makeStore();
+    store.activeTopicId = 'other-topic';
+    await lifecycle('client', get).completeRun(completeEvent('client', { runtimeStatus: 'done' }));
+
+    expect(store.markTopicUnread).toHaveBeenCalled();
+    expect(store.updateTopicStatus).not.toHaveBeenCalled();
+  });
+
+  it('client failure resets the topic to `active` even when not viewing (error is never left `running`)', async () => {
+    const { get, store } = makeStore();
+    store.activeTopicId = 'other-topic';
+    await lifecycle('client', get).completeRun(completeEvent('client', { runtimeStatus: 'error' }));
+
+    expect(store.failOperation).toHaveBeenCalled();
+    expect(store.updateTopicStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'active', topicId: 't1' }),
+    );
+  });
+
+  it('gateway success while viewing does NOT reset via the shared lifecycle (gateway owns its own reset)', async () => {
+    const { get, store } = makeStore();
+    await lifecycle('gateway', get).completeRun(completeEvent('gateway', { status: 'completed' }));
+
+    expect(store.updateTopicStatus).not.toHaveBeenCalled();
+  });
+
+  it('a client sub_agent success does NOT reset the shared topic (sub-agents never wrote `running`)', async () => {
+    const { get, store } = makeStore();
+    await lifecycle('client', get, 'sub_agent').completeRun(
+      completeEvent('client', { runScope: 'sub_agent', runtimeStatus: 'done' }),
+    );
+
+    expect(store.updateTopicStatus).not.toHaveBeenCalled();
+  });
+});
+
 describe('buildRunLifecycle — sub-agent runs skip top-level effects', () => {
   it('a sub_agent success completes the op but does NOT drain the parent input queue', async () => {
     const { get, store } = makeStore();
@@ -181,6 +287,73 @@ describe('buildRunLifecycle — sub-agent runs skip top-level effects', () => {
         completeEvent('gateway', { runScope: 'sub_agent', status: 'completed' }),
       ),
     ).resolves.toBeUndefined();
+    expect(desktopNotificationMock.notifyDesktopAgentCompleted).not.toHaveBeenCalled();
+  });
+});
+
+describe('buildRunLifecycle.afterRunComplete — client desktop notification body', () => {
+  const KEY = messageMapKey(CONTEXT);
+  // parentMessageId for the run under test is 'u1' (see `lifecycle` helper), so
+  // the assistant this run produced is the child of 'u1'.
+  const thisTurnAssistant = {
+    content: 'second turn reply',
+    id: 'a-this',
+    parentId: 'u1',
+    role: 'assistant',
+  } as any;
+  const prevTurnAssistant = {
+    content: 'first turn reply',
+    id: 'a-prev',
+    parentId: 'u-prev',
+    role: 'assistant',
+  } as any;
+
+  it('anchors the body to THIS run reply even when messagesMap still ends on the previous turn', async () => {
+    const { get, store } = makeStore();
+    // messagesMap lags: its last assistant is the PREVIOUS turn. The current
+    // run's assistant has only settled into dbMessagesMap so far.
+    store.messagesMap = { [KEY]: [prevTurnAssistant] } as any;
+    store.dbMessagesMap = { [KEY]: [prevTurnAssistant, thisTurnAssistant] } as any;
+
+    await lifecycle('client', get).afterRunComplete(
+      completeEvent('client', { runtimeStatus: 'done' }),
+    );
+
+    expect(desktopNotificationMock.notifyDesktopAgentCompleted).toHaveBeenCalledTimes(1);
+    expect(desktopNotificationMock.notifyDesktopAgentCompleted).toHaveBeenCalledWith(
+      get,
+      expect.objectContaining({
+        content: 'second turn reply',
+        context: expect.objectContaining({ workspaceSlug: 'team' }),
+      }),
+    );
+  });
+
+  it('uses this run reply when it is present in messagesMap (linear happy path)', async () => {
+    const { get, store } = makeStore();
+    store.messagesMap = { [KEY]: [prevTurnAssistant, thisTurnAssistant] } as any;
+
+    await lifecycle('client', get).afterRunComplete(
+      completeEvent('client', { runtimeStatus: 'done' }),
+    );
+
+    expect(desktopNotificationMock.notifyDesktopAgentCompleted).toHaveBeenCalledWith(
+      get,
+      expect.objectContaining({ content: 'second turn reply' }),
+    );
+  });
+
+  it('suppresses the notification while this run assistant is still tool-calling', async () => {
+    const { get, store } = makeStore();
+    store.messagesMap = {
+      [KEY]: [{ ...thisTurnAssistant, content: 'partial', tools: [{ id: 'tool-1' }] }],
+    } as any;
+
+    await lifecycle('client', get).afterRunComplete(
+      completeEvent('client', { runtimeStatus: 'done' }),
+    );
+
+    expect(desktopNotificationMock.notifyDesktopAgentCompleted).not.toHaveBeenCalled();
   });
 });
 
@@ -255,6 +428,47 @@ describe('buildRunLifecycle.afterUserMessagePersisted — topic title (all runti
     // before summarizing so summaryTopicTitle doesn't bail on a missing topic.
     expect(store.refreshTopic).toHaveBeenCalled();
     expect(store.summaryTopicTitle).toHaveBeenCalledWith('t1', messages);
+  });
+
+  it('new topic (gateway, no caller messages) reads the store under the EVENT topicId, not the stale send-time context', async () => {
+    // Regression (#16289 follow-up): the adapter is built with the send-time
+    // `operationContext`, whose topicId is still null for a brand-new topic.
+    // Gateway/hetero omit `event.messages` and persist the conversation under
+    // the REAL topicId (carried on `event.context`). Reading the store with the
+    // stale adapter context lands on an empty bucket, so the model summarizes
+    // nothing and emits a degenerate "空对话标题" title.
+    const { get, store } = makeStore();
+    const storedMessages = [{ content: 'hello there', id: 'm1', role: 'user' } as any];
+    // Send-time context: new topic not created yet, so no topicId.
+    const sendContext = { agentId: 'a1', workspaceSlug: 'team' } as ConversationContext;
+    // Event context: the freshly-created topic id the messages were persisted under.
+    const eventContext = {
+      agentId: 'a1',
+      topicId: 't1',
+      workspaceSlug: 'team',
+    } as ConversationContext;
+    store.messagesMap = { [messageMapKey(eventContext)]: storedMessages };
+
+    const runLifecycle = buildRunLifecycle(get, {
+      context: sendContext,
+      parentMessageId: 'u1',
+      parentMessageType: 'user',
+      runId: OP,
+      runScope: 'top_level',
+      runtimeType: 'gateway',
+    });
+
+    await runLifecycle.afterUserMessagePersisted({
+      context: eventContext,
+      isCreateNewTopic: true,
+      operationId: OP,
+      runId: OP,
+      runScope: 'top_level',
+      runtimeType: 'gateway',
+      topicId: 't1',
+    });
+
+    expect(store.summaryTopicTitle).toHaveBeenCalledWith('t1', storedMessages);
   });
 
   it('does NOT title for a sub_agent run', async () => {

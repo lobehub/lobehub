@@ -5,6 +5,7 @@ import { getTestDB } from '../../../core/getTestDB';
 import {
   agentEvalBenchmarks,
   agentEvalDatasets,
+  agentEvalExperiments,
   agentEvalTestCases,
   users,
 } from '../../../schemas';
@@ -186,10 +187,52 @@ describe('AgentEvalDatasetModel', () => {
     });
 
     it('should query datasets by benchmarkId', async () => {
-      const results = await datasetModel.query(benchmarkId);
+      const results = await datasetModel.query({ benchmarkId });
 
       expect(results).toHaveLength(2); // user-dataset-1, system-dataset
       expect(results.every((r) => r.benchmarkId === benchmarkId)).toBe(true);
+    });
+
+    it('should query datasets across multiple benchmarks via benchmarkIds', async () => {
+      const [benchmark2] = await serverDB
+        .select()
+        .from(agentEvalBenchmarks)
+        .where(eq(agentEvalBenchmarks.identifier, 'benchmark-2'));
+
+      const results = await datasetModel.query({ benchmarkIds: [benchmarkId, benchmark2.id] });
+
+      // user-dataset-1, user-dataset-2, system-dataset (other-user-dataset excluded)
+      expect(results).toHaveLength(3);
+      expect(results.map((r) => r.identifier)).toEqual(
+        expect.arrayContaining(['user-dataset-1', 'user-dataset-2', 'system-dataset']),
+      );
+    });
+
+    it('should query an experiment-scoped subset and exclude system rows', async () => {
+      const [experiment] = await serverDB
+        .insert(agentEvalExperiments)
+        .values({ name: 'Experiment 1', userId })
+        .returning();
+      await serverDB.insert(agentEvalDatasets).values([
+        {
+          benchmarkId,
+          identifier: 'scoped-dataset',
+          name: 'Scoped Dataset',
+          sourceExperimentId: experiment.id,
+          userId,
+        },
+        {
+          benchmarkId,
+          identifier: 'scoped-system-dataset',
+          name: 'Scoped System Dataset',
+          sourceExperimentId: experiment.id,
+          userId: null, // system row inside the scope must be excluded
+        },
+      ]);
+
+      const results = await datasetModel.query({ sourceExperimentId: experiment.id });
+
+      expect(results.map((r) => r.identifier)).toEqual(['scoped-dataset']);
     });
 
     it('should order by createdAt descending', async () => {

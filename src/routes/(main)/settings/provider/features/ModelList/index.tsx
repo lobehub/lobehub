@@ -16,6 +16,7 @@ import {
 import { memo, Suspense, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
@@ -45,7 +46,7 @@ const Content = memo<ContentProps>(({ id }) => {
 
   const allModels = useAiInfraStore(aiModelSelectors.filteredAiProviderModelList, isEqual);
 
-  const { isLoading } = useFetchAiProviderModels(id);
+  const { isLoading, error, mutate } = useFetchAiProviderModels(id);
 
   // Count models by type (for all models, not just enabled)
   const modelCounts = useMemo(() => {
@@ -128,6 +129,11 @@ const Content = memo<ContentProps>(({ id }) => {
   const currentActiveTab = availableTabKeys.includes(activeTab) ? activeTab : 'all';
 
   if (isLoading) return <SkeletonList />;
+
+  // Error before empty: a failed model-list fetch must not render as
+  // "no models yet" (EmptyModels) — surface the reason + Retry (ux Read §1.1).
+  if (error && isEmpty)
+    return <AsyncError error={error} variant={'block'} onRetry={() => mutate()} />;
 
   if (isSearching) return <SearchResult />;
 

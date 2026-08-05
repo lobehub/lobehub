@@ -3,8 +3,8 @@
 import { AGENT_PROFILE_URL } from '@lobechat/const';
 import type { AgentEvalRunDetail } from '@lobechat/types';
 import { ActionIcon, Avatar, copyToClipboard, Flexbox, Highlighter, Markdown } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App, Button, Tag } from 'antd';
+import { Button, confirmModal, toast } from '@lobehub/ui/base-ui';
+import { Tag } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   ArrowLeft,
@@ -19,7 +19,9 @@ import {
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { createRunEditModal } from '@/routes/(main)/eval/bench/[benchmarkId]/features/RunEditModal';
 import StatusBadge from '@/routes/(main)/eval/features/StatusBadge';
@@ -105,9 +107,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   agentLink: css`
     cursor: pointer;
-
     border-radius: ${cssVar.borderRadiusSM};
-
     transition: color 0.15s ease;
 
     &:hover {
@@ -134,7 +134,6 @@ const styles = createStaticStyles(({ css }) => ({
   headerBand: css`
     padding: 20px;
     border-radius: ${cssVar.borderRadiusLG};
-
     background: ${cssVar.colorFillQuaternary};
   `,
   metaItem: css`
@@ -165,6 +164,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   runName: css`
     margin: 0;
+
     font-size: ${cssVar.fontSizeHeading3};
     font-weight: 600;
     line-height: 1.2;
@@ -180,8 +180,9 @@ interface RunHeaderProps {
 
 const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
   const { t } = useTranslation('eval');
-  const { message } = App.useApp();
+
   const navigate = useWorkspaceAwareNavigate();
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const abortRun = useEvalStore((s) => s.abortRun);
   const deleteRun = useEvalStore((s) => s.deleteRun);
   const startRun = useEvalStore((s) => s.startRun);
@@ -228,7 +229,7 @@ const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
           setStarting(true);
           await startRun(run.id, run.status !== 'idle');
         } catch (error: any) {
-          message.error(error?.message || 'Failed to start run');
+          toast.error(error?.message || 'Failed to start run');
         } finally {
           setStarting(false);
         }
@@ -239,15 +240,18 @@ const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
 
   const handleOpenAgent = () => {
     if (run.targetAgentId) {
-      window.open(AGENT_PROFILE_URL(run.targetAgentId), '_blank');
+      window.open(
+        buildWorkspaceAwarePath(AGENT_PROFILE_URL(run.targetAgentId), activeWorkspaceSlug),
+        '_blank',
+      );
     }
   };
   const handleCopyRunId = async () => {
     try {
       await copyToClipboard(run.id);
-      message.success(t('run.detail.copyRunIdSuccess'));
+      toast.success(t('run.detail.copyRunIdSuccess'));
     } catch {
-      message.error(t('run.detail.copyRunIdFailed'));
+      toast.error(t('run.detail.copyRunIdFailed'));
     }
   };
 

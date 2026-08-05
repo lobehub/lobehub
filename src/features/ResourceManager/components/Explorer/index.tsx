@@ -3,10 +3,14 @@
 import { Flexbox } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 
+import AsyncBoundary from '@/components/AsyncBoundary';
 import { useFolderPath } from '@/routes/(main)/resource/features/hooks/useFolderPath';
 import { useResourceManagerUrlSync } from '@/routes/(main)/resource/features/hooks/useResourceManagerUrlSync';
 import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
-import { sortFileList } from '@/routes/(main)/resource/features/store/selectors';
+import {
+  getResourceQueryVisibility,
+  sortFileList,
+} from '@/routes/(main)/resource/features/store/selectors';
 import { useFetchResources, useResourceStore } from '@/store/file/slices/resource/hooks';
 
 import { KnowledgeBaseListProvider } from '../KnowledgeBaseListProvider';
@@ -56,16 +60,19 @@ const ResourceExplorer = memo(() => {
       showFilesInKnowledgeBase: false,
       sortType,
       sorter,
-      // Two-mode narrowing: `'private'` shows own private rows, `'workspace'`
-      // shows public rows. Personal mode ignores the value server-side so
-      // sending it there is a harmless no-op.
-      visibility: listVisibility === 'private' ? ('private' as const) : ('public' as const),
+      // The two-mode narrowing belongs to the resource home. A concrete
+      // library supplies its own visibility boundary and must not inherit the
+      // user's last home filter.
+      visibility: getResourceQueryVisibility(libraryId, listVisibility),
     }),
     [category, libraryId, currentFolderSlug, sortType, sorter, listVisibility],
   );
 
-  // Use SWR for data fetching with automatic caching and revalidation
-  const { isLoading, isValidating } = useFetchResources(queryParams);
+  // Use SWR for data fetching with automatic caching and revalidation.
+  // `error` / `mutate` were previously discarded, so a failed resource fetch fell
+  // through to the "create your first resource" onboarding empty (Read §1.1
+  // failure-as-empty). Capture them and branch the failure before empty.
+  const { isLoading, isValidating, error, mutate } = useFetchResources(queryParams);
 
   // Get resource data from store (updated by SWR hook)
   const { resourceList } = useResourceStore();
@@ -104,17 +111,34 @@ const ResourceExplorer = memo(() => {
       <Flexbox height={'100%'}>
         <Header />
         <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-          {showEmptyStatus ? (
-            <EmptyPlaceholder />
-          ) : viewMode === 'list' ? (
-            <ListView isLoading={isLoading} isValidating={isValidating} queryParams={queryParams} />
-          ) : (
-            <MasonryView
-              isLoading={isLoading}
-              isValidating={isValidating}
-              queryParams={queryParams}
-            />
-          )}
+          {/*
+            AsyncBoundary gates error → empty → data. `isLoading` stays false here
+            because the list/masonry views own their own skeletons (loading is a
+            content swap inside them, not a full relayout), so the boundary only
+            arbitrates the failed-vs-empty-vs-data precedence the call site got wrong.
+          */}
+          <AsyncBoundary
+            data={data}
+            empty={<EmptyPlaceholder />}
+            error={error}
+            errorVariant={'block'}
+            isEmpty={showEmptyStatus}
+            onRetry={() => mutate()}
+          >
+            {viewMode === 'list' ? (
+              <ListView
+                isLoading={isLoading}
+                isValidating={isValidating}
+                queryParams={queryParams}
+              />
+            ) : (
+              <MasonryView
+                isLoading={isLoading}
+                isValidating={isValidating}
+                queryParams={queryParams}
+              />
+            )}
+          </AsyncBoundary>
           <SearchResultsOverlay />
         </div>
       </Flexbox>

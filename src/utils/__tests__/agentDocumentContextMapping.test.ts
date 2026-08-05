@@ -175,8 +175,7 @@ describe('toAgentContextDocuments', () => {
     expect(result.map((d) => d.id)).toEqual(['doc']);
   });
 
-  // LOBE-11072: children inherit their `custom/folder` parent's title so the
-  // progressive index can fold same-folder siblings under a readable name. The
+  // Children inherit their `custom/folder` parent's title so the progressive
   // folder row is still dropped — only its title survives, on the children.
   it('stamps folderTitle on children of a custom/folder and drops the folder row', () => {
     const rows = [

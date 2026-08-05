@@ -1,4 +1,5 @@
-import { and, eq, gte, isNotNull, sql } from 'drizzle-orm';
+import type { VerifyRunStatus } from '@lobechat/types';
+import { and, eq, gte, isNotNull, or, sql } from 'drizzle-orm';
 
 import { today } from '@/utils/time';
 
@@ -12,15 +13,12 @@ import { agentOperations } from '../schemas/agentOperations';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
-/** Verify rollup states, mirrors the `verify_status` enum column. */
-export type VerifyStatus =
-  | 'unverified'
-  | 'planned'
-  | 'verifying'
-  | 'passed'
-  | 'failed'
-  | 'repairing'
-  | 'delivered';
+/**
+ * Verify rollup states. Aliases the single `VerifyRunStatus` source of truth in
+ * `@lobechat/types` (which also backs the `verify_status` column enum and
+ * `verify_runs.status`) so the three never drift.
+ */
+export type VerifyStatus = VerifyRunStatus;
 
 export interface RecordOperationStartParams {
   agentId?: string | null;
@@ -45,6 +43,16 @@ export interface RecordOperationStartParams {
   trigger?: string;
 }
 
+/** Terminal usage summed across every child operation of one parent. All-zero when it has none. */
+export interface ChildUsageRollup {
+  llmCalls: number;
+  toolCalls: number;
+  totalCost: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalTokens: number;
+}
+
 export interface RecordOperationCompletionParams {
   completedAt?: Date;
   completionReason?:
@@ -67,12 +75,7 @@ export interface RecordOperationCompletionParams {
   /** Backfill the executed provider — see {@link RecordOperationCompletionParams.model}. */
   provider?: string | null;
   status:
-    | 'running'
-    | 'waiting_for_human'
-    | 'waiting_for_async_tool'
-    | 'done'
-    | 'error'
-    | 'interrupted';
+    'running' | 'waiting_for_human' | 'waiting_for_async_tool' | 'done' | 'error' | 'interrupted';
   stepCount?: number | null;
   toolCalls?: number | null;
   totalCost?: number | null;
@@ -128,6 +131,31 @@ export class AgentOperationModel {
   }
 
   /**
+   * Newest operation in this topic that is parked waiting for tool approval.
+   *
+   * A parked run is stream-terminal, so the client marks its own operation
+   * completed and prunes it — by the time the user decides to stop, only the
+   * DB still knows which operation is holding the turn. Scoped by `userId` so
+   * one user can never resolve (and then terminate) another's run.
+   */
+  async findLatestParkedOperationId(topicId: string): Promise<string | undefined> {
+    const [row] = await this.db
+      .select({ id: agentOperations.id })
+      .from(agentOperations)
+      .where(
+        and(
+          eq(agentOperations.topicId, topicId),
+          eq(agentOperations.userId, this.userId),
+          eq(agentOperations.status, 'waiting_for_human'),
+        ),
+      )
+      .orderBy(sql`${agentOperations.createdAt} desc`)
+      .limit(1);
+
+    return row?.id;
+  }
+
+  /**
    * Update the row when the operation reaches a terminal state. Scoped by
    * `userId` so a leaked operationId can't be used to flip another user's
    * row. No-op when the start row was never written.
@@ -168,6 +196,50 @@ export class AgentOperationModel {
       .where(and(eq(agentOperations.id, operationId), this.ownership()));
   }
 
+  /**
+   * Sum the terminal usage of every child operation forked from `parentOperationId`
+   * (`callSubAgent` children, isolated group members).
+   *
+   * A read-time SUM rather than an accumulation on the parent row, because the
+   * sub-agent completion bridge is contractually re-deliverable (QStash redelivery,
+   * plus the watchdog abandon path synthesizing the same call) and its safety rests
+   * on every side effect being overwrite-idempotent or CAS-guarded — an `x += child`
+   * is neither, and would double-count on the second delivery. Re-deriving the sum is
+   * exact no matter how many times it runs, and self-heals if a child row lands late.
+   *
+   * Children are already terminal by the time a parent completes: `persistCompletion`
+   * writes the child's row *before* dispatching its `onComplete` hooks, and the bridge
+   * that unparks the parent IS one of those hooks.
+   */
+  async sumChildUsage(parentOperationId: string): Promise<ChildUsageRollup> {
+    const [row] = await this.db
+      .select({
+        llmCalls: sql<string | null>`sum(${agentOperations.llmCalls})`,
+        toolCalls: sql<string | null>`sum(${agentOperations.toolCalls})`,
+        totalCost: sql<string | null>`sum(${agentOperations.totalCost})`,
+        totalInputTokens: sql<string | null>`sum(${agentOperations.totalInputTokens})`,
+        totalOutputTokens: sql<string | null>`sum(${agentOperations.totalOutputTokens})`,
+        totalTokens: sql<string | null>`sum(${agentOperations.totalTokens})`,
+      })
+      .from(agentOperations)
+      .where(and(eq(agentOperations.parentOperationId, parentOperationId), this.ownership()));
+
+    // `sum()` over zero rows is NULL, and numeric sums come back as strings.
+    const num = (value: string | null | undefined): number => {
+      const parsed = Number(value ?? 0);
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+
+    return {
+      llmCalls: num(row?.llmCalls),
+      toolCalls: num(row?.toolCalls),
+      totalCost: num(row?.totalCost),
+      totalInputTokens: num(row?.totalInputTokens),
+      totalOutputTokens: num(row?.totalOutputTokens),
+      totalTokens: num(row?.totalTokens),
+    };
+  }
+
   async findById(operationId: string) {
     const [row] = await this.db
       .select()
@@ -175,6 +247,28 @@ export class AgentOperationModel {
       .where(and(eq(agentOperations.id, operationId), this.ownership()))
       .limit(1);
     return row ?? null;
+  }
+
+  /**
+   * Load an operation together with its direct child operations (`callSubAgent`
+   * children / isolated group members) — the (at most) two-layer operation
+   * tree. File-Work registration gathers every op in this tree so a round's
+   * tool calls, including those a sub-agent produced, are scanned together.
+   * Owner-scoped. The root op (`id === operationId`) is included in the result.
+   */
+  async listOperationTree(operationId: string) {
+    return this.db
+      .select()
+      .from(agentOperations)
+      .where(
+        and(
+          this.ownership(),
+          or(
+            eq(agentOperations.id, operationId),
+            eq(agentOperations.parentOperationId, operationId),
+          ),
+        ),
+      );
   }
 
   /**

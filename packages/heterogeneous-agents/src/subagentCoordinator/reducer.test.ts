@@ -47,6 +47,23 @@ const toolsEvent = (parentToolCallId: string, subagentMessageId: string, tools: 
   type: 'stream_chunk',
 });
 
+const toolStateEvent = (
+  parentToolCallId: string,
+  subagentMessageId: string,
+  toolCallId: string,
+  snapshotSeq: number,
+) => ({
+  data: {
+    chunkType: 'tool_state',
+    pluginState: { progress: snapshotSeq },
+    snapshotMode: 'replace',
+    snapshotSeq,
+    subagent: sub(parentToolCallId, subagentMessageId),
+    toolCallId,
+  },
+  type: 'stream_chunk',
+});
+
 const tool = (id: string) => ({
   apiName: 'Bash',
   arguments: '{}',
@@ -221,6 +238,23 @@ describe('subagent reducer', () => {
     ]);
   });
 
+  it('routes tool-state snapshots to the owning subagent thread', () => {
+    const { steps } = run([
+      toolsEvent('task-1', 'm1', [tool('tc-1')]),
+      toolStateEvent('task-1', 'm1', 'tc-1', 3),
+    ]);
+
+    expect(steps[1]).toEqual([
+      {
+        kind: 'updateToolState',
+        pluginState: { progress: 3 },
+        snapshotSeq: 3,
+        threadId: 'thd_1',
+        toolCallId: 'tc-1',
+      },
+    ]);
+  });
+
   it('finalizes on the parent tool_result: flush + terminal assistant + finalizeThread + deletes run', () => {
     const { steps, state } = run([
       textEvent('task-1', 'm1', 'trailing summary'),
@@ -278,6 +312,9 @@ describe('subagent reducer', () => {
         messageId: 'msg_2',
         model: 'claude',
         provider: 'claude-code',
+        // Carried so recordUsage's wholesale metadata overwrite re-stamps
+        // heteroMessageId instead of wiping it.
+        subagentMessageId: 'm1',
         threadId: 'thd_1',
         usage,
       },

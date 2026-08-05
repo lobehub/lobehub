@@ -1,4 +1,4 @@
-import type { SearchParams, SearchQuery } from '@lobechat/types';
+import type { SearchParams, SearchQuery, UniformSearchResponse } from '@lobechat/types';
 import type { Crawler, CrawlImplType, CrawlUniformResult } from '@lobechat/web-crawler';
 import debug from 'debug';
 import pMap from 'p-map';
@@ -10,6 +10,8 @@ import { createSearchServiceImpl } from './impls';
 
 const DEFAULT_CRAWL_CONCURRENCY = 3;
 const DEFAULT_CRAWLER_RETRY = 1;
+const SEARCH_PROVIDERS_FAILED =
+  'Web search failed because all configured providers returned errors';
 const log = debug('lobe-oom:web-browsing:search-service');
 
 const parseImplEnv = (envString: string = '') => {
@@ -164,7 +166,9 @@ export class SearchService {
     try {
       return await impl.query(query, params);
     } catch (e) {
-      console.error('[SearchService] query failed:', (e as Error).message);
+      console.error('[SearchService] query failed', {
+        provider: impl.constructor.name || 'UnknownSearchImpl',
+      });
       return {
         costTime: 0,
         errorDetail: (e as Error).message,
@@ -196,6 +200,8 @@ export class SearchService {
       }
     } catch {}
 
+    let lastSuccessfulEmpty: UniformSearchResponse | undefined;
+
     for (const impl of this.searchImpList) {
       try {
         if (log.enabled) {
@@ -212,30 +218,40 @@ export class SearchService {
         searchEngines: impl.useAutoSearchEngineSelection ? undefined : searchEngines,
         searchTimeRange,
       });
-      let data = await this.queryWithImpl(impl, query, currentParams);
+      while (true) {
+        const data = await this.queryWithImpl(impl, query, currentParams);
 
-      // First retry: remove search engine restrictions if no results found
-      if (data.results.length === 0 && currentParams?.searchEngines?.length) {
-        currentParams = buildSearchParams({
-          searchCategories,
-          searchTimeRange,
-        });
-        data = await this.queryWithImpl(impl, query, currentParams);
-      }
+        if (data.errorDetail) break;
+        if (data.results.length > 0) return data;
 
-      // Second retry: remove all restrictions if still no results found
-      if (data.results.length === 0 && currentParams) {
-        data = await this.queryWithImpl(impl, query);
-      }
+        lastSuccessfulEmpty = data;
 
-      // If this provider returned results, use them
-      if (data.results.length > 0) {
-        return data;
+        if (currentParams?.searchEngines?.length) {
+          currentParams = buildSearchParams({
+            searchCategories,
+            searchTimeRange,
+          });
+          continue;
+        }
+
+        if (currentParams) {
+          currentParams = undefined;
+          continue;
+        }
+
+        break;
       }
     }
 
-    // All providers exhausted, return empty result
-    return { costTime: 0, query, resultNumbers: 0, results: [] };
+    if (lastSuccessfulEmpty) return lastSuccessfulEmpty;
+
+    return {
+      costTime: 0,
+      errorDetail: SEARCH_PROVIDERS_FAILED,
+      query,
+      resultNumbers: 0,
+      results: [],
+    };
   }
 }
 

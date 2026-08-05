@@ -2,7 +2,11 @@ import { vi } from 'vitest';
 
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
-import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
+import {
+  agentByIdSelectors,
+  agentChatConfigSelectors,
+  agentSelectors,
+} from '@/store/agent/selectors';
 
 import { useChatStore } from '../../../../store';
 import { messageMapKey } from '../../../../utils/messageMapKey';
@@ -25,6 +29,9 @@ export const setupMockSelectors = (
   // Mock getAgentConfigById to return config for any agentId
   const getAgentConfig = () => createMockAgentConfig(options.agentConfig);
   vi.spyOn(agentSelectors, 'getAgentConfigById').mockImplementation(() => getAgentConfig);
+  vi.spyOn(agentByIdSelectors, 'getAgentById').mockImplementation(
+    () => () => options.agentMeta || {},
+  );
 
   vi.spyOn(agentChatConfigSelectors, 'currentChatConfig').mockImplementation(() =>
     createMockChatConfig(options.chatConfig),
@@ -65,6 +72,17 @@ export const createMockAbortController = () => {
  * Setup spies for message service methods
  */
 export const spyOnMessageService = () => {
+  const batchMutateSpy = vi
+    .spyOn(messageService, 'batchMutate')
+    .mockImplementation(async (operations) => ({
+      results: operations.map((operation, index) => ({
+        id: operation.type === 'createMessage' ? operation.message.id : operation.id,
+        index,
+        success: true,
+        type: operation.type,
+      })),
+      success: true,
+    }));
   const createMessageSpy = vi
     .spyOn(messageService, 'createMessage')
     .mockResolvedValue({ id: TEST_IDS.NEW_MESSAGE_ID, messages: [] });
@@ -82,6 +100,7 @@ export const spyOnMessageService = () => {
     .mockResolvedValue(undefined as any);
 
   return {
+    batchMutateSpy,
     createMessageSpy,
     removeMessageSpy,
     updateMessageErrorSpy,

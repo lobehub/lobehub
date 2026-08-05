@@ -1,3 +1,4 @@
+import { UserInteractionExecutionRuntime } from '@lobechat/builtin-tool-user-interaction/executionRuntime';
 import type { BuiltinToolContext, BuiltinToolResult, ChatStreamPayload } from '@lobechat/types';
 import { BaseExecutor, RequestTrigger } from '@lobechat/types';
 
@@ -7,6 +8,7 @@ import { useNotebookStore } from '@/store/notebook';
 import { LobeAgentManifest } from '../../manifest';
 import type {
   AnalyzeVisualMediaParams,
+  AskUserQuestionArgs,
   CallSubAgentParams,
   ClearTodosParams,
   CreatePlanParams,
@@ -151,6 +153,16 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
   protected readonly apiEnum = LobeAgentApiName;
 
   private planRuntime = new PlanExecutionRuntime(clientPlanService);
+
+  // Reused from the standalone user-interaction tool — askUserQuestion is
+  // human-intervention 'always', so in normal flows the user's UI submit
+  // becomes the tool result and this runtime is only the fallback executor.
+  private interactionRuntime = new UserInteractionExecutionRuntime();
+
+  // ==================== Ask User Question ====================
+
+  askUserQuestion = (params: AskUserQuestionArgs): Promise<BuiltinToolResult> =>
+    this.interactionRuntime.askUserQuestion(params);
 
   // ==================== Plan / Todo ====================
 
@@ -390,22 +402,45 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
       return { content: 'Sub-agent execution is not available in this runtime.', success: false };
     }
 
-    const { result, threadId, success, error, model, totalToolCalls, totalTokens } =
-      await ctx.subAgent.run({
-        description,
-        inheritMessages,
-        instruction,
-        timeout,
-        toolMessageId: ctx.messageId,
-      });
+    const {
+      result,
+      threadId,
+      success,
+      error,
+      model,
+      totalCost,
+      totalInputTokens,
+      totalOutputTokens,
+      totalToolCalls,
+      totalTokens,
+    } = await ctx.subAgent.run({
+      description,
+      inheritMessages,
+      instruction,
+      timeout,
+      toolMessageId: ctx.messageId,
+    });
 
     if (!success) {
       return { content: error ?? 'Sub-agent execution failed.', success: false };
     }
 
+    // Cost + the token split are persisted alongside the totals because this row is
+    // where the parent's usage tray reads a sub-agent's spend — the child's own
+    // messages sit in an isolation thread the parent never loads, so anything left
+    // off here is invisible to the parent's ledger. Mirrors the shape the server
+    // path's completion bridge backfills.
     return {
       content: result,
-      state: { model, threadId, totalToolCalls, totalTokens },
+      state: {
+        model,
+        threadId,
+        totalCost,
+        totalInputTokens,
+        totalOutputTokens,
+        totalToolCalls,
+        totalTokens,
+      },
       success: true,
     };
   };

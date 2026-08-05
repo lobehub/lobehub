@@ -11,6 +11,7 @@ import type {
   KnowledgeBaseInfo,
   LobeToolManifest,
   OnboardingContext,
+  PlanTodoConfig,
   SkillMeta,
   ToolDiscoveryConfig,
   TopicReferenceItem,
@@ -139,6 +140,9 @@ export interface ServerMessagesEngineParams {
 
   /** Page content context (optional, for document editing) */
   pageContentContext?: PageContentContext;
+
+  /** Plan document TODO state used when conversation messages contain no TODO state */
+  planTodo?: PlanTodoConfig;
 
   /** Provider ID */
   provider: string;

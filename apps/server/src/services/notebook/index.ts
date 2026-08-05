@@ -103,9 +103,9 @@ export class NotebookRuntimeService {
     return toServiceResult(doc);
   };
 
-  deleteDocument = async (id: string): Promise<void> => {
+  deleteDocument = async (id: string, options?: { restrictToCreator?: boolean }): Promise<void> => {
     await this.topicDocumentModel.deleteByDocumentId(id);
-    await this.documentService.deleteDocument(id);
+    await this.documentService.deleteDocument(id, options);
   };
 
   getDocument = async (id: string): Promise<DocumentServiceResult | undefined> => {

@@ -2,19 +2,17 @@
 
 import {
   Avatar,
-  Button,
   Checkbox,
   Collapse,
   Empty,
   Flexbox,
   List,
-  Modal,
   SearchBar,
   stopPropagation,
   Text,
   Tooltip,
 } from '@lobehub/ui';
-import { Switch } from 'antd';
+import { Button, Switch } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { omit } from 'es-toolkit/compat';
 import { Users } from 'lucide-react';
@@ -22,6 +20,7 @@ import { type ChangeEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import { DEFAULT_AVATAR } from '@/const/meta';
 import GroupAvatar from '@/features/GroupAvatar';
 import ModelSelect from '@/features/ModelSelect';
@@ -223,10 +222,7 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
       [agentSessions],
     );
 
-    const memberDescriptionClass = useMemo(
-      () => cx(styles.description, styles.memberDescription),
-      [cx, styles.description, styles.memberDescription],
-    );
+    const memberDescriptionClass = cx(styles.description, styles.memberDescription);
 
     const defaultModel = useMemo(() => {
       if (enabledModels.length > 0 && enabledModels[0].children.length > 0) {
@@ -286,7 +282,7 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
       setSelectedAgents((prev) => prev.filter((id) => id !== agentId));
     }, []);
 
-    const handleReset = () => {
+    const handleReset = useCallback(() => {
       setSelectedTemplate('');
       setSelectedAgents([]);
       setInputValue('');
@@ -299,7 +295,7 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
       }
-    };
+    }, [defaultModel]);
 
     const handleHostModelChange = useCallback((config: { model?: string; provider?: string }) => {
       setHostModelConfig(config);
@@ -504,7 +500,7 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
       } catch (error) {
         console.error('Failed to create group from template:', error);
       }
-    }, [selectedTemplate, onCreateFromTemplate, groupTemplates, removedMembers]);
+    }, [selectedTemplate, onCreateFromTemplate, groupTemplates, removedMembers, handleReset]);
 
     const handleCustomConfirm = useCallback(async () => {
       if (selectedAgents.length === 0) return;
@@ -519,7 +515,7 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
       } finally {
         setIsCreatingCustom(false);
       }
-    }, [selectedAgents, onCreateCustom, onCancel]);
+    }, [selectedAgents, onCreateCustom, onCancel, handleReset]);
 
     const handleConfirm = useCallback(async () => {
       if (selectedTemplate) {
@@ -542,7 +538,7 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
     const confirmLoading = selectedTemplate ? isCreatingFromTemplate : isCreatingCustom;
 
     return (
-      <Modal
+      <ImperativeModal
         open={open}
         title={t('groupWizard.title')}
         width={900}
@@ -755,7 +751,7 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
             </Flexbox>
           </Flexbox>
         </Flexbox>
-      </Modal>
+      </ImperativeModal>
     );
   },
 );

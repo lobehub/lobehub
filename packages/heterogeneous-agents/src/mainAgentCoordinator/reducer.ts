@@ -65,8 +65,7 @@ const normalizeErrorText = (value?: string) => value?.replaceAll(/\s+/g, ' ').tr
  */
 const shouldSuppressTerminalErrorEcho = (content: string, errorData: unknown): boolean => {
   const body = errorData as
-    | { clearEchoedContent?: boolean; code?: string; message?: string; stderr?: string }
-    | undefined;
+    { clearEchoedContent?: boolean; code?: string; message?: string; stderr?: string } | undefined;
   // Keep in sync with the interpreters' ECHO_TRIGGER_CODES.
   if (!body?.clearEchoedContent && body?.code !== 'AuthRequired') return false;
   const normalizedContent = normalizeErrorText(content);
@@ -156,11 +155,15 @@ const openTurn = (state: MainAgentRunState, data: any, ctx: MainAgentReduceCtx):
   next.currentAssistantId = messageId;
   // The spine only advances on NORMAL turns — a signal/reactive turn is a
   // tool-child callback, so the next normal turn re-mounts on the pre-callback
-  // spine assistant, not on the callback.
+  // spine assistant, not on the callback. A signal turn that then emits a
+  // tool_use is really back on the main chain; `reduceToolsChunk` advances the
+  // spine onto it at that point (derived from `currentAssistantId`, so it holds
+  // on a cold replica too — see there).
   if (!isSignalTurn) next.lastSpineMessageId = messageId;
   next.currentMainMessageId = mainMessageId;
   next.accContent = '';
   next.accReasoning = '';
+  next.lastReasoningSnapshotSeq = 0;
   next.lastTextSnapshotSeq = 0;
   next.turnMetadata = {};
   next.toolState = emptyToolState();
@@ -172,13 +175,26 @@ const streamInit = (state: MainAgentRunState, data: any): ReduceResult => {
   const update: Record<string, any> = {};
   if (data?.model) update.model = data.model;
   if (data?.provider) update.provider = data.provider;
-  if (Object.keys(update).length === 0) return { intents: [], state };
+
+  // The seeded assistant's CC message.id arrives on the first non-newStep
+  // stream_start after system:init (the seed was opened with no id). Record it
+  // as `currentMainMessageId` so the first turn's rows get `heteroMessageId`
+  // provenance; `openTurn` owns it for every later turn. Only seed it once — a
+  // later non-newStep stream_start must not clobber the open turn's id.
+  const seedMainMessageId =
+    typeof data?.messageId === 'string' && !state.currentMainMessageId ? data.messageId : undefined;
+
+  if (Object.keys(update).length === 0 && !seedMainMessageId) return { intents: [], state };
 
   const next = copyState(state);
   if (data.model) next.turnModel = data.model;
   if (data.provider) next.turnProvider = data.provider;
+  if (seedMainMessageId) next.currentMainMessageId = seedMainMessageId;
   return {
-    intents: [{ kind: 'persistAssistant', messageId: state.currentAssistantId, ...update }],
+    intents:
+      Object.keys(update).length > 0
+        ? [{ kind: 'persistAssistant', messageId: state.currentAssistantId, ...update }]
+        : [],
     state: next,
   };
 };
@@ -207,9 +223,23 @@ const reduceTextChunk = (state: MainAgentRunState, data: any): ReduceResult => {
 };
 
 const reduceReasoningChunk = (state: MainAgentRunState, data: any): ReduceResult => {
-  if (!data?.reasoning) return { intents: [], state };
   const next = copyState(state);
-  next.accReasoning = state.accReasoning + data.reasoning;
+  const snapshotMode = data?.snapshotMode;
+  const snapshotSeq = typeof data?.snapshotSeq === 'number' ? data.snapshotSeq : undefined;
+
+  // Mirrors `reduceTextChunk`: `replace` snapshots are idempotent under batch
+  // redelivery (a raw delta re-append would durably duplicate reasoning on a
+  // cold-replica retry), and the seq guard drops stale/out-of-order ones.
+  if (snapshotMode === 'replace' && snapshotSeq !== undefined) {
+    if (snapshotSeq <= state.lastReasoningSnapshotSeq) return { intents: [], state }; // stale snapshot
+    next.lastReasoningSnapshotSeq = snapshotSeq;
+    next.turnMetadata = { ...next.turnMetadata, heteroReasoningSnapshotSeq: snapshotSeq };
+    next.accReasoning = data.reasoning;
+  } else {
+    if (!data?.reasoning) return { intents: [], state };
+    next.accReasoning = state.accReasoning + data.reasoning;
+  }
+
   return {
     intents: [
       { kind: 'streamContent', messageId: next.currentAssistantId, reasoning: next.accReasoning },
@@ -259,6 +289,22 @@ const reduceToolsChunk = (
   const lastToolMsgId = newToolMsgIds.at(-1);
   if (lastToolMsgId) next.lastToolMsgIdEver = lastToolMsgId;
 
+  // Any assistant that emits a tool_use is on the main chain, so it is a spine
+  // message — advance the spine onto it. For a normal turn this is a no-op
+  // (`openTurn` already pointed the spine here). For a turn OPENED as a
+  // signal/reactive callback that then called a tool, this promotes it so the
+  // NEXT normal turn chains off THIS turn instead of the pre-signal assistant —
+  // otherwise the wire forks and the read side drops everything after the fork.
+  //
+  // Deriving the promotion from `currentAssistantId` (not a per-turn "opened as
+  // signal" flag) is what keeps it correct on a cold / non-sticky serverless
+  // replica: an in-memory flag is NOT rehydrated by `refreshMainStateFromDb`,
+  // but `currentAssistantId` and `lastSpineMessageId` ARE — and a mid-flight
+  // signal turn is still toolless in the DB, so the recovered spine is the
+  // pre-signal assistant (≠ currentAssistantId) and this batch's `tools_calling`
+  // promotes it exactly as a warm replica would.
+  next.lastSpineMessageId = next.currentAssistantId;
+
   return { intents, state: next };
 };
 
@@ -272,6 +318,29 @@ const reduceStreamChunk = (
   }
   if (data?.chunkType === 'reasoning' && typeof data.reasoning === 'string') {
     return reduceReasoningChunk(state, data);
+  }
+  if (
+    data?.chunkType === 'tool_state' &&
+    data.snapshotMode === 'replace' &&
+    typeof data.toolCallId === 'string' &&
+    data.toolCallId.length > 0 &&
+    Number.isInteger(data.snapshotSeq) &&
+    data.snapshotSeq > 0 &&
+    typeof data.pluginState === 'object' &&
+    data.pluginState !== null &&
+    !Array.isArray(data.pluginState)
+  ) {
+    return {
+      intents: [
+        {
+          kind: 'updateToolState',
+          pluginState: data.pluginState,
+          snapshotSeq: data.snapshotSeq,
+          toolCallId: data.toolCallId,
+        },
+      ],
+      state,
+    };
   }
   if (data?.chunkType === 'tools_calling') {
     const tools = (data.toolsCalling as ToolCallPayload[] | undefined) ?? [];

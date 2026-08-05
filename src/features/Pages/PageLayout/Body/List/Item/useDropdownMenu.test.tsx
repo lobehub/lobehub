@@ -11,9 +11,14 @@ const permissionMock = vi.hoisted(() => ({
   edit_own_content: true,
 }));
 
+const CURRENT_USER_ID = vi.hoisted(() => 'user-1');
+
+const useDocumentTransferMenuItemMock = vi.hoisted(() => vi.fn(() => []));
+
 const storeMock = vi.hoisted(() => ({
   activeWorkspaceId: undefined as string | undefined,
-  document: undefined as { id: string; visibility?: 'private' | 'public' | null } | undefined,
+  document: undefined as
+    { id: string; userId?: string; visibility?: 'private' | 'public' | null } | undefined,
 }));
 
 vi.mock('react-i18next', () => ({
@@ -88,6 +93,17 @@ vi.mock('@/store/page', () => ({
   ),
 }));
 
+vi.mock('@/store/user', () => ({
+  useUserStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({ user: { id: CURRENT_USER_ID } }),
+}));
+
+vi.mock('@/store/user/selectors', () => ({
+  userProfileSelectors: {
+    userId: (state: { user?: { id?: string } }) => state.user?.id,
+  },
+}));
+
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => storeMock.activeWorkspaceId,
 }));
@@ -97,7 +113,7 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
 }));
 
 vi.mock('@/business/client/hooks/useDocumentTransferMenuItem', () => ({
-  useDocumentTransferMenuItem: () => [],
+  useDocumentTransferMenuItem: useDocumentTransferMenuItemMock,
 }));
 
 const getMenuItem = (
@@ -107,10 +123,19 @@ const getMenuItem = (
 
 describe('Page list item dropdown menu', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     permissionMock.create_content = true;
     permissionMock.edit_own_content = true;
     storeMock.activeWorkspaceId = undefined;
     storeMock.document = undefined;
+  });
+
+  it('labels the page transfer action as Move', () => {
+    renderHook(() => useDropdownMenu({ pageId: 'page-1', toggleEditing: vi.fn() }));
+
+    expect(useDocumentTransferMenuItemMock).toHaveBeenCalledWith('page-1', {
+      transferLabel: 'pageEditor.menu.move',
+    });
   });
 
   it('disables page management actions for workspace viewers', () => {
@@ -129,7 +154,7 @@ describe('Page list item dropdown menu', () => {
 
   it('exposes "publish to workspace" for private pages in workspace mode', () => {
     storeMock.activeWorkspaceId = 'ws-1';
-    storeMock.document = { id: 'page-1', visibility: 'private' };
+    storeMock.document = { id: 'page-1', userId: CURRENT_USER_ID, visibility: 'private' };
 
     const { result } = renderHook(() =>
       useDropdownMenu({ pageId: 'page-1', toggleEditing: vi.fn() }),
@@ -141,7 +166,7 @@ describe('Page list item dropdown menu', () => {
 
   it('hides "publish to workspace" for workspace-visible pages', () => {
     storeMock.activeWorkspaceId = 'ws-1';
-    storeMock.document = { id: 'page-1', visibility: 'public' };
+    storeMock.document = { id: 'page-1', userId: CURRENT_USER_ID, visibility: 'public' };
 
     const { result } = renderHook(() =>
       useDropdownMenu({ pageId: 'page-1', toggleEditing: vi.fn() }),
@@ -165,7 +190,7 @@ describe('Page list item dropdown menu', () => {
 
   it('hides "publish to workspace" for viewers without edit permission', () => {
     storeMock.activeWorkspaceId = 'ws-1';
-    storeMock.document = { id: 'page-1', visibility: 'private' };
+    storeMock.document = { id: 'page-1', userId: CURRENT_USER_ID, visibility: 'private' };
     permissionMock.edit_own_content = false;
 
     const { result } = renderHook(() =>

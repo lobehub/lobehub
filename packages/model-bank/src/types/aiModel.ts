@@ -228,6 +228,44 @@ export interface Pricing {
   units: PricingUnit[];
 }
 
+/**
+ * Where a benchmark dimension's raw value comes from. `lobehub` marks values
+ * derived from our own data (e.g. the price axis) rather than an external board.
+ */
+export type ModelRatingSource = 'artificial-analysis' | 'design-arena' | 'lmarena' | 'lobehub';
+
+export interface ModelBenchmarkScore {
+  /**
+   * raw value from the source platform (index points / Elo / tokens per second /
+   * credits per million tokens), kept for tooltips and offline re-normalization
+   */
+  raw?: number;
+  /**
+   * normalized 0-100 score; semantics are pool-relative (the strongest model in
+   * the rated pool scores 100 on that dimension), not an absolute capability value
+   */
+  score: number;
+  source: ModelRatingSource;
+  /** click-through target showing the source leaderboard */
+  sourceUrl: string;
+  /** date the raw value was collected (YYYY-MM-DD) */
+  updatedAt: string;
+}
+
+/**
+ * Per-dimension benchmark ratings rendered as a radar chart. Every dimension is
+ * optional — external leaderboards lag behind new models, so the UI must handle
+ * missing dimensions (grey them out / skip the radar below a coverage threshold).
+ */
+export interface ModelRating {
+  agentic?: ModelBenchmarkScore;
+  design?: ModelBenchmarkScore;
+  intelligence?: ModelBenchmarkScore;
+  price?: ModelBenchmarkScore;
+  speed?: ModelBenchmarkScore;
+  writing?: ModelBenchmarkScore;
+}
+
 export interface AIBaseModelCard {
   /**
    * the context window (or input + output tokens limit)
@@ -301,14 +339,18 @@ export type ExtendParamsType =
   | 'effort'
   | 'deepseekV4ReasoningEffort'
   | 'reasoningEffort'
+  | 'reasoningMode'
   | 'gpt5ReasoningEffort'
   | 'gpt5_1ReasoningEffort'
   | 'gpt5_2ReasoningEffort'
   | 'gpt5_2ProReasoningEffort'
+  | 'gpt5_6ReasoningEffort'
   | 'glm5_2ReasoningEffort'
   | 'grok4_20ReasoningEffort'
   | 'grok4_3ReasoningEffort'
+  | 'grok4_5ReasoningEffort'
   | 'hy3ReasoningEffort'
+  | 'kimiK3ReasoningEffort'
   | 'ring2_6ReasoningEffort'
   | 'codexMaxReasoningEffort'
   | 'opus47Effort'
@@ -354,14 +396,18 @@ export const ExtendParamsTypeSchema = z.enum([
   'effort',
   'deepseekV4ReasoningEffort',
   'reasoningEffort',
+  'reasoningMode',
   'gpt5ReasoningEffort',
   'gpt5_1ReasoningEffort',
   'gpt5_2ReasoningEffort',
   'gpt5_2ProReasoningEffort',
+  'gpt5_6ReasoningEffort',
   'glm5_2ReasoningEffort',
   'grok4_20ReasoningEffort',
   'grok4_3ReasoningEffort',
+  'grok4_5ReasoningEffort',
   'hy3ReasoningEffort',
+  'kimiK3ReasoningEffort',
   'ring2_6ReasoningEffort',
   'codexMaxReasoningEffort',
   'opus47Effort',
@@ -504,6 +550,7 @@ export interface AiProviderModelListItem {
   abilities?: ModelAbilities;
   config?: AiModelConfig;
   contextWindowTokens?: number;
+  description?: string;
   displayName?: string;
   enabled: boolean;
   family?: string;
@@ -591,6 +638,7 @@ export interface EnabledAiModel {
   generation?: string;
   id: string;
   knowledgeCutoff?: string;
+  maxOutput?: number;
   parameters?: ModelParamsSchema;
   pricing?: Pricing;
   providerId: string;

@@ -15,6 +15,7 @@ import { electronSystemService } from '@/services/electron/system';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors/builtinAgentSelectors';
 import { useChatStore } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
 import { globalHelpers } from '@/store/global/helpers';
 import { useHomeStore } from '@/store/home';
@@ -66,6 +67,10 @@ export const useCommandMenu = () => {
       const locale = globalHelpers.getCurrentLanguage();
       return lambdaClient.search.query.query({
         agentId,
+        // Keep the aggregate response DB-only: marketplace results are reached
+        // through the permanent typed-search entries instead of gating every
+        // keystroke on three remote marketplace round-trips.
+        includeMarketplace: false,
         limitPerType: typeFilter ? 50 : 5, // Show more results when filtering by type
         locale,
         query: searchQuery,
@@ -171,6 +176,10 @@ export const useCommandMenu = () => {
 
   const handleCreateTopic = useCallback(() => {
     if (!canCreate) return;
+    // The command item is disabled while a new-topic send is in flight, but a
+    // selection can still race the window opening — don't close the palette on
+    // what would be a silent no-op in openNewTopicOrSaveTopic.
+    if (topicSelectors.isNewTopicSendInFlight(useChatStore.getState())) return;
 
     openNewTopicOrSaveTopic();
     onClose();

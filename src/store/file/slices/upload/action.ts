@@ -1,10 +1,10 @@
 import { LOBE_CHAT_CLOUD } from '@lobechat/business-const';
 import { inferImageMimeTypeFromBytes } from '@lobechat/utils';
+import { toast } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 import { sha256 } from 'js-sha256';
 
 import { handleFileUploadError } from '@/business/client/handleFileUploadError';
-import { message } from '@/components/AntdStaticMethods';
 import { fileService } from '@/services/file';
 import { uploadService } from '@/services/upload';
 import { type StoreSetter } from '@/store/types';
@@ -165,13 +165,13 @@ export class FileUploadActionImpl {
           abortController,
           onNotSupported: () => {
             onStatusUpdate?.({ id: statusId, type: 'removeFile' });
-            message.info({
-              content: t('upload.fileOnlySupportInServerMode', {
+            toast.info({
+              description: t('upload.fileOnlySupportInServerMode', {
                 cloud: LOBE_CHAT_CLOUD,
                 ext: normalizedFile.name.split('.').pop(),
                 ns: 'error',
               }),
-              duration: 5,
+              duration: 5000,
             });
           },
           onProgress: (status, upload) => {

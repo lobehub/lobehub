@@ -1,5 +1,9 @@
 import { ClaudeCodeIdentifier } from '@lobechat/builtin-tool-claude-code';
-import { UserInteractionIdentifier } from '@lobechat/builtin-tool-user-interaction';
+import { LobeAgentApiName, LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
+import {
+  UserInteractionApiName,
+  UserInteractionIdentifier,
+} from '@lobechat/builtin-tool-user-interaction';
 import {
   WebOnboardingApiName,
   WebOnboardingIdentifier,
@@ -36,6 +40,14 @@ type CustomInteractionSubmitHandler = (
 
 const isAgentMarketplaceCall = (identifier: string, apiName?: string) =>
   identifier === WebOnboardingIdentifier && apiName === WebOnboardingApiName.showAgentMarketplace;
+
+const isLobeAgentAskUserQuestion = (identifier: string, apiName?: string) =>
+  identifier === LobeAgentIdentifier && apiName === LobeAgentApiName.askUserQuestion;
+
+const isAskUserQuestionCall = (identifier: string, apiName?: string) =>
+  (identifier === UserInteractionIdentifier &&
+    apiName === UserInteractionApiName.askUserQuestion) ||
+  isLobeAgentAskUserQuestion(identifier, apiName);
 
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((item) => typeof item === 'string');
@@ -122,6 +134,13 @@ const customInteractionSubmitHandlers: Array<{
   match: (identifier: string, apiName?: string) => boolean;
 }> = [
   {
+    handler: async (payload) => ({
+      options: { pluginState: { askUserAnswers: payload } },
+      payload,
+    }),
+    match: isAskUserQuestionCall,
+  },
+  {
     handler: handleAgentMarketplaceSubmit,
     match: isAgentMarketplaceCall,
   },
@@ -142,8 +161,15 @@ const HETERO_CUSTOM_INTERACTION_IDENTIFIERS = new Set<string>([ClaudeCodeIdentif
 export const isHeteroInteractionIdentifier = (identifier: string) =>
   HETERO_CUSTOM_INTERACTION_IDENTIFIERS.has(identifier);
 
+/**
+ * lobe-agent reuses the user-interaction `askUserQuestion` card. Unlike the
+ * standalone tool (whose whole identifier is a custom interaction), lobe-agent
+ * has other APIs (createPlan / clearTodos …) that must keep the default
+ * approve/reject UI — so only its `askUserQuestion` API is a custom interaction.
+ */
 export const isCustomInteractionIdentifier = (identifier: string, apiName?: string) =>
   identifier === UserInteractionIdentifier ||
+  isLobeAgentAskUserQuestion(identifier, apiName) ||
   isHeteroInteractionIdentifier(identifier) ||
   Boolean(findCustomInteractionSubmitHandler(identifier, apiName));
 

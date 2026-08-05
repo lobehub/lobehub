@@ -4,6 +4,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { useClientDataSWRWithSync } from '@/libs/swr';
 import { messageService } from '@/services/message';
+import {
+  clearMessageListClientCacheState,
+  MESSAGE_LIST_VERIFICATION_INTERVAL,
+  runMessageListQuery,
+} from '@/services/message/cache';
 
 import { createStore } from '../../index';
 import { dataSelectors } from './selectors';
@@ -296,6 +301,40 @@ describe('DataSlice', () => {
       expect(state.displayMessages).toHaveLength(0);
       expect(state.dbMessages).toHaveLength(0);
     });
+
+    it('should sync internal replacements to the external store via onMessagesChange', () => {
+      const store = createTestStore();
+      const onMessagesChange = vi.fn();
+      store.setState({ onMessagesChange });
+
+      const messages: UIChatMessage[] = [
+        { id: 'msg-1', content: 'Hello', role: 'user', createdAt: 1000, updatedAt: 1000 } as any,
+      ];
+      store.getState().replaceMessages(messages);
+
+      expect(onMessagesChange).toHaveBeenCalledWith(messages, store.getState().context);
+    });
+
+    it('should NOT echo external prop sync back through onMessagesChange (skipOnMessagesChange)', () => {
+      // Regression: StoreUpdater's external → internal sync used to echo the
+      // bucket back to ChatStore, whose write-through mutate re-wrote the SWR
+      // cache with the (possibly partial) bucket and discarded an in-flight
+      // switch-time revalidation — locking the UI on a partial message list.
+      const store = createTestStore();
+      const onMessagesChange = vi.fn();
+      store.setState({ onMessagesChange });
+
+      const partialBucket: UIChatMessage[] = [
+        { id: 'msg-first', content: 'seed', role: 'user', createdAt: 1000, updatedAt: 1000 } as any,
+      ];
+      store.getState().replaceMessages(partialBucket, { skipOnMessagesChange: true });
+
+      // State still updates…
+      expect(store.getState().dbMessages).toHaveLength(1);
+      expect(store.getState().displayMessages[0].id).toBe('msg-first');
+      // …but nothing is echoed back to the external store.
+      expect(onMessagesChange).not.toHaveBeenCalled();
+    });
   });
 
   describe('selectors', () => {
@@ -538,6 +577,7 @@ describe('DataSlice', () => {
   describe('useFetchMessages', () => {
     beforeEach(() => {
       vi.clearAllMocks();
+      clearMessageListClientCacheState();
     });
 
     it('should pass threadId to messageService.getMessages', async () => {
@@ -567,9 +607,32 @@ describe('DataSlice', () => {
       await waitFor(() => {
         expect(messageService.getMessages).toHaveBeenCalledWith({
           agentId: 'test-session',
+          groupId: null,
           threadId: 'test-thread',
           topicId: 'test-topic',
         });
+      });
+    });
+
+    it("tags the onData echo with source 'fetch' so handlers skip the cache write-through", async () => {
+      // Regression: without the tag, ChatStore.replaceMessages writes the
+      // echoed (possibly stale) snapshot through the SWR cache at mount, which
+      // trips SWR's mutation race guard and discards the in-flight
+      // revalidation — the conversation locks on the stale/partial list.
+      const mockMessages: UIChatMessage[] = [
+        { id: 'sync-msg-1', content: 'Synced', role: 'user', createdAt: 1000, updatedAt: 1000 },
+      ];
+      vi.mocked(messageService.getMessages).mockResolvedValue(mockMessages);
+
+      const context = { agentId: 'test-session', threadId: null, topicId: 'test-topic' };
+      const store = createStore({ context });
+      const onMessagesChange = vi.fn();
+      store.setState({ onMessagesChange });
+
+      store.getState().useFetchMessages(context);
+
+      await waitFor(() => {
+        expect(onMessagesChange).toHaveBeenCalledWith(mockMessages, context, { source: 'fetch' });
       });
     });
 
@@ -716,9 +779,32 @@ describe('DataSlice', () => {
       expect(swrKey[0]).toBe('message:list');
       expect(swrKey[1]).toEqual({
         agentId: 'test-session',
-        topicId: 'test-topic',
+        groupId: null,
         threadId: 'test-thread',
+        topicId: 'test-topic',
       });
+    });
+
+    it('skips switch-time revalidation after a successful server verification', async () => {
+      const context = {
+        agentId: 'test-session',
+        topicId: 'test-topic',
+        threadId: null,
+      };
+      await runMessageListQuery(context, async () => []);
+      vi.mocked(messageService.getMessages).mockResolvedValue([]);
+
+      const store = createStore({ context });
+      store.getState().useFetchMessages(context);
+
+      expect(vi.mocked(useClientDataSWRWithSync)).toHaveBeenCalledWith(
+        expect.any(Array),
+        expect.any(Function),
+        expect.objectContaining({
+          dedupingInterval: MESSAGE_LIST_VERIFICATION_INTERVAL,
+          revalidateIfStale: false,
+        }),
+      );
     });
 
     it('should pass groupId to messageService.getMessages for group chat', async () => {

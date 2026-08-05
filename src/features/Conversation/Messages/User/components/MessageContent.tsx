@@ -1,13 +1,13 @@
 import { Flexbox } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 
+import CollapsibleContent from '@/components/CollapsibleContent';
 import MarkdownMessage from '@/features/Conversation/Markdown';
 import { cleanSpeakerTag } from '@/store/chat/utils/cleanSpeakerTag';
 import { type UIChatMessage } from '@/types/index';
 
 import { useMarkdown } from '../useMarkdown';
 import AudioFileListViewer from './AudioFileListViewer';
-import CollapsibleContent from './CollapsibleContent';
 import FileListViewer from './FileListViewer';
 import ImageFileListViewer from './ImageFileListViewer';
 import PageSelections from './PageSelections';
@@ -17,7 +17,9 @@ import VideoFileListViewer from './VideoFileListViewer';
 const UserMessageContent = memo<UIChatMessage>(
   ({ id, content, editorData, imageList, videoList, audioList, fileList, metadata }) => {
     const markdownProps = useMarkdown(id);
-    const pageSelections = metadata?.pageSelections;
+    const selections = metadata?.contextSelections?.length
+      ? metadata.contextSelections
+      : metadata?.pageSelections;
     const displayContent = useMemo(() => (content ? cleanSpeakerTag(content) : content), [content]);
 
     const hasEditorData =
@@ -31,9 +33,7 @@ const UserMessageContent = memo<UIChatMessage>(
 
     return (
       <Flexbox gap={8} id={id}>
-        {pageSelections && pageSelections.length > 0 && (
-          <PageSelections selections={pageSelections} />
-        )}
+        {selections && selections.length > 0 && <PageSelections selections={selections} />}
         {textBody && <CollapsibleContent>{textBody}</CollapsibleContent>}
         {imageList && imageList?.length > 0 && <ImageFileListViewer items={imageList} />}
         {videoList && videoList?.length > 0 && <VideoFileListViewer items={videoList} />}

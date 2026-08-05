@@ -1,4 +1,4 @@
-import type { OperationStore } from '@lobechat/agent-runtime';
+import type { AgentState, OperationStore } from '@lobechat/agent-runtime';
 
 import { TopicModel } from '@/database/models/topic';
 import { type LobeChatDatabase } from '@/database/type';
@@ -15,6 +15,7 @@ export class ServerOperationStore implements OperationStore {
     private readonly userId: string | undefined,
     private readonly workspaceId: string | undefined,
     private readonly topicId: string | undefined,
+    private readonly loadAgentState?: (operationId: string) => Promise<AgentState | null>,
   ) {}
 
   async clearRunningMark(): Promise<void> {
@@ -25,5 +26,9 @@ export class ServerOperationStore implements OperationStore {
     } catch {
       // best-effort — swallow
     }
+  }
+
+  async loadState(operationId: string): Promise<AgentState | null> {
+    return (await this.loadAgentState?.(operationId)) ?? null;
   }
 }

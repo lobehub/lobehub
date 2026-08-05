@@ -1,8 +1,11 @@
 import { Input, stopPropagation } from '@lobehub/ui';
+import { toast } from '@lobehub/ui/base-ui';
 import { type InputRef } from 'antd';
 import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useKnowledgeBaseStore } from '@/store/library';
+import { isForbiddenError } from '@/utils/forbiddenError';
 
 interface EditingProps {
   id: string;
@@ -11,6 +14,8 @@ interface EditingProps {
 }
 
 const Editing = memo<EditingProps>(({ id, name, toggleEditing }) => {
+  const { t } = useTranslation('common');
+
   const [editing, updateKnowledgeBase] = useKnowledgeBaseStore((s) => [
     s.knowledgeBaseRenamingId === id,
     s.updateKnowledgeBase,
@@ -37,11 +42,15 @@ const Editing = memo<EditingProps>(({ id, name, toggleEditing }) => {
 
     const value = newName.trim();
     if (value && value !== name) {
-      await updateKnowledgeBase(id, { name: value });
+      try {
+        await updateKnowledgeBase(id, { name: value });
+      } catch (error) {
+        toast.error(isForbiddenError(error) ? t('manageOnlyCreator') : t('operationFailed'));
+      }
     }
 
     toggleEditing(false);
-  }, [id, name, newName, toggleEditing, updateKnowledgeBase]);
+  }, [id, name, newName, t, toggleEditing, updateKnowledgeBase]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {

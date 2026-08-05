@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { AgentRuntimeErrorType } from '../../../types/error';
+import { serializeScopedSignature, type SignatureScope } from '../../../utils/signatureScope';
 import { FIRST_CHUNK_ERROR_KEY } from '../protocol';
 import { OpenAIStream } from './openai';
 
@@ -128,6 +129,69 @@ describe('OpenAIStream', () => {
         }),
       }),
     );
+  });
+
+  it('should emit a content policy error when finish_reason is content_filter', async () => {
+    const mockOpenAIStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue({
+          choices: [
+            {
+              delta: {},
+              finish_reason: 'content_filter',
+              index: 0,
+            },
+          ],
+          id: 'chatcmpl_content_filter',
+        });
+        controller.close();
+      },
+    });
+    const onError = vi.fn();
+    const onFinal = vi.fn();
+
+    const protocolStream = OpenAIStream(mockOpenAIStream, {
+      callbacks: { onError, onFinal },
+      payload: {
+        model: 'gpt-5.4-mini',
+        provider: 'openai',
+      },
+    });
+
+    const decoder = new TextDecoder();
+    const chunks: string[] = [];
+    // @ts-ignore
+    for await (const chunk of protocolStream) {
+      chunks.push(decoder.decode(chunk, { stream: true }));
+    }
+
+    const expectedError = {
+      body: {
+        chunk: {
+          choices: [
+            {
+              delta: {},
+              finish_reason: 'content_filter',
+              index: 0,
+            },
+          ],
+          id: 'chatcmpl_content_filter',
+        },
+        finishReason: 'content_filter',
+        model: 'gpt-5.4-mini',
+        provider: 'openai',
+      },
+      message: 'Provider blocked the response due to content policy.',
+      type: AgentRuntimeErrorType.ProviderContentPolicyViolation,
+    };
+
+    expect(chunks).toEqual([
+      'id: chatcmpl_content_filter\n',
+      'event: error\n',
+      `data: ${JSON.stringify(expectedError)}\n\n`,
+    ]);
+    expect(onError).toHaveBeenCalledWith(expectedError);
+    expect(onFinal).toHaveBeenCalledWith(expect.objectContaining({ error: expectedError }));
   });
 
   it('should handle empty stream', async () => {
@@ -1132,11 +1196,18 @@ describe('OpenAIStream', () => {
       });
 
       const onToolCallMock = vi.fn();
+      const thoughtSignatureScope: SignatureScope = { fingerprint: 'a'.repeat(32) };
+      const persistedSignature = serializeScopedSignature(
+        'ErEDCq4DAdHtim...',
+        thoughtSignatureScope,
+        'thought_signature',
+      )!;
 
       const protocolStream = OpenAIStream(mockOpenAIStream, {
         callbacks: {
           onToolsCalling: onToolCallMock,
         },
+        payload: { thoughtSignatureScope },
       });
 
       const decoder = new TextDecoder();
@@ -1151,7 +1222,7 @@ describe('OpenAIStream', () => {
         'id: or-123\n',
         'event: tool_calls\n',
         // thoughtSignature should be preserved in the output
-        `data: [{"function":{"arguments":"{}","name":"github__get_me"},"id":"call_123","index":0,"type":"function","thoughtSignature":"ErEDCq4DAdHtim..."}]\n\n`,
+        `data: [{"function":{"arguments":"{}","name":"github__get_me"},"id":"call_123","index":0,"type":"function","thoughtSignature":"${persistedSignature}"}]\n\n`,
       ]);
 
       // Verify the callback receives thoughtSignature
@@ -1161,7 +1232,7 @@ describe('OpenAIStream', () => {
             function: { arguments: '{}', name: 'github__get_me' },
             id: 'call_123',
             index: 0,
-            thoughtSignature: 'ErEDCq4DAdHtim...',
+            thoughtSignature: persistedSignature,
             type: 'function',
           },
         ],
@@ -1169,7 +1240,7 @@ describe('OpenAIStream', () => {
           {
             function: { arguments: '{}', name: 'github__get_me' },
             id: 'call_123',
-            thoughtSignature: 'ErEDCq4DAdHtim...',
+            thoughtSignature: persistedSignature,
             type: 'function',
           },
         ],

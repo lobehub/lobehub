@@ -1,7 +1,8 @@
 'use client';
 
 import { HeartFilled } from '@ant-design/icons';
-import { ActionIcon, Button, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { X } from 'lucide-react';
 import type { HTMLAttributeAnchorTarget, ReactNode } from 'react';
@@ -102,8 +103,12 @@ const HighlightNotification = memo<HighlightNotificationProps>(
         <Flexbox gap={0}>
           {image && <img alt="" className={styles.image} src={image} />}
           <Flexbox gap={4} padding={12}>
-            {title && <div className={styles.title}>{title}</div>}
-            {description && <div className={styles.description}>{description}</div>}
+            {(title || description) && (
+              <Flexbox gap={4} style={{ paddingInlineEnd: 32 }}>
+                {title && <div className={styles.title}>{title}</div>}
+                {description && <div className={styles.description}>{description}</div>}
+              </Flexbox>
+            )}
             {actionLabel && actionHref && (
               <a
                 className={styles.action}

@@ -395,6 +395,21 @@ describe('replyTemplate', () => {
       );
     });
 
+    it('returns the friendly InsufficientBudgetForModel copy instead of the generic user fallback', () => {
+      const en = renderAgentError('InsufficientBudgetForModel', undefined, 'op-1');
+      expect(en).toContain('Not enough credits');
+      expect(en).toContain('op-1');
+      const zh = renderAgentError(
+        'InsufficientBudgetForModel',
+        'Workspace budget exceeded',
+        'op-1',
+        'zh-CN',
+        'user',
+      );
+      expect(zh).toContain('积分余额不足');
+      expect(zh).not.toContain('请检查你的输入');
+    });
+
     it('maps both QuotaLimitReached and InsufficientQuota to the same quota copy', () => {
       const a = renderAgentError('QuotaLimitReached', undefined, 'op-1');
       const b = renderAgentError('InsufficientQuota', undefined, 'op-1');
@@ -509,9 +524,44 @@ describe('replyTemplate', () => {
       expect(renderAgentError('RateLimitExceeded', undefined, 'op-1')).toContain(
         'Too many requests',
       );
-      expect(renderAgentError('ModelEmptyCompletion', undefined, 'op-1')).toContain(
-        'empty response',
+      const emptyCompletion = renderAgentError('ModelEmptyCompletion', undefined, 'op-1');
+      expect(emptyCompletion).toContain('empty response');
+      expect(emptyCompletion).toContain('may still incur charges');
+      expect(renderAgentError('ModelEmptyCompletion', undefined, 'op-1', 'zh-CN')).toContain(
+        '仍可能产生费用',
       );
+    });
+
+    it('renders model refusals without blaming provider availability', () => {
+      const en = renderAgentError('ModelRefusal', undefined, 'op-1', 'en-US', 'provider');
+      expect(en).toContain('declined to answer');
+      expect(en).not.toContain('temporarily unavailable');
+
+      const zh = renderAgentError('ModelRefusal', undefined, 'op-1', 'zh-CN', 'provider');
+      expect(zh).toContain('模型拒绝回答');
+      expect(zh).not.toContain('暂时不可用');
+    });
+
+    it('renders provider content-policy violations as content moderation blocks', () => {
+      const en = renderAgentError(
+        'ProviderContentPolicyViolation',
+        undefined,
+        'op-1',
+        'en-US',
+        'provider',
+      );
+      expect(en).toContain('content-safety filter');
+      expect(en).not.toContain('temporarily unavailable');
+
+      const zh = renderAgentError(
+        'ProviderContentPolicyViolation',
+        undefined,
+        'op-1',
+        'zh-CN',
+        'provider',
+      );
+      expect(zh).toContain('内容安全策略拦截');
+      expect(zh).not.toContain('暂时不可用');
     });
 
     it('gives OperationInactivityTimeout retry-oriented copy', () => {

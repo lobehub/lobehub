@@ -1,10 +1,9 @@
 'use client';
 
 import { type BuiltinSkill, type SkillListItem } from '@lobechat/types';
-import { Avatar, Button, DropdownMenu, Flexbox, Icon, Modal, stopPropagation } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { Avatar, DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
+import { Button, confirmModal, createModal } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { Space } from 'antd';
 import { cssVar } from 'antd-style';
 import { DownloadIcon, MoreHorizontalIcon, Plus, Trash2 } from 'lucide-react';
 import { lazy, memo, Suspense, useState } from 'react';
@@ -37,7 +36,6 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
   const { t: tc } = useTranslation('common');
   const { t: tp } = useTranslation('plugin');
   const [loading, setLoading] = useState(false);
-  const [detailOpen, setDetailOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const { allowed: canCreate } = usePermission('create_content');
   const { allowed: canEdit } = usePermission('edit_own_content');
@@ -119,14 +117,14 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
               },
             ]}
           >
-            <Button disabled={!canEdit} icon={MoreHorizontalIcon} />
+            <Button disabled={!canEdit} icon={<Icon icon={MoreHorizontalIcon} />} />
           </DropdownMenu>
         );
       }
       return (
         <Button
           disabled={!canCreate}
-          icon={Plus}
+          icon={<Icon icon={Plus} />}
           onClick={() => {
             if (!canCreate) return;
             installBuiltinTool(skill.identifier);
@@ -138,7 +136,7 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
     }
 
     return (
-      <Space.Compact>
+      <Flexbox horizontal gap={4}>
         <Button disabled={!canEdit} onClick={() => setEditOpen(true)}>
           {tp('store.actions.configure')}
         </Button>
@@ -166,9 +164,9 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
             },
           ]}
         >
-          <Button disabled={!canEdit} icon={MoreHorizontalIcon} loading={loading} />
+          <Button disabled={!canEdit} icon={<Icon icon={MoreHorizontalIcon} />} loading={loading} />
         </DropdownMenu>
-      </Space.Compact>
+      </Flexbox>
     );
   };
 
@@ -178,31 +176,26 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
     if (isBuiltin) {
       createBuiltinAgentSkillDetailModal({ identifier: skill.identifier });
     } else {
-      setDetailOpen(true);
+      createModal({
+        content: (
+          <Suspense fallback={<div style={{ height: '100%' }} />}>
+            <AgentSkillDetail skillId={skill.id} />
+          </Suspense>
+        ),
+        footer: null,
+        styles: { content: { height: 'calc(100dvh - 200px)', overflow: 'hidden', padding: 0 } },
+        title: tp('dev.title.skillDetails'),
+        width: 960,
+      });
     }
   };
 
   const renderDetailModal = () => {
     if (isBuiltin) return null;
     return (
-      <>
-        <Modal
-          destroyOnHidden
-          footer={null}
-          open={detailOpen}
-          styles={{ body: { height: 'calc(100dvh - 200px)', overflow: 'hidden', padding: 0 } }}
-          title={tp('dev.title.skillDetails')}
-          width={960}
-          onCancel={() => setDetailOpen(false)}
-        >
-          <Suspense fallback={<div style={{ height: '100%' }} />}>
-            <AgentSkillDetail skillId={skill.id} />
-          </Suspense>
-        </Modal>
-        <Suspense>
-          <AgentSkillEdit open={editOpen} skillId={skill.id} onClose={() => setEditOpen(false)} />
-        </Suspense>
-      </>
+      <Suspense>
+        <AgentSkillEdit open={editOpen} skillId={skill.id} onClose={() => setEditOpen(false)} />
+      </Suspense>
     );
   };
 

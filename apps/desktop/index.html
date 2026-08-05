@@ -68,16 +68,20 @@
         if (resolvedTheme === 'dark' || resolvedTheme === 'light') {
           document.documentElement.setAttribute('data-theme', resolvedTheme);
         }
-        // Renderer-side reloads (Cmd+R / webContents.reload) don't go through
-        // the main process's `?lng=` injection, so prefer the i18next cache —
-        // the actual user setting persisted by the language switcher — before
-        // falling back to the URL param or navigator detection.
+        // The main process resolves `lng` from the stored setting, or from the OS
+        // language when that setting is `auto`, so it always wins. The i18next
+        // cache is only a fallback for renderer-side reloads (Cmd+R) that landed
+        // on a client-routed URL without the query param. `navigator.language`
+        // is last — packaging prunes the app's locales, which makes it report
+        // English on a non-English system.
         var urlParams = new URLSearchParams(window.location.search);
-        var locale;
-        try {
-          locale = localStorage.getItem('i18nextLng');
-        } catch (_) {}
-        if (!locale) locale = urlParams.get('lng') || navigator.language || 'en-US';
+        var locale = urlParams.get('lng');
+        if (!locale) {
+          try {
+            locale = localStorage.getItem('i18nextLng');
+          } catch (_) {}
+        }
+        if (!locale) locale = navigator.language || 'en-US';
         document.documentElement.lang = locale;
         var rtl = ['ar', 'arc', 'dv', 'fa', 'ha', 'he', 'khw', 'ks', 'ku', 'ps', 'ur', 'yi'];
         document.documentElement.dir =

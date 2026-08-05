@@ -48,6 +48,10 @@ const figmaFileName = (segments: string[]): string | undefined => {
 export const parseLobeLink = (href?: string): ParsedLobeLink | null => {
   if (!href) return null;
 
+  if (href.startsWith('/')) {
+    return { canonicalLabel: href, kind: 'generic' };
+  }
+
   if (href.startsWith('mailto:')) {
     const email = href.slice('mailto:'.length).split('?')[0];
     return email ? { canonicalLabel: email, kind: 'email' } : null;

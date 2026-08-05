@@ -1,11 +1,15 @@
 'use client';
 
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App, Form } from 'antd';
+import { Alert, Flexbox } from '@lobehub/ui';
+import { Button, confirmModal, toast } from '@lobehub/ui/base-ui';
+import { Form } from 'antd';
 import { createStaticStyles } from 'antd-style';
+import { ExternalLink } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
 import { agentBotProviderService } from '@/services/agentBotProvider';
@@ -13,26 +17,31 @@ import { useAgentStore } from '@/store/agent';
 
 import {
   BOT_RUNTIME_STATUSES,
-  type BotRuntimeStatus,
   type BotRuntimeStatusSnapshot,
 } from '../../../../../types/botRuntimeStatus';
 import Body from './Body';
 import Footer from './Footer';
 import { getChannelFormValues, mergeSettingsWithDefaults } from './formState';
-import Header from './Header';
 import { type ChannelPostSave, ChannelPostSaveContext } from './postSaveContext';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  main: css`
-    position: relative;
-
-    overflow-y: auto;
+  content: css`
     display: flex;
-    flex: 1;
     flex-direction: column;
     align-items: center;
 
-    padding: 24px;
+    width: 100%;
+    padding-block: 16px 24px;
+    padding-inline: 24px;
+  `,
+  main: css`
+    position: relative;
+
+    display: flex;
+    flex: none;
+    flex-direction: column;
+
+    width: 100%;
 
     background: ${cssVar.colorBgContainer};
   `,
@@ -67,45 +76,39 @@ interface PlatformDetailProps {
   currentConfig?: CurrentConfig;
   disabled?: boolean;
   platformDef: SerializedPlatformDefinition;
-  runtimeStatus?: BotRuntimeStatus;
 }
 
 const PlatformDetail = memo<PlatformDetailProps>(
-  ({ platformDef, agentId, currentConfig, disabled, runtimeStatus }) => {
+  ({ platformDef, agentId, currentConfig, disabled }) => {
     const { t } = useTranslation('agent');
-    const { message: msg } = App.useApp();
+    const navigate = useWorkspaceAwareNavigate();
+
     const [form] = Form.useForm<ChannelFormValues>();
     const { allowed: canEdit } = usePermission('edit_own_content');
+    const activeWorkspaceId = useActiveWorkspaceId();
     const readOnly = disabled || !canEdit;
+    const paidFeatureBlocked =
+      platformDef.access?.requiredPlan === 'paid' && platformDef.access.allowed === false;
+    const paidFeatureMode = platformDef.access?.rolloutMode ?? 'enforce';
+    const paidFeatureScope = activeWorkspaceId ? 'workspace' : 'personal';
+    const writeDisabled = readOnly || paidFeatureBlocked;
 
-    const [
-      createBotProvider,
-      deleteBotProvider,
-      updateBotProvider,
-      connectBot,
-      testConnection,
-      refreshBotRuntimeStatus,
-    ] = useAgentStore((s) => [
-      s.createBotProvider,
-      s.deleteBotProvider,
-      s.updateBotProvider,
-      s.connectBot,
-      s.testConnection,
-      s.refreshBotRuntimeStatus,
-    ]);
+    const [createBotProvider, deleteBotProvider, updateBotProvider, connectBot, testConnection] =
+      useAgentStore((s) => [
+        s.createBotProvider,
+        s.deleteBotProvider,
+        s.updateBotProvider,
+        s.connectBot,
+        s.testConnection,
+      ]);
 
     const [saving, setSaving] = useState(false);
     const [connecting, setConnecting] = useState(false);
-    const [pendingEnabled, setPendingEnabled] = useState<boolean>();
     const [saveResult, setSaveResult] = useState<TestResult>();
     const [connectResult, setConnectResult] = useState<TestResult>();
-    const [toggleLoading, setToggleLoading] = useState(false);
     const [testing, setTesting] = useState(false);
     const [testResult, setTestResult] = useState<TestResult>();
-    const [observedStatus, setObservedStatus] = useState<BotRuntimeStatus | undefined>(
-      runtimeStatus,
-    );
-    const [refreshingStatus, setRefreshingStatus] = useState(false);
+    const [isDirty, setIsDirty] = useState(false);
     const connectPollingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Platform-specific extras (e.g. iMessage's BlueBubbles bridge) register a
@@ -139,7 +142,11 @@ const PlatformDetail = memo<PlatformDetailProps>(
           }
           case BOT_RUNTIME_STATUSES.failed: {
             return {
-              errorDetail: runtimeStatus.errorMessage,
+              errorDetail: runtimeStatus.errorCode
+                ? t(`channel.connectionError.${runtimeStatus.errorCode}`, {
+                    defaultValue: runtimeStatus.errorMessage || t('channel.connectFailed'),
+                  })
+                : runtimeStatus.errorMessage,
               title: t('channel.connectFailed'),
               type: 'error',
             };
@@ -169,7 +176,6 @@ const PlatformDetail = memo<PlatformDetailProps>(
         stopConnectPolling();
 
         const snapshot = await agentBotProviderService.getRuntimeStatus(params);
-        setObservedStatus(snapshot.status);
         const nextResult = mapRuntimeStatusToResult(snapshot, {
           showConnected: options?.showConnected,
         });
@@ -215,30 +221,6 @@ const PlatformDetail = memo<PlatformDetailProps>(
       [agentId, connectBot, platformDef.id, syncRuntimeStatus, t],
     );
 
-    const handleRefreshStatus = useCallback(async () => {
-      if (readOnly) return;
-      if (!currentConfig?.enabled) return;
-      setRefreshingStatus(true);
-      try {
-        const snapshot = await refreshBotRuntimeStatus({
-          agentId,
-          applicationId: currentConfig.applicationId,
-          platform: currentConfig.platform,
-        });
-        setObservedStatus(snapshot.status);
-        const nextResult = mapRuntimeStatusToResult(snapshot, { showConnected: true });
-        if (nextResult) {
-          setConnectResult(nextResult);
-        } else if (snapshot.status === BOT_RUNTIME_STATUSES.disconnected) {
-          setConnectResult(undefined);
-        }
-      } catch (e: any) {
-        msg.error(e?.message || String(e));
-      } finally {
-        setRefreshingStatus(false);
-      }
-    }, [agentId, readOnly, currentConfig, mapRuntimeStatusToResult, msg, refreshBotRuntimeStatus]);
-
     // Reset form and status when switching platforms. Must NOT depend on
     // runtimeStatus — otherwise background status refreshes would wipe
     // in-progress form edits and cancel the connect-status polling loop.
@@ -250,36 +232,18 @@ const PlatformDetail = memo<PlatformDetailProps>(
       stopConnectPolling();
     }, [platformDef.id, form, stopConnectPolling]);
 
-    // Keep the displayed status in sync with the latest snapshot from the
-    // parent (initial load, bulk refresh, SWR revalidation).
-    useEffect(() => {
-      setObservedStatus(runtimeStatus);
-    }, [runtimeStatus]);
-
     // Sync form with saved config
     useEffect(() => {
       if (currentConfig) {
         form.setFieldsValue(getChannelFormValues(currentConfig));
       }
+      setIsDirty(false);
     }, [currentConfig, form]);
-
-    useEffect(() => {
-      if (!currentConfig) {
-        setPendingEnabled(undefined);
-        setToggleLoading(false);
-        return;
-      }
-
-      if (pendingEnabled === currentConfig.enabled) {
-        setPendingEnabled(undefined);
-      }
-    }, [currentConfig, pendingEnabled]);
 
     useEffect(() => {
       if (!currentConfig?.enabled) {
         stopConnectPolling();
         setConnectResult(undefined);
-        setObservedStatus(undefined);
         return;
       }
 
@@ -297,7 +261,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
     }, [currentConfig, stopConnectPolling, syncRuntimeStatus]);
 
     const handleSave = useCallback(async () => {
-      if (readOnly) return;
+      if (writeDisabled) return;
 
       try {
         await form.validateFields();
@@ -350,6 +314,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
         // local BlueBubbles bridge) as part of the same save.
         await postSaveRef.current?.({ applicationId });
 
+        setIsDirty(false);
         setSaveResult({ type: 'success' });
         setTimeout(() => setSaveResult(undefined), 3000);
         setSaving(false);
@@ -370,12 +335,12 @@ const PlatformDetail = memo<PlatformDetailProps>(
       createBotProvider,
       updateBotProvider,
       connectCurrentBot,
-      readOnly,
+      writeDisabled,
     ]);
 
     const handleExternalAuth = useCallback(
       async (params: { applicationId: string; credentials: Record<string, string> }) => {
-        if (readOnly) return;
+        if (writeDisabled) return;
 
         setSaving(true);
         setSaveResult(undefined);
@@ -405,7 +370,8 @@ const PlatformDetail = memo<PlatformDetailProps>(
           }
 
           setSaveResult({ type: 'success' });
-          msg.success(t('channel.saved'));
+          setIsDirty(false);
+          toast.success(t('channel.saved'));
 
           // Auto-connect
           await connectCurrentBot(applicationId);
@@ -423,8 +389,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
         createBotProvider,
         updateBotProvider,
         connectCurrentBot,
-        readOnly,
-        msg,
+        writeDisabled,
         t,
       ],
     );
@@ -439,41 +404,20 @@ const PlatformDetail = memo<PlatformDetailProps>(
         onOk: async () => {
           try {
             await deleteBotProvider(currentConfig.id, agentId);
-            msg.success(t('channel.removed'));
+            toast.success(t('channel.removed'));
             form.resetFields();
           } catch {
-            msg.error(t('channel.removeFailed'));
+            toast.error(t('channel.removeFailed'));
           }
         },
         title: t('channel.deleteConfirm'),
       });
-    }, [readOnly, currentConfig, agentId, deleteBotProvider, msg, t, form]);
-
-    const handleToggleEnable = useCallback(
-      async (enabled: boolean) => {
-        if (readOnly) return;
-        if (!currentConfig) return;
-        try {
-          setPendingEnabled(enabled);
-          setToggleLoading(true);
-          await updateBotProvider(currentConfig.id, agentId, { enabled });
-          setToggleLoading(false);
-          if (enabled) {
-            await connectCurrentBot(currentConfig.applicationId);
-          }
-        } catch {
-          setPendingEnabled(undefined);
-          setToggleLoading(false);
-          msg.error(t('channel.updateFailed'));
-        }
-      },
-      [readOnly, currentConfig, agentId, updateBotProvider, connectCurrentBot, msg, t],
-    );
+    }, [readOnly, currentConfig, agentId, deleteBotProvider, t, form]);
 
     const handleTestConnection = useCallback(async () => {
-      if (readOnly) return;
+      if (writeDisabled) return;
       if (!currentConfig) {
-        msg.warning(t('channel.saveFirstWarning'));
+        toast.warning(t('channel.saveFirstWarning'));
         return;
       }
 
@@ -493,47 +437,83 @@ const PlatformDetail = memo<PlatformDetailProps>(
       } finally {
         setTesting(false);
       }
-    }, [readOnly, currentConfig, platformDef.id, testConnection, msg, t]);
+    }, [writeDisabled, currentConfig, platformDef.id, testConnection, t]);
+
+    const handleDiscard = useCallback(() => {
+      form.resetFields();
+      if (currentConfig) form.setFieldsValue(getChannelFormValues(currentConfig));
+      setIsDirty(false);
+      setSaveResult(undefined);
+      setTestResult(undefined);
+    }, [currentConfig, form]);
+
+    const handleFormValuesChange = useCallback(() => setIsDirty(true), []);
+
+    const handlePaidFeatureUpgrade = useCallback(() => {
+      navigate('/settings/plans');
+    }, [navigate]);
 
     return (
       <ChannelPostSaveContext value={postSaveRegistry}>
         <main className={styles.main}>
-          <Header
-            currentConfig={currentConfig}
-            disabled={readOnly}
-            enabledValue={pendingEnabled}
-            platformDef={platformDef}
-            refreshingStatus={refreshingStatus}
-            runtimeStatus={observedStatus}
-            toggleLoading={toggleLoading}
-            onRefreshStatus={handleRefreshStatus}
-            onToggleEnable={handleToggleEnable}
-          />
-          <Body
-            currentConfig={currentConfig}
-            disabled={readOnly}
-            form={form}
-            hasConfig={!!currentConfig}
-            platformDef={platformDef}
-            onAuthenticated={handleExternalAuth}
-          />
-          <Footer
-            connectResult={connectResult}
-            connecting={connecting}
-            currentConfig={currentConfig}
-            disabled={readOnly}
-            form={form}
-            hasConfig={!!currentConfig}
-            platformDef={platformDef}
-            saveResult={saveResult}
-            saving={saving}
-            testResult={testResult}
-            testing={testing}
-            onCopied={() => msg.success(t('channel.copied'))}
-            onDelete={handleDelete}
-            onSave={handleSave}
-            onTestConnection={handleTestConnection}
-          />
+          <div className={styles.content}>
+            {paidFeatureBlocked && (
+              <Alert
+                showIcon
+                style={{ marginBlockStart: 16, maxWidth: 1024, width: '100%' }}
+                type={paidFeatureMode === 'notice' ? 'warning' : 'info'}
+                description={t(`channel.paidFeature.${paidFeatureMode}.desc.${paidFeatureScope}`, {
+                  name: platformDef.name,
+                })}
+                message={
+                  <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
+                    <span>
+                      {t(`channel.paidFeature.${paidFeatureMode}.title`, {
+                        name: platformDef.name,
+                      })}
+                    </span>
+                    <Button
+                      icon={<ExternalLink size={14} />}
+                      size={'small'}
+                      type={'primary'}
+                      onClick={handlePaidFeatureUpgrade}
+                    >
+                      {t(`channel.paidFeature.cta.${paidFeatureScope}`)}
+                    </Button>
+                  </Flexbox>
+                }
+              />
+            )}
+            <Body
+              currentConfig={currentConfig}
+              disabled={writeDisabled}
+              form={form}
+              hasConfig={!!currentConfig}
+              platformDef={platformDef}
+              onAuthenticated={handleExternalAuth}
+              onValuesChange={handleFormValuesChange}
+            />
+            <Footer
+              connectResult={connectResult}
+              connecting={connecting}
+              currentConfig={currentConfig}
+              disabled={readOnly}
+              form={form}
+              hasConfig={!!currentConfig}
+              isDirty={isDirty}
+              platformDef={platformDef}
+              saveResult={saveResult}
+              saving={saving}
+              testResult={testResult}
+              testing={testing}
+              writeDisabled={writeDisabled}
+              onCopied={() => toast.success(t('channel.copied'))}
+              onDelete={handleDelete}
+              onDiscard={handleDiscard}
+              onSave={handleSave}
+              onTestConnection={handleTestConnection}
+            />
+          </div>
         </main>
       </ChannelPostSaveContext>
     );

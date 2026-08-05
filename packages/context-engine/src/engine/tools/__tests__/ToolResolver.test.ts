@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { ToolNameResolver } from '../ToolNameResolver';
 import { ToolResolver } from '../ToolResolver';
 import type {
   ActivatedStepTool,
@@ -85,6 +86,7 @@ const emptyDelta: StepToolDelta = { activatedTools: [] };
 
 describe('ToolResolver', () => {
   const resolver = new ToolResolver();
+  const toolNameResolver = new ToolNameResolver();
 
   describe('resolve with operation-only tools', () => {
     it('should return operation tools when no step delta', () => {
@@ -297,6 +299,64 @@ describe('ToolResolver', () => {
       expect(result.tools).toHaveLength(0);
       expect(result.enabledToolIds).toHaveLength(0);
       // Manifests preserved for ToolNameResolver in deactivation case
+      expect(result.manifestMap['web-search']).toBeDefined();
+    });
+  });
+
+  describe('allowed tool names', () => {
+    it('should filter tools, enabled ids, and prompt manifests by allowed tool names', () => {
+      const opSet = makeOperationToolSet([mockSearchManifest, mockLocalSystemManifest]);
+      const allowedToolName = toolNameResolver.generate(
+        mockLocalSystemManifest.identifier,
+        'read_file',
+        mockLocalSystemManifest.type,
+      );
+
+      const result = resolver.resolve(opSet, emptyDelta, [], [allowedToolName]);
+
+      expect(result.tools.map((tool) => tool.function.name)).toEqual([allowedToolName]);
+      expect(result.enabledToolIds).toEqual(['local-system']);
+      expect(result.manifestMap['web-search']).toBeDefined();
+      expect(result.manifestMap['local-system']).toBeDefined();
+      expect(result.promptManifestMap).toEqual({
+        'local-system': expect.objectContaining({
+          api: [expect.objectContaining({ name: 'read_file' })],
+          identifier: 'local-system',
+        }),
+      });
+    });
+
+    it('should clear manifest systemRole when only part of the manifest is offered to the model', () => {
+      const manifestWithSystemRole: LobeToolManifest = {
+        ...mockLocalSystemManifest,
+        systemRole: 'Use all local-system tools.',
+      };
+      const opSet = makeOperationToolSet([manifestWithSystemRole]);
+      const allowedToolName = toolNameResolver.generate(
+        manifestWithSystemRole.identifier,
+        'read_file',
+        manifestWithSystemRole.type,
+      );
+
+      const result = resolver.resolve(opSet, emptyDelta, [], [allowedToolName]);
+
+      expect(result.promptManifestMap['local-system']).toEqual(
+        expect.objectContaining({
+          api: [expect.objectContaining({ name: 'read_file' })],
+          systemRole: undefined,
+        }),
+      );
+      expect(result.manifestMap['local-system']?.systemRole).toBe('Use all local-system tools.');
+    });
+
+    it('should return empty prompt manifests when an explicit empty allowlist is provided', () => {
+      const opSet = makeOperationToolSet([mockSearchManifest]);
+
+      const result = resolver.resolve(opSet, emptyDelta, [], []);
+
+      expect(result.tools).toEqual([]);
+      expect(result.enabledToolIds).toEqual([]);
+      expect(result.promptManifestMap).toEqual({});
       expect(result.manifestMap['web-search']).toBeDefined();
     });
   });

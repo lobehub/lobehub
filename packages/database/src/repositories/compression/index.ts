@@ -5,13 +5,20 @@ import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { MessageGroupItem } from '../../schemas';
 import { messageGroups, messages } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { buildWorkspaceWhere } from '../../utils/workspace';
+import { buildMessageScopeWhere, buildTopicAnchoredScopeWhere } from '../../utils/messageScope';
 
 export interface CreateCompressionGroupParams {
   content: string;
   editorData?: any;
   messageIds: string[];
   metadata: CompressionGroupMetadata;
+  topicId: string;
+}
+
+export interface FinalizeCompressionGroupParams {
+  content: string;
+  groupId: string;
+  sourceGroupIds?: string[];
   topicId: string;
 }
 
@@ -40,11 +47,16 @@ export class CompressionRepository {
     this.workspaceId = workspaceId;
   }
 
+  // messages / message_groups carry only creation-time scope snapshots — the
+  // authoritative scope is derived from the owning topic (see messageScope.ts).
   private groupsOwnership = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messageGroups);
+    buildTopicAnchoredScopeWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      messageGroups,
+    );
 
   private messagesOwnership = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messages);
+    buildMessageScopeWhere({ userId: this.userId, workspaceId: this.workspaceId });
 
   /**
    * Create a compression group and mark messages as compressed
@@ -138,6 +150,69 @@ export class CompressionRepository {
       .update(messageGroups)
       .set(updateData)
       .where(and(eq(messageGroups.id, groupId), this.groupsOwnership()));
+  }
+
+  /**
+   * Finalize a new compression group and atomically supersede prior groups.
+   * Source messages move before their old groups are deleted so the cascade
+   * never removes conversation history.
+   */
+  async finalizeCompressionGroup(params: FinalizeCompressionGroupParams): Promise<void> {
+    const { content, groupId, topicId } = params;
+    const requestedSourceGroupIds = [
+      ...new Set((params.sourceGroupIds ?? []).filter((id) => id !== groupId)),
+    ];
+
+    await this.db.transaction(async (trx) => {
+      const finalizedGroups = await trx
+        .update(messageGroups)
+        .set({ content, updatedAt: new Date() })
+        .where(
+          and(
+            eq(messageGroups.id, groupId),
+            eq(messageGroups.topicId, topicId),
+            eq(messageGroups.type, MessageGroupType.Compression),
+            this.groupsOwnership(),
+          ),
+        )
+        .returning({ id: messageGroups.id });
+
+      if (finalizedGroups.length === 0) {
+        throw new Error(`Compression group not found: ${groupId}`);
+      }
+
+      if (requestedSourceGroupIds.length === 0) return;
+
+      const sourceGroups = await trx
+        .select({ id: messageGroups.id })
+        .from(messageGroups)
+        .where(
+          and(
+            inArray(messageGroups.id, requestedSourceGroupIds),
+            eq(messageGroups.topicId, topicId),
+            eq(messageGroups.type, MessageGroupType.Compression),
+            this.groupsOwnership(),
+          ),
+        );
+      const sourceGroupIds = sourceGroups.map((group) => group.id);
+
+      if (sourceGroupIds.length === 0) return;
+
+      await trx
+        .update(messages)
+        .set({ messageGroupId: groupId })
+        .where(
+          and(
+            this.messagesOwnership(),
+            eq(messages.topicId, topicId),
+            inArray(messages.messageGroupId, sourceGroupIds),
+          ),
+        );
+
+      await trx
+        .delete(messageGroups)
+        .where(and(this.groupsOwnership(), inArray(messageGroups.id, sourceGroupIds)));
+    });
   }
 
   /**

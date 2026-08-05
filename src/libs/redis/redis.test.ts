@@ -71,6 +71,7 @@ const createMockedProvider = async () => {
     hdel: vi.fn().mockResolvedValue(1),
     hgetall: vi.fn().mockResolvedValue({ a: '1' }),
     eval: vi.fn().mockResolvedValue(null),
+    scan: vi.fn().mockResolvedValue(['0', []]),
     pipeline: vi.fn().mockReturnValue(pipelineMocks),
   };
 
@@ -102,6 +103,7 @@ const createMockedProvider = async () => {
       hdel = mocks.hdel;
       hgetall = mocks.hgetall;
       eval = mocks.eval;
+      scan = mocks.scan;
       pipeline = mocks.pipeline;
     }
 
@@ -199,6 +201,17 @@ describe('mocked', () => {
 
     expect(mocks.eval).toHaveBeenCalledWith('return redis.call("GET", KEYS[1])', 1, 'my-key');
     expect(result).toBe(1);
+    await provider.disconnect();
+  });
+
+  it('forwards scan to ioredis', async () => {
+    const { mocks, provider } = await createMockedProvider();
+    mocks.scan.mockResolvedValue(['0', ['workflow:run-guard:global']]);
+
+    const result = await provider.scan('0', 'MATCH', 'workflow:run-guard:*', 'COUNT', 100);
+
+    expect(mocks.scan).toHaveBeenCalledWith('0', 'MATCH', 'workflow:run-guard:*', 'COUNT', 100);
+    expect(result).toEqual(['0', ['workflow:run-guard:global']]);
     await provider.disconnect();
   });
 

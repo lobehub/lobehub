@@ -1,9 +1,9 @@
 'use client';
 
 import { ProviderIcon } from '@lobehub/icons';
-import { Button, Flexbox, Input, InputPassword, Text, TextArea } from '@lobehub/ui';
-import { Select, useModalContext } from '@lobehub/ui/base-ui';
-import { App, Form } from 'antd';
+import { Flexbox, Input, InputPassword, Text, TextArea } from '@lobehub/ui';
+import { Button, Select, toast, useModalContext } from '@lobehub/ui/base-ui';
+import { Form } from 'antd';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -26,7 +26,7 @@ const CreateNewProviderContent = memo(() => {
   const [form] = Form.useForm<CreateAiProviderParams>();
   const [loading, setLoading] = useState(false);
   const createNewAiProvider = useAiInfraStore((s) => s.createNewAiProvider);
-  const { message } = App.useApp();
+
   const navigate = useWorkspaceAwareNavigate();
   const { close } = useModalContext();
 
@@ -45,7 +45,7 @@ const CreateNewProviderContent = memo(() => {
       await createNewAiProvider(finalValues);
       setLoading(false);
       navigate(`/settings/provider/${values.id}`);
-      message.success(t('createNewAiProvider.createSuccess'));
+      toast.success(t('createNewAiProvider.createSuccess'));
       close();
     } catch (e) {
       console.error(e);

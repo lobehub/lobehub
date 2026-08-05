@@ -1,6 +1,7 @@
 import isEqual from 'fast-deep-equal';
 import { current, produce } from 'immer';
 
+import { type TopicMapScope } from '@/store/chat/utils/topicMapKey';
 import { type ChatTopic, type CreateTopicParams } from '@/types/topic';
 
 /**
@@ -13,9 +14,21 @@ import { type ChatTopic, type CreateTopicParams } from '@/types/topic';
 interface ChatTopicScope {
   agentId?: string;
   groupId?: string;
+  scope?: TopicMapScope;
 }
 
 type AddChatTopicAction = ChatTopicScope & {
+  /**
+   * Marks a client-only row inserted before the server has created it (the
+   * first-send placeholder). `internal_dispatchTopic` tracks these ids so a
+   * topic-list refetch landing mid-send re-prepends them instead of wiping the
+   * row — see `#reconcileFetchedTopics`.
+   *
+   * This must be stated by the caller rather than inferred from the id: the id
+   * is a normal `tpc_…` value the server will honour verbatim, so it is
+   * indistinguishable from a persisted one.
+   */
+  optimistic?: boolean;
   type: 'addTopic';
   value: CreateTopicParams & { id?: string };
 };
@@ -50,7 +63,11 @@ export const topicReducer = (state: ChatTopic[] = [], payload: ChatTopicDispatch
           createdAt: Date.now(),
           favorite: false,
           id: payload.value.id ?? Date.now().toString(),
-          sessionId: payload.value.sessionId ? payload.value.sessionId : undefined,
+          sessionId: payload.value.sessionId || undefined,
+          // A brand-new topic is fresh activity: seed the sidebar sort key so it
+          // lands at the top immediately, matching the server's `topicActivityAt`
+          // once the real row is fetched.
+          sortUpdatedAt: Date.now(),
           updatedAt: Date.now(),
         });
 
@@ -70,6 +87,10 @@ export const topicReducer = (state: ChatTopic[] = [], payload: ChatTopicDispatch
           // Only update if the merged value is different from current (excluding updatedAt).
           // Compare against a plain snapshot, not the raw draft proxy — see message/reducer.ts.
           if (!isEqual(current(currentTopic), mergedTopic)) {
+            // Bump `updatedAt` (display/edit time) on every real write. The sidebar
+            // no longer sorts by `updatedAt` — it sorts by `sortUpdatedAt` (activity
+            // time) — so a status flip bumping `updatedAt` here can't reorder the
+            // list; only an explicit `sortUpdatedAt` in `value` moves a row.
             // TODO: updatedAt type needs to be changed to Date later
             // @ts-ignore
             draftState[topicIndex] = { ...mergedTopic, updatedAt: new Date() };
@@ -93,6 +114,10 @@ export const topicReducer = (state: ChatTopic[] = [], payload: ChatTopicDispatch
           ...nextTopic,
           ...value,
           id: nextId,
+          // Resolving a first-send optimistic topic to its real id is fresh activity:
+          // keep it pinned to the top via the sidebar sort key (`sortUpdatedAt`), not
+          // just `updatedAt` which the sidebar no longer sorts by.
+          sortUpdatedAt: Date.now(),
           updatedAt: Date.now(),
         };
 

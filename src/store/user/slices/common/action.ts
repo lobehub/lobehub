@@ -107,6 +107,9 @@ export class CommonActionImpl {
       () => userService.getUserState(),
       {
         onError: (error) => {
+          // Record the init failure so gated tabs (Advanced / ServiceModel) can
+          // render error + Retry instead of a permanent skeleton.
+          this.#set({ isUserStateInitError: error }, false, n('initUserState/error'));
           options?.onError?.(error);
         },
         onSuccess: (data) => {
@@ -149,8 +152,10 @@ export class CommonActionImpl {
                 isShowPWAGuide: data.canEnablePWAGuide,
                 isUserCanEnableTrace: data.canEnableTrace,
                 isUserHasConversation: data.hasConversation,
+                isIdentityResolved: true,
+                isSignedIn: Boolean(data.userId) || this.#get().isSignedIn,
                 isUserStateInit: true,
-                agentOnboarding: data.agentOnboarding,
+                isUserStateInitError: undefined,
                 onboarding: data.onboarding,
                 preference,
                 referralStatus: data.referralStatus,
@@ -172,11 +177,9 @@ export class CommonActionImpl {
             }
 
             // Keep reply language aligned with the browser locale until the user makes a choice.
-            // Only auto-fill once onboarding has finished — otherwise it pre-empts the language
-            // step in the shared-prefix onboarding (commonStepsCompleted derives from this field
-            // being set, and an auto-fill would skip past the user's explicit choice).
-            const hasFinishedOnboarding =
-              !!data.onboarding?.finishedAt || !!data.agentOnboarding?.finishedAt;
+            // Only auto-fill once onboarding has finished — otherwise it pre-empts the
+            // language step in the onboarding flow, skipping past the user's explicit choice.
+            const hasFinishedOnboarding = !!data.onboarding?.finishedAt;
             if (
               hasFinishedOnboarding &&
               !currentGeneralSettings?.responseLanguage &&

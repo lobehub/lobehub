@@ -1,11 +1,14 @@
 import { AGENT_CHAT_URL } from '@lobechat/const';
+import { agentDisplayName } from '@lobechat/types';
 import { BarList } from '@lobehub/charts';
-import { ActionIcon, Avatar, Modal } from '@lobehub/ui';
+import { ActionIcon, Avatar } from '@lobehub/ui';
 import { MaximizeIcon } from 'lucide-react';
 import qs from 'query-string';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncBoundary from '@/components/AsyncBoundary';
+import ImperativeModal from '@/components/ImperativeModal';
 import { DEFAULT_AVATAR } from '@/const/meta';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import Link from '@/libs/router/Link';
@@ -23,7 +26,7 @@ export const AssistantsRank = memo<{ mobile?: boolean }>(({ mobile }) => {
   const { t } = useTranslation(['auth', 'chat']);
   const navigate = useWorkspaceAwareNavigate();
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const { data, isLoading } = useClientDataSWR(statsKeys.rankAgents(), async () =>
+  const { data, isLoading, error, mutate } = useClientDataSWR(statsKeys.rankAgents(), async () =>
     agentService.rankAgents(),
   );
 
@@ -39,7 +42,7 @@ export const AssistantsRank = memo<{ mobile?: boolean }>(({ mobile }) => {
     return {
       icon: (
         <Avatar
-          alt={item.title || t('defaultAgent', { ns: 'chat' })}
+          alt={agentDisplayName(item, t('defaultAgent', { ns: 'chat' }))}
           avatar={item.avatar || DEFAULT_AVATAR}
           background={item.backgroundColor || undefined}
           size={20}
@@ -50,7 +53,7 @@ export const AssistantsRank = memo<{ mobile?: boolean }>(({ mobile }) => {
         <Link href={link} style={{ color: 'inherit' }}>
           {isInbox
             ? t('inbox.title', { ns: 'chat' })
-            : item.title || t('defaultAgent', { ns: 'chat' })}
+            : agentDisplayName(item, t('defaultAgent', { ns: 'chat' }))}
         </Link>
       ),
       value: item.count,
@@ -68,21 +71,23 @@ export const AssistantsRank = memo<{ mobile?: boolean }>(({ mobile }) => {
           )
         }
       >
-        <BarList
-          data={data?.slice(0, 5).map((item) => mapData(item)) || []}
-          height={220}
-          leftLabel={t('stats.assistantsRank.left')}
-          loading={isLoading || !data}
-          rightLabel={t('stats.assistantsRank.right')}
-          noDataText={{
-            desc: t('stats.empty.desc'),
-            title: t('stats.empty.title'),
-          }}
-          onValueChange={(item) => navigate(item.link)}
-        />
+        <AsyncBoundary data={data} error={error} errorVariant={'block'} onRetry={() => mutate()}>
+          <BarList
+            data={data?.slice(0, 5).map((item) => mapData(item)) || []}
+            height={220}
+            leftLabel={t('stats.assistantsRank.left')}
+            loading={isLoading || !data}
+            rightLabel={t('stats.assistantsRank.right')}
+            noDataText={{
+              desc: t('stats.empty.desc'),
+              title: t('stats.empty.title'),
+            }}
+            onValueChange={(item) => navigate(item.link)}
+          />
+        </AsyncBoundary>
       </StatsFormGroup>
       {showExtra && (
-        <Modal
+        <ImperativeModal
           footer={null}
           loading={isLoading || !data}
           open={open}
@@ -97,7 +102,7 @@ export const AssistantsRank = memo<{ mobile?: boolean }>(({ mobile }) => {
             rightLabel={t('stats.assistantsRank.right')}
             onValueChange={(item) => navigate(item.link)}
           />
-        </Modal>
+        </ImperativeModal>
       )}
     </>
   );

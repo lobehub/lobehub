@@ -70,6 +70,9 @@ git submodules.
 │   ├── database/             # src/{models,schemas,repositories}
 │   ├── model-bank/           # Model definitions & provider cards
 │   ├── model-runtime/        # src/{core,providers}
+│   ├── locales/              # i18n source of truth: packages/locales/src/default/
+│   ├── env/                  # env schemas (@/envs/* → packages/env/src/*)
+│   ├── app-config/
 │   ├── business/             # Open-source stubs (config, const, model-bank, model-runtime) — overridden by cloud
 │   ├── types/
 │   └── utils/
@@ -77,9 +80,9 @@ git submodules.
     ├── app/
     │   ├── (backend)/        # api, f, market, middleware, oidc, trpc, webapi
     │   ├── spa/              # SPA HTML template service
-    │   └── [variants]/(auth)/ # Auth pages (SSR required)
+    │   └── spa-auth/         # Auth HTML shell (SSR)
     ├── routes/               # SPA page segments (thin — delegate to features/)
-    │   └── (main)/ (mobile)/ (desktop)/ (popup)/ onboarding/ share/
+    │   └── (main)/ (mobile)/ (desktop)/ (popup)/ auth/ onboarding/ share/
     ├── spa/                  # SPA entries + router config
     │   ├── entry.{web,mobile,desktop,popup}.tsx
     │   └── router/
@@ -87,7 +90,7 @@ git submodules.
     ├── features/             # Domain business components
     ├── store/                # ~30 zustand stores — `ls` for the full set
     ├── server/               # standalone-Hono server pieces only: agent-hono, workflows-hono (main backend lives in `apps/server`)
-    └── ...                   # components, hooks, layout, libs, locales, services, types, utils
+    └── ...                   # components, hooks, layout, libs, services, types, utils
 ```
 
 ## Architecture Map

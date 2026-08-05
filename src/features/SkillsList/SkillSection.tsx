@@ -2,6 +2,7 @@ import { Accordion, AccordionItem, Center, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, type ReactNode, useState } from 'react';
 
+import AsyncError from '@/components/AsyncError';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 
 export interface SkillSectionHeader {
@@ -16,8 +17,16 @@ export interface SkillSectionHeader {
 export interface SkillSectionProps {
   children?: ReactNode;
   emptyText?: string;
+  /**
+   * A failed fetch. When set (and there's no data), the body renders a failure +
+   * Retry instead of the empty placeholder — a failed scan must not read as
+   * "no skills" (ux Read §1.1).
+   */
+  error?: unknown;
   isEmpty?: boolean;
   isLoading?: boolean;
+  /** Retry the failed fetch (SWR `mutate`). */
+  onRetry?: () => void;
   /**
    * When provided, wraps content in a header + optional Accordion. Omit to
    * render `children` flat (the caller controls layout entirely).
@@ -65,11 +74,21 @@ HeaderRow.displayName = 'SkillSectionHeaderRow';
 interface BodyProps {
   children?: ReactNode;
   emptyText?: string;
+  error?: unknown;
   isEmpty?: boolean;
   isLoading?: boolean;
+  onRetry?: () => void;
 }
 
-const Body = memo<BodyProps>(({ children, emptyText, isEmpty, isLoading }) => {
+const Body = memo<BodyProps>(({ children, emptyText, error, isEmpty, isLoading, onRetry }) => {
+  // Error before empty: a failed scan gets its own state, never a "no skills".
+  if (error && isEmpty) {
+    return (
+      <Flexbox paddingBlock={4} paddingInline={4}>
+        <AsyncError error={error} variant={'inline'} onRetry={onRetry} />
+      </Flexbox>
+    );
+  }
   if (isLoading) {
     return (
       <Center paddingBlock={12}>
@@ -90,12 +109,18 @@ const Body = memo<BodyProps>(({ children, emptyText, isEmpty, isLoading }) => {
 Body.displayName = 'SkillSectionBody';
 
 const SkillSection = memo<SkillSectionProps>(
-  ({ children, emptyText, isEmpty, isLoading, sectionHeader }) => {
+  ({ children, emptyText, error, isEmpty, isLoading, onRetry, sectionHeader }) => {
     // Hook always runs regardless of whether sectionHeader is provided.
     const [expanded, setExpanded] = useState(sectionHeader?.defaultExpanded ?? true);
 
     const body = (
-      <Body emptyText={emptyText} isEmpty={isEmpty} isLoading={isLoading}>
+      <Body
+        emptyText={emptyText}
+        error={error}
+        isEmpty={isEmpty}
+        isLoading={isLoading}
+        onRetry={onRetry}
+      >
         {children}
       </Body>
     );

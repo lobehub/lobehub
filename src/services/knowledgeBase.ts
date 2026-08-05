@@ -24,19 +24,36 @@ class KnowledgeBaseService {
     return lambdaClient.knowledgeBase.removeKnowledgeBase.mutate({ id });
   };
 
-  transferKnowledgeBase = async (id: string, targetWorkspaceId: string | null) => {
-    return lambdaClient.knowledgeBase.transferKnowledgeBase.mutate({ id, targetWorkspaceId });
+  transferKnowledgeBase = async (
+    id: string,
+    targetWorkspaceId: string | null,
+    targetVisibility?: 'private' | 'public',
+  ) => {
+    return lambdaClient.knowledgeBase.transferKnowledgeBase.mutate({
+      id,
+      targetVisibility,
+      targetWorkspaceId,
+    });
   };
 
-  copyKnowledgeBaseToWorkspace = async (id: string, targetWorkspaceId: string | null) => {
+  copyKnowledgeBaseToWorkspace = async (
+    id: string,
+    targetWorkspaceId: string | null,
+    targetVisibility?: 'private' | 'public',
+  ) => {
     return lambdaClient.knowledgeBase.copyKnowledgeBaseToWorkspace.mutate({
       id,
+      targetVisibility,
       targetWorkspaceId,
     });
   };
 
   publishKnowledgeBaseToWorkspace = async (id: string) => {
     return lambdaClient.knowledgeBase.publishKnowledgeBaseToWorkspace.mutate({ id });
+  };
+
+  setKnowledgeBaseVisibility = async (id: string, visibility: 'private' | 'public') => {
+    return lambdaClient.knowledgeBase.setKnowledgeBaseVisibility.mutate({ id, visibility });
   };
 
   addFilesToKnowledgeBase = async (knowledgeBaseId: string, ids: string[]) => {

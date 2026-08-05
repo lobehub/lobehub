@@ -17,18 +17,24 @@ LobeHub 采用 Monorepo 架构（`@lobechat/` 命名空间），
 ```bash
 lobehub/
 ├── apps/
-│   └── desktop/               # Electron 桌面应用
+│   ├── cli/                   # LobeHub CLI
+│   ├── desktop/                # Electron 桌面应用
+│   └── server/                 # 独立服务端（tRPC routers、services、modules）
 ├── packages/                  # 共享包（@lobechat/*）
 │   ├── agent-runtime/         # Agent 运行时
 │   ├── database/              # 数据库 schemas、models、repositories
 │   ├── model-runtime/         # 模型运行时（各 AI 提供商适配）
 │   ├── builtin-tool-*/        # 内置工具包
+│   ├── builtin-tools/         # 内置工具注册表（inspectors、interventions、renders 等）
 │   ├── business/              # Cloud 业务插槽 packages
 │   ├── context-engine/        # 上下文引擎
 │   ├── conversation-flow/     # 会话流程
 │   ├── editor-runtime/        # 编辑器运行时
 │   ├── file-loaders/          # 文件加载器
 │   ├── prompts/               # Prompt 模板
+│   ├── app-config/            # 应用配置（客户端与服务端环境变量）
+│   ├── env/                   # 环境变量定义和校验
+│   ├── locales/               # 国际化默认语言文件（英文）和 resources
 │   └── ...                    # 更多共享包
 ├── src/                       # 主应用源码（见下方详细说明）
 ├── locales/                   # i18n 翻译文件（zh-CN、en-US 等）
@@ -38,30 +44,42 @@ lobehub/
 
 ## src 目录
 
+`config/`、`envs/`、`locales/`、`tools/` 已从 `src/` 迁出，独立为 packages ——
+`packages/app-config`、`packages/env`、`packages/locales`、`packages/builtin-tools`。
+`@/config/*`、`@/envs/*`、`@/locales/*` 路径别名会优先解析到这些 packages（见 `tsconfig.json`），
+所以大部分 import 不需要改动。
+
 ```bash
 src/
-├── app/               # Next.js App Router（路由组和 API 路由）
+├── app/               # Next.js App Router：后端 API 路由 + SPA/认证页 HTML 外壳服务
+│   ├── (backend)/     # 后端 API 路由（auth、webhooks、trpc、webapi、oidc、oauth）
+│   ├── spa/           # SPA HTML 模板路由（服务 Vite 构建的 SPA bundle）
+│   └── spa-auth/      # 认证页 HTML 模板路由
 ├── business/          # Cloud 版专用业务逻辑（客户端/服务端）
 ├── components/        # 可复用的 UI 组件
-├── config/            # 应用配置（客户端与服务端环境变量）
 ├── const/             # 应用常量和枚举
-├── envs/              # 环境变量定义和校验
 ├── features/          # 业务功能模块（Agent 设置、插件开发弹窗等）
 ├── helpers/           # 工具辅助函数
 ├── hooks/             # 全应用复用的自定义 Hooks
 ├── layout/            # 全局布局组件（AuthProvider、GlobalProvider）
 ├── libs/              # 第三方集成（better-auth、OIDC、tRPC、MCP 等）
-├── locales/           # 国际化默认语言文件（英文）
-├── server/            # 服务端模块
-│   ├── featureFlags/  # Feature Flags
-│   ├── globalConfig/  # 全局配置
-│   ├── modules/       # 服务端模块（不访问数据库）
-│   ├── routers/       # tRPC 路由（async、lambda、mobile、tools）
-│   └── services/      # 服务端服务（可访问数据库）
+├── routes/            # SPA 页面片段（layout + page 文件），按平台分组
+│   ├── (main)/        # 桌面端路由
+│   ├── (mobile)/      # 移动端路由
+│   ├── (desktop)/     # 桌面端专属路由（如 desktop-onboarding）
+│   ├── (popup)/       # 弹出窗口路由
+│   ├── auth/          # 认证页面（signin、signup、oauth 等）
+│   ├── onboarding/    # 新用户引导
+│   └── share/         # 分享页面
+├── server/            # 尚未迁移到 apps/server 的剩余服务端模块
+│                       # （SEO metadata、SPA HTML 渲染、composio services、workflows-hono）
 ├── services/          # 客户端服务接口
+├── spa/               # SPA 入口和 React Router 配置
+│   ├── entry.web.tsx / entry.mobile.tsx / entry.desktop.tsx / entry.popup.tsx / entry.auth.tsx
+│   └── router/        # 路由配置（desktopRouter.config.tsx、mobileRouter.config.tsx、
+│                       # popupRouter.config.tsx、authRouter.config.tsx）
 ├── store/             # zustand 状态管理
 ├── styles/            # 全局样式和 CSS-in-JS 配置
-├── tools/             # 内置工具（artifacts、inspectors 等）
 ├── types/             # TypeScript 类型定义
 ├── utils/             # 通用工具函数
 ├── auth.ts            # 认证配置（Better Auth）
@@ -69,11 +87,18 @@ src/
 └── proxy.ts           # Next.js 中间件代理配置
 ```
 
-## app 目录
+## app、routes 和 spa 目录
 
-`app` 目录遵循 Next.js App Router 约定，
-使用[路由组](https://nextjs.org/docs/app/building-your-application/routing/route-groups)
-来组织后端服务、平台变体和应用路由：
+页面路由现在拆分到三个目录中：
+
+- **`src/app/`** — Next.js App Router，仅负责后端 API 路由（`(backend)/`）以及两条负责渲染
+  SPA HTML 外壳的 Next.js 路由：`spa/[variants]/[[...path]]/route.ts`（主应用）
+  和 `spa-auth/[locale]/[[...path]]/route.ts`（认证页）。
+- **`src/routes/`** — SPA 页面片段，按平台路由组分组
+  （`(main)`、`(mobile)`、`(desktop)`、`(popup)`），以及 `auth/`、`onboarding/`、`share/`。
+  这些文件很薄，只负责委托给 `src/features/*` 中的实际 UI 和业务逻辑。
+- **`src/spa/`** — SPA 入口（`entry.web.tsx`、`entry.mobile.tsx`、`entry.desktop.tsx`、
+  `entry.popup.tsx`、`entry.auth.tsx`）和 `router/` 下的 React Router 配置。
 
 ```bash
 app/
@@ -82,6 +107,7 @@ app/
 │   ├── f/                     # 文件服务
 │   ├── market/                # 市场服务
 │   ├── middleware/            # 请求中间件
+│   ├── oauth/                 # OAuth 路由
 │   ├── oidc/                  # OpenID Connect 路由
 │   ├── trpc/                  # tRPC API 端点
 │   │   ├── async/             # 异步 tRPC 路由
@@ -89,25 +115,38 @@ app/
 │   │   ├── lambda/            # Lambda tRPC 路由
 │   │   └── tools/             # 工具 tRPC 路由
 │   └── webapi/                # Web API 端点（chat、models、tts 等）
-├── [variants]/                # 平台和设备变体
-│   ├── (auth)/                # 身份验证页面（login、signup）
-│   ├── (desktop)/             # 桌面端专用路由
-│   ├── (main)/                # 主应用路由（SPA）
-│   │   ├── _layout/           # 布局组件
-│   │   ├── agent/             # Agent 页面
-│   │   ├── home/              # 首页
-│   │   ├── image/             # 图像生成
-│   │   ├── memory/            # 记忆管理
-│   │   ├── resource/          # 资源管理
-│   │   └── settings/          # 应用设置
-│   ├── (mobile)/              # 移动端专用路由
-│   ├── onboarding/            # 新用户引导
-│   ├── router/                # SPA 路由配置
-│   └── share/                 # 分享页面
-├── manifest.ts                # PWA 清单
-├── robots.tsx                 # Robots.txt 生成
-├── sitemap.tsx                # 站点地图生成
-└── sw.ts                      # Service Worker
+├── spa/[variants]/[[...path]]/route.ts       # 渲染主 SPA 的 HTML 外壳
+├── spa-auth/[locale]/[[...path]]/route.ts    # 渲染认证页的 HTML 外壳
+├── [variants]/metadata.ts     # 变体路由共享的 SEO metadata
+├── manifest.ts                 # PWA 清单
+├── robots.tsx                  # Robots.txt 生成
+└── sitemap.tsx                 # 站点地图生成
+```
+
+```bash
+src/routes/
+├── (main)/            # 桌面端路由：agent、group、home、resource、settings、memory 等
+├── (mobile)/          # 移动端路由：(home)、chat、community、me、settings
+├── (desktop)/         # 桌面端专属路由（如 desktop-onboarding）
+├── (popup)/           # 弹出窗口路由：agent、group
+├── auth/              # 认证页面：signin、signup、oauth、reset-password、verify-email 等
+├── onboarding/        # 新用户引导
+└── share/             # 分享页面：t/[id]、page/[id]
+```
+
+```bash
+src/spa/
+├── entry.web.tsx           # 桌面 Web 入口
+├── entry.mobile.tsx        # 移动端入口
+├── entry.desktop.tsx       # Electron 桌面端入口
+├── entry.popup.tsx         # 弹出窗口入口
+├── entry.auth.tsx          # 认证页入口
+└── router/
+    ├── desktopRouter.config.tsx           # 桌面端 React Router 路由
+    ├── desktopRouter.config.desktop.tsx   # 桌面端（Electron）变体，需与上者保持同步
+    ├── mobileRouter.config.tsx            # 移动端 React Router 路由
+    ├── popupRouter.config.tsx             # 弹出窗口路由
+    └── authRouter.config.tsx              # 认证页路由
 ```
 
 ### 架构说明
@@ -115,8 +154,7 @@ app/
 **路由组：**
 
 - `(backend)` — 所有服务端 API 路由、中间件和后端服务
-- `[variants]` — 处理不同平台变体的动态路由组
-- `(main)` — 主应用 SPA，使用 React Router DOM
+- `(main)` / `(mobile)` / `(desktop)` / `(popup)` — `src/routes/` 下按平台划分的 SPA 路由组
 
 **平台组织：**
 
@@ -128,7 +166,7 @@ app/
 **API 架构：**
 
 - REST API：`(backend)/api/` 和 `(backend)/webapi/`
-- tRPC 端点（`src/server/routers/`）：按运行时分组
+- tRPC 端点（`apps/server/src/routers/`）：按运行时分组
   - `lambda/` — 主要业务路由（agent、session、message、
     topic、file、knowledge、settings 等）
   - `async/` — 耗时异步操作（文件处理、图像生成、RAG 评估）
@@ -140,7 +178,7 @@ app/
 以一个典型的用户操作（如更新 Agent 配置）为例，数据在各层之间的流转：
 
 ```plaintext
-React UI (src/features/, src/app/)
+React UI (src/features/, src/routes/)
   │  用户交互触发事件
   ▼
 Store Actions (src/store/)
@@ -149,10 +187,10 @@ Store Actions (src/store/)
 Client Service (src/services/)
   │  封装 tRPC 客户端调用，处理请求参数
   ▼
-tRPC Router (src/server/routers/lambda/)
+tRPC Router (apps/server/src/routers/lambda/)
   │  校验输入（zod），路由到对应 service
   ▼
-Server Service (src/server/services/)
+Server Service (apps/server/src/services/)
   │  执行业务逻辑，调用 DB model
   ▼
 DB Model (packages/database/src/models/)
@@ -166,16 +204,20 @@ PostgreSQL
 ### 路由架构
 
 项目采用混合路由：
-Next.js App Router 处理静态页面（如认证页），
-React Router DOM 承载主应用 SPA。
+Next.js App Router 负责渲染 SPA 的 HTML 外壳和静态 / 认证页面，
+React Router DOM 在浏览器中加载 bundle 后承载主应用 SPA。
 
-**入口**：`src/app/[variants]/page.tsx`
-根据设备类型分发到桌面端或移动端路由。
+**入口**：Next.js 路由 `src/app/spa/[variants]/[[...path]]/route.ts`
+渲染 HTML 外壳（根据设备类型选择桌面端或移动端模板），
+随后加载 `src/spa/` 下对应的 Vite 入口（`entry.web.tsx`、`entry.mobile.tsx`
+或 `entry.desktop.tsx`）来挂载 React Router 应用。
 
 **关键配置文件：**
 
-- 桌面端路由：`src/app/[variants]/router/desktopRouter.config.tsx`
-- 移动端路由：`src/app/[variants]/(mobile)/router/mobileRouter.config.tsx`
+- 桌面端路由：`src/spa/router/desktopRouter.config.tsx`（需与 `desktopRouter.config.desktop.tsx` 保持同步）
+- 移动端路由：`src/spa/router/mobileRouter.config.tsx`
+- 弹出窗口路由：`src/spa/router/popupRouter.config.tsx`
+- 认证页路由：`src/spa/router/authRouter.config.tsx`
 - 路由工具：`src/utils/router.tsx`
 
 **桌面端 SPA 路由（React Router DOM）：**

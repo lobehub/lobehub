@@ -132,6 +132,20 @@ vi.mock('@/features/Conversation', () => ({
   },
 }));
 
+const mockConversationState = vi.hoisted(() => ({
+  current: {
+    chatInputOverlayHeight: 0,
+  },
+}));
+
+vi.mock('@/features/Conversation/store', () => ({
+  inputSelectors: {
+    chatInputOverlayHeight: (s: { chatInputOverlayHeight: number }) => s.chatInputOverlayHeight,
+  },
+  useConversationStore: (selector: (s: { chatInputOverlayHeight: number }) => unknown) =>
+    selector(mockConversationState.current),
+}));
+
 vi.mock('@/routes/(main)/agent/features/Conversation/useActionsBarConfig', () => ({
   useActionsBarConfig: () => ({ assistant: {}, user: {} }),
 }));

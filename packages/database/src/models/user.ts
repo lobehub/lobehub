@@ -8,15 +8,16 @@ import type {
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import dayjs from 'dayjs';
-import { and, asc, eq, gt, inArray, or, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, max, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
 import { merge } from '@/utils/merge';
 import { today } from '@/utils/time';
 
 import type { NewUser, UserItem, UserSettingsItem } from '../schemas';
-import { messages, nextauthAccounts, topics, users, userSettings } from '../schemas';
+import { messages, nextauthAccounts, topics, users, userSettings, workspaces } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { resnapshotTransferredMessagesBeforeOwnerDelete } from '../utils/messageScope';
 
 type DecryptUserKeyVaults = (
   encryptKeyVaultsStr: string | null,
@@ -60,6 +61,26 @@ export class UserModel {
     this.userId = userId;
     this.db = db;
   }
+
+  getUserActivitySummary = async (): Promise<{
+    lastUserMessageAt: Date | null;
+    userCreatedAt: Date | null;
+  }> => {
+    const [summary] = await this.db
+      .select({
+        lastUserMessageAt: max(messages.createdAt),
+        userCreatedAt: users.createdAt,
+      })
+      .from(users)
+      .leftJoin(messages, and(eq(messages.userId, users.id), eq(messages.role, 'user')))
+      .where(eq(users.id, this.userId))
+      .groupBy(users.createdAt);
+
+    return {
+      lastUserMessageAt: summary?.lastUserMessageAt ?? null,
+      userCreatedAt: summary?.userCreatedAt ?? null,
+    };
+  };
 
   getUserRegistrationDuration = async (): Promise<{
     createdAt: string;
@@ -232,8 +253,7 @@ export class UserModel {
     `);
 
     const row = result.rows[0] as
-      | { previousLastActiveAt: Date | string; userCreatedAt: Date | string }
-      | undefined;
+      { previousLastActiveAt: Date | string; userCreatedAt: Date | string } | undefined;
     if (!row) return;
 
     return {
@@ -324,7 +344,25 @@ export class UserModel {
   };
 
   static deleteUser = async (db: LobeChatDatabase, id: string) => {
-    return db.delete(users).where(eq(users.id, id));
+    return db.transaction(async (tx) => {
+      // Deleting a user also cascades every workspace they primary-own, and
+      // those cascade further through messages.workspace_id — so each owned
+      // workspace needs its own scrub (rows transferred away can carry the
+      // old workspace snapshot under a DIFFERENT author user_id).
+      const ownedWorkspaces = await tx
+        .select({ id: workspaces.id })
+        .from(workspaces)
+        .where(eq(workspaces.primaryOwnerId, id));
+      for (const workspace of ownedWorkspaces) {
+        await resnapshotTransferredMessagesBeforeOwnerDelete(tx, { workspaceId: workspace.id });
+      }
+
+      // Messages transferred out of this user's scope still carry the user in
+      // their snapshot user_id (cascade FK) — re-snapshot them from their
+      // anchor first, or the delete below would destroy transferred history.
+      await resnapshotTransferredMessagesBeforeOwnerDelete(tx, { userId: id });
+      return tx.delete(users).where(eq(users.id, id));
+    });
   };
 
   static findById = async (db: LobeChatDatabase, id: string) => {
@@ -345,6 +383,32 @@ export class UserModel {
   static findByIds = async (db: LobeChatDatabase, ids: string[]) => {
     if (ids.length === 0) return [];
     return db.query.users.findMany({ where: inArray(users.id, ids) });
+  };
+
+  /**
+   * Lean batch lookup of the display fields (name + avatar) for a set of user
+   * ids. Used to attribute a connector/tool to the member who authorized it —
+   * both the profile "authorized by X" tag and the runtime credential-ownership
+   * note resolve the same way. Selects only public-facing columns (never
+   * settings / key vaults). Callers must pass ids they are already authorized to
+   * see (e.g. userIds harvested from workspace-scoped connector rows).
+   */
+  static getDisplayInfoByIds = async (
+    db: LobeChatDatabase,
+    ids: string[],
+  ): Promise<
+    Array<{ avatar: string | null; fullName: string | null; id: string; username: string | null }>
+  > => {
+    if (ids.length === 0) return [];
+    return db
+      .select({
+        avatar: users.avatar,
+        fullName: users.fullName,
+        id: users.id,
+        username: users.username,
+      })
+      .from(users)
+      .where(inArray(users.id, ids));
   };
 
   static getUserApiKeys = async (

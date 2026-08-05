@@ -7,14 +7,14 @@ import {
 } from '@lobechat/const';
 import { Notion } from '@lobehub/icons';
 import { type DropdownItem } from '@lobehub/ui';
-import { Button, DropdownMenu, Icon, Tooltip } from '@lobehub/ui';
+import { DropdownMenu, Icon, Tooltip } from '@lobehub/ui';
+import { Button, toast } from '@lobehub/ui/base-ui';
 import { Upload } from 'antd';
 import { FilePenLine, FileUp, FolderIcon, FolderUp, Link, Plus } from 'lucide-react';
 import { type ChangeEvent } from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { message } from '@/components/AntdStaticMethods';
 import { useTopLevelFileUpload } from '@/features/ResourceManager/hooks/useTopLevelFileUpload';
 import { usePermission } from '@/hooks/usePermission';
 import { useCurrentFolderId } from '@/routes/(main)/resource/features/hooks/useCurrentFolderId';
@@ -142,7 +142,7 @@ const AddButton = () => {
       // Trigger auto-rename with the real ID (after sync completes)
       setPendingRenameItemId(realId);
     } catch (error) {
-      message.error(t('header.actions.createFolderError'));
+      toast.error(t('header.actions.createFolderError'));
       console.error('Failed to create folder:', error);
     }
   }, [

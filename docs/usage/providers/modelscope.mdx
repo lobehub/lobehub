@@ -43,7 +43,7 @@ ENABLED_MODELSCOPE=1
 MODELSCOPE_API_KEY=your_modelscope_api_token
 
 # Optional: Custom model list (comma-separated)
-MODELSCOPE_MODEL_LIST=deepseek-ai/DeepSeek-V3-0324,Qwen/Qwen3-235B-A22B
+MODELSCOPE_MODEL_LIST=deepseek-ai/DeepSeek-V3.2,Qwen/Qwen3-235B-A22B
 
 # Optional: Proxy URL (if needed)
 MODELSCOPE_PROXY_URL=https://your-proxy-url
@@ -57,16 +57,15 @@ If you're using Docker, add the ModelScope environment variables to your `docker
 environment:
   - ENABLED_MODELSCOPE=1
   - MODELSCOPE_API_KEY=your_modelscope_api_token
-  - MODELSCOPE_MODEL_LIST=deepseek-ai/DeepSeek-V3-0324,Qwen/Qwen3-235B-A22B
+  - MODELSCOPE_MODEL_LIST=deepseek-ai/DeepSeek-V3.2,Qwen/Qwen3-235B-A22B
 ```
 
 ## Available Models
 
 ModelScope provides access to a variety of models, including:
 
-- **DeepSeek Models**: DeepSeek-V3, DeepSeek-R1 series
-- **Qwen Models**: Qwen3 series, Qwen2.5 series
-- **Llama Models**: Meta-Llama-3 series
+- **DeepSeek Models**: DeepSeek-V3.2, DeepSeek-V3.1 series
+- **Qwen Models**: Qwen3 series (including Qwen3-Next)
 - **Other Models**: Various open-source models
 
 ## Troubleshooting
@@ -121,8 +120,8 @@ For LobeHub integration issues:
 ModelScope uses a namespace-prefixed format for model IDs, for example:
 
 ```
-deepseek-ai/DeepSeek-V3-0324
-deepseek-ai/DeepSeek-R1-0528
+deepseek-ai/DeepSeek-V3.2
+deepseek-ai/DeepSeek-V3.1
 Qwen/Qwen3-235B-A22B
 Qwen/Qwen3-32B
 ```

@@ -11,12 +11,12 @@ import {
 } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { FileTextIcon, MoreHorizontal, Package, Trash } from 'lucide-react';
+import { FileLock2Icon, FileTextIcon, MoreHorizontal, Package, Trash } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Time from '@/routes/(main)/home/features/components/Time';
-import { useDocumentStore } from '@/store/document';
+import { openDocumentModal } from '@/features/DocumentModal/loader';
+import Time from '@/features/Home/components/Time';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
@@ -30,10 +30,15 @@ const flattenWorkspace = (nodes: TaskDetailWorkspaceNode[]): TaskDetailWorkspace
 
 const ArtifactCard = memo<{ node: TaskDetailWorkspaceNode }>(({ node }) => {
   const { t } = useTranslation('chat');
-  const openDocumentPreview = useDocumentStore((s) => s.openDocumentPreview);
   const unpinDocument = useTaskStore((s) => s.unpinDocument);
   const activeTaskId = useTaskStore(taskDetailSelectors.activeTaskId);
-  const title = node.title || 'Untitled';
+  // Tombstone: the viewer lost access to the pinned document (switched back
+  // to private by its owner). The server strips title/metadata; clicking
+  // through still works — the document preview renders its own 404 terminal.
+  const inaccessible = !!node.inaccessible;
+  const title = inaccessible
+    ? t('taskDetail.artifactInaccessible')
+    : node.title || t('taskDetail.untitled');
   const sizeLabel =
     node.size == null ? undefined : t('taskDetail.artifactSize', { value: node.size });
 
@@ -71,15 +76,15 @@ const ArtifactCard = memo<{ node: TaskDetailWorkspaceNode }>(({ node }) => {
       paddingBlock={8}
       paddingInline={12}
       variant="outlined"
-      onClick={() => openDocumentPreview(node.documentId)}
+      onClick={() => void openDocumentModal(node.documentId)}
     >
       <Icon
         color={cssVar.colorTextSecondary}
-        icon={FileTextIcon}
+        icon={inaccessible ? FileLock2Icon : FileTextIcon}
         size={{ size: 18, strokeWidth: 1.5 }}
         style={{ flexShrink: 0 }}
       />
-      <Text ellipsis style={{ flex: 1, minWidth: 0 }}>
+      <Text ellipsis style={{ flex: 1, minWidth: 0 }} type={inaccessible ? 'secondary' : undefined}>
         {title}
       </Text>
       {sizeLabel && (

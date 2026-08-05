@@ -1,5 +1,9 @@
 import { ASYNC_TASK_TIMEOUT } from '@lobechat/business-config/server';
-import type { UserMemoryExtractionMetadata } from '@lobechat/types';
+import type {
+  HourlyUserMemoryExtractionMetadata,
+  HourlyUserMemoryExtractionProgress,
+  UserMemoryExtractionMetadata,
+} from '@lobechat/types';
 import {
   AsyncTaskError,
   AsyncTaskErrorType,
@@ -139,6 +143,105 @@ export class AsyncTaskModel {
     return Boolean(metadata?.control?.cancelRequestedAt);
   };
 
+  appendUserMemoryWorkflowRunIds = async (taskId: string, workflowRunIds: string[]) => {
+    const uniqueIds = Array.from(new Set(workflowRunIds.filter(Boolean)));
+    if (uniqueIds.length === 0) return;
+
+    const incomingIdsJson = JSON.stringify(uniqueIds);
+    const mergedIdsExpr = sql`
+      (
+        SELECT COALESCE(jsonb_agg(value ORDER BY first_ordinal), '[]'::jsonb)
+        FROM (
+          SELECT value, MIN(ordinality) AS first_ordinal
+          FROM jsonb_array_elements_text(
+            COALESCE(
+              ${asyncTasks.metadata} #> '{control,upstash,workflowRunIds}',
+              '[]'::jsonb
+            ) || ${incomingIdsJson}::jsonb
+          ) WITH ORDINALITY AS ids(value, ordinality)
+          GROUP BY value
+        ) AS deduped_ids
+      )
+    `;
+
+    await this.db
+      .update(asyncTasks)
+      .set({
+        metadata: sql`
+          jsonb_set(
+            jsonb_set(
+              jsonb_set(
+                ${asyncTasks.metadata},
+                '{control}',
+                COALESCE(${asyncTasks.metadata} -> 'control', '{}'::jsonb),
+                true
+              ),
+              '{control,upstash}',
+              COALESCE(${asyncTasks.metadata} #> '{control,upstash}', '{}'::jsonb),
+              true
+            ),
+            '{control,upstash,workflowRunIds}',
+            ${mergedIdsExpr},
+            true
+          )
+        `,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(asyncTasks.id, taskId), this.ownership()));
+  };
+
+  markHourlyMemoryExtractionSuccess = async (
+    taskId: string,
+    progress: HourlyUserMemoryExtractionProgress & { status: AsyncTaskStatus.Success },
+  ) => {
+    await this.db
+      .update(asyncTasks)
+      .set({
+        metadata: sql`
+          jsonb_set(
+            jsonb_set(
+              jsonb_set(
+                ${asyncTasks.metadata},
+                '{progress,processedUsers}',
+                to_jsonb(${progress.processedUsers}::int),
+                true
+              ),
+              '{progress,scheduledBatches}',
+              to_jsonb(${progress.scheduledBatches}::int),
+              true
+            ),
+            '{progress,scheduledChildRuns}',
+            to_jsonb(${progress.scheduledChildRuns}::int),
+            true
+          )
+        `,
+        status: sql`
+          CASE
+            WHEN ${asyncTasks.status} = ${AsyncTaskStatus.Error} OR ${asyncTasks.error} IS NOT NULL
+              THEN ${AsyncTaskStatus.Error}
+            ELSE ${progress.status}
+          END
+        `,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(asyncTasks.id, taskId),
+          eq(asyncTasks.type, AsyncTaskType.UserMemoryExtractionHourly),
+          this.ownership(),
+        ),
+      );
+  };
+
+  isHourlyMemoryExtractionCancellationRequested = async (taskId: string) => {
+    const task = await this.findById(taskId);
+    if (!task || task.userId !== this.userId) return false;
+    if (task.type !== AsyncTaskType.UserMemoryExtractionHourly) return false;
+
+    const metadata = task.metadata as HourlyUserMemoryExtractionMetadata | undefined;
+    return Boolean(metadata?.control?.cancelRequestedAt);
+  };
+
   /**
    * make the task status to be `error` if the task is not finished in 20 seconds
    */
@@ -191,6 +294,7 @@ export const initUserMemoryExtractionMetadata = (
         cancelledBy: metadata.control.cancelledBy,
         upstash: metadata.control.upstash
           ? {
+              entryWorkflowRunId: metadata.control.upstash.entryWorkflowRunId,
               workflowRunIds: metadata.control.upstash.workflowRunIds || [],
             }
           : undefined,
@@ -202,4 +306,43 @@ export const initUserMemoryExtractionMetadata = (
   },
   range: metadata?.range,
   source: metadata?.source ?? 'chat_topic',
+});
+
+/**
+ * Initializes hourly user memory extraction metadata.
+ *
+ * Use when:
+ * - Creating the batch-level hourly extraction async task
+ * - Normalizing persisted hourly extraction metadata before updates
+ *
+ * Expects:
+ * - `startedAt` is the ISO timestamp for the hourly scheduler run
+ *
+ * Returns:
+ * - Hourly metadata with progress counters defaulted to zero
+ */
+export const initHourlyUserMemoryExtractionMetadata = (
+  metadata: Partial<HourlyUserMemoryExtractionMetadata> & { startedAt: string },
+): HourlyUserMemoryExtractionMetadata => ({
+  control: metadata.control
+    ? {
+        cancelReason: metadata.control.cancelReason,
+        cancelRequestedAt: metadata.control.cancelRequestedAt,
+        cancelledBy: metadata.control.cancelledBy,
+        upstash: metadata.control.upstash
+          ? {
+              entryWorkflowRunId: metadata.control.upstash.entryWorkflowRunId,
+              workflowRunIds: metadata.control.upstash.workflowRunIds || [],
+            }
+          : undefined,
+      }
+    : undefined,
+  cursor: metadata.cursor,
+  progress: {
+    processedUsers: metadata.progress?.processedUsers ?? 0,
+    scheduledBatches: metadata.progress?.scheduledBatches ?? 0,
+    scheduledChildRuns: metadata.progress?.scheduledChildRuns ?? 0,
+  },
+  source: 'hourly_chat_topic',
+  startedAt: metadata.startedAt,
 });

@@ -4,6 +4,7 @@ import { memo, useLayoutEffect } from 'react';
 import { useLocation, useParams } from 'react-router';
 
 import NotFound from '@/components/404';
+import AsyncError from '@/components/AsyncError';
 import NProgress from '@/components/NProgress';
 import ResourceManager from '@/features/ResourceManager';
 import Container from '@/routes/(main)/resource/library/features/Container';
@@ -18,7 +19,7 @@ const MainContent = memo(() => {
   const setLibraryId = useResourceManagerStore((s) => s.setLibraryId);
 
   // Load knowledge base data
-  const { data, isLoading } = useKnowledgeBaseItem(knowledgeBaseId || '');
+  const { data, isLoading, error, mutate } = useKnowledgeBaseItem(knowledgeBaseId || '');
 
   // Sync libraryId from URL params using useLayoutEffect
   // useLayoutEffect runs synchronously before browser paint, ensuring state is set
@@ -33,6 +34,11 @@ const MainContent = memo(() => {
 
   // Sync file view mode from URL
   useInitFileCheck();
+
+  // A network / 500 on the KB fetch is NOT "this library doesn't exist" (Read §1.1):
+  // branch a transient error to a reload state that keeps the URL, and reserve the
+  // terminal 404 for a genuinely resolved-null (deleted / never-existed) record.
+  if (error && !data) return <AsyncError error={error} variant={'page'} onRetry={() => mutate()} />;
 
   if (!isLoading && !data) return <NotFound />;
 

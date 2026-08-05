@@ -79,7 +79,7 @@ const InterestsRow = () => {
   }, [customInput, normalizedInterests, saveInterests]);
 
   return (
-    <ProfileRow label={t('profile.interests')}>
+    <ProfileRow anchor={'profile-interests'} label={t('profile.interests')}>
       <Flexbox gap={12}>
         <Flexbox horizontal align="center" gap={8} wrap="wrap">
           {areas.map((item) => {

@@ -46,7 +46,7 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface ColumnResizeHandleProps {
-  column: 'name' | 'date' | 'size';
+  column: 'name' | 'date' | 'size' | 'uploader';
   currentWidth: number;
   maxWidth: number;
   minWidth: number;

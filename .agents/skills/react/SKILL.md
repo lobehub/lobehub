@@ -100,7 +100,8 @@ Files with a `.desktop.ts(x)` variant must be edited **in sync**. Drift causes b
 
 | Route Type         | Use Case   | Implementation                                     |
 | ------------------ | ---------- | -------------------------------------------------- |
-| Next.js App Router | Auth pages | `src/app/[variants]/(auth)/`                       |
+| Next.js App Router | Auth shell | `src/app/spa-auth/` (HTML shell; see spa-routes)   |
+| React Router DOM   | Auth pages | `src/routes/auth/` (signin, signup, oauth, …)      |
 | React Router DOM   | Main SPA   | `desktopRouter.config.tsx` + `.desktop.tsx` (pair) |
 
 Router utilities:

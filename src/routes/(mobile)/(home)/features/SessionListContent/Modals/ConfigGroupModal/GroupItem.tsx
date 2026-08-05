@@ -1,6 +1,5 @@
 import { ActionIcon, EditableText, SortableList } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { PencilLine, Trash } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -29,7 +28,6 @@ interface GroupItemProps extends SessionGroupItem {
 
 const GroupItem = memo<GroupItemProps>(({ id, name, disabled = false }) => {
   const { t } = useTranslation(['chat', 'common']);
-  const { message } = App.useApp();
 
   const [editing, setEditing] = useState(false);
   const [updateSessionGroupName, removeSessionGroup] = useSessionStore((s) => [
@@ -85,10 +83,10 @@ const GroupItem = memo<GroupItemProps>(({ id, name, disabled = false }) => {
             if (name !== input) {
               if (!input) return;
               if (input.length === 0 || input.length > 20 || input.trim() === '')
-                return message.warning(t('sessionGroup.tooLong'));
+                return toast.warning(t('sessionGroup.tooLong'));
 
               await updateSessionGroupName(id, input);
-              message.success(t('sessionGroup.renameSuccess'));
+              toast.success(t('sessionGroup.renameSuccess'));
             }
             setEditing(false);
           }}

@@ -1,17 +1,16 @@
 import '../initialize';
 
-import { createRoot } from 'react-dom/client';
-import { createBrowserRouter } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
 
 import BootErrorBoundary from '@/components/BootErrorBoundary';
 import NextThemeProvider from '@/layout/GlobalProvider/NextThemeProvider';
 
 import { authRoutes } from './router/authRouter.config';
+import { createSPABrowserRouter, createSPARoot } from './runtime';
 
-const router = createBrowserRouter(authRoutes);
+const router = createSPABrowserRouter(authRoutes);
 
-createRoot(document.getElementById('root')!).render(
+createSPARoot(document.getElementById('root')!).render(
   <BootErrorBoundary>
     <NextThemeProvider>
       <RouterProvider router={router} />

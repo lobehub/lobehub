@@ -15,6 +15,7 @@ import { ClipboardCheckIcon } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncBoundary from '@/components/AsyncBoundary';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
@@ -87,10 +88,20 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, routeScope }) => {
   const { allowed: canEditTask } = usePermission('create_content');
 
   const useFetchTaskGroupList = useTaskStore((s) => s.useFetchTaskGroupList);
-  useFetchTaskGroupList(agentId ? { agentId } : { allAgents: true });
+  // Keep the SWR handle only for `error` + `mutate` (the error/Retry state).
+  const { error, isLoading, mutate } = useFetchTaskGroupList(
+    agentId ? { agentId } : { allAgents: true },
+  );
+  // Drive the loading/empty boundary off the store's own init flag, NOT SWR's
+  // per-key `data`. On a scope or visibility switch the store resets
+  // `taskGroups` + `isTaskGroupListInit` together (`scopeChangeResetState`)
+  // while SWR still holds cached `data` for the target key — keying `hasSettled`
+  // off SWR `data` flashed the "no tasks" empty board during the refetch.
+  // `isTaskGroupListInit` resets in lockstep with `taskGroups`, so the settled
+  // signal never disagrees with the emptiness signal.
+  const isTaskGroupListInit = useTaskStore(taskListSelectors.isTaskGroupListInit);
 
   const taskGroups = useTaskStore(taskListSelectors.taskGroups);
-  const isInit = useTaskStore(taskListSelectors.isTaskGroupListInit);
   const updateTaskStatus = useTaskStore((s) => s.updateTaskStatus);
 
   const hiddenColumns = useGlobalStore(systemStatusSelectors.taskKanbanHiddenColumns);
@@ -200,34 +211,30 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, routeScope }) => {
     [hiddenColumnSet, t, taskGroups],
   );
 
-  if (!isInit) {
-    return (
-      <Flexbox horizontal className={styles.board}>
-        {visibleColumns.map((col) => (
-          <KanbanColumn
-            loading
-            columnKey={col.key}
-            droppable={false}
-            key={col.key}
-            tasks={[]}
-            total={0}
-          />
-        ))}
-      </Flexbox>
-    );
-  }
-
   const totalTasks = taskGroups.reduce((sum, g) => sum + g.total, 0);
 
-  if (totalTasks === 0) {
-    return (
-      <Center height={'80vh'} width={'100%'}>
-        <Empty description={t('taskList.empty')} icon={ClipboardCheckIcon} />
-      </Center>
-    );
-  }
+  const skeletonBoard = (
+    <Flexbox horizontal className={styles.board}>
+      {visibleColumns.map((col) => (
+        <KanbanColumn
+          loading
+          columnKey={col.key}
+          droppable={false}
+          key={col.key}
+          tasks={[]}
+          total={0}
+        />
+      ))}
+    </Flexbox>
+  );
 
-  return (
+  const emptyState = (
+    <Center height={'80vh'} width={'100%'}>
+      <Empty description={t('taskList.empty')} icon={ClipboardCheckIcon} />
+    </Center>
+  );
+
+  const board = (
     <DndContext
       collisionDetection={pointerWithin}
       sensors={canEditTask ? sensors : []}
@@ -275,6 +282,24 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, routeScope }) => {
         ) : null}
       </DragOverlay>
     </DndContext>
+  );
+
+  // Error gated ahead of empty by AsyncBoundary so a failed fetch shows Retry
+  // instead of the "no tasks" empty. `data` is the SWR result —
+  // undefined until the first fetch settles.
+  return (
+    <AsyncBoundary
+      data={isTaskGroupListInit || undefined}
+      empty={emptyState}
+      error={error}
+      errorVariant={'block'}
+      isEmpty={totalTasks === 0}
+      isLoading={isLoading || (!isTaskGroupListInit && !error)}
+      loading={skeletonBoard}
+      onRetry={() => mutate()}
+    >
+      {board}
+    </AsyncBoundary>
   );
 });
 

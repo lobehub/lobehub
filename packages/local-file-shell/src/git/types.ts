@@ -1,23 +1,56 @@
+/**
+ * The remote ref a local branch publishes to. Stored instead of (not as well as)
+ * relying on the local branch name, which is a device-local label — a worktree's
+ * generated name or an explicit-refspec push makes it differ from the branch that
+ * actually exists on the remote, and only the remote ref means anything off this
+ * machine.
+ */
+export interface GitUpstreamRef {
+  /** Branch name ON the remote (`feat/x`), never the local name. */
+  branch: string;
+  /** Remote name (`origin`). */
+  remote: string;
+}
+
 /** Branch short name (or short SHA when detached). */
 export interface GitBranchInfo {
   branch?: string;
   detached?: boolean;
+  /** Remote ref the branch publishes to. Absent when unpushed or unresolvable. */
+  upstream?: GitUpstreamRef;
 }
 
+export type GitPullRequestCiStatus = 'failure' | 'pending' | 'success' | 'unknown';
+
 export interface GitLinkedPullRequest {
+  ciStatus?: GitPullRequestCiStatus;
+  isDraft?: boolean;
+  mergeable?: string;
+  mergedAt?: string | null;
+  mergeStateStatus?: string;
   number: number;
+  reviewDecision?: string;
   state: string;
   title: string;
   url: string;
 }
 
+export type GitLinkedPullRequestLookupStatus = 'ok' | 'gh-missing' | 'error';
+
 export interface GitLinkedPullRequestResult {
-  /** Additional open PRs targeting the same head branch, beyond the primary one. */
+  /** Additional PRs targeting the same head branch, beyond the primary one. */
   extraCount?: number;
-  /** Null when no open PR is linked to the branch. */
+  /** Null when no PR is linked to the branch. */
   pullRequest: GitLinkedPullRequest | null;
   /** 'ok' — succeeded; 'gh-missing' — gh CLI unavailable / not authed; 'error' — other. */
-  status: 'ok' | 'gh-missing' | 'error';
+  status: GitLinkedPullRequestLookupStatus;
+  /**
+   * Remote ref the lookup actually queried under. Reported back so a caller can
+   * persist it — the PR's own head ref is the most authoritative answer available,
+   * and it is the only one that survives a commit→PR recovery on a machine with no
+   * local trace of the push.
+   */
+  upstream?: GitUpstreamRef;
 }
 
 export interface GitWorkingTreeStatus {
@@ -64,6 +97,7 @@ export interface DeviceGitInfo {
     extraCount?: number;
     ghMissing?: boolean;
     pullRequest?: GitLinkedPullRequest | null;
+    upstream?: GitUpstreamRef;
   };
   workingStatus: GitWorkingTreeStatus;
 }
@@ -191,6 +225,18 @@ export interface GitRenameBranchResult {
 export interface GitDeleteBranchResult {
   error?: string;
   success: boolean;
+}
+
+export interface GitRemoveWorktreeResult {
+  error?: string;
+  success: boolean;
+}
+
+export interface GitAddWorktreeResult {
+  error?: string;
+  success: boolean;
+  /** Absolute path of the created worktree, echoed back so the UI can switch to it. */
+  worktreePath?: string;
 }
 
 export interface GitPullResult {

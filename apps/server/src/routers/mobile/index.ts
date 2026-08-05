@@ -6,6 +6,7 @@ import { mobileSubscriptionRouter } from '@/business/server/mobile-routers/mobil
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 
 import { agentRouter } from '../lambda/agent';
+import { agentDocumentRouter } from '../lambda/agentDocument';
 import { agentSkillsRouter } from '../lambda/agentSkills';
 import { aiAgentRouter } from '../lambda/aiAgent';
 import { aiChatRouter } from '../lambda/aiChat';
@@ -13,6 +14,7 @@ import { aiModelRouter } from '../lambda/aiModel';
 import { aiProviderRouter } from '../lambda/aiProvider';
 import { briefRouter } from '../lambda/brief';
 import { chunkRouter } from '../lambda/chunk';
+import { composioRouter } from '../lambda/composio';
 import { configRouter } from '../lambda/config';
 import { deviceRouter } from '../lambda/device';
 import { documentRouter } from '../lambda/document';
@@ -21,6 +23,7 @@ import { homeRouter } from '../lambda/home';
 import { knowledgeBaseRouter } from '../lambda/knowledgeBase';
 import { marketRouter } from '../lambda/market';
 import { messageRouter } from '../lambda/message';
+import { notificationRouter } from '../lambda/notification';
 import { pluginRouter } from '../lambda/plugin';
 import { pushTokenRouter } from '../lambda/pushToken';
 import { sessionRouter } from '../lambda/session';
@@ -33,6 +36,7 @@ import { userRouter } from '../lambda/user';
 
 export const mobileRouter = router({
   agent: agentRouter,
+  agentDocument: agentDocumentRouter,
   agentSkills: agentSkillsRouter,
   aiAgent: aiAgentRouter,
   aiChat: aiChatRouter,
@@ -40,6 +44,7 @@ export const mobileRouter = router({
   aiModel: aiModelRouter,
   aiProvider: aiProviderRouter,
   chunk: chunkRouter,
+  composio: composioRouter,
   config: configRouter,
   device: deviceRouter,
   document: documentRouter,
@@ -49,6 +54,7 @@ export const mobileRouter = router({
   knowledgeBase: knowledgeBaseRouter,
   market: marketRouter,
   message: messageRouter,
+  notification: notificationRouter,
   plugin: pluginRouter,
   pushToken: pushTokenRouter,
   session: sessionRouter,

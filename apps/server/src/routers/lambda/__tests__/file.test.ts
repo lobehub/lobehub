@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { KnowledgeRepo } from '@/database/repositories/knowledge';
 import { fileRouter } from '@/server/routers/lambda/file';
 import { AsyncTaskStatus } from '@/types/asyncTask';
+import { TransferErrorCode } from '@/types/transferError';
 
 const buildMockFileAccessUrl = ({ id }: { id: string }) => `https://lobehub.com/f/${id}`;
 
@@ -13,6 +14,7 @@ const routerMocks = vi.hoisted(() => {
   return {
     businessFileUploadCheck: vi.fn(),
     businessFileTransferStorageCheck: vi.fn(),
+    hasWorkspaceScopedPermission: vi.fn(),
     serverDB: {
       select: vi.fn(() => ({
         from: vi.fn(() => ({
@@ -122,6 +124,10 @@ vi.mock('@/business/server/lambda-routers/file', () => ({
   businessFileUploadCheck: routerMocks.businessFileUploadCheck,
 }));
 
+vi.mock('@/server/services/workspacePermission', () => ({
+  hasWorkspaceScopedPermission: routerMocks.hasWorkspaceScopedPermission,
+}));
+
 const mockAsyncTaskFindByIds = vi.fn();
 const mockAsyncTaskFindById = vi.fn();
 const mockAsyncTaskDelete = vi.fn();
@@ -171,6 +177,14 @@ vi.mock('@/database/models/file', () => ({
   })),
 }));
 
+const mockKnowledgeBaseFindById = vi.fn();
+
+vi.mock('@/database/models/knowledgeBase', () => ({
+  KnowledgeBaseModel: vi.fn(() => ({
+    findById: mockKnowledgeBaseFindById,
+  })),
+}));
+
 const mockFileServiceGetFullFileUrl = vi.fn();
 const mockFileServiceGetFileAccessUrl = vi.fn();
 const mockFileServiceGetFileMetadata = vi.fn();
@@ -191,6 +205,7 @@ const mockDocumentModelCountFileUsageInSubtree = vi.fn();
 const mockDocumentModelCopyToWorkspace = vi.fn();
 const mockDocumentModelFindById = vi.fn();
 const mockDocumentModelTransferTo = vi.fn();
+const mockDocumentModelSubtreeHasForeignRows = vi.fn().mockResolvedValue(false);
 
 vi.mock('@/database/repositories/knowledge', () => ({
   KnowledgeRepo: vi.fn(() => ({
@@ -203,6 +218,7 @@ vi.mock('@/database/models/document', () => ({
     countFileUsageInSubtree: mockDocumentModelCountFileUsageInSubtree,
     copyToWorkspace: mockDocumentModelCopyToWorkspace,
     findById: mockDocumentModelFindById,
+    subtreeHasForeignRows: mockDocumentModelSubtreeHasForeignRows,
     transferTo: mockDocumentModelTransferTo,
   })),
 }));
@@ -211,6 +227,12 @@ vi.mock('@/server/services/document', () => ({
   DocumentService: vi.fn(() => ({
     deleteDocuments: mockDocumentServiceDeleteDocuments,
   })),
+}));
+
+const mockAssertCanPerformResourceAction = vi.hoisted(() => vi.fn());
+
+vi.mock('@/server/services/resourcePermission', () => ({
+  assertCanPerformResourceAction: mockAssertCanPerformResourceAction,
 }));
 
 describe('fileRouter', () => {
@@ -222,6 +244,8 @@ describe('fileRouter', () => {
     vi.clearAllMocks();
     routerMocks.businessFileUploadCheck.mockResolvedValue(undefined);
     routerMocks.businessFileTransferStorageCheck.mockResolvedValue(undefined);
+    routerMocks.hasWorkspaceScopedPermission.mockResolvedValue(true);
+    mockKnowledgeBaseFindById.mockResolvedValue({ id: 'kb-1', visibility: 'public' });
 
     mockFile = {
       id: 'test-id',
@@ -447,6 +471,53 @@ describe('fileRouter', () => {
           workspaceId: 'workspace-1',
         }),
       );
+    });
+
+    it('should use workspace knowledge-base visibility over an explicit value', async () => {
+      ({ caller } = createCallerWithCtx({ workspaceId: 'workspace-1' }));
+      mockFileModelCheckHash.mockResolvedValue({ isExist: false });
+      mockFileModelCreate.mockResolvedValue({ id: 'new-file-id' });
+
+      await caller.createFile({
+        hash: 'test-hash',
+        fileType: 'text',
+        knowledgeBaseId: 'kb-1',
+        name: 'test.txt',
+        size: 100,
+        url: 'files/test.txt',
+        visibility: 'private',
+        metadata: {},
+      });
+
+      expect(mockKnowledgeBaseFindById).toHaveBeenCalledWith('kb-1');
+      expect(mockFileModelCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          knowledgeBaseId: 'kb-1',
+          visibility: 'public',
+        }),
+        true,
+        routerMocks.transactionClient,
+      );
+    });
+
+    it('should reject a workspace upload when the knowledge base is not accessible', async () => {
+      ({ caller } = createCallerWithCtx({ workspaceId: 'workspace-1' }));
+      mockFileModelCheckHash.mockResolvedValue({ isExist: false });
+      mockKnowledgeBaseFindById.mockResolvedValue(undefined);
+
+      await expect(
+        caller.createFile({
+          hash: 'test-hash',
+          fileType: 'text',
+          knowledgeBaseId: 'missing-kb',
+          name: 'test.txt',
+          size: 100,
+          url: 'files/test.txt',
+          metadata: {},
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      expect(mockFileModelCreate).not.toHaveBeenCalled();
     });
 
     it('should use actual file size from S3 instead of client-provided size (security fix)', async () => {
@@ -765,18 +836,6 @@ describe('fileRouter', () => {
     });
   });
 
-  describe('removeAllFiles', () => {
-    it('should include knowledge-base files when clearing all user files', async () => {
-      mockFileModelQuery.mockResolvedValue([{ id: 'file-1' }, { id: 'file-2' }]);
-      mockFileModelDeleteMany.mockResolvedValue([]);
-
-      await caller.removeAllFiles();
-
-      expect(mockFileModelQuery).toHaveBeenCalledWith({ showFilesInKnowledgeBase: true });
-      expect(mockFileModelDeleteMany).toHaveBeenCalledWith(['file-1', 'file-2'], false);
-    });
-  });
-
   describe('deleteKnowledgeItemsByQuery', () => {
     it('should delete page-backed knowledge items via documentService and plain files via fileModel', async () => {
       mockKnowledgeRepoQuery.mockResolvedValue([
@@ -799,16 +858,120 @@ describe('fileRouter', () => {
 
       const result = await caller.deleteKnowledgeItemsByQuery({});
 
-      expect(mockDocumentServiceDeleteDocuments).toHaveBeenCalledWith(['doc-1']);
-      expect(mockFileModelDeleteMany).toHaveBeenCalledWith(['file-2'], false);
+      expect(mockDocumentServiceDeleteDocuments).toHaveBeenCalledWith(['doc-1'], {
+        restrictToCreator: false,
+      });
+      expect(mockFileModelDeleteMany).toHaveBeenCalledWith(['file-2'], false, {
+        restrictToCreator: false,
+      });
       expect(result).toEqual({ count: 2 });
+    });
+
+    it('should keep member query deletion caller-scoped and honor exclusions', async () => {
+      ({ ctx, caller } = createCallerWithCtx({
+        workspaceId: 'workspace-active',
+        workspaceRole: 'member',
+      }));
+      mockKnowledgeRepoQuery.mockResolvedValue([
+        {
+          documentId: null,
+          fileId: 'file-keep',
+          fileType: 'text/plain',
+          id: 'file-keep',
+          sourceType: 'file',
+        },
+        {
+          documentId: null,
+          fileId: 'file-delete',
+          fileType: 'text/plain',
+          id: 'file-delete',
+          sourceType: 'file',
+        },
+      ]);
+      mockFileModelDeleteMany.mockResolvedValue([]);
+
+      const result = await caller.deleteKnowledgeItemsByQuery({
+        excludedIds: ['file-keep'],
+      });
+
+      expect(mockKnowledgeRepoQuery).toHaveBeenCalledWith({
+        creatorUserId: 'test-user',
+        limit: 501,
+        offset: 0,
+        showFilesInKnowledgeBase: false,
+      });
+      expect(mockFileModelDeleteMany).toHaveBeenCalledWith(['file-delete'], false, {
+        restrictToCreator: true,
+      });
+      expect(result).toEqual({ count: 1 });
+    });
+
+    it('should let workspace owners delete the full query scope', async () => {
+      ({ ctx, caller } = createCallerWithCtx({
+        workspaceId: 'workspace-active',
+        workspaceRole: 'owner',
+      }));
+      mockKnowledgeRepoQuery.mockResolvedValue([
+        {
+          documentId: null,
+          fileId: 'member-file',
+          fileType: 'text/plain',
+          id: 'member-file',
+          sourceType: 'file',
+        },
+      ]);
+      mockFileModelDeleteMany.mockResolvedValue([]);
+
+      await caller.deleteKnowledgeItemsByQuery({});
+
+      expect(mockKnowledgeRepoQuery).toHaveBeenCalledWith({
+        creatorUserId: undefined,
+        limit: 501,
+        offset: 0,
+        showFilesInKnowledgeBase: false,
+      });
+      expect(mockFileModelDeleteMany).toHaveBeenCalledWith(['member-file'], false, {
+        restrictToCreator: false,
+      });
+    });
+  });
+
+  describe('resolveKnowledgeItemIds', () => {
+    it('resolves only caller-owned rows for members and the full scope for owners', async () => {
+      mockKnowledgeRepoQuery.mockResolvedValue([]);
+
+      ({ caller } = createCallerWithCtx({
+        workspaceId: 'workspace-active',
+        workspaceRole: 'member',
+      }));
+      await caller.resolveKnowledgeItemIds({});
+
+      expect(mockKnowledgeRepoQuery).toHaveBeenLastCalledWith({
+        creatorUserId: 'test-user',
+        limit: 501,
+        offset: 0,
+        showFilesInKnowledgeBase: false,
+      });
+
+      ({ caller } = createCallerWithCtx({
+        workspaceId: 'workspace-active',
+        workspaceRole: 'owner',
+      }));
+      await caller.resolveKnowledgeItemIds({});
+
+      expect(mockKnowledgeRepoQuery).toHaveBeenLastCalledWith({
+        creatorUserId: undefined,
+        limit: 501,
+        offset: 0,
+        showFilesInKnowledgeBase: false,
+      });
     });
   });
 
   describe('transferEntity', () => {
     it('should transfer document resources via documentModel', async () => {
       ctx.workspaceId = 'workspace-active';
-      mockDocumentModelFindById.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModelFindById.mockResolvedValue({ id: 'doc-1', userId: 'test-user' });
       mockDocumentModelCountFileUsageInSubtree.mockResolvedValue(4096);
       mockDocumentModelTransferTo.mockResolvedValue({ id: 'doc-1' });
 
@@ -819,13 +982,27 @@ describe('fileRouter', () => {
       });
 
       expect(mockDocumentModelFindById).toHaveBeenCalledWith('doc-1');
+      expect(mockAssertCanPerformResourceAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'transfer',
+          resourceId: 'doc-1',
+          resourceType: 'document',
+          userId: 'test-user',
+          workspaceId: 'workspace-active',
+        }),
+      );
       expect(mockDocumentModelCountFileUsageInSubtree).toHaveBeenCalledWith('doc-1');
       expect(routerMocks.businessFileTransferStorageCheck).toHaveBeenCalledWith({
         additionalSize: 4096,
         targetUserId: 'test-user',
         targetWorkspaceId: null,
       });
-      expect(mockDocumentModelTransferTo).toHaveBeenCalledWith('doc-1', null, 'test-user');
+      expect(mockDocumentModelTransferTo).toHaveBeenCalledWith(
+        'doc-1',
+        null,
+        'test-user',
+        undefined,
+      );
       expect(mockFileModelFindById).not.toHaveBeenCalled();
     });
 
@@ -848,7 +1025,30 @@ describe('fileRouter', () => {
         'file-1',
         'workspace-target',
         'test-user',
+        undefined,
       );
+    });
+
+    it('should reject target workspace transfer when RBAC denies file upload', async () => {
+      routerMocks.hasWorkspaceScopedPermission.mockResolvedValue(false);
+      mockFileModelFindById.mockResolvedValue({ id: 'file-1', size: 2048 });
+
+      await expect(
+        caller.transferEntity({
+          entityType: 'file',
+          id: 'file-1',
+          targetWorkspaceId: 'workspace-target',
+        }),
+      ).rejects.toMatchObject({
+        cause: {
+          data: {
+            code: TransferErrorCode.TargetNoWriteAccess,
+          },
+        },
+      });
+
+      expect(routerMocks.businessFileTransferStorageCheck).not.toHaveBeenCalled();
+      expect(mockFileModelTransferTo).not.toHaveBeenCalled();
     });
   });
 
@@ -868,12 +1068,17 @@ describe('fileRouter', () => {
         targetUserId: 'test-user',
         targetWorkspaceId: null,
       });
-      expect(mockFileModelCopyToWorkspace).toHaveBeenCalledWith('file-1', null, 'test-user');
+      expect(mockFileModelCopyToWorkspace).toHaveBeenCalledWith(
+        'file-1',
+        null,
+        'test-user',
+        undefined,
+      );
     });
 
     it('should copy document resources via documentModel', async () => {
       mockDocumentModelCopyToWorkspace.mockResolvedValue({ id: 'doc-1' });
-      mockDocumentModelFindById.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModelFindById.mockResolvedValue({ id: 'doc-1', userId: 'test-user' });
       mockDocumentModelCountFileUsageInSubtree.mockResolvedValue(4096);
 
       await caller.copyEntityToWorkspace({
@@ -889,7 +1094,12 @@ describe('fileRouter', () => {
         targetUserId: 'test-user',
         targetWorkspaceId: null,
       });
-      expect(mockDocumentModelCopyToWorkspace).toHaveBeenCalledWith('doc-1', null, 'test-user');
+      expect(mockDocumentModelCopyToWorkspace).toHaveBeenCalledWith(
+        'doc-1',
+        null,
+        'test-user',
+        undefined,
+      );
       expect(mockFileModelFindById).not.toHaveBeenCalled();
     });
   });

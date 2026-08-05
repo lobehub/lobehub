@@ -10,9 +10,10 @@ import {
   type ScheduleToolCallReportParams,
 } from './scheduleToolCallReport';
 
-// Mock Next.js after() function
-vi.mock('next/server', () => ({
-  after: vi.fn((callback) => callback()),
+const mockAfter = vi.hoisted(() => vi.fn((callback: () => unknown) => callback()));
+
+vi.mock('@/server/utils/scheduleAfterResponse', () => ({
+  after: mockAfter,
 }));
 
 // Mock DiscoverService
@@ -478,12 +479,10 @@ describe('scheduleToolCallReport', () => {
       consoleErrorSpy.mockRestore();
     });
 
-    it('should use Next.js after() to schedule reporting', async () => {
-      const { after } = await import('next/server');
-
+    it('should schedule reporting after the response', async () => {
       scheduleToolCallReport(baseParams);
 
-      expect(after).toHaveBeenCalledWith(expect.any(Function));
+      expect(mockAfter).toHaveBeenCalledWith(expect.any(Function));
     });
 
     it('should create DiscoverService with marketAccessToken', async () => {

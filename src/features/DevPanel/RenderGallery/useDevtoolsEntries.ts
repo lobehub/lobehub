@@ -54,8 +54,6 @@ const DEPRECATED_TOOLSETS = new Set(['lobe-notebook']);
 const isDeprecatedApi = (identifier: string, apiName: string) =>
   identifier === 'lobe-local-system' && apiName.includes('Local');
 
-export const toToolsetPath = (identifier: string) => `/devtools/${encodeURIComponent(identifier)}`;
-
 export const toApiAnchor = (apiName: string) => `api-${apiName}`;
 
 export const useDevtoolsEntries = (): DevtoolsEntries =>

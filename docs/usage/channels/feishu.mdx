@@ -23,6 +23,15 @@ By connecting a Feishu channel to your LobeHub agent, team members can interact 
 - A LobeHub account with an active subscription
 - A Feishu account with permissions to create enterprise apps
 
+## Connection Modes
+
+LobeHub supports two connection modes for Feishu bots:
+
+- **WebSocket (Recommended)** — Persistent connection using Feishu's official long-lived client. Events are delivered in real time; no public webhook URL is required, so this works out of the box even without a publicly reachable server. This is the default mode for new bots.
+- **Webhook** — HTTP callbacks to an Event Subscription URL. Use this mode if you prefer a stateless callback setup or your app already has an Event Subscription URL configured on the Feishu Open Platform.
+
+> **Note:** The steps below (Step 4) that configure an **Event Subscription URL** on the Feishu Open Platform only apply to **Webhook mode**. Skip them if you are using the default **WebSocket** mode.
+
 ## Step 1: Create a Feishu App
 
 <Steps>
@@ -110,16 +119,25 @@ By connecting a Feishu channel to your LobeHub agent, team members can interact 
   - **App ID** — The App ID from your Feishu app
   - **App Secret** — The App Secret from your Feishu app
 
-  > You don't need to fill in **Verification Token** or **Encrypt Key** at this point — you can set them up after configuring the Event Subscription in Step 4.
+  ### Select Connection Mode
 
-  ### Save and Copy the Webhook URL
+  In **Advanced Settings**, choose the **Connection Mode**:
 
-  Click **Save Configuration**. After saving, an **Event Subscription URL** will be displayed. Copy this URL — you will need it in the next step.
+  - **WebSocket** (default) — Recommended for new bots; skip to Step 5.
+  - **Webhook** — For apps with an existing Event Subscription URL on the Feishu Open Platform; continue to the next steps.
+
+  > You don't need to fill in **Verification Token** or **Encrypt Key** at this point — you can set them up after configuring the Event Subscription in Step 4 (Webhook mode only).
+
+  ### Save Configuration (Webhook Only)
+
+  Click **Save Configuration**. In **Webhook mode**, an **Event Subscription URL** will be displayed after saving. Copy this URL — you will need it in the next step. In **WebSocket mode**, the bot connects automatically and no URL is generated.
 
   ![](/blog/assetsbc6a72dc53430bbbbeafcc7d921396f4.webp)
 </Steps>
 
-## Step 4: Set Up Event Subscription in Feishu
+## Step 4: Set Up Event Subscription in Feishu (Webhook Only)
+
+> Skip this step if you are using WebSocket mode (default).
 
 <Steps>
   ### Open Event Subscription Settings
@@ -221,9 +239,10 @@ See the [Channels overview](/docs/usage/channels/overview#direct-message-policy)
 | -------------------------- | -------- | -------------------------------------------------------------------------------------------------------- |
 | **App ID**                 | Yes      | Your Feishu app's App ID (`cli_xxx`)                                                                     |
 | **App Secret**             | Yes      | Your Feishu app's App Secret                                                                             |
+| **Connection Mode**        | No       | `websocket` (default) or `webhook`. Choose based on whether your app can accept a public webhook URL     |
 | **Verification Token**     | No       | Verifies webhook event source (recommended)                                                              |
-| **Encrypt Key**            | No       | Decrypts encrypted event payloads                                                                        |
-| **Event Subscription URL** | —        | Auto-generated after saving; paste into Feishu Developer Portal                                          |
+| **Encrypt Key**            | No       | Decrypts encrypted event payloads (Webhook mode only)                                                    |
+| **Event Subscription URL** | —        | Auto-generated after saving in Webhook mode; paste into Feishu Developer Portal                          |
 | **Allowed User IDs**       | No       | Comma- or whitespace-separated Feishu `open_id` values. Global gate — applies to DMs and group @mentions |
 | **DM Policy**              | No       | `open` (default), `allowlist`, `pairing`, or `disabled` — who is allowed to DM the bot                   |
 | **Group Policy**           | No       | `open` (default), `allowlist`, or `disabled` — where the bot responds to @mentions                       |
@@ -231,7 +250,8 @@ See the [Channels overview](/docs/usage/channels/overview#direct-message-policy)
 
 ## Troubleshooting
 
-- **Event Subscription URL verification failed:** Ensure you saved the configuration in LobeHub first, and the URL was copied correctly.
+- **Bot not connecting (WebSocket mode):** Verify the App ID and App Secret are correct, and that the bot capability is enabled with the `im.message.receive_v1` event registered.
+- **Event Subscription URL verification failed (Webhook mode):** Ensure you saved the configuration in LobeHub first, and the URL was copied correctly.
 - **Bot not responding:** Verify the app is published and approved, the bot capability is enabled, and the `im.message.receive_v1` event is subscribed.
 - **Bot ignores DMs:** Open **Advanced Settings** in LobeHub and check **DM Policy**. If it is `Disabled`, switch to `Open` or `Allowlist`. If it is `Allowlist`, confirm the sender's `open_id` is listed in **Allowed User IDs**.
 - **Permission errors:** Confirm all required permissions are added and approved in the Developer Portal.

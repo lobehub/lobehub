@@ -98,9 +98,16 @@ export class FileActionImpl {
   };
 
   removeChatUploadFile = async (id: string): Promise<void> => {
-    const { dispatchChatUploadFileList } = this.#get();
+    const { chatUploadFileList, dispatchChatUploadFileList } = this.#get();
+
+    // Restored entries reference an already-persisted file that still backs the
+    // original message — only drop the draft item, never delete the file itself.
+    const skipRemoveFile = chatUploadFileList.find((item) => item.id === id)?.skipRemoveFile;
 
     dispatchChatUploadFileList({ id, type: 'removeFile' });
+
+    if (skipRemoveFile) return;
+
     await fileService.removeFile(id);
   };
 

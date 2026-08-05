@@ -1,8 +1,8 @@
 'use client';
 
-import { ModelTag } from '@lobehub/icons';
+import { ModelIcon } from '@lobehub/icons';
 import { ActionIconGroup, Block, Flexbox, Markdown, Tag, Text } from '@lobehub/ui';
-import { App } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
 import { CopyIcon, RotateCcwSquareIcon, Trash2 } from 'lucide-react';
@@ -10,8 +10,10 @@ import { type RuntimeVideoGenParamsKeys, type RuntimeVideoGenParamsValue } from 
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import useRenderBusinessVideoBatchItem from '@/business/client/hooks/useRenderBusinessVideoBatchItem';
 import { GenerationInvalidAPIKey } from '@/routes/(main)/(create)/features/GenerationInput';
+import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useVideoStore } from '@/store/video';
 import { AsyncTaskErrorType, AsyncTaskStatus } from '@/types/asyncTask';
 import type { GenerationBatch } from '@/types/generation';
@@ -44,7 +46,6 @@ interface VideoGenerationBatchItemProps {
 }
 
 export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(({ batch }) => {
-  const { message } = App.useApp();
   const { t } = useTranslation(['video', 'image']);
   const useCheckGenerationStatus = useVideoStore((s) => s.useCheckGenerationStatus);
   const removeGeneration = useVideoStore((s) => s.removeGeneration);
@@ -52,8 +53,22 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(({ b
   const setModelAndProviderOnSelect = useVideoStore((s) => s.setModelAndProviderOnSelect);
   const setParamOnInput = useVideoStore((s) => s.setParamOnInput);
   const activeTopicId = useVideoStore((s) => s.activeGenerationTopicId);
+  const activeWorkspaceId = useActiveWorkspaceId();
   const { shouldRenderBusinessBatchItem, businessBatchItem } =
     useRenderBusinessVideoBatchItem(batch);
+
+  const enabledVideoModelList = useAiInfraStore(aiProviderSelectors.enabledVideoModelList);
+  // Resolve the model's display name from the enabled model catalog, falling back
+  // to the raw model id when the model is not found (e.g. removed/renamed models).
+  const modelDisplayName = useMemo(() => {
+    const provider = enabledVideoModelList.find((p) => p.id === batch.provider);
+    const model = provider?.children.find((m) => m.id === batch.model);
+    return model?.displayName || batch.model;
+  }, [enabledVideoModelList, batch.provider, batch.model]);
+
+  const creator = batch.creator;
+  const showCreator = Boolean(activeWorkspaceId && creator?.id);
+  const creatorName = creator?.fullName || creator?.username || '';
 
   const time = useMemo(() => {
     return dayjs(batch.createdAt).format('YYYY-MM-DD HH:mm:ss');
@@ -85,12 +100,12 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(({ b
   const handleCopyPrompt = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(batch.prompt);
-      message.success(t('generation.actions.promptCopied', { ns: 'image' }));
+      toast.success(t('generation.actions.promptCopied', { ns: 'image' }));
     } catch (error) {
       console.error('Failed to copy prompt:', error);
-      message.error(t('generation.actions.promptCopyFailed', { ns: 'image' }));
+      toast.error(t('generation.actions.promptCopyFailed', { ns: 'image' }));
     }
-  }, [batch.prompt, message, t]);
+  }, [batch.prompt, t]);
 
   const handleReuseSettings = useCallback(() => {
     setModelAndProviderOnSelect(batch.model, batch.provider);
@@ -140,12 +155,12 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(({ b
 
     try {
       await navigator.clipboard.writeText(errorMessage);
-      message.success(t('generation.actions.errorCopied'));
+      toast.success(t('generation.actions.errorCopied'));
     } catch (error) {
       console.error('Failed to copy error message:', error);
-      message.error(t('generation.actions.errorCopyFailed'));
+      toast.error(t('generation.actions.errorCopyFailed'));
     }
-  }, [generation?.task.error, message, t]);
+  }, [generation?.task.error, t]);
 
   const displayAspectRatio = useMemo(() => {
     const ratio = batch.config?.aspectRatio;
@@ -232,16 +247,36 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(({ b
         <Markdown variant={'chat'}>{batch.prompt}</Markdown>
       </Flexbox>
       {renderContent()}
-      <Flexbox horizontal gap={4} style={{ opacity: 0.66 }}>
-        <ModelTag model={batch.model} variant={'borderless'} />
-        {batch.config?.resolution && <Tag variant={'borderless'}>{batch.config.resolution}</Tag>}
-      </Flexbox>
       <Flexbox
         horizontal
         align={'center'}
-        className={styles.batchActions}
+        gap={4}
         justify={'space-between'}
+        style={{ opacity: 0.66 }}
       >
+        <Flexbox horizontal align={'center'} gap={4}>
+          <Tag icon={<ModelIcon model={batch.model} />} variant={'borderless'}>
+            {modelDisplayName}
+          </Tag>
+          {batch.config?.resolution && <Tag variant={'borderless'}>{batch.config.resolution}</Tag>}
+        </Flexbox>
+        <Flexbox horizontal align={'center'} gap={6}>
+          {showCreator && (
+            <>
+              <Text fontSize={12} type={'secondary'}>
+                {t('generation.metadata.by', { name: creatorName, ns: 'image' })}
+              </Text>
+              <Text fontSize={12} type={'secondary'}>
+                ·
+              </Text>
+            </>
+          )}
+          <Text as={'time'} fontSize={12} type={'secondary'}>
+            {t('generation.metadata.createdAt', { ns: 'image', time })}
+          </Text>
+        </Flexbox>
+      </Flexbox>
+      <Flexbox horizontal align={'center'} className={styles.batchActions}>
         <ActionIconGroup
           items={[
             {
@@ -265,9 +300,6 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(({ b
             },
           ]}
         />
-        <Text as={'time'} fontSize={12} type={'secondary'}>
-          {time}
-        </Text>
       </Flexbox>
     </Block>
   );

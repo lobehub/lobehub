@@ -1,4 +1,5 @@
 import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
+import { agentDisplayName } from '@lobechat/types';
 import { Flexbox, Popover, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -75,6 +76,7 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
     const agentGroups = useHomeStore(homeAgentListSelectors.agentGroups, isEqual);
     const ungroupedAgents = useHomeStore(homeAgentListSelectors.ungroupedAgents, isEqual);
     const privateAgentGroups = useHomeStore(homeAgentListSelectors.privateAgentGroups, isEqual);
+    const privatePinnedAgents = useHomeStore(homeAgentListSelectors.privatePinnedAgents, isEqual);
     const privateUngroupedAgents = useHomeStore(
       homeAgentListSelectors.privateUngroupedAgents,
       isEqual,
@@ -106,7 +108,7 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
             description: null,
             id: inboxAgentId,
             pinned: false,
-            title: inboxMeta?.title || t('inbox.title', { ns: 'chat' }),
+            title: agentDisplayName(inboxMeta, t('inbox.title', { ns: 'chat' })),
             type: 'agent' as const,
             updatedAt: new Date(),
           },
@@ -119,19 +121,25 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
 
     const privateAgents = useMemo<SidebarAgentItem[]>(() => {
       const groupedItems = privateAgentGroups.flatMap((group) => group.items);
-      return [...groupedItems, ...privateUngroupedAgents].filter((agent) => agent.type === 'agent');
-    }, [privateAgentGroups, privateUngroupedAgents]);
+      return [...privatePinnedAgents, ...groupedItems, ...privateUngroupedAgents].filter(
+        (agent) => agent.type === 'agent',
+      );
+    }, [privateAgentGroups, privatePinnedAgents, privateUngroupedAgents]);
 
     const filteredPrivate = useMemo(() => {
       const q = search.trim().toLowerCase();
       if (!q) return privateAgents;
-      return privateAgents.filter((agent) => (agent.title || '').toLowerCase().includes(q));
+      return privateAgents.filter((agent) =>
+        (agentDisplayName(agent) ?? '').toLowerCase().includes(q),
+      );
     }, [privateAgents, search]);
 
     const filteredWorkspace = useMemo(() => {
       const q = search.trim().toLowerCase();
       if (!q) return workspaceAgents;
-      return workspaceAgents.filter((agent) => (agent.title || '').toLowerCase().includes(q));
+      return workspaceAgents.filter((agent) =>
+        (agentDisplayName(agent) ?? '').toLowerCase().includes(q),
+      );
     }, [workspaceAgents, search]);
 
     // Flat order for keyboard navigation and activeIndex: private first, then workspace.
@@ -205,7 +213,7 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
             <AgentItem
               active={flatIndex === activeIndex}
               agentId={agent.id}
-              agentTitle={agent.title || t('untitledAgent', { ns: 'chat' })}
+              agentTitle={agentDisplayName(agent, t('untitledAgent', { ns: 'chat' }))}
               avatar={agent.avatar}
               heterogeneousType={agent.heterogeneousType}
               onAgentChange={handleAgentChange}

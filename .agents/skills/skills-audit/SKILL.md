@@ -1,7 +1,6 @@
 ---
 name: skills-audit
 description: 'Audit .agents/skills SKILL.md files. Use for recurring checks of duplicate, overlapping, stale, inconsistent, or broken skills and merge/delete candidates.'
-disable-model-invocation: true
 argument-hint: '[--verbose | --apply]'
 ---
 

@@ -21,7 +21,7 @@ const options = {
 
 const maxWidth = 1200;
 
-interface PDFViewerProps {
+export interface PDFViewerProps {
   fileId: string;
   url: string | null;
 }
@@ -32,7 +32,6 @@ const PDFViewer = memo<PDFViewerProps>(({ url, fileId }) => {
   const [containerWidth, setContainerWidth] = useState<number>();
   const [isLoaded, setIsLoaded] = useState(false);
 
-   
   const onResize = useCallback<ResizeObserverCallback>((entries) => {
     const [entry] = entries;
 

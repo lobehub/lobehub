@@ -60,6 +60,22 @@ vi.mock('model-bank', () => ({
   LOBE_DEFAULT_MODEL_LIST: mockBuiltinModels,
 }));
 
+// Plan documents are the todo runtime's optional mirror; a topic that never ran
+// `createPlan` simply has none. Model that here so the todo tests exercise the
+// message-history path the tool context is supposed to supply.
+const mockFindPlanByTopic = vi.hoisted(() => vi.fn().mockResolvedValue(null));
+const mockUpdatePlanMetadata = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+
+vi.mock('../lobeAgentPlan', () => ({
+  createServerPlanRuntimeService: () => ({
+    createPlan: vi.fn(),
+    findPlanById: vi.fn(),
+    findPlanByTopic: mockFindPlanByTopic,
+    updatePlan: vi.fn(),
+    updatePlanMetadata: mockUpdatePlanMetadata,
+  }),
+}));
+
 const { lobeAgentRuntime } = await import('../lobeAgent');
 
 describe('lobeAgentRuntime', () => {
@@ -602,6 +618,44 @@ describe('lobeAgentRuntime', () => {
       expect(result.success).toBe(false);
       expect(result).toMatchObject({ error: { code: 'INVALID_ARGUMENTS' } });
       expect(run).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('todos', () => {
+    const todoContext: ToolExecutionContext = {
+      ...baseContext,
+      currentTodos: [
+        { status: 'completed', text: 'env setup' },
+        { status: 'todo', text: 'run case 1' },
+        { status: 'todo', text: 'write report' },
+      ],
+      topicId: 'topic-1',
+    };
+
+    it('applies operations against ctx.currentTodos when no plan document exists', async () => {
+      // Regression: the runtime used to drop `ctx` and resolve todos from the
+      // plan document alone. With no document the list came back empty, every
+      // index went out of bounds, and the agent got "No operations applied."
+      // plus an empty list — which then overwrote the message-history copy.
+      const runtime = lobeAgentRuntime.factory(todoContext);
+
+      const result = await runtime.updateTodos(
+        { operations: [{ index: 1, type: 'processing' }] },
+        todoContext,
+      );
+
+      expect(result.content).not.toContain('No operations applied.');
+      expect(result.state.todos.items).toHaveLength(3);
+      expect(result.state.todos.items[1].status).toBe('processing');
+    });
+
+    it('appends to ctx.currentTodos instead of restarting the list', async () => {
+      const runtime = lobeAgentRuntime.factory(todoContext);
+
+      const result = await runtime.createTodos({ adds: ['publish report'] }, todoContext);
+
+      expect(result.state.todos.items).toHaveLength(4);
+      expect(result.state.todos.items[3].text).toBe('publish report');
     });
   });
 });

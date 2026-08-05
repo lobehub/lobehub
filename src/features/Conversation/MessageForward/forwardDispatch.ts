@@ -1,4 +1,4 @@
-import { type UIChatMessage } from '@lobechat/types';
+export { buildForwardedContent } from '@/store/chat/slices/forward/helpers';
 
 /**
  * A forward request parked in {@link useForwardDispatchStore} while we navigate
@@ -47,37 +47,4 @@ export const canConsumePendingForward = ({
   const isNewConversation = !topicId;
 
   return !isAgentConfigLoading && isNewConversation;
-};
-
-const blockText = (label: string, body: string) => `**${label}**\n\n${body.trim()}`;
-
-/**
- * Render selected messages into a single Markdown transcript. The result is sent
- * as one user turn to the target agent, so it reads the forwarded exchange as
- * context and continues from there.
- */
-export const buildForwardedContent = (
-  messages: UIChatMessage[],
-  options: { header: string; roleLabel: (role: string) => string },
-): string => {
-  const { header, roleLabel } = options;
-
-  const blocks = messages
-    .map((message) => {
-      // AssistantGroup messages keep their text in child content blocks.
-      const body =
-        message.role === 'assistantGroup' && message.children?.length
-          ? message.children
-              .map((child) => child.content)
-              .filter(Boolean)
-              .join('\n\n')
-          : message.content;
-
-      if (!body || !body.trim()) return undefined;
-
-      return blockText(roleLabel(message.role), body);
-    })
-    .filter((block): block is string => !!block);
-
-  return [header, ...blocks].join('\n\n---\n\n');
 };

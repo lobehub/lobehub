@@ -108,8 +108,8 @@ export const messages = pgTable(
     metadata: jsonb('metadata'),
     /**
      * Token usage + cost for this message, promoted out of `metadata.usage`
-     * into a dedicated column. `metadata.usage` stays the source of truth during
-     * the dual-write transition; new reads/aggregations should target this column.
+     * into a dedicated column. New writes target this column exclusively;
+     * readers may temporarily fall back to `metadata.usage` for legacy rows.
      */
     usage: jsonb('usage').$type<ModelUsage>(),
 
@@ -127,6 +127,11 @@ export const messages = pgTable(
     clientId: text('client_id'),
 
     // foreign keys
+    /**
+     * Creation-time snapshot of the author. NOT a scope filter: a message's
+     * authoritative scope is derived from its topic/session (see
+     * `buildMessageScopeWhere`), so agent transfers never rewrite this column.
+     */
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
@@ -149,6 +154,10 @@ export const messages = pgTable(
     messageGroupId: varchar255('message_group_id').references(() => messageGroups.id, {
       onDelete: 'cascade',
     }),
+    /**
+     * Creation-time snapshot of the workspace. NOT a scope filter — see
+     * `userId` above; derive scope via `buildMessageScopeWhere` instead.
+     */
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
     ...timestamps,
   },
@@ -156,6 +165,7 @@ export const messages = pgTable(
     index('messages_created_at_idx').on(table.createdAt),
     uniqueIndex('message_client_id_user_unique').on(table.clientId, table.userId),
     index('messages_topic_id_idx').on(table.topicId),
+    index('messages_topic_id_updated_at_idx').on(table.topicId, table.updatedAt),
     index('messages_parent_id_idx').on(table.parentId),
     index('messages_quota_id_idx').on(table.quotaId),
 
