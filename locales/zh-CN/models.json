@@ -100,6 +100,7 @@
   "Meta-Llama-3.3-70B-Instruct.description": "Llama 3.3 是最先进的多语言开源 Llama 模型，在极低成本下实现接近 405B 的性能。基于 Transformer 架构，并通过 SFT 和 RLHF 提升实用性与安全性。指令微调版本专为多语言对话优化，在行业基准测试中超越众多开放与闭源聊天模型。知识截止时间：2023 年 12 月。",
   "Meta-Llama-4-Maverick-17B-128E-Instruct-FP8.description": "Llama 4 Maverick 是一款大型 MoE 模型，采用高效专家激活机制，具备强大的推理能力。",
   "MiMo-V2-Pro.description": "MiMo-V2-Pro 专为真实世界中的高强度智能体工作流设计。其总参数量超过 1 万亿（激活参数 42B），采用创新的混合注意力架构，支持超长上下文长度（最高 100 万 tokens）。基于强大的基础模型，我们持续在更广泛的智能体场景中扩展算力，进一步拓展智能的行动空间，在从编码到真实任务执行（“钳爪”）等方面实现显著泛化。",
+  "MiniMax-H3.description": "统一的文生视频、图生视频与参考生视频模型，运动表现、一致性和原生音频能力全面增强。",
   "MiniMax-Hailuo-02.description": "下一代视频生成模型MiniMax Hailuo 02正式发布，支持1080P分辨率和10秒视频生成。",
   "MiniMax-Hailuo-2.3-Fast.description": "全新视频生成模型，在身体动作、物理真实感和指令遵循性方面全面升级。",
   "MiniMax-Hailuo-2.3.description": "全新视频生成模型，在身体动作、物理真实感和指令遵循性方面全面升级。",
