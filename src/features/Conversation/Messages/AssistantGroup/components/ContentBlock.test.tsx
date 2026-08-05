@@ -105,7 +105,9 @@ vi.mock('../../components/ImageFileListViewer', () => ({
   default: () => <div>images</div>,
 }));
 
-vi.mock('../../components/Reasoning', () => ({
+vi.mock('../../components/Reasoning', async (importOriginal) => ({
+  // keep the real hasRenderableReasoning predicate — these tests exercise it
+  ...(await importOriginal<Record<string, unknown>>()),
   default: () => <div>reasoning</div>,
 }));
 
