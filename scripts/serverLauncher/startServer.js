@@ -224,17 +224,27 @@ const runServer = async () => {
   console.log('-------------------------------------');
 
   if (process.env.DATABASE_DRIVER) {
-    try {
-      await fs.access(DB_MIGRATION_SCRIPT_PATH);
-
-      await runScript(DB_MIGRATION_SCRIPT_PATH);
-    } catch (err) {
-      if (err.code === 'ENOENT') {
-        console.log(
-          `⚠️ DB Migration: Not found ${DB_MIGRATION_SCRIPT_PATH}. Skipping DB migration. Ensure to migrate database manually.`,
-        );
-        console.log('-------------------------------------');
-      } else {
+    // DB-backed deploys must migrate on boot. Soft-skipping a missing migrator
+    // previously let mispackaged images start with a stale schema (e.g. missing
+    // platform_admins). Opt out only with an explicit SKIP_DB_MIGRATE=1.
+    if (process.env.SKIP_DB_MIGRATE === '1') {
+      console.log('⚠️ DB Migration: SKIP_DB_MIGRATE=1 — skipping automatic migration.');
+      console.log('-------------------------------------');
+    } else {
+      try {
+        await fs.access(DB_MIGRATION_SCRIPT_PATH);
+        await runScript(DB_MIGRATION_SCRIPT_PATH);
+      } catch (err) {
+        if (err.code === 'ENOENT') {
+          console.error(
+            `❌ DB Migration: Not found ${DB_MIGRATION_SCRIPT_PATH}. Refusing to start with DATABASE_DRIVER set.`,
+          );
+          console.error(
+            '   Image must include /app/docker.cjs, /app/errorHint.js, and /app/migrations.',
+          );
+          console.error('   To bypass (migrate externally): set SKIP_DB_MIGRATE=1');
+          process.exit(1);
+        }
         console.error('❌ Error during DB migration:');
         console.error(err);
         process.exit(1);
