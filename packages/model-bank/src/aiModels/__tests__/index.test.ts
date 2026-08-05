@@ -159,6 +159,7 @@ describe('Qwen models', () => {
         abilities: expect.objectContaining({
           functionCall: true,
           reasoning: true,
+          search: true,
           vision: true,
         }),
         contextWindowTokens: 1_000_000,
@@ -167,11 +168,14 @@ describe('Qwen models', () => {
         releasedAt: '2026-07-19',
         settings: {
           extendParams: ['reasoningEffort', 'preserveThinking'],
+          searchImpl: 'params',
         },
         type: 'chat',
       }),
     );
-    expect(qwen38?.abilities?.search).toBeUndefined();
+    // Provider-native web search via Chat Completions `enable_search`, matching the
+    // sibling qwen3.7/3.6 max cards rather than falling back to the app-tool path.
+    expect(qwen38?.abilities?.search).toBe(true);
     expect(qwen38?.pricing).toBeUndefined();
   });
 });

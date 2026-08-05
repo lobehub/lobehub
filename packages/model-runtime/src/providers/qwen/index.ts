@@ -124,7 +124,15 @@ export const params = {
                       thinking?.budget_tokens === 0 ? 0 : thinking?.budget_tokens || undefined,
                   }
                 : {}),
-        ...(typeof preserveThinking === 'boolean' && { preserve_thinking: preserveThinking }),
+        // qwen3.8-max preserves prior reasoning upstream by default (billing it as input
+        // tokens), so an unset switch would silently keep thinking preserved while the UI
+        // renders it off. Send an explicit `false` when the caller hasn't opted in so the
+        // visible off state is honored; other models keep the upstream default untouched.
+        ...(typeof preserveThinking === 'boolean'
+          ? { preserve_thinking: preserveThinking }
+          : isQwen38Max
+            ? { preserve_thinking: false }
+            : {}),
         frequency_penalty: undefined,
         messages,
         model,

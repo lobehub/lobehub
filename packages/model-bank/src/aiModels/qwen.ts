@@ -2270,6 +2270,7 @@ const qwenChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+      search: true,
       vision: true,
     },
     config: {
@@ -2288,6 +2289,7 @@ const qwenChatModels: AIChatModelCard[] = [
     releasedAt: '2026-07-19',
     settings: {
       extendParams: ['reasoningEffort', 'preserveThinking'],
+      searchImpl: 'params',
     },
     type: 'chat',
   },

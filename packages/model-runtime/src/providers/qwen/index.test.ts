@@ -307,5 +307,45 @@ describe('LobeQwenAI - custom features', () => {
         },
       ]);
     });
+
+    it('should default preserve_thinking to false for qwen3.8 max when the switch is unset', () => {
+      const payload = {
+        messages: [{ content: 'hello', role: 'user' }],
+        model: 'qwen3.8-max-preview',
+      } as any;
+
+      const result = params.chatCompletion!.handlePayload!(payload);
+
+      // Upstream preserves prior reasoning by default; an unset UI switch must not
+      // silently keep it on (and bill it as input) while the control renders as off.
+      expect(result.preserve_thinking).toBe(false);
+    });
+
+    it('should respect an explicit preserveThinking on qwen3.8 max', () => {
+      const payload = {
+        messages: [{ content: 'hello', role: 'user' }],
+        model: 'qwen3.8-max-preview',
+        preserveThinking: true,
+      } as any;
+
+      const result = params.chatCompletion!.handlePayload!(payload);
+
+      expect(result.preserve_thinking).toBe(true);
+    });
+  });
+
+  describe('qwen3.8 max search', () => {
+    it('should forward enable_search for provider-native search', () => {
+      const payload = {
+        enabledSearch: true,
+        messages: [{ content: 'hello', role: 'user' }],
+        model: 'qwen3.8-max-preview',
+      } as any;
+
+      const result = params.chatCompletion!.handlePayload!(payload);
+
+      expect(result.enable_search).toBe(true);
+      expect(result.search_options).toBeDefined();
+    });
   });
 });
