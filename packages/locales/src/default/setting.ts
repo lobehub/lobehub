@@ -3073,6 +3073,11 @@ When I am ___, I need ___
   'tools.builtins.lobe-web-browsing.readme':
     'Search the web for current information and crawl web pages to extract content. Supports multiple search engines, categories, and time ranges for comprehensive research.',
   'tools.builtins.lobe-web-browsing.title': 'Web Browsing',
+  'tools.builtins.lobe-image-generation.description':
+    'Generate images through LobeHub providers when the current chat model has no native image output.',
+  'tools.builtins.lobe-image-generation.readme':
+    'Opt-in image generation for models without native image output. Pin this tool to enable it in chat or agent mode; leave unpinned to avoid the tool schema cost.',
+  'tools.builtins.lobe-image-generation.title': 'Image Generation',
   'tools.builtins.lobe-web-onboarding.description':
     'Drive the web onboarding flow with a controlled agent runtime',
   'tools.builtins.lobe-web-onboarding.title': 'Web Onboarding',

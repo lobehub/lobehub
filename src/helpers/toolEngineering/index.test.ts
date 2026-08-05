@@ -319,7 +319,7 @@ describe('toolEngineering', () => {
   });
 
   describe('createChatToolsEngine', () => {
-    it('should enable image generation in chat mode when model lacks native image output', () => {
+    it('should not auto-enable image generation in chat mode', () => {
       mockCurrentChatConfig = { enableAgentMode: false };
       mockImageOutputSupport = false;
 
@@ -334,11 +334,31 @@ describe('toolEngineering', () => {
         provider: 'anthropic',
       });
 
+      expect(result.enabledToolIds).not.toContain('lobe-image-generation');
+    });
+
+    it('should enable image generation in chat mode when the tool is pinned', () => {
+      mockCurrentChatConfig = { enableAgentMode: false };
+      mockCurrentAgentPlugins = ['lobe-image-generation'];
+      mockImageOutputSupport = false;
+
+      const toolsEngine = createAgentToolsEngine({
+        model: 'claude-sonnet',
+        provider: 'anthropic',
+      });
+
+      const result = toolsEngine.generateToolsDetailed({
+        toolIds: ['lobe-image-generation'],
+        model: 'claude-sonnet',
+        provider: 'anthropic',
+      });
+
       expect(result.enabledToolIds).toContain('lobe-image-generation');
     });
 
     it('should not enable image generation in chat mode when model has native image output', () => {
       mockCurrentChatConfig = { enableAgentMode: false };
+      mockCurrentAgentPlugins = ['lobe-image-generation'];
       mockImageOutputSupport = true;
 
       const toolsEngine = createAgentToolsEngine({
@@ -347,7 +367,7 @@ describe('toolEngineering', () => {
       });
 
       const result = toolsEngine.generateToolsDetailed({
-        toolIds: [],
+        toolIds: ['lobe-image-generation'],
         model: 'gpt-image-chat',
         provider: 'openai',
       });
@@ -357,6 +377,7 @@ describe('toolEngineering', () => {
 
     it('should not enable image generation in chat mode when model cannot call tools', () => {
       mockCurrentChatConfig = { enableAgentMode: false };
+      mockCurrentAgentPlugins = ['lobe-image-generation'];
       mockIsCanUseFC = false;
 
       const toolsEngine = createAgentToolsEngine({
@@ -365,7 +386,7 @@ describe('toolEngineering', () => {
       });
 
       const result = toolsEngine.generateToolsDetailed({
-        toolIds: [],
+        toolIds: ['lobe-image-generation'],
         model: 'plain-text-model',
         provider: 'test',
       });

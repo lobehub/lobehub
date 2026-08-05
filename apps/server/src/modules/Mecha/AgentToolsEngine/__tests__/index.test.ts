@@ -308,7 +308,7 @@ describe('createServerAgentToolsEngine', () => {
     expect(result.enabledToolIds).not.toContain(WebBrowsingManifest.identifier);
   });
 
-  it('should enable ImageGeneration in chat mode when model lacks native image output', () => {
+  it('should not auto-enable ImageGeneration in chat mode', () => {
     const context = createMockContext();
     const engine = createServerAgentToolsEngine(context, {
       agentConfig: {
@@ -326,6 +326,27 @@ describe('createServerAgentToolsEngine', () => {
       toolIds: [],
     });
 
+    expect(result.enabledToolIds).not.toContain(ImageGenerationManifest.identifier);
+  });
+
+  it('should enable ImageGeneration in chat mode when the tool is pinned', () => {
+    const context = createMockContext();
+    const engine = createServerAgentToolsEngine(context, {
+      agentConfig: {
+        chatConfig: { enableAgentMode: false },
+        plugins: [ImageGenerationManifest.identifier],
+      },
+      model: 'claude-sonnet',
+      modelAbilities: { functionCall: true, imageOutput: false },
+      provider: 'anthropic',
+    });
+
+    const result = engine.generateToolsDetailed({
+      model: 'claude-sonnet',
+      provider: 'anthropic',
+      toolIds: [ImageGenerationManifest.identifier],
+    });
+
     expect(result.enabledToolIds).toContain(ImageGenerationManifest.identifier);
   });
 
@@ -334,7 +355,7 @@ describe('createServerAgentToolsEngine', () => {
     const engine = createServerAgentToolsEngine(context, {
       agentConfig: {
         chatConfig: { enableAgentMode: false },
-        plugins: [],
+        plugins: [ImageGenerationManifest.identifier],
       },
       model: 'gpt-image-chat',
       modelAbilities: { functionCall: true, imageOutput: true },
@@ -344,7 +365,7 @@ describe('createServerAgentToolsEngine', () => {
     const result = engine.generateToolsDetailed({
       model: 'gpt-image-chat',
       provider: 'openai',
-      toolIds: [],
+      toolIds: [ImageGenerationManifest.identifier],
     });
 
     expect(result.enabledToolIds).not.toContain(ImageGenerationManifest.identifier);
@@ -357,7 +378,7 @@ describe('createServerAgentToolsEngine', () => {
     const engine = createServerAgentToolsEngine(context, {
       agentConfig: {
         chatConfig: { enableAgentMode: false },
-        plugins: [],
+        plugins: [ImageGenerationManifest.identifier],
       },
       model: 'plain-text-model',
       modelAbilities: { functionCall: false, imageOutput: false },
@@ -367,7 +388,7 @@ describe('createServerAgentToolsEngine', () => {
     const result = engine.generateToolsDetailed({
       model: 'plain-text-model',
       provider: 'test',
-      toolIds: [],
+      toolIds: [ImageGenerationManifest.identifier],
     });
 
     expect(result.enabledToolIds).not.toContain(ImageGenerationManifest.identifier);
