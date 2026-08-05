@@ -719,9 +719,44 @@ const aside = drawer && [...drawer.parentElement.children].find((c) => c.tagName
 ```
 
 Then assert on `aside.innerText` line count plus a count of text-free rounded boxes
-(the skeleton rows). Distinguish the two skeleton states explicitly: the whole panel
-collapsing to \~8 text-free rows is the nav-panel fallback, while fixed items present
-with only the list area shimmering is ordinary data loading.
+(the skeleton rows). Distinguish the two skeleton states explicitly: a text-free panel
+carrying `[data-testid="nav-sidebar-skeleton"]` is the nav-panel fallback, while fixed
+items present with only the list area shimmering is ordinary data loading. Do NOT
+identify the fallback by a row count — it is shaped per navKey now
+(`NAV_SKELETON_SHAPES`), so memory/discover render header plus a nav list and no body
+at all, while settings renders a search box plus four accordion groups.
+
+### Park a route's lazy chunk to hold its pending sidebar on screen
+
+**Situation:** verifying what a route's `NavPanel` fallback (or any `dynamicElement`
+Suspense fallback) actually renders. The pending state lasts a few hundred ms, so no
+screenshot or `agent-browser eval` catches it.
+
+**Doesn't work:** network throttling, or adding a debug flag that force-renders the
+fallback. Throttling does not bound the module fetch predictably, and a force-render
+flag proves the component renders, not that the product path reaches it.
+
+**Works:** raw CDP `Fetch.enable` intercepts `app://renderer/...` module requests in
+the Electron renderer. Park the route's layout chunk and the portal never registers,
+so the fallback stays up indefinitely — measure and screenshot at leisure, then kill
+the CDP connection to release the request and measure the settled sidebar in the same
+session.
+
+```js
+Fetch.enable({ patterns: [{ requestStage: 'Request', urlPattern: '*settings/_layout*' }] });
+// on Fetch.requestPaused: keep the requestId, never continueRequest
+// [paused] app://renderer/src/routes/(main)/settings/_layout/index.tsx?t=1785957215039
+```
+
+Two traps. The pattern must name the **layout** chunk only: a broad `*settings*`
+also parks `store/user/slices/settings/*` and the router's own `routeMeta`, which
+stalls boot instead of the route. And the layout module is not always under the path
+you guess — the agent sidebar registers from `(main)/agent/_layout`, not
+`(main)/agent/(chat)/_layout`; when the measurement comes back `mode: real`, the
+pattern missed, it is not a product finding.
+
+Drive the navigation with `app-probe.sh goto <route>` (a full reload, so the module
+is re-requested and re-parked).
 
 ### Boot-phase UI cannot be observed by CDP polling — sample in-page, and mirror the timer
 
