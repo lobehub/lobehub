@@ -11,6 +11,7 @@
   "brief.action.ignore": "Ignoruj",
   "brief.action.retry": "Ponów próbę",
   "brief.action.upgrade": "Zmień plan",
+  "brief.actionFailed": "Nie udało się. Spróbuj ponownie.",
   "brief.addFeedback": "Prześlij opinię",
   "brief.agentSignal.selfReview.applied.heading": "Zaktualizowano",
   "brief.agentSignal.selfReview.applied.summary": "Zastosowano {{count}} aktualizację snu.",

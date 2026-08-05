@@ -11,6 +11,7 @@
   "brief.action.ignore": "تجاهل",
   "brief.action.retry": "إعادة المحاولة",
   "brief.action.upgrade": "ترقية الخطة",
+  "brief.actionFailed": "لم يتم الأمر. يرجى المحاولة مرة أخرى.",
   "brief.addFeedback": "مشاركة الملاحظات",
   "brief.agentSignal.selfReview.applied.heading": "محدث",
   "brief.agentSignal.selfReview.applied.summary": "تم تطبيق تحديث حلم واحد.",

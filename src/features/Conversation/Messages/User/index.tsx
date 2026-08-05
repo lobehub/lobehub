@@ -1,3 +1,4 @@
+import { agentDisplayName } from '@lobechat/types';
 import { Tag } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { type MouseEventHandler } from 'react';
@@ -63,7 +64,10 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
     const targetName =
       targetId === 'user'
         ? userName
-        : agents?.find((agent) => agent.id === targetId)?.title || targetId;
+        : agentDisplayName(
+            agents?.find((agent) => agent.id === targetId),
+            targetId,
+          );
 
     return <Tag>{t('dm.visibleTo', { target: targetName })}</Tag>;
   }, [targetId, userName, agents, t]);

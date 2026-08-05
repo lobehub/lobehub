@@ -11,6 +11,7 @@
   "brief.action.ignore": "Игнорирай",
   "brief.action.retry": "Опит отново",
   "brief.action.upgrade": "Надграждане на плана",
+  "brief.actionFailed": "Това не се получи. Моля, опитайте отново.",
   "brief.addFeedback": "Споделяне на обратна връзка",
   "brief.agentSignal.selfReview.applied.heading": "Актуализирано",
   "brief.agentSignal.selfReview.applied.summary": "{{count}} актуализация на мечтата беше приложена.",

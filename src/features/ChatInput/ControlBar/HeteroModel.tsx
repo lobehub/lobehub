@@ -49,12 +49,12 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 
 import { useAgentId } from '../hooks/useAgentId';
 import { useChatInputResourceAccess } from '../hooks/useChatInputResourceAccess';
-import { OpenCodeModelSelector } from './OpenCodeModelSelector';
+import { HeterogeneousAgentModelSelector } from './HeterogeneousAgentModelSelector';
 
 type HeteroReasoningEffort =
   ClaudeCodeReasoningEffort | CodexReasoningEffort | HeterogeneousAgentDefaultSelection;
 
-type SelectableHeteroProviderType = 'claude-code' | 'codex' | 'opencode';
+type SelectableHeteroProviderType = 'claude-code' | 'codex' | 'opencode' | 'pi';
 
 const CLAUDE_CODE_MODEL_OPTIONS = [
   { label: 'Fable 5', value: 'fable' },
@@ -342,7 +342,7 @@ const stripCodexConfigKey = (args: string[] | undefined, key: string): string[] 
 const isSelectableProviderType = (
   type: HeterogeneousProviderConfig['type'] | undefined,
 ): type is SelectableHeteroProviderType =>
-  type === 'claude-code' || type === 'codex' || type === 'opencode';
+  type === 'claude-code' || type === 'codex' || type === 'opencode' || type === 'pi';
 
 const getModelLabel = (model: string, defaultLabel: string) => {
   if (model === HETEROGENEOUS_AGENT_DEFAULT_SELECTION) return defaultLabel;
@@ -419,9 +419,12 @@ const HeteroModel = memo(() => {
           const sourceArgs = nextPatch.args ?? provider?.args;
           nextPatch.args = stripCodexConfigKey(sourceArgs, CODEX_SERVICE_TIER_CONFIG_KEY);
         }
-      } else if (providerType === 'opencode') {
+      } else if (providerType === 'opencode' || providerType === 'pi') {
         if ('model' in patch) {
-          nextPatch.args = stripCliFlags(provider?.args, ['--model', '-m']);
+          nextPatch.args = stripCliFlags(
+            provider?.args,
+            providerType === 'opencode' ? ['--model', '-m'] : ['--model', '--provider'],
+          );
         }
       } else {
         if ('model' in patch) {
@@ -484,18 +487,19 @@ const HeteroModel = memo(() => {
   if (!isSelectableProviderType(provider?.type)) return null;
   if (!enabled) return null;
 
-  if (provider.type === 'opencode') {
+  if (provider.type === 'opencode' || provider.type === 'pi') {
     const model =
       provider.model && provider.model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION
         ? provider.model
         : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
 
     return (
-      <OpenCodeModelSelector
+      <HeterogeneousAgentModelSelector
         agentId={agentId}
         disabled={false}
         model={model}
         permissionReason={reason}
+        type={provider.type}
         onSelect={(value) => void patchProvider({ model: value })}
       />
     );

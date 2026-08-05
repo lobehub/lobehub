@@ -238,8 +238,8 @@ const ThreadChat = memo(() => {
       messages={messages}
       operationState={operationState}
       skipFetch={isCreatingNewThread}
-      onMessagesChange={(msgs, ctx) => {
-        replaceMessages(msgs, { context: ctx });
+      onMessagesChange={(msgs, ctx, meta) => {
+        replaceMessages(msgs, { context: ctx, source: meta?.source });
       }}
     >
       <ThreadChatContent isSubagentThread={isSubagentThread} />

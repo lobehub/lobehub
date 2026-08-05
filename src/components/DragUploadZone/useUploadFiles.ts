@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 
+import { useMediaUploadAbility } from '@/hooks/useMediaUploadAbility';
 import { usePermission } from '@/hooks/usePermission';
-import { useVisualMediaUploadAbility } from '@/hooks/useVisualMediaUploadAbility';
 import { useFileStore } from '@/store/file';
 
 interface UseUploadFilesOptions {
@@ -12,7 +12,7 @@ interface UseUploadFilesOptions {
 }
 
 /**
- * Hook to handle file uploads with visual media support filtering.
+ * Hook to handle file uploads with multimodal media support filtering.
  * Filters out image/video files if the model cannot receive them directly or via fallback.
  *
  * @param options - The agent id (for upload validation scope) plus model/provider for vision support
@@ -21,7 +21,7 @@ interface UseUploadFilesOptions {
 export const useUploadFiles = (options: UseUploadFilesOptions) => {
   const { agentId, model = '', provider = '' } = options;
 
-  const { canUploadImage, canUploadVideo, canUploadAudio } = useVisualMediaUploadAbility(
+  const { canUploadImage, canUploadVideo, canUploadAudio } = useMediaUploadAbility(
     model,
     provider,
     agentId,

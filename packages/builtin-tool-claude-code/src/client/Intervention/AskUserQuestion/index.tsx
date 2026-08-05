@@ -60,6 +60,7 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     escapeEnter: t('claudeCode.askUserQuestion.escape.enter'),
     escapePlaceholder: t('claudeCode.askUserQuestion.escape.placeholder'),
     multiSelectTag: t('claudeCode.askUserQuestion.multiSelectTag'),
+    recommendedTag: t('claudeCode.askUserQuestion.recommendedTag'),
     skip: t('claudeCode.askUserQuestion.skip'),
     submit: t('claudeCode.askUserQuestion.submit'),
     timeExpired: t('claudeCode.askUserQuestion.timeExpired'),

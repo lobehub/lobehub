@@ -13,8 +13,8 @@ import type {
   VerifyVerdict,
 } from '@lobechat/types';
 import { toRecord } from '@lobechat/utils/object';
-import { Block, Center, Drawer, Empty, Flexbox, Icon, Image, Markdown, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Block, Center, Empty, Flexbox, Icon, Image, Markdown, Text } from '@lobehub/ui';
+import { Button, Drawer } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import type { TFunction } from 'i18next';
 import {
@@ -1307,21 +1307,17 @@ const EvidenceDrawer = memo<{
   title: string;
 }>(({ evidence, onClose, open, title }) => (
   <Drawer
-    destroyOnHidden
     containerMaxWidth={'100%'}
     open={open}
     placement={'right'}
     title={title}
     width={'min(1120px, calc(100vw - 48px))'}
     styles={{
-      body: {
-        height: '100%',
-        padding: 0,
-      },
       bodyContent: {
         height: '100%',
         minHeight: 0,
         overflow: 'hidden',
+        padding: 0,
       },
     }}
     onClose={onClose}

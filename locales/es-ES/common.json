@@ -523,6 +523,7 @@
   "upgradeVersion.hasNew": "Actualización disponible",
   "upgradeVersion.newVersion": "Actualización disponible: {{version}}",
   "upgradeVersion.serverVersion": "Servidor: {{version}}",
+  "userPanel.accountSetting": "Configuración de la cuenta",
   "userPanel.anonymousNickName": "Usuario anónimo",
   "userPanel.billing": "Gestión de facturación",
   "userPanel.cloud": "Lanzar {{name}}",

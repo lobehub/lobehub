@@ -1065,6 +1065,38 @@ export const agentRouter = router({
     }),
 
   /**
+   * Resolve a slug to its agent id so `/agent/:slug` can open the agent.
+   *
+   * Read-only and ownership-scoped: an unknown slug and someone else's slug both
+   * return `null`, so this cannot be used to probe which slugs exist.
+   */
+  resolveAgentIdBySlug: agentProcedure
+    .input(z.object({ slug: z.string() }))
+    .query(async ({ input, ctx }) => {
+      const agentId = await ctx.agentModel.resolveIdBySlug(input.slug);
+      return { agentId };
+    }),
+
+  /**
+   * Rename an agent's url slug. Separate from `updateAgentConfig` because `slug`
+   * is immutable there by design — see `IMMUTABLE_AGENT_FIELDS`.
+   */
+  updateAgentSlug: agentProcedure
+    .use(withScopedPermission('agent:update'))
+    .input(z.object({ agentId: z.string(), slug: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      await assertCanEditResource({
+        db: ctx.serverDB,
+        resourceId: input.agentId,
+        resourceType: 'agent',
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+
+      return ctx.agentModel.updateSlug(input.agentId, input.slug);
+    }),
+
+  /**
    * Pin or unpin an agent
    */
   updateAgentPinned: agentProcedure

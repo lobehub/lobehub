@@ -462,6 +462,7 @@
   "builtins.lobe-user-interaction.apiName.skipUserResponse": "跳過用戶回應",
   "builtins.lobe-user-interaction.apiName.submitUserResponse": "提交用戶回應",
   "builtins.lobe-user-interaction.title": "用戶互動",
+  "builtins.lobe-user-memory.apiName.addActivityMemory": "新增活動記憶",
   "builtins.lobe-user-memory.apiName.addContextMemory": "新增情境記憶",
   "builtins.lobe-user-memory.apiName.addExperienceMemory": "新增經驗記憶",
   "builtins.lobe-user-memory.apiName.addIdentityMemory": "新增身份記憶",

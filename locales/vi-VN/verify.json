@@ -200,6 +200,7 @@
   "acceptance.status.repairing": "Đang sửa chữa",
   "acceptance.status.verifying": "Đang xác minh",
   "acceptance.subject.document": "Tài liệu",
+  "acceptance.subject.standalone": "Độc lập",
   "acceptance.subject.task": "Nhiệm vụ",
   "acceptance.subject.topic": "Chủ đề",
   "acceptance.surface.other": "Khác",

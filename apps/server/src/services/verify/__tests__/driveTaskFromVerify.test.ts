@@ -100,6 +100,26 @@ describe('driveTaskFromVerify', () => {
     expect(runSetMetadata).toHaveBeenCalled();
   });
 
+  it('passed → keeps a recurring task scheduled', async () => {
+    runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'passed' });
+    taskFindById.mockResolvedValue({
+      assigneeAgentId: 'a1',
+      automationMode: 'heartbeat',
+      id: 'task-1',
+      identifier: 'T-1',
+      status: 'scheduled',
+    });
+
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    expect(serviceUpdateStatus).not.toHaveBeenCalled();
+    expect(taskUpdateStatus).not.toHaveBeenCalled();
+    expect(deliverMock).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'done', taskId: 'task-1' }),
+    );
+    expect(runSetMetadata).toHaveBeenCalled();
+  });
+
   it('settles the owning task when the passing verify run belongs to a repair child', async () => {
     runFindByOperation.mockResolvedValue({ id: 'repair-run', metadata: null, status: 'passed' });
     opFindById.mockImplementation(async (id: string) =>

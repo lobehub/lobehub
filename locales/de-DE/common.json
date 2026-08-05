@@ -523,6 +523,7 @@
   "upgradeVersion.hasNew": "Aktualisierung verfügbar",
   "upgradeVersion.newVersion": "Neue Version verfügbar: {{version}}",
   "upgradeVersion.serverVersion": "Server: {{version}}",
+  "userPanel.accountSetting": "Kontoeinstellungen",
   "userPanel.anonymousNickName": "Anonymer Benutzer",
   "userPanel.billing": "Abrechnungsverwaltung",
   "userPanel.cloud": "{{name}} starten",

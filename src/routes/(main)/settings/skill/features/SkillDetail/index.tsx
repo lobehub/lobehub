@@ -1,6 +1,7 @@
 'use client';
 
 import { getLobehubSkillProviderById } from '@lobechat/const';
+import { agentDisplayName } from '@lobechat/types';
 import { Avatar, Markdown, Skeleton, Tooltip } from '@lobehub/ui';
 import { Button, confirmModal, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
@@ -405,15 +406,21 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
     const usageAgentId = agentBoundConnector?.agentId;
     return (
       <ConnectorDetail
-        agentTitle={agentBoundConnector?.agentTitle}
         connectorId={identifier}
+        agentTitle={agentDisplayName({
+          name: agentBoundConnector?.agentName,
+          title: agentBoundConnector?.agentTitle,
+        })}
         middleSlot={
           usageAgentId ? (
             <Suspense fallback={null}>
               <AgentConnectorUsage
                 agentAvatar={agentBoundConnector?.agentAvatar}
                 agentId={usageAgentId}
-                agentTitle={agentBoundConnector?.agentTitle}
+                agentTitle={agentDisplayName({
+                  name: agentBoundConnector?.agentName,
+                  title: agentBoundConnector?.agentTitle,
+                })}
               />
             </Suspense>
           ) : undefined

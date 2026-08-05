@@ -97,8 +97,19 @@ const ChatList = memo<ChatListProps>(
     // mid-fan-out and clobber the in-memory streamed state with a stale
     // assistant placeholder.
     const isStreaming = useChatStore(operationSelectors.isAgentRuntimeRunningByContext(context));
+    // A client-minted topic whose server row does not exist yet (first-send
+    // window) must not be fetched: the query would legitimately return an empty
+    // list and `onData` would wipe the optimistic messages already on screen.
+    // Cleared when the server confirms the topic (`replaceTopicId`), at which
+    // point fetching resumes as normal.
+    const isCreatingTopic = useChatStore(
+      (s) => !!context.topicId && s.creatingTopicIds.includes(context.topicId),
+    );
     const { enableAgentSelfIteration } = useServerConfigStore(featureFlagsSelectors);
-    const messagesSWR = useFetchMessages(context, { revalidateOnFocus: !isStreaming, skipFetch });
+    const messagesSWR = useFetchMessages(context, {
+      revalidateOnFocus: !isStreaming,
+      skipFetch: skipFetch || isCreatingTopic,
+    });
     const refreshError = useMessageRefreshError({
       error: messagesSWR.error,
       identity: getMessageListCacheIdentity(context),

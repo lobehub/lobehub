@@ -249,10 +249,11 @@ export const recentKeys = {
     scope,
   ]),
   /** Home chat-only list; filtering happens before the server-side limit. */
-  topicList: def('recent:topicList', (limit: number, scope: string) => [
+  topicList: def('recent:topicList', (limit: number, scope: string, view: 'mine' | 'team') => [
     'recent:topicList',
     limit,
     scope,
+    view,
   ]),
 };
 
@@ -309,7 +310,12 @@ export const workKeys = {
 
 // ---- brief --------------------------------------------------------------
 export const briefKeys = {
-  list: def('brief:list', (isLogin: boolean) => ['brief:list', isLogin]),
+  /**
+   * Unresolved brief feed, keyed by login + identity scope. Briefs are per-user
+   * AND per-workspace rows, so an entry fetched in one scope must never be
+   * served in another — its ids are unreachable there.
+   */
+  list: def('brief:list', (isLogin: boolean, scope: string) => ['brief:list', isLogin, scope]),
 };
 
 // ---- home inbox ---------------------------------------------------------

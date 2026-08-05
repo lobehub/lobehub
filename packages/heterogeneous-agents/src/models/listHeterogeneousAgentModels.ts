@@ -16,6 +16,7 @@ const execFilePromise = promisify(execFile);
 const MODEL_CATALOG_MAX_BUFFER = 256 * 1024;
 const MODEL_CATALOG_TIMEOUT_MS = 15_000;
 const OPENCODE_MODEL_ID_PATTERN = /^[A-Z0-9][\w.-]*\/[A-Z0-9@][\w./:@+-]*$/i;
+const PI_MODEL_ROW_PATTERN = /^(\S+)\s{2,}(\S+)\s{2,}\S+\s{2,}\S+\s{2,}(?:yes|no)\s{2,}(?:yes|no)$/;
 
 export const parseOpenCodeModelCatalog = (stdout: string): HeterogeneousAgentModel[] => {
   const seen = new Set<string>();
@@ -37,6 +38,26 @@ export const parseOpenCodeModelCatalog = (stdout: string): HeterogeneousAgentMod
   return models;
 };
 
+/** Parse the fixed-width table emitted by `pi --list-models`. */
+export const parsePiModelCatalog = (stdout: string): HeterogeneousAgentModel[] => {
+  const seen = new Set<string>();
+  const models: HeterogeneousAgentModel[] = [];
+
+  for (const rawLine of stdout.split(/\r?\n/)) {
+    const match = PI_MODEL_ROW_PATTERN.exec(rawLine.trim());
+    if (!match) continue;
+
+    const [, providerId, modelId] = match;
+    const id = `${providerId}/${modelId}`;
+    if (providerId === 'provider' || seen.has(id)) continue;
+
+    seen.add(id);
+    models.push({ id, modelId, providerId });
+  }
+
+  return models;
+};
+
 const getErrorRecord = (error: unknown) =>
   error as {
     code?: string;
@@ -53,11 +74,15 @@ const classifyCatalogError = (error: unknown): HeterogeneousAgentModelCatalogErr
   return 'command_failed';
 };
 
-const getCatalogErrorMessage = (code: HeterogeneousAgentModelCatalogErrorCode): string => {
-  if (code === 'cli_not_found') return 'OpenCode CLI was not found';
-  if (code === 'timeout') return 'OpenCode model discovery timed out';
+const getCatalogErrorMessage = (
+  code: HeterogeneousAgentModelCatalogErrorCode,
+  type: ListHeterogeneousAgentModelsParams['type'],
+): string => {
+  const name = type === 'pi' ? 'Pi' : 'OpenCode';
+  if (code === 'cli_not_found') return `${name} CLI was not found`;
+  if (code === 'timeout') return `${name} model discovery timed out`;
 
-  return 'OpenCode model discovery failed';
+  return `${name} model discovery failed`;
 };
 
 /**
@@ -72,8 +97,8 @@ export const listHeterogeneousAgentModels = async (
   params: ListHeterogeneousAgentModelsParams,
 ): Promise<HeterogeneousAgentModelCatalog> => {
   const updatedAt = Date.now();
-  const resolved = await resolveHeteroSpawnCommand('opencode', params.command);
-  const args = ['models'];
+  const resolved = await resolveHeteroSpawnCommand(params.type, params.command);
+  const args = params.type === 'pi' ? ['--list-models'] : ['models'];
   const spawnPlan = await resolveCliSpawnPlan(resolved.command, args);
   const callerEnv = params.env ?? process.env;
   const mergedPath = [
@@ -99,14 +124,17 @@ export const listHeterogeneousAgentModels = async (
     });
 
     return {
-      models: parseOpenCodeModelCatalog(String(stdout)),
+      models:
+        params.type === 'pi'
+          ? parsePiModelCatalog(String(stdout))
+          : parseOpenCodeModelCatalog(String(stdout)),
       status: 'success',
       updatedAt,
     };
   } catch (error) {
     const code = classifyCatalogError(error);
     return {
-      error: { code, message: getCatalogErrorMessage(code) },
+      error: { code, message: getCatalogErrorMessage(code, params.type) },
       status: 'error',
       updatedAt,
     };

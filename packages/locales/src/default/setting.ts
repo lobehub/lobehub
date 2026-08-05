@@ -752,6 +752,27 @@ export default {
   'settingAgent.export.untitledFileName': 'agent-profile',
   'settingAgent.name.placeholder': 'Enter agent name',
   'settingAgent.name.title': 'Name',
+  'settingAgent.personalName.label': 'Name',
+  'settingAgent.personalName.placeholder': 'Give it a name, e.g. Alice',
+  'settingAgent.personalName.unnamed': 'This agent has no name yet',
+  'settingAgent.personalName.pickForMe': 'Name it for me',
+  'settingAgent.personalName.pickFailed': 'Could not save the name, please try again',
+  'settingAgent.personalName.roll': 'Roll a random name',
+  'settingAgent.identity.done': 'Done',
+  'settingAgent.identity.edit': 'Edit identity',
+  'settingAgent.identity.saveFailed': 'Could not save the identity, please try again',
+  'settingAgent.identity.untitled': 'Unnamed agent',
+  'settingAgent.role.label': 'Role',
+  'settingAgent.role.placeholder': 'What it is responsible for, e.g. Health Assistant',
+  'settingAgent.role.unset': 'No role set yet',
+  'settingAgent.slug.label': 'Identifier',
+  'settingAgent.slug.error.builtin': 'A builtin agent’s identifier can’t be changed',
+  'settingAgent.slug.error.invalid': 'Use lowercase letters, numbers and hyphens only',
+  'settingAgent.slug.error.reserved': 'This identifier is reserved',
+  'settingAgent.slug.error.taken': 'This identifier is already in use',
+  'settingAgent.slug.placeholder': 'url-identifier',
+  'settingAgent.slug.openWith': 'Open it directly with /agent/{{slug}}',
+  'settingAgent.slug.tooltip': 'The agent’s url identifier — open it with /agent/<slug>',
   'settingAgent.prompt.desc':
     'Defines who this agent is, what it is responsible for, and how it works and responds. It serves as a core instruction in every conversation.',
   'settingAgent.prompt.editorPlaceholder':
@@ -3080,7 +3101,7 @@ When I am ___, I need ___
   'tools.builtins.lobe-agent-management.description': 'Create, manage, and orchestrate AI agents',
   'tools.builtins.lobe-agent-management.title': 'Agent Management',
   'tools.builtins.lobe-agent.description':
-    'Built-in Lobe Agent capabilities: plan and todo management, sub-agent dispatch, and visual media analysis',
+    'Built-in Lobe Agent capabilities: plan and todo management, sub-agent dispatch, and multimodal media analysis',
   'tools.builtins.lobe-agent.title': 'Lobe Agent',
   'tools.builtins.lobe-brief.description':
     'Report progress, deliver results, and request user decisions',
@@ -3134,6 +3155,11 @@ When I am ___, I need ___
   'tools.builtins.lobe-web-browsing.readme':
     'Search the web for current information and crawl web pages to extract content. Supports multiple search engines, categories, and time ranges for comprehensive research.',
   'tools.builtins.lobe-web-browsing.title': 'Web Browsing',
+  'tools.builtins.lobe-image-generation.description':
+    'Generate images through LobeHub providers when the current chat model has no native image output.',
+  'tools.builtins.lobe-image-generation.readme':
+    'Opt-in image generation for models without native image output. Pin this tool to enable it in chat or agent mode; leave unpinned to avoid the tool schema cost.',
+  'tools.builtins.lobe-image-generation.title': 'Image Generation',
   'tools.builtins.lobe-web-onboarding.description':
     'Drive the web onboarding flow with a controlled agent runtime',
   'tools.builtins.lobe-web-onboarding.title': 'Web Onboarding',

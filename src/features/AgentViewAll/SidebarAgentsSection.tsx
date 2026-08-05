@@ -1,8 +1,8 @@
 'use client';
 
 import { AGENT_CHAT_URL, GROUP_CHAT_URL } from '@lobechat/const';
-import { type SidebarAgentItem } from '@lobechat/types';
-import { Block, ContextMenuTrigger, Flexbox, Icon, type MenuProps, Text } from '@lobehub/ui';
+import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
+import { Block, ContextMenuTrigger, Flexbox, Icon, type MenuProps, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, responsive } from 'antd-style';
 import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
 import { memo, useCallback, useRef, useState } from 'react';
@@ -101,7 +101,11 @@ interface SidebarMiniCardProps {
 // Actions live entirely in the right-click menu (same as rows/cards).
 const SidebarMiniCard = memo<SidebarMiniCardProps>(({ item, onToggleSidebar }) => {
   const { t } = useTranslation('common');
-  const { description, id, title, type } = item;
+  const { description, id, type } = item;
+  // Groups have no personal name, so this resolves to their title.
+  const displayTitle = agentDisplayName(item, t('agentViewAll.untitled'));
+  // Keep the role visible beside a personal name (same as the sidebar row).
+  const roleTag = item.name?.trim() && item.title?.trim() ? item.title : undefined;
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
 
   const [menuActivated, setMenuActivated] = useState(false);
@@ -118,7 +122,7 @@ const SidebarMiniCard = memo<SidebarMiniCardProps>(({ item, onToggleSidebar }) =
           treats it as one cell. The headless ItemActions lives INSIDE it —
           rendering it as a sibling would add a phantom grid item. */}
       <WorkspaceLink
-        aria-label={title || undefined}
+        aria-label={displayTitle}
         className={styles.link}
         ref={setAnchor}
         to={type === 'group' ? GROUP_CHAT_URL(id) : AGENT_CHAT_URL(id, false)}
@@ -127,9 +131,14 @@ const SidebarMiniCard = memo<SidebarMiniCardProps>(({ item, onToggleSidebar }) =
         <Block clickable className={styles.card} height={'100%'} variant={'outlined'}>
           <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
             <AgentAvatar item={item} size={24} />
-            <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={600}>
-              {title || t('agentViewAll.untitled')}
+            <Text ellipsis style={{ minWidth: 0 }} weight={600}>
+              {displayTitle}
             </Text>
+            {roleTag ? (
+              <Tag size={'small'} style={{ flex: 'none' }}>
+                {roleTag}
+              </Tag>
+            ) : null}
           </Flexbox>
           {description ? (
             <Text className={styles.description} fontSize={12} type={'secondary'}>

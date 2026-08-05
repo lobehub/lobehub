@@ -1,13 +1,14 @@
 'use client';
 
 import { AGENT_CHAT_URL, DEFAULT_AVATAR, GROUP_CHAT_URL } from '@lobechat/const';
-import { type SidebarAgentItem } from '@lobechat/types';
+import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
 import {
   Avatar,
   Block,
   ContextMenuTrigger,
   Flexbox,
   type MenuProps,
+  Tag,
   Text,
   Tooltip,
 } from '@lobehub/ui';
@@ -96,7 +97,12 @@ interface AgentCardProps {
 const AgentCard = memo<AgentCardProps>(
   ({ author, item, onToggleSidebar, showAuthor, sidebarHidden }) => {
     const { t } = useTranslation('common');
-    const { description, id, title, type, updatedAt } = item;
+    const { description, id, type, updatedAt } = item;
+    // Groups have no personal name, so this resolves to their title.
+    const displayTitle = agentDisplayName(item, t('agentViewAll.untitled'));
+    // Keep the role visible beside a personal name (same as the sidebar row) —
+    // otherwise a named agent's role disappears from this list entirely.
+    const roleTag = item.name?.trim() && item.title?.trim() ? item.title : undefined;
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
 
     // Right-click support — same bridge as AgentRow: the hook-bearing menu
@@ -112,7 +118,7 @@ const AgentCard = memo<AgentCardProps>(
     return (
       <ContextMenuTrigger items={getContextMenuItems}>
         <WorkspaceLink
-          aria-label={title || undefined}
+          aria-label={displayTitle}
           className={cardStyles.link}
           ref={setAnchor}
           to={type === 'group' ? GROUP_CHAT_URL(id) : AGENT_CHAT_URL(id, false)}
@@ -121,9 +127,16 @@ const AgentCard = memo<AgentCardProps>(
           <Block clickable className={cardStyles.card} height={'100%'} variant={'outlined'}>
             <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
               <AgentAvatar item={item} size={24} />
-              <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={600}>
-                {title || t('agentViewAll.untitled')}
-              </Text>
+              <Flexbox horizontal align={'center'} flex={1} gap={6} style={{ minWidth: 0 }}>
+                <Text ellipsis style={{ minWidth: 0 }} weight={600}>
+                  {displayTitle}
+                </Text>
+                {roleTag ? (
+                  <Tag size={'small'} style={{ flex: 'none' }}>
+                    {roleTag}
+                  </Tag>
+                ) : null}
+              </Flexbox>
               <Flexbox
                 flex={'none'}
                 onClick={(e) => {

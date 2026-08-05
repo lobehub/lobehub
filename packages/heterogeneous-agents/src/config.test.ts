@@ -10,10 +10,11 @@ import { HETEROGENEOUS_TYPE_LABELS } from './labels';
 describe('heterogeneous agent config', () => {
   it('defines create config for all registered agent types', () => {
     expect(HETEROGENEOUS_AGENT_CONFIGS.map((config) => config.type)).toEqual([
+      'amp',
       'claude-code',
       'codex',
-      'amp',
       'opencode',
+      'pi',
     ]);
   });
 
@@ -38,6 +39,11 @@ describe('heterogeneous agent config', () => {
       title: 'OpenCode',
       type: 'opencode',
     });
+    expect(getHeterogeneousAgentConfig('pi')).toMatchObject({
+      command: 'pi',
+      title: 'Pi',
+      type: 'pi',
+    });
   });
 
   it('derives display labels from the shared config source', () => {
@@ -48,12 +54,14 @@ describe('heterogeneous agent config', () => {
       'hermes': 'Hermes',
       'openclaw': 'OpenClaw',
       'opencode': 'OpenCode',
+      'pi': 'Pi',
     });
   });
 
   it('classifies local CLIs separately from remote platforms', () => {
     expect(isRemoteHeterogeneousType('amp')).toBe(false);
     expect(isRemoteHeterogeneousType('opencode')).toBe(false);
+    expect(isRemoteHeterogeneousType('pi')).toBe(false);
     expect(isRemoteHeterogeneousType('openclaw')).toBe(true);
     expect(isRemoteHeterogeneousType('hermes')).toBe(true);
   });

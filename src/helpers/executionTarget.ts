@@ -80,10 +80,10 @@ export interface ResolveExecutionTargetOptions {
   isHetero?: boolean;
   /**
    * Whether this heterogeneous provider can execute in the server cloud
-   * sandbox. Defaults to `false` for Amp and OpenCode (which currently require
-   * a local or connected device) and `true` otherwise. Callers that only know
-   * the provider through a legacy model discriminator can override the inferred
-   * capability.
+   * sandbox. Defaults to `false` for Amp, OpenCode, and Pi (which currently
+   * require a local or connected device) and `true` otherwise. Callers that only
+   * know the provider through a legacy model discriminator can override the
+   * inferred capability.
    */
   sandboxExecutionAvailable?: boolean;
   /**
@@ -112,7 +112,7 @@ export interface ResolveExecutionTargetOptions {
 
 /** Whether a heterogeneous provider can run in LobeHub's cloud sandbox. */
 export const isHeterogeneousSandboxExecutionAvailable = (type: string | undefined): boolean =>
-  type !== 'amp' && type !== 'opencode';
+  type !== 'amp' && type !== 'opencode' && type !== 'pi';
 
 /**
  * Single source of truth for where an agent executes — one global

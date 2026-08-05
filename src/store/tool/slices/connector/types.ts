@@ -44,5 +44,7 @@ export interface ConnectorWithTools {
  */
 export interface AgentBoundConnector extends ConnectorWithTools {
   agentAvatar: string | null;
+  /** Personal name; resolve the label with `agentDisplayName({ name, title })`. */
+  agentName: string | null;
   agentTitle: string | null;
 }

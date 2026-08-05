@@ -2,7 +2,7 @@ import { registerPendingHotkeyCard } from '@lobechat/shared-tool-ui/pending-hotk
 import { Flexbox } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
-import { CornerDownLeft } from 'lucide-react';
+import { CircleStop, CornerDownLeft } from 'lucide-react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -35,7 +35,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   footer: css`
     display: flex;
+    gap: 8px;
+    align-items: center;
     justify-content: flex-end;
+
     margin-block-start: 8px;
   `,
   number: css`
@@ -148,9 +151,37 @@ const ApprovalActions = memo<ApprovalActionsProps>(
       [isAllowListMode],
     );
 
-    const [approveToolCall, rejectAndContinueToolCall] = useConversationStore((s) => [
-      s.approveToolCall,
-      s.rejectAndContinueToolCall,
+    const [approveToolCall, rejectAndContinueToolCall, stopPendingApprovalForCard] =
+      useConversationStore((s) => [
+        s.approveToolCall,
+        s.rejectAndContinueToolCall,
+        s.stopPendingApprovalForCard,
+      ]);
+    const [stopping, setStopping] = useState(false);
+
+    /**
+     * "Stop here — don't continue." Sits beside Submit because it answers the
+     * same question the card is asking; splitting the two across the bar makes
+     * the user hunt for the one they want.
+     *
+     * Not a rejection: rejecting writes a reason and lets the model respond,
+     * stopping ends the turn outright and executes nothing.
+     */
+    const handleStop = useCallback(async () => {
+      if (stopping || loading || isMessageCreating || !canUseResource) return;
+      setStopping(true);
+      try {
+        await stopPendingApprovalForCard(messageId);
+      } finally {
+        setStopping(false);
+      }
+    }, [
+      stopping,
+      loading,
+      isMessageCreating,
+      canUseResource,
+      stopPendingApprovalForCard,
+      messageId,
     ]);
     const addToolToAllowList = useUserStore((s) => s.addToolToAllowList);
 
@@ -339,6 +370,16 @@ const ApprovalActions = memo<ApprovalActionsProps>(
         </div>
 
         <div className={styles.footer}>
+          <Button
+            disabled={loading || isMessageCreating}
+            icon={CircleStop}
+            loading={stopping}
+            size={'middle'}
+            type={'text'}
+            onClick={handleStop}
+          >
+            {t('tool.intervention.stop')}
+          </Button>
           <Button
             className={styles.submitButton}
             disabled={isMessageCreating}

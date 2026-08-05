@@ -3,7 +3,6 @@
 import {
   ActionIcon,
   Block,
-  Drawer,
   type DropdownItem,
   DropdownMenu,
   Flexbox,
@@ -13,7 +12,7 @@ import {
   Text,
   TextArea,
 } from '@lobehub/ui';
-import { Button, Checkbox, Select, toast } from '@lobehub/ui/base-ui';
+import { Button, Checkbox, Drawer, Select, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   ChevronRight,
@@ -751,10 +750,9 @@ const TaskVerifyConfig = memo(() => {
         ) : null}
       </Flexbox>
       <Drawer
-        destroyOnHidden
         open={Boolean(selectedCriterionId)}
         placement={'right'}
-        styles={{ body: { padding: 0 } }}
+        styles={{ bodyContent: { padding: 0 } }}
         title={t('verifyConfig.detail.title')}
         width={'min(92vw, 440px)'}
         onClose={() => setSelectedCriterionId(null)}

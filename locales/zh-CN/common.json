@@ -520,6 +520,7 @@
   "upgradeVersion.hasNew": "有可用更新",
   "upgradeVersion.newVersion": "可用更新版本：{{version}}",
   "upgradeVersion.serverVersion": "服务端：{{version}}",
+  "userPanel.accountSetting": "账户设置",
   "userPanel.anonymousNickName": "匿名用户",
   "userPanel.billing": "账单",
   "userPanel.cloud": "体验 {{name}}",

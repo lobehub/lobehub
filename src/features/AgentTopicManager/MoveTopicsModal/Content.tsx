@@ -1,6 +1,7 @@
 'use client';
 
 import { AGENT_CHAT_URL, DEFAULT_INBOX_AVATAR } from '@lobechat/const';
+import { agentDisplayName } from '@lobechat/types';
 import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { Button, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -86,7 +87,7 @@ const MoveTopicsContent = memo<MoveTopicsContentProps>(({ onMoved, sourceAgentId
               description: null,
               id: inboxAgentId,
               pinned: false,
-              title: inboxMeta?.title || t('inbox.title', { ns: 'chat' }),
+              title: agentDisplayName(inboxMeta, t('inbox.title', { ns: 'chat' })),
               type: 'agent' as const,
               updatedAt: new Date(),
             },
@@ -99,7 +100,7 @@ const MoveTopicsContent = memo<MoveTopicsContentProps>(({ onMoved, sourceAgentId
   const filteredAgents = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return targetAgents;
-    return targetAgents.filter((a) => (a.title || '').toLowerCase().includes(q));
+    return targetAgents.filter((a) => (agentDisplayName(a) ?? '').toLowerCase().includes(q));
   }, [targetAgents, search]);
 
   const handleConfirm = async () => {
@@ -148,14 +149,14 @@ const MoveTopicsContent = memo<MoveTopicsContentProps>(({ onMoved, sourceAgentId
               <AgentItem
                 active={false}
                 agentId={agent.id}
-                agentTitle={agent.title || t('untitledAgent', { ns: 'chat' })}
+                agentTitle={agentDisplayName(agent, t('untitledAgent', { ns: 'chat' }))}
                 avatar={agent.avatar}
                 key={agent.id}
                 onClose={() => {}}
                 onAgentChange={() => {
                   setTarget({
                     id: agent.id,
-                    title: agent.title || t('untitledAgent', { ns: 'chat' }),
+                    title: agentDisplayName(agent, t('untitledAgent', { ns: 'chat' })),
                   });
                   setStep('confirm');
                 }}

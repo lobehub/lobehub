@@ -462,6 +462,7 @@
   "builtins.lobe-user-interaction.apiName.skipUserResponse": "Omitir respuesta del usuario",
   "builtins.lobe-user-interaction.apiName.submitUserResponse": "Enviar respuesta del usuario",
   "builtins.lobe-user-interaction.title": "Interacción del Usuario",
+  "builtins.lobe-user-memory.apiName.addActivityMemory": "Agregar memoria de actividad",
   "builtins.lobe-user-memory.apiName.addContextMemory": "Agregar memoria de contexto",
   "builtins.lobe-user-memory.apiName.addExperienceMemory": "Agregar memoria de experiencia",
   "builtins.lobe-user-memory.apiName.addIdentityMemory": "Agregar memoria de identidad",

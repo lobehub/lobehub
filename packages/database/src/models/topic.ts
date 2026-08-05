@@ -384,7 +384,7 @@ export class TopicModel {
                 // display `updatedAt` above matches the client-side sort key to the server
                 // order (otherwise the two disagree and the list visibly jumps) while a
                 // rename/favorite edit still shows its real edit time. See rankTopics for
-                // the same activity-time pattern. 
+                // the same activity-time pattern.
                 sortUpdatedAt: topicActivityAt,
                 // Workspace sidebars filter maintenance actions client-side by
                 // ownership (own vs workspace scope) — the filter needs the row
@@ -460,7 +460,7 @@ export class TopicModel {
                 // display `updatedAt` above matches the client-side sort key to the server
                 // order (otherwise the two disagree and the list visibly jumps) while a
                 // rename/favorite edit still shows its real edit time. See rankTopics for
-                // the same activity-time pattern. 
+                // the same activity-time pattern.
                 sortUpdatedAt: topicActivityAt,
                 // Workspace sidebars filter maintenance actions client-side by
                 // ownership (own vs workspace scope) — the filter needs the row
@@ -532,7 +532,7 @@ export class TopicModel {
               // display `updatedAt` above matches the client-side sort key to the server
               // order (otherwise the two disagree and the list visibly jumps) while a
               // rename/favorite edit still shows its real edit time. See rankTopics for
-              // the same activity-time pattern. 
+              // the same activity-time pattern.
               sortUpdatedAt: topicActivityAt,
               // Workspace sidebars filter maintenance actions client-side by
               // ownership (own vs workspace scope) — the filter needs the row

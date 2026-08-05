@@ -37,6 +37,8 @@ const CLI_AUTH_REQUIRED_PATTERNS = [
   /not authenticated/i,
   /\bunauthorized\b/i,
   /\b401\b/,
+  /no api key found/i,
+  /no models available/i,
 ];
 
 const CLI_NOT_FOUND_MESSAGES: Record<string, string> = {
@@ -46,6 +48,7 @@ const CLI_NOT_FOUND_MESSAGES: Record<string, string> = {
     'Codex CLI was not found on the machine running this agent. Install it and make sure `codex` can be executed.',
   'opencode':
     'OpenCode CLI was not found on the machine running this agent. Install it and make sure `opencode` can be executed.',
+  'pi': 'Pi CLI was not found on the machine running this agent. Install it and make sure `pi` can be executed.',
 };
 
 const AUTH_REQUIRED_MESSAGES: Record<string, string> = {
@@ -55,6 +58,7 @@ const AUTH_REQUIRED_MESSAGES: Record<string, string> = {
     'Codex could not authenticate on the machine running this agent. Sign in again or refresh its credentials, then retry.',
   'opencode':
     'OpenCode could not authenticate on the machine running this agent. Sign in again or refresh its credentials, then retry.',
+  'pi': 'Pi could not authenticate on the machine running this agent. Run `pi`, use `/login`, then retry.',
 };
 
 /**
@@ -69,7 +73,7 @@ const STATUS_GUIDE_ERROR_CODES = new Set([
   'overloaded',
   'rate_limit',
 ]);
-const STATUS_GUIDE_AGENT_TYPES = new Set(['amp', 'claude-code', 'codex', 'opencode']);
+const STATUS_GUIDE_AGENT_TYPES = new Set(['amp', 'claude-code', 'codex', 'opencode', 'pi']);
 
 /**
  * Whether a terminal error payload (an adapter's in-stream `error` event data,

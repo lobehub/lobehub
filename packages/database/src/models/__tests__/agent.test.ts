@@ -845,6 +845,7 @@ describe('AgentModel', () => {
         description: 'hacked description',
         marketIdentifier: 'hacked-market-id',
         model: 'gpt-4', // non-protected field should still be applied
+        name: 'Hacked Builder Name',
         tags: ['hacked'],
         title: 'Hacked Builder Title',
       });
@@ -853,6 +854,7 @@ describe('AgentModel', () => {
         where: eq(agents.id, agent.id),
       });
 
+      expect(result?.name).toBeNull();
       expect(result?.title).toBeNull();
       expect(result?.description).toBeNull();
       expect(result?.avatar).toBeNull();
@@ -1241,6 +1243,7 @@ describe('AgentModel', () => {
         description: 'hacked description',
         marketIdentifier: 'hacked-market-id',
         model: 'gpt-4', // non-protected field should still be applied
+        name: 'Hacked Builder Name',
         tags: ['hacked'],
         title: 'Hacked Builder Title',
       });
@@ -1249,6 +1252,7 @@ describe('AgentModel', () => {
         where: eq(agents.id, agent.id),
       });
 
+      expect(result?.name).toBeNull();
       expect(result?.title).toBeNull();
       expect(result?.description).toBeNull();
       expect(result?.avatar).toBeNull();
@@ -2013,6 +2017,28 @@ describe('AgentModel', () => {
       // Verify these are NOT copied from source
       expect(duplicatedAgent?.id).not.toBe(sourceAgent.id);
       expect(duplicatedAgent?.slug).not.toBe(sourceAgent.slug);
+    });
+
+    it('should preserve agencyConfig when duplicating', async () => {
+      const agencyConfig = {
+        heterogeneousProvider: {
+          type: 'claude-code',
+          command: 'claude',
+        } as const,
+        executionTarget: 'local',
+      };
+      const [sourceAgent] = await serverDB
+        .insert(agents)
+        .values({ userId, title: 'Hetero Agent', agencyConfig } as NewAgent)
+        .returning();
+
+      const result = await agentModel.duplicate(sourceAgent.id);
+
+      const duplicatedAgent = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, result!.agentId),
+      });
+
+      expect(duplicatedAgent?.agencyConfig).toEqual(agencyConfig);
     });
 
     it('should use provided title when duplicating', async () => {

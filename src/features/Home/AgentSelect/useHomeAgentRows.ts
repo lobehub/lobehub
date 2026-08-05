@@ -1,6 +1,6 @@
 'use client';
 
-import { type SidebarAgentItem } from '@lobechat/types';
+import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -82,7 +82,7 @@ export const useHomeAgentRows = (): HomeAgentRows => {
             backgroundColor: item.backgroundColor || undefined,
             id: item.id,
             pinned: item.pinned ?? false,
-            title: item.title || t('untitledAgent'),
+            title: agentDisplayName(item, t('untitledAgent')),
           });
         }
       }
@@ -104,7 +104,7 @@ export const useHomeAgentRows = (): HomeAgentRows => {
           DEFAULT_INBOX_AVATAR,
         backgroundColor: inboxMeta?.backgroundColor || undefined,
         id: inboxAgentId,
-        title: inboxMeta?.title || 'Lobe AI',
+        title: agentDisplayName(inboxMeta, 'Lobe AI'),
       });
     }
     workspaceRows.push(

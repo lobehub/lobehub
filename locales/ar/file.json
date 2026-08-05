@@ -197,6 +197,8 @@
   "pageList.workspaceTitle": "مساحة العمل",
   "portal.openInPageEditor": "تحرير في الصفحة",
   "preview.downloadFile": "تنزيل الملف",
+  "preview.raw": "خام",
+  "preview.render": "معاينة",
   "preview.unsupportedFileAndContact": "تنسيق هذا الملف غير مدعوم حاليًا للمعاينة عبر الإنترنت. إذا كان لديك طلب للمعاينة، لا تتردد في <1>الاتصال بنا</1>.",
   "resource": "المورد",
   "resourceList.batchCopyDescription": "انسخ الموارد المحددة إلى مساحة عمل أخرى.",

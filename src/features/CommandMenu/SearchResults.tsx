@@ -4,6 +4,7 @@ import {
   GROUP_CHAT_TOPIC_URL,
   GROUP_CHAT_URL,
 } from '@lobechat/const';
+import { agentDisplayName } from '@lobechat/types';
 import { Avatar, Flexbox } from '@lobehub/ui';
 import { Command } from 'cmdk';
 import dayjs from 'dayjs';
@@ -271,7 +272,9 @@ const SearchResults = memo<SearchResultsProps>(
               background={result.agent.backgroundColor || undefined}
               size={14}
             />
-            <span style={{ flex: 'none' }}>{result.agent.title || t('defaultAgent')}</span>
+            <span style={{ flex: 'none' }}>
+              {agentDisplayName(result.agent, t('defaultAgent'))}
+            </span>
             <span style={{ flex: 'none' }}>·</span>
             <span style={{ flex: 'none' }}>{formattedDate}</span>
             {description && (

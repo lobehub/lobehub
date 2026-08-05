@@ -462,6 +462,7 @@
   "builtins.lobe-user-interaction.apiName.skipUserResponse": "Пропустить ответ пользователя",
   "builtins.lobe-user-interaction.apiName.submitUserResponse": "Отправить ответ пользователя",
   "builtins.lobe-user-interaction.title": "Взаимодействие с пользователем",
+  "builtins.lobe-user-memory.apiName.addActivityMemory": "Добавить память активности",
   "builtins.lobe-user-memory.apiName.addContextMemory": "Добавить контекстную память",
   "builtins.lobe-user-memory.apiName.addExperienceMemory": "Добавить память опыта",
   "builtins.lobe-user-memory.apiName.addIdentityMemory": "Добавить память личности",

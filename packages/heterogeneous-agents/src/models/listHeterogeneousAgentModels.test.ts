@@ -32,7 +32,7 @@ const rejectExecFile = (error: Error) => {
 
 const importModule = () => import('./listHeterogeneousAgentModels');
 
-describe('OpenCode model discovery', () => {
+describe('heterogeneous agent model discovery', () => {
   beforeEach(() => {
     execFileMock.mockReset();
   });
@@ -161,5 +161,65 @@ describe('OpenCode model discovery', () => {
       error: { code: 'timeout' },
       status: 'error',
     });
+  });
+
+  it('parses and discovers Pi provider/model rows', async () => {
+    resolveExecFile(
+      [
+        'provider   model                              context  max-out  thinking  images',
+        'anthropic  claude-sonnet-4-5                  200K     64K      yes       yes',
+        'google     gemini-2.5-pro                     1M       64K      yes       yes',
+        'openrouter  google/gemini-2.5-pro             1M       64K      yes       yes',
+        'anthropic  claude-sonnet-4-5                  200K     64K      yes       yes',
+      ].join('\n'),
+    );
+    const { listHeterogeneousAgentModels, parsePiModelCatalog } = await importModule();
+    const stdout = [
+      'provider   model                 context  max-out  thinking  images',
+      'anthropic  claude-sonnet-4-5     200K     64K      yes       yes',
+      'google     gemini-2.5-pro        1M       64K      yes       yes',
+    ].join('\n');
+
+    expect(parsePiModelCatalog(stdout)).toEqual([
+      {
+        id: 'anthropic/claude-sonnet-4-5',
+        modelId: 'claude-sonnet-4-5',
+        providerId: 'anthropic',
+      },
+      { id: 'google/gemini-2.5-pro', modelId: 'gemini-2.5-pro', providerId: 'google' },
+    ]);
+
+    await expect(
+      listHeterogeneousAgentModels({
+        command: '/custom/pi',
+        cwd: '/repo',
+        env: { PI_CODING_AGENT_DIR: '/config' },
+        type: 'pi',
+      }),
+    ).resolves.toMatchObject({
+      models: [
+        {
+          id: 'anthropic/claude-sonnet-4-5',
+          modelId: 'claude-sonnet-4-5',
+          providerId: 'anthropic',
+        },
+        { id: 'google/gemini-2.5-pro', modelId: 'gemini-2.5-pro', providerId: 'google' },
+        {
+          id: 'openrouter/google/gemini-2.5-pro',
+          modelId: 'google/gemini-2.5-pro',
+          providerId: 'openrouter',
+        },
+      ],
+      status: 'success',
+    });
+    expect(execFileMock).toHaveBeenLastCalledWith(
+      '/custom/pi',
+      ['--list-models'],
+      expect.objectContaining({
+        cwd: '/repo',
+        env: { PI_CODING_AGENT_DIR: '/config' },
+      }),
+      expect.any(Function),
+    );
   });
 });

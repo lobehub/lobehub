@@ -166,6 +166,7 @@ export class BriefService {
         agentRowId,
         agentAvatar,
         agentBackgroundColor,
+        agentName,
         agentTitle,
         taskIdentifier,
         taskName,
@@ -177,6 +178,7 @@ export class BriefService {
               avatar: agentAvatar,
               backgroundColor: agentBackgroundColor,
               id: agentRowId,
+              name: agentName,
               title: agentTitle,
             }
           : null,

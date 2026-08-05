@@ -200,6 +200,7 @@
   "acceptance.status.repairing": "Поправката е в процес",
   "acceptance.status.verifying": "Проверката е в процес",
   "acceptance.subject.document": "Документ",
+  "acceptance.subject.standalone": "Самостоятелно",
   "acceptance.subject.task": "Задача",
   "acceptance.subject.topic": "Тема",
   "acceptance.surface.other": "Друго",

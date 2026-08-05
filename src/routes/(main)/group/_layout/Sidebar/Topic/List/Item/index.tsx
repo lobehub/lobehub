@@ -119,7 +119,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
 
   const [editing, isLoading] = useChatStore((s) => [
     id ? s.topicRenamingId === id : false,
-    id ? s.topicLoadingIds.includes(id) : false,
+    id ? operationSelectors.isTopicVisiblyRunning(id)(s) : false,
   ]);
 
   const isUnreadCompleted = useChatStore(

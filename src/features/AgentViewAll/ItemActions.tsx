@@ -1,6 +1,6 @@
 'use client';
 
-import { type SidebarAgentItem } from '@lobechat/types';
+import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
 import type { MenuProps } from '@lobehub/ui';
 import { ActionIcon, Icon } from '@lobehub/ui';
 import { DropdownMenu } from '@lobehub/ui/base-ui';
@@ -137,7 +137,7 @@ ActionsDropdown.displayName = 'ActionsDropdown';
 const AgentItemActions = memo<ItemActionsProps>(({ anchor, item, ...rest }) => {
   const { t } = useTranslation('common');
   const { openCreateGroupModal } = useAgentModal();
-  const { avatar, backgroundColor, id, pinned, slug, title, userId, visibility } = item;
+  const { avatar, backgroundColor, id, pinned, slug, userId, visibility } = item;
 
   const customAvatar = typeof avatar === 'string' ? avatar : undefined;
 
@@ -156,7 +156,7 @@ const AgentItemActions = memo<ItemActionsProps>(({ anchor, item, ...rest }) => {
     openCreateGroupModal: handleOpenCreateGroupModal,
     pinned: pinned ?? false,
     slug,
-    title: title || t('agentViewAll.untitled'),
+    title: agentDisplayName(item, t('agentViewAll.untitled')),
     userId,
     visibility,
   });

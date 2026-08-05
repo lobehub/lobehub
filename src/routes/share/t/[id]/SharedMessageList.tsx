@@ -44,8 +44,8 @@ const SharedMessageList = memo<SharedMessageListProps>((props) => {
       context={context}
       hasInitMessages={!!messages}
       messages={messages}
-      onMessagesChange={(messages, ctx) => {
-        replaceMessages(messages, { context: ctx });
+      onMessagesChange={(messages, ctx, meta) => {
+        replaceMessages(messages, { context: ctx, source: meta?.source });
       }}
     >
       <ChatList

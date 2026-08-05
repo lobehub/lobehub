@@ -1,7 +1,7 @@
 export const LobeAgentIdentifier = 'lobe-agent';
 
 export const LobeAgentApiName = {
-  analyzeVisualMedia: 'analyzeVisualMedia',
+  analyzeMedia: 'analyzeMedia',
   askUserQuestion: 'askUserQuestion',
   callSubAgent: 'callSubAgent',
   clearTodos: 'clearTodos',
@@ -25,21 +25,21 @@ export type {
   AskUserQuestionOption,
 } from '@lobechat/builtin-tool-user-interaction';
 
-export interface AnalyzeVisualMediaParams {
+export interface AnalyzeMediaParams {
   question: string;
   refs?: string[];
   urls?: string[];
 }
 
-export interface AnalyzeVisualMediaFileSummary {
+export interface AnalyzeMediaFileSummary {
   id?: string;
   name: string;
   ref: string;
-  type: 'image' | 'video';
+  type: 'audio' | 'image' | 'video';
 }
 
-export interface AnalyzeVisualMediaState {
-  files?: AnalyzeVisualMediaFileSummary[];
+export interface AnalyzeMediaState {
+  files?: AnalyzeMediaFileSummary[];
   model?: string;
   provider?: string;
   trigger?: string;

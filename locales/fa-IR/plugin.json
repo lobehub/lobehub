@@ -462,6 +462,7 @@
   "builtins.lobe-user-interaction.apiName.skipUserResponse": "رد کردن پاسخ کاربر",
   "builtins.lobe-user-interaction.apiName.submitUserResponse": "ارسال پاسخ کاربر",
   "builtins.lobe-user-interaction.title": "تعامل با کاربر",
+  "builtins.lobe-user-memory.apiName.addActivityMemory": "افزودن حافظه فعالیت",
   "builtins.lobe-user-memory.apiName.addContextMemory": "افزودن حافظه زمینه",
   "builtins.lobe-user-memory.apiName.addExperienceMemory": "افزودن حافظه تجربه",
   "builtins.lobe-user-memory.apiName.addIdentityMemory": "افزودن حافظه هویتی",

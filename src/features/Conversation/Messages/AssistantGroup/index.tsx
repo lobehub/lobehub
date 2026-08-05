@@ -221,7 +221,10 @@ const GroupMessage = memo<GroupMessageProps>(
     return (
       <ChatItem
         showTitle
-        avatar={isSupervisor ? { ...avatar, title: groupMeta.title } : avatar}
+        // The supervisor row is labelled by the group, not by the agent behind it —
+        // drop `name` too, or the renderer's name-first resolution would surface the
+        // agent's personal name over the group title.
+        avatar={isSupervisor ? { ...avatar, name: undefined, title: groupMeta.title } : avatar}
         id={id}
         placement={'left'}
         time={createdAt}

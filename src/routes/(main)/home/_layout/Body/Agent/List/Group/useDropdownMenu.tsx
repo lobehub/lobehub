@@ -44,7 +44,8 @@ export const useGroupDropdownMenu = ({
     useSessionGroupMenuItems();
 
   // Create menu items
-  const { createAgentMenuItem, createGroupChatMenuItem } = useCreateMenuItems();
+  const { createAgentMenuItem, createConnectAgentMenuItem, createGroupChatMenuItem } =
+    useCreateMenuItems();
 
   // "Publish to Workspace" is one-way and only meaningful in workspace mode
   // for the creator's own still-private folder. Once a folder is `public`,
@@ -63,6 +64,7 @@ export const useGroupDropdownMenu = ({
   return useMemo(() => {
     const createAgentItem = createAgentMenuItem({ groupId: id, isPinned, visibility });
     const createGroupChatItem = createGroupChatMenuItem({ groupId: id, visibility });
+    const connectAgentItem = createConnectAgentMenuItem({ groupId: id, visibility });
     const configItem = configGroupMenuItem(openConfigGroupModal);
     const renameItem = id && name ? renameGroupMenuItem(id, name, anchor) : null;
     const deleteItem = id ? deleteGroupMenuItem(id) : null;
@@ -138,6 +140,7 @@ export const useGroupDropdownMenu = ({
     return [
       createAgentItem,
       createGroupChatItem,
+      ...(connectAgentItem ? [{ type: 'divider' as const }, connectAgentItem] : []),
       { type: 'divider' as const },
       ...(isCustomGroup
         ? [
@@ -158,6 +161,7 @@ export const useGroupDropdownMenu = ({
     name,
     visibility,
     createAgentMenuItem,
+    createConnectAgentMenuItem,
     createGroupChatMenuItem,
     configGroupMenuItem,
     renameGroupMenuItem,

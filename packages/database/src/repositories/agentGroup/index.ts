@@ -579,6 +579,7 @@ export class AgentGroupRepository {
         avatar: agents.avatar,
         description: agents.description,
         id: agents.id,
+        name: agents.name,
         slug: agents.slug,
         title: agents.title,
         virtual: agents.virtual,

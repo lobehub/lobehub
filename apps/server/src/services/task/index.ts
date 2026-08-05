@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type {
   TaskContext,
   TaskDetailActivity,
@@ -6,6 +8,7 @@ import type {
   TaskDetailSubtask,
   TaskDetailWorkspaceNode,
   TaskItem,
+  TaskSchedulerContext,
   TaskStatus,
   TaskTopicHandoff,
   WorkspaceData,
@@ -25,6 +28,7 @@ import { resolveAttachmentMetadata } from '../file/resolveAttachments';
 import { type SubtaskGraphPlan, TaskGraphService } from '../taskGraph';
 import { type ReviewResult, TaskReviewService } from '../taskReview';
 import { TaskRunnerService } from '../taskRunner';
+import { createTaskSchedulerModule } from '../taskScheduler';
 
 const emptyWorkspace: WorkspaceData = { nodeMap: {}, tree: [] };
 const UNTITLED_TOPIC_TITLE = 'Untitled';
@@ -379,6 +383,60 @@ export class TaskService {
       await this.taskModel.updateContext(task.id, {
         scheduler: { scheduleStartedAt: new Date().toISOString() },
       });
+    }
+
+    // Heartbeat ticks are one-shot delayed messages that re-arm themselves
+    // after each run. Seed the very first message when a user starts/restarts
+    // the schedule; otherwise a fresh heartbeat task has no event capable of
+    // reaching the lifecycle re-arm path.
+    if (
+      status === 'scheduled' &&
+      task.automationMode === 'heartbeat' &&
+      task.heartbeatInterval &&
+      task.heartbeatInterval > 0 &&
+      resolved.status !== 'running' &&
+      resolved.status !== 'scheduled'
+    ) {
+      const scheduler = createTaskSchedulerModule();
+      const schedulerContext = (resolved.context as TaskContext | null)?.scheduler as
+        TaskSchedulerContext | undefined;
+      const previousTickMessageId = schedulerContext?.tickMessageId;
+      const tickToken = randomUUID();
+      let tickMessageId: string | undefined;
+
+      try {
+        // Invalidate the previous generation before publishing. This closes
+        // the race where an old QStash delivery arrives while the replacement
+        // message is being created.
+        await this.taskModel.updateContext(task.id, { scheduler: { tickToken } });
+        tickMessageId = await scheduler.scheduleNextTopic({
+          delay: task.heartbeatInterval,
+          taskId: task.id,
+          tickToken,
+          userId: this.userId,
+        });
+
+        await this.taskModel.updateContext(task.id, {
+          scheduler: {
+            consecutiveFailures: schedulerContext?.consecutiveFailures ?? 0,
+            scheduledAt: new Date().toISOString(),
+            tickMessageId,
+            tickToken,
+          },
+        });
+      } catch (error) {
+        // Never expose a scheduled status without a persisted tick. Restore
+        // the user-visible state and cancel a newly published message when
+        // persistence was the failing step.
+        if (tickMessageId) await scheduler.cancelScheduled(tickMessageId).catch(() => undefined);
+        await this.taskModel.update(task.id, { context: resolved.context });
+        await this.taskModel.updateStatus(task.id, resolved.status);
+        throw error;
+      }
+
+      if (previousTickMessageId) {
+        await scheduler.cancelScheduled(previousTickMessageId).catch(() => undefined);
+      }
     }
 
     const unlocked: string[] = [];
@@ -780,6 +838,7 @@ export class TaskService {
     });
 
     const taskConfig = task.config ? (task.config as Record<string, unknown>) : undefined;
+    const taskContext = task.context ? (task.context as TaskContext) : undefined;
     const scheduleConfig = (taskConfig?.schedule ?? {}) as { maxExecutions?: number | null };
 
     return {
@@ -806,6 +865,7 @@ export class TaskService {
           ? {
               interval: task.heartbeatInterval,
               lastAt: task.lastHeartbeatAt ? new Date(task.lastHeartbeatAt).toISOString() : null,
+              scheduledAt: taskContext?.scheduler?.scheduledAt,
               timeout: task.heartbeatTimeout,
             }
           : undefined,

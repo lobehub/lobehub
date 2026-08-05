@@ -523,6 +523,7 @@
   "upgradeVersion.hasNew": "有可用的更新",
   "upgradeVersion.newVersion": "有可用的更新：{{version}}",
   "upgradeVersion.serverVersion": "伺服器版本：{{version}}",
+  "userPanel.accountSetting": "帳戶設定",
   "userPanel.anonymousNickName": "匿名使用者",
   "userPanel.billing": "帳單管理",
   "userPanel.cloud": "體驗 {{name}}",

@@ -11,6 +11,7 @@
   "brief.action.ignore": "Ignorieren",
   "brief.action.retry": "Erneut versuchen",
   "brief.action.upgrade": "Plan upgraden",
+  "brief.actionFailed": "Das hat nicht geklappt. Bitte versuchen Sie es erneut.",
   "brief.addFeedback": "Feedback teilen",
   "brief.agentSignal.selfReview.applied.heading": "Aktualisiert",
   "brief.agentSignal.selfReview.applied.summary": "{{count}} Traumaktualisierung wurde angewendet.",

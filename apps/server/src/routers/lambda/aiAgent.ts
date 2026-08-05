@@ -2,6 +2,7 @@ import { type AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { parse } from '@lobechat/conversation-flow';
 import type { TaskCurrentActivity, TaskStatusResult } from '@lobechat/types';
 import {
+  entityIdPattern,
   RequestTrigger,
   ThreadStatus,
   ThreadType,
@@ -25,6 +26,7 @@ import { heteroAuthedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { signUserJWT } from '@/libs/trpc/utils/internalJwt';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
+import { unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
 import {
   assertCanUseMessageTargets,
   assertCanUseTopicTargets,
@@ -224,6 +226,20 @@ const ExecAgentSchema = z
       .optional(),
     /** Whether to auto-start execution after creating operation */
     autoStart: z.boolean().optional().default(true),
+    /**
+     * Client-minted ids for the rows this run creates, honoured verbatim —
+     * the gateway counterpart of `sendMessageInServer`'s `newTopic.id` /
+     * `newUserMessage.id` / `newAssistantMessage.id`. Validated per namespace:
+     * an unvalidated client primary key would let a caller submit look-alike
+     * ids, wrong namespaces, or strings that leak into logs and URLs.
+     */
+    clientIds: z
+      .object({
+        assistantMessageId: z.string().regex(entityIdPattern('messages')).optional(),
+        topicId: z.string().regex(entityIdPattern('topics')).optional(),
+        userMessageId: z.string().regex(entityIdPattern('messages')).optional(),
+      })
+      .optional(),
     /** Explicit device ID to bind to the topic and activate for this run */
     deviceId: z.string().optional(),
     /** Optional existing message IDs to include in context */
@@ -251,6 +267,31 @@ const ExecAgentSchema = z
         /** tool_call_id of the pending tool call being approved/rejected. */
         toolCallId: z.string(),
       })
+      .optional(),
+    /**
+     * Batch form of `resumeApproval` — one entry per pending tool the user
+     * resolved in a single action ("approve all" on a parallel tool batch).
+     * The op applies every decision, then runs all approved tools in ONE
+     * `call_tools_batch` and continues the LLM once with the full result set.
+     *
+     * Prefer this over firing N `resumeApproval` ops for a parallel batch: each
+     * of those continues the LLM while the not-yet-approved tools are still
+     * empty rows, which forks the parent chain and shows the model blank
+     * results. Mutually exclusive with `resumeApproval`.
+     */
+    resumeApprovals: z
+      .array(
+        z.object({
+          decision: z.enum(['approved', 'rejected', 'rejected_continue']),
+          /** ID of the pending `role='tool'` message this decision targets. */
+          parentMessageId: z.string(),
+          /** Optional user-supplied rejection reason (only meaningful for rejected variants). */
+          rejectionReason: z.string().optional(),
+          /** tool_call_id of the pending tool call being approved/rejected. */
+          toolCallId: z.string(),
+        }),
+      )
+      .min(1)
       .optional(),
     /**
      * Resume a previous op paused on a `humanIntervention: 'always'` tool (e.g.
@@ -514,7 +555,7 @@ const AgentStreamEventSchema = z.object({
  * → topic reverse-lookup is unreliable per design decision).
  */
 const HeteroIngestSchema = z.object({
-  agentType: z.enum(['amp', 'claude-code', 'codex', 'opencode']),
+  agentType: z.enum(['amp', 'claude-code', 'codex', 'opencode', 'pi']),
   /** Initial assistant placeholder message id forwarded from the sandbox env var.
    * When present, `loadOrCreateState` uses it directly and skips the DB read of
    * topic.metadata.runningOperation, eliminating the replica-lag race condition. */
@@ -531,7 +572,7 @@ const HeteroIngestSchema = z.object({
  * (CC's per-cwd id), kept here so the server can resume next time.
  */
 const HeteroFinishSchema = z.object({
-  agentType: z.enum(['amp', 'claude-code', 'codex', 'opencode']),
+  agentType: z.enum(['amp', 'claude-code', 'codex', 'opencode', 'pi']),
   error: z
     .object({
       /**
@@ -846,6 +887,7 @@ export const aiAgentRouter = router({
       mentionedAgents,
       parentMessageId,
       resumeApproval,
+      resumeApprovals,
       resumeToolResult,
       selectedToolIds,
       trigger,
@@ -869,6 +911,9 @@ export const aiAgentRouter = router({
           ...existingMessageIds,
           parentMessageId,
           resumeApproval?.parentMessageId,
+          // Every batch target is authorized too — a caller must not be able to
+          // slip a message it doesn't own into the list behind an owned anchor.
+          ...(resumeApprovals ?? []).map((decision) => decision.parentMessageId),
           resumeToolResult?.parentMessageId,
         ],
         topicId: appContext?.topicId,
@@ -879,6 +924,7 @@ export const aiAgentRouter = router({
         agentId,
         appContext,
         autoStart,
+        clientIds: input.clientIds,
         // Propagate the originating request's client IP / user agent into the run
         // so downstream LLM-call metadata can carry them for auditing and spend
         // attribution. These are server-derived from the tRPC context and are
@@ -894,6 +940,7 @@ export const aiAgentRouter = router({
         // human-approval resume — either way, skip user message creation.
         resume: !!parentMessageId,
         resumeApproval,
+        resumeApprovals,
         resumeToolResult,
         selectedToolIds,
         slug,
@@ -906,6 +953,17 @@ export const aiAgentRouter = router({
 
       if (error instanceof TRPCError) {
         throw error;
+      }
+
+      // A primary-key collision on a client-supplied id (a retried send
+      // replaying the same `clientIds`) is client-correctable — surface it as
+      // CONFLICT, not a 500. Generic message on purpose: echoing the id would
+      // let a caller probe for rows it cannot read.
+      if (unwrapPgError(error)?.code === '23505') {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'This run has already been created.',
+        });
       }
 
       throw new TRPCError({
@@ -1491,6 +1549,39 @@ export const aiAgentRouter = router({
    * This endpoint interrupts a SubAgent task by threadId or operationId.
    * It updates both operation status and Thread status to cancelled state.
    */
+  /**
+   * Stop a run parked on tool approval: settle the pending tool rows and end
+   * the operation without executing anything or continuing the model.
+   *
+   * Distinct from `interruptTask`, which only flips runtime state and assumes
+   * a live loop will persist the outcome — a parked run has no loop, so its
+   * tool rows and DB row would both be left behind.
+   */
+  stopPendingApproval: aiAgentWriteProcedure
+    .input(
+      z.object({
+        /** Pending `role='tool'` message ids to settle — the active batch. */
+        toolMessageIds: z.array(z.string()).min(1),
+        topicId: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      // Same ownership gate the approval resume uses: every target must belong
+      // to the caller before anything is written.
+      await assertCanUseAgentRunConversation({
+        db: ctx.serverDB,
+        messageIds: input.toolMessageIds,
+        topicId: input.topicId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+
+      return ctx.aiAgentService.stopPendingApproval({
+        toolMessageIds: input.toolMessageIds,
+        topicId: input.topicId,
+      });
+    }),
+
   interruptTask: aiAgentWriteProcedure
     .input(InterruptTaskSchema)
     .mutation(async ({ input, ctx }) => {

@@ -27,18 +27,25 @@ describe('recentKeys', () => {
   });
 
   it('keys the Home topic-only list independently from mixed recents', () => {
-    expect(recentKeys.topicList(9, 'user-1:workspace-1')).toEqual([
+    expect(recentKeys.topicList(9, 'user-1:workspace-1', 'mine')).toEqual([
       'recent:topicList',
       9,
       'user-1:workspace-1',
+      'mine',
     ]);
+  });
+
+  it('keeps the mine and team views of the Home topic list isolated', () => {
+    expect(recentKeys.topicList(9, 'user-1:workspace-1', 'mine')).not.toEqual(
+      recentKeys.topicList(9, 'user-1:workspace-1', 'team'),
+    );
   });
 
   // Regression: `recent:topicList` had no CACHE_TIERS entry of its own, and the
   // provider matches patterns as substrings — so `recent:list` never covered it.
   // The Home recents list was memory-only and flashed a skeleton on every boot.
   it('routes the Home topic-only recents key to a persisted cache tier', () => {
-    const serialized = unstable_serialize(recentKeys.topicList(9, 'user-1:workspace-1'));
+    const serialized = unstable_serialize(recentKeys.topicList(9, 'user-1:workspace-1', 'mine'));
     const persisted = [...CACHE_TIERS.idb, ...CACHE_TIERS.local].some((pattern) =>
       serialized.includes(pattern),
     );
