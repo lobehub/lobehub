@@ -523,6 +523,7 @@
   "upgradeVersion.hasNew": "Налична е актуализация",
   "upgradeVersion.newVersion": "Налична е актуализация: {{version}}",
   "upgradeVersion.serverVersion": "Сървър: {{version}}",
+  "userPanel.accountSetting": "Настройки на акаунта",
   "userPanel.anonymousNickName": "Анонимен потребител",
   "userPanel.billing": "Управление на плащания",
   "userPanel.cloud": "Стартирай {{name}}",

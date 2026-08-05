@@ -205,6 +205,19 @@ interface CreateUserAndAssistantMessagesParams {
 }
 
 interface CreateUserAndAssistantMessagesOptions {
+  /**
+   * Ids minted by the caller (the client) for the pair. Either side may be
+   * omitted, in which case this model mints that one — an older client that
+   * sends no ids keeps working unchanged.
+   *
+   * Honouring a caller-supplied id is what lets the UI render the pair under
+   * its final ids immediately, instead of showing placeholders and re-keying
+   * them once this insert returns.
+   */
+  ids?: {
+    assistantMessageId?: string;
+    userMessageId?: string;
+  };
   timing?: ModelTimingContext;
 }
 
@@ -2369,10 +2382,10 @@ export class MessageModel {
 
   createUserAndAssistantMessages = async (
     { userMessage, assistantMessage }: CreateUserAndAssistantMessagesParams,
-    { timing }: CreateUserAndAssistantMessagesOptions = {},
+    { ids, timing }: CreateUserAndAssistantMessagesOptions = {},
   ): Promise<{ assistantMessage: DBMessageItem; userMessage: DBMessageItem }> => {
-    const userMessageId = this.genId();
-    const assistantMessageId = this.genId();
+    const userMessageId = ids?.userMessageId ?? this.genId();
+    const assistantMessageId = ids?.assistantMessageId ?? this.genId();
     const createdAt = Date.now();
     const defaultUserCreatedAt = createdAt;
     const defaultAssistantCreatedAt = createdAt + 1;

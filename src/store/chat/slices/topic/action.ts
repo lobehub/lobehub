@@ -226,17 +226,11 @@ export class ChatTopicActionImpl {
       sessionId: targetSessionId,
     });
 
-    this.#get().internal_updateTopicLoading(topicId, true);
-    // 2. auto summary topic Title
-    // We don't need to await the summary, but this owner keeps the new topic
-    // spinning immediately until the fire-and-forget title summary settles.
-    void summaryTopicTitle(topicId, messages)
-      .catch((error) => {
-        console.error('[saveToTopic] Failed to summarize topic title:', error);
-      })
-      .finally(() => {
-        this.#get().internal_updateTopicLoading(topicId, false);
-      });
+    // 2. auto summary topic Title — fire-and-forget; the title streams into the
+    // row as it generates, no separate loading affordance needed.
+    void summaryTopicTitle(topicId, messages).catch((error) => {
+      console.error('[saveToTopic] Failed to summarize topic title:', error);
+    });
 
     return topicId;
   };
@@ -289,7 +283,7 @@ export class ChatTopicActionImpl {
   };
 
   summaryTopicTitle = async (topicId: string, messages: UIChatMessage[]): Promise<void> => {
-    const { internal_updateTopicTitleInSummary, internal_updateTopicLoading } = this.#get();
+    const { internal_updateTopicTitleInSummary } = this.#get();
     const topic = topicSelectors.getTopicById(topicId)(this.#get());
     if (!topic) return;
 
@@ -311,9 +305,6 @@ export class ChatTopicActionImpl {
       },
       onFinish: async (text) => {
         await this.#get().internal_updateTopic(topicId, { title: text });
-      },
-      onLoadingChange: (loading) => {
-        internal_updateTopicLoading(topicId, loading);
       },
       onMessageHandle: (chunk) => {
         switch (chunk.type) {
@@ -397,10 +388,8 @@ export class ChatTopicActionImpl {
       value: { metadata: mergedMetadata },
     });
 
-    this.#get().internal_updateTopicLoading(id, true);
     await topicService.updateTopicMetadata(id, metadata);
     await this.#get().refreshTopic();
-    this.#get().internal_updateTopicLoading(id, false);
   };
 
   updateTopicTitle = async (id: string, title: string): Promise<void> => {
@@ -449,14 +438,20 @@ export class ChatTopicActionImpl {
       });
     }
 
-    // In-flight first-send optimistic rows (`tmp_topic_*`) are client-only, so
-    // any refetch landing mid-send (e.g. the fire-and-forget refreshTopic after
-    // a previous run's topic creation or terminal) would wipe them from the
-    // sidebar until the server returns the real topicId. Re-prepend the ones
-    // still in the bucket — they only ever leave it via replaceTopicId (send
-    // resolved) or deleteTopic (rollback), never via a fetch.
-    if (currentItems && currentItems.length > 0) {
-      const optimisticRows = currentItems.filter((item) => item.id.startsWith('tmp_topic_'));
+    // In-flight first-send optimistic rows are client-only, so any refetch
+    // landing mid-send (e.g. the fire-and-forget refreshTopic after a previous
+    // run's topic creation or terminal) would wipe them from the sidebar until
+    // the server confirms the topic. Re-prepend the ones still in the bucket —
+    // they only ever leave it via replaceTopicId (send resolved) or deleteTopic
+    // (rollback), never via a fetch.
+    //
+    // Membership comes from `creatingTopicIds`, not from the id string: the
+    // placeholder carries a real `tpc_…` id the server is asked to honour, so
+    // it is indistinguishable from a persisted one — and a prefix test would
+    // fail silently the next time the id format changes.
+    const creatingTopicIds = this.#get().creatingTopicIds;
+    if (currentItems && currentItems.length > 0 && creatingTopicIds.length > 0) {
+      const optimisticRows = currentItems.filter((item) => creatingTopicIds.includes(item.id));
       if (optimisticRows.length > 0) {
         const fetchedIds = new Set(next.map((item) => item.id));
         const surviving = optimisticRows.filter((item) => !fetchedIds.has(item.id));
@@ -773,13 +768,11 @@ export class ChatTopicActionImpl {
   };
 
   autoRenameTopicTitle = async (id: string): Promise<void> => {
-    const { activeAgentId: agentId, summaryTopicTitle, internal_updateTopicLoading } = this.#get();
+    const { activeAgentId: agentId, summaryTopicTitle } = this.#get();
 
-    internal_updateTopicLoading(id, true);
     const messages = await messageService.getMessages({ agentId, topicId: id });
 
     await summaryTopicTitle(id, messages);
-    internal_updateTopicLoading(id, false);
   };
 
   useFetchTopics = (
@@ -1400,44 +1393,6 @@ export class ChatTopicActionImpl {
     );
   };
 
-  internal_updateTopicLoading = (id: string, loading: boolean): void => {
-    this.#set(
-      (state) => {
-        const currentCount =
-          state.topicLoadingIdCounts[id] ?? (state.topicLoadingIds.includes(id) ? 1 : 0);
-        const nextCounts = { ...state.topicLoadingIdCounts };
-
-        if (loading) {
-          nextCounts[id] = currentCount + 1;
-          const nextIds = state.topicLoadingIds.includes(id)
-            ? state.topicLoadingIds
-            : [...state.topicLoadingIds, id];
-
-          return {
-            topicLoadingIdCounts: nextCounts,
-            topicLoadingIds: nextIds,
-          };
-        }
-
-        if (currentCount > 1) {
-          nextCounts[id] = currentCount - 1;
-
-          return { topicLoadingIdCounts: nextCounts, topicLoadingIds: state.topicLoadingIds };
-        }
-
-        delete nextCounts[id];
-        const nextIds = state.topicLoadingIds.filter((i) => i !== id);
-
-        return {
-          topicLoadingIdCounts: nextCounts,
-          topicLoadingIds: nextIds,
-        };
-      },
-      false,
-      n('updateTopicLoading'),
-    );
-  };
-
   internal_replaceTopicId = (params: {
     agentId?: string;
     groupId?: string;
@@ -1447,9 +1402,9 @@ export class ChatTopicActionImpl {
   }): void => {
     const { agentId, groupId, nextId, previousId, value } = params;
 
-    // The first-message optimistic topic starts as `tmp_topic_*`. Once the
-    // server returns the real id, keep the same row alive so loading state and
-    // title-summary updates continue targeting the visible topic.
+    // The first-message optimistic topic starts as a client-only row. Once the
+    // server returns the real id, keep the same row alive so title-summary
+    // updates continue targeting the visible topic.
     this.#get().internal_dispatchTopic(
       {
         agentId,
@@ -1462,41 +1417,22 @@ export class ChatTopicActionImpl {
       n('replaceTopicId'),
     );
 
-    this.#set(
-      (state) => {
-        const previousCount = state.topicLoadingIdCounts[previousId] ?? 0;
-        const nextCount = state.topicLoadingIdCounts[nextId] ?? 0;
-        const topicLoadingIdCounts = { ...state.topicLoadingIdCounts };
-        delete topicLoadingIdCounts[previousId];
-        if (previousCount > 0 || nextCount > 0) {
-          topicLoadingIdCounts[nextId] = previousCount + nextCount;
-        }
-        const topicLoadingIds = Array.from(
-          new Set(state.topicLoadingIds.map((id) => (id === previousId ? nextId : id))),
-        );
+    if (previousId === nextId) return;
 
-        return {
-          activeTopicId: state.activeTopicId === previousId ? nextId : state.activeTopicId,
-          topicLoadingIdCounts,
-          topicLoadingIds,
-        };
-      },
+    this.#set(
+      (state) => ({
+        activeTopicId: state.activeTopicId === previousId ? nextId : state.activeTopicId,
+      }),
       false,
-      n('replaceTopicId/loading'),
+      n('replaceTopicId/active'),
     );
   };
 
   internal_updateTopic = async (id: string, data: Partial<ChatTopic>): Promise<void> => {
     this.#get().internal_dispatchTopic({ type: 'updateTopic', id, value: data });
 
-    this.#get().internal_updateTopicLoading(id, true);
-    try {
-      await topicService.updateTopic(id, data);
-      await this.#get().refreshTopic();
-    } finally {
-      // Rename "Topic" -> "New" can fail after opening a loading owner; always release it.
-      this.#get().internal_updateTopicLoading(id, false);
-    }
+    await topicService.updateTopic(id, data);
+    await this.#get().refreshTopic();
   };
 
   internal_updateTopicLinkedPullRequest = async (
@@ -1570,13 +1506,8 @@ export class ChatTopicActionImpl {
       'internal_createTopic',
     );
 
-    this.#get().internal_updateTopicLoading(tmpId, true);
     const topicId = await topicService.createTopic(params);
-    this.#get().internal_updateTopicLoading(tmpId, false);
-
-    this.#get().internal_updateTopicLoading(topicId, true);
     await this.#get().refreshTopic();
-    this.#get().internal_updateTopicLoading(topicId, false);
 
     return topicId;
   };
@@ -1589,6 +1520,32 @@ export class ChatTopicActionImpl {
    * user switched agents (see `updateTopicStatus`).
    */
   internal_dispatchTopic = (payload: ChatTopicDispatch, action?: any): void => {
+    // Track the optimistic-row lifecycle here, at the single funnel every
+    // add / replace / delete goes through, so a caller cannot register a
+    // placeholder and then forget to clear it.
+    if (payload.type === 'addTopic' && payload.optimistic && payload.value.id) {
+      const id = payload.value.id;
+      if (!this.#get().creatingTopicIds.includes(id)) {
+        this.#set(
+          (state) => ({ creatingTopicIds: [...state.creatingTopicIds, id] }),
+          false,
+          n('creatingTopic/register'),
+        );
+      }
+    } else if (
+      (payload.type === 'replaceTopicId' || payload.type === 'deleteTopic') && // The row is no longer client-only: either the server confirmed it, or
+      // the send rolled back and the row is gone.
+      this.#get().creatingTopicIds.includes(payload.id)
+    ) {
+      this.#set(
+        (state) => ({
+          creatingTopicIds: state.creatingTopicIds.filter((creating) => creating !== payload.id),
+        }),
+        false,
+        n('creatingTopic/release'),
+      );
+    }
+
     const { activeAgentId, activeGroupId } = this.#get();
     const scopedAgentId = payload.scope ? payload.agentId : (payload.agentId ?? activeAgentId);
     const scopedGroupId = payload.scope ? payload.groupId : (payload.groupId ?? activeGroupId);

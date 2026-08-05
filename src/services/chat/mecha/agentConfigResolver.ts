@@ -167,7 +167,7 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
   //
   // lobe-agent's context trimming (hide `callSubAgent` in group / sub-agent runs)
   // now lives in its manifest resolver (resolveLobeAgentManifest), applied at
-  // tools-engine build time. That keeps lobe-agent's plan / todo / visual-media
+  // tools-engine build time. That keeps lobe-agent's plan / todo / media-analysis
   // available to sub-agents — only the nested dispatch API is removed — instead of
   // dropping the whole tool here.
   const applyPluginFilters = (pluginIds: string[]) => {

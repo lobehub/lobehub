@@ -85,7 +85,6 @@ const clearLocalTopicRunningOperation = (chatStore: ChatStore, topicId: string |
     },
     'agentMock/clearRunningOperation',
   );
-  chatStore.internal_updateTopicLoading(topicId, false);
 };
 
 const getContextKey = (args: StartArgs) =>

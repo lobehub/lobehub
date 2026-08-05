@@ -370,6 +370,12 @@ export class GatewayActionImpl {
    * then starts the agent. This method handles topic switching and WebSocket connection.
    */
   executeGatewayAgent = async (params: {
+    /**
+     * Client-minted ids for the rows this run creates (fresh sends only). The
+     * server honours them verbatim, so the optimistic topic / message rows keep
+     * their ids instead of diverging from the server-minted ones.
+     */
+    clientIds?: { assistantMessageId?: string; topicId?: string; userMessageId?: string };
     /** Agent/runtime context used to execute the server operation. */
     context: ConversationContext;
     /** File IDs of already-uploaded attachments to attach to the new user message */
@@ -444,6 +450,7 @@ export class GatewayActionImpl {
     tempMessageIds?: string[];
   }): Promise<ExecAgentResult> => {
     const {
+      clientIds,
       context: executionContext,
       fileIds,
       message,
@@ -464,7 +471,11 @@ export class GatewayActionImpl {
     const agentGatewayUrl =
       window.global_serverConfigStore!.getState().serverConfig.agentGatewayUrl!;
 
-    const isCreateNewTopic = !messageContext.topicId;
+    // The EXECUTION context decides whether the server creates a topic. The
+    // message context can already carry the client-minted topic id (the send
+    // adopted it up front so the streamed messages land in the on-screen
+    // bucket) while the topic still has no server row.
+    const isCreateNewTopic = !executionContext.topicId;
     const taskId =
       executionContext.viewedTask?.type === 'detail'
         ? executionContext.viewedTask.taskId
@@ -519,6 +530,9 @@ export class GatewayActionImpl {
     const result = await aiAgentService.execAgentTask(
       {
         agentId: executionContext.agentId,
+        // Fresh sends only — resume flows never pass this, and the server drops
+        // it defensively on resume-like params anyway.
+        clientIds,
         appContext: {
           agentDocumentId: executionContext.agentDocumentId,
           defaultTaskAssigneeAgentId: executionContext.defaultTaskAssigneeAgentId,
@@ -621,6 +635,13 @@ export class GatewayActionImpl {
       messageMapKey(messageContext),
       messageMapKey(resolvedMessageContext),
     );
+    // Legacy queue location: follow-ups enqueued behind an op still registered
+    // under the pre-mint `_new` key.
+    if (isCreateNewTopic)
+      this.#get().moveQueuedMessages(
+        messageMapKey({ ...messageContext, topicId: null }),
+        messageMapKey(resolvedMessageContext),
+      );
 
     if (result.topicId) {
       void this.#get().updateTopicStatus?.({

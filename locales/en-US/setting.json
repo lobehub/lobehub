@@ -1290,7 +1290,7 @@
   "tools.builtins.lobe-agent-documents.title": "Documents",
   "tools.builtins.lobe-agent-management.description": "Create, manage, and orchestrate AI agents",
   "tools.builtins.lobe-agent-management.title": "Agent Management",
-  "tools.builtins.lobe-agent.description": "Built-in Lobe Agent capabilities: plan and todo management, sub-agent dispatch, and visual media analysis",
+  "tools.builtins.lobe-agent.description": "Built-in Lobe Agent capabilities: plan and todo management, sub-agent dispatch, and multimodal media analysis",
   "tools.builtins.lobe-agent.title": "Lobe Agent",
   "tools.builtins.lobe-artifacts.description": "Generate and preview interactive UI components and visualizations",
   "tools.builtins.lobe-artifacts.readme": "Generate and live-preview interactive UI components, data visualizations, charts, SVG graphics, and web applications. Create rich visual content that users can interact with directly.",

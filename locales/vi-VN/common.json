@@ -523,6 +523,7 @@
   "upgradeVersion.hasNew": "Có bản cập nhật mới",
   "upgradeVersion.newVersion": "Có bản cập nhật mới: {{version}}",
   "upgradeVersion.serverVersion": "Máy chủ: {{version}}",
+  "userPanel.accountSetting": "Cài đặt tài khoản",
   "userPanel.anonymousNickName": "Người dùng ẩn danh",
   "userPanel.billing": "Quản lý thanh toán",
   "userPanel.cloud": "Khởi chạy {{name}}",

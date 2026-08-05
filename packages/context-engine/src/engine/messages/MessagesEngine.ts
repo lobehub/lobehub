@@ -270,6 +270,7 @@ export class MessagesEngine {
         knowledgeCutoff: modelKnowledgeCutoff,
         modelId: model,
         nativeMediaCapabilities: {
+          audio: capabilities?.isCanUseAudio?.(model, provider),
           video: capabilities?.isCanUseVideo?.(model, provider),
           vision: capabilities?.isCanUseVision?.(model, provider),
         },

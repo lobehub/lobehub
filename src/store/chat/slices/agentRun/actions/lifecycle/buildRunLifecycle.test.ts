@@ -49,7 +49,6 @@ const makeStore = (afterCompletionCallbacks?: Array<() => void>) => {
     drainQueuedMessages: vi.fn(() => []),
     failOperation: vi.fn(),
     internal_updateTopic: vi.fn(),
-    internal_updateTopicLoading: vi.fn(),
     markTopicUnread: vi.fn(),
     messagesMap: {},
     operations: {
@@ -405,7 +404,6 @@ describe('buildRunLifecycle.afterUserMessagePersisted — topic title (all runti
       expect(store.internal_updateTopic).toHaveBeenCalledWith('t1', {
         title: '阅读下面的材料，根据要求写作。',
       });
-      expect(store.internal_updateTopicLoading).not.toHaveBeenCalledWith('t1', false);
       expect(store.summaryTopicTitle).not.toHaveBeenCalled();
     } finally {
       if (previous === undefined) {

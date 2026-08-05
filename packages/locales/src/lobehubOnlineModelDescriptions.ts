@@ -56,6 +56,10 @@ export const lobeHubOnlineModelDescriptions = {
     "Gemini 3 Pro Image (Nano Banana Pro) is Google's image generation model and also supports multimodal chat.",
   'lobehub.gemini-3-pro-image-preview.description':
     "Gemini 3 Pro Image (Nano Banana Pro) is Google's image generation model and also supports multimodal chat.",
+  'lobehub.gemini-3.1-flash-image:image.description':
+    'Gemini 3.1 Flash Image (Nano Banana 2) delivers Pro-level image quality at Flash speed with multimodal chat support.',
+  'lobehub.gemini-3.1-flash-image.description':
+    'Gemini 3.1 Flash Image (Nano Banana 2) delivers Pro-level image quality at Flash speed with multimodal chat support.',
   'lobehub.gemini-3.1-flash-image-preview:image.description':
     'Gemini 3.1 Flash Image (Nano Banana 2) delivers Pro-level image quality at Flash speed with multimodal chat support.',
   'lobehub.gemini-3.1-flash-image-preview.description':
@@ -170,6 +174,8 @@ export const lobeHubOnlineModelDescriptions = {
     'Qwen3.7-Plus is a cost-effective multimodal model in the Qwen3.7 series, combining strong text capabilities with upgraded vision-language understanding for coding, tool use, GUI tasks, and productivity workflows.',
   'lobehub.qwen3.8-max-preview.description':
     "Qwen3.8-Max-Preview is a preview of Alibaba's next-generation 2.4T-parameter flagship model, with major gains over Qwen3.7-Max in coding and professional productivity, and leading performance on complex long-horizon tasks such as full-stack development and data analysis.",
+  'lobehub.qwen3.8-max.description':
+    "Qwen3.8 Max is Alibaba Cloud's flagship model for complex coding, reasoning, professional productivity, and long-horizon agentic workflows.",
   'lobehub.seedance-1-5-pro-251215.description':
     'Seedance 1.5 Pro by ByteDance supports text-to-video, image-to-video (first frame, first+last frame), and audio generation synchronized with visuals.',
   'lobehub.seedream-5-0-260128.description':

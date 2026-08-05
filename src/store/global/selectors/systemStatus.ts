@@ -368,6 +368,10 @@ const mobileShowTopic = (s: GlobalState) => s.status.mobileShowTopic;
 const mobileShowPortal = (s: GlobalState) => s.status.mobileShowPortal;
 const showAgentBuilderPanel = (s: GlobalState) => s.status.showAgentBuilderPanel;
 const showHomeRail = (s: GlobalState) => s.status.showHomeRail ?? true;
+const showHomePortrait = (s: GlobalState) => s.status.showHomePortrait ?? true;
+const hiddenHomeWidgets = (s: GlobalState): string[] => s.status.hiddenHomeWidgets ?? [];
+const homeRecentsCount = (s: GlobalState): number => s.status.homeRecentsCount ?? 8;
+const homeTaskCount = (s: GlobalState): number => s.status.homeTaskCount ?? 8;
 const showRightPanel = (s: GlobalState) => s.status.showRightPanel;
 const showLeftPanel = (s: GlobalState) => s.status.showLeftPanel;
 const showPageAgentPanel = (s: GlobalState) => s.status.showPageAgentPanel;
@@ -461,9 +465,12 @@ export const systemStatusSelectors = {
   filePanelWidth,
   getAgentSystemRoleExpanded,
   groupAgentBuilderPanelWidth,
+  hiddenHomeWidgets,
   hiddenSidebarSections,
   hidePWAInstaller,
+  homeRecentsCount,
   homeSelectedAgentId,
+  homeTaskCount,
   imagePanelWidth,
   imageTopicViewMode,
   imageTopicPanelWidth,
@@ -494,6 +501,7 @@ export const systemStatusSelectors = {
   sessionGroupKeys,
   showAgentBuilderPanel,
   showFilePanel,
+  showHomePortrait,
   showHomeRail,
   showImagePanel,
   showImageTopicPanel,

@@ -34,6 +34,7 @@ vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: () => mockGetAllWindows() },
   app: {
     getAppPath: vi.fn(() => '/fake/appPath'),
+    getVersion: vi.fn(() => '1.0.0-test'),
     getPath: vi.fn((name: string) => (name === 'desktop' ? FAKE_DESKTOP_PATH : `/fake/${name}`)),
     isPackaged: false,
     on: vi.fn(),
@@ -51,9 +52,18 @@ vi.mock('@/utils/logger', () => ({
   }),
 }));
 
-const { claudeSdkSessionCloseMock, claudeSdkSessionConstructMock } = vi.hoisted(() => ({
+const {
+  claudeSdkSessionCloseMock,
+  claudeSdkSessionConstructMock,
+  codexAppServerCloseMock,
+  codexAppServerConstructMock,
+  codexAppServerInterruptMock,
+} = vi.hoisted(() => ({
   claudeSdkSessionCloseMock: vi.fn(),
   claudeSdkSessionConstructMock: vi.fn(),
+  codexAppServerCloseMock: vi.fn(),
+  codexAppServerConstructMock: vi.fn(),
+  codexAppServerInterruptMock: vi.fn(),
 }));
 
 vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
@@ -104,9 +114,53 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
     }
   }
 
+  class MockCodexAppServerSession {
+    constructor(private readonly options: any) {
+      codexAppServerConstructMock(options);
+    }
+
+    close() {
+      codexAppServerCloseMock();
+    }
+
+    async interrupt() {
+      codexAppServerInterruptMock();
+    }
+
+    async run() {
+      const now = Date.now();
+      this.options.onRuntimeStatus({
+        activeTasks: [],
+        lastEventAt: now,
+        operationId: this.options.operationId,
+        sessionId: this.options.sessionId,
+        state: 'running',
+        transport: 'codex-app-server',
+      });
+      this.options.onSessionId('thread_app_server');
+      await this.options.onEvents([
+        {
+          data: { reason: 'complete', transport: 'codex-app-server' },
+          operationId: this.options.operationId,
+          stepIndex: 0,
+          timestamp: now,
+          type: 'agent_runtime_end',
+        },
+      ]);
+      this.options.onRuntimeStatus({
+        activeTasks: [],
+        lastEventAt: now,
+        sessionId: this.options.sessionId,
+        state: 'closed',
+        transport: 'codex-app-server',
+      });
+    }
+  }
+
   return {
     ...actual,
     ClaudeAgentSdkSession: MockClaudeAgentSdkSession,
+    CodexAppServerSession: MockCodexAppServerSession,
   };
 });
 
@@ -195,21 +249,29 @@ const getFlagValues = (args: string[], flag: string) =>
 describe('HeterogeneousAgentCtr', () => {
   let appStoragePath: string;
   let originalClaudeSdkLabEnv: string | undefined;
+  let originalCodexAppServerLabEnv: string | undefined;
 
   beforeEach(async () => {
     originalClaudeSdkLabEnv = process.env.LOBE_CLAUDE_CODE_SDK;
+    originalCodexAppServerLabEnv = process.env.LOBE_CODEX_APP_SERVER;
     appStoragePath = await mkdtemp(path.join(os.tmpdir(), 'lobehub-hetero-'));
     consumeCodexRateLimitResetCreditMock.mockReset();
     fetchCodexQuotaMock.mockReset();
     claudeSdkSessionCloseMock.mockReset();
     claudeSdkSessionConstructMock.mockReset();
+    codexAppServerCloseMock.mockReset();
+    codexAppServerConstructMock.mockReset();
+    codexAppServerInterruptMock.mockReset();
     mockGetAllWindows.mockReset();
     delete process.env.LOBE_CLAUDE_CODE_SDK;
+    delete process.env.LOBE_CODEX_APP_SERVER;
   });
 
   afterEach(async () => {
     if (originalClaudeSdkLabEnv === undefined) delete process.env.LOBE_CLAUDE_CODE_SDK;
     else process.env.LOBE_CLAUDE_CODE_SDK = originalClaudeSdkLabEnv;
+    if (originalCodexAppServerLabEnv === undefined) delete process.env.LOBE_CODEX_APP_SERVER;
+    else process.env.LOBE_CODEX_APP_SERVER = originalCodexAppServerLabEnv;
     await rm(appStoragePath, { force: true, recursive: true });
   });
 
@@ -986,6 +1048,67 @@ describe('HeterogeneousAgentCtr', () => {
       expect(cliArgs).not.toContain('--full-auto');
       expect(cliArgs).not.toContain('-');
       expect(writes).toEqual([prompt]);
+    });
+
+    it('uses Codex app-server lab instead of spawning codex exec', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codex',
+        args: ['--model', 'gpt-5.5-codex'],
+        command: 'codex',
+        useCodexAppServer: true,
+      });
+
+      await ctr.sendPrompt({ operationId: 'op-test', prompt: 'stream this', sessionId });
+
+      expect(spawnCalls).toHaveLength(0);
+      expect(codexAppServerConstructMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: ['--model', 'gpt-5.5-codex'],
+          clientVersion: '1.0.0-test',
+          commandPath: 'codex',
+          cwd: FAKE_DESKTOP_PATH,
+          input: [{ text: 'stream this', text_elements: [], type: 'text' }],
+          operationId: 'op-test',
+        }),
+      );
+      await expect(ctr.getSessionInfo({ sessionId })).resolves.toEqual({
+        agentSessionId: 'thread_app_server',
+      });
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+    });
+
+    it('falls back to codex exec when app-server cannot preserve a CLI argument', async () => {
+      // Fallback path still spawns `codex exec`; without a fake process, sendPrompt hangs.
+      const { proc } = createFakeProc();
+      nextFakeProc = proc;
+
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codex',
+        args: ['--profile', 'work'],
+        command: 'codex',
+        useCodexAppServer: true,
+      });
+
+      await ctr.sendPrompt({ operationId: 'op-test', prompt: 'preserve profile', sessionId });
+
+      expect(codexAppServerConstructMock).not.toHaveBeenCalled();
+      expect(spawnCalls).toHaveLength(1);
+      expect(spawnCalls[0].args).toEqual(expect.arrayContaining(['--profile', 'work']));
     });
 
     it('places system context before the user prompt in codex stdin', async () => {

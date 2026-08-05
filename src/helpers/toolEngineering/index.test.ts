@@ -66,7 +66,7 @@ vi.mock('@/store/tool', () => ({
           api: [
             {
               description: 'Analyze visual media',
-              name: 'analyzeVisualMedia',
+              name: 'analyzeMedia',
               parameters: {
                 properties: {
                   question: { type: 'string' },

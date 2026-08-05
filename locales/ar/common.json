@@ -523,6 +523,7 @@
   "upgradeVersion.hasNew": "تحديث متوفر",
   "upgradeVersion.newVersion": "تحديث متوفر: {{version}}",
   "upgradeVersion.serverVersion": "الخادم: {{version}}",
+  "userPanel.accountSetting": "إعدادات الحساب",
   "userPanel.anonymousNickName": "مستخدم مجهول",
   "userPanel.billing": "إدارة الفوترة",
   "userPanel.cloud": "تشغيل {{name}}",

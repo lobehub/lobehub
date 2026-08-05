@@ -411,7 +411,7 @@ describe('createServerAgentToolsEngine', () => {
     expect(result.enabledToolIds).toContain(ImageGenerationManifest.identifier);
   });
 
-  it('should enable VisualUnderstanding when injected into runtime plugins', () => {
+  it('should enable MultimodalUnderstanding when injected into runtime plugins', () => {
     const context = createMockContext();
     const engine = createServerAgentToolsEngine(context, {
       agentConfig: { plugins: [LobeAgentManifest.identifier] },

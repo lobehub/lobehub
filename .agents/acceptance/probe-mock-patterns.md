@@ -172,20 +172,25 @@ Acceptance fixture through the local CLI, and capture the same route in separate
 authenticated and storage-empty browser contexts. This proves both owner and
 shared-viewer rendering without depending on production browser cookies.
 
-### The dev Electron main window runs the WEB entry — desktop-entry boot code is unverifiable in dev
+### Which entry the dev Electron main window loads is NOT stable — measure it, never assume
 
 **Situation:** verifying anything that lives in `src/spa/entry.desktop.tsx` (bootstrap
 identity, adapter registration, boot marks) on an `electron-dev.sh` instance.
 
-**Doesn't work:** assuming the desktop instance loads the desktop entry. Measured on a
-live dev instance, the **main window's entry script is `app://renderer/src/spa/entry.web.tsx`**,
-while the **topicPopup window in the same instance correctly loads `entry.popup.tsx`**.
-So Vite dev does resolve some MPA paths but the main window falls through to the root
-`index.html`. (Mechanism not established — do not repeat the plausible-sounding
-"`ViteRendererFallback` is a dumb proxy so everything falls back" explanation; the popup
-result falsifies it.) Consequence: desktop-entry boot code never executes in dev, and a
-deletion there passes every dev smoke test — which is exactly how one such call was lost
-for a whole release.
+**Doesn't work:** assuming any particular entry, in either direction. This has now been
+measured with two different results on the same helper:
+
+- Earlier: the main window's entry script was `app://renderer/src/spa/entry.web.tsx`
+  while the topicPopup window in the same instance loaded `entry.popup.tsx` — so the
+  main window fell through to the root `index.html`. Consequence at the time:
+  desktop-entry boot code never executed in dev, and a deletion there passed every dev
+  smoke test, which is how one such call was lost for a whole release.
+- 2026-08-05, on `feat/home-customize-modal`: the main window loaded
+  **`app://renderer/src/spa/entry.desktop.tsx`** — the fall-through did not reproduce.
+
+Mechanism not established in either direction, and no bisect was done, so do not
+assume the newer reading is permanent either. Treat the loaded entry as an unknown to
+be measured per run — that is the durable rule; the specific value is not.
 
 **Works:** before claiming anything about a desktop entry, read the loaded entry script
 and branch on it:
@@ -837,6 +842,7 @@ cache, so the renderer still shows the pre-write value (generic M18). Clear
 `lobechat-swr-cache*` + `lobehub-local-data` through
 `Page.addScriptToEvaluateOnNewDocument` and reload (see "Cold SWR cache" above),
 then assert `agentMap[id].agencyConfig` before drawing any conclusion.
+
 ### An unconverged lockfile puts two copies of a dep in the graph — every route using it dies at the ErrorBoundary
 
 **Situation:** after rebasing onto a canary that bumped a shared UI dependency and

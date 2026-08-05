@@ -523,6 +523,7 @@
   "upgradeVersion.hasNew": "به‌روزرسانی در دسترس است",
   "upgradeVersion.newVersion": "به‌روزرسانی در دسترس: {{version}}",
   "upgradeVersion.serverVersion": "سرور: {{version}}",
+  "userPanel.accountSetting": "تنظیمات حساب",
   "userPanel.anonymousNickName": "کاربر ناشناس",
   "userPanel.billing": "مدیریت صورتحساب",
   "userPanel.cloud": "اجرای {{name}}",

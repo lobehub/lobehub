@@ -52,6 +52,10 @@ export class MessageQueryActionImpl {
     const threadId =
       context?.threadId !== undefined ? context.threadId : this.#get().activeThreadId;
 
+    // A client-minted topic with no server row yet (first-send window): a
+    // revalidation would return an empty list and wipe the optimistic messages.
+    if (topicId && this.#get().creatingTopicIds.includes(topicId)) return;
+
     // Topic navigation is a soft ensure: a completed prefetch is already the
     // server snapshot the destination hook needs, while an in-flight prefetch
     // will be shared by the coordinator when the hook mounts.
@@ -78,6 +82,9 @@ export class MessageQueryActionImpl {
 
   prefetchMessages = async (context: ConversationContext): Promise<void> => {
     if (!context.agentId || !context.topicId) return;
+    // A client-minted topic with no server row yet (first-send window) would
+    // prefetch an empty list and clobber the optimistic messages on screen.
+    if (this.#get().creatingTopicIds.includes(context.topicId)) return;
 
     const messagesKey = getMessageListCacheIdentity(context);
     if (operationSelectors.isAgentRuntimeRunningByContext(context)(this.#get())) return;

@@ -4,7 +4,11 @@ import type { ScheduleNextTopicParams, TaskSchedulerImpl } from './type';
 
 const log = debug('task-scheduler:local');
 
-export type TaskExecutionCallback = (taskId: string, userId: string) => Promise<void>;
+export type TaskExecutionCallback = (
+  taskId: string,
+  userId: string,
+  tickToken?: string,
+) => Promise<void>;
 
 /**
  * Local task scheduler using setTimeout
@@ -19,7 +23,7 @@ export class LocalTaskScheduler implements TaskSchedulerImpl {
   }
 
   async scheduleNextTopic(params: ScheduleNextTopicParams): Promise<string> {
-    const { taskId, userId, delay = 0 } = params;
+    const { taskId, userId, delay = 0, tickToken } = params;
     const scheduleId = `local-task-${taskId}-${Date.now()}`;
 
     log('Scheduling next topic for task %s (delay: %ds)', taskId, delay);
@@ -34,7 +38,11 @@ export class LocalTaskScheduler implements TaskSchedulerImpl {
 
       try {
         log('Executing next topic for task %s', taskId);
-        await this.executionCallback(taskId, userId);
+        if (tickToken) {
+          await this.executionCallback(taskId, userId, tickToken);
+        } else {
+          await this.executionCallback(taskId, userId);
+        }
       } catch (error) {
         log('Failed to execute next topic for task %s: %O', taskId, error);
       }

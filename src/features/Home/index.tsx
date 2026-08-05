@@ -16,6 +16,7 @@ import HomeModeContent from './HomeModeContent';
 import HomePortrait from './HomePortrait';
 import InputArea from './InputArea';
 import PortraitBubble from './PortraitBubble';
+import { RAIL_INBOX_PROPS, resolveRailVisibility } from './railVisibility';
 import type { HomeMode } from './types';
 
 /** Trailing gutter that keeps the rail's cards off the page's scroll lane. */
@@ -233,10 +234,13 @@ const styles = createStaticStyles(({ css }) => ({
 const Home = memo(() => {
   const isLogin = useUserStore(authSelectors.isLogin);
   const showHomeRail = useGlobalStore(systemStatusSelectors.showHomeRail);
+  const showHomePortrait = useGlobalStore(systemStatusSelectors.showHomePortrait);
+  const hiddenWidgets = useGlobalStore(systemStatusSelectors.hiddenHomeWidgets);
   const [mode, setMode] = useState<HomeMode>('chat');
   const [inputValue, setInputValue] = useState('');
-  const railVisible = Boolean(isLogin && showHomeRail);
+  const railVisible = resolveRailVisibility({ hiddenWidgets, isLogin, showHomeRail });
   const railCollapsed = !railVisible;
+  const portraitVisible = Boolean(isLogin && showHomePortrait);
 
   const handleInputValueChange = useCallback((value: string) => {
     setInputValue(value);
@@ -258,15 +262,15 @@ const Home = memo(() => {
     <Flexbox className={styles.grid}>
       <div className={cx(styles.header, styles.content, railCollapsed && styles.contentCollapsed)}>
         <HomeHeader />
-        {/* No portrait for signed-out visitors, so no one to speak the line. */}
-        {isLogin && (
+        {/* The bubble is the portrait's line, so it goes wherever the portrait goes. */}
+        {portraitVisible && (
           <div className={cx(styles.bubbleSlot, railCollapsed && styles.bubbleSlotCollapsed)}>
             <PortraitBubble />
           </div>
         )}
       </div>
 
-      {isLogin && (
+      {portraitVisible && (
         <div className={cx(styles.portrait, railCollapsed && styles.portraitCollapsed)}>
           <HomePortrait />
         </div>
@@ -301,7 +305,7 @@ const Home = memo(() => {
           id={'home-rail'}
           inert={railCollapsed}
         >
-          <HomeInbox hideNeedsYou hideUnread variant={'rail'} />
+          <HomeInbox {...RAIL_INBOX_PROPS} variant={'rail'} />
         </aside>
       )}
     </Flexbox>

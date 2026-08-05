@@ -48,6 +48,106 @@ describe('CodexAdapter', () => {
     });
   });
 
+  it('streams app-server agent message deltas without duplicating the completed item', () => {
+    const adapter = new CodexAdapter();
+
+    adapter.adapt({ type: 'turn.started' });
+    const first = adapter.adapt({
+      delta: 'hello ',
+      item_id: 'item_0',
+      type: 'item.agent_message.delta',
+    });
+    const second = adapter.adapt({
+      delta: 'from app-server',
+      item_id: 'item_0',
+      type: 'item.agent_message.delta',
+    });
+    const completed = adapter.adapt({
+      item: {
+        id: 'item_0',
+        text: 'hello from app-server',
+        type: 'agent_message',
+      },
+      type: 'item.completed',
+    });
+
+    expect([...first, ...second].map((event) => event.data?.content).filter(Boolean)).toEqual([
+      'hello ',
+      'from app-server',
+    ]);
+    expect(completed).toEqual([]);
+  });
+
+  it('preserves whitespace-only app-server text deltas', () => {
+    const adapter = new CodexAdapter();
+    adapter.adapt({ type: 'turn.started' });
+
+    const events = adapter.adapt({
+      delta: ' ',
+      item_id: 'item_0',
+      type: 'item.agent_message.delta',
+    });
+
+    expect(events).toMatchObject([
+      { data: { chunkType: 'text', content: ' ' }, type: 'stream_chunk' },
+    ]);
+  });
+
+  it('streams cumulative command output snapshots before the final result', () => {
+    const adapter = new CodexAdapter();
+    adapter.adapt({ type: 'turn.started' });
+    adapter.adapt({
+      item: {
+        command: 'printf hello',
+        id: 'command-1',
+        status: 'in_progress',
+        type: 'command_execution',
+      },
+      type: 'item.started',
+    });
+
+    const first = adapter.adapt({
+      delta: 'hel',
+      item_id: 'command-1',
+      type: 'item.command_execution.output_delta',
+    });
+    const second = adapter.adapt({
+      delta: 'lo',
+      item_id: 'command-1',
+      type: 'item.command_execution.output_delta',
+    });
+
+    expect(first).toMatchObject([
+      {
+        data: {
+          chunkType: 'tool_state',
+          pluginState: { output: 'hel', stdout: 'hel' },
+          snapshotMode: 'replace',
+          snapshotSeq: 1,
+          toolCallId: 'command-1',
+        },
+        type: 'stream_chunk',
+      },
+    ]);
+    expect(second[0]).toMatchObject({
+      data: { pluginState: { output: 'hello' }, snapshotSeq: 2 },
+      type: 'stream_chunk',
+    });
+
+    const truncated = adapter.adapt({
+      delta: 'x'.repeat(25_001),
+      item_id: 'command-1',
+      type: 'item.command_execution.output_delta',
+    });
+    const afterTruncation = adapter.adapt({
+      delta: 'not retained',
+      item_id: 'command-1',
+      type: 'item.command_execution.output_delta',
+    });
+    expect(truncated[0].data.pluginState.output).toContain('[Output truncated:');
+    expect(afterTruncation).toEqual([]);
+  });
+
   it('emits model metadata when the host configures the Codex session', () => {
     const adapter = new CodexAdapter();
 
@@ -900,6 +1000,35 @@ describe('CodexAdapter', () => {
       }),
     ]);
     expect(adapter.flush()).toEqual([]);
+  });
+
+  it('marks an interrupted turn as cancelled instead of successful', () => {
+    const adapter = new CodexAdapter();
+    adapter.adapt({ type: 'turn.started' });
+    adapter.adapt({
+      item: {
+        command: 'sleep 30',
+        id: 'command-interrupted',
+        status: 'in_progress',
+        type: 'command_execution',
+      },
+      type: 'item.started',
+    });
+
+    const terminal = adapter.adapt({ reason: 'interrupted', type: 'turn.completed' });
+
+    expect(terminal).toContainEqual(
+      expect.objectContaining({
+        data: { isSuccess: false, toolCallId: 'command-interrupted' },
+        type: 'tool_end',
+      }),
+    );
+    expect(terminal).toContainEqual(
+      expect.objectContaining({
+        data: { reason: 'interrupted' },
+        type: 'agent_runtime_end',
+      }),
+    );
   });
 
   it('ignores todo item.updated events that have no active started tool', () => {

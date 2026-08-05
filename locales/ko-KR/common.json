@@ -523,6 +523,7 @@
   "upgradeVersion.hasNew": "업데이트 가능",
   "upgradeVersion.newVersion": "사용 가능한 업데이트: {{version}}",
   "upgradeVersion.serverVersion": "서버: {{version}}",
+  "userPanel.accountSetting": "계정 설정",
   "userPanel.anonymousNickName": "익명 사용자",
   "userPanel.billing": "청구 관리",
   "userPanel.cloud": "{{name}} 체험하기",

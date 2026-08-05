@@ -67,7 +67,7 @@ export interface GlobalMemoryConfig {
   userMemory?: GlobalMemoryExtractionConfig;
 }
 
-export interface VisualUnderstandingConfig {
+export interface MultimodalUnderstandingConfig {
   model: string;
   provider: string;
 }
@@ -108,10 +108,11 @@ export interface GlobalServerConfig {
   enableLobehubSkill?: boolean;
   enableMagicLink?: boolean;
   enableMarketTrustedClient?: boolean;
+  enableMultimodalUnderstanding?: boolean;
   enableUploadFileToServer?: boolean;
-  enableVisualUnderstanding?: boolean;
   image?: PartialDeep<UserImageConfig>;
   memory?: GlobalMemoryConfig;
+  multimodalUnderstanding?: MultimodalUnderstandingConfig;
   oAuthSSOProviders?: string[];
   systemAgent?: PartialDeep<UserServiceModelConfig>;
   telemetry: {
@@ -126,7 +127,6 @@ export interface GlobalServerConfig {
    * Undefined means "not configured": the default (64) applies.
    */
   toolNameMaxLength?: number;
-  visualUnderstanding?: VisualUnderstandingConfig;
 }
 
 export interface GlobalBillboardItemLocaleFields {

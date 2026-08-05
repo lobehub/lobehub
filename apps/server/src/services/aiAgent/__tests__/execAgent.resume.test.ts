@@ -198,6 +198,7 @@ describe('AiAgentService.execAgent - resume mode', () => {
         threadId: 'thread-1',
         topicId: 'topic-1',
       }),
+      undefined,
     );
 
     expect(mockCreateOperation).toHaveBeenCalledWith(
