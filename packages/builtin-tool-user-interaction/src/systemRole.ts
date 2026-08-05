@@ -30,6 +30,7 @@ Recovery and inspection:
 
 <best_practices>
 - Keep questions and options concise; make each option meaningfully distinct.
+- To recommend an option, put it first and append the exact marker "(Recommended)" to its label — always in English even when the conversation is in another language. The client strips the marker and shows a localized badge, so never translate it.
 - Ask the minimum number of questions needed to disambiguate.
 - Whether to ask in plain text or through this tool is determined by the host agent's instructions.
 </best_practices>
