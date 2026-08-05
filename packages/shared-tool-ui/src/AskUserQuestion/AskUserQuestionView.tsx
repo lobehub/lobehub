@@ -18,7 +18,8 @@ import type { AskUserFormApi } from './useAskUserForm';
  * user's intent.
  */
 const INTERACTIVE_SELECTOR =
-  'a,button,select,summary,[role="button"],[role="tab"],[role="option"],[role="menuitem"]';
+  'a,button,select,summary,[role="button"],[role="tab"],[role="option"],[role="menuitem"],' +
+  '[role="combobox"],[role="listbox"],[role="radio"],[role="slider"],[role="spinbutton"]';
 
 /**
  * All display strings the view needs. Kept i18n-free so `shared-tool-ui` stays
@@ -147,7 +148,17 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
           if (!typingInCard || event.key !== 'Escape' || event.isComposing) return;
         }
         if (target.closest('[role="dialog"],[role="alertdialog"],[role="menu"]')) return;
+        // A focused interactive control (a select, a radio group, a tabbed-to
+        // button…) keeps its native keys — digits/arrows/Space/Enter all
+        // yield; only the advertised Esc-to-skip stays. Our own option rows
+        // are non-focusable divs, so they never appear as the keydown target.
+        if (event.key !== 'Escape' && target.closest(INTERACTIVE_SELECTOR)) return;
       }
+
+      // Held-key auto-repeat must not chain picks across auto-advanced
+      // questions (a held digit could answer-and-submit the whole form) or
+      // hammer Enter; arrows may repeat for fast row scanning.
+      if (event.repeat && event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
 
       const q = activeQuestion;
       const rowNavEnabled = !!q && !escapeActive && !submitting && !expired && q.options.length > 0;
@@ -183,7 +194,6 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
       if (event.key === ' ') {
         if (!rowNavEnabled || highlightedIndex == null || highlightedIndex >= q.options.length)
           return;
-        if (target?.closest(INTERACTIVE_SELECTOR)) return;
         event.preventDefault();
         handleToggle(q, q.options[highlightedIndex].label);
         return;
@@ -191,16 +201,19 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
 
       if (event.key === 'Enter') {
         if (event.shiftKey) return;
-        if (target?.closest(INTERACTIVE_SELECTOR)) return;
-        // Single-select with the question still unanswered: Enter accepts the
-        // highlighted row (which may select-to-submit via the form hook).
-        // Everywhere else Enter keeps meaning "submit the form".
+        // Single-select with the cursor on a row that isn't the current pick:
+        // Enter accepts that row (which may select-to-submit via the form
+        // hook) — including when revisiting an already-answered question to
+        // change the answer. With the cursor on the picked row, on a
+        // custom-text answer, or on a multi-select (Space/digits toggle
+        // there), Enter keeps meaning "submit the form".
         if (
           rowNavEnabled &&
           !q.multiSelect &&
           highlightedIndex != null &&
           highlightedIndex < q.options.length &&
-          !isQuestionAnswered(q, picks, custom)
+          !(custom[q.question] ?? '').trim() &&
+          picks[q.question] !== q.options[highlightedIndex].label
         ) {
           event.preventDefault();
           handleToggle(q, q.options[highlightedIndex].label);
