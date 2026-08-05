@@ -1,6 +1,6 @@
-import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
 
+import { zValidator } from '../common/validator';
 import { ResponsesController } from '../controllers/responses.controller';
 import { requireAuth } from '../middleware/auth';
 import { CreateResponseRequestSchema } from '../types/responses.type';

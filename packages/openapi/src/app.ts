@@ -3,6 +3,7 @@ import { cors } from 'hono/cors';
 import { HTTPException } from 'hono/http-exception';
 import { logger } from 'hono/logger';
 import { prettyJSON } from 'hono/pretty-json';
+import { describeRoute } from 'hono-openapi';
 
 // Import user authentication middleware (supports both OIDC and API Key authentication)
 import { userAuthMiddleware } from './middleware/auth';
@@ -34,7 +35,7 @@ app.onError((error: Error, c) => {
 });
 
 // Health check endpoint
-app.get('/health', (c) => {
+app.get('/health', describeRoute({ summary: 'Health check', tags: ['health'] }), (c) => {
   return c.json({
     service: 'lobe-chat-api',
     status: 'ok',

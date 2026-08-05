@@ -97,6 +97,8 @@ export default eslint(
       '.i18nrc.js',
       // vendored code (copied from @microsoft/fetch-event-source)
       'packages/utils/src/client/fetchEventSource/parse.ts',
+      // generated files (regenerate with `bun generate:openapi` in packages/openapi)
+      'packages/openapi/openapi.yml',
     ],
     next: true,
     react: 'next',
