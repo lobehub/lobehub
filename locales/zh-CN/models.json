@@ -520,6 +520,8 @@
   "gemini-3-pro-preview.description": "Gemini 3 Pro 是 Google 最强大的智能体与编程模型，在最先进推理基础上提供更丰富的视觉效果与更深入的交互体验。",
   "gemini-3.1-flash-image-preview.description": "Gemini 3.1 Flash Image（Nano Banana 2）是 Google 最快的原生图像生成模型，支持思考、对话式图像生成和编辑。",
   "gemini-3.1-flash-image-preview:image.description": "Gemini 3.1 Flash Image（Nano Banana 2）是 Google 最快速的原生图像生成模型，支持思维能力、对话式图像生成和编辑功能。",
+  "gemini-3.1-flash-image.description": "Gemini 3.1 Flash Image（Nano Banana 2）是 Google 最快的原生图像生成模型，支持思考、对话式图像生成和编辑。",
+  "gemini-3.1-flash-image:image.description": "Gemini 3.1 Flash Image（Nano Banana 2）是 Google 最快速的原生图像生成模型，支持思维能力、对话式图像生成和编辑功能。",
   "gemini-3.1-flash-lite-image.description": "Gemini 3.1 Flash Lite Image (Nano Banana 2 Lite) 是 Google 最快且最具成本效益的图像生成模型，专为高容量生成和编辑而设计。",
   "gemini-3.1-flash-lite-image:image.description": "Gemini 3.1 Flash Lite Image (Nano Banana 2 Lite) 是 Google 最快且最具成本效益的图像生成模型，专为高容量生成和编辑而设计。",
   "gemini-3.1-flash-lite-preview.description": "Gemini 3.1 Flash-Lite Preview是谷歌最具成本效益的多模态模型，专为高容量代理任务、翻译和数据处理优化。",
