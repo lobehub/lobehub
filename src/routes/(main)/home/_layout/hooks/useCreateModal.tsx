@@ -640,9 +640,11 @@ export const openCreateAgentModal = ({
       />
     ),
     footer: null,
-    onOpenChange: (open) => {
-      if (!open) onClosed?.();
-    },
+    // NOT `onOpenChange`: that only fires for user dismissal (Escape, backdrop,
+    // the header close button). `instance.close()` — which the in-content close
+    // and the post-create path both call — just flips the stack entry, so the
+    // provider would never learn the modal went away and could not reopen it.
+    onOpenChangeComplete: () => onClosed?.(),
     styles: { content: { padding: 0 } },
     width: CREATE_MODAL_WIDTH,
   });

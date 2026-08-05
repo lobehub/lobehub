@@ -23,6 +23,7 @@ const RenameGroupContent = memo<RenameGroupContentProps>(({ id }) => {
   const [loading, setLoading] = useState(false);
 
   const handleRename = async () => {
+    if (loading) return;
     if (input.length === 0 || input.length > 20) return toast.warning(t('sessionGroup.tooLong'));
 
     setLoading(true);
@@ -40,6 +41,7 @@ const RenameGroupContent = memo<RenameGroupContentProps>(({ id }) => {
       <Flexbox paddingBlock={16} paddingInline={16}>
         <Input
           autoFocus
+          disabled={loading}
           placeholder={t('sessionGroup.inputPlaceholder')}
           value={input}
           onChange={(e) => setInput(e.target.value)}

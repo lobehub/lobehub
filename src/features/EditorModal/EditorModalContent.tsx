@@ -2,20 +2,21 @@ import { useEditor } from '@lobehub/editor/react';
 import { memo, useEffect } from 'react';
 
 import EditorCanvas from './EditorCanvas';
-import type { EditorRef } from './type';
+import type { EditorBridge } from './type';
 
 interface EditorModalContentProps {
+  editorBridge: EditorBridge;
   editorData?: unknown;
-  editorRef: EditorRef;
   value?: string;
 }
 
-const EditorModalContent = memo<EditorModalContentProps>(({ editorData, editorRef, value }) => {
+const EditorModalContent = memo<EditorModalContentProps>(({ editorBridge, editorData, value }) => {
   const editor = useEditor();
 
   useEffect(() => {
-    editorRef.current = editor;
-  }, [editor, editorRef]);
+    editorBridge.current = editor;
+    editorBridge.notifyReady?.();
+  }, [editor, editorBridge]);
 
   return <EditorCanvas defaultValue={value} editor={editor} editorData={editorData} />;
 });

@@ -34,7 +34,7 @@ const DeleteLabelContent = memo<DeleteLabelContentProps>(({ label }) => {
   const armed = confirmText.trim().toLowerCase() === DELETE_CONFIRM_WORD;
 
   const handleDelete = async () => {
-    if (!armed) return;
+    if (!armed || loading || archiving) return;
     setLoading(true);
     try {
       await removeAgentLabel(label.id);

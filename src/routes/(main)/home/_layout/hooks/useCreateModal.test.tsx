@@ -1,9 +1,9 @@
-import type { ModalInstance } from '@lobehub/ui/base-ui';
+import { createModal, type ModalInstance } from '@lobehub/ui/base-ui';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CreateAgentModal } from './useCreateModal';
+import { CreateAgentModal, openCreateAgentModal } from './useCreateModal';
 
 const analyticsTrack = vi.hoisted(() => vi.fn());
 const telemetryState = vi.hoisted(() => ({ enabled: true }));
@@ -731,5 +731,36 @@ describe('CreateAgentModal analytics', () => {
     expect(
       await screen.findByText("Skill wasn't added. Retry, or create an Agent anyway."),
     ).toBeInTheDocument();
+  });
+});
+
+describe('openCreateAgentModal', () => {
+  it('reports the close through onOpenChangeComplete, not onOpenChange', () => {
+    // Regression: the in-content close and the post-create path both call the
+    // instance's `close()`, which never fires `onOpenChange`. Wiring the
+    // provider's `createModalOpen` reset to that callback left it stuck true,
+    // after which the dialog could not be opened a second time.
+    vi.mocked(createModal).mockClear();
+    vi.mocked(createModal).mockReturnValue({
+      close: vi.fn(),
+      destroy: vi.fn(),
+      setCanDismissByClickOutside: vi.fn(),
+      update: vi.fn(),
+    } as unknown as ModalInstance);
+
+    const onClosed = vi.fn();
+    openCreateAgentModal({
+      onClosed,
+      onCreateBlank: vi.fn(),
+      onSubmit: vi.fn(),
+      type: 'agent',
+    });
+
+    const props = vi.mocked(createModal).mock.calls.at(-1)![0] as Record<string, any>;
+    expect(props.onOpenChange).toBeUndefined();
+    expect(typeof props.onOpenChangeComplete).toBe('function');
+
+    props.onOpenChangeComplete(false);
+    expect(onClosed).toHaveBeenCalledTimes(1);
   });
 });

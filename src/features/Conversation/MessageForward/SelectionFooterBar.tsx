@@ -80,7 +80,7 @@ const SelectionFooterBar = memo(() => {
     setForwardOpen(true);
     openForwardModal({
       createConversationStore: () => storeApi,
-      onOpenChange: (open) => setForwardOpen(open),
+      onClosed: () => setForwardOpen(false),
     });
   };
 

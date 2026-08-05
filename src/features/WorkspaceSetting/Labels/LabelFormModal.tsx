@@ -64,7 +64,7 @@ const LabelFormContent = memo<LabelFormModalOptions>(({ assignTo, label, restore
 
   const handleSave = async () => {
     const trimmed = name.trim();
-    if (!trimmed) return;
+    if (!trimmed || loading) return;
 
     setLoading(true);
     try {

@@ -238,13 +238,10 @@ interface OpenForwardModalOptions {
    * and `exitSelectionMode` stay wired to the conversation that opened it.
    */
   createConversationStore: () => StoreApiWithSelector<ConversationStore>;
-  onOpenChange?: (open: boolean) => void;
+  onClosed?: () => void;
 }
 
-export const openForwardModal = ({
-  createConversationStore,
-  onOpenChange,
-}: OpenForwardModalOptions) =>
+export const openForwardModal = ({ createConversationStore, onClosed }: OpenForwardModalOptions) =>
   createModal({
     content: (
       <Provider createStore={createConversationStore}>
@@ -252,7 +249,9 @@ export const openForwardModal = ({
       </Provider>
     ),
     footer: null,
-    onOpenChange,
+    // NOT `onOpenChange`: that skips `instance.close()`, which is how the
+    // in-content Cancel and Forward buttons close this modal.
+    onOpenChangeComplete: () => onClosed?.(),
     title: translate('messageForward.modal.title', { ns: 'chat' }),
     width: 760,
   });

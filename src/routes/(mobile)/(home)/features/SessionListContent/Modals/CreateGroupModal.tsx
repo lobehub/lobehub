@@ -27,7 +27,10 @@ const CreateGroupContent = memo<CreateGroupContentProps>(({ id }) => {
   const [loading, setLoading] = useState(false);
 
   const handleCreate = async () => {
-    if (!canCreate) return;
+    // Enter fires as fast as the user repeats it — a second pass while
+    // `addCustomGroup` is in flight would create a second group and move the
+    // session into whichever request settles last.
+    if (!canCreate || loading) return;
     if (input.length === 0 || input.length > 20 || input.trim() === '')
       return toast.warning(t('sessionGroup.tooLong'));
 
@@ -48,7 +51,7 @@ const CreateGroupContent = memo<CreateGroupContentProps>(({ id }) => {
       <Flexbox paddingBlock={16} paddingInline={16}>
         <Input
           autoFocus
-          disabled={!canCreate}
+          disabled={!canCreate || loading}
           placeholder={t('sessionGroup.inputPlaceholder')}
           value={input}
           onChange={(e) => setInput(e.target.value)}
