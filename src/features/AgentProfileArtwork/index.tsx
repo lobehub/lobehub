@@ -26,6 +26,10 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: calc(${cssVar.borderRadiusLG} + 4px);
 
     background: ${cssVar.colorBgContainer};
+
+    .ant-avatar:focus {
+      outline: none;
+    }
   `,
   background: css`
     position: relative;
