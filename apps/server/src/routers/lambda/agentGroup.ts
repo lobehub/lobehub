@@ -12,7 +12,6 @@ import { UserModel } from '@/database/models/user';
 import { AgentGroupRepository } from '@/database/repositories/agentGroup';
 import { DEFAULT_RESOURCE_ACCESS_LEVELS, RESOURCE_ACCESS_LEVELS_BY_TYPE } from '@/database/schemas';
 import { type ChatGroupConfig } from '@/database/types/chatGroup';
-import { MESSAGE_TRANSFER_HAS_FOREIGN_AUTHORS } from '@/database/utils/messageScope';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentGroupService } from '@/server/services/agentGroup';
@@ -691,16 +690,12 @@ export const agentGroupRouter = router({
           input.targetWorkspaceId,
           ctx.userId,
           input.targetVisibility,
-          {
-            rejectForeignMessageAuthors: isWorkspaceNonOwner(ctx),
-            rejectForeignTopicCommentAuthors: isWorkspaceNonOwner(ctx),
-          },
+          { rejectForeignTopicCommentAuthors: isWorkspaceNonOwner(ctx) },
         );
       } catch (error) {
         if (
           error instanceof Error &&
-          (error.message === TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS ||
-            error.message === MESSAGE_TRANSFER_HAS_FOREIGN_AUTHORS)
+          error.message === TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS
         ) {
           throw new TRPCError({
             cause: { data: { code: TransferErrorCode.OwnerOnly } },

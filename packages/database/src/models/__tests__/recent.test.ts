@@ -610,39 +610,6 @@ describe('RecentModel', () => {
         expect(result[1].lastAssistantMessage).toBe('Last assistant answer');
       });
 
-      it('still previews the last message after the topic was transferred between scopes', async () => {
-        // Post-transfer state: the topic was rehomed into this user's personal
-        // scope, but `messages` keeps its creation-time snapshot (old workspace,
-        // teammate author) because transfers deliberately don't rewrite them.
-        await serverDB.insert(workspaces).values({
-          id: 'recent-transfer-ws',
-          name: 'Old WS',
-          primaryOwnerId: otherUserId,
-          slug: 'recent-transfer-ws',
-        });
-        await serverDB.insert(agents).values({ id: 'agent-inbox', userId, slug: 'inbox' });
-        await serverDB.insert(topics).values({
-          agentId: 'agent-inbox',
-          id: 'topic-transferred',
-          updatedAt: minutesAgo(1),
-          userId,
-        });
-        await serverDB.insert(messages).values({
-          agentId: 'agent-inbox',
-          content: 'Answer written before the transfer',
-          id: 'transferred-preview-message',
-          role: 'assistant',
-          topicId: 'topic-transferred',
-          userId: otherUserId,
-          workspaceId: 'recent-transfer-ws',
-        });
-
-        const result = await recentModel.queryRecent(10, ['topic'], true);
-
-        expect(result.map((row) => row.id)).toEqual(['topic-transferred']);
-        expect(result[0].lastAssistantMessage).toBe('Answer written before the transfer');
-      });
-
       it('returns Date objects for updatedAt', async () => {
         await serverDB.insert(agents).values({ id: 'agent-inbox', userId, slug: 'inbox' });
         await serverDB.insert(topics).values({

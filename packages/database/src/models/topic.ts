@@ -46,7 +46,6 @@ import type { LobeChatDatabase } from '../type';
 import { sanitizeBm25Query } from '../utils/bm25';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
-import { buildMessageScopeWhere } from '../utils/messageScope';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { recomputeTopicUsage } from './topicUsage';
 
@@ -250,7 +249,7 @@ export class TopicModel {
   private mine = () => and(this.ownership(), eq(topics.userId, this.userId));
 
   private messageOwnership = () =>
-    buildMessageScopeWhere({ userId: this.userId, workspaceId: this.workspaceId });
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messages);
   // **************** Query *************** //
 
   query = async ({
@@ -749,15 +748,19 @@ export class TopicModel {
         .from(topics)
         .where(and(this.ownership(), scopeCondition, sql`${topics.title} @@@ ${bm25Query}`))
         .orderBy(desc(topics.updatedAt)),
-      // Query topic IDs matching by message content (BM25). Scope comes from
-      // the joined, ownership-filtered topics — message rows carry only
-      // creation-time snapshots, and ParadeDB can't plan the derived EXISTS
-      // predicate together with `@@@` anyway.
+      // Query topic IDs matching by message content (BM25)
       this.db
         .select({ topicId: messages.topicId })
         .from(messages)
         .innerJoin(topics, eq(messages.topicId, topics.id))
-        .where(and(sql`${messages.content} @@@ ${bm25Query}`, this.ownership(), scopeCondition))
+        .where(
+          and(
+            this.messageOwnership(),
+            sql`${messages.content} @@@ ${bm25Query}`,
+            this.ownership(),
+            scopeCondition,
+          ),
+        )
         .groupBy(messages.topicId),
     ]);
     // If no topics found by message content, return topics matching by title

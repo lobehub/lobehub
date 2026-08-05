@@ -1,25 +1,9 @@
-import type { SQL } from 'drizzle-orm';
-import { and, eq, getTableColumns, inArray, isNull } from 'drizzle-orm';
-import type { PgTable } from 'drizzle-orm/pg-core';
+import { and, eq, inArray } from 'drizzle-orm';
 import pMap from 'p-map';
 
 import * as EXPORT_TABLES from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { buildMessageChildScopeWhere } from '../../utils/messageScope';
 import { buildWorkspaceWhere } from '../../utils/workspace';
-
-/**
- * Message-family tables carry only creation-time scope snapshots; their
- * authoritative scope is derived from the owning topic/session, so exports
- * must use the derived predicates instead of the snapshot columns.
- */
-const DERIVED_SCOPE_TABLES: Partial<
-  Record<keyof typeof EXPORT_TABLES, (ctx: { userId: string; workspaceId?: string }) => SQL>
-> = {
-  messageChunks: (ctx) => buildMessageChildScopeWhere(ctx, EXPORT_TABLES.messageChunks.messageId),
-  messagePlugins: (ctx) => buildMessageChildScopeWhere(ctx, EXPORT_TABLES.messagePlugins.id),
-  messageTranslates: (ctx) => buildMessageChildScopeWhere(ctx, EXPORT_TABLES.messageTranslates.id),
-};
 
 interface BaseTableConfig {
   table: keyof typeof EXPORT_TABLES;
@@ -115,42 +99,6 @@ export class DataExporterRepos {
     });
   }
 
-  /**
-   * Export `messages` across the three scope-derivation arms (topic-owned /
-   * session-owned / orphan), each bounded by its own index — the snapshot
-   * `user_id`/`workspace_id` columns must not be used as scope filters.
-   */
-  private async queryMessages() {
-    const ctx = { userId: this.userId, workspaceId: this.workspaceId };
-    const { messages, sessions, topics } = EXPORT_TABLES;
-    const columns = getTableColumns(messages);
-
-    const [byTopic, bySession, orphans] = await Promise.all([
-      this.db
-        .select(columns)
-        .from(messages)
-        .innerJoin(topics, eq(topics.id, messages.topicId))
-        .where(buildWorkspaceWhere(ctx, topics)),
-      this.db
-        .select(columns)
-        .from(messages)
-        .innerJoin(sessions, eq(sessions.id, messages.sessionId))
-        .where(and(isNull(messages.topicId), buildWorkspaceWhere(ctx, sessions))),
-      this.db
-        .select(columns)
-        .from(messages)
-        .where(
-          and(
-            isNull(messages.topicId),
-            isNull(messages.sessionId),
-            buildWorkspaceWhere(ctx, messages),
-          ),
-        ),
-    ]);
-
-    return [...byTopic, ...bySession, ...orphans];
-  }
-
   private async queryTable(config: RelationTableConfig, existingData: Record<string, any[]>) {
     const { table } = config;
     const tableObj = EXPORT_TABLES[table];
@@ -212,32 +160,15 @@ export class DataExporterRepos {
 
       // If there's relation config, use relation query
 
-      // messages needs the three-arm derived-scope export (see queryMessages) —
-      // a plain where over the shared table would have no index to bound it.
-      if (table === 'messages') {
-        const result = await this.queryMessages();
-        console.info(`Successfully exported table: ${table}, count: ${result.length}`);
-        return this.removeUserId(result);
-      }
-
       // Default to querying with userId, use userField for special cases
       const userField = config.userField || 'userId';
-      const derivedScope = DERIVED_SCOPE_TABLES[table];
-      const where = derivedScope
-        ? derivedScope({ userId: this.userId, workspaceId: this.workspaceId })
-        : 'workspaceId' in tableObj
+      const where =
+        'workspaceId' in tableObj
           ? buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, tableObj)
           : eq(tableObj[userField], this.userId);
 
-      // Derived-scope tables must NOT go through RQB: it aliases the table,
-      // which breaks the correlated EXISTS inside the derived predicate.
-      const result = derivedScope
-        ? await this.db
-            .select()
-            .from(tableObj as PgTable)
-            .where(where)
-        : // @ts-expect-error query
-          await this.db.query[table].findMany({ where });
+      // @ts-expect-error query
+      const result = await this.db.query[table].findMany({ where });
 
       // Only remove userId field for tables queried with userId
       console.info(`Successfully exported table: ${table}, count: ${result.length}`);

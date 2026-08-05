@@ -55,10 +55,6 @@ import {
 import type { LobeChatDatabase } from '../type';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { normalizeInboxAgentMeta } from '../utils/inboxAgent';
-import {
-  hasForeignTopicAnchoredMessageRows,
-  MESSAGE_TRANSFER_HAS_FOREIGN_AUTHORS,
-} from '../utils/messageScope';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import {
   hasForeignTopicComments,
@@ -1676,12 +1672,6 @@ export class AgentModel {
     // work. NULL authors (deleted accounts) count as foreign too.
     if (await hasForeignTopicComments(this.db, this.userId, topicWhere!)) return true;
 
-    // Messages / message_groups anchored to a transferred topic follow it at
-    // read time (derived scope) — including teammate rows carrying only a
-    // topicId (e.g. OpenAPI-created: agentId optional, sessionId always
-    // null), which the direct session/agent probes below cannot see.
-    if (await hasForeignTopicAnchoredMessageRows(this.db, this.userId, topicWhere!)) return true;
-
     const messageWhere =
       sessionIds.length > 0
         ? or(inArray(messages.sessionId, sessionIds), inArray(messages.agentId, agentIds))
@@ -1718,10 +1708,7 @@ export class AgentModel {
     targetWorkspaceId: string | null,
     targetUserId: string,
     targetVisibility?: 'private' | 'public',
-    options: {
-      rejectForeignMessageAuthors?: boolean;
-      rejectForeignTopicCommentAuthors?: boolean;
-    } = {},
+    options: { rejectForeignTopicCommentAuthors?: boolean } = {},
   ): Promise<{ agentId: string; slug: string | null }> => {
     const [result] = await this.transferAgents(
       [agentId],
@@ -1735,23 +1722,16 @@ export class AgentModel {
 
   /**
    * Batch variant of {@link transferAgent}: moves several agents (and their
-   * cascaded topics / threads / tasks / …) in ONE transaction, with every
-   * large-table UPDATE issued once via `inArray` instead of once per agent.
-   * All-or-nothing: a failure on any agent rolls back the whole batch.
-   *
-   * `messages` rows are deliberately left untouched — their scope is derived
-   * from the owning topic/session at read time (see buildMessageScopeWhere),
-   * which keeps the transfer seconds-fast regardless of history size.
+   * cascaded topics / messages / threads / tasks / …) in ONE transaction, with
+   * every large-table UPDATE issued once via `inArray` instead of once per
+   * agent. All-or-nothing: a failure on any agent rolls back the whole batch.
    */
   transferAgents = async (
     agentIds: string[],
     targetWorkspaceId: string | null,
     targetUserId: string,
     targetVisibility?: 'private' | 'public',
-    options: {
-      rejectForeignMessageAuthors?: boolean;
-      rejectForeignTopicCommentAuthors?: boolean;
-    } = {},
+    options: { rejectForeignTopicCommentAuthors?: boolean } = {},
   ): Promise<{ agentId: string; slug: string | null }[]> => {
     if (agentIds.length === 0) return [];
 
@@ -1982,19 +1962,6 @@ export class AgentModel {
       ) {
         throw new Error(TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS);
       }
-
-      // Re-run the topic-anchored foreign-row check UNDER the lock: the
-      // pre-transaction transferHasForeignRows call races message creation.
-      // Message inserts hold FOR KEY SHARE on their topic (FK enforcement),
-      // which conflicts with the FOR UPDATE above — so by this point every
-      // topic-anchored insert has either committed (visible here) or is
-      // blocked until this transaction ends.
-      if (
-        options.rejectForeignMessageAuthors &&
-        (await hasForeignTopicAnchoredMessageRows(trx, this.userId, topicCondition!))
-      ) {
-        throw new Error(MESSAGE_TRANSFER_HAS_FOREIGN_AUTHORS);
-      }
       const movedTopics = await trx
         .update(topics)
         .set({ ...ownershipUpdate, updatedAt: topics.updatedAt })
@@ -2010,30 +1977,15 @@ export class AgentModel {
         targetWorkspaceId,
       );
 
-      // 7. messages (and their child tables) are intentionally NOT rewritten:
-      // their scope is derived from the owning topic/session (see
-      // buildMessageScopeWhere), and rewriting user_id/workspace_id on the
-      // shared messages table costs minutes per heavy agent — every row update
-      // maintains all 17 indexes including the multi-GB BM25 full-text index.
-      // The rows' user_id/workspace_id stay as creation-time author snapshots.
-      //
-      // 7a. EXCEPT anchorless rows (no topic AND no session, e.g. created via
-      // the OpenAPI path with only an agentId): they have nothing to derive
-      // scope from — their snapshot IS authoritative — so they are the one
-      // message shape a transfer must still rewrite. Bounded by agent_id and
-      // rare by construction, so this stays cheap.
+      // 7. Update messages (linked via sessionId or agentId)
+      const messageCondition =
+        sessionIds.length > 0
+          ? or(inArray(messages.sessionId, sessionIds), inArray(messages.agentId, agentIds))
+          : inArray(messages.agentId, agentIds);
       await trx
         .update(messages)
-        // Keep the original recency — a scope transfer does not make the
-        // content newer (same rationale as the agent/topic updates above).
         .set({ ...ownershipUpdate, updatedAt: messages.updatedAt })
-        .where(
-          and(
-            inArray(messages.agentId, agentIds),
-            isNull(messages.topicId),
-            isNull(messages.sessionId),
-          ),
-        );
+        .where(messageCondition!);
 
       // 8. Update threads (linked via agentId)
       await trx

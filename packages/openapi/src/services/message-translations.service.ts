@@ -1,8 +1,7 @@
-import { and, eq, type SQL } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import { messages, messageTranslates } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
-import { buildMessageChildScopeWhere, buildMessageScopeWhere } from '@/database/utils/messageScope';
 
 import { BaseService } from '../common/base.service';
 import { removeSystemContext } from '../helpers/translate';
@@ -22,22 +21,6 @@ export class MessageTranslateService extends BaseService {
   }
 
   /**
-   * Message scope is derived from the owning topic/session — the snapshot
-   * `user_id`/`workspace_id` columns go stale after agent transfers, on both
-   * `messages` and `message_translates`.
-   */
-  private messageScopeWhere(): SQL {
-    return buildMessageScopeWhere({ userId: this.userId, workspaceId: this.workspaceId });
-  }
-
-  private translateScopeWhere(): SQL {
-    return buildMessageChildScopeWhere(
-      { userId: this.userId, workspaceId: this.workspaceId },
-      messageTranslates.id,
-    );
-  }
-
-  /**
    * Get translation info by message ID
    * @param messageId Message ID
    * @returns Translation info
@@ -48,13 +31,12 @@ export class MessageTranslateService extends BaseService {
     this.log('info', '根据消息ID获取翻译信息', { messageId, userId: this.userId });
 
     try {
-      // Plain select instead of RQB findFirst: RQB aliases the table, which
-      // breaks the correlated EXISTS inside translateScopeWhere().
-      const [result] = await this.db
-        .select()
-        .from(messageTranslates)
-        .where(and(eq(messageTranslates.id, messageId), this.translateScopeWhere()))
-        .limit(1);
+      const result = await this.db.query.messageTranslates.findFirst({
+        where: and(
+          eq(messageTranslates.id, messageId),
+          this.buildWorkspaceWhere(messageTranslates),
+        ),
+      });
 
       if (!result) {
         this.log('info', '未找到翻译信息', { messageId });
@@ -95,7 +77,7 @@ export class MessageTranslateService extends BaseService {
     try {
       // First fetch the original message content and sessionId
       const messageInfo = await this.db.query.messages.findFirst({
-        where: and(eq(messages.id, translateData.messageId), this.messageScopeWhere()),
+        where: and(eq(messages.id, translateData.messageId), this.buildWorkspaceWhere(messages)),
       });
 
       if (!messageInfo) {
@@ -137,7 +119,7 @@ export class MessageTranslateService extends BaseService {
     try {
       // Check if message exists
       const messageInfo = await this.db.query.messages.findFirst({
-        where: and(eq(messages.id, data.messageId), this.messageScopeWhere()),
+        where: and(eq(messages.id, data.messageId), this.buildWorkspaceWhere(messages)),
       });
       if (!messageInfo) {
         throw this.createCommonError('未找到要更新翻译信息的消息');
@@ -188,11 +170,12 @@ export class MessageTranslateService extends BaseService {
 
     try {
       // Check if the translation message exists
-      const [originalTranslation] = await this.db
-        .select()
-        .from(messageTranslates)
-        .where(and(eq(messageTranslates.id, messageId), this.translateScopeWhere()))
-        .limit(1);
+      const originalTranslation = await this.db.query.messageTranslates.findFirst({
+        where: and(
+          eq(messageTranslates.id, messageId),
+          this.buildWorkspaceWhere(messageTranslates),
+        ),
+      });
 
       if (!originalTranslation) {
         throw this.createNotFoundError('翻译消息不存在');
@@ -200,7 +183,9 @@ export class MessageTranslateService extends BaseService {
 
       await this.db
         .delete(messageTranslates)
-        .where(and(eq(messageTranslates.id, messageId), this.translateScopeWhere()));
+        .where(
+          and(eq(messageTranslates.id, messageId), this.buildWorkspaceWhere(messageTranslates)),
+        );
 
       return { deleted: true, messageId };
     } catch (error) {

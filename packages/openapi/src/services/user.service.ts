@@ -2,7 +2,6 @@ import { and, count, desc, eq, ilike, inArray, isNull, ne, or } from 'drizzle-or
 
 import { ALL_SCOPE } from '@/const/rbac';
 import { RbacModel } from '@/database/models/rbac';
-import { UserModel } from '@/database/models/user';
 import { messages, roles, userRoles, users } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { idGenerator } from '@/database/utils/idGenerator';
@@ -333,10 +332,8 @@ export class UserService extends BaseService {
         throw this.createAuthorizationError(permissionResult.message || '没有权限删除该用户');
       }
 
-      // Check if the user exists. Route through UserModel.deleteUser so
-      // transferred-away message snapshots are re-materialized before the
-      // cascade (see resnapshotTransferredMessagesBeforeOwnerDelete).
-      const result = await UserModel.deleteUser(this.db, userId);
+      // Check if the user exists
+      const result = await this.db.delete(users).where(eq(users.id, userId));
 
       if (!result.rowCount) {
         throw this.createNotFoundError('用户不存在');
