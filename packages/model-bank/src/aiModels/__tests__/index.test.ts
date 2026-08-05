@@ -175,3 +175,26 @@ describe('Google rolling model aliases', () => {
     expect(flashLiteLatest?.settings?.disabledParams).toEqual(['temperature', 'top_p']);
   });
 });
+
+describe('Google Gemini 3.1 Flash Image stable model', () => {
+  it('registers the stable IDs for chat and image generation', () => {
+    const googleModels = LOBE_DEFAULT_MODEL_LIST.filter(
+      (model) => model.providerId === ModelProvider.Google,
+    );
+
+    expect(googleModels).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          enabled: true,
+          id: 'gemini-3.1-flash-image',
+          type: 'chat',
+        }),
+        expect.objectContaining({
+          enabled: true,
+          id: 'gemini-3.1-flash-image:image',
+          type: 'image',
+        }),
+      ]),
+    );
+  });
+});

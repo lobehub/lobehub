@@ -297,7 +297,7 @@ const googleChatModels: AIChatModelCard[] = [
     enabled: true,
     family: 'gemini',
     generation: 'gemini-3.1',
-    id: 'gemini-3.1-flash-image-preview',
+    id: 'gemini-3.1-flash-image',
     knowledgeCutoff: '2025-01',
     maxOutput: 32_768,
     pricing: {
@@ -953,7 +953,7 @@ export const imagenGenParameters: ModelParamsSchema = {
 const googleImageModels: AIImageModelCard[] = [
   {
     displayName: 'Nano Banana 2',
-    id: 'gemini-3.1-flash-image-preview:image',
+    id: 'gemini-3.1-flash-image:image',
     type: 'image',
     enabled: true,
     description:
