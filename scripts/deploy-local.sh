@@ -420,15 +420,39 @@ if [[ $BUILD -eq 1 ]]; then
   cp "$ROOT/scripts/serverLauncher/startServer.js" "$STAGE/startServer.js"
   cp "$ROOT/scripts/docker/Dockerfile.staged" "$STAGE/Dockerfile"
 
+  # docker.cjs requires drizzle-orm/node-postgres; Next standalone often omits it
+  # because the app bundles ORM usage. Match root Dockerfile (copies drizzle-orm + pg).
+  mkdir -p "$STAGE/node_modules"
+  if [[ ! -e "$ROOT/node_modules/drizzle-orm" ]]; then
+    echo "Error: node_modules/drizzle-orm missing — run pnpm install" >&2
+    exit 1
+  fi
+  # -L: pnpm links into .pnpm; dereference so the image has real package files
+  rm -rf "$STAGE/node_modules/drizzle-orm"
+  cp -aL "$ROOT/node_modules/drizzle-orm" "$STAGE/node_modules/drizzle-orm"
+  if [[ ! -e "$STAGE/node_modules/pg" ]]; then
+    if [[ ! -e "$ROOT/node_modules/pg" ]]; then
+      echo "Error: node_modules/pg missing — run pnpm install" >&2
+      exit 1
+    fi
+    cp -aL "$ROOT/node_modules/pg" "$STAGE/node_modules/pg"
+  fi
+
   docker build -t "$IMAGE" -t "aico/lobehub:$TAG" "$STAGE"
 
   echo "==> Verifying migration packaging in image"
-  for path in /app/docker.cjs /app/errorHint.js /app/migrations /app/startServer.js; do
+  for path in /app/docker.cjs /app/errorHint.js /app/migrations /app/startServer.js /app/node_modules/drizzle-orm; do
     docker run --rm --entrypoint sh "$IMAGE" -c "test -e '$path'" || {
       echo "Error: image missing $path — auto-migrate would fail at boot" >&2
       exit 1
     }
   done
+  docker run --rm --entrypoint node "$IMAGE" -e \
+    "require('drizzle-orm/node-postgres'); require('drizzle-orm/node-postgres/migrator'); require('pg');" \
+    || {
+      echo "Error: image cannot resolve docker.cjs deps (drizzle-orm/pg)" >&2
+      exit 1
+    }
 
   echo "==> Image ready: $IMAGE (also tagged aico/lobehub:$TAG)"
 fi

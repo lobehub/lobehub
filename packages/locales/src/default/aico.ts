@@ -219,6 +219,16 @@ export default {
   'provider.managed.desc':
     'Models are provided by {{brandName}}. Usage is billed from your wallet or organization credit — no API key setup is required.',
 
+  'billing.organization': 'Organization',
+  'billing.personal': 'Personal',
+  'billing.remaining': '{{amount}} left',
+  'billing.selectHint':
+    'Each source has its own managed key and remaining credit. Switching only changes which balance the next chat uses.',
+  'billing.sourcesTitle': 'Billing sources',
+  'billing.switchFailed': 'Could not switch billing source',
+  'billing.switcherAria': 'Billing source {{label}}, {{remaining}} remaining',
+  'billing.switched': 'Using {{label}} credits',
+
   'wallet.amountToman': 'Amount (toman)',
   'wallet.balanceToman': 'Paid-in (toman)',
   'wallet.balanceUsd': 'Balance (USD)',

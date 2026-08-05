@@ -288,6 +288,70 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
     expect(typeof wallet.balanceMicroUsd).toBe('string');
   });
 
+  it('getMyBillingSources returns personal and org sources with separate remaining', async () => {
+    const { eq } = await import('drizzle-orm');
+    const { AicoBillingModel } = await import('@/database/models/aicoBilling');
+    const { OrganizationModel } = await import('@/database/models/organization');
+    const { userWallets } = await import('@/database/schemas/aicoOrganization');
+
+    const ownerCaller = organizationRouter.createCaller(createTestContext(ownerId));
+    const billingCaller = aicoBillingRouter.createCaller(createTestContext(ownerId));
+    const billingModel = new AicoBillingModel(testDB);
+    const orgModel = new OrganizationModel(testDB);
+
+    await billingModel.getOrCreateUserWallet(ownerId);
+    await testDB
+      .update(userWallets)
+      .set({
+        balanceMicroUsd: 1_500_000,
+        balanceToman: 100_000,
+        openrouterKeyId: 'pers-key',
+      })
+      .where(eq(userWallets.userId, ownerId));
+
+    const org = await ownerCaller.create({ name: 'Billing Sources Co' });
+    await orgModel.addManualCredit({
+      amountMicroUsd: 10_000_000,
+      amountToman: 500_000,
+      createdByUserId: ownerId,
+      description: 'test fund',
+      fxRateTomanPerUsd: 50_000,
+      orgId: org.id,
+      type: 'topup',
+    });
+
+    const members = await orgModel.listMembers(org.id);
+    const me = members.find((m) => m.userId === ownerId);
+    expect(me).toBeTruthy();
+
+    await orgModel.allocateMemberCredit({
+      createdByUserId: ownerId,
+      orgId: org.id,
+      orgMemberId: me!.id,
+      period: 'total',
+      periodAmountMicroUsd: 5_000_000,
+    });
+
+    const sources = await billingCaller.getMyBillingSources();
+    expect(sources.sources[0]?.source).toBe('personal');
+    expect(sources.sources[0]?.remainingUsd).toBe('1.500000');
+
+    const orgSource = sources.sources.find(
+      (s) => s.source === 'organization' && s.organizationId === org.id,
+    );
+    expect(orgSource).toBeTruthy();
+    expect(orgSource!.remainingUsd).toBe('5.000000');
+    expect(orgSource!.remainingUsd).not.toBe(sources.sources[0]?.remainingUsd);
+
+    await billingCaller.setBillingPreference({
+      organizationId: org.id,
+      source: 'organization',
+    });
+    const preferred = await billingCaller.getMyBillingSources();
+    expect(preferred.preferredBillingSource).toBe('organization');
+    expect(preferred.preferredOrganizationId).toBe(org.id);
+  });
+
   it('convertToManagement requires a verified phone and rejects a second organization', async () => {
     const strangerCaller = organizationRouter.createCaller(createTestContext(strangerId));
     await expect(strangerCaller.convertToManagement({ name: 'No Phone Co' })).rejects.toMatchObject(

@@ -498,8 +498,14 @@ class ChatService {
       responseAnimation,
     ].reduce((acc, cur) => merge(acc, standardizeAnimationStyle(cur)), {});
 
+    // Managed OpenRouter/Aico chat must send an explicit billing context so the
+    // server can pick the personal vs org key (credits are never pooled).
+    const { resolveAicoBillingForRequest } = await import('@/features/AicoBilling');
+    const aicoBilling = await resolveAicoBillingForRequest(provider);
+    const requestBody = aicoBilling ? { ...payload, aicoBilling } : payload;
+
     return fetchSSE(API_ENDPOINTS.chat(provider), {
-      body: JSON.stringify(payload),
+      body: JSON.stringify(requestBody),
       fetcher,
       headers,
       method: 'POST',
