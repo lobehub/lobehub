@@ -81,8 +81,6 @@ beforeEach(() => {
       agentTopicsViewMap: {},
       searchTopics: [],
       topicDataMap: {},
-      topicLoadingIdCounts: {},
-      topicLoadingIds: [],
       // ... initial state
     },
     false,
@@ -205,7 +203,7 @@ describe('topic action', () => {
       expect(topicId).toEqual('new-topic-id');
     });
 
-    it('should release the fire-and-forget summary loading owner when title summary finishes', async () => {
+    it('should fire the title summary without blocking saveToTopic', async () => {
       const { result } = renderHook(() => useChatStore());
       const messages = [{ id: 'message1' }, { id: 'message2' }] as UIChatMessage[];
       let resolveSummary!: () => void;
@@ -219,29 +217,24 @@ describe('topic action', () => {
           messagesMap: {
             [messageMapKey({ agentId: 'session-id' })]: messages,
           },
-          topicLoadingIdCounts: {},
-          topicLoadingIds: [],
         });
       });
 
       vi.spyOn(result.current, 'internal_createTopic').mockResolvedValue('new-topic-id');
-      vi.spyOn(result.current, 'summaryTopicTitle').mockReturnValue(summaryPromise);
+      const summarySpy = vi
+        .spyOn(result.current, 'summaryTopicTitle')
+        .mockReturnValue(summaryPromise);
 
       await act(async () => {
+        // Resolves before the summary settles — the summary is fire-and-forget.
         await result.current.saveToTopic();
       });
 
-      expect(useChatStore.getState().topicLoadingIds).toEqual(['new-topic-id']);
-      expect(useChatStore.getState().topicLoadingIdCounts).toEqual({ 'new-topic-id': 1 });
+      expect(summarySpy).toHaveBeenCalledWith('new-topic-id', messages);
 
       await act(async () => {
         resolveSummary();
         await summaryPromise;
-      });
-
-      await waitFor(() => {
-        expect(useChatStore.getState().topicLoadingIds).toEqual([]);
-        expect(useChatStore.getState().topicLoadingIdCounts).toEqual({});
       });
     });
   });
@@ -1645,7 +1638,7 @@ describe('topic action', () => {
     });
   });
   describe('internal_updateTopic', () => {
-    it('should release the loading owner when updating a topic fails', async () => {
+    it('should propagate the error when updating a topic fails', async () => {
       const { result } = renderHook(() => useChatStore());
       const agentId = 'agent-1';
       const topicId = 'topic-1';
@@ -1673,8 +1666,6 @@ describe('topic action', () => {
               total: 1,
             },
           },
-          topicLoadingIdCounts: {},
-          topicLoadingIds: [],
         });
       });
 
@@ -1685,9 +1676,6 @@ describe('topic action', () => {
           result.current.internal_updateTopic(topicId, { title: 'New' }),
         ).rejects.toThrow('rename failed');
       });
-
-      expect(useChatStore.getState().topicLoadingIds).not.toContain(topicId);
-      expect(useChatStore.getState().topicLoadingIdCounts[topicId]).toBeUndefined();
     });
   });
   describe('cleanupStaleRunningTopics', () => {
@@ -2089,8 +2077,6 @@ describe('topic action', () => {
             total: 1,
           },
         },
-        topicLoadingIdCounts: {},
-        topicLoadingIds: [],
       });
     };
 
@@ -2124,7 +2110,6 @@ describe('topic action', () => {
           repoType: 'github',
         },
       });
-      expect(useChatStore.getState().topicLoadingIds).toEqual([]);
     });
 
     it('updates empty PR metadata when no existing PR number is anchored', async () => {
@@ -2195,52 +2180,6 @@ describe('topic action', () => {
         useChatStore.getState().topicDataMap[key]!.items[0]!.metadata?.workingDirectoryConfig?.git
           ?.github,
       ).toEqual({ pullRequest: stalePR, pullRequestStatus: 'ok' });
-    });
-  });
-  describe('updateTopicLoading', () => {
-    it('should call update topicLoadingId', async () => {
-      const { result } = renderHook(() => useChatStore());
-      act(() => {
-        useChatStore.setState({ topicLoadingIds: [] });
-      });
-
-      expect(result.current.topicLoadingIds).toHaveLength(0);
-
-      // Call the action with the topicId and newTitle
-      act(() => {
-        result.current.internal_updateTopicLoading('loading-id', true);
-      });
-
-      expect(result.current.topicLoadingIds).toEqual(['loading-id']);
-    });
-
-    it('should keep a topic loading until all loading owners finish', () => {
-      const { result } = renderHook(() => useChatStore());
-      act(() => {
-        useChatStore.setState({ topicLoadingIdCounts: {}, topicLoadingIds: [] });
-      });
-
-      act(() => {
-        result.current.internal_updateTopicLoading('topic-1', true);
-        result.current.internal_updateTopicLoading('topic-1', true);
-      });
-
-      expect(result.current.topicLoadingIds).toEqual(['topic-1']);
-      expect(result.current.topicLoadingIdCounts).toEqual({ 'topic-1': 2 });
-
-      act(() => {
-        result.current.internal_updateTopicLoading('topic-1', false);
-      });
-
-      expect(result.current.topicLoadingIds).toEqual(['topic-1']);
-      expect(result.current.topicLoadingIdCounts).toEqual({ 'topic-1': 1 });
-
-      act(() => {
-        result.current.internal_updateTopicLoading('topic-1', false);
-      });
-
-      expect(result.current.topicLoadingIds).toEqual([]);
-      expect(result.current.topicLoadingIdCounts).toEqual({});
     });
   });
   describe('optimistic topic preservation across refetches', () => {
@@ -2339,7 +2278,7 @@ describe('topic action', () => {
   });
 
   describe('replaceTopicId', () => {
-    it('should migrate a loading optimistic topic to the server topic id', () => {
+    it('should swap the optimistic topic row to the server topic id', () => {
       const { result } = renderHook(() => useChatStore());
       const agentId = 'agent-1';
       const key = topicMapKey({ agentId });
@@ -2366,8 +2305,6 @@ describe('topic action', () => {
               total: 1,
             },
           },
-          topicLoadingIdCounts: { tmp_topic_1: 2 },
-          topicLoadingIds: ['tmp_topic_1'],
         });
       });
 
@@ -2387,65 +2324,6 @@ describe('topic action', () => {
           title: '666',
         }),
       ]);
-      expect(result.current.topicLoadingIds).toEqual(['topic-1']);
-      expect(result.current.topicLoadingIdCounts).toEqual({ 'topic-1': 2 });
-    });
-
-    it('should not double the loading count when resolving a client-minted id to itself', () => {
-      const { result } = renderHook(() => useChatStore());
-      const agentId = 'agent-1';
-      const key = topicMapKey({ agentId });
-      const mintedId = 'tpc_minted0000000001';
-      const optimisticTopic: ChatTopic = {
-        createdAt: Date.now(),
-        favorite: false,
-        id: mintedId,
-        sessionId: agentId,
-        title: '666',
-        updatedAt: Date.now(),
-      };
-
-      act(() => {
-        useChatStore.setState({
-          activeAgentId: agentId,
-          topicDataMap: {
-            [key]: {
-              currentPage: 0,
-              hasMore: false,
-              isExpandingPageSize: false,
-              isLoadingMore: false,
-              items: [optimisticTopic],
-              pageSize: 20,
-              total: 1,
-            },
-          },
-          topicLoadingIdCounts: {},
-          topicLoadingIds: [],
-        });
-      });
-
-      // Send flow: one loading owner opened at optimistic creation…
-      act(() => {
-        result.current.internal_updateTopicLoading(mintedId, true);
-      });
-
-      // …then the server confirms the SAME id (#17889 client-minted ids).
-      act(() => {
-        result.current.internal_replaceTopicId({
-          agentId,
-          nextId: mintedId,
-          previousId: mintedId,
-          value: { sessionId: agentId },
-        });
-      });
-
-      // …and the single run-end release must fully clear the spinner.
-      act(() => {
-        result.current.internal_updateTopicLoading(mintedId, false);
-      });
-
-      expect(result.current.topicLoadingIds).toEqual([]);
-      expect(result.current.topicLoadingIdCounts).toEqual({});
     });
   });
   describe('summaryTopicTitle', () => {

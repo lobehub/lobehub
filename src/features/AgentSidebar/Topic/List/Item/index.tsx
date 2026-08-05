@@ -205,7 +205,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
       return buildWorkspaceAwarePath(AGENT_CHAT_TOPIC_URL(activeAgentId, id), activeWorkspaceSlug);
     }, [activeAgentId, activeWorkspaceSlug, id]);
 
-    const isLoading = useChatStore((s) => (id ? s.topicLoadingIds.includes(id) : false));
+    const isLoading = useChatStore(id ? operationSelectors.isTopicVisiblyRunning(id) : () => false);
 
     const isUnreadCompleted = useChatStore(
       id ? operationSelectors.isTopicUnreadCompleted(id) : () => false,
