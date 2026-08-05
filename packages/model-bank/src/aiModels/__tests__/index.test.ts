@@ -176,8 +176,8 @@ describe('Google rolling model aliases', () => {
   });
 });
 
-describe('Google Gemini 3.1 Flash Image stable model', () => {
-  it('registers the stable IDs for chat and image generation', () => {
+describe('Google Gemini 3.1 Flash Image models', () => {
+  it('registers stable IDs without removing the preview compatibility cards', () => {
     const googleModels = LOBE_DEFAULT_MODEL_LIST.filter(
       (model) => model.providerId === ModelProvider.Google,
     );
@@ -192,6 +192,16 @@ describe('Google Gemini 3.1 Flash Image stable model', () => {
         expect.objectContaining({
           enabled: true,
           id: 'gemini-3.1-flash-image:image',
+          type: 'image',
+        }),
+        expect.objectContaining({
+          enabled: true,
+          id: 'gemini-3.1-flash-image-preview',
+          type: 'chat',
+        }),
+        expect.objectContaining({
+          enabled: true,
+          id: 'gemini-3.1-flash-image-preview:image',
           type: 'image',
         }),
       ]),
