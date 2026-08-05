@@ -722,8 +722,6 @@ export const OrgAdminMembers = () => {
 
       <Text type="secondary">
         <Link to="/wallet">{t('org.linkWallet')}</Link>
-        {' · '}
-        <Link to="/platform">{t('org.linkPlatform')}</Link>
       </Text>
     </Flexbox>
   );
