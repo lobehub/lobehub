@@ -246,6 +246,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
             id: agentId,
             kind,
             name,
+            referenceImageUrl: kind === 'background' ? avatar : backgroundUrl,
             systemRole,
             title,
           });
@@ -253,7 +254,18 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
           // The Agent store owns the persistent error state rendered below.
         }
       },
-      [agentId, canEdit, canGenerate, description, generateAgentArtwork, name, systemRole, title],
+      [
+        agentId,
+        avatar,
+        backgroundUrl,
+        canEdit,
+        canGenerate,
+        description,
+        generateAgentArtwork,
+        name,
+        systemRole,
+        title,
+      ],
     );
 
     return (
@@ -277,7 +289,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
                   <Button
                     className={styles.generationActions}
                     size={'small'}
-                    type={'primary'}
+                    type={'fill'}
                     onClick={() => void cancelAgentArtworkGeneration(agentId)}
                   >
                     {t('settingAgent.artwork.cancel')}
@@ -403,7 +415,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
                                     <Button
                                       className={styles.generationActions}
                                       size={'small'}
-                                      type={'primary'}
+                                      type={'fill'}
                                       onClick={() => void cancelAgentArtworkGeneration(agentId)}
                                     >
                                       {t('settingAgent.artwork.cancel')}

@@ -120,6 +120,16 @@ export class AgentArtworkActionImpl {
       if (!selection) throw new Error('No image generation model is available');
 
       const { model, provider } = selection;
+      const referenceImageUrl = input.referenceImageUrl?.trim();
+      const supportsReferenceImage =
+        !!referenceImageUrl && !!model.parameters && 'imageUrls' in model.parameters;
+      const supportedSizes =
+        model.parameters && 'size' in model.parameters ? model.parameters.size?.enum : undefined;
+      const preferredSizes =
+        input.kind === 'avatar'
+          ? ['1024x1024', '2048x2048']
+          : ['2048x1152', '1536x1024', '3840x2160'];
+      const size = preferredSizes.find((item) => supportedSizes?.includes(item));
       const generationTopicId = await generationTopicService.createTopic(
         'image',
         'private',
@@ -128,7 +138,12 @@ export class AgentArtworkActionImpl {
       const aspectRatio = input.kind === 'avatar' ? '1:1' : '16:9';
       const params = {
         ...(model.parameters && 'aspectRatio' in model.parameters ? { aspectRatio } : {}),
-        prompt: buildAgentArtworkPrompt(input),
+        ...(supportsReferenceImage ? { imageUrls: [referenceImageUrl] } : {}),
+        ...(size ? { size } : {}),
+        prompt: buildAgentArtworkPrompt({
+          ...input,
+          referenceImageUrl: supportsReferenceImage ? referenceImageUrl : undefined,
+        }),
       };
       const result = await imageService.createImage({
         generationTopicId,
