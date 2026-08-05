@@ -1,8 +1,9 @@
+import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
 import { useEffect } from 'react';
 import { type SWRResponse } from 'swr';
 
-import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
+import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
 import { briefKeys } from '@/libs/swr/keys';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
 import { briefService } from '@/services/brief';
@@ -13,6 +14,12 @@ import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 const n = setNamespace('briefList');
+
+export interface NewsDay {
+  /** Any news brief older than this day exists — the day pager's "older" arrow. */
+  hasEarlier: boolean;
+  news: BriefItem[];
+}
 
 type Setter = StoreSetter<BriefStore>;
 
@@ -111,6 +118,29 @@ export class BriefListActionImpl {
       console.warn('[BriefStore] submitFeedback: task.run failed', error);
     }
   };
+
+  /**
+   * Day-scoped news digest (`insight` + `result`, resolved included). Lives in
+   * SWR only — no zustand bucket: the key already partitions by identity scope
+   * and day, the list is read-mostly, and the one mutation that touches it
+   * (mark-all-read) revalidates through the returned SWR handle. `day` is the
+   * viewer's local `YYYY-MM-DD`; the [start, end) instants are computed here so
+   * the server stays timezone-agnostic. `keepPreviousData` keeps the section
+   * stable while the user pages between days.
+   */
+  useFetchNewsByDay = (enabled: boolean, scope: string, day: string): SWRResponse<NewsDay> =>
+    useClientDataSWR<NewsDay>(
+      enabled ? briefKeys.news(true, scope, day) : null,
+      async () => {
+        const startAt = dayjs(day).startOf('day');
+        const result = await briefService.listNewsByDay({
+          endAt: startAt.add(1, 'day').toDate(),
+          startAt: startAt.toDate(),
+        });
+        return { hasEarlier: result.hasEarlier, news: result.data as BriefItem[] };
+      },
+      { keepPreviousData: true },
+    );
 
   /**
    * `scope` is the identity partition (`${userId}:${workspaceId}`) the caller is
