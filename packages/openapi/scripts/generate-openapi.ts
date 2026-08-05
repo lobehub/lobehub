@@ -1,12 +1,11 @@
 /**
  * Generate the OpenAPI 3.1 spec (openapi.yml) from the live Hono app.
  *
- * The spec is assembled at runtime by hono-openapi: every route's request
- * schema is registered through `src/common/validator.ts`, and route metadata
- * comes from `describeRoute`. The script then post-processes the document
- * (tags / operationId / placeholder responses) and verifies that every
- * registered route made it into the spec, so a route that silently misses
- * spec registration fails the run instead of vanishing from the document.
+ * The document itself is assembled by `src/spec.ts` (shared with the runtime
+ * `GET /api/v1/openapi.json` endpoint). This script adds what the emitter
+ * needs on top: safe env bootstrapping, a parity check that fails when a
+ * registered route is missing from the spec (instead of silently vanishing),
+ * and a `--check` mode for CI.
  *
  * Usage:
  *   bun scripts/generate-openapi.ts          # regenerate openapi.yml
@@ -28,79 +27,32 @@ const PKG_ROOT = path.join(import.meta.dirname, '..');
 const SPEC_PATH = path.join(PKG_ROOT, 'openapi.yml');
 const HTTP_METHODS = new Set(['DELETE', 'GET', 'PATCH', 'POST', 'PUT']);
 
+// Documentation-serving routes: real endpoints, deliberately not part of the
+// API surface described by the spec.
+const SPEC_EXEMPT = new Set(['GET /api/v1/docs', 'GET /api/v1/openapi.json']);
+
 // Import after the env defaults above are in place.
 const { honoApp } = await import('../src/app');
-const { generateSpecs } = await import('hono-openapi');
+const { buildSpecDocument } = await import('../src/spec');
 const YAML = await import('yaml');
 
-const spec = await generateSpecs(honoApp, {
-  documentation: {
-    components: {
-      securitySchemes: {
-        bearerAuth: {
-          bearerFormat: 'API Key (sk-lh-...) or OIDC JWT',
-          scheme: 'bearer',
-          type: 'http',
-        },
-      },
-    },
-    info: {
-      description:
-        'LobeHub platform REST API. Generated from `packages/openapi` routes — do not edit openapi.yml by hand; run `bun generate:openapi` instead.',
-      title: 'LobeHub API',
-      version: '1.0.0',
-    },
-    security: [{ bearerAuth: [] }],
-    servers: [{ description: 'LobeHub Cloud', url: 'https://app.lobehub.com' }],
-  },
-});
-
-// ---------- Post-processing ----------
-type Operation = {
-  operationId?: string;
-  responses?: Record<string, unknown>;
-  tags?: string[];
-};
-
-const paths = (spec.paths ?? {}) as Record<string, Record<string, Operation>>;
-
-for (const [path, item] of Object.entries(paths)) {
-  // '/api/v1/agent-groups/{id}' -> group 'agent-groups', rest '{id}'
-  const segments = path.replace(/^\/api\/v1\/?/, '').split('/');
-  const group = segments[0] || 'root';
-  const rest = segments.slice(1).join('/');
-
-  for (const [method, op] of Object.entries(item)) {
-    if (!HTTP_METHODS.has(method.toUpperCase())) continue;
-
-    op.tags ??= [group];
-    op.operationId ??= `${group}.${method}${rest ? `_${rest.replaceAll(/[{}]/g, '').replaceAll('/', '_')}` : ''}`;
-    // OpenAPI requires a responses object and a description on every response.
-    // Response schemas are still pending (tracked in the spec rollout plan),
-    // so fill placeholders where the routes have not declared them yet.
-    if (!op.responses || Object.keys(op.responses).length === 0) {
-      op.responses = { 200: { description: 'Successful response (schema pending)' } };
-    }
-    for (const response of Object.values(op.responses)) {
-      const responseObject = response as { description?: string };
-      responseObject.description ??= 'Successful response (schema pending)';
-    }
-  }
-}
+const spec = await buildSpecDocument(honoApp);
+const paths = (spec.paths ?? {}) as Record<string, Record<string, unknown>>;
 
 // ---------- Parity check: every registered route must be in the spec ----------
-const normalize = (path: string) => path.replaceAll(/:([^/]+)/g, '{$1}');
+const normalize = (routePath: string) => routePath.replaceAll(/:([^/]+)/g, '{$1}');
 
 const registered = new Set(
   honoApp.routes
     .filter((r) => HTTP_METHODS.has(r.method))
-    .map((r) => `${r.method} ${normalize(r.path)}`),
+    .map((r) => `${r.method} ${normalize(r.path)}`)
+    .filter((endpoint) => !SPEC_EXEMPT.has(endpoint)),
 );
 const documented = new Set(
-  Object.entries(paths).flatMap(([path, item]) =>
+  Object.entries(paths).flatMap(([specPath, item]) =>
     Object.keys(item)
       .filter((method) => HTTP_METHODS.has(method.toUpperCase()))
-      .map((method) => `${method.toUpperCase()} ${path}`),
+      .map((method) => `${method.toUpperCase()} ${specPath}`),
   ),
 );
 

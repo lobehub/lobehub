@@ -12,6 +12,7 @@
     "@hono/zod-validator": "^0.7.6",
     "@lobechat/model-runtime": "workspace:*",
     "@lobechat/types": "workspace:*",
+    "@scalar/hono-api-reference": "^0.11.12",
     "debug": "^4.4.3",
     "drizzle-orm": "^0.45.2",
     "formidable": "^3.5.4",

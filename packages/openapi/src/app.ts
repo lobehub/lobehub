@@ -1,3 +1,4 @@
+import { Scalar } from '@scalar/hono-api-reference';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { HTTPException } from 'hono/http-exception';
@@ -10,6 +11,7 @@ import { userAuthMiddleware } from './middleware/auth';
 import { workspaceAuthMiddleware } from './middleware/workspace';
 // Import routes
 import routes from './routes';
+import { buildSpecDocument } from './spec';
 
 // Create Hono app instance
 const app = new Hono().basePath('/api/v1');
@@ -42,6 +44,17 @@ app.get('/health', describeRoute({ summary: 'Health check', tags: ['health'] }),
     timestamp: new Date().toISOString(),
   });
 });
+
+// API documentation (public, like the API spec itself).
+// The spec is rebuilt from the live routes on first request and cached, so it
+// can never lag behind the deployed code; `openapi.yml` at the package root is
+// the versioned artifact of the same document for SDK generation and diffing.
+let specCache: Awaited<ReturnType<typeof buildSpecDocument>> | null = null;
+app.get('/openapi.json', async (c) => {
+  specCache ??= await buildSpecDocument(app);
+  return c.json(specCache);
+});
+app.get('/docs', Scalar({ pageTitle: 'LobeHub API', url: '/api/v1/openapi.json' }));
 
 // Register routes
 Object.entries(routes).forEach(([key, value]) => app.route(`/${key}`, value));
