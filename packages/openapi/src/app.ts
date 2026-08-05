@@ -6,6 +6,7 @@ import { logger } from 'hono/logger';
 import { prettyJSON } from 'hono/pretty-json';
 import { describeRoute } from 'hono-openapi';
 
+import { SCALAR_CUSTOM_CSS } from './docs-theme';
 // Import user authentication middleware (supports both OIDC and API Key authentication)
 import { userAuthMiddleware } from './middleware/auth';
 import { workspaceAuthMiddleware } from './middleware/workspace';
@@ -54,7 +55,18 @@ app.get('/openapi.json', async (c) => {
   specCache ??= await buildSpecDocument(app);
   return c.json(specCache);
 });
-app.get('/docs', Scalar({ pageTitle: 'LobeHub API', url: '/api/v1/openapi.json' }));
+app.get(
+  '/docs',
+  Scalar({
+    customCss: SCALAR_CUSTOM_CSS,
+    favicon: '/favicon.ico',
+    pageTitle: 'LobeHub API',
+    // 'none' keeps the runtime bundle from injecting its own theme stylesheet
+    // after our customCss, which would override every variable we set.
+    theme: 'none',
+    url: '/api/v1/openapi.json',
+  }),
+);
 
 // Register routes
 Object.entries(routes).forEach(([key, value]) => app.route(`/${key}`, value));
