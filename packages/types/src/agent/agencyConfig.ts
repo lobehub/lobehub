@@ -1,4 +1,5 @@
 import type { WorkingDirConfigValue } from '../device';
+import type { LobeAgentChatConfig } from './chatConfig';
 
 /**
  * Selector value that means "do not override the underlying CLI".
@@ -664,14 +665,24 @@ export interface LobeAgentAgencyConfig {
    */
   modelSelectionPolicy?: AgentModelSelectionPolicy;
   /**
-   * Default model used by sub-agents this agent spawns via
-   * `lobe-agent.callSubAgent`. When unset, sub-agents fall back to the global
-   * default (`DEFAULT_SUB_AGENT_MODEL`, e.g. deepseek-v4-flash) rather than
-   * inheriting the parent agent's main model. Configurable in the params panel.
+   * Model override for sub-agents this agent spawns via
+   * `lobe-agent.callSubAgent`. When unset (or nulled to clear a previous
+   * override), sub-agents follow the parent run's effective model — same
+   * provider, same model. Configurable in the params panel; `null` rather than
+   * `undefined` marks the cleared state because the config deep-merge skips
+   * `undefined` and would resurrect the old override.
    */
   subagent?: {
-    model?: string;
-    provider?: string;
+    /**
+     * chatConfig overrides (thinking / reasoning-effort extend params) for the
+     * overridden sub-agent model, merged over the parent's chatConfig at spawn.
+     * Only meaningful together with a `model` override — when sub-agents follow
+     * the parent model they inherit the parent's chatConfig wholesale, so the
+     * effort follows automatically.
+     */
+    chatConfig?: Partial<LobeAgentChatConfig> | null;
+    model?: string | null;
+    provider?: string | null;
   };
   /**
    * Ad-hoc verify criteria mounted directly on this agent, in addition to any

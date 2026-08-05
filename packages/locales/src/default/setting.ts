@@ -1028,7 +1028,8 @@ export default {
   'settingModel.reasoningEffort.options.medium': 'Medium',
   'settingModel.reasoningEffort.title': 'Reasoning Effort',
   'settingModel.subAgentModel.desc':
-    'The default model used by sub-agents this agent spawns. Sub-agents run on a lightweight model by default instead of inheriting this agent’s main model.',
+    'The model used by sub-agents this agent spawns. By default sub-agents follow the main agent’s current model (same provider, same model); pick a model here to override, or clear the selection to follow again.',
+  'settingModel.subAgentModel.followParent': 'Follow main agent model',
   'settingModel.submit': 'Update Model Settings',
   'settingModel.temperature.desc':
     'The higher the value, the more creative and imaginative the responses; the lower the value, the more rigorous the responses.',

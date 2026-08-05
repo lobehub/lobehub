@@ -210,7 +210,10 @@ export const buildServerVirtualSubAgentRunner = (
     run: async ({ agentId: targetAgentId, description, instruction, timeout }) => {
       // This runner serves two tools, and only one of them may swap the model:
       //   - `callSubAgent` names no agent, so the child is an anonymous clone of
-      //     the parent — it takes the parent's `agencyConfig.subagent` model.
+      //     the parent — it takes the parent's `agencyConfig.subagent` override,
+      //     or follows the parent's effective model when none is configured
+      //     (`state.metadata.agentConfig` is already resolved, so it carries the
+      //     model the parent run actually uses).
       //   - `callAgent` names an existing agent, which carries a model the user
       //     configured on it. Overriding that would discard a deliberate choice,
       //     the same way forcing a group member onto the sub-agent default would.
@@ -218,7 +221,12 @@ export const buildServerVirtualSubAgentRunner = (
       // re-derive it from the parent config.
       const subAgentModel = targetAgentId
         ? undefined
-        : resolveSubAgentModel(parentAgentConfig?.agencyConfig?.subagent);
+        : resolveSubAgentModel(parentAgentConfig?.agencyConfig?.subagent, parentAgentConfig);
+      // Thinking / reasoning-effort overrides configured for the sub-agent
+      // model; same callSubAgent-only carve-out as the model above.
+      const subAgentChatConfig = targetAgentId
+        ? undefined
+        : parentAgentConfig?.agencyConfig?.subagent?.chatConfig;
 
       // 1. Create the pending placeholder tool message (mirrors the normal
       //    tool-message shape in call_tool) that anchors the isolation thread
@@ -241,6 +249,7 @@ export const buildServerVirtualSubAgentRunner = (
       //    bridge that backfills this tool message and resumes the parent op.
       const result = (await execVirtualSubAgent({
         agentId: targetAgentId ?? agentId,
+        chatConfig: subAgentChatConfig,
         groupId: state.metadata?.groupId ?? undefined,
         instruction,
         model: subAgentModel?.model,

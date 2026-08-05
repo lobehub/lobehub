@@ -24,7 +24,11 @@ import {
 } from '@lobechat/builtin-tool-self-iteration';
 import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import { builtinTools, manualModeExcludeToolIds } from '@lobechat/builtin-tools';
-import { isHeterogeneousAgentModelId, LOADING_FLAT } from '@lobechat/const';
+import {
+  isHeterogeneousAgentModelId,
+  LOADING_FLAT,
+  resolveSubAgentChatConfig,
+} from '@lobechat/const';
 import {
   type AgentGroupConfig,
   type AgentManagementContext,
@@ -53,6 +57,7 @@ import type {
   ExecSubAgentResult,
   ExecVirtualSubAgentParams,
   LobeAgentAgencyConfig,
+  LobeAgentChatConfig,
   LobeAgentConfig,
   MessagePluginItem,
   RuntimeMentionedAgent,
@@ -351,6 +356,12 @@ interface InternalExecAgentParams extends ExecAgentParams {
   botContext?: ChatTopicBotContext;
   /** Bot platform context for injecting platform capabilities (e.g. markdown support) */
   botPlatformContext?: BotPlatformContext;
+  /**
+   * chatConfig overrides (thinking / reasoning-effort extend params) merged over
+   * the executing agent's own chatConfig, skipping nulled keys. Internal-only:
+   * set by the callSubAgent thread-run path, never client-passable.
+   */
+  chatConfigOverride?: Partial<LobeAgentChatConfig> | null;
   /** Cron job ID that triggered this execution (if trigger is 'cron') */
   cronJobId?: string;
   /** Disable only local-system while preserving other tools. Useful for signal-only evals. */
@@ -1193,6 +1204,7 @@ export class AiAgentService {
       functionTools,
       hooks,
       instructions,
+      chatConfigOverride,
       model: modelOverride,
       provider: providerOverride,
       stream,
@@ -1347,6 +1359,16 @@ export class AiAgentService {
         ...agentConfig.chatConfig,
         enableAgentMode: memberModeOverride,
       };
+    }
+
+    // callSubAgent thinking / reasoning-effort overrides. A virtual sub-agent
+    // executes the same agent row, so `agentConfig.chatConfig` here IS the
+    // parent's chatConfig — merging the `agencyConfig.subagent.chatConfig`
+    // patch over it yields the sub-agent's effective config.
+    if (chatConfigOverride) {
+      agentConfig.chatConfig =
+        resolveSubAgentChatConfig(agentConfig.chatConfig, chatConfigOverride) ??
+        agentConfig.chatConfig;
     }
 
     // Persistence-attribution agent id. Background Agent Signal runs (memory /
@@ -4532,6 +4554,7 @@ export class AiAgentService {
    */
   execVirtualSubAgent = async (params: ExecVirtualSubAgentParams): Promise<ExecSubAgentResult> =>
     this.execAgentThreadRun(params, {
+      chatConfig: params.chatConfig,
       isSubAgent: true,
       logScope: 'execVirtualSubAgent',
       // Sub-agent model is resolved at the spawn site (callSubAgent runner) from
@@ -4743,6 +4766,12 @@ export class AiAgentService {
        * `resumeParentOnComplete` is set.
        */
       bridgeHookFactory?: (threadId: string) => AgentHook;
+      /**
+       * chatConfig overrides (thinking / reasoning-effort extend params) for
+       * the spawned run, merged over the executing agent's own chatConfig.
+       * Only set by the callSubAgent path.
+       */
+      chatConfig?: Partial<LobeAgentChatConfig> | null;
       isSubAgent: boolean;
       logScope: 'execSubAgent' | 'execVirtualSubAgent';
       /**
@@ -4871,6 +4900,7 @@ export class AiAgentService {
       agentId,
       appContext,
       autoStart: true,
+      chatConfigOverride: options.chatConfig,
       hooks,
       // Explicit sub-agent model override resolved at the spawn site.
       model: options.model,
