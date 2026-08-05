@@ -10,7 +10,7 @@ const log = debug('lobe-cost:convertOpenAIUsage');
 
 // Keep the reference implementation's behavior of filtering out zero/falsy values,
 // except for fields where 0 is semantically meaningful. `inputAudioTokens` must preserve an
-// explicitly reported zero so Cloud diagnostics can distinguish it from a provider omission.
+// explicitly reported zero so callers can distinguish it from a provider omission.
 // `!!value` would filter out 0, which is often desired for token counts.
 const shouldKeepUsageValue = (key: string, value: unknown) => {
   if (value === undefined || value === null) return false;
@@ -80,8 +80,8 @@ export const convertOpenAIUsage = (
   const cachedTokens =
     (usage as any).prompt_cache_hit_tokens || usage.prompt_tokens_details?.cached_tokens;
   // OpenAI reports aggregate cached prompt tokens, but does not identify how many cached tokens
-  // are audio. Do not infer inputCachedAudioTokens from overlapping aggregate counters; Cloud
-  // diagnostics records this as a reconciliation gate when an audio request has cache usage.
+  // are audio. Do not infer inputCachedAudioTokens from overlapping aggregate counters; callers
+  // can handle the unavailable modality split without receiving fabricated usage.
   const inputWriteCacheTokens = readCacheWriteTokens(usage.prompt_tokens_details);
 
   const inputCacheMissTokens = resolveOpenAIInputCacheMissTokens({
