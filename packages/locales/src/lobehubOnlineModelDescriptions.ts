@@ -60,6 +60,10 @@ export const lobeHubOnlineModelDescriptions = {
     'Gemini 3.1 Flash Image (Nano Banana 2) delivers Pro-level image quality at Flash speed with multimodal chat support.',
   'lobehub.gemini-3.1-flash-image.description':
     'Gemini 3.1 Flash Image (Nano Banana 2) delivers Pro-level image quality at Flash speed with multimodal chat support.',
+  'lobehub.gemini-3.1-flash-image-preview:image.description':
+    'Gemini 3.1 Flash Image (Nano Banana 2) delivers Pro-level image quality at Flash speed with multimodal chat support.',
+  'lobehub.gemini-3.1-flash-image-preview.description':
+    'Gemini 3.1 Flash Image (Nano Banana 2) delivers Pro-level image quality at Flash speed with multimodal chat support.',
   'lobehub.gemini-3.1-flash-lite-image:image.description':
     "Gemini 3.1 Flash Lite Image (Nano Banana 2 Lite) is Google's fastest and most cost-efficient image generation model, built for high-volume generation and editing.",
   'lobehub.gemini-3.1-flash-lite-image.description':

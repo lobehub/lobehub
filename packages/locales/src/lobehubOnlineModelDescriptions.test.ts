@@ -10,6 +10,8 @@ const zhCNDescriptions = zhCNModels as Record<string, string>;
 const addedDescriptionKeys = [
   'lobehub.gemini-3.1-flash-image.description',
   'lobehub.gemini-3.1-flash-image:image.description',
+  'lobehub.gemini-3.1-flash-image-preview.description',
+  'lobehub.gemini-3.1-flash-image-preview:image.description',
   'lobehub.qwen3.8-max.description',
 ] as const;
 

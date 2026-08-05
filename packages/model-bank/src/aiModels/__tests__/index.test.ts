@@ -190,21 +190,25 @@ describe('Google Gemini 3.1 Flash Image models', () => {
         expect.objectContaining({
           enabled: true,
           id: 'gemini-3.1-flash-image',
+          releasedAt: '2026-05-28',
           type: 'chat',
         }),
         expect.objectContaining({
           enabled: true,
           id: 'gemini-3.1-flash-image:image',
+          releasedAt: '2026-05-28',
           type: 'image',
         }),
         expect.objectContaining({
           enabled: true,
           id: 'gemini-3.1-flash-image-preview',
+          releasedAt: '2026-02-26',
           type: 'chat',
         }),
         expect.objectContaining({
           enabled: true,
           id: 'gemini-3.1-flash-image-preview:image',
+          releasedAt: '2026-02-26',
           type: 'image',
         }),
       ]),
