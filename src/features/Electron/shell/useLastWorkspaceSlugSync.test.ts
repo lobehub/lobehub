@@ -1,5 +1,5 @@
 import { act, renderHook } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 
 import { PERSONAL_TAB_SCOPE } from '@/features/Electron/titlebar/TabBar/scope';
 import { electronSystemService } from '@/services/electron/system';
@@ -7,7 +7,7 @@ import { useElectronStore } from '@/store/electron';
 
 import { useLastWorkspaceSlugSync } from './useLastWorkspaceSlugSync';
 
-let setLastWorkspaceSlug: ReturnType<typeof vi.spyOn>;
+let setLastWorkspaceSlug: MockInstance<(slug: string | null) => Promise<void>>;
 
 beforeEach(() => {
   setLastWorkspaceSlug = vi
