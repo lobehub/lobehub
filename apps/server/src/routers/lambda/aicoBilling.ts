@@ -89,6 +89,69 @@ export const aicoBillingRouter = router({
     };
   }),
 
+  /**
+   * Personal wallet + each org membership budget as separate spendable sources.
+   * Credits never pool — each source has its own remaining balance and managed key.
+   */
+  getMyBillingSources: billingProcedure.query(async ({ ctx }) => {
+    const [wallet, orgs] = await Promise.all([
+      ctx.billingModel.getOrCreateUserWallet(ctx.userId),
+      ctx.organizationModel.listForUser(ctx.userId),
+    ]);
+
+    const personalRemaining = Number(wallet.balanceMicroUsd ?? 0);
+    const personal = {
+      hasManagedKey: Boolean(wallet.openrouterKeyId),
+      isActive: Boolean(wallet.isActive),
+      remainingMicroUsd: String(personalRemaining),
+      remainingUsd: microUsdToDecimalString(personalRemaining),
+      source: 'personal' as const,
+    };
+
+    const organizationSources = (
+      await Promise.all(
+        orgs.map(async (org) => {
+          const members = await ctx.organizationModel.listMembers(org.id);
+          const me = members.find((m) => m.userId === ctx.userId && m.status === 'active');
+          if (!me) return null;
+
+          const budget = await ctx.organizationModel.getMemberBudget(me.id);
+          const reservedMicroUsd = Number(budget?.reservedMicroUsd ?? 0);
+          const settledUsageMicroUsd = Number(budget?.settledUsageMicroUsd ?? 0);
+          const remainingMicroUsd = Math.max(0, reservedMicroUsd - settledUsageMicroUsd);
+          const renewalStatus = budget?.renewalStatus ?? null;
+
+          return {
+            hasManagedKey: Boolean(budget?.openrouterKeyId),
+            isActive: Boolean(budget?.isActive),
+            organizationId: org.id,
+            organizationName: org.name,
+            remainingMicroUsd: String(remainingMicroUsd),
+            remainingUsd: microUsdToDecimalString(remainingMicroUsd),
+            renewalBlocked:
+              renewalStatus === 'renewal_pending' || renewalStatus === 'renewal_failed',
+            source: 'organization' as const,
+          };
+        }),
+      )
+    ).filter(Boolean) as Array<{
+      hasManagedKey: boolean;
+      isActive: boolean;
+      organizationId: string;
+      organizationName: string;
+      remainingMicroUsd: string;
+      remainingUsd: string;
+      renewalBlocked: boolean;
+      source: 'organization';
+    }>;
+
+    return {
+      preferredBillingSource: wallet.preferredBillingSource as 'personal' | 'organization',
+      preferredOrganizationId: wallet.preferredOrganizationId,
+      sources: [personal, ...organizationSources],
+    };
+  }),
+
   getMyPublicCode: billingProcedure.query(async ({ ctx }) => {
     return { publicCode: await ctx.organizationModel.ensureUserPublicCode(ctx.userId) };
   }),

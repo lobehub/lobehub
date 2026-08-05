@@ -4,12 +4,19 @@ import { Block, Flexbox, Tag, Text } from '@lobehub/ui';
 import { Button, toast } from '@lobehub/ui/base-ui';
 import { Form, InputNumber, Table } from 'antd';
 import { createStaticStyles } from 'antd-style';
+import { CheckIcon, WalletIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
 import { toastAicoError } from '@/business/client/resolveAicoErrorMessage';
 import StatisticCard from '@/components/StatisticCard';
+import {
+  type AicoBillingContext,
+  type AicoBillingSource,
+  formatRemainingUsd,
+  useAicoBillingSources,
+} from '@/features/AicoBilling';
 import { useClientDataSWR } from '@/libs/swr';
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -29,7 +36,45 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorBgContainer};
   `,
+  sourceActive: css`
+    border-color: ${cssVar.colorPrimary};
+    background: ${cssVar.colorPrimaryBg};
+  `,
+  sourceCard: css`
+    cursor: pointer;
+
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+
+    padding: 12px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+
+    transition:
+      border-color 0.15s ease,
+      background 0.15s ease;
+
+    &:hover {
+      border-color: ${cssVar.colorPrimaryBorder};
+    }
+  `,
+  sourceGrid: css`
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+  `,
 }));
+
+const sourceToContext = (source: AicoBillingSource): AicoBillingContext =>
+  source.source === 'personal'
+    ? { source: 'personal' }
+    : { organizationId: source.organizationId, source: 'organization' };
+
+const sourceTitle = (source: AicoBillingSource, t: (key: string) => string): string => {
+  if (source.source === 'personal') return t('billing.personal');
+  return source.organizationName || t('billing.organization');
+};
 
 export const AicoWallet = () => {
   const { t } = useTranslation('aico');
@@ -52,6 +97,8 @@ export const AicoWallet = () => {
     lambdaClient.aicoBilling.getManagedProviderStatus.query(),
   );
 
+  const { canSwitch, data: billingSources, isSelected, selectSource } = useAicoBillingSources();
+
   return (
     <Flexbox className={styles.page} gap={20}>
       <Flexbox gap={4}>
@@ -66,11 +113,11 @@ export const AicoWallet = () => {
 
       <div className={styles.grid}>
         <StatisticCard
-          statistic={{ value: `$${wallet?.balanceUsd?.toFixed(4) ?? '0'}` }}
+          statistic={{ value: `$${Number(wallet?.balanceUsd ?? 0).toFixed(4)}` }}
           title={t('wallet.balanceUsd')}
         />
         <StatisticCard
-          statistic={{ value: wallet?.balanceToman?.toLocaleString() ?? 0 }}
+          statistic={{ value: Number(wallet?.balanceToman ?? 0).toLocaleString() }}
           title={t('wallet.balanceToman')}
         />
         <StatisticCard
@@ -83,6 +130,59 @@ export const AicoWallet = () => {
           }}
         />
       </div>
+
+      {billingSources && billingSources.sources.length > 0 ? (
+        <Block className={styles.section} variant="outlined">
+          <Flexbox gap={12}>
+            <Text strong>{t('billing.sourcesTitle')}</Text>
+            <Text type="secondary">{t('billing.selectHint')}</Text>
+            <div className={styles.sourceGrid}>
+              {billingSources.sources.map((source) => {
+                const ctx = sourceToContext(source);
+                const selected = isSelected(ctx);
+                const title = sourceTitle(source, t);
+                const remaining = formatRemainingUsd(source.remainingUsd);
+
+                return (
+                  <button
+                    className={`${styles.sourceCard}${selected ? ` ${styles.sourceActive}` : ''}`}
+                    disabled={busy || (selected && !canSwitch)}
+                    key={source.source === 'personal' ? 'personal' : source.organizationId}
+                    type="button"
+                    onClick={async () => {
+                      if (selected || busy) return;
+                      setBusy(true);
+                      try {
+                        await selectSource(ctx);
+                        toast.success(t('billing.switched', { label: title }));
+                        await mutateWallet();
+                      } catch (err) {
+                        toastAicoError(err, t, 'billing.switchFailed');
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                  >
+                    <Flexbox horizontal align="center" justify="space-between">
+                      <Flexbox horizontal align="center" gap={6}>
+                        <WalletIcon size={14} />
+                        <Text strong>{title}</Text>
+                      </Flexbox>
+                      {selected ? <CheckIcon size={14} /> : null}
+                    </Flexbox>
+                    <Text style={{ fontSize: 18, fontVariantNumeric: 'tabular-nums' }}>
+                      {remaining}
+                    </Text>
+                    <Text style={{ fontSize: 12 }} type="secondary">
+                      {source.hasManagedKey ? t('wallet.keyProvisioned') : t('wallet.keyPending')}
+                    </Text>
+                  </button>
+                );
+              })}
+            </div>
+          </Flexbox>
+        </Block>
+      ) : null}
 
       <Block className={styles.section} variant="outlined">
         <Flexbox gap={16}>
@@ -197,7 +297,7 @@ export const AicoWallet = () => {
               {
                 dataIndex: 'amountToman',
                 title: t('wallet.columns.toman'),
-                render: (v: number) => v?.toLocaleString?.() ?? v,
+                render: (v: number | string) => Number(v ?? 0).toLocaleString(),
               },
               {
                 dataIndex: 'createdAt',

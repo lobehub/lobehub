@@ -259,27 +259,6 @@ export class AicoBillingModel {
     });
   };
 
-  /** UX preference only — never authorize managed requests from this alone. */
-  setBillingPreference = async (params: {
-    preferredBillingSource: 'personal' | 'organization';
-    preferredOrganizationId?: string | null;
-    userId: string;
-  }) => {
-    await this.getOrCreateUserWallet(params.userId);
-    const [row] = await this.db
-      .update(userWallets)
-      .set({
-        preferredBillingSource: params.preferredBillingSource,
-        preferredOrganizationId:
-          params.preferredBillingSource === 'organization'
-            ? (params.preferredOrganizationId ?? null)
-            : null,
-      })
-      .where(eq(userWallets.userId, params.userId))
-      .returning();
-    return row;
-  };
-
   listUserUsage = async (userId: string, limit = 50) => {
     return this.db.query.usageLogs.findMany({
       where: eq(usageLogs.userId, userId),

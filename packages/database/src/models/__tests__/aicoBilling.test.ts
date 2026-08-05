@@ -42,16 +42,20 @@ describe('AicoBillingModel', () => {
     expect(a.id).toBe(b.id);
   });
 
-  it('updates trial config', async () => {
-    const updated = await model.updateTrialConfig({
-      allowedModelIds: ['openai/gpt-4o-mini'],
-      durationDays: 5,
-      enabled: true,
-      maxRequests: 100,
-      updatedByUserId: userId,
+  it('persists billing preference for SPA pre-select', async () => {
+    const preference = await model.setBillingPreference({
+      organizationId: 'org-pref',
+      source: 'organization',
+      userId,
     });
-    expect(updated.durationDays).toBe(5);
-    expect(updated.maxRequests).toBe(100);
-    expect(JSON.parse(updated.allowedModelIds)).toEqual(['openai/gpt-4o-mini']);
+    expect(preference.preferredBillingSource).toBe('organization');
+    expect(preference.preferredOrganizationId).toBe('org-pref');
+
+    const personal = await model.setBillingPreference({
+      source: 'personal',
+      userId,
+    });
+    expect(personal.preferredBillingSource).toBe('personal');
+    expect(personal.preferredOrganizationId).toBeNull();
   });
 });
