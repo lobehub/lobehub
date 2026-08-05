@@ -7,6 +7,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 export interface CountStepperProps {
+  disabled?: boolean;
   label: string;
   max: number;
   min: number;
@@ -21,24 +22,30 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const CountStepper = memo<CountStepperProps>(({ label, value, min, max, onChange }) => {
+const CountStepper = memo<CountStepperProps>(({ disabled, label, value, min, max, onChange }) => {
   const { t } = useTranslation('home');
 
   return (
     <Flexbox horizontal align={'center'} gap={8}>
       <ActionIcon
         aria-label={t('dashboard.customize.decrease', { label })}
-        disabled={value <= min}
+        disabled={disabled || value <= min}
         icon={MinusIcon}
         size={'small'}
         onClick={() => onChange(value - 1)}
       />
-      <Text aria-label={label} aria-live={'polite'} className={styles.value} weight={500}>
+      <Text
+        aria-label={label}
+        aria-live={'polite'}
+        className={styles.value}
+        type={disabled ? 'secondary' : undefined}
+        weight={500}
+      >
         {value}
       </Text>
       <ActionIcon
         aria-label={t('dashboard.customize.increase', { label })}
-        disabled={value >= max}
+        disabled={disabled || value >= max}
         icon={PlusIcon}
         size={'small'}
         onClick={() => onChange(value + 1)}
