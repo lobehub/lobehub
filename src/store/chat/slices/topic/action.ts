@@ -1468,6 +1468,12 @@ export class ChatTopicActionImpl {
       n('replaceTopicId'),
     );
 
+    // Client-minted ids (#17889) resolve with previousId === nextId — there is
+    // no loading owner to migrate, and running the merge below would read the
+    // same counter twice and double it, leaving the sidebar spinner stuck after
+    // the single run-end release.
+    if (previousId === nextId) return;
+
     this.#set(
       (state) => {
         const previousCount = state.topicLoadingIdCounts[previousId] ?? 0;

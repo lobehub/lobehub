@@ -2390,6 +2390,63 @@ describe('topic action', () => {
       expect(result.current.topicLoadingIds).toEqual(['topic-1']);
       expect(result.current.topicLoadingIdCounts).toEqual({ 'topic-1': 2 });
     });
+
+    it('should not double the loading count when resolving a client-minted id to itself', () => {
+      const { result } = renderHook(() => useChatStore());
+      const agentId = 'agent-1';
+      const key = topicMapKey({ agentId });
+      const mintedId = 'tpc_minted0000000001';
+      const optimisticTopic: ChatTopic = {
+        createdAt: Date.now(),
+        favorite: false,
+        id: mintedId,
+        sessionId: agentId,
+        title: '666',
+        updatedAt: Date.now(),
+      };
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          topicDataMap: {
+            [key]: {
+              currentPage: 0,
+              hasMore: false,
+              isExpandingPageSize: false,
+              isLoadingMore: false,
+              items: [optimisticTopic],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+          topicLoadingIdCounts: {},
+          topicLoadingIds: [],
+        });
+      });
+
+      // Send flow: one loading owner opened at optimistic creation…
+      act(() => {
+        result.current.internal_updateTopicLoading(mintedId, true);
+      });
+
+      // …then the server confirms the SAME id (#17889 client-minted ids).
+      act(() => {
+        result.current.internal_replaceTopicId({
+          agentId,
+          nextId: mintedId,
+          previousId: mintedId,
+          value: { sessionId: agentId },
+        });
+      });
+
+      // …and the single run-end release must fully clear the spinner.
+      act(() => {
+        result.current.internal_updateTopicLoading(mintedId, false);
+      });
+
+      expect(result.current.topicLoadingIds).toEqual([]);
+      expect(result.current.topicLoadingIdCounts).toEqual({});
+    });
   });
   describe('summaryTopicTitle', () => {
     it('should show a loading placeholder when auto-summarizing a topic without a title', async () => {
