@@ -339,6 +339,23 @@ it in the route layout instead, and cover it with a test that asserts which rout
 received the write — a test that only asserts a write happened passes on the
 broken topology too.
 
+### L-S7 — Verifying a dependency-level fix through a dev server that predates the install
+
+**Wrong approach:** confirm the fixed version exists in `node_modules`, then capture
+behavioral evidence through an already-running Vite dev server.
+
+**Why it fails:** Vite pins its optimized dependency bundle at server boot. A server
+started before (or during) the `pnpm install` that brought the fix serves the old
+dependency code for its entire lifetime — the browser provably executes code that no
+longer exists on disk, and the evidence contradicts the source. An in-process restart
+via touching the Vite config can wedge the optimizer (new dep URLs 504); only a real
+process restart is trustworthy.
+
+**Correct approach:** before capturing evidence for a dependency-level change, prove
+the served bundle carries it — fetch the relevant `/node_modules/.vite/deps/*` chunk
+from the dev server and grep for a marker of the fix — or restart the dev server
+process outright and re-verify.
+
 ## Historical source
 
 Detailed incident narratives and retired pixel- or component-specific directions
