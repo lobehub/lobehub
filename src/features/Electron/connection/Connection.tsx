@@ -53,7 +53,7 @@ const Connection = () => {
         >
           <Center style={{ height: '100%', overflow: 'auto', padding: 24 }}>
             <Flexbox style={{ maxWidth: 560, width: '100%' }}>
-              <LoginStep onBack={handleClose} onNext={handleClose} />
+              <LoginStep mode={'status'} onBack={handleClose} onNext={handleClose} />
             </Flexbox>
           </Center>
         </Suspense>
