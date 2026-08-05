@@ -16,7 +16,7 @@ import { RichContentRenderer } from './RichContentRenderer';
  * (LOBE-12829). Multimodal reasoning streams image parts via tempDisplayContent
  * without content, so those count as renderable.
  */
-export const hasRenderableReasoning = (reasoning?: ModelReasoning): boolean =>
+export const hasRenderableReasoning = (reasoning?: ModelReasoning | null): boolean =>
   !!reasoning?.content?.trim() || !!reasoning?.tempDisplayContent?.length;
 
 interface ReasoningProps {
