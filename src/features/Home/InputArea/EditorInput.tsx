@@ -2,6 +2,7 @@ import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { PlusIcon } from 'lucide-react';
 import { memo, type ReactNode, useMemo } from 'react';
 
+import { getBusinessChatInputSendAreaPrefix } from '@/business/client/hooks/useBusinessChatInputSendAreaPrefix';
 import {
   type ActionKeys,
   ChatInputProvider,
@@ -92,6 +93,7 @@ const HomeEditorInput = memo<HomeEditorInputProps>(
           initialContent={initialValue}
           inputContainerProps={inputContainerProps}
           placeholder={placeholder}
+          sendAreaPrefix={getBusinessChatInputSendAreaPrefix()}
           showControlBar={false}
           leftContent={
             <Flexbox horizontal align={'center'} gap={2}>
