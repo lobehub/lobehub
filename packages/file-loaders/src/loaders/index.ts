@@ -27,6 +27,10 @@ const lazyFileLoaders: Record<Exclude<SupportedFileType, 'txt'>, LazyLoaderFacto
     const { ExcelLoader } = await import('./excel');
     return ExcelLoader;
   },
+  ipynb: async () => {
+    const { IpynbLoader } = await import('./ipynb');
+    return IpynbLoader;
+  },
   pdf: async () => {
     // Polyfill DOMMatrix for Node.js environment before importing pdfjs-dist
     // pdfjs-dist 5.x uses DOMMatrix at module initialization which doesn't exist in Node.js
