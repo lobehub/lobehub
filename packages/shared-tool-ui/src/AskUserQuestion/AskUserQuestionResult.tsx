@@ -1,40 +1,20 @@
 'use client';
 
-import { Flexbox, Icon, Text } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
-import { Check, PenLine } from 'lucide-react';
+import { Flexbox, Text } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
 import type { AskUserQuestionItem } from './types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  // Codex-style flat summary: the question keeps the body text color and the
+  // answer drops to secondary — the exchange reads as a quiet process record,
+  // not an interactive control. No chips, icons, or borders.
   answer: css`
     font-size: 14px;
-    font-weight: 500;
     line-height: 1.5;
-    color: ${cssVar.colorText};
-    overflow-wrap: anywhere;
-  `,
-  answerContent: css`
-    min-width: 0;
-  `,
-  answerIcon: css`
-    flex-shrink: 0;
-    margin-block-start: 3px;
     color: ${cssVar.colorTextSecondary};
-  `,
-  answerIconSelected: css`
-    color: ${cssVar.colorSuccess};
-  `,
-  answerRow: css`
-    box-sizing: border-box;
-    width: fit-content;
-    max-width: 100%;
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-radius: 8px;
-
-    background: ${cssVar.colorFillTertiary};
+    overflow-wrap: anywhere;
   `,
   container: css`
     padding-block: 8px 4px;
@@ -80,7 +60,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 14px;
     font-weight: 400;
     line-height: 1.5;
-    color: ${cssVar.colorTextSecondary};
+    color: ${cssVar.colorText};
     overflow-wrap: anywhere;
   `,
   questionContent: css`
@@ -93,14 +73,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: baseline;
   `,
   unanswered: css`
-    width: fit-content;
-    max-width: 100%;
-    padding-block: 8px;
-    padding-inline: 12px;
-    border: 1px dashed ${cssVar.colorBorderSecondary};
-    border-radius: 8px;
-
-    font-size: 12px;
+    font-size: 14px;
     line-height: 1.5;
     color: ${cssVar.colorTextQuaternary};
   `,
@@ -110,27 +83,6 @@ export interface AskUserQuestionResultLabels {
   noAnswer: string;
   notAnswered: string;
 }
-
-interface AnswerLineProps {
-  icon: typeof Check;
-  selected?: boolean;
-  text: string;
-}
-
-const AnswerLine = memo<AnswerLineProps>(({ icon, text, selected }) => (
-  <Flexbox horizontal align="flex-start" className={styles.answerRow} gap={12}>
-    <Icon
-      className={cx(styles.answerIcon, selected && styles.answerIconSelected)}
-      icon={icon}
-      size={14}
-    />
-    <Flexbox className={styles.answerContent} flex={1} gap={4}>
-      <span className={styles.answer}>{text}</span>
-    </Flexbox>
-  </Flexbox>
-));
-
-AnswerLine.displayName = 'AskUserQuestionResultAnswerLine';
 
 interface QuestionAnswerProps {
   answer?: string | string[];
@@ -145,20 +97,17 @@ const QuestionAnswer = memo<QuestionAnswerProps>(({ question, answer, index, not
   return (
     <Flexbox align="flex-start" gap={8} horizontal={!!index}>
       {!!index && <span className={styles.ordinal}>{`Q${index}`}</span>}
-      <Flexbox className={styles.questionContent} flex={1} gap={8}>
+      <Flexbox className={styles.questionContent} flex={1} gap={4}>
         <div className={index ? styles.titleRow : undefined}>
           <span className={styles.question}>{question.question}</span>
           {!!index && question.header && <span className={styles.header}>{question.header}</span>}
         </div>
         {labels.length > 0 ? (
-          <Flexbox gap={8}>
-            {/* Label only — re-printing the option's description would re-list
-                choose-time context the reader no longer needs (Codex-style
-                compact summary). */}
-            {labels.map((label) => (
-              <AnswerLine selected icon={Check} key={label} text={label} />
-            ))}
-          </Flexbox>
+          labels.map((label) => (
+            <span className={styles.answer} key={label}>
+              {label}
+            </span>
+          ))
         ) : (
           <span className={styles.unanswered}>{notAnswered}</span>
         )}
@@ -210,7 +159,7 @@ export const AskUserQuestionResult = memo<AskUserQuestionResultProps>(
             </Flexbox>
           ))}
           {multiple && <div className={styles.divider} />}
-          <AnswerLine icon={PenLine} text={freeformText} />
+          <span className={styles.answer}>{freeformText}</span>
           {isError && <Text type="warning">{labels.noAnswer}</Text>}
         </Flexbox>
       );
