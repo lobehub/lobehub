@@ -63,7 +63,7 @@ import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
 import Files from './Files';
-import { fitsBesidePortal } from './fitsBesidePortal';
+import { sidebarWidthBudget } from './fitsBesidePortal';
 import Overview from './Overview';
 import ResourcesSection from './ResourcesSection';
 import Review from './Review';
@@ -136,6 +136,7 @@ const styles = createStaticStyles(({ css }) => ({
 const REVIEW_TREE_STORAGE_KEY = 'lobechat-review-tree';
 const OPEN_TABS_STORAGE_KEY = 'lobechat-working-sidebar-open-tabs-v1';
 const PINNED_TABS_STORAGE_KEY = 'lobechat-working-sidebar-pinned-tabs-v1';
+const MIN_PANEL_WIDTH = 300;
 const MAX_PANEL_WIDTH = 1200;
 // Two-pane Review (diff list + file-tree rail) is cramped below this.
 const TWO_PANE_MIN_WIDTH = 560;
@@ -660,14 +661,23 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   );
   const reviewTwoPane = activeTab === 'review' && reviewAvailable && showReviewTree;
   const displayWidth = reviewTwoPane ? Math.max(storedWidth, TWO_PANE_MIN_WIDTH) : storedWidth;
-  // Yield the row to conversation + portal when the three no longer fit. This
-  // only overrides the rendered state — `showRightPanel` keeps the user's own
+  // Yield the row to conversation + portal when the three no longer fit. A
+  // stored width that merely outgrew the current row (the user dragged the
+  // panel out, or resized the window down) renders clamped instead of
+  // unmounting the whole panel — the sidebar disappears only when even its
+  // minimum width leaves no room for the conversation. Either way this only
+  // overrides the rendered state — `showRightPanel` keeps the user's own
   // choice, so the sidebar comes back by itself once there is room again.
-  const fits = fitsBesidePortal({
+  const minDisplayWidth = reviewTwoPane ? TWO_PANE_MIN_WIDTH : MIN_PANEL_WIDTH;
+  const widthBudget = sidebarWidthBudget({
     availableWidth,
     portalWidth: portalOpen ? portalWidth : 0,
-    sidebarWidth: displayWidth,
   });
+  const fits = widthBudget >= minDisplayWidth;
+  const renderWidth = Math.min(displayWidth, Math.max(widthBudget, minDisplayWidth));
+  // Also cap the drag range so releasing a drag can never persist a width that
+  // immediately fails the fit check and hides the panel.
+  const maxPanelWidth = Math.min(MAX_PANEL_WIDTH, Math.max(widthBudget, minDisplayWidth));
   const openMenuItems = useCallback((): DropdownItem[] => {
     const itemOf = (key: string): DropdownItem | undefined => {
       const tab = availableTabs.get(key);
@@ -755,11 +765,11 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     <RightPanel
       stableLayout
       collapseThreshold={320}
-      defaultWidth={displayWidth}
+      defaultWidth={renderWidth}
       expand={Boolean(showRightPanel) && fits}
-      maxWidth={MAX_PANEL_WIDTH}
-      minWidth={300}
-      width={displayWidth}
+      maxWidth={maxPanelWidth}
+      minWidth={MIN_PANEL_WIDTH}
+      width={renderWidth}
       onSizeChange={(size) => {
         if (!size?.width) return;
         // DraggablePanel emits width as a `"420px"` string on drag-stop; parse it so
