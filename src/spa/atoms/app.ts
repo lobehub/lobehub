@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 
 let appReady = false;
+let appPainted = false;
 let postRenderReady = false;
 const listeners = new Set<() => void>();
 
@@ -9,12 +10,20 @@ const emit = () => {
 };
 
 export const getAppReady = () => appReady;
+export const getAppPainted = () => appPainted;
 export const getPostRenderReady = () => postRenderReady;
 
 export const setAppReady = (ready: boolean) => {
   if (appReady === ready) return;
 
   appReady = ready;
+  emit();
+};
+
+export const setAppPainted = (painted: boolean) => {
+  if (appPainted === painted) return;
+
+  appPainted = painted;
   emit();
 };
 
@@ -33,6 +42,9 @@ export const subscribeAppReady = (listener: () => void) => {
 };
 
 export const useAppReady = () => useSyncExternalStore(subscribeAppReady, getAppReady, getAppReady);
+
+export const useAppPainted = () =>
+  useSyncExternalStore(subscribeAppReady, getAppPainted, getAppPainted);
 
 export const usePostRenderReady = () =>
   useSyncExternalStore(subscribeAppReady, getPostRenderReady, getPostRenderReady);

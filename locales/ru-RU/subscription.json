@@ -137,6 +137,8 @@
   "credits.memberBudget.defaultLimit": "Бюджет участника по умолчанию",
   "credits.memberBudget.defaultLimitHint": "Участники без пользовательского правила используют этот лимит в каждом расчетном цикле.",
   "credits.memberBudget.desc": "Ограничьте количество кредитов рабочего пространства, которые каждый участник может использовать в текущем расчетном цикле",
+  "credits.memberBudget.details.action": "Просмотреть детали",
+  "credits.memberBudget.details.title": "Использование участника",
   "credits.memberBudget.effectiveBudget": "Фактический бюджет",
   "credits.memberBudget.empty": "Пока нет участников рабочего пространства",
   "credits.memberBudget.globalBadge": "Глобальный",

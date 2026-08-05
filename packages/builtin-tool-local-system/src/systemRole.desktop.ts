@@ -78,7 +78,7 @@ You have access to a set of tools to interact with the user's local file system:
     - 'command': The shell command to execute.
     - 'description' (Optional but recommended): A clear, concise description of what the command does (5-10 words, in active voice). **IMPORTANT: Always use the same language as the user's input.** If the user speaks Chinese, write the description in Chinese; if English, use English, etc.
     - 'run_in_background' (Optional): Set to true to return immediately after starting the terminal session. The result includes a 'shell_id' for later observation or termination.
-    The command runs in {{defaultShell}}. When that shell is PowerShell, write PowerShell-compatible syntax; on Windows PowerShell 5.1 the &&/|| chain operators are NOT available — use ';' to sequence commands or 'if ($?) { ... }' for conditional chaining. The returned output reflects the tool's wait window, not necessarily the full command lifetime.
+    The command runs in {{defaultShell}}. {{shellSyntaxGuidance}} The returned output reflects the tool's wait window, not necessarily the full command lifetime.
     - Installing software: do NOT proactively install software on the user's system. Prefer tools that are already installed, or a no-install alternative. If a task genuinely needs a system-level or global install (e.g. \`brew install\`, \`apt\`/\`dnf install\`, \`npm i -g\`, \`pipx\`, a global \`pip install\`), ask the user first and explain why, rather than running the install on your own. Routine project-local dependency installs (e.g. \`npm\`/\`pnpm install\` inside a project, \`pip install\` inside an active virtualenv) are fine — run them as normal.
     - Result semantics:
       - 'success' indicates whether the tool call itself succeeded.

@@ -15,7 +15,7 @@ export type ToolsTrpcClient = ReturnType<typeof createTRPCClient<ToolsRouter>>;
 
 const PERSONAL_KEY = '__personal__';
 const _clients = new Map<string, TrpcClient>();
-let _toolsClient: ToolsTrpcClient | undefined;
+const _toolsClients = new Map<string, ToolsTrpcClient>();
 
 async function getAuthAndServer(): Promise<{ headers: Record<string, string>; serverUrl: string }> {
   // LOBEHUB_JWT + LOBEHUB_SERVER env vars (used by server-side sandbox execution)
@@ -107,19 +107,29 @@ export function createLambdaClient(
   });
 }
 
-export async function getToolsTrpcClient(): Promise<ToolsTrpcClient> {
-  if (_toolsClient) return _toolsClient;
+/**
+ * Same workspace scoping as `getTrpcClient` — the tools router is workspace
+ * aware too, and dropping the header here silently ran every tools call
+ * (web/local search, market) against personal scope, which also mis-attributes
+ * the spend.
+ */
+export async function getToolsTrpcClient(workspaceId?: string): Promise<ToolsTrpcClient> {
+  const wsId = resolveWorkspaceId(workspaceId);
+  const cacheKey = wsId ?? PERSONAL_KEY;
+  const cached = _toolsClients.get(cacheKey);
+  if (cached) return cached;
 
   const { headers, serverUrl } = await getAuthAndServer();
-  _toolsClient = createTRPCClient<ToolsRouter>({
+  const client = createTRPCClient<ToolsRouter>({
     links: [
       httpLink({
-        headers,
+        headers: withWorkspaceHeader(headers, wsId),
         transformer: superjson,
         url: `${serverUrl}/trpc/tools`,
       }),
     ],
   });
+  _toolsClients.set(cacheKey, client);
 
-  return _toolsClient;
+  return client;
 }

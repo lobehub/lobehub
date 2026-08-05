@@ -1,5 +1,6 @@
 'use client';
 
+import { agentDisplayName } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { cx } from 'antd-style';
 import { memo } from 'react';
@@ -55,7 +56,7 @@ const ChatItem = memo<ChatItemProps>(
 
     const avatarContent = (
       <Avatar
-        alt={avatarProps?.alt || avatar.title || 'avatar'}
+        alt={avatarProps?.alt || agentDisplayName(avatar, 'avatar')}
         loading={loading}
         shape={'square'}
         onClick={onAvatarClick}

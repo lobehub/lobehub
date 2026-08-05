@@ -6,6 +6,8 @@ import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from 'reac
 import { bootTiming } from '@/libs/bootTiming';
 import { cacheHydration } from '@/libs/swr/cacheHydration';
 import { useCacheScope } from '@/libs/swr/useCacheScope';
+import { setAppPainted, useAppReady } from '@/spa/atoms/app';
+import { removeStaticLoadingScreen } from '@/spa/loadingScreen';
 
 // first-write-wins: only the very first paint records the boot timing mark.
 let firstPaintMarked = false;
@@ -26,7 +28,8 @@ const HYDRATION_TIMEOUT = 8000;
 /**
  * Blocks the first paint until the active scope's IndexedDB cache has hydrated,
  * so the app never flashes empty on cold boot — the static `loading-screen`
- * overlay covers exactly this window.
+ * overlay and then `BootShell` cover exactly this window, and releasing here is
+ * what signals `appPainted` to tear them down.
  *
  * This is a one-way latch: once released it never blanks again. A later scope
  * change (anonymous → signed-in, or workspace switch) re-hydrates the SWR cache
@@ -48,6 +51,7 @@ const HYDRATION_TIMEOUT = 8000;
  */
 const CacheHydrationGate = ({ children }: PropsWithChildren) => {
   const scope = useCacheScope();
+  const appReady = useAppReady();
 
   const ready = useSyncExternalStore(
     cacheHydration.subscribe,
@@ -80,8 +84,29 @@ const CacheHydrationGate = ({ children }: PropsWithChildren) => {
       firstPaintMarked = true;
       bootTiming.mark('first-paint');
     }
-    document.getElementById('loading-screen')?.remove();
+    // Runs after `children` have committed, so the boot shell only tears down
+    // once the real app is already in the DOM.
+    setAppPainted(true);
   }, [released]);
+
+  // Backstop for entries that mount no `BootShell` (the Electron popup window,
+  // whose `popup.html` ships a z-index 99999 scrim with `pointer-events: auto`):
+  // the shell normally owns this removal, so without a backstop the popup stays
+  // dimmed AND swallows every click.
+  //
+  // `appReady` is part of the condition, not decoration. Hydration can finish
+  // before initialization, and in that window `AppLayer` still renders null while
+  // `resolveBootShellPhase` is `hidden` (it needs BOTH signals for `done`, and
+  // the 200ms timer has not fired) — so the shell is not up either. Removing the
+  // splash on `released` alone blanks the window until whichever lands first,
+  // and the shell timer has been measured arriving 1153ms late on an Electron
+  // cold boot. Gating on `appReady` means `AppLayer` is rendering the outlet, so
+  // the route's own fallback is guaranteed to be on screen.
+  useLayoutEffect(() => {
+    if (!released || !appReady) return;
+
+    removeStaticLoadingScreen();
+  }, [released, appReady]);
 
   if (!released) return null;
 

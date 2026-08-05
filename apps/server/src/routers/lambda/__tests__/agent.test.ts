@@ -123,8 +123,8 @@ describe('agentRouter', () => {
     };
     vi.mocked(ResourcePermissionModel).mockImplementation(() => resourcePermissionModelMock);
     workspaceUserSettingsModelMock = {
-      copySidebarGroupAssignment: vi.fn(),
-      setSidebarGroupAssignment: vi.fn(),
+      getPreference: vi.fn().mockResolvedValue({}),
+      updatePreference: vi.fn(),
     };
     vi.mocked(WorkspaceUserSettingsModel).mockImplementation(() => workspaceUserSettingsModelMock);
 
@@ -499,12 +499,9 @@ describe('agentRouter', () => {
         'use',
         userId,
       );
-      // Folder placement is per-member in workspace mode — the duplicate must
-      // inherit the caller's own assignment for the source agent.
-      expect(workspaceUserSettingsModelMock.copySidebarGroupAssignment).toHaveBeenCalledWith(
-        'public-agent',
-        'copied-agent',
-      );
+      // Folder placement is shared state, carried by AgentModel.duplicate's
+      // `sessionGroupId` copy — no per-member bookkeeping on top.
+      expect(workspaceUserSettingsModelMock.updatePreference).not.toHaveBeenCalled();
     });
   });
 

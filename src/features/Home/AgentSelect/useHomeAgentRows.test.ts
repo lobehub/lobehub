@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
     ungroupedAgents: [] as any[],
   },
   sidebarHiddenAgentIds: [] as string[],
+  sidebarHiddenGroupIds: [] as string[],
   sidebarVisibilityOverrides: {} as Record<string, boolean>,
 }));
 
@@ -55,7 +56,10 @@ vi.mock('@/store/home', () => ({
 vi.mock('@/store/user', () => ({
   useUserStore: (selector: (state: unknown) => unknown) =>
     selector({
-      preference: { sidebarHiddenAgentIds: mocks.sidebarHiddenAgentIds },
+      preference: {
+        sidebarHiddenAgentIds: mocks.sidebarHiddenAgentIds,
+        sidebarHiddenGroupIds: mocks.sidebarHiddenGroupIds,
+      },
       updatePreference: vi.fn(),
       updateWorkspaceUserPreference: vi.fn(),
       userId: mocks.currentUserId,
@@ -64,8 +68,12 @@ vi.mock('@/store/user', () => ({
 
 vi.mock('@/store/user/selectors', () => ({
   workspaceUserSettingsSelectors: {
+    // `useKeepSidebarGroupsListed` reaches through to the group-visibility
+    // hook, which now gates writes on the loaded preference workspace.
+    preferenceWorkspaceId: () => mocks.activeWorkspaceId ?? null,
     sidebarAgentVisibilityOverrides: () => mocks.sidebarVisibilityOverrides,
     sidebarHiddenAgentIds: () => mocks.sidebarHiddenAgentIds,
+    sidebarHiddenGroupIds: () => mocks.sidebarHiddenGroupIds,
   },
   userProfileSelectors: { userId: (state: { userId: string }) => state.userId },
 }));
@@ -93,6 +101,7 @@ describe('useHomeAgentRows', () => {
     mocks.activeWorkspaceId = undefined;
     mocks.currentUserId = 'member-1';
     mocks.sidebarHiddenAgentIds = [];
+    mocks.sidebarHiddenGroupIds = [];
     mocks.sidebarVisibilityOverrides = {};
     mocks.agentState.agentMap = { agt_inbox: { title: 'Lobe AI' } };
     mocks.homeState.agentGroups = [];
@@ -137,7 +146,7 @@ describe('useHomeAgentRows', () => {
     expect(ids(result.current.workspaceRows)).toEqual(['agt_inbox', 'agt_a']);
   });
 
-  it('hides another member Agent by default and shows it after an explicit override', () => {
+  it("lists another member's Agent by default and hides it after an explicit override", () => {
     mocks.activeWorkspaceId = 'ws_1';
     mocks.homeState.ungroupedAgents = [
       agent('agt_own', 'Own'),
@@ -146,12 +155,25 @@ describe('useHomeAgentRows', () => {
 
     const { rerender, result } = renderHook(() => useHomeAgentRows());
 
-    expect(ids(result.current.workspaceRows)).toEqual(['agt_inbox', 'agt_own']);
+    expect(ids(result.current.workspaceRows)).toEqual(['agt_inbox', 'agt_own', 'agt_shared']);
 
-    mocks.sidebarVisibilityOverrides = { agt_shared: true };
+    mocks.sidebarVisibilityOverrides = { agt_shared: false };
     rerender();
 
-    expect(ids(result.current.workspaceRows)).toEqual(['agt_inbox', 'agt_own', 'agt_shared']);
+    expect(ids(result.current.workspaceRows)).toEqual(['agt_inbox', 'agt_own']);
+  });
+
+  it('drops the agents inside a Category the caller hid', () => {
+    mocks.activeWorkspaceId = 'ws_1';
+    mocks.homeState.agentGroups = [
+      { id: 'grp_shown', items: [agent('agt_shown', 'Shown')], name: 'Shown' },
+      { id: 'grp_hidden', items: [agent('agt_in_hidden', 'In hidden')], name: 'Hidden' },
+    ];
+    mocks.sidebarHiddenGroupIds = ['grp_hidden'];
+
+    const { result } = renderHook(() => useHomeAgentRows());
+
+    expect(ids(result.current.workspaceRows)).toEqual(['agt_inbox', 'agt_shown']);
   });
 
   it('keeps a single flat bucket in personal mode', () => {

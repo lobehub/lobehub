@@ -59,15 +59,25 @@ export const collectFileEditToolCallRecords = (
  * persisted. Callers must memoize on the blocks reference (see
  * {@link useOperationEditedFiles}) so the scan runs once per snapshot.
  */
+/**
+ * An edited-file entry annotated with its content origin, so the card can route
+ * a click to the right preview transport (sandbox live-read vs local/device
+ * filesystem).
+ */
+export interface OperationEditedFile extends EditedFileEntry {
+  /**
+   * Whether the file's LAST edit came from the cloud sandbox — mirroring the
+   * server's provenance rule, the terminal edit owns the file's content.
+   */
+  sandboxBacked: boolean;
+}
+
 export const deriveOperationEditedFiles = (
   blocks: AssistantContentBlock[] = [],
   hasWorkSurface = false,
-): EditedFileEntry[] => {
+): OperationEditedFile[] => {
   const records = collectFileEditToolCallRecords(blocks);
   if (records.length === 0) return [];
-
-  const entries = scanOperationFileEdits(records);
-  if (!hasWorkSurface) return entries;
 
   const sandboxToolCallIds = new Set(
     records
@@ -75,14 +85,27 @@ export const deriveOperationEditedFiles = (
       .map((record) => record.toolCallId),
   );
 
-  return entries.filter((entry) => {
-    if (classifyEditedFile(entry.path).category !== 'entity') return true;
-    // Mirrors the server's provenance rule: a Work version's provenance is the
-    // file's LAST edit, so the card drops the entry only when that edit came
-    // from the sandbox (→ a Work card covers it).
+  const entries = scanOperationFileEdits(records).map((entry): OperationEditedFile => {
     const lastSourceToolCallId = entry.sourceToolCallIds.at(-1);
-    return !(lastSourceToolCallId && sandboxToolCallIds.has(lastSourceToolCallId));
+    return {
+      ...entry,
+      sandboxBacked: !!lastSourceToolCallId && sandboxToolCallIds.has(lastSourceToolCallId),
+    };
   });
+  if (!hasWorkSurface) return entries;
+
+  // Drop sandbox-backed entity files: their `file` Work card covers them.
+  // Deleted entries stay — the file Work registrar skips `kind === 'deleted'`
+  // (there is nothing left in the sandbox to export), so the card is the only
+  // surface where a deleted entity file remains visible.
+  return entries.filter(
+    (entry) =>
+      !(
+        entry.kind !== 'deleted' &&
+        classifyEditedFile(entry.path).category === 'entity' &&
+        entry.sandboxBacked
+      ),
+  );
 };
 
 export interface EditedFilesTotals {

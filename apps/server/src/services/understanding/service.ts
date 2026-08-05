@@ -11,7 +11,12 @@ import {
   UnderstandingResourceNotFoundError,
   UnderstandingSessionNotFoundError,
 } from '@lobechat/database';
-import { chainUnderstandingPersona, UNDERSTANDING_ANALYSIS_JSON_SCHEMA } from '@lobechat/prompts';
+import {
+  chainUnderstandingDetailedPersona,
+  chainUnderstandingPersona,
+  UNDERSTANDING_ANALYSIS_JSON_SCHEMA,
+  UNDERSTANDING_DETAILED_PERSONA_JSON_SCHEMA,
+} from '@lobechat/prompts';
 import type {
   CollectionDiagnostics,
   ConfirmOnboardingUnderstandingInput,
@@ -21,6 +26,7 @@ import type {
   RetryOnboardingUnderstandingProviderInput,
   ReviseOnboardingUnderstandingInput,
   UnderstandingFeedbackTurn,
+  UnderstandingPersonaProposal,
 } from '@lobechat/types';
 import {
   MAX_COLLECTION_ERRORS,
@@ -28,6 +34,7 @@ import {
   projectOnboardingUnderstandingSessionStatus,
   RequestTrigger,
   UnderstandingAnalysisSchema,
+  UnderstandingPersonaProposalSchema,
 } from '@lobechat/types';
 import { isPlainRecord } from '@lobechat/utils/object';
 
@@ -70,12 +77,14 @@ interface ProcessCollectedInput {
 type UnderstandingRepository = Pick<
   OnboardingUnderstandingRepository,
   | 'commitWriting'
+  | 'commitDetailedWriting'
   | 'completeProvider'
   | 'confirm'
   | 'expireProviderContexts'
   | 'extend'
   | 'failProvider'
   | 'failWriting'
+  | 'failDetailedWriting'
   | 'get'
   | 'initialize'
   | 'markProviderRunning'
@@ -636,6 +645,8 @@ export class UnderstandingService {
       session.writing.status === 'completed'
     ) {
       return {
+        feedbackRevision: session.writing.feedbackRevision ?? 0,
+        generationRevision: session.writing.generationRevision ?? 0,
         published: true as const,
         resultId: session.writing.resultMessageId,
         sourceFingerprint: expectedSourceFingerprint,
@@ -720,6 +731,8 @@ export class UnderstandingService {
       return { published: false as const, sourceFingerprint: expectedSourceFingerprint };
     }
     return {
+      feedbackRevision: prepared.feedbackRevision,
+      generationRevision: prepared.generationRevision,
       ...(committed.personaVersion === undefined
         ? {}
         : { personaVersion: committed.personaVersion }),
@@ -758,6 +771,140 @@ export class UnderstandingService {
         session.writing.status === 'failed'
         ? session
         : undefined;
+    } catch (error) {
+      if (
+        error instanceof StaleUnderstandingRevisionError ||
+        error instanceof StaleUnderstandingSessionError
+      ) {
+        return;
+      }
+      throw error;
+    }
+  };
+
+  processDetailedPersona = async ({
+    expectedSourceFingerprint,
+    responseLanguage,
+    sessionId,
+    topicId,
+  }: ProcessCollectedInput) => {
+    const session = await this.activeSession(topicId, sessionId);
+    const writing = session.writing;
+    if (
+      getUnderstandingSourceFingerprint(session) !== expectedSourceFingerprint ||
+      writing?.status !== 'completed' ||
+      writing.sourceFingerprint !== expectedSourceFingerprint
+    ) {
+      return { published: false as const, sourceFingerprint: expectedSourceFingerprint };
+    }
+    if (writing.detailed?.status === 'completed') {
+      return { published: true as const, sourceFingerprint: expectedSourceFingerprint };
+    }
+    if (writing.detailed?.status !== 'running') {
+      return { published: false as const, sourceFingerprint: expectedSourceFingerprint };
+    }
+
+    const resultMessage = await this.dependencies.messages.findById(writing.resultMessageId);
+    const proposal = storedProposal(resultMessage?.metadata);
+    if (!proposal) throw new UnderstandingProviderContextUnavailableError();
+    if (
+      proposal.sourceFingerprint !== expectedSourceFingerprint ||
+      proposal.feedbackRevision !== writing.feedbackRevision ||
+      proposal.generationRevision !== writing.generationRevision
+    ) {
+      return { published: false as const, sourceFingerprint: expectedSourceFingerprint };
+    }
+
+    const completed = Object.entries(session.sources)
+      .filter(([, state]) => state.status === 'completed')
+      .sort(([left], [right]) => left.localeCompare(right));
+    const sourceStore = this.dependencies.sourceStore();
+    const contexts = await Promise.all(
+      completed.map(([providerId, state]) =>
+        sourceStore.get({
+          providerId,
+          revision: state.revision,
+          sessionId,
+          userId: this.dependencies.userId,
+        }),
+      ),
+    );
+    if (contexts.some((context) => !context)) {
+      throw new UnderstandingProviderContextUnavailableError();
+    }
+
+    const baseline = await this.dependencies.persona.getLatestPersonaDocument();
+    const writerAgent = await this.dependencies.writerAgent();
+    const detailedPersona: UnderstandingPersonaProposal = UnderstandingPersonaProposalSchema.parse(
+      await this.dependencies.generator.generateObject(
+        {
+          messages: [
+            {
+              content: chainUnderstandingDetailedPersona({
+                analysis: proposal.analysis,
+                responseLanguage,
+              }),
+              role: 'system',
+            },
+            {
+              content: [
+                'Write the complete persona from the original collected provider contexts.',
+                buildEphemeralDocument(contexts as StoredUnderstandingProviderContext[], baseline),
+              ].join('\n\n'),
+              role: 'user',
+            },
+          ],
+          model: writerAgent.model,
+          provider: writerAgent.provider,
+          schema: UNDERSTANDING_DETAILED_PERSONA_JSON_SCHEMA,
+          thinking: { type: 'disabled' },
+        },
+        { metadata: { trigger: RequestTrigger.Onboarding } },
+      ),
+    );
+    const committed = await this.dependencies.repository.commitDetailedWriting({
+      detailedPersona,
+      feedbackRevision: writing.feedbackRevision ?? 0,
+      generationRevision: writing.generationRevision ?? 0,
+      sessionId,
+      sourceFingerprint: expectedSourceFingerprint,
+      topicId,
+    });
+    return { ...committed, sourceFingerprint: expectedSourceFingerprint };
+  };
+
+  failDetailedPersona = async ({
+    sessionId,
+    sourceFingerprint,
+    topicId,
+  }: {
+    sessionId: string;
+    sourceFingerprint: string;
+    topicId: string;
+  }) => {
+    try {
+      const current = await this.activeSession(topicId, sessionId);
+      const writing = current.writing;
+      if (
+        writing?.status !== 'completed' ||
+        writing.sourceFingerprint !== sourceFingerprint ||
+        writing.detailed?.status !== 'running'
+      ) {
+        return;
+      }
+      return this.dependencies.repository.failDetailedWriting({
+        error: canonicalCollectionError(
+          'understanding',
+          'detailed-writing',
+          'UNDERSTANDING_DETAILED_WRITING_FAILED',
+          true,
+        ),
+        feedbackRevision: writing.feedbackRevision ?? 0,
+        generationRevision: writing.generationRevision ?? 0,
+        sessionId,
+        sourceFingerprint,
+        topicId,
+      });
     } catch (error) {
       if (
         error instanceof StaleUnderstandingRevisionError ||

@@ -1,3 +1,4 @@
+import { agentDisplayName } from '@lobechat/types';
 import { Avatar, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -108,7 +109,7 @@ const NewsItem = memo<NewsItemProps>(({ bare, brief }) => {
               // Fade the whole row once read: the leading glyph dims with the title
               // so a scanned item recedes as one, not just a lighter headline.
               style={{ flex: 'none', opacity: read ? 0.5 : 1 }}
-              title={brief.agent.title ?? undefined}
+              title={agentDisplayName(brief.agent)}
             />
           ) : (
             <BriefIcon muted={read} type={brief.type} />

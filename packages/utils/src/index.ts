@@ -4,6 +4,7 @@ export * from './client/cookie';
 export * from './dedupeBy';
 export * from './detectChinese';
 export * from './detectTruncatedJSON';
+export * from './entityId';
 export * from './env';
 export * from './error';
 export * from './folderStructure';

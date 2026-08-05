@@ -200,6 +200,7 @@
   "acceptance.status.repairing": "수리 진행 중",
   "acceptance.status.verifying": "검증 진행 중",
   "acceptance.subject.document": "문서",
+  "acceptance.subject.standalone": "독립형",
   "acceptance.subject.task": "작업",
   "acceptance.subject.topic": "주제",
   "acceptance.surface.other": "기타",

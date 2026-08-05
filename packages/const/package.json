@@ -11,7 +11,7 @@
     "./rbac": "./src/rbac.ts",
     "./url": "./src/url.ts",
     "./verify": "./src/verify.ts",
-    "./visualRef": "./src/visualRef.ts"
+    "./mediaRef": "./src/mediaRef.ts"
   },
   "main": "./src/index.ts",
   "dependencies": {

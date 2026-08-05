@@ -1,5 +1,6 @@
 // @vitest-environment node
 import type {
+  OnboardingTaskRecommendationSession,
   OnboardingUnderstandingMessageMetadata,
   UnderstandingAnalysis,
 } from '@lobechat/types';
@@ -37,7 +38,7 @@ const analysis: UnderstandingAnalysis = {
     identities: [
       {
         description: 'TEST_IDENTITY_DESCRIPTION',
-        salience: 96,
+        rank: 96,
         title: 'TEST_IDENTITY_TITLE',
       },
     ],
@@ -145,7 +146,7 @@ describe('OnboardingUnderstandingRepository', () => {
     });
     expect(prepared).toMatchObject({ ready: true, threadId });
     await insertAssistant(messageId, threadId);
-    return repository.commitWriting({
+    const published = await repository.commitWriting({
       assistantMessageId: messageId,
       feedbackRevision: prepared.feedbackRevision,
       generationRevision: prepared.generationRevision,
@@ -158,6 +159,21 @@ describe('OnboardingUnderstandingRepository', () => {
       threadId,
       topicId,
     });
+    if (published.published) {
+      await repository.commitDetailedWriting({
+        detailedPersona: {
+          content: 'TEST_DETAILED_PERSONA_CONTENT',
+          reasoning: 'TEST_DETAILED_PERSONA_REASONING',
+          tagline: 'TEST_DETAILED_PERSONA_TAGLINE',
+        },
+        feedbackRevision: prepared.feedbackRevision,
+        generationRevision: prepared.generationRevision,
+        sessionId,
+        sourceFingerprint: fingerprint,
+        topicId,
+      });
+    }
+    return published;
   };
 
   beforeEach(async () => {
@@ -169,6 +185,47 @@ describe('OnboardingUnderstandingRepository', () => {
     ]);
     await installTopic();
     repository = new OnboardingUnderstandingRepository(db, userId);
+  });
+
+  /** @example A fresh onboarding run cannot inherit completed starter-task recommendations. */
+  it('removes Understanding and task recommendations together on reset', async () => {
+    const taskRecommendations: OnboardingTaskRecommendationSession = {
+      createdTaskIds: {},
+      errors: [],
+      id: sessionId,
+      providerIds: ['github'],
+      recommendations: [],
+      sourceFingerprint: 'github@1',
+      status: 'pending',
+      updatedAt: '2026-08-04T00:00:00.000Z',
+    };
+    const [existing] = await db
+      .select({ metadata: topics.metadata })
+      .from(topics)
+      .where(eq(topics.id, topicId));
+    await db
+      .update(topics)
+      .set({
+        metadata: {
+          ...existing.metadata,
+          onboardingSession: {
+            ...existing.metadata!.onboardingSession!,
+            taskRecommendations,
+          },
+        },
+      })
+      .where(eq(topics.id, topicId));
+    await repository.initialize(topicId, sessionId, ['github']);
+
+    await repository.removeForReset(topicId);
+
+    const [resetTopic] = await db
+      .select({ metadata: topics.metadata })
+      .from(topics)
+      .where(eq(topics.id, topicId));
+    expect(resetTopic.metadata?.model).toBe('keep-me');
+    expect(resetTopic.metadata?.onboardingSession?.understanding).toBeUndefined();
+    expect(resetTopic.metadata?.onboardingSession?.taskRecommendations).toBeUndefined();
   });
 
   /**
@@ -326,6 +383,11 @@ describe('OnboardingUnderstandingRepository', () => {
       repository.confirm({ resultId: 'combined-result', sessionId, topicId }),
     ).resolves.toEqual({ personaVersion: 1 });
     const persona = new UserPersonaModel(db, userId);
+    await expect(persona.getLatestPersonaDocument()).resolves.toMatchObject({
+      persona: 'TEST_DETAILED_PERSONA_CONTENT',
+      tagline: 'TEST_DETAILED_PERSONA_TAGLINE',
+      version: 1,
+    });
     await persona.upsertPersona({ persona: 'User-edited persona', tagline: 'User-edited tagline' });
     await expect(
       repository.confirm({ resultId: 'combined-result', sessionId, topicId }),

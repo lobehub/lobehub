@@ -137,6 +137,8 @@
   "credits.memberBudget.defaultLimit": "Ngân sách mặc định cho thành viên",
   "credits.memberBudget.defaultLimitHint": "Các thành viên không có quy tắc tùy chỉnh sẽ sử dụng giới hạn này trong mỗi chu kỳ thanh toán.",
   "credits.memberBudget.desc": "Giới hạn số lượng tín dụng không gian làm việc mà mỗi thành viên có thể sử dụng trong chu kỳ thanh toán hiện tại",
+  "credits.memberBudget.details.action": "Xem chi tiết",
+  "credits.memberBudget.details.title": "Sử dụng của thành viên",
   "credits.memberBudget.effectiveBudget": "Ngân sách hiệu lực",
   "credits.memberBudget.empty": "Chưa có thành viên trong không gian làm việc",
   "credits.memberBudget.globalBadge": "Toàn cầu",

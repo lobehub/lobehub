@@ -1,8 +1,13 @@
+import { lobeHubOnlineModelDescriptions } from '../lobehubOnlineModelDescriptions';
 import { modelDescriptionOverrides } from '../modelDescriptionOverrides';
 
 /**
- * The client already receives each model's English description with its model card and uses it as
- * i18next's defaultValue. Keep only app-owned overrides in the browser namespace so loading the
- * models locale does not import the complete model-bank catalog.
+ * Vite SPA path: platform resolve rewrites `models.ts` → `models.vite.ts` so the
+ * browser does not import the full model-bank catalog. Keep app-owned description
+ * overrides here — including LobeHub provider-scoped keys — and use each model
+ * card's English description as i18next `defaultValue` for everything else.
  */
-export default modelDescriptionOverrides;
+export default {
+  ...modelDescriptionOverrides,
+  ...lobeHubOnlineModelDescriptions,
+};

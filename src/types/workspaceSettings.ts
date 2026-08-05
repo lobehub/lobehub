@@ -15,6 +15,7 @@ export enum WorkspaceSettingsTabs {
   Creds = 'credential',
   Devices = 'devices',
   General = 'general',
+  Labels = 'labels',
   Members = 'members',
   Notification = 'notification',
   OAuthApps = 'oauth-apps',

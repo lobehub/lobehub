@@ -111,7 +111,11 @@ export class OpenCodeAdapter implements AgentEventAdapter {
       this.started = true;
     }
     this.streamOpen = true;
-    const data: StreamStartData = { provider: OPENCODE_IDENTIFIER, sessionId: this.sessionId };
+    const data: StreamStartData & { newStep?: boolean } = {
+      provider: OPENCODE_IDENTIFIER,
+      sessionId: this.sessionId,
+      ...(this.stepIndex > 0 ? { newStep: true } : {}),
+    };
     events.push(this.makeEvent('stream_start', data));
     return events;
   }

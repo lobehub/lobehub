@@ -13,7 +13,7 @@ import { BUILTIN_AGENT_SLUGS, getAgentRuntimeConfig } from '@lobechat/builtin-ag
 import { builtinSkills } from '@lobechat/builtin-skills';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { LobeAgentIdentifier, LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
-import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
+import { getShellSyntaxGuidance, LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MessageToolIdentifier } from '@lobechat/builtin-tool-message';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import type { DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
@@ -183,6 +183,13 @@ import { isWorkspaceCacheFresh, upsertWorkspaceScan } from './workspaceInitCache
 
 const log = debug('lobe-server:ai-agent-service');
 
+/**
+ * Content written onto a tool row that the user stopped before it ran. Mirrors
+ * the runtime's aborted-tool wording so a stopped call reads the same whether
+ * it was settled here or by `resolve_aborted_tools`.
+ */
+const STOPPED_TOOL_CONTENT = 'Tool execution was aborted by user.';
+
 const createGraphAwareAgentFactory =
   (
     upstreamFactory?: AgentRuntimeServiceOptions['agentFactory'],
@@ -231,18 +238,23 @@ function formatErrorForMetadata(error: unknown): Record<string, any> | undefined
   return { message: String(error) };
 }
 
-const getVisualAvailabilityFromFileTypes = (fileTypes: string[]) => ({
+const getMediaAvailabilityFromFileTypes = (fileTypes: string[]) => ({
+  hasAudios: fileTypes.some((fileType) => fileType.startsWith('audio')),
   hasImages: fileTypes.some((fileType) => fileType.startsWith('image')),
   hasVideos: fileTypes.some((fileType) => fileType.startsWith('video')),
 });
 
-interface VisualAvailabilityMessage {
+interface MediaAvailabilityMessage {
+  audioList?: unknown[];
   imageList?: unknown[];
   role?: string;
   videoList?: unknown[];
 }
 
-const getVisualAvailabilityFromMessages = (messages: VisualAvailabilityMessage[]) => ({
+const getMediaAvailabilityFromMessages = (messages: MediaAvailabilityMessage[]) => ({
+  hasAudios: messages.some(
+    (message) => message.role === 'user' && (message.audioList?.length ?? 0) > 0,
+  ),
   hasImages: messages.some(
     (message) => message.role === 'user' && (message.imageList?.length ?? 0) > 0,
   ),
@@ -251,9 +263,11 @@ const getVisualAvailabilityFromMessages = (messages: VisualAvailabilityMessage[]
   ),
 });
 
-const isVisualUnderstandingConfigured = () => {
+const isMultimodalUnderstandingConfigured = () => {
   try {
-    return !!toolsEnv.VISUAL_UNDERSTANDING_PROVIDER && !!toolsEnv.VISUAL_UNDERSTANDING_MODEL;
+    return (
+      !!toolsEnv.MULTIMODAL_UNDERSTANDING_PROVIDER && !!toolsEnv.MULTIMODAL_UNDERSTANDING_MODEL
+    );
   } catch {
     // The env proxy rejects server-only keys in client-like runtimes; treat that as disabled.
     return false;
@@ -404,6 +418,24 @@ interface InternalExecAgentParams extends ExecAgentParams {
     rejectionReason?: string;
     toolCallId: string;
   };
+  /**
+   * Batch form of `resumeApproval` — every decision the user made in ONE
+   * action ("approve all" on a parallel tool batch). The service applies each
+   * decision to its tool message and resumes with a single `call_tools_batch`
+   * covering all approved tools, so the LLM is continued exactly once with the
+   * complete result set.
+   *
+   * Resolving a parallel batch as N sequential `resumeApproval` calls instead
+   * produces N operations, and each one continues the LLM while the tools not
+   * yet approved are still empty rows. Mutually exclusive with
+   * `resumeApproval`; when both are absent nothing approval-related runs.
+   */
+  resumeApprovals?: {
+    decision: 'approved' | 'rejected' | 'rejected_continue';
+    parentMessageId: string;
+    rejectionReason?: string;
+    toolCallId: string;
+  }[];
   /**
    * When present, this execAgent call resumes a previous op that paused on a
    * `humanIntervention: 'always'` tool (e.g. lobe-agent `askUserQuestion`). The
@@ -1180,12 +1212,21 @@ export class AiAgentService {
       parentOperationId,
       resume,
       resumeApproval,
+      resumeApprovals,
       resumeToolResult,
       selectedToolIds,
       mentionedAgents,
       suppressUserMessage,
       ephemeralUserMessage,
     } = params;
+
+    // Honour client-minted row ids on a FRESH send only. Resume / regeneration
+    // replays reach this method too (resumeApproval, resumeToolResult,
+    // parentMessageId), and a replayed id there would collide with the row the
+    // original send already created — so those paths drop the ids defensively
+    // rather than trusting every caller to omit them.
+    const isResumeLike = !!resume || !!resumeApproval || !!resumeToolResult || !!parentMessageId;
+    const clientIds = isResumeLike ? undefined : params.clientIds;
 
     // Validate that either agentId or slug is provided
     if (!agentId && !slug) {
@@ -1462,7 +1503,16 @@ export class AiAgentService {
     // tRPC router get `resume: true` via the router, but the service-level
     // API allows resumeApproval alone — fold both into a single effective
     // flag so downstream resume branches don't need to know about approval.
-    const effectiveResume = resume || !!resumeApproval || !!resumeToolResult;
+    // Normalize the single and batch approval forms into one list so every
+    // branch below (validation, DB writes, resume context) has a single shape
+    // to reason about. `resumeApproval` stays the wire format for one decision.
+    const approvalDecisions = resumeApprovals?.length
+      ? resumeApprovals
+      : resumeApproval
+        ? [resumeApproval]
+        : [];
+
+    const effectiveResume = resume || approvalDecisions.length > 0 || !!resumeToolResult;
 
     // Both resume and suppressUserMessage run the turn off existing history
     // instead of appending a new user message — share the message-construction
@@ -1516,40 +1566,97 @@ export class AiAgentService {
     // tool_call_id / apiName / identifier / arguments / type fields live on
     // the plugin row and must be fetched separately.
     let resumeApprovalPlugin: MessagePluginItem | undefined;
+    /**
+     * Approved decisions paired with their plugin row, in the order the caller
+     * listed them. Drives the batch resume context at 16b; the tool message id
+     * doubles as the row `call_tools_batch` fills in place.
+     */
+    const approvedToolEntries: {
+      createdAt: Date;
+      plugin: MessagePluginItem;
+      toolMessageId: string;
+    }[] = [];
+    /** Assistant that emitted this batch — the pending tool rows' shared parent. */
+    let approvalOwnerAssistantId: string | undefined;
 
-    if (resumeApproval) {
-      if (!resumeParentMessage) {
-        throw new Error('resumeApproval requires parentMessageId to point at a tool message');
+    // Load and validate EVERY decision before applying any of them. The apply
+    // step writes per entry, so validating inline would leave a rejected batch
+    // half-persisted — some tools already marked approved with no run to
+    // execute them.
+    const validatedDecisions: {
+      entry: (typeof approvalDecisions)[number];
+      plugin: MessagePluginItem;
+      targetMessage: NonNullable<typeof resumeParentMessage>;
+    }[] = [];
+
+    for (const decisionEntry of approvalDecisions) {
+      // The single-decision form validated `parentMessageId` (the op-level
+      // resume anchor) as the target tool message. In the batch form each
+      // decision names its own tool message, so load and validate per entry —
+      // the op-level anchor is only one of them.
+      const targetMessage =
+        decisionEntry.parentMessageId === parentMessageId
+          ? resumeParentMessage
+          : await this.messageModel.findById(decisionEntry.parentMessageId);
+
+      if (!targetMessage) {
+        throw new Error(`resumeApproval: tool message not found: ${decisionEntry.parentMessageId}`);
       }
-      if (resumeParentMessage.role !== 'tool') {
+      if (targetMessage.role !== 'tool') {
         throw new Error(
-          `resumeApproval.parentMessageId must point at a role='tool' message, got role='${resumeParentMessage.role}'`,
+          `resumeApproval.parentMessageId must point at a role='tool' message, got role='${targetMessage.role}'`,
+        );
+      }
+      if (targetMessage.topicId !== appContext?.topicId) {
+        throw new Error('appContext.topicId does not match approval target message');
+      }
+
+      const plugin = await this.messageModel.findMessagePlugin(decisionEntry.parentMessageId);
+      if (!plugin) {
+        throw new Error(
+          `resumeApproval: no plugin row for tool message ${decisionEntry.parentMessageId}`,
+        );
+      }
+      if (plugin.toolCallId && plugin.toolCallId !== decisionEntry.toolCallId) {
+        throw new Error(
+          `resumeApproval.toolCallId mismatch for message ${decisionEntry.parentMessageId}: ` +
+            `stored=${plugin.toolCallId}, requested=${decisionEntry.toolCallId}`,
         );
       }
 
-      resumeApprovalPlugin = await this.messageModel.findMessagePlugin(
-        resumeApproval.parentMessageId,
+      validatedDecisions.push({ entry: decisionEntry, plugin, targetMessage });
+    }
+
+    // A batch resume executes every approved tool as ONE `call_tools_batch`
+    // under ONE assistant anchor and continues the LLM once. That is only
+    // meaningful when the calls actually came from the same assistant turn.
+    // The client scopes its selection, but a stale or hand-built request could
+    // mix an abandoned approval from an earlier turn into this one — which
+    // would run an unrelated tool and fold its result into a turn it does not
+    // belong to. Reject rather than silently anchoring on whichever entry came
+    // first.
+    const approvalOwnerIds = new Set(
+      validatedDecisions.map(({ targetMessage }) => targetMessage.parentId ?? '(none)'),
+    );
+    if (approvalOwnerIds.size > 1) {
+      throw new Error(
+        `resumeApprovals must resolve one assistant turn, got ${approvalOwnerIds.size} owners: ` +
+          [...approvalOwnerIds].join(', '),
       );
-      if (!resumeApprovalPlugin) {
-        throw new Error(
-          `resumeApproval: no plugin row for tool message ${resumeApproval.parentMessageId}`,
-        );
-      }
-      if (
-        resumeApprovalPlugin.toolCallId &&
-        resumeApprovalPlugin.toolCallId !== resumeApproval.toolCallId
-      ) {
-        throw new Error(
-          `resumeApproval.toolCallId mismatch for message ${resumeApproval.parentMessageId}: ` +
-            `stored=${resumeApprovalPlugin.toolCallId}, requested=${resumeApproval.toolCallId}`,
-        );
-      }
+    }
 
-      const { decision, rejectionReason } = resumeApproval;
+    for (const { entry: decisionEntry, plugin, targetMessage } of validatedDecisions) {
+      const { decision, rejectionReason } = decisionEntry;
       if (decision === 'approved') {
-        await this.messageModel.updateMessagePlugin(resumeApproval.parentMessageId, {
+        await this.messageModel.updateMessagePlugin(decisionEntry.parentMessageId, {
           intervention: { status: 'approved' },
         });
+        approvedToolEntries.push({
+          createdAt: targetMessage.createdAt,
+          plugin,
+          toolMessageId: decisionEntry.parentMessageId,
+        });
+        approvalOwnerAssistantId ??= targetMessage.parentId ?? undefined;
       } else {
         // rejected / rejected_continue both write the same rejection content
         // + intervention state. The difference surfaces later in how the new
@@ -1557,21 +1664,42 @@ export class AiAgentService {
         const rejectionContent = rejectionReason
           ? `User reject this tool calling with reason: ${rejectionReason}`
           : 'User reject this tool calling without reason';
-        await this.messageModel.updateToolMessage(resumeApproval.parentMessageId, {
+        await this.messageModel.updateToolMessage(decisionEntry.parentMessageId, {
           content: rejectionContent,
         });
-        await this.messageModel.updateMessagePlugin(resumeApproval.parentMessageId, {
+        await this.messageModel.updateMessagePlugin(decisionEntry.parentMessageId, {
           intervention: { rejectedReason: rejectionReason, status: 'rejected' },
         });
       }
 
+      // Kept for the single-decision resume context at 16b, which reads the
+      // plugin of the op-level anchor message.
+      if (decisionEntry.parentMessageId === parentMessageId) resumeApprovalPlugin = plugin;
+
       log(
         'execAgent: resumeApproval decision=%s applied to tool message %s (toolCallId=%s)',
         decision,
-        resumeApproval.parentMessageId,
-        resumeApproval.toolCallId,
+        decisionEntry.parentMessageId,
+        decisionEntry.toolCallId,
       );
     }
+
+    // The approval pause creates one row per pending tool sequentially, in the
+    // order the model emitted the calls — so row creation order IS declaration
+    // order, and sorting by it makes the resume independent of how the client
+    // happened to order its request array.
+    approvedToolEntries.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+    /**
+     * Spine anchor for a batch approval: the ASSISTANT that emitted the batch —
+     * i.e. the previous LLM call. A step is one LLM call, and tool rows are
+     * inline data of the call that produced them, never spine nodes. So the
+     * continuation assistant created below chains directly onto that assistant
+     * (`user → asst → asst …`, tools hanging off their caller) rather than onto
+     * one of the batch's tool rows, which would make the spine depend on which
+     * tool row you happened to pick and on the order they were written in.
+     */
+    const batchApprovalAnchorId = resumeApprovals?.length ? approvalOwnerAssistantId : undefined;
 
     // 2.7. Human-answer resume: a `humanIntervention: 'always'` tool (e.g.
     // lobe-agent `askUserQuestion`) paused this run. Write the human-provided
@@ -1681,26 +1809,31 @@ export class AiAgentService {
           : undefined;
 
       const fallbackTitleSource = markdownToTxt(prompt);
-      const newTopic = await this.topicModel.create({
-        agentId: resolvedAgentId,
-        // Persist the group association when running inside a group conversation.
-        // Without it the topic is created group-less and only shows under the
-        // member agent's topic list — never in the group sidebar (which queries
-        // `topics.groupId`), so the conversation silently "disappears" from the
-        // group. execGroupAgent normally pre-creates the topic, but any path
-        // that reaches execAgent without a topicId (e.g. the async/queue run)
-        // must carry the groupId through too (group topic sidebar + ownership fix).
-        groupId: appContext?.groupId,
-        metadata,
-        // Snapshot the effective model as the topic's pinned model (config).
-        model,
-        provider,
-        title:
-          title !== undefined
-            ? title
-            : fallbackTitleSource.slice(0, 50) + (fallbackTitleSource.length > 50 ? '...' : ''),
-        trigger,
-      });
+      // Second argument: the id the client already rendered this topic under
+      // (sidebar row, message bucket). Absent → the model mints one as before.
+      const newTopic = await this.topicModel.create(
+        {
+          agentId: resolvedAgentId,
+          // Persist the group association when running inside a group conversation.
+          // Without it the topic is created group-less and only shows under the
+          // member agent's topic list — never in the group sidebar (which queries
+          // `topics.groupId`), so the conversation silently "disappears" from the
+          // group. execGroupAgent normally pre-creates the topic, but any path
+          // that reaches execAgent without a topicId (e.g. the async/queue run)
+          // must carry the groupId through too (group topic sidebar + ownership fix).
+          groupId: appContext?.groupId,
+          metadata,
+          // Snapshot the effective model as the topic's pinned model (config).
+          model,
+          provider,
+          title:
+            title !== undefined
+              ? title
+              : fallbackTitleSource.slice(0, 50) + (fallbackTitleSource.length > 50 ? '...' : ''),
+          trigger,
+        },
+        clientIds?.topicId,
+      );
       topicId = newTopic.id;
       log(
         'execAgent: created new topic %s with trigger %s, groupId %s, cronJobId %s',
@@ -1753,7 +1886,7 @@ export class AiAgentService {
     // 3.5. Hetero-agent early exit — local CLI and remote platform agents bypass the
     // server-side LLM pipeline.  After topic + message creation we hand off to
     // the device gateway (desktop) or cloud sandbox, which will push events
-    // back via `heteroIngest` / `heteroFinish` (claude-code / codex / opencode) or
+    // back via `heteroIngest` / `heteroFinish` (amp / claude-code / codex / opencode / pi) or
     // `agentNotify.notify` (openclaw / hermes).
     //
     // Detection: prefer agencyConfig.heterogeneousProvider.type (set by the UI),
@@ -1762,7 +1895,7 @@ export class AiAgentService {
     const heteroProviderType = agentConfig.agencyConfig?.heterogeneousProvider?.type;
     const isHeteroAgent = !!heteroProviderType || isHeterogeneousAgentModelId(model);
     const heteroType = (heteroProviderType ?? model) as
-      'amp' | 'claude-code' | 'codex' | 'hermes' | 'openclaw' | 'opencode';
+      'amp' | 'claude-code' | 'codex' | 'hermes' | 'openclaw' | 'opencode' | 'pi';
 
     // ── Shared turn setup (runs for BOTH hetero and normal agents) ──────────
     // Everything up to and including persisting the turn is identical for both
@@ -1819,20 +1952,24 @@ export class AiAgentService {
     const userMessageParentId = await resolveUserMessageParentId();
     const userMessageRecord = runFromHistory
       ? undefined
-      : await this.messageModel.create({
-          agentId: persistAgentId,
-          content: prompt,
-          files: runAttachments.fileIds,
-          // Group reads filter on messages.groupId (MessageModel.query group
-          // branch), so a group turn must stamp groupId or the message never
-          // shows when the topic is reopened (group topic sidebar + ownership fix).
-          groupId: appContext?.groupId ?? undefined,
-          metadata: requestTriggerMetadata,
-          parentId: userMessageParentId,
-          role: 'user',
-          threadId: appContext?.threadId ?? undefined,
-          topicId,
-        });
+      : await this.messageModel.create(
+          {
+            agentId: persistAgentId,
+            content: prompt,
+            files: runAttachments.fileIds,
+            // Group reads filter on messages.groupId (MessageModel.query group
+            // branch), so a group turn must stamp groupId or the message never
+            // shows when the topic is reopened (group topic sidebar + ownership fix).
+            groupId: appContext?.groupId ?? undefined,
+            metadata: requestTriggerMetadata,
+            parentId: userMessageParentId,
+            role: 'user',
+            threadId: appContext?.threadId ?? undefined,
+            topicId,
+          },
+          // The id the client's optimistic user row already renders under.
+          clientIds?.userMessageId,
+        );
     if (userMessageRecord) {
       selfMessageIds.add(userMessageRecord.id);
       log('execAgent: created user message %s', userMessageRecord.id);
@@ -1856,22 +1993,29 @@ export class AiAgentService {
     // / `turn_metadata` (backfilled by HeterogeneousPersistenceHandler), and
     // seeding the agent's chat model would leak it into the model tag. A normal
     // run seeds model + provider as usual.
-    const assistantMessageRecord = await this.messageModel.create({
-      agentId: persistAgentId,
-      content: LOADING_FLAT,
-      // Stamp groupId so the assistant turn is visible in the group read path
-      // (MessageModel.query filters group chats by messages.groupId).
-      groupId: appContext?.groupId ?? undefined,
-      metadata: orchestrationMetadata,
-      model: isHeteroAgent ? undefined : model,
-      // Chain onto the user turn we just persisted; `parentMessageId` is the
-      // anchor only on a resume, where no user message is created.
-      parentId: userMessageRecord?.id ?? parentMessageId,
-      provider: isHeteroAgent ? heteroType : provider,
-      role: 'assistant',
-      threadId: appContext?.threadId ?? undefined,
-      topicId,
-    });
+    const assistantMessageRecord = await this.messageModel.create(
+      {
+        agentId: persistAgentId,
+        content: LOADING_FLAT,
+        // Stamp groupId so the assistant turn is visible in the group read path
+        // (MessageModel.query filters group chats by messages.groupId).
+        groupId: appContext?.groupId ?? undefined,
+        metadata: orchestrationMetadata,
+        model: isHeteroAgent ? undefined : model,
+        // Chain onto the user turn we just persisted; `parentMessageId` is the
+        // anchor only on a resume, where no user message is created. A batch
+        // approval overrides it with the assistant that emitted the batch — the
+        // previous LLM call — so the spine stays one node per call and never
+        // depends on which of the batch's tool rows the client sent as anchor.
+        parentId: userMessageRecord?.id ?? batchApprovalAnchorId ?? parentMessageId,
+        provider: isHeteroAgent ? heteroType : provider,
+        role: 'assistant',
+        threadId: appContext?.threadId ?? undefined,
+        topicId,
+      },
+      // The id the client's assistant placeholder already renders under.
+      clientIds?.assistantMessageId,
+    );
     selfMessageIds.add(assistantMessageRecord.id);
     assistantMessageRef.current = assistantMessageRecord.id;
     log('execAgent: created assistant message %s', assistantMessageRecord.id);
@@ -2045,7 +2189,8 @@ export class AiAgentService {
         heteroType === 'amp' ||
         heteroType === 'claude-code' ||
         heteroType === 'codex' ||
-        heteroType === 'opencode'
+        heteroType === 'opencode' ||
+        heteroType === 'pi'
           ? buildHeteroExecArgs(
               agentConfig.agencyConfig?.heterogeneousProvider?.type === heteroType
                 ? agentConfig.agencyConfig.heterogeneousProvider
@@ -2227,7 +2372,7 @@ export class AiAgentService {
           };
         }
       } else {
-        // Local CLI hetero (Amp / Claude Code / Codex / OpenCode) — fork between device dispatch
+        // Local CLI hetero (Amp / Claude Code / Codex / OpenCode / Pi) — fork between device dispatch
         // and cloud sandbox via the shared execution plan:
         //   - requestedDeviceId (topic-level override) always wins
         //   - executionTarget 'device' → dispatch to boundDeviceId (errors if unset)
@@ -2288,7 +2433,7 @@ export class AiAgentService {
               agentId: resolvedAgentId,
               assistantMessageId: assistantMessageRecord.id,
               detail:
-                heteroType === 'amp' || heteroType === 'opencode'
+                heteroType === 'amp' || heteroType === 'opencode' || heteroType === 'pi'
                   ? 'No device bound. Pick a local or connected device in the Execution Device switcher.'
                   : 'No device bound. Pick a device in the Execution Device switcher, or switch to Cloud sandbox.',
               message: 'No bound device for hetero agent',
@@ -2352,7 +2497,9 @@ export class AiAgentService {
           const deviceSystemContext = buildRemoteDeviceHeteroContext({
             agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
             conversationHistory,
-            cwd: deviceCwd,
+            // The native CLI session already knows its cwd. Keep the explanatory workspace note
+            // on the first turn only so persistent resumed sessions do not accumulate duplicates.
+            cwd: resumeSessionId ? undefined : deviceCwd,
           });
 
           const result = await deviceGateway.dispatchAgentRun({
@@ -2954,31 +3101,36 @@ export class AiAgentService {
         attachedFileTypes = fileRecords.map((file) => file.fileType || '');
       }
       const inputFileTypes = [...externalFileTypes, ...attachedFileTypes];
-      const inputVisualAvailability = getVisualAvailabilityFromFileTypes(inputFileTypes);
-      let historyVisualAvailability = { hasImages: false, hasVideos: false };
-      const visualUnderstandingConfigured = isVisualUnderstandingConfigured();
+      const inputMediaAvailability = getMediaAvailabilityFromFileTypes(inputFileTypes);
+      let historyMediaAvailability = { hasAudios: false, hasImages: false, hasVideos: false };
+      const multimodalUnderstandingConfigured = isMultimodalUnderstandingConfigured();
 
       if (
-        visualUnderstandingConfigured &&
-        ((!modelAbilities?.vision && !inputVisualAvailability.hasImages) ||
-          (!modelAbilities?.video && !inputVisualAvailability.hasVideos))
+        multimodalUnderstandingConfigured &&
+        ((!modelAbilities?.audio && !inputMediaAvailability.hasAudios) ||
+          (!modelAbilities?.vision && !inputMediaAvailability.hasImages) ||
+          (!modelAbilities?.video && !inputMediaAvailability.hasVideos))
       ) {
-        historyVisualAvailability = getVisualAvailabilityFromMessages(await loadHistoryMessages());
+        historyMediaAvailability = getMediaAvailabilityFromMessages(await loadHistoryMessages());
       }
 
+      const needsAudioUnderstanding =
+        (inputMediaAvailability.hasAudios || historyMediaAvailability.hasAudios) &&
+        !modelAbilities?.audio;
       const needsImageUnderstanding =
-        (inputVisualAvailability.hasImages || historyVisualAvailability.hasImages) &&
+        (inputMediaAvailability.hasImages || historyMediaAvailability.hasImages) &&
         !modelAbilities?.vision;
       const needsVideoUnderstanding =
-        (inputVisualAvailability.hasVideos || historyVisualAvailability.hasVideos) &&
+        (inputMediaAvailability.hasVideos || historyMediaAvailability.hasVideos) &&
         !modelAbilities?.video;
-      const shouldEnableVisualUnderstanding =
-        visualUnderstandingConfigured && (needsImageUnderstanding || needsVideoUnderstanding);
+      const shouldEnableMultimodalUnderstanding =
+        multimodalUnderstandingConfigured &&
+        (needsAudioUnderstanding || needsImageUnderstanding || needsVideoUnderstanding);
       agentPlugins = [
         ...agentPlugins,
         ...(hasTopicReference ? ['lobe-topic-reference'] : []),
         ...(isBotConversation ? [MessageToolIdentifier] : []),
-        ...(shouldEnableVisualUnderstanding ? [LobeAgentManifest.identifier] : []),
+        ...(shouldEnableMultimodalUnderstanding ? [LobeAgentManifest.identifier] : []),
       ];
 
       // Resolve THE device decision for this run. All rules live in
@@ -3451,13 +3603,14 @@ export class AiAgentService {
         if (!systemInfo) return {};
         const device = onlineDevices.find((d) => d.deviceId === deviceId);
         log('execAgent: fetched device system info for %s', deviceId);
+        // Devices that don't report defaultShell run an older client whose
+        // runner still hardcodes cmd.exe on Windows — describe that honestly
+        // instead of the new PowerShell default.
+        const defaultShell =
+          systemInfo.defaultShell ?? (device?.platform === 'win32' ? 'cmd.exe' : '/bin/sh');
         return {
           arch: systemInfo.arch,
-          // Devices that don't report defaultShell run an older client whose
-          // runner still hardcodes cmd.exe on Windows — describe that honestly
-          // instead of the new PowerShell default.
-          defaultShell:
-            systemInfo.defaultShell ?? (device?.platform === 'win32' ? 'cmd.exe' : '/bin/sh'),
+          defaultShell,
           desktopPath: systemInfo.desktopPath,
           documentsPath: systemInfo.documentsPath,
           downloadsPath: systemInfo.downloadsPath,
@@ -3466,6 +3619,9 @@ export class AiAgentService {
           musicPath: systemInfo.musicPath,
           picturesPath: systemInfo.picturesPath,
           platform: device?.platform ?? 'unknown',
+          // Keep the syntax guidance consistent with the shell named above —
+          // the system role references both placeholders in one sentence.
+          shellSyntaxGuidance: getShellSyntaxGuidance(defaultShell),
           userDataPath: systemInfo.userDataPath,
           videosPath: systemInfo.videosPath,
           // `workingDirectory` is intentionally NOT taken from the live device
@@ -3821,7 +3977,42 @@ export class AiAgentService {
     // decision is persisted, there's nothing meaningful to do differently
     // server-side, and letting the LLM produce a brief acknowledgement keeps
     // the conversation cleanly terminated either way.
-    if (resumeApproval && resumeApprovalPlugin) {
+    // Batch approval: hand the runtime every approved tool at once so it runs a
+    // single `call_tools_batch` against the existing pending rows and continues
+    // the LLM exactly once, with the complete result set. Taken whenever the
+    // caller used the batch wire form; the single `resumeApproval` form keeps
+    // the established `call_tool` + `skipCreateToolMessage` path below.
+    if (resumeApprovals?.length && approvedToolEntries.length > 0) {
+      initialContext = {
+        initialContext: initialContext.initialContext,
+        payload: {
+          approvedToolCalls: approvedToolEntries.map(({ plugin }) => ({
+            apiName: plugin.apiName,
+            arguments: plugin.arguments,
+            id: plugin.toolCallId,
+            identifier: plugin.identifier,
+            type: plugin.type ?? 'default',
+          })),
+          assistantMessageId: assistantMessageRecord.id,
+          // The tool rows already exist and are parented to the assistant that
+          // emitted the calls; the batch executor addresses them through
+          // `toolMessageIds` and never inserts, so this only anchors the spine.
+          parentMessageId: approvalOwnerAssistantId ?? assistantMessageRecord.id,
+          toolMessageIds: Object.fromEntries(
+            approvedToolEntries
+              .filter(({ plugin }) => !!plugin.toolCallId)
+              .map(({ plugin, toolMessageId }) => [plugin.toolCallId!, toolMessageId]),
+          ),
+        } as any,
+        phase: 'human_approved_tool' as const,
+        session: {
+          messageCount: allMessages.length,
+          sessionId: operationId,
+          status: 'idle' as const,
+          stepCount: 0,
+        },
+      };
+    } else if (resumeApproval && resumeApprovalPlugin) {
       if (resumeApproval.decision === 'approved') {
         // Ask the runtime to execute the approved tool directly. Matches the
         // `phase: 'human_approved_tool'` contract used by the in-place
@@ -5247,6 +5438,88 @@ export class AiAgentService {
       operationId: resolvedOperationId,
       success: true,
       threadId: thread?.id,
+    };
+  }
+
+  /**
+   * Stop a run that is parked waiting for tool approval: settle the pending
+   * tool rows and terminate the operation, WITHOUT executing anything and
+   * without continuing the model.
+   *
+   * This is the "from this step on, don't go any further" action. It is not the
+   * same as rejecting a tool — a rejection resumes the model so it can respond
+   * to the refusal, whereas stopping ends the turn outright.
+   *
+   * Why it can't reuse the ordinary cancel path: when the runtime parks it
+   * emits a stream-terminal `waiting_for_human`, so the client marks its own
+   * operation `completed` and prunes it ~30s later, and the topic's
+   * `runningOperation` pointer is cleared. By the time the user decides to
+   * stop, the client no longer knows the parked operation id — so we resolve it
+   * here from the topic instead of trusting the caller.
+   *
+   * The tool rows are settled IN PLACE (the approval pause already created one
+   * row per pending call). Inserting fresh aborted rows would duplicate every
+   * tool in the turn and leave the originals `pending`, which is exactly what
+   * keeps the approval cards on screen after a stop.
+   */
+  async stopPendingApproval(params: { toolMessageIds: string[]; topicId: string }): Promise<{
+    operationId?: string;
+    settledToolMessageIds: string[];
+    success: boolean;
+  }> {
+    const { toolMessageIds, topicId } = params;
+
+    // Validate every target before writing any of them: a half-settled batch
+    // would clear some cards while leaving the rest pointing at a run that is
+    // already gone.
+    const targets: { id: string }[] = [];
+    for (const toolMessageId of toolMessageIds) {
+      const message = await this.messageModel.findById(toolMessageId);
+      if (!message)
+        throw new Error(`stopPendingApproval: tool message not found: ${toolMessageId}`);
+      if (message.role !== 'tool') {
+        throw new Error(
+          `stopPendingApproval.toolMessageIds must point at role='tool' messages, got role='${message.role}'`,
+        );
+      }
+      if (message.topicId !== topicId) {
+        throw new Error('stopPendingApproval: topicId does not match the target tool message');
+      }
+      targets.push({ id: toolMessageId });
+    }
+
+    for (const target of targets) {
+      await this.messageModel.updateToolMessage(target.id, {
+        content: STOPPED_TOOL_CONTENT,
+      });
+      await this.messageModel.updateMessagePlugin(target.id, {
+        intervention: { status: 'aborted' },
+      } as any);
+    }
+
+    // Retire the parked operation so the topic does not keep a run that can
+    // never be resumed. Resolved from the topic because the client has lost the
+    // id by now (see the doc comment above).
+    const parkedOperationId = await this.agentOperationModel.findLatestParkedOperationId(topicId);
+    if (parkedOperationId) {
+      await this.agentRuntimeService.interruptOperation(parkedOperationId);
+      await this.agentOperationModel.recordCompletion(parkedOperationId, {
+        completedAt: new Date(),
+        completionReason: 'interrupted',
+        status: 'interrupted',
+      });
+    }
+
+    log(
+      'stopPendingApproval: settled %d tool message(s), retired operation %s',
+      targets.length,
+      parkedOperationId ?? '(none)',
+    );
+
+    return {
+      operationId: parkedOperationId,
+      settledToolMessageIds: targets.map((t) => t.id),
+      success: true,
     };
   }
 }

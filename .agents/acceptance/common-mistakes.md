@@ -232,6 +232,30 @@ DOM measurements as well as visual evidence.
 
 ## Environment safety
 
+### L-S0 — Concluding a dependency moved from the root manifest alone
+
+**Wrong approach:** refresh a shared dependency by running `pnpm install --filter .`
+at the repo root — or by bumping only the root range and running a full install —
+then read the new version out of `package.json` and treat a type-check failure in
+untouched files as pre-existing.
+
+**Why it fails:** the filter installs only the root workspace, and even an unfiltered
+install leaves `packages/*` on their old resolution when they declare a loose range
+(`"@lobehub/ui": "^5"` is satisfied by both the old and the new version, so nothing
+forces them to move). Two identities of the same package then coexist in the graph,
+and the errors surface far from the change — a duplicated `next` shows up as
+`NextRequest is not assignable to NextRequest` in backend route shells, and a
+duplicated UI package kills routes at the ErrorBoundary with a missing React context,
+or gives a component library two copies of a shared z-index/portal manager. Neither
+names the real cause.
+
+**Correct approach:** run a full `pnpm install` (no filter) after any dependency
+range change, then `pnpm dedupe` when the root and the workspace packages resolve
+different versions of a shared peer. State the version only from resolved copies —
+count the versions under `node_modules/<pkg>` and every `packages/*/node_modules/<pkg>`
+and require one distinct value — never from the root manifest. Remember `apps/desktop`
+and `apps/cli` are standalone installs that a root install never covers.
+
 ### L-S1 — Publishing to an assumed server target
 
 **Wrong approach:** strip a server environment variable and treat `lh whoami` as

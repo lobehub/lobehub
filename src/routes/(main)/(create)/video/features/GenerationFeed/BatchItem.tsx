@@ -1,6 +1,6 @@
 'use client';
 
-import { ModelTag } from '@lobehub/icons';
+import { ModelIcon } from '@lobehub/icons';
 import { ActionIconGroup, Block, Flexbox, Markdown, Tag, Text } from '@lobehub/ui';
 import { toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import useRenderBusinessVideoBatchItem from '@/business/client/hooks/useRenderBusinessVideoBatchItem';
 import { GenerationInvalidAPIKey } from '@/routes/(main)/(create)/features/GenerationInput';
+import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useVideoStore } from '@/store/video';
 import { AsyncTaskErrorType, AsyncTaskStatus } from '@/types/asyncTask';
 import type { GenerationBatch } from '@/types/generation';
@@ -55,6 +56,15 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(({ b
   const activeWorkspaceId = useActiveWorkspaceId();
   const { shouldRenderBusinessBatchItem, businessBatchItem } =
     useRenderBusinessVideoBatchItem(batch);
+
+  const enabledVideoModelList = useAiInfraStore(aiProviderSelectors.enabledVideoModelList);
+  // Resolve the model's display name from the enabled model catalog, falling back
+  // to the raw model id when the model is not found (e.g. removed/renamed models).
+  const modelDisplayName = useMemo(() => {
+    const provider = enabledVideoModelList.find((p) => p.id === batch.provider);
+    const model = provider?.children.find((m) => m.id === batch.model);
+    return model?.displayName || batch.model;
+  }, [enabledVideoModelList, batch.provider, batch.model]);
 
   const creator = batch.creator;
   const showCreator = Boolean(activeWorkspaceId && creator?.id);
@@ -245,7 +255,9 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(({ b
         style={{ opacity: 0.66 }}
       >
         <Flexbox horizontal align={'center'} gap={4}>
-          <ModelTag model={batch.model} variant={'borderless'} />
+          <Tag icon={<ModelIcon model={batch.model} />} variant={'borderless'}>
+            {modelDisplayName}
+          </Tag>
           {batch.config?.resolution && <Tag variant={'borderless'}>{batch.config.resolution}</Tag>}
         </Flexbox>
         <Flexbox horizontal align={'center'} gap={6}>

@@ -18,7 +18,10 @@ describe('githubUnderstandingProvider', () => {
     const client = {
       getUserProfile: vi.fn(() => profile),
       getUserProfileReadme: supplemental('readme', undefined),
+      listContributedRepositories: supplemental('contributedRepositories', []),
+      listInfluentialRepositories: supplemental('influentialRepositories', []),
       listPinnedRepositories: supplemental('pinned', []),
+      listPinnedContributedRepositories: supplemental('pinnedContributions', []),
       listRecentContributions: supplemental('contributions', []),
       listRecentPullRequests: supplemental('pullRequests', []),
       listRecentRepositories: supplemental('repositories', []),
@@ -33,11 +36,11 @@ describe('githubUnderstandingProvider', () => {
       userId: 'user-id',
     });
 
-    await vi.waitFor(() => expect(started.size).toBe(6));
+    await vi.waitFor(() => expect(started.size).toBe(9));
     resolveProfile!({ externalAccountId: 'account-id', login: 'octocat' });
 
     await expect(collecting).resolves.toMatchObject({
-      diagnostics: { failedCount: 0, succeededCount: 7 },
+      diagnostics: { failedCount: 0, succeededCount: 10 },
       sourceCount: 1,
     });
   });

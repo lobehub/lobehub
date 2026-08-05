@@ -54,12 +54,12 @@ describe('builtin executor registry', () => {
     );
   }, 30_000);
 
-  it('registers visual understanding executor APIs', async () => {
+  it('registers multimodal understanding executor APIs', async () => {
     await registerBuiltinToolExecutors();
 
-    await expect(
-      hasExecutor(LobeAgentIdentifier, LobeAgentApiName.analyzeVisualMedia),
-    ).resolves.toBe(true);
+    await expect(hasExecutor(LobeAgentIdentifier, LobeAgentApiName.analyzeMedia)).resolves.toBe(
+      true,
+    );
   }, 30_000);
 
   it('rejects nested sub-agent execution', async () => {

@@ -1,5 +1,6 @@
 'use client';
 
+import { agentDisplayName } from '@lobechat/types';
 import { Flexbox, SearchBar, Skeleton, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -71,7 +72,7 @@ const AvailableAgentList = memo<AvailableAgentListProps>(({ agents, isLoading })
 
     const searchLower = searchTerm.toLowerCase();
     return agents.filter((agent) => {
-      const title = agent.title || '';
+      const title = agentDisplayName(agent) ?? '';
       const description = agent.description || '';
       return (
         title.toLowerCase().includes(searchLower) || description.toLowerCase().includes(searchLower)

@@ -244,6 +244,14 @@ const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
             window.open(openTarget.url, '_blank', 'noopener,noreferrer');
           return;
         }
+        // file works: the gallery lives outside the conversation UI, so the
+        // FilePreview chat portal isn't available — fall back to opening the
+        // persisted file URL like the pre-portal behavior.
+        case 'filePreview': {
+          if (isSafeExternalUrl(openTarget.url))
+            window.open(openTarget.url, '_blank', 'noopener,noreferrer');
+          return;
+        }
         // task: no external URL — the standalone detail route resolves the same
         // identifier-or-id the chat portal uses.
         case 'task': {

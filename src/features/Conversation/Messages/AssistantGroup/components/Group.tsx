@@ -300,6 +300,15 @@ const Group = memo<GroupChildrenProps>(
             defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
             disableEditing={disableEditing}
             key={segment.blocks[0]?.renderKey ?? `${id}.workflow.${index}`}
+            // While the turn's operation is still running, process folding may
+            // take over the moment it ends: the segment tree re-parents into
+            // ProcessFold, which remounts WorkflowCollapse already collapsed —
+            // one non-animated reflow. Letting the collapse also self-animate
+            // from semi → collapsed first would shrink the layout twice and make
+            // the conversation jitter. Once the op ends without a fold happening
+            // (tool-only turn, no final answer), suppression releases and
+            // WorkflowCollapse applies its completion level then.
+            suppressAutoCollapse={!!enableProcessFold && hasActiveOperation}
             workflowChromeComplete={
               workflowChromeComplete ||
               (hasRenderedContentAfter(segments, index) && !hasPendingIntervention(segment.blocks))

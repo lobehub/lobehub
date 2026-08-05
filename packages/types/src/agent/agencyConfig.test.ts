@@ -155,6 +155,37 @@ describe('buildHeteroSpawnArgs', () => {
     ).toBeUndefined();
   });
 
+  it('forwards Pi native args and an explicit provider/model selection', () => {
+    const provider = {
+      args: ['--offline'],
+      effort: 'high',
+      model: 'anthropic/claude-sonnet-4-5',
+      type: 'pi',
+    } satisfies HeterogeneousProviderConfig;
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual([
+      '--offline',
+      '--model',
+      'anthropic/claude-sonnet-4-5',
+    ]);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=--offline',
+      '--model',
+      'anthropic/claude-sonnet-4-5',
+    ]);
+  });
+
+  it('does not duplicate a Pi model already present in native args', () => {
+    const provider = {
+      args: ['--model=google/gemini-2.5-pro'],
+      model: 'anthropic/claude-sonnet-4-5',
+      type: 'pi',
+    } satisfies HeterogeneousProviderConfig;
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual(['--model=google/gemini-2.5-pro']);
+    expect(buildHeteroExecArgs(provider)).toEqual(['--agent-arg=--model=google/gemini-2.5-pro']);
+  });
+
   it('appends --model and --effort for claude-code', () => {
     expect(buildHeteroSpawnArgs({ type: 'claude-code', model: 'opus', effort: 'high' })).toEqual([
       '--model',

@@ -22,7 +22,7 @@ import { HeteroTraceRecorder } from './HeteroTraceRecorder';
 
 const log = debug('lobe-server:hetero-agent-service');
 
-export type HeterogeneousAgentType = 'amp' | 'claude-code' | 'codex' | 'opencode';
+export type HeterogeneousAgentType = 'amp' | 'claude-code' | 'codex' | 'opencode' | 'pi';
 
 export type HeterogeneousFinishResult = 'success' | 'error' | 'cancelled';
 

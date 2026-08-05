@@ -200,6 +200,7 @@ export class ServerToolTransport implements ToolTransport {
               // Assistant message owning this tool call (≠ source user message).
               assistantMessageId: context.parentMessageId,
               clientIp: context.state.metadata?.clientIp,
+              currentTodos: context.currentTodos,
               deviceCapable: context.state.metadata?.executionPlan
                 ? isDeviceCapablePlan(context.state.metadata.executionPlan)
                 : undefined,

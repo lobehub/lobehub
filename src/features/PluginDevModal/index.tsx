@@ -1,8 +1,8 @@
 import { isDesktop } from '@lobechat/const';
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { type LobeToolCustomPlugin } from '@lobechat/types';
-import { Drawer, Flexbox } from '@lobehub/ui';
-import { Button, toast } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button, Drawer, toast } from '@lobehub/ui/base-ui';
 import { Form, Popconfirm } from 'antd';
 import { useResponsive } from 'antd-style';
 import { memo, useEffect, useRef, useState } from 'react';
@@ -168,7 +168,6 @@ const DevModal = memo<DevModalProps>(
         }}
       >
         <Drawer
-          destroyOnHidden
           containerMaxWidth={'auto'}
           footer={footer}
           height={isDesktop ? `calc(100vh - ${TITLE_BAR_HEIGHT}px)` : '100vh'}
@@ -177,21 +176,13 @@ const DevModal = memo<DevModalProps>(
           push={false}
           title={t(isEditMode ? 'dev.title.skillSettings' : 'dev.title.create')}
           width={mobile ? '100%' : 800}
-          // Sit above @lobehub/ui's base-ui floating layer (Popover/Dropdown/Tooltip = 1100).
-          // antd Drawer defaults to ~1000, so a config panel opened from the Tools skill
-          // popover would otherwise mount *behind* the still-open popover and look like it
-          // "didn't open". 1200 = the base-ui modal tier.
-          zIndex={1200}
           styles={{
-            body: {
-              padding: 0,
-            },
             bodyContent: {
               height: '100%',
+              padding: 0,
             },
           }}
-          onClose={(e) => {
-            e.stopPropagation();
+          onClose={() => {
             onOpenChange(false);
           }}
         >

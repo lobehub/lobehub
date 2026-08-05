@@ -5,7 +5,7 @@ export {
   type PlanRuntimeService,
 } from './client/executor/PlanRuntime';
 export * from './manifest';
+export * from './media';
 export * from './resolveManifest';
 export * from './systemRole';
 export * from './types';
-export * from './visualMedia';

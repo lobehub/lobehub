@@ -7,7 +7,7 @@ import { documents, files } from '@lobechat/database/schemas';
 import { loadFile, UnsupportedFileTypeError } from '@lobechat/file-loaders';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import isEqual from 'fast-deep-equal';
 
 import { DocumentModel } from '@/database/models/document';
@@ -809,8 +809,14 @@ export class DocumentService {
   }
 
   /**
-   * Parse file content
+   * Parse file content.
    *
+   * Idempotent: returns the document already stored for the file, and serializes
+   * the cache write per file so two concurrent calls cannot both insert one.
+   *
+   * The database handle must not be an open transaction — the advisory lock is
+   * transaction scoped, so a nested call would hold it until the outer
+   * transaction commits instead of releasing it after the insert.
    */
   async parseFile(fileId: string): Promise<LobeDocument> {
     // Idempotent: return existing document if already parsed
@@ -837,19 +843,48 @@ export class DocumentService {
         file.name.replace(/\.(pdf|docx?|md|markdown)$/i, '') ||
         'Untitled';
 
-      const document = await this.documentModel.create({
-        content: fileDocument.content,
-        fileId,
-        fileType: CUSTOM_DOCUMENT_FILE_TYPE, // Use custom/document for all parsed files
-        filename: title,
-        metadata: fileDocument.metadata,
-        pages: fileDocument.pages,
-        parentId: file.parentId,
-        source: file.url,
-        sourceType: 'file',
-        title,
-        totalCharCount: fileDocument.totalCharCount,
-        totalLineCount: fileDocument.totalLineCount,
+      const document = await this.db.transaction(async (tx) => {
+        // The existence check above ran before the download and the parse, so
+        // another request can have published its own row for this file in the
+        // meantime. Serialize the write per file so two concurrent `parseFile`
+        // calls cannot both insert one. `hashtext` returns int4 while
+        // `pg_advisory_xact_lock` takes bigint, so cast. Under the default READ
+        // COMMITTED isolation the re-check below takes a fresh snapshot once the
+        // lock is granted, so it sees whatever the holder committed. The parse
+        // itself stays outside the transaction: it downloads and reads the whole
+        // file, and holding a connection that long would turn every large upload
+        // into pool pressure.
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${`parseFile:${fileId}`})::bigint)`,
+        );
+
+        const transactionDb = tx as unknown as LobeChatDatabase;
+        const transactionDocumentModel = new DocumentModel(
+          transactionDb,
+          this.userId,
+          this.workspaceId,
+          this.callerAgentVisibility,
+        );
+
+        // Whoever inserted first wins; discard this parse rather than adding a
+        // second document for the same file.
+        const raced = await transactionDocumentModel.findByFileId(fileId);
+        if (raced) return raced;
+
+        return transactionDocumentModel.create({
+          content: fileDocument.content,
+          fileId,
+          fileType: CUSTOM_DOCUMENT_FILE_TYPE, // Use custom/document for all parsed files
+          filename: title,
+          metadata: fileDocument.metadata,
+          pages: fileDocument.pages,
+          parentId: file.parentId,
+          source: file.url,
+          sourceType: 'file',
+          title,
+          totalCharCount: fileDocument.totalCharCount,
+          totalLineCount: fileDocument.totalLineCount,
+        });
       });
 
       return document as LobeDocument;

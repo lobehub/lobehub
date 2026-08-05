@@ -1,5 +1,8 @@
+import type { RemoteServerAuth } from '@/modules/heterogeneousAgent/fileStorePort';
+
 import type HeterogeneousAgentImplementation from './HeterogeneousAgentImpl';
 import { ControllerModule, IpcMethod } from './index';
+import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 
 type Implementation = HeterogeneousAgentImplementation;
 
@@ -13,10 +16,27 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
 
   private implementationPromise?: Promise<Implementation>;
 
+  /**
+   * Resolved on this side of the lazy boundary and handed to the implementation.
+   * This controller lives in the eager main chunk next to `App` and
+   * `RemoteServerConfigCtr`; the implementation is a deferred chunk where the
+   * same `getController` lookup came back `undefined` at runtime and crashed the
+   * main process. Missing controller degrades to "no authed remote server",
+   * which makes the image upload a no-op instead of an unhandled rejection.
+   */
+  private remoteServerAuth: RemoteServerAuth = {
+    getAccessToken: async () => (await this.remoteServerConfigCtr?.getAccessToken()) ?? null,
+    getServerUrl: async () => (await this.remoteServerConfigCtr?.getRemoteServerUrl()) ?? null,
+  };
+
+  private get remoteServerConfigCtr(): RemoteServerConfigCtr | undefined {
+    return this.app.getController(RemoteServerConfigCtr);
+  }
+
   private getImplementation = (): Promise<Implementation> => {
     this.implementationPromise ??= import('./HeterogeneousAgentImpl')
       .then(({ default: Implementation }) => {
-        const implementation = new Implementation(this.app);
+        const implementation = new Implementation(this.app, this.remoteServerAuth);
         implementation.afterAppReady();
         return implementation;
       })

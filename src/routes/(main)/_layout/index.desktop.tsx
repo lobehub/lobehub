@@ -11,6 +11,7 @@ import { HotkeysProvider } from 'react-hotkeys-hook';
 import WorkspaceContextSlot from '@/business/client/WorkspaceContextSlot';
 import DesktopBrowserGatewayBridge from '@/features/DesktopBrowserGatewayBridge';
 import DesktopFileMenuBridge from '@/features/DesktopFileMenuBridge';
+import DesktopLayoutContainer from '@/features/DesktopLayoutContainer';
 import DesktopNavigationBridge from '@/features/DesktopNavigationBridge';
 import ActiveConversationBridge from '@/features/Electron/ActiveConversationBridge';
 import AuthRequiredModal from '@/features/Electron/AuthRequiredModal';
@@ -31,7 +32,6 @@ import { DndContextWrapper } from '@/routes/(main)/resource/features/DndContextW
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import DesktopAutoOidcOnFirstOpen from './DesktopAutoOidcOnFirstOpen';
-import DesktopLayoutContainer from './DesktopLayoutContainer';
 import RegisterHotkeys from './RegisterHotkeys';
 import { styles } from './style';
 

@@ -76,6 +76,7 @@ export enum SettingsTabs {
   Hotkey = 'hotkey',
   /** @deprecated Use ServiceModel instead */
   Image = 'image',
+  Labels = 'labels',
   Labs = 'labs',
   LLM = 'llm',
   Memory = 'memory',
@@ -145,6 +146,17 @@ export interface SystemStatus {
    */
   agentBuilderPanelWidth?: number;
   /**
+   * Expanded group keys of the agent view-all page. Expanded (not collapsed)
+   * keys are persisted because groups default to COLLAPSED (mirrors Linear) —
+   * newly appearing groups start collapsed until explicitly opened.
+   */
+  agentListExpandedGroupKeys?: string[];
+  /**
+   * Whether the "in sidebar" overview section of the agent view-all page is
+   * collapsed. Defaults to expanded so the section is discoverable.
+   */
+  agentListSidebarSectionCollapsed?: boolean;
+  /**
    * View mode of the agent view-all page (card grid vs table list)
    */
   agentListViewMode?: 'card' | 'list';
@@ -152,7 +164,7 @@ export interface SystemStatus {
    * Display options of the agent view-all page (grouping / ordering / hidden-agent visibility)
    */
   agentListViewOptions?: {
-    groupBy: 'author' | 'none';
+    groupBy: 'author' | 'label' | 'none';
     orderBy: 'author' | 'title' | 'updatedAt';
     orderDirection: 'asc' | 'desc';
     showSidebarHidden: boolean;
@@ -194,6 +206,7 @@ export interface SystemStatus {
    * Group Agent Builder panel width
    */
   groupAgentBuilderPanelWidth?: number;
+  hiddenHomeWidgets?: string[];
   /**
    * Hidden sidebar sections
    */
@@ -201,11 +214,13 @@ export interface SystemStatus {
   hidePWAInstaller?: boolean;
   hideThreadLimitAlert?: boolean;
   hideTopicSharePrivacyWarning?: boolean;
+  homeRecentsCount?: number;
   /**
    * Agent picked from the home AgentSelect dropdown. When unset the home page
    * falls back to the inbox agent. Persisted so the choice survives reloads.
    */
   homeSelectedAgentId?: string;
+  homeTaskCount?: number;
   imagePanelWidth: number;
   imageTopicPanelWidth?: number;
   imageTopicViewMode?: 'grid' | 'list';
@@ -252,7 +267,15 @@ export interface SystemStatus {
    * number of pages (documents) to display per page
    */
   pagePageSize?: number;
+  /**
+   * @deprecated legacy shared portal width, kept as the fallback for views that
+   * have no entry in `portalWidths` yet
+   */
   portalWidth: number;
+  /**
+   * portal width remembered per view type, see `PortalWidths`
+   */
+  portalWidths?: Record<string, number>;
   /**
    * number of private agents (ungrouped) to display in the Private sidebar bucket
    */
@@ -278,6 +301,7 @@ export interface SystemStatus {
   showAgentBuilderPanel?: boolean;
   showCommandMenu?: boolean;
   showFilePanel?: boolean;
+  showHomePortrait?: boolean;
   /**
    * Visibility of the Home dashboard's activity and recommendations rail.
    * Independent from `showRightPanel` so Home preferences do not affect chat pages.
@@ -462,6 +486,8 @@ export interface GlobalState {
 
 export const INITIAL_STATUS = {
   agentBuilderPanelWidth: 360,
+  agentListExpandedGroupKeys: [] as string[],
+  agentListSidebarSectionCollapsed: false,
   agentListViewMode: 'list' as const,
   agentListViewOptions: {
     groupBy: 'none' as const,
@@ -491,9 +517,12 @@ export const INITIAL_STATUS = {
   fileManagerViewMode: 'list' as const,
   filePanelWidth: 320,
   groupAgentBuilderPanelWidth: 360,
+  hiddenHomeWidgets: [],
   hidePWAInstaller: false,
   hideThreadLimitAlert: false,
   hideTopicSharePrivacyWarning: false,
+  homeRecentsCount: 8,
+  homeTaskCount: 8,
   imagePanelWidth: 320,
   imageTopicViewMode: 'grid' as const,
   imageTopicPanelWidth: 80,
@@ -507,10 +536,12 @@ export const INITIAL_STATUS = {
   pageAgentPanelWidth: 360,
   pagePageSize: 20,
   portalWidth: 400,
+  portalWidths: {},
   readNotificationSlugs: [],
   resourceManagerColumnWidths: DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS,
   showCommandMenu: false,
   showFilePanel: true,
+  showHomePortrait: true,
   showHotkeyHelper: false,
   showHomeRail: true,
   showImagePanel: true,
@@ -540,20 +571,37 @@ export const INITIAL_STATUS = {
 const statusStorage = new AsyncLocalStorage<SystemStatus>('LOBE_SYSTEM_STATUS');
 
 /**
- * Restore the Home rail before React's first render. The remaining system
- * status still follows the existing async initialization path, but this
- * layout-affecting preference must not briefly render its default value after
- * a page reload.
+ * Restore the shell-defining preferences before React's first render. The
+ * remaining system status still follows the existing async initialization path,
+ * but these must not briefly render their default value after a page reload —
+ * the boot shell reads them synchronously to draw a shell that lines up with
+ * the real layout, and `NavPanelDraggable` would otherwise size its
+ * pre-hydration placeholder to the default width.
  */
 export const createInitialSystemStatus = (): SystemStatus => {
   const persistedStatus = statusStorage.getFromLocalStorageSync();
 
   return {
     ...INITIAL_STATUS,
+    hiddenHomeWidgets: Array.isArray(persistedStatus.hiddenHomeWidgets)
+      ? persistedStatus.hiddenHomeWidgets
+      : INITIAL_STATUS.hiddenHomeWidgets,
+    leftPanelWidth:
+      typeof persistedStatus.leftPanelWidth === 'number'
+        ? persistedStatus.leftPanelWidth
+        : INITIAL_STATUS.leftPanelWidth,
+    showHomePortrait:
+      typeof persistedStatus.showHomePortrait === 'boolean'
+        ? persistedStatus.showHomePortrait
+        : INITIAL_STATUS.showHomePortrait,
     showHomeRail:
       typeof persistedStatus.showHomeRail === 'boolean'
         ? persistedStatus.showHomeRail
         : INITIAL_STATUS.showHomeRail,
+    showLeftPanel:
+      typeof persistedStatus.showLeftPanel === 'boolean'
+        ? persistedStatus.showLeftPanel
+        : INITIAL_STATUS.showLeftPanel,
   };
 };
 

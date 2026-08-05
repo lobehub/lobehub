@@ -7,6 +7,7 @@ const targets = [
   { distDir: 'desktop', publicDir: 'public/_spa' },
   { distDir: 'mobile', publicDir: 'public/_spa' },
   { distDir: 'auth', publicDir: 'public/_spa-auth' },
+  { distDir: 'workbench', publicDir: 'public/_spa-workbench' },
 ] as const;
 
 export const copySpaBuild = (root = path.resolve(import.meta.dirname, '..')) => {

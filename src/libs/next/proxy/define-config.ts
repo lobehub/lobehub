@@ -13,6 +13,7 @@ import { parseBrowserLanguage } from '@/utils/locale';
 import { DEFAULT_LANG, locales, RouteVariants } from '@/utils/server/routeVariants';
 
 import { authSpaRoutes, nextjsOnlyRoutes } from '../nextjsOnlyRoutes';
+import { isWorkbenchSpaRoute } from '../workbenchRoutes';
 import { createRouteMatcher } from './createRouteMatcher';
 
 // Create debug logger instances
@@ -138,6 +139,17 @@ export function defineConfig() {
       const authSpaPath = `/spa-auth/${safeLocale}${url.pathname}`;
       logDefault('Auth SPA route, rewriting to: %s', authSpaPath);
       url.pathname = authSpaPath;
+
+      const response = NextResponse.rewrite(url);
+      persistLocaleCookie(response, request, explicitlyLocale);
+
+      return response;
+    }
+
+    if (device.type === 'mobile' && isWorkbenchSpaRoute(url.pathname)) {
+      const workbenchPath = `/spa-workbench/${safeLocale}${url.pathname}`;
+      logDefault('Workbench SPA route, rewriting to: %s', workbenchPath);
+      url.pathname = workbenchPath;
 
       const response = NextResponse.rewrite(url);
       persistLocaleCookie(response, request, explicitlyLocale);

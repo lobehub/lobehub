@@ -41,6 +41,7 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { isDesktop } from '@/const/version';
 import { useRepoType } from '@/features/ChatInput/ControlBar/useRepoType';
+import { getPortalViewWidth } from '@/features/Portal/portalWidth';
 import TopicCommentsSidebar from '@/features/Portal/TopicComments/Sidebar';
 import RightPanel from '@/features/RightPanel';
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
@@ -62,6 +63,7 @@ import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
 import Files from './Files';
+import { fitsBesidePortal } from './fitsBesidePortal';
 import Overview from './Overview';
 import ResourcesSection from './ResourcesSection';
 import Review from './Review';
@@ -155,10 +157,20 @@ const BROWSER_TAB_KEY = 'browser';
 const BROWSER_TAB_PREFIX = 'browser:';
 const isBrowserTab = (tab: string) => tab === BROWSER_TAB_KEY || tab.startsWith(BROWSER_TAB_PREFIX);
 
-const AgentWorkingSidebar = memo(() => {
+interface AgentWorkingSidebarProps {
+  /**
+   * Measured width of the row this sidebar shares with the conversation and the
+   * portal. Undefined until the layout has measured it.
+   */
+  availableWidth?: number;
+}
+
+const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) => {
   const { t } = useTranslation(['chat', 'setting']);
   const [
     storedWidth,
+    legacyPortalWidth,
+    portalWidths,
     updateSystemStatus,
     toggleRightPanel,
     toggleTerminalPanel,
@@ -168,6 +180,8 @@ const AgentWorkingSidebar = memo(() => {
     tabRequest,
   ] = useGlobalStore((s) => [
     systemStatusSelectors.workingSidebarWidth(s),
+    systemStatusSelectors.portalWidth(s),
+    systemStatusSelectors.portalWidths(s),
     s.updateSystemStatus,
     s.toggleRightPanel,
     s.toggleTerminalPanel,
@@ -181,11 +195,17 @@ const AgentWorkingSidebar = memo(() => {
   ]);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const workspaceId = useActiveWorkspaceId();
-  const [topicId, currentPortalView, openTopicComments] = useChatStore((s) => [
+  const [topicId, currentPortalView, portalOpen, openTopicComments] = useChatStore((s) => [
     s.activeTopicId,
     chatPortalSelectors.currentView(s),
+    chatPortalSelectors.showStandalonePortal(s),
     s.openTopicComments,
   ]);
+  const portalWidth = getPortalViewWidth({
+    legacyWidth: legacyPortalWidth,
+    viewType: currentPortalView?.type,
+    widths: portalWidths,
+  });
   const isChatMode = useAgentStore((s) =>
     activeAgentId ? chatConfigByIdSelectors.isChatModeById(activeAgentId)(s) : false,
   );
@@ -640,6 +660,14 @@ const AgentWorkingSidebar = memo(() => {
   );
   const reviewTwoPane = activeTab === 'review' && reviewAvailable && showReviewTree;
   const displayWidth = reviewTwoPane ? Math.max(storedWidth, TWO_PANE_MIN_WIDTH) : storedWidth;
+  // Yield the row to conversation + portal when the three no longer fit. This
+  // only overrides the rendered state — `showRightPanel` keeps the user's own
+  // choice, so the sidebar comes back by itself once there is room again.
+  const fits = fitsBesidePortal({
+    availableWidth,
+    portalWidth: portalOpen ? portalWidth : 0,
+    sidebarWidth: displayWidth,
+  });
   const openMenuItems = useCallback((): DropdownItem[] => {
     const itemOf = (key: string): DropdownItem | undefined => {
       const tab = availableTabs.get(key);
@@ -728,6 +756,7 @@ const AgentWorkingSidebar = memo(() => {
       stableLayout
       collapseThreshold={320}
       defaultWidth={displayWidth}
+      expand={Boolean(showRightPanel) && fits}
       maxWidth={MAX_PANEL_WIDTH}
       minWidth={300}
       width={displayWidth}

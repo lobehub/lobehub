@@ -137,6 +137,8 @@
   "credits.memberBudget.defaultLimit": "預設成員預算",
   "credits.memberBudget.defaultLimitHint": "沒有自訂規則的成員每個計費週期都使用此限制。",
   "credits.memberBudget.desc": "限制每位成員在當前計費週期內可使用的工作區點數數量",
+  "credits.memberBudget.details.action": "查看詳情",
+  "credits.memberBudget.details.title": "會員使用情況",
   "credits.memberBudget.effectiveBudget": "有效預算",
   "credits.memberBudget.empty": "尚無工作區成員",
   "credits.memberBudget.globalBadge": "全域",

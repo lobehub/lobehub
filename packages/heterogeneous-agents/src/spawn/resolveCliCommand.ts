@@ -4,7 +4,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 
 /**
- * Shared resolver for external CLI-agent binaries (Amp / Claude Code / Codex / OpenCode).
+ * Shared resolver for external CLI-agent binaries (Amp / Claude Code / Codex / OpenCode / Pi).
  *
  * This is the single source of truth for "given a command name, where is the
  * runnable binary?". It's consumed by BOTH spawn sites:
@@ -20,7 +20,7 @@ import { promisify } from 'node:util';
 const execFilePromise = promisify(execFile);
 const execPromise = promisify(exec);
 
-export type HeterogeneousCliAgentType = 'amp' | 'claude-code' | 'codex' | 'opencode';
+export type HeterogeneousCliAgentType = 'amp' | 'claude-code' | 'codex' | 'opencode' | 'pi';
 
 /**
  * Resolution result. A structural subset of the desktop `BinaryManager`'s
@@ -260,6 +260,10 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
     // `--version`, without a product-name prefix.
     validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
   },
+  'pi': {
+    // Pi prints a bare semantic version for `--version`.
+    validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
+  },
 } as const satisfies Record<HeterogeneousCliAgentType, ValidateOptions>;
 
 // The default (bare) command each agent type is shipped to run. The well-known
@@ -270,6 +274,7 @@ export const DEFAULT_HETERO_COMMAND: Record<HeterogeneousCliAgentType, string> =
   'claude-code': 'claude',
   'codex': 'codex',
   'opencode': 'opencode',
+  'pi': 'pi',
 };
 
 // Well-known absolute install locations probed when a bare command isn't on
@@ -322,6 +327,15 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
         path.join(homedir(), '.bun', 'bin', 'opencode'),
         path.join(homedir(), '.npm-global', 'bin', 'opencode'),
         path.join(homedir(), 'Library', 'pnpm', 'opencode'),
+      ];
+    }
+    case 'pi': {
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+
+      return [
+        path.join(homedir(), '.local', 'bin', 'pi'),
+        path.join(homedir(), '.npm-global', 'bin', 'pi'),
+        path.join(homedir(), 'Library', 'pnpm', 'pi'),
       ];
     }
     default: {

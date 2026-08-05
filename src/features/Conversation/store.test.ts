@@ -42,7 +42,6 @@ vi.mock('@/store/chat', () => ({
       sendMessage: vi.fn(),
       switchTopic: vi.fn(),
       summaryTopicTitle: vi.fn(),
-      internal_updateTopicLoading: vi.fn(),
     })),
     setState: vi.fn(),
   },

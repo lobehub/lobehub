@@ -183,6 +183,8 @@ export default {
     'Members without a custom rule use this limit each billing cycle.',
   'credits.memberBudget.desc':
     'Limit how many workspace credits each member can use in the current billing cycle',
+  'credits.memberBudget.details.action': 'View details',
+  'credits.memberBudget.details.title': 'Member usage',
   'credits.memberBudget.effectiveBudget': 'Effective budget',
   'credits.memberBudget.empty': 'No workspace members yet',
   'credits.memberBudget.globalBadge': 'Global',
@@ -199,7 +201,7 @@ export default {
   'credits.memberBudget.status.inherit': 'Inherits default',
   'credits.memberBudget.status.unlimited': 'Unlimited',
   'credits.memberBudget.target.allMembers': 'All members',
-  'credits.memberBudget.title': 'Budget',
+  'credits.memberBudget.title': 'Member Budget Control',
   'credits.memberBudget.unlimited': 'Unlimited',
   'credits.memberBudget.upgradeCta': 'View plans',
   'credits.memberBudget.userPanel.exhaustedDesc':

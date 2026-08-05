@@ -297,6 +297,40 @@ const googleChatModels: AIChatModelCard[] = [
     enabled: true,
     family: 'gemini',
     generation: 'gemini-3.1',
+    id: 'gemini-3.1-flash-image',
+    knowledgeCutoff: '2025-01',
+    maxOutput: 32_768,
+    pricing: {
+      approximatePricePerImage: 0.067,
+      units: [
+        { name: 'imageOutput', rate: 60, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-05-28',
+    settings: {
+      extendParams: ['imageAspectRatio2', 'imageResolution2', 'thinkingLevel4'],
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      imageOutput: true,
+      reasoning: true,
+      search: true,
+      vision: true,
+    },
+    contextWindowTokens: 131_072 + 32_768,
+    description:
+      "Gemini 3.1 Flash Image (Nano Banana 2) is Google's fastest native image generation model with thinking support, conversational image generation and editing.",
+    displayName: 'Nano Banana 2',
+    enabled: true,
+    family: 'gemini',
+    generation: 'gemini-3.1',
     id: 'gemini-3.1-flash-image-preview',
     knowledgeCutoff: '2025-01',
     maxOutput: 32_768,
@@ -951,6 +985,25 @@ export const imagenGenParameters: ModelParamsSchema = {
 };
 
 const googleImageModels: AIImageModelCard[] = [
+  {
+    displayName: 'Nano Banana 2',
+    id: 'gemini-3.1-flash-image:image',
+    type: 'image',
+    enabled: true,
+    description:
+      "Gemini 3.1 Flash Image (Nano Banana 2) is Google's fastest native image generation model with thinking support, conversational image generation and editing.",
+    releasedAt: '2026-05-28',
+    parameters: nanoBanana2Parameters,
+    pricing: {
+      approximatePricePerImage: 0.067,
+      units: [
+        { name: 'imageOutput', rate: 60, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+  },
   {
     displayName: 'Nano Banana 2',
     id: 'gemini-3.1-flash-image-preview:image',

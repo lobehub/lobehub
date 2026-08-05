@@ -6,6 +6,7 @@ import type {
 } from '@lobechat/types';
 
 import type { ModelPricingContext } from './pricing';
+import type { ModelRuntimeDiagnostics } from './providerDiagnostics';
 import type { MessageToolCall, MessageToolCallChunk } from './toolsCalling';
 
 export type LLMRoleType = 'user' | 'system' | 'assistant' | 'function' | 'tool';
@@ -195,6 +196,12 @@ export interface ChatStreamPayload {
 
 export interface ChatMethodOptions {
   callback?: ChatStreamCallbacks;
+  /**
+   * Request-scoped provider-boundary evidence retained by the caller.
+   * Keep this separate from metadata because routing hooks may retain metadata
+   * after the provider returns, while diagnostics can contain a large payload.
+   */
+  diagnostics?: ModelRuntimeDiagnostics;
   /**
    * response headers
    */
