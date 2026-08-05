@@ -65,6 +65,8 @@ describe('classifyLLMError', () => {
     // straight from the spec table.
     it.each([
       ['ContentModeration', 'Content Exists Risk'],
+      // Google promptFeedback / blocked finishReason map to this type so callLlm does not retry.
+      ['ProviderContentPolicyViolation', 'The content may contain prohibited content'],
       ['InvalidRequestFormat', 'Range of input length should be 1 to 8192'],
       ['UserConfigError', 'Invalid URL (POST /v1/v1beta'],
       ['NoAvailableChannel', 'No available keys in pool'],
