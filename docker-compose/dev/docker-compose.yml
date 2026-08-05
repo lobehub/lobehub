@@ -69,6 +69,7 @@ services:
       timeout: 3s
       retries: 30
     command: ['--access-key','${RUSTFS_ACCESS_KEY}','--secret-key','${RUSTFS_SECRET_KEY}','/data']
+    restart: always
     env_file:
       - .env
 
