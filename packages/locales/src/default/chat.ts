@@ -1911,6 +1911,7 @@ export default {
     'Video file size must not exceed {{maxSize}}. Current file size is {{actualSize}}.',
   'voiceMessage.action': 'Send voice message',
   'voiceMessage.cancel': 'Cancel recording',
+  'voiceMessage.cancelUpload': 'Cancel voice message upload',
   'voiceMessage.delete': 'Delete recording',
   'voiceMessage.duration': 'Recording duration: {{duration}}',
   'voiceMessage.error.not_supported':
@@ -1925,6 +1926,11 @@ export default {
   'voiceMessage.retry': 'Retry voice message',
   'voiceMessage.send': 'Send voice message',
   'voiceMessage.statusLabel': 'Voice message recorder',
+  'voiceMessage.status.sendFailed': 'Send failed',
+  'voiceMessage.status.sending': 'Sending…',
+  'voiceMessage.status.unsupported': 'Switch models to retry',
+  'voiceMessage.status.uploadFailed': 'Upload failed',
+  'voiceMessage.status.uploading': 'Uploading… {{progress}}%',
   'voiceMessage.stopping': 'Finishing recording…',
   'voiceMessage.tooShort': 'Record for at least {{duration}} ms',
   'voiceMessage.unsupported':

@@ -2,14 +2,21 @@
 
 import { Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { DownloadIcon, PauseIcon, PlayIcon } from 'lucide-react';
+import { DownloadIcon, PauseIcon, PlayIcon, RotateCcwIcon, XIcon } from 'lucide-react';
 import { memo, type MouseEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { useChatStore } from '@/store/chat';
 
 import { useAudioElementSource } from './useAudioElementSource';
 import { useWaveform } from './useWaveform';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  actionGroup: css`
+    display: flex;
+    flex: none;
+    gap: 2px;
+  `,
   bar: css`
     flex: 1;
 
@@ -84,6 +91,73 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       background: ${cssVar.colorFillSecondary};
     }
   `,
+  miniButton: css`
+    cursor: pointer;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+
+    color: ${cssVar.colorTextSecondary};
+
+    background: transparent;
+
+    transition:
+      color 120ms ease,
+      background 120ms ease;
+
+    &:hover {
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillSecondary};
+    }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimary};
+      outline-offset: 1px;
+    }
+  `,
+  progress: css`
+    position: absolute;
+    inset-block-end: 0;
+    inset-inline: 0;
+
+    overflow: hidden;
+
+    height: 2px;
+    border-radius: 2px;
+
+    background: ${cssVar.colorFillSecondary};
+  `,
+  progressValue: css`
+    height: 100%;
+    border-radius: inherit;
+    background: ${cssVar.colorPrimary};
+    transition: width 160ms ease;
+  `,
+  status: css`
+    pointer-events: none;
+
+    position: absolute;
+    inset: 0;
+
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    padding-inline: 4px;
+
+    font-size: 11px;
+    color: ${cssVar.colorTextSecondary};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
   time: css`
     flex: none;
 
@@ -120,6 +194,18 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       outline-offset: 2px;
     }
   `,
+  waveformPending: css`
+    opacity: 0.18;
+  `,
+  waveformWrap: css`
+    position: relative;
+
+    display: flex;
+    flex: 1;
+
+    min-width: 0;
+    height: 32px;
+  `,
 }));
 
 export const formatTime = (seconds: number): string => {
@@ -139,12 +225,18 @@ interface AudioPlayerProps {
    * surfaces render the player as a block, not an inline attachment.
    */
   fullWidth?: boolean;
+  messageId?: string;
   url: string;
 }
 
 const AudioPlayer = memo<AudioPlayerProps>(
-  ({ url, alt, downloadFileName, durationMs, fullWidth }) => {
+  ({ url, alt, downloadFileName, durationMs, fullWidth, messageId }) => {
   const { t } = useTranslation('chat');
+  const [uploadState, cancelVoiceMessage, retryVoiceMessage] = useChatStore((s) => [
+    messageId ? s.voiceMessageUploadMap[messageId] : undefined,
+    s.cancelVoiceMessage,
+    s.retryVoiceMessage,
+  ]);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -157,6 +249,21 @@ const AudioPlayer = memo<AudioPlayerProps>(
 
   const peaks = useWaveform(url, waveformEnabled);
   const progress = duration > 0 ? currentTime / duration : 0;
+  const uploadProgress = Math.min(100, Math.max(0, Math.round(uploadState?.progress ?? 0)));
+  const isFailed = uploadState?.status === 'failed';
+  const isPending = uploadState?.status === 'uploading' || uploadState?.status === 'sending';
+  const statusText =
+    uploadState?.status === 'uploading'
+      ? t('voiceMessage.status.uploading', { progress: uploadProgress })
+      : uploadState?.status === 'sending'
+        ? t('voiceMessage.status.sending')
+        : uploadState?.error === 'unsupported'
+          ? t('voiceMessage.status.unsupported')
+          : uploadState?.error === 'send'
+            ? t('voiceMessage.status.sendFailed')
+            : uploadState?.error === 'upload'
+              ? t('voiceMessage.status.uploadFailed')
+              : undefined;
 
   useEffect(() => {
     setCurrentTime(0);
@@ -227,23 +334,35 @@ const AudioPlayer = memo<AudioPlayerProps>(
       >
         <Icon icon={isPlaying ? PauseIcon : PlayIcon} size={16} />
       </button>
-      <button
-        aria-label={t('audioPlayer.seek')}
-        className={styles.waveform}
-        type="button"
-        onClick={handleSeek}
-      >
-        {peaks.map((peak, i) => {
-          const played = peaks.length > 0 && i / peaks.length <= progress;
-          return (
-            <div
-              className={played ? `${styles.bar} ${styles.barPlayed}` : styles.bar}
-              key={i}
-              style={{ height: `${Math.round(peak * 100)}%` }}
-            />
-          );
-        })}
-      </button>
+      <div className={styles.waveformWrap}>
+        <button
+          aria-label={t('audioPlayer.seek')}
+          className={`${styles.waveform} ${uploadState ? styles.waveformPending : ''}`}
+          type="button"
+          onClick={handleSeek}
+        >
+          {peaks.map((peak, i) => {
+            const played = peaks.length > 0 && i / peaks.length <= progress;
+            return (
+              <div
+                className={played ? `${styles.bar} ${styles.barPlayed}` : styles.bar}
+                key={i}
+                style={{ height: `${Math.round(peak * 100)}%` }}
+              />
+            );
+          })}
+        </button>
+        {statusText && (
+          <span aria-live="polite" className={styles.status} role="status" title={statusText}>
+            {statusText}
+          </span>
+        )}
+        {uploadState?.status === 'uploading' && (
+          <div className={styles.progress}>
+            <div className={styles.progressValue} style={{ width: `${uploadProgress}%` }} />
+          </div>
+        )}
+      </div>
       <span className={styles.time}>{formatTime(currentTime || duration)}</span>
       {downloadFileName && (
         <button
@@ -255,6 +374,32 @@ const AudioPlayer = memo<AudioPlayerProps>(
         >
           <Icon icon={DownloadIcon} size={15} />
         </button>
+      )}
+      {uploadState && messageId && (
+        <div className={styles.actionGroup}>
+          {isFailed && (
+            <button
+              aria-label={t('voiceMessage.retry')}
+              className={styles.miniButton}
+              title={t('voiceMessage.retry')}
+              type="button"
+              onClick={() => retryVoiceMessage(messageId)}
+            >
+              <Icon icon={RotateCcwIcon} size={14} />
+            </button>
+          )}
+          {(isPending || isFailed) && (
+            <button
+              aria-label={t(isFailed ? 'voiceMessage.delete' : 'voiceMessage.cancelUpload')}
+              className={styles.miniButton}
+              title={t(isFailed ? 'voiceMessage.delete' : 'voiceMessage.cancelUpload')}
+              type="button"
+              onClick={() => void cancelVoiceMessage(messageId)}
+            >
+              <Icon icon={XIcon} size={14} />
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

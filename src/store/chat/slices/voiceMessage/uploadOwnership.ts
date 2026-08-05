@@ -1,4 +1,4 @@
-import { type UploadFileItem } from '@lobechat/types';
+import type { UploadFileItem } from '@lobechat/types';
 
 type RemoveFile = (id: string) => Promise<void>;
 
@@ -12,7 +12,7 @@ interface ActiveSend {
 /**
  * Owns uploaded voice files until the conversation lifecycle acknowledges them.
  *
- * The ownership boundary is deliberately independent from React state: retries reuse the same
+ * The ownership boundary is independent from React and Zustand state: retries reuse the same
  * uploaded row, stale upload completions are cleaned up, and cancellation waits for an in-flight
  * send to confirm that it was not accepted before deleting its file.
  */
@@ -47,24 +47,25 @@ export class VoiceMessageUploadOwnership {
     return this.attemptId;
   };
 
-  discard = async () => {
+  discard = async (): Promise<'accepted' | 'discarded'> => {
     this.attemptId += 1;
 
     const pending = this.pending;
     this.pending = undefined;
-    if (!pending) return;
+    if (!pending) return 'discarded';
 
     const activeSend = this.activeSend?.fileId === pending.id ? this.activeSend.promise : undefined;
     if (activeSend) {
       try {
         await activeSend;
-        return;
+        return 'accepted';
       } catch {
-        // The send settled without acceptance, so this component still owns the file.
+        // The send settled without acceptance, so this transaction still owns the file.
       }
     }
 
     await this.cleanupFile(pending.id);
+    return 'discarded';
   };
 
   finishSend = (promise: Promise<void>) => {

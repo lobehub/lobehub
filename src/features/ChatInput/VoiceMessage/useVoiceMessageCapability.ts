@@ -1,7 +1,8 @@
 import { ModelProvider } from 'model-bank/modelProvider';
 
-import { useAiInfraStore } from '@/store/aiInfra';
+import { getAiInfraStoreState, useAiInfraStore } from '@/store/aiInfra';
 import { aiModelSelectors, aiProviderSelectors } from '@/store/aiInfra/selectors';
+import type { AiInfraStore } from '@/store/aiInfra/store';
 
 interface VoiceMessageActionStateInput {
   canRecordVoiceMessage: boolean;
@@ -53,24 +54,30 @@ export const supportsRawAudioMessage = ({
   );
 };
 
-export const useVoiceMessageCapability = (model?: string, provider?: string) =>
-  useAiInfraStore((state) => {
-    if (!model || !provider) return false;
+export const getVoiceMessageCapability = (
+  model?: string,
+  provider?: string,
+  state: AiInfraStore = getAiInfraStoreState(),
+) => {
+  if (!model || !provider) return false;
 
-    const modelSupportsAudio = aiModelSelectors.isModelSupportAudio(model, provider)(state);
-    const isCuratedModel = state.builtinAiModelList.some(
-      (item) => item.id === model && item.providerId === provider,
-    );
-    const isBuiltinProvider = Object.values(ModelProvider).includes(provider as ModelProvider);
-    const runtimeProvider = isBuiltinProvider
-      ? provider
-      : aiProviderSelectors.providerConfigById(provider)(state)?.settings.sdkType ||
-        ModelProvider.OpenAI;
+  const modelSupportsAudio = aiModelSelectors.isModelSupportAudio(model, provider)(state);
+  const isCuratedModel = state.builtinAiModelList.some(
+    (item) => item.id === model && item.providerId === provider,
+  );
+  const isBuiltinProvider = Object.values(ModelProvider).includes(provider as ModelProvider);
+  const runtimeProvider = isBuiltinProvider
+    ? provider
+    : aiProviderSelectors.providerConfigById(provider)(state)?.settings.sdkType ||
+      ModelProvider.OpenAI;
 
-    return supportsRawAudioMessage({
-      isCuratedModel,
-      modelSupportsAudio,
-      provider,
-      runtimeProvider,
-    });
+  return supportsRawAudioMessage({
+    isCuratedModel,
+    modelSupportsAudio,
+    provider,
+    runtimeProvider,
   });
+};
+
+export const useVoiceMessageCapability = (model?: string, provider?: string) =>
+  useAiInfraStore((state) => getVoiceMessageCapability(model, provider, state));

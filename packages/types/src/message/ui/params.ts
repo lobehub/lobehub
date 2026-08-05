@@ -173,6 +173,11 @@ export interface SendMessageParams {
    */
   onMessagePersisted?: () => void;
   /**
+   * ID of a pre-created local user message that the formal send lifecycle should adopt in place.
+   * This keeps an optimistic row stable while replacing its local preview with uploaded media.
+   */
+  optimisticUserMessageId?: string;
+  /**
    * Page selections attached to the message (for Ask AI functionality)
    * These will be persisted to the database and injected via context-engine
    */

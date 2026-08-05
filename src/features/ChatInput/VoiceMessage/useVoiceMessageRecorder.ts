@@ -1,5 +1,6 @@
 'use client';
 
+import { type VoiceMessageRecording } from '@lobechat/types';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
@@ -46,14 +47,6 @@ export const calculateWaveformLevel = (samples: Uint8Array) => {
 
 type RecorderStatus = 'idle' | 'requesting' | 'recording' | 'stopping' | 'ready' | 'error';
 
-export interface VoiceRecording {
-  codec?: string;
-  durationMs: number;
-  file: File;
-  mimeType: string;
-  waveform: number[];
-}
-
 interface VoiceMessageRecorderOptions {
   maxDurationMs?: number;
   minDurationMs?: number;
@@ -77,7 +70,7 @@ export const useVoiceMessageRecorder = ({
 }: VoiceMessageRecorderOptions = {}) => {
   const [durationMs, setDurationMs] = useState(0);
   const [error, setError] = useState<VoiceRecorderErrorCode>();
-  const [recording, setRecording] = useState<VoiceRecording>();
+  const [recording, setRecording] = useState<VoiceMessageRecording>();
   const [status, setStatus] = useState<RecorderStatus>('idle');
   const [waveform, setWaveform] = useState<number[]>(initialWaveform);
 
@@ -87,13 +80,15 @@ export const useVoiceMessageRecorder = ({
   const lastWaveformUpdateRef = useRef(0);
   const mountedRef = useRef(true);
   const recorderRef = useRef<MediaRecorder | undefined>(undefined);
-  const recordingRef = useRef<VoiceRecording | undefined>(undefined);
+  const recordingRef = useRef<VoiceMessageRecording | undefined>(undefined);
   const requestIdRef = useRef(0);
   const sourceRef = useRef<MediaStreamAudioSourceNode | undefined>(undefined);
   const startedAtRef = useRef(0);
-  const stopPromiseRef = useRef<Promise<VoiceRecording | undefined> | undefined>(undefined);
+  const stopPromiseRef = useRef<Promise<VoiceMessageRecording | undefined> | undefined>(undefined);
   const stopRequestIdRef = useRef<number | undefined>(undefined);
-  const stopResolveRef = useRef<((recording?: VoiceRecording) => void) | undefined>(undefined);
+  const stopResolveRef = useRef<((recording?: VoiceMessageRecording) => void) | undefined>(
+    undefined,
+  );
   const streamRef = useRef<MediaStream | undefined>(undefined);
   const wasCancelledRef = useRef(false);
   const waveformRef = useRef(waveform);
@@ -120,7 +115,7 @@ export const useVoiceMessageRecorder = ({
     streamRef.current = undefined;
   }, []);
 
-  const settleStopPromise = useCallback((value?: VoiceRecording, requestId?: number) => {
+  const settleStopPromise = useCallback((value?: VoiceMessageRecording, requestId?: number) => {
     if (requestId !== undefined && stopRequestIdRef.current !== requestId) return;
 
     stopResolveRef.current?.(value);
@@ -314,7 +309,7 @@ export const useVoiceMessageRecorder = ({
           `voice-message-${now()}.${getAudioFileExtension(normalizedRecording.mimeType)}`,
           { type: normalizedRecording.mimeType },
         );
-        const nextRecording: VoiceRecording = {
+        const nextRecording: VoiceMessageRecording = {
           codec: normalizedRecording.codec,
           durationMs: finalDurationMs,
           file,
@@ -358,7 +353,7 @@ export const useVoiceMessageRecorder = ({
     }
   }, [cleanupCapture, maxDurationMs, normalizeRecording, now, settleStopPromise, setupWaveform]);
 
-  const stop = useCallback(async (): Promise<VoiceRecording | undefined> => {
+  const stop = useCallback(async (): Promise<VoiceMessageRecording | undefined> => {
     if (recordingRef.current) return recordingRef.current;
 
     const recorder = recorderRef.current;

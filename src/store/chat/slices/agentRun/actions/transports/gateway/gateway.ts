@@ -660,6 +660,7 @@ export class GatewayActionImpl {
     // the streamed messages. They differ for callAgent/sub-agent runs.
     const resolvedExecutionContext = { ...executionContext, topicId: result.topicId };
     const resolvedMessageContext = { ...messageContext, topicId: result.topicId };
+    this.#get().moveVoiceMessages(messageContext, resolvedMessageContext);
 
     if (!isCreateNewTopic && cancelledAfterPersistence) {
       try {

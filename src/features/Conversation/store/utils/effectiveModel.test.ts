@@ -4,7 +4,10 @@ import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { useUserStore } from '@/store/user';
 
-import { getEffectiveConversationModel } from './effectiveModel';
+import {
+  getEffectiveConversationModel,
+  getEffectiveConversationModelConfig,
+} from './effectiveModel';
 
 const AGENT_ID = 'agt_test';
 const TOPIC_ID = 'tpc_test';
@@ -38,6 +41,32 @@ describe('getEffectiveConversationModel', () => {
     expect(getEffectiveConversationModel({ agentId: AGENT_ID, topicId: TOPIC_ID })).toBe(
       'claude-opus-5',
     );
+  });
+
+  it('resolves model and provider from the requested topic instead of the active agent bucket', () => {
+    useAgentStore.setState({
+      agentMap: {
+        [AGENT_ID]: { chatConfig: {}, model: 'gpt-5.2', provider: 'openai' },
+        active_agent: { chatConfig: {}, model: 'text-model', provider: 'anthropic' },
+      },
+    } as any);
+    useChatStore.setState({
+      activeAgentId: 'active_agent',
+      activeTopicId: 'active_topic',
+      topicDataMap: {
+        [`agent_${AGENT_ID}`]: {
+          items: [{ id: TOPIC_ID, model: 'gemini-audio', provider: 'google' }],
+        },
+        agent_active_agent: {
+          items: [{ id: 'active_topic', model: 'text-model', provider: 'anthropic' }],
+        },
+      },
+    } as any);
+
+    expect(getEffectiveConversationModelConfig({ agentId: AGENT_ID, topicId: TOPIC_ID })).toEqual({
+      model: 'gemini-audio',
+      provider: 'google',
+    });
   });
 
   it('falls back to the agent default when the topic has no model recorded', () => {
@@ -76,6 +105,10 @@ describe('getEffectiveConversationModel', () => {
     } as any);
 
     expect(getEffectiveConversationModel({ agentId: AGENT_ID })).toBe('claude-opus-5');
+    expect(getEffectiveConversationModelConfig({ agentId: AGENT_ID })).toMatchObject({
+      model: 'claude-opus-5',
+      provider: 'anthropic',
+    });
   });
 
   it('applies the member override on a collaborative builtin the caller created', () => {

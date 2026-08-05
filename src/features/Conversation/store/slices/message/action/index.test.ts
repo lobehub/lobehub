@@ -254,6 +254,43 @@ describe('sendMessage composer ownership', () => {
     expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({ preserveComposer: true }));
   });
 
+  it('uses an explicit migrated context without forwarding the old provider messages', async () => {
+    const store = createTestStore({ topicId: null });
+    const sendMessage = vi.fn().mockResolvedValue({
+      assistantMessageId: 'assistant-1',
+      userMessageId: 'user-1',
+    });
+    vi.spyOn(useChatStore, 'getState').mockReturnValue({ sendMessage } as any);
+    store.setState({
+      displayMessages: [
+        {
+          content: 'stale new-topic message',
+          createdAt: 1,
+          id: 'old-message',
+          role: 'user',
+          updatedAt: 1,
+        },
+      ],
+    });
+    const targetContext = { agentId: 'agent-1', threadId: null, topicId: 'topic-created' };
+
+    await act(async () => {
+      await store.getState().sendMessage({
+        conversationContext: targetContext,
+        files: [],
+        message: 'voice follow-up',
+        preserveComposer: true,
+      });
+    });
+
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ context: targetContext, message: 'voice follow-up' }),
+    );
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.not.objectContaining({ messages: expect.anything() }),
+    );
+  });
+
   it('does not clear or dispatch the draft when cancellation happens inside the before-send hook', async () => {
     const store = createTestStore();
     const sendMessage = vi.fn();

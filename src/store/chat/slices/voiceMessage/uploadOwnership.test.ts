@@ -32,7 +32,7 @@ describe('VoiceMessageUploadOwnership', () => {
     expect(ownership.getPending()).toBe(voiceFile);
     expect(removeFile).not.toHaveBeenCalled();
 
-    await ownership.discard();
+    await expect(ownership.discard()).resolves.toBe('discarded');
     expect(removeFile).toHaveBeenCalledOnce();
     expect(removeFile).toHaveBeenCalledWith(voiceFile.id);
   });
@@ -50,7 +50,7 @@ describe('VoiceMessageUploadOwnership', () => {
     expect(removeFile).not.toHaveBeenCalled();
 
     send.resolve();
-    await cleanup;
+    await expect(cleanup).resolves.toBe('accepted');
     expect(removeFile).not.toHaveBeenCalled();
   });
 
@@ -66,7 +66,10 @@ describe('VoiceMessageUploadOwnership', () => {
     const secondCleanup = ownership.discard();
     send.reject(new Error('not accepted'));
 
-    await Promise.all([firstCleanup, secondCleanup]);
+    await expect(Promise.all([firstCleanup, secondCleanup])).resolves.toEqual([
+      'discarded',
+      'discarded',
+    ]);
     expect(removeFile).toHaveBeenCalledOnce();
   });
 
@@ -75,7 +78,7 @@ describe('VoiceMessageUploadOwnership', () => {
     const ownership = new VoiceMessageUploadOwnership(removeFile);
     const attemptId = ownership.beginAttempt();
 
-    await ownership.discard();
+    await expect(ownership.discard()).resolves.toBe('discarded');
 
     await expect(ownership.ownUploaded(attemptId, voiceFile)).resolves.toBe(false);
     expect(removeFile).toHaveBeenCalledOnce();
@@ -91,7 +94,7 @@ describe('VoiceMessageUploadOwnership', () => {
     const attemptId = ownership.beginAttempt();
     await ownership.ownUploaded(attemptId, voiceFile);
 
-    await ownership.discard();
+    await expect(ownership.discard()).resolves.toBe('discarded');
 
     expect(removeFile).toHaveBeenCalledTimes(3);
   });

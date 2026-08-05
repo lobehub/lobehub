@@ -1,4 +1,4 @@
-import { type OpenAIChatMessage, type UploadFileItem } from '@lobechat/types';
+import { type OpenAIChatMessage, type VoiceMessageRecording } from '@lobechat/types';
 import { type IEditor, type SlashOptions } from '@lobehub/editor';
 import { type ChatInputProps } from '@lobehub/editor/react';
 import { type MenuProps } from '@lobehub/ui';
@@ -12,14 +12,7 @@ export type SendButtonHandler = (params: {
   getMarkdownContent: () => string;
 }) => Promise<void> | void;
 
-export interface VoiceMessageSendOptions {
-  signal: AbortSignal;
-}
-
-export type VoiceMessageSendHandler = (
-  file: UploadFileItem,
-  options: VoiceMessageSendOptions,
-) => Promise<void>;
+export type VoiceMessageSendHandler = (recording: VoiceMessageRecording) => boolean;
 
 export interface SendButtonProps {
   disabled?: boolean;

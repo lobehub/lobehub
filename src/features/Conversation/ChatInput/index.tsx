@@ -1,6 +1,6 @@
 'use client';
 
-import { type UploadFileItem } from '@lobechat/types';
+import { type VoiceMessageRecording } from '@lobechat/types';
 import { type SlashOptions } from '@lobehub/editor';
 import { type ChatInputActionsProps } from '@lobehub/editor/react';
 import { Alert, Flexbox, type MenuProps } from '@lobehub/ui';
@@ -17,7 +17,6 @@ import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
 import {
   type SendButtonHandler,
   type SendButtonProps,
-  type VoiceMessageSendOptions,
 } from '@/features/ChatInput/store/initialState';
 import { useAgentStore } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
@@ -49,6 +48,7 @@ import {
 import GoalArmedChip from './VerifyTray/GoalArmedChip';
 import { useGoalArmStore } from './VerifyTray/goalArmStore';
 import GoalTray from './VerifyTray/GoalTray';
+import { canSendVoiceMessage } from './voiceMessageCapability';
 
 /** Max recent messages to feed into auto-complete context (≈10 conversation turns) */
 const MAX_CONTEXT_MESSAGES = 25;
@@ -406,9 +406,21 @@ const ChatInput = memo<ChatInputProps>(
     };
 
     const handleVoiceMessageSend = useCallback(
-      (file: UploadFileItem, { signal }: VoiceMessageSendOptions) =>
-        sendVoiceMessage(sendMessage, file, { signal }),
-      [sendMessage],
+      (recording: VoiceMessageRecording) =>
+        Boolean(
+          useChatStore.getState().sendVoiceMessage({
+            canSend: canSendVoiceMessage,
+            context,
+            recording,
+            send: (file, { context: targetContext, messageId, signal }) =>
+              sendVoiceMessage(sendMessage, file, {
+                context: targetContext,
+                optimisticUserMessageId: messageId,
+                signal,
+              }),
+          }),
+        ),
+      [context, sendMessage],
     );
 
     const defaultContent = (

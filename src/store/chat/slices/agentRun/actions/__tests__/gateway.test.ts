@@ -529,6 +529,7 @@ describe('GatewayActionImpl', () => {
     function createExecuteTestAction() {
       const mockClient = createMockClient();
       const moveQueuedMessages = vi.fn();
+      const moveVoiceMessages = vi.fn();
       const state: Record<string, any> = { gatewayConnections: {}, topicDataMap: {} };
       const associateMessageWithOperation = vi.fn();
       const connectToGateway = vi.fn();
@@ -555,6 +556,7 @@ describe('GatewayActionImpl', () => {
         internal_dispatchTopic: internalDispatchTopic,
         internal_replaceTopicId: internalReplaceTopicId,
         moveQueuedMessages,
+        moveVoiceMessages,
         onOperationCancel,
         replaceMessages,
         refreshTopic,
@@ -584,6 +586,7 @@ describe('GatewayActionImpl', () => {
         internalReplaceTopicId,
         mockClient,
         moveQueuedMessages,
+        moveVoiceMessages,
         onOperationCancel,
         replaceMessages,
         refreshTopic,
@@ -720,7 +723,7 @@ describe('GatewayActionImpl', () => {
     });
 
     it('should move queued follow-ups from the new-topic key to the server-created topic key', async () => {
-      const { action, moveQueuedMessages } = createExecuteTestAction();
+      const { action, moveQueuedMessages, moveVoiceMessages } = createExecuteTestAction();
       const context = { agentId: 'agent-1', topicId: null, threadId: null };
 
       vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
@@ -747,6 +750,10 @@ describe('GatewayActionImpl', () => {
         messageMapKey(context),
         messageMapKey({ ...context, topicId: 'topic-created' }),
       );
+      expect(moveVoiceMessages).toHaveBeenCalledWith(context, {
+        ...context,
+        topicId: 'topic-created',
+      });
     });
 
     it('should replace the optimistic topic placeholder with the server topic id', async () => {
@@ -1018,6 +1025,7 @@ describe('GatewayActionImpl', () => {
         connectToGateway,
         getOperationAbortSignal: vi.fn(() => controller.signal),
         moveQueuedMessages,
+        moveVoiceMessages: vi.fn(),
         onOperationCancel,
         replaceMessages,
         startOperation,
@@ -1106,6 +1114,7 @@ describe('GatewayActionImpl', () => {
         connectToGateway: vi.fn(),
         internal_dispatchTopic: vi.fn(),
         moveQueuedMessages: vi.fn(),
+        moveVoiceMessages: vi.fn(),
         onOperationCancel,
         replaceMessages: vi.fn(),
         startOperation,
@@ -1194,6 +1203,7 @@ describe('GatewayActionImpl', () => {
         connectToGateway,
         internal_dispatchTopic: internalDispatchTopic,
         moveQueuedMessages: vi.fn(),
+        moveVoiceMessages: vi.fn(),
         onOperationCancel: vi.fn(),
         startOperation,
         updateTopicStatus: vi.fn(),
@@ -1281,6 +1291,7 @@ describe('GatewayActionImpl', () => {
         connectToGateway,
         internal_dispatchTopic: internalDispatchTopic,
         moveQueuedMessages: vi.fn(),
+        moveVoiceMessages: vi.fn(),
         onOperationCancel: vi.fn(),
         startOperation,
         updateTopicStatus: vi.fn(),
@@ -1371,6 +1382,7 @@ describe('GatewayActionImpl', () => {
         connectToGateway,
         internal_dispatchTopic: internalDispatchTopic,
         moveQueuedMessages: vi.fn(),
+        moveVoiceMessages: vi.fn(),
         onOperationCancel: vi.fn(),
         startOperation,
         updateTopicStatus: vi.fn(),

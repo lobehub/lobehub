@@ -1,23 +1,20 @@
 'use client';
 
+import { type VoiceMessageRecording } from '@lobechat/types';
 import { Icon, Tooltip } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { ArrowUp, type LucideProps, RotateCcw, X } from 'lucide-react';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-
-import { fileService } from '@/services/file';
-import { useFileStore } from '@/store/file';
 
 import { ChatInputAction } from '../ActionBar/components/ChatInputAction';
 import { useAgentId } from '../hooks/useAgentId';
 import { useEffectiveModel } from '../hooks/useEffectiveModel';
 import { useChatInputStore, useStoreApi } from '../store';
 import { formatVoiceDuration } from './mediaRecorder';
-import { VoiceMessageUploadOwnership } from './uploadOwnership';
 import { useIntentionalHover } from './useIntentionalHover';
 import { getVoiceMessageActionState, useVoiceMessageCapability } from './useVoiceMessageCapability';
-import { useVoiceMessageRecorder, type VoiceRecording } from './useVoiceMessageRecorder';
+import { useVoiceMessageRecorder } from './useVoiceMessageRecorder';
 
 const VoiceMessageIcon = ({
   ref,
@@ -360,8 +357,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-type UploadStatus = 'idle' | 'uploading' | 'sending' | 'failed';
-
 export interface VoiceMessageControlProps {
   actionLabel: string;
   actionText?: string;
@@ -495,7 +490,6 @@ const VoiceMessage = memo(() => {
   const agentId = useAgentId();
   const { model, provider } = useEffectiveModel(agentId);
   const canRecordVoiceMessage = useVoiceMessageCapability(model, provider);
-  const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
   const storeApi = useStoreApi();
   const [activeAudioInputMode, onVoiceMessageSend, setActiveAudioInputMode] = useChatInputStore(
     (s) => [s.activeAudioInputMode, s.onVoiceMessageSend, s.setActiveAudioInputMode],
@@ -503,18 +497,9 @@ const VoiceMessage = memo(() => {
   const recorder = useVoiceMessageRecorder();
   const canRecordVoiceMessageRef = useRef(canRecordVoiceMessage);
   canRecordVoiceMessageRef.current = canRecordVoiceMessage;
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle');
-  const abortControllerRef = useRef<AbortController | undefined>(undefined);
-  const uploadOwnershipRef = useRef<VoiceMessageUploadOwnership | undefined>(undefined);
-  if (!uploadOwnershipRef.current) {
-    uploadOwnershipRef.current = new VoiceMessageUploadOwnership((id) =>
-      fileService.removeUnreferencedFile(id),
-    );
-  }
-  const uploadOwnership = uploadOwnershipRef.current;
+  const sendCommittedRef = useRef(false);
 
-  const hasRecorderActivity = recorder.status !== 'idle' || uploadStatus !== 'idle';
+  const hasRecorderActivity = recorder.status !== 'idle';
   const isActive = activeAudioInputMode === 'voiceMessage' || hasRecorderActivity;
   const isOtherAudioModeActive =
     activeAudioInputMode !== undefined && activeAudioInputMode !== 'voiceMessage';
@@ -530,125 +515,42 @@ const VoiceMessage = memo(() => {
 
   useEffect(
     () => () => {
-      const cleanup = uploadOwnership.discard();
-      abortControllerRef.current?.abort();
-      void cleanup.catch(console.error);
       if (storeApi.getState().activeAudioInputMode === 'voiceMessage') {
         storeApi.getState().setActiveAudioInputMode(undefined);
       }
     },
-    [storeApi, uploadOwnership],
+    [storeApi],
   );
 
   const discard = useCallback(() => {
-    const cleanup = uploadOwnership.discard();
-    abortControllerRef.current?.abort();
-    abortControllerRef.current = undefined;
-    void cleanup.catch(console.error);
-    setUploadProgress(0);
-    setUploadStatus('idle');
     recorder.reset();
     setActiveAudioInputMode(undefined);
-  }, [recorder, setActiveAudioInputMode, uploadOwnership]);
+  }, [recorder, setActiveAudioInputMode]);
 
-  const uploadAndSend = useCallback(
-    async (captured?: VoiceRecording) => {
-      if (!canRecordVoiceMessageRef.current) return;
-
-      const voiceRecording = captured ?? recorder.recording ?? (await recorder.stop());
-      if (!voiceRecording || voiceRecording.durationMs < recorder.minDurationMs) return;
-
-      const requestId = uploadOwnership.beginAttempt();
-      const abortController = new AbortController();
-      abortControllerRef.current = abortController;
-      setUploadProgress(0);
-      setUploadStatus(uploadOwnership.getPending() ? 'sending' : 'uploading');
+  const commitRecording = useCallback(
+    async (captured?: VoiceMessageRecording) => {
+      if (!canRecordVoiceMessageRef.current || sendCommittedRef.current) return;
+      sendCommittedRef.current = true;
 
       try {
-        let uploadItem = uploadOwnership.getPending();
-        if (!uploadItem) {
-          const result = await uploadWithProgress({
-            abortController,
-            file: voiceRecording.file,
-            fileMetadata: {
-              codec: voiceRecording.codec,
-              durationMs: voiceRecording.durationMs,
-              mimeType: voiceRecording.mimeType,
-            },
-            onStatusUpdate: (event) => {
-              if (event.type !== 'updateFile' || !uploadOwnership.isCurrent(requestId)) return;
-              if (event.value.uploadState) setUploadProgress(event.value.uploadState.progress);
-            },
-          });
+        const voiceRecording = captured ?? recorder.recording ?? (await recorder.stop());
+        if (!voiceRecording || voiceRecording.durationMs < recorder.minDurationMs) return;
+        if (!onVoiceMessageSend) return;
 
-          if (!result) {
-            if (!uploadOwnership.isCurrent(requestId)) return;
-            throw new Error('Voice message upload did not return a file');
-          }
+        const accepted = onVoiceMessageSend(voiceRecording);
+        if (!accepted) return;
 
-          uploadItem = {
-            audioMetadata: {
-              codec: voiceRecording.codec,
-              durationMs: voiceRecording.durationMs,
-              mimeType: voiceRecording.mimeType,
-            },
-            file: voiceRecording.file,
-            fileUrl: result.url,
-            id: result.id,
-            status: 'success',
-          };
-          try {
-            if (!(await uploadOwnership.ownUploaded(requestId, uploadItem))) return;
-          } catch (error) {
-            console.error('[VoiceMessage] Failed to clean up stale upload:', error);
-            return;
-          }
-        }
-
-        if (!uploadOwnership.isCurrent(requestId)) return;
-
-        // The selected model may have changed while the binary upload was in flight.
-        // Keep and reuse the uploaded recording, but never dispatch audio to a text-only model.
-        if (!canRecordVoiceMessageRef.current) {
-          setUploadProgress(0);
-          setUploadStatus('idle');
-          return;
-        }
-
-        if (!onVoiceMessageSend) throw new Error('Voice message send handler is unavailable');
-
-        setUploadStatus('sending');
-        const sendPromise = Promise.resolve(
-          onVoiceMessageSend(uploadItem, { signal: abortController.signal }),
-        );
-        uploadOwnership.trackSend(uploadItem, sendPromise);
-        try {
-          await sendPromise;
-          // Acceptance transfers file ownership even if cancel/unmount already invalidated this UI
-          // attempt. Clear ownership before checking request freshness so cleanup can never delete it.
-          uploadOwnership.accept(uploadItem);
-        } finally {
-          uploadOwnership.finishSend(sendPromise);
-        }
-        if (!uploadOwnership.isCurrent(requestId)) return;
-
-        setUploadProgress(0);
-        setUploadStatus('idle');
         recorder.reset();
         setActiveAudioInputMode(undefined);
-      } catch {
-        if (!uploadOwnership.isCurrent(requestId)) return;
-        setUploadStatus('failed');
       } finally {
-        if (uploadOwnership.isCurrent(requestId)) abortControllerRef.current = undefined;
+        sendCommittedRef.current = false;
       }
     },
-    [onVoiceMessageSend, recorder, setActiveAudioInputMode, uploadOwnership, uploadWithProgress],
+    [onVoiceMessageSend, recorder, setActiveAudioInputMode],
   );
 
   const handleStart = useCallback(() => {
     if (!canStart) return;
-    setUploadStatus('idle');
     setActiveAudioInputMode('voiceMessage');
     void recorder.start();
   }, [canStart, recorder, setActiveAudioInputMode]);
@@ -689,36 +591,26 @@ const VoiceMessage = memo(() => {
 
   const errorText = !canRecordVoiceMessage
     ? t('voiceMessage.unsupported')
-    : uploadStatus === 'failed'
-      ? t('voiceMessage.uploadFailed')
-      : recorder.error
-        ? t(`voiceMessage.error.${recorder.error}`)
-        : undefined;
+    : recorder.error
+      ? t(`voiceMessage.error.${recorder.error}`)
+      : undefined;
   const waveform = recorder.recording?.waveform ?? recorder.waveform;
   const visibleWaveform = waveform.slice(-8);
   const canSendRecording =
-    uploadStatus !== 'uploading' &&
-    uploadStatus !== 'sending' &&
     recorder.durationMs >= recorder.minDurationMs &&
     (recorder.status === 'recording' || recorder.status === 'ready');
   const { canSend, sendDisabled, showRetry } = getVoiceMessageActionState({
     canRecordVoiceMessage,
     canSendRecording,
-    hasRecoverableError: uploadStatus === 'failed' || recorder.status === 'error',
+    hasRecoverableError: recorder.status === 'error',
   });
-  const showBusy =
-    uploadStatus === 'uploading' ||
-    uploadStatus === 'sending' ||
-    recorder.status === 'requesting' ||
-    recorder.status === 'stopping';
+  const showBusy = recorder.status === 'requesting' || recorder.status === 'stopping';
   const statusText =
     recorder.status === 'requesting'
       ? t('voiceMessage.requesting')
       : recorder.status === 'stopping'
         ? t('voiceMessage.stopping')
-        : uploadStatus === 'uploading' || uploadStatus === 'sending'
-          ? t('voiceMessage.uploading')
-          : undefined;
+        : undefined;
   const statusAnnouncement =
     errorText ??
     statusText ??
@@ -731,12 +623,11 @@ const VoiceMessage = memo(() => {
   return (
     <VoiceMessageControl
       actionLabel={t(showRetry ? 'voiceMessage.retry' : 'voiceMessage.send')}
-      cancelLabel={t(uploadStatus === 'failed' ? 'voiceMessage.delete' : 'voiceMessage.cancel')}
+      cancelLabel={t(recorder.status === 'ready' ? 'voiceMessage.delete' : 'voiceMessage.cancel')}
       errorText={errorText}
       expanded={showBusy}
       groupLabel={t('voiceMessage.statusLabel')}
       isRetry={showRetry}
-      progress={uploadStatus === 'uploading' ? uploadProgress : undefined}
       sendDisabled={sendDisabled}
       statusAnnouncement={statusAnnouncement}
       waveform={visibleWaveform}
@@ -751,14 +642,8 @@ const VoiceMessage = memo(() => {
           ? t('voiceMessage.tooShort', { duration: recorder.minDurationMs })
           : undefined
       }
+      onAction={showRetry ? handleRetryPermission : () => void commitRecording()}
       onCancel={discard}
-      onAction={
-        showRetry
-          ? uploadStatus === 'failed'
-            ? () => void uploadAndSend(recorder.recording)
-            : handleRetryPermission
-          : () => void uploadAndSend()
-      }
     />
   );
 });

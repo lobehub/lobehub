@@ -9,6 +9,27 @@ const voiceFile = {
 } as UploadFileItem;
 
 describe('sendVoiceMessage', () => {
+  it('forwards the optimistic user message id to the formal send lifecycle', async () => {
+    const context = { agentId: 'agent-1', topicId: 'topic-created' };
+    const sendMessage = vi.fn(async (params: SendMessageParams) => {
+      params.onMessageAccepted?.();
+    });
+
+    await expect(
+      sendVoiceMessage(sendMessage, voiceFile, {
+        context,
+        optimisticUserMessageId: 'tmp-voice-message',
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationContext: context,
+        optimisticUserMessageId: 'tmp-voice-message',
+      }),
+    );
+  });
+
   it('releases the recording after acceptance without waiting for generation to finish', async () => {
     let params: SendMessageParams | undefined;
     let resolveSend!: () => void;

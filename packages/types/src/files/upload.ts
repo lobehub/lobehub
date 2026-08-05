@@ -21,6 +21,14 @@ export type FileProcessStatus = 'pending' | 'chunking' | 'embedding' | 'success'
 
 export const UPLOAD_STATUS_SET = new Set(['uploading', 'pending', 'processing']);
 
+export interface VoiceMessageRecording {
+  codec?: string;
+  durationMs: number;
+  file: File;
+  mimeType: string;
+  waveform: number[];
+}
+
 // the file that is upload at chat page
 export interface UploadFileItem {
   /**

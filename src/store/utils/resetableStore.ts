@@ -14,6 +14,8 @@ export abstract class ResetableStoreAction<TStore extends object> implements Res
 
   protected abstract readonly resetActionName: string;
 
+  protected beforeReset = () => {};
+
   constructor(set: Setter<TStore>, _get: () => TStore, api: StoreApi<TStore>) {
     void _get;
     this.#set = set;
@@ -21,6 +23,7 @@ export abstract class ResetableStoreAction<TStore extends object> implements Res
   }
 
   reset = () => {
+    this.beforeReset();
     this.#set(this.#api.getInitialState(), false, this.resetActionName);
   };
 }
