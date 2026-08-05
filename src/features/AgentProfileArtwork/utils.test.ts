@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
+import { selectAgentArtworkModel } from '@/store/agent/slices/artwork/utils';
 import type { EnabledProviderWithModels } from '@/types/aiProvider';
 
-import { buildAgentArtworkPrompt, resolveAgentBackground, selectAgentArtworkModel } from './utils';
+import { resolveAgentBackground } from './utils';
 
 const createProvider = (id: string, modelIds: string[]): EnabledProviderWithModels => ({
   children: modelIds.map((modelId) => ({ abilities: {}, id: modelId })),
@@ -26,28 +27,6 @@ describe('resolveAgentBackground', () => {
     'data:image/png;base64,abc',
   ])('keeps the image source %s', (value) => {
     expect(resolveAgentBackground(value)).toBe(value);
-  });
-});
-
-describe('buildAgentArtworkPrompt', () => {
-  it('builds an avatar-specific prompt from the agent identity', () => {
-    const prompt = buildAgentArtworkPrompt({
-      kind: 'avatar',
-      name: 'Coco',
-      title: 'Coding assistant',
-    });
-
-    expect(prompt).toContain('Coco. Coding assistant');
-    expect(prompt).toContain('full-bleed composition');
-    expect(prompt).toContain('no white background');
-    expect(prompt).toContain('square profile icon');
-    expect(prompt.toLowerCase()).toContain('no words');
-  });
-
-  it('builds a wide background prompt', () => {
-    expect(buildAgentArtworkPrompt({ kind: 'background', title: 'Researcher' })).toContain(
-      'wide cinematic profile cover',
-    );
   });
 });
 

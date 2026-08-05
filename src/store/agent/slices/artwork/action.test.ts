@@ -1,0 +1,104 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { generationService } from '@/services/generation';
+import { generationTopicService } from '@/services/generationTopic';
+import { imageService } from '@/services/image';
+import { getAiInfraStoreState } from '@/store/aiInfra';
+import { AsyncTaskStatus } from '@/types/asyncTask';
+
+import { useAgentStore } from '../../store';
+
+vi.mock('zustand/traditional');
+
+vi.mock('@/services/generation', () => ({
+  generationService: { getGenerationStatus: vi.fn() },
+}));
+
+vi.mock('@/services/generationTopic', () => ({
+  generationTopicService: { createTopic: vi.fn() },
+}));
+
+vi.mock('@/services/image', () => ({
+  imageService: { createImage: vi.fn() },
+}));
+
+vi.mock('@/store/aiInfra', () => ({
+  getAiInfraStoreState: vi.fn(),
+}));
+
+const input = {
+  description: 'Writes and reviews TypeScript',
+  id: 'agent-a',
+  kind: 'avatar' as const,
+  name: 'Coco',
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  useAgentStore.setState({ agentArtworkGenerationMap: {} });
+  vi.mocked(getAiInfraStoreState).mockReturnValue({
+    enabledImageModelList: [
+      {
+        children: [{ abilities: {}, id: 'gpt-image-2' }],
+        id: 'openai',
+        name: 'OpenAI',
+        source: 'builtin',
+      },
+    ],
+  } as ReturnType<typeof getAiInfraStoreState>);
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe('AgentArtworkAction', () => {
+  it('keeps a per-agent generating state until the image is saved', async () => {
+    let startGeneration: (value: string) => void = () => {};
+    vi.mocked(generationTopicService.createTopic).mockReturnValue(
+      new Promise((resolve) => {
+        startGeneration = resolve;
+      }),
+    );
+    vi.mocked(imageService.createImage).mockResolvedValue({
+      data: { generations: [{ asyncTaskId: 'task-1', id: 'generation-1' }] },
+      success: true,
+    } as never);
+    vi.mocked(generationService.getGenerationStatus).mockResolvedValue({
+      generation: { asset: { url: 'https://example.com/avatar.webp' } },
+      status: AsyncTaskStatus.Success,
+    } as never);
+    const updateAgentMetaById = vi.fn().mockResolvedValue(undefined);
+    useAgentStore.setState({ updateAgentMetaById });
+
+    const promise = useAgentStore.getState().generateAgentArtwork(input);
+
+    expect(useAgentStore.getState().agentArtworkGenerationMap?.['agent-a']).toEqual({
+      kind: 'avatar',
+      status: 'generating',
+    });
+
+    startGeneration('topic-1');
+    await promise;
+
+    expect(updateAgentMetaById).toHaveBeenCalledWith('agent-a', {
+      avatar: 'https://example.com/avatar.webp',
+    });
+    expect(useAgentStore.getState().agentArtworkGenerationMap?.['agent-a']).toBeUndefined();
+  });
+
+  it('keeps a retryable error state when generation cannot start', async () => {
+    vi.mocked(generationTopicService.createTopic).mockResolvedValue('topic-1');
+    vi.mocked(imageService.createImage).mockResolvedValue({ success: false } as never);
+
+    await expect(useAgentStore.getState().generateAgentArtwork(input)).rejects.toThrow(
+      'Image generation could not be started',
+    );
+
+    expect(useAgentStore.getState().agentArtworkGenerationMap?.['agent-a']).toEqual({
+      error: 'Image generation could not be started',
+      kind: 'avatar',
+      status: 'error',
+    });
+  });
+});

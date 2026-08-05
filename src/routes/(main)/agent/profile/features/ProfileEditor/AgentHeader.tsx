@@ -48,6 +48,7 @@ const AgentHeader = memo(() => {
       }}
     >
       <AgentProfileArtwork
+        agentId={agentId}
         avatar={meta.avatar}
         background={meta.backgroundColor}
         canEdit={canEdit}

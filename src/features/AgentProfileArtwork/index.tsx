@@ -8,10 +8,14 @@ import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import EmojiPicker from '@/components/EmojiPicker';
+import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
+import { useAgentStore } from '@/store/agent';
+import { agentArtworkSelectors } from '@/store/agent/selectors';
+import { useAiInfraStore } from '@/store/aiInfra';
+import { aiProviderSelectors } from '@/store/aiInfra/selectors';
 import { useFileStore } from '@/store/file';
 
-import { useGenerateAgentArtwork } from './useGenerateAgentArtwork';
-import { buildAgentArtworkPrompt, resolveAgentBackground } from './utils';
+import { resolveAgentBackground } from './utils';
 
 const MAX_ARTWORK_SIZE = 1024 * 1024;
 
@@ -87,9 +91,24 @@ const styles = createStaticStyles(({ css }) => ({
     width: 100%;
   `,
   generatedPreview: css`
+    position: relative;
+
+    overflow: hidden;
+
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
+
     background: ${cssVar.colorFillQuaternary};
+  `,
+  generationFeedback: css`
+    position: absolute;
+    z-index: 3;
+    inset: 0;
+
+    color: ${cssVar.colorText};
+
+    background: ${cssVar.colorBgMask};
+    backdrop-filter: blur(8px);
   `,
   scrim: css`
     position: absolute;
@@ -99,6 +118,7 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface AgentProfileArtworkProps {
+  agentId: string;
   avatar?: string | null;
   background?: string | null;
   canEdit: boolean;
@@ -114,6 +134,7 @@ interface AgentProfileArtworkProps {
 export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
   ({
     avatar,
+    agentId,
     background,
     canEdit,
     description,
@@ -126,12 +147,16 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
   }) => {
     const { t } = useTranslation('setting');
     const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
-    const { canGenerate, generate } = useGenerateAgentArtwork();
+    const canGenerate = useAiInfraStore(
+      (state) => aiProviderSelectors.enabledImageModelList(state).length > 0,
+    );
+    const generateAgentArtwork = useAgentStore((s) => s.generateAgentArtwork);
+    const generation = useAgentStore(agentArtworkSelectors.generationByAgentId(agentId));
     const backgroundInputRef = useRef<HTMLInputElement>(null);
     const [avatarUploading, setAvatarUploading] = useState(false);
     const [backgroundUploading, setBackgroundUploading] = useState(false);
-    const [generationError, setGenerationError] = useState<'avatar' | 'background' | null>(null);
-    const [generating, setGenerating] = useState<'avatar' | 'background' | null>(null);
+    const generating = generation?.status === 'generating' ? generation.kind : null;
+    const generationError = generation?.status === 'error' ? generation.kind : null;
     const backgroundUrl = resolveAgentBackground(background);
 
     const upload = useCallback(
@@ -163,35 +188,20 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
       async (kind: 'avatar' | 'background') => {
         if (!canEdit || !canGenerate) return;
 
-        setGenerationError(null);
-        setGenerating(kind);
         try {
-          const url = await generate(
+          await generateAgentArtwork({
+            description,
+            id: agentId,
             kind,
-            buildAgentArtworkPrompt({ description, kind, name, systemRole, title }),
-          );
-          if (kind === 'avatar') onAvatarChange(url);
-          else onBackgroundChange(url);
-        } catch (error) {
-          console.error('Failed to generate agent artwork:', error);
-          setGenerationError(kind);
-          if (kind === 'background') toast.error(t('settingAgent.artwork.generateFailed'));
-        } finally {
-          setGenerating(null);
+            name,
+            systemRole,
+            title,
+          });
+        } catch {
+          // The Agent store owns the persistent error state rendered below.
         }
       },
-      [
-        canEdit,
-        canGenerate,
-        description,
-        generate,
-        name,
-        onAvatarChange,
-        onBackgroundChange,
-        systemRole,
-        t,
-        title,
-      ],
+      [agentId, canEdit, canGenerate, description, generateAgentArtwork, name, systemRole, title],
     );
 
     return (
@@ -201,6 +211,27 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
           style={{ backgroundImage: backgroundUrl ? `url(${backgroundUrl})` : undefined }}
         >
           {backgroundUrl ? <div className={styles.scrim} /> : null}
+          {generating === 'background' ? (
+            <Center className={styles.generationFeedback}>
+              <Flexbox align={'center'} gap={10}>
+                <NeuralNetworkLoading size={32} />
+                <Text>{t('settingAgent.artwork.background.generating')}</Text>
+              </Flexbox>
+            </Center>
+          ) : generationError === 'background' ? (
+            <Center className={styles.generationFeedback}>
+              <Flexbox align={'center'} gap={10}>
+                <Text>{t('settingAgent.artwork.generateFailed')}</Text>
+                <Button
+                  icon={WandSparkles}
+                  size={'small'}
+                  onClick={() => void generateArtwork('background')}
+                >
+                  {t('settingAgent.artwork.retry')}
+                </Button>
+              </Flexbox>
+            </Center>
+          ) : null}
           {!backgroundUrl && canEdit ? (
             <Center className={styles.emptyBackgroundActions}>
               <Flexbox align={'center'} gap={8}>
@@ -300,6 +331,14 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
                         <Flexbox gap={12} padding={12} width={332}>
                           <Center className={styles.generatedPreview} height={156}>
                             <Avatar avatar={avatar || undefined} shape={'square'} size={112} />
+                            {generating === 'avatar' ? (
+                              <Center className={styles.generationFeedback}>
+                                <Flexbox align={'center'} gap={10}>
+                                  <NeuralNetworkLoading size={32} />
+                                  <Text>{t('settingAgent.artwork.avatar.generating')}</Text>
+                                </Flexbox>
+                              </Center>
+                            ) : null}
                           </Center>
                           <Button
                             className={styles.generatedAction}
@@ -343,4 +382,4 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
 
 AgentProfileArtwork.displayName = 'AgentProfileArtwork';
 
-export { buildAgentArtworkPrompt, resolveAgentBackground } from './utils';
+export { resolveAgentBackground } from './utils';
