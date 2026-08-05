@@ -2,12 +2,14 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
-import { memo, useCallback, useState } from 'react';
+import { lazy, memo, Suspense, useCallback, useState } from 'react';
 
 import HomeInbox from '@/features/HomeInbox';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { useTaskStore } from '@/store/task';
+import { taskDetailSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
@@ -18,6 +20,13 @@ import InputArea from './InputArea';
 import PortraitBubble from './PortraitBubble';
 import { RAIL_INBOX_PROPS, resolveRailVisibility } from './railVisibility';
 import type { HomeMode } from './types';
+
+// The "View run" button on brief cards only writes drawer state to the task
+// store — some component must mount the drawer shell that reacts to it.
+// TaskDetailPage mounts its own; home needs one too, or the click is a silent
+// no-op. Lazy so the home bundle doesn't pay for the chat stack until a run is
+// actually opened.
+const TopicChatDrawer = lazy(() => import('@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer'));
 
 /** Trailing gutter that keeps the rail's cards off the page's scroll lane. */
 const RAIL_GUTTER = 14;
@@ -238,6 +247,12 @@ const Home = memo(() => {
   const hiddenWidgets = useGlobalStore(systemStatusSelectors.hiddenHomeWidgets);
   const [mode, setMode] = useState<HomeMode>('chat');
   const [inputValue, setInputValue] = useState('');
+
+  const drawerTopicId = useTaskStore(taskDetailSelectors.activeTopicDrawerTopicId);
+  // Mount the drawer on first open and keep it mounted afterwards, so its
+  // close animation can play instead of the panel vanishing with the state.
+  const [drawerMounted, setDrawerMounted] = useState(false);
+  if (drawerTopicId && !drawerMounted) setDrawerMounted(true);
   const railVisible = resolveRailVisibility({ hiddenWidgets, isLogin, showHomeRail });
   const railCollapsed = !railVisible;
   const portraitVisible = Boolean(isLogin && showHomePortrait);
@@ -307,6 +322,14 @@ const Home = memo(() => {
         >
           <HomeInbox {...RAIL_INBOX_PROPS} variant={'rail'} />
         </aside>
+      )}
+
+      {/* FloatingPanel portals to the app element, so where this sits in the
+          tree doesn't affect its viewport-anchored position. */}
+      {drawerMounted && (
+        <Suspense fallback={null}>
+          <TopicChatDrawer />
+        </Suspense>
       )}
     </Flexbox>
   );

@@ -6,6 +6,7 @@ import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useBriefStore } from '@/store/brief';
+import { useTaskStore } from '@/store/task';
 
 import BriefCardActions from '../BriefCardActions';
 
@@ -54,6 +55,8 @@ vi.mock('../CommentInput', () => ({
 
 const mockResolveBrief = vi.fn();
 const mockSubmitFeedback = vi.fn();
+const mockSetActiveTaskId = vi.fn();
+const mockOpenTopicDrawer = vi.fn();
 const mockToastError = vi.spyOn(toast, 'error').mockReturnValue(undefined as never);
 
 const sampleActions: BriefAction[] = [
@@ -66,6 +69,10 @@ beforeEach(() => {
   useBriefStore.setState({
     resolveBrief: mockResolveBrief,
     submitFeedback: mockSubmitFeedback,
+  });
+  useTaskStore.setState({
+    openTopicDrawer: mockOpenTopicDrawer,
+    setActiveTaskId: mockSetActiveTaskId,
   });
 });
 
@@ -109,6 +116,33 @@ describe('BriefCardActions', () => {
     // mutation settles, so the number of awaits in between is an implementation
     // detail this assertion must not encode.
     await waitFor(() => expect(onAfterResolve).toHaveBeenCalled());
+  });
+
+  it('should open the run drawer with the brief agent riding the open call', () => {
+    renderWithRouter(
+      <BriefCardActions
+        agentId="agent-1"
+        briefId="brief-1"
+        briefType="error"
+        taskId="task-1"
+        topicId="topic-1"
+        topicTitle="Nightly cleanup"
+      />,
+    );
+
+    fireEvent.click(screen.getByText('View run'));
+
+    expect(mockSetActiveTaskId).toHaveBeenCalledWith('task-1');
+    // The agent/title must ride openTopicDrawer itself: setActiveTaskId clears
+    // the drawer's agent state, so without this the drawer's `open` gate stays
+    // false until (unless) the task-detail fetch resolves.
+    expect(mockOpenTopicDrawer).toHaveBeenCalledWith('topic-1', {
+      agentId: 'agent-1',
+      title: 'Nightly cleanup',
+    });
+    expect(mockSetActiveTaskId.mock.invocationCallOrder[0]).toBeLessThan(
+      mockOpenTopicDrawer.mock.invocationCallOrder[0],
+    );
   });
 
   it('should hide action buttons when comment button clicked', () => {

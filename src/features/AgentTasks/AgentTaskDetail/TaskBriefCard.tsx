@@ -117,6 +117,7 @@ const TaskBriefCard = memo<TaskBriefCardProps>(
             <BriefCardArtifacts artifacts={brief.artifacts} />
             <BriefCardActions
               actions={brief.actions}
+              agentId={brief.agentId ?? brief.agent?.id}
               briefId={brief.id}
               briefType={brief.type}
               resolvedAction={brief.resolvedAction}
