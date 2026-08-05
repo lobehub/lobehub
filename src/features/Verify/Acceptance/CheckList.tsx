@@ -1107,19 +1107,6 @@ const CheckRow = memo<{
             paddingBlock={detailMode ? 0 : '0 14px'}
             paddingInline={detailMode ? 0 : 16}
           >
-            {/* How this verdict was reached. An LLM judge's whole product IS its
-              reasoning — showing only the evidence line left the reviewer with a
-              verdict and no argument for it. */}
-            {check.result?.toulmin?.reasoning && (
-              <Flexbox gap={4}>
-                <Text fontSize={11} type={'secondary'}>
-                  {t('acceptance.checks.judgeReason')}
-                </Text>
-                <Text fontSize={12} style={{ whiteSpace: 'pre-wrap' }}>
-                  {check.result.toulmin.reasoning}
-                </Text>
-              </Flexbox>
-            )}
             {check.result?.toulmin?.evidence && (
               <Text className={styles.descClamp} fontSize={12} type={'secondary'}>
                 {check.result.toulmin.evidence}
@@ -1170,12 +1157,33 @@ const CheckRow = memo<{
               </Flexbox>
             )}
 
-            {/* An executed check with zero artifacts must SAY so — a silent blank
-              under the verdict reads as a rendering bug, not as a fact. Filled
-              so it reads as a status, never as more description text. */}
+            {/* The verifier's record slot. An LLM judge's whole product IS its
+              reasoning, so when it exists it IS the record shown here — in the
+              same slot the empty-evidence note otherwise occupies (the two are
+              the same statement: "here is what the verifier left behind"). An
+              executed check with neither still SAYS so — a silent blank under
+              the verdict reads as a rendering bug, not as a fact. */}
             {check.state !== 'not_executed' &&
               check.result &&
-              !hasRenderableEvidence(check.evidence.length, visualization) && (
+              (check.result.toulmin?.reasoning ? (
+                <Flexbox
+                  gap={4}
+                  paddingBlock={8}
+                  paddingInline={10}
+                  style={{
+                    background: cssVar.colorFillQuaternary,
+                    borderRadius: cssVar.borderRadius,
+                    width: '100%',
+                  }}
+                >
+                  <Text fontSize={11} type={'secondary'}>
+                    {t('acceptance.checks.judgeReason')}
+                  </Text>
+                  <Text fontSize={12} style={{ whiteSpace: 'pre-wrap' }}>
+                    {check.result.toulmin.reasoning}
+                  </Text>
+                </Flexbox>
+              ) : !hasRenderableEvidence(check.evidence.length, visualization) ? (
                 <Flexbox
                   paddingBlock={6}
                   paddingInline={10}
@@ -1189,7 +1197,7 @@ const CheckRow = memo<{
                     {t('acceptance.evidence.empty')}
                   </Text>
                 </Flexbox>
-              )}
+              ) : null)}
 
             {/* The user's standing feedback hangs right under the evidence it
               judges. BOTH verdicts keep an undo path — a mis-click is the most
