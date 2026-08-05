@@ -913,6 +913,69 @@ Gate on a real authenticated TRPC call rather than on the page rendering: a 200 
 `apps/desktop` are standalone installs (PROJECT.md §1), so each also needs its own
 `pnpm install` in a fresh worktree.
 
+### The dev Electron instance may be a thin client on PRODUCTION — read `dataSyncConfig` before any write
+
+**Situation:** starting `electron-dev.sh` to verify a frontend change, then driving flows that
+create or mutate product objects (labels, groups, agents, forwarded topics, saved edits).
+
+**Doesn't work:** assuming the instance talks to a local backend because the run also started one.
+The seeded login snapshot carries its own target, and `{"storageMode":"cloud","active":true}` means
+the renderer runs your working-tree code while every request goes to `app.lobehub.com` with the
+user's real account. `app-probe.sh server-auth` returns 200, which reads as "the local stack is
+wired up" and encourages exactly the writes that then land in production. The local dev server the
+run started sits unused.
+
+**Works:** read the target first and let it decide the test's write budget.
+
+```bash
+agent-browser --cdp 9222 eval '(() => JSON.stringify(window.__LOBE_STORES.electron().dataSyncConfig))()'
+# {"storageMode":"cloud","active":true}   -> production account; keep the run read-only
+# {"storageMode":"selfHost","remoteServerUrl":"http://localhost:3111", ...} -> local backend
+```
+
+On `cloud`, verify open / render / close only, treat every submit as a user-owned decision, and
+prove afterwards that nothing was written (re-read the relevant store count). Note this also makes
+the whole local-server bring-up unnecessary — check the target before spending minutes on it.
+
+### Asserting a modal's exit window: `data-ending-style` is never set, and `record-gif.sh` is far too slow
+
+**Situation:** proving what a base-ui modal does during its \~120ms exit — typically that the body
+stays mounted while the panel fades, rather than blanking at the start of the animation.
+
+**Doesn't work:** three separate traps.
+
+- Gating on `panel.hasAttribute("data-ending-style")`. `base-ui/Modal/style.mjs` does carry a
+  `[data-ending-style]` rule, but the imperative host animates through motion/react, so the
+  attribute stays absent for the whole exit. Filtering samples on it yields an empty set and reads
+  as "the exit never happened".
+- Polling the state from the driver. A `Runtime.evaluate` round trip is the same order of magnitude
+  as the window itself, so the driver only ever observes before and after.
+- `scripts/record-gif.sh`. Its own header caps effective rate at 1–2 fps; a 120ms window gets at
+  most one frame.
+
+**Works:** sample inside the page and capture frames from the compositor.
+
+```js
+// exit-window signal = opacity decay on popupInner ([role=dialog] > :first-child)
+const tick = () =>
+  samples.push({
+    t: performance.now() - t0,
+    connected: panel.isConnected,
+    opacity: getComputedStyle(panel).opacity,
+    panelH: panel.getBoundingClientRect().height,
+    contentKids: content.children.length,
+    contentTextLen: content.innerText.length,
+  });
+setInterval(tick, 8);
+```
+
+A body that survives the exit holds `contentTextLen` / `contentKids` constant while opacity decays,
+and the panel shrinks only \~1.5% (the `scale(0.98)` exit transform) instead of collapsing to the
+56px header. For the visual half, drive raw CDP `Page.startScreencast` (frames land only when the
+compositor paints, so they cluster inside the animation — \~9 frames in the 120ms window) and replay
+those unmodified frames slowly with ffmpeg. Do not slow the product's own transition: the exit is a
+JS animation, so a CSS `transition-duration` override does nothing anyway.
+
 ## Detailed references
 
 - [Probe field notes](./references/probe-field-notes.md) — all historical
