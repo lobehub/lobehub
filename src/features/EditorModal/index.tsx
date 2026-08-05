@@ -78,7 +78,11 @@ export const openEditorModal = ({
     // NOT `onOpenChange`: that only fires for user dismissal, while the footer's
     // Cancel goes through `instance.close()`. Cancelling would then leave the
     // caller's editing flag set and the editor could never be reopened.
-    onOpenChangeComplete: () => onClose?.(),
+    // `createModal` only ever completes with `false`, but the open flag is
+    // honored so this does not depend on that renderer detail.
+    onOpenChangeComplete: (open) => {
+      if (!open) onClose?.();
+    },
     styles: { content: { overflow: 'hidden', padding: 0 } },
     width: 'min(90vw, 920px)',
   });

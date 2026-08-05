@@ -251,7 +251,9 @@ export const openForwardModal = ({ createConversationStore, onClosed }: OpenForw
     footer: null,
     // NOT `onOpenChange`: that skips `instance.close()`, which is how the
     // in-content Cancel and Forward buttons close this modal.
-    onOpenChangeComplete: () => onClosed?.(),
+    onOpenChangeComplete: (open) => {
+      if (!open) onClosed?.();
+    },
     title: translate('messageForward.modal.title', { ns: 'chat' }),
     width: 760,
   });

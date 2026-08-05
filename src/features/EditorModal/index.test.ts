@@ -31,6 +31,9 @@ describe('openEditorModal', () => {
     expect(props.onOpenChange).toBeUndefined();
     expect(typeof props.onOpenChangeComplete).toBe('function');
 
+    props.onOpenChangeComplete(true);
+    expect(onClose).not.toHaveBeenCalled();
+
     props.onOpenChangeComplete(false);
     expect(onClose).toHaveBeenCalledTimes(1);
   });

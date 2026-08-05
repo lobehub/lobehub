@@ -760,6 +760,9 @@ describe('openCreateAgentModal', () => {
     expect(props.onOpenChange).toBeUndefined();
     expect(typeof props.onOpenChangeComplete).toBe('function');
 
+    props.onOpenChangeComplete(true);
+    expect(onClosed).not.toHaveBeenCalled();
+
     props.onOpenChangeComplete(false);
     expect(onClosed).toHaveBeenCalledTimes(1);
   });

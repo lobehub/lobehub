@@ -644,7 +644,11 @@ export const openCreateAgentModal = ({
     // the header close button). `instance.close()` — which the in-content close
     // and the post-create path both call — just flips the stack entry, so the
     // provider would never learn the modal went away and could not reopen it.
-    onOpenChangeComplete: () => onClosed?.(),
+    // `createModal` only ever completes with `false`, but the open flag is
+    // honored so this does not depend on that renderer detail.
+    onOpenChangeComplete: (open) => {
+      if (!open) onClosed?.();
+    },
     styles: { content: { padding: 0 } },
     width: CREATE_MODAL_WIDTH,
   });
