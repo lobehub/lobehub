@@ -1,22 +1,19 @@
-import { type DropdownMenuCheckboxItem } from '@lobehub/ui';
-import { ActionIcon, DropdownMenu, Flexbox } from '@lobehub/ui';
+import { ActionIcon, type DropdownItem, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import dayjs from 'dayjs';
-import { Clock3Icon, PlusIcon } from 'lucide-react';
-import { memo, useMemo } from 'react';
+import { Clock3Icon, MoreHorizontalIcon, PlusIcon, Trash2 } from 'lucide-react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import NavHeader from '@/features/NavHeader';
+import { mutate } from '@/libs/swr';
+import { topicService } from '@/services/topic';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
+import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  time: css`
-    margin-inline-start: 6px;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
+const styles = createStaticStyles(({ css }) => ({
   title: css`
     overflow: hidden;
 
@@ -33,7 +30,8 @@ interface TopicSelectorProps {
 }
 
 const TopicSelector = memo<TopicSelectorProps>(({ agentId, disabled }) => {
-  const { t } = useTranslation('topic');
+  const { t } = useTranslation(['common', 'topic']);
+  const { modal } = App.useApp();
 
   // Fetch topics for the agent builder
   const useFetchTopics = useChatStore((s) => s.useFetchTopics);
@@ -52,34 +50,78 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId, disabled }) => {
     [topics, activeTopicId],
   );
 
-  const items = useMemo<DropdownMenuCheckboxItem[]>(
+  const handleDeleteTopic = useCallback(
+    (topicId: string, topicTitle: string) => {
+      modal.confirm({
+        cancelText: t('cancel', { ns: 'common' }),
+        centered: true,
+        content: t('actions.confirmRemoveTopic', {
+          ns: 'topic',
+          title: topicTitle,
+        }),
+        okButtonProps: { danger: true },
+        okText: t('delete', { ns: 'common' }),
+        onOk: async () => {
+          await topicService.removeTopic(topicId);
+
+          if (activeTopicId === topicId) {
+            switchTopic(null);
+          }
+
+          const containerKey = topicMapKey({ agentId });
+          await mutate(
+            (key) =>
+              Array.isArray(key) && key[0] === 'SWR_USE_FETCH_TOPIC' && key[1] === containerKey,
+            undefined,
+            { revalidate: true },
+          );
+        },
+        title: t('delete', { ns: 'common' }),
+      });
+    },
+    [agentId, activeTopicId, modal, switchTopic, t],
+  );
+
+  const items = useMemo<DropdownItem[]>(
     () =>
       (topics || []).map((topic) => {
-        const displayTime =
-          dayjs().diff(dayjs(topic.updatedAt), 'd') < 7
-            ? dayjs(topic.updatedAt).fromNow()
-            : dayjs(topic.updatedAt).format('YYYY-MM-DD');
+        const topicActions: DropdownItem[] = [
+          {
+            danger: true,
+            icon: <Icon icon={Trash2} />,
+            key: `delete-${topic.id}`,
+            label: t('delete', { ns: 'common' }),
+            onClick: () => {
+              handleDeleteTopic(topic.id, topic.title);
+            },
+          },
+        ];
 
         return {
-          checked: topic.id === activeTopicId,
-          closeOnClick: true,
+          extra: (
+            <span
+              onClick={(event) => {
+                event.stopPropagation();
+              }}
+            >
+              <DropdownMenu items={topicActions} placement="bottomRight">
+                <ActionIcon icon={MoreHorizontalIcon} size={'small'} />
+              </DropdownMenu>
+            </span>
+          ),
           key: topic.id,
           label: (
-            <Flexbox horizontal align="center" gap={4} justify="space-between" width="100%">
+            <Flexbox horizontal align="center" gap={4} width="100%">
               <span className={styles.title}>{topic.title}</span>
-              <span className={styles.time}>{displayTime}</span>
             </Flexbox>
           ),
-          onCheckedChange: (checked) => {
+          onClick: () => {
             if (disabled) return;
-            if (checked) {
-              switchTopic(topic.id);
-            }
+            switchTopic(topic.id);
           },
-          type: 'checkbox',
         };
       }),
-    [topics, switchTopic, styles, activeTopicId],
+    [topics, switchTopic, styles, t, handleDeleteTopic, disabled],
   );
   const isEmpty = !topics || topics.length === 0;
 
@@ -95,10 +137,9 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId, disabled }) => {
             disabled={disabled}
             icon={PlusIcon}
             size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-            title={t('actions.addNewTopic')}
+            title={t('actions.addNewTopic', { ns: 'topic' })}
             onClick={() => {
               if (disabled) return;
-
               switchTopic();
             }}
           />
