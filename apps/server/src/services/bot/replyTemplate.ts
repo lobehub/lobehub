@@ -239,6 +239,7 @@ type SystemStrings = {
   errorCommandConnectionClosed: string;
   errorContentModeration: string;
   errorEmptyCompletion: string;
+  errorModelRefusal: string;
   errorHarnessInternal: string;
   errorInsufficientCredits: string;
   errorLocationNotSupported: string;
@@ -307,6 +308,8 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       "**Blocked by the content-safety filter.**\nThe model provider's safety filter rejected the request or response. Please rephrase and try again.",
     errorEmptyCompletion:
       "**The model provider returned an empty response.**\nEven without visible content, this request may still incur charges. You can retry, or switch models in the agent's settings and try again.",
+    errorModelRefusal:
+      '**The model declined to answer this request.**\nTry rephrasing it, or switch models in the agent settings and try again.',
     errorHarnessInternal:
       '**Something went wrong on our side.**\nThe agent run hit an internal error, which has been logged. Please try again — if it keeps happening, share the Operation ID below with support.',
     errorInsufficientCredits:
@@ -384,6 +387,8 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       '**被内容安全策略拦截**\n模型 Provider 的安全策略拒绝了本次请求或回复。请调整内容后重试。',
     errorEmptyCompletion:
       '**模型供应商返回了空内容**\n即使没有可显示的内容，本次请求仍可能产生费用。你可以重试，或在 Agent 设置中切换模型后再试。',
+    errorModelRefusal:
+      '**模型拒绝回答该请求**\n请尝试调整表述，或在 Agent 设置中切换其他模型后重试。',
     errorHarnessInternal:
       '**我们这边出了点问题**\nAgent 执行遇到内部错误，已记录。请重试；如果持续出现，请把下方 Operation ID 提供给支持人员。',
     errorInsufficientCredits:
@@ -464,7 +469,9 @@ const FRIENDLY_ERROR_BY_TYPE: Record<string, keyof SystemStrings> = {
   QuotaLimitReached: 'errorQuotaLimitReached',
   // ── transient provider / capacity (attribution: provider) ──
   ModelEmptyCompletion: 'errorEmptyCompletion',
+  ModelRefusal: 'errorModelRefusal',
   NoAvailableChannel: 'errorProviderUnavailable',
+  ProviderContentPolicyViolation: 'errorContentModeration',
   ProviderServiceUnavailable: 'errorProviderUnavailable',
   RateLimitExceeded: 'errorRateLimited',
   // ── network / infra (attribution: system) ──

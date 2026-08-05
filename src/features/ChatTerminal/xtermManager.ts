@@ -2,6 +2,7 @@ import '@xterm/xterm/css/xterm.css';
 
 import type { TerminalDataPayload, TerminalExitPayload } from '@lobechat/electron-client-ipc';
 import { FitAddon } from '@xterm/addon-fit';
+import { WebglAddon } from '@xterm/addon-webgl';
 import type { ITheme } from '@xterm/xterm';
 import { Terminal } from '@xterm/xterm';
 import debug from 'debug';
@@ -15,6 +16,7 @@ interface TermInstance {
   fit: FitAddon;
   opened: boolean;
   term: Terminal;
+  webgl?: WebglAddon;
 }
 
 type ExitListener = (sessionId: string, exitCode: number) => void;
@@ -30,6 +32,7 @@ class XtermManager {
   private instances = new Map<string, TermInstance>();
   private exitListeners = new Set<ExitListener>();
   private ipcBound = false;
+  private webglUnavailable = false;
 
   private bindIpc() {
     if (this.ipcBound) return;
@@ -87,10 +90,34 @@ class XtermManager {
       instance.term.open(instance.container);
       instance.opened = true;
     }
+    this.enableWebgl(instance);
   }
 
   detach(sessionId: string) {
-    this.instances.get(sessionId)?.container.remove();
+    const instance = this.instances.get(sessionId);
+    if (!instance) return;
+    // Browsers cap live WebGL contexts (~8-16) and silently evict the oldest,
+    // so only the visible terminal keeps one — hidden tabs fall back to the
+    // (inert) DOM renderer until re-attached.
+    this.disposeWebgl(instance);
+    instance.container.remove();
+  }
+
+  private enableWebgl(instance: TermInstance) {
+    if (this.webglUnavailable || instance.webgl) return;
+    try {
+      const webgl = new WebglAddon();
+      webgl.onContextLoss(() => {
+        // Context reclaimed (OOM / resume from sleep) — drop to the DOM
+        // renderer now; the next attach retries WebGL.
+        if (instance.webgl === webgl) this.disposeWebgl(instance);
+      });
+      instance.term.loadAddon(webgl);
+      instance.webgl = webgl;
+    } catch (error) {
+      this.webglUnavailable = true;
+      log('WebGL renderer unavailable, falling back to DOM: %O', error);
+    }
   }
 
   focus(sessionId: string) {
@@ -130,10 +157,25 @@ class XtermManager {
     this.disposeInstance(sessionId);
   }
 
+  // Addon dispose reaches into xterm core internals and can throw when the
+  // addon and core versions drift (e.g. addon-webgl 0.19 on xterm 5.5) —
+  // cleanup paths must survive it or unmount breaks.
+  private disposeWebgl(instance: TermInstance) {
+    const { webgl } = instance;
+    if (!webgl) return;
+    instance.webgl = undefined;
+    try {
+      webgl.dispose();
+    } catch (error) {
+      log('webgl addon dispose failed: %O', error);
+    }
+  }
+
   private disposeInstance(sessionId: string) {
     const instance = this.instances.get(sessionId);
     if (!instance) return;
     this.instances.delete(sessionId);
+    this.disposeWebgl(instance);
     instance.container.remove();
     instance.term.dispose();
   }

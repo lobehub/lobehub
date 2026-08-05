@@ -2,6 +2,7 @@ table agents {
   id text [pk, not null]
   slug varchar(100)
   title varchar(255)
+  name varchar(255)
   description varchar(1000)
   tags jsonb [default: `[]`]
   editor_data jsonb
@@ -331,6 +332,43 @@ table agent_eval_test_cases {
     dataset_id [name: 'agent_eval_test_cases_dataset_id_idx']
     sort_order [name: 'agent_eval_test_cases_sort_order_idx']
     workspace_id [name: 'agent_eval_test_cases_workspace_id_idx']
+  }
+}
+
+table agent_label_assignments {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  label_id uuid [not null]
+  agent_id text [not null]
+  user_id text [not null]
+  workspace_id text
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (label_id, agent_id) [name: 'agent_label_assignments_label_id_agent_id_unique', unique]
+    agent_id [name: 'agent_label_assignments_agent_id_idx']
+    workspace_id [name: 'agent_label_assignments_workspace_id_idx']
+  }
+}
+
+table agent_labels {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  name text [not null]
+  description text
+  color text
+  archived boolean [not null, default: false]
+  user_id text [not null]
+  workspace_id text
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    user_id [name: 'agent_labels_user_id_idx']
+    workspace_id [name: 'agent_labels_workspace_id_idx']
+    (user_id, name) [name: 'agent_labels_user_id_name_unique', unique]
+    (workspace_id, name) [name: 'agent_labels_workspace_id_name_unique', unique]
   }
 }
 
@@ -1550,10 +1588,12 @@ table notification_deliveries {
 table notifications {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   user_id text [not null]
+  workspace_id text
   category text [not null]
   type text [not null]
   title text [not null]
   content text [not null]
+  context text
   dedupe_key text
   action_url text
   is_read boolean [not null, default: false]
@@ -1566,6 +1606,8 @@ table notifications {
     (user_id, created_at) [name: 'idx_notifications_user_active']
     user_id [name: 'idx_notifications_user_unread']
     (user_id, dedupe_key) [name: 'idx_notifications_dedupe', unique]
+    (user_id, workspace_id) [name: 'idx_notifications_user_workspace']
+    workspace_id [name: 'idx_notifications_workspace_id']
     (updated_at, created_at, id) [name: 'idx_notifications_archived_cleanup']
   }
 }
@@ -2411,6 +2453,55 @@ table topics {
   }
 }
 
+table topic_comment_mentions {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  comment_id text [not null]
+  mentioned_user_id text [not null]
+  workspace_id text [not null]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (comment_id, mentioned_user_id) [name: 'topic_comment_mentions_comment_id_mentioned_user_id_unique', unique]
+    (mentioned_user_id, created_at) [name: 'topic_comment_mentions_mentioned_user_id_created_at_idx']
+    workspace_id [name: 'topic_comment_mentions_workspace_id_idx']
+  }
+}
+
+table topic_comments {
+  id text [pk, not null]
+  topic_id text [not null]
+  message_id text
+  parent_comment_id text
+  author_user_id text
+  workspace_id text [not null]
+  content text [not null]
+  editor_data jsonb
+  client_id text [not null]
+  anchor_preview jsonb
+  deleted_at "timestamp with time zone"
+  moderated_at "timestamp with time zone"
+  moderated_by_user_id text
+  moderation_expires_at "timestamp with time zone"
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (topic_id, author_user_id, client_id) [name: 'topic_comments_topic_id_author_user_id_client_id_unique', unique]
+    
+    
+    
+    
+    (parent_comment_id, created_at, id) [name: 'topic_comments_parent_comment_id_created_at_id_idx']
+    (topic_id, created_at, id) [name: 'topic_comments_topic_id_created_at_id_idx']
+    (topic_id, message_id) [name: 'topic_comments_topic_id_message_id_idx']
+    message_id [name: 'topic_comments_message_id_idx']
+    author_user_id [name: 'topic_comments_author_user_id_idx']
+    moderation_expires_at [name: 'topic_comments_moderation_expires_at_idx']
+    moderated_by_user_id [name: 'topic_comments_moderated_by_user_id_idx']
+    workspace_id [name: 'topic_comments_workspace_id_idx']
+  }
+}
+
 table user_settings {
   id text [pk, not null]
   tts jsonb
@@ -3015,6 +3106,7 @@ table workspace_members {
   indexes {
     (workspace_id, user_id) [pk]
     user_id [name: 'workspace_members_user_id_idx']
+    workspace_id [name: 'workspace_members_unique_active_owner_idx', unique]
   }
 }
 
@@ -3161,6 +3253,18 @@ ref: threads.source_message_id - messages.id
 ref: messages.message_group_id > message_groups.id
 
 ref: sessions.group_id - session_groups.id
+
+ref: topic_comment_mentions.comment_id > topic_comments.id
+
+ref: topic_comment_mentions.mentioned_user_id - users.id
+
+ref: topic_comments.topic_id > topics.id
+
+ref: topic_comments.message_id - messages.id
+
+ref: topic_comments.author_user_id - users.id
+
+ref: topic_comments.workspace_id - workspaces.id
 
 ref: topic_documents.document_id > documents.id
 

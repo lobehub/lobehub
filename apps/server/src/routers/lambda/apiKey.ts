@@ -11,10 +11,8 @@ import { ApiKeyModel } from '@/database/models/apiKey';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
-import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
-
 const apiKeyProcedure = wsCompatProcedure
-  .use(requireWorkspaceRoleWhenScoped('owner'))
+  .use(requireWorkspaceRoleWhenScoped('admin'))
   .use(serverDatabase)
   .use(async (opts) => {
     const { ctx } = opts;
@@ -59,7 +57,6 @@ export const apiKeyRouter = router({
     .mutation(async ({ input, ctx }) => {
       const existing = await ctx.apiKeyModel.findById(input.id);
       if (!existing) return;
-      assertWorkspaceRowManageable(ctx, existing.userId, 'API key');
 
       return ctx.apiKeyModel.delete(input.id);
     }),
@@ -77,7 +74,6 @@ export const apiKeyRouter = router({
     .query(async ({ input, ctx }) => {
       const apiKey = await ctx.apiKeyModel.findById(input.id);
       if (!apiKey) return apiKey;
-      assertWorkspaceRowManageable(ctx, apiKey.userId, 'API key');
 
       return apiKey;
     }),
@@ -102,7 +98,6 @@ export const apiKeyRouter = router({
     .mutation(async ({ input, ctx }) => {
       const existing = await ctx.apiKeyModel.findById(input.id);
       if (!existing) return;
-      assertWorkspaceRowManageable(ctx, existing.userId, 'API key');
 
       return ctx.apiKeyModel.update(input.id, input.value);
     }),

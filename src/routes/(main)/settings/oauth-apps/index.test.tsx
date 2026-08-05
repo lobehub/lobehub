@@ -33,10 +33,6 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => null,
 }));
 
-vi.mock('@/business/client/hooks/useIsWorkspaceOwner', () => ({
-  useIsWorkspaceOwner: () => true,
-}));
-
 vi.mock('@/components/404', () => ({
   default: () => <div>not-found</div>,
 }));

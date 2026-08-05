@@ -5,7 +5,8 @@ import { getTrpcClient } from '../api/client';
 import { outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
 import { attachAcceptanceRunCommands } from './acceptanceRun';
-import { parseSubjectRef } from './verifyHelpers';
+import type { ReviewAnnotationRegion } from './verifyHelpers';
+import { formatAnnotationRegion, parseSubjectRef } from './verifyHelpers';
 
 /**
  * Resolve an acceptance from either its uuid or a `type:id` subject reference —
@@ -46,6 +47,7 @@ const statusColor = (status: string): string => {
 const userGlyph = (userReview?: { action: string; stale: boolean } | null): string => {
   if (!userReview) return pc.dim('· pending');
   if (userReview.action === 'accept') return pc.green('✓ accepted');
+  if (userReview.action === 'ignore') return pc.dim('⊘ ignored');
   return userReview.stale ? pc.dim('· pending') : pc.red('✗ rejected');
 };
 
@@ -190,7 +192,12 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
 
         interface FeedbackEntry {
           actionable: boolean;
-          annotations?: { comment?: string }[];
+          /**
+           * Kept whole. Dropping `evidenceId`/`rect` here used to leave the
+           * reader with a bare note and several plausible targets on the
+           * screenshot — the location is the actionable half of a region.
+           */
+          annotations?: (ReviewAnnotationRegion & { region?: string })[];
           category?: string;
           checkId?: string;
           checkSeq?: number;
@@ -200,6 +207,26 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
           kind: 'check' | 'group';
           roundIndex: number;
           title?: string;
+        }
+
+        // `evidenceId` is opaque on its own — resolve it to the artifact name the
+        // report used. An annotation can point at an older round's evidence, so
+        // the timeline is folded in alongside the check's current evidence.
+        interface EvidenceRow {
+          description?: string | null;
+          id?: string;
+        }
+        const evidenceLabels = new Map<string, string>();
+        for (const check of bundle.checks) {
+          const rows: EvidenceRow[] = [
+            ...(check.evidence ?? []),
+            ...(check.timeline ?? []).flatMap(
+              (entry: { evidence?: EvidenceRow[] }) => entry.evidence ?? [],
+            ),
+          ];
+          for (const row of rows) {
+            if (row?.id && row.description) evidenceLabels.set(row.id, row.description);
+          }
         }
 
         const entries: FeedbackEntry[] = [];
@@ -216,7 +243,10 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
             );
             entries.push({
               actionable: standing,
-              annotations: review.annotations?.map((a) => ({ comment: a.comment })),
+              annotations: review.annotations?.map((a: ReviewAnnotationRegion) => ({
+                ...a,
+                region: formatAnnotationRegion(a, evidenceLabels),
+              })),
               checkId: check.id,
               checkSeq: check.seq,
               comment: review.comment ?? '',
@@ -268,6 +298,7 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
           if (entry.comment) console.log(`    ${entry.comment}`);
           for (const annotation of entry.annotations ?? []) {
             if (annotation.comment) console.log(`    ${pc.dim('region:')} ${annotation.comment}`);
+            if (annotation.region) console.log(`      ${pc.dim(`└ ${annotation.region}`)}`);
           }
           if (entry.fileIds?.length)
             console.log(`    ${pc.dim(`attachments: ${entry.fileIds.join(', ')}`)}`);

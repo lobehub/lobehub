@@ -226,7 +226,7 @@ describe('groupTopicsByUpdatedTime', () => {
     const today = dayjs().valueOf();
 
     // Row was edited last year (updatedAt) but had message activity today
-    // (sortUpdatedAt) — the sidebar must group it under "today". (LOBE-11543)
+    // (sortUpdatedAt) — the sidebar must group it under "today". 
     const topic: ChatTopic = {
       id: 'active',
       title: 'Recently active',

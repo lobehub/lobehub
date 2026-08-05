@@ -1,6 +1,6 @@
 import { Flexbox, Skeleton } from '@lobehub/ui';
 import dayjs from 'dayjs';
-import { Clock3Icon, ClockArrowUp, UsersIcon } from 'lucide-react';
+import { Clock3Icon, UsersIcon } from 'lucide-react';
 import { memo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
@@ -19,7 +19,6 @@ const formatEnglishNumber = (number: number) => {
 
 const WorkspaceWelcome = memo<{ mobile?: boolean }>(({ mobile }) => {
   const { t, i18n } = useTranslation('auth');
-  const { t: tSetting } = useTranslation('setting');
   const workspace = useActiveWorkspace();
   const members = useWorkspaceMembers();
 
@@ -56,20 +55,11 @@ const WorkspaceWelcome = memo<{ mobile?: boolean }>(({ mobile }) => {
         />
       </Flexbox>
       <Flexbox horizontal gap={16} wrap={'wrap'}>
-        <TimeLabel
-          date={String(memberCount)}
-          icon={UsersIcon}
-          title={tSetting('workspaceSetting.tab.members')}
-        />
+        <TimeLabel date={String(memberCount)} icon={UsersIcon} />
         <TimeLabel
           date={dayjs(workspace.createdAt).format('YYYY-MM-DD')}
           icon={Clock3Icon}
           title={t('stats.createdAt')}
-        />
-        <TimeLabel
-          date={dayjs(workspace.updatedAt).format('YYYY-MM-DD')}
-          icon={ClockArrowUp}
-          title={t('stats.updatedAt')}
         />
       </Flexbox>
     </Flexbox>

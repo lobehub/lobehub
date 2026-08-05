@@ -64,7 +64,7 @@ const DesktopChatInput = memo(() => {
           footer={
             <ChatInputActionBar
               left={<div />}
-              right={<SendArea />}
+              right={<SendArea hideContextWindow={false} />}
               style={{
                 paddingRight: 8,
               }}

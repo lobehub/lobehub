@@ -29,6 +29,7 @@ const { MockBrowser, mockAppBrowsers, mockWindowTemplates } = vi.hoisted(() => {
       loadUrl: vi.fn().mockResolvedValue(undefined),
       options,
       show: vi.fn(),
+      waitForFirstFrame: vi.fn().mockResolvedValue(undefined),
       webContents: browserWindow.webContents,
     };
   });
@@ -157,6 +158,14 @@ describe('BrowserManager', () => {
 
       expect(appBrowser.browserWindow.restore).toHaveBeenCalled();
     });
+  });
+
+  it('waits for the main window first frame before deferred initialization', async () => {
+    const mainWindow = manager.getMainWindow();
+
+    await manager.waitForMainWindowFirstFrame(2500);
+
+    expect(mainWindow.waitForFirstFrame).toHaveBeenCalledWith(2500);
   });
 
   describe('retrieveByIdentifier', () => {

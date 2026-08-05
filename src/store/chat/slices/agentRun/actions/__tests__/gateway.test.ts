@@ -648,6 +648,61 @@ describe('GatewayActionImpl', () => {
       );
     });
 
+    it('should execute as the target agent while routing messages to the parent conversation', async () => {
+      const { action, moveQueuedMessages, startOperation, updateTopicStatus } =
+        createExecuteTestAction();
+      const executionContext = {
+        agentId: 'target-agent',
+        scope: 'sub_agent' as const,
+        subAgentId: 'target-agent',
+        topicId: 'topic-1',
+      };
+      const messageContext = {
+        agentId: 'parent-agent',
+        scope: 'main' as const,
+        topicId: 'topic-1',
+      };
+
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'target-agent',
+        assistantMessageId: 'ast-target',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'ok',
+        operationId: 'server-op-target',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'test-token',
+        topicId: 'topic-1',
+        userMessageId: 'usr-target',
+      });
+
+      await action.executeGatewayAgent({
+        context: executionContext,
+        message: 'Delegated work',
+        messageContext,
+      });
+
+      expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentId: 'target-agent',
+          appContext: expect.objectContaining({ scope: 'sub_agent', topicId: 'topic-1' }),
+        }),
+        expect.anything(),
+      );
+      expect(startOperation).toHaveBeenCalledWith(
+        expect.objectContaining({ context: messageContext }),
+      );
+      expect(moveQueuedMessages).toHaveBeenCalledWith(
+        messageMapKey(messageContext),
+        messageMapKey(messageContext),
+      );
+      expect(updateTopicStatus).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: 'parent-agent', topicId: 'topic-1' }),
+      );
+    });
+
     it('should move queued follow-ups from the new-topic key to the server-created topic key', async () => {
       const { action, moveQueuedMessages } = createExecuteTestAction();
       const context = { agentId: 'agent-1', topicId: null, threadId: null };
@@ -1062,7 +1117,7 @@ describe('GatewayActionImpl', () => {
       });
     });
 
-    // Regression (LOBE-12055): after an error run the gateway session completes
+    // Regression: after an error run the gateway session completes
     // and clears the SERVER-side topic metadata, but the local Zustand store copy
     // of `runningOperation` stayed set — so useGatewayReconnect kept firing a
     // reconnect for a dead op and looped 404s. onSessionComplete must ALSO clear
@@ -1627,7 +1682,7 @@ describe('GatewayActionImpl', () => {
 
     // Seeds a topic whose local metadata still carries a runningOperation, wires up
     // internal_dispatchTopic + connectToGateway capture, so we can assert the local
-    // store clear (LOBE-12055) on both the NOT_FOUND refresh path and onSessionComplete.
+    // store clear on both the NOT_FOUND refresh path and onSessionComplete.
     function createSeededReconnectHarness() {
       const captured: { onSessionComplete?: (p: any) => void } = {};
       const connectToGateway = vi.fn((params: any) => {
@@ -1685,7 +1740,7 @@ describe('GatewayActionImpl', () => {
       return { action, captured, connectToGateway, internalDispatchTopic };
     }
 
-    // Regression (LOBE-12055): a stale local runningOperation fires a reconnect,
+    // Regression: a stale local runningOperation fires a reconnect,
     // but the server already cleared its marker and answers refreshGatewayToken
     // with TRPC NOT_FOUND. The reconnect must clear the local marker and bail
     // silently (no connect, no throw) so the SWR fetcher resolves instead of

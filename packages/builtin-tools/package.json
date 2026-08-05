@@ -15,7 +15,8 @@
     "./streamings": "./src/streamings.ts",
     "./identifiers": "./src/identifiers.ts",
     "./dynamicInterventionAudits": "./src/dynamicInterventionAudits.ts",
-    "./workRegistration": "./src/workRegistration.ts"
+    "./workRegistration": "./src/workRegistration.ts",
+    "./fileEditScan": "./src/fileEditScan/index.ts"
   },
   "main": "./src/index.ts",
   "dependencies": {
@@ -32,6 +33,7 @@
     "@lobechat/builtin-tool-creds": "workspace:*",
     "@lobechat/builtin-tool-group-agent-builder": "workspace:*",
     "@lobechat/builtin-tool-group-management": "workspace:*",
+    "@lobechat/builtin-tool-image-generation": "workspace:*",
     "@lobechat/builtin-tool-knowledge-base": "workspace:*",
     "@lobechat/builtin-tool-lobe-agent": "workspace:*",
     "@lobechat/builtin-tool-lobe-delivery-checker": "workspace:*",

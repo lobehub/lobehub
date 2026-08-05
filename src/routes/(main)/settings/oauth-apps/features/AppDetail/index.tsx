@@ -1,8 +1,7 @@
 'use client';
 
 import { Flexbox, Icon, Skeleton, Tag, Text } from '@lobehub/ui';
-import { Button, confirmModal, Switch } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { Button, confirmModal, Switch, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ArrowLeftIcon, Trash2Icon } from 'lucide-react';
 import { type FC, useEffect } from 'react';
@@ -68,7 +67,6 @@ interface AppDetailProps {
 
 const AppDetail: FC<AppDetailProps> = ({ canEdit, id, onBack, onChanged }) => {
   const { t } = useTranslation('auth');
-  const { message } = App.useApp();
 
   const { data, error, isLoading, mutate } = useClientDataSWR(authKeys.oauthAppById(id), () =>
     lambdaClient.oauthApp.getById.query({ id }),
@@ -87,7 +85,7 @@ const AppDetail: FC<AppDetailProps> = ({ canEdit, id, onBack, onChanged }) => {
   const updateMutation = lambdaQuery.oauthApp.update.useMutation({
     onSuccess: () => {
       revalidate();
-      message.success(t('oauthApp.detail.saveSuccess'));
+      toast.success(t('oauthApp.detail.saveSuccess'));
     },
   });
   const enabledMutation = lambdaQuery.oauthApp.setEnabled.useMutation({ onSuccess: revalidate });

@@ -1,9 +1,11 @@
 import { inArray } from 'drizzle-orm';
 
+import { RbacModel } from '@/database/models/rbac';
 import { agentsToSessions, messages, topics } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import {
   assertCanPerformResourceAction,
+  canPerformResourceAction,
   getResourceMeta,
 } from '@/server/services/resourcePermission';
 
@@ -11,6 +13,7 @@ import { getWorkspaceAgentParentGroupIds } from './workspaceAgentGuard';
 
 interface ConversationGuardCtx {
   db: LobeChatDatabase;
+  grantedPermissions?: readonly string[];
   userId: string;
   workspaceId?: string | null;
 }
@@ -25,26 +28,31 @@ export interface CreateMessageTarget extends ConversationTarget {
   topicId?: string | null;
 }
 
+interface ResolvedConversationTarget {
+  meta: NonNullable<Awaited<ReturnType<typeof getResourceMeta>>>;
+  resourceId: string;
+  resourceType: 'agent' | 'agentGroup';
+}
+
 /**
- * Workspace General-access guard for conversation writes.
+ * Workspace General-access guard for conversations.
  *
  * Workspace topics/messages are visible workspace-wide (`buildWorkspaceWhere`
- * matches every member's rows), and shared conversations are intentionally
- * co-editable by members — but only for members who can at least USE the
- * agent/group the conversation belongs to. `view`-level General access means
- * read-only: no sends, no message edits/deletes, no topic co-edits.
+ * matches every member's rows), so reads still need VIEW access to the owning
+ * agent/group. Shared conversation writes require USE access; `view`-level
+ * General access remains read-only.
  *
  * Personal mode (no workspaceId) is a no-op. Targets that don't resolve to a
  * workspace-shared agent/group of the CURRENT workspace (inbox, legacy rows,
  * cross-workspace ids) fall through — the models' workspace ownership WHERE
  * already keeps those writes scoped.
  */
-export const assertCanUseConversationTargets = async (
-  ctx: ConversationGuardCtx,
+const resolveConversationTargets = async (
+  ctx: Pick<ConversationGuardCtx, 'db' | 'workspaceId'>,
   targets: ConversationTarget[],
-): Promise<void> => {
+): Promise<ResolvedConversationTarget[]> => {
   const workspaceId = ctx.workspaceId ?? undefined;
-  if (!workspaceId || targets.length === 0) return;
+  if (!workspaceId || targets.length === 0) return [];
 
   // A conversation belongs to its group when it has one, otherwise its agent.
   const refs = new Map<string, { resourceId: string; resourceType: 'agent' | 'agentGroup' }>();
@@ -73,15 +81,33 @@ export const assertCanUseConversationTargets = async (
     refs.set(`agentGroup:${groupId}`, { resourceId: groupId, resourceType: 'agentGroup' });
   }
 
+  const resolved: ResolvedConversationTarget[] = [];
   for (const { resourceId, resourceType } of refs.values()) {
     const meta = await getResourceMeta(ctx.db, resourceType, resourceId);
     // Not a resource of the current workspace — nothing to guard at this
     // layer; the ownership WHERE keeps foreign ids unreachable anyway.
     if (!meta || meta.workspaceId !== workspaceId) continue;
 
+    resolved.push({ meta, resourceId, resourceType });
+  }
+
+  return resolved;
+};
+
+const assertCanAccessConversationTargets = async (
+  ctx: ConversationGuardCtx,
+  targets: ConversationTarget[],
+  action: 'use' | 'view',
+): Promise<void> => {
+  const workspaceId = ctx.workspaceId ?? undefined;
+  if (!workspaceId) return;
+
+  const resolved = await resolveConversationTargets(ctx, targets);
+  for (const { meta, resourceId, resourceType } of resolved) {
     await assertCanPerformResourceAction({
-      action: 'use',
+      action,
       db: ctx.db,
+      grantedPermissions: ctx.grantedPermissions,
       meta,
       resourceId,
       resourceType,
@@ -90,6 +116,11 @@ export const assertCanUseConversationTargets = async (
     });
   }
 };
+
+export const assertCanUseConversationTargets = async (
+  ctx: ConversationGuardCtx,
+  targets: ConversationTarget[],
+): Promise<void> => assertCanAccessConversationTargets(ctx, targets, 'use');
 
 /**
  * Resolve message ids to their owning agent/group from the DB rows (client
@@ -120,15 +151,11 @@ export const assertCanUseMessageTargets = async (
   }
 };
 
-/**
- * Resolve topic ids to their owning agent/group from the DB rows and assert
- * `use` access.
- */
-export const assertCanUseTopicTargets = async (
-  ctx: ConversationGuardCtx,
+const resolveTopicTargets = async (
+  ctx: Pick<ConversationGuardCtx, 'db' | 'workspaceId'>,
   topicIds: string[],
-): Promise<void> => {
-  if (!ctx.workspaceId || topicIds.length === 0) return;
+): Promise<ResolvedConversationTarget[]> => {
+  if (!ctx.workspaceId || topicIds.length === 0) return [];
 
   const rows = await ctx.db
     .select({ agentId: topics.agentId, groupId: topics.groupId, sessionId: topics.sessionId })
@@ -153,7 +180,91 @@ export const assertCanUseTopicTargets = async (
           .where(inArray(agentsToSessions.sessionId, unresolvedSessionIds))
       : [];
 
-  await assertCanUseConversationTargets(ctx, [...rows, ...sessionTargets]);
+  return resolveConversationTargets(ctx, [...rows, ...sessionTargets]);
+};
+
+const assertCanAccessTopicTargets = async (
+  ctx: ConversationGuardCtx,
+  topicIds: string[],
+  action: 'use' | 'view',
+): Promise<void> => {
+  const workspaceId = ctx.workspaceId ?? undefined;
+  if (!workspaceId) return;
+
+  const resolved = await resolveTopicTargets(ctx, topicIds);
+  for (const { meta, resourceId, resourceType } of resolved) {
+    await assertCanPerformResourceAction({
+      action,
+      db: ctx.db,
+      grantedPermissions: ctx.grantedPermissions,
+      meta,
+      resourceId,
+      resourceType,
+      userId: ctx.userId,
+      workspaceId,
+    });
+  }
+};
+
+/** Resolve topic ids to their owning agent/group and assert `use` access. */
+export const assertCanUseTopicTargets = async (
+  ctx: ConversationGuardCtx,
+  topicIds: string[],
+): Promise<void> => assertCanAccessTopicTargets(ctx, topicIds, 'use');
+
+/** Resolve topic ids to their owning agent/group and assert `view` access. */
+export const assertCanViewTopicTargets = async (
+  ctx: ConversationGuardCtx,
+  topicIds: string[],
+): Promise<void> => assertCanAccessTopicTargets(ctx, topicIds, 'view');
+
+/**
+ * Resolve one set of topic resources, then evaluate every active recipient
+ * against that shared metadata. `view` is the minimum resource access level,
+ * so supplying it avoids re-reading the same General-access row per user.
+ */
+export const filterUserIdsByTopicViewAccess = async (
+  ctx: Pick<ConversationGuardCtx, 'db' | 'workspaceId'>,
+  topicIds: string[],
+  userIds: string[],
+): Promise<string[]> => {
+  const workspaceId = ctx.workspaceId ?? undefined;
+  const uniqueUserIds = [...new Set(userIds)];
+  if (!workspaceId || uniqueUserIds.length === 0) return [];
+
+  const [resolvedTargets, permissionsByUserId] = await Promise.all([
+    resolveTopicTargets(ctx, topicIds),
+    RbacModel.getWorkspaceUsersPermissions({
+      db: ctx.db,
+      requireMembership: true,
+      userIds: uniqueUserIds,
+      workspaceId,
+    }),
+  ]);
+  const activeUserIds = uniqueUserIds.filter((userId) => permissionsByUserId.has(userId));
+  const access = await Promise.all(
+    activeUserIds.map(async (userId) => {
+      const grantedPermissions = permissionsByUserId.get(userId)!;
+      const checks = await Promise.all(
+        resolvedTargets.map(({ meta, resourceId, resourceType }) =>
+          canPerformResourceAction({
+            action: 'view',
+            db: ctx.db,
+            effectiveAccessLevel: 'view',
+            grantedPermissions,
+            meta,
+            resourceId,
+            resourceType,
+            userId,
+            workspaceId,
+          }),
+        ),
+      );
+      return checks.every(Boolean);
+    }),
+  );
+
+  return activeUserIds.filter((_, index) => access[index]);
 };
 
 /**

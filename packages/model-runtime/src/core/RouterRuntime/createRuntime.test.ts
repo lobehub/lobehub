@@ -1,6 +1,7 @@
 import { AgentRuntimeErrorType, RequestTrigger } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getRuntimeSignatureScopeSource } from '../../utils/signatureScope';
 import type { LobeRuntimeAI } from '../BaseAI';
 import { createRouterRuntime } from './createRuntime';
 
@@ -58,12 +59,15 @@ describe('createRouterRuntime', () => {
 
     it('should merge router options with constructor options', async () => {
       const mockConstructor = vi.fn();
+      let signatureScopeSource;
 
       class MockRuntime implements LobeRuntimeAI {
         constructor(options: any) {
           mockConstructor(options);
         }
-        chat = vi.fn();
+        chat = vi.fn().mockImplementation(() => {
+          signatureScopeSource = getRuntimeSignatureScopeSource(this);
+        });
         models = vi.fn();
         embeddings = vi.fn();
         textToSpeech = vi.fn();
@@ -74,7 +78,8 @@ describe('createRouterRuntime', () => {
         routers: [
           {
             apiType: 'openai',
-            options: { baseURL: 'https://api.example.com' },
+            id: 'router-a',
+            options: { baseURL: 'https://api.example.com', id: 'channel-a' },
             runtime: MockRuntime as any,
             models: ['test-model'],
           },
@@ -93,6 +98,12 @@ describe('createRouterRuntime', () => {
           id: 'test-runtime',
         }),
       );
+      expect(signatureScopeSource).toEqual({
+        apiType: 'openai',
+        channelId: 'channel-a',
+        provider: 'test-runtime',
+        routerId: 'router-a',
+      });
     });
   });
 

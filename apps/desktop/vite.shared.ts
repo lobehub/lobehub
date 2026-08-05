@@ -3,7 +3,7 @@ import { builtinModules } from 'node:module';
 import path from 'node:path';
 
 import dotenv from 'dotenv';
-import type { ConfigEnv, UserConfig } from 'vite';
+import type { ConfigEnv, PluginOption, UserConfig } from 'vite';
 import { loadEnv, runnerImport } from 'vite';
 
 export const DESKTOP_DIR = __dirname;
@@ -32,6 +32,27 @@ export const loadDesktopEnv = (mode: string) => {
   dotenv.config({ path: path.join(DESKTOP_DIR, '.env') });
   Object.assign(process.env, loadEnv(mode, ROOT_DIR, ''));
 };
+
+export const REACT_DEVTOOLS_BRIDGE_URL = 'http://localhost:8097';
+
+/**
+ * React DevTools cannot run as a Chrome extension here: its content scripts are
+ * registered with `matches: ["<all_urls>"]`, and Chromium rejects widening that
+ * to a custom scheme (both in the manifest and via `chrome.scripting`). The
+ * renderer always loads from `app://renderer`, so the extension never installs
+ * `window.__REACT_DEVTOOLS_GLOBAL_HOOK__` and its devtools panels never appear.
+ * The standalone bridge (`npm run react-devtools`) is the only working path —
+ * `http://localhost` stays exempt from mixed-content blocking on the secure
+ * `app://` origin.
+ */
+export const reactDevtoolsPlugin = (): PluginOption => ({
+  apply: 'serve',
+  name: 'lobe-desktop-react-devtools',
+  transformIndexHtml: () =>
+    process.env.DESKTOP_REACT_DEVTOOLS === '1'
+      ? [{ attrs: { src: REACT_DEVTOOLS_BRIDGE_URL }, injectTo: 'head-prepend', tag: 'script' }]
+      : [],
+});
 
 export const nodeExternals = [
   'electron',

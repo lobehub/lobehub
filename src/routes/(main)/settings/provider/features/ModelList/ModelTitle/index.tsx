@@ -1,6 +1,5 @@
 import { ActionIcon, DropdownMenu, Flexbox, Skeleton, Text, Tooltip } from '@lobehub/ui';
-import { Button, confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { Button, confirmModal, toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { CircleX, EllipsisVertical, LucideRefreshCcwDot, PlusIcon } from 'lucide-react';
 import { memo, use, useEffect, useState } from 'react';
@@ -24,11 +23,10 @@ interface ModelFetcherProps {
 const ModelTitle = memo<ModelFetcherProps>(
   ({ provider, showAddNewModel = true, showModelFetcher = true }) => {
     const { t } = useTranslation('modelProvider');
-    const { message } = App.useApp();
+
     const { allowed: canManageProvider, reason } = usePermission('manage_provider_key');
     const [
       searchKeyword,
-      totalModels,
       isEmpty,
       hasRemoteModels,
       fetchRemoteModelList,
@@ -37,7 +35,6 @@ const ModelTitle = memo<ModelFetcherProps>(
       useFetchAiProviderModels,
     ] = useAiInfraStore((s) => [
       s.modelSearchKeyword,
-      aiModelSelectors.totalAiProviderModelList(s),
       aiModelSelectors.isEmptyAiProviderModelList(s),
       aiModelSelectors.hasRemoteModels(s),
       s.fetchRemoteModelList,
@@ -77,29 +74,22 @@ const ModelTitle = memo<ModelFetcherProps>(
               {t('providerModels.list.title')}
             </Text>
 
-            {isLoading ? (
-              <Skeleton.Button active style={{ height: 22 }} />
-            ) : (
-              <Text style={{ fontSize: 12 }} type={'secondary'}>
-                <div style={{ display: 'flex', lineHeight: '24px' }}>
-                  {t('providerModels.list.total', { count: totalModels })}
-                  {hasRemoteModels && (
-                    <ActionIcon
-                      disabled={!canManageProvider}
-                      icon={CircleX}
-                      loading={clearRemoteModelsLoading}
-                      size={'small'}
-                      title={canManageProvider ? t('providerModels.list.fetcher.clear') : undefined}
-                      onClick={async () => {
-                        if (!canManageProvider) return;
-                        setClearRemoteModelsLoading(true);
-                        await clearObtainedModels(provider);
-                        setClearRemoteModelsLoading(false);
-                      }}
-                    />
-                  )}
-                </div>
-              </Text>
+            {/* Only meaningful once the list has loaded, so it waits rather
+                than holding a skeleton next to the title. */}
+            {!isLoading && hasRemoteModels && (
+              <ActionIcon
+                disabled={!canManageProvider}
+                icon={CircleX}
+                loading={clearRemoteModelsLoading}
+                size={'small'}
+                title={canManageProvider ? t('providerModels.list.fetcher.clear') : undefined}
+                onClick={async () => {
+                  if (!canManageProvider) return;
+                  setClearRemoteModelsLoading(true);
+                  await clearObtainedModels(provider);
+                  setClearRemoteModelsLoading(false);
+                }}
+              />
             )}
           </Flexbox>
           {isLoading ? (
@@ -135,7 +125,7 @@ const ModelTitle = memo<ModelFetcherProps>(
                               ? error.message
                               : t('providerModels.list.fetcher.errorFallback');
 
-                          message.error(
+                          toast.error(
                             t('providerModels.list.fetcher.error', {
                               message: errorMessage,
                             }),
@@ -181,7 +171,7 @@ const ModelTitle = memo<ModelFetcherProps>(
                           content: t('providerModels.list.resetAll.conform'),
                           onOk: async () => {
                             await clearModelsByProvider(provider);
-                            message.success(t('providerModels.list.resetAll.success'));
+                            toast.success(t('providerModels.list.resetAll.success'));
                           },
                           title: t('providerModels.list.resetAll.title'),
                         });

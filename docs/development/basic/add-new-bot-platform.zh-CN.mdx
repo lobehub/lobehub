@@ -207,7 +207,7 @@ export class PlatformApi {
 实现 `PlatformClient` 并继承 `ClientFactory`：
 
 ```ts
-import { createPlatformAdapter } from '@chat-adapter/<platform>';
+import { createPlatformAdapter } from '@chat-adapter/<platform';
 import debug from 'debug';
 
 import {
@@ -223,7 +223,7 @@ import { PlatformApi } from './api';
 const log = debug('bot-platform:<platform>:bot');
 
 class MyPlatformClient implements PlatformClient {
-  readonly id = '<platform>';
+  readonly id = 'platform';
   readonly applicationId: string;
 
   private config: BotProviderConfig;
@@ -252,7 +252,7 @@ class MyPlatformClient implements PlatformClient {
   createAdapter(): Record<string, any> {
     // 返回 Chat SDK adapter 实例用于入站消息处理
     return {
-      '<platform>': createPlatformAdapter({
+      'platform': createPlatformAdapter({
         botToken: this.config.credentials.botToken,
         // ... adapter 特定配置
       }),
@@ -332,13 +332,13 @@ import { MyPlatformClientFactory } from './client';
 import { schema } from './schema';
 
 export const myPlatform: PlatformDefinition = {
-  id: '<platform>',
+  id: 'platform',
   name: 'Platform Name',
   connectionMode: 'webhook', // 'webhook' | 'websocket' | 'polling'
   description: 'Connect a Platform bot',
   documentation: {
     portalUrl: 'https://developers.example.com',
-    setupGuideUrl: 'https://lobehub.com/docs/usage/channels/<platform>',
+    setupGuideUrl: 'https://lobehub.com/docs/usage/channels/<platform',
   },
   schema,
   showWebhookUrl: true, // 如果用户需要手动复制 webhook URL 则设为 true

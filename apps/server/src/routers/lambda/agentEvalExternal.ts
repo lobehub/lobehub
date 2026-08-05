@@ -19,7 +19,7 @@ import {
 } from '@/database/models/agentEval';
 import { ThreadModel } from '@/database/models/thread';
 import { messages } from '@/database/schemas';
-import { buildWorkspaceWhere } from '@/database/utils/workspace';
+import { buildMessageScopeWhere } from '@/database/utils/messageScope';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentEvalRunService, RUN_CREATE_ID_CONFLICT } from '@/server/services/agentEvalRun';
@@ -148,7 +148,10 @@ const recomputeRunAggregation = async (
       topic.status === 'external' ||
       (topic.evalResult as Record<string, unknown> | null)?.awaitingExternalEval === true,
   );
-  const status = resolveRunStatus(metrics, hasAwaitingExternal);
+  const hasActiveTopic = refreshedTopics.some(
+    (topic) => topic.status === 'pending' || topic.status === 'running',
+  );
+  const status = hasActiveTopic ? 'running' : resolveRunStatus(metrics, hasAwaitingExternal);
 
   await ctx.runModel.update(runId, { metrics, status });
 
@@ -309,8 +312,14 @@ const applyReportResult = async (
       });
     }
   } else {
+    const externalError = externalResult.error as Record<string, unknown> | string | undefined;
+    const errorMessage =
+      typeof externalError === 'string'
+        ? externalError
+        : [externalError?.type, externalError?.message].filter(Boolean).join(': ') || undefined;
+    const topicStatus = errorMessage ? 'error' : input.correct ? 'passed' : 'failed';
     const alreadyReported =
-      runTopic.status === (input.correct ? 'passed' : 'failed') &&
+      runTopic.status === topicStatus &&
       runTopic.score === input.score &&
       runTopic.passed === input.correct &&
       isEqual(existingEvalResult.externalResult, externalResult);
@@ -323,12 +332,19 @@ const applyReportResult = async (
         externalResult,
         rubricScores,
       } satisfies EvalRunTopicResult & Record<string, unknown>;
+      if (errorMessage) {
+        nextEvalResult.error = errorMessage;
+        nextEvalResult.errorDetail = externalError;
+      } else {
+        delete nextEvalResult.error;
+        delete nextEvalResult.errorDetail;
+      }
 
       await ctx.runTopicModel.updateByRunAndTopic(input.runId, input.topicId, {
         evalResult: nextEvalResult,
         passed: input.correct,
         score: input.score,
-        status: input.correct ? 'passed' : 'failed',
+        status: topicStatus,
       });
     }
 
@@ -450,10 +466,14 @@ export const agentEvalExternalRouter = router({
     .input(z.object({ threadId: z.string().optional(), topicId: z.string() }))
     .query(async ({ ctx, input }) => {
       const conditions = [
-        buildWorkspaceWhere(
-          { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
-          messages,
-        ),
+        // Derived scope: messages.user_id/workspace_id are creation-time
+        // snapshots that go stale after an agent transfer, so filtering on them
+        // would return nothing for a transferred topic. The `topicId` equality
+        // below keeps the correlated predicate index-bounded.
+        buildMessageScopeWhere({
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        }),
         eq(messages.topicId, input.topicId),
         isNull(messages.messageGroupId),
       ];
@@ -542,6 +562,11 @@ export const agentEvalExternalRouter = router({
       const run = await ctx.runModel.findById(input.runId);
       if (!run) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Run not found' });
+      }
+
+      if (input.status === 'running') {
+        const updated = await ctx.runModel.update(input.runId, { status: 'running' });
+        return { runId: input.runId, status: updated?.status ?? 'running', success: true };
       }
 
       // Worker-driven terminal failure/abort: allowed from any non-terminal

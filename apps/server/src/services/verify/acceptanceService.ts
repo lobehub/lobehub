@@ -170,20 +170,25 @@ export const buildAcceptanceCheckUnion = (rounds: RoundInput[]): AcceptanceCheck
     const roundIndex = run.roundIndex ?? 0;
     const plan = (run.plan ?? []) as VerifyCheckItem[];
     const planById = new Map(plan.map((item) => [item.id, item]));
+    const logicalIdByCheckItemId = new Map(
+      plan.map((item) => [item.id, item.sourceCriterionId ?? item.id]),
+    );
 
     for (const item of plan) {
-      const row = ensureRow(item.id, roundIndex);
+      const logicalId = item.sourceCriterionId ?? item.id;
+      const row = ensureRow(logicalId, roundIndex);
       // The latest snapshot wins: repair rounds may refine method/expected.
       row.planItem = item;
       row.title = item.title;
       row.required = item.required;
       row.category = item.category ?? row.category;
       row.surface = itemSurface(item) ?? row.surface;
-      lastPlannedRound.set(item.id, roundIndex);
+      lastPlannedRound.set(logicalId, roundIndex);
     }
 
     for (const result of results) {
-      const row = ensureRow(result.checkItemId, roundIndex);
+      const logicalId = logicalIdByCheckItemId.get(result.checkItemId) ?? result.checkItemId;
+      const row = ensureRow(logicalId, roundIndex);
       const state = resultState(result);
       // The title THIS round used — the current round's snapshot, not the final one.
       const roundTitle =
@@ -207,7 +212,7 @@ export const buildAcceptanceCheckUnion = (rounds: RoundInput[]): AcceptanceCheck
   // order so a chain (C replaced by B replaced by A) collapses fully into A.
   const foldOrder = [...rows.values()].sort((a, b) => a.introducedAtRound - b.introducedAtRound);
   for (const row of foldOrder) {
-    const supersedes = row.planItem?.supersedes ?? [];
+    const supersedes = (row.planItem?.supersedes ?? []).map((id) => rows.get(id)?.id ?? id);
     for (const oldId of supersedes) {
       const old = rows.get(oldId);
       if (!old || old === row) continue;
@@ -248,8 +253,8 @@ export const buildAcceptanceCheckUnion = (rounds: RoundInput[]): AcceptanceCheck
 
 // ============================================
 // User review overlay — the per-check human verdict layered onto the union.
-// An accept is sticky across rounds; a reject binds to the round it judged and
-// demotes to iteration history once a newer round lands.
+// An accept or ignore is sticky across rounds; a reject binds to the round it
+// judged and demotes to iteration history once a newer round lands.
 // ============================================
 
 /** The standing user verdict on one union row, derived from its result rows. */
@@ -310,10 +315,14 @@ export const buildCheckReviewOverlay = (
   for (const entry of check.timeline) {
     const result = resultsById.get(entry.resultId);
     const decision = result?.userDecision;
-    if (!result || (decision !== 'accepted' && decision !== 'rejected')) continue;
+    if (
+      !result ||
+      (decision !== 'accepted' && decision !== 'rejected' && decision !== 'overridden')
+    )
+      continue;
     const detail = result.userDecisionDetail ?? undefined;
     reviews.push({
-      action: decision === 'accepted' ? 'accept' : 'reject',
+      action: decision === 'accepted' ? 'accept' : decision === 'overridden' ? 'ignore' : 'reject',
       annotations: detail?.annotations,
       comment: detail?.comment,
       createdAt: detail?.decidedAt ?? (result.completedAt ?? result.createdAt)?.toISOString() ?? '',
@@ -415,6 +424,11 @@ export class AcceptanceService {
     subjectType: AcceptanceSubjectType,
     subjectId: string,
   ): Promise<void> => {
+    // Standalone acceptances are the subject themselves. They deliberately do
+    // not require a Task/Topic/Document row, which keeps external repositories
+    // from having to manufacture a LobeHub task before publishing evidence.
+    if (subjectType === 'standalone') return;
+
     const found = await this.findSubject(subjectType, subjectId);
     if (!found) {
       throw new Error(`${subjectType} "${subjectId}" not found in the current workspace`);
@@ -442,6 +456,9 @@ export class AcceptanceService {
         );
         return doc ? { title: doc.title ?? null } : null;
       }
+      case 'standalone': {
+        return null;
+      }
     }
   };
 
@@ -449,10 +466,15 @@ export class AcceptanceService {
   ensureForSubject = async (
     subjectType: AcceptanceSubjectType,
     subjectId: string,
-    defaults?: { requirement?: string },
+    defaults?: { requirement?: string; title?: string },
   ): Promise<AcceptanceItem> => {
     await this.assertSubjectExists(subjectType, subjectId);
-    return this.acceptanceModel.ensureForSubject(subjectType, subjectId, defaults);
+    return this.acceptanceModel.ensureForSubject(subjectType, subjectId, {
+      requirement: defaults?.requirement,
+      ...(subjectType === 'standalone' && defaults?.title
+        ? { metadata: { title: defaults.title } }
+        : {}),
+    });
   };
 
   /**
@@ -471,6 +493,11 @@ export class AcceptanceService {
     if (existing.acceptanceId) {
       throw new Error('This verify run already belongs to another acceptance');
     }
+    if (acceptance.status === 'accepted' || acceptance.status === 'closed') {
+      throw new Error(
+        `This acceptance has already been ${acceptance.status} — reopen it before attaching another round`,
+      );
+    }
 
     // Rounds inherit the aggregate's visibility so a private acceptance's new
     // round never leaks through its own report URL.
@@ -482,13 +509,15 @@ export class AcceptanceService {
 
   /**
    * Re-derive the aggregate's lifecycle state from its current round. The
-   * user's `accepted` is terminal; `rejected` is sticky until a round newer
-   * than the decision arrives.
+   * user's `accepted` / `closed` are terminal; `rejected` is sticky until a
+   * round newer than the decision arrives.
    */
   recomputeStatus = async (acceptanceId: string): Promise<AcceptanceStatus | null> => {
     const acceptance = await this.acceptanceModel.findById(acceptanceId);
     if (!acceptance) return null;
-    if (acceptance.status === 'accepted') return 'accepted';
+    if (acceptance.status === 'accepted' || acceptance.status === 'closed') {
+      return acceptance.status;
+    }
 
     const runs = await this.runModel.listByAcceptance(acceptanceId);
     const current = runs.at(-1);
@@ -596,7 +625,12 @@ export class AcceptanceService {
       throw new Error(`Check(s) never executed — nothing to review: ${notExecuted.join(', ')}`);
     }
 
-    const decision = input.action === 'accept' ? 'accepted' : 'rejected';
+    const decision =
+      input.action === 'accept'
+        ? 'accepted'
+        : input.action === 'ignore'
+          ? 'overridden'
+          : 'rejected';
     const currentRoundIndex = runs.at(-1)?.roundIndex ?? 0;
     const detail: VerifyCheckDecisionDetail = {
       decidedAt: new Date().toISOString(),
@@ -635,6 +669,9 @@ export class AcceptanceService {
     if (!acceptance) throw new Error(`Acceptance "${acceptanceId}" not found`);
     if (acceptance.status === 'accepted') {
       throw new Error('This delivery has already been accepted');
+    }
+    if (acceptance.status === 'closed') {
+      throw new Error('This acceptance is closed — reopen it before making a decision');
     }
     if (acceptance.status === 'rejected') {
       throw new Error('This delivery was rejected — the next verification round re-opens it');

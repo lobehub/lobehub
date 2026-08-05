@@ -73,6 +73,7 @@ const createMessageTransport = (): MessageTransport => ({
   query: vi.fn(),
   update: vi.fn(),
   updatePluginState: vi.fn(),
+  updateToolIntervention: vi.fn(),
   updateToolMessage: vi.fn(),
 });
 
@@ -182,12 +183,18 @@ describe('callLlm executor', () => {
       type: 'call_llm',
     };
 
-    const result = await callLlm(host)(instructionWithParent, state);
+    const result = await callLlm(host)(instructionWithParent, state, {
+      instructionIndex: 1,
+      phase: 'user_input',
+    });
     expect(messages.findById).toHaveBeenCalledWith('parent-1');
     expect(messages.createAssistantMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         agentId: 'agent-1',
         content: '',
+        // Creation provenance stamp — must reference the running operation so
+        // the id stays resolvable after client reloads.
+        metadata: { operationId: 'op-1' },
         model: 'gpt-4',
         parentId: 'parent-1',
         provider: 'openai',
@@ -195,6 +202,9 @@ describe('callLlm executor', () => {
         threadId: 'thread-1',
         topicId: 'topic-1',
       }),
+      {
+        idempotencyKey: 'agent-runtime:op-1:step:0:instruction:1:assistant',
+      },
     );
     expect(stream.publishEvent).toHaveBeenCalledWith({
       data: {
@@ -258,11 +268,36 @@ describe('callLlm executor', () => {
       newState: { messages: [expect.objectContaining({ id: 'assistant-existing' })] },
     });
     expect(messages.createAssistantMessage).not.toHaveBeenCalled();
+    // Pre-created placeholders exist before the operation does — the executor
+    // must merge the provenance stamp onto them.
+    expect(messages.update).toHaveBeenCalledWith('assistant-existing', {
+      metadata: { operationId: 'op-1' },
+    });
     expect(transport.createTrace).toHaveBeenCalledWith(
       expect.objectContaining({
         assistantMessageId: 'assistant-existing',
       }),
     );
+  });
+
+  it('keeps the run alive when the provenance stamp write fails', async () => {
+    const state = createState();
+    const transport = createCallTransport();
+    const messages = createMessageTransport();
+    vi.mocked(messages.update).mockRejectedValueOnce(new Error('db down'));
+    const host = createHost(transport.llm, messages);
+    const reuseInstruction: AgentInstructionCallLlm = {
+      payload: {
+        ...instruction.payload,
+        assistantMessageId: 'assistant-existing',
+      },
+      type: 'call_llm',
+    };
+
+    // The stamp is a tracing aid — its failure must not become an LLM error.
+    await expect(callLlm(host)(reuseInstruction, state)).resolves.toMatchObject({
+      newState: { messages: [expect.objectContaining({ id: 'assistant-existing' })] },
+    });
   });
 
   it('throws when the LLM transport does not provide runAttempt', async () => {

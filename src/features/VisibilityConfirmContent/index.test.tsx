@@ -2,7 +2,6 @@
  * @vitest-environment happy-dom
  */
 import { render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import VisibilityConfirmContent from './index';
@@ -12,30 +11,8 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@lobehub/ui', () => ({
-  Flexbox: ({ children }: { children?: ReactNode }) => (
-    <div data-testid="content-shell">{children}</div>
-  ),
   Icon: ({ size }: { icon: unknown; size?: number }) => (
     <span data-icon-size={size} data-testid="icon" />
-  ),
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-}));
-
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Select: ({
-    options,
-    value,
-  }: {
-    options: { label: ReactNode; value: string }[];
-    value: string;
-  }) => (
-    <div data-testid="access-select" data-value={value}>
-      {options.map((option) => (
-        <div data-option={option.value} key={option.value}>
-          {option.label}
-        </div>
-      ))}
-    </div>
   ),
 }));
 
@@ -59,33 +36,11 @@ describe('VisibilityConfirmContent', () => {
     expect(screen.getAllByText('visibilityConfirm.irreversible')).toHaveLength(1);
   });
 
-  it('offers only edit/use and defaults to use when publishing an agent', () => {
-    render(
-      <VisibilityConfirmContent
-        accessLevelRef={{ current: 'use' }}
-        resourceType="agent"
-        variant="publish"
-      />,
-    );
-
-    expect(screen.getByTestId('access-select').dataset.value).toBe('use');
-    expect(document.querySelector('[data-option="edit"]')).toBeTruthy();
-    expect(document.querySelector('[data-option="use"]')).toBeTruthy();
-    expect(document.querySelector('[data-option="view"]')).toBeNull();
-  });
-
-  it('offers edit/view and defaults to view when publishing a document', () => {
-    render(
-      <VisibilityConfirmContent
-        accessLevelRef={{ current: 'view' }}
-        resourceType="document"
-        variant="publish"
-      />,
-    );
-
-    expect(screen.getByTestId('access-select').dataset.value).toBe('view');
-    expect(document.querySelector('[data-option="edit"]')).toBeTruthy();
-    expect(document.querySelector('[data-option="use"]')).toBeNull();
-    expect(document.querySelector('[data-option="view"]')).toBeTruthy();
+  // LOBE-12543: publishing no longer asks for member permissions up front —
+  // the resource lands on the workspace default and the owner tunes it later
+  // from the resource's own "Member Permissions" entry.
+  it('does not render a member-permission select when publishing', () => {
+    render(<VisibilityConfirmContent variant="publish" />);
+    expect(screen.queryByText('permission.generalAccess.label')).toBeNull();
   });
 });

@@ -25,7 +25,7 @@ import { and, desc, eq, isNull, lte } from 'drizzle-orm';
 
 import { MessageModel } from '@/database/models/message';
 import { getServerDB } from '@/database/server';
-import { buildWorkspaceWhere } from '@/database/utils/workspace';
+import { buildMessageScopeWhere } from '@/database/utils/messageScope';
 import { extractTraceContext } from '@/libs/observability/traceparent';
 import { isAgentSignalEnabledForUser } from '@/server/services/agentSignal/featureGate';
 import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observability/traceEvents';
@@ -312,7 +312,7 @@ const buildFeedbackSourceSerializedContext = async (
     limit: 10,
     orderBy: [desc(messages.createdAt)],
     where: and(
-      buildWorkspaceWhere({ userId: input.userId, workspaceId: input.workspaceId }, messages),
+      buildMessageScopeWhere({ userId: input.userId, workspaceId: input.workspaceId }),
       eq(messages.topicId, sourceEvent.payload.topicId),
       lte(messages.createdAt, contextEndAt),
       threadScopeFilter,

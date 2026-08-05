@@ -8,10 +8,11 @@ import { defineConfig } from 'vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
 import {
+  createSharedRolldownOutput,
+  sharedModulePreload,
   sharedOptimizeDeps,
   sharedRendererDefine,
   sharedRendererPlugins,
-  sharedRollupOutput,
 } from '../../plugins/vite/sharedRendererConfig';
 import {
   applyDesktopViteConfigExtension,
@@ -20,6 +21,7 @@ import {
   DEV_VITE_PORT,
   isCloudDesktopBuild,
   loadDesktopEnv,
+  reactDevtoolsPlugin,
   RENDERER_CHROME_TARGET,
   ROOT_DIR,
 } from './vite.shared';
@@ -220,7 +222,7 @@ export default defineConfig(async (env) => {
     base: '/',
     build: {
       minify: true,
-      modulePreload: { polyfill: false },
+      modulePreload: { ...sharedModulePreload, polyfill: false },
       outDir: RENDERER_OUT_DIR,
       reportCompressedSize: false,
       rolldownOptions: {
@@ -229,7 +231,7 @@ export default defineConfig(async (env) => {
           overlay: path.resolve(__dirname, 'overlay.html'),
           popup: path.resolve(__dirname, 'popup.html'),
         },
-        output: sharedRollupOutput,
+        output: createSharedRolldownOutput({ strictExecutionOrder: true }),
       },
       sourcemap: false,
       target: RENDERER_CHROME_TARGET,
@@ -245,6 +247,7 @@ export default defineConfig(async (env) => {
       isCloudDesktop && cloudTsconfigPathsPlugin(),
       isCloudDesktop && cloudDesktopBusinessConstPlugin(),
       electronDesktopHtmlPlugin(),
+      reactDevtoolsPlugin(),
       excludeWebSpaBuildArtifactsPlugin(),
       vanillaExtractPlugin(),
       ...(sharedRendererPlugins({ platform: 'desktop' }) as PluginOption[]),

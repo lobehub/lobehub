@@ -28,7 +28,7 @@ export type {
   ResponseAnimationStyle,
   UpdateAiProviderConfigParams,
   UpdateAiProviderParams,
-} from 'model-bank';
+} from 'model-bank/aiProvider';
 export {
   AiProviderAuthTypeEnum,
   AiProviderSDKEnum,
@@ -36,4 +36,4 @@ export {
   CreateAiProviderSchema,
   UpdateAiProviderConfigSchema,
   UpdateAiProviderSchema,
-} from 'model-bank';
+} from 'model-bank/aiProvider';

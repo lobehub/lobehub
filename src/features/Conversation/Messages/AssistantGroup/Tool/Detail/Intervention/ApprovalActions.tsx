@@ -1,7 +1,8 @@
+import { registerPendingHotkeyCard } from '@lobechat/shared-tool-ui/pending-hotkeys';
 import { Flexbox } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
-import { CornerDownLeft } from 'lucide-react';
+import { CircleStop, CornerDownLeft } from 'lucide-react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -34,7 +35,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   footer: css`
     display: flex;
+    gap: 8px;
+    align-items: center;
     justify-content: flex-end;
+
     margin-block-start: 8px;
   `,
   number: css`
@@ -147,9 +151,37 @@ const ApprovalActions = memo<ApprovalActionsProps>(
       [isAllowListMode],
     );
 
-    const [approveToolCall, rejectAndContinueToolCall] = useConversationStore((s) => [
-      s.approveToolCall,
-      s.rejectAndContinueToolCall,
+    const [approveToolCall, rejectAndContinueToolCall, stopPendingApprovalForCard] =
+      useConversationStore((s) => [
+        s.approveToolCall,
+        s.rejectAndContinueToolCall,
+        s.stopPendingApprovalForCard,
+      ]);
+    const [stopping, setStopping] = useState(false);
+
+    /**
+     * "Stop here — don't continue." Sits beside Submit because it answers the
+     * same question the card is asking; splitting the two across the bar makes
+     * the user hunt for the one they want.
+     *
+     * Not a rejection: rejecting writes a reason and lets the model respond,
+     * stopping ends the turn outright and executes nothing.
+     */
+    const handleStop = useCallback(async () => {
+      if (stopping || loading || isMessageCreating || !canUseResource) return;
+      setStopping(true);
+      try {
+        await stopPendingApprovalForCard(messageId);
+      } finally {
+        setStopping(false);
+      }
+    }, [
+      stopping,
+      loading,
+      isMessageCreating,
+      canUseResource,
+      stopPendingApprovalForCard,
+      messageId,
     ]);
     const addToolToAllowList = useUserStore((s) => s.addToolToAllowList);
 
@@ -194,12 +226,17 @@ const ApprovalActions = memo<ApprovalActionsProps>(
       }
     }, [choice]);
 
-    // Window-level keyboard: 1/2/↑/↓ to switch, Enter to submit. Skip while
+    // Page-level keyboard: 1/2/↑/↓ to switch, Enter to submit. Skip while
     // typing anywhere on the page so we never hijack the main chat composer.
     // The reject input has its own onKeyDown for Enter / ↑.
+    //
+    // Kept fresh in a ref so the shared-arbiter registration below stays
+    // mount-stable while the handler always sees current state.
+    const containerRef = useRef<HTMLDivElement>(null);
+    const onKeyDownRef = useRef<(e: KeyboardEvent) => void>(() => {});
     useEffect(() => {
-      if (!canUseResource) return;
-      const handler = (e: KeyboardEvent) => {
+      onKeyDownRef.current = (e: KeyboardEvent) => {
+        if (e.defaultPrevented) return;
         const target = e.target as HTMLElement | null;
         if (target) {
           const tag = target.tagName;
@@ -236,11 +273,27 @@ const ApprovalActions = memo<ApprovalActionsProps>(
           // No default
         }
       };
-      window.addEventListener('keydown', handler);
-      return () => {
-        window.removeEventListener('keydown', handler);
-      };
-    }, [canUseResource, choices, handleSubmit]);
+    }, [choices, handleSubmit]);
+
+    // One registration per mount: the shared arbiter dispatches each keypress
+    // to exactly one pending card (containment first, then newest
+    // registration), so this card and a coexisting AskUserQuestion card (e.g.
+    // in the global approval notification) never race on the same keystroke.
+    useEffect(() => {
+      if (!canUseResource) return;
+      return registerPendingHotkeyCard({
+        // The footer may be portaled away from the intervention body, so
+        // containment covers the whole owning surface (marked with
+        // `data-pending-hotkey-scope`: InterventionBar / global approval
+        // card), falling back to the footer itself when rendered inline.
+        contains: (node) => {
+          const el = containerRef.current;
+          if (!el) return false;
+          return (el.closest('[data-pending-hotkey-scope]') ?? el).contains(node);
+        },
+        onKeyDown: (e) => onKeyDownRef.current(e),
+      });
+    }, [canUseResource]);
 
     const handleRejectInputKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -268,7 +321,7 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     if (!canUseResource) return null;
 
     return (
-      <Flexbox className={styles.container}>
+      <Flexbox className={styles.container} ref={containerRef}>
         <div className={styles.optionList} role="radiogroup">
           {choices.map((c, index) => {
             if (c === 'reject') {
@@ -317,6 +370,16 @@ const ApprovalActions = memo<ApprovalActionsProps>(
         </div>
 
         <div className={styles.footer}>
+          <Button
+            disabled={loading || isMessageCreating}
+            icon={CircleStop}
+            loading={stopping}
+            size={'middle'}
+            type={'text'}
+            onClick={handleStop}
+          >
+            {t('tool.intervention.stop')}
+          </Button>
           <Button
             className={styles.submitButton}
             disabled={isMessageCreating}

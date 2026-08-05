@@ -11,6 +11,7 @@ import {
   ClaudeCodeSdkAdapter,
   CodexAdapter,
   OpenCodeAdapter,
+  PiAdapter,
 } from './adapters';
 import type { AgentEventAdapter } from './types';
 
@@ -33,6 +34,9 @@ const registry: Record<string, AgentRegistryEntry> = {
   },
   'opencode': {
     createAdapter: () => new OpenCodeAdapter(),
+  },
+  'pi': {
+    createAdapter: () => new PiAdapter(),
   },
   // 'kimi-cli': { createAdapter: () => new KimiCLIAdapter() },
 };

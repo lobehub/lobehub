@@ -1,5 +1,5 @@
 import type { IconType } from '@icons-pack/react-simple-icons';
-import { SiCaldotcom } from '@icons-pack/react-simple-icons';
+import { SiCaldotcom, SiGithub, SiX } from '@icons-pack/react-simple-icons';
 
 export interface ComposioAppType {
   appSlug: string;
@@ -256,6 +256,41 @@ export const COMPOSIO_APP_TYPES: ComposioAppType[] = [
     label: 'Cal.com',
     readme:
       'Connect to Cal.com to manage your scheduling and appointments. View availability, book meetings, manage event types, and automate your calendar through natural conversation.',
+  },
+  {
+    appSlug: 'NOTION',
+    author: 'Composio',
+    authorUrl: 'https://composio.dev',
+    description: 'Notion is a collaborative productivity and note-taking application',
+    icon: 'https://hub-apac-1.lobeobjects.space/assets/logos/notion.svg',
+    identifier: 'notion',
+    label: 'Notion',
+    readme:
+      'Connect to Notion to access and manage your workspace. Create pages, search content, update databases, and organize your knowledge base through natural conversation with your AI assistant.',
+  },
+  {
+    appSlug: 'TWITTER',
+    author: 'Composio',
+    authorUrl: 'https://composio.dev',
+    description:
+      'X (Twitter) is a social media platform for sharing real-time updates, news, and engaging with your audience',
+    icon: SiX,
+    identifier: 'twitter',
+    label: 'X (Twitter)',
+    readme:
+      'Connect to X (Twitter) to post updates, manage your timeline, and engage with your audience. Create content, monitor mentions, and build your social media presence through conversational AI.',
+  },
+  {
+    appSlug: 'GITHUB',
+    author: 'Composio',
+    authorUrl: 'https://composio.dev',
+    description:
+      'GitHub is a platform for version control and collaboration, enabling developers to host, review, and manage code repositories',
+    icon: SiGithub,
+    identifier: 'github',
+    label: 'GitHub',
+    readme:
+      'Connect to GitHub to access your repositories, create and manage issues, review pull requests, and collaborate on code through natural conversation with your AI assistant.',
   },
 ];
 

@@ -32,6 +32,11 @@ import { parseGoogleErrorMessage } from '../../utils/googleErrorParser';
 import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
 import { withMappedModelId } from '../../utils/modelIdMapping';
 import { StreamingResponse } from '../../utils/response';
+import {
+  createSignatureChannelId,
+  createSignatureScope,
+  getRuntimeSignatureScopeSource,
+} from '../../utils/signatureScope';
 import { createGoogleImage } from './createImage';
 import { createGoogleVideo, pollGoogleVideoOperation } from './createVideo';
 import { createGoogleGenerateObject, createGoogleGenerateObjectWithTools } from './generateObject';
@@ -148,6 +153,7 @@ export class LobeGoogleAI implements LobeRuntimeAI {
       const { model, thinkingBudget, thinkingLevel, imageAspectRatio, imageResolution } = payload;
       const requestPayload = withMappedModelId(payload, this.modelIdMappingOptions);
       const requestModel = requestPayload.model;
+      const thoughtSignatureScope = await this.getThoughtSignatureScope(requestModel);
       const shouldOmitDeprecatedGenerationParams =
         shouldOmitDeprecatedGoogleGenerationParams(requestModel);
 
@@ -159,7 +165,10 @@ export class LobeGoogleAI implements LobeRuntimeAI {
         thinkingLevel,
       }) as unknown as ThinkingConfig;
 
-      const contents = await buildGoogleMessages(payload.messages, { model: requestModel });
+      const contents = await buildGoogleMessages(payload.messages, {
+        model: requestModel,
+        thoughtSignatureScope,
+      });
       if (shouldOmitDeprecatedGenerationParams) {
         // Gemini 3.6 Flash, 3.5 Flash-Lite, and later models reject assistant prefills.
         while (contents.at(-1)?.role === 'model') contents.pop();
@@ -180,15 +189,19 @@ export class LobeGoogleAI implements LobeRuntimeAI {
       }
 
       const tools = this.buildGoogleToolsWithSearch(payload.tools, payload);
+      const imageConfig: NonNullable<GenerateContentConfig['imageConfig']> = {};
+      if (isImageResponseModel) {
+        if (imageAspectRatio && imageAspectRatio !== 'auto') {
+          imageConfig.aspectRatio = imageAspectRatio;
+        }
+        if (imageResolution) {
+          imageConfig.imageSize = imageResolution;
+        }
+      }
+
       const config: GenerateContentConfig = {
         abortSignal: originalSignal,
-        imageConfig:
-          isImageResponseModel && imageAspectRatio && imageAspectRatio !== 'auto'
-            ? {
-                aspectRatio: imageAspectRatio,
-                imageSize: imageResolution,
-              }
-            : undefined,
+        imageConfig: Object.keys(imageConfig).length > 0 ? imageConfig : undefined,
         maxOutputTokens: payload.max_tokens,
         responseModalities: isImageResponseModel ? ['Text', 'Image'] : undefined,
         // avoid wide sensitive words
@@ -214,11 +227,14 @@ export class LobeGoogleAI implements LobeRuntimeAI {
         systemInstruction: shouldDisableGoogleSystemInstruction(model)
           ? undefined
           : (payload.system as string),
-        temperature: shouldOmitDeprecatedGenerationParams
-          ? undefined
-          : isImageResponseModel
-            ? Math.min(payload.temperature ?? 1, 1)
-            : payload.temperature,
+        ...(shouldOmitDeprecatedGenerationParams
+          ? {}
+          : {
+              temperature: isImageResponseModel
+                ? Math.min(payload.temperature ?? 1, 1)
+                : payload.temperature,
+              topP: payload.top_p,
+            }),
         thinkingConfig: shouldDisableGoogleThinkingConfig(model)
           ? undefined
           : normalizeThinkingConfig(thinkingConfig),
@@ -229,7 +245,6 @@ export class LobeGoogleAI implements LobeRuntimeAI {
             ? { includeServerSideToolInvocations: true }
             : undefined,
         tools,
-        topP: shouldOmitDeprecatedGenerationParams ? undefined : payload.top_p,
       };
 
       const inputStartAt = Date.now();
@@ -259,7 +274,7 @@ export class LobeGoogleAI implements LobeRuntimeAI {
       const stream = GoogleGenerativeAIStream(prod, {
         callbacks: options?.callback,
         inputStartAt,
-        payload: { model, pricing, provider: this.provider },
+        payload: { model, pricing, provider: this.provider, thoughtSignatureScope },
       });
 
       // Respond with the stream
@@ -349,10 +364,14 @@ export class LobeGoogleAI implements LobeRuntimeAI {
    * @see https://ai.google.dev/gemini-api/docs/function-calling
    */
   async generateObject(payload: GenerateObjectPayload, options?: GenerateObjectOptions) {
-    // Convert OpenAI messages to Google format
-    const contents = await buildGoogleMessages(payload.messages, { model: payload.model });
-    const pricing = await getModelPricing(payload.model, this.provider, options?.pricingContext);
     const requestPayload = withMappedModelId(payload, this.modelIdMappingOptions);
+
+    // Convert OpenAI messages to Google format
+    const contents = await buildGoogleMessages(payload.messages, {
+      model: requestPayload.model,
+      thoughtSignatureScope: await this.getThoughtSignatureScope(requestPayload.model),
+    });
+    const pricing = await getModelPricing(payload.model, this.provider, options?.pricingContext);
 
     // Handle tools-based structured output
     if (payload.tools && payload.tools.length > 0) {
@@ -375,6 +394,34 @@ export class LobeGoogleAI implements LobeRuntimeAI {
     }
 
     return undefined;
+  }
+
+  /**
+   * Direct Gemini endpoints use an irreversible endpoint/credential fingerprint.
+   * Injected Vertex clients have no stable identity and therefore fail closed unless
+   * RouterRuntime supplied a channel.
+   */
+  private async getThoughtSignatureScope(model: string) {
+    const runtimeSource = getRuntimeSignatureScopeSource(this);
+    const directChannelId =
+      runtimeSource || !this.baseURL || !this.apiKey
+        ? undefined
+        : await createSignatureChannelId(this.baseURL, this.apiKey);
+
+    return createSignatureScope({
+      kind: 'thought_signature',
+      model,
+      protocol: 'google_generate_content',
+      source:
+        runtimeSource ??
+        (directChannelId
+          ? {
+              apiType: this.isVertexAi ? 'vertexai' : 'google',
+              channelId: directChannelId,
+              provider: this.provider,
+            }
+          : undefined),
+    });
   }
 
   private createEnhancedStream(originalStream: any, signal: AbortSignal): ReadableStream {

@@ -22,13 +22,15 @@ describe('useRemoteAgentDeviceGuard', () => {
   it('checks the EFFECTIVE bound device (with the caller override merged)', async () => {
     // The workspace-shared row points at the creator's (offline) machine; the
     // caller's override picks their own online device — the guard must probe
-    // the override device, not the shared one (LOBE-11904).
+    // the override device, not the shared one.
     mockedUseEffectiveAgencyConfig.mockReturnValue({
       agencyConfig: {
         boundDeviceId: 'my-device',
         executionTarget: 'device',
         heterogeneousProvider: { type: 'codex' },
       },
+      canDisplayExecutionTarget: true,
+      canSelectExecutionTarget: true,
       isPreferenceLoading: false,
       workspaceScoped: false,
     });
@@ -49,6 +51,8 @@ describe('useRemoteAgentDeviceGuard', () => {
         executionTarget: 'device',
         heterogeneousProvider: { type: 'claude-code' },
       },
+      canDisplayExecutionTarget: true,
+      canSelectExecutionTarget: true,
       isPreferenceLoading: false,
       workspaceScoped: false,
     });
@@ -66,6 +70,8 @@ describe('useRemoteAgentDeviceGuard', () => {
         executionTarget: 'device',
         heterogeneousProvider: { type: 'codex' },
       },
+      canDisplayExecutionTarget: true,
+      canSelectExecutionTarget: true,
       isPreferenceLoading: true,
       workspaceScoped: true,
     });
@@ -79,6 +85,8 @@ describe('useRemoteAgentDeviceGuard', () => {
   it('reports no-device when nothing is bound', async () => {
     mockedUseEffectiveAgencyConfig.mockReturnValue({
       agencyConfig: { heterogeneousProvider: { type: 'codex' } },
+      canDisplayExecutionTarget: true,
+      canSelectExecutionTarget: true,
       isPreferenceLoading: false,
       workspaceScoped: false,
     });

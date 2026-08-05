@@ -86,6 +86,42 @@ export class KnowledgeBaseModel {
       return [];
     }
 
+    // Adding content to a workspace library is an explicit move into that
+    // library's visibility boundary. Only rewrite rows owned by the current
+    // actor; a public library may contain resources contributed by multiple
+    // members, and one member must never change another member's permissions.
+    if (this.workspaceId) {
+      const now = new Date();
+      const creatorScope = { userId: this.userId, workspaceId: this.workspaceId };
+
+      await this.db
+        .update(files)
+        .set({ updatedAt: now, visibility: kb.visibility })
+        .where(
+          and(
+            inArray(files.id, resolvedFileIds),
+            eq(files.userId, this.userId),
+            buildWorkspaceWhere(creatorScope, files),
+          ),
+        );
+
+      const documentLink =
+        documentIds.length > 0
+          ? or(inArray(documents.id, documentIds), inArray(documents.fileId, resolvedFileIds))
+          : inArray(documents.fileId, resolvedFileIds);
+
+      await this.db
+        .update(documents)
+        .set({ updatedAt: now, visibility: kb.visibility })
+        .where(
+          and(
+            documentLink,
+            eq(documents.userId, this.userId),
+            buildWorkspaceWhere(creatorScope, documents),
+          ),
+        );
+    }
+
     return this.db
       .insert(knowledgeBaseFiles)
       .values(
@@ -193,9 +229,9 @@ export class KnowledgeBaseModel {
     return data as KnowledgeBaseItem[];
   };
 
-  findById = async (id: string) => {
+  findById = async (id: string, callerAgentVisibility?: 'private' | 'public' | null) => {
     return this.db.query.knowledgeBases.findFirst({
-      where: and(eq(knowledgeBases.id, id), this.ownership()),
+      where: and(eq(knowledgeBases.id, id), this.ownership(callerAgentVisibility)),
     });
   };
 
@@ -233,28 +269,91 @@ export class KnowledgeBaseModel {
 
   /**
    * Flip a knowledge base's `visibility`. Bidirectional companion to
-   * `publishToWorkspace`. The combined `user_id = ?` +
-   * `visibility = fromVisibility` guards keep the operation creator-only and
-   * idempotent against rows already at the target visibility.
+   * `publishToWorkspace`. The knowledge base is the visibility boundary for
+   * content created inside it, so creator-owned linked files and documents
+   * move with the library. Foreign public resources are deliberately left
+   * untouched — changing a library must never rewrite another member's rows.
    *
-   * Unpublishing is safe by design — this column only gates KB list
-   * enumeration; other members lose the sidebar entry immediately, while
-   * downstream RAG paths handle a missing/unreachable KB.
+   * The content reconciliation also runs when the KB already has the requested
+   * visibility. This repairs rows created by older clients that published the
+   * library without promoting its contents, while keeping the KB timestamp
+   * itself idempotent.
    */
   setVisibility = async (id: string, visibility: 'private' | 'public') => {
-    const fromVisibility = visibility === 'public' ? 'private' : 'public';
+    return this.db.transaction(async (trx) => {
+      const [knowledgeBase] = await trx
+        .select({ id: knowledgeBases.id, visibility: knowledgeBases.visibility })
+        .from(knowledgeBases)
+        .where(
+          and(eq(knowledgeBases.id, id), this.ownership(), eq(knowledgeBases.userId, this.userId)),
+        )
+        .limit(1);
 
-    return this.db
-      .update(knowledgeBases)
-      .set({ updatedAt: new Date(), visibility })
-      .where(
-        and(
-          eq(knowledgeBases.id, id),
-          this.ownership(),
-          eq(knowledgeBases.userId, this.userId),
-          eq(knowledgeBases.visibility, fromVisibility),
-        ),
-      );
+      if (!knowledgeBase) return [];
+
+      const now = new Date();
+      const result =
+        knowledgeBase.visibility === visibility
+          ? []
+          : await trx
+              .update(knowledgeBases)
+              .set({ updatedAt: now, visibility })
+              .where(
+                and(
+                  eq(knowledgeBases.id, id),
+                  eq(knowledgeBases.userId, this.userId),
+                  eq(knowledgeBases.visibility, knowledgeBase.visibility),
+                ),
+              )
+              .returning({ id: knowledgeBases.id });
+
+      const linkedFiles = await trx
+        .select({ id: knowledgeBaseFiles.fileId })
+        .from(knowledgeBaseFiles)
+        .where(eq(knowledgeBaseFiles.knowledgeBaseId, id));
+      const linkedFileIds = linkedFiles.map((file) => file.id);
+      const creatorScope = {
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      };
+
+      if (linkedFileIds.length > 0) {
+        await trx
+          .update(files)
+          .set({ updatedAt: now, visibility })
+          .where(
+            and(
+              inArray(files.id, linkedFileIds),
+              eq(files.userId, this.userId),
+              buildWorkspaceWhere(creatorScope, {
+                userId: files.userId,
+                workspaceId: files.workspaceId,
+              }),
+            ),
+          );
+      }
+
+      const documentLink =
+        linkedFileIds.length > 0
+          ? or(eq(documents.knowledgeBaseId, id), inArray(documents.fileId, linkedFileIds))
+          : eq(documents.knowledgeBaseId, id);
+
+      await trx
+        .update(documents)
+        .set({ updatedAt: now, visibility })
+        .where(
+          and(
+            documentLink,
+            eq(documents.userId, this.userId),
+            buildWorkspaceWhere(creatorScope, {
+              userId: documents.userId,
+              workspaceId: documents.workspaceId,
+            }),
+          ),
+        );
+
+      return result;
+    });
   };
 
   private resolveAvailableName = async (

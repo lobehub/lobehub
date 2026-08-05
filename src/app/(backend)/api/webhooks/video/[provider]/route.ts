@@ -234,6 +234,7 @@ export const POST = async (req: Request, { params }: { params: Promise<{ provide
         prompt: batch?.prompt ?? '',
         topicId: batch?.generationTopicId,
         userId: asyncTask.userId,
+        workspaceId: asyncTask.workspaceId ?? undefined,
       });
     } catch (err) {
       console.error('[video-webhook] notification failed:', err);

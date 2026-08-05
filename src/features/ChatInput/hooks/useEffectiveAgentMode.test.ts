@@ -1,6 +1,81 @@
-import { describe, expect, it } from 'vitest';
+import { renderHook } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { resolveEffectiveAgentMode } from './useEffectiveAgentMode';
+import { resolveEffectiveAgentMode, useEffectiveAgentMode } from './useEffectiveAgentMode';
+
+const testState = vi.hoisted(() => ({
+  access: {
+    canManageAgent: false,
+    isAccessLoading: false,
+  },
+  agent: {
+    agent: undefined as { visibility?: 'private' | 'public'; workspaceId?: string } | undefined,
+    enableAgentMode: true,
+    model: 'model-1',
+    provider: 'provider-1',
+  },
+  aiInfra: {
+    isReady: true,
+  },
+  supportToolUse: true,
+  user: {
+    fetchedPreference: undefined as
+      { agentModeOverrides?: Record<string, boolean> } | null | undefined,
+    isLoading: false,
+    useFetchWorkspaceUserPreference: () => ({
+      data: testState.user.fetchedPreference,
+      isLoading: testState.user.isLoading,
+    }),
+    workspaceUserPreference: {} as { agentModeOverrides?: Record<string, boolean> },
+  },
+}));
+
+vi.mock('@/features/ResourcePermission/useAgentManagementAccess', () => ({
+  useAgentManagementAccess: () => testState.access,
+}));
+
+vi.mock('@/hooks/useModelSupportToolUse', () => ({
+  useModelSupportToolUse: () => testState.supportToolUse,
+}));
+
+vi.mock('@/store/agent', () => ({
+  useAgentStore: (selector: (s: typeof testState.agent) => unknown) => selector(testState.agent),
+}));
+
+vi.mock('@/store/agent/selectors', () => ({
+  agentByIdSelectors: {
+    getAgentById: () => (s: typeof testState.agent) => s.agent,
+    getAgentEnableModeById: () => (s: typeof testState.agent) => s.enableAgentMode,
+    getAgentModelById: () => (s: typeof testState.agent) => s.model,
+    getAgentModelProviderById: () => (s: typeof testState.agent) => s.provider,
+  },
+}));
+
+vi.mock('@/store/aiInfra', () => ({
+  aiProviderSelectors: {
+    isInitAiProviderRuntimeState: (s: typeof testState.aiInfra) => s.isReady,
+  },
+  useAiInfraStore: (selector: (s: typeof testState.aiInfra) => unknown) =>
+    selector(testState.aiInfra),
+}));
+
+vi.mock('@/store/user', () => ({
+  useUserStore: (selector: (s: typeof testState.user) => unknown) => selector(testState.user),
+}));
+
+beforeEach(() => {
+  testState.access.canManageAgent = false;
+  testState.access.isAccessLoading = false;
+  testState.agent.agent = undefined;
+  testState.agent.enableAgentMode = true;
+  testState.agent.model = 'model-1';
+  testState.agent.provider = 'provider-1';
+  testState.aiInfra.isReady = true;
+  testState.supportToolUse = true;
+  testState.user.fetchedPreference = undefined;
+  testState.user.isLoading = false;
+  testState.user.workspaceUserPreference = {};
+});
 
 describe('resolveEffectiveAgentMode', () => {
   it('uses agent mode when the stored mode is enabled and the model supports tool use', () => {
@@ -83,5 +158,49 @@ describe('resolveEffectiveAgentMode', () => {
         supportToolUse: false,
       });
     });
+  });
+});
+
+describe('useEffectiveAgentMode', () => {
+  it('uses an ordinary member personal mode for a public Workspace Agent', () => {
+    testState.agent.agent = { visibility: 'public', workspaceId: 'workspace-1' };
+    testState.user.workspaceUserPreference = {
+      agentModeOverrides: { 'agent-1': false },
+    };
+
+    const { result } = renderHook(() => useEffectiveAgentMode('agent-1'));
+
+    expect(result.current).toMatchObject({
+      currentMode: 'chat',
+      isAgentRuntimeMode: false,
+      isPreferenceLoading: false,
+      usesWorkspaceMemberMode: true,
+    });
+  });
+
+  it('ignores a member override for the author or Workspace admin', () => {
+    testState.access.canManageAgent = true;
+    testState.agent.agent = { visibility: 'public', workspaceId: 'workspace-1' };
+    testState.user.workspaceUserPreference = {
+      agentModeOverrides: { 'agent-1': false },
+    };
+
+    const { result } = renderHook(() => useEffectiveAgentMode('agent-1'));
+
+    expect(result.current).toMatchObject({
+      currentMode: 'agent',
+      isAgentRuntimeMode: true,
+      isPreferenceLoading: false,
+      usesWorkspaceMemberMode: false,
+    });
+  });
+
+  it('waits for the ordinary member preference before exposing the mode control', () => {
+    testState.agent.agent = { visibility: 'public', workspaceId: 'workspace-1' };
+    testState.user.isLoading = true;
+
+    const { result } = renderHook(() => useEffectiveAgentMode('agent-1'));
+
+    expect(result.current.isPreferenceLoading).toBe(true);
   });
 });

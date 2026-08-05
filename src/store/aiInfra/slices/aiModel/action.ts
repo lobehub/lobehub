@@ -1,3 +1,4 @@
+import { toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
 import type {
@@ -8,7 +9,6 @@ import type {
 } from 'model-bank';
 import type { SWRResponse } from 'swr';
 
-import { message } from '@/components/AntdStaticMethods';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { aiModelKeys } from '@/libs/swr/keys';
 import { aiModelService } from '@/services/aiModel';
@@ -108,7 +108,7 @@ export class AiModelActionImpl {
         const visibleDuplicateIds = duplicateIds.slice(0, MAX_DUPLICATE_MODEL_IDS_IN_WARNING);
         const remainingCount = duplicateIds.length - visibleDuplicateIds.length;
 
-        message.warning(
+        toast.warning(
           t(
             remainingCount > 0
               ? 'providerModels.list.fetcher.duplicatesRemovedWithMore'
@@ -146,6 +146,22 @@ export class AiModelActionImpl {
   removeAiModel = async (id: string, providerId: string): Promise<void> => {
     await aiModelService.deleteAiModel({ id, providerId });
     await this.#get().refreshAiModelList();
+  };
+
+  /**
+   * Toggle a model of an arbitrary provider, without requiring the provider settings
+   * page context (`activeAiProvider`). Used by ModelSelect to re-enable a persisted
+   * model that is no longer in the enabled list.
+   */
+  toggleProviderModelEnabled = async (params: ToggleAiModelEnableParams): Promise<void> => {
+    this.#get().internal_toggleAiModelLoading(params.id, true);
+
+    try {
+      await aiModelService.toggleModelEnabled(params);
+      await this.#get().refreshAiProviderRuntimeState();
+    } finally {
+      this.#get().internal_toggleAiModelLoading(params.id, false);
+    }
   };
 
   toggleModelEnabled = async (

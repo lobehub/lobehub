@@ -409,7 +409,7 @@ describe('imageRouter', () => {
         success: true as const,
         data: {
           batch: { id: 'charged-batch' },
-          generations: [{ id: 'charged-gen' }],
+          generations: [{ asyncTaskId: 'charged-task', id: 'charged-gen' }],
         },
       };
       mockChargeBeforeGenerate.mockResolvedValue(chargeResult);

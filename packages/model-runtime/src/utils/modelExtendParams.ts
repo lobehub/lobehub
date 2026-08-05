@@ -1,6 +1,8 @@
 import type { LobeAgentChatConfig } from '@lobechat/types';
 import type { ExtendParamsType } from 'model-bank';
 
+import { isAdaptiveThinkingDefaultOnModel } from '../providers/anthropic/modelId';
+
 /**
  * Extended parameters for model runtime
  */
@@ -26,7 +28,10 @@ export interface ModelExtendParams {
 }
 
 type ThinkingLevelExtendParam =
-  'thinkingLevel' | 'thinkingLevel2' | 'thinkingLevel3' | 'thinkingLevel4';
+  | 'thinkingLevel'
+  | 'thinkingLevel2'
+  | 'thinkingLevel3'
+  | 'thinkingLevel4';
 
 type ThinkingLevelValue = NonNullable<LobeAgentChatConfig['thinkingLevel']>;
 
@@ -40,10 +45,16 @@ const DEFAULT_THINKING_LEVEL_BY_EXTEND_PARAM = {
 const MODEL_THINKING_LEVEL_DEFAULTS: Partial<
   Record<string, Partial<Record<ThinkingLevelExtendParam, ThinkingLevelValue>>>
 > = {
-  'gemini-3.5-flash': {
+  'gemini-flash-latest': {
     thinkingLevel: 'medium',
   },
+  'gemini-flash-lite-latest': {
+    thinkingLevel: 'minimal',
+  },
   'gemini-3.6-flash': {
+    thinkingLevel: 'medium',
+  },
+  'gemini-3.5-flash': {
     thinkingLevel: 'medium',
   },
   'gemini-3.5-flash-lite': {
@@ -55,10 +66,6 @@ const MODEL_THINKING_LEVEL_DEFAULTS: Partial<
   'gemini-3.1-flash-lite-preview': {
     thinkingLevel: 'minimal',
   },
-} as const;
-
-const MODEL_ENABLE_ADAPTIVE_THINKING_DEFAULTS: Partial<Record<string, boolean>> = {
-  'claude-sonnet-5': true,
 } as const;
 
 /**
@@ -95,12 +102,17 @@ export const resolveDefaultThinkingLevelForModel = (model?: string): ThinkingLev
   return resolveThinkingLevelDefault(model, 'thinkingLevel');
 };
 
+/**
+ * Returns `true` for models that ship adaptive thinking on, `undefined` when the model has
+ * no opinion — `false` is intentionally never returned, since it would read as an explicit
+ * opt-out rather than "no default".
+ */
 export const resolveDefaultEnableAdaptiveThinkingForModel = (
   model?: string,
 ): boolean | undefined => {
   if (!model) return;
 
-  return MODEL_ENABLE_ADAPTIVE_THINKING_DEFAULTS[model];
+  return isAdaptiveThinkingDefaultOnModel(model) || undefined;
 };
 
 export interface ApplyModelExtendParamsContext {
@@ -186,7 +198,7 @@ export const applyModelExtendParams = (ctx: ApplyModelExtendParamsContext): Mode
       chatConfig.enableAdaptiveThinking === false &&
       !modelExtendParams.includes('enableReasoning')
     ) {
-      // Claude Sonnet 5 defaults adaptive thinking on; fresh configs used to
+      // Claude 5 and later default adaptive thinking on; fresh configs used to
       // serialize as `{ thinking: { type: 'disabled' } }` and override that.
       extendParams.thinking = {
         type: 'disabled',
@@ -258,6 +270,10 @@ export const applyModelExtendParams = (ctx: ApplyModelExtendParamsContext): Mode
 
   if (modelExtendParams.includes('hy3ReasoningEffort') && chatConfig.hy3ReasoningEffort) {
     extendParams.reasoning_effort = chatConfig.hy3ReasoningEffort;
+  }
+
+  if (modelExtendParams.includes('kimiK3ReasoningEffort') && chatConfig.kimiK3ReasoningEffort) {
+    extendParams.reasoning_effort = chatConfig.kimiK3ReasoningEffort;
   }
 
   if (modelExtendParams.includes('ring2_6ReasoningEffort') && chatConfig.ring2_6ReasoningEffort) {

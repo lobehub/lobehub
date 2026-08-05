@@ -5,7 +5,12 @@ import type {
   OnboardingUnderstandingSessionStatus,
   UnderstandingProviderState,
 } from './understanding';
-import { projectOnboardingUnderstandingSessionStatus } from './understanding';
+import {
+  OnboardingUnderstandingMessageMetadataSchema,
+  OnboardingUnderstandingSessionSchema,
+  UnderstandingCompositionItemSchema,
+  projectOnboardingUnderstandingSessionStatus,
+} from './understanding';
 
 const completedProvider: UnderstandingProviderState = {
   errors: [],
@@ -110,5 +115,118 @@ const cases: Array<[string, OnboardingUnderstandingSession, OnboardingUnderstand
 describe('projectOnboardingUnderstandingSessionStatus', () => {
   it.each(cases)('projects %s', (_, session, expected) => {
     expect(projectOnboardingUnderstandingSessionStatus(session)).toBe(expected);
+  });
+});
+describe('onboarding Understanding revision schemas', () => {
+  /**
+   * @example
+   * expect(session.success).toBe(true);
+   */
+  it('accepts cumulative feedback and the current generation revision', () => {
+    const session = OnboardingUnderstandingSessionSchema.safeParse({
+      feedback: {
+        revision: 2,
+        turns: [
+          {
+            content: 'Focus on my open-source infrastructure work.',
+            createdAt: '2026-07-24T00:00:00.000Z',
+            revision: 1,
+          },
+          {
+            content: 'Do not treat newsletters as durable interests.',
+            createdAt: '2026-07-24T00:01:00.000Z',
+            revision: 2,
+          },
+        ],
+      },
+      generationRevision: 3,
+      id: 'session',
+      sources: { github: completedProvider },
+      writing: {
+        feedbackRevision: 2,
+        generationRevision: 3,
+        resultMessageId: 'message',
+        sourceFingerprint: 'github@1',
+        status: 'completed',
+        updatedAt: '2026-07-24T00:02:00.000Z',
+      },
+    });
+
+    expect(session.success).toBe(true);
+  });
+
+  /**
+   * @example
+   * expect(proposal.success).toBe(true);
+   */
+  it('binds a proposal to the feedback and generation revisions that produced it', () => {
+    const proposal = OnboardingUnderstandingMessageMetadataSchema.safeParse({
+      analysis: {
+        composition: {
+          identities: [],
+          interests: [],
+          lifeStyle: [],
+          social: [],
+          working: [],
+        },
+        personaProposal: {
+          content: 'You build open-source infrastructure.',
+          reasoning: 'Your direct feedback clarifies the connected evidence.',
+          tagline: 'Open-source infrastructure builder',
+        },
+        profile: {
+          description: 'Builds open-source infrastructure.',
+          domains: ['open source'],
+          name: 'Example User',
+          pronoun: 'non-specific',
+          roles: ['engineer'],
+          summary: 'Open-source infrastructure engineer.',
+          tagline: 'Open-source infrastructure builder',
+        },
+      },
+      diagnostics: {
+        errors: [],
+        evidenceCount: 1,
+        failedCount: 0,
+        succeededCount: 1,
+      },
+      feedbackRevision: 2,
+      generationRevision: 3,
+      kind: 'proposal',
+      providers: ['github'],
+      resultId: 'message',
+      sourceFingerprint: 'github@1',
+    });
+
+    expect(proposal.success).toBe(true);
+  });
+});
+
+describe('UnderstandingCompositionItemSchema', () => {
+  /** @example expect(result.rank).toBe(91); */
+  it('normalizes persisted salience values to rank', () => {
+    expect(
+      UnderstandingCompositionItemSchema.parse({
+        description: 'Maintains reliable systems.',
+        salience: 91,
+        title: 'Maintainer',
+      }),
+    ).toEqual({
+      description: 'Maintains reliable systems.',
+      rank: 91,
+      title: 'Maintainer',
+    });
+  });
+
+  /** @example expect(result.rank).toBe(88); */
+  it('keeps rank authoritative when both field names are present', () => {
+    expect(
+      UnderstandingCompositionItemSchema.parse({
+        description: 'Builds developer tools.',
+        rank: 88,
+        salience: 12,
+        title: 'Tool builder',
+      }),
+    ).toMatchObject({ rank: 88 });
   });
 });

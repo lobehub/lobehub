@@ -1,7 +1,7 @@
 import { DESKTOP_HEADER_ICON_SMALL_SIZE, isDesktop } from '@lobechat/const';
 import { ActionIcon, copyToClipboard, Flexbox, Icon } from '@lobehub/ui';
 import { type DropdownItem, DropdownMenu } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
 import { Copy, ExternalLink, MoreHorizontal, RefreshCw } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,7 +19,6 @@ import Header from '../components/Header';
 import Title from './Title';
 
 const AcceptanceHeader = memo(() => {
-  const { message } = App.useApp();
   const { t } = useTranslation('verify');
   const appOrigin = useAppOrigin();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
@@ -42,7 +41,7 @@ const AcceptanceHeader = memo(() => {
       onClick: async () => {
         if (!pageUrl) return;
         await copyToClipboard(pageUrl);
-        message.success(t('report.actions.copyLinkSuccess'));
+        toast.success(t('report.actions.copyLinkSuccess'));
       },
     },
     {

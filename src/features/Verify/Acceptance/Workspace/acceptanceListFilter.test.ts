@@ -19,6 +19,7 @@ const item = (
 const acceptances = [
   item('active', 'delivered', 'Needs review'),
   item('completed', 'accepted', 'Signed off'),
+  item('closed', 'closed', 'No longer needed'),
   item('failed', 'rejected', 'Needs repair'),
 ];
 
@@ -33,6 +34,7 @@ describe('filterAcceptanceList', () => {
   it('can show only completed acceptances', () => {
     expect(filterAcceptanceList(acceptances, 'completed', '').map(({ id }) => id)).toEqual([
       'completed',
+      'closed',
     ]);
   });
 

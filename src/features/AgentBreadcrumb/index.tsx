@@ -1,5 +1,6 @@
 'use client';
 
+import { agentDisplayName } from '@lobechat/types';
 import { Icon, Text } from '@lobehub/ui';
 import { Breadcrumb as AntBreadcrumb } from 'antd';
 import { createStaticStyles } from 'antd-style';
@@ -10,11 +11,11 @@ import { Link, useLocation } from 'react-router';
 import urlJoin from 'url-join';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import {
   buildPrefixedAgentRoutePath,
   parseAgentPathname,
-} from '@/routes/(main)/agent/_layout/Sidebar/utils/agentPathname';
+} from '@/features/AgentSidebar/utils/agentPathname';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 
@@ -51,7 +52,9 @@ const AgentBreadcrumb = memo<AgentBreadcrumbProps>(({ agentId, extraItems, title
   const { t } = useTranslation(['chat', 'common']);
   const { pathname } = useLocation();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
-  const agentTitle = useAgentStore((s) => agentSelectors.getAgentMetaById(agentId)(s).title);
+  const agentTitle = useAgentStore((s) =>
+    agentDisplayName(agentSelectors.getAgentMetaById(agentId)(s)),
+  );
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const isInbox = !!inboxAgentId && agentId === inboxAgentId;
   const displayTitle = isInbox

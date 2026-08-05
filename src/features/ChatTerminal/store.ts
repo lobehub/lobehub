@@ -24,6 +24,7 @@ interface ChatTerminalState {
 }
 
 interface ChatTerminalActions {
+  closeOtherTabs: (topicKey: string, tabId: string) => void;
   closeTab: (topicKey: string, tabId: string) => void;
   createTab: (topicKey: string, cwd?: string) => Promise<void>;
   setActiveTab: (topicKey: string, tabId: string) => void;
@@ -40,6 +41,18 @@ const tabTitle = (cwd: string, shell: string) => {
 export const useChatTerminalStore = create<ChatTerminalActions & ChatTerminalState>()(
   (set, get) => ({
     activeTabIds: {},
+
+    closeOtherTabs: (topicKey, tabId) => {
+      const { activeTabIds, tabsByTopic } = get();
+      const tabs = tabsByTopic[topicKey] ?? [];
+      const kept = tabs.find((tab) => tab.id === tabId);
+      if (!kept) return;
+      for (const tab of tabs) if (tab.id !== tabId) xtermManager.close(tab.id);
+      set({
+        activeTabIds: { ...activeTabIds, [topicKey]: tabId },
+        tabsByTopic: { ...tabsByTopic, [topicKey]: [kept] },
+      });
+    },
 
     closeTab: (topicKey, tabId) => {
       xtermManager.close(tabId);

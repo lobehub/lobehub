@@ -41,6 +41,9 @@ describe('LobeGithubCopilotAI', () => {
 
       expect(convertResponseInputsSpy).toHaveBeenCalledWith(expect.any(Array), {
         forceImageBase64: true,
+        reasoningSignatureScope: {
+          fingerprint: expect.stringMatching(/^[\da-f]{32}$/),
+        },
         strictToolPairing: true,
       });
     });
@@ -66,7 +69,41 @@ describe('LobeGithubCopilotAI', () => {
 
       expect(convertMessagesSpy).toHaveBeenCalledWith(expect.any(Array), {
         forceImageBase64: true,
+        thoughtSignatureScope: {
+          fingerprint: expect.stringMatching(/^[\da-f]{32}$/),
+        },
       });
+    });
+
+    it('should bind signature scopes to the Copilot account', async () => {
+      const convertMessagesSpy = vi
+        .spyOn(openAIContextBuilders, 'convertOpenAIMessages')
+        .mockRejectedValue({ status: 400 });
+      const futureTime = Date.now() + 600_000;
+
+      for (const oauthAccessToken of ['ghu_account_a', 'ghu_account_b']) {
+        const instance = new LobeGithubCopilotAI({
+          bearerToken: 'cached-bearer-token',
+          bearerTokenExpiresAt: futureTime,
+          oauthAccessToken,
+        });
+
+        await expect(
+          instance.chat({
+            messages: [{ content: 'hello', role: 'user' }],
+            model: 'gpt-4o',
+          } as any),
+        ).rejects.toBeDefined();
+      }
+
+      const fingerprints = convertMessagesSpy.mock.calls.map(
+        ([, options]) => options?.thoughtSignatureScope?.fingerprint,
+      );
+      expect(fingerprints[0]).toMatch(/^[\da-f]{32}$/);
+      expect(fingerprints[1]).toMatch(/^[\da-f]{32}$/);
+      expect(fingerprints[0]).not.toBe(fingerprints[1]);
+      expect(fingerprints).not.toContain('ghu_account_a');
+      expect(fingerprints).not.toContain('ghu_account_b');
     });
   });
 

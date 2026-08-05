@@ -766,6 +766,50 @@ describe('GraphAgent', () => {
       ).toEqual([readToolName, searchToolName]);
     });
 
+    it('should reject a resolved tool call outside the active node allow-list', async () => {
+      const agent = new GraphAgent({
+        agentConfig: { maxSteps: 100 },
+        graph: loadGoalLoopGraph(),
+        modelRuntimeConfig: { model: 'gpt-4', provider: 'openai' },
+        operationId: 'test-operation',
+      });
+      const state = createMockState({
+        messages: [{ content: '/goal inspect workspace', role: 'user' }],
+      });
+      const writeToolCall = {
+        apiName: 'write',
+        arguments: '{}',
+        id: 'call-write',
+        identifier: 'workspace',
+        type: 'builtin' as const,
+      };
+
+      expectCallLlm(await agent.runner(createContext('init'), state));
+
+      const instruction = await agent.runner(
+        createContext('llm_result', {
+          hasToolsCalling: true,
+          parentMessageId: 'assistant-msg-1',
+          result: { content: '', tool_calls: [] },
+          toolsCalling: [writeToolCall],
+        }),
+        state,
+      );
+
+      expect(instruction).toEqual([
+        {
+          payload: {
+            blockedContent:
+              'Tool execution blocked because the tool is not allowed in the current execution scope.',
+            blockedReason: 'tool_not_allowed',
+            parentMessageId: 'assistant-msg-1',
+            toolsCalling: [writeToolCall],
+          },
+          type: 'resolve_blocked_tools',
+        },
+      ]);
+    });
+
     it('should not add a tool allow-list when delegating an unrestricted agent node', async () => {
       const graph = loadGoalLoopGraph();
       const planNode = graph.nodes.plan;

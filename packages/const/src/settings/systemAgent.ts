@@ -51,6 +51,8 @@ export const DEFAULT_SYSTEM_AGENT_CONFIG: UserServiceModelConfig = {
   historyCompress: DEFAULT_SYSTEM_AGENT_ITEM,
   inputCompletion: DEFAULT_INPUT_COMPLETION_SYSTEM_AGENT_ITEM,
   memoryAnalysisAgentConfig: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
+  onboardingTaskRecommender: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
+  onboardingUnderstanding: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   userMemoryEmbedding: DEFAULT_USER_MEMORY_EMBEDDING_SYSTEM_AGENT_ITEM,
   userMemoryPersonaWriter: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   promptRewrite: DEFAULT_PROMPT_REWRITE_SYSTEM_AGENT_ITEM,

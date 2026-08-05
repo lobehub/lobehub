@@ -245,7 +245,7 @@ describe('TaskModel', () => {
 
     // Non-tool deletion (UI / CLI) must leave the Work artifact orphaned so the
     // UI can render it as "resource deleted" from its snapshot. Tool-driven
-    // deletion removes the Work separately at the dispatch layer (LOBE-11606).
+    // deletion removes the Work separately at the dispatch layer.
     it('should NOT delete the task Work artifact', async () => {
       const model = new TaskModel(serverDB, userId);
       const workModel = new WorkModel(serverDB, userId);

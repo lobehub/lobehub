@@ -18,7 +18,8 @@ vi.hoisted(() => {
 });
 
 const mocks = vi.hoisted(() => ({
-  isOwner: true,
+  canManageWorkspace: true,
+  canViewBilling: true,
 }));
 
 vi.mock('react-i18next', () => ({
@@ -27,8 +28,11 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/business/client/hooks/useIsWorkspaceOwner', () => ({
-  useIsWorkspaceOwner: () => mocks.isOwner,
+vi.mock('@/hooks/usePermission', () => ({
+  usePermission: (action: string) => ({
+    allowed: action === 'view_billing' ? mocks.canViewBilling : mocks.canManageWorkspace,
+    reason: '',
+  }),
 }));
 
 const initialUserStoreState = useUserStore.getState();
@@ -40,7 +44,8 @@ const getItemKeys = () => {
 };
 
 beforeEach(() => {
-  mocks.isOwner = true;
+  mocks.canManageWorkspace = true;
+  mocks.canViewBilling = true;
 });
 
 afterEach(() => {
@@ -77,7 +82,7 @@ describe('workspace settings useCategory', () => {
     );
   });
 
-  it('places API Key in the owner-only Admin group', () => {
+  it('places API Key in the Admin-or-higher group', () => {
     const { result } = renderHook(() => useWorkspaceSettingCategory());
     const adminGroup = result.current.find(
       (group) => group.key === WorkspaceSettingsGroupKey.Admin,
@@ -90,8 +95,8 @@ describe('workspace settings useCategory', () => {
     expect(agentGroup?.items.map((item) => item.key)).not.toContain(WorkspaceSettingsTabs.APIKey);
   });
 
-  it('does not expose API Key settings to non-owners', () => {
-    mocks.isOwner = false;
+  it('does not expose API Key settings below Admin', () => {
+    mocks.canManageWorkspace = false;
 
     const itemKeys = getItemKeys();
     const { result } = renderHook(() => useWorkspaceSettingCategory());
@@ -100,5 +105,25 @@ describe('workspace settings useCategory', () => {
       false,
     );
     expect(itemKeys).not.toContain(WorkspaceSettingsTabs.APIKey);
+  });
+
+  // Admin-or-higher reads the billing numbers; the pages keep the
+  // money-moving controls behind the narrower manage_subscription gate.
+  it('shows Credits and Billing to roles that may view billing', () => {
+    const itemKeys = getItemKeys();
+
+    expect(itemKeys).toContain(WorkspaceSettingsTabs.Credits);
+    expect(itemKeys).toContain(WorkspaceSettingsTabs.Billing);
+  });
+
+  it('hides financial settings below Admin', () => {
+    mocks.canViewBilling = false;
+
+    const itemKeys = getItemKeys();
+
+    expect(itemKeys).not.toContain(WorkspaceSettingsTabs.Credits);
+    expect(itemKeys).not.toContain(WorkspaceSettingsTabs.Billing);
+    expect(itemKeys).toContain(WorkspaceSettingsTabs.Plans);
+    expect(itemKeys).toContain(WorkspaceSettingsTabs.Usage);
   });
 });

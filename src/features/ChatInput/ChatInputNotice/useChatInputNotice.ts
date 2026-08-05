@@ -59,6 +59,12 @@ export const resolveChatInputNotice = ({
     !currentChatModel
   )
     return { action: undefined, key: 'input.modelUnavailable', type: 'warning' } as const;
+
+  // Use-level General access (can chat, can't edit the shared config) is
+  // deliberately NOT a notice: a standing "you can only use this agent" banner
+  // states a permission without naming what it blocks (LOBE-12547). The locked
+  // controls explain themselves instead — see `useModelLockTooltip` for the
+  // model triggers and the fixed-target tooltip on the device chip.
 };
 
 /** Union of every notice shape `resolveChatInputNotice` can return. */

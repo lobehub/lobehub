@@ -147,6 +147,26 @@ describe('cliAgentBinaries', () => {
       expect(execFileMock.mock.calls[1]![0]).toBe('C:\\tools\\foo.exe');
     });
 
+    it('preserves PATH order when npm .cmd precedes a later .exe (Vite+ case)', async () => {
+      callExecFile(
+        [
+          'C:\\Users\\hp\\AppData\\Roaming\\npm\\claude.cmd',
+          'C:\\Users\\hp\\.vite-plus\\bin\\claude.exe',
+        ].join('\r\n'),
+      );
+      callExec('1.2.3 (Claude Code)');
+
+      const { claudeCodeBinary } = await import('../cliAgentBinaries');
+      const status = await claudeCodeBinary.detect();
+
+      expect(status.available).toBe(true);
+      expect(status.path).toBe('C:\\Users\\hp\\AppData\\Roaming\\npm\\claude.cmd');
+      expect(execMock).toHaveBeenCalledTimes(1);
+      expect(execMock.mock.calls[0]![0]).toBe(
+        '"C:\\Users\\hp\\AppData\\Roaming\\npm\\claude.cmd" --version',
+      );
+    });
+
     it('reports unavailable when `where` only returns unrunnable matches (.ps1 / extensionless)', async () => {
       callExecFile(
         [
@@ -181,6 +201,20 @@ describe('cliAgentBinaries', () => {
         available: true,
         path: '/Users/test/.opencode/bin/opencode',
         version: '1.18.3',
+      });
+    });
+
+    it('detects Pi through the shared bare-version probe', async () => {
+      callExecFile('/Users/test/.local/bin/pi\n');
+      callExecFile('0.83.0');
+
+      const { piBinary } = await import('../cliAgentBinaries');
+      const status = await piBinary.detect();
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/Users/test/.local/bin/pi',
+        version: '0.83.0',
       });
     });
 

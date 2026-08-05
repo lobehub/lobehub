@@ -106,6 +106,10 @@ export const workRouter = router({
   listByConversation: workProcedure
     .input(
       z.object({
+        // Opt-in for the `file` work type. Absent → the legacy (pre-`file`) set,
+        // so already-deployed clients whose descriptor table lacks `file` never
+        // receive it (see resolveAllowedWorkTypes in the work registry).
+        includeFileWorks: z.boolean().optional(),
         limit: z.number().min(1).max(100).default(50),
         threadId: z.string().nullable().optional(),
         topicId: z.string().nullable().optional(),
@@ -117,9 +121,10 @@ export const workRouter = router({
     .input(
       z.object({
         cursor: z.string().nullable().optional(),
+        includeFileWorks: z.boolean().optional(),
         limit: z.number().min(1).max(100).default(30),
         provider: z.enum(WORK_SKILL_PROVIDERS).optional(),
-        type: z.enum(['task', 'document', 'external']).nullable().optional(),
+        type: z.enum(['task', 'document', 'external', 'file']).nullable().optional(),
       }),
     )
     .query(async ({ ctx, input }) => ctx.workModel.listByWorkspace(input)),
@@ -127,12 +132,14 @@ export const workRouter = router({
   listByRootOperation: workProcedure
     .input(
       z.object({
+        includeFileWorks: z.boolean().optional(),
         limit: z.number().min(1).max(50).default(20),
         rootOperationId: z.string().nullable().optional(),
       }),
     )
     .query(async ({ ctx, input }) =>
       ctx.workModel.listByRootOperation({
+        includeFileWorks: input.includeFileWorks,
         limit: input.limit,
         rootOperationId: input.rootOperationId,
       }),
@@ -141,12 +148,14 @@ export const workRouter = router({
   listByRootOperations: workProcedure
     .input(
       z.object({
+        includeFileWorks: z.boolean().optional(),
         limit: z.number().min(1).max(50).default(20),
         rootOperationIds: z.array(z.string()).max(100).nullable().optional(),
       }),
     )
     .query(async ({ ctx, input }) =>
       ctx.workModel.listByRootOperations({
+        includeFileWorks: input.includeFileWorks,
         limit: input.limit,
         rootOperationIds: input.rootOperationIds,
       }),

@@ -49,6 +49,18 @@ export interface ChatTopicState {
    */
   allTopicsDrawerOpen: boolean;
   creatingTopic: boolean;
+  /**
+   * Ids of client-minted topics whose server row does not exist yet (the
+   * first-send window between minting the id and the server confirming the
+   * topic). State rather than a private field because consumers must react to
+   * it: `#reconcileFetchedTopics` keeps these rows across refetches, and the
+   * message-fetch gate skips fetching a topic that cannot return rows yet —
+   * an early fetch would come back empty and wipe the optimistic messages.
+   *
+   * Registered on an `optimistic` addTopic dispatch; cleared by
+   * `replaceTopicId` (server confirmed) or `deleteTopic` (rollback).
+   */
+  creatingTopicIds: string[];
   inSearchingMode?: boolean;
   isSearchingTopic: boolean;
   searchTopics: ChatTopic[];
@@ -70,6 +82,7 @@ export interface ChatTopicState {
 export const initialTopicState: ChatTopicState = {
   activeTopicId: null as any,
   agentTopicsViewMap: {},
+  creatingTopicIds: [],
   allTopicsDrawerOpen: false,
   creatingTopic: false,
   isSearchingTopic: false,

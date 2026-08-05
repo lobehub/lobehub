@@ -1,10 +1,13 @@
 'use client';
 
 import { MARKDOWN_MIME_TYPES } from '@lobechat/const';
-import type { CSSProperties } from 'react';
-import { memo } from 'react';
+import { Center } from '@lobehub/ui';
+import type { CSSProperties, JSXElementConstructor } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 
+import AsyncError from '@/components/AsyncError';
 import { isHtmlFile } from '@/components/HtmlPreview';
+import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { type FileListItem } from '@/types/files';
 
 import { isPdfFile } from './fileType';
@@ -12,8 +15,10 @@ import NotSupport from './NotSupport';
 import CodeViewer from './Renderer/Code';
 import HTMLViewer from './Renderer/HTML';
 import ImageViewer from './Renderer/Image';
+import MarkdownViewer from './Renderer/Markdown';
 import MSDocViewer from './Renderer/MSDoc';
-import PDFViewer from './Renderer/PDF';
+import type { PDFViewerProps } from './Renderer/PDF';
+import { preloadPDFRenderer } from './Renderer/PDF/loader';
 import VideoViewer from './Renderer/Video';
 
 // File type definitions
@@ -83,6 +88,8 @@ const CODE_EXTENSIONS = [
   '.yml',
   '.toml',
   '.sql',
+  '.csv',
+  '.tsv',
   // Functional languages
   '.ex',
   '.exs',
@@ -161,6 +168,10 @@ const CODE_MIME_TYPES = new Set([
   'toml',
   'sql',
   'text/x-sql',
+  'csv',
+  'text/csv',
+  'tsv',
+  'text/tab-separated-values',
   // Markdown
   'md',
   'mdx',
@@ -170,6 +181,12 @@ const CODE_MIME_TYPES = new Set([
   'txt',
   'text/plain',
 ]);
+
+// Markdown renders as rich text (with a raw toggle) instead of the highlighted
+// source view — must be checked before the code fallback, whose lists also
+// contain the md/mdx extensions and MIME types.
+const MARKDOWN_EXTENSIONS = ['.md', '.mdx', '.markdown'];
+const MARKDOWN_FILE_MIME_TYPES = new Set(['md', 'mdx', 'markdown', ...MARKDOWN_MIME_TYPES]);
 
 const MSDOC_EXTENSIONS = ['.doc', '.docx', '.odt', '.ppt', '.pptx', '.xls', '.xlsx'];
 const MSDOC_MIME_TYPES = new Set([
@@ -234,13 +251,68 @@ interface FileViewerProps extends FileListItem {
   style?: CSSProperties;
 }
 
+type PDFRenderer = JSXElementConstructor<PDFViewerProps>;
+
+type PDFRendererState =
+  | { status: 'idle' | 'loading' }
+  | { error: unknown; status: 'error' }
+  | { Renderer: PDFRenderer; status: 'ready' };
+
+const usePDFRenderer = (enabled: boolean) => {
+  const [attempt, setAttempt] = useState(0);
+  const [state, setState] = useState<PDFRendererState>({ status: 'idle' });
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    let active = true;
+    setState({ status: 'loading' });
+
+    void preloadPDFRenderer().then(
+      ({ default: Renderer }) => {
+        if (active) setState({ Renderer, status: 'ready' });
+      },
+      (error: unknown) => {
+        if (active) setState({ error, status: 'error' });
+      },
+    );
+
+    return () => {
+      active = false;
+    };
+  }, [attempt, enabled]);
+
+  const retry = useCallback(() => setAttempt((value) => value + 1), []);
+
+  return { retry, state };
+};
+
 /**
  * Preview any file type.
  */
 const FileViewer = memo<FileViewerProps>(({ id, style, fileType, url, name }) => {
+  const isPDF = isPdfFile({ fileName: name, fileType, path: url });
+  const { retry: retryPDFRenderer, state: pdfRendererState } = usePDFRenderer(isPDF);
+
   // PDF files
-  if (isPdfFile({ fileName: name, fileType, path: url })) {
-    return <PDFViewer fileId={id} url={url} />;
+  if (isPDF) {
+    if (pdfRendererState.status === 'error')
+      return (
+        <Center height={'100%'} width={'100%'}>
+          <AsyncError error={pdfRendererState.error} variant={'block'} onRetry={retryPDFRenderer} />
+        </Center>
+      );
+
+    if (pdfRendererState.status === 'ready') {
+      const { Renderer } = pdfRendererState;
+      return <Renderer fileId={id} url={url} />;
+    }
+
+    return (
+      <Center height={'100%'} width={'100%'}>
+        <NeuralNetworkLoading size={36} />
+      </Center>
+    );
   }
 
   // Image files
@@ -270,7 +342,12 @@ const FileViewer = memo<FileViewerProps>(({ id, style, fileType, url, name }) =>
     return <HTMLViewer fileId={id} url={url} />;
   }
 
-  // Code files (JavaScript, TypeScript, Python, Java, C++, Go, Rust, Markdown, etc.)
+  // Markdown files render as rich text with a raw toggle.
+  if (matchesFileType(fileType, name, MARKDOWN_EXTENSIONS, MARKDOWN_FILE_MIME_TYPES)) {
+    return <MarkdownViewer fileId={id} url={url} />;
+  }
+
+  // Code files (JavaScript, TypeScript, Python, Java, C++, Go, Rust, etc.)
   if (matchesFileType(fileType, name, CODE_EXTENSIONS, CODE_MIME_TYPES)) {
     return <CodeViewer fileId={id} fileName={name} url={url} />;
   }

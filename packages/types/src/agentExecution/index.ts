@@ -138,6 +138,26 @@ export interface ExecAgentAppContext {
  * Parameters for execAgent - execute a single Agent
  * Either agentId or slug must be provided
  */
+/**
+ * Ids the client already rendered this run's rows under, for the server to
+ * honour verbatim — the gateway counterpart of `sendMessageInServer`'s
+ * `newTopic.id` / `newUserMessage.id` / `newAssistantMessage.id`. Without
+ * them the gateway path mints its own ids and the client's optimistic rows
+ * never converge with the server rows.
+ *
+ * Only meaningful for a fresh send. Resume / regeneration paths must NOT
+ * carry them: replaying an id there would collide with the row the original
+ * send already created.
+ */
+export interface ExecAgentClientIds {
+  /** Id for the assistant placeholder row this run creates. */
+  assistantMessageId?: string;
+  /** Id for the topic when this run creates one (ignored when reusing). */
+  topicId?: string;
+  /** Id for the user message row this run creates. */
+  userMessageId?: string;
+}
+
 export interface ExecAgentParams {
   /** The agent ID to run (either agentId or slug is required) */
   agentId?: string;
@@ -145,6 +165,8 @@ export interface ExecAgentParams {
   appContext?: ExecAgentAppContext;
   /** Whether to auto-start execution after creating operation (default: true) */
   autoStart?: boolean;
+  /** Client-minted ids for the rows this run creates (fresh sends only). */
+  clientIds?: ExecAgentClientIds;
   /**
    * Client IP of the originating request, captured server-side for run
    * attribution. Propagated into the run's `state.metadata` and downstream

@@ -2,9 +2,10 @@
 
 import { isDesktop } from '@lobechat/const';
 import { type FormGroupItemType, type FormItemProps } from '@lobehub/ui';
-import { Form, Skeleton } from '@lobehub/ui';
+import { Alert, Flexbox, Form, Skeleton } from '@lobehub/ui';
 import { Switch } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
+import { FlaskConicalIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -23,7 +24,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const Page = memo(() => {
+const LabsForm = memo(() => {
   const { t: tLabs } = useTranslation('labs');
 
   const [
@@ -36,6 +37,7 @@ const Page = memo(() => {
     enablePlatformAgent,
     enableImessage,
     enableClaudeCodeSdk,
+    enableCodexAppServer,
     enableHeteroSessionImport,
     enableMessageTextSelectionActions,
     enableOAuthApps,
@@ -53,6 +55,7 @@ const Page = memo(() => {
     labPreferSelectors.enablePlatformAgent(s),
     labPreferSelectors.enableImessage(s),
     labPreferSelectors.enableClaudeCodeSdk(s),
+    labPreferSelectors.enableCodexAppServer(s),
     labPreferSelectors.enableHeteroSessionImport(s),
     labPreferSelectors.enableMessageTextSelectionActions(s),
     labPreferSelectors.enableOAuthApps(s),
@@ -177,8 +180,8 @@ const Page = memo(() => {
     } satisfies FormItemProps,
   ];
 
-  // Desktop-only experiments: iMessage bridge, the Claude Code SDK runtime, and
-  // the in-app browser (main-process WebContentsViews).
+  // Desktop-only experiments: local agent runtimes, iMessage bridge, and the
+  // in-app browser (renderer-retained Electron webviews).
   const desktopItems: FormItemProps[] = [
     {
       children: (
@@ -204,6 +207,19 @@ const Page = memo(() => {
       className: styles.labItem,
       desc: tLabs('features.claudeCodeSdk.desc'),
       label: tLabs('features.claudeCodeSdk.title'),
+      minWidth: undefined,
+    },
+    {
+      children: (
+        <Switch
+          checked={enableCodexAppServer}
+          loading={!isPreferenceInit}
+          onChange={(checked: boolean) => updateLab({ enableCodexAppServer: checked })}
+        />
+      ),
+      className: styles.labItem,
+      desc: tLabs('features.codexAppServer.desc'),
+      label: tLabs('features.codexAppServer.title'),
       minWidth: undefined,
     },
     // rides on the Claude Code hetero-agent stack: scans local CLI
@@ -253,17 +269,38 @@ const Page = memo(() => {
   }
 
   return (
-    <>
-      <SettingHeader description={tLabs('description')} title={tLabs('title')} />
-      <Form
-        collapsible={false}
-        items={items}
-        itemsType={'group'}
-        variant={'filled'}
-        {...FORM_STYLE}
-      />
-    </>
+    <Form
+      collapsible={false}
+      items={items}
+      itemsType={'group'}
+      variant={'filled'}
+      {...FORM_STYLE}
+    />
   );
 });
+
+interface PageProps {
+  showSettingHeader?: boolean;
+}
+
+const Page = ({ showSettingHeader = true }: PageProps) => {
+  const { t: tLabs } = useTranslation('labs');
+
+  return (
+    <>
+      {showSettingHeader && <SettingHeader title={tLabs('title')} />}
+      <Flexbox gap={16}>
+        <Alert
+          showIcon
+          icon={FlaskConicalIcon}
+          title={tLabs('description')}
+          type={'info'}
+          variant={'filled'}
+        />
+        <LabsForm />
+      </Flexbox>
+    </>
+  );
+};
 
 export default Page;

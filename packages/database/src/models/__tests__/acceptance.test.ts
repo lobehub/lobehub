@@ -67,6 +67,24 @@ describe('AcceptanceModel', () => {
     expect(third.requirement).toBe('Review UX polish ships end to end');
   });
 
+  it('keeps the first standalone display title and backfills one when initially absent', async () => {
+    const model = new AcceptanceModel(serverDB, userId);
+    const subjectId = 'standalone-external-delivery';
+
+    const first = await model.ensureForSubject('standalone', subjectId);
+    expect(first.metadata?.title).toBeUndefined();
+
+    const titled = await model.ensureForSubject('standalone', subjectId, {
+      metadata: { title: 'External delivery' },
+    });
+    expect(titled.metadata?.title).toBe('External delivery');
+
+    const unchanged = await model.ensureForSubject('standalone', subjectId, {
+      metadata: { title: 'Replacement title' },
+    });
+    expect(unchanged.metadata?.title).toBe('External delivery');
+  });
+
   it('defaults visibility by scope: personal public, workspace private', async () => {
     const personal = new AcceptanceModel(serverDB, userId);
     const personalRow = await personal.ensureForSubject('topic', topicId);
@@ -101,6 +119,9 @@ describe('AcceptanceModel', () => {
     expect((await model.findById(row.id))?.completedAt).toBeNull();
 
     await model.updateStatus(row.id, 'accepted');
+    expect((await model.findById(row.id))?.completedAt).toBeInstanceOf(Date);
+
+    await model.updateStatus(row.id, 'closed');
     expect((await model.findById(row.id))?.completedAt).toBeInstanceOf(Date);
 
     // A new round re-opening the loop clears the completion stamp.

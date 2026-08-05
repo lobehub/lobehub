@@ -271,6 +271,35 @@ describe('buildAgentInput', () => {
     });
   });
 
+  describe('pi', () => {
+    it('uses raw text stdin and @path image arguments', async () => {
+      const filePath = path.join(tmp, 'pi input.png');
+      await writeFile(filePath, PNG_BYTES);
+      const plan = await buildAgentInput('pi', [
+        { text: 'first', type: 'text' },
+        { source: { path: filePath, type: 'path' }, type: 'image' },
+        { text: 'second', type: 'text' },
+      ]);
+
+      expect(plan).toEqual({ args: [`@${filePath}`], stdin: 'first\n\nsecond' });
+    });
+
+    it('materializes base64 images through the shared path-input helper', async () => {
+      const plan = await buildAgentInput(
+        'pi',
+        [
+          {
+            source: { data: PNG_BYTES.toString('base64'), mediaType: 'image/png', type: 'base64' },
+            type: 'image',
+          },
+        ],
+        { cacheDir: tmp },
+      );
+      expect(plan.args).toHaveLength(1);
+      expect(plan.args[0]).toMatch(/^@.*\.png$/);
+    });
+  });
+
   it('throws on unknown agent types', async () => {
     await expect(buildAgentInput('kimi-cli', 'hi')).rejects.toThrow(/unsupported agent type/);
   });

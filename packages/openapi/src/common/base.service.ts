@@ -306,13 +306,32 @@ export abstract class BaseService implements IBaseService {
           return targetFile?.userId;
         }
 
-        // Query messages table
+        // Query messages table. `messages.user_id` is a creation-time
+        // snapshot that goes stale after agent transfers — derive the owner
+        // from the message's anchor (topic first, then session) so
+        // permission checks agree with the derived read scope.
         case !!target?.targetMessageId: {
           const targetMessage = await this.db.query.messages.findFirst({
-            columns: { userId: true },
+            columns: { sessionId: true, topicId: true, userId: true },
             where: eq(messages.id, target.targetMessageId),
           });
-          return targetMessage?.userId;
+          if (!targetMessage) return undefined;
+
+          if (targetMessage.topicId) {
+            const anchorTopic = await this.db.query.topics.findFirst({
+              columns: { userId: true },
+              where: eq(topics.id, targetMessage.topicId),
+            });
+            return anchorTopic?.userId ?? targetMessage.userId;
+          }
+          if (targetMessage.sessionId) {
+            const anchorSession = await this.db.query.sessions.findFirst({
+              columns: { userId: true },
+              where: eq(sessions.id, targetMessage.sessionId),
+            });
+            return anchorSession?.userId ?? targetMessage.userId;
+          }
+          return targetMessage.userId;
         }
 
         // Query aiModels table

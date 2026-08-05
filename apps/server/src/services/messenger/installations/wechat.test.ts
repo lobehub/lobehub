@@ -1,14 +1,25 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { WECHAT_WINDOW_MAX_SENDS } from '@/server/services/bot/platforms/wechat/contextWindow';
+
 import { wechatInstallationKey, WechatInstallationStore } from './wechat';
 
-const { mockFindByPlatformUserWithCredentials, mockGetMessengerWechatConfig, mockRedisSet } =
-  vi.hoisted(() => ({
-    mockFindByPlatformUserWithCredentials: vi.fn(),
-    mockGetMessengerWechatConfig: vi.fn(),
-    mockRedisSet: vi.fn(),
-  }));
+const {
+  mockFindByPlatformUserWithCredentials,
+  mockFlushPendingWechatPushes,
+  mockGetMessengerWechatConfig,
+  mockRedisExpire,
+  mockRedisHset,
+  mockRedisSet,
+} = vi.hoisted(() => ({
+  mockFindByPlatformUserWithCredentials: vi.fn(),
+  mockFlushPendingWechatPushes: vi.fn(),
+  mockGetMessengerWechatConfig: vi.fn(),
+  mockRedisExpire: vi.fn(),
+  mockRedisHset: vi.fn(),
+  mockRedisSet: vi.fn(),
+}));
 
 vi.mock('@/config/messenger', () => ({
   getMessengerWechatConfig: mockGetMessengerWechatConfig,
@@ -25,11 +36,19 @@ vi.mock('@/database/models/messengerAccountLink', () => ({
 }));
 
 vi.mock('@/server/modules/AgentRuntime/redis', () => ({
-  getAgentRuntimeRedisClient: () => ({ set: mockRedisSet }),
+  getAgentRuntimeRedisClient: () => ({
+    expire: mockRedisExpire,
+    hset: mockRedisHset,
+    set: mockRedisSet,
+  }),
 }));
 
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   KeyVaultsGateKeeper: { initWithEnvKey: vi.fn().mockResolvedValue({ kind: 'gatekeeper' }) },
+}));
+
+vi.mock('@/server/services/messenger/wechatPush', () => ({
+  flushPendingWechatPushes: mockFlushPendingWechatPushes,
 }));
 
 const accountLink = {
@@ -57,6 +76,9 @@ beforeEach(() => {
   mockGetMessengerWechatConfig.mockResolvedValue({ enabled: true });
   mockFindByPlatformUserWithCredentials.mockResolvedValue(accountLink);
   mockRedisSet.mockResolvedValue('OK');
+  mockRedisHset.mockResolvedValue(1);
+  mockRedisExpire.mockResolvedValue(1);
+  mockFlushPendingWechatPushes.mockResolvedValue(0);
 });
 
 describe('WechatInstallationStore', () => {
@@ -89,11 +111,25 @@ describe('WechatInstallationStore', () => {
       platform: 'wechat',
       tenantId: 'alice@im.wechat',
     });
+    // Legacy plain-token key stays mirrored for older readers…
     expect(mockRedisSet).toHaveBeenCalledWith(
       'wechat:ctx-token:bot@im.wechat:alice@im.wechat',
       'context-1',
       'EX',
       86_400,
+    );
+    // …while the send window resets with a fresh quota.
+    expect(mockRedisHset).toHaveBeenCalledWith(
+      'wechat:ctx-window:bot@im.wechat:alice@im.wechat',
+      expect.objectContaining({ remaining: WECHAT_WINDOW_MAX_SENDS, token: 'context-1' }),
+    );
+    // The reopened window triggers a pending-push replay.
+    expect(mockFlushPendingWechatPushes).toHaveBeenCalledWith(
+      expect.objectContaining({
+        applicationId: 'bot@im.wechat',
+        botToken: 'secret-token',
+        platformUserId: 'alice@im.wechat',
+      }),
     );
   });
 

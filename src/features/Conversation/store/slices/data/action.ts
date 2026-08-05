@@ -62,8 +62,18 @@ export interface DataAction {
    * Used for syncing after database operations (optimistic update pattern)
    *
    * @param messages - New messages array from database
+   * @param options.skipOnMessagesChange - Set when the messages came FROM the
+   *   external store (StoreUpdater prop sync). Echoing them back through
+   *   `onMessagesChange` re-writes the SWR message cache with whatever the
+   *   bucket held at mount — when that bucket is a partial seed (e.g. only the
+   *   topic's first message), the echo's cache mutate lands while the
+   *   switch-time revalidation is in flight and discards its result, locking
+   *   the UI on the partial list.
    */
-  replaceMessages: (messages: UIChatMessage[]) => void;
+  replaceMessages: (
+    messages: UIChatMessage[],
+    options?: { skipOnMessagesChange?: boolean },
+  ) => void;
 
   /**
    * Switch message branch by updating the parent's activeBranchIndex
@@ -158,7 +168,7 @@ export const dataSlice: StateCreator<
     get().onMessagesChange?.(newDbMessages, get().context);
   },
 
-  replaceMessages: (messages) => {
+  replaceMessages: (messages, options) => {
     const contextKey = messageMapKey(get().context);
     const prevDbMessages = get().dbMessages;
 
@@ -167,18 +177,21 @@ export const dataSlice: StateCreator<
     const stableFlatList = stabilizeReferences(get().displayMessages, flatList);
 
     log(
-      '[replaceMessages] | contextKey=%s | prevCount=%d | newCount=%d | displayCount=%d | messageIds=%o',
+      '[replaceMessages] | contextKey=%s | prevCount=%d | newCount=%d | displayCount=%d | skipOnMessagesChange=%s | messageIds=%o',
       contextKey,
       prevDbMessages.length,
       messages.length,
       stableFlatList.length,
+      options?.skipOnMessagesChange,
       messages.slice(0, 5).map((m) => m.id),
     );
 
     set({ dbMessages: messages, displayMessages: stableFlatList }, false, 'replaceMessages');
 
-    // Sync changes to external store (ChatStore)
-    get().onMessagesChange?.(messages, get().context);
+    // Sync changes to external store (ChatStore) — skipped for external prop
+    // sync, which would only echo the external store's own data back and
+    // poison the SWR cache (see interface doc).
+    if (!options?.skipOnMessagesChange) get().onMessagesChange?.(messages, get().context);
   },
 
   switchMessageBranch: async (messageId, branchIndex) => {
@@ -267,8 +280,13 @@ export const dataSlice: StateCreator<
           });
 
           // Call onMessagesChange callback with the request context (not current context)
-          // This ensures data is stored to the correct topic even if user switched topics
-          get().onMessagesChange?.(mergedMessages, context);
+          // This ensures data is stored to the correct topic even if user switched topics.
+          // `source: 'fetch'` marks this as a server-snapshot echo: handlers must
+          // NOT write it through the SWR cache — at mount, this fires with the
+          // stale cached list while the revalidation is in flight, and a cache
+          // mutate here trips SWR's mutation race guard, discarding the fresh
+          // result (conversation locks on the stale/partial list).
+          get().onMessagesChange?.(mergedMessages, context, { source: 'fetch' });
         },
       },
     );

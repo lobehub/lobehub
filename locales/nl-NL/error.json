@@ -156,6 +156,7 @@
   "upload.networkError": "Controleer je netwerkverbinding en zorg dat de cross-origin-instellingen van de opslagservice correct zijn.",
   "upload.permissionDenied": "Je hebt geen toestemming om bestanden in deze werkruimte te uploaden.",
   "upload.storageBlock.billingUnavailable": "De status van je abonnementsfacturering kan niet worden geverifieerd. Probeer het later opnieuw of werk je factureringsgegevens bij.",
+  "upload.storageBlock.cleanupFiles": "Ruim ruimte vrij",
   "upload.storageBlock.monthlyCapReached": "Je maandelijkse opslaguitgavenlimiet is bereikt.",
   "upload.storageBlock.noPaymentMethod": "Voeg een betaalmethode toe om door te gaan met uploaden.",
   "upload.storageBlock.overageNotEnabled": "Je opslagruimte is vol. Schakel betalen per gebruik in om door te gaan met uploaden.",

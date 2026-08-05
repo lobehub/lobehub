@@ -10,7 +10,7 @@
   "table.columns.duration": "Длительность",
   "table.columns.model": "Модель",
   "table.columns.spend": "Кредиты",
-  "table.columns.startTime": "Создано",
+  "table.columns.time": "Время",
   "table.columns.totalTokens": "Использование токенов",
   "table.columns.trigger.enums.agent_signal": "Сигнал агента",
   "table.columns.trigger.enums.api": "Вызов API",
@@ -43,6 +43,10 @@
   "table.filters.reset": "Сбросить",
   "table.filters.searchModel": "Поиск модели",
   "table.filters.startDate": "Дата начала",
+  "table.pagination.next": "Следующая страница",
+  "table.pagination.perPage": "{{size}} / страница",
+  "table.pagination.prev": "Предыдущая страница",
+  "table.pagination.range": "{{from}}-{{to}} из {{total}} элементов",
   "table.title": "Детали использования вычислительных кредитов",
   "table.totalToken.input": "Ввод",
   "table.totalToken.output": "Вывод",
@@ -66,8 +70,8 @@
   "usageStats.chart.title": "Когда этот агент потратил",
   "usageStats.chart.tokens": "Токен",
   "usageStats.dimension": "Размерность",
-  "usageStats.entry": "Использование и стоимость",
+  "usageStats.entry": "Статистика",
   "usageStats.range": "Диапазон времени",
   "usageStats.rangeSuffix": "Последние {{count}} дн.",
-  "usageStats.title": "Использование и стоимость"
+  "usageStats.title": "Статистика"
 }

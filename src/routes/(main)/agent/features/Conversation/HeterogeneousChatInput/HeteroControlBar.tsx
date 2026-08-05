@@ -131,9 +131,23 @@ const HeteroControlBar = memo(() => {
 
   // All hooks must be called unconditionally (Rules of Hooks)
   const isLoading = useAgentStore(agentByIdSelectors.isAgentConfigLoadingById(agentId));
-  // Effective config = shared row + this member's device override (LOBE-11689),
+  // Effective config = shared row + this member's device override,
   // so the quota badges gate on where THIS member's run actually executes.
   const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId);
+
+  const heteroProvider = agencyConfig?.heterogeneousProvider;
+  const executionTarget = resolveExecutionTarget(agencyConfig, {
+    clientExecutionAvailable: isDesktop,
+    isHetero: !!heteroProvider,
+    workspaceScoped,
+  });
+  const isLocalHeteroExecution = executionTarget === 'local';
+  // An explicit bound device (including web's device-upgraded "local" pick)
+  // samples quota through the gateway; `auto` has no concrete device to ask
+  // and the cloud sandbox has no sampler, so both stay quota-less.
+  const quotaDeviceId = executionTarget === 'device' ? agencyConfig?.boundDeviceId : undefined;
+  const shouldShowClaudeQuota =
+    heteroProvider?.type === 'claude-code' && (isLocalHeteroExecution || !!quotaDeviceId);
 
   if (isAccessLoading) return null;
 
@@ -148,17 +162,23 @@ const HeteroControlBar = memo(() => {
     );
   }
 
-  // On web there's no full-access badge / skeleton — just the workspace controls
-  // (the cloud repo switcher is rendered inside WorkspaceControls). The CLI
-  // model + thinking-effort selector now lives in the input's bottom-left action
-  // bar (see HeterogeneousChatInput), not in this strip.
+  // On web there's no full-access badge / skeleton — just the workspace
+  // controls (the cloud repo switcher is rendered inside WorkspaceControls)
+  // plus the Claude quota badge when the run executes on a bound device that
+  // can sample it. The CLI model + thinking-effort selector now lives in the
+  // input's bottom-left action bar (see HeterogeneousChatInput), not here.
   if (!isDesktop) {
     if (!agentId) return null;
     return (
-      <Flexbox horizontal align={'center'} className={styles.bar}>
+      <Flexbox horizontal align={'center'} className={styles.bar} justify={'space-between'}>
         <Flexbox horizontal align={'center'} className={styles.leftGroup} gap={4}>
           <WorkspaceControls alwaysShowWorkspace agentId={agentId} />
         </Flexbox>
+        {shouldShowClaudeQuota && quotaDeviceId && (
+          <Flexbox horizontal align={'center'} className={styles.rightGroup} gap={4}>
+            <ClaudeCodeQuotaMenu deviceId={quotaDeviceId} env={heteroProvider?.env} />
+          </Flexbox>
+        )}
       </Flexbox>
     );
   }
@@ -178,17 +198,13 @@ const HeteroControlBar = memo(() => {
       <span className={styles.fullAccessLabel}>{tChat('heteroAgent.fullAccess.label')}</span>
     </div>
   );
-  const heteroProvider = agencyConfig?.heterogeneousProvider;
-  const isLocalHeteroExecution =
-    resolveExecutionTarget(agencyConfig, {
-      clientExecutionAvailable: isDesktop,
-      isHetero: true,
-      workspaceScoped,
-    }) === 'local';
+  // Codex quota still needs the local CLI (spawned over IPC), so it stays
+  // desktop-local; the SDK runtime badge likewise reports this desktop's own
+  // in-process runtime, not a remote device's.
   const shouldShowCodexQuota = heteroProvider?.type === 'codex' && isLocalHeteroExecution;
-  const shouldShowClaudeQuota = heteroProvider?.type === 'claude-code' && isLocalHeteroExecution;
   const shouldShowSdkRuntime =
-    shouldShowClaudeQuota &&
+    heteroProvider?.type === 'claude-code' &&
+    isLocalHeteroExecution &&
     runtimeStatus?.transport === 'claude-sdk' &&
     visibleSdkRuntimeStates.has(runtimeStatus.state);
   const sdkRuntimeClassName =
@@ -234,7 +250,9 @@ const HeteroControlBar = memo(() => {
         {shouldShowCodexQuota && (
           <CodexQuotaMenu command={heteroProvider?.command} env={heteroProvider?.env} />
         )}
-        {shouldShowClaudeQuota && <ClaudeCodeQuotaMenu env={heteroProvider?.env} />}
+        {shouldShowClaudeQuota && (
+          <ClaudeCodeQuotaMenu deviceId={quotaDeviceId} env={heteroProvider?.env} />
+        )}
         {sdkRuntimeBadge}
         <Tooltip title={tChat('heteroAgent.fullAccess.tooltip')}>{fullAccessBadge}</Tooltip>
       </Flexbox>

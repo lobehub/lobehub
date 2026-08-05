@@ -84,13 +84,47 @@ describe('Generation Actions', () => {
 
       expect(mockCancelOperations).toHaveBeenCalledWith(
         {
-          type: INPUT_LOADING_OPERATION_TYPES,
-          status: 'running',
           agentId: 'session-1',
+          groupId: undefined,
+          isNew: undefined,
+          scope: undefined,
+          status: 'running',
+          threadId: null,
           topicId: 'topic-1',
+          type: INPUT_LOADING_OPERATION_TYPES,
         },
         expect.any(String),
       );
+    });
+
+    it('should isolate a creating thread from the main conversation in the same topic', () => {
+      const editor = { setJSONState: vi.fn() };
+      const context: ConversationContext = {
+        agentId: 'session-1',
+        isNew: true,
+        scope: 'thread',
+        threadId: null,
+        topicId: 'topic-1',
+      };
+
+      const store = createStore({ context });
+      store.setState({ editor });
+
+      act(() => {
+        store.getState().stopGenerating();
+      });
+
+      expect(mockCancelOperations).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentId: 'session-1',
+          isNew: true,
+          scope: 'thread',
+          threadId: null,
+          topicId: 'topic-1',
+        }),
+        expect.any(String),
+      );
+      expect(mockCancelSendMessageInServer).toHaveBeenCalledWith(context, editor);
     });
 
     it('should call onGenerationStop hook', () => {

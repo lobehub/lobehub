@@ -5,10 +5,10 @@ import { getAgentPersistConfig, getAgentRuntimeConfig } from '../../index';
 import { BUILTIN_AGENT_SLUGS } from '../../types';
 
 describe('ONBOARDING_UNDERSTANDING', () => {
-  it('is registered on the memory-analysis mini model', () => {
+  it('uses its dedicated system-agent task model', () => {
     expect(getAgentPersistConfig(BUILTIN_AGENT_SLUGS.onboardingUnderstanding)).toMatchObject({
-      model: DEFAULT_SYSTEM_AGENT_CONFIG.memoryAnalysisAgentConfig.model,
-      provider: DEFAULT_SYSTEM_AGENT_CONFIG.memoryAnalysisAgentConfig.provider,
+      model: DEFAULT_SYSTEM_AGENT_CONFIG.onboardingUnderstanding.model,
+      provider: DEFAULT_SYSTEM_AGENT_CONFIG.onboardingUnderstanding.provider,
       slug: 'onboarding-understanding',
     });
   });

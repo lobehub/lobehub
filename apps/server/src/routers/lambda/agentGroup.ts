@@ -7,10 +7,12 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { AgentModel } from '@/database/models/agent';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
+import { TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS } from '@/database/models/topicComment';
 import { UserModel } from '@/database/models/user';
 import { AgentGroupRepository } from '@/database/repositories/agentGroup';
 import { DEFAULT_RESOURCE_ACCESS_LEVELS, RESOURCE_ACCESS_LEVELS_BY_TYPE } from '@/database/schemas';
 import { type ChatGroupConfig } from '@/database/types/chatGroup';
+import { MESSAGE_TRANSFER_HAS_FOREIGN_AUTHORS } from '@/database/utils/messageScope';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentGroupService } from '@/server/services/agentGroup';
@@ -21,7 +23,10 @@ import {
   assertCanPerformResourceAction,
   buildResourcePermissionState,
 } from '@/server/services/resourcePermission';
-import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
+import {
+  hasWorkspaceScopedPermission,
+  isWorkspacePrimaryOwner,
+} from '@/server/services/workspacePermission';
 import { TransferErrorCode } from '@/types/transferError';
 
 import { isWorkspaceNonOwner } from './_helpers/assertWorkspaceRowManageable';
@@ -319,6 +324,31 @@ export const agentGroupRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      // Resolve the folder BEFORE creating the member agents. The same check
+      // runs inside `createGroupWithSupervisor`, but that happens after these
+      // inserts and outside their transaction, so a bad folder id would leave
+      // orphaned virtual agents behind.
+      const groupFolderId = input.groupConfig?.groupId;
+      let folderVisibility: 'private' | 'public' | undefined;
+
+      if (groupFolderId) {
+        folderVisibility = await ctx.agentGroupRepo.getAssignableFolderVisibility(groupFolderId);
+        const requested = input.groupConfig?.visibility;
+
+        if (requested && requested !== folderVisibility)
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `A ${requested} chat group cannot be created in a ${folderVisibility} folder`,
+          });
+      }
+
+      // The synthetic members inherit the group's visibility, the same way the
+      // supervisor does. Left to the column default they would be public
+      // workspace resources while their group is private — visible to
+      // permission checks that look agents up by id rather than through the
+      // group. Must match `createGroupWithSupervisor`'s own derivation.
+      const groupVisibility = input.groupConfig?.visibility ?? folderVisibility ?? undefined;
+
       // 1. Batch create virtual member agents
       const memberConfigs = input.members.map((member) => ({
         ...member,
@@ -327,6 +357,7 @@ export const agentGroupRouter = router({
         plugins: member.plugins as unknown as string[] | undefined,
         tags: member.tags as string[] | undefined,
         virtual: true,
+        ...(groupVisibility ? { visibility: groupVisibility } : {}),
       }));
 
       const createdAgents = await ctx.agentModel.batchCreate(memberConfigs);
@@ -634,25 +665,51 @@ export const agentGroupRouter = router({
         });
       }
 
-      // The transfer rehomes member agents and every group conversation — a
-      // non-owner member must not move teammates' rows along with their group.
+      // The transfer rehomes member agents and every group conversation — only
+      // the primary owner may move teammates' rows along with a group;
+      // co-admins and members may not.
       if (
-        isWorkspaceNonOwner(ctx) &&
+        ctx.workspaceId &&
+        !(await isWorkspacePrimaryOwner({
+          db: ctx.serverDB,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        })) &&
         (await ctx.agentGroupRepo.transferHasForeignRows(input.groupId))
       ) {
         throw new TRPCError({
           cause: { data: { code: TransferErrorCode.OwnerOnly } },
           code: 'FORBIDDEN',
-          message: "Only workspace owners can transfer a group carrying others' content",
+          message: "Only the workspace owner can transfer a group carrying others' content",
         });
       }
 
-      const result = await ctx.agentGroupRepo.transferToWorkspace(
-        input.groupId,
-        input.targetWorkspaceId,
-        ctx.userId,
-        input.targetVisibility,
-      );
+      let result;
+      try {
+        result = await ctx.agentGroupRepo.transferToWorkspace(
+          input.groupId,
+          input.targetWorkspaceId,
+          ctx.userId,
+          input.targetVisibility,
+          {
+            rejectForeignMessageAuthors: isWorkspaceNonOwner(ctx),
+            rejectForeignTopicCommentAuthors: isWorkspaceNonOwner(ctx),
+          },
+        );
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          (error.message === TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS ||
+            error.message === MESSAGE_TRANSFER_HAS_FOREIGN_AUTHORS)
+        ) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.OwnerOnly } },
+            code: 'FORBIDDEN',
+            message: "Only workspace owners can transfer a group carrying others' content",
+          });
+        }
+        throw error;
+      }
 
       if (ctx.workspaceId) {
         await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).removeAll(
@@ -711,6 +768,22 @@ export const agentGroupRouter = router({
   publishGroupToWorkspace: agentGroupProcedureWrite
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      // Same rule `setGroupVisibility` enforces, on the other route to the same
+      // transition: a private group may hold the creator's private member
+      // agents, and publishing the group without them leaves everyone else
+      // with a group whose members they cannot see. Guarding only one of two
+      // publish paths guards neither.
+      if (ctx.workspaceId) {
+        const privateMembers = await ctx.chatGroupModel.countPrivateGroupAgents(input.id);
+
+        if (privateMembers > 0)
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message:
+              'Cannot publish a group that still contains private agents. Publish or remove those agents first.',
+          });
+      }
+
       const result = await ctx.chatGroupModel.publishToWorkspace(input.id);
       if (ctx.workspaceId) {
         await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).setAccessLevel(

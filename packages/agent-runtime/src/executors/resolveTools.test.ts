@@ -126,6 +126,43 @@ describe('resolveTools executors', () => {
     });
   });
 
+  it('persists a caller-provided blocked reason and content', async () => {
+    const instruction: Extract<AgentInstruction, { type: 'resolve_blocked_tools' }> = {
+      payload: {
+        blockedContent: 'Tool is outside the current execution scope.',
+        blockedReason: 'tool_not_allowed',
+        parentMessageId: 'assistant-msg-1',
+        toolsCalling: [createToolCall()],
+      },
+      type: 'resolve_blocked_tools',
+    };
+
+    const result = await resolveBlockedTools(host)(instruction, createState());
+
+    expect(createToolMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: 'Tool is outside the current execution scope.',
+        pluginError: 'tool_not_allowed',
+        pluginIntervention: {
+          rejectedReason: 'tool_not_allowed',
+          status: 'rejected',
+        },
+        pluginState: { reason: 'tool_not_allowed', type: 'blocked' },
+      }),
+    );
+    expect(result.events).toContainEqual({
+      id: 'tool-call-1',
+      result: {
+        content: 'Tool is outside the current execution scope.',
+        error: 'tool_not_allowed',
+        executionTime: 0,
+        state: { reason: 'tool_not_allowed', type: 'blocked' },
+        success: false,
+      },
+      type: 'tool_result',
+    });
+  });
+
   it('persists aborted tools and completes the operation as user_aborted', async () => {
     const instruction: Extract<AgentInstruction, { type: 'resolve_aborted_tools' }> = {
       payload: {
@@ -168,6 +205,41 @@ describe('resolveTools executors', () => {
         type: 'step_complete',
       }),
     );
+  });
+
+  it('settles an already-persisted pending row in place instead of inserting a duplicate', async () => {
+    // Aborting a parked approval: the pause already wrote one tool row per
+    // pending call. Inserting fresh aborted rows here would duplicate every
+    // tool in the turn AND leave the originals `pending`, so the approval cards
+    // survive the Stop that was supposed to clear them.
+    const updateToolMessage = vi.fn().mockResolvedValue(undefined);
+    const updateToolIntervention = vi.fn().mockResolvedValue(undefined);
+    host.transports.messages.updateToolMessage = updateToolMessage;
+    host.transports.messages.updateToolIntervention = updateToolIntervention;
+
+    const instruction: Extract<AgentInstruction, { type: 'resolve_aborted_tools' }> = {
+      payload: {
+        existingToolMessageIds: { 'tool-call-1': 'pending-msg-1' },
+        parentMessageId: 'assistant-msg-1',
+        toolsCalling: [createToolCall('tool-call-1'), createToolCall('tool-call-2')],
+      },
+      type: 'resolve_aborted_tools',
+    };
+
+    const result = await resolveAbortedTools(host)(instruction, createState());
+
+    expect(updateToolMessage).toHaveBeenCalledWith('pending-msg-1', {
+      content: 'Tool execution was aborted by user.',
+    });
+    expect(updateToolIntervention).toHaveBeenCalledWith('pending-msg-1', { status: 'aborted' });
+
+    // The call with no existing row still gets one created — mixed batches are
+    // resolved per call, not all-or-nothing.
+    expect(createToolMessage).toHaveBeenCalledTimes(1);
+    expect(createToolMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ tool_call_id: 'tool-call-2' }),
+    );
+    expect(result.newState.status).toBe('done');
   });
 
   it('publishes and rethrows persist errors', async () => {

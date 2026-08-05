@@ -181,6 +181,16 @@ describe('getModelPropertyWithFallback', () => {
       expect(result).toBe('chat');
     });
 
+    it('should infer embedding type for unknown embedding-like model IDs', async () => {
+      const result = await getModelPropertyWithFallback('bge-m3', 'type', 'newapi');
+      expect(result).toBe('embedding');
+    });
+
+    it('should infer embedding type case-insensitively for custom model IDs', async () => {
+      const result = await getModelPropertyWithFallback('TEXT-EMBEDDING-3-SMALL', 'type');
+      expect(result).toBe('embedding');
+    });
+
     it('should return undefined for non-type properties when model not found', async () => {
       const result = await getModelPropertyWithFallback('non-existent-model', 'displayName');
       expect(result).toBeUndefined();

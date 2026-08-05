@@ -3,7 +3,7 @@
 import { exportJSONFile } from '@lobechat/utils/client';
 import { ActionIcon, Flexbox, Icon, Tag } from '@lobehub/ui';
 import { confirmModal, type DropdownItem, DropdownMenu, Switch } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
 import {
   BookOpen,
   Download,
@@ -45,7 +45,7 @@ const STATUS_TAG_COLORS: Partial<Record<BotRuntimeStatus, string>> = {
 const Header = memo<HeaderProps>(
   ({ agentId, currentConfig, disabled, platformDef, providers, runtimeStatus }) => {
     const { t } = useTranslation(['agent', 'chat', 'common']);
-    const { message } = App.useApp();
+
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [pendingEnabled, setPendingEnabled] = useState<boolean>();
     const [refreshingStatus, setRefreshingStatus] = useState(false);
@@ -100,7 +100,7 @@ const Header = memo<HeaderProps>(
             !Array.isArray(data) ||
             data.some((item) => !item.platform || !item.applicationId || !item.credentials)
           ) {
-            message.error(t('channel.importInvalidFormat'));
+            toast.error(t('channel.importInvalidFormat'));
             return;
           }
 
@@ -121,14 +121,14 @@ const Header = memo<HeaderProps>(
             }
           }
 
-          message.success(t('channel.importSuccess'));
+          toast.success(t('channel.importSuccess'));
         } catch {
-          message.error(t('channel.importFailed'));
+          toast.error(t('channel.importFailed'));
         } finally {
           event.target.value = '';
         }
       },
-      [agentId, connectBot, createBotProvider, disabled, message, t],
+      [agentId, connectBot, createBotProvider, disabled, t],
     );
 
     const handleDeleteAll = useCallback(() => {
@@ -140,14 +140,14 @@ const Header = memo<HeaderProps>(
         onOk: async () => {
           try {
             await deleteAllBotProviders(agentId);
-            message.success(t('channel.deleteAllSuccess'));
+            toast.success(t('channel.deleteAllSuccess'));
           } catch {
-            message.error(t('channel.deleteAllFailed'));
+            toast.error(t('channel.deleteAllFailed'));
           }
         },
         title: t('channel.deleteAllConfirm'),
       });
-    }, [agentId, deleteAllBotProviders, disabled, message, providers, t]);
+    }, [agentId, deleteAllBotProviders, disabled, providers, t]);
 
     const handleRefreshStatus = useCallback(async () => {
       if (writeDisabled || !currentConfig?.enabled) return;
@@ -159,11 +159,11 @@ const Header = memo<HeaderProps>(
           platform: currentConfig.platform,
         });
       } catch (error) {
-        message.error(error instanceof Error ? error.message : String(error));
+        toast.error(error instanceof Error ? error.message : String(error));
       } finally {
         setRefreshingStatus(false);
       }
-    }, [agentId, currentConfig, message, refreshBotRuntimeStatus, writeDisabled]);
+    }, [agentId, currentConfig, refreshBotRuntimeStatus, writeDisabled]);
 
     const handleToggleEnable = useCallback(
       async (enabled: boolean) => {
@@ -181,12 +181,12 @@ const Header = memo<HeaderProps>(
           }
         } catch {
           setPendingEnabled(undefined);
-          message.error(t('channel.updateFailed'));
+          toast.error(t('channel.updateFailed'));
         } finally {
           setToggleLoading(false);
         }
       },
-      [agentId, connectBot, currentConfig, disabled, message, t, updateBotProvider, writeDisabled],
+      [agentId, connectBot, currentConfig, disabled, t, updateBotProvider, writeDisabled],
     );
 
     const statusLabel = (() => {

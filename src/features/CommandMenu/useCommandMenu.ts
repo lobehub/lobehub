@@ -67,6 +67,10 @@ export const useCommandMenu = () => {
       const locale = globalHelpers.getCurrentLanguage();
       return lambdaClient.search.query.query({
         agentId,
+        // Keep the aggregate response DB-only: marketplace results are reached
+        // through the permanent typed-search entries instead of gating every
+        // keystroke on three remote marketplace round-trips.
+        includeMarketplace: false,
         limitPerType: typeFilter ? 50 : 5, // Show more results when filtering by type
         locale,
         query: searchQuery,

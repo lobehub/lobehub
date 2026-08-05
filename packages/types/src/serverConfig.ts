@@ -22,7 +22,9 @@ export type IFeatureFlagsState = {
   enableAgentSelfIteration: boolean | undefined;
   enableAuthCaptcha: boolean | undefined;
   enableCheckUpdates: boolean | undefined;
+  enableDevDock: boolean | undefined;
   enableKnowledgeBase: boolean | undefined;
+  enableOnboardingV2: boolean | undefined;
   enableRAGEval: boolean | undefined;
   enableSTT: boolean | undefined;
   enableStorageOverage: boolean | undefined;
@@ -65,7 +67,7 @@ export interface GlobalMemoryConfig {
   userMemory?: GlobalMemoryExtractionConfig;
 }
 
-export interface VisualUnderstandingConfig {
+export interface MultimodalUnderstandingConfig {
   model: string;
   provider: string;
 }
@@ -106,16 +108,25 @@ export interface GlobalServerConfig {
   enableLobehubSkill?: boolean;
   enableMagicLink?: boolean;
   enableMarketTrustedClient?: boolean;
+  enableMultimodalUnderstanding?: boolean;
   enableUploadFileToServer?: boolean;
-  enableVisualUnderstanding?: boolean;
   image?: PartialDeep<UserImageConfig>;
   memory?: GlobalMemoryConfig;
+  multimodalUnderstanding?: MultimodalUnderstandingConfig;
   oAuthSSOProviders?: string[];
   systemAgent?: PartialDeep<UserServiceModelConfig>;
   telemetry: {
     langfuse?: boolean;
   };
-  visualUnderstanding?: VisualUnderstandingConfig;
+  /**
+   * `TOOL_NAME_MAX_LENGTH`: the length at which a function-call tool name gets
+   * compressed to an opaque `MD5HASH_…`, `0` disabling that compression.
+   * Exposed to the client because the client-driven chat path builds the tool
+   * payload in the browser, where the server env isn't visible — without this
+   * the var would only take effect in gateway (server-run) mode.
+   * Undefined means "not configured": the default (64) applies.
+   */
+  toolNameMaxLength?: number;
 }
 
 export interface GlobalBillboardItemLocaleFields {

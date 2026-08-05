@@ -1,5 +1,5 @@
 import type { VerifyRunStatus } from '@lobechat/types';
-import { and, eq, gte, isNotNull, sql } from 'drizzle-orm';
+import { and, eq, gte, isNotNull, or, sql } from 'drizzle-orm';
 
 import { today } from '@/utils/time';
 
@@ -131,6 +131,31 @@ export class AgentOperationModel {
   }
 
   /**
+   * Newest operation in this topic that is parked waiting for tool approval.
+   *
+   * A parked run is stream-terminal, so the client marks its own operation
+   * completed and prunes it — by the time the user decides to stop, only the
+   * DB still knows which operation is holding the turn. Scoped by `userId` so
+   * one user can never resolve (and then terminate) another's run.
+   */
+  async findLatestParkedOperationId(topicId: string): Promise<string | undefined> {
+    const [row] = await this.db
+      .select({ id: agentOperations.id })
+      .from(agentOperations)
+      .where(
+        and(
+          eq(agentOperations.topicId, topicId),
+          eq(agentOperations.userId, this.userId),
+          eq(agentOperations.status, 'waiting_for_human'),
+        ),
+      )
+      .orderBy(sql`${agentOperations.createdAt} desc`)
+      .limit(1);
+
+    return row?.id;
+  }
+
+  /**
    * Update the row when the operation reaches a terminal state. Scoped by
    * `userId` so a leaked operationId can't be used to flip another user's
    * row. No-op when the start row was never written.
@@ -222,6 +247,28 @@ export class AgentOperationModel {
       .where(and(eq(agentOperations.id, operationId), this.ownership()))
       .limit(1);
     return row ?? null;
+  }
+
+  /**
+   * Load an operation together with its direct child operations (`callSubAgent`
+   * children / isolated group members) — the (at most) two-layer operation
+   * tree. File-Work registration gathers every op in this tree so a round's
+   * tool calls, including those a sub-agent produced, are scanned together.
+   * Owner-scoped. The root op (`id === operationId`) is included in the result.
+   */
+  async listOperationTree(operationId: string) {
+    return this.db
+      .select()
+      .from(agentOperations)
+      .where(
+        and(
+          this.ownership(),
+          or(
+            eq(agentOperations.id, operationId),
+            eq(agentOperations.parentOperationId, operationId),
+          ),
+        ),
+      );
   }
 
   /**

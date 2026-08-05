@@ -1,8 +1,13 @@
-import type {
-  CollectionDiagnostics,
-  OnboardingUnderstandingMessageMetadata,
-  OnboardingUnderstandingSession,
-  UnderstandingAnalysis,
+import {
+  UNDERSTANDING_ANALYSIS_JSON_SCHEMA,
+  UNDERSTANDING_DETAILED_PERSONA_JSON_SCHEMA,
+} from '@lobechat/prompts';
+import {
+  type CollectionDiagnostics,
+  type OnboardingUnderstandingMessageMetadata,
+  type OnboardingUnderstandingSession,
+  RequestTrigger,
+  type UnderstandingAnalysis,
 } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -10,19 +15,19 @@ import { UnderstandingService, type UnderstandingServiceDependencies } from './s
 import type { StoredUnderstandingProviderContext } from './sourceStore';
 import type { UnderstandingProvider } from './types';
 
-type WriterInput = Parameters<
-  ReturnType<UnderstandingServiceDependencies['writerRuntime']>['agent']['execAgent']
->[0];
-
-const { mockAssertWorkflowAvailable, mockTriggerProviders } = vi.hoisted(() => ({
-  mockAssertWorkflowAvailable: vi.fn(),
-  mockTriggerProviders: vi.fn(),
-}));
+const { mockAssertWorkflowAvailable, mockTriggerProviders, mockTriggerWriting } = vi.hoisted(
+  () => ({
+    mockAssertWorkflowAvailable: vi.fn(),
+    mockTriggerProviders: vi.fn(),
+    mockTriggerWriting: vi.fn(),
+  }),
+);
 
 vi.mock('@/server/workflows/onboardingUnderstanding', () => ({
   OnboardingUnderstandingWorkflow: {
     assertAvailable: mockAssertWorkflowAvailable,
     triggerProviders: mockTriggerProviders,
+    triggerWriting: mockTriggerWriting,
   },
 }));
 
@@ -32,7 +37,7 @@ const analysis: UnderstandingAnalysis = {
     interests: [
       {
         description: 'TEST_INTEREST_DESCRIPTION',
-        salience: 96,
+        rank: 96,
         title: 'TEST_INTEREST_TITLE',
       },
     ],
@@ -95,8 +100,6 @@ const storedContext = (
 
 const createHarness = (initialSession?: OnboardingUnderstandingSession) => {
   let session = initialSession;
-  let runningOperation:
-    { assistantMessageId: string; operationId: string; threadId?: string | null } | undefined;
   let latestAssistant:
     | { content?: unknown; error?: unknown; id: string; role: string; threadId?: string | null }
     | undefined;
@@ -120,6 +123,7 @@ const createHarness = (initialSession?: OnboardingUnderstandingSession) => {
   });
 
   const repository = {
+    commitDetailedWriting: vi.fn(async (_input: unknown) => ({ published: true })),
     commitWriting: vi.fn(async (_input: unknown) => ({ published: true })),
     completeProvider: vi.fn(
       async ({ providerId, revision }: { providerId: string; revision: number }) => {
@@ -136,7 +140,39 @@ const createHarness = (initialSession?: OnboardingUnderstandingSession) => {
     ),
     confirm: vi.fn(async () => ({ personaVersion: 1 })),
     expireProviderContexts: vi.fn(async () => session!),
+    extend: vi.fn(
+      async ({ feedback, providerIds }: { feedback?: string; providerIds: string[] }) => {
+        const currentFeedback = session?.feedback ?? { revision: 0, turns: [] };
+        const nextRevision = feedback ? currentFeedback.revision + 1 : currentFeedback.revision;
+        session = {
+          ...session!,
+          feedback: {
+            revision: nextRevision,
+            turns: feedback
+              ? [
+                  ...currentFeedback.turns,
+                  {
+                    content: feedback,
+                    createdAt: '2026-07-24T00:00:00.000Z',
+                    revision: nextRevision,
+                  },
+                ]
+              : currentFeedback.turns,
+          },
+          sources: {
+            ...session!.sources,
+            ...Object.fromEntries(
+              providerIds
+                .filter((providerId) => !session!.sources[providerId])
+                .map((providerId) => [providerId, providerState('pending')]),
+            ),
+          },
+        };
+        return session;
+      },
+    ),
     failProvider: vi.fn(async () => session!),
+    failDetailedWriting: vi.fn(async () => session!),
     failWriting: vi.fn(async ({ error, sourceFingerprint }) => {
       session = {
         ...session!,
@@ -167,16 +203,21 @@ const createHarness = (initialSession?: OnboardingUnderstandingSession) => {
       return { revision };
     }),
     prepareWriting: vi.fn(async ({ sourceFingerprint, threadId }) => {
+      const feedbackRevision = session?.feedback?.revision ?? 0;
+      const generationRevision = (session?.generationRevision ?? 0) + 1;
       session = {
         ...session!,
+        generationRevision,
         writing: {
+          feedbackRevision,
+          generationRevision,
           resultMessageId: session?.writing?.resultMessageId,
           sourceFingerprint,
           status: 'running',
           updatedAt: '2026-07-20T00:00:00.000Z',
         },
       };
-      return { ready: true, threadId };
+      return { feedbackRevision, generationRevision, ready: true, threadId };
     }),
   };
   const sourceStore = {
@@ -190,15 +231,20 @@ const createHarness = (initialSession?: OnboardingUnderstandingSession) => {
     }),
   };
   const sourceStoreFactory = vi.fn(() => sourceStore);
-  const execAgent = vi.fn(async (_input: WriterInput) => ({
-    assistantMessageId: 'assistant-new',
-    operationId: 'operation-new',
-    success: true as const,
+  const writerAgent = vi.fn(async () => ({
+    id: 'agent-1',
+    model: 'gpt-5.4-mini',
+    provider: 'lobehub',
   }));
-  const executeOperation = vi.fn(async () => ({ status: 'done' }));
-  const writerAgentId = vi.fn(async () => 'agent-1');
-  const writerRuntimeFactory = vi.fn(() => ({ agent: { execAgent }, executeOperation }));
+  const generateObject = vi.fn(
+    async (
+      _input: Parameters<UnderstandingServiceDependencies['generator']['generateObject']>[0],
+      _options: Parameters<UnderstandingServiceDependencies['generator']['generateObject']>[1],
+    ): Promise<unknown> => analysis,
+  );
+  type CreateMessageInput = Parameters<UnderstandingServiceDependencies['messages']['create']>[0];
   const messages = {
+    create: vi.fn(async (_input: CreateMessageInput) => ({ id: 'assistant-structured' })),
     findById: vi.fn(async (id: string) => ({
       content: JSON.stringify(analysis),
       metadata: assistantMetadata.has(id)
@@ -207,8 +253,17 @@ const createHarness = (initialSession?: OnboardingUnderstandingSession) => {
     })),
     findLatestAssistantMessageByThread: vi.fn(async () => latestAssistant),
   };
+  const listAvailableProviderIds = vi.fn(async (providerIds: readonly string[]) => [
+    ...providerIds,
+  ]);
   const dependencies: UnderstandingServiceDependencies = {
-    connectorData: {} as UnderstandingServiceDependencies['connectorData'],
+    connectorData: {
+      listAvailableProviderIds,
+    } as unknown as UnderstandingServiceDependencies['connectorData'],
+    generator: {
+      generateObject:
+        generateObject as UnderstandingServiceDependencies['generator']['generateObject'],
+    },
     ids: () => 'session-new',
     messages,
     persona: { getLatestPersonaDocument: vi.fn(async () => null) },
@@ -217,29 +272,27 @@ const createHarness = (initialSession?: OnboardingUnderstandingSession) => {
     sourceStore: sourceStoreFactory,
     topic: {
       assertActiveOnboardingTopic: vi.fn(),
-      findById: vi.fn(async () => ({ metadata: { runningOperation } })),
     },
     userId: 'user-1',
-    writerAgentId,
-    writerRuntime: writerRuntimeFactory,
+    writerAgent,
   };
 
   return {
     dependencies,
-    execAgent,
-    executeOperation,
     githubCollect,
+    generateObject,
+    listAvailableProviderIds,
     messages,
     repository,
     service: new UnderstandingService(dependencies),
     setLatestAssistant: (value: typeof latestAssistant) => (latestAssistant = value),
-    setRunningOperation: (value: typeof runningOperation) => (runningOperation = value),
+    setAssistantMetadata: (id: string, value: OnboardingUnderstandingMessageMetadata) =>
+      assistantMetadata.set(id, value),
     setSession: (value: OnboardingUnderstandingSession) => (session = value),
     sourceStore,
     sourceStoreFactory,
     stored,
-    writerAgentId,
-    writerRuntimeFactory,
+    writerAgent,
   };
 };
 
@@ -247,12 +300,110 @@ describe('UnderstandingService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockTriggerProviders.mockResolvedValue({ workflowRunId: 'workflow-1' });
+    mockTriggerWriting.mockResolvedValue({ workflowRunId: 'workflow-writing-1' });
+  });
+
+  /**
+   * @example
+   * expect(result.feedback?.revision).toBe(1);
+   */
+  it('submits cumulative feedback and only newly added sources', async () => {
+    const harness = createHarness(createSession({ github: providerState('completed', 1) }));
+    harness.stored.set('github:1', storedContext('github', '# GitHub'));
+
+    await expect(
+      harness.service.revise({
+        expectedFeedbackRevision: 0,
+        feedback: 'Focus on infrastructure.',
+        providerIds: ['github', 'gmail'],
+        responseLanguage: 'zh-CN',
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+      }),
+    ).resolves.toMatchObject({
+      feedback: { revision: 1 },
+      sources: {
+        github: { status: 'completed' },
+        gmail: { status: 'pending' },
+      },
+    });
+
+    expect(harness.repository.extend).toHaveBeenCalledWith({
+      expectedFeedbackRevision: 0,
+      feedback: 'Focus on infrastructure.',
+      providerIds: ['github', 'gmail'],
+      sessionId: 'session-1',
+      topicId: 'topic-1',
+    });
+    expect(mockTriggerProviders).toHaveBeenCalledWith(
+      {
+        providers: [{ id: 'gmail', revision: 1 }],
+        responseLanguage: 'zh-CN',
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+        userId: 'user-1',
+      },
+      expect.objectContaining({
+        workflowRunId: expect.stringContaining('onboarding-understanding-extend-session-1'),
+      }),
+    );
+    expect(mockTriggerWriting).toHaveBeenCalledWith(
+      {
+        responseLanguage: 'zh-CN',
+        sessionId: 'session-1',
+        sourceFingerprint: 'github@1',
+        topicId: 'topic-1',
+        userId: 'user-1',
+      },
+      expect.any(Object),
+    );
+  });
+
+  /**
+   * @example
+   * expect(provider.revision).toBe(2);
+   */
+  it('automatically recollects included sources whose Redis context expired', async () => {
+    const harness = createHarness(createSession({ github: providerState('completed', 1) }));
+    harness.repository.expireProviderContexts.mockImplementationOnce(async () => {
+      const expired = createSession({ github: providerState('failed', 1) });
+      harness.setSession(expired);
+      return expired;
+    });
+
+    await harness.service.revise({
+      expectedFeedbackRevision: 0,
+      feedback: 'Focus on infrastructure.',
+      providerIds: [],
+      responseLanguage: 'zh-CN',
+      sessionId: 'session-1',
+      topicId: 'topic-1',
+    });
+
+    expect(harness.repository.expireProviderContexts).toHaveBeenCalledWith({
+      providers: [{ providerId: 'github', revision: 1 }],
+      sessionId: 'session-1',
+      sourceFingerprint: 'github@1',
+      topicId: 'topic-1',
+    });
+    expect(harness.repository.markProviderRunning).toHaveBeenCalledWith(
+      'topic-1',
+      'session-1',
+      'github',
+    );
+    expect(mockTriggerProviders).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providers: [{ id: 'github', revision: 2 }],
+      }),
+      expect.any(Object),
+    );
+    expect(mockTriggerWriting).not.toHaveBeenCalled();
   });
 
   it('starts static providers with deterministic pending revisions', async () => {
     const harness = createHarness();
 
-    await expect(harness.service.start('topic-1')).resolves.toMatchObject({
+    await expect(harness.service.start('topic-1', 'zh-CN')).resolves.toMatchObject({
       id: 'session-new',
       status: 'processing',
     });
@@ -262,12 +413,95 @@ describe('UnderstandingService', () => {
           { id: 'github', revision: 1 },
           { id: 'gmail', revision: 1 },
         ],
+        responseLanguage: 'zh-CN',
         sessionId: 'session-new',
         topicId: 'topic-1',
         userId: 'user-1',
       },
       { workflowRunId: 'onboarding-understanding-initial-session-new' },
     );
+  });
+
+  /**
+   * @example
+   * expect(result.sources.gmail).toBeUndefined();
+   */
+  it('excludes providers whose connector client is unavailable before initialization', async () => {
+    const harness = createHarness();
+    harness.listAvailableProviderIds.mockResolvedValueOnce(['github']);
+
+    await expect(harness.service.start('topic-1', 'zh-CN')).resolves.toMatchObject({
+      sources: { github: { status: 'pending' } },
+    });
+
+    expect(harness.repository.initialize).toHaveBeenCalledWith('topic-1', 'session-new', [
+      'github',
+    ]);
+    expect(mockTriggerProviders).toHaveBeenCalledWith(
+      expect.objectContaining({ providers: [{ id: 'github', revision: 1 }] }),
+      expect.any(Object),
+    );
+  });
+
+  /** @example A temporary availability failure leaves no persisted Understanding session. */
+  it('does not initialize a session when provider availability fails transiently', async () => {
+    // ROOT CAUSE:
+    //
+    // Persisting after a transient availability failure creates an incomplete immutable session.
+    // Later starts return that existing session and never retry provider initialization.
+    //
+    // Before: transient errors were converted into an unavailable provider list downstream.
+    // We fixed this by propagating the error before repository initialization.
+    const harness = createHarness();
+    const transientError = new Error('database temporarily unavailable');
+    harness.listAvailableProviderIds.mockRejectedValueOnce(transientError);
+
+    await expect(harness.service.start('topic-1', 'zh-CN')).rejects.toBe(transientError);
+
+    expect(harness.repository.initialize).not.toHaveBeenCalled();
+    expect(mockTriggerProviders).not.toHaveBeenCalled();
+  });
+
+  /**
+   * @example
+   * expect(result.sources.gmail).toBeUndefined();
+   */
+  it('starts only the connected providers selected by the onboarding UI', async () => {
+    const harness = createHarness();
+
+    await expect(harness.service.start('topic-1', 'zh-CN', ['github'])).resolves.toMatchObject({
+      sources: { github: { status: 'pending' } },
+    });
+    expect(harness.repository.initialize).toHaveBeenCalledWith('topic-1', 'session-new', [
+      'github',
+    ]);
+    expect(mockTriggerProviders).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providers: [{ id: 'github', revision: 1 }],
+      }),
+      expect.any(Object),
+    );
+  });
+
+  /**
+   * @example
+   * expect(result.sources.gmail.status).toBe('failed');
+   */
+  it('does not retry a failed provider whose connector is no longer available', async () => {
+    const harness = createHarness(createSession({ gmail: providerState('failed', 1) }));
+    harness.listAvailableProviderIds.mockResolvedValueOnce([]);
+
+    await expect(
+      harness.service.retry({
+        providerId: 'gmail',
+        responseLanguage: 'zh-CN',
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+      }),
+    ).resolves.toMatchObject({ sources: { gmail: { status: 'failed' } } });
+
+    expect(harness.repository.markProviderRunning).not.toHaveBeenCalled();
+    expect(mockTriggerProviders).not.toHaveBeenCalled();
   });
 
   it('stores one exact provider revision and returns its completion fingerprint', async () => {
@@ -304,8 +538,8 @@ describe('UnderstandingService', () => {
       userId: 'user-1',
     });
     expect(harness.sourceStoreFactory).toHaveBeenCalledOnce();
-    expect(harness.writerAgentId).not.toHaveBeenCalled();
-    expect(harness.writerRuntimeFactory).not.toHaveBeenCalled();
+    expect(harness.writerAgent).not.toHaveBeenCalled();
+    expect(harness.generateObject).not.toHaveBeenCalled();
   });
 
   it('replays a completed provider revision after commit-before-ack without recollecting', async () => {
@@ -331,7 +565,7 @@ describe('UnderstandingService', () => {
     expect(harness.repository.completeProvider).toHaveBeenCalledOnce();
   });
 
-  it('writes GitHub Markdown and Gmail XML only through the ephemeral writer input', async () => {
+  it('generates the proposal with the native JSON schema', async () => {
     const fingerprint = 'github@1,gmail@1';
     const harness = createHarness(
       createSession({
@@ -348,13 +582,24 @@ describe('UnderstandingService', () => {
     await expect(
       harness.service.processCollected({
         expectedSourceFingerprint: fingerprint,
+        responseLanguage: 'zh-CN',
         sessionId: 'session-1',
         topicId: 'topic-1',
       }),
-    ).resolves.toMatchObject({ published: true, resultId: 'assistant-new' });
-    const writerInput = harness.execAgent.mock.calls[0][0];
-    expect(writerInput.ephemeralUserMessage).toContain('# GitHub\n\nGITHUB_MARKDOWN');
-    expect(writerInput.ephemeralUserMessage).toContain(
+    ).resolves.toMatchObject({ published: true, resultId: 'assistant-structured' });
+    expect(harness.generateObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'gpt-5.4-mini',
+        provider: 'lobehub',
+        schema: UNDERSTANDING_ANALYSIS_JSON_SCHEMA,
+        thinking: { type: 'disabled' },
+      }),
+      { metadata: { trigger: RequestTrigger.Onboarding } },
+    );
+    const writerInput = harness.generateObject.mock.calls[0][0];
+    expect(writerInput.messages[0].content).toContain('every user-visible string value in zh-CN');
+    expect(writerInput.messages[1].content).toContain('# GitHub\n\nGITHUB_MARKDOWN');
+    expect(writerInput.messages[1].content).toContain(
       '```xml\n<gmailMessages>GMAIL_XML</gmailMessages>\n```',
     );
     expect(JSON.stringify(harness.repository.commitWriting.mock.calls[0][0])).not.toContain(
@@ -363,9 +608,122 @@ describe('UnderstandingService', () => {
     expect(harness.sourceStore.get.mock.invocationCallOrder.at(-1)).toBeLessThan(
       harness.repository.prepareWriting.mock.invocationCallOrder[0],
     );
-    expect(harness.writerAgentId).toHaveBeenCalledOnce();
+    expect(harness.writerAgent).toHaveBeenCalledOnce();
     expect(harness.sourceStoreFactory).toHaveBeenCalledOnce();
-    expect(harness.writerRuntimeFactory).toHaveBeenCalledOnce();
+    const createdMessage = harness.messages.create.mock.calls[0][0];
+    expect(createdMessage).toMatchObject({
+      agentId: 'agent-1',
+      model: 'gpt-5.4-mini',
+      provider: 'lobehub',
+      role: 'assistant',
+    });
+    expect(JSON.parse(createdMessage.content)).toEqual(analysis);
+  });
+
+  it('expands the quick composition and original contexts into a detailed persona', async () => {
+    const detailedPersona = {
+      content: '# Identity\n\nYou build source-grounded systems.\n\n# Working style\n\nYou ship.',
+      reasoning: 'Repeated repository activity supports the working-style synthesis.',
+      tagline: 'Source-grounded builder',
+    };
+    const harness = createHarness({
+      generationRevision: 1,
+      id: 'session-1',
+      sources: { github: providerState('completed', 1) },
+      writing: {
+        detailed: { status: 'running', updatedAt: '2026-07-20T00:00:00.000Z' },
+        feedbackRevision: 0,
+        generationRevision: 1,
+        resultMessageId: 'assistant-structured',
+        sourceFingerprint: 'github@1',
+        status: 'completed',
+        updatedAt: '2026-07-20T00:00:00.000Z',
+      },
+    });
+    harness.stored.set('github:1', storedContext('github', '# GitHub\n\nGITHUB_MARKDOWN'));
+    harness.setAssistantMetadata('assistant-structured', {
+      analysis,
+      diagnostics,
+      feedbackRevision: 0,
+      generationRevision: 1,
+      kind: 'proposal',
+      providers: ['github'],
+      resultId: 'assistant-structured',
+      sourceFingerprint: 'github@1',
+    });
+    harness.generateObject.mockResolvedValueOnce(detailedPersona);
+
+    await expect(
+      harness.service.processDetailedPersona({
+        expectedSourceFingerprint: 'github@1',
+        responseLanguage: 'zh-CN',
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+      }),
+    ).resolves.toEqual({ published: true, sourceFingerprint: 'github@1' });
+
+    expect(harness.generateObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        schema: UNDERSTANDING_DETAILED_PERSONA_JSON_SCHEMA,
+      }),
+      { metadata: { trigger: RequestTrigger.Onboarding } },
+    );
+    const writerInput = harness.generateObject.mock.calls[0][0];
+    expect(writerInput.messages[0].content).toContain('TEST_INTEREST_TITLE');
+    expect(writerInput.messages[1].content).toContain('GITHUB_MARKDOWN');
+    expect(harness.repository.commitDetailedWriting).toHaveBeenCalledWith({
+      detailedPersona,
+      feedbackRevision: 0,
+      generationRevision: 1,
+      sessionId: 'session-1',
+      sourceFingerprint: 'github@1',
+      topicId: 'topic-1',
+    });
+  });
+
+  /**
+   * @example
+   * expect(writerInput.messages[0].content).toContain('Focus on infrastructure.');
+   */
+  it('includes cumulative user feedback in writer instructions', async () => {
+    const harness = createHarness({
+      feedback: {
+        revision: 2,
+        turns: [
+          {
+            content: 'Focus on infrastructure.',
+            createdAt: '2026-07-24T00:00:00.000Z',
+            revision: 1,
+          },
+          {
+            content: 'Do not infer interests from newsletters.',
+            createdAt: '2026-07-24T00:01:00.000Z',
+            revision: 2,
+          },
+        ],
+      },
+      id: 'session-1',
+      sources: { github: providerState('completed', 1) },
+    });
+    harness.stored.set('github:1', storedContext('github', '# GitHub'));
+
+    await harness.service.processCollected({
+      expectedSourceFingerprint: 'github@1',
+      responseLanguage: 'zh-CN',
+      sessionId: 'session-1',
+      topicId: 'topic-1',
+    });
+
+    const writerInput = harness.generateObject.mock.calls[0][0];
+    expect(writerInput.messages[0].content).toContain('Focus on infrastructure.');
+    expect(writerInput.messages[0].content).toContain('Do not infer interests from newsletters.');
+    expect(writerInput.messages[1].content).not.toContain('Focus on infrastructure.');
+    expect(harness.repository.commitWriting).toHaveBeenCalledWith(
+      expect.objectContaining({
+        feedbackRevision: 2,
+        generationRevision: 1,
+      }),
+    );
   });
 
   it('polls without resolving the writer agent', async () => {
@@ -373,12 +731,12 @@ describe('UnderstandingService', () => {
 
     await expect(harness.service.get('topic-1')).resolves.toMatchObject({ id: 'session-1' });
 
-    expect(harness.writerAgentId).not.toHaveBeenCalled();
+    expect(harness.writerAgent).not.toHaveBeenCalled();
     expect(harness.sourceStoreFactory).not.toHaveBeenCalled();
-    expect(harness.writerRuntimeFactory).not.toHaveBeenCalled();
+    expect(harness.generateObject).not.toHaveBeenCalled();
   });
 
-  it('records a current writing failure before prepareWriting runs', async () => {
+  it('ignores a writing failure before a generation is prepared', async () => {
     const harness = createHarness(createSession({ github: providerState('completed', 1) }));
 
     await expect(
@@ -387,10 +745,9 @@ describe('UnderstandingService', () => {
         sourceFingerprint: 'github@1',
         topicId: 'topic-1',
       }),
-    ).resolves.toMatchObject({
-      writing: { sourceFingerprint: 'github@1', status: 'failed' },
-    });
+    ).resolves.toBeUndefined();
     expect(harness.repository.prepareWriting).not.toHaveBeenCalled();
+    expect(harness.repository.failWriting).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -423,6 +780,7 @@ describe('UnderstandingService', () => {
       await expect(
         harness.service.processCollected({
           expectedSourceFingerprint: expected,
+          responseLanguage: 'zh-CN',
           sessionId: 'session-1',
           topicId: 'topic-1',
         }),
@@ -437,46 +795,30 @@ describe('UnderstandingService', () => {
       } else {
         expect(harness.repository.expireProviderContexts).not.toHaveBeenCalled();
       }
-      expect(harness.execAgent).not.toHaveBeenCalled();
+      expect(harness.generateObject).not.toHaveBeenCalled();
     },
   );
 
-  it.each(['running-operation', 'completed-assistant'] as const)(
-    'recovers a valid %s without relaunching the agent',
-    async (recovery) => {
-      const fingerprint = 'github@1';
-      const harness = createHarness(createSession({ github: providerState('completed', 1) }));
-      harness.stored.set('github:1', storedContext('github', '# GitHub'));
-      if (recovery === 'running-operation') {
-        const threadId = 'thd_02fa61d8cee35a4387ccc990';
-        harness.setRunningOperation({
-          assistantMessageId: 'assistant-running',
-          operationId: 'operation-running',
-          threadId,
-        });
-      } else {
-        harness.setLatestAssistant({
-          content: JSON.stringify(analysis),
-          id: 'assistant-existing',
-          role: 'assistant',
-        });
-      }
+  it('reuses a valid stored writer result without another model request', async () => {
+    const fingerprint = 'github@1';
+    const harness = createHarness(createSession({ github: providerState('completed', 1) }));
+    harness.stored.set('github:1', storedContext('github', '# GitHub'));
+    harness.setLatestAssistant({
+      content: JSON.stringify(analysis),
+      id: 'assistant-existing',
+      role: 'assistant',
+    });
 
-      await expect(
-        harness.service.processCollected({
-          expectedSourceFingerprint: fingerprint,
-          sessionId: 'session-1',
-          topicId: 'topic-1',
-        }),
-      ).resolves.toMatchObject({ published: true });
-      expect(harness.execAgent).not.toHaveBeenCalled();
-      expect(harness.repository.commitWriting).toHaveBeenCalledOnce();
-      expect(harness.executeOperation).toHaveBeenCalledTimes(
-        recovery === 'running-operation' ? 1 : 0,
-      );
-      expect(harness.writerRuntimeFactory).toHaveBeenCalledTimes(
-        recovery === 'running-operation' ? 1 : 0,
-      );
-    },
-  );
+    await expect(
+      harness.service.processCollected({
+        expectedSourceFingerprint: fingerprint,
+        responseLanguage: 'zh-CN',
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+      }),
+    ).resolves.toMatchObject({ published: true, resultId: 'assistant-existing' });
+    expect(harness.generateObject).not.toHaveBeenCalled();
+    expect(harness.messages.create).not.toHaveBeenCalled();
+    expect(harness.repository.commitWriting).toHaveBeenCalledOnce();
+  });
 });

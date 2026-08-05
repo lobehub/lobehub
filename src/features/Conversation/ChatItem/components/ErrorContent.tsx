@@ -4,8 +4,7 @@ import { RotateCcw } from 'lucide-react';
 import { memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useConversationStore } from '@/features/Conversation';
-import { dataSelectors } from '@/features/Conversation/store';
+import { dataSelectors, useConversationStore } from '@/features/Conversation/store';
 
 import { type ChatItemProps } from '../type';
 

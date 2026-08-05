@@ -274,7 +274,7 @@ describe('TaskTopicModel', () => {
     });
 
     it('only counts the requested triggers, excluding manual + legacy-null rows', async () => {
-      // LOBE-11391: the maxExecutions quota must count scheduled ticks only —
+      // the maxExecutions quota must count scheduled ticks only —
       // manual "run now" invocations and legacy rows (null trigger) don't count.
       const taskModel = new TaskModel(serverDB, userId);
       const topicModel = new TaskTopicModel(serverDB, userId);

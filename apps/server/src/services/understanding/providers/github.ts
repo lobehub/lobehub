@@ -15,13 +15,31 @@ export const githubUnderstandingProvider: UnderstandingProvider = {
   id: 'github',
   collect: async ({ connectorData }) => {
     const client = await connectorData.getGitHubClient();
-    const profile = await client.getUserProfile();
+    const profilePromise = client.getUserProfile();
     const operations: SupplementalOperation[] = [
+      {
+        code: 'GITHUB_CONTRIBUTED_REPOSITORIES_FAILED',
+        key: 'contributedRepositories',
+        message: 'GitHub contributed repository enrichment failed',
+        run: () => client.listContributedRepositories(),
+      },
+      {
+        code: 'GITHUB_INFLUENTIAL_REPOSITORIES_FAILED',
+        key: 'influentialRepositories',
+        message: 'GitHub influential repository enrichment failed',
+        run: () => client.listInfluentialRepositories(),
+      },
       {
         code: 'GITHUB_PINNED_REPOSITORIES_FAILED',
         key: 'pinnedRepositories',
         message: 'GitHub pinned repository enrichment failed',
         run: () => client.listPinnedRepositories(),
+      },
+      {
+        code: 'GITHUB_PINNED_CONTRIBUTIONS_FAILED',
+        key: 'pinnedContributedRepositories',
+        message: 'GitHub pinned contribution enrichment failed',
+        run: () => client.listPinnedContributedRepositories(),
       },
       {
         code: 'GITHUB_RECENT_CONTRIBUTIONS_FAILED',
@@ -54,8 +72,11 @@ export const githubUnderstandingProvider: UnderstandingProvider = {
         run: () => client.getUserProfileReadme(),
       },
     ];
-    const settled = await Promise.allSettled(operations.map(({ run }) => run()));
-    const context: GitHubUserContext = { profile };
+    const [resolvedProfile, settled] = await Promise.all([
+      profilePromise,
+      Promise.allSettled(operations.map(({ run }) => run())),
+    ]);
+    const context: GitHubUserContext = { profile: resolvedProfile };
     const errors = settled.flatMap((result, index) => {
       if (result.status === 'fulfilled') {
         Object.assign(context, { [operations[index].key]: result.value });
@@ -73,22 +94,34 @@ export const githubUnderstandingProvider: UnderstandingProvider = {
     });
     const {
       organizations = [],
+      contributedRepositories = [],
+      influentialRepositories = [],
       pinnedRepositories = [],
+      pinnedContributedRepositories = [],
       profileReadme,
       recentContributions = [],
       recentPullRequests = [],
       recentRepositories = [],
     } = context;
-    const hasPrimaryProfileEvidence = Boolean(
-      profileReadme || pinnedRepositories.length > 0 || recentContributions.length > 0,
-    );
+    const hasStructuredContributionEvidence =
+      contributedRepositories.length > 0 || recentContributions.length > 0;
+    const repositoryEvidenceCount = new Set(
+      [
+        ...contributedRepositories,
+        ...influentialRepositories,
+        ...pinnedRepositories,
+        ...pinnedContributedRepositories,
+      ].map(({ nameWithOwner }) => nameWithOwner),
+    ).size;
     const sourceCount =
       1 +
       organizations.length +
+      repositoryEvidenceCount +
       (profileReadme ? 1 : 0) +
-      pinnedRepositories.length +
       recentContributions.length +
-      (hasPrimaryProfileEvidence ? 0 : recentRepositories.length + recentPullRequests.length);
+      (hasStructuredContributionEvidence
+        ? 0
+        : recentRepositories.length + recentPullRequests.length);
 
     return {
       context: ['Provider: github', '# Source Brief', toGitHubUserContextMarkdown(context)].join(

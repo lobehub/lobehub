@@ -21,6 +21,10 @@ const openCodeCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgency
   heterogeneousProvider: { command: 'opencode', type: 'opencode' },
   ...over,
 });
+const piCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({
+  heterogeneousProvider: { command: 'pi', type: 'pi' },
+  ...over,
+});
 
 describe('resolveWorkspaceScoped', () => {
   it('preserves shared-row coercion until a workspace member explicitly selects a target', () => {
@@ -66,7 +70,7 @@ describe('resolveExecutionTarget', () => {
   });
 
   it('routes a bound desktop-local selection to the bound device on web when device routing is available (plain and hetero)', () => {
-    // LOBE-11473: a `local` pick pins this desktop's own deviceId as
+    // a `local` pick pins this desktop's own deviceId as
     // `boundDeviceId`; on web that config still runs on the bound device
     // server-side, so surface it honestly as `device` instead of masquerading
     // as `sandbox`. Hetero agents always route here; plain agents need a
@@ -86,7 +90,7 @@ describe('resolveExecutionTarget', () => {
     ).toBe('device');
   });
 
-  it('keeps a bound `local` as `sandbox` when no device routing is available (LOBE-11473 regression)', () => {
+  it('keeps a bound `local` as `sandbox` when no device routing is available ( regression)', () => {
     // A plain agent with a bound `local` target but no device-gateway to route
     // it (self-host without DEVICE_GATEWAY_URL, or any server call that leaves
     // `deviceRoutingAvailable` unset) must fall back to the cloud sandbox — it
@@ -143,6 +147,7 @@ describe('resolveExecutionTarget', () => {
     it.each([
       ['Amp', ampCfg],
       ['OpenCode', openCodeCfg],
+      ['Pi', piCfg],
     ] as const)('keeps an unconfigured %s agent pending on web', (_name, providerCfg) => {
       expect(
         resolveExecutionTarget(providerCfg(), {
@@ -175,6 +180,17 @@ describe('resolveExecutionTarget', () => {
       for (const executionTarget of ['sandbox', 'local'] as const) {
         expect(
           resolveExecutionTarget(openCodeCfg({ executionTarget }), {
+            clientExecutionAvailable: false,
+            isHetero: true,
+          }),
+        ).toBe('none');
+      }
+    });
+
+    it('normalizes unsupported Pi sandbox and unbound web-local targets to pending', () => {
+      for (const executionTarget of ['sandbox', 'local'] as const) {
+        expect(
+          resolveExecutionTarget(piCfg({ executionTarget }), {
             clientExecutionAvailable: false,
             isHetero: true,
           }),
@@ -356,7 +372,7 @@ describe('resolveRuntimeMode', () => {
     const boundLocal = cfg({ boundDeviceId: 'device-a', executionTarget: 'local' });
     // with a device-gateway → device → runtimeMode none (routed via the plan)
     expect(resolveRuntimeMode(boundLocal, false, true)).toBe('none');
-    // without one → sandbox → cloud (LOBE-11473 regression guard)
+    // without one → sandbox → cloud ( regression guard)
     expect(resolveRuntimeMode(boundLocal, false)).toBe('cloud');
   });
 });
@@ -426,7 +442,7 @@ describe('resolveExecutionPlan', () => {
       ).toEqual({ kind: 'sandbox', target: 'sandbox' });
     });
 
-    it('keeps a bound `local` as sandbox on a no-gateway backend (LOBE-11473 regression)', () => {
+    it('keeps a bound `local` as sandbox on a no-gateway backend ( regression)', () => {
       // No device-gateway: `clientExecutionAvailable` is false and the plan
       // never passes `deviceRoutingAvailable`, so a bound `local` target must
       // resolve to the sandbox — not `device`/`device-unrouted`, which would

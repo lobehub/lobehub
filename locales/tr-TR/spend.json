@@ -10,7 +10,7 @@
   "table.columns.duration": "Süre",
   "table.columns.model": "Model",
   "table.columns.spend": "Kredi",
-  "table.columns.startTime": "Oluşturulma Zamanı",
+  "table.columns.time": "Zaman",
   "table.columns.totalTokens": "Token Kullanımı",
   "table.columns.trigger.enums.agent_signal": "Ajan Sinyali",
   "table.columns.trigger.enums.api": "API Çağrısı",
@@ -43,6 +43,10 @@
   "table.filters.reset": "Sıfırla",
   "table.filters.searchModel": "Model ara",
   "table.filters.startDate": "Başlangıç tarihi",
+  "table.pagination.next": "Sonraki sayfa",
+  "table.pagination.perPage": "{{size}} / sayfa",
+  "table.pagination.prev": "Önceki sayfa",
+  "table.pagination.range": "{{from}}-{{to}} arasında {{total}} öğe",
   "table.title": "Hesaplama Kredisi Kullanım Detayları",
   "table.totalToken.input": "Girdi",
   "table.totalToken.output": "Çıktı",
@@ -66,8 +70,8 @@
   "usageStats.chart.title": "Bu ajan harcama yaptığında",
   "usageStats.chart.tokens": "Jeton",
   "usageStats.dimension": "Boyut",
-  "usageStats.entry": "Kullanım ve Maliyet",
+  "usageStats.entry": "İstatistikler",
   "usageStats.range": "Zaman aralığı",
   "usageStats.rangeSuffix": "Son {{count}}g",
-  "usageStats.title": "Kullanım ve Maliyet"
+  "usageStats.title": "İstatistikler"
 }

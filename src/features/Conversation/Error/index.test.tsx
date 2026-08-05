@@ -3,6 +3,7 @@ import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ip
 import type * as modelRuntimeModule from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import type * as lobechatTypesModule from '@lobechat/types';
+import { ChatErrorType } from '@lobechat/types';
 import type * as lobehubUiModule from '@lobehub/ui';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
@@ -12,6 +13,7 @@ import ErrorMessageExtra, { useErrorContent } from './index';
 
 const navigateMock = vi.fn();
 const updateMessageErrorMock = vi.fn();
+const dynamicComponentPropsMock = vi.hoisted(() => vi.fn());
 
 const serverConfigMock = vi.hoisted(() => ({ enableBusinessFeatures: false }));
 const missingTranslationKeys = vi.hoisted(() => new Set<string>());
@@ -123,7 +125,16 @@ vi.mock('@/hooks/useProviderName', () => ({
 }));
 
 vi.mock('@/libs/next/dynamic', () => ({
-  default: () => () => <div>dynamic</div>,
+  default: () => (props: { onRetry?: () => void }) => {
+    dynamicComponentPropsMock(props);
+
+    return (
+      <div>
+        dynamic
+        {props.onRetry && <button onClick={props.onRetry}>dynamic-retry</button>}
+      </div>
+    );
+  },
 }));
 
 vi.mock('@/store/serverConfig', () => ({
@@ -160,6 +171,7 @@ const ErrorMessageWithContent = ({ data }: { data: any }) => {
 
 describe('ErrorMessageExtra', () => {
   beforeEach(() => {
+    dynamicComponentPropsMock.mockClear();
     missingTranslationKeys.clear();
     serverConfigMock.enableBusinessFeatures = false;
     businessErrorContentMock.mockReturnValue({
@@ -208,6 +220,52 @@ describe('ErrorMessageExtra', () => {
     );
 
     expect(screen.getByText('dynamic')).toBeInTheDocument();
+  });
+
+  it('shows the server error UI for internal errors without exposing the raw message', () => {
+    serverConfigMock.enableBusinessFeatures = true;
+
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'Sensitive internal configuration error' }}
+        data={{
+          error: {
+            body: { name: 'Error' },
+            message: 'Sensitive internal configuration error',
+            type: ChatErrorType.InternalServerError,
+          },
+          id: 'msg-internal-error',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('dynamic')).toBeInTheDocument();
+    expect(screen.queryByText('Sensitive internal configuration error')).not.toBeInTheDocument();
+  });
+
+  it('keeps the group retry callback on the internal server error UI', () => {
+    serverConfigMock.enableBusinessFeatures = true;
+    const onRegenerate = vi.fn();
+
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'Sensitive internal configuration error' }}
+        retryScopeId="group-parent"
+        data={{
+          error: {
+            body: { name: 'Error' },
+            message: 'Sensitive internal configuration error',
+            type: ChatErrorType.InternalServerError,
+          },
+          id: 'group-child-error',
+        }}
+        onRegenerate={onRegenerate}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'dynamic-retry' }));
+
+    expect(onRegenerate).toHaveBeenCalledTimes(1);
   });
 
   it('shows the trace-id report UI for fallback provider errors', () => {

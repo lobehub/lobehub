@@ -29,7 +29,10 @@ After you have the diff, read whatever surrounding files you need for context.
 
 ## Mandatory preparation
 
-Read every rule file listed below IN FULL, then read the rule sources each file lists (skills, docs). These files define how to check, what counts as a violation, and — equally important — what does NOT count:
+Read every dimension file listed below IN FULL. Follow each file's routing table: read every routed
+reference required by the touched surface IN FULL, and skip unrelated routed references. Then read
+only the relevant sections of the external rule sources it lists (skills, docs). These files define
+how to check, what counts as a violation, and — equally important — what does NOT count:
 
 {dimension_files}
 
@@ -46,10 +49,12 @@ Focus over completeness: findings must serve THIS change and its requirement. Do
 ## Review scope (hard rules)
 
 - Finding locations must land on `+` lines of the diff by default.
-- Legacy code gets two treatments (the `nature` field marks which):
-  - **Old problems you merely stumbled on** (unrelated to this change) → do not investigate, do not return; report only if it is an obvious p0-level production bug, marked `nature: "exposed_legacy"` with the scenario noting it is a bystander find.
-  - **Legacy problems this diff triggers, exposes, or depends on** → report normally, location pointing at the implicated old code, `nature: "exposed_legacy"`, scenario explaining how this change surfaces it.
-  - Everything else (locations on `+` lines) → `nature: "introduced"`.
+- Legacy code gets two treatments (`nature: "exposed_legacy"` for both; the `exposure` field marks which):
+  - **Legacy problems this diff triggers, exposes, or depends on** → report normally, location pointing at the implicated old code, `exposure: "triggered"`, scenario explaining how this change surfaces it. Test: without this diff the problem was unreachable, inert, or harmless; with it, it can now fire.
+  - **Old problems you merely stumbled on** (unrelated to this change) → do not investigate, do not return; report only if it is an obvious p0-level production bug, `exposure: "bystander"`, with the scenario noting it is a bystander find.
+  - Everything else (locations on `+` lines) → `nature: "introduced"`, omit `exposure`.
+
+This distinction is not cosmetic: it decides whether the finding blocks this PR or gets handed to the code's owner as a separate task. Do not label a bystander find `triggered` to make it sound more urgent — an inflated `exposure` drags an unrelated fix into this PR and blows up its scope.
 
 ## Effort budget
 
@@ -57,41 +62,76 @@ Evidence gathering is bounded — you are a finder, not the final judge:
 
 - Once a finding has concrete `file:line` evidence, stop expanding; do not keep browsing to make it stronger.
 - Deep falsification belongs to the independent verify pass, not to you: when settling a suspicion would take more than a handful of targeted file reads, report it with your best evidence instead of running a multi-file proof campaign.
-- Read rule sources selectively — the sections relevant to the touched surfaces — not cover to cover.
+- Read external rule sources selectively — the sections relevant to the touched surfaces — not cover
+  to cover. Routed deep-review references selected above are still read in full.
 
 ## Return format (strict JSON)
 
 Output exactly ONE JSON object inside a ```` ```json ```` fence (the main agent extracts and `JSON.parse`s it). Valid JSON only: escape quotes/backslashes, no comments, no trailing commas, no single quotes.
 
+Every issue requires `id`, `dimension`, `issue_type`, `nature`, `severity`, `likelihood`,
+`location`, `summary`, `core_problem`, `fix_cost`, at least one `fix_options` entry, and
+`need_test`.
+
+Conditional fields:
+
+- `exposure` and `scenario` when `nature` is `exposed_legacy`
+- `scenario` when likelihood is `low`
+- `existing_implementations` for reuse-architecture dedup findings
+- `rule_source` for style or convention findings
+
+```json
 {
-  "missing_sources": ["path"],       // only when a listed rule source could not be read; omit otherwise
   "issues": [
     {
-      "id": "logic-1",               // required; dimension id_prefix + ordinal (prefix defined in the dimension file)
-      "dimension": "logic",          // required; one of your assigned dimension ids
-      "issue_type": "edge case",     // required; a precise short phrase (2-5 words), NOT the dimension name — e.g. "missing auth scope", "N+1 query", "stale comment"
-      "nature": "introduced",        // required; introduced | exposed_legacy
-      "severity": "p1",              // required; p0 | p1 | p2 (definitions below)
-      "location": "src/api/user.ts:87",  // required; exact file:line
-      "summary": "1-2 technical sentences for a reviewer who reads code",  // required
-      "core_problem": "≤ 2 plain-language sentences: impact + cause, understandable without reading code",  // required
-      "scenario": "concrete trigger scenario",   // optional; required when nature=exposed_legacy
-      "existing_implementations": ["src/foo.ts:62-138"],  // required (≥ 1 entry) only for dimension=reuse-architecture dedup findings; omit otherwise
-      "rule_source": "dimensions/code-style.md → antd import rule",  // required for style/convention findings: which rule this violates; omit for logic bugs proven by evidence
-      "fix_cost": "low",             // required; low | medium | high
-      "fix_options": ["option A", "option B"],  // required; ≥ 1
-      "need_test": true              // required; does the fix need an accompanying test
+      "id": "logic-1",
+      "dimension": "logic",
+      "issue_type": "empty input",
+      "nature": "introduced",
+      "severity": "p1",
+      "likelihood": "high",
+      "location": "src/api/user.ts:87",
+      "summary": "Batch delete accepts an empty id list and builds invalid SQL.",
+      "core_problem": "Because empty input is not rejected, submitting an empty selection returns a server error.",
+      "scenario": "The bulk-action UI submits after the final selected row is deselected.",
+      "fix_cost": "low",
+      "fix_options": ["Require at least one id in the input schema"],
+      "need_test": true
     }
-  ],
-  "workflow_feedback": [             // optional; omit entirely when empty
-    { "suggestion": "concrete, actionable improvement to a named skill file/section", "why": "what happened this run" }
   ]
 }
+```
+
+Optional top-level fields:
+
+- `missing_sources`: string paths that could not be read
+- `release_checks`: release-risk only; entries require `item`, `why`, and `blocks_deploy`
+- `workflow_feedback`: entries require `suggestion` and `why`
+
+### release_checks
+
+A pre-deploy confirmation item, not a defect. Use it when the code is fine but shipping it safely depends on something you cannot read from the repo — production data shape, whether a config value is set per environment, what is currently in a queue. These skip verification and go straight to the report as a checklist.
+
+Do not use it as a place to park weak findings. If the problem is in the code, it is an `issues` entry with evidence. If you would have to guess at production state to call it a bug, it is a check. Only the `release-risk` dimension emits these; other dimensions omit the field.
 
 ### severity definitions
-- p0: likely production incident (data corruption / financial loss / auth bypass / outage) or directly violates the stated requirement and acceptance criteria
-- p1: a real bug that should be fixed in this change
+
+Severity is **impact only** — how bad it is when it fires. Requirement gating is decided later via
+`blocks_release`; never inflate severity merely because an acceptance criterion exists.
+
+- p0: when it fires it is a production incident (data corruption / financial loss / auth bypass / outage)
+- p1: a real bug or requirement deviation that should be fixed in this change
 - p2: real but deferrable; bookkeeping level
+
+### likelihood definitions
+
+Severity answers "how bad if it happens"; `likelihood` answers "how often does it happen". They are independent — a data-corruption bug reachable only through a manually crafted request is `p0` + `low`. Judge the real production path, not the theoretical one: who can reach this code, do they need special state or timing, and does anything upstream normally prevent it.
+
+- `high`: fires on a normal user path or a routine call — no special setup, most users or requests hit it
+- `medium`: needs a specific but realistic combination (a less-common option, a particular data shape, a retry, a concurrent request that actually happens in this system)
+- `low`: needs a rare edge — a hand-crafted input, a state the product can't currently produce, a race that requires improbable timing, an environment we don't ship, or a failure of something already guaranteed upstream
+
+When you say `low`, the `scenario` field must spell out the exact chain of preconditions. If you cannot write that chain concretely, you are guessing at the trigger — either downgrade the finding or say so in the scenario. Never inflate `likelihood` to protect a finding from being deprioritized; an honest `low` on a real bug is a good outcome.
 
 ### core_problem style
 One breath: "Because 〈what the code/design lacks〉, when 〈user or caller does X〉, 〈consequence〉." Split into two sentences (impact + cause) only when gluing them reads unnaturally. Plain over precise; keep API names and error strings in `summary`.
@@ -101,28 +141,4 @@ Precise beats broad ("rename missed import" not "code style"). Short beats long 
 
 ## When you find nothing
 Return `{"issues": []}`. No silence, no pleasantries.
-
-## Example finding (format alignment)
-
-{
-  "issues": [
-    {
-      "id": "logic-1",
-      "dimension": "logic",
-      "issue_type": "edge case",
-      "nature": "introduced",
-      "severity": "p1",
-      "location": "src/api/user.ts:87",
-      "summary": "Batch delete endpoint doesn't validate userIds length; an empty array builds `DELETE FROM users WHERE id IN ()` which is a SQL syntax error.",
-      "core_problem": "Because input validation misses the empty-array branch, a UI that submits an empty selection gets a 500 and looks like a server outage.",
-      "scenario": "Front end submits an empty selection list; endpoint 500s instead of returning a friendly no-op.",
-      "fix_cost": "low",
-      "fix_options": [
-        "Add z.array(z.string()).min(1) at the input layer",
-        "Early-return in the service for empty arrays"
-      ],
-      "need_test": true
-    }
-  ]
-}
 `````

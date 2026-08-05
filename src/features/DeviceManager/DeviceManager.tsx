@@ -20,6 +20,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import SharedListSkeleton from '@/components/ListSkeleton';
 import { useElectronStore } from '@/store/electron';
 
 import DeviceDetailPanel from './DeviceDetailPanel';
@@ -253,16 +254,8 @@ const ListSkeleton = memo<{ withHeader?: boolean }>(({ withHeader }) => (
         <Skeleton.Button active size={'small'} style={{ height: 16, minWidth: 80, width: 80 }} />
       </Flexbox>
     )}
-    <Flexbox gap={2} padding={4}>
-      {[0, 1, 2, 3].map((i) => (
-        <Flexbox horizontal align={'center'} gap={16} key={i} style={{ padding: 12 }}>
-          <Skeleton.Avatar active shape={'square'} size={48} />
-          <Flexbox flex={1} gap={8}>
-            <Skeleton.Button active size={'small'} style={{ height: 14, width: 140 }} />
-            <Skeleton.Button active size={'small'} style={{ height: 12, width: 200 }} />
-          </Flexbox>
-        </Flexbox>
-      ))}
+    <Flexbox padding={4}>
+      <SharedListSkeleton />
     </Flexbox>
   </Flexbox>
 ));

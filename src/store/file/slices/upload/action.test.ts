@@ -1,8 +1,9 @@
+import { toast } from '@lobehub/ui/base-ui';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { handleFileUploadError } from '@/business/client/handleFileUploadError';
-import { message, notification } from '@/components/AntdStaticMethods';
+import { notification } from '@/components/AntdStaticMethods';
 import { fileService } from '@/services/file';
 import { uploadService } from '@/services/upload';
 import { getImageDimensions } from '@/utils/client/imageDimensions';
@@ -13,12 +14,13 @@ vi.mock('zustand/traditional');
 
 // Mock necessary modules
 vi.mock('@/components/AntdStaticMethods', () => ({
-  message: {
-    info: vi.fn(),
-  },
   notification: {
     error: vi.fn(),
   },
+}));
+
+vi.mock('@lobehub/ui/base-ui', () => ({
+  toast: { info: vi.fn() },
 }));
 
 vi.mock('@/business/client/handleFileUploadError', () => ({
@@ -474,7 +476,7 @@ describe('FileUploadAction', () => {
           id: mockFile.name,
           type: 'removeFile',
         });
-        expect(message.info).toHaveBeenCalled();
+        expect(toast.info).toHaveBeenCalled();
       });
     });
 

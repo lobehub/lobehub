@@ -35,6 +35,7 @@ vi.mock('@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge', () =
 const getExecutorMock = vi.fn();
 vi.mock('@/store/tool/slices/builtin/executors', () => ({
   getExecutor: (...args: unknown[]) => getExecutorMock(...args),
+  registerBuiltinToolExecutors: vi.fn().mockResolvedValue(undefined),
 }));
 
 // ─── Test Helpers ───
@@ -134,7 +135,7 @@ describe('createGatewayEventHandler', () => {
       // Native gateway ships the assistant seed on stream_start, so the client
       // inserts the message shell locally (createMessage) and must NOT trigger a
       // DB refetch — the refetch is what clobbered the streamed assistantGroup
-      // with a stale placeholder (LOBE-11501).
+      // with a stale placeholder.
       expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'msg-step2', type: 'createMessage' }),
         { operationId: 'op-1' },
@@ -650,7 +651,7 @@ describe('createGatewayEventHandler', () => {
     it('marks visible loading done without completing the operation or clearing topic loading', async () => {
       const store = createMockStore();
       // The streamed content has landed in the store — the visible_output_end
-      // guard (LOBE-11501) only clears loading once the assistant row is present
+      // guard only clears loading once the assistant row is present
       // with its content, so seed it here to represent that state.
       store.dbMessagesMap['main_agent-1_topic-1'] = [
         { content: 'hello back', id: 'msg-initial', role: 'assistant' },

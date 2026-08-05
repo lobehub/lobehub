@@ -20,6 +20,7 @@ import type {
   ToulminVerdict,
   VerifyCheckDecisionDetail,
   VerifyCheckItem,
+  VerifyCheckResultMetadata,
   VerifyRubricConfig,
   VerifyRunContext,
   VerifyRunDecisionDetail,
@@ -242,7 +243,7 @@ export const verifyCheckResults = pgTable(
     toulmin: jsonb('toulmin').$type<ToulminVerdict>(),
 
     /** Generic result extension bag. Shape is intentionally unknown until verifier payloads stabilize. */
-    metadata: jsonb('metadata').$type<unknown>(),
+    metadata: jsonb('metadata').$type<VerifyCheckResultMetadata>(),
 
     /** Forward-looking remediation hint, seeded into auto_repair. */
     suggestion: text('suggestion'),
@@ -367,7 +368,8 @@ export const acceptances = pgTable(
 
     /**
      * Polymorphic accepted object. No FK on purpose: an acceptance may target task,
-     * topic, document, or future subject types without reshaping this aggregate.
+     * topic, document, standalone delivery, or future subject types without
+     * reshaping this aggregate.
      * Subject existence/ownership is validated in the service that creates it.
      */
     subjectType: text('subject_type', { enum: acceptanceSubjectTypes }).notNull(),

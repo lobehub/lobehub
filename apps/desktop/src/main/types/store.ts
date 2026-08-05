@@ -3,6 +3,7 @@ import type {
   ImessageBridgeConfig,
   NetworkProxySettings,
   UpdateChannel,
+  WindowsShellMode,
 } from '@lobechat/electron-client-ipc';
 import type { HeteroSessionDirPref } from '@lobechat/types';
 
@@ -53,6 +54,8 @@ export interface ElectronMainStore {
   storagePath: string;
   themeMode: 'dark' | 'light' | 'system';
   updateChannel: UpdateChannel;
+  /** Shell used for agent command execution on Windows (ignored elsewhere). */
+  windowsShellMode: WindowsShellMode;
 }
 
 export type StoreKey = keyof ElectronMainStore;

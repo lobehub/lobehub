@@ -295,7 +295,7 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
   // One-time fold of legacy localStorage recents into device.workingDirs.
   useMigrateDeviceRecents();
 
-  // Effective config (shared row + this member's device override, LOBE-11689)
+  // Effective config (shared row + this member's device override)
   // so recents / default cwd / the selected-repo label all resolve against the
   // device THIS member's run actually targets.
   const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId);

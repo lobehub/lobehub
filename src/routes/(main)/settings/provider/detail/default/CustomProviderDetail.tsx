@@ -23,7 +23,8 @@ const CustomProviderDetail = memo<{ id: string }>(({ id }) => {
   if (isLoading || !data || !data.id) return <Loading debugId="Provider > CustomProviderDetail" />;
 
   return (
-    <Flexbox gap={24} paddingBlock={8}>
+    // No block padding of its own — SettingContainer already insets the page.
+    <Flexbox gap={24}>
       <ProviderConfig {...data} id={id} name={data.name || ''} />
       <ModelList id={id} />
     </Flexbox>

@@ -118,6 +118,7 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
   ({ className, item, onOpen, variant = 'card' }) => {
     const { t } = useTranslation('chat');
     const openDocument = useChatStore((s) => s.openDocument);
+    const openFilePreview = useChatStore((s) => s.openFilePreview);
     const openTaskDetail = useChatStore((s) => s.openTaskDetail);
     const cost = formatWorkVersionCost(item.totalCost);
 
@@ -152,6 +153,10 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
           // Defense in depth: only ever hand http(s) to shell.openExternal.
           if (isSafeExternalUrl(openTarget.url))
             window.open(openTarget.url, '_blank', 'noopener,noreferrer');
+          return;
+        }
+        case 'filePreview': {
+          openFilePreview({ fileId: openTarget.fileId });
           return;
         }
         case 'task': {

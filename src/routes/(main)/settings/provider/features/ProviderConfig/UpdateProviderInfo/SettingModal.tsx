@@ -11,7 +11,8 @@ import {
   Select,
   useModalContext,
 } from '@lobehub/ui/base-ui';
-import { App, Form } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
+import { Form } from 'antd';
 import { cssVar } from 'antd-style';
 import { t as i18nT } from 'i18next';
 import { BrainIcon } from 'lucide-react';
@@ -49,7 +50,6 @@ const SettingContent = memo<SettingContentProps>(({ initialValues, id }) => {
     s.deleteAiProvider,
   ]);
 
-  const { message } = App.useApp();
   const navigate = useWorkspaceAwareNavigate();
   const { close } = useModalContext();
 
@@ -79,7 +79,7 @@ const SettingContent = memo<SettingContentProps>(({ initialValues, id }) => {
 
       await updateAiProvider(id, finalValues);
       setLoading(false);
-      message.success(t('updateAiProvider.updateSuccess'));
+      toast.success(t('updateAiProvider.updateSuccess'));
       close();
     } catch (e) {
       console.error(e);
@@ -96,7 +96,7 @@ const SettingContent = memo<SettingContentProps>(({ initialValues, id }) => {
         await deleteAiProvider(id);
         navigate('/settings/provider/all');
         close();
-        message.success(t('updateAiProvider.deleteSuccess'));
+        toast.success(t('updateAiProvider.deleteSuccess'));
       },
       title: t('updateAiProvider.confirmDelete'),
     });

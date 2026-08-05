@@ -4,7 +4,7 @@ import type { SandboxPolicy } from '@lobechat/device-sandbox';
 
 import type { RunCommandParams, RunCommandResult } from '../types';
 import type { ShellOutputFiles, ShellProcess, ShellProcessManager } from './process-manager';
-import { getShellConfig } from './utils';
+import { detectWindowsShell, getShellConfig, normalizeEnvVarRefs } from './utils';
 
 export interface RunCommandOptions {
   logger?: {
@@ -34,8 +34,18 @@ export async function runCommand(
   const logPrefix = `[runCommand: ${description || command.slice(0, 50)}]`;
   logger?.debug(`${logPrefix} Starting`, { background: run_in_background, cwd, timeout });
 
-  const shellConfig = getShellConfig(command);
   const requestedEnv = extraEnv ? { ...process.env, ...extraEnv } : process.env;
+
+  // On Windows, rewrite env-var references the target shell cannot resolve
+  // natively into its own syntax (see normalizeEnvVarRefs), so a command
+  // authored in another shell dialect still resolves against the actual env.
+  // We do NOT rewrite on macOS/Linux: /bin/sh handles its own variable syntax,
+  // and rewriting here would break shell-local variables (e.g. `for x; do echo $x`).
+  const effectiveCommand =
+    process.platform === 'win32'
+      ? normalizeEnvVarRefs(command, requestedEnv, (await detectWindowsShell()).type)
+      : command;
+  const shellConfig = await getShellConfig(effectiveCommand);
   let outputFiles: ShellOutputFiles | undefined;
   let releaseSandbox: (() => void) | undefined;
 
@@ -66,6 +76,11 @@ export async function runCommand(
       env: launchEnv,
       shell: false,
       stdio: ['pipe', shellOutputFiles.stdout.fd, shellOutputFiles.stderr.fd],
+      // The Electron main process is a GUI process without a console, so on
+      // Windows spawning a console program (powershell.exe / cmd.exe) allocates
+      // a new console window that flashes up for every command. windowsHide
+      // defaults to false in Node, so it must be set explicitly.
+      windowsHide: true,
     });
 
     const shellProcess: ShellProcess = {
@@ -81,6 +96,13 @@ export async function runCommand(
 
     childProcess.on('error', (error) => {
       logger?.error(`${logPrefix} Command failed:`, error);
+      const cwdContext = cwd ? ` (working directory: ${cwd})` : '';
+      shellProcess.spawnError = new Error(
+        `Failed to start command${cwdContext}: ${error.message}`,
+        {
+          cause: error,
+        },
+      );
       shellProcess.exitCode = 1;
     });
     childProcess.once('close', () => releaseSandbox?.());

@@ -52,12 +52,18 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   tabCounter: css`
-    margin-inline-start: auto;
-    padding-block: 5px;
-    padding-inline: 10px;
-
     font-size: 11px;
     color: ${cssVar.colorTextTertiary};
     white-space: nowrap;
+  `,
+  tabTrailing: css`
+    display: flex;
+    flex-shrink: 0;
+    gap: 8px;
+    align-items: center;
+
+    margin-inline-start: auto;
+    padding-block: 4px;
+    padding-inline: 10px;
   `,
 }));

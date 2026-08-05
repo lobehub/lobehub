@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { buildRevealSidebarSectionPatch } from './useRevealSidebarSection';
 
-describe('buildRevealSidebarSectionPatch (LOBE-11758)', () => {
+describe('buildRevealSidebarSectionPatch ', () => {
   it('expands a collapsed section', () => {
     // Stale persisted keys from before the Private section shipped.
     expect(buildRevealSidebarSectionPatch('private', ['recents', 'agent'], [])).toEqual({

@@ -67,7 +67,7 @@ export interface ResolveExecutionTargetOptions {
    * stay `sandbox`. So server callers leave it `undefined` (false) and the
    * branch is a no-op there — only web display sites pass
    * `!!serverConfig.agentGatewayUrl` to keep the honest device display
-   * (LOBE-11473). `isHetero` also satisfies the gate: a hetero agent's bound
+   *. `isHetero` also satisfies the gate: a hetero agent's bound
    * `local` was always surfaced as `device` on web regardless of gateway state.
    */
   deviceRoutingAvailable?: boolean;
@@ -80,10 +80,10 @@ export interface ResolveExecutionTargetOptions {
   isHetero?: boolean;
   /**
    * Whether this heterogeneous provider can execute in the server cloud
-   * sandbox. Defaults to `false` for Amp and OpenCode (which currently require
-   * a local or connected device) and `true` otherwise. Callers that only know
-   * the provider through a legacy model discriminator can override the inferred
-   * capability.
+   * sandbox. Defaults to `false` for Amp, OpenCode, and Pi (which currently
+   * require a local or connected device) and `true` otherwise. Callers that only
+   * know the provider through a legacy model discriminator can override the
+   * inferred capability.
    */
   sandboxExecutionAvailable?: boolean;
   /**
@@ -112,7 +112,7 @@ export interface ResolveExecutionTargetOptions {
 
 /** Whether a heterogeneous provider can run in LobeHub's cloud sandbox. */
 export const isHeterogeneousSandboxExecutionAvailable = (type: string | undefined): boolean =>
-  type !== 'amp' && type !== 'opencode';
+  type !== 'amp' && type !== 'opencode' && type !== 'pi';
 
 /**
  * Single source of truth for where an agent executes — one global
@@ -138,7 +138,7 @@ export const isHeterogeneousSandboxExecutionAvailable = (type: string | undefine
  * server routes such a config to that bound device — so on web we resolve it
  * to `device`, surfacing honestly that it runs on the user's machine (via
  * `lh connect`) instead of masquerading as `sandbox`. This applies to plain
- * agents too, not just heterogeneous CLI agents (LOBE-11473: plain agents used
+ * agents too, not just heterogeneous CLI agents (plain agents used
  * to leak here, showing "cloud sandbox" while the server ran on the device).
  *
  * This upgrade is gated on `deviceRoutingAvailable` (or `isHetero`): the run

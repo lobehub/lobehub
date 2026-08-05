@@ -38,7 +38,7 @@ import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useAgentStore } from '@/store/agent';
 import { useElectronStore } from '@/store/electron';
 
-import { formatFixedExecutionTargetTooltip } from './executionTargetTooltip';
+import { formatLockedControlTooltip } from '../utils/lockedControlTooltip';
 
 const styles = createStaticStyles(({ css }) => ({
   button: css`
@@ -64,20 +64,19 @@ const styles = createStaticStyles(({ css }) => ({
       background: ${cssVar.colorFillSecondary};
     }
   `,
-  buttonDisabled: css`
-    cursor: not-allowed;
-    opacity: 0.5;
-
-    &:hover {
-      color: ${cssVar.colorTextSecondary};
-      background: transparent;
-    }
-  `,
   buttonLabel: css`
     overflow: hidden;
     max-width: 120px;
     text-overflow: ellipsis;
     white-space: nowrap;
+  `,
+  buttonReadonly: css`
+    cursor: default;
+
+    &:hover {
+      color: ${cssVar.colorTextSecondary};
+      background: transparent;
+    }
   `,
   check: css`
     flex: none;
@@ -322,23 +321,23 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const { t } = useTranslation('chat');
   const [open, setOpen] = useState(false);
   const navigate = useWorkspaceAwareNavigate();
-  const { canUseResource, isGroupContext } = useChatInputResourceAccess();
-  const viewOnly = !canUseResource;
+  const { canUseResource } = useChatInputResourceAccess();
 
   const agentWorkspaceId = useAgentStore((s) => s.agentMap[agentId]?.workspaceId);
   const isWorkspaceAgent = Boolean(agentWorkspaceId);
 
-  // Shared config merged with the caller's per-agent override (LOBE-11689) —
+  // Shared config merged with the caller's per-agent override —
   // the hook eagerly fetches the `workspaceUserSettings` bucket on mount so
   // what the picker shows and what dispatch will actually do always agree.
   const {
     agencyConfig,
+    canDisplayExecutionTarget,
+    canSelectExecutionTarget,
     isPreferenceLoading: isWorkspacePreferenceLoading,
     workspaceScoped,
   } = useEffectiveAgencyConfig(agentId);
-
-  const isFixedExecutionTarget =
-    isWorkspaceAgent && agencyConfig?.executionTargetSelectionPolicy === 'fixed';
+  const canShowExecutionTarget = canUseResource && canDisplayExecutionTarget;
+  const canShowExecutionTargetSelector = canShowExecutionTarget && canSelectExecutionTarget;
 
   const heteroType = agencyConfig?.heterogeneousProvider?.type;
   const boundDeviceId = agencyConfig?.boundDeviceId;
@@ -352,7 +351,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
 
   // Workspace-keyed SWR fetch — the raw lambdaQuery key has no workspace
   // dimension, so the picker kept showing the previous workspace's pool after
-  // a switch (LOBE-11904).
+  // a switch.
   const { data: devices, isLoading } = useDeviceList();
 
   // The current machine's own gateway deviceId (desktop only), used to badge the
@@ -372,16 +371,28 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     isHetero,
     workspaceScoped,
   });
+  // A read-only member receives the safe target type but not `boundDeviceId`.
+  // Use the stored type for the summary so a fixed, bound `local` target is
+  // described as a workspace device instead of being client-coerced to sandbox.
+  const chipExecutionTarget = canShowExecutionTargetSelector
+    ? executionTarget
+    : (agencyConfig?.executionTarget ?? executionTarget);
 
   // Device-only CLIs cannot fall back to the cloud sandbox. When a web/legacy
   // config has no usable device target, open the picker once so `none` is an
   // explicit setup prompt rather than a disabled-but-active sandbox row.
   useEffect(() => {
+    if (!canShowExecutionTargetSelector) return;
     if (supportsSandbox) return;
     if (isWorkspacePreferenceLoading) return;
     if (executionTarget !== 'none') return;
     setOpen(true);
-  }, [executionTarget, isWorkspacePreferenceLoading, supportsSandbox]);
+  }, [
+    canShowExecutionTargetSelector,
+    executionTarget,
+    isWorkspacePreferenceLoading,
+    supportsSandbox,
+  ]);
 
   const selectExecutionTarget = useSelectExecutionTarget(agentId);
   const handleSelect = useCallback(
@@ -394,7 +405,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
 
   // Auto-default to THIS desktop's local execution on first open, for both
   // personal and workspace agents (workspace behaviour used to be a hostname
-  // lookup against the workspace device pool — see LOBE-11647 — but with
+  // lookup against the workspace device pool — see — but with
   // per-user overrides that lookup is unnecessary: `useSelectExecutionTarget`
   // resolves `'local'` to this desktop's personal gateway `deviceId` and, for
   // a workspace agent, persists it into `users.preference.agentDeviceOverrides`,
@@ -407,30 +418,31 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   // default would clobber it.
   useEffect(() => {
     if (!isDesktop) return;
-    // View-only members must not write anything — not even the harmless
-    // per-user local-device default.
-    if (viewOnly) return;
-    if (isFixedExecutionTarget) return;
+    if (!canShowExecutionTargetSelector) return;
     if (isWorkspacePreferenceLoading) return;
     if (agencyConfig?.executionTarget !== undefined) return;
     if (agencyConfig?.boundDeviceId !== undefined) return;
     if (!currentDeviceId) return;
-    void selectExecutionTarget('local');
+    // `silent`: this is a mount-time default, so a rejected write must not
+    // surface a save-failure toast on an agent the user only opened.
+    void selectExecutionTarget('local', undefined, { silent: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     agencyConfig?.executionTarget,
     agencyConfig?.boundDeviceId,
     currentDeviceId,
+    canShowExecutionTargetSelector,
     isWorkspacePreferenceLoading,
-    isFixedExecutionTarget,
-    viewOnly,
   ]);
 
   // Don't render for remote hetero agents — they use RemoteAgentConfigCard in profile.
   if (heteroType && isRemoteHeterogeneousType(heteroType)) return null;
+  if (!canShowExecutionTarget) return null;
 
   const boundDevice =
-    executionTarget === 'device' ? devices?.find((d) => d.deviceId === boundDeviceId) : undefined;
+    canShowExecutionTargetSelector && executionTarget === 'device'
+      ? devices?.find((d) => d.deviceId === boundDeviceId)
+      : undefined;
 
   // The picker splits by whether the caller is inside a workspace agent:
   //
@@ -446,7 +458,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   //   (per-user `sha256(machineUUID + userId)` vs
   //   `sha256(machineUUID + workspace:<id>)`), so binding one to a workspace
   //   agent conflates identities. The `local` chip already covers "run on my
-  //   machine" as a per-user override (LOBE-11689) without needing to expose
+  // machine" as a per-user override without needing to expose
   //   the raw personal deviceId.
   //
   // Naming — Personal is reserved for the account-tier concept; workspace
@@ -477,22 +489,27 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   // Compute chip
   let chipIcon: ReactNode = <ExecutionTargetIcon target={'sandbox'} />;
   let chipLabel = t('heteroAgent.executionTarget.sandbox');
-  if (executionTarget === 'none') {
+  if (chipExecutionTarget === 'none') {
     chipIcon = <ExecutionTargetIcon target={'none'} />;
     chipLabel = t('heteroAgent.executionTarget.none');
-  } else if (executionTarget === 'auto') {
+  } else if (chipExecutionTarget === 'auto') {
     chipIcon = <ExecutionTargetIcon target={'auto'} />;
     chipLabel = t('heteroAgent.executionTarget.auto');
-  } else if (executionTarget === 'local') {
+  } else if (chipExecutionTarget === 'local') {
     // 本机始终使用通用的本地电脑图标，不区分具体平台
-    chipIcon = <ExecutionTargetIcon target={'local'} />;
-    chipLabel = t('heteroAgent.executionTarget.local');
-  } else if (executionTarget === 'device') {
+    chipIcon = <ExecutionTargetIcon target={canShowExecutionTargetSelector ? 'local' : 'device'} />;
+    chipLabel = t(
+      canShowExecutionTargetSelector
+        ? 'heteroAgent.executionTarget.local'
+        : 'heteroAgent.executionTarget.workspaceGroup',
+    );
+  } else if (chipExecutionTarget === 'device') {
     chipIcon = <ExecutionTargetIcon devicePlatform={boundDevice?.platform} target={'device'} />;
-    chipLabel =
-      boundDevice?.friendlyName ??
-      boundDevice?.hostname ??
-      t('heteroAgent.executionTarget.unknownDevice');
+    chipLabel = canShowExecutionTargetSelector
+      ? (boundDevice?.friendlyName ??
+        boundDevice?.hostname ??
+        t('heteroAgent.executionTarget.unknownDevice'))
+      : t('heteroAgent.executionTarget.workspaceGroup');
   }
 
   const isActive = (target: DeviceExecutionTarget, deviceId?: string) => {
@@ -580,7 +597,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
         />
       )}
       {/* `local` pins this desktop's personal `deviceId`. Available in both
-          personal and workspace modes now (LOBE-11689): a workspace-agent
+          personal and workspace modes now : a workspace-agent
           `local` pick lands in `users.preference.agentDeviceOverrides` — my
           per-user override — so it never binds the workspace-shared
           `agencyConfig` or coerces any other member's dispatch. */}
@@ -675,28 +692,22 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     </Flexbox>
   );
 
-  const selectionDisabled = viewOnly || isFixedExecutionTarget;
   const chip = (
-    <div className={cx(styles.button, selectionDisabled && styles.buttonDisabled)}>
+    <div className={cx(styles.button, !canShowExecutionTargetSelector && styles.buttonReadonly)}>
       {chipIcon}
       <span className={styles.buttonLabel}>{chipLabel}</span>
-      <Icon icon={ChevronDownIcon} size={12} />
+      {canShowExecutionTargetSelector ? <Icon icon={ChevronDownIcon} size={12} /> : null}
     </div>
   );
 
-  // View-level General access: the whole input area is read-only, so the
-  // execution-target picker stays visible but inert (disabled, not hidden).
-  if (selectionDisabled)
+  // Locked: reaching here with the chip visible means the author fixed the
+  // execution target in the Agent Profile (a member without use access never
+  // renders the chip at all), so name the environment and say why it's pinned
+  // instead of leaving an inert label.
+  if (!canShowExecutionTargetSelector)
     return (
       <Tooltip
-        title={
-          isFixedExecutionTarget
-            ? formatFixedExecutionTargetTooltip(
-                chipLabel,
-                t('heteroAgent.executionTarget.fixedTip'),
-              )
-            : t(isGroupContext ? 'input.viewOnlyGroup' : 'input.viewOnlyAgent')
-        }
+        title={formatLockedControlTooltip(chipLabel, t('heteroAgent.executionTarget.fixedTip'))}
       >
         {chip}
       </Tooltip>

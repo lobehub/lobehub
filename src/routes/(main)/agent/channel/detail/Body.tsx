@@ -124,6 +124,15 @@ function buildRules(field: FieldSchema, t: (key: string) => string) {
     rules.push({ message: t(field.label), required: true });
   }
 
+  // Format constraint declared by the platform schema. antd's validator skips
+  // `pattern` on empty values, so an untouched optional field stays valid.
+  if (field.pattern) {
+    rules.push({
+      message: field.patternMessage ? t(field.patternMessage) : t(field.label),
+      pattern: new RegExp(field.pattern),
+    });
+  }
+
   if (field.type === 'number' || field.type === 'integer') {
     if (typeof field.minimum === 'number') {
       rules.push({
@@ -456,7 +465,7 @@ const ApplicationIdField = memo<{ disabled?: boolean; divider?: boolean; field: 
         label={renderFieldLabel(field, t)}
         minWidth={'max(50%, 400px)'}
         name="applicationId"
-        rules={field.required ? [{ message: t(field.label), required: true }] : undefined}
+        rules={buildRules(field, t)}
         variant="outlined"
       >
         <FormInput

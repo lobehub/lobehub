@@ -66,6 +66,7 @@ vi.mock('electron', () => ({
     getAppPath: vi.fn(() => '/mock/app/path'),
     getLocale: vi.fn(() => 'en-US'),
     getPath: vi.fn((name: string) => `/mock/path/${name}`),
+    getPreferredSystemLanguages: vi.fn(() => ['en-US']),
   },
   desktopCapturer: {
     getSources: vi.fn(async () => []),
@@ -91,8 +92,8 @@ vi.mock('electron', () => ({
   },
 }));
 
-// Mock electron-is
-vi.mock('electron-is', () => ({
+// Mock platform detection
+vi.mock('@/utils/platform', () => ({
   macOS: vi.fn(() => true),
 }));
 
@@ -215,7 +216,7 @@ describe('SystemController', () => {
     });
 
     it('should return true on non-macOS when requesting accessibility access', async () => {
-      const { macOS } = await import('electron-is');
+      const { macOS } = await import('@/utils/platform');
       vi.mocked(macOS).mockReturnValue(false);
       // Clear the injected module to simulate non-macOS behavior
       __setMacPermissionsModule(null);
@@ -274,7 +275,7 @@ describe('SystemController', () => {
     });
 
     it('should return true on non-macOS', async () => {
-      const { macOS } = await import('electron-is');
+      const { macOS } = await import('@/utils/platform');
       const { shell } = await import('electron');
       vi.mocked(macOS).mockReturnValue(false);
       // Clear the injected module to simulate non-macOS behavior
@@ -313,7 +314,7 @@ describe('SystemController', () => {
     });
 
     it('should return true on non-macOS and not open settings', async () => {
-      const { macOS } = await import('electron-is');
+      const { macOS } = await import('@/utils/platform');
       vi.mocked(macOS).mockReturnValue(false);
 
       const result = await invokeIpc('system.requestScreenAccess');
@@ -348,7 +349,7 @@ describe('SystemController', () => {
     });
 
     it('should return true on non-macOS', async () => {
-      const { macOS } = await import('electron-is');
+      const { macOS } = await import('@/utils/platform');
       vi.mocked(macOS).mockReturnValue(false);
 
       const result = await invokeIpc('system.getFullDiskAccessStatus');

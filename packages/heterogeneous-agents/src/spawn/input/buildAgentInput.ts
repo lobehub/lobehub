@@ -132,6 +132,17 @@ const buildOpenCodeInput = async (
   };
 };
 
+const buildPiInput = async (
+  blocks: AgentContentBlock[],
+  options: BuildAgentInputOptions,
+): Promise<AgentInputPlan> => {
+  const imagePaths = await resolvePathInputImagePaths(blocks, options);
+  return {
+    args: imagePaths.map((imagePath) => `@${imagePath}`),
+    stdin: collectText(blocks),
+  };
+};
+
 /**
  * Convert a unified `AgentPromptInput` into the per-agent stdin payload + any
  * extra CLI args required to attach images. The single source of truth for
@@ -140,6 +151,7 @@ const buildOpenCodeInput = async (
  * - `amp` / `claude-code`: stream-json on stdin with text + base64 image content blocks
  * - `codex`: raw text on stdin + repeatable `--image <path>` flags
  * - `opencode`: raw text on stdin + repeatable `--file <path>` flags
+ * - `pi`: raw text on stdin + repeatable `@<path>` arguments
  *
  * Path-mode agents materialize URL / base64 images via `materializeImageToPath`
  * into `imageMaterializeDir` (defaults to `cacheDir` then `os.tmpdir()`).
@@ -161,6 +173,9 @@ export const buildAgentInput = async (
     }
     case 'opencode': {
       return buildOpenCodeInput(blocks, options);
+    }
+    case 'pi': {
+      return buildPiInput(blocks, options);
     }
     default: {
       throw new Error(`buildAgentInput: unsupported agent type "${agentType}"`);

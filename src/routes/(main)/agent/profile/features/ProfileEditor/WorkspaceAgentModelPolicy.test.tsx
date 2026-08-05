@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { WorkspaceAgentModelPolicy } from './WorkspaceAgentModelPolicy';
 
@@ -39,7 +39,6 @@ vi.mock('./WorkspaceAgentPolicyCard', () => ({
       {children}
     </div>
   ),
-  WorkspaceAgentSelectionPolicyMenu: () => <div data-testid="policy-menu" />,
 }));
 
 vi.mock('@/store/agent', () => ({
@@ -48,11 +47,34 @@ vi.mock('@/store/agent', () => ({
 }));
 
 describe('WorkspaceAgentModelPolicy', () => {
+  beforeEach(() => {
+    testState.agent.agentMap['agent-1'] = {
+      agencyConfig: { modelSelectionPolicy: 'member' },
+      model: 'gpt-4',
+      visibility: 'public',
+      workspaceId: 'workspace-1',
+    };
+  });
+
   it('renders the policy card for a loaded workspace agent', () => {
     render(<WorkspaceAgentModelPolicy agentId="agent-1" />);
 
     expect(screen.getByText('settingAgent.modelPolicy.title')).toBeTruthy();
     expect(screen.getByTestId('model-select')).toBeTruthy();
+  });
+
+  it('renders the model picker without a member-switch control — that moved to the Permission page', () => {
+    testState.agent.agentMap['agent-1'] = {
+      agencyConfig: { modelSelectionPolicy: 'fixed' },
+      model: 'gpt-4',
+      visibility: 'public',
+      workspaceId: 'workspace-1',
+    };
+
+    render(<WorkspaceAgentModelPolicy agentId="agent-1" />);
+
+    expect(screen.getByTestId('model-select')).toBeTruthy();
+    expect(screen.queryByTestId('policy-menu')).toBeNull();
   });
 
   it('renders nothing instead of crashing while the agent config is not loaded yet', () => {

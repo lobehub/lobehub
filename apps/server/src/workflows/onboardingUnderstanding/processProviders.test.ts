@@ -6,6 +6,10 @@ import {
   processUnderstandingProviders,
 } from './processProviders';
 
+type TriggerTaskRecommendations = Parameters<
+  typeof processUnderstandingProviders
+>[1]['triggerTaskRecommendations'];
+
 const errors = vi.hoisted(() => {
   class DomainError extends Error {}
   return { DomainError };
@@ -26,6 +30,7 @@ const payload = {
     { id: 'gmail', revision: 1 },
     { id: 'github', revision: 1 },
   ],
+  responseLanguage: 'zh-CN',
   sessionId: 'session-1',
   topicId: 'topic-1',
   userId: 'user-1',
@@ -73,13 +78,17 @@ describe('processUnderstandingProviders', () => {
       }),
     };
     const { context, invocations, steps } = createContext(payload);
+    const triggerTaskRecommendations = vi.fn<TriggerTaskRecommendations>(async () => undefined);
     const running = processUnderstandingProviders(context as never, {
       createService: async () => service as never,
       processCollectedWorkflow: workflow as never,
+      triggerTaskRecommendations,
     });
 
     await vi.waitFor(() => expect(invocations).toHaveLength(1));
+    await vi.waitFor(() => expect(triggerTaskRecommendations).toHaveBeenCalledTimes(1));
     expect(invocations[0].settings.body).toEqual({
+      responseLanguage: 'zh-CN',
       sessionId: 'session-1',
       sourceFingerprint: 'github@1',
       topicId: 'topic-1',
@@ -88,7 +97,12 @@ describe('processUnderstandingProviders', () => {
     releaseGmail();
     await running;
 
-    expect(steps).toEqual(['provider:github:1:process', 'provider:gmail:1:process']);
+    expect(steps).toEqual([
+      'provider:github:1:process',
+      'provider:gmail:1:process',
+      'provider:github:recommend:1',
+      'provider:gmail:recommend:1',
+    ]);
     expect(service.processProvider).toHaveBeenCalledWith({
       providerId: 'github',
       revision: 1,
@@ -100,6 +114,17 @@ describe('processUnderstandingProviders', () => {
       key: 'onboarding-understanding.writing.session-1',
       parallelism: 1,
     });
+    expect(triggerTaskRecommendations).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ sourceFingerprint: 'github@1' }),
+      {
+        flowControl: {
+          key: 'onboarding-task-recommendation.session-1',
+          parallelism: 1,
+        },
+        workflowRunId: expect.stringMatching(/^onboarding-task-recommendation-[a-f0-9]{32}$/),
+      },
+    );
     expect(JSON.stringify({ invocations, payload })).not.toMatch(/token|accountId|markdown|xml/i);
   });
 
@@ -108,9 +133,11 @@ describe('processUnderstandingProviders', () => {
     const attempt = { id: 'github', revision: 2 };
     const first = createContext({ ...payload, providers: [attempt] });
     const replay = createContext({ ...payload, providers: [attempt] });
+    const triggerTaskRecommendations = vi.fn<TriggerTaskRecommendations>(async () => undefined);
     const dependencies = {
       createService: async () => service as never,
       processCollectedWorkflow: workflow as never,
+      triggerTaskRecommendations,
     };
 
     await processUnderstandingProviders(first.context as never, dependencies);
@@ -123,6 +150,39 @@ describe('processUnderstandingProviders', () => {
     expect(first.invocations[0].settings.workflowRunId).toMatch(
       /^onboarding-understanding-collected-[a-f0-9]{32}$/,
     );
+    const firstRecommendationCall = triggerTaskRecommendations.mock.calls.at(0);
+    const replayedRecommendationCall = triggerTaskRecommendations.mock.calls.at(1);
+    expect(firstRecommendationCall).toBeDefined();
+    expect(replayedRecommendationCall).toBeDefined();
+    if (!firstRecommendationCall || !replayedRecommendationCall) {
+      throw new Error('Expected both recommendation workflow triggers');
+    }
+    expect(firstRecommendationCall[1].workflowRunId).toBe(
+      replayedRecommendationCall[1].workflowRunId,
+    );
+  });
+
+  /**
+   * @example A diagnostic run writes Understanding without implicitly starting task generation.
+   */
+  it('can suppress automatic task recommendations while preserving Understanding writing', async () => {
+    const service = { processProvider: vi.fn(async () => completed('github', 'github@1')) };
+    const diagnostic = createContext({
+      ...payload,
+      providers: [{ id: 'github', revision: 1 }],
+      triggerTaskRecommendations: false,
+    });
+    const triggerTaskRecommendations = vi.fn<TriggerTaskRecommendations>(async () => undefined);
+
+    await processUnderstandingProviders(diagnostic.context as never, {
+      createService: async () => service as never,
+      processCollectedWorkflow: workflow as never,
+      triggerTaskRecommendations,
+    });
+
+    expect(diagnostic.invocations).toHaveLength(1);
+    expect(diagnostic.invocations[0].settings.body.sourceFingerprint).toBe('github@1');
+    expect(triggerTaskRecommendations).not.toHaveBeenCalled();
   });
 
   it('does not invoke writing for terminal failure and lets transient errors retry', async () => {
@@ -136,6 +196,7 @@ describe('processUnderstandingProviders', () => {
           processProvider: vi.fn(async () => ({ ...completed('github', ''), status: 'failed' })),
         }) as never,
       processCollectedWorkflow: workflow as never,
+      triggerTaskRecommendations: vi.fn(async () => undefined),
     });
     expect(terminal.invocations).toHaveLength(0);
 
@@ -149,6 +210,7 @@ describe('processUnderstandingProviders', () => {
             }),
           }) as never,
         processCollectedWorkflow: workflow as never,
+        triggerTaskRecommendations: vi.fn(async () => undefined),
       }),
     ).rejects.toBe(transient);
   });
@@ -167,6 +229,7 @@ describe('processUnderstandingProviders', () => {
           })),
         }) as never,
       processCollectedWorkflow: workflow as never,
+      triggerTaskRecommendations: vi.fn(async () => undefined),
     });
 
     expect(stale.invocations).toHaveLength(0);
@@ -185,6 +248,7 @@ describe('processUnderstandingProviders', () => {
       processUnderstandingProviders(duplicate.context as never, {
         createService: async () => service as never,
         processCollectedWorkflow: workflow as never,
+        triggerTaskRecommendations: vi.fn(async () => undefined),
       }),
     ).rejects.toThrow();
 
@@ -197,6 +261,7 @@ describe('processUnderstandingProviders', () => {
       processUnderstandingProviders(unsafe.context as never, {
         createService: vi.fn(),
         processCollectedWorkflow: workflow as never,
+        triggerTaskRecommendations: vi.fn(async () => undefined),
       }),
     ).rejects.toThrow();
   });

@@ -4,7 +4,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 
 /**
- * Shared resolver for external CLI-agent binaries (Amp / Claude Code / Codex / OpenCode).
+ * Shared resolver for external CLI-agent binaries (Amp / Claude Code / Codex / OpenCode / Pi).
  *
  * This is the single source of truth for "given a command name, where is the
  * runnable binary?". It's consumed by BOTH spawn sites:
@@ -20,7 +20,7 @@ import { promisify } from 'node:util';
 const execFilePromise = promisify(execFile);
 const execPromise = promisify(exec);
 
-export type HeterogeneousCliAgentType = 'amp' | 'claude-code' | 'codex' | 'opencode';
+export type HeterogeneousCliAgentType = 'amp' | 'claude-code' | 'codex' | 'opencode' | 'pi';
 
 /**
  * Resolution result. A structural subset of the desktop `BinaryManager`'s
@@ -60,18 +60,23 @@ let shellPathPromise: Promise<string | undefined> | undefined;
 // User-supplied custom commands flow through here via `detectHeterogeneousCliCommand`.
 const WINDOWS_SHELL_METAS = /[&|;<>^`!"]/;
 
-// Extensions we can actually execute on Windows, in preference order:
+// Extensions we can actually execute on Windows.
 // `.exe` runs directly via `execFile`, `.cmd` / `.bat` runs via `cmd.exe`.
 // `.ps1` and extensionless wrappers (npm sometimes drops a Unix shell script
 // next to the `.cmd` shim) are deliberately excluded — we can't run them.
+//
+// IMPORTANT: pick by PATH order (the order `where` returns), not by extension
+// rank. Preferring every `.exe` over every `.cmd` would skip an earlier npm
+// `claude.cmd` in favour of a later `claude.exe` from Vite+ (see #17376).
 const WINDOWS_RUNNABLE_EXTS = ['.exe', '.cmd', '.bat'] as const;
 
+const isWindowsRunnablePath = (line: string): boolean => {
+  const lower = line.toLowerCase();
+  return WINDOWS_RUNNABLE_EXTS.some((ext) => lower.endsWith(ext));
+};
+
 const pickWindowsRunnable = (lines: string[]): string | undefined => {
-  for (const ext of WINDOWS_RUNNABLE_EXTS) {
-    const match = lines.find((line) => line.toLowerCase().endsWith(ext));
-    if (match) return match;
-  }
-  return undefined;
+  return lines.find(isWindowsRunnablePath);
 };
 
 const getLoginShellPath = async (): Promise<string | undefined> => {
@@ -167,8 +172,8 @@ const resolveCommandPath = async (command: string): Promise<ResolvedCommand | un
 
   // Windows `where` lists every PATHEXT match (e.g. for `codex` npm ships
   // a Unix shell wrapper alongside `codex.cmd` and `codex.ps1`). Picking
-  // the first line can land us on something we can't execute, so prefer a
-  // runnable extension and bail otherwise.
+  // the first line can land us on something we can't execute, so walk the
+  // PATH-ordered list and take the first runnable extension.
   if (isWindows()) {
     const runnablePath = pickWindowsRunnable(lines);
     return runnablePath ? { path: runnablePath } : undefined;
@@ -255,6 +260,10 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
     // `--version`, without a product-name prefix.
     validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
   },
+  'pi': {
+    // Pi prints a bare semantic version for `--version`.
+    validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
+  },
 } as const satisfies Record<HeterogeneousCliAgentType, ValidateOptions>;
 
 // The default (bare) command each agent type is shipped to run. The well-known
@@ -265,6 +274,7 @@ export const DEFAULT_HETERO_COMMAND: Record<HeterogeneousCliAgentType, string> =
   'claude-code': 'claude',
   'codex': 'codex',
   'opencode': 'opencode',
+  'pi': 'pi',
 };
 
 // Well-known absolute install locations probed when a bare command isn't on
@@ -317,6 +327,15 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
         path.join(homedir(), '.bun', 'bin', 'opencode'),
         path.join(homedir(), '.npm-global', 'bin', 'opencode'),
         path.join(homedir(), 'Library', 'pnpm', 'opencode'),
+      ];
+    }
+    case 'pi': {
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+
+      return [
+        path.join(homedir(), '.local', 'bin', 'pi'),
+        path.join(homedir(), '.npm-global', 'bin', 'pi'),
+        path.join(homedir(), 'Library', 'pnpm', 'pi'),
       ];
     }
     default: {

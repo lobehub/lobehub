@@ -1,23 +1,18 @@
 #!/usr/bin/env bun
 /**
- * Auto-handle "Add my MCP server to the marketplace" issues.
+ * Auto-handle MCP marketplace listing issues (new listing + rescan/refresh).
  *
- * MCP listing requests are now self-service via the @lobehub/market-cli, so we
- * no longer take them through GitHub issues. This script runs when an issue is
- * opened: if it is a *new-server listing request* (and NOT a marketplace bug or
- * CLI feedback), it labels the issue `mcp:submission`, posts the redirect
- * template (pointing at the CLI, with the author's own repo filled in), and
- * closes it as `not_planned`. The comment invites the author to reopen if it
- * was closed by mistake.
+ * Listing and refresh requests are self-service via @lobehub/market-cli.
+ * When an issue matches, we label it `mcp:submission`, post a CLI redirect
+ * comment, and close it as `not_planned`. Authors can reopen if it was closed
+ * by mistake, or open a new issue if the CLI cannot complete the task.
  *
- * Anything that is not a confident match is left untouched for normal triage.
+ * Product bugs and CLI feedback are left for normal triage.
  */
 
 import {
   MCP_LABEL_COLORS,
   MCP_LABEL_DESCRIPTIONS,
-  MCP_MANUAL_REVIEW_LABEL,
-  MCP_RESCAN_LABEL,
   MCP_SUBMISSION_LABEL,
 } from './shared/mcp-labels';
 import { classify } from './shared/mcp-submission-classifier';
@@ -32,6 +27,7 @@ declare global {
 
 const MARKER = '<!-- bot:mcp-submission -->';
 const REPO_PLACEHOLDER = 'https://github.com/<owner>/<repo>';
+const PUBLISH_SKILL_URL = 'https://lobehub.com/publish-mcp/skill.md';
 
 interface GitHubLabel {
   name: string;
@@ -73,7 +69,6 @@ async function githubRequest<T>(
     );
   }
 
-  // Some endpoints (e.g. label add) return 200 with a body; others may be empty.
   const text = await response.text();
   return (text ? JSON.parse(text) : undefined) as T;
 }
@@ -82,30 +77,38 @@ function buildComment(repoUrl: string | null): string {
   const submitUrl = repoUrl ?? REPO_PLACEHOLDER;
 
   return `${MARKER}
-👋 Thanks for this! Heads-up: **we no longer take MCP listing requests via issues** — there's now a self-service flow, so you can list and manage your server yourself without waiting on us.
+👋 Thanks for this! **MCP marketplace listing and refresh requests are self-service** — please use the official CLI instead of GitHub issues. You can list a new server, claim an existing one, and publish version/metadata updates yourself without waiting on us.
 
-**Easiest — let your coding agent do it.** Paste this into Claude Code / Cursor / Codex / etc.:
+### Easiest — let your coding agent do it
+
+Paste this into Claude Code / Cursor / Codex / etc.:
 
 \`\`\`text
-Read https://lobehub.com/publish-mcp/skill.md and follow the instructions to publish my MCP server to the LobeHub Marketplace
+Read ${PUBLISH_SKILL_URL} and follow the instructions to publish (or refresh) my MCP server on the LobeHub Marketplace
 \`\`\`
 
-It reads our publishing skill and drives the CLI for you (login → verify GitHub ownership → submit your repo).
-
-**Prefer to run it yourself?** Use the official CLI directly (Node.js ≥ 22):
+### Or run the CLI yourself (Node.js ≥ 22)
 
 \`\`\`bash
-npx -y @lobehub/market-cli login            # browser login
-npx -y @lobehub/market-cli github connect    # verify you own the repo
+# 1. Login + link GitHub (browser, once)
+npx -y @lobehub/market-cli login
+npx -y @lobehub/market-cli github connect
+
+# 2a. New listing — submit a GitHub repo you own (or have push access to).
+#     Private repos work too after \`github connect\`. Replace the URL if needed.
 npx -y @lobehub/market-cli plugin submit ${submitUrl}
-npx -y @lobehub/market-cli plugin list --output json   # import is async (~a few min)
+# Import is async (~a few minutes). Track with:
+npx -y @lobehub/market-cli plugin list --output json
+
+# 2b. Already listed — claim it, then publish an updated version / metadata
+#     (from a directory that has lhm.plugin.json)
+npx -y @lobehub/market-cli plugin claim <identifier>
+npx -y @lobehub/market-cli plugin publish --dir /absolute/path/to/your-mcp
 \`\`\`
 
-After that you self-manage everything — versions, metadata, delist, delete — via \`plugin publish\` / \`unpublish\` / \`delete\`. Full guide: **https://lobehub.com/publish-mcp/skill.md**
+If the CLI fails (claim/submit stuck, docs wrong, etc.), **open a new issue** with the command you ran and the full error output — that feedback is welcome.
 
-Self-publish works from a **GitHub repo you own**. Not your repo and you just want it indexed? Use the **"Request a Server"** button at **https://lobehub.com/mcp**.
-
-I'll close this as a listing request — **if you think it was closed by mistake, just reopen this issue (or leave a comment) and we'll take another look.** The CLI just launched, so if you hit _any_ problem using it, a new issue is very welcome — that feedback is exactly what we want right now. Thanks! 🙏`;
+I'll close this as a marketplace listing request. **If it was closed by mistake, reopen or comment and we'll take another look.** Thanks! 🙏`;
 }
 
 async function ensureLabel(
@@ -174,41 +177,17 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Idempotency is handled per-step below (label adds are idempotent, the close is a
-  // no-op on an already-closed issue, and the redirect comment is guarded by its
-  // marker), so a re-run after a partial failure safely completes the missing steps.
-  const { delivery, isSubmission, kind, reason, repoUrl } = classify(
-    issue.title || '',
-    issue.body || '',
-  );
-  console.log(`[INFO] Classification: ${kind} — ${reason}`);
+  // Idempotency: label add is safe to re-run, close is a no-op when already closed,
+  // and the redirect comment is guarded by its marker.
+  const { isSubmission, reason, repoUrl } = classify(issue.title || '', issue.body || '');
+  console.log(`[INFO] Classification: isSubmission=${isSubmission} — ${reason}`);
   if (repoUrl) console.log(`[INFO] Extracted repo: ${repoUrl}`);
 
-  // Rescan / refresh requests against an existing listing get their own queue
-  // label and stay open: they need a maintainer (or future automation) to
-  // trigger a rescan, not the "use the CLI" redirect.
-  if (kind === 'listing-ops') {
-    await ensureLabel(
-      owner,
-      repo,
-      token,
-      MCP_RESCAN_LABEL,
-      MCP_LABEL_COLORS.rescan,
-      MCP_LABEL_DESCRIPTIONS.rescan,
-    );
-    await addLabel(owner, repo, token, issueNumber, MCP_RESCAN_LABEL);
-    console.log(
-      '[DONE] Existing-listing rescan request — labeled, left open (no comment, no close)',
-    );
-    return;
-  }
-
   if (!isSubmission) {
-    console.log('[DONE] Not a listing request — leaving for normal triage');
+    console.log('[DONE] Not a marketplace listing request — leaving for normal triage');
     return;
   }
 
-  // Every detected listing request gets the category label.
   await ensureLabel(
     owner,
     repo,
@@ -219,27 +198,6 @@ async function main(): Promise<void> {
   );
   await addLabel(owner, repo, token, issueNumber, MCP_SUBMISSION_LABEL);
 
-  // Remote-only or unknown-delivery servers cannot be self-published through the
-  // CLI, so we must NOT send the "use the CLI" redirect or close them. Flag for
-  // maintainer review and leave open.
-  if (delivery !== 'local') {
-    await ensureLabel(
-      owner,
-      repo,
-      token,
-      MCP_MANUAL_REVIEW_LABEL,
-      MCP_LABEL_COLORS.manualReview,
-      MCP_LABEL_DESCRIPTIONS.manualReview,
-    );
-    await addLabel(owner, repo, token, issueNumber, MCP_MANUAL_REVIEW_LABEL);
-    console.log(
-      `[DONE] ${delivery} delivery — left open for manual handling (no comment, no close)`,
-    );
-    return;
-  }
-
-  // Local / installable server — redirect to the self-service CLI and close.
-  // Guard the comment with its marker so a re-run never double-posts.
   const comments = await githubRequest<GitHubComment[]>(
     `/repos/${owner}/${repo}/issues/${issueNumber}/comments`,
     token,
@@ -253,16 +211,13 @@ async function main(): Promise<void> {
     console.log('[INFO] Posted CLI redirect comment');
   }
 
-  // Closing an already-closed issue is a harmless no-op, so this step is re-run safe.
   await githubRequest(`/repos/${owner}/${repo}/issues/${issueNumber}`, token, 'PATCH', {
     state: 'closed',
     state_reason: 'not_planned',
   });
-  console.log(`[SUCCESS] Closed #${issueNumber} (local submission) as not planned`);
+  console.log(`[SUCCESS] Closed #${issueNumber} (marketplace listing request) as not planned`);
 }
 
-// Run only when executed directly, so `classify`/`extractRepoUrl` can be
-// imported by unit tests without firing the GitHub side effects.
 // @ts-ignore - import.meta.main is provided by Bun
 if (import.meta.main) {
   main().catch((error) => {

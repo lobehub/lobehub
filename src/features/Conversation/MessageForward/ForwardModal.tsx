@@ -1,5 +1,6 @@
 'use client';
 
+import { agentDisplayName } from '@lobechat/types';
 import { Flexbox, SearchBar, Text, TextArea } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -118,7 +119,9 @@ const ForwardModal = memo<ForwardModalProps>(({ open, onClose }) => {
     const trimmed = keyword.trim().toLowerCase();
     return agents
       .filter((agent) => agent.type === 'agent' && agent.id !== currentAgentId)
-      .filter((agent) => !trimmed || (agent.title || '').toLowerCase().includes(trimmed));
+      .filter(
+        (agent) => !trimmed || (agentDisplayName(agent) ?? '').toLowerCase().includes(trimmed),
+      );
   }, [agents, currentAgentId, keyword]);
 
   const selectedAgents = useMemo(
@@ -186,7 +189,7 @@ const ForwardModal = memo<ForwardModalProps>(({ open, onClose }) => {
                     <SelectCircle checked={checked} />
                     <AgentAvatar avatar={avatarOf(agent.avatar)} />
                     <Text ellipsis style={{ flex: 1 }}>
-                      {agent.title || t('untitledAgent')}
+                      {agentDisplayName(agent, t('untitledAgent'))}
                     </Text>
                   </Flexbox>
                 );

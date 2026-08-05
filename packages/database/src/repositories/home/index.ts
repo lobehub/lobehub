@@ -1,13 +1,16 @@
 import {
   type SidebarAgentItem,
+  type SidebarAgentLabel,
   type SidebarAgentListResponse,
   type SidebarGroup,
 } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
-import { and, count, desc, eq, inArray, isNull, not, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNull, not, or, sql } from 'drizzle-orm';
 
 import { ChatGroupModel } from '../../models/chatGroup';
 import {
+  agentLabelAssignments,
+  agentLabels,
   agents,
   agentsToSessions,
   chatGroups,
@@ -60,8 +63,15 @@ export class HomeRepository {
 
   /**
    * Get sidebar agent list with pinned, grouped, and ungrouped items
+   *
+   * @param includeLabels - whether the caller holds `agent_label:read`. The
+   *   router decides; defaulting to `true` keeps personal mode and every
+   *   existing caller unchanged, since that grant only exists in a workspace.
    */
-  async getSidebarAgentList(): Promise<SidebarAgentListResponse> {
+  async getSidebarAgentList(
+    includeLabels = true,
+    includeGroups = true,
+  ): Promise<SidebarAgentListResponse> {
     // 1. Query all agents (non-virtual) with their session info (if exists).
     //    `visibility` is selected so we can later bucket public vs. the
     //    current user's private rows; the WHERE already hides other members'
@@ -75,6 +85,7 @@ export class HomeRepository {
         backgroundColor: agents.backgroundColor,
         description: agents.description,
         id: agents.id,
+        name: agents.name,
         pinned: agents.pinned,
         sessionGroupId: sessions.groupId,
         sessionId: sessions.id,
@@ -132,24 +143,39 @@ export class HomeRepository {
     // loaded topics for.
     const { agentUnread, groupUnread } = await this.getUnreadCounts();
 
-    // 3. Query all sessionGroups (user-defined folders)
-    const groupList = await this.db
-      .select({
-        id: sessionGroups.id,
-        name: sessionGroups.name,
-        sort: sessionGroups.sort,
-        userId: sessionGroups.userId,
-        visibility: sessionGroups.visibility,
-      })
-      .from(sessionGroups)
-      .where(
-        buildWorkspaceWhere(this.scope, {
-          userId: sessionGroups.userId,
-          workspaceId: sessionGroups.workspaceId,
-          visibility: sessionGroups.visibility,
-        }),
-      )
-      .orderBy(sessionGroups.sort);
+    // 2.3 Labels applied to agents — one scope-wide query, attached per item
+    // in processAgentList so the list can render tags / group by label.
+    //
+    // Skipped when the caller lacks the label read grant: the registry is
+    // gated on `agent_label:read`, and this payload carries the same label
+    // names and colors, so returning it anyway would just be a second way in.
+    const agentLabelsMap = includeLabels ? await this.getAgentLabelsMap() : new Map();
+
+    // 3. Query sessionGroups (user-defined folders). Folders are the shared
+    // skeleton of a workspace sidebar: every member sees the same public
+    // folders, in the same shared order. Private folders stay scoped to their
+    // creator through the standard visibility predicate. Items whose groupId
+    // points at a folder invisible to the caller fall back to the ungrouped
+    // list in processAgentList.
+    const groupList = !includeGroups
+      ? []
+      : await this.db
+          .select({
+            id: sessionGroups.id,
+            name: sessionGroups.name,
+            sort: sessionGroups.sort,
+            userId: sessionGroups.userId,
+            visibility: sessionGroups.visibility,
+          })
+          .from(sessionGroups)
+          .where(
+            buildWorkspaceWhere(this.scope, {
+              userId: sessionGroups.userId,
+              workspaceId: sessionGroups.workspaceId,
+              visibility: sessionGroups.visibility,
+            }),
+          )
+          .orderBy(sessionGroups.sort);
 
     // 4. Process and categorize
     return this.processAgentList(
@@ -159,7 +185,40 @@ export class HomeRepository {
       memberAvatarsMap,
       agentUnread,
       groupUnread,
+      agentLabelsMap,
     );
+  }
+
+  /**
+   * Labels applied to agents in the current scope, keyed by agent id. The
+   * junction rows carry the same workspace scoping as the label registry, so
+   * one predicate covers both personal and workspace mode.
+   */
+  private async getAgentLabelsMap(): Promise<Map<string, SidebarAgentLabel[]>> {
+    const rows = await this.db
+      .select({
+        agentId: agentLabelAssignments.agentId,
+        color: agentLabels.color,
+        id: agentLabels.id,
+        name: agentLabels.name,
+      })
+      .from(agentLabelAssignments)
+      .innerJoin(agentLabels, eq(agentLabelAssignments.labelId, agentLabels.id))
+      .where(
+        buildWorkspaceWhere(this.scope, {
+          userId: agentLabelAssignments.userId,
+          workspaceId: agentLabelAssignments.workspaceId,
+        }),
+      )
+      .orderBy(asc(agentLabels.name));
+
+    const map = new Map<string, SidebarAgentLabel[]>();
+    for (const { agentId, ...label } of rows) {
+      const existing = map.get(agentId) || [];
+      existing.push(label);
+      map.set(agentId, existing);
+    }
+    return map;
   }
 
   /**
@@ -221,6 +280,7 @@ export class HomeRepository {
       backgroundColor: string | null;
       description: string | null;
       id: string;
+      name: string | null;
       pinned: boolean | null;
       sessionGroupId: string | null;
       sessionId: string | null;
@@ -252,7 +312,13 @@ export class HomeRepository {
     memberAvatarsMap: Map<string, Array<{ avatar: string; background?: string }>>,
     agentUnread: Map<string, number> = new Map(),
     groupUnread: Map<string, number> = new Map(),
+    agentLabelsMap: Map<string, SidebarAgentLabel[]> = new Map(),
   ): SidebarAgentListResponse {
+    // Sidebar organization (folder membership + pin) is SHARED in workspace
+    // mode: it reads the same `sessionGroupId` / `pinned` columns as personal
+    // mode, so one member's grouping and pinning is what every member sees.
+    // The only per-member layer left is show/hide, applied client-side from
+    // `sidebarAgentVisibilityOverrides` / `sidebarHiddenGroupIds`.
     // Convert to unified format
     // For pinned status: agents.pinned takes priority, fallback to sessions.pinned for backward compatibility
     // For groupId: agents.sessionGroupId takes priority, fallback to sessions.groupId for backward compatibility
@@ -273,11 +339,23 @@ export class HomeRepository {
           avatar: meta.avatar,
           backgroundColor: a.backgroundColor,
           description: a.description,
-          groupId: a.agentSessionGroupId ?? a.sessionGroupId,
+          // Legacy fallback, personal scope only. `sessions` are per-user rows
+          // and this join does not filter by the caller, so in a workspace the
+          // fallback would hand one member's old per-session folder to every
+          // member — arbitrarily, since which session wins depends on the join.
+          // That was harmless while folders were per-member; now that the
+          // sidebar is shared it would publish one person's legacy state.
+          groupId: this.workspaceId
+            ? a.agentSessionGroupId
+            : (a.agentSessionGroupId ?? a.sessionGroupId),
           heterogeneousType: a.agencyConfig?.heterogeneousProvider?.type ?? null,
           id: a.id,
           isPrivate: visibility === 'private',
-          pinned: a.pinned ?? a.sessionPinned ?? false,
+          labels: agentLabelsMap.get(a.id),
+          name: a.name,
+          // Same personal-only reasoning as `groupId`: `sessions.pinned` is one
+          // member's legacy pin, and pins are shared again.
+          pinned: this.workspaceId ? (a.pinned ?? false) : (a.pinned ?? a.sessionPinned ?? false),
           sessionId: a.sessionId,
           slug: a.slug,
           title: meta.title,
@@ -316,9 +394,11 @@ export class HomeRepository {
     allItems.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
 
     // Categorize: pinned / grouped / ungrouped, split by visibility. Pinned
-    // items always bubble to the top regardless of visibility so the user can
-    // surface their own private agents without leaving them buried.
+    // wins over grouping, but stays within its visibility bucket — a pinned
+    // private agent must surface at the top of the Private section, not jump
+    // into the shared (public) pinned list.
     const pinned: SidebarAgentItem[] = [];
+    const privatePinned: SidebarAgentItem[] = [];
     const ungrouped: SidebarAgentItem[] = [];
     const privateUngrouped: SidebarAgentItem[] = [];
     const groupedMap = new Map<string, SidebarAgentItem[]>();
@@ -340,7 +420,7 @@ export class HomeRepository {
       const cleanedItem = cleanObject(sidebarItem) as SidebarAgentItem;
 
       if (item.pinned) {
-        pinned.push(cleanedItem);
+        (isPrivate ? privatePinned : pinned).push(cleanedItem);
         continue;
       }
 
@@ -375,7 +455,7 @@ export class HomeRepository {
       });
     }
 
-    return { groups, pinned, privateGroups, privateUngrouped, ungrouped };
+    return { groups, pinned, privateGroups, privatePinned, privateUngrouped, ungrouped };
   }
 
   /**
@@ -396,6 +476,7 @@ export class HomeRepository {
           backgroundColor: agents.backgroundColor,
           description: agents.description,
           id: agents.id,
+          name: agents.name,
           pinned: agents.pinned,
           sessionId: sessions.id,
           sessionPinned: sessions.pinned,
@@ -458,7 +539,10 @@ export class HomeRepository {
           backgroundColor: a.backgroundColor,
           description: a.description,
           id: a.id,
-          pinned: a.pinned ?? a.sessionPinned ?? false,
+          name: a.name,
+          // Same personal-only reasoning as `groupId`: `sessions.pinned` is one
+          // member's legacy pin, and pins are shared again.
+          pinned: this.workspaceId ? (a.pinned ?? false) : (a.pinned ?? a.sessionPinned ?? false),
           sessionId: a.sessionId,
           title: meta.title,
           type: 'agent' as const,

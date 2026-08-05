@@ -5,8 +5,11 @@ import { memo, useMemo } from 'react';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
+import { useUserStore } from '@/store/user';
+import { authSelectors } from '@/store/user/slices/auth/selectors';
 import { SessionDefaultGroup } from '@/types/index';
 
+import { resolveAgentListContentState } from './agentListContentState';
 import Group from './Group';
 import InboxItem from './InboxItem';
 import SessionList from './List';
@@ -28,6 +31,13 @@ interface AgentListContentProps {
 // spinner on both Public and Private headers for no good reason.
 const AgentListContent = memo<AgentListContentProps>(({ hideInbox, onMoreClick }) => {
   const isInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
+  const authLoaded = useUserStore(authSelectors.isLoaded);
+  const isLogin = useUserStore(authSelectors.isLogin);
+  const contentState = resolveAgentListContentState({
+    authLoaded: !!authLoaded,
+    isInit,
+    isLogin: !!isLogin,
+  });
   const { customList, pinnedList, defaultList } = useAgentList();
 
   // Memoize computed visibility flags to prevent unnecessary recalculations
@@ -41,7 +51,13 @@ const AgentListContent = memo<AgentListContentProps>(({ hideInbox, onMoreClick }
     };
   }, [pinnedList?.length, customList?.length]);
 
-  if (!isInit) return <SkeletonList rows={6} />;
+  if (contentState !== 'ready')
+    return (
+      <>
+        {!hideInbox && <InboxItem style={{ minHeight: 36 }} />}
+        {contentState === 'loading' && <SkeletonList rows={3} />}
+      </>
+    );
 
   // Always render the default SessionList so the "+ Create Agent" entry is visible
   // even when the user has only the built-in Lobe AI inbox.

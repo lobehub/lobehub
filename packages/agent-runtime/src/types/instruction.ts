@@ -20,6 +20,9 @@ export interface AgentRuntimeContext {
    */
   initialContext?: RuntimeInitialContext;
 
+  /** Zero-based instruction position within the current runtime step */
+  instructionIndex?: number;
+
   metadata?: Record<string, unknown>;
 
   /** Operation ID (links to Operation for business context) */
@@ -255,6 +258,14 @@ export interface AgentInstructionCallTool extends AgentInstructionBase {
 
 export interface AgentInstructionCallToolsBatch extends AgentInstructionBase {
   payload: {
+    /**
+     * `tool_call_id → existing tool message id`, for tools whose row already
+     * exists as a pending placeholder (batch human approval: the approval pause
+     * created one row per pending tool). The executor UPDATES those rows instead
+     * of inserting new ones — without this, resuming an approved batch would
+     * duplicate every tool message and orphan the pending originals.
+     */
+    existingToolMessageIds?: Record<string, string>;
     parentMessageId: string;
     toolsCalling: ChatToolPayload[];
   } & any;
@@ -263,6 +274,15 @@ export interface AgentInstructionCallToolsBatch extends AgentInstructionBase {
 
 export interface AgentInstructionResolveAbortedTools extends AgentInstructionBase {
   payload: {
+    /**
+     * `tool_call_id → existing tool message id`, for calls whose row is already
+     * on disk as a pending placeholder (an approval pause creates one row per
+     * pending tool). The executor UPDATES those rows to the aborted state
+     * instead of inserting new ones — without this, aborting a parked approval
+     * duplicates every tool row and leaves the originals `pending`, so the
+     * approval cards stay on screen after Stop.
+     */
+    existingToolMessageIds?: Record<string, string>;
     /** Parent message ID (assistant message) */
     parentMessageId: string;
     /** Reason for the abort */
@@ -328,6 +348,17 @@ export interface AgentInstructionRequestHumanSelect extends AgentInstructionBase
 }
 
 export interface AgentInstructionRequestHumanApprove extends AgentInstructionBase {
+  /**
+   * The assistant message that emitted `pendingToolsCalling`. Any producer that
+   * creates pending tool rows should set it, so those rows land under their real
+   * owner — see the parent resolution comment in `executors/humanApprove.ts`.
+   *
+   * Optional for the `skipCreateToolMessage` (resume) paths, which create no
+   * rows, and for backwards compatibility with producers that omit it: the
+   * executor still falls back to scanning `state.messages`, which is accurate
+   * only within a single step.
+   */
+  parentMessageId?: string;
   pendingToolsCalling: ChatToolPayload[];
   reason?: string;
   skipCreateToolMessage?: boolean;

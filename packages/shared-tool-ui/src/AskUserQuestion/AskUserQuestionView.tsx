@@ -1,11 +1,12 @@
 'use client';
 
-import { Flexbox, Icon, Text, TextArea } from '@lobehub/ui';
+import { Flexbox, Hotkey, Icon, KeyMapEnum, Text, TextArea } from '@lobehub/ui';
 import { Button, Tabs } from '@lobehub/ui/base-ui';
 import { Check, PenLine, Send, X } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
+import { registerPendingHotkeyCard } from '../pendingHotkeys';
 import { formatRemaining, isQuestionAnswered } from './draft';
 import QuestionPanel from './QuestionPanel';
 import type { AskUserFormApi } from './useAskUserForm';
@@ -45,7 +46,8 @@ export interface AskUserQuestionViewProps extends AskUserFormApi {
  * - a Skip/Submit footer with an optional countdown.
  *
  * All state and handlers arrive via props (from `useAskUserForm`); this
- * component is pure view and holds no state of its own.
+ * component holds no state of its own — its only side effect is the
+ * window-level Enter-to-submit / Esc-to-skip shortcut listener.
  */
 export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
   const {
@@ -73,6 +75,71 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
     submitting,
   } = props;
 
+  const rootRef = useRef<HTMLDivElement>(null);
+  const portalRef = useRef(actionsPortalTarget);
+
+  // Page-level keyboard: Enter submits, Esc skips — the card is the pending
+  // interaction, so the shortcuts work without focusing it first. Backs off
+  // while the user is typing anywhere outside the card (chat composer
+  // included; the card's own textareas handle Enter via their onKeyDown while
+  // Esc keeps skipping there), when the event was already consumed (e.g. an
+  // overlay closing itself on Esc), or inside open overlays so Esc keeps
+  // meaning "close this overlay" there.
+  //
+  // Read through a ref so the arbiter registration below stays mount-stable
+  // while the handler always sees fresh state.
+  const onKeyDownRef = useRef<(event: KeyboardEvent) => void>(() => {});
+  useEffect(() => {
+    portalRef.current = actionsPortalTarget;
+    onKeyDownRef.current = (event) => {
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target) {
+        const tag = target.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) {
+          // Typing inside this card only backs off Enter (handled by the
+          // textarea itself) — the advertised Esc-to-skip must keep working.
+          // The IME guard keeps Esc-canceling a CJK composition from skipping.
+          const typingInCard = rootRef.current?.contains(target) ?? false;
+          if (!typingInCard || event.key !== 'Escape' || event.isComposing) return;
+        }
+        if (target.closest('[role="dialog"],[role="alertdialog"],[role="menu"]')) return;
+      }
+      if (event.key === 'Enter') {
+        if (event.shiftKey || isSubmitDisabled) return;
+        // A focused interactive control (e.g. tabbing to the Skip button, a
+        // tab, or a link) keeps its native Enter activation — hijacking it
+        // into submit would invert the keyboard user's intent.
+        if (
+          target?.closest(
+            'a,button,select,summary,[role="button"],[role="tab"],[role="option"],[role="menuitem"]',
+          )
+        )
+          return;
+        event.preventDefault();
+        handleSubmit();
+      } else if (event.key === 'Escape') {
+        if (submitting) return;
+        event.preventDefault();
+        handleSkip();
+      }
+    };
+  }, [actionsPortalTarget, handleSubmit, handleSkip, isSubmitDisabled, submitting]);
+
+  // Registered once per mount: the shared arbiter dispatches each keypress to
+  // exactly one pending card (containment first, then newest registration), so
+  // coexisting cards — this one, the global notification's, a tool-approval
+  // card — never race on the same keystroke, regardless of re-render timing.
+  useEffect(
+    () =>
+      registerPendingHotkeyCard({
+        contains: (node) =>
+          Boolean(rootRef.current?.contains(node)) || Boolean(portalRef.current?.contains(node)),
+        onKeyDown: (event) => onKeyDownRef.current(event),
+      }),
+    [],
+  );
+
   const footer = (
     <Flexbox
       horizontal
@@ -89,6 +156,7 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
       <Flexbox horizontal gap={8}>
         <Button disabled={submitting} icon={<Icon icon={X} />} onClick={handleSkip}>
           {labels.skip}
+          <Hotkey compact keys={KeyMapEnum.Esc} variant="borderless" />
         </Button>
         <Button
           disabled={isSubmitDisabled}
@@ -98,13 +166,14 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
           onClick={handleSubmit}
         >
           {labels.submit}
+          <Hotkey compact inverseTheme keys={KeyMapEnum.Enter} variant="borderless" />
         </Button>
       </Flexbox>
     </Flexbox>
   );
 
   return (
-    <Flexbox gap={12}>
+    <Flexbox gap={12} ref={rootRef}>
       {isMulti && (
         <Tabs
           activeKey={escapeActive ? 'escape' : activeTab}
@@ -154,6 +223,16 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
           value={escapeText}
           variant="filled"
           onChange={(e) => handleEscapeTextChange(e.target.value)}
+          onKeyDown={(e) => {
+            // Enter submits (Shift+Enter keeps inserting a newline); fall back
+            // to the default newline while submit is unavailable. The IME guard
+            // keeps CJK composition confirms from submitting the form.
+            if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return;
+            if (e.metaKey || e.ctrlKey || e.altKey) return;
+            if (isSubmitDisabled) return;
+            e.preventDefault();
+            handleSubmit();
+          }}
         />
       ) : (
         activeQuestion && (
@@ -165,6 +244,7 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
             multiSelectTag={labels.multiSelectTag}
             question={activeQuestion}
             onCustomChange={handleCustomChange}
+            onPressEnter={isSubmitDisabled ? undefined : handleSubmit}
             onToggle={handleToggle}
           />
         )

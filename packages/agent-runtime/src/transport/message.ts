@@ -13,6 +13,14 @@ export interface RuntimeMessageRef {
   topicId?: string | null;
 }
 
+export interface CreateAssistantMessageOptions {
+  /**
+   * Stable key for one logical assistant output. Persistent transports should
+   * return the existing message when a step is delivered more than once.
+   */
+  idempotencyKey?: string;
+}
+
 export interface QueryMessagesInput {
   agentId?: string;
   current?: number;
@@ -54,7 +62,10 @@ export interface UpdateToolMessageInput {
  * id the caller needs to anchor follow-up writes.
  */
 export interface MessageTransport {
-  createAssistantMessage: (params: CreateMessageParams) => Promise<RuntimeMessageRef>;
+  createAssistantMessage: (
+    params: CreateMessageParams,
+    options?: CreateAssistantMessageOptions,
+  ) => Promise<RuntimeMessageRef>;
   createToolMessage: (params: CreateMessageParams) => Promise<RuntimeMessageRef>;
   deleteMessage: (id: string) => Promise<void>;
   /** Existence / parent preflight; returns the id when present. */
@@ -62,5 +73,15 @@ export interface MessageTransport {
   query: (params?: QueryMessagesInput, options?: QueryMessagesOptions) => Promise<UIChatMessage[]>;
   update: (id: string, params: Partial<UpdateMessageParams>) => Promise<void>;
   updatePluginState: (id: string, state: Record<string, any>) => Promise<void>;
+  /**
+   * Move an existing tool row out of its `pending` approval state.
+   *
+   * Separate from {@link updateToolMessage} because intervention lives on the
+   * plugin row, not the message row. The abort path needs it: a parked approval
+   * already has one tool row per pending call, and Stop must settle THOSE rows —
+   * inserting fresh aborted rows instead leaves the originals `pending`, so the
+   * approval cards never clear.
+   */
+  updateToolIntervention: (id: string, intervention: Record<string, any>) => Promise<void>;
   updateToolMessage: (id: string, params: UpdateToolMessageInput) => Promise<void>;
 }

@@ -10,7 +10,7 @@
   "table.columns.duration": "Dauer",
   "table.columns.model": "Modell",
   "table.columns.spend": "Credits",
-  "table.columns.startTime": "Erstellt am",
+  "table.columns.time": "Zeit",
   "table.columns.totalTokens": "Token-Nutzung",
   "table.columns.trigger.enums.agent_signal": "Agentensignal",
   "table.columns.trigger.enums.api": "API-Aufruf",
@@ -43,6 +43,10 @@
   "table.filters.reset": "Zurücksetzen",
   "table.filters.searchModel": "Modell suchen",
   "table.filters.startDate": "Startdatum",
+  "table.pagination.next": "Nächste Seite",
+  "table.pagination.perPage": "{{size}} / Seite",
+  "table.pagination.prev": "Vorherige Seite",
+  "table.pagination.range": "{{from}}-{{to}} von {{total}} Elementen",
   "table.title": "Details zur Nutzung von Rechen-Credits",
   "table.totalToken.input": "Eingabe",
   "table.totalToken.output": "Ausgabe",
@@ -66,8 +70,8 @@
   "usageStats.chart.title": "Wann dieser Agent ausgegeben hat",
   "usageStats.chart.tokens": "Token",
   "usageStats.dimension": "Dimension",
-  "usageStats.entry": "Nutzung & Kosten",
+  "usageStats.entry": "Statistiken",
   "usageStats.range": "Zeitraum",
   "usageStats.rangeSuffix": "Letzte {{count}} Tage",
-  "usageStats.title": "Nutzung & Kosten"
+  "usageStats.title": "Statistiken"
 }

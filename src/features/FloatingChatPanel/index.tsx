@@ -15,7 +15,7 @@ import {
   ConversationProvider,
 } from '@/features/Conversation';
 import { useChatFollowUp } from '@/features/Conversation/hooks/useChatFollowUp';
-import { type ConversationContext } from '@/features/Conversation/types';
+import { type ConversationContext, type MessagesChangeMeta } from '@/features/Conversation/types';
 import { mergeConversationHooks } from '@/features/Conversation/utils/mergeConversationHooks';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useActionsBarConfig } from '@/routes/(main)/agent/features/Conversation/useActionsBarConfig';
@@ -162,8 +162,8 @@ const FloatingChatPanel = memo<FloatingChatPanelProps>(
     const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
     const replaceMessages = useChatStore((s) => s.replaceMessages);
     const handleMessagesChange = useCallback(
-      (next: UIChatMessage[], ctx: ConversationContext) => {
-        replaceMessages(next, { context: ctx });
+      (next: UIChatMessage[], ctx: ConversationContext, meta?: MessagesChangeMeta) => {
+        replaceMessages(next, { context: ctx, source: meta?.source });
       },
       [replaceMessages],
     );

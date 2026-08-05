@@ -39,6 +39,8 @@ export const TERMS_URL = urlJoin(OFFICIAL_SITE, '/terms');
 
 export const PLUGINS_INDEX_URL = 'https://chat-plugins.lobehub.com';
 
+export const OPS_ASSETS_BASE_URL = 'https://chat-cloud.lobeobjects.space/dc/ops-assets';
+
 export const MORE_MODEL_PROVIDER_REQUEST_URL =
   'https://github.com/lobehub/lobe-chat/discussions/6157';
 

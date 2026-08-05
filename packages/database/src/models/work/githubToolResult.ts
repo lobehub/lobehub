@@ -6,6 +6,7 @@ import type {
 } from '@lobechat/types';
 
 import { WORK_DESCRIPTION_PREVIEW_LENGTH } from './internal';
+import { parseShellCommandSegments } from './shellCommandParsing';
 import {
   type ExternalToolWorkOperation,
   fromRecord,
@@ -21,7 +22,7 @@ import {
 type GithubWorkEntityType = 'issue' | 'pull_request';
 
 /**
- * Only successful create/edit results become Works (LOBE-10967): read-only
+ * Only successful create/edit results become Works: read-only
  * queries (get/list/search), comments, and branch/repo operations are
  * intentionally excluded, mirroring the Linear adaptation.
  *
@@ -251,105 +252,6 @@ const buildParams = (
 // gh CLI (`runCommand`) parsing
 // ---------------------------------------------------------------------------
 
-const CONTROL_OPERATORS = new Set(['&&', '||', ';', '|', '&']);
-
-/**
- * Minimal POSIX-ish tokenizer: whitespace splitting with single/double quote
- * and backslash handling. Returns null on unterminated quotes — better to
- * skip registration than to mis-attribute flag values.
- *
- * Deliberately hand-rolled instead of adding a `shell-quote`-style dependency:
- * a real shell parser would also expand what we must keep literal (`$VAR`,
- * globs) and adds a dependency to the database package for a best-effort
- * bookkeeping path whose worst failure mode is skipping a Work registration.
- * Known trade-off: quoting is stripped before operator splitting, so a quoted
- * literal like `--title '&&'` is treated as a control operator and at worst
- * truncates the parsed segment. Edge cases are pinned in
- * `__tests__/githubToolResult.test.ts`.
- */
-const tokenizeShellCommand = (input: string): string[] | null => {
-  const tokens: string[] = [];
-  let current = '';
-  let hasCurrent = false;
-  let i = 0;
-
-  const push = () => {
-    if (hasCurrent) {
-      tokens.push(current);
-      current = '';
-      hasCurrent = false;
-    }
-  };
-
-  while (i < input.length) {
-    const ch = input[i];
-
-    if (ch === "'") {
-      const end = input.indexOf("'", i + 1);
-      if (end === -1) return null;
-      current += input.slice(i + 1, end);
-      hasCurrent = true;
-      i = end + 1;
-    } else if (ch === '"') {
-      i++;
-      let closed = false;
-      while (i < input.length) {
-        const c = input[i];
-        if (c === '\\' && '"\\$`'.includes(input[i + 1] ?? '')) {
-          current += input[i + 1];
-          i += 2;
-        } else if (c === '"') {
-          closed = true;
-          i++;
-          break;
-        } else {
-          current += c;
-          i++;
-        }
-      }
-      if (!closed) return null;
-      hasCurrent = true;
-    } else if (ch === '\\') {
-      // Backslash-newline is a line continuation; otherwise escape the next char.
-      if (input[i + 1] === '\n') {
-        i += 2;
-      } else {
-        current += input[i + 1] ?? '';
-        hasCurrent = true;
-        i += 2;
-      }
-    } else if (/\s/.test(ch)) {
-      push();
-      i++;
-    } else {
-      current += ch;
-      hasCurrent = true;
-      i++;
-    }
-  }
-
-  push();
-  return tokens;
-};
-
-/** Split a token stream on whitespace-separated shell control operators. */
-const splitCommandSegments = (tokens: string[]): string[][] => {
-  const segments: string[][] = [];
-  let current: string[] = [];
-
-  for (const token of tokens) {
-    if (CONTROL_OPERATORS.has(token)) {
-      if (current.length > 0) segments.push(current);
-      current = [];
-    } else {
-      current.push(token);
-    }
-  }
-
-  if (current.length > 0) segments.push(current);
-  return segments;
-};
-
 /**
  * gh flags that consume a value. Needed even for flags we don't extract, so
  * their values are not misread as positional targets (`gh issue edit 952`).
@@ -520,12 +422,12 @@ const normalizeGithubCliResult = (
   const command = fromRecord(record, ['command']) ?? fromRecord(args, ['command']);
   if (!command) return null;
 
-  const tokens = tokenizeShellCommand(command);
-  if (!tokens) return null;
+  const segments = parseShellCommandSegments(command);
+  if (!segments) return null;
 
   // A chained command (`git push && gh pr create ...`) reports one combined
   // stdout; the trailing URL belongs to the last gh create/edit segment.
-  const parsed = splitCommandSegments(tokens)
+  const parsed = segments
     .map(parseGhSegment)
     .findLast((segment): segment is ParsedGhCommand => !!segment);
   if (!parsed) return null;
@@ -584,6 +486,25 @@ const normalizeGithubCliResult = (
     },
     type: 'register',
   };
+};
+
+/**
+ * Normalize a HETEROGENEOUS / device shell tool result (codex
+ * `command_execution`, claude-code `Bash`, lobe-local-system `runCommand`) that
+ * may have run `gh issue|pr create/edit`.
+ *
+ * Reuses the github skill's gh-CLI parsing wholesale: callers present the
+ * record as `data: { command, output, exitCode }`. Unlike
+ * {@link normalizeGithubToolResult} there is no toolName gate — the caller has
+ * already scoped the record to a shell tool, and `toolName` carries the real
+ * provenance name (`Bash` / `command_execution` / `runCommand`).
+ */
+export const normalizeGithubShellToolResult = (
+  params: SkillToolResultWorkInput,
+): ExternalToolWorkOperation | null => {
+  if (isApplicationError(params.data)) return null;
+
+  return normalizeGithubCliResult(params);
 };
 
 export const normalizeGithubToolResult = (

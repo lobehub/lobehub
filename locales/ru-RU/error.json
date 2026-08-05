@@ -156,6 +156,7 @@
   "upload.networkError": "Проверьте подключение к сети и убедитесь, что CORS настроен правильно для сервиса хранения файлов.",
   "upload.permissionDenied": "У вас нет разрешения на загрузку файлов в это рабочее пространство.",
   "upload.storageBlock.billingUnavailable": "Статус вашей подписки не может быть подтвержден. Попробуйте позже или обновите данные для оплаты.",
+  "upload.storageBlock.cleanupFiles": "Освободить место",
   "upload.storageBlock.monthlyCapReached": "Достигнут месячный лимит расходов на хранилище.",
   "upload.storageBlock.noPaymentMethod": "Добавьте способ оплаты, чтобы продолжить загрузку.",
   "upload.storageBlock.overageNotEnabled": "Ваше хранилище заполнено. Включите оплату по мере использования, чтобы продолжить загрузку.",

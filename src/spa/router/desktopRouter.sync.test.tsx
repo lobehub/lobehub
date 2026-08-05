@@ -1,224 +1,280 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import type { ReactElement } from 'react';
 import type { RouteObject } from 'react-router';
 import { matchRoutes } from 'react-router';
 import { describe, expect, it } from 'vitest';
 
+import BrandTextLoading from '@/components/Loading/BrandTextLoading';
+import ContentLoading from '@/components/Loading/ContentLoading';
 import { WORKSPACE_SETTINGS_TABS } from '@/features/Workspace/workspaceAwarePath';
+import AppShellSkeleton from '@/spa/BootShell/AppShellSkeleton';
+import { createTabRouter } from '@/spa/router/tabRouter';
 
-import { desktopRoutes } from './desktopRouter.config';
+import {
+  createMainAreaChildren as createWebMainAreaChildren,
+  desktopRoutes as webDesktopRoutes,
+} from './desktopRouter.config';
+import {
+  createMainAreaChildren as createElectronMainAreaChildren,
+  desktopRoutes as electronDesktopRoutes,
+} from './desktopRouter.config.desktop';
 
-/**
- * Known path pairs that intentionally differ between web and desktop (Electron).
- * Map: desktop path → web path
- */
-const KNOWN_DIVERGENCES: Record<string, string> = {
-  '/desktop-onboarding': '/onboarding',
+type MainAreaFactory = () => RouteObject[];
+
+const mainAreaVariants: Array<[string, MainAreaFactory]> = [
+  ['Web', createWebMainAreaChildren],
+  ['Electron', createElectronMainAreaChildren],
+];
+
+const createMainAreaRoutes = (factory: MainAreaFactory): RouteObject[] => [
+  { children: factory(), path: '/' },
+];
+
+const findWorkspaceSettingsRoute = (factory: MainAreaFactory) => {
+  const workspaceRoute = factory().find((route) => route.path === ':workspaceSlug');
+  return workspaceRoute?.children?.find((route) => route.path === 'settings');
 };
 
-/**
- * Web-only routes intentionally absent from Electron (no in-app entry points there).
- * Paths are flat `path: '...'` literals extracted from both configs.
- */
-const WEB_ONLY_PATHS = new Set([
-  '/onboarding',
-  '/onboarding/agent',
-  '/onboarding/classic',
-  // Messenger link flow — web/CLI only (the verify workspace + acceptance
-  // pages ship on Electron too, so they are synced, not listed here)
-  '/verify-im',
-]);
+const collectPaths = (routes: RouteObject[]): string[] =>
+  routes.flatMap((route) =>
+    route.path
+      ? [route.path, ...collectPaths(route.children ?? [])]
+      : collectPaths(route.children ?? []),
+  );
 
-/** Extra `index: true` routes present only on web. */
-const WEB_ONLY_INDEX_DELTA = 0;
+const routeShape = (routes: RouteObject[]): unknown =>
+  routes.map((route) => ({
+    children: route.children ? routeShape(route.children) : undefined,
+    index: route.index === true || undefined,
+    path: route.path,
+  }));
 
-/** handle.meta blobs present only on web. */
-const WEB_ONLY_HANDLE_METAS = new Set<string>([]);
-
-function extractIndexCount(source: string) {
-  return [...source.matchAll(/index:\s*true/g)].length;
+async function readRouterSources() {
+  return Promise.all(
+    [
+      'desktopRouter.shared.tsx',
+      'desktopRouter.config.tsx',
+      'desktopRouter.config.desktop.tsx',
+    ].map((filename) => readFile(path.join(process.cwd(), 'src/spa/router', filename), 'utf8')),
+  );
 }
 
-function extractHandleMetas(source: string) {
-  const metas: string[] = [];
-  const marker = 'handle:';
+describe('desktop router shared definition', () => {
+  it('matches the nested acceptance check route on Web only', () => {
+    const matches = matchRoutes(webDesktopRoutes, '/acceptance/acceptance-1/check/check-1');
 
-  let cursor = source.indexOf(marker);
-  while (cursor !== -1) {
-    const braceStart = source.indexOf('{', cursor + marker.length);
-    let depth = 0;
-    let end = braceStart;
-    for (; end < source.length; end += 1) {
-      const char = source[end];
-      if (char === '{') depth += 1;
-      else if (char === '}') {
-        depth -= 1;
-        if (depth === 0) break;
+    expect(matches?.at(-1)?.route.path).toBe(':acceptanceId/check/:checkId');
+    expect(matches?.at(-1)?.params).toMatchObject({
+      acceptanceId: 'acceptance-1',
+      checkId: 'check-1',
+    });
+    expect(electronDesktopRoutes.some((route) => route.path === '/acceptance')).toBe(false);
+  });
+
+  it.each(mainAreaVariants)(
+    '%s agent sub-pages declare route meta so tab titles are not bare branding',
+    (_, createMainAreaChildren) => {
+      for (const pathname of [
+        '/agent/agent-1/profile',
+        '/agent/agent-1/channel',
+        '/agent/agent-1/channel/slack',
+        '/agent/agent-1/statistics',
+        '/group/group-1/profile',
+      ]) {
+        const matches = matchRoutes(createMainAreaRoutes(createMainAreaChildren), pathname);
+        const meta = matches
+          ?.map((match) => (match.route.handle as { meta?: unknown } | undefined)?.meta)
+          .findLast(Boolean);
+
+        expect(matches, `${pathname} must match a route`).toBeTruthy();
+        expect(meta, `${pathname} must declare handle.meta`).toBeDefined();
       }
-    }
+    },
+  );
 
-    metas.push(source.slice(braceStart, end + 1).replaceAll(/\s+/g, ' '));
-    cursor = source.indexOf(marker, end + 1);
-  }
+  it.each(mainAreaVariants)('%s keeps legacy agent stats deep-links matching', (_, factory) => {
+    const matches = matchRoutes(createMainAreaRoutes(factory), '/agent/agent-1/stats');
 
-  return metas.sort();
-}
-
-function extractPaths(source: string) {
-  return [...source.matchAll(/path:\s*'([^']+)'/g)].map((match) => match[1]);
-}
-
-function normalizePaths(paths: string[]) {
-  return [...new Set(paths.map((path) => KNOWN_DIVERGENCES[path] ?? path))]
-    .filter((path) => !WEB_ONLY_PATHS.has(path))
-    .sort();
-}
-
-async function readDesktopRouterSources() {
-  return Promise.all([
-    readFile(path.join(process.cwd(), 'src/spa/router/desktopRouter.config.tsx'), 'utf8'),
-    readFile(path.join(process.cwd(), 'src/spa/router/desktopRouter.config.desktop.tsx'), 'utf8'),
-  ]);
-}
-
-describe('desktopRouter config sync', () => {
-  it('personal memory settings route is not shadowed by workspace memory route', () => {
-    const matches = matchRoutes(desktopRoutes, '/settings/memory');
-    const paths = matches?.map((match) => match.route.path);
-
-    expect(paths).toContain('settings');
-    expect(paths).not.toContain(':workspaceSlug');
-    expect(paths?.at(-1)).toBe('memory');
-    expect(matches?.at(-1)?.route.handle).toMatchObject({ settingsTab: 'memory' });
+    expect(matches?.at(-1)?.route.path).toBe('stats');
   });
 
-  it('desktop (sync) route paths must match web (async) route paths', async () => {
-    const [asyncSource, syncSource] = await readDesktopRouterSources();
+  it.each(mainAreaVariants)(
+    '%s personal memory settings are not shadowed by workspace memory routes',
+    (_, factory) => {
+      const matches = matchRoutes(createMainAreaRoutes(factory), '/settings/memory');
+      const paths = matches?.map((match) => match.route.path);
 
-    const asyncPaths = normalizePaths(extractPaths(asyncSource));
-    const syncPaths = normalizePaths(extractPaths(syncSource));
+      expect(paths).toContain('settings');
+      expect(paths).not.toContain(':workspaceSlug');
+      expect(paths?.at(-1)).toBe('memory');
+      expect(matches?.at(-1)?.route.handle).toMatchObject({ settingsTab: 'memory' });
+    },
+  );
 
-    const missingInSync = asyncPaths.filter((p) => !syncPaths.includes(p));
-    const extraInSync = syncPaths.filter((p) => !asyncPaths.includes(p));
-    const asyncIndexCount = extractIndexCount(asyncSource);
-    const syncIndexCount = extractIndexCount(syncSource);
-
-    expect(missingInSync, `Missing in desktop config: ${missingInSync.join(', ')}`).toEqual([]);
-    expect(extraInSync, `Extra in desktop config: ${extraInSync.join(', ')}`).toEqual([]);
-    expect(syncIndexCount, 'Desktop config index route count must match async config').toBe(
-      asyncIndexCount - WEB_ONLY_INDEX_DELTA,
+  it('generates identical main-area path and nesting behavior for Web and Electron', () => {
+    expect(routeShape(createElectronMainAreaChildren())).toEqual(
+      routeShape(createWebMainAreaChildren()),
     );
   });
 
-  it('route handle.meta declarations must match between web and desktop configs', async () => {
-    const [asyncSource, syncSource] = await readDesktopRouterSources();
-
-    const asyncMetas = extractHandleMetas(asyncSource).filter(
-      (meta) => !WEB_ONLY_HANDLE_METAS.has(meta),
-    );
-    const syncMetas = extractHandleMetas(syncSource);
-
-    expect(asyncMetas.length, 'Async config must declare at least one handle.meta').toBeGreaterThan(
-      0,
-    );
-    expect(syncMetas, 'Desktop config handle.meta declarations must match async config').toEqual(
-      asyncMetas,
-    );
-  });
-
-  it('workspace settings tree is registered with all tabs in both configs', async () => {
-    const [asyncSource, syncSource] = await readDesktopRouterSources();
-
-    const requiredImportTargets = [
-      '@/routes/(main)/[workspaceSlug]/settings/_layout',
-      '@/routes/(main)/[workspaceSlug]/settings/general',
-      '@/routes/(main)/[workspaceSlug]/settings/members',
-      '@/routes/(main)/[workspaceSlug]/settings/plans',
-      '@/routes/(main)/[workspaceSlug]/settings/billing',
-      '@/routes/(main)/[workspaceSlug]/settings/credits',
-      '@/routes/(main)/[workspaceSlug]/settings/usage',
-      '@/routes/(main)/[workspaceSlug]/settings/skill',
-      '@/routes/(main)/[workspaceSlug]/settings/connector',
-      '@/routes/(main)/[workspaceSlug]/settings/oauth-apps',
-      '@/routes/(main)/[workspaceSlug]/settings/audit-log',
+  it('keeps all route modules behind lazy import boundaries', async () => {
+    const sources = await readRouterSources();
+    const combinedSource = sources.join('\n');
+    const eagerDefaultRouteImports = [
+      ...combinedSource.matchAll(/^import\s+[A-Z]\w*\s+from\s+'@\/routes\//gm),
+    ];
+    const lazyRouteImports = [
+      ...combinedSource.matchAll(
+        /(?:dynamicElement|dynamicLayout)\(\s*\(\) => (?:loadRouteWithBuiltinToolSurfaces\(\(\) => )?import\(['"]@\/routes\//g,
+      ),
     ];
 
-    for (const target of requiredImportTargets) {
-      expect(asyncSource, `async config missing ${target}`).toContain(`import('${target}')`);
-      expect(syncSource, `sync config missing ${target}`).toContain(`from '${target}'`);
-    }
-
-    // Old billing route directory is gone in both configs
-    expect(asyncSource).not.toContain('@/routes/(main)/[workspaceSlug]/billing/_layout');
-    expect(asyncSource).not.toContain('@/routes/(main)/[workspaceSlug]/billing/plans');
-    expect(syncSource).not.toContain('@/routes/(main)/[workspaceSlug]/billing/_layout');
-    expect(syncSource).not.toContain('@/routes/(main)/[workspaceSlug]/billing/plans');
-
-    // Legacy /:slug/billing/* redirects still exist (string match — the
-    // `path: 'billing'` block under `:workspaceSlug` is preserved as redirects)
-    expect(asyncSource).toContain("redirectElement('../settings/plans')");
-    expect(syncSource).toContain("redirectElement('../settings/plans')");
+    expect(eagerDefaultRouteImports).toHaveLength(0);
+    expect(combinedSource).not.toContain(
+      "import { ProviderDetailPage, ProviderLayout } from '@/routes/(main)/settings/provider'",
+    );
+    expect(lazyRouteImports.length).toBeGreaterThan(100);
   });
 
-  it('keeps workspace-aware settings tabs aligned with registered workspace routes', () => {
-    const rootRoute = desktopRoutes.find((route) => route.path === '/');
-    const workspaceRoute = rootRoute?.children?.find((route) => route.path === ':workspaceSlug');
-    const settingsRoute = workspaceRoute?.children?.find((route) => route.path === 'settings');
+  it('owns prioritized preload registration only in the shared route definition', async () => {
+    const [sharedSource, webSource, electronSource] = await readRouterSources();
 
-    expect(settingsRoute, 'Workspace settings route must exist').toBeDefined();
+    expect([...sharedSource.matchAll(/preloadId:\s*'[^']+'/g)].length).toBeGreaterThan(0);
+    expect(webSource).not.toContain('preloadId:');
+    expect(electronSource).not.toContain('preloadId:');
+  });
 
-    const collectPaths = (routes: RouteObject[]): string[] =>
-      routes.flatMap((route) =>
-        route.path
-          ? [route.path, ...collectPaths(route.children ?? [])]
-          : collectPaths(route.children ?? []),
-      );
-    const registeredTabs = [
-      ...new Set(
-        collectPaths(settingsRoute?.children ?? []).map(
-          (registeredPath) => registeredPath.split('/')[0],
+  it('does not opt Electron out of the post-render route preload scheduler', async () => {
+    const source = await readFile(
+      path.join(process.cwd(), 'src/spa/initialize/routePreload.ts'),
+      'utf8',
+    );
+
+    expect(source).not.toContain("typeof window === 'undefined' || __ELECTRON__");
+  });
+
+  it('keeps platform differences limited to root composition and runtime-only routes', () => {
+    const webRoot = webDesktopRoutes.find((route) => route.path === '/');
+    const electronRoot = electronDesktopRoutes.find((route) => route.path === '/');
+    const webPaths = webDesktopRoutes.map((route) => route.path);
+    const electronPaths = electronDesktopRoutes.map((route) => route.path);
+
+    expect(webRoot?.children).toHaveLength(createWebMainAreaChildren().length);
+    expect(electronRoot?.children).toMatchObject([
+      { element: null, index: true },
+      { element: null, path: '*' },
+    ]);
+    expect(webPaths).toContain('/verify-im');
+    expect(webPaths).toContain('/share/t');
+    expect(webPaths).toContain('/share/page');
+    expect(webPaths).toContain('/verify');
+    expect(webPaths).toContain('/acceptance');
+    expect(webPaths).toContain('/onboarding');
+    expect(webPaths).not.toContain('/desktop-onboarding');
+    expect(electronPaths).not.toContain('/verify-im');
+    expect(electronPaths).not.toContain('/share/t');
+    expect(electronPaths).not.toContain('/share/page');
+    expect(electronPaths).not.toContain('/verify');
+    expect(electronPaths).not.toContain('/acceptance');
+    expect(electronPaths).not.toContain('/onboarding');
+    expect(electronPaths).toContain('/desktop-onboarding');
+  });
+
+  it.each([
+    ['Web', webDesktopRoutes],
+    ['Electron', electronDesktopRoutes],
+  ])('%s hands the boot shell over to the same skeleton, not the brand logo', (_, routes) => {
+    const root = routes.find((route) => route.path === '/');
+    const { fallback } = (root?.element as ReactElement<{ fallback: ReactElement }>).props;
+
+    expect(fallback.type).toBe(AppShellSkeleton);
+  });
+
+  // `dynamicElement` / `dynamicLayout` wrap each route element in their own
+  // Suspense, which always beats an outlet-level boundary — so without the
+  // rewrite the brand wordmark reappears inside the container for 1–2s on a
+  // cold deep link, right after the boot shell hands over.
+  const collectFallbacks = (list: RouteObject[]): unknown[] => {
+    const fallbacks: unknown[] = [];
+    const walk = (routes: RouteObject[]) => {
+      for (const route of routes) {
+        const element = route.element as ReactElement<{ fallback?: ReactElement }> | undefined;
+        if (element?.props?.fallback) fallbacks.push(element.props.fallback.type);
+        if (route.children) walk(route.children);
+      }
+    };
+    walk(list);
+    return fallbacks;
+  };
+
+  it.each([
+    // Electron's root tree holds only TabHost stubs — its real content routes
+    // live in the per-tab memory routers, which build their own tree.
+    ['Web', () => webDesktopRoutes.find((route) => route.path === '/')?.children ?? []],
+    ['Electron', () => createTabRouter('/').routes[0]?.children ?? []],
+  ])('%s main-area routes load behind the content fallback, not the brand logo', (_, getRoutes) => {
+    const fallbacks = collectFallbacks(getRoutes());
+
+    expect(fallbacks.length).toBeGreaterThan(0);
+    expect(fallbacks).not.toContain(BrandTextLoading);
+    expect(new Set(fallbacks)).toEqual(new Set([ContentLoading]));
+  });
+
+  it('injects Home only into Electron per-tab content routes', () => {
+    const webChildren = createWebMainAreaChildren();
+    const electronChildren = createElectronMainAreaChildren();
+    const webWorkspace = webChildren.find((route) => route.path === ':workspaceSlug');
+    const electronWorkspace = electronChildren.find((route) => route.path === ':workspaceSlug');
+
+    expect(webChildren.find((route) => route.index)?.element).toBeUndefined();
+    expect(webWorkspace?.children?.find((route) => route.index)?.element).toBeUndefined();
+    expect(electronChildren.find((route) => route.index)?.element).toBeDefined();
+    expect(electronWorkspace?.children?.find((route) => route.index)?.element).toBeDefined();
+  });
+
+  it.each(mainAreaVariants)(
+    '%s registers every workspace-aware settings tab',
+    (_, createMainAreaChildren) => {
+      const settingsRoute = findWorkspaceSettingsRoute(createMainAreaChildren);
+      const registeredTabs = [
+        ...new Set(
+          collectPaths(settingsRoute?.children ?? []).map(
+            (registeredPath) => registeredPath.split('/')[0],
+          ),
         ),
-      ),
-    ].sort();
-    const workspaceAwareTabs = [...WORKSPACE_SETTINGS_TABS].sort();
+      ].sort();
 
-    expect(
-      workspaceAwareTabs,
-      'WORKSPACE_SETTINGS_TABS must exactly match the registered workspace settings routes',
-    ).toEqual(registeredTabs);
-  });
+      expect(settingsRoute, 'Workspace settings route must exist').toBeDefined();
+      expect(registeredTabs).toEqual([...WORKSPACE_SETTINGS_TABS].sort());
+    },
+  );
 
-  it('workspace OAuth apps list and detail routes are registered', () => {
-    const listMatches = matchRoutes(desktopRoutes, '/acme/settings/oauth-apps');
-    const detailMatches = matchRoutes(desktopRoutes, '/acme/settings/oauth-apps/client-1');
+  it.each(mainAreaVariants)(
+    '%s registers workspace OAuth app list and detail routes',
+    (_, factory) => {
+      const routes = createMainAreaRoutes(factory);
+      const listMatches = matchRoutes(routes, '/acme/settings/oauth-apps');
+      const detailMatches = matchRoutes(routes, '/acme/settings/oauth-apps/client-1');
 
-    expect(listMatches?.at(-1)?.route.path).toBe('oauth-apps');
-    expect(detailMatches?.at(-1)?.route.path).toBe('oauth-apps/:sub');
-    expect(detailMatches?.at(-1)?.params).toMatchObject({ sub: 'client-1', workspaceSlug: 'acme' });
-  });
+      expect(listMatches?.at(-1)?.route.path).toBe('oauth-apps');
+      expect(detailMatches?.at(-1)?.route.path).toBe('oauth-apps/:sub');
+      expect(detailMatches?.at(-1)?.params).toMatchObject({
+        sub: 'client-1',
+        workspaceSlug: 'acme',
+      });
+    },
+  );
 
-  it('both configs import and spread BusinessResourceRoutes into /resource children', async () => {
-    const [asyncSource, syncSource] = await readDesktopRouterSources();
+  it('keeps business resource and task routes in the shared definition', async () => {
+    const [sharedSource] = await readRouterSources();
 
-    expect(asyncSource).toContain('BusinessResourceRoutes');
-    expect(syncSource).toContain('BusinessResourceRoutes');
-    expect(asyncSource).toContain('...BusinessResourceRoutes');
-    expect(syncSource).toContain('...BusinessResourceRoutes');
-  });
-
-  it('task list and detail desktop routes share one workspace layout', async () => {
-    const [asyncSource, syncSource] = await readDesktopRouterSources();
-
-    expect(asyncSource).toContain("import('@/routes/(main)/(task-workspace)/_layout')");
-    expect(syncSource).toContain("from '@/routes/(main)/(task-workspace)/_layout'");
-    expect(asyncSource).toContain("import('@/routes/(main)/agent/task/[taskId]')");
-    expect(syncSource).toContain("from '@/routes/(main)/agent/task/[taskId]'");
-    expect(asyncSource).not.toContain("import('@/routes/(main)/task-workspace/_layout')");
-    expect(syncSource).not.toContain("from '@/routes/(main)/task-workspace/_layout'");
-    expect(asyncSource).not.toContain("import('@/routes/(main)/tasks/_layout')");
-    expect(asyncSource).not.toContain("import('@/routes/(main)/task/_layout')");
-    expect(syncSource).not.toContain("from '@/routes/(main)/tasks/_layout'");
-    expect(syncSource).not.toContain("from '@/routes/(main)/task/_layout'");
+    expect(sharedSource).toContain('...BusinessResourceRoutes');
+    expect(sharedSource).toContain("import('@/routes/(main)/(task-workspace)/_layout')");
+    expect(sharedSource).toContain("import('@/routes/(main)/agent/task/[taskId]')");
+    expect(sharedSource).not.toContain("import('@/routes/(main)/task-workspace/_layout')");
+    expect(sharedSource).not.toContain("import('@/routes/(main)/tasks/_layout')");
+    expect(sharedSource).not.toContain("import('@/routes/(main)/task/_layout')");
   });
 });

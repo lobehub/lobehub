@@ -26,6 +26,12 @@ export interface GatewayDevice {
 
 export interface DeviceSystemInfo {
   arch: string;
+  /**
+   * Human-readable name of the shell that runCommand uses on this device
+   * (e.g. "PowerShell 7+ (pwsh)"). Optional for protocol compatibility with
+   * older devices that do not report it.
+   */
+  defaultShell?: string;
   desktopPath: string;
   documentsPath: string;
   downloadsPath: string;
@@ -104,6 +110,23 @@ export interface GatewayMcpStdioParams {
 }
 
 /**
+ * HTTP MCP connection params forwarded to the device for a tunneled MCP tool
+ * call. Used for endpoints only the device's network can reach (localhost /
+ * LAN MCP servers) — the cloud server's fetch would fail. Credentials are
+ * decrypted server-side and forwarded verbatim; the device stores nothing.
+ */
+export interface GatewayMcpHttpParams {
+  auth?: { accessToken?: string; token?: string; type: 'none' | 'bearer' | 'oauth2' };
+  headers?: Record<string, string>;
+  name: string;
+  type: 'http';
+  url: string;
+}
+
+/** MCP connection params for a tunneled call — discriminated on `type`. */
+export type GatewayMcpParams = GatewayMcpStdioParams | GatewayMcpHttpParams;
+
+/**
  * How the device should execute a tunneled tool call. Explicit so routing never
  * depends on structural sniffing (e.g. "does `params` exist?") — the gateway
  * relays every call over one `tool-call` channel, so the discriminator must be
@@ -124,8 +147,8 @@ export interface ToolCallRequestMessage {
     apiName: string;
     arguments: string;
     identifier: string;
-    /** Stdio MCP connection params — present only when `type === 'mcp'`. */
-    params?: GatewayMcpStdioParams;
+    /** MCP connection params (stdio or http) — present only when `type === 'mcp'`. */
+    params?: GatewayMcpParams;
     /**
      * Routing discriminator. `'mcp'` → the device's local MCP client (spawns
      * the stdio server); `'tool'` (or omitted, for back-compat with older
@@ -254,11 +277,7 @@ export type ServerMessage =
 // ─── Client Types ───
 
 export type ConnectionStatus =
-  | 'authenticating'
-  | 'connected'
-  | 'connecting'
-  | 'disconnected'
-  | 'reconnecting';
+  'authenticating' | 'connected' | 'connecting' | 'disconnected' | 'reconnecting';
 
 export interface GatewayClientEvents {
   agent_run_request: (request: AgentRunRequestMessage) => void;

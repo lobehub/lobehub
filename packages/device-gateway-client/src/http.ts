@@ -1,7 +1,7 @@
 import type {
   DeviceSystemInfo,
   GatewayDevice,
-  GatewayMcpStdioParams,
+  GatewayMcpParams,
   GatewayToolCallType,
 } from './types';
 
@@ -79,20 +79,20 @@ export class GatewayHttpClient {
   }
 
   /**
-   * Tunnel a stdio MCP tool call to the device. Rides the same
+   * Tunnel an MCP tool call to the device. Rides the same
    * `/api/device/tool-call` relay as {@link executeToolCall} — the gateway
-   * forwards `toolCall` opaquely — but carries `params` (the stdio connection
-   * params) so the device routes it to its local MCP client (spawning the
-   * stdio server) rather than the builtin local-system tool switch. The cloud
-   * server can't spawn the user's binary, so execution must happen on the
-   * device.
+   * forwards `toolCall` opaquely — but carries `params` (the MCP connection
+   * params) so the device routes it to its local MCP client rather than the
+   * builtin local-system tool switch. Used when only the device can reach the
+   * MCP server: stdio (the cloud can't spawn the user's binary) and
+   * localhost / LAN HTTP endpoints (the cloud's fetch can't reach them).
    */
   async executeMcpCall(mcpCall: {
     apiName: string;
     arguments: string;
     deviceId?: string;
     identifier: string;
-    params: GatewayMcpStdioParams;
+    params: GatewayMcpParams;
     timeout?: number;
     userId: string;
     workspaceId?: string;
@@ -116,7 +116,7 @@ export class GatewayHttpClient {
       apiName: string;
       arguments: string;
       identifier: string;
-      params?: GatewayMcpStdioParams;
+      params?: GatewayMcpParams;
       type?: GatewayToolCallType;
     },
   ): Promise<DeviceToolCallResult> {

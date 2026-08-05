@@ -10,6 +10,7 @@ import {
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
   pruneWorkingDirByDeviceDeletes,
   resolveAgencyConfig,
+  resolveAgentAgencyConfig,
   resolveClaudeCodeModel,
   resolveClaudeCodeReasoningEffort,
   resolveCodexModel,
@@ -152,6 +153,37 @@ describe('buildHeteroSpawnArgs', () => {
         type: 'codex',
       }),
     ).toBeUndefined();
+  });
+
+  it('forwards Pi native args and an explicit provider/model selection', () => {
+    const provider = {
+      args: ['--offline'],
+      effort: 'high',
+      model: 'anthropic/claude-sonnet-4-5',
+      type: 'pi',
+    } satisfies HeterogeneousProviderConfig;
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual([
+      '--offline',
+      '--model',
+      'anthropic/claude-sonnet-4-5',
+    ]);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=--offline',
+      '--model',
+      'anthropic/claude-sonnet-4-5',
+    ]);
+  });
+
+  it('does not duplicate a Pi model already present in native args', () => {
+    const provider = {
+      args: ['--model=google/gemini-2.5-pro'],
+      model: 'anthropic/claude-sonnet-4-5',
+      type: 'pi',
+    } satisfies HeterogeneousProviderConfig;
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual(['--model=google/gemini-2.5-pro']);
+    expect(buildHeteroExecArgs(provider)).toEqual(['--agent-arg=--model=google/gemini-2.5-pro']);
   });
 
   it('appends --model and --effort for claude-code', () => {
@@ -537,5 +569,51 @@ describe('resolveAgencyConfig', () => {
     expect(resolveAgencyConfig(shared, { executionTarget: 'none' })).toEqual({
       executionTarget: 'none',
     });
+  });
+});
+
+describe('resolveAgentAgencyConfig', () => {
+  it('applies the fixed member policy to a public Workspace Agent', () => {
+    const shared = {
+      boundDeviceId: 'shared-device',
+      executionTarget: 'device' as const,
+      executionTargetSelectionPolicy: 'fixed' as const,
+    };
+
+    expect(
+      resolveAgentAgencyConfig(
+        shared,
+        { boundDeviceId: 'member-device', executionTarget: 'local' },
+        { visibility: 'public', workspaceId: 'workspace-1' },
+      ),
+    ).toEqual(shared);
+  });
+
+  it('ignores member policy and overrides while a Workspace Agent is private', () => {
+    expect(
+      resolveAgentAgencyConfig(
+        {
+          boundDeviceId: 'owner-device',
+          executionTarget: 'device',
+          executionTargetSelectionPolicy: 'fixed',
+        },
+        { boundDeviceId: 'stale-member-device', executionTarget: 'local' },
+        { visibility: 'private', workspaceId: 'workspace-1' },
+      ),
+    ).toEqual({ boundDeviceId: 'owner-device', executionTarget: 'device' });
+  });
+
+  it('ignores member policy and overrides for an author or Workspace admin', () => {
+    expect(
+      resolveAgentAgencyConfig(
+        {
+          boundDeviceId: 'shared-device',
+          executionTarget: 'device',
+          executionTargetSelectionPolicy: 'fixed',
+        },
+        { boundDeviceId: 'member-device', executionTarget: 'local' },
+        { canManage: true, visibility: 'public', workspaceId: 'workspace-1' },
+      ),
+    ).toEqual({ boundDeviceId: 'shared-device', executionTarget: 'device' });
   });
 });

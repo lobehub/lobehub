@@ -20,6 +20,7 @@ import { mobileHeaderSticky } from '@/styles/mobileHeader';
 const TAB_TITLE_KEY: Partial<Record<SettingsTabs, string>> = {
   [SettingsTabs.Billing]: 'subscription:tab.billing',
   [SettingsTabs.Credits]: 'subscription:tab.credits',
+  [SettingsTabs.Labs]: 'labs:title',
   [SettingsTabs.Plans]: 'subscription:tab.plans',
   [SettingsTabs.Profile]: 'auth:profile.title',
   [SettingsTabs.Referral]: 'subscription:tab.referral',
@@ -29,12 +30,13 @@ const TAB_TITLE_KEY: Partial<Record<SettingsTabs, string>> = {
 };
 
 const WORKSPACE_TAB_TITLE_KEY: Record<string, string> = {
+  budget: 'subscription:tab.budget',
   general: 'setting:workspaceSetting.tab.general',
   members: 'setting:workspaceSetting.tab.members',
 };
 
 const Header = memo(() => {
-  const { t } = useTranslation(['setting', 'auth', 'subscription']);
+  const { t } = useTranslation(['setting', 'auth', 'labs', 'subscription']);
   const showMobileWorkspace = useShowMobileWorkspace();
   const navigate = useWorkspaceAwareNavigate();
   const params = useParams<{ providerId?: string; tab?: string }>();

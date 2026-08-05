@@ -102,7 +102,7 @@ describe('hetero exec command', () => {
     stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     mockResolveHeteroSpawnCommand.mockReset();
     mockResolveHeteroSpawnCommand.mockImplementation(
-      async (agentType: 'amp' | 'claude-code' | 'codex' | 'opencode', command?: string) => ({
+      async (agentType: 'amp' | 'claude-code' | 'codex' | 'opencode' | 'pi', command?: string) => ({
         command:
           command ??
           (agentType === 'amp'
@@ -111,7 +111,9 @@ describe('hetero exec command', () => {
               ? 'codex'
               : agentType === 'opencode'
                 ? 'opencode'
-                : 'claude'),
+                : agentType === 'pi'
+                  ? 'pi'
+                  : 'claude'),
       }),
     );
     mockSpawnAgent.mockReset();
@@ -386,6 +388,39 @@ describe('hetero exec command', () => {
         command: 'opencode',
         extraArgs: ['--variant', 'max', '--model', 'anthropic/claude-sonnet-4'],
         resumeSessionId: 'session-open-1',
+      }),
+    );
+  });
+
+  it('runs Pi with model, resume, and native args while ignoring effort and speed', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'pi',
+      '--prompt',
+      'do thing',
+      '--resume',
+      'pi-session-1',
+      '--model',
+      'anthropic/claude-sonnet-4-5',
+      '--effort',
+      'high',
+      '--speed',
+      'fast',
+      '--agent-arg=--provider',
+      '--agent-arg=anthropic',
+    ]);
+
+    expect(mockResolveHeteroSpawnCommand).toHaveBeenCalledWith('pi', undefined);
+    expect(mockSpawnAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'pi',
+        command: 'pi',
+        extraArgs: ['--provider', 'anthropic', '--model', 'anthropic/claude-sonnet-4-5'],
+        resumeSessionId: 'pi-session-1',
       }),
     );
   });

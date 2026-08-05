@@ -10,7 +10,7 @@
   "table.columns.duration": "Duur",
   "table.columns.model": "Model",
   "table.columns.spend": "Credits",
-  "table.columns.startTime": "Aangemaakt op",
+  "table.columns.time": "Tijd",
   "table.columns.totalTokens": "Tokenverbruik",
   "table.columns.trigger.enums.agent_signal": "Agent Signaal",
   "table.columns.trigger.enums.api": "API-oproep",
@@ -43,6 +43,10 @@
   "table.filters.reset": "Resetten",
   "table.filters.searchModel": "Model zoeken",
   "table.filters.startDate": "Startdatum",
+  "table.pagination.next": "Volgende pagina",
+  "table.pagination.perPage": "{{size}} / pagina",
+  "table.pagination.prev": "Vorige pagina",
+  "table.pagination.range": "{{from}}-{{to}} van {{total}} items",
   "table.title": "Details van rekencreditsgebruik",
   "table.totalToken.input": "Invoer",
   "table.totalToken.output": "Uitvoer",
@@ -66,8 +70,8 @@
   "usageStats.chart.title": "Wanneer deze agent uitgaf",
   "usageStats.chart.tokens": "Token",
   "usageStats.dimension": "Dimensie",
-  "usageStats.entry": "Gebruik & Kosten",
+  "usageStats.entry": "Statistieken",
   "usageStats.range": "Tijdsbereik",
   "usageStats.rangeSuffix": "Laatste {{count}}d",
-  "usageStats.title": "Gebruik & Kosten"
+  "usageStats.title": "Statistieken"
 }

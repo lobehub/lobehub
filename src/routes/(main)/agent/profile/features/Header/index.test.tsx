@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
       provider: 'openai',
     },
     isInbox: false,
+    isBuiltinAgent: false,
     isCurrentAgentHeterogeneous: false,
     meta: {
       description: 'Test description',
@@ -35,11 +36,14 @@ const mocks = vi.hoisted(() => ({
     removeAgent: vi.fn(),
   },
   navigate: vi.fn(),
+  // The two independent halves of "may configure this agent": the workspace
+  // role permission and this agent's General Access level.
+  permission: { allowed: true },
+  resourceAccess: { canEditResource: true, canManageResource: true },
   profileState: {
     editor: undefined as { getDocument: (format: string) => string | undefined } | undefined,
     lockState: { holderId: null as string | null, lockedByOther: false, pending: false },
   },
-  resourcePermissionMenuItemArgs: [] as unknown[],
 }));
 
 vi.mock('@lobechat/const', async (importOriginal) => ({
@@ -49,18 +53,22 @@ vi.mock('@lobechat/const', async (importOriginal) => ({
 
 interface MockDropdownItem {
   children?: MockDropdownItem[];
+  disabled?: boolean;
   key?: string;
   label?: ReactNode;
   onClick?: () => void;
   type?: string;
 }
 
+// `disabled` is forwarded rather than dropped: the permission entries below are
+// deliberately rendered-but-disabled, so a harness that ignores the flag would
+// report them as available and pass no matter what the component decides.
 const renderMenuItems = (items: MockDropdownItem[]) =>
   items
     .filter((item) => item.type !== 'divider')
     .map((item) => (
       <div key={item.key}>
-        <button type="button" onClick={item.onClick}>
+        <button disabled={item.disabled} type="button" onClick={item.onClick}>
           {item.label}
         </button>
         {item.children && <div>{renderMenuItems(item.children)}</div>}
@@ -88,6 +96,7 @@ vi.mock('@lobehub/ui', () => ({
 
 vi.mock('@lobehub/ui/base-ui', () => ({
   confirmModal: vi.fn(),
+  toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
 }));
 
 vi.mock('antd', async (importOriginal) => {
@@ -159,15 +168,12 @@ vi.mock('@/features/ResourcePermission/AccessLevelTag', () => ({
   ),
 }));
 
-vi.mock('@/features/ResourcePermission/useResourceAccess', () => ({
-  useResourceAccess: () => ({ canEditResource: true, canManageResource: true }),
+vi.mock('@/hooks/usePermission', () => ({
+  usePermission: () => mocks.permission,
 }));
 
-vi.mock('@/features/ResourcePermission/useResourcePermissionMenuItem', () => ({
-  useResourcePermissionMenuItem: (...args: unknown[]) => {
-    mocks.resourcePermissionMenuItemArgs = args;
-    return { key: 'member-permissions', label: 'Members: Can use' };
-  },
+vi.mock('@/features/ResourcePermission/useResourceAccess', () => ({
+  useResourceAccess: () => mocks.resourceAccess,
 }));
 
 vi.mock('@/features/NavHeader', () => ({
@@ -210,6 +216,8 @@ vi.mock('@/store/agent/selectors', () => ({
       state.isCurrentAgentHeterogeneous,
   },
   builtinAgentSelectors: {
+    isBuiltinAgent: (agentId?: string) => (state: typeof mocks.agentState) =>
+      !!agentId && !!state.isBuiltinAgent,
     isInboxAgent: (state: typeof mocks.agentState) => state.isInbox,
   },
 }));
@@ -261,9 +269,39 @@ describe('Agent profile Header', () => {
     mocks.agentState.isInbox = false;
     mocks.agentState.systemRole = 'You are helpful.';
     mocks.agentState.visibility = 'public';
-    mocks.resourcePermissionMenuItemArgs = [];
     mocks.globalState.showAgentBuilderPanel = false;
     mocks.profileState.editor = undefined;
+    mocks.permission.allowed = true;
+    mocks.resourceAccess.canEditResource = true;
+    mocks.resourceAccess.canManageResource = true;
+  });
+
+  // `ResourceConfigAccessGate` requires the role permission AND resource-level
+  // edit access. A member whose role cannot edit content but who holds `edit`
+  // General Access on this agent satisfies only the second half — offering them
+  // an enabled entry sends them to a page that immediately bounces them back.
+  it.each([
+    ['the role cannot edit content', { canEditResource: true, permission: false }],
+    ['General Access is view-only', { canEditResource: false, permission: true }],
+  ])('disables the config entries when %s', (_label, { canEditResource, permission }) => {
+    mocks.permission.allowed = permission;
+    mocks.resourceAccess.canEditResource = canEditResource;
+    // No global mock reset in this file, so the shared spy carries calls in
+    // from earlier cases; a "never navigated" assertion has to start clean.
+    mocks.navigate.mockClear();
+
+    render(<Header />);
+
+    const settings = screen.getByRole('button', { name: 'advancedSettings' });
+    const permissionEntry = screen.getByRole('button', { name: 'permission.page.entry' });
+
+    expect(settings).toBeDisabled();
+    expect(permissionEntry).toBeDisabled();
+
+    // The handler guards independently of the `disabled` prop, since the real
+    // menu renders through a component that may still deliver the click.
+    fireEvent.click(permissionEntry);
+    expect(mocks.navigate).not.toHaveBeenCalledWith('/agent/agent-1/permission');
   });
 
   it.each([false, true])(
@@ -291,9 +329,26 @@ describe('Agent profile Header', () => {
 
     render(<Header />);
 
-    expect(mocks.resourcePermissionMenuItemArgs).toEqual(['agent', 'agent-1']);
-    expect(screen.getByRole('button', { name: 'Members: Can use' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'permission.page.entry' })).toBeInTheDocument();
     expect(screen.getByTestId('access-level-resource-id')).toHaveTextContent('agent-1');
+  });
+
+  it('opens the Permission page from the menu entry', () => {
+    render(<Header />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'permission.page.entry' }));
+
+    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agent-1/permission');
+  });
+
+  it('keeps the Permission entry on a private workspace agent — its model / environment policies still apply once shared', () => {
+    mocks.agentState.visibility = 'private';
+
+    render(<Header />);
+
+    expect(screen.getByRole('button', { name: 'permission.page.entry' })).toBeInTheDocument();
+    // Member access is meaningless while private, so the tag stays unbound.
+    expect(screen.getByTestId('access-level-resource-id')).toHaveTextContent('');
   });
 
   it('should export the current agent profile as markdown', async () => {

@@ -1,4 +1,5 @@
 {
+  "description": "Bu özellikler deneyseldir. Kaldırılabilirler ve hatalar içerebilirler. Kullanırken geri bildirimlerinizi memnuniyetle karşılarız.",
   "features.agentGraphConfig.desc": "Bir ajan profilinin gelişmiş ayarlarında grafik çalışma zamanı yapılandırmasını göster.",
   "features.agentGraphConfig.title": "Ajan Grafik Çalışma Zamanı Yapılandırması",
   "features.agentSelfIteration.desc": "Asistanın düşünmesini, öz farkındalık geliştirmesini ve devam eden denemeler ile etkileşimler boyunca sürekli yineleme yapmasını sağlar.",
@@ -11,6 +12,8 @@
   "features.claudeCodeSdk.title": "Claude Code SDK Çalışma Zamanı",
   "features.groupChat.desc": "Çoklu temsilci grup sohbeti koordinasyonunu etkinleştirin.",
   "features.groupChat.title": "Grup Sohbeti (Çoklu Temsilci)",
+  "features.heteroSessionImport.desc": "Konu listesi menüsüne \"Yerel Aracı Oturumlarını İçe Aktar\" seçeneği ekleyin: yerel Claude Code / Codex CLI transkriptlerini tarayın ve bunları konular olarak içe aktarın, yeniden içe aktarma sırasında artımlı senkronizasyon sağlayın.",
+  "features.heteroSessionImport.title": "Yerel Aracı Oturumu İçe Aktarma",
   "features.imessage.desc": "Ajanları, yerel LobeHub Masaüstü BlueBubbles köprüsü aracılığıyla iMessage'a bağlayın.",
   "features.imessage.title": "iMessage Kanalı",
   "features.inAppBrowser.desc": "Konuşma yan panelinde Tarayıcı sekmesini göster: arama sonuçlarını yerinde açan ve temsilcilerin görünür bir şekilde gezinmesine olanak tanıyan gömülü bir tarayıcı.",

@@ -77,6 +77,14 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
     "model": "gpt-5.4-mini",
     "provider": "openai",
   },
+  "onboardingTaskRecommender": {
+    "model": "gpt-5.4-mini",
+    "provider": "openai",
+  },
+  "onboardingUnderstanding": {
+    "model": "gpt-5.4-mini",
+    "provider": "openai",
+  },
   "promptRewrite": {
     "enabled": true,
     "model": "gpt-5.4-mini",

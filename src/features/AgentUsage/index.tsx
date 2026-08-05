@@ -69,7 +69,6 @@ const AgentUsage = memo(() => {
   return (
     <Flexbox height={'100%'} width={'100%'}>
       <NavHeader
-        styles={{ left: { paddingInlineStart: 24 } }}
         left={
           activeAgentId ? (
             <AgentBreadcrumb agentId={activeAgentId} title={t('usageStats.title')} />

@@ -1,8 +1,7 @@
 /**
  * In-page element picker for the browser panel's "add element to chat context"
- * action. Like the agent overlay, it must live *inside* the guest page: the page
- * is a WebContentsView that paints above all renderer DOM, so no highlight drawn
- * by the panel could ever sit on top of it.
+ * action. Like the agent overlay, it lives inside the guest page so the highlight
+ * tracks the selected DOM node through scrolling and layout changes.
  *
  * The script returns a Promise, which `executeJavaScript` awaits — the main
  * process simply waits until the user clicks an element (resolves with its

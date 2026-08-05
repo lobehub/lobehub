@@ -1,11 +1,10 @@
 import { diagnoseTopic, type TopicDiagnosis } from '@lobechat/conversation-flow';
 import { and, eq, inArray } from 'drizzle-orm';
-import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import { MessageModel } from '../../models/message';
 import { messages } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { buildWorkspaceWhere } from '../../utils/workspace';
+import { buildMessageScopeWhere } from '../../utils/messageScope';
 
 interface TopicScope {
   agentId?: string | null;
@@ -40,8 +39,10 @@ export class TopicDoctorRepo {
     this.messageModel = new MessageModel(db, userId, workspaceId);
   }
 
-  private ws = (cols: { userId: AnyPgColumn; workspaceId: AnyPgColumn }) =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, cols);
+  // messages.user_id/workspace_id are creation-time snapshots — derive scope
+  // from the owning topic/session instead (see messageScope.ts).
+  private messagesWs = () =>
+    buildMessageScopeWhere({ userId: this.userId, workspaceId: this.workspaceId });
 
   diagnose = async ({ agentId, topicId }: TopicScope): Promise<TopicDiagnosis> => {
     // The same list the client renders from, so the `parse()` inside the diagnosis sees
@@ -64,7 +65,7 @@ export class TopicDoctorRepo {
       .where(
         and(
           eq(messages.topicId, scope.topicId),
-          this.ws(messages),
+          this.messagesWs(),
           inArray(
             messages.id,
             patch.map((op) => op.messageId),
@@ -98,7 +99,7 @@ export class TopicDoctorRepo {
             // A repair changes how history is threaded, not when it was written.
             updatedAt: messages.updatedAt,
           })
-          .where(and(eq(messages.id, op.messageId), this.ws(messages)));
+          .where(and(eq(messages.id, op.messageId), this.messagesWs()));
       }
     });
 

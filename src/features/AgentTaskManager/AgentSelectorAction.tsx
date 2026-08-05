@@ -1,3 +1,4 @@
+import { agentDisplayName } from '@lobechat/types';
 import { Center, Flexbox, Popover } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -57,6 +58,7 @@ const AgentSelectorAction = memo<AgentSelectorActionProps>(({ onAgentChange }) =
   const agentGroups = useHomeStore(homeAgentListSelectors.agentGroups, isEqual);
   const ungroupedAgents = useHomeStore(homeAgentListSelectors.ungroupedAgents, isEqual);
   const privateAgentGroups = useHomeStore(homeAgentListSelectors.privateAgentGroups, isEqual);
+  const privatePinnedAgents = useHomeStore(homeAgentListSelectors.privatePinnedAgents, isEqual);
   const privateUngroupedAgents = useHomeStore(
     homeAgentListSelectors.privateUngroupedAgents,
     isEqual,
@@ -97,8 +99,10 @@ const AgentSelectorAction = memo<AgentSelectorActionProps>(({ onAgentChange }) =
 
   const privateAgents = useMemo<SidebarAgentItem[]>(() => {
     const groupedItems = privateAgentGroups.flatMap((group) => group.items);
-    return [...groupedItems, ...privateUngroupedAgents].filter((agent) => agent.type === 'agent');
-  }, [privateAgentGroups, privateUngroupedAgents]);
+    return [...privatePinnedAgents, ...groupedItems, ...privateUngroupedAgents].filter(
+      (agent) => agent.type === 'agent',
+    );
+  }, [privateAgentGroups, privatePinnedAgents, privateUngroupedAgents]);
 
   const activeAgent = useMemo(
     () => [...privateAgents, ...workspaceAgents].find((agent) => agent.id === agentId),
@@ -117,7 +121,7 @@ const AgentSelectorAction = memo<AgentSelectorActionProps>(({ onAgentChange }) =
       <AgentItem
         active={agent.id === agentId}
         agentId={agent.id}
-        agentTitle={agent.title || t('untitledAgent', { ns: 'chat' })}
+        agentTitle={agentDisplayName(agent, t('untitledAgent', { ns: 'chat' }))}
         avatar={agent.avatar}
         key={agent.id}
         onAgentChange={handleAgentChange}

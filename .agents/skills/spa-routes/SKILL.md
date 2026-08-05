@@ -14,7 +14,7 @@ SPA structure:
 
 This project uses a **roots vs features** split: `src/routes/` only holds page segments; business logic and UI live in `src/features/` by domain.
 
-**Agent constraint — desktop router parity:** Edits to the desktop route tree must update **both** `src/spa/router/desktopRouter.config.tsx` and `src/spa/router/desktopRouter.config.desktop.tsx` in the same change (same paths, nesting, index routes, and segment registration). Updating only one causes drift; the missing tree can fail to register routes and surface as a **blank screen** or broken navigation on the affected build.
+**Agent constraint — shared desktop router:** Common Web/Electron paths, nesting, metadata, lazy loaders, and preload groups belong in `src/spa/router/desktopRouter.shared.tsx`. The two `desktopRouter.config*` files are thin platform adapters; change them only for genuine runtime differences. Do not duplicate a common route in both adapters.
 
 ## When to Use This Skill
 
@@ -76,27 +76,28 @@ Each feature should:
    - Layout: `export { default } from '@/features/MyFeature/MyLayout'` or compose a few feature components + `<Outlet />`.
    - Page: import from `@/features/MyFeature` (or a specific subpath) and render; no business logic in the route file.
 
-5. **Register the route (desktop — two files, always)**
-   - **`desktopRouter.config.tsx`:** Add the segment with `dynamicElement` / `dynamicLayout` pointing at route modules (e.g. `@/routes/(main)/my-feature`).
-   - **`desktopRouter.config.desktop.tsx`:** Mirror the **same** `RouteObject` shape: identical `path` / `index` / parent-child structure. Use the static imports and elements already used in that file (see neighboring routes). Do **not** register in only one of these files.
-   - **Mobile-only flows:** use `mobileRouter.config.tsx` instead (no need to duplicate into the desktop pair unless the route truly exists on both).
+5. **Register the route in the correct definition layer**
+   - **Shared Web/Electron route:** add the segment once in `desktopRouter.shared.tsx` with `dynamicElement` / `dynamicLayout`. Put its `preloadId` there as part of the shared lazy-loader definition.
+   - **Web-only or Electron-only route:** add it to the corresponding thin `desktopRouter.config.tsx` adapter. Keep platform-only differences explicit and small.
+   - **Mobile-only flow:** use `mobileRouter.config.tsx`; mobile does not consume the shared desktop tree.
 
 ---
 
-## 3a. Desktop router pair (`desktopRouter.config` × 2)
+## 3a. Shared desktop route definition and platform adapters
 
-| File                               | Role                                                                                                                      |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `desktopRouter.config.tsx`         | Dynamic imports via `dynamicElement` / `dynamicLayout` — code-splitting; used by `entry.web.tsx` and `entry.desktop.tsx`. |
-| `desktopRouter.config.desktop.tsx` | Same route tree with **synchronous** imports — kept for Electron / local parity and predictable bundling.                 |
+| File                               | Role                                                                                                            |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `desktopRouter.shared.tsx`         | Single source of truth for common paths, nesting, metadata, lazy imports, and prioritized route preload groups. |
+| `desktopRouter.config.tsx`         | Thin Web adapter: mounts the common content tree at `/` and adds Web-only routes.                               |
+| `desktopRouter.config.desktop.tsx` | Thin Electron adapter: injects per-tab Home behavior, TabHost root stubs, and Electron-only onboarding.         |
 
-Anything that changes the tree (new segment, renamed `path`, moved layout, new child route) must be reflected in **both** files in one PR or commit. Remove routes from both when deleting.
+Add or remove common routes only in `desktopRouter.shared.tsx`. Keep `desktopRouter.sync.test.tsx` passing so path behavior, lazy boundaries, preload ownership, and the intentional platform differences remain verified.
 
 ---
 
 ## 3b. Other `.desktop.{ts,tsx}` variants inside `src/routes/`
 
-The router pair is **not** the only `.desktop` variant pattern in this repo. Some route trees colocate a `<name>.desktop.{ts,tsx}` next to its base `<name>.{ts,tsx}` — Vite's resolver swaps in the `.desktop` file for Electron builds. Same drift risk as the router pair: editing only one side can break Electron silently.
+The thin router adapters are not duplicated trees. Other route modules may still colocate a `<name>.desktop.{ts,tsx}` next to a base `<name>.{ts,tsx}`; Vite's resolver swaps in the `.desktop` file for Electron builds. Those paired module implementations still carry a drift risk.
 
 Known variants today:
 

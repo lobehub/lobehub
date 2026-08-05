@@ -75,7 +75,7 @@ const sortGroups = (groups: GroupedTopic[]): GroupedTopic[] => {
  * Resolve the timestamp a topic sorts/groups by for the given field. For
  * `updatedAt` this is the server-provided `sortUpdatedAt` (latest message
  * activity), falling back to the raw `updatedAt` when absent — so the sidebar
- * order matches the server ORDER BY and doesn't jump. (LOBE-11543)
+ * order matches the server ORDER BY and doesn't jump. 
  */
 export const getTopicSortTime = (topic: ChatTopic, field: 'createdAt' | 'updatedAt'): number =>
   field === 'updatedAt' ? (topic.sortUpdatedAt ?? topic.updatedAt) : topic.createdAt;

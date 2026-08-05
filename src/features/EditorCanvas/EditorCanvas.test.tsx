@@ -2,10 +2,12 @@
  * @vitest-environment happy-dom
  */
 import { type IEditor } from '@lobehub/editor';
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import type { ComponentType } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { EditorCanvas } from './EditorCanvas';
+import type { EditorDataModeProps } from './EditorDataMode';
 
 // Mock DocumentIdMode
 vi.mock('./DocumentIdMode', () => ({
@@ -138,6 +140,7 @@ describe('EditorCanvas', () => {
 
       render(
         <EditorCanvas
+          contentRevision={3}
           editor={mockEditor}
           editorData={editorData}
           placeholder="Custom placeholder"
@@ -150,11 +153,72 @@ describe('EditorCanvas', () => {
       const lastCall = (EditorDataMode.default as ReturnType<typeof vi.fn>).mock.calls.at(-1);
 
       expect(lastCall?.[0]).toMatchObject({
+        contentRevision: 3,
         editor: mockEditor,
         editorData,
         onContentChange,
         onInit,
         placeholder: 'Custom placeholder',
+      });
+    });
+
+    it('should reload same-entity content only when its authoritative revision changes', async () => {
+      const editorDataModeModule = (await vi.importActual('./EditorDataMode')) as {
+        default: ComponentType<EditorDataModeProps>;
+      };
+      const ActualEditorDataMode = editorDataModeModule.default;
+
+      const { rerender } = render(
+        <ActualEditorDataMode
+          contentRevision={0}
+          editor={mockEditor}
+          editorData={{ content: 'Old instruction' }}
+          entityId="T-1"
+        />,
+      );
+
+      const InternalEditor = await vi.importMock('./InternalEditor');
+      const onInit = (InternalEditor.default as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0]
+        .onInit;
+      act(() => onInit?.(mockEditor));
+      vi.mocked(mockEditor.setDocument).mockClear();
+
+      rerender(
+        <ActualEditorDataMode
+          contentRevision={0}
+          editor={mockEditor}
+          editorData={{ content: 'Old instruction' }}
+          entityId="T-1"
+        />,
+      );
+      expect(mockEditor.setDocument).not.toHaveBeenCalled();
+
+      // A refetch or local autosave can replace the props while the revision
+      // stays stable. Never inspect/reload the live document in that case.
+      rerender(
+        <ActualEditorDataMode
+          contentRevision={0}
+          editor={mockEditor}
+          editorData={{ content: 'New instruction' }}
+          entityId="T-1"
+        />,
+      );
+      expect(mockEditor.setDocument).not.toHaveBeenCalled();
+      expect(mockEditor.getDocument).not.toHaveBeenCalled();
+
+      rerender(
+        <ActualEditorDataMode
+          contentRevision={1}
+          editor={mockEditor}
+          editorData={{ content: 'New instruction' }}
+          entityId="T-1"
+        />,
+      );
+
+      await waitFor(() => {
+        expect(mockEditor.setDocument).toHaveBeenCalledWith('markdown', 'New instruction', {
+          keepId: true,
+        });
       });
     });
 

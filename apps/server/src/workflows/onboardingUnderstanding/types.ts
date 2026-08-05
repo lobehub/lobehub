@@ -6,20 +6,32 @@ const providerIdSchema = z
   .min(1)
   .max(128)
   .regex(/^[\w-]+$/);
-
+/** Payload for collecting all selected Understanding providers. */
 export interface ProcessUnderstandingProvidersPayload {
   providers: UnderstandingProviderAttempt[];
+  /** Language required for the eventual user-visible proposal. */
+  responseLanguage: string;
   sessionId: string;
   topicId: string;
+  /**
+   * Whether completed sources should also start task recommendation generation.
+   *
+   * @default true
+   */
+  triggerTaskRecommendations?: boolean;
   userId: string;
 }
 
+/** One provider collection attempt in an Understanding workflow. */
 export interface UnderstandingProviderAttempt {
   id: string;
   revision: number;
 }
 
+/** Payload for generating an Understanding proposal from collected sources. */
 export interface ProcessCollectedUnderstandingPayload {
+  /** Language required for every user-visible proposal field. */
+  responseLanguage: string;
   sessionId: string;
   sourceFingerprint: string;
   topicId: string;
@@ -40,7 +52,14 @@ export const ProcessUnderstandingProvidersPayloadSchema = z
         (providers) => new Set(providers.map(({ id }) => id)).size === providers.length,
         'Provider attempts must be unique',
       ),
+    responseLanguage: z
+      .string()
+      .trim()
+      .min(2)
+      .max(64)
+      .regex(/^[A-Z]{2,3}(?:-[A-Z0-9]{2,8})*$/i),
     sessionId: identifierSchema,
+    triggerTaskRecommendations: z.boolean().optional(),
     topicId: identifierSchema,
     userId: identifierSchema,
   })
@@ -48,6 +67,12 @@ export const ProcessUnderstandingProvidersPayloadSchema = z
 
 export const ProcessCollectedUnderstandingPayloadSchema = z
   .object({
+    responseLanguage: z
+      .string()
+      .trim()
+      .min(2)
+      .max(64)
+      .regex(/^[A-Z]{2,3}(?:-[A-Z0-9]{2,8})*$/i),
     sessionId: identifierSchema,
     sourceFingerprint: z
       .string()

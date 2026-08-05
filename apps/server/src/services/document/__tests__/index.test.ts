@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
+import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 
 import { EditLockService } from '../../editLock';
 import { FileService } from '../../file';
@@ -14,6 +15,7 @@ import { DocumentService } from '../index';
 vi.mock('@/server/modules/AgentRuntime/redis', () => ({ getAgentRuntimeRedisClient: () => null }));
 vi.mock('@/database/models/document');
 vi.mock('@/database/models/file');
+vi.mock('@/database/models/knowledgeBase');
 vi.mock('../../file');
 vi.mock('../history');
 // Spy on the realtime broadcast so we can assert lock.changed is published only
@@ -82,6 +84,7 @@ describe('DocumentService', () => {
   let mockDocumentHistoryService: any;
   let mockFileModel: any;
   let mockFileService: any;
+  let mockKnowledgeBaseModel: any;
   const userId = 'test-user-id';
 
   beforeEach(() => {
@@ -127,10 +130,15 @@ describe('DocumentService', () => {
       downloadFileToLocal: vi.fn(),
     };
 
+    mockKnowledgeBaseModel = {
+      findById: vi.fn().mockResolvedValue({ id: 'kb-1', visibility: 'public' }),
+    };
+
     vi.mocked(DocumentModel).mockImplementation(() => mockDocumentModel);
     vi.mocked(DocumentHistoryService).mockImplementation(() => mockDocumentHistoryService);
     vi.mocked(FileModel).mockImplementation(() => mockFileModel);
     vi.mocked(FileService).mockImplementation(() => mockFileService);
+    vi.mocked(KnowledgeBaseModel).mockImplementation(() => mockKnowledgeBaseModel);
 
     service = new DocumentService(mockDb, userId);
   });
@@ -323,12 +331,17 @@ describe('DocumentService', () => {
         mockDocumentModel.create.mockResolvedValue({ id: 'doc-1' });
       });
 
-      it('propagates explicit private visibility to the KB mirror file', async () => {
+      it('uses private knowledge-base visibility over an explicit public value', async () => {
+        mockKnowledgeBaseModel.findById.mockResolvedValue({
+          id: 'kb-1',
+          visibility: 'private',
+        });
+
         await service.createDocument({
           title: 'Private Doc',
           editorData: {},
           knowledgeBaseId: 'kb-1',
-          visibility: 'private',
+          visibility: 'public',
         });
 
         expect(mockFileModel.create).toHaveBeenCalledWith(
@@ -340,7 +353,7 @@ describe('DocumentService', () => {
         );
       });
 
-      it('defaults top-level KB documents to private in workspace mode', async () => {
+      it('inherits public visibility from the workspace knowledge base', async () => {
         await service.createDocument({
           title: 'Draft',
           editorData: {},
@@ -348,15 +361,16 @@ describe('DocumentService', () => {
         });
 
         expect(mockFileModel.create).toHaveBeenCalledWith(
-          expect.objectContaining({ visibility: 'private' }),
+          expect.objectContaining({ visibility: 'public' }),
           false,
         );
         expect(mockDocumentModel.create).toHaveBeenCalledWith(
-          expect.objectContaining({ visibility: 'private' }),
+          expect.objectContaining({ visibility: 'public' }),
         );
+        expect(mockKnowledgeBaseModel.findById).toHaveBeenCalledWith('kb-1', undefined);
       });
 
-      it('keeps a nested document private regardless of parent visibility', async () => {
+      it('inherits library visibility without consulting the navigation parent', async () => {
         mockDocumentModel.findById.mockResolvedValue({ id: 'parent-1', visibility: 'public' });
 
         await service.createDocument({
@@ -368,15 +382,15 @@ describe('DocumentService', () => {
 
         expect(mockDocumentModel.findById).not.toHaveBeenCalled();
         expect(mockFileModel.create).toHaveBeenCalledWith(
-          expect.objectContaining({ visibility: 'private' }),
+          expect.objectContaining({ visibility: 'public' }),
           false,
         );
         expect(mockDocumentModel.create).toHaveBeenCalledWith(
-          expect.objectContaining({ visibility: 'private' }),
+          expect.objectContaining({ visibility: 'public' }),
         );
       });
 
-      it('falls back to private when parent lookup returns nothing', async () => {
+      it('uses the library visibility when the navigation parent is missing', async () => {
         mockDocumentModel.findById.mockResolvedValue(undefined);
 
         await service.createDocument({
@@ -387,9 +401,45 @@ describe('DocumentService', () => {
         });
 
         expect(mockFileModel.create).toHaveBeenCalledWith(
+          expect.objectContaining({ visibility: 'public' }),
+          false,
+        );
+      });
+
+      it('inherits private visibility from a private knowledge base', async () => {
+        mockKnowledgeBaseModel.findById.mockResolvedValue({
+          id: 'kb-private',
+          visibility: 'private',
+        });
+
+        await service.createDocument({
+          title: 'Private Library Doc',
+          editorData: {},
+          knowledgeBaseId: 'kb-private',
+        });
+
+        expect(mockFileModel.create).toHaveBeenCalledWith(
           expect.objectContaining({ visibility: 'private' }),
           false,
         );
+        expect(mockDocumentModel.create).toHaveBeenCalledWith(
+          expect.objectContaining({ visibility: 'private' }),
+        );
+      });
+
+      it('rejects creation when the knowledge base is not accessible', async () => {
+        mockKnowledgeBaseModel.findById.mockResolvedValue(undefined);
+
+        await expect(
+          service.createDocument({
+            title: 'Missing Library Doc',
+            editorData: {},
+            knowledgeBaseId: 'missing-kb',
+          }),
+        ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+        expect(mockFileModel.create).not.toHaveBeenCalled();
+        expect(mockDocumentModel.create).not.toHaveBeenCalled();
       });
     });
 

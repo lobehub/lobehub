@@ -1,3 +1,4 @@
+import { agentDisplayName } from '@lobechat/types';
 import { Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,7 +16,7 @@ export interface TitleProps {
 
 const Title = memo<TitleProps>(({ showTitle, time, avatar, titleAddon }) => {
   const { t } = useTranslation('chat');
-  const title = avatar.title || t('untitledAgent');
+  const title = agentDisplayName(avatar, t('untitledAgent'));
   const { text: timeText, title: timeTitle } = useActivityTime(time);
 
   return (

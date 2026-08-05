@@ -43,7 +43,7 @@ const FileItem = memo<FileItemProps>(({ alt, onRemove, src, loading }) => {
       height={64}
       isLoading={loading}
       objectFit={'cover'}
-      size={IMAGE_SIZE as any}
+      size={IMAGE_SIZE}
       src={src}
       width={64}
       actions={

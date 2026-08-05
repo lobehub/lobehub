@@ -1,8 +1,8 @@
 ---
 title: 将 LobeHub 连接到 LINE
 description: >-
-  学习如何通过 LINE Messaging API 将 LINE 机器人连接到 LobeHub
-  代理，使您的 AI 助手能够在 LINE 私信和群组对话中与用户互动。
+  学习如何通过 LINE Messaging API 将 LINE 机器人连接到 LobeHub 代理，使您的 AI 助手能够在 LINE
+  私信和群组对话中与用户互动。
 tags:
   - LINE
   - 消息渠道
@@ -108,12 +108,13 @@ LINE Official Account Manager 默认会自动回复用户消息并在第一次�
   >   <summary>手动备选方案（按钮不可用时）</summary>
   >
   >   ```bash
-  >   curl -H "Authorization: Bearer <你的 channel access token>" \
+  >   curl -H "Authorization: Bearer <你的 channel access token" \
   >     https://api.line.me/v2/bot/info
   >   ```
   >
   >   把返回 JSON 中的 `userId` 字段复制到 **Destination User ID** 即可。
-  > </details>
+  >
+</details>
 
   ### 保存配置
 
@@ -188,7 +189,7 @@ LINE Messaging API 有一些平台层面的限制，LobeHub 的对接行为如�
 
 - **LINE Developers Console 的 "Verify" 失败。** LobeHub 中的 Channel Secret 必须与 **Basic settings** 选项卡显示的值完全一致。重新粘贴、保存后再试。
 - **保存或测试连接时出现 `Authentication failed.`。** Channel Access Token 失效或被撤销。在 Messaging API 选项卡里重新签发长期 Token，并把新值粘贴到 LobeHub。
-- **`Channel access token belongs to bot Uxxx, not Uyyy`。** Destination User ID 与 Token 不匹配。最简方式：清空字段后点击 **从 LINE 获取**，让 LobeHub 重新拉到正确的 `userId`。错误消息里的 `Uxxx` 也是 Token 实际归属的 bot userId，直接复制粘贴也可以。（手动核对：`curl -H "Authorization: Bearer <token>" https://api.line.me/v2/bot/info`。）
+- **`Channel access token belongs to bot Uxxx, not Uyyy`。** Destination User ID 与 Token 不匹配。最简方式：清空字段后点击 **从 LINE 获取**，让 LobeHub 重新拉到正确的 `userId`。错误消息里的 `Uxxx` 也是 Token 实际归属的 bot userId，直接复制粘贴也可以。（手动核对：`curl -H "Authorization: Bearer <token" https://api.line.me/v2/bot/info`。）
 - **Webhook 投递返回 `401 Invalid signature`。** LobeHub 中的 Channel Secret 与 LINE 的不一致，更新为正确的 Channel Secret。
 - **机器人不回复。** 请依次确认：
   1. Messaging API 选项卡中的 **Use webhook** 已切到 **ON**。

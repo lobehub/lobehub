@@ -32,7 +32,7 @@ export const useEffectiveWorkingDirectory = (agentId?: string): string | undefin
   const isLogin = useUserStore(authSelectors.isLogin);
   useDeviceStore((s) => s.useFetchDevices)(isLogin || isDesktop);
 
-  // Effective config = shared row + this member's device override (LOBE-11689),
+  // Effective config = shared row + this member's device override,
   // so `resolveTargetDeviceId` targets the device THIS member's run goes to —
   // not whichever machine landed on the workspace-shared row.
   const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId);

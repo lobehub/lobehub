@@ -66,6 +66,21 @@ const createImageInputSchema = z.object({
 });
 export type CreateImageServicePayload = z.infer<typeof createImageInputSchema>;
 
+const isErrorBatchResult = (
+  result: unknown,
+): result is {
+  data: {
+    batch: NewGenerationBatch;
+    generations: NewGeneration[];
+  };
+  success: true;
+} =>
+  typeof result === 'object' &&
+  result !== null &&
+  'data' in result &&
+  'success' in result &&
+  result.success === true;
+
 export const imageRouter = router({
   createImage: imageCreateProcedure
     .input(createImageInputSchema)
@@ -188,7 +203,7 @@ export const imageRouter = router({
       });
       // An error batch (insufficient budget / cooldown / frozen workspace) is
       // returned to the client as-is.
-      if (chargeResult && 'data' in chargeResult) {
+      if (isErrorBatchResult(chargeResult)) {
         return chargeResult;
       }
       // Otherwise, opaque per-generation billing handles to thread through each
