@@ -1816,6 +1816,37 @@ describe('ChatService', () => {
       );
     });
 
+    it('should keep the logical Qwen model and pass its deployment alias separately', async () => {
+      useAiInfraStore.setState({
+        enabledAiModels: [
+          {
+            config: { deploymentName: 'my-qwen-deployment' },
+            id: 'qwen3.8-max-preview',
+            providerId: ModelProvider.Qwen,
+          },
+        ],
+      } as any);
+
+      const params: Partial<ChatStreamPayload> = {
+        messages: [],
+        model: 'qwen3.8-max-preview',
+        provider: ModelProvider.Qwen,
+      };
+
+      await chatService.getChatCompletion(params, {});
+
+      const payload = JSON.parse(mockFetchSSE.mock.calls[0][1].body);
+
+      // The logical id is preserved so runtime rules resolve; the alias rides along
+      // in deploymentName for the runtime to forward as the upstream model.
+      expect(payload).toEqual(
+        expect.objectContaining({
+          deploymentName: 'my-qwen-deployment',
+          model: 'qwen3.8-max-preview',
+        }),
+      );
+    });
+
     it('should return InvalidAccessCode error when enableFetchOnClient is true and auth is enabled but user is not signed in', async () => {
       // Mock fetchSSE to call onErrorHandle with the error
       const { fetchSSE } = await import('@lobechat/fetch-sse');

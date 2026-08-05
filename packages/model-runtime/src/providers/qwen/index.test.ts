@@ -348,4 +348,28 @@ describe('LobeQwenAI - custom features', () => {
       expect(result.search_options).toBeDefined();
     });
   });
+
+  describe('qwen3.8 max deployment alias', () => {
+    it('should apply qwen3.8 rules by logical id and send the deployment name as model', () => {
+      const payload = {
+        deploymentName: 'my-qwen-deployment',
+        messages: [{ content: 'hello', role: 'user' }],
+        model: 'qwen3.8-max-preview',
+        reasoning_effort: 'high',
+        temperature: 0.2,
+      } as any;
+
+      const result = params.chatCompletion!.handlePayload!(payload);
+
+      // Rules resolve from the logical id even though the id is aliased...
+      expect(result.enable_thinking).toBe(true);
+      expect(result.reasoning_effort).toBe('xhigh');
+      expect(result.temperature).toBe(0.6);
+      expect(result.preserve_thinking).toBe(false);
+      // ...while the upstream request carries the deployment alias as the model.
+      expect(result.model).toBe('my-qwen-deployment');
+      // The alias field itself must not leak into the outgoing payload.
+      expect((result as any).deploymentName).toBeUndefined();
+    });
+  });
 });

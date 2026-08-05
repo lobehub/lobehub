@@ -34,6 +34,7 @@ export const params = {
   chatCompletion: {
     handlePayload: (payload) => {
       const {
+        deploymentName,
         model,
         presence_penalty,
         reasoning_effort,
@@ -44,6 +45,9 @@ export const params = {
         preserveThinking,
         ...rest
       } = payload;
+      // `model` stays the logical id so the rules below resolve correctly even when a
+      // deployment alias is configured; the alias is what the upstream API expects.
+      const requestModel = deploymentName ?? model;
       const isDeepSeekV4Model = model.startsWith('deepseek-v4');
       const isQwen38Max = isQwen38MaxModel(model);
       const thinkingExplicitlyDisabled = thinking?.type === 'disabled';
@@ -135,7 +139,7 @@ export const params = {
             : {}),
         frequency_penalty: undefined,
         messages,
-        model,
+        model: requestModel,
         presence_penalty: resolvedParams.presence_penalty,
         stream: true,
         temperature: resolvedParams.temperature,

@@ -391,7 +391,11 @@ class ChatService {
       : undefined;
     const shouldUseDeploymentField =
       (provider === ModelProvider.Azure && isResponsesAPIModel(model)) ||
-      provider === ModelProvider.Spark;
+      provider === ModelProvider.Spark ||
+      // Qwen keeps the logical model id so model-specific runtime rules (e.g. the
+      // qwen3.8-max thinking/effort/temperature safeguards) still apply when a
+      // deployment alias is configured; the alias travels in `deploymentName`.
+      provider === ModelProvider.Qwen;
 
     if (!shouldUseDeploymentField && deploymentName) {
       model = deploymentName;
