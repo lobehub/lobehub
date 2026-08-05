@@ -11,6 +11,11 @@ export const useBusinessChatInputAlerts = (): ReactNode => null;
 /**
  * Aico billing source switcher sits next to the send area so users can pick
  * personal vs org credit (separate balances) while chatting.
+ *
+ * Conversation ChatInput injects this automatically. Home and other surfaces
+ * that render DesktopChatInput directly must pass
+ * `sendAreaPrefix={getBusinessChatInputSendAreaPrefix()}` so the wallet can be
+ * chosen before the first message.
  */
 export const getBusinessChatInputSendAreaPrefix = (sendAreaPrefix?: ReactNode): ReactNode => {
   const switcher = createElement(BillingSourceSwitcher);
