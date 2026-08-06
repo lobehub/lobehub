@@ -1,8 +1,13 @@
 export type HeterogeneousAgentMenuLabelKey =
-  'newAmpAgent' | 'newClaudeCodeAgent' | 'newCodexAgent' | 'newOpenCodeAgent' | 'newPiAgent';
+  | 'newAmpAgent'
+  | 'newClaudeCodeAgent'
+  | 'newCodexAgent'
+  | 'newOpenCodeAgent'
+  | 'newPiAgent'
+  | 'newQoderAgent';
 
 /**
- * Config for local CLI hetero agents (Amp, Claude Code, Codex, OpenCode, Pi) that run as
+ * Config for local CLI hetero agents (Amp, Claude Code, Codex, OpenCode, Pi, Qoder) that run as
  * desktop subprocesses via Electron IPC. Platform task agents (openclaw,
  * hermes) use a separate notify-based runner and are not listed here.
  */
@@ -12,7 +17,7 @@ export interface HeterogeneousAgentConfig {
   menuKey: string;
   menuLabelKey: HeterogeneousAgentMenuLabelKey;
   title: string;
-  type: 'amp' | 'claude-code' | 'codex' | 'opencode' | 'pi';
+  type: 'amp' | 'claude-code' | 'codex' | 'opencode' | 'pi' | 'qoder';
 }
 
 export const HETEROGENEOUS_AGENT_CONFIGS = [
@@ -55,6 +60,14 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
     menuLabelKey: 'newPiAgent',
     title: 'Pi',
     type: 'pi',
+  },
+  {
+    command: 'qodercli',
+    iconId: 'Qoder',
+    menuKey: 'newQoderAgent',
+    menuLabelKey: 'newQoderAgent',
+    title: 'Qoder',
+    type: 'qoder',
   },
 ] as const satisfies readonly HeterogeneousAgentConfig[];
 

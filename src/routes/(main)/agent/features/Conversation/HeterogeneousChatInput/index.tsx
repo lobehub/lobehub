@@ -108,14 +108,15 @@ const HeterogeneousChatInput = memo(() => {
     !isHeterogeneousSandboxExecutionAvailable(providerType) &&
     executionTarget === 'none';
 
-  // OpenCode and Pi can discover models on an explicit bound device; Claude Code and
+  // OpenCode, Pi, and Qoder discover models on a concrete runtime; Claude Code and
   // Codex show the selector on every execution path (local / sandbox / device)
   // since dispatch forwards --model/--effort everywhere.
   const isSelectableHeteroProvider =
     providerType === 'claude-code' ||
     providerType === 'codex' ||
     providerType === 'opencode' ||
-    providerType === 'pi';
+    providerType === 'pi' ||
+    providerType === 'qoder';
   const showHeteroModel =
     isSelectableHeteroProvider &&
     shouldShowHeteroModelSelector({

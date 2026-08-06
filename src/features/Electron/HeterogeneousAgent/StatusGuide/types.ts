@@ -47,6 +47,7 @@ export const SUPPORTED_HETEROGENEOUS_AGENT_TYPES = [
   'codex',
   'opencode',
   'pi',
+  'qoder',
 ] as const;
 
 export type SupportedHeterogeneousAgentType = (typeof SUPPORTED_HETEROGENEOUS_AGENT_TYPES)[number];

@@ -241,11 +241,12 @@ export interface ListHeterogeneousAgentModelsParams {
   command?: string;
   cwd?: string;
   env?: Record<string, string>;
-  type: 'opencode' | 'pi';
+  type: 'opencode' | 'pi' | 'qoder';
 }
 
 export interface HeterogeneousAgentModelCatalogItem {
   id: string;
+  label?: string;
   modelId: string;
   providerId: string;
 }

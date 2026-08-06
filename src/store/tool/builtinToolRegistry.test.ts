@@ -21,6 +21,7 @@ import {
 import { getBuiltinRenderDisplayControl } from '@lobechat/builtin-tools/displayControls';
 import { builtinToolIdentifiers } from '@lobechat/builtin-tools/identifiers';
 import { getBuiltinInspector } from '@lobechat/builtin-tools/inspectors';
+import { getBuiltinIntervention } from '@lobechat/builtin-tools/interventions';
 import { registerBuiltinToolSurfaces } from '@lobechat/builtin-tools/register';
 import { getBuiltinRender } from '@lobechat/builtin-tools/renders';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -94,6 +95,7 @@ describe('builtin tool registry', () => {
     expect(
       getBuiltinRender(ClaudeCodeToolIdentifier, UserInteractionApiName.askUserQuestion),
     ).toBeDefined();
+    expect(getBuiltinIntervention('qoder', UserInteractionApiName.askUserQuestion)).toBeDefined();
   });
 
   it('exposes the marketplace APIs under the web onboarding manifest', () => {

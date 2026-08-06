@@ -16,11 +16,13 @@ export type HeterogeneousAgentModelCatalogErrorCode =
 
 /** One model reported by a heterogeneous CLI's device-local model catalog. */
 export interface HeterogeneousAgentModel {
-  /** Complete provider/model identifier. Treat as opaque when persisting or spawning. */
+  /** Exact value accepted by the CLI's model-selection flag. Treat as opaque. */
   id: string;
-  /** Everything after the first slash. May itself contain slashes. */
+  /** Optional human-readable model label. */
+  label?: string;
+  /** Model identifier shown when the CLI does not provide a separate display label. */
   modelId: string;
-  /** Everything before the first slash, used only for display grouping. */
+  /** Provider or CLI family, used only for display grouping. */
   providerId: string;
 }
 
@@ -28,7 +30,7 @@ export interface ListHeterogeneousAgentModelsParams {
   command?: string;
   cwd?: string;
   env?: Record<string, string>;
-  type: 'opencode' | 'pi';
+  type: 'opencode' | 'pi' | 'qoder';
 }
 
 export interface HeterogeneousAgentModelCatalogSuccess {
@@ -137,7 +139,7 @@ const CODEX_FAST_SERVICE_TIER_VALUES = ['fast', 'priority'] as const;
  *
  * Two families of hetero agents are supported:
  *
- * - **Local CLI** (`amp` | `claude-code` | `codex` | `opencode` | `pi`): spawned as a child
+ * - **Local CLI** (`amp` | `claude-code` | `codex` | `opencode` | `pi` | `qoder`): spawned as a child
  *   process on the desktop or a connected device; uses `command`, `args`, `env`,
  *   `systemContext`.
  *
@@ -189,7 +191,7 @@ export interface HeterogeneousProviderConfig {
    */
   systemContext?: string;
   /** Agent runtime type. */
-  type: 'amp' | 'claude-code' | 'codex' | 'hermes' | 'opencode' | 'openclaw' | 'pi';
+  type: 'amp' | 'claude-code' | 'codex' | 'hermes' | 'opencode' | 'openclaw' | 'pi' | 'qoder';
 }
 
 interface ClaudeCodeSelectionSource {
@@ -210,6 +212,7 @@ const CODEX_MODEL_FLAGS = ['-m', '--model'] as const;
 const HETERO_EXEC_AGENT_ARG_FLAG = '--agent-arg';
 const OPENCODE_MODEL_FLAGS = ['-m', '--model'] as const;
 const PI_MODEL_FLAGS = ['--model'] as const;
+const QODER_MODEL_FLAGS = ['-m', '--model'] as const;
 
 const hasCliFlag = (args: string[], flag: string): boolean =>
   args.some((arg) => arg === flag || arg.startsWith(`${flag}=`));
@@ -428,8 +431,8 @@ export const codexModelSupportsFastSpeed = (model: string): boolean =>
  * For `claude-code` and `codex`, the chat-input selector persists explicit
  * `model` + `effort` selections on the provider config; this is the single
  * place that maps those stored settings onto provider-specific argv for direct
- * local desktop spawns. OpenCode and Pi use their device-local model catalogs
- * and forward the selected provider/model id using the native `--model` flag.
+ * local desktop spawns. OpenCode, Pi, and Qoder use their device-local model
+ * catalogs and forward the selected model using the native `--model` flag.
  * Missing/default settings are resolved by the UI helpers for display only.
  * They are not appended here because CLI overrides must not mask each CLI's
  * own settings/env/account defaults. User-authored `args` win, so there is
@@ -447,7 +450,8 @@ export const buildHeteroSpawnArgs = (
     provider.type !== 'claude-code' &&
     provider.type !== 'codex' &&
     provider.type !== 'opencode' &&
-    provider.type !== 'pi'
+    provider.type !== 'pi' &&
+    provider.type !== 'qoder'
   ) {
     return provider.args;
   }
@@ -505,6 +509,17 @@ export const buildHeteroSpawnArgs = (
     }
   }
 
+  if (provider.type === 'qoder') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, QODER_MODEL_FLAGS)
+    ) {
+      extraArgs.push('--model', model);
+    }
+  }
+
   if (extraArgs.length === 0) return provider.args;
   return [...baseArgs, ...extraArgs];
 };
@@ -528,7 +543,8 @@ export const buildHeteroExecArgs = (
     provider.type !== 'claude-code' &&
     provider.type !== 'codex' &&
     provider.type !== 'opencode' &&
-    provider.type !== 'pi'
+    provider.type !== 'pi' &&
+    provider.type !== 'qoder'
   ) {
     return provider.args;
   }
@@ -590,6 +606,17 @@ export const buildHeteroExecArgs = (
       model &&
       model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
       !hasAnyCliFlag(baseArgs, PI_MODEL_FLAGS)
+    ) {
+      selectorArgs.push('--model', model);
+    }
+  }
+
+  if (provider.type === 'qoder') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, QODER_MODEL_FLAGS)
     ) {
       selectorArgs.push('--model', model);
     }

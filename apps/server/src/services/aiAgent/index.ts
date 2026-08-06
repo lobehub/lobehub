@@ -1910,7 +1910,7 @@ export class AiAgentService {
     // 3.5. Hetero-agent early exit — local CLI and remote platform agents bypass the
     // server-side LLM pipeline.  After topic + message creation we hand off to
     // the device gateway (desktop) or cloud sandbox, which will push events
-    // back via `heteroIngest` / `heteroFinish` (amp / claude-code / codex / opencode / pi) or
+    // back via `heteroIngest` / `heteroFinish` (amp / claude-code / codex / opencode / pi / qoder) or
     // `agentNotify.notify` (openclaw / hermes).
     //
     // Detection: prefer agencyConfig.heterogeneousProvider.type (set by the UI),
@@ -1919,7 +1919,7 @@ export class AiAgentService {
     const heteroProviderType = agentConfig.agencyConfig?.heterogeneousProvider?.type;
     const isHeteroAgent = !!heteroProviderType || isHeterogeneousAgentModelId(model);
     const heteroType = (heteroProviderType ?? model) as
-      'amp' | 'claude-code' | 'codex' | 'hermes' | 'openclaw' | 'opencode' | 'pi';
+      'amp' | 'claude-code' | 'codex' | 'hermes' | 'openclaw' | 'opencode' | 'pi' | 'qoder';
 
     // ── Shared turn setup (runs for BOTH hetero and normal agents) ──────────
     // Everything up to and including persisting the turn is identical for both
@@ -2214,7 +2214,8 @@ export class AiAgentService {
         heteroType === 'claude-code' ||
         heteroType === 'codex' ||
         heteroType === 'opencode' ||
-        heteroType === 'pi'
+        heteroType === 'pi' ||
+        heteroType === 'qoder'
           ? buildHeteroExecArgs(
               agentConfig.agencyConfig?.heterogeneousProvider?.type === heteroType
                 ? agentConfig.agencyConfig.heterogeneousProvider
@@ -2493,7 +2494,10 @@ export class AiAgentService {
               agentId: resolvedAgentId,
               assistantMessageId: assistantMessageRecord.id,
               detail:
-                heteroType === 'amp' || heteroType === 'opencode' || heteroType === 'pi'
+                heteroType === 'amp' ||
+                heteroType === 'opencode' ||
+                heteroType === 'pi' ||
+                heteroType === 'qoder'
                   ? 'No device bound. Pick a local or connected device in the Execution Device switcher.'
                   : 'No device bound. Pick a device in the Execution Device switcher, or switch to Cloud sandbox.',
               message: 'No bound device for hetero agent',

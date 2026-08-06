@@ -300,6 +300,45 @@ describe('buildAgentInput', () => {
     });
   });
 
+  describe('qoder', () => {
+    it('uses Qoder stream-json stdin and path-based --attachment flags', async () => {
+      const filePath = path.join(tmp, 'qoder input.png');
+      await writeFile(filePath, PNG_BYTES);
+      const plan = await buildAgentInput('qoder', [
+        { text: 'first', type: 'text' },
+        { source: { path: filePath, type: 'path' }, type: 'image' },
+        { text: 'second', type: 'text' },
+      ]);
+
+      expect(plan.args).toEqual(['--attachment', filePath]);
+      expect(JSON.parse(plan.stdin.trim())).toEqual({
+        message: {
+          content: [{ text: 'first\n\nsecond', type: 'text' }],
+          role: 'user',
+        },
+        parent_tool_use_id: null,
+        type: 'user',
+      });
+    });
+
+    it('materializes base64 images instead of embedding Claude-style image blocks', async () => {
+      const plan = await buildAgentInput(
+        'qoder',
+        [
+          {
+            source: { data: PNG_BYTES.toString('base64'), mediaType: 'image/png', type: 'base64' },
+            type: 'image',
+          },
+        ],
+        { cacheDir: tmp },
+      );
+
+      expect(plan.args[0]).toBe('--attachment');
+      expect(plan.args[1]).toMatch(/\.png$/);
+      expect(JSON.parse(plan.stdin.trim()).message.content).toEqual([]);
+    });
+  });
+
   it('throws on unknown agent types', async () => {
     await expect(buildAgentInput('kimi-cli', 'hi')).rejects.toThrow(/unsupported agent type/);
   });

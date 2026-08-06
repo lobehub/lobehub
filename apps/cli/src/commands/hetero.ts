@@ -28,7 +28,7 @@ import { CoalescingBatchIngester } from '../utils/CoalescingBatchIngester';
 import { log } from '../utils/logger';
 import { TrpcIngestSink } from '../utils/TrpcIngestSink';
 
-const SUPPORTED_AGENT_TYPES = new Set(['amp', 'claude-code', 'codex', 'opencode', 'pi']);
+const SUPPORTED_AGENT_TYPES = new Set(['amp', 'claude-code', 'codex', 'opencode', 'pi', 'qoder']);
 const CODEX_REASONING_EFFORT_CONFIG_KEY = 'model_reasoning_effort';
 const CODEX_SERVICE_TIER_CONFIG_KEY = 'service_tier';
 
@@ -132,7 +132,9 @@ const buildExtraArgs = (
             ? [...(options.model ? ['--model', options.model] : [])]
             : options.type === 'pi'
               ? [...(options.model ? ['--model', options.model] : [])]
-              : [];
+              : options.type === 'qoder'
+                ? [...(options.model ? ['--model', options.model] : [])]
+                : [];
   const extraArgs = [...(options.agentArg ?? []), ...selectorArgs];
 
   return extraArgs.length > 0 ? extraArgs : undefined;
@@ -383,7 +385,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
   // Build the ingest sink — no-op for standalone mode, real tRPC sink for
   // server-ingest mode.  The tRPC client reads LOBEHUB_JWT (operation-scoped
   // JWT injected by the server) for authentication.
-  const agentType = options.type as 'amp' | 'claude-code' | 'codex' | 'opencode' | 'pi';
+  const agentType = options.type as 'amp' | 'claude-code' | 'codex' | 'opencode' | 'pi' | 'qoder';
   let sink: TrpcIngestSink | undefined;
   let serverIngester: CoalescingBatchIngester | undefined;
   // Uploader for tool_result images (CC `Read` on an image file). Reuses the
@@ -414,7 +416,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     });
   }
 
-  // ─── AskUserQuestion MCP — remote Human-in-the-loop (claude-code only) ──────
+  // ─── AskUserQuestion MCP — remote Human-in-the-loop ────────────────────────
   //
   // Mount the same `lobe_cc` MCP server the desktop app uses, but resolve the
   // bridge over the server's Redis stream instead of Electron IPC:
@@ -430,7 +432,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
   let askBridge: AskUserBridge | undefined;
   let askMcpConfigPath: string | undefined;
   const askPollAbort = new AbortController();
-  if (serverIngest && agentType === 'claude-code' && serverIngester) {
+  if (serverIngest && (agentType === 'claude-code' || agentType === 'qoder') && serverIngester) {
     askServer = new LobeBuiltinMcpServer();
     await askServer.start();
     askBridge = askServer.registerOperation(operationId);
@@ -745,11 +747,11 @@ const exec = async (options: ExecOptions): Promise<void> => {
   const interceptResume = !!options.resume;
   const extraArgs = [
     ...(buildExtraArgs(options) ?? []),
-    // Point CC at the lobe_cc AskUserQuestion MCP server we just mounted.
+    // Point the supported CLI at the lobe_cc AskUserQuestion MCP server we just mounted.
     ...(askMcpConfigPath ? ['--mcp-config', askMcpConfigPath] : []),
   ];
   // Resolve the CLI binary once, up front, and reuse it for both the initial
-  // run and the resume-retry. For the default bare command (`amp`/`codex`/`claude`)
+  // run and the resume-retry. For each provider's default bare command
   // this finds the validated binary — including an app-bundled Codex CLI when
   // a broken `codex` shim shadows PATH — so sandbox/terminal runs no longer
   // ENOENT on a stale global install. Custom commands are used verbatim.
@@ -887,7 +889,7 @@ export function registerHeteroCommand(program: Command) {
   const hetero = program
     .command('hetero')
     .description(
-      'Run heterogeneous agent CLIs (Amp / Claude Code / Codex / OpenCode / Pi) and stream their output',
+      'Run heterogeneous agent CLIs (Amp / Claude Code / Codex / OpenCode / Pi / Qoder) and stream their output',
     );
 
   hetero
@@ -921,7 +923,7 @@ export function registerHeteroCommand(program: Command) {
     )
     .option(
       '-c, --command <bin>',
-      'Override the agent CLI binary name (default: `amp`, `claude`, `codex`, `opencode`, or `pi`)',
+      'Override the agent CLI binary name (default: `amp`, `claude`, `codex`, `opencode`, `pi`, or `qodercli`)',
     )
     .option(
       '--operation-id <id>',

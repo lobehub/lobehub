@@ -12,6 +12,7 @@ import {
   CodexAdapter,
   OpenCodeAdapter,
   PiAdapter,
+  QoderAdapter,
 } from './adapters';
 import type { AgentEventAdapter } from './types';
 
@@ -37,6 +38,9 @@ const registry: Record<string, AgentRegistryEntry> = {
   },
   'pi': {
     createAdapter: () => new PiAdapter(),
+  },
+  'qoder': {
+    createAdapter: () => new QoderAdapter(),
   },
   // 'kimi-cli': { createAdapter: () => new KimiCLIAdapter() },
 };

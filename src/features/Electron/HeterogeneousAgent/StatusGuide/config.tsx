@@ -9,8 +9,10 @@ import {
   OPENCODE_CLI_INSTALL_DOCS_URL,
   PI_CLI_INSTALL_COMMANDS,
   PI_CLI_INSTALL_DOCS_URL,
+  QODER_CLI_INSTALL_COMMANDS,
+  QODER_CLI_INSTALL_DOCS_URL,
 } from '@lobechat/electron-client-ipc';
-import { Amp, ClaudeCode, Codex, OpenCode, Pi } from '@lobehub/icons';
+import { Amp, ClaudeCode, Codex, OpenCode, Pi, Qoder } from '@lobehub/icons';
 
 import {
   type HeterogeneousAgentGuideConfig,
@@ -58,6 +60,14 @@ export const HETEROGENEOUS_AGENT_GUIDE_CONFIG = {
     signInCommand: 'pi',
     title: 'Pi',
     translationPrefix: 'piInstallGuide',
+  },
+  'qoder': {
+    docsUrl: QODER_CLI_INSTALL_DOCS_URL,
+    icon: Qoder,
+    installCommands: QODER_CLI_INSTALL_COMMANDS,
+    signInCommand: 'qodercli login',
+    title: 'Qoder',
+    translationPrefix: 'qoderInstallGuide',
   },
 } as const satisfies Record<SupportedHeterogeneousAgentType, HeterogeneousAgentGuideConfig>;
 

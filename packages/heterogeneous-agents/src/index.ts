@@ -1,4 +1,4 @@
-export { AmpAdapter, ClaudeCodeAdapter } from './adapters';
+export { AmpAdapter, ClaudeCodeAdapter, QoderAdapter } from './adapters';
 export type {
   HeterogeneousAgentType,
   LocalHeterogeneousAgentType,

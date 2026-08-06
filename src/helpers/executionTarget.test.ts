@@ -30,11 +30,19 @@ const openClawCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgency
   heterogeneousProvider: { type: 'openclaw' },
   ...over,
 });
+const qoderCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({
+  heterogeneousProvider: { command: 'qodercli', type: 'qoder' },
+  ...over,
+});
 
 describe('isHeterogeneousSandboxExecutionAvailable', () => {
   it('keeps notify-based platform agents on local or connected devices', () => {
     expect(isHeterogeneousSandboxExecutionAvailable('openclaw')).toBe(false);
     expect(isHeterogeneousSandboxExecutionAvailable('hermes')).toBe(false);
+  });
+
+  it('keeps Qoder on local or connected devices', () => {
+    expect(isHeterogeneousSandboxExecutionAvailable('qoder')).toBe(false);
   });
 });
 
@@ -176,6 +184,7 @@ describe('resolveExecutionTarget', () => {
       ['Amp', ampCfg],
       ['OpenCode', openCodeCfg],
       ['Pi', piCfg],
+      ['Qoder', qoderCfg],
     ] as const)('keeps an unconfigured %s agent pending on web', (_name, providerCfg) => {
       expect(
         resolveExecutionTarget(providerCfg(), {
@@ -219,6 +228,17 @@ describe('resolveExecutionTarget', () => {
       for (const executionTarget of ['sandbox', 'local'] as const) {
         expect(
           resolveExecutionTarget(piCfg({ executionTarget }), {
+            clientExecutionAvailable: false,
+            isHetero: true,
+          }),
+        ).toBe('none');
+      }
+    });
+
+    it('normalizes unsupported Qoder sandbox and unbound web-local targets to pending', () => {
+      for (const executionTarget of ['sandbox', 'local'] as const) {
+        expect(
+          resolveExecutionTarget(qoderCfg({ executionTarget }), {
             clientExecutionAvailable: false,
             isHetero: true,
           }),

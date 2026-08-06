@@ -11,6 +11,7 @@ import {
   HeterogeneousAgentSessionErrorCode,
   OPENCODE_CLI_INSTALL_DOCS_URL,
   PI_CLI_INSTALL_DOCS_URL,
+  QODER_CLI_AUTH_DOCS_URL,
 } from '@lobechat/electron-client-ipc';
 import {
   createMainAgentRunState,
@@ -99,9 +100,10 @@ const CLI_AUTH_REQUIRED_PATTERNS = [
   /no models available/i,
 ] as const;
 const AMP_AUTH_REQUIRED_PATTERNS = [/please (?:log|sign) in/i, /amp_api_key/i] as const;
+const QODER_AUTH_REQUIRED_PATTERNS = [/not logged in/i, /please run \/login/i] as const;
 
 const buildCliAuthRequiredSessionError = (
-  agentType: 'amp' | 'claude-code' | 'codex' | 'opencode' | 'pi',
+  agentType: 'amp' | 'claude-code' | 'codex' | 'opencode' | 'pi' | 'qoder',
   rawMessage: string,
 ): HeterogeneousAgentSessionError => {
   switch (agentType) {
@@ -154,6 +156,15 @@ const buildCliAuthRequiredSessionError = (
         stderr: rawMessage,
       };
     }
+    case 'qoder': {
+      return {
+        agentType,
+        code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+        docsUrl: QODER_CLI_AUTH_DOCS_URL,
+        message: 'Qoder could not authenticate. Run `qodercli login`, then retry.',
+        stderr: rawMessage,
+      };
+    }
   }
 };
 
@@ -168,7 +179,8 @@ const maybeClassifyCliAuthRequiredError = (
     agentType !== 'claude-code' &&
     agentType !== 'codex' &&
     agentType !== 'opencode' &&
-    agentType !== 'pi'
+    agentType !== 'pi' &&
+    agentType !== 'qoder'
   ) {
     return;
   }
@@ -189,7 +201,9 @@ const maybeClassifyCliAuthRequiredError = (
   const patterns =
     agentType === 'amp'
       ? [...CLI_AUTH_REQUIRED_PATTERNS, ...AMP_AUTH_REQUIRED_PATTERNS]
-      : CLI_AUTH_REQUIRED_PATTERNS;
+      : agentType === 'qoder'
+        ? [...CLI_AUTH_REQUIRED_PATTERNS, ...QODER_AUTH_REQUIRED_PATTERNS]
+        : CLI_AUTH_REQUIRED_PATTERNS;
   if (!patterns.some((pattern) => pattern.test(message))) return;
 
   return buildCliAuthRequiredSessionError(agentType, message);
@@ -226,6 +240,9 @@ const getDefaultHeterogeneousCommand = (agentType: string): string => {
     }
     case 'pi': {
       return 'pi';
+    }
+    case 'qoder': {
+      return 'qodercli';
     }
     default: {
       return 'claude';
