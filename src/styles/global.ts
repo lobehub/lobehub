@@ -81,11 +81,15 @@ const genGlobalStyle = ({ token }: { prefixCls: string; token: Theme }) => css`
    * --switch-dir:-1, so the knob/background animate the wrong way. Keep the
    * control LTR (standard toggle UX) under RTL documents.
    *
-   * Tabs / Segmented indicators (e.g. Settings → Appearance → Response Animation):
-   * JS writes physical offsetLeft into --active-tab-left / --active-item-left, but
-   * component CSS binds logical inset-inline-start. Under RTL the selection pill
-   * shifts away from the active option. Force physical \`left\` to match the JS.
+   * Tabs / Segmented indicators (Settings → Appearance animation, platform/org
+   * admin tabs, etc.): JS writes physical offsetLeft into --active-tab-left /
+   * --active-item-left, but component CSS binds logical inset-inline-start.
+   * Under RTL that mirrors the pill away from the active option. Always force
+   * physical \`left\` (safe in LTR too — left === inset-inline-start there).
+   * Do not gate on html[dir=rtl] only: antd direction=rtl can nest :dir(rtl)
+   * without html.dir matching yet.
    */
+  :dir(rtl) [role='switch'],
   html[dir='rtl'] [role='switch'] {
     --switch-dir: 1;
 
@@ -93,20 +97,18 @@ const genGlobalStyle = ({ token }: { prefixCls: string; token: Theme }) => css`
   }
 
   /* stylelint-disable liberty/use-logical-spec -- indicator offsets are physical */
-  :dir(rtl) [role='tablist'] > [role='presentation'],
-  html[dir='rtl'] [role='tablist'] > [role='presentation'] {
+  [role='tablist'] > [role='presentation'] {
     right: auto !important;
     left: var(--active-tab-left) !important;
     inset-inline: auto !important;
-    transition-property: left, inset-block-start, top, width, height, transform !important;
+    transition-property: left, top, inset-block-start, width, height, transform !important;
   }
 
-  :dir(rtl) [data-orientation] > [aria-hidden='true']:first-of-type,
-  html[dir='rtl'] [data-orientation] > [aria-hidden='true']:first-of-type {
+  [data-orientation] > [aria-hidden='true']:first-of-type {
     right: auto !important;
     left: var(--active-item-left) !important;
     inset-inline: auto !important;
-    transition-property: left, inset-block-start, top, width, height, transform !important;
+    transition-property: left, top, inset-block-start, width, height, transform !important;
   }
   /* stylelint-enable liberty/use-logical-spec */
 `;
