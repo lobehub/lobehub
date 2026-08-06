@@ -1,14 +1,39 @@
 export { AmpAdapter, ClaudeCodeAdapter, QoderAdapter } from './adapters';
 export type {
+  HeterogeneousAgentCliError,
+  HeterogeneousAgentDescriptor,
+  HeterogeneousAgentMenuLabelKey,
   HeterogeneousAgentType,
+  LocalHeterogeneousAgentDescriptor,
   LocalHeterogeneousAgentType,
+  RemoteHeterogeneousAgentDescriptor,
   RemoteHeterogeneousAgentType,
 } from './config';
 export {
+  AMP_CLI_INSTALL_COMMANDS,
+  AMP_CLI_INSTALL_DOCS_URL,
+  buildHeterogeneousAgentAuthRequiredError,
+  buildHeterogeneousAgentCliNotFoundError,
+  CLAUDE_CODE_CLI_INSTALL_COMMANDS,
+  CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
+  CODEX_CLI_INSTALL_COMMANDS,
+  CODEX_CLI_INSTALL_DOCS_URL,
   getHeterogeneousAgentConfig,
+  getHeterogeneousAgentConfigOrThrow,
   HETEROGENEOUS_AGENT_CONFIGS,
+  isHeterogeneousAgentAuthRequired,
+  isLocalHeterogeneousType,
   isRemoteHeterogeneousType,
+  LOCAL_HETEROGENEOUS_AGENT_TYPES,
+  OPENCODE_CLI_INSTALL_COMMANDS,
+  OPENCODE_CLI_INSTALL_DOCS_URL,
+  PI_CLI_INSTALL_COMMANDS,
+  PI_CLI_INSTALL_DOCS_URL,
+  QODER_CLI_AUTH_DOCS_URL,
+  QODER_CLI_INSTALL_COMMANDS,
+  QODER_CLI_INSTALL_DOCS_URL,
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
+  resolveHeterogeneousAgentCommand,
 } from './config';
 export type {
   HeteroErrorAttribution,
@@ -41,7 +66,7 @@ export type {
   SetErrorIntent,
 } from './mainAgentCoordinator';
 export { createMainAgentRunState, reduceMainAgent } from './mainAgentCoordinator';
-export { createAdapter, listAgentTypes } from './registry';
+export { createAdapter, listAgentTypes, listLocalAgentTypes } from './registry';
 export type { HeterogeneousAgentScanMap, HeterogeneousAgentScanStatus } from './scan/types';
 export { isHeteroStatusGuideErrorData } from './spawn/classifyProcessFailure';
 export type {

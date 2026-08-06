@@ -8,7 +8,8 @@ import {
   PiAdapter,
   QoderAdapter,
 } from './adapters';
-import { createAdapter, listAgentTypes } from './registry';
+import { HETEROGENEOUS_AGENT_CONFIGS } from './config';
+import { createAdapter, listAgentTypes, listLocalAgentTypes } from './registry';
 
 describe('registry', () => {
   describe('createAdapter', () => {
@@ -45,14 +46,11 @@ describe('registry', () => {
   });
 
   describe('listAgentTypes', () => {
-    it('includes every local CLI adapter', () => {
-      const types = listAgentTypes();
-      expect(types).toContain('amp');
-      expect(types).toContain('claude-code');
-      expect(types).toContain('codex');
-      expect(types).toContain('opencode');
-      expect(types).toContain('pi');
-      expect(types).toContain('qoder');
+    it('registers exactly one local adapter for every descriptor', () => {
+      expect(listLocalAgentTypes().toSorted()).toEqual(
+        HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type).toSorted(),
+      );
+      expect(listAgentTypes()).toContain('claude-code-sdk');
     });
   });
 });

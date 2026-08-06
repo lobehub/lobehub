@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildHeterogeneousAgentAuthRequiredError,
   getHeterogeneousAgentConfig,
   HETEROGENEOUS_AGENT_CONFIGS,
+  isHeterogeneousAgentAuthRequired,
   isRemoteHeterogeneousType,
+  resolveHeterogeneousAgentCommand,
 } from './config';
 import { HETEROGENEOUS_TYPE_LABELS } from './labels';
 
@@ -19,36 +22,60 @@ describe('heterogeneous agent config', () => {
     ]);
   });
 
-  it('resolves config by type', () => {
+  it('resolves descriptor metadata by type', () => {
     expect(getHeterogeneousAgentConfig('claude-code')).toMatchObject({
-      command: 'claude',
+      defaultCommand: 'claude',
+      install: {
+        docsUrl: 'https://docs.anthropic.com/en/docs/claude-code/setup',
+      },
+      kind: 'local-cli',
       title: 'Claude Code',
       type: 'claude-code',
     });
     expect(getHeterogeneousAgentConfig('codex')).toMatchObject({
-      command: 'codex',
+      defaultCommand: 'codex',
       title: 'Codex',
       type: 'codex',
     });
     expect(getHeterogeneousAgentConfig('amp')).toMatchObject({
-      command: 'amp',
+      defaultCommand: 'amp',
       title: 'Amp',
       type: 'amp',
     });
     expect(getHeterogeneousAgentConfig('opencode')).toMatchObject({
-      command: 'opencode',
+      defaultCommand: 'opencode',
       title: 'OpenCode',
       type: 'opencode',
     });
     expect(getHeterogeneousAgentConfig('pi')).toMatchObject({
-      command: 'pi',
+      defaultCommand: 'pi',
       title: 'Pi',
       type: 'pi',
     });
     expect(getHeterogeneousAgentConfig('qoder')).toMatchObject({
-      command: 'qodercli',
+      auth: { docsUrl: 'https://docs.qoder.com/cli/auth.md' },
+      defaultCommand: 'qodercli',
       title: 'Qoder',
       type: 'qoder',
+    });
+  });
+
+  it('resolves commands from descriptors and fails loudly for unknown types', () => {
+    expect(resolveHeterogeneousAgentCommand('claude-code')).toBe('claude');
+    expect(resolveHeterogeneousAgentCommand('claude-code', ' claude-beta ')).toBe('claude-beta');
+    expect(() => resolveHeterogeneousAgentCommand('unknown-agent')).toThrow(
+      'Unknown local heterogeneous agent type: "unknown-agent"',
+    );
+  });
+
+  it('builds auth guidance from descriptor metadata', () => {
+    expect(isHeterogeneousAgentAuthRequired('amp', 'Please log in before continuing')).toBe(true);
+    expect(buildHeterogeneousAgentAuthRequiredError({ agentType: 'amp' })).toMatchObject({
+      agentType: 'amp',
+      code: 'auth_required',
+      command: 'amp',
+      docsUrl: 'https://ampcode.com/manual',
+      message: 'Amp could not authenticate. Run `amp login` or configure AMP_API_KEY, then retry.',
     });
   });
 

@@ -1,3 +1,8 @@
+import type {
+  HeterogeneousAgentType,
+  LocalHeterogeneousAgentType,
+} from '@lobechat/heterogeneous-agents';
+
 /**
  * Status of a registered binary
  */
@@ -23,10 +28,9 @@ export interface BinaryInfo {
   priority?: number;
 }
 
-export type HeterogeneousCliAgentType =
-  'amp' | 'claude-code' | 'codex' | 'opencode' | 'pi' | 'qoder';
+export type HeterogeneousCliAgentType = LocalHeterogeneousAgentType;
 
-export type DetectableHeterogeneousAgentType = HeterogeneousCliAgentType | 'hermes' | 'openclaw';
+export type DetectableHeterogeneousAgentType = HeterogeneousAgentType;
 
 export interface DetectHeterogeneousAgentCommandParams {
   agentType: DetectableHeterogeneousAgentType;

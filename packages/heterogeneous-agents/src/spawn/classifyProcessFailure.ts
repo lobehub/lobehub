@@ -1,3 +1,10 @@
+import {
+  buildHeterogeneousAgentAuthRequiredError,
+  buildHeterogeneousAgentCliNotFoundError,
+  HETEROGENEOUS_AGENT_CONFIGS,
+  isHeterogeneousAgentAuthRequired,
+  isLocalHeterogeneousType,
+} from '../config';
 import type { HeterogeneousTerminalErrorData } from '../types';
 
 /**
@@ -29,43 +36,6 @@ import type { HeterogeneousTerminalErrorData } from '../types';
  */
 const SPAWN_ENOENT_PATTERN = /\bspawn .+ ENOENT\b/;
 
-/** Mirrors `CLI_AUTH_REQUIRED_PATTERNS` in the desktop `HeterogeneousAgentCtr`. */
-const CLI_AUTH_REQUIRED_PATTERNS = [
-  /failed to authenticate/i,
-  /invalid authentication credentials/i,
-  /authentication[_ ]error/i,
-  /not authenticated/i,
-  /\bunauthorized\b/i,
-  /\b401\b/,
-  /no api key found/i,
-  /no models available/i,
-] as const;
-const QODER_AUTH_REQUIRED_PATTERNS = [/not logged in/i, /please run \/login/i] as const;
-
-const CLI_NOT_FOUND_MESSAGES: Record<string, string> = {
-  'claude-code':
-    'Claude Code CLI was not found on the machine running this agent. Install it and make sure `claude` can be executed.',
-  'codex':
-    'Codex CLI was not found on the machine running this agent. Install it and make sure `codex` can be executed.',
-  'opencode':
-    'OpenCode CLI was not found on the machine running this agent. Install it and make sure `opencode` can be executed.',
-  'pi': 'Pi CLI was not found on the machine running this agent. Install it and make sure `pi` can be executed.',
-  'qoder':
-    'Qoder CLI was not found on the machine running this agent. Install it and make sure `qodercli` can be executed.',
-};
-
-const AUTH_REQUIRED_MESSAGES: Record<string, string> = {
-  'claude-code':
-    'Claude Code could not authenticate on the machine running this agent. Sign in again or refresh its credentials, then retry.',
-  'codex':
-    'Codex could not authenticate on the machine running this agent. Sign in again or refresh its credentials, then retry.',
-  'opencode':
-    'OpenCode could not authenticate on the machine running this agent. Sign in again or refresh its credentials, then retry.',
-  'pi': 'Pi could not authenticate on the machine running this agent. Run `pi`, use `/login`, then retry.',
-  'qoder':
-    'Qoder could not authenticate on the machine running this agent. Run `qodercli login`, then retry.',
-};
-
 /**
  * Codes/agent types the client renders the dedicated status-guide card for.
  * Must stay in sync with `HETEROGENEOUS_AGENT_STATUS_GUIDE_ERROR_CODES` in
@@ -78,14 +48,9 @@ const STATUS_GUIDE_ERROR_CODES = new Set([
   'overloaded',
   'rate_limit',
 ]);
-const STATUS_GUIDE_AGENT_TYPES = new Set([
-  'amp',
-  'claude-code',
-  'codex',
-  'opencode',
-  'pi',
-  'qoder',
-]);
+const STATUS_GUIDE_AGENT_TYPES = new Set(
+  HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type as string),
+);
 
 /**
  * Whether a terminal error payload (an adapter's in-stream `error` event data,
@@ -110,6 +75,8 @@ export const isHeteroStatusGuideErrorData = (
 export interface ClassifyHeteroProcessFailureParams {
   /** Adapter type key for a local CLI with a status guide. */
   agentType: string;
+  /** Configured CLI command, when the caller overrides the descriptor default. */
+  command?: string;
   /** Stderr tail / flattened error message to pattern-match. */
   detail?: string;
   /**
@@ -127,32 +94,25 @@ export interface ClassifyHeteroProcessFailureParams {
 export const classifyHeteroProcessFailure = (
   params: ClassifyHeteroProcessFailureParams,
 ): HeterogeneousTerminalErrorData | undefined => {
-  const { agentType, errnoCode } = params;
+  const { agentType, command, errnoCode } = params;
   const detail = params.detail?.trim();
 
-  const cliNotFoundMessage = CLI_NOT_FOUND_MESSAGES[agentType];
   // Unknown agent type → the client guide can't render it; don't classify.
-  if (!cliNotFoundMessage) return;
+  if (!isLocalHeterogeneousType(agentType)) return;
 
   if (errnoCode === 'ENOENT' || (detail && SPAWN_ENOENT_PATTERN.test(detail))) {
-    return {
+    return buildHeterogeneousAgentCliNotFoundError({
       agentType,
-      code: 'cli_not_found',
-      message: cliNotFoundMessage,
-      ...(detail ? { stderr: detail } : {}),
-    };
+      command,
+      stderr: detail,
+    });
   }
 
-  const authRequiredPatterns =
-    agentType === 'qoder'
-      ? [...CLI_AUTH_REQUIRED_PATTERNS, ...QODER_AUTH_REQUIRED_PATTERNS]
-      : CLI_AUTH_REQUIRED_PATTERNS;
-  if (detail && authRequiredPatterns.some((pattern) => pattern.test(detail))) {
-    return {
+  if (detail && isHeterogeneousAgentAuthRequired(agentType, detail)) {
+    return buildHeterogeneousAgentAuthRequiredError({
       agentType,
-      code: 'auth_required',
-      message: AUTH_REQUIRED_MESSAGES[agentType],
+      command,
       stderr: detail,
-    };
+    });
   }
 };

@@ -5,6 +5,11 @@ import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
+import {
+  HETEROGENEOUS_AGENT_CONFIGS,
+  isLocalHeterogeneousType,
+  LOCAL_HETEROGENEOUS_AGENT_TYPES,
+} from '@lobechat/heterogeneous-agents';
 import type { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import { LobeBuiltinMcpServer } from '@lobechat/heterogeneous-agents/builtinMcp';
 import { resolveHeteroSpawnCommand } from '@lobechat/heterogeneous-agents/resolveCliCommand';
@@ -28,7 +33,8 @@ import { CoalescingBatchIngester } from '../utils/CoalescingBatchIngester';
 import { log } from '../utils/logger';
 import { TrpcIngestSink } from '../utils/TrpcIngestSink';
 
-const SUPPORTED_AGENT_TYPES = new Set(['amp', 'claude-code', 'codex', 'opencode', 'pi', 'qoder']);
+export const SUPPORTED_AGENT_TYPES = new Set<string>(LOCAL_HETEROGENEOUS_AGENT_TYPES);
+const SUPPORTED_AGENT_TITLES = HETEROGENEOUS_AGENT_CONFIGS.map(({ title }) => title).join(' / ');
 const CODEX_REASONING_EFFORT_CONFIG_KEY = 'model_reasoning_effort';
 const CODEX_SERVICE_TIER_CONFIG_KEY = 'service_tier';
 
@@ -333,7 +339,7 @@ class RawStreamDump {
 }
 
 const exec = async (options: ExecOptions): Promise<void> => {
-  if (!SUPPORTED_AGENT_TYPES.has(options.type)) {
+  if (!isLocalHeterogeneousType(options.type)) {
     log.error(
       `Unsupported --type "${options.type}". Supported: ${[...SUPPORTED_AGENT_TYPES].join(', ')}`,
     );
@@ -385,7 +391,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
   // Build the ingest sink — no-op for standalone mode, real tRPC sink for
   // server-ingest mode.  The tRPC client reads LOBEHUB_JWT (operation-scoped
   // JWT injected by the server) for authentication.
-  const agentType = options.type as 'amp' | 'claude-code' | 'codex' | 'opencode' | 'pi' | 'qoder';
+  const agentType = options.type;
   let sink: TrpcIngestSink | undefined;
   let serverIngester: CoalescingBatchIngester | undefined;
   // Uploader for tool_result images (CC `Read` on an image file). Reuses the
@@ -525,7 +531,12 @@ const exec = async (options: ExecOptions): Promise<void> => {
     type: string,
     errnoCode?: string,
   ): { body?: Record<string, unknown>; message: string; type: string } => {
-    const classified = classifyHeteroProcessFailure({ agentType, detail: message, errnoCode });
+    const classified = classifyHeteroProcessFailure({
+      agentType,
+      command: options.command,
+      detail: message,
+      errnoCode,
+    });
     if (!classified) return { message, type };
     return { body: { ...classified }, message: classified.message, type: 'AgentRuntimeError' };
   };
@@ -889,7 +900,7 @@ export function registerHeteroCommand(program: Command) {
   const hetero = program
     .command('hetero')
     .description(
-      'Run heterogeneous agent CLIs (Amp / Claude Code / Codex / OpenCode / Pi / Qoder) and stream their output',
+      `Run heterogeneous agent CLIs (${SUPPORTED_AGENT_TITLES}) and stream their output`,
     );
 
   hetero

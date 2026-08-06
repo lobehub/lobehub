@@ -88,6 +88,18 @@ describe('classifyHeteroProcessFailure', () => {
     expect(result?.message).toContain('`codex`');
   });
 
+  it('preserves a configured command in CLI-not-found guidance', () => {
+    const result = classifyHeteroProcessFailure({
+      agentType: 'claude-code',
+      command: '/opt/bin/claude-beta',
+      detail: 'Error: spawn /opt/bin/claude-beta ENOENT',
+      errnoCode: 'ENOENT',
+    });
+
+    expect(result).toMatchObject({ command: '/opt/bin/claude-beta' });
+    expect(result?.message).toContain('`/opt/bin/claude-beta`');
+  });
+
   it('classifies a missing OpenCode binary for the install guide', () => {
     const result = classifyHeteroProcessFailure({
       agentType: 'opencode',
@@ -177,11 +189,33 @@ describe('classifyHeteroProcessFailure', () => {
     expect(result?.code).toBe('cli_not_found');
   });
 
-  it('returns undefined for unsupported agent types', () => {
+  it('classifies missing and unauthenticated Amp installations', () => {
     expect(
       classifyHeteroProcessFailure({
         agentType: 'amp',
         detail: 'Error: spawn amp ENOENT',
+        errnoCode: 'ENOENT',
+      }),
+    ).toMatchObject({
+      agentType: 'amp',
+      code: 'cli_not_found',
+      command: 'amp',
+      docsUrl: 'https://ampcode.com/manual',
+    });
+
+    expect(
+      classifyHeteroProcessFailure({
+        agentType: 'amp',
+        detail: 'Please log in with `amp login` or configure AMP_API_KEY.',
+      }),
+    ).toMatchObject({ agentType: 'amp', code: 'auth_required', command: 'amp' });
+  });
+
+  it('returns undefined for unsupported agent types', () => {
+    expect(
+      classifyHeteroProcessFailure({
+        agentType: 'kimi-cli',
+        detail: 'Error: spawn kimi ENOENT',
         errnoCode: 'ENOENT',
       }),
     ).toBeUndefined();

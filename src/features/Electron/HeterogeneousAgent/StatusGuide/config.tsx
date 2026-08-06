@@ -1,17 +1,5 @@
-import {
-  AMP_CLI_INSTALL_COMMANDS,
-  AMP_CLI_INSTALL_DOCS_URL,
-  CLAUDE_CODE_CLI_INSTALL_COMMANDS,
-  CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
-  CODEX_CLI_INSTALL_COMMANDS,
-  CODEX_CLI_INSTALL_DOCS_URL,
-  OPENCODE_CLI_INSTALL_COMMANDS,
-  OPENCODE_CLI_INSTALL_DOCS_URL,
-  PI_CLI_INSTALL_COMMANDS,
-  PI_CLI_INSTALL_DOCS_URL,
-  QODER_CLI_INSTALL_COMMANDS,
-  QODER_CLI_INSTALL_DOCS_URL,
-} from '@lobechat/electron-client-ipc';
+import type { LocalHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
+import { HETEROGENEOUS_AGENT_CONFIGS } from '@lobechat/heterogeneous-agents';
 import { Amp, ClaudeCode, Codex, OpenCode, Pi, Qoder } from '@lobehub/icons';
 
 import {
@@ -20,56 +8,53 @@ import {
   type SupportedHeterogeneousAgentType,
 } from './types';
 
-export const HETEROGENEOUS_AGENT_GUIDE_CONFIG = {
+const GUIDE_PRESENTATION_CONFIG = {
   'amp': {
-    docsUrl: AMP_CLI_INSTALL_DOCS_URL,
     icon: Amp,
-    installCommands: AMP_CLI_INSTALL_COMMANDS,
-    signInCommand: 'amp login',
-    title: 'Amp',
     translationPrefix: 'ampInstallGuide',
   },
   'claude-code': {
-    docsUrl: CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
     icon: ClaudeCode,
-    installCommands: CLAUDE_CODE_CLI_INSTALL_COMMANDS,
-    signInCommand: 'claude',
-    title: 'Claude Code',
     translationPrefix: 'claudeCodeInstallGuide',
   },
   'codex': {
-    docsUrl: CODEX_CLI_INSTALL_DOCS_URL,
     icon: Codex,
-    installCommands: CODEX_CLI_INSTALL_COMMANDS,
-    signInCommand: 'codex',
-    title: 'Codex',
     translationPrefix: 'codexInstallGuide',
   },
   'opencode': {
-    docsUrl: OPENCODE_CLI_INSTALL_DOCS_URL,
     icon: OpenCode,
-    installCommands: OPENCODE_CLI_INSTALL_COMMANDS,
-    signInCommand: 'opencode auth login',
-    title: 'OpenCode',
     translationPrefix: 'opencodeInstallGuide',
   },
   'pi': {
-    docsUrl: PI_CLI_INSTALL_DOCS_URL,
     icon: Pi,
-    installCommands: PI_CLI_INSTALL_COMMANDS,
-    signInCommand: 'pi',
-    title: 'Pi',
     translationPrefix: 'piInstallGuide',
   },
   'qoder': {
-    docsUrl: QODER_CLI_INSTALL_DOCS_URL,
     icon: Qoder,
-    installCommands: QODER_CLI_INSTALL_COMMANDS,
-    signInCommand: 'qodercli login',
-    title: 'Qoder',
     translationPrefix: 'qoderInstallGuide',
   },
-} as const satisfies Record<SupportedHeterogeneousAgentType, HeterogeneousAgentGuideConfig>;
+} as const satisfies Record<
+  LocalHeterogeneousAgentType,
+  Pick<HeterogeneousAgentGuideConfig, 'icon' | 'translationPrefix'>
+>;
+
+const createGuideConfig = () => {
+  const configs = {} as Record<SupportedHeterogeneousAgentType, HeterogeneousAgentGuideConfig>;
+
+  for (const descriptor of HETEROGENEOUS_AGENT_CONFIGS) {
+    configs[descriptor.type] = {
+      docsUrl: descriptor.install.docsUrl,
+      installCommands: descriptor.install.commands,
+      signInCommand: descriptor.auth.signInCommand,
+      title: descriptor.title,
+      ...GUIDE_PRESENTATION_CONFIG[descriptor.type],
+    };
+  }
+
+  return configs;
+};
+
+export const HETEROGENEOUS_AGENT_GUIDE_CONFIG = createGuideConfig();
 
 export const isSupportedHeterogeneousAgentType = (
   value?: string,

@@ -1,3 +1,4 @@
+import { getHeterogeneousAgentConfigOrThrow } from '../config';
 import type {
   AgentEventAdapter,
   HeterogeneousAgentEvent,
@@ -12,7 +13,7 @@ import type {
 } from '../types';
 
 const PI_IDENTIFIER = 'pi';
-const PI_CLI_INSTALL_DOCS_URL = 'https://github.com/earendil-works/pi';
+const PI_CLI_INSTALL_DOCS_URL = getHeterogeneousAgentConfigOrThrow(PI_IDENTIFIER).auth.docsUrl;
 const PI_AUTH_REQUIRED_PATTERNS = [
   /failed to authenticate/i,
   /invalid (?:authentication )?(?:credentials?|tokens?|api keys?)/i,

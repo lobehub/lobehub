@@ -4,6 +4,7 @@ export * from './chatConfig';
 export * from './displayName';
 export * from './document';
 export * from './graph';
+export * from './heterogeneousAgent';
 export * from './item';
 export * from './modelSelection';
 export * from './pluginConfig';

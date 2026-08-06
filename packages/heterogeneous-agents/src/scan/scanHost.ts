@@ -54,7 +54,7 @@ export const probeRemotePlatform = async (
 export const scanHeterogeneousAgentsOnHost = async (): Promise<HeterogeneousAgentScanMap> => {
   const entries = await Promise.all([
     ...HETEROGENEOUS_AGENT_CONFIGS.map(async (config) => {
-      const status = await detectHeterogeneousCliCommand(config.type, config.command);
+      const status = await detectHeterogeneousCliCommand(config.type, config.defaultCommand);
       return [
         config.type,
         {

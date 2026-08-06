@@ -1,5 +1,6 @@
 import type { WorkingDirConfigValue } from '../device';
 import type { LobeAgentChatConfig } from './chatConfig';
+import type { HeterogeneousAgentType } from './heterogeneousAgent';
 
 /**
  * Selector value that means "do not override the underlying CLI".
@@ -190,8 +191,8 @@ export interface HeterogeneousProviderConfig {
    * Combined with any runtime-generated context (e.g. cloned repo list).
    */
   systemContext?: string;
-  /** Agent runtime type. */
-  type: 'amp' | 'claude-code' | 'codex' | 'hermes' | 'opencode' | 'openclaw' | 'pi' | 'qoder';
+  /** Agent runtime type, derived from the shared heterogeneous-agent descriptor catalog. */
+  type: HeterogeneousAgentType;
 }
 
 interface ClaudeCodeSelectionSource {

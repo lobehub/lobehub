@@ -4,16 +4,15 @@ import { Amp, ClaudeCode, Codex, getLobeIconCDN, OpenCode, Pi, Qoder } from '@lo
 import {
   getHeterogeneousAgentConfig,
   HETEROGENEOUS_AGENT_CONFIGS,
-  type HeterogeneousAgentConfig,
   isRemoteHeterogeneousType,
 } from '../config';
 
 export { isRemoteHeterogeneousType };
 
-export interface HeterogeneousAgentClientConfig extends HeterogeneousAgentConfig {
+export type HeterogeneousAgentClientConfig = (typeof HETEROGENEOUS_AGENT_CONFIGS)[number] & {
   avatar: string;
   icon: IconType;
-}
+};
 
 const heterogeneousAgentIcons = {
   'amp': Amp,
@@ -22,7 +21,7 @@ const heterogeneousAgentIcons = {
   'opencode': OpenCode,
   'pi': Pi,
   'qoder': Qoder,
-} as const satisfies Record<HeterogeneousAgentConfig['type'], IconType>;
+} as const satisfies Record<HeterogeneousAgentClientConfig['type'], IconType>;
 
 const createAgentAvatar = (iconId: string) =>
   getLobeIconCDN(iconId, {

@@ -1,3 +1,4 @@
+import { getHeterogeneousAgentConfigOrThrow } from '../config';
 import type {
   AgentEventAdapter,
   HeterogeneousAgentEvent,
@@ -10,7 +11,8 @@ import type {
 } from '../types';
 
 const OPENCODE_IDENTIFIER = 'opencode';
-const OPENCODE_CLI_INSTALL_DOCS_URL = 'https://opencode.ai/docs';
+const OPENCODE_CLI_INSTALL_DOCS_URL =
+  getHeterogeneousAgentConfigOrThrow(OPENCODE_IDENTIFIER).auth.docsUrl;
 const AUTH_REQUIRED_PATTERNS = [
   /authentication/i,
   /not authenticated/i,

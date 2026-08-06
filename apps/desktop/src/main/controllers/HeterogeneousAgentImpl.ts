@@ -15,22 +15,14 @@ import type {
   HeterogeneousAgentSessionError,
   HeterogeneousCliAgentType,
 } from '@lobechat/electron-client-ipc';
+import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc/types/heterogeneous-agent';
 import {
-  AMP_CLI_INSTALL_COMMANDS,
-  AMP_CLI_INSTALL_DOCS_URL,
-  CLAUDE_CODE_CLI_INSTALL_COMMANDS,
-  CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
-  CODEX_CLI_INSTALL_COMMANDS,
-  CODEX_CLI_INSTALL_DOCS_URL,
-  HeterogeneousAgentSessionErrorCode,
-  OPENCODE_CLI_INSTALL_COMMANDS,
-  OPENCODE_CLI_INSTALL_DOCS_URL,
-  PI_CLI_INSTALL_COMMANDS,
-  PI_CLI_INSTALL_DOCS_URL,
-  QODER_CLI_AUTH_DOCS_URL,
-  QODER_CLI_INSTALL_COMMANDS,
-  QODER_CLI_INSTALL_DOCS_URL,
-} from '@lobechat/electron-client-ipc/types/heterogeneous-agent';
+  buildHeterogeneousAgentAuthRequiredError,
+  buildHeterogeneousAgentCliNotFoundError,
+  getHeterogeneousAgentConfigOrThrow,
+  isHeterogeneousAgentAuthRequired,
+  resolveHeterogeneousAgentCommand,
+} from '@lobechat/heterogeneous-agents';
 import type { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import type {
   LobeBuiltinMcpServer,
@@ -128,18 +120,6 @@ const CODEX_RESUME_THREAD_NOT_FOUND_PATTERNS = [
   /conversation .*not found/i,
   /resume.*not found/i,
 ] as const;
-const CLI_AUTH_REQUIRED_PATTERNS = [
-  /failed to authenticate/i,
-  /invalid authentication credentials/i,
-  /authentication[_ ]error/i,
-  /not authenticated/i,
-  /\bunauthorized\b/i,
-  /\b401\b/,
-  /no api key found/i,
-  /no models available/i,
-] as const;
-const AMP_AUTH_REQUIRED_PATTERNS = [/please (?:log|sign) in/i, /amp_api_key/i] as const;
-const QODER_AUTH_REQUIRED_PATTERNS = [/not logged in/i, /please run \/login/i] as const;
 const CODEX_RESUME_CWD_MISMATCH_PATTERNS = [
   /working directory/i,
   /\bcwd\b/i,
@@ -414,210 +394,25 @@ export default class HeterogeneousAgentCtr {
   );
 
   private resolveSessionCommand(session: AgentSession): string {
-    const resolvedCommand = session.command.trim();
-    if (resolvedCommand) return resolvedCommand;
-
-    switch (session.agentType) {
-      case 'amp': {
-        return 'amp';
-      }
-      case 'codex': {
-        return 'codex';
-      }
-      case 'opencode': {
-        return 'opencode';
-      }
-      case 'pi': {
-        return 'pi';
-      }
-      case 'qoder': {
-        return 'qodercli';
-      }
-      default: {
-        return 'claude';
-      }
-    }
+    return resolveHeterogeneousAgentCommand(session.agentType, session.command);
   }
 
-  private buildAmpCliMissingError(session: AgentSession): HeterogeneousAgentSessionError {
-    const command = this.resolveSessionCommand(session);
-
-    return {
-      agentType: 'amp',
-      code: HeterogeneousAgentSessionErrorCode.CliNotFound,
-      command,
-      docsUrl: AMP_CLI_INSTALL_DOCS_URL,
-      installCommands: AMP_CLI_INSTALL_COMMANDS,
-      message: `Amp CLI was not found. Install it and make sure \`${command}\` can be executed.`,
-    };
-  }
-
-  private buildCodexCliMissingError(session: AgentSession): HeterogeneousAgentSessionError {
-    const command = this.resolveSessionCommand(session);
-
-    return {
-      agentType: 'codex',
-      code: HeterogeneousAgentSessionErrorCode.CliNotFound,
-      command,
-      docsUrl: CODEX_CLI_INSTALL_DOCS_URL,
-      installCommands: CODEX_CLI_INSTALL_COMMANDS,
-      message: `Codex CLI was not found. Install it and make sure \`${command}\` can be executed.`,
-    };
-  }
-
-  private buildClaudeCodeCliMissingError(session: AgentSession): HeterogeneousAgentSessionError {
-    const command = this.resolveSessionCommand(session);
-
-    return {
-      agentType: 'claude-code',
-      code: HeterogeneousAgentSessionErrorCode.CliNotFound,
-      command,
-      docsUrl: CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
-      installCommands: CLAUDE_CODE_CLI_INSTALL_COMMANDS,
-      message: `Claude Code CLI was not found. Install it and make sure \`${command}\` can be executed.`,
-    };
-  }
-
-  private buildOpenCodeCliMissingError(session: AgentSession): HeterogeneousAgentSessionError {
-    const command = this.resolveSessionCommand(session);
-
-    return {
-      agentType: 'opencode',
-      code: HeterogeneousAgentSessionErrorCode.CliNotFound,
-      command,
-      docsUrl: OPENCODE_CLI_INSTALL_DOCS_URL,
-      installCommands: OPENCODE_CLI_INSTALL_COMMANDS,
-      message: `OpenCode CLI was not found. Install it and make sure \`${command}\` can be executed.`,
-    };
-  }
-
-  private buildPiCliMissingError(session: AgentSession): HeterogeneousAgentSessionError {
-    const command = this.resolveSessionCommand(session);
-
-    return {
-      agentType: 'pi',
-      code: HeterogeneousAgentSessionErrorCode.CliNotFound,
-      command,
-      docsUrl: PI_CLI_INSTALL_DOCS_URL,
-      installCommands: PI_CLI_INSTALL_COMMANDS,
-      message: `Pi CLI was not found. Install it and make sure \`${command}\` can be executed.`,
-    };
-  }
-
-  private buildQoderCliMissingError(session: AgentSession): HeterogeneousAgentSessionError {
-    const command = this.resolveSessionCommand(session);
-
-    return {
-      agentType: 'qoder',
-      code: HeterogeneousAgentSessionErrorCode.CliNotFound,
-      command,
-      docsUrl: QODER_CLI_INSTALL_DOCS_URL,
-      installCommands: QODER_CLI_INSTALL_COMMANDS,
-      message: `Qoder CLI was not found. Install it and make sure \`${command}\` can be executed.`,
-    };
-  }
-
-  private buildCliMissingError(session: AgentSession): HeterogeneousAgentSessionError | undefined {
-    switch (session.agentType) {
-      case 'amp': {
-        return this.buildAmpCliMissingError(session);
-      }
-      case 'claude-code': {
-        return this.buildClaudeCodeCliMissingError(session);
-      }
-      case 'codex': {
-        return this.buildCodexCliMissingError(session);
-      }
-      case 'opencode': {
-        return this.buildOpenCodeCliMissingError(session);
-      }
-      case 'pi': {
-        return this.buildPiCliMissingError(session);
-      }
-      case 'qoder': {
-        return this.buildQoderCliMissingError(session);
-      }
-      default: {
-        return;
-      }
-    }
+  private buildCliMissingError(session: AgentSession): HeterogeneousAgentSessionError {
+    return buildHeterogeneousAgentCliNotFoundError({
+      agentType: session.agentType,
+      command: session.command,
+    });
   }
 
   private buildCliAuthRequiredError(
     session: AgentSession,
     stderr: string,
-  ): HeterogeneousAgentSessionError | undefined {
-    const command = this.resolveSessionCommand(session);
-
-    switch (session.agentType) {
-      case 'amp': {
-        return {
-          agentType: 'amp',
-          code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-          command,
-          docsUrl: AMP_CLI_INSTALL_DOCS_URL,
-          message:
-            'Amp could not authenticate. Run `amp login` or configure AMP_API_KEY, then retry.',
-          stderr,
-        };
-      }
-      case 'claude-code': {
-        return {
-          agentType: 'claude-code',
-          code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-          command,
-          docsUrl: CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
-          message:
-            'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
-          stderr,
-        };
-      }
-      case 'codex': {
-        return {
-          agentType: 'codex',
-          code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-          command,
-          docsUrl: CODEX_CLI_INSTALL_DOCS_URL,
-          message:
-            'Codex could not authenticate. Sign in again or refresh its credentials, then retry.',
-          stderr,
-        };
-      }
-      case 'opencode': {
-        return {
-          agentType: 'opencode',
-          code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-          command,
-          docsUrl: OPENCODE_CLI_INSTALL_DOCS_URL,
-          message:
-            'OpenCode could not authenticate. Sign in again or refresh its credentials, then retry.',
-          stderr,
-        };
-      }
-      case 'pi': {
-        return {
-          agentType: 'pi',
-          code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-          command,
-          docsUrl: PI_CLI_INSTALL_DOCS_URL,
-          message: 'Pi could not authenticate. Run `pi`, use `/login`, then retry.',
-          stderr,
-        };
-      }
-      case 'qoder': {
-        return {
-          agentType: 'qoder',
-          code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-          command,
-          docsUrl: QODER_CLI_AUTH_DOCS_URL,
-          message: 'Qoder could not authenticate. Run `qodercli login`, then retry.',
-          stderr,
-        };
-      }
-      default: {
-        return;
-      }
-    }
+  ): HeterogeneousAgentSessionError {
+    return buildHeterogeneousAgentAuthRequiredError({
+      agentType: session.agentType,
+      command: session.command,
+      stderr,
+    });
   }
 
   private getErrorMessage(error: unknown): string | undefined {
@@ -690,13 +485,7 @@ export default class HeterogeneousAgentCtr {
     const message = this.getErrorMessage(error);
 
     if (!message) return;
-    const patterns =
-      session.agentType === 'amp'
-        ? [...CLI_AUTH_REQUIRED_PATTERNS, ...AMP_AUTH_REQUIRED_PATTERNS]
-        : session.agentType === 'qoder'
-          ? [...CLI_AUTH_REQUIRED_PATTERNS, ...QODER_AUTH_REQUIRED_PATTERNS]
-          : CLI_AUTH_REQUIRED_PATTERNS;
-    if (!patterns.some((pattern) => pattern.test(message))) return;
+    if (!isHeterogeneousAgentAuthRequired(session.agentType, message)) return;
 
     return this.buildCliAuthRequiredError(session, message);
   }
@@ -762,21 +551,7 @@ export default class HeterogeneousAgentCtr {
   private async getSpawnPreflightError(
     session: AgentSession,
   ): Promise<HeterogeneousAgentSessionError | undefined> {
-    const defaultCommand =
-      session.agentType === 'amp'
-        ? 'amp'
-        : session.agentType === 'claude-code'
-          ? 'claude'
-          : session.agentType === 'codex'
-            ? 'codex'
-            : session.agentType === 'opencode'
-              ? 'opencode'
-              : session.agentType === 'pi'
-                ? 'pi'
-                : session.agentType === 'qoder'
-                  ? 'qodercli'
-                  : undefined;
-    if (!defaultCommand) return;
+    const defaultCommand = getHeterogeneousAgentConfigOrThrow(session.agentType).defaultCommand;
 
     const command = this.resolveSessionCommand(session);
     const status =

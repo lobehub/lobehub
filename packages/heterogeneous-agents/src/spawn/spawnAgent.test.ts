@@ -565,7 +565,7 @@ describe('spawnAgent', () => {
     const { spawnAgent } = await import('./spawnAgent');
     await expect(
       spawnAgent({ agentType: 'kimi-cli', operationId: 'op-1', prompt: 'hi' }),
-    ).rejects.toThrow(/unsupported agent type/);
+    ).rejects.toThrow('Unknown local heterogeneous agent type: "kimi-cli"');
   });
 
   it('events iterator drains all pipeline events including the trailing flush', async () => {

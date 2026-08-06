@@ -219,7 +219,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     const navigate = useWorkspaceAwareNavigate();
     const { allowed: canEdit } = usePermission('edit_own_content');
     const providerConfig = getHeterogeneousAgentClientConfig(provider.type);
-    const defaultCommand = providerConfig?.command || '';
+    const defaultCommand = providerConfig?.defaultCommand || '';
     const resolvedCommand = provider.command?.trim() || defaultCommand;
     const isUsingCustomCommand = resolvedCommand !== defaultCommand;
     const [status, setStatus] = useState<BinaryStatus | undefined>();

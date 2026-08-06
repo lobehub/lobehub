@@ -3,11 +3,13 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 
+import type { LocalHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
+import { HETEROGENEOUS_AGENT_CONFIGS } from '@lobechat/heterogeneous-agents';
 import type * as HeteroSpawn from '@lobechat/heterogeneous-agents/spawn';
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { registerHeteroCommand } from './hetero';
+import { registerHeteroCommand, SUPPORTED_AGENT_TYPES } from './hetero';
 
 const { mockResolveHeteroSpawnCommand, mockSpawnAgent } = vi.hoisted(() => ({
   mockResolveHeteroSpawnCommand: vi.fn(),
@@ -102,10 +104,7 @@ describe('hetero exec command', () => {
     stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     mockResolveHeteroSpawnCommand.mockReset();
     mockResolveHeteroSpawnCommand.mockImplementation(
-      async (
-        agentType: 'amp' | 'claude-code' | 'codex' | 'opencode' | 'pi' | 'qoder',
-        command?: string,
-      ) => ({
+      async (agentType: LocalHeterogeneousAgentType, command?: string) => ({
         command:
           command ??
           (agentType === 'amp'
@@ -163,6 +162,12 @@ describe('hetero exec command', () => {
       throw err;
     }
   };
+
+  it('supports exactly the local agent descriptor types', () => {
+    expect([...SUPPORTED_AGENT_TYPES].toSorted()).toEqual(
+      HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type).toSorted(),
+    );
+  });
 
   it('rejects unsupported agent types via process.exit(2)', async () => {
     await runCmd(['hetero', 'exec', '--type', 'kimi-cli', '--prompt', 'hi']);

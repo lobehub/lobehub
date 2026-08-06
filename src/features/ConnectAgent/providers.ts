@@ -50,7 +50,7 @@ export const CONNECTABLE_PROVIDERS: ConnectableProvider[] = [
   ...HETEROGENEOUS_AGENT_CLIENT_CONFIGS.map((config) => ({
     avatar: config.avatar,
     brand: CLI_BRANDS[config.type],
-    command: config.command,
+    command: config.defaultCommand,
     kind: 'cli' as const,
     title: config.title,
     type: config.type,

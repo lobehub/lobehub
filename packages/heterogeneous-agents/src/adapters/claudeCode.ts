@@ -36,6 +36,7 @@
  * - `tool_result` blocks are in `type: 'user'` events, not assistant events
  */
 
+import { getHeterogeneousAgentConfigOrThrow } from '../config';
 import type { HeteroErrorKind } from '../errors/specs';
 import { imagePlaceholder } from '../imageEcho';
 import type {
@@ -192,7 +193,8 @@ interface ClaudeCodeTaskEntry {
   subject: string;
 }
 
-const CLAUDE_CODE_CLI_INSTALL_DOCS_URL = 'https://docs.anthropic.com/en/docs/claude-code/setup';
+const CLAUDE_CODE_CLI_INSTALL_DOCS_URL =
+  getHeterogeneousAgentConfigOrThrow('claude-code').auth.docsUrl;
 
 const CLI_AUTH_REQUIRED_PATTERNS = [
   /failed to authenticate/i,

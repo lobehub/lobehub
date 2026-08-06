@@ -2,47 +2,21 @@ import type { HeteroQuotaWindow } from '@lobechat/heterogeneous-agents/quota';
 
 import type { HeterogeneousCliAgentType } from './binary';
 
-export const AMP_CLI_INSTALL_DOCS_URL = 'https://ampcode.com/manual';
-
-export const AMP_CLI_INSTALL_COMMANDS = [
-  'curl -fsSL https://ampcode.com/install.sh | bash',
-  'brew install ampcode/tap/ampcode',
-] as const;
-
-export const CLAUDE_CODE_CLI_INSTALL_DOCS_URL =
-  'https://docs.anthropic.com/en/docs/claude-code/setup';
-
-export const CLAUDE_CODE_CLI_INSTALL_COMMANDS = [
-  'curl -fsSL https://claude.ai/install.sh | bash',
-  'brew install --cask claude-code',
-] as const;
-
-export const CODEX_CLI_INSTALL_DOCS_URL =
-  'https://github.com/openai/codex#installing-and-running-codex-cli';
-
-export const CODEX_CLI_INSTALL_COMMANDS = [
-  'npm install -g @openai/codex',
-  'brew install --cask codex',
-] as const;
-
-export const OPENCODE_CLI_INSTALL_DOCS_URL = 'https://opencode.ai/docs';
-
-export const OPENCODE_CLI_INSTALL_COMMANDS = [
-  'curl -fsSL https://opencode.ai/install | bash',
-] as const;
-
-export const PI_CLI_INSTALL_DOCS_URL = 'https://github.com/earendil-works/pi';
-
-export const PI_CLI_INSTALL_COMMANDS = ['npm install -g @earendil-works/pi-coding-agent'] as const;
-
-export const QODER_CLI_AUTH_DOCS_URL = 'https://docs.qoder.com/cli/auth.md';
-
-export const QODER_CLI_INSTALL_DOCS_URL = 'https://docs.qoder.com/cli/install.md';
-
-export const QODER_CLI_INSTALL_COMMANDS = [
-  'curl -fsSL https://qoder.com/install | bash',
-  'npm install -g @qoder-ai/qodercli',
-] as const;
+export {
+  AMP_CLI_INSTALL_COMMANDS,
+  AMP_CLI_INSTALL_DOCS_URL,
+  CLAUDE_CODE_CLI_INSTALL_COMMANDS,
+  CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
+  CODEX_CLI_INSTALL_COMMANDS,
+  CODEX_CLI_INSTALL_DOCS_URL,
+  OPENCODE_CLI_INSTALL_COMMANDS,
+  OPENCODE_CLI_INSTALL_DOCS_URL,
+  PI_CLI_INSTALL_COMMANDS,
+  PI_CLI_INSTALL_DOCS_URL,
+  QODER_CLI_AUTH_DOCS_URL,
+  QODER_CLI_INSTALL_COMMANDS,
+  QODER_CLI_INSTALL_DOCS_URL,
+} from '@lobechat/heterogeneous-agents';
 
 export const HeterogeneousAgentSessionErrorCode = {
   AuthRequired: 'auth_required',

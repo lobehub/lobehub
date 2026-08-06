@@ -3,6 +3,9 @@ import { homedir, platform } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
+import type { LocalHeterogeneousAgentType } from '../config';
+import { HETEROGENEOUS_AGENT_CONFIGS } from '../config';
+
 /**
  * Shared resolver for external CLI-agent binaries (Amp / Claude Code / Codex / OpenCode / Pi / Qoder).
  *
@@ -20,8 +23,7 @@ import { promisify } from 'node:util';
 const execFilePromise = promisify(execFile);
 const execPromise = promisify(exec);
 
-export type HeterogeneousCliAgentType =
-  'amp' | 'claude-code' | 'codex' | 'opencode' | 'pi' | 'qoder';
+export type HeterogeneousCliAgentType = LocalHeterogeneousAgentType;
 
 /**
  * Resolution result. A structural subset of the desktop `BinaryManager`'s
@@ -274,14 +276,9 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
 // The default (bare) command each agent type is shipped to run. The well-known
 // fallback locations below hold *this* binary, so they may only be probed when
 // the requested command is the default — never for a custom command.
-export const DEFAULT_HETERO_COMMAND: Record<HeterogeneousCliAgentType, string> = {
-  'amp': 'amp',
-  'claude-code': 'claude',
-  'codex': 'codex',
-  'opencode': 'opencode',
-  'pi': 'pi',
-  'qoder': 'qodercli',
-};
+export const DEFAULT_HETERO_COMMAND = Object.fromEntries(
+  HETEROGENEOUS_AGENT_CONFIGS.map(({ defaultCommand, type }) => [type, defaultCommand]),
+) as Record<HeterogeneousCliAgentType, string>;
 
 // Well-known absolute install locations probed when a bare command isn't on
 // PATH. This covers GUI-launched apps with a lean launchd PATH: Claude's

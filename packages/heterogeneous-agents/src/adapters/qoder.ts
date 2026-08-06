@@ -7,13 +7,14 @@
  * tool payload, error, and usage record is stamped with Qoder's identity.
  */
 
+import { getHeterogeneousAgentConfigOrThrow } from '../config';
 import type { HeterogeneousAgentEvent } from '../types';
 import { ClaudeCodeAdapter } from './claudeCode';
 
 export const QODER_IDENTIFIER = 'qoder';
 
-const CLAUDE_CODE_AUTH_DOCS_URL = 'https://docs.anthropic.com/en/docs/claude-code/setup';
-const QODER_AUTH_DOCS_URL = 'https://docs.qoder.com/cli/auth.md';
+const CLAUDE_CODE_AUTH_DOCS_URL = getHeterogeneousAgentConfigOrThrow('claude-code').auth.docsUrl;
+const QODER_AUTH_DOCS_URL = getHeterogeneousAgentConfigOrThrow(QODER_IDENTIFIER).auth.docsUrl;
 const QODER_AUTH_REQUIRED_PATTERNS = [/not logged in/i, /please run \/login/i] as const;
 
 const isQoderAuthAssistant = (raw: unknown): boolean => {

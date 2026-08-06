@@ -1,3 +1,4 @@
+import type { LocalHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import {
   detectHeterogeneousCliCommand,
   detectValidatedCommand,
@@ -166,15 +167,22 @@ export const aiderBinary: BinarySpec = defineCommandBinary('aider', {
 /**
  * All CLI agent binaries
  */
+export const heterogeneousCliAgentBinaries = {
+  'amp': ampBinary,
+  'claude-code': claudeCodeBinary,
+  'codex': codexBinary,
+  'opencode': opencodeBinary,
+  'pi': piBinary,
+  'qoder': qoderBinary,
+} satisfies Record<LocalHeterogeneousAgentType, BinarySpec>;
+
 export const cliAgentBinaries: BinarySpec[] = [
-  claudeCodeBinary,
-  codexBinary,
-  ampBinary,
-  opencodeBinary,
-  piBinary,
-  qoderBinary,
+  ...Object.values(heterogeneousCliAgentBinaries),
   geminiCliBinary,
   qwenCodeBinary,
   kimiCliBinary,
   aiderBinary,
 ];
+
+export const listHeterogeneousCliBinaryTypes = (): LocalHeterogeneousAgentType[] =>
+  Object.keys(heterogeneousCliAgentBinaries) as LocalHeterogeneousAgentType[];
