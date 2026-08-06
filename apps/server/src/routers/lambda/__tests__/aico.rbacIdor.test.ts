@@ -162,6 +162,16 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
       code: 'FORBIDDEN',
     });
     await expect(
+      memberCaller.getTransactionHistory({
+        from: '2026-01-01',
+        orgId: created.id,
+        to: '2026-01-31',
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(
+      memberCaller.getOrgUsageChart({ from: '2026-01-01', orgId: created.id, to: '2026-01-31' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(
       memberCaller.allocateMemberCredit({
         amountUsd: '1.000000',
         orgId: created.id,
@@ -183,8 +193,63 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
       code: 'FORBIDDEN',
     });
     await expect(
+      strangerCaller.getTransactionHistory({
+        from: '2026-01-01',
+        orgId: created.id,
+        to: '2026-01-31',
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(
+      strangerCaller.getMemberUsageChart({
+        from: '2026-01-01',
+        orgId: created.id,
+        orgMemberId: 'x',
+        to: '2026-01-31',
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(
       strangerCaller.mockOrgTopup({ amountToman: 1000, orgId: created.id }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('org manager can load transaction history and usage charts for a date range', async () => {
+    const ownerCaller = organizationRouter.createCaller(createTestContext(ownerId));
+    const created = await ownerCaller.create({ name: 'Analytics Org' });
+    const platformCaller = platformAdminRouter.createCaller(createTestContext(platformId));
+    await platformCaller.addManualCredit({
+      amountToman: 25_000,
+      description: 'analytics seed',
+      orgId: created.id,
+    });
+
+    const today = new Date().toISOString().slice(0, 10);
+    const history = await ownerCaller.getTransactionHistory({
+      from: today,
+      orgId: created.id,
+      to: today,
+    });
+    expect(history.length).toBeGreaterThan(0);
+    expect(typeof history[0]?.amountToman).toBe('string');
+    expect(typeof history[0]?.amountUsd).toBe('string');
+
+    const orgChart = await ownerCaller.getOrgUsageChart({
+      from: today,
+      orgId: created.id,
+      to: today,
+    });
+    expect(orgChart).toHaveLength(1);
+    expect(orgChart[0]?.date).toBe(today);
+    expect(typeof orgChart[0]?.costUsd).toBe('string');
+
+    const members = await ownerCaller.listMembers({ orgId: created.id });
+    const ownerMember = members.members.find((m) => m.userId === ownerId)!;
+    const memberChart = await ownerCaller.getMemberUsageChart({
+      from: today,
+      orgId: created.id,
+      orgMemberId: ownerMember.id,
+      to: today,
+    });
+    expect(memberChart).toHaveLength(1);
   });
 
   it('non-platform user cannot call platformAdmin mutations', async () => {
