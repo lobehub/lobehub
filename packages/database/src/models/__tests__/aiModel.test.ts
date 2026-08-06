@@ -373,6 +373,41 @@ describe('AiModelModel', () => {
         undefined,
       );
     });
+
+    it('should survive clearing remote models saved in remote-first order', async () => {
+      // Row created by the remote fetch first...
+      await aiProviderModel.batchUpdateAiModels('openai', [
+        {
+          contextWindowTokens: 400_000,
+          displayName: 'GPT-5.6 Sol',
+          enabled: true,
+          id: 'gpt-5.6-sol',
+          source: 'remote',
+          type: 'chat',
+        },
+        { enabled: true, id: 'some-remote-model', source: 'remote', type: 'chat' },
+      ] as AiProviderModelListItem[]);
+      // ...then the user saves a preference onto the remote row
+      await aiProviderModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
+        gpt5_6ReasoningEffort: 'high',
+      });
+
+      await aiProviderModel.clearRemoteModels('openai');
+
+      expect(await aiProviderModel.getModelReasoningConfig('gpt-5.6-sol', 'openai')).toEqual({
+        gpt5_6ReasoningEffort: 'high',
+      });
+      // Demoted to a preference-only row: remote identity and metadata stripped
+      const row = await aiProviderModel.findByIdAndProvider('gpt-5.6-sol', 'openai');
+      expect(row!.source).toBeNull();
+      expect(row!.displayName).toBeNull();
+      expect(row!.contextWindowTokens).toBeNull();
+      expect(row!.enabled).toBeNull();
+      // The plain remote row is still cleared
+      expect(await aiProviderModel.findByIdAndProvider('some-remote-model', 'openai')).toBe(
+        undefined,
+      );
+    });
   });
 
   describe('getModelListByProviderId', () => {

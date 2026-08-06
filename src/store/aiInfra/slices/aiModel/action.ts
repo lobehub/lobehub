@@ -247,6 +247,11 @@ export class AiModelActionImpl {
    * swallowed so the send path falls back to defaults instead of breaking.
    */
   ensureModelReasoningConfig = async (id: string, provider: string): Promise<void> => {
+    // Right after a reload the model metadata may still be hydrating — settle
+    // it first (bounded, no-op once loaded) so an unknown model isn't mistaken
+    // for "no reasoning params" and skipped.
+    await this.#get().ensureAiProviderRuntimeStateReady();
+
     // The config only matters for models declaring reasoning-family extend
     // params (resolveModelExtendParams ignores it otherwise) — skip the
     // blocking round trip for everything else.

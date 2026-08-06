@@ -512,15 +512,49 @@ export class AiModelModel {
   };
 
   clearRemoteModels(providerId: string) {
-    return this.db
-      .delete(aiModels)
-      .where(
-        and(
-          eq(aiModels.providerId, providerId),
-          eq(aiModels.source, AiModelSourceEnum.Remote),
-          this.scopeWhere(),
-        ),
-      );
+    return this.db.transaction(async (trx) => {
+      // A remote row that accumulated a personal reasoning preference
+      // (remote-first order: fetched, then the user saved an Effort default —
+      // see updateModelReasoningConfig) must not lose it. Demote the row to a
+      // preference-only shape (strip remote metadata, drop the remote source)
+      // instead of deleting it.
+      await trx
+        .update(aiModels)
+        .set({
+          abilities: null,
+          config: sql`jsonb_build_object('chatConfig', ${aiModels.config} -> 'chatConfig')`,
+          contextWindowTokens: null,
+          description: null,
+          displayName: null,
+          enabled: null,
+          organization: null,
+          parameters: null,
+          pricing: null,
+          releasedAt: null,
+          settings: null,
+          sort: null,
+          source: null,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(aiModels.providerId, providerId),
+            eq(aiModels.source, AiModelSourceEnum.Remote),
+            sql`${aiModels.config} -> 'chatConfig' IS NOT NULL`,
+            this.scopeWhere(),
+          ),
+        );
+
+      return trx
+        .delete(aiModels)
+        .where(
+          and(
+            eq(aiModels.providerId, providerId),
+            eq(aiModels.source, AiModelSourceEnum.Remote),
+            this.scopeWhere(),
+          ),
+        );
+    });
   }
 
   clearModelsByProvider(providerId: string) {

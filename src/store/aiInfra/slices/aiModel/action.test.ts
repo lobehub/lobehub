@@ -712,6 +712,10 @@ describe('AiModelAction', () => {
   describe('ensureModelReasoningConfig', () => {
     beforeEach(() => {
       vi.spyOn(aiModelSelectors, 'isModelHasReasoningExtendParams').mockReturnValue(() => true);
+      // Make the runtime-state warm-up a no-op so tests exercise the fetch logic
+      act(() => {
+        useStore.setState({ isInitAiProviderRuntimeState: true });
+      });
     });
 
     it('should skip the fetch for models without reasoning extend params', async () => {
