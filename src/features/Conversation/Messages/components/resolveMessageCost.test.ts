@@ -23,8 +23,18 @@ describe('resolveMessageCost', () => {
 });
 
 describe('formatMessageCostUsd', () => {
-  it('formats to two decimal places with a dollar sign', () => {
+  it('keeps at least two decimals for typical amounts', () => {
     expect(formatMessageCostUsd(0.37)).toBe('$0.37');
     expect(formatMessageCostUsd(1)).toBe('$1.00');
+  });
+
+  it('preserves micro-USD precision for small OpenRouter charges', () => {
+    expect(formatMessageCostUsd(0.00015)).toBe('$0.00015');
+    expect(formatMessageCostUsd(0.0042)).toBe('$0.0042');
+  });
+
+  it('trims trailing zeros beyond two places', () => {
+    expect(formatMessageCostUsd(0.12)).toBe('$0.12');
+    expect(formatMessageCostUsd(1.23)).toBe('$1.23');
   });
 });
