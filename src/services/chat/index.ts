@@ -322,6 +322,13 @@ class ChatService {
 
     // ============  3. process extend params   ============ //
 
+    // Make sure the user's saved model-instance reasoning config is loaded
+    // before the synchronous resolution below — after a reload the
+    // ReasoningConfigLoader SWR fetch may still be in flight when the user
+    // sends the first message. No-op once cached; failures fall back to
+    // level defaults.
+    await getAiInfraStoreState().ensureModelReasoningConfig(payload.model, payload.provider!);
+
     const extendParams = resolveModelExtendParams({
       chatConfig,
       model: payload.model,
