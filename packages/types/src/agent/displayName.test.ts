@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { agentDisplayName } from './displayName';
+import { agentDisplayName, agentSecondaryDisplayName } from './displayName';
 
 describe('agentDisplayName', () => {
   it('prefers the personal name over the role', () => {
@@ -27,5 +27,22 @@ describe('agentDisplayName', () => {
   it('returns undefined without a fallback when nothing is set', () => {
     expect(agentDisplayName({})).toBeUndefined();
     expect(agentDisplayName(undefined)).toBeUndefined();
+  });
+});
+
+describe('agentSecondaryDisplayName', () => {
+  it('prefers a runtime label over a platform profile title', () => {
+    expect(agentSecondaryDisplayName({ name: '陆令言', title: 'default' }, 'Hermes')).toBe(
+      'Hermes',
+    );
+    expect(agentSecondaryDisplayName({ name: '燕来', title: 'Pi' }, 'Pi')).toBe('Pi');
+  });
+
+  it('keeps regular roles and suppresses labels that duplicate the primary name', () => {
+    expect(agentSecondaryDisplayName({ name: 'Alice', title: 'Health Assistant' })).toBe(
+      'Health Assistant',
+    );
+    expect(agentSecondaryDisplayName({ title: 'Pi' }, 'Pi')).toBeUndefined();
+    expect(agentSecondaryDisplayName({ title: 'Health Assistant' })).toBeUndefined();
   });
 });

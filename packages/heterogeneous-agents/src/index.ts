@@ -25,7 +25,7 @@ export {
   HETERO_ERROR_SPECS,
   isUserSideHeteroError,
 } from './errors';
-export { HETEROGENEOUS_TYPE_LABELS } from './labels';
+export { getHeterogeneousTypeLabel, HETEROGENEOUS_TYPE_LABELS } from './labels';
 export type {
   CreateAssistantIntent,
   MainAgentIntent,
