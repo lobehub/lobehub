@@ -20,8 +20,7 @@ const getFileByChunkTargetId = (id?: string | null) => (s: FilesStoreState) => {
     (s.resourceMap.get(id) as FileListItem | undefined) ??
     ([...s.resourceMap.values()].find((item) => item.fileId === id) as FileListItem | undefined) ??
     (s.resourceList.find((item) => item.id === id || item.fileId === id) as
-      | FileListItem
-      | undefined)
+      FileListItem | undefined)
   );
 };
 
@@ -43,6 +42,8 @@ const overviewUploadingStatus = (s: FilesStoreState): FileUploadStatus => {
   if (s.dockUploadFileList.some((file) => uploadStatusArray.has(file.status))) {
     return 'uploading';
   }
+
+  if (s.dockUploadFileList.some((file) => file.status === 'error')) return 'error';
 
   return 'success';
 };

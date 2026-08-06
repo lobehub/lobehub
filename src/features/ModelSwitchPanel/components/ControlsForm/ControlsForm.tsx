@@ -55,8 +55,18 @@ import ThinkingLevelSlider from './ThinkingLevelSlider';
 import ThinkingSlider from './ThinkingSlider';
 
 interface ControlsFormProps {
+  /**
+   * Override the config source. Defaults to the agent's own chatConfig; the
+   * sub-agent params panel passes the sub-agent's effective (merged) config.
+   */
+  chatConfig?: LobeAgentChatConfig;
   disabled?: boolean;
   model?: string;
+  /**
+   * Override the write sink. Defaults to updating the agent's chatConfig; the
+   * sub-agent params panel redirects writes into `agencyConfig.subagent.chatConfig`.
+   */
+  onChatConfigChange?: (patch: Partial<LobeAgentChatConfig>) => Promise<void>;
   onUpdatingChange?: (updating: boolean) => void;
   provider?: string;
 }
@@ -82,7 +92,14 @@ const resolveEnableAdaptiveThinkingInitialValue = (config: LobeAgentChatConfig, 
 };
 
 const ControlsForm = memo<ControlsFormProps>(
-  ({ disabled, model: modelProp, onUpdatingChange, provider: providerProp }) => {
+  ({
+    chatConfig: chatConfigProp,
+    disabled,
+    model: modelProp,
+    onChatConfigChange,
+    onUpdatingChange,
+    provider: providerProp,
+  }) => {
     const { t } = useTranslation('chat');
     const agentId = useAgentId();
     const { updateAgentChatConfig } = useUpdateAgentConfig();
@@ -94,10 +111,11 @@ const ControlsForm = memo<ControlsFormProps>(
     const provider = providerProp ?? agentProvider;
     const [form] = Form.useForm();
 
-    const config = useAgentStore(
+    const storeConfig = useAgentStore(
       (s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s),
       isEqual,
     );
+    const config = chatConfigProp ?? storeConfig;
 
     const modelExtendParams = useAiInfraStore(aiModelSelectors.modelExtendParams(model, provider));
     const initialValues = useMemo(() => {
@@ -555,7 +573,7 @@ const ControlsForm = memo<ControlsFormProps>(
             if (disabled) return;
             onUpdatingChange?.(true);
             try {
-              await updateAgentChatConfig(values);
+              await (onChatConfigChange ?? updateAgentChatConfig)(values);
             } finally {
               onUpdatingChange?.(false);
             }

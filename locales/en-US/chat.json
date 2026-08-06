@@ -1416,6 +1416,8 @@
   "upload.clientMode.fileNotSupported": "File uploads are not supported in browser mode; only images are allowed.",
   "upload.clientMode.visionNotSupported": "The current model does not support visual recognition. Please switch to a different model to use this feature.",
   "upload.preview.prepareTasks": "Preparing chunks...",
+  "upload.preview.status.cancelled": "Upload cancelled",
+  "upload.preview.status.error": "Upload failed",
   "upload.preview.status.pending": "Preparing to upload...",
   "upload.preview.status.processing": "Processing file...",
   "upload.validation.unsupportedFileType": "Unsupported file type: {{files}}. Supported images: JPG, PNG, GIF, WebP. Supported documents include PDF, Word, Excel, PowerPoint, Markdown, text, CSV, JSON, and code files.",

@@ -5,6 +5,13 @@
 export interface AskUserQuestionOption {
   description?: string;
   label: string;
+  /**
+   * The tool schema has no recommendation field, so models mark their pick by
+   * convention: a "(Recommended)" suffix on the label. `normalizeAskUserQuestions`
+   * strips that suffix and raises this flag so the UI renders a badge instead of
+   * leaking the marker as plain text.
+   */
+  recommended?: boolean;
 }
 
 /**

@@ -610,6 +610,32 @@ describe('RecentModel', () => {
         expect(result[1].lastAssistantMessage).toBe('Last assistant answer');
       });
 
+      it('strips markdown syntax from topic previews', async () => {
+        await serverDB.insert(agents).values({ id: 'agent-inbox', userId, slug: 'inbox' });
+        await serverDB.insert(topics).values({
+          agentId: 'agent-inbox',
+          id: 'topic-markdown-preview',
+          status: 'active',
+          updatedAt: minutesAgo(1),
+          userId,
+        });
+        await serverDB.insert(messages).values({
+          agentId: 'agent-inbox',
+          content:
+            '## Heading\n\nSome **bold** text with a [link](https://example.com) and `code`.',
+          id: 'markdown-preview-message',
+          role: 'assistant',
+          topicId: 'topic-markdown-preview',
+          userId,
+        });
+
+        const result = await recentModel.queryRecent(1, ['topic'], true);
+
+        expect(result[0].lastAssistantMessage).toBe(
+          'Heading\n\nSome bold text with a link and code.',
+        );
+      });
+
       it('returns Date objects for updatedAt', async () => {
         await serverDB.insert(agents).values({ id: 'agent-inbox', userId, slug: 'inbox' });
         await serverDB.insert(topics).values({

@@ -19,13 +19,11 @@ import Actions from './CollapseGroup/Actions';
 import Inbox from './Inbox';
 import SessionList from './List';
 import ConfigGroupModal from './Modals/ConfigGroupModal';
-import RenameGroupModal from './Modals/RenameGroupModal';
+import { openRenameGroupModal } from './Modals/RenameGroupModal';
 
 const DefaultMode = memo(() => {
   const { t } = useTranslation('chat');
 
-  const [activeGroupId, setActiveGroupId] = useState<string>();
-  const [renameGroupModalOpen, setRenameGroupModalOpen] = useState(false);
   const [configGroupModalOpen, setConfigGroupModalOpen] = useState(false);
 
   useFetchSessions();
@@ -81,10 +79,7 @@ const DefaultMode = memo(() => {
               isCustomGroup
               id={id}
               openConfigModal={() => setConfigGroupModalOpen(true)}
-              openRenameModal={() => setRenameGroupModalOpen(true)}
-              onOpenChange={(isOpen) => {
-                if (isOpen) setActiveGroupId(id);
-              }}
+              openRenameModal={() => openRenameGroupModal(id)}
             />
           ),
           key: id,
@@ -111,13 +106,6 @@ const DefaultMode = memo(() => {
           updateSystemStatus({ expandSessionGroupKeys });
         }}
       />
-      {activeGroupId && (
-        <RenameGroupModal
-          id={activeGroupId}
-          open={renameGroupModalOpen}
-          onCancel={() => setRenameGroupModalOpen(false)}
-        />
-      )}
       <ConfigGroupModal
         open={configGroupModalOpen}
         onCancel={() => setConfigGroupModalOpen(false)}

@@ -148,6 +148,50 @@ describe('Hunyuan models', () => {
   });
 });
 
+describe('MiniMax video models', () => {
+  it('registers MiniMax-H3 with the official v2 parameter limits', () => {
+    const h3 = LOBE_DEFAULT_MODEL_LIST.find(
+      (model) => model.providerId === ModelProvider.Minimax && model.id === 'MiniMax-H3',
+    );
+
+    expect(h3).toEqual(
+      expect.objectContaining({
+        enabled: true,
+        parameters: expect.objectContaining({
+          aspectRatio: expect.objectContaining({ default: '16:9' }),
+          duration: expect.objectContaining({ max: 15, min: 4 }),
+          imageUrls: expect.objectContaining({ maxCount: 7 }),
+          resolution: expect.objectContaining({ default: '768P', enum: ['768P', '2K'] }),
+        }),
+        releasedAt: '2026-07-31',
+        type: 'video',
+      }),
+    );
+  });
+
+  it('keeps the combined MiniMax-H3 reference capacity within the v2 limit of 9', () => {
+    const h3 = LOBE_DEFAULT_MODEL_LIST.find(
+      (model) => model.providerId === ModelProvider.Minimax && model.id === 'MiniMax-H3',
+    );
+
+    const parameters = (h3?.parameters ?? {}) as {
+      endImageUrl?: unknown;
+      imageUrl?: unknown;
+      imageUrls?: { maxCount?: number };
+    };
+
+    // The first-frame (imageUrl), reference-list (imageUrls), and last-frame
+    // (endImageUrl) slots all normalize into a single reference pool that the
+    // runtime caps at 9. The combined upload capacity must stay within that
+    // limit so the UI can never assemble a payload createVideo would reject.
+    const firstFrameSlots = parameters.imageUrl === undefined ? 0 : 1;
+    const lastFrameSlots = parameters.endImageUrl === undefined ? 0 : 1;
+    const referenceSlots = parameters.imageUrls?.maxCount ?? 0;
+
+    expect(firstFrameSlots + referenceSlots + lastFrameSlots).toBeLessThanOrEqual(9);
+  });
+});
+
 describe('Google rolling model aliases', () => {
   it('tracks the current Flash and Flash-Lite model versions', () => {
     const googleModels = LOBE_DEFAULT_MODEL_LIST.filter((model) => model.providerId === 'google');
@@ -173,5 +217,53 @@ describe('Google rolling model aliases', () => {
     );
     expect(flashLiteLatest?.pricing).toEqual(flashLite?.pricing);
     expect(flashLiteLatest?.settings?.disabledParams).toEqual(['temperature', 'top_p']);
+  });
+});
+
+describe('Google Gemini 3.1 Flash Image models', () => {
+  it('registers stable IDs without removing the preview compatibility cards', () => {
+    const googleModels = LOBE_DEFAULT_MODEL_LIST.filter(
+      (model) => model.providerId === ModelProvider.Google,
+    );
+    const stableImageModel = googleModels.find(
+      (model) => model.id === 'gemini-3.1-flash-image:image',
+    );
+
+    expect(googleModels).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          enabled: true,
+          id: 'gemini-3.1-flash-image',
+          releasedAt: '2026-05-28',
+          type: 'chat',
+        }),
+        expect.objectContaining({
+          enabled: true,
+          id: 'gemini-3.1-flash-image:image',
+          releasedAt: '2026-05-28',
+          type: 'image',
+        }),
+        expect.objectContaining({
+          enabled: true,
+          id: 'gemini-3.1-flash-image-preview',
+          releasedAt: '2026-02-26',
+          type: 'chat',
+        }),
+        expect.objectContaining({
+          enabled: true,
+          id: 'gemini-3.1-flash-image-preview:image',
+          releasedAt: '2026-02-26',
+          type: 'image',
+        }),
+      ]),
+    );
+    expect(stableImageModel?.pricing?.units).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'textInput', rate: 0.5 }),
+        expect.objectContaining({ name: 'imageInput', rate: 0.5 }),
+        expect.objectContaining({ name: 'textOutput', rate: 3 }),
+        expect.objectContaining({ name: 'imageOutput', rate: 60 }),
+      ]),
+    );
   });
 });

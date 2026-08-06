@@ -1,3 +1,4 @@
+import type { LobeAgentChatConfig } from '../agent/chatConfig';
 import type { WorkingDirConfig } from '../device';
 import type { TaskDetail, UIChatMessage } from '../message';
 import type { ChatTopic } from '../topic';
@@ -399,15 +400,21 @@ export interface ExecSubAgentParams {
 export interface ExecVirtualSubAgentParams {
   /** The agent ID to execute */
   agentId: string;
+  /**
+   * chatConfig overrides (thinking / reasoning-effort extend params) for the
+   * sub-agent run, from the parent agent's `agencyConfig.subagent.chatConfig`.
+   * Merged over the executing agent's own chatConfig, skipping nulled keys.
+   */
+  chatConfig?: Partial<LobeAgentChatConfig> | null;
   /** The Group ID inherited from the parent operation, when present */
   groupId?: string;
   /** Instruction/prompt for the virtual sub-agent */
   instruction: string;
   /**
    * Model the sub-agent should run on, resolved by the spawn site from the
-   * parent agent's `agencyConfig.subagent`. Passed explicitly so the execution
-   * side never re-reads the parent config. Falls back to the global default
-   * (`DEFAULT_SUB_AGENT_MODEL`) at the spawn site when unset.
+   * parent agent's `agencyConfig.subagent` (explicit override or the parent's
+   * effective model). Passed explicitly so the execution side never re-reads
+   * the parent config.
    */
   model?: string;
   /** The parent placeholder tool message ID */

@@ -239,7 +239,12 @@ export class FileUploadActionImpl {
     } catch (error) {
       if (
         handleFileUploadError(error, {
-          onUploadBlocked: () => onStatusUpdate?.({ id: statusId, type: 'removeFile' }),
+          onUploadBlocked: ({ code, description }) =>
+            onStatusUpdate?.({
+              id: statusId,
+              type: 'updateFile',
+              value: { error: description, errorCode: code, status: 'error' },
+            }),
         })
       ) {
         return;

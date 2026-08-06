@@ -1,5 +1,6 @@
 import { type LobeChatDatabase } from '@lobechat/database';
 import { TRPCError } from '@trpc/server';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DocumentModel } from '@/database/models/document';
@@ -89,6 +90,7 @@ describe('DocumentService', () => {
 
   beforeEach(() => {
     mockDb = {
+      execute: vi.fn().mockResolvedValue(undefined),
       query: {
         documents: {
           findMany: vi.fn().mockResolvedValue([]),
@@ -1776,6 +1778,104 @@ describe('DocumentService', () => {
         });
       }
 
+      expect(mockCleanup).toHaveBeenCalled();
+    });
+
+    it('should return the cached document without parsing it again', async () => {
+      const cached = { content: 'Cached', id: 'doc-1' };
+      mockDocumentModel.findByFileId.mockResolvedValueOnce(cached);
+
+      const result = await service.parseFile('file-1');
+
+      expect(result).toEqual(cached);
+      expect(mockFileService.downloadFileToLocal).not.toHaveBeenCalled();
+      expect(loadFile).not.toHaveBeenCalled();
+      expect(mockDocumentModel.create).not.toHaveBeenCalled();
+    });
+
+    // The model bound to the locked transaction has to be a different object
+    // from the one the service already holds, otherwise no assertion can tell
+    // which connection the re-check and the insert actually ran on.
+    const mountLockedTransaction = (transactionModel: any) => {
+      const executeSpy = vi.fn().mockResolvedValue(undefined);
+      const trx = { execute: executeSpy };
+      mockDb.transaction = vi.fn(async (callback: any) => callback(trx));
+      vi.mocked(DocumentModel).mockImplementation(
+        (db: any) => (db === trx ? transactionModel : mockDocumentModel) as any,
+      );
+
+      return { executeSpy, trx };
+    };
+
+    it('should take a per-file advisory lock before writing the parse cache', async () => {
+      vi.mocked(loadFile).mockResolvedValue({
+        content: 'Content',
+        fileType: 'markdown',
+        metadata: {},
+        pages: undefined,
+        totalCharCount: 7,
+        totalLineCount: 1,
+      } as any);
+      const transactionModel = {
+        create: vi.fn().mockResolvedValue({ id: 'doc-1' }),
+        findByFileId: vi.fn().mockResolvedValue(null),
+      };
+      const { executeSpy, trx } = mountLockedTransaction(transactionModel);
+      const scopedService = new DocumentService(mockDb, userId, 'workspace-1', 'public');
+
+      const result = await scopedService.parseFile('file-1');
+
+      expect(executeSpy).toHaveBeenCalledTimes(1);
+      // Render the statement the way the driver receives it, so the assertion
+      // covers the real SQL and its bound parameter.
+      const lockStatement = new PgDialect().sqlToQuery(executeSpy.mock.calls[0][0]);
+      expect(lockStatement.sql).toContain('pg_advisory_xact_lock');
+      // The key is derived from the file, so different files take different keys.
+      expect(lockStatement.params).toEqual(['parseFile:file-1']);
+      // The re-check and the insert run on the locked transaction and keep the
+      // service's own scope — not on the connection the service already holds.
+      expect(vi.mocked(DocumentModel)).toHaveBeenLastCalledWith(
+        trx,
+        userId,
+        'workspace-1',
+        'public',
+      );
+      expect(transactionModel.findByFileId).toHaveBeenCalledWith('file-1');
+      expect(transactionModel.create).toHaveBeenCalledTimes(1);
+      expect(mockDocumentModel.create).not.toHaveBeenCalled();
+      // Both have to happen after the lock is held — re-checking before it would
+      // leave the same window open.
+      expect(executeSpy.mock.invocationCallOrder[0]).toBeLessThan(
+        transactionModel.findByFileId.mock.invocationCallOrder[0],
+      );
+      expect(executeSpy.mock.invocationCallOrder[0]).toBeLessThan(
+        transactionModel.create.mock.invocationCallOrder[0],
+      );
+      expect(result).toEqual({ id: 'doc-1' });
+    });
+
+    it('should return the document another request published while this parse ran', async () => {
+      vi.mocked(loadFile).mockResolvedValue({
+        content: 'Content',
+        fileType: 'markdown',
+        metadata: {},
+        pages: undefined,
+        totalCharCount: 7,
+        totalLineCount: 1,
+      } as any);
+      const published = { content: 'Published by the other request', id: 'doc-raced' };
+      const transactionModel = {
+        create: vi.fn(),
+        // The check before the parse missed it; the re-check under the lock hits.
+        findByFileId: vi.fn().mockResolvedValue(published),
+      };
+      mountLockedTransaction(transactionModel);
+
+      const result = await service.parseFile('file-1');
+
+      expect(result).toEqual(published);
+      expect(transactionModel.create).not.toHaveBeenCalled();
+      expect(mockDocumentModel.create).not.toHaveBeenCalled();
       expect(mockCleanup).toHaveBeenCalled();
     });
 

@@ -1,8 +1,9 @@
+import { createModal, type ModalInstance } from '@lobehub/ui/base-ui';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CreateAgentModal } from './useCreateModal';
+import { CreateAgentModal, openCreateAgentModal } from './useCreateModal';
 
 const analyticsTrack = vi.hoisted(() => vi.fn());
 const telemetryState = vi.hoisted(() => ({ enabled: true }));
@@ -86,15 +87,6 @@ vi.mock('@lobehub/ui', () => ({
   Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
 }));
 
-vi.mock('@/components/ImperativeModal', () => ({
-  default: ({ children, open, width }: { children?: ReactNode; open?: boolean; width?: string }) =>
-    open ? (
-      <div data-modal-width={width} role="dialog">
-        {children}
-      </div>
-    ) : null,
-}));
-
 vi.mock('@/services/marketApi', () => ({
   marketApiService: {
     searchSkill: marketApiMocks.searchSkill,
@@ -131,12 +123,7 @@ vi.mock('@lobehub/ui/base-ui', () => ({
       {children}
     </button>
   ),
-  Modal: ({ children, open, width }: { children?: ReactNode; open?: boolean; width?: string }) =>
-    open ? (
-      <div data-modal-width={width} role="dialog">
-        {children}
-      </div>
-    ) : null,
+  createModal: vi.fn(),
 }));
 
 vi.mock('antd-style', () => ({
@@ -261,11 +248,13 @@ const renderModal = (type: 'agent' | 'group' = 'agent') => {
   const onOpenSkills = vi.fn();
   const onSubmit = vi.fn().mockResolvedValue(undefined);
   const onTryInLobeAI = vi.fn();
+  const update = vi.fn();
+  const modalRef = { current: { update } as unknown as ModalInstance };
 
   render(
     <CreateAgentModal
-      open
       agentId="inbox-agent"
+      modalRef={modalRef}
       type={type}
       onClose={onClose}
       onCreateBlank={onCreateBlank}
@@ -275,7 +264,7 @@ const renderModal = (type: 'agent' | 'group' = 'agent') => {
     />,
   );
 
-  return { onClose, onCreateBlank, onOpenSkills, onSubmit, onTryInLobeAI };
+  return { onClose, onCreateBlank, onOpenSkills, onSubmit, onTryInLobeAI, update };
 };
 
 const expectTrackedSkillSuggestionAction = async (
@@ -654,7 +643,7 @@ describe('CreateAgentModal analytics', () => {
       totalCount: 1,
       totalPages: 1,
     });
-    const { onClose, onOpenSkills, onSubmit, onTryInLobeAI } = renderModal();
+    const { onClose, onOpenSkills, onSubmit, onTryInLobeAI, update } = renderModal();
 
     fireEvent.change(screen.getByLabelText('chat input'), {
       target: { value: '帮我做一个简历优化检查清单' },
@@ -680,7 +669,7 @@ describe('CreateAgentModal analytics', () => {
     expect(screen.getByText('Resume Reviewer')).toBeInTheDocument();
     expect(screen.getByText('Ready in LobeAI')).toBeInTheDocument();
     expect(screen.queryByText('resume-reviewer')).not.toBeInTheDocument();
-    expect(screen.getByRole('dialog')).toHaveAttribute('data-modal-width', 'min(90vw, 560px)');
+    expect(update).toHaveBeenCalledWith({ width: 'min(90vw, 560px)' });
     expect(screen.queryByText('Skill not a fit?')).not.toBeInTheDocument();
     expect(screen.queryByText('Create Agent Anyway')).not.toBeInTheDocument();
 
@@ -742,5 +731,39 @@ describe('CreateAgentModal analytics', () => {
     expect(
       await screen.findByText("Skill wasn't added. Retry, or create an Agent anyway."),
     ).toBeInTheDocument();
+  });
+});
+
+describe('openCreateAgentModal', () => {
+  it('reports the close through onOpenChangeComplete, not onOpenChange', () => {
+    // Regression: the in-content close and the post-create path both call the
+    // instance's `close()`, which never fires `onOpenChange`. Wiring the
+    // provider's `createModalOpen` reset to that callback left it stuck true,
+    // after which the dialog could not be opened a second time.
+    vi.mocked(createModal).mockClear();
+    vi.mocked(createModal).mockReturnValue({
+      close: vi.fn(),
+      destroy: vi.fn(),
+      setCanDismissByClickOutside: vi.fn(),
+      update: vi.fn(),
+    } as unknown as ModalInstance);
+
+    const onClosed = vi.fn();
+    openCreateAgentModal({
+      onClosed,
+      onCreateBlank: vi.fn(),
+      onSubmit: vi.fn(),
+      type: 'agent',
+    });
+
+    const props = vi.mocked(createModal).mock.calls.at(-1)![0] as Record<string, any>;
+    expect(props.onOpenChange).toBeUndefined();
+    expect(typeof props.onOpenChangeComplete).toBe('function');
+
+    props.onOpenChangeComplete(true);
+    expect(onClosed).not.toHaveBeenCalled();
+
+    props.onOpenChangeComplete(false);
+    expect(onClosed).toHaveBeenCalledTimes(1);
   });
 });

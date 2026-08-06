@@ -2019,6 +2019,28 @@ describe('AgentModel', () => {
       expect(duplicatedAgent?.slug).not.toBe(sourceAgent.slug);
     });
 
+    it('should preserve agencyConfig when duplicating', async () => {
+      const agencyConfig = {
+        heterogeneousProvider: {
+          type: 'claude-code',
+          command: 'claude',
+        } as const,
+        executionTarget: 'local',
+      };
+      const [sourceAgent] = await serverDB
+        .insert(agents)
+        .values({ userId, title: 'Hetero Agent', agencyConfig } as NewAgent)
+        .returning();
+
+      const result = await agentModel.duplicate(sourceAgent.id);
+
+      const duplicatedAgent = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, result!.agentId),
+      });
+
+      expect(duplicatedAgent?.agencyConfig).toEqual(agencyConfig);
+    });
+
     it('should use provided title when duplicating', async () => {
       const [sourceAgent] = await serverDB
         .insert(agents)

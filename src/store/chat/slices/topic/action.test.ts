@@ -1,3 +1,4 @@
+import { DEFAULT_MODEL, DEFAULT_PROVIDER } from '@lobechat/business-const';
 import type { LobeUser, UIChatMessage } from '@lobechat/types';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { type Mock } from 'vitest';
@@ -2439,8 +2440,10 @@ describe('topic action', () => {
       });
 
       expect(createTopicSpy).toHaveBeenCalledWith({
-        model: 'deepseek-v4-pro',
-        provider: 'deepseek',
+        // The test never seeds agentMap, so snapshotAgentModel falls back to the
+        // defaults — assert the constants so default-model bumps can't break this.
+        model: DEFAULT_MODEL,
+        provider: DEFAULT_PROVIDER,
         sessionId: activeAgentId,
         messages: messages.map((m) => m.id),
         title: 'defaultTitle',

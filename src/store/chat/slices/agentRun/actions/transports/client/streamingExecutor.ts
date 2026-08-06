@@ -15,11 +15,17 @@ import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { createPathScopeAudit } from '@lobechat/builtin-tool-local-system';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { manualModeExcludeToolIds } from '@lobechat/builtin-tools';
-import { isDesktop, resolveSubAgentModel } from '@lobechat/const';
+import {
+  getSubAgentChatConfigOverride,
+  isDesktop,
+  resolveSubAgentChatConfig,
+  resolveSubAgentModel,
+} from '@lobechat/const';
 import { type ToolsEngine } from '@lobechat/context-engine';
 import { buildTaskDetailPrompt, buildTaskListPrompt } from '@lobechat/prompts';
 import {
   type ConversationContext,
+  type LobeAgentChatConfig,
   type MessageMetadata,
   type RunSubAgentResult,
   type RuntimeInitialContext,
@@ -120,6 +126,7 @@ export class StreamingExecutorActionImpl {
     subAgentId: paramSubAgentId,
     isSubAgent,
     modelOverride,
+    chatConfigOverride,
   }: {
     messages: UIChatMessage[];
     parentMessageId: string;
@@ -139,6 +146,8 @@ export class StreamingExecutorActionImpl {
     isSubAgent?: boolean;
     /** Model/provider the run is forced onto, resolved by the caller that spawns it. */
     modelOverride?: { model: string; provider: string };
+    /** chatConfig patch merged over the resolved chatConfig (sub-agent thinking overrides). */
+    chatConfigOverride?: Partial<LobeAgentChatConfig> | null;
   }): {
     state: AgentState;
     context: AgentRuntimeContext;
@@ -186,10 +195,19 @@ export class StreamingExecutorActionImpl {
     const topicModel = topicId ? topicSelectors.getTopicModelById(topicId)(this.#get()) : undefined;
     const modelResolution = modelOverride ?? topicModel;
     const agentConfig: ResolvedAgentConfig =
-      modelResolution && resolvedAgentConfig.agentConfig
+      (modelResolution || chatConfigOverride) && resolvedAgentConfig.agentConfig
         ? {
             ...resolvedAgentConfig,
-            agentConfig: { ...resolvedAgentConfig.agentConfig, ...modelResolution },
+            ...(modelResolution
+              ? { agentConfig: { ...resolvedAgentConfig.agentConfig, ...modelResolution } }
+              : {}),
+            ...(chatConfigOverride
+              ? {
+                  chatConfig:
+                    resolveSubAgentChatConfig(resolvedAgentConfig.chatConfig, chatConfigOverride) ??
+                    resolvedAgentConfig.chatConfig,
+                }
+              : {}),
           }
         : resolvedAgentConfig;
 
@@ -490,6 +508,12 @@ export class StreamingExecutorActionImpl {
      * keep their own model.
      */
     modelOverride?: { model: string; provider: string };
+    /**
+     * chatConfig overrides (thinking / reasoning-effort extend params) merged
+     * over the resolved chatConfig, skipping nulled keys. Passed by
+     * `runClientSubAgent` from the parent's `agencyConfig.subagent.chatConfig`.
+     */
+    chatConfigOverride?: Partial<LobeAgentChatConfig> | null;
     userMessageId?: string;
   }): Promise<{ cost?: Cost; model?: string; provider?: string; usage?: Usage } | void> => {
     const {
@@ -619,6 +643,7 @@ export class StreamingExecutorActionImpl {
       subAgentId, // Pass subAgentId for agent config retrieval (behavior depends on scope)
       isSubAgent, // Pass isSubAgent to filter out lobe-agent tool in sub-agent context
       modelOverride: params.modelOverride,
+      chatConfigOverride: params.chatConfigOverride,
     });
 
     if (params.skipCreateFirstMessage) {
@@ -1007,15 +1032,25 @@ export class StreamingExecutorActionImpl {
       }
 
       // 6. Run the sub-agent with the current client runtime.
-      //    A sub-agent runs on its own model rather than inheriting the parent's
-      //    main one, resolved here at the spawn site from the parent's
-      //    `agencyConfig.subagent` (mirrors the server's callSubAgent runner).
+      //    The model is resolved here at the spawn site (mirrors the server's
+      //    callSubAgent runner): an explicit `agencyConfig.subagent` override
+      //    wins, otherwise the sub-agent follows the parent's *effective* model
+      //    — topic-pinned model over the agent default, the same precedence
+      //    internal_createAgentState applies to the parent run itself.
       const parentAgentConfig = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
+      const parentEffectiveModel =
+        topicSelectors.getTopicModelById(topicId)(this.#get()) ?? parentAgentConfig;
       const runtimeResult = await this.#get().executeClientAgent({
+        chatConfigOverride: getSubAgentChatConfigOverride(
+          parentAgentConfig?.agencyConfig?.subagent,
+        ),
         context: subContext,
         isSubAgent: true,
         messages: subMessages,
-        modelOverride: resolveSubAgentModel(parentAgentConfig?.agencyConfig?.subagent),
+        modelOverride: resolveSubAgentModel(
+          parentAgentConfig?.agencyConfig?.subagent,
+          parentEffectiveModel,
+        ),
         operationId: taskOperationId,
         parentMessageId: userMessageId,
         parentMessageType: 'user',

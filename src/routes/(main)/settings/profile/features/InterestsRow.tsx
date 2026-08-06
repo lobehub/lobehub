@@ -8,10 +8,10 @@ import { BriefcaseIcon } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { fetchErrorNotification } from '@/components/Error/fetchErrorNotification';
 import { INTEREST_AREAS } from '@/routes/onboarding/config';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { saveToast } from '@/store/utils/saveToast';
 
 import ProfileRow from './ProfileRow';
 
@@ -30,13 +30,13 @@ const InterestsRow = () => {
         await updateInterests(updated);
       } catch (error) {
         console.error('Failed to update interests:', error);
-        fetchErrorNotification.error({
-          errorMessage: error instanceof Error ? error.message : String(error),
-          status: 500,
+        saveToast(error, {
+          retry: () => void saveInterests(updated),
+          title: t('profile.saveError'),
         });
       }
     },
-    [updateInterests],
+    [updateInterests, t],
   );
 
   const areas = useMemo(

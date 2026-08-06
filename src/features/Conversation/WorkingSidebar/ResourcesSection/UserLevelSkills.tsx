@@ -1,10 +1,10 @@
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { confirmModal, createModal, toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
+import { t as translate } from 'i18next';
 import { EyeIcon, PencilIcon, Trash2Icon } from 'lucide-react';
-import { lazy, memo, Suspense, useMemo, useState } from 'react';
+import { lazy, memo, Suspense, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import ImperativeModal from '@/components/ImperativeModal';
 import { startSkillDrag } from '@/features/ChatInput/InputEditor/ActionTag/skillDragData';
 import {
   openRenameSkillModal,
@@ -18,6 +18,19 @@ import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors } from '@/store/tool/selectors';
 
 const AgentSkillDetail = lazy(() => import('@/features/AgentSkillDetail'));
+
+const openSkillDetailModal = (skillId: string) =>
+  createModal({
+    content: (
+      <Suspense fallback={<div style={{ height: '100%' }} />}>
+        <AgentSkillDetail skillId={skillId} />
+      </Suspense>
+    ),
+    footer: null,
+    styles: { content: { height: 'calc(100dvh - 200px)', overflow: 'hidden', padding: 0 } },
+    title: translate('workingPanel.skills.detail.title', { ns: 'chat' }),
+    width: 960,
+  });
 
 /**
  * Reads user-installed skills (entries in the `agent_skill` table — market
@@ -67,7 +80,6 @@ const UserLevelSkills = memo<UserLevelSkillsProps>(({ hideHeader }) => {
   const updateAgentSkill = useToolStore((s) => s.updateAgentSkill);
   const deleteAgentSkill = useToolStore((s) => s.deleteAgentSkill);
   const { allowed: canEdit } = usePermission('edit_own_content');
-  const [detailSkillId, setDetailSkillId] = useState<string>();
 
   const getRowActions = (item: SkillListItem): SkillRowAction[] => {
     const skill = agentSkills.find((s) => s.identifier === item.id);
@@ -78,7 +90,7 @@ const UserLevelSkills = memo<UserLevelSkillsProps>(({ hideHeader }) => {
         icon: EyeIcon,
         key: 'view',
         label: t('workingPanel.skills.actions.view'),
-        onClick: () => setDetailSkillId(skill.id),
+        onClick: () => openSkillDetailModal(skill.id),
         sfSymbol: 'eye',
       },
     ];
@@ -149,7 +161,7 @@ const UserLevelSkills = memo<UserLevelSkillsProps>(({ hideHeader }) => {
       items={items}
       onOpenSkill={(item) => {
         const skill = agentSkills.find((s) => s.identifier === item.id);
-        if (skill) setDetailSkillId(skill.id);
+        if (skill) openSkillDetailModal(skill.id);
       }}
       onSkillDragStart={(item, event) => {
         startSkillDrag(event, {
@@ -161,42 +173,17 @@ const UserLevelSkills = memo<UserLevelSkillsProps>(({ hideHeader }) => {
     />
   );
 
-  const detailModal = (
-    <ImperativeModal
-      destroyOnHidden
-      footer={null}
-      open={!!detailSkillId}
-      styles={{ body: { height: 'calc(100dvh - 200px)', overflow: 'hidden', padding: 0 } }}
-      title={t('workingPanel.skills.detail.title')}
-      width={960}
-      onCancel={() => setDetailSkillId(undefined)}
-    >
-      <Suspense fallback={<div style={{ height: '100%' }} />}>
-        {detailSkillId && <AgentSkillDetail skillId={detailSkillId} />}
-      </Suspense>
-    </ImperativeModal>
-  );
-
-  if (hideHeader)
-    return (
-      <>
-        {list}
-        {detailModal}
-      </>
-    );
+  if (hideHeader) return list;
 
   return (
-    <>
-      <SkillSection
-        sectionHeader={{
-          count: items.length,
-          title: t('workingPanel.skills.section.user'),
-        }}
-      >
-        {list}
-      </SkillSection>
-      {detailModal}
-    </>
+    <SkillSection
+      sectionHeader={{
+        count: items.length,
+        title: t('workingPanel.skills.section.user'),
+      }}
+    >
+      {list}
+    </SkillSection>
   );
 });
 

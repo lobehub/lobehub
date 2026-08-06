@@ -124,7 +124,7 @@ describe('MessagesEngine', () => {
       });
     });
 
-    it('should drop placeholder residue hidden inside tasks containers (LOBE-12572)', async () => {
+    it('should drop placeholder residue hidden inside tasks containers', async () => {
       // TasksFlattenProcessor emits children as role='task' and
       // TaskMessageProcessor converts them to assistant AFTER the flatten —
       // the post-flatten placeholder pass must run after that conversion, or
@@ -155,7 +155,7 @@ describe('MessagesEngine', () => {
       expect(result.messages[0].role).toBe('user');
     });
 
-    it('should not let placeholder-only containers consume history slots (LOBE-12572)', async () => {
+    it('should not let placeholder-only containers consume history slots', async () => {
       // History truncation counts each container as one group; a placeholder-
       // only container must be dropped BEFORE truncation or it eats a slot and
       // then vanishes at the flatten phase, losing a real history turn.

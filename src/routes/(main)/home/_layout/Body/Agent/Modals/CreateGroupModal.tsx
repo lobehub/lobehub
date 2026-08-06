@@ -1,17 +1,14 @@
-import { type ModalProps } from '@lobehub/ui';
-import { Flexbox, Input, stopPropagation } from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
-import { type InputRef } from 'antd';
-import { type MouseEvent } from 'react';
-import { memo, useRef, useState } from 'react';
+import { Flexbox, Input } from '@lobehub/ui';
+import { Button, createModal, ModalFooter, toast, useModalContext } from '@lobehub/ui/base-ui';
+import { t as translate } from 'i18next';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import ImperativeModal from '@/components/ImperativeModal';
 import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
 
-interface CreateGroupModalProps extends ModalProps {
+interface CreateGroupModalOptions {
   /**
    * Agent to move into the newly created group. Omitted when the modal is
    * opened from the sidebar "create group" entry, which only creates the group.
@@ -20,60 +17,66 @@ interface CreateGroupModalProps extends ModalProps {
   visibility?: 'private' | 'public';
 }
 
-const CreateGroupModal = memo<CreateGroupModalProps>(
-  ({ id, open, onCancel, visibility }: CreateGroupModalProps) => {
-    const { t } = useTranslation('chat');
-    const { allowed: canCreate } = usePermission('create_content');
+const CreateGroupContent = memo<CreateGroupModalOptions>(({ id, visibility }) => {
+  const { t } = useTranslation(['chat', 'common']);
+  const { close } = useModalContext();
+  const { allowed: canCreate } = usePermission('create_content');
 
-    const toggleExpandSessionGroup = useGlobalStore((s) => s.toggleExpandSessionGroup);
+  const toggleExpandSessionGroup = useGlobalStore((s) => s.toggleExpandSessionGroup);
+  const [updateAgentGroup, addGroup] = useHomeStore((s) => [s.updateAgentGroup, s.addGroup]);
 
-    const [updateAgentGroup, addGroup] = useHomeStore((s) => [s.updateAgentGroup, s.addGroup]);
-    // The input stays uncontrolled: ImperativeModal renders this content through
-    // the global ModalHost, so a controlled value living in this component only
-    // reaches the DOM after an effect-driven update — the lag makes React reset
-    // the field mid-IME-composition and CJK input becomes impossible.
-    const inputRef = useRef<InputRef>(null);
-    const [loading, setLoading] = useState(false);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
 
-    return (
-      <div onClick={stopPropagation}>
-        <ImperativeModal
-          allowFullscreen
-          destroyOnHidden
-          okButtonProps={{ disabled: !canCreate, loading }}
-          open={open}
-          title={t('sessionGroup.createGroup')}
-          width={400}
-          onCancel={onCancel}
-          onOk={async (e: MouseEvent<HTMLButtonElement>) => {
-            if (!canCreate) return;
+  const handleCreate = async () => {
+    // Enter fires as fast as the user repeats it — a second pass while `addGroup`
+    // is in flight would create a second group and move the agent into whichever
+    // request settles last.
+    if (!canCreate || loading) return;
+    if (input.length === 0 || input.length > 20 || input.trim() === '')
+      return toast.warning(t('sessionGroup.tooLong'));
 
-            const input = inputRef.current?.input?.value ?? '';
-            if (input.length === 0 || input.length > 20 || input.trim() === '')
-              return toast.warning(t('sessionGroup.tooLong'));
+    setLoading(true);
+    try {
+      const groupId = await addGroup(input, visibility);
+      if (id) await updateAgentGroup(id, groupId);
+      toggleExpandSessionGroup(groupId, true);
+      toast.success(t('sessionGroup.createSuccess'));
+      close();
+    } finally {
+      setLoading(false);
+    }
+  };
 
-            setLoading(true);
-            const groupId = await addGroup(input, visibility);
-            if (id) await updateAgentGroup(id, groupId);
-            toggleExpandSessionGroup(groupId, true);
-            setLoading(false);
+  return (
+    <>
+      <Flexbox paddingBlock={16} paddingInline={16}>
+        <Input
+          autoFocus
+          disabled={!canCreate || loading}
+          placeholder={t('sessionGroup.inputPlaceholder')}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onPressEnter={handleCreate}
+        />
+      </Flexbox>
+      <ModalFooter>
+        <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>
+        <Button disabled={!canCreate} loading={loading} type={'primary'} onClick={handleCreate}>
+          {t('ok', { defaultValue: 'OK', ns: 'common' })}
+        </Button>
+      </ModalFooter>
+    </>
+  );
+});
 
-            toast.success(t('sessionGroup.createSuccess'));
-            onCancel?.(e);
-          }}
-        >
-          <Flexbox paddingBlock={16}>
-            <Input
-              autoFocus
-              disabled={!canCreate}
-              placeholder={t('sessionGroup.inputPlaceholder')}
-              ref={inputRef}
-            />
-          </Flexbox>
-        </ImperativeModal>
-      </div>
-    );
-  },
-);
+CreateGroupContent.displayName = 'HomeCreateGroupContent';
 
-export default CreateGroupModal;
+export const openCreateGroupModal = (options: CreateGroupModalOptions = {}) =>
+  createModal({
+    content: <CreateGroupContent {...options} />,
+    footer: null,
+    styles: { content: { padding: 0 } },
+    title: translate('sessionGroup.createGroup', { ns: 'chat' }),
+    width: 400,
+  });

@@ -8,7 +8,7 @@ import { shouldDropUnsupportedClaudeAssistantPrefill } from './modelId';
  * unsupported assistant prefill and returns 400 before generation starts.
  *
  * A single trailing pop is not enough: failed-run placeholder rows can stack
- * multiple assistant messages at the payload tail (see LOBE-12572), so strip
+ * multiple assistant messages at the payload tail, so strip
  * until the conversation ends with a non-assistant turn. Models that still
  * support prefill are left untouched.
  * @see https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prefill-claudes-response

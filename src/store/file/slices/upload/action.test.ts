@@ -3,7 +3,6 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { handleFileUploadError } from '@/business/client/handleFileUploadError';
-import { notification } from '@/components/AntdStaticMethods';
 import { fileService } from '@/services/file';
 import { uploadService } from '@/services/upload';
 import { getImageDimensions } from '@/utils/client/imageDimensions';
@@ -13,12 +12,6 @@ import { useFileStore as useStore } from '../../store';
 vi.mock('zustand/traditional');
 
 // Mock necessary modules
-vi.mock('@/components/AntdStaticMethods', () => ({
-  notification: {
-    error: vi.fn(),
-  },
-}));
-
 vi.mock('@lobehub/ui/base-ui', () => ({
   toast: { info: vi.fn() },
 }));
@@ -192,7 +185,6 @@ describe('FileUploadAction', () => {
 
       expect(uploadResult).toBeUndefined();
       expect(handleFileUploadError).toHaveBeenCalledWith(uploadError);
-      expect(notification.error).not.toHaveBeenCalled();
     });
   });
 
@@ -859,7 +851,10 @@ describe('FileUploadAction', () => {
         vi.spyOn(fileService, 'checkFileHash').mockResolvedValue(mockCheckResult);
         vi.spyOn(uploadService, 'uploadFileToS3').mockRejectedValue(uploadError);
         vi.mocked(handleFileUploadError).mockImplementation((_error, options) => {
-          options?.onUploadBlocked?.();
+          options?.onUploadBlocked?.({
+            code: 'monthly_cap_reached',
+            description: 'Storage cap reached',
+          });
           return true;
         });
 
@@ -873,13 +868,17 @@ describe('FileUploadAction', () => {
         expect(result).toBeUndefined();
         expect(onStatusUpdate).toHaveBeenCalledWith({
           id: mockFile.name,
-          type: 'removeFile',
+          type: 'updateFile',
+          value: {
+            error: 'Storage cap reached',
+            errorCode: 'monthly_cap_reached',
+            status: 'error',
+          },
         });
         expect(handleFileUploadError).toHaveBeenCalledWith(
           uploadError,
           expect.objectContaining({ onUploadBlocked: expect.any(Function) }),
         );
-        expect(notification.error).not.toHaveBeenCalled();
       });
 
       it('should handle checkFileHash errors', async () => {

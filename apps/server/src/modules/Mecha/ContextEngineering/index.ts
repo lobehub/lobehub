@@ -1,3 +1,4 @@
+import { getShellSyntaxGuidance } from '@lobechat/builtin-tool-local-system';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { MessagesEngine } from '@lobechat/context-engine';
 import { type OpenAIChatMessage } from '@lobechat/types';
@@ -71,6 +72,24 @@ const createServerVariableGenerators = (params: {
     // leaking the literal `{{defaultShell}}` token into the prompt.
     defaultShell: () =>
       'the platform default shell (PowerShell on Windows, /bin/sh on macOS/Linux)',
+    // Same leak-guard for the paired syntax-guidance placeholder; passing
+    // undefined yields the shell-agnostic wording.
+    shellSyntaxGuidance: () => getShellSyntaxGuidance(undefined),
+    // Leak-guards for the device identity/path placeholders in the local-system
+    // system role. Real values arrive via `additionalVariables` (device system
+    // info) and override these; without a device report, tell the model the
+    // value is unknown instead of leaking the literal `{{...}}` token.
+    arch: () => 'unknown',
+    hostname: () => 'unknown',
+    platform: () => 'unknown',
+    desktopPath: () => '(not reported)',
+    documentsPath: () => '(not reported)',
+    downloadsPath: () => '(not reported)',
+    homePath: () => '(not reported)',
+    musicPath: () => '(not reported)',
+    picturesPath: () => '(not reported)',
+    userDataPath: () => '(not reported)',
+    videosPath: () => '(not reported)',
   };
 };
 

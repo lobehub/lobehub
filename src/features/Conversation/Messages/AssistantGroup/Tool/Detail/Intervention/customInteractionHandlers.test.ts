@@ -95,7 +95,10 @@ describe('customInteractionHandlers', () => {
     const result = await prepareCustomInteractionSubmit(identifier, payload, { apiName });
 
     expect(result).toEqual({
-      options: { pluginState: { askUserAnswers: payload } },
+      // createUserMessage must stay false: the completed tool card already
+      // renders the answers, so a synthetic user message would duplicate them
+      // in the client runtime (LOBE-12835).
+      options: { createUserMessage: false, pluginState: { askUserAnswers: payload } },
       payload,
     });
   });

@@ -221,6 +221,74 @@ describe('WorkflowCollapse', () => {
     expect(screen.getByRole('button', { name: 'Collapse' })).toBeInTheDocument();
   });
 
+  it('auto-collapses on completion by default', () => {
+    const { rerender } = render(
+      <WorkflowCollapse assistantMessageId="msg-1" blocks={makeBlocks()} />,
+    );
+
+    expect(getExpandedKeys()).toBe('["workflow"]');
+
+    mockIsGenerating = false;
+    rerender(
+      <WorkflowCollapse
+        assistantMessageId="msg-1"
+        blocks={makeBlocks({ result: { content: 'ok' } })}
+      />,
+    );
+
+    expect(getExpandedKeys()).toBe('[]');
+  });
+
+  it('skips the completion auto-collapse while suppressAutoCollapse is set', () => {
+    // Regression: the animated semi → collapsed transition used to run right
+    // before the parent folded the whole workflow into ProcessFold, shrinking
+    // the layout twice and making the conversation visibly jitter.
+    const { rerender } = render(
+      <WorkflowCollapse suppressAutoCollapse assistantMessageId="msg-1" blocks={makeBlocks()} />,
+    );
+
+    expect(getExpandedKeys()).toBe('["workflow"]');
+
+    mockIsGenerating = false;
+    rerender(
+      <WorkflowCollapse
+        suppressAutoCollapse
+        assistantMessageId="msg-1"
+        blocks={makeBlocks({ result: { content: 'ok' } })}
+      />,
+    );
+
+    expect(getExpandedKeys()).toBe('["workflow"]');
+  });
+
+  it('collapses late when suppressAutoCollapse is released after completion', () => {
+    // The turn ended but never folded (e.g. tool-only turn with no final
+    // answer), so nothing else collapses the workflow — the late release must.
+    const { rerender } = render(
+      <WorkflowCollapse suppressAutoCollapse assistantMessageId="msg-1" blocks={makeBlocks()} />,
+    );
+
+    mockIsGenerating = false;
+    rerender(
+      <WorkflowCollapse
+        suppressAutoCollapse
+        assistantMessageId="msg-1"
+        blocks={makeBlocks({ result: { content: 'ok' } })}
+      />,
+    );
+    expect(getExpandedKeys()).toBe('["workflow"]');
+
+    rerender(
+      <WorkflowCollapse
+        assistantMessageId="msg-1"
+        blocks={makeBlocks({ result: { content: 'ok' } })}
+        suppressAutoCollapse={false}
+      />,
+    );
+
+    expect(getExpandedKeys()).toBe('[]');
+  });
+
   it('auto expands and switches the header when confirmation is pending', async () => {
     render(
       <WorkflowCollapse

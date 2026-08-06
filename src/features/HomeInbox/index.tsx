@@ -14,16 +14,20 @@ import Recommendations, { useRecommendationsVisible } from '@/features/Recommend
 import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { useBriefStore } from '@/store/brief';
 import { briefListSelectors } from '@/store/brief/selectors';
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
+import { filterHiddenWidgetSections } from './hiddenWidgets';
+import { resolveInboxBlockState } from './inboxBlockState';
 import InboxBriefCard from './InboxBriefCard';
 import MarkAllReadButton from './MarkAllReadButton';
 import NeedsYouRailCard from './NeedsYouRailCard';
 import NewsList from './NewsList';
 import { ownsRailSections } from './railSectionPlacement';
 import RunningTasksCard from './RunningTasksCard';
-import { filterTopicsForInboxScope, resolveScopeToggleSection } from './scopeTogglePlacement';
+import { filterTopicsForInboxScope, resolveInboxScopeToggleSection } from './scopeTogglePlacement';
 import { splitBriefs } from './splitBriefs';
 import UnreadTopicList from './UnreadTopicList';
 import { useHomeInboxTopics } from './useHomeInboxTopics';
@@ -120,6 +124,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
 
   const topics = useHomeInboxTopics(isLogin);
   const recommendationsVisible = useRecommendationsVisible();
+  const hiddenWidgets = useGlobalStore(systemStatusSelectors.hiddenHomeWidgets);
 
   // A team context is a workspace with more than the viewer in it. In personal
   // mode this map is empty, so `isTeam` is false and the whole mine/team layer
@@ -148,9 +153,18 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
 
   if (!isLogin) return null;
 
+  const blockState = resolveInboxBlockState({
+    hasError: Boolean(briefsSWR.error),
+    hiddenWidgets,
+    hideNeedsYou,
+    isBriefsInit,
+    isLoading: Boolean(briefsSWR.isLoading),
+    isMain,
+  });
+
   // The brief feed is the primary content; a first-load failure blocks the whole
   // surface. No fabricated section heading — we don't know what's under it yet.
-  if (!isMain && briefsSWR.error && !isBriefsInit && !briefsSWR.isLoading) {
+  if (blockState === 'error') {
     return (
       <AsyncError
         error={briefsSWR.error}
@@ -164,7 +178,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
 
   // First load: bare skeletons, no group heading (loading must not assert a
   // "Needs you" section that may turn out empty). Recommendations keep their own.
-  if (!isMain && !isBriefsInit) {
+  if (blockState === 'skeleton') {
     return (
       <Flexbox gap={12}>
         <BriefCardSkeleton />
@@ -189,11 +203,14 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
     />
   ) : undefined;
   const toggleSectionKey = scopeToggle
-    ? resolveScopeToggleSection({
-        hasNeedsYou: !hideNeedsYou && needsYou.length > 0,
-        hasRunning: runningTopics.length > 0,
-        hasUnread: !hideUnread && unreadTopics.length > 0,
+    ? resolveInboxScopeToggleSection({
+        hiddenWidgets,
+        hideNeedsYou,
+        hideUnread,
+        needsYouCount: needsYou.length,
         preferUnread: isMain,
+        runningCount: runningTopics.length,
+        unreadCount: unreadTopics.length,
       })
     : null;
   const placeToggle = (key: typeof toggleSectionKey): ReactNode =>
@@ -312,15 +329,17 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
       subtitle: t('inbox.news.subtitle'),
     });
 
-  if (sections.length === 0) {
+  const visibleSections = filterHiddenWidgetSections(sections, hiddenWidgets);
+
+  if (visibleSections.length === 0) {
     if (isMain) return null;
 
     if (isRail)
-      return (
+      return recommendationsVisible ? (
         <Flexbox gap={12}>
           <Recommendations variant={'rail'} />
         </Flexbox>
-      );
+      ) : null;
 
     // With no titled block above it, the bare recommendations list doesn't need
     // the full section gap below the input area — offset the parent's gap so it
@@ -338,7 +357,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
 
   return (
     <Flexbox gap={isRail ? 12 : 32}>
-      {sections.map(({ action, badge, count, key, label, node, selfShelled, subtitle }) => {
+      {visibleSections.map(({ action, badge, count, key, label, node, selfShelled, subtitle }) => {
         if (selfShelled) return <Fragment key={key}>{node}</Fragment>;
 
         if (isRail)
