@@ -9,6 +9,7 @@ import { fileService } from '@/services/file';
 import { uploadService } from '@/services/upload';
 import { type StoreSetter } from '@/store/types';
 import { type UploadFileItem } from '@/types/files';
+import { getAudioDuration } from '@/utils/client/audioDuration';
 import { getImageDimensions } from '@/utils/client/imageDimensions';
 
 import { type FileStore } from '../../store';
@@ -140,6 +141,11 @@ export class FileUploadActionImpl {
     try {
       const fileArrayBuffer = await file.arrayBuffer();
       const normalizedFile = await normalizeUploadedImageFileType(file, fileArrayBuffer);
+      const extensionAudioMime = audioMimeFromExtension(normalizedFile.name);
+      const audioDurationPromise =
+        normalizedFile.type.startsWith('audio/') || extensionAudioMime
+          ? getAudioDuration(normalizedFile).catch(() => undefined)
+          : undefined;
 
       // 1. extract image dimensions if applicable
       const dimensions = await getImageDimensions(normalizedFile);
@@ -201,8 +207,11 @@ export class FileUploadActionImpl {
       // Audio containers like .m4a share the ISO-BMFF box with .mp4, so both the browser and
       // byte-sniffing may report an empty or `video/*` mime. Trust the extension to keep these
       // classified (and rendered) as audio.
-      const audioMime = audioMimeFromExtension(normalizedFile.name);
-      if (audioMime && !fileType.startsWith('audio/')) fileType = audioMime;
+      if (extensionAudioMime && !fileType.startsWith('audio/')) fileType = extensionAudioMime;
+
+      const durationMs = fileType.startsWith('audio/')
+        ? await (audioDurationPromise ?? getAudioDuration(normalizedFile).catch(() => undefined))
+        : undefined;
 
       // 5. create file to db
       // Fall back to the global file URL when legacy/generated metadata has no `path`.
@@ -213,7 +222,11 @@ export class FileUploadActionImpl {
         {
           fileType,
           hash,
-          metadata: { ...metadata, ...dimensions },
+          metadata: {
+            ...metadata,
+            ...dimensions,
+            ...(durationMs === undefined ? {} : { durationMs }),
+          },
           name: normalizedFile.name,
           parentId,
           size: normalizedFile.size,
