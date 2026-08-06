@@ -110,6 +110,7 @@ import {
   isDeviceLockedPlan,
   resolveExecutionPlan,
   resolveToolMode,
+  resolveWorkspaceScoped,
 } from '@/helpers/executionTarget';
 import { shouldEnableBuiltinSkill } from '@/helpers/skillFilters';
 import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
@@ -1196,6 +1197,7 @@ export class AiAgentService {
       clientIp,
       userAgent,
       deviceId: requestedDeviceId,
+      localDeviceId,
       botPlatformContext,
       discordContext,
       existingMessageIds = [],
@@ -2235,8 +2237,23 @@ export class AiAgentService {
         userId: this.userId,
       };
 
-      const remoteDeviceId =
-        effectiveRequestedDeviceId || agentConfig.agencyConfig?.boundDeviceId || undefined;
+      const platformPlan = isRemoteHetero
+        ? resolveExecutionPlan({
+            agencyConfig: agentConfig.agencyConfig,
+            canUseDevice,
+            clientExecutionAvailable: Boolean(localDeviceId),
+            isHetero: true,
+            localDeviceId,
+            requestedDeviceId: effectiveRequestedDeviceId,
+            sandboxExecutionAvailable: false,
+            trigger: requestTriggerMetadata?.trigger,
+            workspaceScoped: resolveWorkspaceScoped(
+              isPublicWorkspaceAgent && !canManageAgent,
+              memberDeviceOverride,
+            ),
+          })
+        : undefined;
+      const remoteDeviceId = platformPlan?.kind === 'device' ? platformPlan.deviceId : undefined;
 
       // Register the run's lifecycle hooks so the hetero terminal path fires
       // onComplete/onError through the same `hookDispatcher` the normal LLM
@@ -2266,13 +2283,13 @@ export class AiAgentService {
         },
       });
 
-      // Remote hetero agents (openclaw / hermes) dispatch to the device identified
-      // by agencyConfig.boundDeviceId and communicate back via agentNotify.notify.
-      // They always go through the gateway WS channel — open the stream now so the
-      // frontend can subscribe before the first lh notify arrives.
+      // Notify-based platform agents (openclaw / hermes) communicate back via
+      // agentNotify.notify. A local run uses the requesting desktop's device ID;
+      // a remote run uses agencyConfig.boundDeviceId. Both use the gateway transport,
+      // so open the stream before the first notify arrives.
 
       if (isRemoteHetero) {
-        // Remote hetero agents are device-only — there is no sandbox to
+        // Platform task agents require either this desktop or a connected device — there is no sandbox to
         // degrade to, so a denied sender (external bot user) is refused
         // outright instead of reaching the owner's machine.
         if (!canUseDevice) {
@@ -2304,12 +2321,12 @@ export class AiAgentService {
           };
         }
         if (!remoteDeviceId) {
-          log('execAgent: openclaw/hermes requires a bound device (boundDeviceId not set)');
+          log('execAgent: openclaw/hermes requires a local or connected device');
           await this.finalizeHeteroDispatchError({
             agentId: resolvedAgentId,
             assistantMessageId: assistantMessageRecord.id,
-            detail: 'No device bound to this agent. Configure boundDeviceId.',
-            message: 'No bound device for remote hetero agent',
+            detail: 'No local or connected device is available for this agent.',
+            message: 'No execution device for platform agent',
             operationId,
             topicId,
           });
@@ -2319,7 +2336,7 @@ export class AiAgentService {
             autoStarted: false,
             createdAt: new Date().toISOString(),
             error: 'No bound device',
-            message: 'Remote hetero agent requires boundDeviceId',
+            message: 'Platform agent requires a local or connected device',
             operationId,
             status: 'error',
             success: false,
@@ -2361,7 +2378,7 @@ export class AiAgentService {
               // topic so agentNotify can resolve the workspace-owned topic.
               // Without this the device's notify call falls back to personal
               // mode and TopicModel.findById returns NOT_FOUND.
-              workspaceId: remoteDeviceWorkspaceId,
+              workspaceId: this.workspaceId,
             }),
             identifier: 'runHeteroTask',
           },

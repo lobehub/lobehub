@@ -189,6 +189,8 @@ export interface ExecAgentParams {
   fileIds?: string[];
   /** Additional system instructions appended after the agent's own system role */
   instructions?: string;
+  /** Current desktop's device ID; used only when the effective target is `local`. */
+  localDeviceId?: string;
   /** Override the agent's default model */
   model?: string;
   /**

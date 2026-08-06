@@ -30,7 +30,7 @@ const parsePlatformVersion = (type: RemoteHeterogeneousAgentType, output: string
   return output.split(/\s+/).at(-1);
 };
 
-const probeRemotePlatform = async (
+export const probeRemotePlatform = async (
   type: RemoteHeterogeneousAgentType,
 ): Promise<HeterogeneousAgentScanStatus> => {
   try {

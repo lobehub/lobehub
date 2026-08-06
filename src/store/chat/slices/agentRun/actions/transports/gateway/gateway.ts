@@ -4,6 +4,7 @@ import {
   type AgentStreamEvent,
   type ConnectionStatus,
 } from '@lobechat/agent-gateway-client';
+import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import type {
   ChatTopicMetadata,
   ConversationContext,
@@ -11,8 +12,10 @@ import type {
   MessageMetadata,
   RuntimeMentionedAgent,
 } from '@lobechat/types';
+import { resolveAgentAgencyConfig } from '@lobechat/types';
 
 import { isDesktop } from '@/const/version';
+import { resolveExecutionTarget, resolveWorkspaceScoped } from '@/helpers/executionTarget';
 import {
   aiAgentService,
   type ResumeApprovalParam,
@@ -22,7 +25,7 @@ import { gatewayConnectionService } from '@/services/electron/gatewayConnection'
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { getAgentStoreState } from '@/store/agent';
-import { chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { consumePendingTopicRepos, getPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
 import { topicSelectors } from '@/store/chat/selectors';
 import type { ChatStore } from '@/store/chat/store';
@@ -30,7 +33,11 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import type { StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
-import { settingsSelectors, toolInterventionSelectors } from '@/store/user/selectors';
+import {
+  settingsSelectors,
+  toolInterventionSelectors,
+  userProfileSelectors,
+} from '@/store/user/selectors';
 import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
@@ -56,24 +63,53 @@ import { createGatewayMemberStreamHandler } from './gatewayMemberStreamHandler';
  * device-resolution heuristics. We don't pre-check online status here — an
  * offline id simply fails the server's `onlineDevices` guard and stays unrouted.
  */
-const resolveLocalDeviceId = async (agentId?: string): Promise<string | undefined> => {
-  if (!isDesktop || !agentId) return undefined;
+const resolveDesktopDeviceHints = async (
+  agentId?: string,
+): Promise<{ deviceId?: string; localDeviceId?: string }> => {
+  if (!isDesktop || !agentId) return {};
 
   const agentState = getAgentStoreState();
   // Chat mode means "no execution environment" — never resolve a device, even
   // when the target is `local`. The server enforces this too (it auto-activates
   // a single online device), but skipping the deviceId round-trip here avoids
   // sending an id the server would only discard.
-  if (chatConfigByIdSelectors.isChatModeById(agentId)(agentState)) return undefined;
+  if (chatConfigByIdSelectors.isChatModeById(agentId)(agentState)) return {};
 
-  const isLocal = chatConfigByIdSelectors.isLocalSystemEnabledById(agentId)(agentState);
-  if (!isLocal) return undefined;
+  const agent = agentByIdSelectors.getAgentById(agentId)(agentState);
+  const userState = useUserStore.getState();
+  const currentUserId = userProfileSelectors.userId(userState);
+  const isAuthor = !!currentUserId && agent?.userId === currentUserId;
+  const usesWorkspaceMemberSelection =
+    !!agent?.workspaceId && agent.visibility !== 'private' && !isAuthor;
+  const deviceOverride = usesWorkspaceMemberSelection
+    ? userState.workspaceUserPreference.agentDeviceOverrides?.[agentId]
+    : undefined;
+  const agencyConfig = resolveAgentAgencyConfig(
+    agentByIdSelectors.getAgencyConfigById(agentId)(agentState),
+    deviceOverride,
+    {
+      canManage: isAuthor,
+      visibility: agent?.visibility,
+      workspaceId: agent?.workspaceId,
+    },
+  );
+  const isPlatformTask = isRemoteHeterogeneousType(agencyConfig?.heterogeneousProvider?.type ?? '');
+  const executionTarget = resolveExecutionTarget(agencyConfig, {
+    clientExecutionAvailable: true,
+    isHetero: !!agencyConfig?.heterogeneousProvider,
+    workspaceScoped: resolveWorkspaceScoped(usesWorkspaceMemberSelection, deviceOverride),
+  });
+  // Platform hints are capability claims, not routing overrides. Always send
+  // this desktop best-effort and let the server's authoritative execution plan
+  // decide whether the effective target may consume it.
+  if (!isPlatformTask && executionTarget !== 'local') return {};
 
   try {
     const info = await gatewayConnectionService.getDeviceInfo();
-    return info?.deviceId;
+    if (!info?.deviceId) return {};
+    return isPlatformTask ? { localDeviceId: info.deviceId } : { deviceId: info.deviceId };
   } catch {
-    return undefined;
+    return {};
   }
 };
 
@@ -521,7 +557,7 @@ export class GatewayActionImpl {
       ? this.#get().getOperationAbortSignal(parentOperationId)
       : undefined;
 
-    const localDeviceId = await resolveLocalDeviceId(executionContext.agentId);
+    const desktopDeviceHints = await resolveDesktopDeviceHints(executionContext.agentId);
     const userInterventionConfig = {
       approvalMode: toolInterventionSelectors.approvalMode(useUserStore.getState()),
       allowList: toolInterventionSelectors.allowList(useUserStore.getState()),
@@ -556,7 +592,7 @@ export class GatewayActionImpl {
           threadId: executionContext.threadId,
           topicId: executionContext.topicId,
         },
-        deviceId: localDeviceId,
+        ...desktopDeviceHints,
         fileIds,
         mentionedAgents,
         parentMessageId,
@@ -574,7 +610,7 @@ export class GatewayActionImpl {
     if (abortSignal?.aborted) {
       // Cancel arrived after execAgentTask resolved — server task exists.
       aiAgentService
-        .interruptTask({ operationId: result.operationId })
+        .interruptTask({ operationId: result.operationId, topicId: result.topicId })
         .catch((err) => console.error('[Gateway] interruptTask after cancel failed:', err));
       throw abortSignal.reason ?? new DOMException('Aborted', 'AbortError');
     }
@@ -621,7 +657,7 @@ export class GatewayActionImpl {
 
       if (abortSignal?.aborted) {
         aiAgentService
-          .interruptTask({ operationId: result.operationId })
+          .interruptTask({ operationId: result.operationId, topicId: result.topicId })
           .catch((err) => console.error('[Gateway] interruptTask after cancel failed:', err));
         throw abortSignal.reason ?? new DOMException('Aborted', 'AbortError');
       }

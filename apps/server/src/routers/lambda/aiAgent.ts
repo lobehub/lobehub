@@ -242,6 +242,8 @@ const ExecAgentSchema = z
       .optional(),
     /** Explicit device ID to bind to the topic and activate for this run */
     deviceId: z.string().optional(),
+    /** Current desktop device hint, honored only for an effective local target */
+    localDeviceId: z.string().optional(),
     /** Optional existing message IDs to include in context */
     existingMessageIds: z.array(z.string()).optional().default([]),
     /** File IDs of already-uploaded attachments to attach to the new user message */
@@ -882,6 +884,7 @@ export const aiAgentRouter = router({
       appContext,
       autoStart = true,
       deviceId,
+      localDeviceId,
       existingMessageIds = [],
       fileIds,
       mentionedAgents,
@@ -931,6 +934,7 @@ export const aiAgentRouter = router({
         // intentionally not part of the client-passable input schema.
         clientIp: ctx.clientIp ?? undefined,
         deviceId,
+        localDeviceId,
         existingMessageIds,
         fileIds,
         mentionedAgents,
