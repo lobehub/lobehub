@@ -201,7 +201,7 @@ export default {
   'betterAuth.verifyPhone.otp.resend': 'Resend code',
   'betterAuth.verifyPhone.otp.resent': 'Code resent',
   'betterAuth.verifyPhone.otp.submit': 'Verify',
-  'betterAuth.verifyPhone.phone.invalid': 'Enter a valid Iranian mobile (e.g. 0912… or +98912…)',
+  'betterAuth.verifyPhone.phone.invalid': 'Enter a valid Iranian mobile (e.g. 0912…)',
   'betterAuth.verifyPhone.phone.placeholder': '09121234567',
   'betterAuth.verifyPhone.phone.required': 'Please enter your mobile number',
   'betterAuth.verifyPhone.phone.submit': 'Send code',

@@ -9,6 +9,7 @@ import { Smartphone } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { OtpCodeInput } from '@/features/Auth/OtpCodeInput';
 import AuthCard from '@/features/AuthCard';
 import { AuthAgreement, useAuthAgreement } from '@/features/AuthShell';
 import { isValidIranianPhoneNumber } from '@/libs/better-auth/phone';
@@ -49,11 +50,9 @@ export const SignInPhoneStep = ({
   const { t } = useTranslation('auth');
   const { agreementChecked, continueWithAgreement, setAgreementChecked } = useAuthAgreement();
   const phoneInputRef = useRef<InputRef>(null);
-  const otpInputRef = useRef<InputRef>(null);
 
   useEffect(() => {
     if (step === 'phone') phoneInputRef.current?.focus();
-    else otpInputRef.current?.focus();
   }, [step]);
 
   if (step === 'phoneOtp') {
@@ -70,14 +69,7 @@ export const SignInPhoneStep = ({
               { len: 6, message: t('betterAuth.verifyPhone.otp.length') },
             ]}
           >
-            <Input
-              autoComplete="one-time-code"
-              inputMode="numeric"
-              maxLength={6}
-              placeholder="123456"
-              ref={otpInputRef}
-              size="large"
-            />
+            <OtpCodeInput autoFocus />
           </Form.Item>
           <Button block htmlType="submit" loading={loading} size="large" type="primary">
             {t('betterAuth.signin.phone.submitOtp')}

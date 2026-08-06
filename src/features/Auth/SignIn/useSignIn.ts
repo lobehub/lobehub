@@ -14,7 +14,10 @@ import {
   requestPasswordReset,
   signIn,
 } from '@/libs/better-auth/auth-client';
-import { normalizeIranianPhoneNumber } from '@/libs/better-auth/phone';
+import {
+  formatIranianPhoneForDisplay,
+  normalizeIranianPhoneNumber,
+} from '@/libs/better-auth/phone';
 import { isBuiltinProvider, normalizeProviderId } from '@/libs/better-auth/utils/client';
 import { buildOnboardingRedirectUrl, sanitizeRedirectPath } from '@/utils/onboardingRedirect';
 
@@ -486,7 +489,7 @@ export const useSignIn = () => {
     loading,
     oAuthSSOProviders: resolvedProviders,
     otpForm,
-    phoneDisplay: phoneE164,
+    phoneDisplay: formatIranianPhoneForDisplay(phoneE164),
     phoneForm,
     resending,
     sending,

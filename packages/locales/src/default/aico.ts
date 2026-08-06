@@ -138,6 +138,7 @@ export default {
 
   'platform.activate': 'Activate',
   'platform.amountToman': 'Amount (toman)',
+  'platform.amountUsd': 'Amount (USD)',
   'platform.assignFailed': 'Failed to assign manager',
   'platform.assignManager': 'Assign manager',
   'platform.assignSubmit': 'Assign',
@@ -232,6 +233,7 @@ export default {
   'billing.switched': 'Using {{label}} credits',
 
   'wallet.amountToman': 'Amount (toman)',
+  'wallet.amountUsd': 'Amount (USD)',
   'wallet.balanceToman': 'Paid-in (toman)',
   'wallet.balanceUsd': 'Balance (USD)',
   'wallet.columns.date': 'Date',
@@ -239,6 +241,8 @@ export default {
   'wallet.columns.type': 'Type',
   'wallet.columns.usd': 'USD',
   'wallet.fxHint': 'Rate: {{rate}} toman = $1 (converted at purchase)',
+  'wallet.previewToman': 'Equivalent now: {{toman}} toman',
+  'wallet.previewUsd': 'Equivalent now: ${{usd}}',
   'wallet.keyPending': 'Key will be created on first topup',
   'wallet.keyProvisioned': 'Managed key active (hidden)',
   'wallet.linkOrg': 'Organization admin',

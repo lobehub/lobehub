@@ -213,7 +213,7 @@ describe('defineConfig', () => {
     expect(mergeLocalNoProxy('*')).toBe('*');
   });
 
-  it('should leave phone signup temp name empty so onboarding name is blank', async () => {
+  it('should not enable phone signup on verification', async () => {
     const { phoneNumber } = await import('better-auth/plugins');
     const { defineConfig } = await import('./define-config');
 
@@ -221,8 +221,8 @@ describe('defineConfig', () => {
 
     expect(phoneNumber).toHaveBeenCalled();
     const phoneOpts = vi.mocked(phoneNumber).mock.calls.at(-1)?.[0] as {
-      signUpOnVerification?: { getTempName?: (phone: string) => string };
+      signUpOnVerification?: unknown;
     };
-    expect(phoneOpts.signUpOnVerification?.getTempName?.('+989121234567')).toBe('');
+    expect(phoneOpts.signUpOnVerification).toBeUndefined();
   });
 });

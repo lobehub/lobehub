@@ -8,12 +8,15 @@ import { users } from '@/database/schemas';
 import {
   microUsdToDecimalString,
   tomanString,
-  tomanToMicroUsd,
   usdDecimalStringToMicro,
 } from '@/database/utils/aicoMoney';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getTomanPerUsd } from '@/server/services/aico/fxService';
+import {
+  resolveTopupAmount,
+  topupAmountInputSchema,
+} from '@/server/services/aico/resolveTopupAmount';
 import { AicoOpenRouterKeyService } from '@/server/services/openrouter/keyService';
 import { OpenRouterModelCatalogSyncService } from '@/server/services/openrouter/modelCatalogSync';
 
@@ -132,20 +135,17 @@ export const platformAdminRouter = router({
 
   addManualCredit: platformProcedure
     .input(
-      z.object({
-        amountToman: z.number().int().positive(),
+      topupAmountInputSchema.extend({
         description: z.string().max(500).optional(),
         orgId: z.string().min(1),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        const { rate: fxRate } = await getTomanPerUsd();
-        const fxRateTomanPerUsd = Math.round(fxRate);
-        const amountMicroUsd = Number(tomanToMicroUsd(input.amountToman, fxRateTomanPerUsd));
+        const { amountMicroUsd, amountToman, fxRateTomanPerUsd } = await resolveTopupAmount(input);
         const result = await ctx.organizationModel.addManualCredit({
           amountMicroUsd,
-          amountToman: input.amountToman,
+          amountToman,
           createdByUserId: ctx.userId,
           description: input.description,
           fxRateTomanPerUsd,
@@ -176,8 +176,7 @@ export const platformAdminRouter = router({
 
   addManualUserCredit: platformProcedure
     .input(
-      z.object({
-        amountToman: z.number().int().positive().max(100_000_000),
+      topupAmountInputSchema.extend({
         description: z.string().max(500).optional(),
         email: z.string().email().optional(),
         publicCode: z.string().min(1).max(32).optional(),
@@ -200,15 +199,10 @@ export const platformAdminRouter = router({
       }
 
       try {
-        const { rate: fxRate } = await getTomanPerUsd();
-        const fxRateTomanPerUsd = Math.round(fxRate);
-        if (!Number.isFinite(fxRateTomanPerUsd) || fxRateTomanPerUsd <= 0) {
-          throw new Error('INVALID_FX_RATE');
-        }
-        const amountMicroUsd = Number(tomanToMicroUsd(input.amountToman, fxRateTomanPerUsd));
+        const { amountMicroUsd, amountToman, fxRateTomanPerUsd } = await resolveTopupAmount(input);
         const result = await ctx.billingModel.manualCreditUser({
           amountMicroUsd,
-          amountToman: input.amountToman,
+          amountToman,
           createdByUserId: ctx.userId,
           description: input.description,
           fxRateTomanPerUsd,

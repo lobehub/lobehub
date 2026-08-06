@@ -929,6 +929,36 @@ describe('createGatewayEventHandler', () => {
   });
 
   describe('agent_runtime_end', () => {
+    it('should fail the run and persist error when reason is error', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(
+        makeEvent('agent_runtime_end', {
+          finalState: { error: { errorType: 'InvalidProviderAPIKey', message: 'Invalid API Key' } },
+          reason: 'error',
+        }),
+      );
+      await flush();
+
+      expect(store.failOperation).toHaveBeenCalledWith('op-1', expect.anything());
+      expect(store.completeOperation).not.toHaveBeenCalled();
+      expect(messageService.updateMessageError).toHaveBeenCalledWith(
+        'msg-initial',
+        expect.objectContaining({ type: 'InvalidProviderAPIKey' }),
+        expect.any(Object),
+      );
+      expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'updateMessage',
+          value: expect.objectContaining({
+            error: expect.objectContaining({ type: 'InvalidProviderAPIKey' }),
+          }),
+        }),
+        expect.any(Object),
+      );
+    });
+
     it('should complete operation and refresh messages', async () => {
       const store = createMockStore();
       const handler = createHandler(store);

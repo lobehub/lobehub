@@ -5,12 +5,16 @@ import { z } from 'zod';
 import { AicoBillingModel } from '@/database/models/aicoBilling';
 import { OrganizationModel } from '@/database/models/organization';
 import { users } from '@/database/schemas';
-import { microUsdToDecimalString, tomanToMicroUsd } from '@/database/utils/aicoMoney';
+import { microUsdToDecimalString } from '@/database/utils/aicoMoney';
 import { aicoEnv } from '@/envs/aico';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getTomanPerUsd } from '@/server/services/aico/fxService';
 import { assertMockTopupAllowed, isMockTopupUiEnabled } from '@/server/services/aico/mockTopupGate';
+import {
+  resolveTopupAmount,
+  topupAmountInputSchema,
+} from '@/server/services/aico/resolveTopupAmount';
 import { AicoOpenRouterKeyService } from '@/server/services/openrouter/keyService';
 
 const billingProcedure = authedProcedure.use(serverDatabase).use(async ({ ctx, next }) => {
@@ -50,16 +54,6 @@ const toIntegerFxRate = (rate: number): number => {
     throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'INVALID_FX_RATE' });
   }
   return rounded;
-};
-
-const microToSafeInteger = (micro: bigint, label: string): number => {
-  if (micro <= 0n) {
-    throw new TRPCError({ code: 'BAD_REQUEST', message: `AMOUNT_MUST_BE_POSITIVE:${label}` });
-  }
-  if (micro > BigInt(Number.MAX_SAFE_INTEGER)) {
-    throw new TRPCError({ code: 'BAD_REQUEST', message: `AMOUNT_TOO_LARGE:${label}` });
-  }
-  return Number(micro);
 };
 
 export const aicoBillingRouter = router({
@@ -222,38 +216,31 @@ export const aicoBillingRouter = router({
       };
     }),
 
-  mockTopup: billingProcedure
-    .input(z.object({ amountToman: z.number().int().positive().max(100_000_000) }))
-    .mutation(async ({ ctx, input }) => {
-      assertMockTopupAllowed();
+  mockTopup: billingProcedure.input(topupAmountInputSchema).mutation(async ({ ctx, input }) => {
+    assertMockTopupAllowed();
 
-      const { rate } = await getTomanPerUsd();
-      const fxRateTomanPerUsd = toIntegerFxRate(rate);
-      const amountMicroUsd = microToSafeInteger(
-        tomanToMicroUsd(input.amountToman, fxRateTomanPerUsd),
-        'micro_usd',
-      );
+    const { amountMicroUsd, amountToman, fxRateTomanPerUsd } = await resolveTopupAmount(input);
 
-      const { wallet, transaction } = await ctx.billingModel.mockTopupUser({
-        amountMicroUsd,
-        amountToman: input.amountToman,
-        createdByUserId: ctx.userId,
-        fxRateTomanPerUsd,
-        userId: ctx.userId,
-      });
+    const { wallet, transaction } = await ctx.billingModel.mockTopupUser({
+      amountMicroUsd,
+      amountToman,
+      createdByUserId: ctx.userId,
+      fxRateTomanPerUsd,
+      userId: ctx.userId,
+    });
 
-      await ctx.keyService.ensureUserKey(ctx.userId);
+    await ctx.keyService.ensureUserKey(ctx.userId);
 
-      return {
-        amountMicroUsd: String(amountMicroUsd),
-        amountUsd: microUsdToDecimalString(amountMicroUsd),
-        balanceMicroUsd: String(wallet.balanceMicroUsd),
-        balanceToman: String(wallet.balanceToman),
-        balanceUsd: microUsdToDecimalString(wallet.balanceMicroUsd),
-        fxRateTomanPerUsd,
-        transactionId: transaction.id,
-      };
-    }),
+    return {
+      amountMicroUsd: String(amountMicroUsd),
+      amountUsd: microUsdToDecimalString(amountMicroUsd),
+      balanceMicroUsd: String(wallet.balanceMicroUsd),
+      balanceToman: String(wallet.balanceToman),
+      balanceUsd: microUsdToDecimalString(wallet.balanceMicroUsd),
+      fxRateTomanPerUsd,
+      transactionId: transaction.id,
+    };
+  }),
 
   getMyTrial: billingProcedure.query(async ({ ctx }) => {
     const [trial, config, active] = await Promise.all([

@@ -12,6 +12,12 @@ import { Link, useNavigate, useParams } from 'react-router';
 
 import { toastAicoError } from '@/business/client/resolveAicoErrorMessage';
 import StatisticCard from '@/components/StatisticCard';
+import {
+  type FxTopupChargeField,
+  FxTopupFields,
+  type FxTopupFormValues,
+  resolveFxTopupPayload,
+} from '@/features/AicoBilling/FxTopupFields';
 import { buildPhoneVerifyRedirectUrl, isValidIranianPhoneNumber } from '@/libs/better-auth/phone';
 import { useClientDataSWR } from '@/libs/swr';
 import { lambdaClient } from '@/libs/trpc/client';
@@ -55,7 +61,8 @@ export const OrgAdminMembers = () => {
   );
   const [form] = Form.useForm<InviteForm>();
   const [teamForm] = Form.useForm<{ name: string }>();
-  const [topupForm] = Form.useForm<{ amountToman: number }>();
+  const [topupForm] = Form.useForm<FxTopupFormValues>();
+  const [topupChargeField, setTopupChargeField] = useState<FxTopupChargeField>('toman');
   const [allocForm] = Form.useForm<{ amountUsd: number; orgMemberId: string }>();
   const [modelsForm] = Form.useForm<{ modelIds: string; teamId: string }>();
   const [upgradeForm] = Form.useForm<{ name: string }>();
@@ -391,7 +398,7 @@ export const OrgAdminMembers = () => {
                   setBusy(true);
                   try {
                     await lambdaClient.organization.allocateMemberCredit.mutate({
-                      amountUsd: values.amountUsd,
+                      amountUsd: Number(values.amountUsd).toFixed(6),
                       orgId: selectedOrgId,
                       orgMemberId: values.orgMemberId,
                     });
@@ -698,24 +705,20 @@ export const OrgAdminMembers = () => {
                 <Building2Icon size={18} />
                 <Text strong>{t('org.topupTitle')}</Text>
               </Flexbox>
-              <Text type="secondary">
-                {t('wallet.fxHint', {
-                  rate: fx?.tomanPerUsd?.toLocaleString() ?? '—',
-                })}
-                {fx?.source ? ` (${fx.source})` : ''}
-              </Text>
               <Text>
                 {t('org.walletUsd')}: <Text strong>{usd(wallet?.balanceUsd)}</Text>
               </Text>
               <Form
                 form={topupForm}
-                layout="inline"
+                layout="vertical"
                 onFinish={async (values) => {
                   if (!selectedOrgId) return;
+                  const payload = resolveFxTopupPayload(values, topupChargeField);
+                  if (!payload) return;
                   setBusy(true);
                   try {
                     await lambdaClient.organization.mockOrgTopup.mutate({
-                      amountToman: values.amountToman,
+                      ...payload,
                       orgId: selectedOrgId,
                     });
                     toast.success(t('org.topupSuccess'));
@@ -728,9 +731,15 @@ export const OrgAdminMembers = () => {
                   }
                 }}
               >
-                <Form.Item name="amountToman" rules={[{ required: true }]}>
-                  <InputNumber min={1000} placeholder={t('org.amountToman')} />
-                </Form.Item>
+                <FxTopupFields
+                  chargeField={topupChargeField}
+                  form={topupForm}
+                  fxRate={fx?.tomanPerUsd}
+                  fxSource={fx?.source}
+                  tomanLabelKey="org.amountToman"
+                  usdLabelKey="org.amountUsd"
+                  onChargeFieldChange={setTopupChargeField}
+                />
                 <Button htmlType="submit" loading={busy} type="primary">
                   {t('org.topupSubmit')}
                 </Button>

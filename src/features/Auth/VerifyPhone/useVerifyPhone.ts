@@ -7,7 +7,10 @@ import {
   phoneNumber as phoneNumberApi,
   useSession,
 } from '@/libs/better-auth/auth-client';
-import { normalizeIranianPhoneNumber } from '@/libs/better-auth/phone';
+import {
+  formatIranianPhoneForDisplay,
+  normalizeIranianPhoneNumber,
+} from '@/libs/better-auth/phone';
 import { sanitizeRedirectPath } from '@/utils/onboardingRedirect';
 
 type Step = 'phone' | 'otp';
@@ -153,7 +156,7 @@ export const useVerifyPhone = ({ callbackUrl }: UseVerifyPhoneParams) => {
     handleSendOtp,
     handleVerify,
     loading,
-    phoneDisplay: phoneE164,
+    phoneDisplay: formatIranianPhoneForDisplay(phoneE164),
     resending,
     step,
   };

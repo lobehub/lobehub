@@ -13,7 +13,7 @@ const ARABIC_INDIC_DIGITS = '٠١٢٣٤٥٦٧٨٩';
 
 /** Map Eastern digits → ASCII 0-9. */
 export const toAsciiDigits = (value: string): string =>
-  value.replaceAll(/[۰-۹٠-٩]/g, (ch) => {
+  value.replaceAll(/[\u06F0-\u06F9\u0660-\u0669]/g, (ch) => {
     const persian = PERSIAN_DIGITS.indexOf(ch);
     if (persian >= 0) return String(persian);
     const arabic = ARABIC_INDIC_DIGITS.indexOf(ch);
@@ -22,7 +22,9 @@ export const toAsciiDigits = (value: string): string =>
 
 /** Strip spaces / dashes / invisible chars after digit transliteration. */
 export const stripPhoneNoise = (value: string): string =>
-  toAsciiDigits(value).replaceAll(/[\s\-()]/g, '').trim();
+  toAsciiDigits(value)
+    .replaceAll(/[\s\-()]/g, '')
+    .trim();
 
 /**
  * Normalize Iranian mobiles to E.164. Returns null when the number is not a
@@ -80,3 +82,11 @@ export const buildPhoneVerifyRedirectUrl = (callbackUrl?: string | null): string
 };
 
 export const buildTrialPhoneVerifyUrl = buildPhoneVerifyRedirectUrl;
+
+/** Display E.164 Iranian mobiles as local `09…` form in UI copy. */
+export const formatIranianPhoneForDisplay = (e164: string | null | undefined): string => {
+  if (!e164) return '';
+  const normalized = normalizeIranianPhoneNumber(e164);
+  if (!normalized) return e164;
+  return `0${normalized.slice(3)}`;
+};

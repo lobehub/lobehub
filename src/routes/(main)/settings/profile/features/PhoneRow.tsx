@@ -4,7 +4,7 @@ import { Flexbox, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { useTranslation } from 'react-i18next';
 
-import { buildTrialPhoneVerifyUrl } from '@/libs/better-auth/phone';
+import { buildTrialPhoneVerifyUrl, formatIranianPhoneForDisplay } from '@/libs/better-auth/phone';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
@@ -36,7 +36,7 @@ const PhoneRow = () => {
       }
     >
       <Flexbox gap={4}>
-        <Text>{phone || t('profile.phoneEmpty')}</Text>
+        <Text>{formatIranianPhoneForDisplay(phone) || t('profile.phoneEmpty')}</Text>
         <Text fontSize={12} type="secondary">
           {verified ? t('profile.phoneVerified') : t('profile.phoneUnverifiedActionHint')}
         </Text>
