@@ -36,12 +36,10 @@ import { useAgentStore } from '@/store/agent';
 import { useElectronStore } from '@/store/electron';
 import { useHomeStore } from '@/store/home';
 
-import {
-  buildPlatformAgencyConfig,
-  CONNECTABLE_PROVIDERS,
-  type ConnectableProvider,
-} from './providers';
-import { type ScanTarget, useAgentScan } from './useAgentScan';
+import type { ConnectableProvider, ConnectAgentProfile } from './providers';
+import { buildConnectAgentConfig, CONNECTABLE_PROVIDERS } from './providers';
+import type { ScanTarget } from './useAgentScan';
+import { useAgentScan } from './useAgentScan';
 
 const styles = createStaticStyles(({ css }) => ({
   cmd: css`
@@ -243,12 +241,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-interface AgentProfile {
-  avatar?: string;
-  description?: string;
-  title?: string;
-}
-
 interface CreatedAgent {
   agentId: string;
   locationLabel: string;
@@ -371,7 +363,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
     const [target, setTarget] = useState<ScanTarget | null>(null);
     const [selectedTypes, setSelectedTypes] = useState<HeterogeneousAgentType[]>([]);
     const [profiles, setProfiles] = useState<
-      Partial<Record<RemoteHeterogeneousAgentType, AgentProfile>>
+      Partial<Record<RemoteHeterogeneousAgentType, ConnectAgentProfile>>
     >({});
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
@@ -477,59 +469,16 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
 
     const buildCreateParams = useCallback(
       (provider: ConnectableProvider, overrides?: { description?: string; name?: string }) => {
-        const title = overrides?.name?.trim() || provider.title;
-
-        if (provider.kind === 'platform' && isRemoteHeterogeneousType(provider.type)) {
-          const profile = isRemoteHeterogeneousType(provider.type)
-            ? profiles[provider.type]
-            : undefined;
-          return {
-            config: {
-              agencyConfig: buildPlatformAgencyConfig(
-                provider.type,
-                target?.kind === 'device'
-                  ? { deviceId: target.device.deviceId, kind: 'device' }
-                  : { kind: 'local' },
-              ),
-              avatar: profile?.avatar || undefined,
-              description: (overrides?.description ?? profile?.description)?.trim() || undefined,
-              title: overrides?.name?.trim() || profile?.title || provider.title,
-            },
-            groupId,
-            visibility,
-          };
-        }
-
-        const base = {
-          avatar: provider.avatar,
-          description: overrides?.description?.trim() || undefined,
-          provider: provider.type,
-          systemRole: '',
-          title,
-        };
-
-        if (target?.kind === 'device') {
-          return {
-            config: {
-              ...base,
-              agencyConfig: {
-                boundDeviceId: target.device.deviceId,
-                executionTarget: 'device' as const,
-                heterogeneousProvider: { command: provider.command, type: provider.type },
-              },
-            },
-            groupId,
-            visibility,
-          };
-        }
-
         return {
-          config: {
-            ...base,
-            agencyConfig: {
-              heterogeneousProvider: { command: provider.command, type: provider.type },
-            },
-          },
+          config: buildConnectAgentConfig({
+            overrides,
+            profile: isRemoteHeterogeneousType(provider.type) ? profiles[provider.type] : undefined,
+            provider,
+            target:
+              target?.kind === 'device'
+                ? { deviceId: target.device.deviceId, kind: 'device' }
+                : { kind: 'local' },
+          }),
           groupId,
           visibility,
         };
@@ -554,7 +503,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
                 agentId: result.agentId,
                 locationLabel: targetLabel,
                 provider,
-                title: params.config.title ?? provider.title,
+                title: agentDisplayName(params.config, provider.title) ?? provider.title,
                 version: scanState.agents?.[provider.type]?.version,
               } satisfies CreatedAgent;
             }),

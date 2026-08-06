@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { buildPlatformAgencyConfig } from './providers';
+import {
+  buildConnectAgentConfig,
+  buildPlatformAgencyConfig,
+  getConnectableProvider,
+} from './providers';
 import { scanLocal } from './useAgentScan';
 
 const detectHeterogeneousAgentCommand = vi.hoisted(() => vi.fn());
@@ -49,6 +53,25 @@ describe('buildPlatformAgencyConfig', () => {
       boundDeviceId: 'remote-device',
       executionTarget: 'device',
       heterogeneousProvider: { type: 'hermes' },
+    });
+  });
+});
+
+describe('buildConnectAgentConfig', () => {
+  it('stores a customized label as the personal name without overwriting the platform profile', () => {
+    const provider = getConnectableProvider('hermes')!;
+
+    expect(
+      buildConnectAgentConfig({
+        overrides: { description: ' Custom description ', name: ' Research Agent ' },
+        profile: { description: 'Profile description', title: 'default' },
+        provider,
+        target: { kind: 'local' },
+      }),
+    ).toMatchObject({
+      description: 'Custom description',
+      name: 'Research Agent',
+      title: 'default',
     });
   });
 });
