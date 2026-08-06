@@ -588,6 +588,40 @@ describe('convertUsage', () => {
     expect(result.cost).toBeCloseTo(2, 10);
   });
 
+  it('should prefer OpenRouter provider-reported usage.cost over pricing estimate', () => {
+    const pricing: Pricing = {
+      units: [
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    };
+
+    const usage = {
+      completion_tokens: 500_000,
+      cost: 0.0042,
+      prompt_tokens: 1_000_000,
+      total_tokens: 1_500_000,
+    } as OpenAI.Completions.CompletionUsage & { cost: number };
+
+    const result = convertOpenAIUsage(usage, { pricing });
+
+    expect(result.cost).toBe(0.0042);
+  });
+
+  it('should keep provider-reported cost when model-bank pricing is missing', () => {
+    const usage = {
+      completion_tokens: 10,
+      cost: 0.00015,
+      prompt_tokens: 20,
+      total_tokens: 30,
+    } as OpenAI.Completions.CompletionUsage & { cost: number };
+
+    const result = convertOpenAIUsage(usage);
+
+    expect(result.cost).toBe(0.00015);
+    expect(result.totalTokens).toBe(30);
+  });
+
   it('should enrich response usage with pricing cost when pricing is provided', () => {
     const pricing: Pricing = {
       units: [

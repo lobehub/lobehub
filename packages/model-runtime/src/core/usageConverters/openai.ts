@@ -44,6 +44,29 @@ const readCacheWriteTokens = (details: CacheWriteUsageDetails | undefined): numb
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 };
 
+/**
+ * OpenRouter (and some compatible proxies) report the actual billed USD on
+ * `usage.cost`. Prefer that over model-bank estimates so the message cost chip
+ * matches wallet charge — pricing lookup often misses Aico/OpenRouter model ids.
+ */
+export const readProviderReportedCost = (usage: unknown): number | undefined => {
+  if (!usage || typeof usage !== 'object') return undefined;
+  const cost = (usage as { cost?: unknown }).cost;
+  if (typeof cost !== 'number' || !Number.isFinite(cost) || cost < 0) return undefined;
+  return cost;
+};
+
+const withPricingOrProviderCost = (
+  usage: ModelUsage,
+  pricing: Pricing | undefined,
+  providerUsage: unknown,
+): ModelUsage => {
+  const priced = withUsageCost(usage, pricing);
+  const reported = readProviderReportedCost(providerUsage);
+  if (reported === undefined) return priced;
+  return { ...priced, cost: reported };
+};
+
 const resolveOpenAIInputCacheMissTokens = (params: {
   explicitMissTokens?: number;
   inputCachedTokens?: number;
@@ -128,7 +151,7 @@ export const convertOpenAIUsage = (
 
   log('convertOpenAIUsage data(completion-api): %O', finalData);
 
-  return withUsageCost(finalData as ModelUsage, payload?.pricing);
+  return withPricingOrProviderCost(finalData as ModelUsage, payload?.pricing, usage);
 };
 
 export const convertOpenAIResponseUsage = (
@@ -194,7 +217,8 @@ export const convertOpenAIResponseUsage = (
 
   log('convertOpenAIResponseUsage data(response-api): %O', finalData);
 
-  return withUsageCost(finalData as ModelUsage, payload?.pricing); // Cast because we've built it to match
+  // Cast because we've built it to match; prefer provider-reported cost when present.
+  return withPricingOrProviderCost(finalData as ModelUsage, payload?.pricing, usage);
 };
 
 export const convertOpenAIImageUsage = (
