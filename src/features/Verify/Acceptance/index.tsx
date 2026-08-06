@@ -1847,7 +1847,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
               containerMaxWidth={'100%'}
               open={ledgerExpand}
               placement={'right'}
-              styles={{ body: { padding: 0 } }}
+              styles={{ bodyContent: { padding: 0 } }}
               width={'min(340px, 88vw)'}
               onClose={() => setLedgerExpand(false)}
             >
@@ -1909,15 +1909,13 @@ const AcceptancePage = memo<AcceptancePageProps>(
           so no extra close button here (two would overlap). */}
         {showHistory && (
           <Drawer
-            destroyOnHidden
             noHeader
             containerMaxWidth={'100%'}
             open={reportRound !== null}
             placement={'right'}
             width={'min(960px, 92vw)'}
             styles={{
-              body: { height: '100%', padding: 0 },
-              bodyContent: { height: '100%', minHeight: 0, overflow: 'hidden' },
+              bodyContent: { height: '100%', minHeight: 0, overflow: 'hidden', padding: 0 },
             }}
             onClose={() => openReport(null)}
           >
