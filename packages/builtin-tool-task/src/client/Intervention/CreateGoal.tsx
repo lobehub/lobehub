@@ -15,14 +15,14 @@ import { Button } from '@lobehub/ui/base-ui';
 import { InputNumber } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronRight, Plus, Trash2 } from 'lucide-react';
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { CreateGoalParams, GoalCriterionDraft } from '../../types';
 
 const styles = createStaticStyles(({ css }) => ({
   criterion: css`
-    padding-block: 7px;
+    padding-block: 3px;
     padding-inline: 10px;
 
     & + & {
@@ -35,7 +35,10 @@ const styles = createStaticStyles(({ css }) => ({
   header: css`
     position: sticky;
     z-index: 2;
-    inset-block-start: 0;
+
+    /* The intervention scroller carries 8px top padding; sticky pins below it
+      and lets content bleed through the strip. Pin above it instead. */
+    inset-block-start: -8px;
 
     padding-block: 0 6px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
@@ -51,6 +54,11 @@ const styles = createStaticStyles(({ css }) => ({
   list: css`
     overflow: hidden;
     padding: 0;
+  `,
+  criterionTitle: css`
+    padding-block: 4px;
+    padding-inline: 0;
+    font-size: 13px;
   `,
   optional: css`
     flex: none;
@@ -164,18 +172,32 @@ const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
         return next;
       });
 
-    // The instruction lives in the rich editor, not in args — folding it back
-    // on every keystroke would rerender the card and fight the editor's own
-    // state. It merges into args once, right before approval submits them.
+    // The instruction lives in the rich editor; args carry its persisted
+    // draft. The editor mounts once from the persisted value (a changing
+    // `content` prop would reset it mid-edit), while edits flow back through
+    // a debounced onArgsChange — the same DB-backed draft path every other
+    // field uses, so a refresh loses at most the debounce window. The
+    // before-approve flush closes even that window.
+    const [initialInstruction] = useState(args.instruction);
+    const persistTimerRef = useRef<ReturnType<typeof setTimeout>>(null);
+
     const saveInstruction = useCallback(async () => {
+      if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
       if (!editor) return;
       const markdown = String(editor.getDocument('markdown') ?? '');
       await onArgsChange?.({ ...args, instruction: markdown });
     }, [editor, onArgsChange, args]);
+    const saveInstructionRef = useRef(saveInstruction);
+    saveInstructionRef.current = saveInstruction;
+
+    const handleInstructionChange = useCallback(() => {
+      if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = setTimeout(() => void saveInstructionRef.current(), 800);
+    }, []);
 
     useEffect(
-      () => registerBeforeApprove?.('createGoal', saveInstruction),
-      [registerBeforeApprove, saveInstruction],
+      () => registerBeforeApprove?.('createGoal', () => saveInstructionRef.current()),
+      [registerBeforeApprove],
     );
 
     return (
@@ -196,7 +218,7 @@ const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
         >
           <Flexbox className={styles.instructionEditor}>
             <Editor
-              content={args.instruction}
+              content={initialInstruction}
               editor={editor}
               type={'markdown'}
               plugins={[
@@ -207,6 +229,7 @@ const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
                 ReactListPlugin,
                 ReactTablePlugin,
               ]}
+              onTextChange={handleInstructionChange}
             />
           </Flexbox>
         </Section>
@@ -249,6 +272,7 @@ const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
                         C{index + 1}
                       </Text>
                       <Input
+                        className={styles.criterionTitle}
                         style={{ flex: 1 }}
                         value={criterion.title}
                         variant={'borderless'}
@@ -309,10 +333,10 @@ const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
               })}
             </Block>
             <Flexbox horizontal>
-              <ActionIcon
-                icon={Plus}
+              <Button
+                icon={<Icon icon={Plus} />}
                 size={'small'}
-                title={t('builtins.lobe-task.goal.addCriterion')}
+                type={'text'}
                 onClick={() =>
                   patch({
                     criteria: [
@@ -321,7 +345,9 @@ const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
                     ],
                   })
                 }
-              />
+              >
+                {t('builtins.lobe-task.goal.addCriterion')}
+              </Button>
             </Flexbox>
           </Flexbox>
         </Section>
