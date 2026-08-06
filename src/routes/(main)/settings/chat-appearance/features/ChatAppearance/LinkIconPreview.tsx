@@ -4,9 +4,12 @@ import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { Trans } from 'react-i18next';
 
-import { OFFICIAL_SITE } from '@/const/url';
+import { OFFICIAL_DOMAIN, OFFICIAL_SITE } from '@/const/url';
 import { type LobeLinkKind } from '@/features/Conversation/Markdown/plugins/Link/parse';
 import LinkRender from '@/features/Conversation/Markdown/plugins/Link/Render';
+
+const SAMPLE_GITHUB_REPO = 'Panafor-Ai-Team/Aico';
+const SAMPLE_GITHUB_HREF = `https://github.com/${SAMPLE_GITHUB_REPO}`;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   bubble: css`
@@ -50,19 +53,13 @@ const LinkIconPreview = memo(() => (
       i18nKey="settingChatAppearance.linkIcon.previewMessage"
       ns="setting"
       components={{
-        repo: (
-          <SampleLink
-            href="https://github.com/lobehub/lobehub"
-            kind="github"
-            label="lobehub/lobehub"
-          />
-        ),
+        repo: <SampleLink href={SAMPLE_GITHUB_HREF} kind="github" label={SAMPLE_GITHUB_REPO} />,
         site: (
           <SampleLink
-            domain="lobehub.com"
+            domain={OFFICIAL_DOMAIN}
             href={OFFICIAL_SITE}
             kind="generic"
-            label="lobehub.com"
+            label={OFFICIAL_DOMAIN}
           />
         ),
       }}

@@ -1,5 +1,6 @@
 'use client';
 
+import { BRANDING_NAME } from '@lobechat/business-const';
 import {
   Flexbox,
   FormGroup,
@@ -24,6 +25,9 @@ import ChatTransitionPreview from './ChatTransitionPreview';
 import HighlighterPreview from './HighlighterPreview';
 import LinkIconPreview from './LinkIconPreview';
 import MermaidPreview from './MermaidPreview';
+
+const brandedThemeLabel = (id: string, displayName: string) =>
+  id === 'lobe-theme' ? `${BRANDING_NAME} Theme` : displayName;
 
 const ChatAppearance = memo(() => {
   const { t } = useTranslation('setting');
@@ -177,7 +181,7 @@ const ChatAppearance = memo(() => {
             <Select
               value={general.highlighterTheme}
               options={highlighterThemes.map((item) => ({
-                label: item.displayName,
+                label: brandedThemeLabel(item.id, item.displayName),
                 value: item.id,
               }))}
               style={{
@@ -201,7 +205,7 @@ const ChatAppearance = memo(() => {
             <Select
               value={general.mermaidTheme}
               options={mermaidThemes.map((item) => ({
-                label: item.displayName,
+                label: brandedThemeLabel(item.id, item.displayName),
                 value: item.id,
               }))}
               style={{
