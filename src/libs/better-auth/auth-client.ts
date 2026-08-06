@@ -12,6 +12,7 @@ import { type auth } from '@/auth';
 
 export const {
   changeEmail,
+  getSession,
   linkSocial,
   oauth2,
   accountInfo,

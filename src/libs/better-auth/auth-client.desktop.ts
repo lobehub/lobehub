@@ -46,6 +46,7 @@ function lazyProp(key: string): any {
 }
 
 export const changeEmail = lazyProp('changeEmail');
+export const getSession = lazyProp('getSession');
 export const linkSocial = lazyProp('linkSocial');
 export const oauth2 = lazyProp('oauth2');
 export const accountInfo = lazyProp('accountInfo');

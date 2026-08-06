@@ -26,6 +26,7 @@
   "errors.TRIAL_PHONE_ALREADY_USED": "دوره آزمایشی با این شماره قبلاً استفاده شده است.",
   "errors.TRIAL_PHONE_BLOCKED": "این شماره برای دوره آزمایشی مجاز نیست.",
   "errors.TRIAL_REQUEST_LIMIT": "سقف درخواست‌های دوره آزمایشی تمام شده است.",
+  "errors.verifyPhoneAction": "تأیید موبایل",
   "invite.accept": "پذیرش دعوت‌نامه",
   "invite.accepted": "به سازمان پیوستید",
   "invite.description": "پیوستن به {{org}} با نقش {{role}}",
@@ -127,6 +128,7 @@
   "org.usageChart": "مصرف اعضا",
   "org.usageChartHint": "همگام‌سازی‌شده از مصرف توکن مدیریت‌شده (باقی‌مانده سقف OpenRouter).",
   "org.usageEmpty": "هنوز مصرفی ثبت نشده. برای شروع ردیابی، اعتبار تخصیص دهید.",
+  "org.verifyPhone": "تأیید شماره موبایل",
   "org.walletToman": "کیف پول سازمان (تومان)",
   "org.walletUsd": "تخصیص‌نیافته (دلار)",
   "platform.activate": "فعال‌سازی",
@@ -227,5 +229,7 @@
   "wallet.trialTitle": "دوره آزمایشی رایگان",
   "wallet.trialUsed": "دوره آزمایشی این حساب قبلاً استفاده شده است",
   "wallet.upgradeDesc": "هم‌تیمی‌ها را دعوت کنید و اعتبار شرکت را تقسیم کنید.",
-  "wallet.upgradeTitle": "حساب شرکتی"
+  "wallet.upgradeTitle": "حساب شرکتی",
+  "wallet.verifyPhone": "تأیید شماره موبایل",
+  "wallet.verifyPhoneHint": "یک‌بار تأیید کنید؛ سپس می‌توانید دوره آزمایشی را اینجا فعال کنید."
 }

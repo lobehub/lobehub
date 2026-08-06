@@ -34,6 +34,7 @@
   "errors.TRIAL_PHONE_ALREADY_USED": "该手机号已使用过试用。",
   "errors.TRIAL_PHONE_BLOCKED": "该手机号不符合试用条件。",
   "errors.TRIAL_REQUEST_LIMIT": "试用请求次数已达上限。",
+  "errors.verifyPhoneAction": "验证手机号",
   "invite.accept": "接受邀请",
   "invite.accepted": "你已加入组织",
   "invite.description": "以 {{role}} 身份加入 {{org}}",
@@ -135,6 +136,7 @@
   "org.usageChart": "成员消费",
   "org.usageChartHint": "来自托管令牌用量同步。",
   "org.usageEmpty": "暂无成员用量。先分配额度即可开始追踪。",
+  "org.verifyPhone": "验证手机号",
   "org.walletToman": "组织钱包（toman）",
   "org.walletUsd": "未分配（USD）",
   "platform.activate": "启用",
@@ -245,5 +247,7 @@
   "wallet.trialTitle": "免费试用",
   "wallet.trialUsed": "此账户已使用过试用",
   "wallet.upgradeDesc": "邀请同事并拆分公司额度。",
-  "wallet.upgradeTitle": "公司账户"
+  "wallet.upgradeTitle": "公司账户",
+  "wallet.verifyPhone": "验证手机号",
+  "wallet.verifyPhoneHint": "验证一次后，即可在此激活试用。"
 }

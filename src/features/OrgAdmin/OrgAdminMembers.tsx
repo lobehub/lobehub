@@ -12,9 +12,11 @@ import { Link, useNavigate, useParams } from 'react-router';
 
 import { toastAicoError } from '@/business/client/resolveAicoErrorMessage';
 import StatisticCard from '@/components/StatisticCard';
-import { isValidIranianPhoneNumber } from '@/libs/better-auth/phone';
+import { buildPhoneVerifyRedirectUrl, isValidIranianPhoneNumber } from '@/libs/better-auth/phone';
 import { useClientDataSWR } from '@/libs/swr';
 import { lambdaClient } from '@/libs/trpc/client';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   grid: css`
@@ -48,6 +50,9 @@ export const OrgAdminMembers = () => {
   const { orgId: orgIdParam } = useParams<{ orgId?: string }>();
   const [selectedOrgId, setSelectedOrgId] = useState(orgIdParam || '');
   const [tab, setTab] = useState('overview');
+  const phoneVerified = useUserStore((s) =>
+    Boolean(userProfileSelectors.userProfile(s)?.phoneNumberVerified),
+  );
   const [form] = Form.useForm<InviteForm>();
   const [teamForm] = Form.useForm<{ name: string }>();
   const [topupForm] = Form.useForm<{ amountToman: number }>();
@@ -165,7 +170,9 @@ export const OrgAdminMembers = () => {
                   setSelectedOrgId(org.id);
                   navigate(`/org/${org.id}/members`);
                 } catch (err) {
-                  toastAicoError(err, t, 'org.upgradeFailed');
+                  toastAicoError(err, t, 'org.upgradeFailed', {
+                    phoneVerifyCallbackUrl: '/org',
+                  });
                 } finally {
                   setBusy(false);
                 }
@@ -174,13 +181,26 @@ export const OrgAdminMembers = () => {
               <Form.Item label={t('org.companyName')} name="name" rules={[{ required: true }]}>
                 <Input placeholder={t('org.companyNamePlaceholder')} />
               </Form.Item>
-              <Button htmlType="submit" loading={busy} type="primary">
-                {t('org.upgradeSubmit')}
-              </Button>
+              {phoneVerified ? (
+                <Button htmlType="submit" loading={busy} type="primary">
+                  {t('org.upgradeSubmit')}
+                </Button>
+              ) : (
+                <Flexbox gap={8}>
+                  <Text fontSize={12} type="secondary">
+                    {t('org.upgradePhoneHint')}
+                  </Text>
+                  <Button
+                    type="primary"
+                    onClick={() => {
+                      window.location.assign(buildPhoneVerifyRedirectUrl('/org'));
+                    }}
+                  >
+                    {t('org.verifyPhone')}
+                  </Button>
+                </Flexbox>
+              )}
             </Form>
-            <Text fontSize={12} type="secondary">
-              {t('org.upgradePhoneHint')}
-            </Text>
           </Flexbox>
         </Block>
       </Flexbox>

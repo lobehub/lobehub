@@ -34,6 +34,7 @@
   "errors.TRIAL_PHONE_ALREADY_USED": "Trial has already been used with this phone number.",
   "errors.TRIAL_PHONE_BLOCKED": "This phone number is not eligible for trial.",
   "errors.TRIAL_REQUEST_LIMIT": "Trial request limit has been reached.",
+  "errors.verifyPhoneAction": "Verify phone",
   "invite.accept": "Accept invitation",
   "invite.accepted": "You joined the organization",
   "invite.description": "Join {{org}} as {{role}}",
@@ -135,6 +136,7 @@
   "org.usageChart": "Member spend",
   "org.usageChartHint": "Synced from managed token usage (OpenRouter limit remaining).",
   "org.usageEmpty": "No member usage yet. Allocate credit to start tracking.",
+  "org.verifyPhone": "Verify phone number",
   "org.walletToman": "Org wallet (toman)",
   "org.walletUsd": "Unallocated (USD)",
   "platform.activate": "Activate",
@@ -245,5 +247,7 @@
   "wallet.trialTitle": "Free trial",
   "wallet.trialUsed": "Trial already used on this account",
   "wallet.upgradeDesc": "Invite teammates and split company credits.",
-  "wallet.upgradeTitle": "Company account"
+  "wallet.upgradeTitle": "Company account",
+  "wallet.verifyPhone": "Verify phone number",
+  "wallet.verifyPhoneHint": "Verify once, then you can activate the trial here."
 }

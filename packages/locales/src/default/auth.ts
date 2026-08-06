@@ -178,6 +178,8 @@ export default {
   'betterAuth.verifyPhone.errors.invalidOtp': 'Incorrect code. Please try again.',
   'betterAuth.verifyPhone.errors.invalidPhone': 'Please enter a valid Iranian mobile number.',
   'betterAuth.verifyPhone.errors.otpExpired': 'This code has expired. Request a new one.',
+  'betterAuth.verifyPhone.alreadyVerified':
+    'This phone number is already verified on your account.',
   'betterAuth.verifyPhone.errors.phoneExists':
     'This phone number is already linked to another account.',
   'betterAuth.verifyPhone.errors.rateLimited':
@@ -291,9 +293,11 @@ export default {
   'profile.emailPlaceholder': 'new-email@example.com',
   'profile.phone': 'Phone number',
   'profile.phoneEmpty': 'Not set',
+  'profile.phoneUnverifiedActionHint':
+    'Tap Verify to send a code — then trial and company features unlock.',
   'profile.phoneUnverifiedHint': 'Verify your phone in settings to activate trial credits.',
   'profile.phoneVerified': 'Verified — trial activation available',
-  'profile.verifyPhoneForTrial': 'Verify for trial',
+  'profile.verifyPhoneForTrial': 'Verify phone',
   'profile.fullName': 'Fullname',
   'profile.interests': 'Interests',
   'profile.password': 'Password',
