@@ -4,13 +4,13 @@ import { Flexbox } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
-import { useFolderPath } from '@/routes/(main)/resource/features/hooks/useFolderPath';
-import { useResourceManagerUrlSync } from '@/routes/(main)/resource/features/hooks/useResourceManagerUrlSync';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
+import { useFolderPath } from '@/features/ResourceManager/hooks/useFolderPath';
+import { useResourceManagerUrlSync } from '@/features/ResourceManager/hooks/useResourceManagerUrlSync';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import {
   getResourceQueryVisibility,
   sortFileList,
-} from '@/routes/(main)/resource/features/store/selectors';
+} from '@/features/ResourceManager/store/selectors';
 import { useFetchResources, useResourceStore } from '@/store/file/slices/resource/hooks';
 
 import { KnowledgeBaseListProvider } from '../KnowledgeBaseListProvider';

@@ -5,10 +5,10 @@ import { ArrowUpIcon, PlusIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { useCreateNewModal } from '@/features/LibraryModal';
+import { useCurrentFolderId } from '@/features/ResourceManager/hooks/useCurrentFolderId';
 import { useTopLevelFileUpload } from '@/features/ResourceManager/hooks/useTopLevelFileUpload';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { usePermission } from '@/hooks/usePermission';
-import { useCurrentFolderId } from '@/routes/(main)/resource/features/hooks/useCurrentFolderId';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { useFileStore } from '@/store/file';
 
 const ICON_SIZE = 80;

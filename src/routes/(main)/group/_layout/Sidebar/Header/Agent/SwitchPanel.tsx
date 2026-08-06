@@ -2,10 +2,10 @@ import { Flexbox, Popover } from '@lobehub/ui';
 import { type PropsWithChildren } from 'react';
 import React, { memo, Suspense } from 'react';
 
+import List from '@/features/HomeSidebar/Body/Agent/List';
+import { AgentModalProvider } from '@/features/HomeSidebar/Body/Agent/ModalProvider';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import List from '@/routes/(main)/home/_layout/Body/Agent/List';
-import { AgentModalProvider } from '@/routes/(main)/home/_layout/Body/Agent/ModalProvider';
 
 const SwitchPanel = memo<PropsWithChildren>(({ children }) => {
   const navigate = useWorkspaceAwareNavigate();

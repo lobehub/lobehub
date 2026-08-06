@@ -1,8 +1,8 @@
 import { useCallback } from 'react';
 
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 
 export interface UseFileItemClickOptions {
   id: string;

@@ -22,11 +22,11 @@ vi.mock('@/hooks/usePermission', () => ({
   usePermission: () => ({ allowed: canCreate, reason: '' }),
 }));
 
-vi.mock('@/routes/(main)/resource/features/hooks/useCurrentFolderId', () => ({
+vi.mock('@/features/ResourceManager/hooks/useCurrentFolderId', () => ({
   useCurrentFolderId: () => undefined,
 }));
 
-vi.mock('@/routes/(main)/resource/features/store', () => ({
+vi.mock('@/features/ResourceManager/store', () => ({
   useResourceManagerStore: (selector: (state: { libraryId?: string }) => unknown) =>
     selector({ libraryId }),
 }));

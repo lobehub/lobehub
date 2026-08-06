@@ -4,7 +4,7 @@ import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useCategory } from '@/routes/(main)/settings/hooks/useCategory';
+import { useCategory } from '@/features/Settings/hooks/useCategory';
 import { SettingsTabs } from '@/store/global/initialState';
 import {
   featureFlagsSelectors,

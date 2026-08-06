@@ -1,8 +1,8 @@
 import { useCallback } from 'react';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import { useCurrentFolderId } from '@/routes/(main)/resource/features/hooks/useCurrentFolderId';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
+import { useCurrentFolderId } from '@/features/ResourceManager/hooks/useCurrentFolderId';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { useFileStore } from '@/store/file';
 
 /**

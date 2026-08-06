@@ -1,6 +1,6 @@
 import { memo } from 'react';
 
-import { isExplorerItemSelected } from '@/routes/(main)/resource/features/store/selectors';
+import { isExplorerItemSelected } from '@/features/ResourceManager/store/selectors';
 import { type FileListItem } from '@/types/files';
 
 import MasonryFileItem from '.';

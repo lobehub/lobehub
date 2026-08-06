@@ -15,9 +15,9 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner';
 import RepoIcon from '@/components/LibIcon';
 import { useKnowledgeBaseListContext } from '@/features/ResourceManager/components/KnowledgeBaseListProvider';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { openWorkspaceDeleteAllModal } from '@/features/WorkspaceDeleteAllModal';
 import { usePermission } from '@/hooks/usePermission';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { useKnowledgeBaseStore } from '@/store/library';
 
 import ActionIconWithChevron from './ActionIconWithChevron';
