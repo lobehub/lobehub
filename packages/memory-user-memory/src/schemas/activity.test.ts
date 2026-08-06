@@ -30,4 +30,28 @@ describe('ActivityMemoryItemSchema', () => {
 
     expect(result.success).toBe(true);
   });
+
+  /**
+   * @example
+   * A context item must not pass validation as an activity item.
+   */
+  it('rejects a non-activity memory type', () => {
+    const result = ActivityMemoryItemSchema.safeParse({
+      details: 'The user completed a planned activity.',
+      memoryCategory: 'work',
+      memoryType: 'context',
+      summary: 'The user completed an activity.',
+      tags: ['activity'],
+      title: 'Completed an activity',
+      withActivity: {
+        narrative: 'The activity was completed.',
+      },
+    });
+
+    /**
+     * @example
+     * `memoryType: "context"` produces an unsuccessful parse.
+     */
+    expect(result.success).toBe(false);
+  });
 });
