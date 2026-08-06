@@ -36,7 +36,7 @@ const AgentHeader = memo(() => {
   return (
     <Flexbox
       gap={16}
-      paddingBlock={'16px 0'}
+      paddingBlock={'0 16px'}
       style={{
         cursor: 'default',
         marginInline: -16,
