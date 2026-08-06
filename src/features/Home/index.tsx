@@ -56,12 +56,17 @@ const GREETING_LANE = COLLAPSED_CONTENT_OFFSET * 2 + PORTRAIT_LANE + BUBBLE_MAX_
 const BUBBLE_INLINE_MIN = 1080;
 const MINIMAL_STACK_GAP = 24;
 /**
- * The greeting's line box — 22px at a 1.4 line-height, from HomeHeader. Its
- * height plus the gap is what the block must shed below itself to land the
- * composer, not the pair's midpoint, on the center of the lane.
+ * The minimal header stacks the agent switcher (24px avatar + 2px paddings,
+ * from AgentSelect) over the greeting line (22px × 1.4, from HomeHeader) with
+ * an 8px gap. That stack's height plus the gap below it is what the block must
+ * shed under itself to land the composer, not the stack's midpoint, on the
+ * center of the lane.
  */
 const MINIMAL_GREETING_LINE = Math.round(22 * 1.4);
-const MINIMAL_LIFT = MINIMAL_GREETING_LINE + MINIMAL_STACK_GAP;
+const MINIMAL_SWITCHER_ROW = 28;
+const MINIMAL_HEADER_GAP = 8;
+const MINIMAL_HEADER_HEIGHT = MINIMAL_SWITCHER_ROW + MINIMAL_HEADER_GAP + MINIMAL_GREETING_LINE;
+const MINIMAL_LIFT = MINIMAL_HEADER_HEIGHT + MINIMAL_STACK_GAP;
 
 const styles = createStaticStyles(({ css }) => ({
   // Both rows size to their content and the page scrolls around the whole grid

@@ -1,5 +1,5 @@
 import { Flexbox, Text } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -25,12 +25,6 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: 22px;
     line-height: 1.4;
     letter-spacing: -0.01em;
-  `,
-  // The measure is the layout's answer to the portrait, which the centered
-  // block does not have — so the headline runs to the block's own width.
-  greetingCentered: css`
-    max-width: none;
-    text-align: center;
   `,
   toolbar: css`
     width: 100%;
@@ -60,17 +54,19 @@ const HomeHeader = memo<HomeHeaderProps>(({ centered }) => {
     : t(`dashboard.greeting.${greetingKey}Guest`);
 
   return (
-    <Flexbox gap={16} justify={'center'}>
-      {!centered && (
+    // Minimal mode keeps the full layout's stacking order — the switcher names
+    // who speaks, the greeting answers below — but drops the toolbar chrome and
+    // its 48px lane, so the pair reads as one compact block flush with the
+    // composer. The layout's lift math (MINIMAL_LIFT) counts on these heights.
+    <Flexbox gap={centered ? 8 : 16} justify={'center'}>
+      {centered ? (
+        <AgentSelect />
+      ) : (
         <Flexbox horizontal align={'center'} className={styles.toolbar} gap={16}>
           <AgentSelect />
         </Flexbox>
       )}
-      <Text
-        as={'h1'}
-        className={cx(styles.greeting, centered && styles.greetingCentered)}
-        weight={600}
-      >
+      <Text as={'h1'} className={styles.greeting} weight={600}>
         {greeting}
       </Text>
     </Flexbox>
