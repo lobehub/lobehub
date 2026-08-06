@@ -17,6 +17,13 @@ describe('isHeteroStatusGuideErrorData', () => {
     expect(
       isHeteroStatusGuideErrorData({
         agentType: 'codex',
+        code: 'working_directory_not_found',
+        message: 'Working directory does not exist: /tmp/gone',
+      }),
+    ).toBe(true);
+    expect(
+      isHeteroStatusGuideErrorData({
+        agentType: 'codex',
         code: 'rate_limit',
         message: 'usage limit reached',
       }),
@@ -63,6 +70,20 @@ describe('isHeteroStatusGuideErrorData', () => {
 });
 
 describe('classifyHeteroProcessFailure', () => {
+  it('classifies a preflight working-directory failure separately from a missing CLI', () => {
+    const result = classifyHeteroProcessFailure({
+      agentType: 'codex',
+      detail: 'Working directory does not exist: /tmp/gone',
+      errnoCode: 'HETERO_WORKING_DIRECTORY_NOT_FOUND',
+    });
+
+    expect(result).toMatchObject({
+      agentType: 'codex',
+      code: 'working_directory_not_found',
+      message: 'Working directory does not exist: /tmp/gone',
+    });
+  });
+
   it('classifies a raw spawn ErrnoException code as cli_not_found', () => {
     const result = classifyHeteroProcessFailure({
       agentType: 'claude-code',

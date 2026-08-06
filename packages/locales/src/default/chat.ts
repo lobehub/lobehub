@@ -798,6 +798,12 @@ export default {
   'codexInstallGuide.menuNotification.title': 'Codex CLI not found',
   'codexInstallGuide.reason': 'LobeHub could not start Codex: {{message}}',
   'codexInstallGuide.title': 'Install Codex CLI',
+  'workingDirectoryGuide.actions.retry': 'Retry',
+  'workingDirectoryGuide.desc':
+    'The working directory saved for this conversation no longer exists.',
+  'workingDirectoryGuide.hint':
+    'Choose an existing folder from the working directory selector, then retry this message.',
+  'workingDirectoryGuide.title': 'Working directory unavailable',
   'opencodeInstallGuide.actions.openDocs': 'Open Install Guide',
   'opencodeInstallGuide.actions.openSystemTools': 'Open System Tools',
   'opencodeInstallGuide.afterInstall':

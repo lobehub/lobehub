@@ -404,6 +404,16 @@ export default class HeterogeneousAgentCtr {
     });
   }
 
+  private buildWorkingDirectoryMissingError(session: AgentSession): HeterogeneousAgentSessionError {
+    return {
+      agentType: session.agentType,
+      code: HeterogeneousAgentSessionErrorCode.WorkingDirectoryNotFound,
+      command: this.resolveSessionCommand(session),
+      message: `Working directory does not exist: ${session.cwd}`,
+      workingDirectory: session.cwd,
+    };
+  }
+
   private buildCliAuthRequiredError(
     session: AgentSession,
     stderr: string,
@@ -492,6 +502,8 @@ export default class HeterogeneousAgentCtr {
 
   private getSessionErrorPayload(error: unknown, session: AgentSession): SessionErrorPayload {
     if (typeof error === 'object' && error && 'code' in error && error.code === 'ENOENT') {
+      if (!existsSync(session.cwd)) return this.buildWorkingDirectoryMissingError(session);
+
       const cliMissingError = this.buildCliMissingError(session);
       if (cliMissingError) return cliMissingError;
     }
@@ -551,6 +563,8 @@ export default class HeterogeneousAgentCtr {
   private async getSpawnPreflightError(
     session: AgentSession,
   ): Promise<HeterogeneousAgentSessionError | undefined> {
+    if (!existsSync(session.cwd)) return this.buildWorkingDirectoryMissingError(session);
+
     const defaultCommand = getHeterogeneousAgentConfigOrThrow(session.agentType).defaultCommand;
 
     const command = this.resolveSessionCommand(session);

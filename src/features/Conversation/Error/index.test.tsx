@@ -453,6 +453,28 @@ describe('ErrorMessageExtra', () => {
     expect(screen.getByText('guide:claude-code:rate_limit')).toBeInTheDocument();
   });
 
+  it('renders the working-directory guide instead of the CLI install guide', () => {
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.undefined' }}
+        data={{
+          error: {
+            body: {
+              agentType: 'codex',
+              code: HeterogeneousAgentSessionErrorCode.WorkingDirectoryNotFound,
+              message: 'Working directory does not exist: /tmp/deleted-worktree',
+              workingDirectory: '/tmp/deleted-worktree',
+            },
+            message: 'Working directory does not exist: /tmp/deleted-worktree',
+          } as any,
+          id: 'msg-working-directory',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('guide:codex:working_directory_not_found')).toBeInTheDocument();
+  });
+
   it('dismisses only the current heterogeneous error field', () => {
     render(
       <ErrorMessageExtra
