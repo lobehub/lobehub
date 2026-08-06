@@ -206,9 +206,9 @@ export class AiInfraRepos {
         injectSearchSettings(item.providerId, { ...item, type: normalizeAiModelType(item.type) }),
       );
 
-    return [...builtinModels, ...appendedUserModels].sort(
-      (a, b) => (a?.sort ?? Infinity) - (b?.sort ?? Infinity),
-    ) as EnabledAiModel[];
+    return [...builtinModels, ...appendedUserModels]
+      .filter((model) => isAiModelVisible(model) && !isFreeAiModel(model))
+      .sort((a, b) => (a?.sort ?? Infinity) - (b?.sort ?? Infinity)) as EnabledAiModel[];
   };
 
   getAiProviderRuntimeState = async (

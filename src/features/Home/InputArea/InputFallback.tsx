@@ -45,6 +45,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   textarea: css`
     resize: none;
 
+    unicode-bidi: plaintext;
     display: block;
     flex: 1;
 
@@ -105,6 +106,7 @@ const InputFallback = memo<InputFallbackProps>(
             autoFocus
             aria-label={placeholder}
             className={styles.textarea}
+            dir="auto"
             placeholder={placeholder}
             value={value}
             onChange={handleChange}

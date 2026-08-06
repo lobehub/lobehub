@@ -58,7 +58,11 @@ import { useMentionCategories } from './useMentionCategories';
 
 const className = cx(
   css`
+    /* Per-line first-strong direction for soft breaks; Lexical sets dir per paragraph. */
+    unicode-bidi: plaintext;
+
     p {
+      unicode-bidi: plaintext;
       margin-block-end: 0;
     }
   `,
