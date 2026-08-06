@@ -16,7 +16,7 @@ import { RouteVariants } from '@/utils/server/routeVariants';
 
 export function generateStaticParams() {
   const mobileOptions = isDesktop ? [false] : [true, false];
-  const staticLocales: Locales[] = ['en-US', 'zh-CN'];
+  const staticLocales: Locales[] = ['fa-IR', 'en-US'];
 
   const variants: { variants: string }[] = [];
 

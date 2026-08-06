@@ -2,6 +2,8 @@ import i18next from 'i18next';
 import resourcesToBackend from 'i18next-resources-to-backend';
 import { initReactI18next } from 'react-i18next';
 
+import faCommon from '@/../locales/fa-IR/common.json';
+import faError from '@/../locales/fa-IR/error.json';
 import { DEFAULT_LANG } from '@/const/locale';
 import defaultCommon from '@/locales/default/common';
 import defaultError from '@/locales/default/error';
@@ -9,9 +11,17 @@ import { normalizeLocale } from '@/locales/resources';
 import { unwrapESMModule } from '@/utils/esm/unwrapESMModule';
 import { loadI18nNamespaceModule } from '@/utils/i18n/loadI18nNamespaceModule';
 
+const mergeNamespace = (
+  fallbackResources: Record<string, unknown>,
+  localeResources: Record<string, unknown>,
+) => ({
+  ...fallbackResources,
+  ...localeResources,
+});
+
 const defaultResources = {
-  common: defaultCommon,
-  error: defaultError,
+  common: mergeNamespace(defaultCommon, faCommon),
+  error: mergeNamespace(defaultError, faError),
 };
 
 const loadWorkbenchNamespace = async (lng: string, ns: string) => {

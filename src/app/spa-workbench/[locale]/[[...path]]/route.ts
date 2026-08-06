@@ -10,7 +10,7 @@ import { getServerGlobalConfig } from '@/server/globalConfig';
 import { type SPAClientEnv, type SPAServerConfig } from '@/types/spaServerConfig';
 
 export function generateStaticParams() {
-  const staticLocales: Locales[] = ['en-US', 'zh-CN'];
+  const staticLocales: Locales[] = ['fa-IR', 'en-US'];
 
   return staticLocales.map((locale) => ({ locale }));
 }

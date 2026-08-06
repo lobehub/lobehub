@@ -8,6 +8,7 @@ import { Component, type CSSProperties, lazy, memo, type PropsWithChildren, Susp
 
 import { LobeAnalyticsProviderWrapper } from '@/components/Analytics/LobeAnalyticsProviderWrapper';
 import { DragUploadProvider } from '@/components/DragUploadZone/DragUploadProvider';
+import { DEFAULT_LANG } from '@/const/locale';
 import { isDesktop } from '@/const/version';
 import { useDevDockMounted } from '@/hooks/useDevDockMounted';
 import AuthProvider from '@/layout/AuthProvider';
@@ -75,7 +76,7 @@ const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
   const postRenderReady = usePostRenderReady();
   const serverConfig: SPAServerConfig | undefined = window.__SERVER_CONFIG__;
 
-  const locale = document.documentElement.lang || 'en-US';
+  const locale = document.documentElement.lang || DEFAULT_LANG;
   const isMobile =
     (serverConfig?.isMobile ?? typeof __MOBILE__ !== 'undefined') ? __MOBILE__ : false;
 

@@ -41,7 +41,6 @@ describe('createAuthI18n', () => {
   it('boots with Persian when document lang is already fa-IR', async () => {
     const { init, instance } = createAuthI18n('fa-IR');
     await init({ initAsync: false });
-    await instance.reloadResources(['fa-IR'], ['auth']);
 
     expect(instance.t('betterAuth.verifyPhone.title', { ns: 'auth' })).toBe(
       'فعال‌سازی دوره آزمایشی — تأیید موبایل',

@@ -26,41 +26,48 @@ describe('parseBrowserLanguage', () => {
     return headers;
   };
 
-  describe('when DEFAULT_LANG is en-US', () => {
+  describe('when DEFAULT_LANG is fa-IR', () => {
+    it('should return fa-IR regardless of accept-language header', () => {
+      expect(parseBrowserLanguage(createHeaders())).toBe('fa-IR');
+      expect(parseBrowserLanguage(createHeaders('en-US,en;q=0.9'))).toBe('fa-IR');
+      expect(parseBrowserLanguage(createHeaders('zh-CN,zh;q=0.9,en;q=0.8'))).toBe('fa-IR');
+    });
+  });
+
+  describe('when defaultLang is en-US', () => {
     it('should return en-US for empty accept-language header', () => {
       const headers = createHeaders();
-      expect(parseBrowserLanguage(headers)).toBe('en-US');
+      expect(parseBrowserLanguage(headers, 'en-US')).toBe('en-US');
     });
 
     it('should return en-US for English language preference', () => {
       const headers = createHeaders('en-US,en;q=0.9');
-      expect(parseBrowserLanguage(headers)).toBe('en-US');
+      expect(parseBrowserLanguage(headers, 'en-US')).toBe('en-US');
     });
 
     it('should handle Arabic language special case', () => {
       const headers = createHeaders('ar-SA,ar;q=0.9');
-      expect(parseBrowserLanguage(headers)).toBe('ar');
+      expect(parseBrowserLanguage(headers, 'en-US')).toBe('ar');
     });
 
     it('should convert ar-EG to ar', () => {
       const headers = createHeaders('ar-EG,ar;q=0.9');
-      expect(parseBrowserLanguage(headers)).toBe('ar');
+      expect(parseBrowserLanguage(headers, 'en-US')).toBe('ar');
     });
 
     it('should handle multiple language preferences', () => {
       const headers = createHeaders('zh-CN,zh;q=0.9,en;q=0.8');
-      // This expectation might need to be adjusted based on your locales configuration
-      expect(parseBrowserLanguage(headers)).toBe('zh-CN');
+      expect(parseBrowserLanguage(headers, 'en-US')).toBe('zh-CN');
     });
 
     it('should normalize simplified Chinese script language preferences', () => {
       const headers = createHeaders('zh-Hans-CN,zh-Hans;q=0.9,en;q=0.8');
-      expect(parseBrowserLanguage(headers)).toBe('zh-CN');
+      expect(parseBrowserLanguage(headers, 'en-US')).toBe('zh-CN');
     });
 
     it('should normalize traditional Chinese script language preferences', () => {
       const headers = createHeaders('zh-Hant-TW,zh-Hant;q=0.9,en;q=0.8');
-      expect(parseBrowserLanguage(headers)).toBe('zh-TW');
+      expect(parseBrowserLanguage(headers, 'en-US')).toBe('zh-TW');
     });
   });
 
@@ -74,12 +81,12 @@ describe('parseBrowserLanguage', () => {
   describe('error handling', () => {
     it('should handle invalid accept-language header format', () => {
       const headers = createHeaders('invalid-format');
-      expect(parseBrowserLanguage(headers)).toBe('en-US');
+      expect(parseBrowserLanguage(headers)).toBe('fa-IR');
     });
 
     it('should handle empty Headers object', () => {
       const headers = new Headers();
-      expect(parseBrowserLanguage(headers)).toBe('en-US');
+      expect(parseBrowserLanguage(headers)).toBe('fa-IR');
     });
   });
 });

@@ -15,7 +15,7 @@ import { imageUrl } from '@/const/url';
 import { isDesktop } from '@/const/version';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import { useSaveState } from '@/hooks/useSaveState';
-import { localeOptions } from '@/locales/resources';
+import { visibleLocaleOptions } from '@/locales/resources';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
@@ -88,7 +88,7 @@ const Common = memo(() => {
               defaultValue={language}
               options={[
                 { label: t('settingCommon.lang.autoMode'), value: 'auto' },
-                ...localeOptions,
+                ...visibleLocaleOptions,
               ]}
               style={{
                 width: '50%',
@@ -166,7 +166,7 @@ const Common = memo(() => {
           <Flexbox horizontal justify={'flex-end'}>
             <Select
               allowClear
-              options={localeOptions}
+              options={visibleLocaleOptions}
               placeholder={t('settingCommon.responseLanguage.placeholder')}
               value={general?.responseLanguage || undefined}
               style={{

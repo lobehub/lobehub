@@ -9,7 +9,7 @@ import { type AuthSPAServerConfig } from '@/types/spaServerConfig';
 import { buildSeoMeta } from './seoMeta';
 
 export function generateStaticParams() {
-  const staticLocales: Locales[] = ['en-US', 'zh-CN'];
+  const staticLocales: Locales[] = ['fa-IR', 'en-US'];
 
   return staticLocales.map((locale) => ({ locale }));
 }
