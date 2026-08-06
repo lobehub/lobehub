@@ -32,6 +32,16 @@ describe('Aico error catalog', () => {
     expect(isAicoErrorCode('BUDGET_EXCEEDED')).toBe(true);
     expect(resolveAicoErrorCode('not-a-code')).toBeUndefined();
   });
+
+  it('includes personal funds codes with Persian defaults', () => {
+    expect(AICO_ERROR_MESSAGES_FA.PERSONAL_FUNDS_UNAVAILABLE).toBe(
+      'موجودی کیف پول شخصی کافی نیست. لطفاً شارژ کنید یا دوره آزمایشی را فعال کنید.',
+    );
+    expect(AICO_ERROR_MESSAGES_FA.MEMBER_BUDGET_UNFUNDED).toBe(
+      'سهمیه سازمانی انتخاب‌شده موجودی ندارد.',
+    );
+    expect(isAicoErrorCode('PERSONAL_FUNDS_UNAVAILABLE')).toBe(true);
+  });
 });
 
 describe('resolveAicoErrorMessage', () => {

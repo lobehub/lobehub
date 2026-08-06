@@ -500,9 +500,9 @@ class ChatService {
 
     // Managed OpenRouter/Aico chat must send an explicit billing context so the
     // server can pick the personal vs org key (credits are never pooled).
-    const { AICO_BILLING_SOURCES_SWR_KEY, resolveAicoBillingForRequest } =
+    const { AICO_BILLING_SOURCES_SWR_KEY, assertAicoBillingAllowsChat } =
       await import('@/features/AicoBilling');
-    const aicoBilling = await resolveAicoBillingForRequest(provider);
+    const aicoBilling = await assertAicoBillingAllowsChat(provider);
     const requestBody = aicoBilling ? { ...payload, aicoBilling } : payload;
 
     const refreshBillingAfterFinish = aicoBilling

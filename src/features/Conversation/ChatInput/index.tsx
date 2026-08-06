@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import {
   getBusinessChatInputSendAreaPrefix,
   useBusinessChatInputAlerts,
+  useBusinessChatInputSendDisabled,
 } from '@/business/client/hooks/useBusinessChatInputSendAreaPrefix';
 import type { ActionKeys, ChatInputFeature } from '@/features/ChatInput';
 import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
@@ -291,8 +292,13 @@ const ChatInput = memo<ChatInputProps>(
     // Input stays enabled during agent execution — messages are queued.
     // When disableQueue is set (e.g. onboarding), block sending while loading.
     // disableSend hard-blocks regardless of content (host surface is read-only).
+    const billingSendDisabled = useBusinessChatInputSendDisabled();
     const disabled =
-      isInputEmpty || isUploadingFiles || (!!disableQueue && isInputQueueBlocked) || !!disableSend;
+      isInputEmpty ||
+      isUploadingFiles ||
+      (!!disableQueue && isInputQueueBlocked) ||
+      !!disableSend ||
+      billingSendDisabled;
     const shouldUsePlainSendButton = !showSendMenu && !!sendMenu;
     const businessAlerts = useBusinessChatInputAlerts();
     const businessSendAreaPrefix = getBusinessChatInputSendAreaPrefix(sendAreaPrefix);
@@ -301,8 +307,8 @@ const ChatInput = memo<ChatInputProps>(
     const handleSend: SendButtonHandler = useCallback(
       async ({ clearContent, getMarkdownContent, getEditorData }) => {
         // Host surface is read-only (e.g. page locked) — block Enter too, not
-        // just the grayed-out button.
-        if (disableSend) return;
+        // just the grayed-out button. Same for empty managed billing source.
+        if (disableSend || billingSendDisabled) return;
 
         // Get instant values from stores at trigger time
         const fileStore = useFileStore.getState();
@@ -359,7 +365,7 @@ const ChatInput = memo<ChatInputProps>(
           pageSelections,
         });
       },
-      [sendMessage, storeApi, disableQueue, disableSend, isInputQueueBlocked],
+      [billingSendDisabled, sendMessage, storeApi, disableQueue, disableSend, isInputQueueBlocked],
     );
 
     const sendButtonProps: SendButtonProps = {

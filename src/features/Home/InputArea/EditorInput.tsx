@@ -2,7 +2,10 @@ import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { PlusIcon } from 'lucide-react';
 import { memo, type ReactNode, useMemo } from 'react';
 
-import { getBusinessChatInputSendAreaPrefix } from '@/business/client/hooks/useBusinessChatInputSendAreaPrefix';
+import {
+  getBusinessChatInputSendAreaPrefix,
+  useBusinessChatInputSendDisabled,
+} from '@/business/client/hooks/useBusinessChatInputSendAreaPrefix';
 import {
   type ActionKeys,
   ChatInputProvider,
@@ -47,6 +50,7 @@ const HomeEditorInput = memo<HomeEditorInputProps>(
     placeholder,
     send,
   }) => {
+    const billingSendDisabled = useBusinessChatInputSendDisabled();
     const inputContainerProps = useMemo(
       () => ({
         minHeight: HOME_INPUT_BODY_HEIGHT,
@@ -79,7 +83,7 @@ const HomeEditorInput = memo<HomeEditorInputProps>(
           useChatStore.setState({ mainInputEditor: instance });
         }}
         sendButtonProps={{
-          disabled: loading || isAgentConfigLoading,
+          disabled: loading || isAgentConfigLoading || billingSendDisabled,
           generating: loading,
           onStop: () => {},
           shape: 'round',

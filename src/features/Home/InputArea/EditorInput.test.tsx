@@ -8,6 +8,7 @@ const getBusinessChatInputSendAreaPrefix = vi.fn(() => <div data-testid="aico-bi
 vi.mock('@/business/client/hooks/useBusinessChatInputSendAreaPrefix', () => ({
   getBusinessChatInputSendAreaPrefix: (...args: unknown[]) =>
     getBusinessChatInputSendAreaPrefix(...args),
+  useBusinessChatInputSendDisabled: () => false,
 }));
 
 vi.mock('@/features/ChatInput/ActionBar', () => ({
