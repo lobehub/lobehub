@@ -1,0 +1,246 @@
+import debug from 'debug';
+
+import { BaseProcessor } from '../base/BaseProcessor';
+import type { LobeToolManifest } from '../engine/tools/types';
+import type { SkillMeta } from '../providers/SkillContextProvider';
+import type { Message, PipelineContext, ProcessorOptions } from '../types';
+
+declare module '../types' {
+  interface PipelineContextMetadataOverrides {
+    activationResultTrim?: {
+      savedChars: number;
+      trimmedMessages: number;
+    };
+  }
+}
+
+const log = debug('context-engine:processor:ActivationResultTrimProcessor');
+
+/**
+ * Wire-format tool identifiers of the activation tools. Literal copies of
+ * `LobeActivatorIdentifier` (@lobechat/builtin-tool-activator) and
+ * `SkillsIdentifier` (@lobechat/builtin-tool-skills) — both are frozen,
+ * persisted in DB message rows, and not importable here without adding
+ * tool-package deps to context-engine (same rationale as agent-runtime's
+ * messageSelectors).
+ */
+const ACTIVATOR_IDENTIFIER = 'lobe-activator';
+const SKILLS_IDENTIFIER = 'lobe-skills';
+
+interface ActivatedToolState {
+  apiCount?: number;
+  identifier?: string;
+  name?: string;
+}
+
+interface ActivatedSkillState {
+  identifier?: string;
+  name?: string;
+}
+
+export interface ActivationResultTrimConfig {
+  /**
+   * Manifests whose systemRole / API descriptions the ToolSystemRoleProvider
+   * injects into the system prompt for this request. Must be computed with
+   * `selectToolPromptManifests` under the provider's own enablement gates
+   * (manifests present + function calling supported); pass an empty array when
+   * the provider is disabled so nothing gets trimmed.
+   */
+  injectedManifests?: LobeToolManifest[];
+  /**
+   * Activated skills whose full content the SkillContextProvider injects into
+   * the system prompt for this request. Must be computed with
+   * `selectActivatedSkills` under the provider's own enablement gates (agent
+   * mode + enabled skills present); pass an empty array when the provider is
+   * disabled so nothing gets trimmed.
+   */
+  injectedSkills?: SkillMeta[];
+}
+
+/**
+ * Trims dynamic-activation tool results whose full documentation is ALSO
+ * injected into the system prompt, so each activated tool/skill document
+ * reaches the LLM payload exactly once.
+ *
+ * Background (LOBE-5684): `activateTools` writes the manifest systemRole + API
+ * descriptions into its `role=tool` result, and once activated the same
+ * manifest enters ToolSystemRoleProvider's system-prompt injection on every
+ * subsequent request — permanently double-carrying the document.
+ * `activateSkill` has the same shape for operation-pinned skills, whose
+ * content SkillContextProvider injects while the activation result also holds
+ * the full SKILL.md body.
+ *
+ * The trim happens ONLY at the payload assembly boundary — DB/UI rows keep the
+ * full activation result — and ONLY when the injection is confirmed for this
+ * request (condition-gated via the shared select helpers): a dynamically
+ * activated skill that is NOT injected keeps its tool result as the single
+ * content channel. The replacement text is deterministic, so once a document
+ * moves to the system prompt the trimmed history stays byte-stable across
+ * requests and keeps the prompt-cache prefix reusable.
+ *
+ * Must run AFTER the flatten processors (assistantGroup / compressedGroup
+ * hoist nested tool results back into `role: 'tool'` rows with
+ * plugin/pluginState re-attached) and BEFORE ToolCallProcessor consumes the
+ * plugin payloads.
+ */
+export class ActivationResultTrimProcessor extends BaseProcessor {
+  readonly name = 'ActivationResultTrimProcessor';
+
+  private injectedToolIds: Set<string>;
+  private injectedSkillsByIdentifier: Map<string, SkillMeta>;
+  private injectedSkillsByName: Map<string, SkillMeta>;
+
+  constructor(config: ActivationResultTrimConfig, options: ProcessorOptions = {}) {
+    super(options);
+    this.injectedToolIds = new Set((config.injectedManifests ?? []).map((m) => m.identifier));
+    this.injectedSkillsByIdentifier = new Map(
+      (config.injectedSkills ?? []).map((s) => [s.identifier, s]),
+    );
+    // activateSkill resolves names case-insensitively, so match the same way.
+    this.injectedSkillsByName = new Map(
+      (config.injectedSkills ?? []).map((s) => [s.name.toLowerCase(), s]),
+    );
+  }
+
+  protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
+    if (this.injectedToolIds.size === 0 && this.injectedSkillsByIdentifier.size === 0) {
+      return this.markAsExecuted(context);
+    }
+
+    const clonedContext = this.cloneContext(context);
+    let trimmedMessages = 0;
+    let savedChars = 0;
+
+    clonedContext.messages = clonedContext.messages.map((message) => {
+      const trimmed = this.trimMessage(message);
+      if (trimmed === undefined) return message;
+
+      trimmedMessages += 1;
+      savedChars += (message.content as string).length - trimmed.length;
+      return { ...message, content: trimmed };
+    });
+
+    if (trimmedMessages > 0) {
+      log('Trimmed %d activation result(s), saved %d chars', trimmedMessages, savedChars);
+    }
+
+    clonedContext.metadata.activationResultTrim = { savedChars, trimmedMessages };
+    return this.markAsExecuted(clonedContext);
+  }
+
+  /** Returns the replacement content, or undefined when the message must stay untouched. */
+  private trimMessage(message: Message): string | undefined {
+    if (message.role !== 'tool') return undefined;
+    if (typeof message.content !== 'string' || !message.content) return undefined;
+
+    const plugin = message.plugin as { apiName?: string; identifier?: string } | undefined;
+    if (!plugin) return undefined;
+
+    if (plugin.identifier === ACTIVATOR_IDENTIFIER && plugin.apiName === 'activateTools') {
+      return this.trimActivateToolsResult(message);
+    }
+
+    // Direct activateSkill calls arrive on the skills tool; the activator also
+    // exposes the same API for identifier-based fallbacks.
+    if (
+      plugin.apiName === 'activateSkill' &&
+      (plugin.identifier === SKILLS_IDENTIFIER || plugin.identifier === ACTIVATOR_IDENTIFIER)
+    ) {
+      return this.trimActivateSkillResult(message);
+    }
+
+    return undefined;
+  }
+
+  private findInjectedSkill(state: ActivatedSkillState): SkillMeta | undefined {
+    const byIdentifier = state.identifier
+      ? this.injectedSkillsByIdentifier.get(state.identifier)
+      : undefined;
+    if (byIdentifier) return byIdentifier;
+
+    return state.name ? this.injectedSkillsByName.get(state.name.toLowerCase()) : undefined;
+  }
+
+  private trimActivateToolsResult(message: Message): string | undefined {
+    const state = message.pluginState as
+      | {
+          activatedSkills?: ActivatedSkillState[];
+          activatedTools?: ActivatedToolState[];
+          alreadyActive?: string[];
+          notFound?: string[];
+        }
+      | undefined;
+
+    const activatedTools = Array.isArray(state?.activatedTools) ? state.activatedTools : [];
+    const activatedSkills = Array.isArray(state?.activatedSkills)
+      ? state.activatedSkills.filter(Boolean)
+      : [];
+
+    // Nothing was activated (pure already-active / not-found result) — the
+    // content carries no document, leave it alone.
+    if (activatedTools.length === 0 && activatedSkills.length === 0) return undefined;
+
+    // Trim only when EVERY activated item is covered by a system-prompt
+    // injection; the result content is a single blob, so a partially covered
+    // activation must keep its full text as the only channel for the
+    // uncovered items.
+    const allToolsInjected = activatedTools.every(
+      (tool) => tool.identifier && this.injectedToolIds.has(tool.identifier),
+    );
+    const allSkillsInjected = activatedSkills.every((skill) => !!this.findInjectedSkill(skill));
+    if (!allToolsInjected || !allSkillsInjected) return undefined;
+
+    const parts: string[] = [];
+
+    const toolSummaries = activatedTools.map((tool) => {
+      const apiCount =
+        typeof tool.apiCount === 'number'
+          ? `, ${tool.apiCount} API${tool.apiCount === 1 ? '' : 's'}`
+          : '';
+      return `${tool.name ?? tool.identifier} (${tool.identifier}${apiCount})`;
+    });
+    if (toolSummaries.length > 0) {
+      parts.push(`Successfully activated tools: ${toolSummaries.join(', ')}.`);
+    }
+
+    if (activatedSkills.length > 0) {
+      const skillNames = activatedSkills.map((skill) => skill.name ?? skill.identifier);
+      parts.push(`Activated skills: ${skillNames.join(', ')}.`);
+    }
+
+    if (state?.alreadyActive?.length) {
+      parts.push(`Already active: ${state.alreadyActive.join(', ')}.`);
+    }
+    if (state?.notFound?.length) {
+      parts.push(`Not found: ${state.notFound.join(', ')}.`);
+    }
+
+    parts.push(
+      'Full usage instructions and API descriptions for the activated items are available in the system prompt.',
+    );
+
+    return parts.join('\n');
+  }
+
+  private trimActivateSkillResult(message: Message): string | undefined {
+    const state = message.pluginState as ActivatedSkillState | undefined;
+    if (!state?.name && !state?.identifier) return undefined;
+
+    const injected = this.findInjectedSkill(state);
+    if (!injected?.content) return undefined;
+
+    const original = message.content as string;
+    const confirmation = `Skill "${state.name ?? injected.name}" activated. Its full instructions are available in the system prompt.`;
+
+    // The activation result may carry extra sections beyond the injected body
+    // (resource tree, project directory hint). When the result is the injected
+    // content plus a suffix, keep that suffix — it is not in the system prompt.
+    // On any other mismatch (e.g. the skill was edited after activation), drop
+    // the stale copy entirely: the system prompt carries the current version.
+    const remainder = original.startsWith(injected.content)
+      ? original.slice(injected.content.length).trim()
+      : '';
+
+    return remainder ? `${confirmation}\n\n${remainder}` : confirmation;
+  }
+}
