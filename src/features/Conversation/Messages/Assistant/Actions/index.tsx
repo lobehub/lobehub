@@ -76,10 +76,18 @@ export const AssistantActionsBar = memo<AssistantActionsBarProps>(({ actionsConf
     <MessageActionBar
       bar={actionsConfig?.bar ?? defaultBar}
       ctx={ctx}
-      leading={<ReactionPicker messageId={id} />}
       menu={actionsConfig?.menu ?? DEFAULT_MENU}
-      trailing={
-        showCost ? <MessageCostBadge metadata={data.metadata} usage={data.usage} /> : undefined
+      leading={
+        <>
+          <ReactionPicker messageId={id} />
+          {showCost ? (
+            <MessageCostBadge
+              metadata={data.metadata}
+              performance={data.performance}
+              usage={data.usage}
+            />
+          ) : null}
+        </>
       }
     />
   );

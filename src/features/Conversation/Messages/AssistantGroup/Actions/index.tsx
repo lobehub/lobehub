@@ -80,9 +80,17 @@ export const GroupActionsBar = memo<GroupActionsProps>(
       <MessageActionBar
         bar={actionsConfig?.bar ?? defaultBar}
         ctx={ctx}
-        leading={<ReactionPicker messageId={id} />}
         menu={actionsConfig?.menu ?? DEFAULT_MENU}
-        trailing={<MessageCostBadge metadata={data.metadata} usage={data.usage} />}
+        leading={
+          <>
+            <ReactionPicker messageId={id} />
+            <MessageCostBadge
+              metadata={data.metadata}
+              performance={data.performance}
+              usage={data.usage}
+            />
+          </>
+        }
       />
     );
   },
