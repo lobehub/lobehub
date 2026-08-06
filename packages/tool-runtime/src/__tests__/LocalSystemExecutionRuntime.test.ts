@@ -155,7 +155,7 @@ describe('LocalSystemExecutionRuntime.grepContent', () => {
       'path': '/repo',
       'pattern': 'Foo',
       'type': 'ts',
-    } as never);
+    });
 
     const forwarded = (service.grepContent as ReturnType<typeof vi.fn>).mock.calls[0][0];
 
@@ -240,5 +240,226 @@ describe('LocalSystemExecutionRuntime.readFile', () => {
 
     expect(output.state?.images).toBeUndefined();
     expect(output.content).toContain('hello');
+  });
+});
+
+describe('LocalSystemExecutionRuntime.executeToolCall — working directory anchoring', () => {
+  const WD = '/Users/me/project';
+
+  // Regression: the desktop executor spawned shells in the app install
+  // directory because no cwd ever reached the IPC layer. The runner spawns in
+  // `params.cwd`, so it MUST carry the agent's working directory.
+  it('injects the working directory as runCommand cwd and maps run_in_background', async () => {
+    const service = createService({
+      runCommand: vi.fn().mockResolvedValue({ exit_code: 0, stdout: 'ok', success: true }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    await runtime.executeToolCall(
+      'runCommand',
+      { command: 'ls', run_in_background: true },
+      { workingDirectory: WD },
+    );
+
+    expect(service.runCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ command: 'ls', cwd: WD, run_in_background: true }),
+    );
+  });
+
+  it('keeps a server-injected absolute cwd (gateway path, no workingDirectory option)', async () => {
+    const service = createService({
+      runCommand: vi.fn().mockResolvedValue({ exit_code: 0, success: true }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    await runtime.executeToolCall('runCommand', { command: 'ls', cwd: '/from/server' });
+
+    expect(service.runCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ command: 'ls', cwd: '/from/server' }),
+    );
+  });
+
+  it('resolves a relative model-supplied cwd against the working directory', async () => {
+    const service = createService({
+      runCommand: vi.fn().mockResolvedValue({ exit_code: 0, success: true }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    await runtime.executeToolCall(
+      'runCommand',
+      { command: 'ls', cwd: 'packages' },
+      { workingDirectory: WD },
+    );
+
+    expect(service.runCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: `${WD}/packages` }),
+    );
+  });
+
+  it.each([
+    [
+      'readFile',
+      { path: 'src/a.ts' },
+      'readLocalFile',
+      { cwd: WD, fullContent: undefined, loc: undefined, path: 'src/a.ts' },
+    ],
+    [
+      'writeFile',
+      { content: 'x', path: 'src/a.ts' },
+      'writeFile',
+      { content: 'x', cwd: WD, path: 'src/a.ts' },
+    ],
+    [
+      'editFile',
+      { file_path: 'a.ts', new_string: 'b', old_string: 'a' },
+      'editLocalFile',
+      {
+        cwd: WD,
+        file_path: 'a.ts',
+        new_string: 'b',
+        old_string: 'a',
+        replace_all: undefined,
+      },
+    ],
+    [
+      'moveFiles',
+      { items: [{ newPath: 'b.ts', oldPath: 'a.ts' }] },
+      'moveLocalFiles',
+      { cwd: WD, items: [{ newPath: 'b.ts', oldPath: 'a.ts' }] },
+    ],
+    [
+      'listFiles',
+      { path: '.' },
+      'listLocalFiles',
+      { cwd: WD, limit: undefined, path: '.', sortBy: undefined, sortOrder: undefined },
+    ],
+  ] as const)(
+    'forwards the working directory as cwd for %s',
+    async (apiName, args, serviceMethod, expected) => {
+      const service = createService({
+        [serviceMethod]: vi.fn().mockResolvedValue({ replacements: 1, success: true }),
+      });
+      const runtime = new LocalSystemExecutionRuntime(service);
+
+      await runtime.executeToolCall(apiName, args as Record<string, any>, {
+        workingDirectory: WD,
+      });
+
+      expect(service[serviceMethod as keyof ILocalSystemService]).toHaveBeenCalledWith(expected);
+    },
+  );
+
+  it('forwards cwd to readFiles (direct service call path)', async () => {
+    const service = createService({
+      readLocalFiles: vi.fn().mockResolvedValue([]),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    await runtime.executeToolCall(
+      'readFiles',
+      { paths: ['a.ts', 'b.ts'] },
+      { workingDirectory: WD },
+    );
+
+    expect(service.readLocalFiles).toHaveBeenCalledWith({ cwd: WD, paths: ['a.ts', 'b.ts'] });
+  });
+
+  it('anchors an omitted grep scope onto the working directory with full param forwarding', async () => {
+    const service = createService({
+      grepContent: vi.fn().mockResolvedValue({ matches: [], success: true, total_matches: 0 }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    await runtime.executeToolCall(
+      'grepContent',
+      { '-i': true, 'glob': '**/*.ts', 'pattern': 'foo' },
+      { workingDirectory: WD },
+    );
+
+    const forwarded = (service.grepContent as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(forwarded).toMatchObject({ '-i': true, 'glob': '**/*.ts', 'pattern': 'foo' });
+    expect(forwarded.path ?? forwarded.scope ?? forwarded.cwd).toBe(WD);
+  });
+
+  it('resolves glob scope "." to the working directory', async () => {
+    const service = createService({
+      globFiles: vi.fn().mockResolvedValue({ files: [], success: true, total_files: 0 }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    await runtime.executeToolCall(
+      'globFiles',
+      { pattern: '**/*.ts', scope: '.' },
+      { workingDirectory: WD },
+    );
+
+    expect(service.globFiles).toHaveBeenCalledWith({ limit: 100, pattern: '**/*.ts', scope: WD });
+  });
+
+  it('defaults the searchFiles directory to the working directory', async () => {
+    const service = createService({
+      searchLocalFiles: vi.fn().mockResolvedValue([]),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    await runtime.executeToolCall('searchFiles', { keywords: 'foo' }, { workingDirectory: WD });
+
+    expect(service.searchLocalFiles).toHaveBeenCalledWith(
+      expect.objectContaining({ directory: WD, keywords: 'foo', limit: 100 }),
+    );
+  });
+});
+
+describe('LocalSystemExecutionRuntime.executeToolCall — dispatch', () => {
+  it('normalizes legacy API aliases (readLocalFile → readFile)', async () => {
+    const service = createService({
+      readLocalFile: vi.fn().mockResolvedValue({ content: 'hi', success: true }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    const output = await runtime.executeToolCall('readLocalFile', { path: '/tmp/a.txt' });
+
+    expect(output?.success).toBe(true);
+    expect(service.readLocalFile).toHaveBeenCalled();
+  });
+
+  it('routes legacy renameLocalFile through the typed renameFile method', async () => {
+    const service = createService({
+      renameLocalFile: vi.fn().mockResolvedValue({ newPath: '/tmp/b.txt', success: true }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    const output = await runtime.executeToolCall('renameLocalFile', {
+      newName: 'b.txt',
+      path: '/tmp/a.txt',
+    });
+
+    expect(output?.success).toBe(true);
+    expect(service.renameLocalFile).toHaveBeenCalledWith({ newName: 'b.txt', path: '/tmp/a.txt' });
+  });
+
+  it('maps shell_id to commandId and forwards filter/timeout for getCommandOutput', async () => {
+    const service = createService({
+      getCommandOutput: vi.fn().mockResolvedValue({ exit_code: 0, stdout: '', success: true }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    await runtime.executeToolCall('getCommandOutput', {
+      filter: 'ERROR',
+      shell_id: 'sh-1',
+      timeout: 5000,
+    });
+
+    expect(service.getCommandOutput).toHaveBeenCalledWith({
+      filter: 'ERROR',
+      shell_id: 'sh-1',
+      timeout: 5000,
+    });
+  });
+
+  it('returns null for non-local-system tools so callers can fall back', async () => {
+    const runtime = new LocalSystemExecutionRuntime(createService());
+
+    expect(await runtime.executeToolCall('runHeteroTask', {})).toBeNull();
   });
 });

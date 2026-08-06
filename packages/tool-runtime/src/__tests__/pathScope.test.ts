@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { normalizePathForScope, resolveArgsWithScope, resolvePathWithScope } from '../path';
+import { normalizePathForScope, resolveArgsWithScope, resolvePathWithScope } from '../pathScope';
 
 describe('normalizePathForScope', () => {
   it('should normalize a simple absolute path', () => {
