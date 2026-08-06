@@ -200,4 +200,13 @@ describe('Agent sidebar header nav', () => {
 
     expect(screen.getByRole('button', { name: 'tab.integration' })).toBeInTheDocument();
   });
+
+  it('hides message channels for device-only heterogeneous agents', () => {
+    agentMock.heterogeneousProviderType = 'opencode';
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+
+    expect(screen.queryByRole('button', { name: 'tab.integration' })).not.toBeInTheDocument();
+  });
 });

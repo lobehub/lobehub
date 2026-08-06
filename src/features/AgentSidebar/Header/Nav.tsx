@@ -20,6 +20,8 @@ import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useActionSWR } from '@/libs/swr';
 import { topicActionKeys } from '@/libs/swr/keys';
+import { useAgentStore } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
@@ -42,8 +44,15 @@ const Nav = memo(() => {
   const { canEditResource, isAccessResolved } = useResourceAccess('agent', agentId);
   const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
+  const heterogeneousProviderType = useAgentStore(
+    agentSelectors.currentAgentHeterogeneousProviderType,
+  );
   const hideProfile = !isAgentEditable || !isAccessResolved || !canEditContent || !canEditResource;
-  const hideChannel = hideProfile;
+  const supportsMessageChannels =
+    !heterogeneousProviderType ||
+    heterogeneousProviderType === 'claude-code' ||
+    heterogeneousProviderType === 'codex';
+  const hideChannel = hideProfile || !supportsMessageChannels;
   const switchTopic = useChatStore((s) => s.switchTopic);
   const [openNewTopicOrSaveTopic] = useChatStore((s) => [s.openNewTopicOrSaveTopic]);
   const isNewTopicSendInFlight = useChatStore(topicSelectors.isNewTopicSendInFlight);
