@@ -56,8 +56,19 @@ const currentTopicCount = (s: ChatStoreState): number => currentTopicData(s)?.to
 
 const getTopicById =
   (id: string) =>
-  (s: ChatStoreState): ChatTopic | undefined =>
-    currentTopics(s)?.find((topic) => topic.id === id); // Don't filter here, need to access all topics by ID
+  (s: ChatStoreState): ChatTopic | undefined => {
+    const currentTopic = currentTopics(s)?.find((topic) => topic.id === id);
+    if (currentTopic) return currentTopic;
+
+    // Multiple desktop tab routers can render topics from different agents at
+    // the same time. The global activeAgentId only describes the focused tab,
+    // so fall back to the other already-loaded agent buckets for background
+    // panes. Topic ids are globally unique.
+    for (const topicData of Object.values(s.topicDataMap)) {
+      const topic = topicData.items.find((item) => item.id === id);
+      if (topic) return topic;
+    }
+  };
 
 /**
  * Get topics by specific agentId (for AgentBuilder scenarios where agentId differs from activeAgentId)

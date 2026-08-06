@@ -24,7 +24,7 @@ interface UseEffectiveWorkingDirectoryOptions {
    * @default true
    */
   homeFallback?: boolean;
-  topicId?: string;
+  topicId?: string | null;
 }
 
 /**
@@ -55,17 +55,11 @@ export const useEffectiveWorkingDirectory = (
   const legacyAgentWorkingDirectory = useAgentStore((s) =>
     agentId ? s.localAgentWorkingDirectoryMap[agentId] : undefined,
   );
-  const topicWorkingDirectory = useChatStore(
+  const topicWorkingDirectory = useChatStore(topicSelectors.getTopicWorkingDirectory(topicId));
+  const topicWorkingDirectoryConfig = useChatStore((s) =>
     topicId
-      ? topicSelectors.getTopicWorkingDirectory(topicId)
-      : topicSelectors.currentTopicWorkingDirectory,
-  );
-  const topicWorkingDirectoryConfig = useChatStore(
-    (s) =>
-      (topicId
-        ? topicSelectors.getTopicById(topicId)(s)
-        : topicSelectors.currentTopicMetadata(s)
-      )?.workingDirectoryConfig,
+      ? topicSelectors.getTopicById(topicId)(s)?.metadata?.workingDirectoryConfig
+      : topicSelectors.currentTopicMetadata(s)?.workingDirectoryConfig,
   );
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
   const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId, {
