@@ -41,6 +41,22 @@ const lobehub = createLobeHub({
 
 Raw spec types are exported from `@lobehub/sdk/types`.
 
+### Streaming responses
+
+`responses.create` returns Server-Sent Events when `body.stream: true`. Opt out of JSON parsing with `parseAs: 'stream'` and read the raw stream from `response.body`:
+
+```ts
+const { response } = await lobehub.responses.create({
+  body: { input: '…', model: '…', stream: true },
+  parseAs: 'stream',
+});
+for await (const chunk of response.body!) {
+  // decode SSE chunks
+}
+```
+
+(First-class typed SSE methods will come with the spec's response schemas.)
+
 ## Development
 
 - `bun generate` — regenerate `src/generated/` from `../openapi/openapi.yml` (run after the spec changes; naming rules live in `openapi-ts.config.ts`)
