@@ -12,11 +12,9 @@ import Controls from './Controls';
 const EffortAction = memo<{ model: string; provider: string }>(({ model, provider }) => {
   const { t } = useTranslation('chat');
 
-  // Load the user's saved model-instance reasoning defaults into the store so
-  // the dropdown and the send pipeline (modelParamsResolver) see the same value
-  const useFetchAiModelReasoningConfig = useAiInfraStore((s) => s.useFetchAiModelReasoningConfig);
-  useFetchAiModelReasoningConfig(model, provider);
-
+  // The saved model-instance reasoning defaults are fetched by
+  // ReasoningConfigLoader (mounted in ChatInputProvider), so the dropdown and
+  // the send pipeline (modelParamsResolver) read the same store value.
   return (
     <ChatInputAction
       icon={GaugeIcon}
