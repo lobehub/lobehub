@@ -382,18 +382,25 @@ export const platformAdminRouter = router({
 
   listUserWallets: platformProcedure.query(async ({ ctx }) => {
     const wallets = await ctx.billingModel.listAllWallets();
-    const publicCodes = await ctx.organizationModel.getUserPublicCodesByIds(
-      wallets.map((w) => w.userId),
-    );
-    return wallets.map((w) => ({
-      balanceMicroUsd: String(w.balanceMicroUsd ?? 0),
-      balanceToman: tomanString(w.balanceToman ?? 0),
-      balanceUsd: microUsdToDecimalString(w.balanceMicroUsd ?? 0),
-      hasManagedKey: Boolean(w.openrouterKeyId),
-      isActive: w.isActive,
-      publicCode: publicCodes.get(w.userId) ?? null,
-      userId: w.userId,
-    }));
+    const userIds = wallets.map((w) => w.userId);
+    const [publicCodes, identities] = await Promise.all([
+      ctx.organizationModel.getUserPublicCodesByIds(userIds),
+      ctx.organizationModel.getUserIdentitiesByIds(userIds),
+    ]);
+    return wallets.map((w) => {
+      const identity = identities.get(w.userId);
+      return {
+        balanceMicroUsd: String(w.balanceMicroUsd ?? 0),
+        balanceToman: tomanString(w.balanceToman ?? 0),
+        balanceUsd: microUsdToDecimalString(w.balanceMicroUsd ?? 0),
+        email: identity?.email ?? null,
+        hasManagedKey: Boolean(w.openrouterKeyId),
+        isActive: w.isActive,
+        publicCode: publicCodes.get(w.userId) ?? null,
+        userId: w.userId,
+        username: identity?.username ?? null,
+      };
+    });
   }),
 
   getOpenRouterModelSyncStatus: platformProcedure.query(async ({ ctx }) => {

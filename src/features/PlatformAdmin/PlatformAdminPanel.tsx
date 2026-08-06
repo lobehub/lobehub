@@ -527,6 +527,16 @@ export const PlatformAdminPanel = () => {
                     render: (v: string | null) => (v ? <Tag>{v}</Tag> : '—'),
                   },
                   {
+                    dataIndex: 'email',
+                    title: t('platform.columns.email'),
+                    render: (v: string | null) => v || '—',
+                  },
+                  {
+                    dataIndex: 'username',
+                    title: t('platform.columns.username'),
+                    render: (v: string | null) => v || '—',
+                  },
+                  {
                     dataIndex: 'userId',
                     title: t('platform.columns.userId'),
                     render: (v: string) => v.slice(0, 14),
@@ -677,7 +687,7 @@ export const PlatformAdminPanel = () => {
                       placeholder={t('platform.userIdPlaceholder')}
                       style={{ width: '100%' }}
                       options={(userWallets || []).map((w) => ({
-                        label: `${w.publicCode ? `${w.publicCode} · ` : ''}${w.userId.slice(0, 14)} · ${usd(w.balanceUsd)}`,
+                        label: `${w.email || w.username || (w.publicCode ? `${w.publicCode} · ` : '') + w.userId.slice(0, 14)} · ${usd(w.balanceUsd)}`,
                         value: w.userId,
                       }))}
                     />
