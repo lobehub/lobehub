@@ -190,6 +190,22 @@ export class ActivationResultTrimProcessor extends BaseProcessor {
     const allSkillsInjected = activatedSkills.every((skill) => !!this.findInjectedSkill(skill));
     if (!allToolsInjected || !allSkillsInjected) return undefined;
 
+    // Fallback-activated skills append their full activation content to the
+    // blob, which may extend beyond the injected `skill.content` (resource
+    // tree, project directory hint — same shape the direct activateSkill path
+    // preserves). Locate each injected copy inside the blob and keep those
+    // suffixes; when a copy cannot be located we cannot prove what extra
+    // information the blob carries, so keep the full result untouched.
+    let skillRemainders: string[] = [];
+    if (activatedSkills.length > 0) {
+      const extracted = this.extractFallbackSkillRemainders(
+        message.content as string,
+        activatedSkills,
+      );
+      if (!extracted) return undefined;
+      skillRemainders = extracted;
+    }
+
     const parts: string[] = [];
 
     const toolSummaries = activatedTools.map((tool) => {
@@ -206,6 +222,7 @@ export class ActivationResultTrimProcessor extends BaseProcessor {
     if (activatedSkills.length > 0) {
       const skillNames = activatedSkills.map((skill) => skill.name ?? skill.identifier);
       parts.push(`Activated skills: ${skillNames.join(', ')}.`);
+      parts.push(...skillRemainders);
     }
 
     if (state?.alreadyActive?.length) {
@@ -220,6 +237,50 @@ export class ActivationResultTrimProcessor extends BaseProcessor {
     );
 
     return parts.join('\n');
+  }
+
+  /**
+   * Locate each fallback-activated skill's injected content inside the
+   * activateTools result blob (skill contents are appended in activation
+   * order) and return the non-injected suffix that follows each copy, cut at
+   * the next skill's content or the trailing `Already active:` / `Not found:`
+   * sections. Returns undefined when any copy cannot be located.
+   */
+  private extractFallbackSkillRemainders(
+    original: string,
+    activatedSkills: ActivatedSkillState[],
+  ): string[] | undefined {
+    const positions: Array<{ end: number; start: number }> = [];
+    let searchFrom = 0;
+
+    for (const skill of activatedSkills) {
+      const injected = this.findInjectedSkill(skill);
+      // Coverage was already checked by the caller; bail defensively anyway.
+      if (!injected?.content) return undefined;
+
+      const start = original.indexOf(injected.content, searchFrom);
+      if (start === -1) return undefined;
+
+      const end = start + injected.content.length;
+      positions.push({ end, start });
+      searchFrom = end;
+    }
+
+    const remainders: string[] = [];
+    for (const [index, position] of positions.entries()) {
+      let to = index + 1 < positions.length ? positions[index + 1].start : original.length;
+      // Matches the literal section labels ActivatorExecutionRuntime appends
+      // after the skill contents.
+      for (const label of ['\nAlready active:', '\nNot found:']) {
+        const labelIndex = original.indexOf(label, position.end);
+        if (labelIndex !== -1 && labelIndex < to) to = labelIndex;
+      }
+
+      const remainder = original.slice(position.end, to).trim();
+      if (remainder) remainders.push(remainder);
+    }
+
+    return remainders;
   }
 
   private trimActivateSkillResult(message: Message): string | undefined {

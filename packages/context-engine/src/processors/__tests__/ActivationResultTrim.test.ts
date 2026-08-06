@@ -123,6 +123,7 @@ describe('ActivationResultTrimProcessor', () => {
       const result = await processor.process(
         createContext([
           activateToolsMessage({
+            content: `Successfully activated tools:\n\n## Creds (lobe-creds)\n${CREDS_SYSTEM_ROLE}\n${SKILL_CONTENT}`,
             pluginState: {
               activatedSkills: [{ name: 'PowerShell' }],
               activatedTools: [{ apiCount: 2, identifier: 'lobe-creds', name: 'Creds' }],
@@ -133,7 +134,53 @@ describe('ActivationResultTrimProcessor', () => {
 
       const content = result.messages[0].content as string;
       expect(content).not.toContain(CREDS_SYSTEM_ROLE);
+      expect(content).not.toContain(SKILL_CONTENT);
       expect(content).toContain('Activated skills: PowerShell.');
+    });
+
+    it('should preserve a fallback-activated skill suffix beyond the injected content', async () => {
+      // Resource tree / project directory hints are appended to the fallback
+      // activation content but are NOT part of the injected skill.content.
+      const processor = new ActivationResultTrimProcessor({
+        injectedManifests: [credsManifest],
+        injectedSkills: [powershellSkill],
+      });
+      const result = await processor.process(
+        createContext([
+          activateToolsMessage({
+            content: `Successfully activated tools:\n\n## Creds (lobe-creds)\n${CREDS_SYSTEM_ROLE}\n${SKILL_CONTENT}\n\n${RESOURCE_TREE}\nAlready active: github`,
+            pluginState: {
+              activatedSkills: [{ name: 'PowerShell' }],
+              activatedTools: [{ apiCount: 2, identifier: 'lobe-creds', name: 'Creds' }],
+              alreadyActive: ['github'],
+            },
+          }),
+        ]),
+      );
+
+      const content = result.messages[0].content as string;
+      expect(content).not.toContain(SKILL_CONTENT);
+      expect(content).toContain(RESOURCE_TREE);
+      expect(content).toContain('Already active: github.');
+    });
+
+    it('should NOT trim when a fallback skill copy cannot be located in the blob', async () => {
+      // If the blob's copy diverges from the injected content we cannot prove
+      // what extra information it carries — keep the full result.
+      const processor = new ActivationResultTrimProcessor({
+        injectedManifests: [credsManifest],
+        injectedSkills: [powershellSkill],
+      });
+      const original = activateToolsMessage({
+        content: `Successfully activated tools:\n\n## Creds (lobe-creds)\n${CREDS_SYSTEM_ROLE}\nstale powershell content v1`,
+        pluginState: {
+          activatedSkills: [{ name: 'PowerShell' }],
+          activatedTools: [{ apiCount: 2, identifier: 'lobe-creds', name: 'Creds' }],
+        },
+      });
+      const result = await processor.process(createContext([original]));
+
+      expect(result.messages[0].content).toBe(original.content);
     });
 
     it('should leave pure already-active results untouched', async () => {
