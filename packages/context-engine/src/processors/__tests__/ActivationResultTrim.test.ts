@@ -185,6 +185,22 @@ describe('ActivationResultTrimProcessor', () => {
       expect(result.messages[0].content).toBe(original.content);
     });
 
+    it('should be byte-identical on results the activator already returns short', async () => {
+      // ActivatorExecutionRuntime now emits this exact confirmation at the
+      // source; the trim rebuilding the same bytes keeps history stable and
+      // guards the two formats against drifting apart.
+      const short = [
+        'Successfully activated tools: lobe-creds.listCreds, lobe-creds.createCred.',
+        'Usage instructions for the activated items are in the system prompt.',
+      ].join('\n');
+      const processor = new ActivationResultTrimProcessor({ injectedManifests: [credsManifest] });
+      const result = await processor.process(
+        createContext([activateToolsMessage({ content: short })]),
+      );
+
+      expect(result.messages[0].content).toBe(short);
+    });
+
     it('should leave pure already-active results untouched', async () => {
       const processor = new ActivationResultTrimProcessor({ injectedManifests: [credsManifest] });
       const original = activateToolsMessage({

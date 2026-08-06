@@ -62,13 +62,16 @@ export interface ActivationResultTrimConfig {
  * injected into the system prompt, so each activated tool/skill document
  * reaches the LLM payload exactly once.
  *
- * Background (LOBE-5684): `activateTools` writes the manifest systemRole + API
- * descriptions into its `role=tool` result, and once activated the same
- * manifest enters ToolSystemRoleProvider's system-prompt injection on every
- * subsequent request — permanently double-carrying the document.
- * `activateSkill` has the same shape for operation-pinned skills, whose
- * content SkillContextProvider injects while the activation result also holds
- * the full SKILL.md body.
+ * Background (LOBE-5684): `activateTools` used to write the manifest
+ * systemRole + API descriptions into its `role=tool` result, and once
+ * activated the same manifest enters ToolSystemRoleProvider's system-prompt
+ * injection on every subsequent request — permanently double-carrying the
+ * document. The activator now returns a short confirmation at the source, but
+ * persisted history from before that change still carries the full docs, and
+ * `activateSkill` (plus the activator's skill fallback) still returns the full
+ * SKILL.md body because the tool result is the only content channel for
+ * non-injected skills — so this payload-boundary trim remains load-bearing for
+ * both.
  *
  * The trim happens ONLY at the payload assembly boundary — DB/UI rows keep the
  * full activation result — and ONLY when the injection is confirmed for this
