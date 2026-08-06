@@ -186,11 +186,16 @@ vi.mock('node:crypto', () => ({
 const execSyncMock = vi.hoisted(() => vi.fn());
 const execFileSyncMock = vi.hoisted(() => vi.fn());
 const spawnMock = vi.hoisted(() => vi.fn());
+const resolveRemotePlatformCommandMock = vi.hoisted(() => vi.fn());
 
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<{ execSync: typeof ExecSyncType }>();
   return { ...actual, execFileSync: execFileSyncMock, execSync: execSyncMock, spawn: spawnMock };
 });
+
+vi.mock('@lobechat/heterogeneous-agents/scanHost', () => ({
+  resolveRemotePlatformCommand: resolveRemotePlatformCommandMock,
+}));
 
 vi.mock('node:os', () => ({
   default: { hostname: vi.fn(() => 'mock-hostname'), tmpdir: vi.fn(() => '/tmp') },
@@ -1004,6 +1009,12 @@ describe('GatewayConnectionCtr', () => {
 
     beforeEach(() => {
       execFileSyncMock.mockReturnValue('/usr/local/bin/lh\n');
+      resolveRemotePlatformCommandMock.mockResolvedValue({
+        available: true,
+        path: '/resolved/bin/openclaw',
+        resolvedPathEnv: '/resolved/bin:/usr/bin',
+        version: '1.2.3',
+      });
       spawnMock.mockReset();
     });
 
@@ -1026,7 +1037,13 @@ describe('GatewayConnectionCtr', () => {
       await vi.advanceTimersByTimeAsync(0);
 
       expect(spawnMock).toHaveBeenCalledTimes(1);
-      const [, spawnArgs] = spawnMock.mock.calls[0] as [string, string[]];
+      const [spawnCommand, spawnArgs, spawnOptions] = spawnMock.mock.calls[0] as [
+        string,
+        string[],
+        { env: NodeJS.ProcessEnv },
+      ];
+      expect(spawnCommand).toBe('/resolved/bin/openclaw');
+      expect(spawnOptions.env.PATH).toBe('/resolved/bin:/usr/bin');
       const messageArg = spawnArgs[spawnArgs.indexOf('--message') + 1];
       expect(messageArg).toContain('hello');
       expect(messageArg).toContain('lh notify');

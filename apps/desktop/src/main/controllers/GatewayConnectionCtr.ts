@@ -21,7 +21,9 @@ import type {
   RunCommandParams,
   WriteLocalFileParams,
 } from '@lobechat/electron-client-ipc';
+import { resolveRemotePlatformCommand } from '@lobechat/heterogeneous-agents/scanHost';
 import { type ILocalSystemService, LocalSystemExecutionRuntime } from '@lobechat/tool-runtime';
+import { execa } from 'execa';
 
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import ImessageBridgeService from '@/services/imessageBridgeSrv';
@@ -864,6 +866,11 @@ export default class GatewayConnectionCtr extends ControllerModule {
     };
 
     if (agentType === 'openclaw') {
+      const commandStatus = await resolveRemotePlatformCommand('openclaw');
+      if (!commandStatus.available || !commandStatus.path) {
+        throw new Error('OpenClaw executable not found');
+      }
+      if (commandStatus.resolvedPathEnv) childEnv.PATH = commandStatus.resolvedPathEnv;
       const lhPath = this.resolveLhPath();
       const openclawAgent = process.env['OPENCLAW_AGENT_ID'] ?? 'main';
 
@@ -886,20 +893,31 @@ export default class GatewayConnectionCtr extends ControllerModule {
         }
       }
 
-      const child = spawn(
-        'openclaw',
-        [
-          'agent',
-          '--agent',
-          openclawAgent,
-          '--session-id',
-          topicId,
-          '--message',
-          enrichedPrompt,
-          '--local',
-        ],
-        { cwd: workDir, detached: true, env: childEnv, stdio: 'ignore' },
-      );
+      const openclawArgs = [
+        'agent',
+        '--agent',
+        openclawAgent,
+        '--session-id',
+        topicId,
+        '--message',
+        enrichedPrompt,
+        '--local',
+      ];
+      const child =
+        process.platform === 'win32'
+          ? execa(commandStatus.path, openclawArgs, {
+              cwd: workDir,
+              detached: true,
+              env: childEnv,
+              reject: false,
+              stdio: 'ignore',
+            })
+          : spawn(commandStatus.path, openclawArgs, {
+              cwd: workDir,
+              detached: true,
+              env: childEnv,
+              stdio: 'ignore',
+            });
 
       const pid = child.pid;
       if (pid === undefined) throw new Error('Failed to get PID for openclaw process');
@@ -952,6 +970,11 @@ export default class GatewayConnectionCtr extends ControllerModule {
     }
 
     if (agentType === 'hermes') {
+      const commandStatus = await resolveRemotePlatformCommand('hermes');
+      if (!commandStatus.available || !commandStatus.path) {
+        throw new Error('Hermes executable not found');
+      }
+      if (commandStatus.resolvedPathEnv) childEnv.PATH = commandStatus.resolvedPathEnv;
       // Kill any existing hermes process for this topicId before spawning a new one.
       for (const [existingTaskId, entry] of this.platformTasks) {
         if (entry.topicId === topicId && entry.agentType === 'hermes') {
@@ -972,12 +995,23 @@ export default class GatewayConnectionCtr extends ControllerModule {
       }
 
       // Hermes prints "session_id: <id>\n<response>" to stdout in --quiet mode.
-      const child = spawn('hermes', hermesArgs, {
-        cwd: workDir,
-        detached: true,
-        env: childEnv,
-        stdio: ['ignore', 'pipe', 'ignore'],
-      });
+      const child =
+        process.platform === 'win32'
+          ? execa(commandStatus.path, hermesArgs, {
+              cwd: workDir,
+              detached: true,
+              env: childEnv,
+              reject: false,
+              stderr: 'ignore',
+              stdin: 'ignore',
+              stdout: 'pipe',
+            })
+          : spawn(commandStatus.path, hermesArgs, {
+              cwd: workDir,
+              detached: true,
+              env: childEnv,
+              stdio: ['ignore', 'pipe', 'ignore'],
+            });
 
       const pid = child.pid;
       if (pid === undefined) throw new Error('Failed to get PID for hermes process');

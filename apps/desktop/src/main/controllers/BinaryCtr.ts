@@ -6,7 +6,7 @@ import type {
   DetectHeterogeneousAgentCommandParams,
 } from '@lobechat/electron-client-ipc';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
-import { probeRemotePlatform } from '@lobechat/heterogeneous-agents/scanHost';
+import { resolveRemotePlatformCommand } from '@lobechat/heterogeneous-agents/scanHost';
 
 import type { BinaryCategory, BinaryStatus } from '@/core/infrastructure/BinaryManager';
 import { detectHeterogeneousCliCommand } from '@/modules/binaries';
@@ -46,7 +46,7 @@ export default class BinaryCtr extends ControllerModule {
   ): Promise<BinaryStatus> {
     logger.debug('Detecting heterogeneous agent command:', params);
     if (isRemoteHeterogeneousType(params.agentType)) {
-      return probeRemotePlatform(params.agentType);
+      return resolveRemotePlatformCommand(params.agentType);
     }
     return detectHeterogeneousCliCommand(params.agentType, params.command);
   }
