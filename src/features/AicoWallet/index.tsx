@@ -17,8 +17,11 @@ import {
   formatRemainingUsd,
   useAicoBillingSources,
 } from '@/features/AicoBilling';
+import { buildPhoneVerifyRedirectUrl } from '@/libs/better-auth/phone';
 import { useClientDataSWR } from '@/libs/swr';
 import { lambdaClient } from '@/libs/trpc/client';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   grid: css`
@@ -80,6 +83,9 @@ export const AicoWallet = () => {
   const { t } = useTranslation('aico');
   const [busy, setBusy] = useState(false);
   const [form] = Form.useForm<{ amountToman: number }>();
+  const phoneVerified = useUserStore((s) =>
+    Boolean(userProfileSelectors.userProfile(s)?.phoneNumberVerified),
+  );
 
   const { data: wallet, mutate: mutateWallet } = useClientDataSWR('aico-my-wallet', () =>
     lambdaClient.aicoBilling.getMyWallet.query(),
@@ -247,24 +253,42 @@ export const AicoWallet = () => {
               <Text type="secondary">
                 {t('wallet.trialDesc', { days: trial?.config.durationDays ?? 3 })}
               </Text>
-              <Button
-                loading={busy}
-                type="primary"
-                onClick={async () => {
-                  setBusy(true);
-                  try {
-                    await lambdaClient.aicoBilling.activateTrial.mutate();
-                    toast.success(t('wallet.trialActivated'));
-                    await mutateTrial();
-                  } catch (err) {
-                    toastAicoError(err, t, 'wallet.trialFailed');
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-              >
-                {t('wallet.trialActivate')}
-              </Button>
+              {phoneVerified ? (
+                <Button
+                  loading={busy}
+                  type="primary"
+                  onClick={async () => {
+                    setBusy(true);
+                    try {
+                      await lambdaClient.aicoBilling.activateTrial.mutate();
+                      toast.success(t('wallet.trialActivated'));
+                      await mutateTrial();
+                    } catch (err) {
+                      toastAicoError(err, t, 'wallet.trialFailed', {
+                        phoneVerifyCallbackUrl: '/wallet',
+                      });
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                >
+                  {t('wallet.trialActivate')}
+                </Button>
+              ) : (
+                <Flexbox horizontal gap={8} wrap="wrap">
+                  <Button
+                    type="primary"
+                    onClick={() => {
+                      window.location.assign(buildPhoneVerifyRedirectUrl('/wallet'));
+                    }}
+                  >
+                    {t('wallet.verifyPhone')}
+                  </Button>
+                  <Text fontSize={12} type="secondary">
+                    {t('wallet.verifyPhoneHint')}
+                  </Text>
+                </Flexbox>
+              )}
             </>
           )}
         </Flexbox>
