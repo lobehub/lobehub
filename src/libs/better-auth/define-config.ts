@@ -326,23 +326,13 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
           });
         },
       }),
-      // Aico Phase 1: phone OTP sign-in/up + optional verify for trial (not a login gate)
+      // Aico Phase 1: phone OTP sign-in + optional verify for trial (not a login gate)
       phoneNumber({
         allowedAttempts: 3,
         expiresIn: OTP_EXPIRES_IN,
         otpLength: 6,
         // Do not block email/OAuth sign-in when phone is unverified
         requireVerification: false,
-        // Allow first-time accounts via phone OTP (temp email until they add a real one)
-        signUpOnVerification: {
-          getTempEmail: (phone) => {
-            const digits = phone.replaceAll(/\D/g, '');
-            return `${digits}@phone.local`;
-          },
-          // Leave fullName empty so onboarding "What's your name?" is blank
-          // (default Better Auth behavior would store the phone number as name).
-          getTempName: () => '',
-        },
         // Map Better Auth logical field → users.phone (column already exists)
         schema: {
           user: {

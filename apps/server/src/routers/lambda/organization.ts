@@ -9,15 +9,17 @@ import {
   isBudgetPeriod,
   microUsdToDecimalString,
   tomanString,
-  tomanToMicroUsd,
   usdDecimalStringToMicro,
 } from '@/database/utils/aicoMoney';
 import { appEnv } from '@/envs/app';
 import { normalizeIranianPhoneNumber } from '@/libs/better-auth/phone';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { getTomanPerUsd } from '@/server/services/aico/fxService';
 import { assertMockTopupAllowed } from '@/server/services/aico/mockTopupGate';
+import {
+  resolveTopupAmount,
+  topupAmountInputSchema,
+} from '@/server/services/aico/resolveTopupAmount';
 import { EmailService } from '@/server/services/email';
 import { AicoOpenRouterKeyService } from '@/server/services/openrouter/keyService';
 import { SmsService } from '@/server/services/sms';
@@ -152,22 +154,16 @@ export const organizationRouter = router({
           publicUserId: z.string().min(3).max(64).optional(),
           role: z.enum(['admin', 'member']).default('member'),
         })
-        .refine(
-          (v) =>
-            Boolean(v.identifierValue || v.email || v.phone || v.publicUserId),
-          { message: 'INVITE_IDENTIFIER_REQUIRED' },
-        ),
+        .refine((v) => Boolean(v.identifierValue || v.email || v.phone || v.publicUserId), {
+          message: 'INVITE_IDENTIFIER_REQUIRED',
+        }),
     )
     .mutation(async ({ ctx, input }) => {
       await requireOrgManager(ctx.organizationModel, ctx.userId, input.orgId);
 
-      let identifierType: 'email' | 'phone' | 'public_user_id' =
+      const identifierType: 'email' | 'phone' | 'public_user_id' =
         input.identifierType ??
-        (input.publicUserId
-          ? 'public_user_id'
-          : input.phone
-            ? 'phone'
-            : 'email');
+        (input.publicUserId ? 'public_user_id' : input.phone ? 'phone' : 'email');
       let identifierValue = (
         input.identifierValue ??
         input.publicUserId ??
@@ -382,8 +378,7 @@ export const organizationRouter = router({
 
   mockOrgTopup: orgProcedure
     .input(
-      z.object({
-        amountToman: z.number().int().positive().max(100_000_000),
+      topupAmountInputSchema.extend({
         orgId: z.string().min(1),
       }),
     )
@@ -391,19 +386,13 @@ export const organizationRouter = router({
       await requireOrgManager(ctx.organizationModel, ctx.userId, input.orgId);
       assertMockTopupAllowed();
 
-      const { rate } = await getTomanPerUsd();
-      // Live FX rates are fractional; integer money math needs an integer rate.
-      const fxRate = Math.round(rate);
-      if (!Number.isFinite(fxRate) || fxRate <= 0) {
-        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'INVALID_FX_RATE' });
-      }
-      const amountMicroUsd = Number(tomanToMicroUsd(input.amountToman, fxRate));
+      const { amountMicroUsd, amountToman, fxRateTomanPerUsd } = await resolveTopupAmount(input);
       const result = await ctx.organizationModel.addManualCredit({
         amountMicroUsd,
-        amountToman: input.amountToman,
+        amountToman,
         createdByUserId: ctx.userId,
         description: 'Mock org topup',
-        fxRateTomanPerUsd: fxRate,
+        fxRateTomanPerUsd,
         orgId: input.orgId,
         type: 'topup',
       });
@@ -413,7 +402,7 @@ export const organizationRouter = router({
         balanceMicroUsd: String(result.organization.walletBalanceMicroUsd ?? 0),
         balanceToman: tomanString(result.organization.walletBalanceToman ?? 0),
         balanceUsd: microUsdToDecimalString(result.organization.walletBalanceMicroUsd ?? 0),
-        fxRate: String(fxRate),
+        fxRate: String(fxRateTomanPerUsd),
       };
     }),
 

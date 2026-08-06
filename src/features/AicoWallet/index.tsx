@@ -2,7 +2,7 @@
 
 import { Block, Flexbox, Tag, Text } from '@lobehub/ui';
 import { Button, toast } from '@lobehub/ui/base-ui';
-import { Form, InputNumber, Table } from 'antd';
+import { Form, Table } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { CheckIcon, WalletIcon } from 'lucide-react';
 import { useState } from 'react';
@@ -17,6 +17,12 @@ import {
   formatRemainingUsd,
   useAicoBillingSources,
 } from '@/features/AicoBilling';
+import {
+  type FxTopupChargeField,
+  FxTopupFields,
+  type FxTopupFormValues,
+  resolveFxTopupPayload,
+} from '@/features/AicoBilling/FxTopupFields';
 import { buildPhoneVerifyRedirectUrl } from '@/libs/better-auth/phone';
 import { useClientDataSWR } from '@/libs/swr';
 import { lambdaClient } from '@/libs/trpc/client';
@@ -82,7 +88,8 @@ const sourceTitle = (source: AicoBillingSource, t: (key: string) => string): str
 export const AicoWallet = () => {
   const { t } = useTranslation('aico');
   const [busy, setBusy] = useState(false);
-  const [form] = Form.useForm<{ amountToman: number }>();
+  const [chargeField, setChargeField] = useState<FxTopupChargeField>('toman');
+  const [form] = Form.useForm<FxTopupFormValues>();
   const phoneVerified = useUserStore((s) =>
     Boolean(userProfileSelectors.userProfile(s)?.phoneNumberVerified),
   );
@@ -193,20 +200,18 @@ export const AicoWallet = () => {
       <Block className={styles.section} variant="outlined">
         <Flexbox gap={16}>
           <Text strong>{t('wallet.mockTopup')}</Text>
-          <Text type="secondary">
-            {t('wallet.fxHint', { rate: fx?.tomanPerUsd?.toLocaleString() ?? '—' })}
-            {fx?.source ? ` (${fx.source})` : ''}
-          </Text>
           <Form
             form={form}
             layout="vertical"
             onFinish={async (values) => {
+              const payload = resolveFxTopupPayload(values, chargeField);
+              if (!payload) return;
               setBusy(true);
               try {
-                const result = await lambdaClient.aicoBilling.mockTopup.mutate(values);
+                const result = await lambdaClient.aicoBilling.mockTopup.mutate(payload);
                 toast.success(
                   t('wallet.topupSuccess', {
-                    toman: values.amountToman.toLocaleString(),
+                    toman: (payload.amountToman ?? values.amountToman ?? 0).toLocaleString(),
                     usd: result.amountUsd,
                   }),
                 );
@@ -219,13 +224,13 @@ export const AicoWallet = () => {
               }
             }}
           >
-            <Form.Item
-              label={t('wallet.amountToman')}
-              name="amountToman"
-              rules={[{ required: true }]}
-            >
-              <InputNumber min={1000} step={1000} style={{ width: '100%' }} />
-            </Form.Item>
+            <FxTopupFields
+              chargeField={chargeField}
+              form={form}
+              fxRate={fx?.tomanPerUsd}
+              fxSource={fx?.source}
+              onChargeFieldChange={setChargeField}
+            />
             <Button htmlType="submit" loading={busy} type="primary">
               {t('wallet.topupSubmit')}
             </Button>

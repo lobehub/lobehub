@@ -94,7 +94,7 @@ describe('AicoBilling types helpers', () => {
   });
 
   it('formatRemainingUsd formats decimal strings', () => {
-    expect(formatRemainingUsd('12.5')).toBe('$12.5000');
-    expect(formatRemainingUsd(undefined)).toBe('$0.0000');
+    expect(formatRemainingUsd('12.5')).toBe('$12.50');
+    expect(formatRemainingUsd(undefined)).toBe('$0.00');
   });
 });

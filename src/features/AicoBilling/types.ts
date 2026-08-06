@@ -70,6 +70,6 @@ export const findBillingSource = (
 
 export const formatRemainingUsd = (remainingUsd: string | undefined): string => {
   const n = Number(remainingUsd ?? 0);
-  if (!Number.isFinite(n)) return '$0.0000';
-  return `$${n.toFixed(4)}`;
+  if (!Number.isFinite(n)) return '$0.00';
+  return `$${n.toFixed(2)}`;
 };

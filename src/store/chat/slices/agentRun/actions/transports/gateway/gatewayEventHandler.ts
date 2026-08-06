@@ -34,7 +34,11 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 // cancel and a deferred-tool park. These must NOT mark the topic unread, and
 // must take the non-success branch in `onSessionComplete` so the run clears
 // back to 'active' rather than persisting as an unread completion.
-const NON_COMPLETION_RUNTIME_END_REASONS = new Set(['interrupted', 'waiting_for_async_tool']);
+const NON_COMPLETION_RUNTIME_END_REASONS = new Set([
+  'error',
+  'interrupted',
+  'waiting_for_async_tool',
+]);
 
 /**
  * Whether an `agent_runtime_end` event represents a clean completion (vs. a
@@ -604,8 +608,11 @@ export const createGatewayEventHandler = (
       return;
     }
 
-    if (event.type === 'agent_runtime_end' || event.type === 'error') {
-      terminalState = event.type === 'error' ? 'error' : 'completed';
+    if (event.type === 'error') {
+      terminalState = 'error';
+    } else if (event.type === 'agent_runtime_end') {
+      const reason = (event.data as { reason?: string } | undefined)?.reason;
+      terminalState = reason === 'error' ? 'error' : 'completed';
     }
 
     switch (event.type) {
@@ -1084,7 +1091,13 @@ export const createGatewayEventHandler = (
 
       case 'agent_runtime_end': {
         enqueue(async () => {
-          const data = event.data as { reason?: string; uiMessages?: UIChatMessage[] } | undefined;
+          const data = event.data as
+            | {
+                finalState?: { error?: unknown };
+                reason?: string;
+                uiMessages?: UIChatMessage[];
+              }
+            | undefined;
 
           void emitClientAgentSignalSourceEvent({
             payload: {
@@ -1161,7 +1174,39 @@ export const createGatewayEventHandler = (
           //     notification (skipped if a queued follow-up was scheduled).
           //   • cancelled → completeRun only completes the op (no unread badge,
           //     no queue drain, no notification) — same as the old inline path.
+          //   • error → failed run with persisted inline error card.
           if (runtimeType === 'gateway' && runLifecycle) {
+            if (data?.reason === 'error') {
+              const messageError = toChatMessageError(data.finalState?.error ?? data);
+
+              await runLifecycle.completeRun({ ...lifecycleEventBase, status: 'failed' });
+
+              const updateResult = await messageService
+                .updateMessageError(currentAssistantMessageId, messageError, {
+                  agentId: context.agentId,
+                  groupId: context.groupId,
+                  threadId: context.threadId,
+                  topicId: context.topicId,
+                })
+                .catch(console.error);
+
+              if (updateResult?.success && updateResult.messages) {
+                get().replaceMessages(updateResult.messages, { context });
+              } else {
+                await fetchAndReplaceMessages(get, context).catch(console.error);
+              }
+
+              get().internal_dispatchMessage(
+                {
+                  id: currentAssistantMessageId,
+                  type: 'updateMessage',
+                  value: { error: messageError },
+                },
+                dispatchContext,
+              );
+              return;
+            }
+
             const status = isCompletedRuntimeEnd(data?.reason) ? 'completed' : 'cancelled';
             const { requeued } = await runLifecycle.completeRun({
               ...lifecycleEventBase,

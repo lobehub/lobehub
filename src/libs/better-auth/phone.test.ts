@@ -1,5 +1,6 @@
 import {
   buildPhoneVerifyRedirectUrl,
+  formatIranianPhoneForDisplay,
   isPhoneLikeDisplayName,
   isValidIranianPhoneNumber,
   normalizeIranianPhoneNumber,
@@ -67,5 +68,16 @@ describe('buildPhoneVerifyRedirectUrl', () => {
     expect(buildPhoneVerifyRedirectUrl('/verify-phone?callbackUrl=%2F')).toBe(
       '/verify-phone?callbackUrl=%2F',
     );
+  });
+});
+
+describe('formatIranianPhoneForDisplay', () => {
+  it('converts E.164 to local 09… form', () => {
+    expect(formatIranianPhoneForDisplay('+989121234567')).toBe('09121234567');
+  });
+
+  it('returns empty for missing input', () => {
+    expect(formatIranianPhoneForDisplay(null)).toBe('');
+    expect(formatIranianPhoneForDisplay(undefined)).toBe('');
   });
 });

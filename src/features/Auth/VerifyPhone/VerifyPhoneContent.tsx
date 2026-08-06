@@ -1,30 +1,12 @@
 import { Flexbox, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { Form, Input } from 'antd';
-import { createStaticStyles } from 'antd-style';
 import { useTranslation } from 'react-i18next';
 
+import { OtpCodeInput } from '@/features/Auth/OtpCodeInput';
 import { isValidIranianPhoneNumber } from '@/libs/better-auth/phone';
 
 import { useVerifyPhone } from './useVerifyPhone';
-
-const styles = createStaticStyles(({ css }) => ({
-  // Stretch OTP cells across the same width as the block action buttons below.
-  otp: css`
-    display: flex;
-    justify-content: space-between;
-    width: 100%;
-
-    .ant-otp-input-wrapper {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .ant-otp-input {
-      width: 100%;
-    }
-  `,
-}));
 
 interface VerifyPhoneContentProps {
   callbackUrl: string;
@@ -58,7 +40,7 @@ export const VerifyPhoneContent = ({ callbackUrl }: VerifyPhoneContentProps) => 
               { len: 6, message: t('betterAuth.verifyPhone.otp.length') },
             ]}
           >
-            <Input.OTP autoFocus className={styles.otp} length={6} size="large" />
+            <OtpCodeInput autoFocus />
           </Form.Item>
           <Button block htmlType="submit" loading={loading} size="large" type="primary">
             {t('betterAuth.verifyPhone.otp.submit')}

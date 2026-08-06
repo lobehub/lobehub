@@ -446,8 +446,11 @@ export const messageCRUDSlice: StateCreator<
       value: { error },
     });
 
-    // Persist to database
-    const result = await messageService.updateMessage(id, { error }, context);
+    // Persist to database — normalize missing error.type via messageService helper.
+    const result =
+      error === null
+        ? await messageService.updateMessage(id, { error: null }, context)
+        : await messageService.updateMessageError(id, error, context);
 
     if (result?.success && result.messages) {
       replaceMessages(result.messages);

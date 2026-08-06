@@ -15,6 +15,12 @@ import { useTranslation } from 'react-i18next';
 
 import { toastAicoError } from '@/business/client/resolveAicoErrorMessage';
 import StatisticCard from '@/components/StatisticCard';
+import {
+  type FxTopupChargeField,
+  FxTopupFields,
+  type FxTopupFormValues,
+  resolveFxTopupPayload,
+} from '@/features/AicoBilling/FxTopupFields';
 import { AICO_TABLE_SCROLL, aicoPanelStyles } from '@/features/AicoPanels';
 import { useClientDataSWR } from '@/libs/swr';
 import { lambdaClient } from '@/libs/trpc/client';
@@ -25,13 +31,12 @@ export const PlatformAdminPanel = () => {
   const { t } = useTranslation('aico');
   const [tab, setTab] = useState('overview');
   const [createForm] = Form.useForm<{ managerEmail: string; name: string }>();
-  const [creditForm] = Form.useForm<{ amountToman: number; description?: string; orgId: string }>();
-  const [userCreditForm] = Form.useForm<{
-    amountToman: number;
-    description?: string;
-    email?: string;
-    userId?: string;
-  }>();
+  const [creditForm] = Form.useForm<FxTopupFormValues & { description?: string; orgId: string }>();
+  const [creditChargeField, setCreditChargeField] = useState<FxTopupChargeField>('toman');
+  const [userCreditForm] = Form.useForm<
+    FxTopupFormValues & { description?: string; email?: string; userId?: string }
+  >();
+  const [userCreditChargeField, setUserCreditChargeField] = useState<FxTopupChargeField>('toman');
   const [assignForm] = Form.useForm<{
     managerEmail: string;
     orgId: string;
@@ -53,6 +58,9 @@ export const PlatformAdminPanel = () => {
   const { data: financials, mutate: mutateFinancials } = useClientDataSWR(
     'aico-platform-financials',
     () => lambdaClient.platformAdmin.getPlatformFinancials.query(),
+  );
+  const { data: fx } = useClientDataSWR('aico-fx', () =>
+    lambdaClient.aicoBilling.getFxRate.query(),
   );
   const { data: master } = useClientDataSWR('aico-platform-master', () =>
     lambdaClient.platformAdmin.getMasterAccountStatus.query(),
@@ -568,10 +576,17 @@ export const PlatformAdminPanel = () => {
                 form={creditForm}
                 layout="vertical"
                 onFinish={async (values) => {
+                  const payload = resolveFxTopupPayload(values, creditChargeField);
+                  if (!payload) return;
                   setBusy(true);
                   try {
-                    await lambdaClient.platformAdmin.addManualCredit.mutate(values);
+                    await lambdaClient.platformAdmin.addManualCredit.mutate({
+                      ...payload,
+                      description: values.description,
+                      orgId: values.orgId,
+                    });
                     toast.success(t('platform.credited'));
+                    creditForm.resetFields(['amountToman', 'amountUsd', 'description']);
                     await Promise.all([mutate(), mutateFinancials()]);
                   } catch (err) {
                     toastAicoError(err, t, 'platform.creditFailed');
@@ -589,13 +604,16 @@ export const PlatformAdminPanel = () => {
                     }))}
                   />
                 </Form.Item>
-                <Form.Item
-                  label={t('platform.amountToman')}
-                  name="amountToman"
-                  rules={[{ required: true }]}
-                >
-                  <InputNumber min={1} style={{ width: '100%' }} />
-                </Form.Item>
+                <FxTopupFields
+                  chargeField={creditChargeField}
+                  form={creditForm}
+                  fxRate={fx?.tomanPerUsd}
+                  fxSource={fx?.source}
+                  tomanLabelKey="platform.amountToman"
+                  tomanMin={1}
+                  usdLabelKey="platform.amountUsd"
+                  onChargeFieldChange={setCreditChargeField}
+                />
                 <Form.Item label={t('platform.description')} name="description">
                   <Input />
                 </Form.Item>
@@ -618,16 +636,18 @@ export const PlatformAdminPanel = () => {
                     toast.error(t('platform.userCreditTargetRequired'));
                     return;
                   }
+                  const payload = resolveFxTopupPayload(values, userCreditChargeField);
+                  if (!payload) return;
                   setBusy(true);
                   try {
                     await lambdaClient.platformAdmin.addManualUserCredit.mutate({
-                      amountToman: values.amountToman,
+                      ...payload,
                       description: values.description,
                       email: values.email || undefined,
                       userId: values.userId || undefined,
                     });
                     toast.success(t('platform.userCredited'));
-                    userCreditForm.resetFields(['amountToman', 'description']);
+                    userCreditForm.resetFields(['amountToman', 'amountUsd', 'description']);
                     await Promise.all([mutateUserWallets(), mutateFinancials()]);
                   } catch (err) {
                     toastAicoError(err, t, 'platform.userCreditFailed');
@@ -663,13 +683,16 @@ export const PlatformAdminPanel = () => {
                     />
                   </Form.Item>
                 </div>
-                <Form.Item
-                  label={t('platform.amountToman')}
-                  name="amountToman"
-                  rules={[{ required: true }]}
-                >
-                  <InputNumber min={1} style={{ width: '100%' }} />
-                </Form.Item>
+                <FxTopupFields
+                  chargeField={userCreditChargeField}
+                  form={userCreditForm}
+                  fxRate={fx?.tomanPerUsd}
+                  fxSource={fx?.source}
+                  tomanLabelKey="platform.amountToman"
+                  tomanMin={1}
+                  usdLabelKey="platform.amountUsd"
+                  onChargeFieldChange={setUserCreditChargeField}
+                />
                 <Form.Item label={t('platform.description')} name="description">
                   <Input />
                 </Form.Item>

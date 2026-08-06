@@ -242,6 +242,7 @@ export class GatewayActionImpl {
       if (
         isOwnOp &&
         event.type === 'agent_runtime_end' &&
+        (event.data as { reason?: string } | undefined)?.reason !== 'error' &&
         isCompletedRuntimeEnd((event.data as { reason?: string } | undefined)?.reason)
       ) {
         terminalSucceeded = true;

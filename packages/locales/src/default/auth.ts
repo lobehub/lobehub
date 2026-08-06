@@ -153,6 +153,8 @@ export default {
   'betterAuth.signup.firstNameLabel': 'First name',
   'betterAuth.signup.firstNamePlaceholder': 'First name',
   'betterAuth.signup.hasAccount': 'Already have an account?',
+  'betterAuth.signup.phoneDisabledHint':
+    'You can sign in with phone, but phone sign-up is disabled for now.',
   'betterAuth.signup.phoneLink': 'Continue with phone',
   'betterAuth.signup.invalidReferralCodeContent':
     'The referral code "{{code}}" you entered is invalid or expired. Do you want to continue signing up?',
@@ -201,7 +203,7 @@ export default {
   'betterAuth.verifyPhone.otp.resend': 'Resend code',
   'betterAuth.verifyPhone.otp.resent': 'Code resent',
   'betterAuth.verifyPhone.otp.submit': 'Verify',
-  'betterAuth.verifyPhone.phone.invalid': 'Enter a valid Iranian mobile (e.g. 0912… or +98912…)',
+  'betterAuth.verifyPhone.phone.invalid': 'Enter a valid Iranian mobile (e.g. 0912…)',
   'betterAuth.verifyPhone.phone.placeholder': '09121234567',
   'betterAuth.verifyPhone.phone.required': 'Please enter your mobile number',
   'betterAuth.verifyPhone.phone.submit': 'Send code',

@@ -50,7 +50,7 @@ const assertFiniteIntegerString = (raw: string, label: string): bigint => {
 /** Parse a decimal USD string (e.g. "12.345678") into micro-USD, truncating toward zero. */
 export const usdDecimalStringToMicro = (value: string): bigint => {
   const trimmed = value.trim();
-  if (!/^-?\d+(\.\d+)?$/.test(trimmed)) throw new Error('INVALID_USD_DECIMAL');
+  if (!/^-?\d+(?:\.\d+)?$/.test(trimmed)) throw new Error('INVALID_USD_DECIMAL');
 
   const negative = trimmed.startsWith('-');
   const unsigned = negative ? trimmed.slice(1) : trimmed;
@@ -62,7 +62,8 @@ export const usdDecimalStringToMicro = (value: string): bigint => {
 
 /** Format micro-USD as a fixed 6-decimal string for API/tRPC. */
 export const microUsdToDecimalString = (micro: bigint | number | string): string => {
-  const value = typeof micro === 'bigint' ? micro : assertFiniteIntegerString(String(micro), 'micro');
+  const value =
+    typeof micro === 'bigint' ? micro : assertFiniteIntegerString(String(micro), 'micro');
   const negative = value < 0n;
   const abs = negative ? -value : value;
   const whole = abs / MICRO_USD_PER_USD;
@@ -87,12 +88,28 @@ export const openRouterUsdToMicroFloor = (usd: number): bigint => {
  * rate = toman per 1 USD (positive integer or integer string).
  * Floor toward zero so Aico never over-credits.
  */
-export const tomanToMicroUsd = (amountToman: bigint | number | string, tomanPerUsd: bigint | number | string): bigint => {
+export const tomanToMicroUsd = (
+  amountToman: bigint | number | string,
+  tomanPerUsd: bigint | number | string,
+): bigint => {
   const toman = typeof amountToman === 'bigint' ? amountToman : BigInt(amountToman);
   const rate = typeof tomanPerUsd === 'bigint' ? tomanPerUsd : BigInt(tomanPerUsd);
   if (toman <= 0n) throw new Error('INVALID_TOMAN_AMOUNT');
   if (rate <= 0n) throw new Error('INVALID_FX_RATE');
   return (toman * MICRO_USD_PER_USD) / rate;
+};
+
+/** Inverse of tomanToMicroUsd — floor toward zero. */
+export const microUsdToToman = (
+  micro: bigint | number | string,
+  tomanPerUsd: bigint | number | string,
+): bigint => {
+  const microValue =
+    typeof micro === 'bigint' ? micro : assertFiniteIntegerString(String(micro), 'micro');
+  const rate = typeof tomanPerUsd === 'bigint' ? tomanPerUsd : BigInt(tomanPerUsd);
+  if (microValue <= 0n) throw new Error('INVALID_MICRO_USD_AMOUNT');
+  if (rate <= 0n) throw new Error('INVALID_FX_RATE');
+  return (microValue * rate) / MICRO_USD_PER_USD;
 };
 
 /** Confirmed unused reservation: never negative; floor already implied by integer subtraction. */
@@ -110,7 +127,8 @@ export const assertNonNegativeMicro = (value: bigint, label = 'amount'): void =>
 };
 
 /** JSON-safe money field (decimal string). */
-export const moneyString = (micro: bigint | number | string): string => microUsdToDecimalString(micro);
+export const moneyString = (micro: bigint | number | string): string =>
+  microUsdToDecimalString(micro);
 
 export const tomanString = (toman: bigint | number | string): string => {
   const value = typeof toman === 'bigint' ? toman : BigInt(toman);

@@ -70,12 +70,6 @@ const BetterAuthSignUpForm = () => {
     }
   }, [searchParams, form]);
 
-  const handleGoToPhone = () => {
-    void trackLoginOrSignupClicked({ spm: 'signup.go_to_phone.click' }).finally(() => {
-      navigate(`/signin?mode=phone&${searchParams.toString()}`);
-    });
-  };
-
   const footer = (
     <Text align="center" fontSize={13} type="secondary">
       {t('betterAuth.signup.hasAccount')}{' '}
@@ -104,11 +98,13 @@ const BetterAuthSignUpForm = () => {
   return (
     <AuthCard footer={footer} title={t('betterAuth.signup.title')}>
       <AuthSocialButtons
+        phoneDisabled
         showDivider
         oAuthSSOProviders={oAuthSSOProviders}
+        phoneDisabledHintKey="betterAuth.signup.phoneDisabledHint"
         phoneLabelKey="betterAuth.signup.phoneLink"
         socialLoading={socialLoading}
-        onPhoneClick={handleGoToPhone}
+        onPhoneClick={() => {}}
         onSocialSignIn={(provider) =>
           continueWithAgreement(() => {
             void onSocialSignIn(provider);
