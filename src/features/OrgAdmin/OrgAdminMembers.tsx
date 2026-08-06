@@ -375,7 +375,7 @@ export const OrgAdminMembers = () => {
                   options={[
                     { label: t('org.usageMemberAll'), value: 'all' },
                     ...(dashboard?.members || []).map((m) => ({
-                      label: m.publicCode || m.userId.slice(0, 12),
+                      label: m.email || m.username || m.publicCode || m.userId.slice(0, 12),
                       value: m.memberId,
                     })),
                   ]}
@@ -411,6 +411,16 @@ export const OrgAdminMembers = () => {
                     dataIndex: 'publicCode',
                     title: t('org.columns.publicId'),
                     render: (v: string | null, row) => v || row.userId.slice(0, 12),
+                  },
+                  {
+                    dataIndex: 'email',
+                    title: t('org.columns.email'),
+                    render: (v: string | null) => v || '—',
+                  },
+                  {
+                    dataIndex: 'username',
+                    title: t('org.columns.username'),
+                    render: (v: string | null) => v || '—',
                   },
                   { dataIndex: 'role', title: t('org.columns.role') },
                   {
@@ -529,10 +539,13 @@ export const OrgAdminMembers = () => {
                   >
                     <Select
                       style={{ width: '100%' }}
-                      options={(roster?.members || []).map((m) => ({
-                        label: `${(m as { publicCode?: string | null }).publicCode || m.userId} (${m.role})`,
-                        value: m.id,
-                      }))}
+                      options={(roster?.members || []).map((m) => {
+                        const identity = m.email || m.username || m.publicCode || m.userId;
+                        return {
+                          label: `${identity} (${m.role})`,
+                          value: m.id,
+                        };
+                      })}
                     />
                   </Form.Item>
                   <Form.Item
@@ -564,6 +577,16 @@ export const OrgAdminMembers = () => {
                     dataIndex: 'publicCode',
                     title: t('org.columns.publicId'),
                     render: (v: string | null, row) => v || row.userId.slice(0, 12),
+                  },
+                  {
+                    dataIndex: 'email',
+                    title: t('org.columns.email'),
+                    render: (v: string | null) => v || '—',
+                  },
+                  {
+                    dataIndex: 'username',
+                    title: t('org.columns.username'),
+                    render: (v: string | null) => v || '—',
                   },
                   { dataIndex: 'role', title: t('org.columns.role') },
                   { dataIndex: 'status', title: t('org.columns.status') },

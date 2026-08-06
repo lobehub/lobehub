@@ -42,6 +42,7 @@ vi.mock('@/server/services/openrouter/keyService', () => ({
     ensureMemberKey = vi.fn().mockResolvedValue({ created: false, keyId: null });
     disableMemberKey = vi.fn().mockResolvedValue(null);
     disableAllOrgMemberKeys = disableAllOrgMemberKeysMock;
+    getUserRemaining = vi.fn().mockRejectedValue(new Error('not mocked'));
     reclaimMemberKey = vi.fn().mockResolvedValue(null);
     syncMemberUsage = vi.fn().mockResolvedValue(null);
   },
@@ -243,6 +244,8 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
 
     const members = await ownerCaller.listMembers({ orgId: created.id });
     const ownerMember = members.members.find((m) => m.userId === ownerId)!;
+    expect(ownerMember.email).toBe('owner@rbac.test');
+    expect(ownerMember.username).toBeNull();
     const memberChart = await ownerCaller.getMemberUsageChart({
       from: today,
       orgId: created.id,
@@ -316,6 +319,8 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
     const wallets = await platformCaller.listUserWallets();
     const strangerWallet = wallets.find((w: any) => w.userId === strangerId);
     expect(strangerWallet?.publicCode).toMatch(/^USR/);
+    expect(strangerWallet?.email).toBe('stranger@rbac.test');
+    expect(strangerWallet?.username).toBeNull();
 
     const orgs = await platformCaller.listOrganizations({});
     expect(orgs.items.every((o: any) => typeof o.publicCode === 'string')).toBe(true);

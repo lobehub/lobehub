@@ -445,21 +445,37 @@ export class OrganizationModel {
     });
   };
 
-  /** Same as {@link listMembers}, joined with each member's public short code. */
+  /** Same as {@link listMembers}, joined with public short code + user identity. */
   listMembersWithPublicCodes = async (
     orgId: string,
-  ): Promise<Array<OrganizationMemberItem & { publicCode: string | null }>> => {
+  ): Promise<
+    Array<
+      OrganizationMemberItem & {
+        email: string | null;
+        publicCode: string | null;
+        username: string | null;
+      }
+    >
+  > => {
     const rows = await this.db
       .select({
+        email: users.email,
         member: organizationMembers,
         publicCode: aicoUserPublicIds.publicCode,
+        username: users.username,
       })
       .from(organizationMembers)
       .leftJoin(aicoUserPublicIds, eq(aicoUserPublicIds.userId, organizationMembers.userId))
+      .leftJoin(users, eq(users.id, organizationMembers.userId))
       .where(eq(organizationMembers.orgId, orgId))
       .orderBy(desc(organizationMembers.createdAt));
 
-    return rows.map((r) => ({ ...r.member, publicCode: r.publicCode ?? null }));
+    return rows.map((r) => ({
+      ...r.member,
+      email: r.email ?? null,
+      publicCode: r.publicCode ?? null,
+      username: r.username ?? null,
+    }));
   };
 
   updateMemberRole = async (params: { memberId: string; orgId: string; role: OrgMemberRole }) => {
@@ -1170,6 +1186,20 @@ export class OrganizationModel {
     return new Map(rows.map((r) => [r.userId, r.publicCode]));
   };
 
+  /** Batch lookup of email + username for admin listings. */
+  getUserIdentitiesByIds = async (
+    userIds: string[],
+  ): Promise<Map<string, { email: string | null; username: string | null }>> => {
+    if (userIds.length === 0) return new Map();
+    const rows = await this.db
+      .select({ email: users.email, id: users.id, username: users.username })
+      .from(users)
+      .where(inArray(users.id, userIds));
+    return new Map(
+      rows.map((r) => [r.id, { email: r.email ?? null, username: r.username ?? null }]),
+    );
+  };
+
   // ─── Dashboard ───────────────────────────────────────────────────────
 
   getOrgDashboardStats = async (orgId: string) => {
@@ -1189,6 +1219,7 @@ export class OrganizationModel {
         const settledUsageMicroUsd = Number(budget?.settledUsageMicroUsd ?? 0);
         const reservedMicroUsd = Number(budget?.reservedMicroUsd ?? 0);
         return {
+          email: m.email,
           memberId: m.id,
           nextRenewalAt: budget?.nextRenewalAt ?? null,
           period: (budget?.period as BudgetPeriod | undefined) ?? 'total',
@@ -1202,6 +1233,7 @@ export class OrganizationModel {
           status: m.status as OrgMemberStatus,
           teamName: team?.name ?? null,
           userId: m.userId,
+          username: m.username,
         };
       }),
     );
