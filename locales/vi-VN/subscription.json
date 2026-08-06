@@ -449,6 +449,7 @@
   "plans.plan.ultimate.desc": "Dành cho người dùng chuyên sâu cần hội thoại AI phức tạp",
   "plans.plan.ultimate.title": "Tối ưu",
   "plans.restoreSubscription": "Khôi phục đăng ký",
+  "plans.restoreSubscriptionError": "Không thể khôi phục đăng ký của bạn",
   "plans.restoreSubscriptionSuccess": "Đăng ký đã được khôi phục",
   "plans.storage.title": "Lưu trữ dữ liệu",
   "plans.subscribe": "Đăng ký",

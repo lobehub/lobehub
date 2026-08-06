@@ -248,6 +248,7 @@
   "uploadDock.body.item.pending": "Przygotowywanie do przesłania...",
   "uploadDock.body.item.processing": "Przetwarzanie pliku...",
   "uploadDock.body.item.restTime": "Pozostało {{time}}",
+  "uploadDock.body.item.retry": "Ponów przesyłanie",
   "uploadDock.fileQueueInfo": "Przesyłanie pierwszych {{count}} plików, {{remaining}} w kolejce",
   "uploadDock.header.cancelAll": "Anuluj wszystko",
   "uploadDock.totalCount": "Łącznie {{count}} elementów",

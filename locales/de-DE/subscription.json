@@ -449,6 +449,7 @@
   "plans.plan.ultimate.desc": "Für Power-User mit komplexen KI-Anforderungen",
   "plans.plan.ultimate.title": "Ultimate",
   "plans.restoreSubscription": "Abonnement wiederherstellen",
+  "plans.restoreSubscriptionError": "Ihr Abonnement konnte nicht wiederhergestellt werden",
   "plans.restoreSubscriptionSuccess": "Abonnement wurde wiederhergestellt",
   "plans.storage.title": "Datenspeicher",
   "plans.subscribe": "Abonnieren",

@@ -449,6 +449,7 @@
   "plans.plan.ultimate.desc": "Для активных пользователей с комплексными задачами",
   "plans.plan.ultimate.title": "Максимум",
   "plans.restoreSubscription": "Восстановить подписку",
+  "plans.restoreSubscriptionError": "Не удалось восстановить вашу подписку",
   "plans.restoreSubscriptionSuccess": "Подписка восстановлена",
   "plans.storage.title": "Хранилище данных",
   "plans.subscribe": "Оформить подписку",

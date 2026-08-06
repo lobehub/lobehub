@@ -1,11 +1,11 @@
 'use client';
 
-import { Center, Empty, Text } from '@lobehub/ui';
+import { Center, Empty, Flexbox, Text } from '@lobehub/ui';
 import { Button, Switch, toast } from '@lobehub/ui/base-ui';
 import { useMutation } from '@tanstack/react-query';
 import { Popconfirm } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { Trash } from 'lucide-react';
+import { BookOpen, Trash } from 'lucide-react';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -258,14 +258,19 @@ const ApiKey: FC = () => {
         <Text as={'h3'} style={{ fontSize: 16, fontWeight: 500, margin: 0 }}>
           {t('apikey.list.title')}
         </Text>
-        <Button
-          disabled={!canCreate}
-          title={canCreate ? undefined : canEdit ? manageTooltip : reason}
-          type="primary"
-          onClick={handleCreate}
-        >
-          {t('apikey.list.actions.create')}
-        </Button>
+        <Flexbox horizontal gap={8}>
+          <Button href="/api/v1/docs" icon={BookOpen} target="_blank" type="text">
+            {t('apikey.list.actions.viewDocs')}
+          </Button>
+          <Button
+            disabled={!canCreate}
+            title={canCreate ? undefined : canEdit ? manageTooltip : reason}
+            type="primary"
+            onClick={handleCreate}
+          >
+            {t('apikey.list.actions.create')}
+          </Button>
+        </Flexbox>
       </div>
       <LiteTable
         columns={columns}

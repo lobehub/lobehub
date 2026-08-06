@@ -248,6 +248,7 @@
   "uploadDock.body.item.pending": "Preparando para subir...",
   "uploadDock.body.item.processing": "Procesando archivo...",
   "uploadDock.body.item.restTime": "Quedan {{time}}",
+  "uploadDock.body.item.retry": "Reintentar carga",
   "uploadDock.fileQueueInfo": "Subiendo los primeros {{count}} archivos, {{remaining}} restantes en la cola",
   "uploadDock.header.cancelAll": "Cancelar todo",
   "uploadDock.totalCount": "Total: {{count}} elementos",

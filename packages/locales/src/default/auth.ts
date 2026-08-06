@@ -29,6 +29,7 @@ export default {
   'apikey.list.actions.deleteConfirm.actions.ok': 'Confirm',
   'apikey.list.actions.deleteConfirm.content': 'Are you sure you want to delete this API Key?',
   'apikey.list.actions.deleteConfirm.title': 'Confirm Action',
+  'apikey.list.actions.viewDocs': 'API Docs',
   'apikey.list.columns.actions': 'Actions',
   'apikey.list.columns.creator': 'Creator',
   'apikey.list.columns.expiresAt': 'Expiration Date',

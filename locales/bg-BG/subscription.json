@@ -449,6 +449,7 @@
   "plans.plan.ultimate.desc": "За интензивни потребители с нужда от сложни AI разговори",
   "plans.plan.ultimate.title": "Ултимативен",
   "plans.restoreSubscription": "Възстановяване на абонамента",
+  "plans.restoreSubscriptionError": "Не можа да се възстанови абонаментът ви",
   "plans.restoreSubscriptionSuccess": "Абонаментът е възстановен",
   "plans.storage.title": "Съхранение на данни",
   "plans.subscribe": "Абонирай се",

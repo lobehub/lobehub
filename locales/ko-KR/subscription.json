@@ -449,6 +449,7 @@
   "plans.plan.ultimate.desc": "복잡한 AI 대화가 필요한 고급 사용자용",
   "plans.plan.ultimate.title": "얼티메이트",
   "plans.restoreSubscription": "구독 복원",
+  "plans.restoreSubscriptionError": "구독을 복원할 수 없습니다",
   "plans.restoreSubscriptionSuccess": "구독이 복원되었습니다",
   "plans.storage.title": "데이터 저장소",
   "plans.subscribe": "구독하기",

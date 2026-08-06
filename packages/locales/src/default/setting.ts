@@ -54,6 +54,13 @@ export default {
   'accountDeletion.requestSuccess': 'Deletion request submitted',
   'accountDeletion.sectionTitle': 'Account Deletion',
   'accountDeletion.title': 'Delete Account',
+  'accountDeletion.workspaceAutoCancel.notice':
+    'Deleting your account will automatically cancel the paid plans on these workspaces: {{names}}. Remaining time will not be refunded.',
+  'accountDeletion.workspaceBlocked.membersDesc':
+    'You are the owner of {{count}} workspace(s) that still have other members. To protect their data, transfer ownership or delete these workspaces before deleting your account.',
+  'accountDeletion.workspaceBlocked.reasonMembers': 'Other members',
+  'accountDeletion.workspaceBlocked.reasonPaid': 'Paid plan active',
+  'accountDeletion.workspaceBlocked.title': 'Transfer your workspaces first',
   'advancedSettings': 'Advanced Settings',
   'agentCronJobs.addJob': 'Add Scheduled Task',
   'agentCronJobs.clearTopics': 'Clear Topics',
@@ -2623,7 +2630,7 @@ When I am ___, I need ___
   'workspace.waitlistPage.submitHint': "We'll email you as soon as your access is approved.",
   'workspace.waitlistPage.subtitle': 'Members, agents, and knowledge in one shared space.',
   'workspace.waitlistPage.teamSizeLabel': 'How many people',
-  'workspace.waitlistPage.teamSizeOption.1': 'Just me',
+  'workspace.waitlistPage.teamSizeOption.1': 'Just me for now',
   'workspace.waitlistPage.teamSizeOption.2-10': '2–10',
   'workspace.waitlistPage.teamSizeOption.11-50': '11–50',
   'workspace.waitlistPage.teamSizeOption.50+': '50+',

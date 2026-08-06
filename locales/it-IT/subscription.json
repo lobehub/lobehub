@@ -449,6 +449,7 @@
   "plans.plan.ultimate.desc": "Per utenti intensivi che necessitano di conversazioni IA complesse",
   "plans.plan.ultimate.title": "Ultimate",
   "plans.restoreSubscription": "Ripristina Abbonamento",
+  "plans.restoreSubscriptionError": "Impossibile ripristinare il tuo abbonamento",
   "plans.restoreSubscriptionSuccess": "L'abbonamento è stato ripristinato",
   "plans.storage.title": "Archiviazione Dati",
   "plans.subscribe": "Abbonati",

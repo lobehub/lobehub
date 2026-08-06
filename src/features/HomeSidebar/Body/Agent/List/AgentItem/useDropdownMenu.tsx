@@ -259,14 +259,31 @@ export const useAgentDropdownMenu = ({
                     icon: group === groupId ? <Icon icon={Check} /> : <div />,
                     key: groupId,
                     label: name,
-                    onClick: () => updateAgentGroup(id, groupId),
+                    onClick: async () => {
+                      // A rejected move (folder deleted meanwhile, visibility
+                      // mismatch, missing role) must surface — swallowed, it
+                      // reads as "Move to Category does nothing".
+                      try {
+                        await updateAgentGroup(id, groupId);
+                      } catch (error) {
+                        console.error('Failed to move agent to category:', error);
+                        toast.error(t('operationFailed', { ns: 'common' }));
+                      }
+                    },
                     sfSymbol: group === groupId ? 'checkmark' : undefined,
                   })),
                   {
                     icon: isDefault ? <Icon icon={Check} /> : <div />,
                     key: 'defaultList',
                     label: t('defaultList'),
-                    onClick: () => updateAgentGroup(id, SessionDefaultGroup.Default),
+                    onClick: async () => {
+                      try {
+                        await updateAgentGroup(id, SessionDefaultGroup.Default);
+                      } catch (error) {
+                        console.error('Failed to move agent to category:', error);
+                        toast.error(t('operationFailed', { ns: 'common' }));
+                      }
+                    },
                     sfSymbol: isDefault ? 'checkmark' : undefined,
                   },
                   { type: 'divider' as const },

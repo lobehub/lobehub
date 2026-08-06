@@ -1,8 +1,6 @@
 {
   "authResult.failed.desc": "Probeer het opnieuw of kies een andere inlogmethode",
   "authResult.failed.title": "Autorisatie mislukt",
-  "authResult.success.desc": "Klik op de knop Start hieronder om LobeHub Desktop te blijven gebruiken",
-  "authResult.success.title": "Autorisatie geslaagd",
   "back": "Terug",
   "navigation.next": "Doorgaan",
   "next": "Volgende",
@@ -61,6 +59,7 @@
   "screen5.actions.cancel": "Annuleren",
   "screen5.actions.connectToServer": "Verbinden met server",
   "screen5.actions.connecting": "Bezig met verbinden...",
+  "screen5.actions.done": "Voltooid",
   "screen5.actions.signInCloud": "Aanmelden bij LobeHub Cloud",
   "screen5.actions.signOut": "Afmelden",
   "screen5.actions.signingIn": "Bezig met aanmelden...",
@@ -81,6 +80,10 @@
   "screen5.methods.selfhost.name": "Zelfgehoste instantie",
   "screen5.navigation.next": "Aan de slag",
   "screen5.selfhost.endpointPlaceholder": "Voer je server-URL in (bijv. https://jouw-server.com)",
+  "screen5.status.cloud.title": "Verbonden met LobeHub Cloud",
+  "screen5.status.description": "Agents, groepen, instellingen en context worden gesynchroniseerd op al je apparaten.",
+  "screen5.status.selfhost.description": "Agents, groepen, instellingen en context worden gesynchroniseerd met {{url}}.",
+  "screen5.status.selfhost.title": "Verbonden met je eigen server",
   "screen5.title": "Meld je aan om te synchroniseren tussen apparaten",
   "screen5.title2": "Houd je gegevens overal gesynchroniseerd",
   "screen5.title3": "Je gegevens blijven onder jouw controle"

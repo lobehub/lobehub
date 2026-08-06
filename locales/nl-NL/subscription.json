@@ -449,6 +449,7 @@
   "plans.plan.ultimate.desc": "Voor intensieve gebruikers met complexe AI-behoeften",
   "plans.plan.ultimate.title": "Ultimate",
   "plans.restoreSubscription": "Abonnement Herstellen",
+  "plans.restoreSubscriptionError": "Kon uw abonnement niet herstellen",
   "plans.restoreSubscriptionSuccess": "Abonnement is hersteld",
   "plans.storage.title": "Gegevensopslag",
   "plans.subscribe": "Abonneren",

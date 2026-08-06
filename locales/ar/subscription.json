@@ -449,6 +449,7 @@
   "plans.plan.ultimate.desc": "للمستخدمين الكثيفين الذين يحتاجون إلى محادثات ذكاء اصطناعي معقدة",
   "plans.plan.ultimate.title": "النهائي",
   "plans.restoreSubscription": "استعادة الاشتراك",
+  "plans.restoreSubscriptionError": "تعذر استعادة اشتراكك",
   "plans.restoreSubscriptionSuccess": "تم استعادة الاشتراك",
   "plans.storage.title": "تخزين البيانات",
   "plans.subscribe": "اشترك",

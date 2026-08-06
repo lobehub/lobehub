@@ -27,6 +27,7 @@ import {
   topics,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { insertInBatches, splitCrossBatchSelfReferences } from '../../utils/batchInsert';
 import { idGenerator } from '../../utils/idGenerator';
 import { normalizeInboxAgentMeta } from '../../utils/inboxAgent';
 import { buildWorkspaceWhere } from '../../utils/workspace';
@@ -228,7 +229,7 @@ export class AgentGroupRepository {
       }
     }
 
-    await executor.insert(topics).values(
+    await insertInBatches(
       sourceTopics.map((topic) => ({
         ...topic,
         agentId: mapAgentId(topic.agentId),
@@ -239,16 +240,17 @@ export class AgentGroupRepository {
         userId: targetUserId,
         workspaceId: targetWorkspaceId,
       })),
+      (batch) => executor.insert(topics).values(batch),
     );
 
     if (sourceThreads.length > 0) {
-      await executor.insert(threads).values(
+      const { fixups: threadFixups, rows: threadRows } = splitCrossBatchSelfReferences(
         sourceThreads.map((thread) => ({
           ...thread,
           agentId: mapAgentId(thread.agentId),
           clientId: null,
           groupId: newGroupId,
-          id: threadIdMap.get(thread.id),
+          id: threadIdMap.get(thread.id)!,
           parentThreadId: thread.parentThreadId
             ? (threadIdMap.get(thread.parentThreadId) ?? null)
             : null,
@@ -259,7 +261,14 @@ export class AgentGroupRepository {
           userId: targetUserId,
           workspaceId: targetWorkspaceId,
         })),
+        ['parentThreadId'],
       );
+
+      await insertInBatches(threadRows, (batch) => executor.insert(threads).values(batch));
+
+      for (const fixup of threadFixups) {
+        await executor.update(threads).set(fixup.patch).where(eq(threads.id, fixup.id));
+      }
     }
 
     if (sourceMessages.length === 0) return;
@@ -292,10 +301,19 @@ export class AgentGroupRepository {
       };
     });
 
-    await executor.insert(messages).values(messageRows);
+    const { fixups: messageFixups, rows: messageInsertRows } = splitCrossBatchSelfReferences(
+      messageRows,
+      ['parentId', 'quotaId'],
+    );
+
+    await insertInBatches(messageInsertRows, (batch) => executor.insert(messages).values(batch));
+
+    for (const fixup of messageFixups) {
+      await executor.update(messages).set(fixup.patch).where(eq(messages.id, fixup.id));
+    }
 
     if (sourcePlugins.length > 0) {
-      await executor.insert(messagePlugins).values(
+      await insertInBatches(
         sourcePlugins
           .map((plugin) => {
             const newMessageId = messageIdMap.get(plugin.id);
@@ -311,6 +329,7 @@ export class AgentGroupRepository {
             };
           })
           .filter((plugin) => !!plugin),
+        (batch) => executor.insert(messagePlugins).values(batch),
       );
     }
   };

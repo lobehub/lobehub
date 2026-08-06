@@ -248,6 +248,7 @@
   "uploadDock.body.item.pending": "準備上傳...",
   "uploadDock.body.item.processing": "檔案處理中...",
   "uploadDock.body.item.restTime": "剩餘 {{time}}",
+  "uploadDock.body.item.retry": "重試上傳",
   "uploadDock.fileQueueInfo": "正在上傳前 {{count}} 個檔案，剩餘 {{remaining}} 個檔案將排隊上傳",
   "uploadDock.header.cancelAll": "全部取消",
   "uploadDock.totalCount": "共 {{count}} 項",

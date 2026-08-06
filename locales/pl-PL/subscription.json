@@ -449,6 +449,7 @@
   "plans.plan.ultimate.desc": "Dla zaawansowanych użytkowników potrzebujących złożonych rozmów AI",
   "plans.plan.ultimate.title": "Ultimate",
   "plans.restoreSubscription": "Przywróć Subskrypcję",
+  "plans.restoreSubscriptionError": "Nie można przywrócić subskrypcji",
   "plans.restoreSubscriptionSuccess": "Subskrypcja została przywrócona",
   "plans.storage.title": "Przechowywanie danych",
   "plans.subscribe": "Subskrybuj",

@@ -3,9 +3,11 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { AgentModel } from '@/database/models/agent';
 import { WorkspaceUserSettingsModel } from '@/database/models/workspaceUserSettings';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 
 /**
  * Per-user preferences scoped to the current workspace. Every procedure is
@@ -65,6 +67,38 @@ export const workspaceUserSettingsRouter = router({
   updatePreference: workspaceUserSettingsProcedure
     .input(preferencePatchSchema)
     .mutation(async ({ ctx, input }) => {
+      // Compat for pre-shared-sidebar clients: their "Move to Category" still
+      // patches the deprecated per-member `sidebarGroupAssignments` map here,
+      // which the sidebar no longer reads — so for as long as such a bundle
+      // stays open (long-lived web tabs, older desktop builds) every move
+      // succeeds server-side yet visibly does nothing. Translate each entry
+      // into the shared `agents.sessionGroupId` write a current client sends,
+      // under the same role gate as `home.updateAgentSessionGroupId`.
+      const legacyAssignments = (input as Partial<WorkspaceUserPreference>).sidebarGroupAssignments;
+      if (legacyAssignments && Object.keys(legacyAssignments).length > 0) {
+        const canOrganize = await hasWorkspaceScopedPermission({
+          action: 'AGENT_UPDATE',
+          db: ctx.serverDB,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+        if (canOrganize) {
+          const agentModel = new AgentModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
+          for (const [agentId, groupId] of Object.entries(legacyAssignments)) {
+            try {
+              await agentModel.updateSessionGroupId(agentId, groupId ?? null);
+            } catch (error) {
+              // Best-effort per entry: a vanished folder or a visibility
+              // mismatch must not fail the preference write itself.
+              console.warn(
+                `[workspaceUserSettings] skipped legacy sidebar assignment for ${agentId}:`,
+                error,
+              );
+            }
+          }
+        }
+      }
+
       try {
         const row = await ctx.workspaceUserSettingsModel.updatePreference(
           input as Partial<WorkspaceUserPreference>,

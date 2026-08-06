@@ -449,6 +449,7 @@
   "plans.plan.ultimate.desc": "برای کاربران پرمصرف با نیاز به گفتگوهای پیچیده هوش مصنوعی",
   "plans.plan.ultimate.title": "نهایی",
   "plans.restoreSubscription": "بازیابی اشتراک",
+  "plans.restoreSubscriptionError": "امکان بازیابی اشتراک شما وجود ندارد",
   "plans.restoreSubscriptionSuccess": "اشتراک بازیابی شده است",
   "plans.storage.title": "ذخیره‌سازی داده",
   "plans.subscribe": "اشتراک",

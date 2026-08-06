@@ -449,6 +449,7 @@
   "plans.plan.ultimate.desc": "Para usuários intensivos que precisam de conversas complexas com IA",
   "plans.plan.ultimate.title": "Ultimate",
   "plans.restoreSubscription": "Restaurar Assinatura",
+  "plans.restoreSubscriptionError": "Não foi possível restaurar sua assinatura",
   "plans.restoreSubscriptionSuccess": "Assinatura foi restaurada",
   "plans.storage.title": "Armazenamento de Dados",
   "plans.subscribe": "Assinar",

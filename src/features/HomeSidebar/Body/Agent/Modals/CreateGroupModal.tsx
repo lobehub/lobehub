@@ -43,6 +43,11 @@ const CreateGroupContent = memo<CreateGroupModalOptions>(({ id, visibility }) =>
       toggleExpandSessionGroup(groupId, true);
       toast.success(t('sessionGroup.createSuccess'));
       close();
+    } catch (error) {
+      // Without this, a rejected create/move leaves the button stuck
+      // on loading and the modal open with no explanation.
+      console.error('Failed to create category:', error);
+      toast.error(t('operationFailed', { ns: 'common' }));
     } finally {
       setLoading(false);
     }

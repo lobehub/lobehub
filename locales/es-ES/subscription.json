@@ -449,6 +449,7 @@
   "plans.plan.ultimate.desc": "Para usuarios intensivos que necesitan conversaciones complejas con IA",
   "plans.plan.ultimate.title": "Máximo",
   "plans.restoreSubscription": "Restaurar Suscripción",
+  "plans.restoreSubscriptionError": "No se pudo restaurar tu suscripción",
   "plans.restoreSubscriptionSuccess": "La suscripción ha sido restaurada",
   "plans.storage.title": "Almacenamiento de Datos",
   "plans.subscribe": "Suscribirse",

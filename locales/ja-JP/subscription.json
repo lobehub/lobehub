@@ -449,6 +449,7 @@
   "plans.plan.ultimate.desc": "複雑なAI会話を必要とするヘビーユーザー向け",
   "plans.plan.ultimate.title": "プロ版",
   "plans.restoreSubscription": "サブスクリプションを復元",
+  "plans.restoreSubscriptionError": "サブスクリプションを復元できませんでした",
   "plans.restoreSubscriptionSuccess": "サブスクリプションが復元されました",
   "plans.storage.title": "データストレージ",
   "plans.subscribe": "サブスクライブ",

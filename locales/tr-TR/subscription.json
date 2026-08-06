@@ -449,6 +449,7 @@
   "plans.plan.ultimate.desc": "Karmaşık yapay zeka sohbetlerine ihtiyaç duyan yoğun kullanıcılar için",
   "plans.plan.ultimate.title": "Ultimate",
   "plans.restoreSubscription": "Aboneliği Geri Yükle",
+  "plans.restoreSubscriptionError": "Aboneliğiniz geri yüklenemedi",
   "plans.restoreSubscriptionSuccess": "Abonelik geri yüklendi",
   "plans.storage.title": "Veri Depolama",
   "plans.subscribe": "Abone Ol",
