@@ -3,9 +3,11 @@ name: self-host-deploy
 description: >-
   Deploy Aico self-hosted with Docker Compose — zero to production.
   Covers setup.sh, custom domain, reverse proxy/CDN, build-from-source,
-  platform admin bootstrap, production hardening, and SPA chunk troubleshooting.
+  platform admin bootstrap, production hardening, SPA chunk troubleshooting,
+  and local moz deploy data persistence (PANACHAT_DATA_DIR / tmpfs bind bugs).
   Use when the user asks to deploy, self-host, docker compose, production setup,
-  domain config, platform admin, best practices, or errors like "Failed to fetch
+  domain config, platform admin, best practices, moz -u/-d/-i, missing users,
+  empty DB after redeploy, platform admins gone, or errors like "Failed to fetch
   dynamically imported module" on /_spa/assets.
 user-invocable: true
 ---

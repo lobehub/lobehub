@@ -117,13 +117,55 @@ FROM platform_admins pa
 JOIN users u ON u.id = pa.user_id;
 ```
 
-## Database reset (destructive)
+## Local moz data dir (PanaChat)
+
+Local builds via `moz` / `scripts/deploy-local.sh` persist Postgres/Redis/RustFS under:
+
+`PANACHAT_DATA_DIR` → default `~/.local/share/panachat-data/{postgres,redis,rustfs}`
+
+Compose binds that path via `docker-compose.aico.data.override.yml`. **`moz -u` / `moz -d` do not delete this directory** — they only recreate containers.
+
+### Symptom: users / platform admins “missing” after redeploy
+
+Often **not** a wipe. Docker Desktop + WSL2 sometimes reports a bind mount in `docker inspect` but the container filesystem is **tmpfs** (empty RAM disk). Postgres then initializes a fresh empty cluster while the real data remains on the host path.
+
+Diagnose:
 
 ```bash
-docker compose down
-sudo rm -rf ./data # Postgres volume
-docker compose up -d
+docker exec lobe-postgres df -T /var/lib/postgresql/data
+# Good: ext4 (or other real FS) under ~/.local/share/panachat-data/postgres
+# Bad:  tmpfs / none
+
+./scripts/deploy-local.sh -i # Users / Platform admins counts
 ```
+
+Recover (do **not** `rm -rf` the host postgres dir):
+
+```bash
+moz -k
+# Optional: confirm host cluster still has data
+docker run --rm -v "$HOME/.local/share/panachat-data/postgres:/d:ro" alpine \
+  sh -c 'test -f /d/PG_VERSION && du -sh /d && df -T /d'
+moz -d
+docker exec lobe-postgres df -T /var/lib/postgresql/data # must NOT be tmpfs
+moz -i
+```
+
+If it is **still tmpfs** after redeploy: restart Docker Desktop, then `moz -d` again.
+
+**Never** run `rm -rf ~/.local/share/panachat-data/postgres` unless the user explicitly wants a destructive reset — that is the good copy when the live container is on tmpfs.
+
+## Database reset (destructive)
+
+Only when the user explicitly wants to wipe data:
+
+```bash
+moz -k
+rm -rf "${PANACHAT_DATA_DIR:-$HOME/.local/share/panachat-data}/postgres"
+moz -d
+```
+
+Upstream-style `./data` wipe is obsolete for Aico local moz deploys (data lives under `PANACHAT_DATA_DIR`, not `docker-compose/deploy/data`).
 
 Migrations run automatically on container start (`docker.cjs`).
 
