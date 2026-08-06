@@ -199,8 +199,12 @@ export const aiModelRouter = router({
       return ctx.aiModelModel.update(input.id, input.providerId, input.value);
     }),
 
+  // Intentionally NOT gated by `ai_model:update`: this writes a personal
+  // preference (scoped by userId with workspaceId NULL, see
+  // AiModelModel.updateModelReasoningConfig), so workspace members without the
+  // shared model-management permission must still be able to save it. Matches
+  // the ungated getAiModelReasoningConfig read above.
   updateAiModelReasoningConfig: aiModelProcedure
-    .use(withScopedPermission('ai_model:update'))
     .input(
       z.object({
         id: z.string(),
