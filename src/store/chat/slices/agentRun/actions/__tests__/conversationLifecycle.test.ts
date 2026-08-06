@@ -1874,6 +1874,78 @@ describe('ConversationLifecycle actions', () => {
         );
       });
 
+      it('routes a legacy bare Qoder model to the desktop heterogeneous runtime without gateway mode', async () => {
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({ agentConfig: { agencyConfig: undefined, model: 'qoder' } });
+
+        const executeGatewayAgent = vi.fn();
+        act(() => {
+          useChatStore.setState({
+            executeGatewayAgent,
+            isGatewayModeEnabled: () => false,
+          });
+        });
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          messages: [
+            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+          ],
+          topicId: TEST_IDS.TOPIC_ID,
+          topics: [],
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+        executeHeterogeneousAgentMock.mockResolvedValue(undefined);
+
+        const { result } = renderHook(() => useChatStore());
+        await act(async () => {
+          await result.current.sendMessage({
+            message: TEST_CONTENT.USER_MESSAGE,
+            context: createTestContext(),
+          });
+        });
+
+        expect(executeHeterogeneousAgentMock).toHaveBeenCalledWith(
+          expect.any(Function),
+          expect.objectContaining({ heterogeneousProvider: { type: 'qoder' } }),
+        );
+        expect(executeGatewayAgent).not.toHaveBeenCalled();
+        expect(result.current.executeClientAgent).not.toHaveBeenCalled();
+      });
+
+      it('keeps a legacy bare Qoder model on the gateway when gateway mode is available', async () => {
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({ agentConfig: { agencyConfig: undefined, model: 'qoder' } });
+
+        const executeGatewayAgent = vi.fn().mockImplementation(async (params) => {
+          useChatStore.getState().completeOperation(params.parentOperationId);
+          return {
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            operationId: 'gateway-operation',
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          };
+        });
+        act(() => {
+          useChatStore.setState({
+            executeGatewayAgent,
+            isGatewayModeEnabled: () => true,
+          });
+        });
+
+        const { result } = renderHook(() => useChatStore());
+        await act(async () => {
+          await result.current.sendMessage({
+            message: TEST_CONTENT.USER_MESSAGE,
+            context: createTestContext(),
+          });
+        });
+
+        expect(executeGatewayAgent).toHaveBeenCalledTimes(1);
+        expect(executeHeterogeneousAgentMock).not.toHaveBeenCalled();
+        expect(result.current.executeClientAgent).not.toHaveBeenCalled();
+      });
+
       it('runs a workspace Codex local-device override in the desktop heterogeneous runtime', async () => {
         mockConstEnv.isDesktop = true;
         setupMockSelectors({

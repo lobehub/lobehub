@@ -35,13 +35,12 @@ const CLI_AUTH_REQUIRED_PATTERNS = [
   /invalid authentication credentials/i,
   /authentication[_ ]error/i,
   /not authenticated/i,
-  /not logged in/i,
-  /please run \/login/i,
   /\bunauthorized\b/i,
   /\b401\b/,
   /no api key found/i,
   /no models available/i,
-];
+] as const;
+const QODER_AUTH_REQUIRED_PATTERNS = [/not logged in/i, /please run \/login/i] as const;
 
 const CLI_NOT_FOUND_MESSAGES: Record<string, string> = {
   'claude-code':
@@ -144,7 +143,11 @@ export const classifyHeteroProcessFailure = (
     };
   }
 
-  if (detail && CLI_AUTH_REQUIRED_PATTERNS.some((pattern) => pattern.test(detail))) {
+  const authRequiredPatterns =
+    agentType === 'qoder'
+      ? [...CLI_AUTH_REQUIRED_PATTERNS, ...QODER_AUTH_REQUIRED_PATTERNS]
+      : CLI_AUTH_REQUIRED_PATTERNS;
+  if (detail && authRequiredPatterns.some((pattern) => pattern.test(detail))) {
     return {
       agentType,
       code: 'auth_required',

@@ -133,6 +133,15 @@ describe('classifyHeteroProcessFailure', () => {
     expect(auth?.message).toContain('Qoder');
   });
 
+  it('keeps Qoder-specific login wording scoped to Qoder', () => {
+    expect(
+      classifyHeteroProcessFailure({ agentType: 'qoder', detail: 'Please run /login' }),
+    ).toMatchObject({ code: 'auth_required' });
+    expect(
+      classifyHeteroProcessFailure({ agentType: 'claude-code', detail: 'Please run /login' }),
+    ).toBeUndefined();
+  });
+
   it('does NOT treat an in-run ENOENT (no spawn context) as cli_not_found', () => {
     const result = classifyHeteroProcessFailure({
       agentType: 'claude-code',

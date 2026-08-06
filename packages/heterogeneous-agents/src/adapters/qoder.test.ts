@@ -126,7 +126,13 @@ describe('QoderAdapter', () => {
 
     expect(
       adapter.adapt({
-        message: { content: [{ text: authText, type: 'text' }], id: 'msg-auth' },
+        message: {
+          content: [
+            { text: 'Not logged in', type: 'text' },
+            { text: 'Please run /login', type: 'text' },
+          ],
+          id: 'msg-auth',
+        },
         type: 'assistant',
       }),
     ).toEqual([]);

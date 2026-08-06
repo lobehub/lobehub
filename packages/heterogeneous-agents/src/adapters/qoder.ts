@@ -14,21 +14,22 @@ export const QODER_IDENTIFIER = 'qoder';
 
 const CLAUDE_CODE_AUTH_DOCS_URL = 'https://docs.anthropic.com/en/docs/claude-code/setup';
 const QODER_AUTH_DOCS_URL = 'https://docs.qoder.com/cli/auth.md';
-const QODER_AUTH_REQUIRED_PATTERN = /not logged in\s*·\s*please run \/login/i;
+const QODER_AUTH_REQUIRED_PATTERNS = [/not logged in/i, /please run \/login/i] as const;
 
 const isQoderAuthAssistant = (raw: unknown): boolean => {
   if (!raw || typeof raw !== 'object') return false;
   const event = raw as { message?: { content?: unknown }; type?: string };
   if (event.type !== 'assistant' || !Array.isArray(event.message?.content)) return false;
 
-  return event.message.content.some(
-    (block) =>
-      !!block &&
-      typeof block === 'object' &&
-      'text' in block &&
-      typeof block.text === 'string' &&
-      QODER_AUTH_REQUIRED_PATTERN.test(block.text),
-  );
+  const text = event.message.content
+    .map((block) =>
+      block && typeof block === 'object' && 'text' in block && typeof block.text === 'string'
+        ? block.text
+        : '',
+    )
+    .join(' ');
+
+  return QODER_AUTH_REQUIRED_PATTERNS.every((pattern) => pattern.test(text));
 };
 
 const normalizeQoderValue = (value: unknown, key?: string): void => {

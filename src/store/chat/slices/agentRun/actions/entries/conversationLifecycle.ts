@@ -5,7 +5,7 @@ import {
   AgentManagementIdentifier,
   createCallAgentManifest,
 } from '@lobechat/builtin-tool-agent-management';
-import { isDesktop, LOADING_FLAT } from '@lobechat/const';
+import { isDesktop, isHeterogeneousAgentModelId, LOADING_FLAT } from '@lobechat/const';
 import { formatSelectedSkillsContext, formatSelectedToolsContext } from '@lobechat/context-engine';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { chainCompressContext } from '@lobechat/prompts';
@@ -313,12 +313,21 @@ export class ConversationLifecycleActionImpl {
       visibility: agent?.visibility,
       workspaceId: agent?.workspaceId,
     });
-    const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
+    const isGatewayMode = this.#get().isGatewayModeEnabled(agentId);
+    // Legacy agents may only carry `model: '<cli-type>'`. Keep gateway routing
+    // unchanged when it is available, but recover the provider before the
+    // desktop-only local fallback so both runtime selection and the executor
+    // receive the same heterogeneous identity.
+    const heterogeneousProvider =
+      agencyConfig?.heterogeneousProvider ??
+      (isDesktop && !isGatewayMode && isHeterogeneousAgentModelId(agentConfig?.model)
+        ? { type: agentConfig.model }
+        : undefined);
     const runtimeType = selectRuntimeType({
       boundDeviceId: agencyConfig?.boundDeviceId,
       executionTarget: agencyConfig?.executionTarget,
       heterogeneousProvider,
-      isGatewayMode: this.#get().isGatewayModeEnabled(agentId),
+      isGatewayMode,
       isWorkspaceAgent: workspaceScoped,
       // Callers that need to pin the runtime (e.g. task topics that were
       // started server-side via runTask) pass `forceRuntime` to override
