@@ -21,22 +21,13 @@ describe('global RTL control fixes', () => {
     expect(source).toContain('direction: ltr');
   });
 
-  it('maps Tabs selection indicators to physical left (incl. Settings animation)', () => {
-    // Ungated: physical left works in LTR and fixes RTL regardless of html.dir timing
+  it('forces LTR on Tabs/Segmented indicators so inset-inline-start matches physical left', () => {
     expect(source).toContain("[role='tablist'] > [role='presentation']");
-    expect(source).toContain('left: var(--active-tab-left) !important');
-    expect(source).toContain('inset-inline: auto !important');
-    expect(source).toContain(
-      'transition-property: left, top, inset-block-start, width, height, transform !important',
-    );
-    // Prior broken formula used containing-block % and --active-tab-right
+    expect(source).toContain("[data-orientation] > [aria-hidden='true']:first-of-type");
+    expect(source).toMatch(/\[role='tablist'\] > \[role='presentation'\][\s\S]*?direction:\s*ltr/);
+    // Prior broken approaches (inset-inline:auto wiped left under RTL)
+    expect(source).not.toContain('inset-inline: auto');
     expect(source).not.toContain('var(--active-tab-right)');
     expect(source).not.toContain('(var(--active-tab-width) - 100%)');
-  });
-
-  it('maps Segmented selection indicators to physical left', () => {
-    expect(source).toContain("[data-orientation] > [aria-hidden='true']:first-of-type");
-    expect(source).toContain('left: var(--active-item-left) !important');
-    expect(source).toContain('liberty/use-logical-spec');
   });
 });
