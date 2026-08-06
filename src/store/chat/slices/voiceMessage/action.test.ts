@@ -1,4 +1,4 @@
-import type { UploadFileItem, VoiceMessageRecording } from '@lobechat/types';
+import type { ConversationContext, UploadFileItem, VoiceMessageRecording } from '@lobechat/types';
 import { act, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -44,7 +44,7 @@ const getMessage = (messageId: string) =>
 const adoptUploadedFile = (
   file: UploadFileItem,
   messageId: string,
-  conversationContext = context,
+  conversationContext: ConversationContext = context,
 ) => {
   useChatStore.getState().internal_dispatchMessage(
     {
