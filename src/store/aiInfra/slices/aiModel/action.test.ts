@@ -707,6 +707,25 @@ describe('AiModelAction', () => {
       expect(useStore.getState().modelReasoningConfigUpdatingKeys).toEqual([]);
       expect(toast.error).toHaveBeenCalledWith(t('reasoningEffort.updateFailed', { ns: 'chat' }));
     });
+
+    it('should drop the key on failed rollback when it was not cached before', async () => {
+      const { result } = renderHook(() => useStore());
+      vi.spyOn(aiModelService, 'updateAiModelReasoningConfig').mockRejectedValue(
+        new Error('Service error'),
+      );
+
+      await expect(async () => {
+        await act(async () => {
+          await result.current.updateModelReasoningConfig('gpt-5.2', 'openai', {
+            gpt5_2ReasoningEffort: 'high',
+          });
+        });
+      }).rejects.toThrow('Service error');
+
+      // A leftover `[key]: undefined` would make ensureModelReasoningConfig
+      // treat the key as cached and never fetch the saved server value
+      expect('openai/gpt-5.2' in useStore.getState().modelReasoningConfigMap).toBe(false);
+    });
   });
 
   describe('ensureModelReasoningConfig', () => {

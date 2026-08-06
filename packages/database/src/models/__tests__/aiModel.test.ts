@@ -357,10 +357,18 @@ describe('AiModelModel', () => {
         gpt5_6ReasoningEffort: 'high',
       });
 
-      // Sync marks plain rows as remote, but must not claim the preference row —
-      // clearRemoteModels deletes remote rows wholesale
+      // Sync claims the preference row as remote too (so its synced metadata
+      // stays clearable); clearRemoteModels demotes chatConfig-holding remote
+      // rows instead of deleting them, so the preference still survives
       await aiProviderModel.batchUpdateAiModels('openai', [
-        { enabled: true, id: 'gpt-5.6-sol', source: 'remote', type: 'chat' },
+        {
+          contextWindowTokens: 400_000,
+          displayName: 'GPT-5.6 Sol',
+          enabled: true,
+          id: 'gpt-5.6-sol',
+          source: 'remote',
+          type: 'chat',
+        },
         { enabled: true, id: 'some-remote-model', source: 'remote', type: 'chat' },
       ] as AiProviderModelListItem[]);
       await aiProviderModel.clearRemoteModels('openai');
@@ -368,6 +376,10 @@ describe('AiModelModel', () => {
       expect(await aiProviderModel.getModelReasoningConfig('gpt-5.6-sol', 'openai')).toEqual({
         gpt5_6ReasoningEffort: 'high',
       });
+      // Demoted back to a hidden preference-only shell — the synced metadata
+      // must not linger as a ghost list entry after clearing remote models
+      const row = await aiProviderModel.findByIdAndProvider('gpt-5.6-sol', 'openai');
+      expect(AiModelModel.isPreferenceOnlyRow(row!)).toBe(true);
       // The plain remote row is still cleared as before
       expect(await aiProviderModel.findByIdAndProvider('some-remote-model', 'openai')).toBe(
         undefined,

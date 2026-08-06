@@ -210,9 +210,14 @@ export class AiModelActionImpl {
       await aiModelService.updateAiModelReasoningConfig(id, provider, value);
     } catch (error) {
       this.#set(
-        (state) => ({
-          modelReasoningConfigMap: { ...state.modelReasoningConfigMap, [key]: previous },
-        }),
+        (state) => {
+          const modelReasoningConfigMap = { ...state.modelReasoningConfigMap };
+          // A leftover `[key]: undefined` would read as "cached empty" and stop
+          // ensureModelReasoningConfig from ever fetching the server value
+          if (previous === undefined) delete modelReasoningConfigMap[key];
+          else modelReasoningConfigMap[key] = previous;
+          return { modelReasoningConfigMap };
+        },
         false,
         `updateModelReasoningConfig/rollback/${key}`,
       );
