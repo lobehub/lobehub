@@ -15,6 +15,7 @@ describe('branding env configuration', () => {
       BRANDING_CLOUD_NAME_FA,
       BRANDING_LOGO_URL,
       getLocalizedBrandingName,
+      getLocalizedBrandingInboxName,
     } = await import('./branding');
 
     expect(BRANDING_NAME).toBe('Panachat');
