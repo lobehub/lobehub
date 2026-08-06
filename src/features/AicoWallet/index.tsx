@@ -46,8 +46,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorBgContainer};
   `,
   sourceActive: css`
-    border-color: ${cssVar.colorPrimary};
-    background: ${cssVar.colorPrimaryBg};
+    border-color: ${cssVar.colorBorder};
+    background: ${cssVar.colorFillTertiary};
   `,
   sourceCard: css`
     cursor: pointer;
@@ -60,12 +60,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 
+    background: transparent;
+
     transition:
       border-color 0.15s ease,
       background 0.15s ease;
 
     &:hover {
-      border-color: ${cssVar.colorPrimaryBorder};
+      border-color: ${cssVar.colorBorder};
+      background: ${cssVar.colorFillQuaternary};
     }
   `,
   sourceGrid: css`
