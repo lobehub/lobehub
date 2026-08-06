@@ -1,8 +1,8 @@
-import { ModelIcon } from '@lobehub/icons';
 import { Center, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { memo, useCallback } from 'react';
 
+import { BrandedModelIcon } from '@/components/Branding/BrandedModelIcon';
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useChatStore } from '@/store/chat';
@@ -92,7 +92,7 @@ const ModelSwitch = memo(() => {
       width={blockSize}
     >
       <div className={styles.icon}>
-        <ModelIcon model={model} size={iconSize} />
+        <BrandedModelIcon model={model} size={iconSize} />
       </div>
     </Center>
   );

@@ -2,20 +2,20 @@ import { BRANDING_NAME } from '@lobechat/business-const';
 
 import { isCustomBranding } from '@/const/version';
 
-const OPENROUTER_MODEL_PREFIX = 'openrouter/';
-
 /** Slug used in UI model ids, e.g. `aico` from branding name `Aico`. */
 export const getBrandingModelSlug = (): string => BRANDING_NAME.trim().toLowerCase();
 
 /**
  * True when this model id is an OpenRouter-namespace id that should show as our brand
  * (e.g. `openrouter/auto` → `aico/auto` + ProductLogo).
+ * Matches ModelIcon's `^openrouter` keyword so any OpenRouter-owned id is branded.
  */
 export const isBrandedOpenRouterModelId = (modelId: string): boolean =>
-  isCustomBranding && modelId.toLowerCase().startsWith(OPENROUTER_MODEL_PREFIX);
+  Boolean(isCustomBranding && modelId && /^openrouter\b/i.test(modelId));
 
 /** Display-only id; runtime/API ids stay `openrouter/...`. */
 export const formatBrandedModelId = (modelId: string): string => {
   if (!isBrandedOpenRouterModelId(modelId)) return modelId;
-  return `${getBrandingModelSlug()}/${modelId.slice(OPENROUTER_MODEL_PREFIX.length)}`;
+  const rest = modelId.replace(/^openrouter\/?/i, '');
+  return rest ? `${getBrandingModelSlug()}/${rest}` : getBrandingModelSlug();
 };

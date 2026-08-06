@@ -1,5 +1,4 @@
 import { getCachedTextInputUnitRate, getWriteCacheInputUnitRate } from '@lobechat/utils';
-import { ModelIcon } from '@lobehub/icons';
 import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { Tabs } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
@@ -8,6 +7,7 @@ import { type LobeDefaultAiModelListItem } from 'model-bank';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { BrandedModelIcon } from '@/components/Branding/BrandedModelIcon';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
@@ -52,7 +52,7 @@ const ModelCard = memo<ModelCardProps>(({ pricing, id, provider, displayName }) 
         justify={'space-between'}
       >
         <Flexbox horizontal align={'center'} gap={8}>
-          <ModelIcon model={id} size={22} />
+          <BrandedModelIcon model={id} size={22} />
           <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
             <Flexbox horizontal align={'center'} gap={8} style={{ lineHeight: '12px' }}>
               {displayName || id}

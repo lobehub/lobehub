@@ -1,10 +1,10 @@
-import { ModelTag } from '@lobehub/icons';
 import { Center, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ScrollText } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { BrandedModelTag } from '@/components/Branding/BrandedModelTag';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useAgentStore } from '@/store/agent/store';
 
@@ -50,7 +50,7 @@ const History = memo(() => {
             <Text type={'secondary'}>{t('historySummary')}</Text>
             {model && (
               <div>
-                <ModelTag model={model} />
+                <BrandedModelTag model={model} />
               </div>
             )}
           </Flexbox>

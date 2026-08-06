@@ -19,7 +19,13 @@ type BrandedModelIconProps = {
  */
 export const BrandedModelIcon = memo<BrandedModelIconProps>(({ model, size = 32, type }) => {
   if (isBrandedOpenRouterModelId(model)) {
-    return <ProductLogo size={size} type={type === 'mono' ? 'mono' : 'flat'} />;
+    return (
+      <ProductLogo
+        size={size}
+        style={{ flex: 'none', height: size, width: size }}
+        type={type === 'mono' ? 'mono' : 'flat'}
+      />
+    );
   }
 
   return <ModelIcon model={model} size={size} type={type} />;

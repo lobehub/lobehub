@@ -13,6 +13,7 @@ describe('brandedModelId', () => {
 
     expect(getBrandingModelSlug()).toBe(BRANDING_NAME.trim().toLowerCase());
     expect(isBrandedOpenRouterModelId('openrouter/auto')).toBe(true);
+    expect(isBrandedOpenRouterModelId('OpenRouter/auto')).toBe(true);
     expect(formatBrandedModelId('openrouter/auto')).toBe(`${getBrandingModelSlug()}/auto`);
     expect(formatBrandedModelId('deepseek/deepseek-chat')).toBe('deepseek/deepseek-chat');
   });
