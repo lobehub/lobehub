@@ -37,6 +37,7 @@ import type {
 import {
   AgentRuntimeErrorType,
   buildHeteroSpawnArgs,
+  normalizeHeterogeneousProviderConfig,
   ThreadStatus,
   ThreadType,
 } from '@lobechat/types';
@@ -268,11 +269,6 @@ const getTopicMetadataById = (
   }
 };
 
-/**
- * Resolve the adapter from the descriptor-backed provider identity.
- */
-const resolveAdapterType = (config: HeterogeneousProviderConfig): string => config.type;
-
 const asRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 
@@ -463,7 +459,7 @@ export const executeHeterogeneousAgent = async (
   params: HeterogeneousAgentExecutorParams,
 ): Promise<void> => {
   const {
-    heterogeneousProvider,
+    heterogeneousProvider: persistedHeterogeneousProvider,
     contextSelections,
     assistantMessageId,
     context,
@@ -476,7 +472,10 @@ export const executeHeterogeneousAgent = async (
     workingDirectoryConfig,
   } = params;
 
-  const adapterType = resolveAdapterType(heterogeneousProvider);
+  const heterogeneousProvider = normalizeHeterogeneousProviderConfig(
+    persistedHeterogeneousProvider,
+  );
+  const adapterType = heterogeneousProvider.type;
 
   // Which real provider account this run consumes, resolved once after spawn
   // from the FINAL env (so an agent-env override is attributed correctly, not

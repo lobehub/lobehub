@@ -1,6 +1,10 @@
 import type { WorkingDirConfigValue } from '../device';
 import type { LobeAgentChatConfig } from './chatConfig';
-import type { HeterogeneousAgentType } from './heterogeneousAgent';
+import type { HeterogeneousAgentType, LocalHeterogeneousAgentType } from './heterogeneousAgent';
+import {
+  HETEROGENEOUS_AGENT_CONFIGS,
+  REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
+} from './heterogeneousAgent';
 
 /**
  * Selector value that means "do not override the underlying CLI".
@@ -194,6 +198,73 @@ export interface HeterogeneousProviderConfig {
   /** Agent runtime type, derived from the shared heterogeneous-agent descriptor catalog. */
   type: HeterogeneousAgentType;
 }
+
+const HETEROGENEOUS_AGENT_TYPES = new Set<string>([
+  ...HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type),
+  ...REMOTE_HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type),
+]);
+
+const LEGACY_COMMAND_INFERENCE_TYPES = new Set<LocalHeterogeneousAgentType>([
+  'claude-code',
+  'codex',
+]);
+
+interface LegacyHeterogeneousProviderConfig extends HeterogeneousProviderConfig {
+  adapterType?: unknown;
+}
+
+const resolveKnownHeterogeneousAgentType = (value: unknown): HeterogeneousAgentType | undefined => {
+  if (typeof value !== 'string' || !value) return;
+  if (!HETEROGENEOUS_AGENT_TYPES.has(value)) {
+    throw new Error(`Unknown heterogeneous agent type: "${value}"`);
+  }
+  return value as HeterogeneousAgentType;
+};
+
+/**
+ * Upgrade a persisted provider config written before `type` became required.
+ *
+ * New callers must always write `type`; this compatibility path exists because
+ * `agents.agency_config` is JSONB and older rows are not runtime-schema parsed
+ * or backfilled. The old renderer preferred `adapterType`, then recognized
+ * Claude/Codex from `command`, and otherwise defaulted to Claude Code.
+ */
+export const normalizeHeterogeneousProviderConfig = (
+  config: HeterogeneousProviderConfig,
+): HeterogeneousProviderConfig => {
+  const legacyConfig = config as LegacyHeterogeneousProviderConfig;
+  const explicitType = resolveKnownHeterogeneousAgentType(legacyConfig.type);
+  if (explicitType && legacyConfig.adapterType === undefined) return config;
+
+  const adapterType = explicitType
+    ? undefined
+    : resolveKnownHeterogeneousAgentType(legacyConfig.adapterType);
+  const normalizedCommand = config.command?.trim().toLowerCase();
+  const inferredType = normalizedCommand
+    ? HETEROGENEOUS_AGENT_CONFIGS.find(
+        ({ defaultCommand, type }) =>
+          LEGACY_COMMAND_INFERENCE_TYPES.has(type) &&
+          normalizedCommand.includes(defaultCommand.toLowerCase()),
+      )?.type
+    : undefined;
+  const type = explicitType ?? adapterType ?? inferredType ?? 'claude-code';
+  const normalizedConfig = { ...legacyConfig };
+  delete normalizedConfig.adapterType;
+
+  return { ...normalizedConfig, type };
+};
+
+const normalizeAgencyConfigHeterogeneousProvider = (
+  agencyConfig: LobeAgentAgencyConfig | null | undefined,
+): LobeAgentAgencyConfig | undefined => {
+  const base = agencyConfig ?? undefined;
+  if (!base?.heterogeneousProvider) return base;
+
+  const heterogeneousProvider = normalizeHeterogeneousProviderConfig(base.heterogeneousProvider);
+  return heterogeneousProvider === base.heterogeneousProvider
+    ? base
+    : { ...base, heterogeneousProvider };
+};
 
 interface ClaudeCodeSelectionSource {
   args?: string[];
@@ -781,7 +852,7 @@ export const resolveAgencyConfig = (
   agencyConfig: LobeAgentAgencyConfig | null | undefined,
   override: Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'> | null | undefined,
 ): LobeAgentAgencyConfig | undefined => {
-  const base = agencyConfig ?? undefined;
+  const base = normalizeAgencyConfigHeterogeneousProvider(agencyConfig);
   if (base?.executionTargetSelectionPolicy === 'fixed') return base;
   if (!override) return base;
   const hasTarget = override.executionTarget !== undefined;
@@ -814,12 +885,12 @@ export const resolveAgentAgencyConfig = (
   override: Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'> | null | undefined,
   context: AgentAgencyConfigContext,
 ): LobeAgentAgencyConfig | undefined => {
+  const base = normalizeAgencyConfigHeterogeneousProvider(agencyConfig);
   const isPublicWorkspaceAgent =
     !!context.workspaceId && context.visibility !== 'private' && context.canManage !== true;
 
-  if (isPublicWorkspaceAgent) return resolveAgencyConfig(agencyConfig, override);
+  if (isPublicWorkspaceAgent) return resolveAgencyConfig(base, override);
 
-  const base = agencyConfig ?? undefined;
   if (!base?.executionTargetSelectionPolicy) return base;
 
   const { executionTargetSelectionPolicy, ...ownerConfig } = base;

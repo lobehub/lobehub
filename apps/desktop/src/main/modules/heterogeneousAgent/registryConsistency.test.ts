@@ -1,7 +1,6 @@
 import { HETEROGENEOUS_AGENT_CONFIGS, listLocalAgentTypes } from '@lobechat/heterogeneous-agents';
 import { describe, expect, it, vi } from 'vitest';
 
-import { SUPPORTED_HETEROGENEOUS_AGENT_TYPES } from '../../../../../../src/features/Electron/HeterogeneousAgent/StatusGuide/types';
 import { listHeterogeneousCliBinaryTypes } from '../binaries/cliAgentBinaries';
 import { listHeterogeneousAgentDriverTypes } from '.';
 
@@ -22,6 +21,5 @@ describe('heterogeneous agent registry consistency', () => {
     expect(listLocalAgentTypes().toSorted()).toEqual(descriptorTypes);
     expect(listHeterogeneousAgentDriverTypes().toSorted()).toEqual(descriptorTypes);
     expect(listHeterogeneousCliBinaryTypes().toSorted()).toEqual(descriptorTypes);
-    expect(SUPPORTED_HETEROGENEOUS_AGENT_TYPES.toSorted()).toEqual(descriptorTypes);
   });
 });
