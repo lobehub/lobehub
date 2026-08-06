@@ -38,7 +38,7 @@ const PhoneRow = () => {
       <Flexbox gap={4}>
         <Text>{phone || t('profile.phoneEmpty')}</Text>
         <Text fontSize={12} type="secondary">
-          {verified ? t('profile.phoneVerified') : t('profile.phoneUnverifiedHint')}
+          {verified ? t('profile.phoneVerified') : t('profile.phoneUnverifiedActionHint')}
         </Text>
       </Flexbox>
     </ProfileRow>

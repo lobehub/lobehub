@@ -2,7 +2,11 @@ import { toast } from '@lobehub/ui/base-ui';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { phoneNumber as phoneNumberApi, useSession } from '@/libs/better-auth/auth-client';
+import {
+  getSession,
+  phoneNumber as phoneNumberApi,
+  useSession,
+} from '@/libs/better-auth/auth-client';
 import { normalizeIranianPhoneNumber } from '@/libs/better-auth/phone';
 import { sanitizeRedirectPath } from '@/utils/onboardingRedirect';
 
@@ -11,6 +15,11 @@ type Step = 'phone' | 'otp';
 interface UseVerifyPhoneParams {
   callbackUrl: string;
 }
+
+type SessionUserPhone = {
+  phoneNumber?: string | null;
+  phoneNumberVerified?: boolean | null;
+};
 
 const mapOtpError = (code: string | undefined, fallback: string, t: (key: string) => string) => {
   switch (code) {
@@ -30,13 +39,25 @@ const mapOtpError = (code: string | undefined, fallback: string, t: (key: string
       return t('betterAuth.verifyPhone.errors.phoneExists');
     }
     default: {
-      // Better Auth / rate-limit style messages
       if (code === 'TOO_MANY_REQUESTS' || fallback.toLowerCase().includes('too many')) {
         return t('betterAuth.verifyPhone.errors.rateLimited');
       }
       return fallback || t('betterAuth.verifyPhone.errors.generic');
     }
   }
+};
+
+/**
+ * Better Auth's `updatePhoneNumber` verify path updates the DB but does **not**
+ * rewrite the session cookie cache. With `session.cookieCache` enabled, a plain
+ * refetch still returns stale `phoneNumberVerified: false` until logout or cache
+ * expiry — force a DB-backed get-session that refreshes the cookie before leaving
+ * the auth SPA.
+ */
+export const refreshSessionAfterPhoneVerify = async (): Promise<SessionUserPhone | null> => {
+  const result = await getSession({ query: { disableCookieCache: true } });
+  const user = (result as { data?: { user?: SessionUserPhone } | null } | null)?.data?.user;
+  return user ?? null;
 };
 
 export const useVerifyPhone = ({ callbackUrl }: UseVerifyPhoneParams) => {
@@ -46,6 +67,13 @@ export const useVerifyPhone = ({ callbackUrl }: UseVerifyPhoneParams) => {
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [phoneE164, setPhoneE164] = useState('');
+
+  const finishVerified = async () => {
+    await refreshSessionAfterPhoneVerify();
+    await refetch?.({ query: { disableCookieCache: true } });
+    toast.success(t('betterAuth.verifyPhone.success'));
+    window.location.href = sanitizeRedirectPath(callbackUrl, '/');
+  };
 
   const sendOtp = async (rawPhone: string): Promise<boolean> => {
     const normalized = normalizeIranianPhoneNumber(rawPhone);
@@ -92,18 +120,24 @@ export const useVerifyPhone = ({ callbackUrl }: UseVerifyPhoneParams) => {
       const { error } = await phoneNumberApi.verify({
         code: values.code,
         phoneNumber: phoneE164,
-        // Attach phone to the signed-in account (not a phone-only signup)
         updatePhoneNumber: true,
       });
 
       if (error) {
+        if (error.code === 'PHONE_NUMBER_EXIST') {
+          const user = await refreshSessionAfterPhoneVerify();
+          if (user?.phoneNumberVerified && user.phoneNumber === phoneE164) {
+            await refetch?.({ query: { disableCookieCache: true } });
+            toast.success(t('betterAuth.verifyPhone.alreadyVerified'));
+            window.location.href = sanitizeRedirectPath(callbackUrl, '/');
+            return;
+          }
+        }
         toast.error(mapOtpError(error.code, error.message || '', t));
         return;
       }
 
-      await refetch?.();
-      toast.success(t('betterAuth.verifyPhone.success'));
-      window.location.href = sanitizeRedirectPath(callbackUrl, '/');
+      await finishVerified();
     } finally {
       setLoading(false);
     }
@@ -125,11 +159,6 @@ export const useVerifyPhone = ({ callbackUrl }: UseVerifyPhoneParams) => {
   };
 };
 
-/**
- * Leave the trial verify flow without going through Sign In.
- * Hard navigation is required: `/verify-phone` lives on the auth SPA
- * while `callbackUrl` is usually a main-app path (e.g. `/settings/profile`).
- */
 export const exitVerifyPhoneFlow = (callbackUrl: string) => {
   window.location.assign(sanitizeRedirectPath(callbackUrl, '/'));
 };
