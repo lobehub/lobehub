@@ -30,7 +30,11 @@ const WorkbenchErrorBoundary = () => {
   const error = useRouteError() as Error;
   const { resolvedTheme } = useTheme();
 
-  if (typeof window !== 'undefined' && isChunkLoadError(error)) notifyChunkError();
+  useEffect(() => {
+    if (isChunkLoadError(error)) {
+      notifyChunkError(error);
+    }
+  }, [error]);
 
   const isDark = resolvedTheme === 'dark';
 

@@ -2,7 +2,7 @@
 
 import { ConfigProvider, ThemeProvider } from '@lobehub/ui';
 import * as m from 'motion/react-m';
-import { type ComponentType, type ReactElement } from 'react';
+import { type ComponentType, type ReactElement, useEffect } from 'react';
 import { lazy, memo, Suspense } from 'react';
 import type { RouteObject } from 'react-router';
 import { Navigate, Outlet, useRouteError } from 'react-router';
@@ -146,9 +146,11 @@ export const ErrorBoundary = ({ resetPath }: ErrorBoundaryProps) => {
   const isDark = useIsDark();
   const appearance = isDark ? 'dark' : 'light';
 
-  if (typeof window !== 'undefined' && isChunkLoadError(error)) {
-    notifyChunkError(error);
-  }
+  useEffect(() => {
+    if (isChunkLoadError(error)) {
+      notifyChunkError(error);
+    }
+  }, [error]);
 
   return (
     <ThemeProvider

@@ -4,6 +4,11 @@ const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }));
 
 vi.mock('@lobehub/ui/base-ui', () => ({ toast: { error: toastError } }));
 
+vi.mock('i18next', () => ({
+  t: (_key: string, options?: { defaultValue?: string }) =>
+    options?.defaultValue ?? 'There is a new version for the web app. Refresh the page to update',
+}));
+
 const reload = vi.fn();
 
 const dispatchPreloadError = (error: unknown) => {
@@ -74,15 +79,17 @@ describe('chunk-load error listeners', () => {
     expect(toastError).toHaveBeenCalledOnce();
     expect(reload).not.toHaveBeenCalled();
     expect(sessionStorage.getItem('lobe-chunk-reload')).toBe('1');
+    expect(sessionStorage.getItem('lobe-chunk-reload-toast')).toBe('1');
   });
 
-  it('does not reload again for distinct chunk errors after the guard is armed', () => {
+  it('toasts only once for distinct chunk errors after the guard is armed', () => {
     sessionStorage.setItem('lobe-chunk-reload', '1');
 
     dispatchRejection(new Error('Failed to fetch dynamically imported module'));
     dispatchRejection(new Error('Failed to fetch dynamically imported module'));
 
     expect(reload).not.toHaveBeenCalled();
-    expect(toastError).toHaveBeenCalledTimes(2);
+    expect(toastError).toHaveBeenCalledOnce();
+    expect(sessionStorage.getItem('lobe-chunk-reload-toast')).toBe('1');
   });
 });
