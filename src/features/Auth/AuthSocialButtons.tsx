@@ -51,6 +51,8 @@ export interface AuthSocialButtonsProps {
   oAuthSSOProviders: string[];
   onPhoneClick?: () => void;
   onSocialSignIn: (provider: string) => void;
+  phoneDisabled?: boolean;
+  phoneDisabledHintKey?: 'betterAuth.signup.phoneDisabledHint';
   phoneLabelKey?: 'betterAuth.signin.continueWithPhone' | 'betterAuth.signup.phoneLink';
   showDivider?: boolean;
   socialLoading: string | null;
@@ -58,6 +60,8 @@ export interface AuthSocialButtonsProps {
 
 export const AuthSocialButtons = memo<AuthSocialButtonsProps>(
   ({
+    phoneDisabled = false,
+    phoneDisabledHintKey,
     oAuthSSOProviders,
     onPhoneClick,
     onSocialSignIn,
@@ -77,6 +81,7 @@ export const AuthSocialButtons = memo<AuthSocialButtonsProps>(
     };
 
     const phoneLabel = t(phoneLabelKey);
+    const phoneDisabledHint = phoneDisabledHintKey ? t(phoneDisabledHintKey) : null;
 
     return (
       <Flexbox gap={12}>
@@ -102,14 +107,20 @@ export const AuthSocialButtons = memo<AuthSocialButtonsProps>(
             <Button
               aria-label={phoneLabel}
               className={styles.socialButton}
+              disabled={phoneDisabled}
               icon={<Icon icon={Smartphone} size={22} style={PROVIDER_ICON_STYLE} />}
               size="large"
-              title={phoneLabel}
+              title={phoneDisabledHint || phoneLabel}
               type="fill"
               onClick={onPhoneClick}
             />
           ) : null}
         </div>
+        {phoneDisabledHint ? (
+          <Text align="center" fontSize={12} type="secondary">
+            {phoneDisabledHint}
+          </Text>
+        ) : null}
         {showDivider && (
           <Divider plain className={styles.divider}>
             <Text fontSize={13} type="secondary">

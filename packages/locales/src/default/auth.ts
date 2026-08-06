@@ -153,6 +153,8 @@ export default {
   'betterAuth.signup.firstNameLabel': 'First name',
   'betterAuth.signup.firstNamePlaceholder': 'First name',
   'betterAuth.signup.hasAccount': 'Already have an account?',
+  'betterAuth.signup.phoneDisabledHint':
+    'You can sign in with phone, but phone sign-up is disabled for now.',
   'betterAuth.signup.phoneLink': 'Continue with phone',
   'betterAuth.signup.invalidReferralCodeContent':
     'The referral code "{{code}}" you entered is invalid or expired. Do you want to continue signing up?',

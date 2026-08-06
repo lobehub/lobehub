@@ -98,9 +98,13 @@ const BetterAuthSignUpForm = () => {
   return (
     <AuthCard footer={footer} title={t('betterAuth.signup.title')}>
       <AuthSocialButtons
+        phoneDisabled
         showDivider
         oAuthSSOProviders={oAuthSSOProviders}
+        phoneDisabledHintKey="betterAuth.signup.phoneDisabledHint"
+        phoneLabelKey="betterAuth.signup.phoneLink"
         socialLoading={socialLoading}
+        onPhoneClick={() => {}}
         onSocialSignIn={(provider) =>
           continueWithAgreement(() => {
             void onSocialSignIn(provider);
