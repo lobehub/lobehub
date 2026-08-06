@@ -51,6 +51,13 @@ beforeEach(() => {
       providerId: 'deepseek',
       settings: { extendParams: ['deepseekV4ReasoningEffort'] },
     },
+    {
+      abilities: {},
+      displayName: 'GPT-4o Mini',
+      id: 'gpt-4o-mini',
+      providerId: 'openai',
+      settings: {},
+    },
   ]);
   findByIdAndProviderMock.mockResolvedValue(undefined);
   getModelReasoningConfigMock.mockResolvedValue(undefined);
@@ -69,6 +76,18 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
 
     expect(getModelReasoningConfigMock).toHaveBeenCalledWith('gpt-4', 'openai');
     expect(hints.resolvedExtendParams).toEqual({ reasoning_effort: 'high' });
+  });
+
+  it('should skip the reasoning config DB read for models without reasoning extend params', async () => {
+    const hints = await resolveServerCallLlmContextHints({
+      ctx: createCtx({ chatConfig: {} }),
+      llmPayload,
+      model: 'gpt-4o-mini',
+      provider: 'openai',
+    });
+
+    expect(getModelReasoningConfigMock).not.toHaveBeenCalled();
+    expect(hints.resolvedExtendParams).toEqual({});
   });
 
   it('should ignore stale reasoning fields left in agent chatConfig', async () => {

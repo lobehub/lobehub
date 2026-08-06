@@ -9,7 +9,12 @@ import {
   resolveEffectiveReasoningChatConfig,
 } from '@lobechat/model-runtime';
 import type { LobeAgentChatConfig, UIChatMessage } from '@lobechat/types';
-import { type AiModelReasoningConfig, type ExtendParamsType, ModelProvider } from 'model-bank';
+import {
+  type AiModelReasoningConfig,
+  type ExtendParamsType,
+  MODEL_REASONING_EXTEND_PARAMS,
+  ModelProvider,
+} from 'model-bank';
 
 import { AiModelModel } from '@/database/models/aiModel';
 
@@ -96,12 +101,29 @@ export const resolveServerCallLlmContextHints = async ({
     }
   }
 
+  let modelExtendParams = readExtendParams(modelCard);
+
+  // Aggregation providers (e.g. `lobehub`) may serve a model without copying
+  // its origin `settings.extendParams`. Fall back to the canonical model card
+  // (matched by id across any provider) so reasoning/thinking params like
+  // `thinkingLevel` still reach the model. Mirrors the client-side
+  // `transformToAiModelList` re-namespacing behavior.
+  if (!modelExtendParams || modelExtendParams.length === 0) {
+    modelExtendParams = readExtendParams(canonicalModelCard);
+  }
+
   // Reasoning fields (effort family + reasoningMode) are user-level
   // model-instance settings (personal scope, cross-workspace): same-named
   // agent chatConfig values are ignored and the saved per-model config applies
   // instead — except explicit sub-agent overrides, which stay honored.
+  // Only read the saved config when the model can actually consume it
+  // (applyModelExtendParams ignores it otherwise) — this runs on every server
+  // LLM attempt, so non-reasoning models must not pay the extra DB read.
+  const modelHasReasoningExtendParams = (modelExtendParams ?? []).some((param) =>
+    (MODEL_REASONING_EXTEND_PARAMS as readonly string[]).includes(param),
+  );
   let modelReasoningConfig: AiModelReasoningConfig | undefined;
-  if (aiModelModel) {
+  if (aiModelModel && modelHasReasoningExtendParams) {
     try {
       modelReasoningConfig = await aiModelModel.getModelReasoningConfig(model, provider);
     } catch (error) {
@@ -120,17 +142,6 @@ export const resolveServerCallLlmContextHints = async ({
           subAgentReasoningOverrides: subAgentChatConfigOverride,
         })
       : undefined;
-
-  let modelExtendParams = readExtendParams(modelCard);
-
-  // Aggregation providers (e.g. `lobehub`) may serve a model without copying
-  // its origin `settings.extendParams`. Fall back to the canonical model card
-  // (matched by id across any provider) so reasoning/thinking params like
-  // `thinkingLevel` still reach the model. Mirrors the client-side
-  // `transformToAiModelList` re-namespacing behavior.
-  if (!modelExtendParams || modelExtendParams.length === 0) {
-    modelExtendParams = readExtendParams(canonicalModelCard);
-  }
 
   const modelSupportsPreserveThinkingFromCard =
     Array.isArray(modelExtendParams) && modelExtendParams.includes('preserveThinking');
