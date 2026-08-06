@@ -341,6 +341,32 @@ describe('useConversationScroll — pin behavior', () => {
     expect(scrollToIndex).not.toHaveBeenCalled();
   });
 
+  // Regression: settle re-pins fire while the content height is still changing
+  // (e.g. a workflow collapse at turn completion). A smooth scroll there is
+  // itself a visible slide, so only the initial send scroll may animate.
+  it('re-pins without smooth scrolling once the spacer layout settles', () => {
+    const { result, rerender } = renderScrollHook({
+      dataSource: [assistantId, 'prev'],
+      isSecondLastMessageFromUser: false,
+    });
+
+    rerender({
+      dataSource: ['m0', 'm1', userId, assistantId],
+      isSecondLastMessageFromUser: true,
+    });
+    expect(scrollToIndex).toHaveBeenCalledWith(2, { align: 'start', smooth: true });
+    scrollToIndex.mockClear();
+
+    // Registering the spacer node bumps spacerLayoutVersion, which is the
+    // "layout settled" beat the pin controller retries on.
+    const spacerNode = document.createElement('div');
+    act(() => {
+      result.current.registerSpacerNode(spacerNode);
+    });
+
+    expect(scrollToIndex).toHaveBeenCalledWith(2, { align: 'start', smooth: false });
+  });
+
   it('does not scroll on initial render', () => {
     renderScrollHook({
       dataSource: ['a', 'b', userId, assistantId],

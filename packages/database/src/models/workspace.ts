@@ -7,7 +7,6 @@ import {
   workspaces,
 } from '../schemas/workspace';
 import type { LobeChatDatabase } from '../type';
-import { resnapshotTransferredMessagesBeforeOwnerDelete } from '../utils/messageScope';
 
 const getActiveMembershipRole = async (
   db: LobeChatDatabase,
@@ -97,24 +96,9 @@ export class WorkspaceModel {
   };
 
   delete = async (id: string) => {
-    return this.db.transaction(async (tx) => {
-      // Only the primary owner may delete — verify BEFORE the resnapshot
-      // below, so an unauthorized caller cannot trigger the scrub's writes.
-      const [owned] = await tx
-        .select({ id: workspaces.id })
-        .from(workspaces)
-        .where(and(eq(workspaces.id, id), eq(workspaces.primaryOwnerId, this.userId)))
-        .limit(1);
-      if (!owned) return;
-
-      // Messages transferred OUT of this workspace still carry it in their
-      // snapshot workspace_id (cascade FK) — re-snapshot them from their
-      // anchor first, or the delete below would destroy transferred history.
-      await resnapshotTransferredMessagesBeforeOwnerDelete(tx, { workspaceId: id });
-      return tx
-        .delete(workspaces)
-        .where(and(eq(workspaces.id, id), eq(workspaces.primaryOwnerId, this.userId)));
-    });
+    return this.db
+      .delete(workspaces)
+      .where(and(eq(workspaces.id, id), eq(workspaces.primaryOwnerId, this.userId)));
   };
 
   findById = async (id: string) => {

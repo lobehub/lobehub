@@ -206,10 +206,20 @@ const Group = memo<GroupChildrenProps>(
       messageStateSelectors.isMessageCollapsed(id)(s),
       messageStateSelectors.isAssistantGroupItemGenerating(id)(s),
     ]);
+    // A running op whose visible output already ended (`visible_output_end` →
+    // `metadata.visibleLoadingDone`) only has terminal bookkeeping left
+    // (server-side persistence, agent_runtime_end, completeRun). Treating it as
+    // still active would delay process folding by seconds after the answer
+    // finished streaming. Safe to fold early: `stream_start` resets the flag,
+    // so a follow-up step re-activates the operation.
     const hasActiveOperation = useChatStore((s) =>
       operationSelectors
         .getOperationsByMessage(id)(s)
-        .some((op) => ACTIVE_OPERATION_STATUSES.has(op.status)),
+        .some(
+          (op) =>
+            ACTIVE_OPERATION_STATUSES.has(op.status) &&
+            !(op.status === 'running' && op.metadata.visibleLoadingDone),
+        ),
     );
     const turnDurationMs = useConversationStore((s) => getTurnDurationMs(s.dbMessages, blocks));
     const contextValue = useMemo(() => ({ assistantGroupId: id }), [id]);
@@ -300,6 +310,15 @@ const Group = memo<GroupChildrenProps>(
             defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
             disableEditing={disableEditing}
             key={segment.blocks[0]?.renderKey ?? `${id}.workflow.${index}`}
+            // While the turn's operation is still running, process folding may
+            // take over the moment it ends: the segment tree re-parents into
+            // ProcessFold, which remounts WorkflowCollapse already collapsed —
+            // one non-animated reflow. Letting the collapse also self-animate
+            // from semi → collapsed first would shrink the layout twice and make
+            // the conversation jitter. Once the op ends without a fold happening
+            // (tool-only turn, no final answer), suppression releases and
+            // WorkflowCollapse applies its completion level then.
+            suppressAutoCollapse={!!enableProcessFold && hasActiveOperation}
             workflowChromeComplete={
               workflowChromeComplete ||
               (hasRenderedContentAfter(segments, index) && !hasPendingIntervention(segment.blocks))

@@ -736,6 +736,23 @@ export default {
   'plugin.store': 'Skill Store',
   'settingAgent.avatar.sizeExceeded': 'Image size exceeds 1MB limit, please choose a smaller image',
   'settingAgent.avatar.title': 'Avatar',
+  'settingAgent.artwork.avatar.generate': 'Generate avatar',
+  'settingAgent.artwork.avatar.generateAction': 'Generate from Agent Profile',
+  'settingAgent.artwork.avatar.generating': 'Creating an avatar that matches this Agent…',
+  'settingAgent.artwork.avatar.image': 'Image avatar',
+  'settingAgent.artwork.background.empty': 'Add a background to give this Agent a visual identity',
+  'settingAgent.artwork.background.emptyHint': 'Add a cover image',
+  'settingAgent.artwork.background.generate': 'Generate background',
+  'settingAgent.artwork.background.generating': 'Creating a matching background…',
+  'settingAgent.artwork.background.remove': 'Remove background',
+  'settingAgent.artwork.background.upload': 'Upload background',
+  'settingAgent.artwork.cancel': 'Cancel generation',
+  'settingAgent.artwork.generateFailed': 'Could not generate the image. Try again.',
+  'settingAgent.artwork.generatingHint':
+    'This usually takes about 60 seconds. You can keep editing while it finishes.',
+  'settingAgent.artwork.retry': 'Try again',
+  'settingAgent.artwork.sizeExceeded': 'Image must be smaller than 1 MB',
+  'settingAgent.artwork.uploadFailed': 'Could not upload the image. Try again.',
   'settingAgent.backgroundColor.title': 'Background Color',
   'settingAgent.description.desc': 'A brief introduction to your agent, not for character setting',
   'settingAgent.description.placeholder': 'Enter agent description',
@@ -1028,7 +1045,8 @@ export default {
   'settingModel.reasoningEffort.options.medium': 'Medium',
   'settingModel.reasoningEffort.title': 'Reasoning Effort',
   'settingModel.subAgentModel.desc':
-    'The default model used by sub-agents this agent spawns. Sub-agents run on a lightweight model by default instead of inheriting this agent’s main model.',
+    'The model used by sub-agents this agent spawns. By default sub-agents follow the main agent’s current model (same provider, same model); pick a model here to override, or clear the selection to follow again.',
+  'settingModel.subAgentModel.followParent': 'Follow main agent model',
   'settingModel.submit': 'Update Model Settings',
   'settingModel.temperature.desc':
     'The higher the value, the more creative and imaginative the responses; the lower the value, the more rigorous the responses.',
@@ -1117,6 +1135,8 @@ export default {
   'serviceModel.contextLimit.placeholder': 'Context limit',
   'serviceModel.memoryModels.title': 'Memory',
   'serviceModel.optionalFeatures.title': 'Optional Features',
+  'serviceModel.topicAutoSummary.desc':
+    'Summarizes topics created in the rolling 24-hour window after one hour without message activity.',
   'settingSystemTools.appEnvironment.chromium.desc': 'Chromium browser engine version',
   'settingSystemTools.appEnvironment.desc': 'Built-in runtime versions in the desktop app',
   'settingSystemTools.appEnvironment.electron.desc': 'Electron framework version',
@@ -1392,6 +1412,11 @@ When I am ___, I need ___
   'systemAgent.topic.label': 'Model',
   'systemAgent.topic.modelDesc': 'Model used to rename topics',
   'systemAgent.topic.title': 'Topic Auto-Naming',
+  'systemAgent.topicAutoSummary.modelDesc':
+    'Writes a short description and a reusable conversation summary after a topic becomes inactive.',
+  'systemAgent.topicAutoSummary.promptPlaceholder':
+    'Optional custom instructions. The conversation and required JSON output schema are added automatically.',
+  'systemAgent.topicAutoSummary.title': 'Automatic Topic Summary',
   'systemAgent.translation.label': 'Model',
   'systemAgent.translation.modelDesc': 'Model used to translate messages',
   'systemAgent.translation.title': 'Message Translation',
@@ -3101,7 +3126,7 @@ When I am ___, I need ___
   'tools.builtins.lobe-agent-management.description': 'Create, manage, and orchestrate AI agents',
   'tools.builtins.lobe-agent-management.title': 'Agent Management',
   'tools.builtins.lobe-agent.description':
-    'Built-in Lobe Agent capabilities: plan and todo management, sub-agent dispatch, and visual media analysis',
+    'Built-in Lobe Agent capabilities: plan and todo management, sub-agent dispatch, and multimodal media analysis',
   'tools.builtins.lobe-agent.title': 'Lobe Agent',
   'tools.builtins.lobe-brief.description':
     'Report progress, deliver results, and request user decisions',
@@ -3155,6 +3180,11 @@ When I am ___, I need ___
   'tools.builtins.lobe-web-browsing.readme':
     'Search the web for current information and crawl web pages to extract content. Supports multiple search engines, categories, and time ranges for comprehensive research.',
   'tools.builtins.lobe-web-browsing.title': 'Web Browsing',
+  'tools.builtins.lobe-image-generation.description':
+    'Generate images through LobeHub providers when the current chat model has no native image output.',
+  'tools.builtins.lobe-image-generation.readme':
+    'Opt-in image generation for models without native image output. Pin this tool to enable it in chat or agent mode; leave unpinned to avoid the tool schema cost.',
+  'tools.builtins.lobe-image-generation.title': 'Image Generation',
   'tools.builtins.lobe-web-onboarding.description':
     'Drive the web onboarding flow with a controlled agent runtime',
   'tools.builtins.lobe-web-onboarding.title': 'Web Onboarding',

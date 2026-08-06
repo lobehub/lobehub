@@ -1,8 +1,9 @@
-import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
+import { describeRoute } from 'hono-openapi';
 
 import { getAllScopePermissions, getScopePermissions } from '@/utils/rbac';
 
+import { zValidator } from '../common/validator';
 import { UserController } from '../controllers';
 import { requireAuth } from '../middleware/auth';
 import { requireAnyPermission } from '../middleware/permission-check';
@@ -21,10 +22,15 @@ const UserRoutes = new Hono();
  * GET /api/v1/users/me
  * Requires authentication but no special permission
  */
-UserRoutes.get('/me', requireAuth, async (c) => {
-  const userController = new UserController();
-  return await userController.getCurrentUser(c);
-});
+UserRoutes.get(
+  '/me',
+  describeRoute({ summary: 'Get current authenticated user', tags: ['users'] }),
+  requireAuth,
+  async (c) => {
+    const userController = new UserController();
+    return await userController.getCurrentUser(c);
+  },
+);
 
 /**
  * Get the list of users in the system (supports search)
@@ -34,7 +40,10 @@ UserRoutes.get('/me', requireAuth, async (c) => {
 UserRoutes.get(
   '/',
   requireAuth,
-  requireAnyPermission(getScopePermissions('USER_READ', ['ALL']), 'You do not have permission to view user list'),
+  requireAnyPermission(
+    getScopePermissions('USER_READ', ['ALL']),
+    'You do not have permission to view user list',
+  ),
   zValidator('query', UserSearchRequestSchema),
   async (c) => {
     const userController = new UserController();
@@ -50,7 +59,10 @@ UserRoutes.get(
 UserRoutes.post(
   '/',
   requireAuth,
-  requireAnyPermission(getScopePermissions('USER_CREATE', ['ALL']), 'You do not have permission to create a user'),
+  requireAnyPermission(
+    getScopePermissions('USER_CREATE', ['ALL']),
+    'You do not have permission to create a user',
+  ),
   zValidator('json', CreateUserRequestSchema),
   async (c) => {
     const userController = new UserController();
@@ -66,7 +78,10 @@ UserRoutes.post(
 UserRoutes.get(
   '/:id',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('USER_READ'), 'You do not have permission to view user details'),
+  requireAnyPermission(
+    getAllScopePermissions('USER_READ'),
+    'You do not have permission to view user details',
+  ),
   zValidator('param', UserIdParamSchema),
   async (c) => {
     const userController = new UserController();
@@ -82,7 +97,10 @@ UserRoutes.get(
 UserRoutes.patch(
   '/:id',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('USER_UPDATE'), 'You do not have permission to update user information'),
+  requireAnyPermission(
+    getAllScopePermissions('USER_UPDATE'),
+    'You do not have permission to update user information',
+  ),
   zValidator('param', UserIdParamSchema),
   zValidator('json', UpdateUserRequestSchema),
   async (c) => {
@@ -99,7 +117,10 @@ UserRoutes.patch(
 UserRoutes.delete(
   '/:id',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('USER_DELETE'), 'You do not have permission to delete a user'),
+  requireAnyPermission(
+    getAllScopePermissions('USER_DELETE'),
+    'You do not have permission to delete a user',
+  ),
   zValidator('param', UserIdParamSchema),
   async (c) => {
     const userController = new UserController();
@@ -115,7 +136,10 @@ UserRoutes.delete(
 UserRoutes.get(
   '/:id/roles',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('RBAC_USER_ROLE_READ'), 'You do not have permission to view user roles'),
+  requireAnyPermission(
+    getAllScopePermissions('RBAC_USER_ROLE_READ'),
+    'You do not have permission to view user roles',
+  ),
   zValidator('param', UserIdParamSchema),
   async (c) => {
     const userController = new UserController();
@@ -131,7 +155,10 @@ UserRoutes.get(
 UserRoutes.patch(
   '/:id/roles',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('RBAC_USER_ROLE_UPDATE'), 'You do not have permission to assign user roles'),
+  requireAnyPermission(
+    getAllScopePermissions('RBAC_USER_ROLE_UPDATE'),
+    'You do not have permission to assign user roles',
+  ),
   zValidator('param', UserIdParamSchema),
   zValidator('json', UpdateUserRolesRequestSchema),
   async (c) => {

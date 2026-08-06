@@ -291,6 +291,7 @@ export default {
   'uploadDock.body.item.pending': 'Preparing to upload...',
   'uploadDock.body.item.processing': 'Processing file...',
   'uploadDock.body.item.restTime': 'Remaining {{time}}',
+  'uploadDock.body.item.retry': 'Retry upload',
   'uploadDock.fileQueueInfo':
     'Uploading the first {{count}} files, {{remaining}} remaining in queue',
   'uploadDock.totalCount': 'Total {{count}} items',

@@ -19,7 +19,7 @@ interface UseRemoteAgentDeviceGuardResult {
 }
 
 /**
- * Checks whether the bound device is online and, for remote-only hetero
+ * Checks whether the bound device is online and, for notify-based hetero
  * platforms, whether that platform is available on the device. Used in
  * HeterogeneousChatInput before device-dispatched hetero runs.
  */
@@ -61,7 +61,15 @@ export const useRemoteAgentDeviceGuard = ({
       const devices = await deviceService.listDevices();
       const device = devices.find((d) => d.deviceId === boundDeviceId);
 
-      if (!device || !device.online) {
+      // A shared/legacy binding may point at the author's personal principal,
+      // which is intentionally absent from the caller-scoped device list. The
+      // server owns that routing decision; absence here is not proof of offline.
+      if (!device) {
+        setStatus('ok');
+        return;
+      }
+
+      if (!device.online) {
         setStatus('device-offline');
         return;
       }
@@ -70,6 +78,7 @@ export const useRemoteAgentDeviceGuard = ({
         const capability = await deviceService.checkCapability({
           deviceId: boundDeviceId,
           platform: providerType,
+          scope: device.scope,
         });
         setStatus(capability.available ? 'ok' : 'platform-unavailable');
       } else {

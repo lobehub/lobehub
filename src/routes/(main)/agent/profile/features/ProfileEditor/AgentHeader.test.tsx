@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => {
     },
     agentStoreListeners: new Set<() => void>(),
     actionIconProps: { all: [] as Record<string, unknown>[] },
+    artworkProps: { last: undefined as Record<string, unknown> | undefined },
     createAgentIdentityModal: vi.fn(),
     refreshAgentConfig: vi.fn(),
     emojiPickerProps: { last: undefined as Record<string, unknown> | undefined },
@@ -85,15 +86,11 @@ vi.mock('antd', () => ({
   message: { error: vi.fn() },
 }));
 
-vi.mock('@/components/EmojiPicker', () => ({
-  default: vi.fn((props: Record<string, unknown>) => {
-    mocks.emojiPickerProps.last = props;
-    return <button type="button">avatar</button>;
-  }),
-}));
-
-vi.mock('@/features/AgentSetting/AgentMeta/BackgroundSwatches', () => ({
-  default: () => <div />,
+vi.mock('@/features/AgentProfileArtwork', () => ({
+  AgentProfileArtwork: (props: Record<string, unknown>) => {
+    mocks.artworkProps.last = props;
+    return <div>artwork</div>;
+  },
 }));
 
 vi.mock('@/hooks/usePermission', () => ({
@@ -123,6 +120,8 @@ vi.mock('@/store/agent', async () => {
 vi.mock('@/store/agent/selectors', () => ({
   agentSelectors: {
     getAgentMetaById: (agentId: string) => (state: typeof mocks.agentStoreState) =>
+      state.agentMap[agentId] || {},
+    getAgentConfigById: (agentId: string) => (state: typeof mocks.agentStoreState) =>
       state.agentMap[agentId] || {},
     getAgentSlugById: (agentId: string) => (state: typeof mocks.agentStoreState) =>
       state.agentMap[agentId]?.slug,
@@ -185,6 +184,7 @@ describe('AgentHeader', () => {
     mocks.emojiPickerProps.last = undefined;
     mocks.inputProps.all = [];
     mocks.actionIconProps.all = [];
+    mocks.artworkProps.last = undefined;
     mocks.permissionState.allowed = false;
     mocks.randomAgentName.mockReturnValue('Zoe');
     mocks.sidebarAgents = [];
@@ -194,10 +194,10 @@ describe('AgentHeader', () => {
     vi.useRealTimers();
   });
 
-  it('keeps the emoji picker closed when edits are not allowed', () => {
+  it('keeps the artwork editor read-only when edits are not allowed', () => {
     render(<AgentHeader />);
 
-    expect(mocks.emojiPickerProps.last?.open).toBe(false);
+    expect(mocks.artworkProps.last?.canEdit).toBe(false);
   });
 
   it('opens the identity form instead of editing inline', () => {
@@ -333,31 +333,22 @@ describe('AgentHeader', () => {
     expect(view.container.textContent).not.toContain('settingAgent.personalName.pickForMe');
   });
 
-  it('keeps an asynchronous avatar upload bound to the agent that started it', async () => {
+  it('keeps an artwork update bound to the agent that started it', () => {
     mocks.permissionState.allowed = true;
     mocks.agentStoreState.agentMap = {
       'agent-a': { title: 'Agent A' },
       'agent-b': { title: 'Agent B' },
     };
-    let resolveUpload: ((result: { url: string }) => void) | undefined;
-    mocks.uploadWithProgress.mockImplementation(
-      () =>
-        new Promise<{ url: string }>((resolve) => {
-          resolveUpload = resolve;
-        }),
-    );
     render(<AgentHeader />);
-    const upload = mocks.emojiPickerProps.last?.onUpload as (file: File) => Promise<void>;
-    const uploadPromise = upload(new File(['avatar'], 'avatar.png', { type: 'image/png' }));
+    const onAvatarChange = mocks.artworkProps.last?.onAvatarChange as (avatar: string) => void;
 
     act(() => {
       mocks.agentStoreState.activeAgentId = 'agent-b';
       mocks.agentStoreListeners.forEach((listener) => listener());
     });
 
-    await act(async () => {
-      resolveUpload?.({ url: 'https://example.com/agent-a.png' });
-      await uploadPromise;
+    act(() => {
+      onAvatarChange('https://example.com/agent-a.png');
     });
 
     expect(mocks.updateAgentMetaById).toHaveBeenCalledExactlyOnceWith('agent-a', {

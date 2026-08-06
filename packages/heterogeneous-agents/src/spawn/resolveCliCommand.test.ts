@@ -104,6 +104,20 @@ describe('resolveCliCommand', () => {
       });
     });
 
+    it('resolves and validates Qoder using its bare semver output', async () => {
+      callExecFile('/Users/x/.local/bin/qodercli\n');
+      callExecFile('1.1.15');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('qoder', 'qodercli');
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/Users/x/.local/bin/qodercli',
+        version: '1.1.15',
+      });
+    });
+
     it('finds OpenCode in its well-known user-local install path', async () => {
       const originalPath = process.env.PATH;
       const originalShell = process.env.SHELL;
@@ -328,6 +342,11 @@ describe('resolveCliCommand', () => {
     it('defines pi as the default Pi command', async () => {
       const { DEFAULT_HETERO_COMMAND } = await importModule();
       expect(DEFAULT_HETERO_COMMAND.pi).toBe('pi');
+    });
+
+    it('defines qodercli as the default Qoder command', async () => {
+      const { DEFAULT_HETERO_COMMAND } = await importModule();
+      expect(DEFAULT_HETERO_COMMAND.qoder).toBe('qodercli');
     });
 
     it('resolves the default bare command to the validated absolute path', async () => {

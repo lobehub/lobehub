@@ -1,15 +1,4 @@
-import {
-  and,
-  desc,
-  eq,
-  inArray,
-  isNull,
-  ne,
-  or,
-  type SQL,
-  sql,
-  type SQLWrapper,
-} from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, ne, type SQL, sql, type SQLWrapper } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import {
@@ -21,15 +10,12 @@ import {
   knowledgeBaseFiles,
   knowledgeBases,
   messages,
-  sessions,
   topics,
   userMemories,
-  workspaceMembers,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { sanitizeBm25Query } from '../../utils/bm25';
 import { normalizeInboxAgentMeta, normalizeInboxAgentTitle } from '../../utils/inboxAgent';
-import { buildMessageScopeJoinWhere } from '../../utils/messageScope';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
 export type SearchResultType =
@@ -247,10 +233,9 @@ const RECENCY_CANDIDATE_MULTIPLIER = 4;
  * score ordering is real (see `liftsAgentFilter`): trading the exact inline
  * predicate for a score-ordered pool is unsound when the scores backing that
  * order are NULL. Indexing the column instead is tracked with the other
- * missing fast fields in LOBE-12381.
+ * missing fast fields.
  *
- * @see https://linear.app/lobehub/issue/LOBE-12379
- * @see https://linear.app/lobehub/issue/LOBE-12575
+ * Indexing the column is tracked with the other missing fast fields.
  */
 const WORKSPACE_FILTER_CANDIDATE_MULTIPLIER = 5;
 
@@ -283,7 +268,7 @@ const WORKSPACE_FILTER_MIN_CANDIDATES = 500;
 
 /**
  * Flip to `true` once every BM25 index used by this repo carries `workspace_id`
- * as a fast keyword field (LOBE-12381). pg_search then pushes `workspace_id IS
+ * as a fast keyword field. pg_search then pushes `workspace_id IS
  * NULL` down as `must_not: exists(workspace_id)` and `workspace_id = ?` as a
  * `term`, so the ownership predicate can stay inline and personal search becomes
  * exact again (no candidate over-fetch, no dropped rows) while workspace-mode
@@ -325,7 +310,7 @@ export class SearchRepo {
    * approximation. Workspace mode has no such pushdown-able owner column — its
    * rows are a tiny slice of a global TopN — so lifting the filter there would
    * silently return nothing. It keeps the exact inline predicate and stays on
-   * the slow plan until LOBE-12381 lands.
+   * the slow plan until `workspace_id` becomes a fast keyword field in the BM25 index.
    */
   private get liftsWorkspaceFilter() {
     return !WORKSPACE_ID_IN_BM25_INDEX && !this.workspaceId;
@@ -338,7 +323,7 @@ export class SearchRepo {
    * pool, which is only sound while the scan's `ORDER BY paradedb.score()` is
    * real. Personal mode qualifies: its scan keeps only pushdown-able quals, so
    * scores are valid and the pool is genuinely the top-N matches. Workspace
-   * mode does not (until LOBE-12381 makes `workspace_id` a fast field): its
+   * mode does not (until `workspace_id` becomes a fast field in the BM25 index): its
    * inline `workspace_id` qual NULLs the whole score column on pg_search
    * 0.15.26, so a pool cut on that ordering would be an arbitrary slice that
    * silently drops agent rows. It keeps `agent_id` inline next to
@@ -743,40 +728,6 @@ export class SearchRepo {
 
     const candidateLimit = limit * RECENCY_CANDIDATE_MULTIPLIER;
 
-    // messages.user_id/workspace_id are creation-time snapshots — a message's
-    // authoritative scope is derived from its owning topic/session
-    // (buildMessageScopeJoinWhere), and that check MUST live above the scan:
-    // joins inside the scan break TopN, and ParadeDB rejects the EXISTS form
-    // outright ("Unsupported query shape"). The scan keeps only a fast-field
-    // author/tenant BOUND that over-covers the derived scope:
-    //  - personal mode: `user_id = me` (pushdown-able → TopN + real scores).
-    //    Approximation: teammate-authored rows inside topics transferred INTO
-    //    a personal scope fall outside the bound (rare by construction).
-    //  - workspace mode: workspace snapshot rows OR rows authored by any
-    //    member (covers content transferred in by a member; the member list
-    //    is inlined as literals — a subquery here would degrade the scan the
-    //    same way EXISTS does). Plan quality matches upstream workspace mode
-    //    (already non-TopN until LOBE-12381).
-    let scanBound: SQL;
-    if (this.workspaceId) {
-      const memberRows = await this.db
-        .select({ userId: workspaceMembers.userId })
-        .from(workspaceMembers)
-        .where(
-          and(
-            eq(workspaceMembers.workspaceId, this.workspaceId),
-            isNull(workspaceMembers.deletedAt),
-          ),
-        );
-      const memberIds = memberRows.map((row) => row.userId);
-      scanBound = or(
-        buildWorkspaceWhere(this.scope, messages),
-        memberIds.length > 0 ? inArray(messages.userId, memberIds) : undefined,
-      ) as SQL;
-    } else {
-      scanBound = eq(messages.userId, this.userId) as SQL;
-    }
-
     const hits = this.db
       .select({
         agentId: messages.agentId,
@@ -787,16 +738,14 @@ export class SearchRepo {
         model: messages.model,
         role: messages.role,
         score: sql<number>`paradedb.score(${messages.id})`.as('score'),
-        sessionId: messages.sessionId,
         topicId: messages.topicId,
         updatedAt: messages.updatedAt,
-        userId: messages.userId,
         workspaceId: messages.workspaceId,
       })
       .from(messages)
       .where(
         and(
-          scanBound,
+          this.scanScopeWhere(messages),
           ne(messages.role, 'tool'),
           agentId && !this.liftsAgentFilter ? eq(messages.agentId, agentId) : undefined,
           sql`${messages.content} @@@ ${bm25Query}`,
@@ -805,16 +754,11 @@ export class SearchRepo {
       .orderBy(sql`paradedb.score(${messages.id}) DESC`)
       // `agent_id` is not a BM25 field, so where the scan's score order is real
       // its filter lives above the scan and the pool deepens to compensate. See
-      // the scan-shape invariant and `liftsAgentFilter` above. The derived
-      // scope check above the scan drops rows in every mode now, so the pool
-      // over-fetches in workspace mode too.
+      // the scan-shape invariant and `liftsAgentFilter` above.
       .limit(
         agentId && this.liftsAgentFilter
           ? AGENT_SCOPE_CANDIDATE_POOL
-          : Math.max(
-              candidateLimit * WORKSPACE_FILTER_CANDIDATE_MULTIPLIER,
-              WORKSPACE_FILTER_MIN_CANDIDATES,
-            ),
+          : this.scanCandidateLimit(candidateLimit),
       )
       .as('message_hits');
 
@@ -836,13 +780,9 @@ export class SearchRepo {
       })
       .from(hits)
       .leftJoin(agents, eq(hits.agentId, agents.id))
-      .leftJoin(topics, eq(topics.id, hits.topicId))
-      .leftJoin(sessions, eq(sessions.id, hits.sessionId))
       .where(
         and(
-          // Authoritative derived scope — topic first, then session, then the
-          // orphan rows' own snapshot columns.
-          buildMessageScopeJoinWhere(this.scope, hits),
+          this.liftedScopeWhere(hits.workspaceId),
           agentId ? eq(hits.agentId, agentId) : undefined,
         ),
       )
@@ -1079,7 +1019,7 @@ export class SearchRepo {
    * the plain index-scan plan: `knowledge_base_id` is not in the BM25 index
    * either, so isolating the scan would not buy TopN. The KB filter does bound
    * the match set to one knowledge base (via its btree index), which keeps it
-   * workable until LOBE-12381 adds the missing fast fields.
+   * workable until `workspace_id` and `visibility` become fast fields in the BM25 index.
    */
   async searchKnowledgeBaseDocuments(
     query: string,

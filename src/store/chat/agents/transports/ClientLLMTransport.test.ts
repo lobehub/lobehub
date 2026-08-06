@@ -63,27 +63,32 @@ vi.mock('../StreamingHandler', () => ({
   },
 }));
 
-const createTransport = () => {
+const createTransport = (context: Record<string, unknown> = {}) => {
   const operation = {
     abortController: new AbortController(),
-    context: { agentId: 'agent-1', topicId: 'topic-1' },
+    context: { agentId: 'agent-1', topicId: 'topic-1', ...context },
     status: 'running',
   };
   const store = {
     associateMessageWithOperation: vi.fn(),
     completeOperation: vi.fn(),
+    failOperation: vi.fn(),
     internal_dispatchMessage: vi.fn(),
     internal_toggleToolCallingStreaming: vi.fn(),
     internal_transformToolCalls: vi.fn((calls: unknown) => calls),
     operations: { 'op-1': operation },
     startOperation: vi.fn(() => ({ operationId: 'reasoning-op' })),
+    updateTopicStatus: vi.fn().mockResolvedValue(undefined),
   } as unknown as ChatStore;
 
-  return new ClientLLMTransport({
-    get: () => store,
-    operationId: 'op-1',
-    session: { assistantMessageId: 'msg-1' } as any,
-  });
+  return {
+    store,
+    transport: new ClientLLMTransport({
+      get: () => store,
+      operationId: 'op-1',
+      session: { assistantMessageId: 'msg-1' } as any,
+    }),
+  };
 };
 
 const input = {
@@ -107,7 +112,7 @@ describe('ClientLLMTransport.runAttempt · empty-completion grounding guard', ()
 
   it('keeps a grounding-only completion (empty content, positive output tokens) as a success', async () => {
     finishGrounding = grounding;
-    const result = await createTransport().runAttempt(input);
+    const result = await createTransport().transport.runAttempt(input);
 
     expect(result.ok).toBe(true);
     expect(result.output.grounding).toEqual(grounding);
@@ -115,13 +120,129 @@ describe('ClientLLMTransport.runAttempt · empty-completion grounding guard', ()
 
   it('still flags a truly empty completion (no content, no grounding) as ModelEmptyError', async () => {
     finishGrounding = null;
-    const result = await createTransport().runAttempt(input);
+    const { transport } = createTransport();
+    const result = await transport.runAttempt(input);
 
     expect(result.ok).toBe(false);
     if (result.ok === false) {
       expect(result.error).toBeInstanceOf(ModelEmptyError);
       expect((result.error as ModelEmptyError).diagnostics).toMatchObject({ cost: 5.980_015 });
-      expect(createTransport().retryPolicy.classifyError(result.error).kind).toBe('stop');
+      expect(transport.retryPolicy.classifyError(result.error).kind).toBe('stop');
     }
+  });
+});
+
+describe('ClientLLMTransport.retryPolicy.onError · terminal operation teardown', () => {
+  it('writes the message error and fails the running operation immediately', () => {
+    const { store, transport } = createTransport();
+
+    transport.retryPolicy.onError?.({
+      error: {
+        body: {
+          message: 'The content may contain prohibited content. Please adjust it and try again.',
+          provider: 'google',
+        },
+        message: 'The content may contain prohibited content. Please adjust it and try again.',
+        type: 'ProviderContentPolicyViolation',
+      },
+      events: [],
+      interrupted: false,
+    });
+
+    expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+      {
+        id: 'msg-1',
+        type: 'updateMessage',
+        value: {
+          error: expect.objectContaining({
+            message: 'The content may contain prohibited content. Please adjust it and try again.',
+            type: 'ProviderContentPolicyViolation',
+          }),
+        },
+      },
+      { operationId: 'op-1' },
+    );
+    expect(store.failOperation).toHaveBeenCalledWith('op-1', {
+      message: 'The content may contain prohibited content. Please adjust it and try again.',
+      type: 'ProviderContentPolicyViolation',
+    });
+    expect(store.updateTopicStatus).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      groupId: undefined,
+      status: 'active',
+      topicId: 'topic-1',
+    });
+  });
+
+  it('resets group-scoped topic status with the operation scope', () => {
+    const { store, transport } = createTransport({
+      groupId: 'group-1',
+      scope: 'group',
+    });
+
+    transport.retryPolicy.onError?.({
+      error: {
+        message: 'The content may contain prohibited content. Please adjust it and try again.',
+        type: 'ProviderContentPolicyViolation',
+      },
+      events: [],
+      interrupted: false,
+    });
+
+    expect(store.updateTopicStatus).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      groupId: 'group-1',
+      scope: 'group',
+      status: 'active',
+      topicId: 'topic-1',
+    });
+  });
+
+  it('does not fail the operation when the run was interrupted by the user', () => {
+    const { store, transport } = createTransport();
+
+    transport.retryPolicy.onError?.({
+      error: { message: 'aborted', type: 'AbortError' },
+      events: [],
+      interrupted: true,
+    });
+
+    expect(store.internal_dispatchMessage).not.toHaveBeenCalled();
+    expect(store.failOperation).not.toHaveBeenCalled();
+    expect(store.updateTopicStatus).not.toHaveBeenCalled();
+  });
+
+  it('does not fail an operation that is no longer running', () => {
+    const { store, transport } = createTransport();
+    store.operations['op-1'].status = 'cancelled';
+
+    transport.retryPolicy.onError?.({
+      error: {
+        message: 'The content may contain prohibited content. Please adjust it and try again.',
+        type: 'ProviderContentPolicyViolation',
+      },
+      events: [],
+      interrupted: false,
+    });
+
+    expect(store.internal_dispatchMessage).toHaveBeenCalled();
+    expect(store.failOperation).not.toHaveBeenCalled();
+    expect(store.updateTopicStatus).not.toHaveBeenCalled();
+  });
+
+  it('does not reset topic status for nested sub-agent operations', () => {
+    const { store, transport } = createTransport({ scope: 'sub_agent' });
+
+    transport.retryPolicy.onError?.({
+      error: {
+        message: 'The content may contain prohibited content. Please adjust it and try again.',
+        type: 'ProviderContentPolicyViolation',
+      },
+      events: [],
+      interrupted: false,
+    });
+
+    expect(store.failOperation).toHaveBeenCalled();
+    expect(store.updateTopicStatus).not.toHaveBeenCalled();
   });
 });

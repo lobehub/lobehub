@@ -18,6 +18,9 @@ LICENSE
 
 # dependencies
 node_modules
+
+# generated files (regenerate with `bun generate:openapi` in packages/openapi)
+packages/openapi/openapi.yml
 *.log
 *.lock
 package-lock.json

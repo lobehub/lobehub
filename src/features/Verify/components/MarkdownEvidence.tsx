@@ -1,16 +1,7 @@
 'use client';
 
-import {
-  Center,
-  Drawer,
-  Flexbox,
-  Highlighter,
-  Icon,
-  Markdown,
-  MaskShadow,
-  Text,
-} from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Center, Flexbox, Highlighter, Icon, Markdown, MaskShadow, Text } from '@lobehub/ui';
+import { Button, Drawer } from '@lobehub/ui/base-ui';
 import { useSize } from 'ahooks';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronsDownUpIcon, ChevronsUpDownIcon, FileText } from 'lucide-react';
@@ -235,15 +226,13 @@ export const EvidenceFileCard = memo<{
       </button>
       {open && (
         <Drawer
-          destroyOnHidden
           containerMaxWidth={'100%'}
           open={open}
           placement={'right'}
           title={name}
           width={'min(1120px, calc(100vw - 48px))'}
           styles={{
-            body: { height: '100%', padding: 0 },
-            bodyContent: { height: '100%', minHeight: 0, overflow: 'hidden' },
+            bodyContent: { height: '100%', minHeight: 0, overflow: 'hidden', padding: 0 },
           }}
           onClose={() => setOpen(false)}
         >

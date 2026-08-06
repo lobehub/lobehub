@@ -52,13 +52,9 @@ import {
   threads,
   topics,
 } from '../schemas';
-import type { LobeChatDatabase } from '../type';
+import type { LobeChatDatabase, Transaction } from '../type';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { normalizeInboxAgentMeta } from '../utils/inboxAgent';
-import {
-  hasForeignTopicAnchoredMessageRows,
-  MESSAGE_TRANSFER_HAS_FOREIGN_AUTHORS,
-} from '../utils/messageScope';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import {
   hasForeignTopicComments,
@@ -250,6 +246,90 @@ export class AgentModel {
       }
     }
     return ids;
+  };
+
+  /**
+   * Strip device bindings that are not enrolled in `targetWorkspaceId`, and
+   * downgrade `fixed` device execution targets that can no longer be resolved.
+   * Any `boundDeviceId` / `workingDirByDevice` entry pointing outside the
+   * target workspace is dropped, and a `fixed` device target without a valid
+   * public device is downgraded to `member` (defaulting to the caller's own
+   * device). Shared by `transferAgents` (moving a row into a workspace) and
+   * `duplicate` (copying a row into the caller's workspace): both re-home the
+   * row to a new owner, so a leftover reference to a device only the previous
+   * owner can reach would otherwise point the re-homed agent at a target
+   * nobody else can resolve.
+   */
+  private sanitizeAgencyConfigForWorkspace = async (
+    db: LobeChatDatabase | Transaction,
+    targetWorkspaceId: string,
+    agencyConfigs: Array<LobeAgentAgencyConfig | null | undefined>,
+  ): Promise<Array<LobeAgentAgencyConfig | null>> => {
+    const allCandidateIds = [
+      ...new Set(agencyConfigs.flatMap((config) => this.collectBoundDeviceIds(config))),
+    ];
+    const deviceRows =
+      allCandidateIds.length > 0
+        ? await db
+            .select({ deviceId: devices.deviceId, visibility: devices.visibility })
+            .from(devices)
+            .where(
+              and(
+                eq(devices.workspaceId, targetWorkspaceId),
+                inArray(devices.deviceId, allCandidateIds),
+              ),
+            )
+        : [];
+    const allowed = new Set(deviceRows.map((r) => r.deviceId));
+    const publicDeviceIds = new Set(
+      deviceRows.filter((r) => r.visibility === 'public').map((r) => r.deviceId),
+    );
+
+    return agencyConfigs.map((config) => {
+      let next: LobeAgentAgencyConfig | null = config ?? null;
+      if (!next) return next;
+
+      const candidateIds = this.collectBoundDeviceIds(next);
+      if (candidateIds.length > 0) {
+        const cleaned: LobeAgentAgencyConfig = { ...next };
+        if (cleaned.boundDeviceId && !allowed.has(cleaned.boundDeviceId)) {
+          delete cleaned.boundDeviceId;
+        }
+        if (cleaned.workingDirByDevice) {
+          const filtered: Record<string, string> = {};
+          for (const [deviceId, cwd] of Object.entries(cleaned.workingDirByDevice)) {
+            if (allowed.has(deviceId) && typeof cwd === 'string') filtered[deviceId] = cwd;
+          }
+          cleaned.workingDirByDevice = Object.keys(filtered).length > 0 ? filtered : undefined;
+        }
+        if (
+          cleaned.executionTargetSelectionPolicy === 'fixed' &&
+          cleaned.executionTarget === 'device' &&
+          (!cleaned.boundDeviceId || !allowed.has(cleaned.boundDeviceId))
+        ) {
+          cleaned.executionTargetSelectionPolicy = 'member';
+        }
+        next = cleaned;
+      }
+
+      if (
+        next.executionTargetSelectionPolicy === 'fixed' &&
+        (!next.executionTarget ||
+          !['auto', 'device', 'none', 'sandbox'].includes(next.executionTarget))
+      ) {
+        next.executionTargetSelectionPolicy = 'member';
+      }
+
+      if (
+        next.executionTargetSelectionPolicy === 'fixed' &&
+        next.executionTarget === 'device' &&
+        (!next.boundDeviceId || !publicDeviceIds.has(next.boundDeviceId))
+      ) {
+        next.executionTargetSelectionPolicy = 'member';
+      }
+
+      return next;
+    });
   };
 
   /**
@@ -1413,6 +1493,22 @@ export class AgentModel {
 
     if (!sourceAgent) return null;
 
+    // The copy is owned by the caller, so device references must be resolvable
+    // by the caller too. A public workspace agent may still carry a legacy
+    // personal-device `boundDeviceId` / `workingDirByDevice` that `updateConfig`
+    // grandfathers; duplicating it verbatim would point the new agent at a
+    // device outside the workspace instead of defaulting to the caller's own
+    // device. Sanitize exactly like `transferAgents` does when moving into a
+    // workspace. Personal-scope copies keep existing bindings (any device is
+    // reachable there).
+    const agencyConfig = this.workspaceId
+      ? (
+          await this.sanitizeAgencyConfigForWorkspace(this.db, this.workspaceId, [
+            sourceAgent.agencyConfig,
+          ])
+        )[0]
+      : (sourceAgent.agencyConfig ?? null);
+
     // Create new agent with explicit include fields
     const [newAgent] = await this.db
       .insert(agents)
@@ -1420,6 +1516,11 @@ export class AgentModel {
         buildWorkspacePayload(
           { userId: this.userId, workspaceId: this.workspaceId },
           {
+            // Agency config (heterogeneous provider, execution target, device
+            // binding, sub-agent defaults, verify rubric...). Duplicating must
+            // preserve it, otherwise a heterogeneous agent is copied as a plain
+            // one and its external runtime config is silently lost.
+            agencyConfig,
             avatar: sourceAgent.avatar,
             backgroundColor: sourceAgent.backgroundColor,
             chatConfig: sourceAgent.chatConfig,
@@ -1676,12 +1777,6 @@ export class AgentModel {
     // work. NULL authors (deleted accounts) count as foreign too.
     if (await hasForeignTopicComments(this.db, this.userId, topicWhere!)) return true;
 
-    // Messages / message_groups anchored to a transferred topic follow it at
-    // read time (derived scope) — including teammate rows carrying only a
-    // topicId (e.g. OpenAPI-created: agentId optional, sessionId always
-    // null), which the direct session/agent probes below cannot see.
-    if (await hasForeignTopicAnchoredMessageRows(this.db, this.userId, topicWhere!)) return true;
-
     const messageWhere =
       sessionIds.length > 0
         ? or(inArray(messages.sessionId, sessionIds), inArray(messages.agentId, agentIds))
@@ -1718,10 +1813,7 @@ export class AgentModel {
     targetWorkspaceId: string | null,
     targetUserId: string,
     targetVisibility?: 'private' | 'public',
-    options: {
-      rejectForeignMessageAuthors?: boolean;
-      rejectForeignTopicCommentAuthors?: boolean;
-    } = {},
+    options: { rejectForeignTopicCommentAuthors?: boolean } = {},
   ): Promise<{ agentId: string; slug: string | null }> => {
     const [result] = await this.transferAgents(
       [agentId],
@@ -1735,23 +1827,16 @@ export class AgentModel {
 
   /**
    * Batch variant of {@link transferAgent}: moves several agents (and their
-   * cascaded topics / threads / tasks / …) in ONE transaction, with every
-   * large-table UPDATE issued once via `inArray` instead of once per agent.
-   * All-or-nothing: a failure on any agent rolls back the whole batch.
-   *
-   * `messages` rows are deliberately left untouched — their scope is derived
-   * from the owning topic/session at read time (see buildMessageScopeWhere),
-   * which keeps the transfer seconds-fast regardless of history size.
+   * cascaded topics / messages / threads / tasks / …) in ONE transaction, with
+   * every large-table UPDATE issued once via `inArray` instead of once per
+   * agent. All-or-nothing: a failure on any agent rolls back the whole batch.
    */
   transferAgents = async (
     agentIds: string[],
     targetWorkspaceId: string | null,
     targetUserId: string,
     targetVisibility?: 'private' | 'public',
-    options: {
-      rejectForeignMessageAuthors?: boolean;
-      rejectForeignTopicCommentAuthors?: boolean;
-    } = {},
+    options: { rejectForeignTopicCommentAuthors?: boolean } = {},
   ): Promise<{ agentId: string; slug: string | null }[]> => {
     if (agentIds.length === 0) return [];
 
@@ -1820,77 +1905,14 @@ export class AgentModel {
       // Device rows for the whole batch are fetched with one query.
       const resolvedAgencyConfigs = new Map<string, LobeAgentAgencyConfig | null>();
       if (targetWorkspaceId) {
-        const allCandidateIds = [
-          ...new Set(
-            foundAgents.flatMap((agent) => this.collectBoundDeviceIds(agent.agencyConfig)),
-          ),
-        ];
-        const deviceRows =
-          allCandidateIds.length > 0
-            ? await trx
-                .select({ deviceId: devices.deviceId, visibility: devices.visibility })
-                .from(devices)
-                .where(
-                  and(
-                    eq(devices.workspaceId, targetWorkspaceId),
-                    inArray(devices.deviceId, allCandidateIds),
-                  ),
-                )
-            : [];
-        const allowed = new Set(deviceRows.map((r) => r.deviceId));
-        const publicDeviceIds = new Set(
-          deviceRows.filter((r) => r.visibility === 'public').map((r) => r.deviceId),
+        const cleanedConfigs = await this.sanitizeAgencyConfigForWorkspace(
+          trx,
+          targetWorkspaceId,
+          foundAgents.map((agent) => agent.agencyConfig),
         );
-
-        for (const agent of foundAgents) {
-          let nextAgencyConfig: LobeAgentAgencyConfig | null = agent.agencyConfig ?? null;
-          if (!nextAgencyConfig) {
-            resolvedAgencyConfigs.set(agent.id, nextAgencyConfig);
-            continue;
-          }
-
-          const candidateIds = this.collectBoundDeviceIds(nextAgencyConfig);
-          if (candidateIds.length > 0) {
-            const cleaned: LobeAgentAgencyConfig = { ...nextAgencyConfig };
-            if (cleaned.boundDeviceId && !allowed.has(cleaned.boundDeviceId)) {
-              delete cleaned.boundDeviceId;
-            }
-            if (cleaned.workingDirByDevice) {
-              const filtered: Record<string, string> = {};
-              for (const [deviceId, cwd] of Object.entries(cleaned.workingDirByDevice)) {
-                if (allowed.has(deviceId) && typeof cwd === 'string') filtered[deviceId] = cwd;
-              }
-              cleaned.workingDirByDevice = Object.keys(filtered).length > 0 ? filtered : undefined;
-            }
-            if (
-              cleaned.executionTargetSelectionPolicy === 'fixed' &&
-              cleaned.executionTarget === 'device' &&
-              (!cleaned.boundDeviceId || !allowed.has(cleaned.boundDeviceId))
-            ) {
-              cleaned.executionTargetSelectionPolicy = 'member';
-            }
-            nextAgencyConfig = cleaned;
-          }
-
-          if (
-            nextAgencyConfig.executionTargetSelectionPolicy === 'fixed' &&
-            (!nextAgencyConfig.executionTarget ||
-              !['auto', 'device', 'none', 'sandbox'].includes(nextAgencyConfig.executionTarget))
-          ) {
-            nextAgencyConfig.executionTargetSelectionPolicy = 'member';
-          }
-
-          if (
-            nextAgencyConfig.executionTargetSelectionPolicy === 'fixed' &&
-            nextAgencyConfig.executionTarget === 'device' &&
-            (!nextAgencyConfig.boundDeviceId ||
-              !publicDeviceIds.has(nextAgencyConfig.boundDeviceId))
-          ) {
-            nextAgencyConfig.executionTargetSelectionPolicy = 'member';
-          }
-
-          resolvedAgencyConfigs.set(agent.id, nextAgencyConfig);
-        }
+        foundAgents.forEach((agent, index) =>
+          resolvedAgencyConfigs.set(agent.id, cleanedConfigs[index]),
+        );
       }
 
       // 4. Update the agent records. slug / agencyConfig differ per agent, so
@@ -1982,19 +2004,6 @@ export class AgentModel {
       ) {
         throw new Error(TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS);
       }
-
-      // Re-run the topic-anchored foreign-row check UNDER the lock: the
-      // pre-transaction transferHasForeignRows call races message creation.
-      // Message inserts hold FOR KEY SHARE on their topic (FK enforcement),
-      // which conflicts with the FOR UPDATE above — so by this point every
-      // topic-anchored insert has either committed (visible here) or is
-      // blocked until this transaction ends.
-      if (
-        options.rejectForeignMessageAuthors &&
-        (await hasForeignTopicAnchoredMessageRows(trx, this.userId, topicCondition!))
-      ) {
-        throw new Error(MESSAGE_TRANSFER_HAS_FOREIGN_AUTHORS);
-      }
       const movedTopics = await trx
         .update(topics)
         .set({ ...ownershipUpdate, updatedAt: topics.updatedAt })
@@ -2010,30 +2019,15 @@ export class AgentModel {
         targetWorkspaceId,
       );
 
-      // 7. messages (and their child tables) are intentionally NOT rewritten:
-      // their scope is derived from the owning topic/session (see
-      // buildMessageScopeWhere), and rewriting user_id/workspace_id on the
-      // shared messages table costs minutes per heavy agent — every row update
-      // maintains all 17 indexes including the multi-GB BM25 full-text index.
-      // The rows' user_id/workspace_id stay as creation-time author snapshots.
-      //
-      // 7a. EXCEPT anchorless rows (no topic AND no session, e.g. created via
-      // the OpenAPI path with only an agentId): they have nothing to derive
-      // scope from — their snapshot IS authoritative — so they are the one
-      // message shape a transfer must still rewrite. Bounded by agent_id and
-      // rare by construction, so this stays cheap.
+      // 7. Update messages (linked via sessionId or agentId)
+      const messageCondition =
+        sessionIds.length > 0
+          ? or(inArray(messages.sessionId, sessionIds), inArray(messages.agentId, agentIds))
+          : inArray(messages.agentId, agentIds);
       await trx
         .update(messages)
-        // Keep the original recency — a scope transfer does not make the
-        // content newer (same rationale as the agent/topic updates above).
         .set({ ...ownershipUpdate, updatedAt: messages.updatedAt })
-        .where(
-          and(
-            inArray(messages.agentId, agentIds),
-            isNull(messages.topicId),
-            isNull(messages.sessionId),
-          ),
-        );
+        .where(messageCondition!);
 
       // 8. Update threads (linked via agentId)
       await trx

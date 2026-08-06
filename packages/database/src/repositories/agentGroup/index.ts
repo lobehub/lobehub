@@ -29,12 +29,6 @@ import {
 import type { LobeChatDatabase } from '../../type';
 import { idGenerator } from '../../utils/idGenerator';
 import { normalizeInboxAgentMeta } from '../../utils/inboxAgent';
-import {
-  buildMessageChildScopeWhere,
-  buildMessageScopeWhere,
-  hasForeignTopicAnchoredMessageRows,
-  MESSAGE_TRANSFER_HAS_FOREIGN_AUTHORS,
-} from '../../utils/messageScope';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
 interface CopyAgentGroupToWorkspaceOptions {
@@ -117,14 +111,9 @@ export class AgentGroupRepository {
   private threadOwnership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, threads);
   private messageOwnership = () =>
-    buildMessageScopeWhere({ userId: this.userId, workspaceId: this.workspaceId });
-  // Child snapshots drift after agent transfer — derive from the parent
-  // message instead of trusting the row's own user_id/workspace_id.
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messages);
   private messagePluginOwnership = () =>
-    buildMessageChildScopeWhere(
-      { userId: this.userId, workspaceId: this.workspaceId },
-      messagePlugins.id,
-    );
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messagePlugins);
 
   private buildCopiedAgent = (
     source: AgentItem | undefined,
@@ -276,12 +265,9 @@ export class AgentGroupRepository {
     if (sourceMessages.length === 0) return;
 
     const sourceMessageIds = sourceMessages.map((message) => message.id);
-    // Plain select instead of RQB findMany: RQB aliases the table, which
-    // breaks the correlated EXISTS inside messagePluginOwnership().
-    const sourcePlugins = await executor
-      .select()
-      .from(messagePlugins)
-      .where(and(this.messagePluginOwnership(), inArray(messagePlugins.id, sourceMessageIds)));
+    const sourcePlugins = await executor.query.messagePlugins.findMany({
+      where: and(this.messagePluginOwnership(), inArray(messagePlugins.id, sourceMessageIds)),
+    });
 
     const messageRows = sourceMessages.map((message) => {
       const newMessageId = messageIdMap.get(message.id)!;
@@ -891,12 +877,6 @@ export class AgentGroupRepository {
     if (await hasForeignTopicComments(this.db, this.userId, eq(topics.groupId, groupId)))
       return true;
 
-    // Messages / message_groups anchored to a transferred topic follow it at
-    // read time (derived scope) — including teammate rows carrying only a
-    // topicId, which the direct groupId probe below cannot see.
-    if (await hasForeignTopicAnchoredMessageRows(this.db, this.userId, eq(topics.groupId, groupId)))
-      return true;
-
     const [foreignThread] = await this.db
       .select({ id: threads.id })
       .from(threads)
@@ -917,10 +897,7 @@ export class AgentGroupRepository {
     targetWorkspaceId: string | null,
     targetUserId: string,
     targetVisibility?: 'private' | 'public',
-    options: {
-      rejectForeignMessageAuthors?: boolean;
-      rejectForeignTopicCommentAuthors?: boolean;
-    } = {},
+    options: { rejectForeignTopicCommentAuthors?: boolean } = {},
   ): Promise<{ groupId: string } | null> {
     const sourceGroup = await this.db.query.chatGroups.findFirst({
       where: and(eq(chatGroups.id, groupId), this.groupOwnership()),
@@ -1012,16 +989,6 @@ export class AgentGroupRepository {
         (await hasForeignTopicComments(trx, this.userId, eq(topics.groupId, groupId)))
       ) {
         throw new Error(TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS);
-      }
-
-      // Re-run the topic-anchored foreign-row check UNDER the lock — the
-      // precheck races message creation; see AgentModel.transferAgents for
-      // the FOR KEY SHARE / FOR UPDATE serialization argument.
-      if (
-        options.rejectForeignMessageAuthors &&
-        (await hasForeignTopicAnchoredMessageRows(trx, this.userId, eq(topics.groupId, groupId)))
-      ) {
-        throw new Error(MESSAGE_TRANSFER_HAS_FOREIGN_AUTHORS);
       }
 
       const movedTopics = await trx

@@ -1,4 +1,4 @@
-import type { execSync as ExecSyncType } from 'node:child_process';
+import type * as ChildProcessModule from 'node:child_process';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -183,14 +183,18 @@ vi.mock('node:crypto', () => ({
   randomUUID: vi.fn(() => 'mock-device-uuid'),
 }));
 
-const execSyncMock = vi.hoisted(() => vi.fn());
 const execFileSyncMock = vi.hoisted(() => vi.fn());
 const spawnMock = vi.hoisted(() => vi.fn());
+const resolveRemotePlatformCommandMock = vi.hoisted(() => vi.fn());
 
 vi.mock('node:child_process', async (importOriginal) => {
-  const actual = await importOriginal<{ execSync: typeof ExecSyncType }>();
-  return { ...actual, execFileSync: execFileSyncMock, execSync: execSyncMock, spawn: spawnMock };
+  const actual = await importOriginal<typeof ChildProcessModule>();
+  return { ...actual, execFileSync: execFileSyncMock, spawn: spawnMock };
 });
+
+vi.mock('@lobechat/heterogeneous-agents/scanHost', () => ({
+  resolveRemotePlatformCommand: resolveRemotePlatformCommandMock,
+}));
 
 vi.mock('node:os', () => ({
   default: { hostname: vi.fn(() => 'mock-hostname'), tmpdir: vi.fn(() => '/tmp') },
@@ -1004,6 +1008,12 @@ describe('GatewayConnectionCtr', () => {
 
     beforeEach(() => {
       execFileSyncMock.mockReturnValue('/usr/local/bin/lh\n');
+      resolveRemotePlatformCommandMock.mockResolvedValue({
+        available: true,
+        path: '/resolved/bin/openclaw',
+        resolvedPathEnv: '/resolved/bin:/usr/bin',
+        version: '1.2.3',
+      });
       spawnMock.mockReset();
     });
 
@@ -1026,7 +1036,13 @@ describe('GatewayConnectionCtr', () => {
       await vi.advanceTimersByTimeAsync(0);
 
       expect(spawnMock).toHaveBeenCalledTimes(1);
-      const [, spawnArgs] = spawnMock.mock.calls[0] as [string, string[]];
+      const [spawnCommand, spawnArgs, spawnOptions] = spawnMock.mock.calls[0] as [
+        string,
+        string[],
+        { env: NodeJS.ProcessEnv },
+      ];
+      expect(spawnCommand).toBe('/resolved/bin/openclaw');
+      expect(spawnOptions.env.PATH).toBe('/resolved/bin:/usr/bin');
       const messageArg = spawnArgs[spawnArgs.indexOf('--message') + 1];
       expect(messageArg).toContain('hello');
       expect(messageArg).toContain('lh notify');
@@ -1034,6 +1050,7 @@ describe('GatewayConnectionCtr', () => {
 
     it('kills an existing concurrent openclaw process for the same topicId before spawning', async () => {
       const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+      const notifySpy = vi.spyOn(ctr as any, 'sendNotify');
 
       // First task
       const child1 = makeMockChild(1111);
@@ -1068,10 +1085,148 @@ describe('GatewayConnectionCtr', () => {
       );
       await vi.advanceTimersByTimeAsync(0);
 
-      expect(killSpy).toHaveBeenCalledWith(1111, 'SIGTERM');
+      expect(killSpy).toHaveBeenCalledWith(-1111, 'SIGTERM');
       expect(spawnMock).toHaveBeenCalledTimes(2);
 
+      // The replaced child may close after the new operation has started. It must
+      // neither send a terminal notify for the new operation nor remove its task.
+      child1._emit('close', null, 'SIGTERM');
+      expect(notifySpy).not.toHaveBeenCalled();
+
+      client.simulateToolCallRequest(
+        'cancelHeteroTask',
+        { signal: 'SIGINT', taskId: 'task-2' },
+        'req-cancel-2',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      expect(killSpy).toHaveBeenCalledWith(-2222, 'SIGINT');
+
       killSpy.mockRestore();
+    });
+
+    it('kills the complete detached process group when cancelling a task', async () => {
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+      const child = makeMockChild(5555);
+      spawnMock.mockReturnValue(child);
+      const client = await connectAndOpen();
+      client.simulateToolCallRequest(
+        'runHeteroTask',
+        {
+          agentType: 'openclaw',
+          operationId: 'op-cancel',
+          prompt: 'work',
+          taskId: 'task-cancel',
+          topicId: 'topic-cancel',
+        },
+        'req-run-cancel',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      client.simulateToolCallRequest(
+        'cancelHeteroTask',
+        { signal: 'SIGINT', taskId: 'task-cancel' },
+        'req-cancel',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(killSpy).toHaveBeenCalledWith(-5555, 'SIGINT');
+
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(killSpy).toHaveBeenCalledWith(-5555, 'SIGKILL');
+      killSpy.mockRestore();
+    });
+
+    it('does not escalate cancellation after the process group is gone', async () => {
+      const alive = new Set([5556]);
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation((pid, signal?) => {
+        const target = typeof pid === 'number' ? Math.abs(pid) : Number(pid);
+        if (signal === 0) {
+          if (!alive.has(target)) throw Object.assign(new Error('ESRCH'), { code: 'ESRCH' });
+          return true;
+        }
+        if (signal === 'SIGINT' || signal === 'SIGTERM') {
+          // Leader exits, but leave group membership to the close handler's cleanup
+          // simulation below so the escalation probe can see "gone".
+        }
+        if (signal === 'SIGKILL') {
+          alive.delete(target);
+        }
+        return true;
+      });
+      const child = makeMockChild(5556);
+      spawnMock.mockReturnValue(child);
+      const client = await connectAndOpen();
+      client.simulateToolCallRequest(
+        'runHeteroTask',
+        {
+          agentType: 'openclaw',
+          operationId: 'op-cancel-exit',
+          prompt: 'work',
+          taskId: 'task-cancel-exit',
+          topicId: 'topic-cancel-exit',
+        },
+        'req-run-cancel-exit',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      client.simulateToolCallRequest(
+        'cancelHeteroTask',
+        { signal: 'SIGINT', taskId: 'task-cancel-exit' },
+        'req-cancel-exit',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      // Whole tree is gone with the leader — escalation must not fire SIGKILL.
+      alive.delete(5556);
+      child._emit('close', 0, null);
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(killSpy).toHaveBeenCalledWith(-5556, 'SIGINT');
+      expect(killSpy).not.toHaveBeenCalledWith(-5556, 'SIGKILL');
+      killSpy.mockRestore();
+    });
+
+    it('still escalates when the group leader exits but detached children remain', async () => {
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+      const child = makeMockChild(5557);
+      spawnMock.mockReturnValue(child);
+      const client = await connectAndOpen();
+      client.simulateToolCallRequest(
+        'runHeteroTask',
+        {
+          agentType: 'openclaw',
+          operationId: 'op-cancel-orphan',
+          prompt: 'work',
+          taskId: 'task-cancel-orphan',
+          topicId: 'topic-cancel-orphan',
+        },
+        'req-run-cancel-orphan',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      client.simulateToolCallRequest(
+        'cancelHeteroTask',
+        { signal: 'SIGINT', taskId: 'task-cancel-orphan' },
+        'req-cancel-orphan',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      // Leader closed, but process.kill(-pid, 0) still succeeds → orphans remain.
+      child._emit('close', null, 'SIGINT');
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(killSpy).toHaveBeenCalledWith(-5557, 'SIGINT');
+      expect(killSpy).toHaveBeenCalledWith(-5557, 'SIGKILL');
+      killSpy.mockRestore();
+    });
+
+    it('uses taskkill to terminate the full Windows wrapper process tree', () => {
+      const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32');
+
+      (ctr as any).killPlatformProcessTree(6666, 'SIGINT');
+
+      expect(spawnMock).toHaveBeenCalledWith('taskkill', ['/pid', '6666', '/T', '/F'], {
+        stdio: 'ignore',
+      });
+      platformSpy.mockRestore();
     });
 
     it('does not kill processes for a different topicId', async () => {
@@ -1126,15 +1281,15 @@ describe('GatewayConnectionCtr', () => {
     }
 
     beforeEach(() => {
-      execSyncMock.mockReset();
+      resolveRemotePlatformCommandMock.mockReset();
     });
 
-    it('returns available:true with version when binary is installed', async () => {
-      execSyncMock.mockImplementation((cmd: string) => {
-        if (cmd.startsWith('which ') || cmd.startsWith('where '))
-          return '/usr/local/bin/openclaw\n';
-        if (cmd.includes('--version')) return 'openclaw 1.2.3\n';
-        return '';
+    it('uses the shared login-shell resolver for capability checks', async () => {
+      resolveRemotePlatformCommandMock.mockResolvedValue({
+        available: true,
+        path: '/login-shell/bin/openclaw',
+        resolvedPathEnv: '/login-shell/bin:/usr/bin',
+        version: '1.2.3',
       });
 
       const client = await connectAndOpen();
@@ -1148,18 +1303,18 @@ describe('GatewayConnectionCtr', () => {
       expect(client.sendToolCallResponse).toHaveBeenCalledWith({
         requestId: 'req-cap',
         result: {
-          content: JSON.stringify({ available: true, version: 'openclaw 1.2.3' }),
-          state: { available: true, version: 'openclaw 1.2.3' },
+          content: JSON.stringify({ available: true, version: '1.2.3' }),
+          state: { available: true, version: '1.2.3' },
           success: true,
         },
       });
+      expect(resolveRemotePlatformCommandMock).toHaveBeenCalledWith('openclaw');
     });
 
-    it('returns available:true without version when --version command fails', async () => {
-      execSyncMock.mockImplementation((cmd: string) => {
-        if (cmd.startsWith('which ') || cmd.startsWith('where '))
-          return '/usr/local/bin/openclaw\n';
-        throw new Error('version command failed');
+    it('returns available:true when the shared resolver has no version', async () => {
+      resolveRemotePlatformCommandMock.mockResolvedValue({
+        available: true,
+        path: '/login-shell/bin/openclaw',
       });
 
       const client = await connectAndOpen();
@@ -1181,8 +1336,8 @@ describe('GatewayConnectionCtr', () => {
     });
 
     it('returns available:false when binary is not installed', async () => {
-      execSyncMock.mockImplementation(() => {
-        throw new Error('command not found');
+      resolveRemotePlatformCommandMock.mockResolvedValue({
+        available: false,
       });
 
       const client = await connectAndOpen();

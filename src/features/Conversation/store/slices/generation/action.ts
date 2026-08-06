@@ -213,8 +213,6 @@ const runHeterogeneousFromExistingMessage = async (
   // the executor runs (the executor only dispatches updates, not creates).
   await chatStore.refreshMessages();
 
-  if (context.topicId) chatStore.internal_updateTopicLoading(context.topicId, true);
-
   const { operationId: heteroOpId } = chatStore.startOperation({
     context,
     label: 'Heterogeneous Agent Execution',
@@ -224,23 +222,18 @@ const runHeterogeneousFromExistingMessage = async (
   });
   chatStore.associateMessageWithOperation(assistantMsg.id, heteroOpId);
 
-  try {
-    const { executeHeterogeneousAgent } =
-      await import('@/store/chat/slices/agentRun/actions/transports/hetero/heterogeneousAgentExecutor');
-    await executeHeterogeneousAgent(() => useChatStore.getState(), {
-      assistantMessageId: assistantMsg.id,
-      context,
-      heterogeneousProvider,
-      imageList: imageList?.length ? imageList : undefined,
-      message: prompt,
-      operationId: heteroOpId,
-      resumeSessionId,
-      workingDirectory,
-    });
-  } finally {
-    if (context.topicId)
-      useChatStore.getState().internal_updateTopicLoading(context.topicId, false);
-  }
+  const { executeHeterogeneousAgent } =
+    await import('@/store/chat/slices/agentRun/actions/transports/hetero/heterogeneousAgentExecutor');
+  await executeHeterogeneousAgent(() => useChatStore.getState(), {
+    assistantMessageId: assistantMsg.id,
+    context,
+    heterogeneousProvider,
+    imageList: imageList?.length ? imageList : undefined,
+    message: prompt,
+    operationId: heteroOpId,
+    resumeSessionId,
+    workingDirectory,
+  });
 
   return assistantMsg.id;
 };

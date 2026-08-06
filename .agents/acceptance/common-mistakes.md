@@ -232,6 +232,30 @@ DOM measurements as well as visual evidence.
 
 ## Environment safety
 
+### L-S0 — Concluding a dependency moved from the root manifest alone
+
+**Wrong approach:** refresh a shared dependency by running `pnpm install --filter .`
+at the repo root — or by bumping only the root range and running a full install —
+then read the new version out of `package.json` and treat a type-check failure in
+untouched files as pre-existing.
+
+**Why it fails:** the filter installs only the root workspace, and even an unfiltered
+install leaves `packages/*` on their old resolution when they declare a loose range
+(`"@lobehub/ui": "^5"` is satisfied by both the old and the new version, so nothing
+forces them to move). Two identities of the same package then coexist in the graph,
+and the errors surface far from the change — a duplicated `next` shows up as
+`NextRequest is not assignable to NextRequest` in backend route shells, and a
+duplicated UI package kills routes at the ErrorBoundary with a missing React context,
+or gives a component library two copies of a shared z-index/portal manager. Neither
+names the real cause.
+
+**Correct approach:** run a full `pnpm install` (no filter) after any dependency
+range change, then `pnpm dedupe` when the root and the workspace packages resolve
+different versions of a shared peer. State the version only from resolved copies —
+count the versions under `node_modules/<pkg>` and every `packages/*/node_modules/<pkg>`
+and require one distinct value — never from the root manifest. Remember `apps/desktop`
+and `apps/cli` are standalone installs that a root install never covers.
+
 ### L-S1 — Publishing to an assumed server target
 
 **Wrong approach:** strip a server environment variable and treat `lh whoami` as
@@ -314,6 +338,23 @@ search params: express a param write as a facade navigation rather than
 it in the route layout instead, and cover it with a test that asserts which router
 received the write — a test that only asserts a write happened passes on the
 broken topology too.
+
+### L-S7 — Verifying a dependency-level fix through a dev server that predates the install
+
+**Wrong approach:** confirm the fixed version exists in `node_modules`, then capture
+behavioral evidence through an already-running Vite dev server.
+
+**Why it fails:** Vite pins its optimized dependency bundle at server boot. A server
+started before (or during) the `pnpm install` that brought the fix serves the old
+dependency code for its entire lifetime — the browser provably executes code that no
+longer exists on disk, and the evidence contradicts the source. An in-process restart
+via touching the Vite config can wedge the optimizer (new dep URLs 504); only a real
+process restart is trustworthy.
+
+**Correct approach:** before capturing evidence for a dependency-level change, prove
+the served bundle carries it — fetch the relevant `/node_modules/.vite/deps/*` chunk
+from the dev server and grep for a marker of the fix — or restart the dev server
+process outright and re-verify.
 
 ## Historical source
 

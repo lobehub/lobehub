@@ -35,6 +35,15 @@ export const PI_CLI_INSTALL_DOCS_URL = 'https://github.com/earendil-works/pi';
 
 export const PI_CLI_INSTALL_COMMANDS = ['npm install -g @earendil-works/pi-coding-agent'] as const;
 
+export const QODER_CLI_AUTH_DOCS_URL = 'https://docs.qoder.com/cli/auth.md';
+
+export const QODER_CLI_INSTALL_DOCS_URL = 'https://docs.qoder.com/cli/install.md';
+
+export const QODER_CLI_INSTALL_COMMANDS = [
+  'curl -fsSL https://qoder.com/install | bash',
+  'npm install -g @qoder-ai/qodercli',
+] as const;
+
 export const HeterogeneousAgentSessionErrorCode = {
   AuthRequired: 'auth_required',
   CliNotFound: 'cli_not_found',

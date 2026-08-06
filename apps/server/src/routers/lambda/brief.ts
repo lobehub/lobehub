@@ -153,6 +153,26 @@ export const briefRouter = router({
     }
   }),
 
+  // Day-scoped news digest for the home inbox. The client computes the local
+  // [startAt, endAt) day boundaries — the server has no per-user timezone on
+  // this path, and absolute instants keep the query timezone-agnostic.
+  listNewsByDay: briefProcedure
+    .input(z.object({ endAt: z.coerce.date(), startAt: z.coerce.date() }))
+    .query(async ({ input, ctx }) => {
+      try {
+        const service = new BriefService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
+        const { data, hasEarlier } = await service.listNewsByDay(input);
+        return { data, hasEarlier, success: true };
+      } catch (error) {
+        console.error('[brief:listNewsByDay]', error);
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to list news briefs',
+        });
+      }
+    }),
+
   listUnresolved: briefProcedure.query(async ({ ctx }) => {
     try {
       const service = new BriefService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);

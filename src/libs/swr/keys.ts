@@ -316,6 +316,16 @@ export const briefKeys = {
    * served in another — its ids are unreachable there.
    */
   list: def('brief:list', (isLogin: boolean, scope: string) => ['brief:list', isLogin, scope]),
+  /**
+   * Day-scoped news digest (`insight` + `result`, resolved included), keyed by
+   * the viewer's local day (`YYYY-MM-DD`) on top of the identity scope.
+   */
+  news: def('brief:news', (isLogin: boolean, scope: string, day: string) => [
+    'brief:news',
+    isLogin,
+    scope,
+    day,
+  ]),
 };
 
 // ---- home inbox ---------------------------------------------------------

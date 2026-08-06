@@ -1,11 +1,10 @@
 import { ActionIcon, Block, Flexbox, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, createModal, type ModalInstance } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { Blocks, CheckCircle2, Lightbulb, PencilLineIcon, RefreshCw, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import ImperativeModal from '@/components/ImperativeModal';
 import {
   type ActionKeys,
   type ChatInputEditor,
@@ -308,17 +307,22 @@ const Examples = memo<ExamplesProps>(({ suggestMode, onExampleClick }) => {
 
 export interface CreateAgentModalProps {
   agentId?: string;
+  /**
+   * The panel narrows once a skill has been installed, and imperative modals
+   * take their width at creation — hand the instance back so the content can
+   * resize the panel it lives in.
+   */
+  modalRef?: { current?: ModalInstance };
   onClose: () => void;
   onCreateBlank: () => Promise<void> | void;
   onOpenSkills?: (identifier: string) => void;
   onSubmit: (prompt: string) => Promise<void> | void;
   onTryInLobeAI?: () => Promise<void> | void;
-  open: boolean;
   type: 'agent' | 'group';
 }
 
 export const CreateAgentModal = memo<CreateAgentModalProps>(
-  ({ open, type, agentId, onClose, onOpenSkills, onSubmit, onCreateBlank, onTryInLobeAI }) => {
+  ({ type, agentId, modalRef, onClose, onOpenSkills, onSubmit, onCreateBlank, onTryInLobeAI }) => {
     const { t } = useTranslation('chat');
     const editorRef = useRef<ChatInputEditor | null>(null);
     const contentRef = useRef('');
@@ -345,13 +349,10 @@ export const CreateAgentModal = memo<CreateAgentModalProps>(
     }, []);
 
     useEffect(() => {
-      if (!open) return;
-      resetInputTracking();
-      setInstalledSkill(undefined);
-      setInstallingSkillIdentifier(undefined);
-      setSkillInstallError(false);
-      setSkillSuggestion(undefined);
-    }, [open, resetInputTracking]);
+      modalRef?.current?.update({
+        width: installedSkill ? INSTALLED_SKILL_MODAL_WIDTH : CREATE_MODAL_WIDTH,
+      });
+    }, [installedSkill, modalRef]);
 
     const handleClose = useCallback(() => {
       resetInputTracking();
@@ -532,19 +533,7 @@ export const CreateAgentModal = memo<CreateAgentModalProps>(
     );
 
     return (
-      <ImperativeModal
-        centered
-        destroyOnHidden
-        closable={false}
-        footer={null}
-        open={open}
-        title={false}
-        width={installedSkill ? INSTALLED_SKILL_MODAL_WIDTH : CREATE_MODAL_WIDTH}
-        styles={{
-          body: { padding: 0 },
-        }}
-        onCancel={handleClose}
-      >
+      <>
         {installedSkill ? (
           <Flexbox gap={12} paddingBlock={'12px 24px'} paddingInline={24}>
             <Flexbox horizontal align="center" justify="flex-end">
@@ -621,7 +610,50 @@ export const CreateAgentModal = memo<CreateAgentModalProps>(
             )}
           </Flexbox>
         )}
-      </ImperativeModal>
+      </>
     );
   },
 );
+
+CreateAgentModal.displayName = 'CreateAgentModal';
+
+export interface OpenCreateAgentModalOptions extends Omit<
+  CreateAgentModalProps,
+  'modalRef' | 'onClose'
+> {
+  /** Runs once the modal has been dismissed, for whatever reason. */
+  onClosed?: () => void;
+}
+
+export const openCreateAgentModal = ({
+  onClosed,
+  ...contentProps
+}: OpenCreateAgentModalOptions) => {
+  const modalRef: { current?: ModalInstance } = {};
+
+  const instance = createModal({
+    content: (
+      <CreateAgentModal
+        {...contentProps}
+        modalRef={modalRef}
+        onClose={() => modalRef.current?.close()}
+      />
+    ),
+    footer: null,
+    // NOT `onOpenChange`: that only fires for user dismissal (Escape, backdrop,
+    // the header close button). `instance.close()` — which the in-content close
+    // and the post-create path both call — just flips the stack entry, so the
+    // provider would never learn the modal went away and could not reopen it.
+    // `createModal` only ever completes with `false`, but the open flag is
+    // honored so this does not depend on that renderer detail.
+    onOpenChangeComplete: (open) => {
+      if (!open) onClosed?.();
+    },
+    styles: { content: { padding: 0 } },
+    width: CREATE_MODAL_WIDTH,
+  });
+
+  modalRef.current = instance;
+
+  return instance;
+};

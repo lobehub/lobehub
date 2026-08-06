@@ -39,9 +39,6 @@ export default {
   'features.oauthApps.desc':
     'Show OAuth app management in personal and workspace settings. This feature is hidden by default.',
   'features.oauthApps.title': 'OAuth Apps',
-  'features.platformAgent.desc':
-    'Show the "Connect Agent" entry in the create menu. Connected agents (e.g. OpenClaw, Hermes) run on your own devices and communicate back via lh connect.',
-  'features.platformAgent.title': 'Connect Agent',
   'features.taskVerify.desc':
     'Add a delivery-acceptance section to the task detail: describe acceptance in one sentence and let AI generate editable verify criteria.',
   'features.taskVerify.title': 'Task Delivery Acceptance',
@@ -50,5 +47,11 @@ export default {
   'features.topicAcceptance.title': 'Topic Acceptance',
   'group.desktop': 'Desktop',
   'group.general': 'General',
+  'stage.alpha.desc':
+    'Internal testing only. Not recommended for daily use yet — it may change or break at any time.',
+  'stage.alpha.label': 'Alpha',
+  'stage.beta.desc':
+    'Relatively usable. The core flow works, while details are still being polished.',
+  'stage.beta.label': 'Beta',
   'title': 'Labs',
 };

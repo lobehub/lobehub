@@ -35,6 +35,13 @@ describe('isHeteroStatusGuideErrorData', () => {
         message: 'No API key found',
       }),
     ).toBe(true);
+    expect(
+      isHeteroStatusGuideErrorData({
+        agentType: 'qoder',
+        code: 'auth_required',
+        message: 'Not logged in · Please run /login',
+      }),
+    ).toBe(true);
   });
 
   it('rejects payloads missing the agentType/code pair or outside the guide sets', () => {
@@ -107,6 +114,32 @@ describe('classifyHeteroProcessFailure', () => {
         detail: 'No API key found for provider anthropic',
       }),
     ).toMatchObject({ agentType: 'pi', code: 'auth_required' });
+  });
+
+  it('classifies missing Qoder and its successful-exit login message', () => {
+    expect(
+      classifyHeteroProcessFailure({
+        agentType: 'qoder',
+        detail: 'Error: spawn qodercli ENOENT',
+        errnoCode: 'ENOENT',
+      }),
+    ).toMatchObject({ agentType: 'qoder', code: 'cli_not_found' });
+
+    const auth = classifyHeteroProcessFailure({
+      agentType: 'qoder',
+      detail: 'Not logged in · Please run /login',
+    });
+    expect(auth).toMatchObject({ agentType: 'qoder', code: 'auth_required' });
+    expect(auth?.message).toContain('Qoder');
+  });
+
+  it('keeps Qoder-specific login wording scoped to Qoder', () => {
+    expect(
+      classifyHeteroProcessFailure({ agentType: 'qoder', detail: 'Please run /login' }),
+    ).toMatchObject({ code: 'auth_required' });
+    expect(
+      classifyHeteroProcessFailure({ agentType: 'claude-code', detail: 'Please run /login' }),
+    ).toBeUndefined();
   });
 
   it('does NOT treat an in-run ENOENT (no spawn context) as cli_not_found', () => {

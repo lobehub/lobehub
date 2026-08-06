@@ -53,7 +53,6 @@ function createMockStore() {
     internal_dispatchMessage: vi.fn(),
     internal_executeClientTool: vi.fn().mockResolvedValue(undefined),
     internal_toggleToolCallingStreaming: vi.fn(),
-    internal_updateTopicLoading: vi.fn(),
     markTopicUnread: vi.fn(),
     messagesMap: {} as Record<string, any>,
     operations: {
@@ -584,7 +583,6 @@ describe('createGatewayEventHandler', () => {
         visibleLoadingDone: true,
       });
       expect(store.completeOperation).not.toHaveBeenCalledWith('op-1');
-      expect(store.internal_updateTopicLoading).not.toHaveBeenCalledWith('topic-1', false);
     });
 
     it('keeps visible loading after stream_end when tool calls need another step', async () => {
@@ -608,7 +606,6 @@ describe('createGatewayEventHandler', () => {
         visibleLoadingDone: true,
       });
       expect(store.completeOperation).not.toHaveBeenCalledWith('op-1');
-      expect(store.internal_updateTopicLoading).not.toHaveBeenCalledWith('topic-1', false);
     });
 
     it('applies finalContent before ending a reasoning-only stream', async () => {
@@ -670,11 +667,6 @@ describe('createGatewayEventHandler', () => {
         visibleLoadingDone: true,
       });
       expect(store.completeOperation).not.toHaveBeenCalledWith('op-1');
-      // Sidebar "running" spinner is driven off `topic.status === 'running'`
-      // (persisted, reset at the terminal) for gateway/hetero runs — not the
-      // client-only `topicLoadingIds` overlay — so visible_output_end no longer
-      // clears it early.
-      expect(store.internal_updateTopicLoading).not.toHaveBeenCalled();
     });
   });
 

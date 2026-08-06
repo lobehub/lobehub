@@ -4,7 +4,6 @@ import { toast } from '@lobehub/ui/base-ui';
 import { Buffer } from 'buffer.js';
 import { t } from 'i18next';
 
-import { notification } from '@/components/AntdStaticMethods';
 import { FILE_UPLOAD_BLACKLIST } from '@/const/file';
 import { fileService } from '@/services/file';
 import { ragService } from '@/services/rag';
@@ -111,6 +110,15 @@ export class FileActionImpl {
     await fileService.removeFile(id);
   };
 
+  retryChatUploadFile = async (id: string): Promise<void> => {
+    const { chatUploadFileList, dispatchChatUploadFileList } = this.#get();
+    const item = chatUploadFileList.find((file) => file.id === id);
+    if (!item?.agentId) return;
+
+    dispatchChatUploadFileList({ id, type: 'removeFile' });
+    await this.uploadChatFiles([item.file], item.agentId);
+  };
+
   startAsyncTask = async (
     id: string,
     runner: (id: string) => Promise<string>,
@@ -202,7 +210,14 @@ export class FileActionImpl {
           base64Url = `data:${file.type};base64,${base64}`;
         }
 
-        return { base64Url, file, id: file.name, previewUrl, status: 'pending' } as UploadFileItem;
+        return {
+          agentId,
+          base64Url,
+          file,
+          id: file.name,
+          previewUrl,
+          status: 'pending',
+        } as UploadFileItem;
       }),
     );
 
@@ -218,14 +233,19 @@ export class FileActionImpl {
           onStatusUpdate: dispatchChatUploadFileList,
         });
       } catch (error) {
-        // skip `UNAUTHORIZED` error
-        if (getErrorMessage(error) !== 'UNAUTHORIZED')
-          notification.error({
-            description: getUploadErrorDescription(error),
-            message: t('upload.uploadFailed', { ns: 'error' }),
+        if (getErrorMessage(error) === 'UNAUTHORIZED') {
+          dispatchChatUploadFileList({ id: file.name, type: 'removeFile' });
+        } else {
+          dispatchChatUploadFileList({
+            id: file.name,
+            type: 'updateFile',
+            value: {
+              error: getUploadErrorDescription(error),
+              status: 'error',
+              uploadState: undefined,
+            },
           });
-
-        dispatchChatUploadFileList({ id: file.name, type: 'removeFile' });
+        }
       }
 
       if (!fileResult) return;

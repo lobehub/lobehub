@@ -12,13 +12,12 @@ import {
 } from '../../models/topicComment';
 import { agents } from '../../schemas/agent';
 import { chatGroups, chatGroupsAgents } from '../../schemas/chatGroup';
-import { messageGroups, messagePlugins, messages } from '../../schemas/message';
+import { messagePlugins, messages } from '../../schemas/message';
 import { threads, topics } from '../../schemas/topic';
 import { topicCommentMentions, topicComments } from '../../schemas/topicComment';
 import { users } from '../../schemas/user';
 import { workspaces } from '../../schemas/workspace';
 import type { LobeChatDatabase } from '../../type';
-import { MESSAGE_TRANSFER_HAS_FOREIGN_AUTHORS } from '../../utils/messageScope';
 import { AgentGroupRepository } from './index';
 
 const userId = 'agent-group-test-user';
@@ -1661,96 +1660,6 @@ describe('AgentGroupRepository', () => {
         workspaceId,
       });
       expect(await wsRepo.transferHasForeignRows('guard-group')).toBe(true);
-    });
-
-    it('flags topic-only teammate messages and message groups as foreign transfer rows', async () => {
-      await serverDB.insert(chatGroups).values({
-        id: 'anchor-guard-group',
-        title: 'Anchor Guard Group',
-        userId,
-        workspaceId,
-      });
-      await serverDB.insert(topics).values({
-        groupId: 'anchor-guard-group',
-        id: 'anchor-guard-group-topic',
-        title: 'Own Topic',
-        userId,
-        workspaceId,
-      });
-
-      const wsRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
-
-      // Caller's own topic-only message — not foreign
-      await serverDB.insert(messages).values({
-        id: 'anchor-guard-group-own',
-        role: 'user',
-        topicId: 'anchor-guard-group-topic',
-        userId,
-        workspaceId,
-      });
-      expect(await wsRepo.transferHasForeignRows('anchor-guard-group')).toBe(false);
-
-      // A teammate's message carrying ONLY a topicId (no groupId/sessionId)
-      // follows the transferred topic under derived scope — the direct
-      // groupId probe alone cannot see it
-      await serverDB.insert(messages).values({
-        id: 'anchor-guard-group-teammate',
-        role: 'user',
-        topicId: 'anchor-guard-group-topic',
-        userId: otherUserId,
-        workspaceId,
-      });
-      expect(await wsRepo.transferHasForeignRows('anchor-guard-group')).toBe(true);
-
-      // Same for a teammate's message group anchored to the caller's topic
-      await serverDB.delete(messages).where(eq(messages.id, 'anchor-guard-group-teammate'));
-      expect(await wsRepo.transferHasForeignRows('anchor-guard-group')).toBe(false);
-      await serverDB.insert(messageGroups).values({
-        id: 'anchor-guard-group-mg',
-        topicId: 'anchor-guard-group-topic',
-        userId: otherUserId,
-        workspaceId,
-      });
-      expect(await wsRepo.transferHasForeignRows('anchor-guard-group')).toBe(true);
-    });
-
-    it('rechecks topic-anchored teammate rows inside the group transfer transaction', async () => {
-      await serverDB.insert(chatGroups).values({
-        id: 'locked-guard-group',
-        title: 'Locked Guard Group',
-        userId,
-        workspaceId,
-      });
-      await serverDB.insert(topics).values({
-        groupId: 'locked-guard-group',
-        id: 'locked-guard-group-topic',
-        title: 'Own Topic',
-        userId,
-        workspaceId,
-      });
-      // Teammate topic-only row present when the transaction rechecks under
-      // the topic lock (the precheck is deliberately skipped here).
-      await serverDB.insert(messages).values({
-        id: 'locked-guard-group-msg',
-        role: 'user',
-        topicId: 'locked-guard-group-topic',
-        userId: otherUserId,
-        workspaceId,
-      });
-
-      const wsRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
-      await expect(
-        wsRepo.transferToWorkspace('locked-guard-group', null, userId, undefined, {
-          rejectForeignMessageAuthors: true,
-        }),
-      ).rejects.toThrow(MESSAGE_TRANSFER_HAS_FOREIGN_AUTHORS);
-
-      // The rejection rolled the whole transfer back
-      const [topic] = await serverDB
-        .select()
-        .from(topics)
-        .where(eq(topics.id, 'locked-guard-group-topic'));
-      expect(topic.workspaceId).toBe(workspaceId);
     });
 
     it.skipIf(!isServerDB)(

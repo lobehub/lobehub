@@ -203,7 +203,7 @@ interface HeterogeneousAgentModelSelectorProps {
 export const HeterogeneousAgentModelSelector = memo<HeterogeneousAgentModelSelectorProps>(
   ({ agentId, disabled, model, onSelect, permissionReason, type }) => {
     const { t } = useTranslation('chat');
-    const agentName = type === 'pi' ? 'Pi' : 'OpenCode';
+    const agentName = type === 'pi' ? 'Pi' : type === 'qoder' ? 'Qoder' : 'OpenCode';
     const [search, setSearch] = useState('');
     const {
       contentActive,
@@ -288,8 +288,8 @@ export const HeterogeneousAgentModelSelector = memo<HeterogeneousAgentModelSelec
       const query = search.trim().toLowerCase();
       return query
         ? all.filter((item) =>
-            [item.id, item.providerId, item.modelId].some((value) =>
-              value.toLowerCase().includes(query),
+            [item.id, item.label, item.providerId, item.modelId].some(
+              (value) => value && value.toLowerCase().includes(query),
             ),
           )
         : all;
@@ -425,7 +425,7 @@ export const HeterogeneousAgentModelSelector = memo<HeterogeneousAgentModelSelec
                           onClick={() => handleSelect(item.id)}
                         >
                           <div className={styles.itemBody}>
-                            <div className={styles.itemTitle}>{item.modelId}</div>
+                            <div className={styles.itemTitle}>{item.label ?? item.modelId}</div>
                             <div
                               className={cx(
                                 styles.itemSubtitle,

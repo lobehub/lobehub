@@ -16,6 +16,12 @@ import { styles } from './style';
 export interface BriefCardActionsProps {
   /** Brief actions from the brief payload — falls back to DEFAULT_BRIEF_ACTIONS by type. */
   actions?: BriefAction[] | null;
+  /**
+   * Agent owning the run topic. Passed through to the drawer so it opens
+   * immediately instead of waiting on the task-detail fetch — which may never
+   * resolve when the parent task has been deleted.
+   */
+  agentId?: string | null;
   briefId: string;
   briefType: string;
   /** Hook invoked after a comment is successfully posted. */
@@ -28,6 +34,8 @@ export interface BriefCardActionsProps {
   taskStatus?: TaskStatus | null;
   /** When set together with taskId, renders a "View run" shortcut to the topic drawer. */
   topicId?: string | null;
+  /** Drawer header title until the run's activity metadata loads. */
+  topicTitle?: string | null;
 }
 
 type CommentMode = { type: 'feedback' } | { key: string; type: 'comment' };
@@ -42,6 +50,7 @@ const SuccessTag = memo<{ label: string }>(({ label }) => (
 const BriefCardActions = memo<BriefCardActionsProps>(
   ({
     actions: actionsProp,
+    agentId,
     briefId,
     briefType,
     onAfterAddComment,
@@ -50,6 +59,7 @@ const BriefCardActions = memo<BriefCardActionsProps>(
     taskId,
     taskStatus,
     topicId,
+    topicTitle,
   }) => {
     const { t } = useTranslation('home');
     const [commentMode, setCommentMode] = useState<CommentMode | null>(null);
@@ -69,10 +79,15 @@ const BriefCardActions = memo<BriefCardActionsProps>(
       // setActiveTaskId hydrates `activeTaskId` so the drawer can resolve the
       // task's agentId / activity metadata (and clears any prior drawer topic
       // when switching tasks). openTopicDrawer must come after — setActiveTaskId
-      // resets activeTopicDrawerTopicId on task changes.
+      // resets activeTopicDrawerTopicId AND the drawer's own agent/title, so
+      // the explicit agentId has to ride this call, not precede it. Without it
+      // the drawer's `open` gate stays false until the task detail fetch lands.
       setActiveTaskId(taskId);
-      openTopicDrawer(topicId);
-    }, [openTopicDrawer, setActiveTaskId, taskId, topicId]);
+      openTopicDrawer(topicId, {
+        agentId: agentId ?? undefined,
+        title: topicTitle ?? undefined,
+      });
+    }, [agentId, openTopicDrawer, setActiveTaskId, taskId, topicId, topicTitle]);
     const viewRunButton = showViewRun ? (
       <Button
         className={'brief-view-run-btn'}

@@ -181,6 +181,49 @@ describe('spawnAgent', () => {
     expect(args[resumeIdx + 1]).toBe('cc-prev-123');
   });
 
+  it('spawns Qoder with its stream-json protocol, permission mode, and resume id', async () => {
+    const fake = createFakeProc({ stdoutChunks: [ccInit] });
+    nextFakeProc = fake.proc;
+
+    const { spawnAgent } = await import('./spawnAgent');
+    const handle = await spawnAgent({
+      agentType: 'qoder',
+      operationId: 'op-qoder',
+      prompt: 'continue with Qoder',
+      resumeSessionId: 'qoder-prev-123',
+    });
+    fake.start();
+
+    for await (const _event of handle.events) {
+      // Drain the stream so the adapter captures the session id.
+    }
+    await handle.exit;
+
+    expect(spawnCalls[0]).toMatchObject({
+      command: 'qodercli',
+    });
+    expect(spawnCalls[0].args).toEqual([
+      '-p',
+      '--input-format',
+      'stream-json',
+      '--output-format',
+      'stream-json',
+      '--include-partial-messages',
+      '--permission-mode',
+      'bypass_permissions',
+      '--resume',
+      'qoder-prev-123',
+    ]);
+    expect(JSON.parse(fake.stdinWrites[0].trim())).toEqual({
+      message: {
+        content: [{ text: 'continue with Qoder', type: 'text' }],
+        role: 'user',
+      },
+      parent_tool_use_id: null,
+      type: 'user',
+    });
+  });
+
   it('spawns AMP with its private headless stream-json protocol', async () => {
     nextFakeProc = createFakeProc().proc;
     const { spawnAgent } = await import('./spawnAgent');

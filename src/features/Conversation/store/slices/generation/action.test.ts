@@ -1293,7 +1293,6 @@ describe('Generation Actions', () => {
 
     const setupHeteroChatStore = async (overrides: Record<string, any> = {}) => {
       const mockRefreshMessages = vi.fn().mockResolvedValue(undefined);
-      const mockInternalUpdateTopicLoading = vi.fn();
       const mockAssociateMessageWithOperation = vi.fn();
       const mockHeteroStartOperation = vi
         .fn()
@@ -1315,7 +1314,6 @@ describe('Generation Actions', () => {
         isGatewayModeEnabled: vi.fn(() => false),
         switchMessageBranch: mockSwitchMessageBranch,
         refreshMessages: mockRefreshMessages,
-        internal_updateTopicLoading: mockInternalUpdateTopicLoading,
         associateMessageWithOperation: mockAssociateMessageWithOperation,
         executeClientAgent: mockExecuteClientAgent,
         executeGatewayAgent: mockExecuteGatewayAgent,
@@ -1325,7 +1323,6 @@ describe('Generation Actions', () => {
       return {
         mockAssociateMessageWithOperation,
         mockHeteroStartOperation,
-        mockInternalUpdateTopicLoading,
         mockRefreshMessages,
       };
     };

@@ -27,6 +27,8 @@ import { type RecentItem } from '@/server/routers/lambda/recent';
 import { recentService } from '@/services/recent';
 import { useBriefStore } from '@/store/brief';
 import { briefListSelectors } from '@/store/brief/selectors';
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
@@ -109,7 +111,10 @@ const TASK_STATUSES = new Set<TaskStatus>([
   'running',
   'scheduled',
 ]);
-const HOME_TOPIC_RECENT_LIMIT = 9;
+export const HOME_TOPIC_RECENT_LIMIT = 15;
+
+export const resolveRecentsBadgeCount = (fetched: number, shown: number): number | undefined =>
+  Math.min(fetched, shown) || undefined;
 
 const normalizeTaskStatus = (status: string): TaskStatus =>
   TASK_STATUSES.has(status as TaskStatus) ? (status as TaskStatus) : 'backlog';
@@ -240,10 +245,12 @@ const TaskContent = memo(() => {
   // filter. It must always show the complete task set.
   const tasksSWR = useFetchTaskList({ allAgents: true, visibility: 'all' });
   const tasks = useTaskStore(taskListSelectors.taskList);
+  const tasksTotal = useTaskStore(taskListSelectors.taskListTotal);
   const tasksInit = useTaskStore(taskListSelectors.isTaskListInit);
+  const taskCount = useGlobalStore(systemStatusSelectors.homeTaskCount);
 
   return (
-    <GroupBlock count={tasks.length || undefined} title={t('dashboard.task.title')}>
+    <GroupBlock count={tasksTotal || undefined} title={t('dashboard.task.title')}>
       {tasksSWR.error && !tasksInit ? (
         <AsyncError error={tasksSWR.error} variant={'inline'} onRetry={tasksSWR.mutate} />
       ) : !tasksInit ? (
@@ -252,7 +259,7 @@ const TaskContent = memo(() => {
         <Text className={styles.empty}>{t('dashboard.task.empty')}</Text>
       ) : (
         <Flexbox gap={4}>
-          {tasks.slice(0, 8).map((task) => (
+          {tasks.slice(0, taskCount).map((task) => (
             <Row
               description={task.description || task.identifier}
               href={taskDetailPath(task.identifier)}
@@ -272,6 +279,10 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
   const isLogin = useUserStore(authSelectors.isLogin);
   const authLoaded = useUserStore(authSelectors.isLoaded);
   const myId = useUserStore(userProfileSelectors.userId);
+  const recentsCount = useGlobalStore(systemStatusSelectors.homeRecentsCount);
+  const hiddenWidgets = useGlobalStore(systemStatusSelectors.hiddenHomeWidgets);
+  const recentsHidden = hiddenWidgets.includes('recents');
+  const tasksHidden = hiddenWidgets.includes('tasks');
   const cacheScope = useCacheScope();
 
   // One page-level mine/team scope, shared by the inbox sections and Recent
@@ -286,7 +297,7 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
   // client-filtering the top N of a team-wide feed could starve out the
   // viewer's own topics entirely.
   const recentsSWR = useClientDataSWR(
-    isLogin
+    isLogin && !recentsHidden
       ? recentKeys.topicList(HOME_TOPIC_RECENT_LIMIT, cacheScope, teamView ? 'team' : 'mine')
       : null,
     () => recentService.getAll(HOME_TOPIC_RECENT_LIMIT, ['topic'], true, !teamView),
@@ -310,12 +321,15 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
   const topicRecents = recentsSWR.data ?? [];
 
   if (mode === 'chat') {
+    // With the recents section switched off nothing is fetched, so it reports as
+    // settled-and-empty rather than perpetually loading, and the remaining
+    // activity alone decides what this column is.
     const state = resolveHomeChatContentState({
       authLoaded: !!authLoaded,
-      hasError: !!recentsSWR.error,
+      hasError: !recentsHidden && !!recentsSWR.error,
       isLogin: !!isLogin,
       recentsCount: topicRecents.length,
-      recentsInit: recentsSWR.data !== undefined,
+      recentsInit: recentsHidden || recentsSWR.data !== undefined,
       activityCount: mineRunningCount + mineUnreadCount + needsYouCount,
       activityError: Boolean(inboxTopics.error || briefsSWR.error),
       activityResolved:
@@ -329,11 +343,15 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
     // exist. Mirror the expanded page instead: suggestions first, then whatever
     // folded in (both sections render null when there is nothing to carry).
     if (state === 'empty') {
-      if (!inlineRail) return <EmptySuggestions onSelect={onSuggestionSelect} />;
+      // The starters are what the recents section shows when it has nothing to
+      // list, so switching that section off takes them with it.
+      const starters = recentsHidden ? null : <EmptySuggestions onSelect={onSuggestionSelect} />;
+
+      if (!inlineRail) return starters;
 
       return (
         <Flexbox gap={32}>
-          <EmptySuggestions onSelect={onSuggestionSelect} />
+          {starters}
           <HomeInbox inlineRail variant={'main'} />
           <Recommendations variant={'main'} />
         </Flexbox>
@@ -348,10 +366,10 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
           variant={'main'}
           onScopeChange={setScope}
         />
-        {(state !== 'ready' || topicRecents.length > 0) && (
+        {!recentsHidden && (state !== 'ready' || topicRecents.length > 0) && (
           <GroupBlock
             actionAlwaysVisible
-            count={topicRecents.length || undefined}
+            count={resolveRecentsBadgeCount(topicRecents.length, recentsCount)}
             title={t('dashboard.chat.recents')}
             action={
               isTeam ? (
@@ -373,7 +391,7 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
               <LoadingRows withTime />
             ) : (
               <Flexbox gap={4}>
-                {topicRecents.slice(0, 8).map((item) => (
+                {topicRecents.slice(0, recentsCount).map((item) => (
                   <RecentTopicRow key={item.id} showAuthor={teamView} topic={item} />
                 ))}
               </Flexbox>
@@ -388,7 +406,7 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
   if (!isLogin) return null;
 
   if (mode === 'task') {
-    if (!inlineRail) return <TaskContent />;
+    if (!inlineRail) return tasksHidden ? null : <TaskContent />;
 
     // The rail's sections sit beside task mode while it is open, so a folded
     // rail must not take them away here either: in flight and what happened
@@ -397,7 +415,7 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
     return (
       <Flexbox gap={32}>
         <HomeInbox hideNeedsYou hideUnread inlineRail variant={'main'} />
-        <TaskContent />
+        {!tasksHidden && <TaskContent />}
         <Recommendations variant={'main'} />
       </Flexbox>
     );

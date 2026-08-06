@@ -10,7 +10,7 @@ import { type MouseEvent, useCallback } from 'react';
  * `display: none`). Lexical's `focus()` falls back to `selectEnd()` when the
  * editor has no selection, so focusing the hidden editor leaves a dirty
  * end-of-document selection that scrolls the page to the bottom once the editor
- * becomes visible again. See LOBE-12593.
+ * becomes visible again.
  */
 export const useClickToFocusEditor = (editor: IEditor | undefined, canEdit: boolean) =>
   useCallback(

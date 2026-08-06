@@ -1,5 +1,5 @@
 import { Flexbox, Text } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -26,6 +26,12 @@ const styles = createStaticStyles(({ css }) => ({
     line-height: 1.4;
     letter-spacing: -0.01em;
   `,
+  // The measure is the layout's answer to the portrait, which the centered
+  // block does not have — so the headline runs to the block's own width.
+  greetingCentered: css`
+    max-width: none;
+    text-align: center;
+  `,
   toolbar: css`
     width: 100%;
     min-width: 0;
@@ -39,7 +45,11 @@ const getGreetingKey = (hour: number): 'afternoon' | 'evening' | 'morning' => {
   return 'evening';
 };
 
-const HomeHeader = memo(() => {
+interface HomeHeaderProps {
+  centered?: boolean;
+}
+
+const HomeHeader = memo<HomeHeaderProps>(({ centered }) => {
   const { t } = useTranslation('home');
   const displayName = useUserStore(userProfileSelectors.displayUserName);
   const isLogin = useUserStore(authSelectors.isLogin);
@@ -51,10 +61,16 @@ const HomeHeader = memo(() => {
 
   return (
     <Flexbox gap={16} justify={'center'}>
-      <Flexbox horizontal align={'center'} className={styles.toolbar} gap={16}>
-        <AgentSelect />
-      </Flexbox>
-      <Text as={'h1'} className={styles.greeting} weight={600}>
+      {!centered && (
+        <Flexbox horizontal align={'center'} className={styles.toolbar} gap={16}>
+          <AgentSelect />
+        </Flexbox>
+      )}
+      <Text
+        as={'h1'}
+        className={cx(styles.greeting, centered && styles.greetingCentered)}
+        weight={600}
+      >
         {greeting}
       </Text>
     </Flexbox>

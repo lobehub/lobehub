@@ -2,21 +2,32 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
-import { memo, useCallback, useState } from 'react';
+import { lazy, memo, Suspense, useCallback, useState } from 'react';
 
 import HomeInbox from '@/features/HomeInbox';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { useTaskStore } from '@/store/task';
+import { taskDetailSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
+import { isHomeMinimalLayout } from './CustomizeModal/config';
 import HomeHeader from './HomeHeader';
 import HomeModeContent from './HomeModeContent';
 import HomePortrait from './HomePortrait';
 import InputArea from './InputArea';
 import PortraitBubble from './PortraitBubble';
+import { RAIL_INBOX_PROPS, resolveRailVisibility } from './railVisibility';
 import type { HomeMode } from './types';
+
+// The "View run" button on brief cards only writes drawer state to the task
+// store — some component must mount the drawer shell that reacts to it.
+// TaskDetailPage mounts its own; home needs one too, or the click is a silent
+// no-op. Lazy so the home bundle doesn't pay for the chat stack until a run is
+// actually opened.
+const TopicChatDrawer = lazy(() => import('@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer'));
 
 /** Trailing gutter that keeps the rail's cards off the page's scroll lane. */
 const RAIL_GUTTER = 14;
@@ -43,6 +54,14 @@ const BUBBLE_GAP = 16;
 const GREETING_LANE = COLLAPSED_CONTENT_OFFSET * 2 + PORTRAIT_LANE + BUBBLE_MAX_WIDTH + BUBBLE_GAP;
 /** Under this the greeting, the bubble and the portrait cannot share a line. */
 const BUBBLE_INLINE_MIN = 1080;
+const MINIMAL_STACK_GAP = 24;
+/**
+ * The greeting's line box — 22px at a 1.4 line-height, from HomeHeader. Its
+ * height plus the gap is what the block must shed below itself to land the
+ * composer, not the pair's midpoint, on the center of the lane.
+ */
+const MINIMAL_GREETING_LINE = Math.round(22 * 1.4);
+const MINIMAL_LIFT = MINIMAL_GREETING_LINE + MINIMAL_STACK_GAP;
 
 const styles = createStaticStyles(({ css }) => ({
   // Both rows size to their content and the page scrolls around the whole grid
@@ -150,6 +169,20 @@ const styles = createStaticStyles(({ css }) => ({
     grid-area: 2 / 1;
     min-width: 0;
   `,
+  // Nothing stacks under the composer any more, so the page stops being a
+  // dashboard: greeting and composer read as one block, on a measure of their
+  // own rather than the dashboard's full span.
+  //
+  // The route centers this block with auto margins, which would put the pair's
+  // midpoint on the center and leave the composer — the thing you actually look
+  // at — sitting low. The trailing pad is counted into the centered box, so it
+  // lifts everything by half its height and hands the composer the center.
+  minimal: css`
+    width: 100%;
+    max-inline-size: 760px;
+    margin-inline: auto;
+    padding-block-end: ${MINIMAL_LIFT}px;
+  `,
   portrait: css`
     grid-area: 1 / 2;
     transition: transform ${RAIL_TRANSITION_DURATION}ms ease-out;
@@ -233,10 +266,20 @@ const styles = createStaticStyles(({ css }) => ({
 const Home = memo(() => {
   const isLogin = useUserStore(authSelectors.isLogin);
   const showHomeRail = useGlobalStore(systemStatusSelectors.showHomeRail);
+  const showHomePortrait = useGlobalStore(systemStatusSelectors.showHomePortrait);
+  const hiddenWidgets = useGlobalStore(systemStatusSelectors.hiddenHomeWidgets);
+  const minimal = isHomeMinimalLayout({ hiddenWidgets, showPortrait: showHomePortrait });
   const [mode, setMode] = useState<HomeMode>('chat');
   const [inputValue, setInputValue] = useState('');
-  const railVisible = Boolean(isLogin && showHomeRail);
+
+  const drawerTopicId = useTaskStore(taskDetailSelectors.activeTopicDrawerTopicId);
+  // Mount the drawer on first open and keep it mounted afterwards, so its
+  // close animation can play instead of the panel vanishing with the state.
+  const [drawerMounted, setDrawerMounted] = useState(false);
+  if (drawerTopicId && !drawerMounted) setDrawerMounted(true);
+  const railVisible = resolveRailVisibility({ hiddenWidgets, isLogin, showHomeRail });
   const railCollapsed = !railVisible;
+  const portraitVisible = Boolean(isLogin && showHomePortrait);
 
   const handleInputValueChange = useCallback((value: string) => {
     setInputValue(value);
@@ -254,19 +297,34 @@ const Home = memo(() => {
     [handleInputValueChange],
   );
 
+  if (minimal)
+    return (
+      <Flexbox className={styles.minimal} gap={MINIMAL_STACK_GAP}>
+        <HomeHeader centered />
+        <div className={styles.inputArea}>
+          <InputArea
+            inputValue={inputValue}
+            mode={mode}
+            onInputValueChange={handleInputValueChange}
+            onModeChange={setMode}
+          />
+        </div>
+      </Flexbox>
+    );
+
   return (
     <Flexbox className={styles.grid}>
       <div className={cx(styles.header, styles.content, railCollapsed && styles.contentCollapsed)}>
         <HomeHeader />
-        {/* No portrait for signed-out visitors, so no one to speak the line. */}
-        {isLogin && (
+        {/* The bubble is the portrait's line, so it goes wherever the portrait goes. */}
+        {portraitVisible && (
           <div className={cx(styles.bubbleSlot, railCollapsed && styles.bubbleSlotCollapsed)}>
             <PortraitBubble />
           </div>
         )}
       </div>
 
-      {isLogin && (
+      {portraitVisible && (
         <div className={cx(styles.portrait, railCollapsed && styles.portraitCollapsed)}>
           <HomePortrait />
         </div>
@@ -301,8 +359,16 @@ const Home = memo(() => {
           id={'home-rail'}
           inert={railCollapsed}
         >
-          <HomeInbox hideNeedsYou hideUnread variant={'rail'} />
+          <HomeInbox {...RAIL_INBOX_PROPS} variant={'rail'} />
         </aside>
+      )}
+
+      {/* FloatingPanel portals to the app element, so where this sits in the
+          tree doesn't affect its viewport-anchored position. */}
+      {drawerMounted && (
+        <Suspense fallback={null}>
+          <TopicChatDrawer />
+        </Suspense>
       )}
     </Flexbox>
   );

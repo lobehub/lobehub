@@ -13,6 +13,7 @@ import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
+import ElectronAppStateSync from './ElectronAppStateSync';
 import { useUserStateRedirect } from './useUserStateRedirect';
 
 const DeferredStoreInitialization = lazy(() => import('./DeferredStoreInitialization'));
@@ -77,9 +78,12 @@ const StoreInitialization = memo(() => {
   useStoreUpdater('isMobile', mobile);
 
   return (
-    <Suspense>
-      <DeferredStoreInitialization isLogin={isLoginOnInit} />
-    </Suspense>
+    <>
+      <ElectronAppStateSync />
+      <Suspense>
+        <DeferredStoreInitialization isLogin={isLoginOnInit} />
+      </Suspense>
+    </>
   );
 });
 

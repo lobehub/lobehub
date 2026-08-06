@@ -1,9 +1,6 @@
 'use client';
 
-import {
-  HETEROGENEOUS_TYPE_LABELS,
-  isRemoteHeterogeneousType,
-} from '@lobechat/heterogeneous-agents';
+import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import { type ChatInputActionsProps } from '@lobehub/editor/react';
 import { Alert, Flexbox } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
@@ -106,20 +103,20 @@ const HeterogeneousChatInput = memo(() => {
     clientExecutionAvailable: isDesktop,
     workspaceScoped,
   });
-  const isRemoteAgent = !!providerType && isRemoteHeterogeneousType(providerType);
   const deviceSelectionRequired =
     !!providerType &&
     !isHeterogeneousSandboxExecutionAvailable(providerType) &&
     executionTarget === 'none';
 
-  // OpenCode and Pi can discover models on an explicit bound device; Claude Code and
+  // OpenCode, Pi, and Qoder discover models on a concrete runtime; Claude Code and
   // Codex show the selector on every execution path (local / sandbox / device)
   // since dispatch forwards --model/--effort everywhere.
   const isSelectableHeteroProvider =
     providerType === 'claude-code' ||
     providerType === 'codex' ||
     providerType === 'opencode' ||
-    providerType === 'pi';
+    providerType === 'pi' ||
+    providerType === 'qoder';
   const showHeteroModel =
     isSelectableHeteroProvider &&
     shouldShowHeteroModelSelector({
@@ -146,13 +143,11 @@ const HeterogeneousChatInput = memo(() => {
     [showHeteroModel],
   );
 
-  // A run goes to an `lh connect` device when the provider is a remote-only type
-  // (openclaw / hermes) OR a local-CLI type (claude-code / codex) resolves to a
-  // bound device (including desktop "local" opened from web). Either way the
+  // A run goes to an `lh connect` device when its execution target resolves to a
+  // bound device (including desktop "local" opened from web). The
   // bound device must be online before we let the user send — guard it here
   // instead of failing at dispatch time.
-  const isDeviceExecution =
-    isRemoteAgent || (executionTarget === 'device' && !!agencyConfig?.boundDeviceId);
+  const isDeviceExecution = executionTarget === 'device' && !!agencyConfig?.boundDeviceId;
 
   const { status, refresh } = useRemoteAgentDeviceGuard({ agentId, enabled: isDeviceExecution });
 

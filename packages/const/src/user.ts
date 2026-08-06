@@ -13,7 +13,6 @@ export const DEFAULT_PREFERENCE: UserPreference = {
     enableInputMarkdown: true,
     enableMessageTextSelectionActions: false,
     enableOAuthApps: false,
-    enablePlatformAgent: false,
   },
   topicGroupMode: 'byTime',
   topicIncludeCompleted: false,

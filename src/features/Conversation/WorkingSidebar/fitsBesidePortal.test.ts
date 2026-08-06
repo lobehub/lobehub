@@ -2,9 +2,25 @@ import { describe, expect, it } from 'vitest';
 
 import { CHAT_PORTAL_WIDE_WIDTH, CHAT_PORTAL_WIDTH } from '@/const/layoutTokens';
 
-import { fitsBesidePortal } from './fitsBesidePortal';
+import { fitsBesidePortal, sidebarWidthBudget } from './fitsBesidePortal';
 
 const SIDEBAR = 360;
+
+describe('sidebarWidthBudget', () => {
+  it('is unlimited until the row has been measured', () => {
+    expect(sidebarWidthBudget({ portalWidth: 0 })).toBe(Number.POSITIVE_INFINITY);
+    expect(sidebarWidthBudget({ availableWidth: 0, portalWidth: 0 })).toBe(
+      Number.POSITIVE_INFINITY,
+    );
+  });
+
+  it('reserves the conversation share beside an open portal', () => {
+    // 1710 - 840 - 420
+    expect(sidebarWidthBudget({ availableWidth: 1710, portalWidth: CHAT_PORTAL_WIDE_WIDTH })).toBe(
+      450,
+    );
+  });
+});
 
 describe('fitsBesidePortal', () => {
   it('keeps the sidebar until the row has been measured', () => {

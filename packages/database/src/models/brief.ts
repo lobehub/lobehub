@@ -1,4 +1,5 @@
-import { and, desc, eq, inArray, isNull, notInArray, type SQL, sql } from 'drizzle-orm';
+import { NEWS_BRIEF_TYPES } from '@lobechat/types';
+import { and, desc, eq, gte, inArray, isNull, lt, notInArray, type SQL, sql } from 'drizzle-orm';
 
 import { agents } from '../schemas/agent';
 import type { BriefItem, NewBrief } from '../schemas/task';
@@ -100,18 +101,7 @@ export class BriefModel {
   async listUnresolvedEnriched(options?: { limit?: number }): Promise<UnresolvedBriefRow[]> {
     const { limit = 20 } = options ?? {};
     const rows = await this.db
-      .select({
-        agentAvatar: agents.avatar,
-        agentBackgroundColor: agents.backgroundColor,
-        agentRowId: agents.id,
-        agentName: agents.name,
-        agentSlug: agents.slug,
-        agentTitle: agents.title,
-        brief: briefs,
-        taskIdentifier: tasks.identifier,
-        taskName: tasks.name,
-        taskStatus: tasks.status,
-      })
+      .select(this.enrichedSelection())
       .from(briefs)
       .leftJoin(agents, eq(briefs.agentId, agents.id))
       .leftJoin(tasks, eq(briefs.taskId, tasks.id))
@@ -126,7 +116,80 @@ export class BriefModel {
       )
       .limit(limit);
 
-    return rows.map(({ agentSlug, ...row }) => ({
+    return this.normalizeEnrichedRows(rows);
+  }
+
+  /**
+   * Day-scoped news digest (`insight` + `result`): every brief created in
+   * `[startAt, endAt)`, resolved or not. A day's digest is a record, not a
+   * queue — dropping resolved rows would make every already-read day come
+   * back empty. Plain chronological order: within one day the priority
+   * buckets of the unresolved feed carry no meaning.
+   *
+   * The 50 cap is a deliberate scope cut, newest-first: a single user
+   * producing 50+ news briefs in one local day is far outside current
+   * product reality, and the day pager carries no same-day cursor. Revisit
+   * with real pagination if daily volumes ever approach it.
+   */
+  async listNewsEnriched(options: {
+    endAt: Date;
+    limit?: number;
+    startAt: Date;
+  }): Promise<UnresolvedBriefRow[]> {
+    const { endAt, limit = 50, startAt } = options;
+    const rows = await this.db
+      .select(this.enrichedSelection())
+      .from(briefs)
+      .leftJoin(agents, eq(briefs.agentId, agents.id))
+      .leftJoin(tasks, eq(briefs.taskId, tasks.id))
+      .where(
+        and(
+          this.ownership(),
+          inArray(briefs.type, NEWS_BRIEF_TYPES),
+          gte(briefs.createdAt, startAt),
+          lt(briefs.createdAt, endAt),
+        ),
+      )
+      .orderBy(desc(briefs.createdAt))
+      .limit(limit);
+
+    return this.normalizeEnrichedRows(rows);
+  }
+
+  /**
+   * Whether any news brief exists before `date` — lets the day pager disable
+   * its "older" arrow at the true start of history instead of paging into
+   * empty days forever.
+   */
+  async hasNewsBefore(date: Date): Promise<boolean> {
+    const rows = await this.db
+      .select({ id: briefs.id })
+      .from(briefs)
+      .where(
+        and(this.ownership(), inArray(briefs.type, NEWS_BRIEF_TYPES), lt(briefs.createdAt, date)),
+      )
+      .limit(1);
+
+    return rows.length > 0;
+  }
+
+  private enrichedSelection = () => ({
+    agentAvatar: agents.avatar,
+    agentBackgroundColor: agents.backgroundColor,
+    agentRowId: agents.id,
+    agentName: agents.name,
+    agentSlug: agents.slug,
+    agentTitle: agents.title,
+    brief: briefs,
+    taskIdentifier: tasks.identifier,
+    taskName: tasks.name,
+    taskStatus: tasks.status,
+  });
+
+  private normalizeEnrichedRows = (
+    rows: (UnresolvedBriefRow & { agentSlug: string | null })[],
+  ): UnresolvedBriefRow[] =>
+    rows.map(({ agentSlug, ...row }) => ({
       ...row,
       agentAvatar: normalizeInboxAgentAvatar(row.agentAvatar, {
         slug: agentSlug,
@@ -135,7 +198,6 @@ export class BriefModel {
         slug: agentSlug,
       }),
     }));
-  }
 
   /**
    * Lists unresolved briefs for one agent and trigger before applying the read cap.

@@ -19,7 +19,7 @@ import {
 } from '@/database/models/agentEval';
 import { ThreadModel } from '@/database/models/thread';
 import { messages } from '@/database/schemas';
-import { buildMessageScopeWhere } from '@/database/utils/messageScope';
+import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentEvalRunService, RUN_CREATE_ID_CONFLICT } from '@/server/services/agentEvalRun';
@@ -466,14 +466,10 @@ export const agentEvalExternalRouter = router({
     .input(z.object({ threadId: z.string().optional(), topicId: z.string() }))
     .query(async ({ ctx, input }) => {
       const conditions = [
-        // Derived scope: messages.user_id/workspace_id are creation-time
-        // snapshots that go stale after an agent transfer, so filtering on them
-        // would return nothing for a transferred topic. The `topicId` equality
-        // below keeps the correlated predicate index-bounded.
-        buildMessageScopeWhere({
-          userId: ctx.userId,
-          workspaceId: ctx.workspaceId ?? undefined,
-        }),
+        buildWorkspaceWhere(
+          { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
+          messages,
+        ),
         eq(messages.topicId, input.topicId),
         isNull(messages.messageGroupId),
       ];

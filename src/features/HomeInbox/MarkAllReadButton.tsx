@@ -8,6 +8,8 @@ import { useBriefStore } from '@/store/brief';
 
 interface MarkAllReadButtonProps {
   news: BriefItem[];
+  /** Fired after the resolve lands — lets the day digest revalidate its own SWR cache. */
+  onResolved?: () => void;
 }
 
 /**
@@ -15,7 +17,7 @@ interface MarkAllReadButtonProps {
  * `read` action — reports are knowledge, so dismissing them wholesale must
  * never accept a delivery or complete a task.
  */
-const MarkAllReadButton = memo<MarkAllReadButtonProps>(({ news }) => {
+const MarkAllReadButton = memo<MarkAllReadButtonProps>(({ news, onResolved }) => {
   const { t } = useTranslation('home');
   const resolveBriefsAsRead = useBriefStore((s) => s.resolveBriefsAsRead);
   const [loading, setLoading] = useState(false);
@@ -24,6 +26,7 @@ const MarkAllReadButton = memo<MarkAllReadButtonProps>(({ news }) => {
     setLoading(true);
     try {
       await resolveBriefsAsRead(news.map((brief) => brief.id));
+      onResolved?.();
     } catch (error) {
       // Without this the button just stops spinning and the pile stays put —
       // the tRPC client only console.errors non-401 failures.
@@ -31,7 +34,7 @@ const MarkAllReadButton = memo<MarkAllReadButtonProps>(({ news }) => {
     } finally {
       setLoading(false);
     }
-  }, [news, resolveBriefsAsRead, t]);
+  }, [news, onResolved, resolveBriefsAsRead, t]);
 
   return (
     <Button

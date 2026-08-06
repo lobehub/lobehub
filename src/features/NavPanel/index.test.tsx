@@ -44,10 +44,6 @@ vi.mock('./components/NavPanelDraggable', () => ({
   ),
 }));
 
-vi.mock('./components/SkeletonList', () => ({
-  default: () => <div>Nav panel loading</div>,
-}));
-
 vi.mock('@/features/HomeSidebar/Content', () => ({
   default: () => <div>Home sidebar</div>,
 }));
@@ -109,10 +105,45 @@ describe('NavPanel', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Nav panel loading')).toBeInTheDocument();
+      expect(screen.getByTestId('nav-sidebar-skeleton')).toBeInTheDocument();
     });
     expect(screen.getByTestId('nav-panel')).toHaveAttribute('data-nav-key', 'pending:discover');
     expect(screen.queryByText('Home sidebar')).not.toBeInTheDocument();
+  });
+
+  it('gives the settings skeleton a search placeholder', async () => {
+    pathname = '/settings/profile';
+
+    render(<NavPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('nav-sidebar-skeleton')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('nav-sidebar-skeleton-search')).toBeInTheDocument();
+    expect(screen.queryByTestId('nav-sidebar-skeleton-nav')).not.toBeInTheDocument();
+  });
+
+  it('drops the search placeholder for the searchless workspace settings sidebar', async () => {
+    pathname = '/lobe-team/settings/general';
+
+    render(<NavPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('nav-sidebar-skeleton')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('nav-sidebar-skeleton-search')).not.toBeInTheDocument();
+  });
+
+  it('shapes the skeleton per nav key: discover is header-plus-nav with no body', async () => {
+    pathname = '/community';
+
+    render(<NavPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('nav-sidebar-skeleton')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('nav-sidebar-skeleton-nav')).toBeInTheDocument();
+    expect(screen.queryByTestId('nav-sidebar-skeleton-search')).not.toBeInTheDocument();
   });
 
   it('does not let an older owner cleanup remove the newer entry for the same key', async () => {
@@ -142,7 +173,7 @@ describe('NavPanel', () => {
     await waitFor(() => {
       expect(screen.getByText('New Home sidebar')).toBeInTheDocument();
     });
-    expect(screen.queryByText('Nav panel loading')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('nav-sidebar-skeleton')).not.toBeInTheDocument();
   });
 });
 
@@ -160,7 +191,7 @@ describe('NavPanelShell', () => {
       expect(screen.getByText('Home sidebar')).toBeInTheDocument();
     });
     expect(screen.getByTestId('nav-panel')).toHaveAttribute('data-nav-key', 'home');
-    expect(screen.queryByText('Nav panel loading')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('nav-sidebar-skeleton')).not.toBeInTheDocument();
   });
 
   it('still yields to a dedicated route panel', async () => {
@@ -169,7 +200,7 @@ describe('NavPanelShell', () => {
     render(<NavPanelShell />);
 
     await waitFor(() => {
-      expect(screen.getByText('Nav panel loading')).toBeInTheDocument();
+      expect(screen.getByTestId('nav-sidebar-skeleton')).toBeInTheDocument();
     });
     expect(screen.queryByText('Home sidebar')).not.toBeInTheDocument();
   });

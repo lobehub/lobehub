@@ -97,7 +97,9 @@ const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
                 <TooltipGroup layoutAnimation={false}>
                   <StyleProvider speedy={import.meta.env.PROD}>
                     <LobeAnalyticsProviderWrapper>
-                      <CacheHydrationGate>{children}</CacheHydrationGate>
+                      <CacheHydrationGate>
+                        <DevDockLayout>{children}</DevDockLayout>
+                      </CacheHydrationGate>
                     </LobeAnalyticsProviderWrapper>
                   </StyleProvider>
                 </TooltipGroup>
@@ -124,9 +126,7 @@ const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
           isMobile={isMobile}
           serverConfig={serverConfig?.config}
         >
-          <QueryProvider>
-            <DevDockLayout>{content}</DevDockLayout>
-          </QueryProvider>
+          <QueryProvider>{content}</QueryProvider>
         </ServerConfigStoreProvider>
       </AppTheme>
     </Locale>

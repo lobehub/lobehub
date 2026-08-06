@@ -41,7 +41,6 @@ export const nativeModules = [
   // macOS-only native modules
   ...(isDarwin ? ['node-mac-permissions'] : []),
   '@lydell/node-pty',
-  '@napi-rs/canvas',
   'get-windows',
   'node-screenshots',
 ];
@@ -71,7 +70,6 @@ export function getAsarUnpackPatterns() {
   return [
     'node_modules/@lydell/node-pty-*/prebuilds/**/*.node',
     'node_modules/@lydell/node-pty-*/prebuilds/*/spawn-helper',
-    'node_modules/@napi-rs/canvas-*/*.node',
     'node_modules/font-list/libs/darwin/fontlist',
     'node_modules/get-windows/main',
     'node_modules/node-mac-permissions/build/Release/permissions.node',

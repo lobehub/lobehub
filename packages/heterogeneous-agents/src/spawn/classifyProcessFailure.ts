@@ -39,7 +39,8 @@ const CLI_AUTH_REQUIRED_PATTERNS = [
   /\b401\b/,
   /no api key found/i,
   /no models available/i,
-];
+] as const;
+const QODER_AUTH_REQUIRED_PATTERNS = [/not logged in/i, /please run \/login/i] as const;
 
 const CLI_NOT_FOUND_MESSAGES: Record<string, string> = {
   'claude-code':
@@ -49,6 +50,8 @@ const CLI_NOT_FOUND_MESSAGES: Record<string, string> = {
   'opencode':
     'OpenCode CLI was not found on the machine running this agent. Install it and make sure `opencode` can be executed.',
   'pi': 'Pi CLI was not found on the machine running this agent. Install it and make sure `pi` can be executed.',
+  'qoder':
+    'Qoder CLI was not found on the machine running this agent. Install it and make sure `qodercli` can be executed.',
 };
 
 const AUTH_REQUIRED_MESSAGES: Record<string, string> = {
@@ -59,6 +62,8 @@ const AUTH_REQUIRED_MESSAGES: Record<string, string> = {
   'opencode':
     'OpenCode could not authenticate on the machine running this agent. Sign in again or refresh its credentials, then retry.',
   'pi': 'Pi could not authenticate on the machine running this agent. Run `pi`, use `/login`, then retry.',
+  'qoder':
+    'Qoder could not authenticate on the machine running this agent. Run `qodercli login`, then retry.',
 };
 
 /**
@@ -73,7 +78,14 @@ const STATUS_GUIDE_ERROR_CODES = new Set([
   'overloaded',
   'rate_limit',
 ]);
-const STATUS_GUIDE_AGENT_TYPES = new Set(['amp', 'claude-code', 'codex', 'opencode', 'pi']);
+const STATUS_GUIDE_AGENT_TYPES = new Set([
+  'amp',
+  'claude-code',
+  'codex',
+  'opencode',
+  'pi',
+  'qoder',
+]);
 
 /**
  * Whether a terminal error payload (an adapter's in-stream `error` event data,
@@ -131,7 +143,11 @@ export const classifyHeteroProcessFailure = (
     };
   }
 
-  if (detail && CLI_AUTH_REQUIRED_PATTERNS.some((pattern) => pattern.test(detail))) {
+  const authRequiredPatterns =
+    agentType === 'qoder'
+      ? [...CLI_AUTH_REQUIRED_PATTERNS, ...QODER_AUTH_REQUIRED_PATTERNS]
+      : CLI_AUTH_REQUIRED_PATTERNS;
+  if (detail && authRequiredPatterns.some((pattern) => pattern.test(detail))) {
     return {
       agentType,
       code: 'auth_required',

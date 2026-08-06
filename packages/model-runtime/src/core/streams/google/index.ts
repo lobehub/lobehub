@@ -58,12 +58,9 @@ const transformGoogleGenerativeAIStream = (
     };
   }
   // Handle promptFeedback with blockReason (e.g., PROHIBITED_CONTENT)
+  // Content blocks are terminal policy rejections — never retryable ProviderBizError.
   if ('promptFeedback' in chunk && (chunk as any).promptFeedback?.blockReason) {
     const blockReason = (chunk as any).promptFeedback.blockReason;
-    const errorType =
-      blockReason === 'IMAGE_PROHIBITED_CONTENT'
-        ? AgentRuntimeErrorType.ProviderContentPolicyViolation
-        : AgentRuntimeErrorType.ProviderBizError;
     const humanFriendlyMessage = getBlockReasonMessage(blockReason);
 
     return {
@@ -75,7 +72,7 @@ const transformGoogleGenerativeAIStream = (
           message: humanFriendlyMessage,
           provider: 'google',
         },
-        type: errorType,
+        type: AgentRuntimeErrorType.ProviderContentPolicyViolation,
       },
       id: context?.id || 'error',
       type: 'error',
@@ -89,15 +86,12 @@ const transformGoogleGenerativeAIStream = (
     serializeScopedSignature(signature, payload?.thoughtSignatureScope, 'thought_signature');
 
   // Handle blocked terminal candidate finishReason (e.g., PROHIBITED_CONTENT, SAFETY)
+  // Same as promptFeedback: policy blocks must stop the attempt, not trigger LLM retry.
   const blockedReason = getCandidateBlockedReason(candidate);
   if (blockedReason) {
     const convertedUsage = usageMetadata
       ? convertGoogleAIUsage(usageMetadata, payload?.pricing)
       : undefined;
-    const errorType =
-      blockedReason === 'IMAGE_PROHIBITED_CONTENT'
-        ? AgentRuntimeErrorType.ProviderContentPolicyViolation
-        : AgentRuntimeErrorType.ProviderBizError;
     const humanFriendlyMessage = getBlockReasonMessage(blockedReason);
 
     return [
@@ -114,7 +108,7 @@ const transformGoogleGenerativeAIStream = (
             message: humanFriendlyMessage,
             provider: 'google',
           },
-          type: errorType,
+          type: AgentRuntimeErrorType.ProviderContentPolicyViolation,
         },
         id: context?.id || 'error',
         type: 'error' as const,
