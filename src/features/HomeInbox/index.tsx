@@ -26,6 +26,7 @@ import { resolveInboxBlockState } from './inboxBlockState';
 import InboxBriefCard from './InboxBriefCard';
 import MarkAllReadButton from './MarkAllReadButton';
 import NeedsYouRailCard from './NeedsYouRailCard';
+import { resolveShownNewsOffset } from './newsDayOffset';
 import NewsList from './NewsList';
 import { ownsRailSections } from './railSectionPlacement';
 import RunningTasksCard from './RunningTasksCard';
@@ -132,14 +133,21 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   // earlier days. This replaces slicing news out of the unresolved feed, which
   // let week-old unread reports masquerade as "today's brief".
   const [newsDayOffset, setNewsDayOffset] = useState(0);
-  const newsDay = useMemo(
-    () => dayjs().subtract(newsDayOffset, 'day').format('YYYY-MM-DD'),
-    [newsDayOffset],
-  );
+  // Recomputed every render on purpose (no memo): a Home left mounted across
+  // local midnight must start querying the new day on its next render instead
+  // of serving yesterday under a "Daily brief" label until remount.
+  const newsDay = dayjs().subtract(newsDayOffset, 'day').format('YYYY-MM-DD');
   const useFetchNewsByDay = useBriefStore((s) => s.useFetchNewsByDay);
   const newsSWR = useFetchNewsByDay(isLogin === true && showRailSections, cacheScope, newsDay);
   const dayNews = newsSWR.data?.news;
   const hasEarlierNews = newsSWR.data?.hasEarlier ?? false;
+  // `keepPreviousData` shows the previous day's payload while a page flip is in
+  // flight, so everything the user SEES (title, empty copy, arrow gating) must
+  // derive from the payload's own day — not from `newsDayOffset`, which has
+  // already moved on. Otherwise a slow flip renders "Yesterday's brief" over
+  // today's items. Clicks navigate relative to the shown day for the same
+  // reason: WYSIWYG paging self-heals any offset/data divergence.
+  const shownNewsOffset = newsSWR.data ? resolveShownNewsOffset(newsSWR.data.day) : 0;
 
   const topics = useHomeInboxTopics(isLogin);
   const recommendationsVisible = useRecommendationsVisible();
@@ -333,19 +341,38 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
       ),
     });
 
+  // A first-load failure of the day feed must not make the whole section
+  // vanish — an absent "Daily brief" is indistinguishable from having no
+  // briefs, so surface the error with a retry like the topic feed does.
+  if (showRailSections && newsSWR.error && !dayNews)
+    sections.push({
+      key: 'news-error',
+      label: t('inbox.news.title'),
+      node: (
+        <AsyncError
+          error={newsSWR.error}
+          variant={'inline'}
+          onRetry={() => void newsSWR.mutate()}
+        />
+      ),
+    });
+
   // Shown once the day feed has loaded, whenever there is anything to show *or*
   // anywhere to go: an empty today must still expose the pager when earlier
   // days hold briefs, and a browsed-to empty day must keep the way back.
+  // Everything below renders from `shownNewsOffset` / the payload's own day —
+  // see the comment at `shownNewsOffset` for why `newsDayOffset` must not be
+  // used for display.
   const news = dayNews ?? [];
   const unresolvedNews = news.filter((brief) => !brief.resolvedAt);
   const showNewsSection =
-    showRailSections && !!dayNews && (news.length > 0 || newsDayOffset > 0 || hasEarlierNews);
+    showRailSections && !!dayNews && (news.length > 0 || shownNewsOffset > 0 || hasEarlierNews);
   if (showNewsSection) {
-    const newsDate = dayjs(newsDay);
+    const newsDate = dayjs(newsSWR.data!.day);
     const newsLabel =
-      newsDayOffset === 0
+      shownNewsOffset === 0
         ? t('inbox.news.title')
-        : newsDayOffset === 1
+        : shownNewsOffset === 1
           ? t('inbox.news.titleYesterday')
           : t('inbox.news.titleDay', {
               date: newsDate.format(
@@ -366,20 +393,20 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
             icon={ChevronLeftIcon}
             size={'small'}
             title={t('inbox.news.prevDay')}
-            onClick={() => setNewsDayOffset(newsDayOffset + 1)}
+            onClick={() => setNewsDayOffset(shownNewsOffset + 1)}
           />
           <ActionIcon
-            disabled={newsDayOffset === 0}
+            disabled={shownNewsOffset === 0}
             icon={ChevronRightIcon}
             size={'small'}
             title={t('inbox.news.nextDay')}
-            onClick={() => setNewsDayOffset(newsDayOffset - 1)}
+            onClick={() => setNewsDayOffset(Math.max(0, shownNewsOffset - 1))}
           />
         </Flexbox>
       ),
       // Mid-paging (or on an empty day) the arrows are the section's only
       // controls — they must not vanish when the pointer leaves the header.
-      actionAlwaysVisible: newsDayOffset > 0 || news.length === 0,
+      actionAlwaysVisible: shownNewsOffset > 0 || news.length === 0,
       // Team view: News is still only mine (briefs are per-user), so say so
       // rather than let a team-scoped page imply it spans the team.
       badge: teamView && (
@@ -391,7 +418,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
       node:
         news.length === 0 ? (
           <span className={homeType.supporting}>
-            {t(newsDayOffset === 0 ? 'inbox.news.emptyToday' : 'inbox.news.emptyDay')}
+            {t(shownNewsOffset === 0 ? 'inbox.news.emptyToday' : 'inbox.news.emptyDay')}
           </span>
         ) : (
           <NewsList bare={isRail} news={news} />

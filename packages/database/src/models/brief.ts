@@ -125,6 +125,11 @@ export class BriefModel {
    * queue — dropping resolved rows would make every already-read day come
    * back empty. Plain chronological order: within one day the priority
    * buckets of the unresolved feed carry no meaning.
+   *
+   * The 50 cap is a deliberate scope cut, newest-first: a single user
+   * producing 50+ news briefs in one local day is far outside current
+   * product reality, and the day pager carries no same-day cursor. Revisit
+   * with real pagination if daily volumes ever approach it.
    */
   async listNewsEnriched(options: {
     endAt: Date;

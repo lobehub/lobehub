@@ -16,6 +16,13 @@ import { setNamespace } from '@/utils/storeDebug';
 const n = setNamespace('briefList');
 
 export interface NewsDay {
+  /**
+   * The local day (`YYYY-MM-DD`) this payload belongs to. Carried in the data so
+   * consumers rendering with `keepPreviousData` can label/gate from the day
+   * actually shown instead of the day being fetched — otherwise a slow page
+   * flip shows the new day's title over the old day's briefs.
+   */
+  day: string;
   /** Any news brief older than this day exists — the day pager's "older" arrow. */
   hasEarlier: boolean;
   news: BriefItem[];
@@ -137,7 +144,7 @@ export class BriefListActionImpl {
           endAt: startAt.add(1, 'day').toDate(),
           startAt: startAt.toDate(),
         });
-        return { hasEarlier: result.hasEarlier, news: result.data as BriefItem[] };
+        return { day, hasEarlier: result.hasEarlier, news: result.data as BriefItem[] };
       },
       { keepPreviousData: true },
     );
