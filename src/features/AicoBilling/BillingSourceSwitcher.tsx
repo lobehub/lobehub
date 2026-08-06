@@ -14,7 +14,7 @@ import { useAicoBillingSources } from './useAicoBillingSources';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   check: css`
-    color: ${cssVar.colorPrimary};
+    color: ${cssVar.colorTextSecondary};
   `,
   chevron: css`
     color: ${cssVar.colorTextQuaternary};
