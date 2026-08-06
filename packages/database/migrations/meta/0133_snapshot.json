@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "d701f390-e3aa-40d8-9432-dd8f2e3542fc",
+  "id": "69d48d48-0b96-4e71-99ce-685b1e81d3ab",
   "policies": {},
   "prevId": "d3a87170-86d7-4e73-a701-69d472c7df3e",
   "roles": {},
@@ -3052,6 +3052,13 @@
       "name": "agent_history_job_agents",
       "schema": "",
       "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
         "job_id": {
           "name": "job_id",
           "type": "text",
@@ -3066,6 +3073,27 @@
         }
       },
       "indexes": {
+        "agent_history_job_agents_job_id_agent_id_unique": {
+          "name": "agent_history_job_agents_job_id_agent_id_unique",
+          "columns": [
+            {
+              "expression": "job_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "agent_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "agent_history_job_agents_agent_id_idx": {
           "name": "agent_history_job_agents_agent_id_idx",
           "columns": [
@@ -3102,12 +3130,7 @@
           "onUpdate": "no action"
         }
       },
-      "compositePrimaryKeys": {
-        "agent_history_job_agents_job_id_agent_id_pk": {
-          "name": "agent_history_job_agents_job_id_agent_id_pk",
-          "columns": ["job_id", "agent_id"]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -3117,6 +3140,13 @@
       "name": "agent_history_job_topics",
       "schema": "",
       "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
         "job_id": {
           "name": "job_id",
           "type": "text",
@@ -3144,6 +3174,27 @@
         }
       },
       "indexes": {
+        "agent_history_job_topics_job_id_topic_id_unique": {
+          "name": "agent_history_job_topics_job_id_topic_id_unique",
+          "columns": [
+            {
+              "expression": "job_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "topic_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "agent_history_job_topics_topic_id_idx": {
           "name": "agent_history_job_topics_topic_id_idx",
           "columns": [
@@ -3207,12 +3258,7 @@
           "onUpdate": "no action"
         }
       },
-      "compositePrimaryKeys": {
-        "agent_history_job_topics_job_id_topic_id_pk": {
-          "name": "agent_history_job_topics_job_id_topic_id_pk",
-          "columns": ["job_id", "topic_id"]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},

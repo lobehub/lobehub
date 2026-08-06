@@ -1,4 +1,13 @@
-import { boolean, index, integer, jsonb, pgTable, primaryKey, text } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
 import { idGenerator } from '../utils/idGenerator';
 import { timestamps, timestamptz } from './_helpers';
@@ -86,13 +95,14 @@ export type NewAgentHistoryJob = typeof agentHistoryJobs.$inferInsert;
  * row under a `pending` job cannot start another transfer.
  *
  * FK onto `agents` cascades on delete (deleting the agent removes the pending
- * work), but there is deliberately no unique constraint on `agent_id`: history
+ * work), but there is deliberately no unique constraint on `agent_id` alone: history
  * keeps completed jobs, and uniqueness among PENDING jobs is enforced by the
  * entry guard inside the transfer transaction.
  */
 export const agentHistoryJobAgents = pgTable(
   'agent_history_job_agents',
   {
+    id: uuid('id').defaultRandom().notNull().primaryKey(),
     jobId: text('job_id')
       .notNull()
       .references(() => agentHistoryJobs.id, { onDelete: 'cascade' }),
@@ -101,7 +111,7 @@ export const agentHistoryJobAgents = pgTable(
       .references(() => agents.id, { onDelete: 'cascade' }),
   },
   (t) => [
-    primaryKey({ columns: [t.jobId, t.agentId] }),
+    uniqueIndex('agent_history_job_agents_job_id_agent_id_unique').on(t.jobId, t.agentId),
     index('agent_history_job_agents_agent_id_idx').on(t.agentId),
   ],
 );
@@ -122,6 +132,7 @@ export type AgentHistoryJobAgentItem = typeof agentHistoryJobAgents.$inferSelect
 export const agentHistoryJobTopics = pgTable(
   'agent_history_job_topics',
   {
+    id: uuid('id').defaultRandom().notNull().primaryKey(),
     jobId: text('job_id')
       .notNull()
       .references(() => agentHistoryJobs.id, { onDelete: 'cascade' }),
@@ -133,7 +144,7 @@ export const agentHistoryJobTopics = pgTable(
     activityAt: timestamptz('activity_at').notNull(),
   },
   (t) => [
-    primaryKey({ columns: [t.jobId, t.topicId] }),
+    uniqueIndex('agent_history_job_topics_job_id_topic_id_unique').on(t.jobId, t.topicId),
     index('agent_history_job_topics_topic_id_idx').on(t.topicId),
     index('agent_history_job_topics_pick_idx').on(t.jobId, t.priority, t.activityAt),
   ],
