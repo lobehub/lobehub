@@ -78,14 +78,14 @@ export const SSOProvidersList = memo(() => {
     if (isBuiltinProvider(normalizedProvider)) {
       // Use better-auth native linkSocial API for built-in providers
       await linkSocial({
-        callbackURL: '/profile',
+        callbackURL: '/settings/profile',
         provider: normalizedProvider as any,
       });
       return;
     }
 
     await oauth2.link({
-      callbackURL: '/profile',
+      callbackURL: '/settings/profile',
       providerId: normalizedProvider,
     });
   };
