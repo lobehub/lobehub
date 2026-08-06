@@ -81,90 +81,97 @@ interface MessageActionBarProps {
   leading?: ReactNode;
   /** Menu slots (shown in the overflow dropdown); defaults to `bar` when omitted */
   menu?: MessageActionSlot[];
+  /** Custom control rendered after the icon group inside the shared action container */
+  trailing?: ReactNode;
 }
 
 /**
  * Universal action bar. Resolves declarative slot keys (`'copy'`, `'edit'`,
  * `'divider'`, ...) against the registry and renders an ActionIconGroup.
  */
-export const MessageActionBar = memo<MessageActionBarProps>(({ ctx, bar, leading, menu }) => {
-  const built = useBuildActions(ctx);
-  const { allowed: canEdit } = usePermission('edit_own_content');
+export const MessageActionBar = memo<MessageActionBarProps>(
+  ({ ctx, bar, leading, menu, trailing }) => {
+    const built = useBuildActions(ctx);
+    const { allowed: canEdit } = usePermission('edit_own_content');
 
-  const effectiveBar = canEdit ? bar : VIEWER_BAR;
-  const effectiveMenu = canEdit ? menu : undefined;
-  const [barSlots, menuSlots] = useMemo(() => {
-    const shouldPromoteComments =
-      Boolean(built.comments) &&
-      !effectiveBar.includes('comments') &&
-      Boolean(effectiveMenu?.includes('comments'));
+    const effectiveBar = canEdit ? bar : VIEWER_BAR;
+    const effectiveMenu = canEdit ? menu : undefined;
+    const [barSlots, menuSlots] = useMemo(() => {
+      const shouldPromoteComments =
+        Boolean(built.comments) &&
+        !effectiveBar.includes('comments') &&
+        Boolean(effectiveMenu?.includes('comments'));
 
-    return [
-      shouldPromoteComments ? [...effectiveBar, 'comments'] : effectiveBar,
-      shouldPromoteComments ? effectiveMenu?.filter((slot) => slot !== 'comments') : effectiveMenu,
-    ];
-  }, [built.comments, effectiveBar, effectiveMenu]);
+      return [
+        shouldPromoteComments ? [...effectiveBar, 'comments'] : effectiveBar,
+        shouldPromoteComments
+          ? effectiveMenu?.filter((slot) => slot !== 'comments')
+          : effectiveMenu,
+      ];
+    }, [built.comments, effectiveBar, effectiveMenu]);
 
-  const barItems = useMemo(() => resolveSlots(barSlots, built), [barSlots, built]);
-  const menuItems = useMemo(
-    () => (menuSlots ? resolveSlots(menuSlots, built) : undefined),
-    [menuSlots, built],
-  );
+    const barItems = useMemo(() => resolveSlots(barSlots, built), [barSlots, built]);
+    const menuItems = useMemo(
+      () => (menuSlots ? resolveSlots(menuSlots, built) : undefined),
+      [menuSlots, built],
+    );
 
-  const items = useMemo(
-    () => barItems.filter((item) => !('disabled' in item && item.disabled)).map(stripHandleClick),
-    [barItems],
-  );
-  // An all-null menu (every slot's action opted out) must collapse to no menu —
-  // ActionIconGroup renders the overflow trigger for any truthy array, even [].
-  const menuStripped = useMemo(
-    () => (menuItems?.length ? menuItems.map(stripHandleClick) : undefined),
-    [menuItems],
-  );
+    const items = useMemo(
+      () => barItems.filter((item) => !('disabled' in item && item.disabled)).map(stripHandleClick),
+      [barItems],
+    );
+    // An all-null menu (every slot's action opted out) must collapse to no menu —
+    // ActionIconGroup renders the overflow trigger for any truthy array, even [].
+    const menuStripped = useMemo(
+      () => (menuItems?.length ? menuItems.map(stripHandleClick) : undefined),
+      [menuItems],
+    );
 
-  const allActions = useMemo(
-    () => buildActionsMap([...barItems, ...(menuItems ?? [])]),
-    [barItems, menuItems],
-  );
+    const allActions = useMemo(
+      () => buildActionsMap([...barItems, ...(menuItems ?? [])]),
+      [barItems, menuItems],
+    );
 
-  const handleAction = useCallback(
-    (event: ActionIconGroupEvent) => {
-      if (event.keyPath && event.keyPath.length > 1) {
-        const parentKey = event.keyPath.at(-1);
-        const childKey = event.keyPath[0];
-        const parent = allActions.get(parentKey!);
-        if (parent && 'children' in parent && parent.children) {
-          const child = parent.children.find((c) => c.key === childKey);
-          child?.handleClick?.();
-          return;
+    const handleAction = useCallback(
+      (event: ActionIconGroupEvent) => {
+        if (event.keyPath && event.keyPath.length > 1) {
+          const parentKey = event.keyPath.at(-1);
+          const childKey = event.keyPath[0];
+          const parent = allActions.get(parentKey!);
+          if (parent && 'children' in parent && parent.children) {
+            const child = parent.children.find((c) => c.key === childKey);
+            child?.handleClick?.();
+            return;
+          }
         }
-      }
-      const action = allActions.get(event.key);
-      action?.handleClick?.();
-    },
-    [allActions],
-  );
+        const action = allActions.get(event.key);
+        action?.handleClick?.();
+      },
+      [allActions],
+    );
 
-  const actionGroup = (
-    <ActionIconGroup items={items} menu={menuStripped} onActionClick={handleAction} />
-  );
+    const actionGroup = (
+      <ActionIconGroup items={items} menu={menuStripped} onActionClick={handleAction} />
+    );
 
-  if (!leading) return actionGroup;
+    if (!leading && !trailing) return actionGroup;
 
-  return (
-    <Block horizontal align={'center'} padding={2}>
-      {leading}
-      <ActionIconGroup
-        items={items}
-        menu={menuStripped}
-        padding={0}
-        style={{ background: 'transparent', border: 'none', borderRadius: 0, boxShadow: 'none' }}
-        variant={'borderless'}
-        onActionClick={handleAction}
-      />
-    </Block>
-  );
-});
+    return (
+      <Block horizontal align={'center'} padding={2}>
+        {leading}
+        <ActionIconGroup
+          items={items}
+          menu={menuStripped}
+          padding={0}
+          style={{ background: 'transparent', border: 'none', borderRadius: 0, boxShadow: 'none' }}
+          variant={'borderless'}
+          onActionClick={handleAction}
+        />
+        {trailing}
+      </Block>
+    );
+  },
+);
 
 MessageActionBar.displayName = 'MessageActionBar';
 

@@ -243,7 +243,7 @@ export default {
   'billing.personal': 'Personal',
   'billing.remaining': '{{amount}} left',
   'billing.selectHint':
-    'Each source has its own managed key and remaining credit. Switching only changes which balance the next chat uses.',
+    'Each source has its own balance. The selected source is charged on the next chat.',
   'billing.sourcesTitle': 'Billing sources',
   'billing.switchFailed': 'Could not switch billing source',
   'billing.switcherAria': 'Billing source {{label}}, {{remaining}} remaining',

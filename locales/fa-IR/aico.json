@@ -1,4 +1,12 @@
 {
+  "billing.organization": "سازمان",
+  "billing.personal": "شخصی",
+  "billing.remaining": "{{amount}} باقی‌مانده",
+  "billing.selectHint": "هر منبع موجودی و کلید جداگانه دارد. با انتخاب منبع، گفتگوی بعدی از همان موجودی کسر می‌شود.",
+  "billing.sourcesTitle": "منابع پرداخت",
+  "billing.switchFailed": "تغییر منبع پرداخت ناموفق بود",
+  "billing.switched": "در حال استفاده از اعتبار {{label}}",
+  "billing.switcherAria": "منبع پرداخت {{label}}، {{remaining}} باقی‌مانده",
   "errors.ALREADY_HAS_ORGANIZATION": "شما از قبل یک سازمان دارید.",
   "errors.BUDGET_EXCEEDED": "سهمیه‌ی شما تمام شده است.",
   "errors.BUDGET_NOT_FOUND": "سهمیه یافت نشد.",

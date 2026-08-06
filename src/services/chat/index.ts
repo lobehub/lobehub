@@ -500,9 +500,28 @@ class ChatService {
 
     // Managed OpenRouter/Aico chat must send an explicit billing context so the
     // server can pick the personal vs org key (credits are never pooled).
-    const { resolveAicoBillingForRequest } = await import('@/features/AicoBilling');
+    const { AICO_BILLING_SOURCES_SWR_KEY, resolveAicoBillingForRequest } =
+      await import('@/features/AicoBilling');
     const aicoBilling = await resolveAicoBillingForRequest(provider);
     const requestBody = aicoBilling ? { ...payload, aicoBilling } : payload;
+
+    const refreshBillingAfterFinish = aicoBilling
+      ? async () => {
+          const { mutate: globalMutate } = await import('@/libs/swr');
+          void globalMutate(AICO_BILLING_SOURCES_SWR_KEY);
+          void globalMutate('aico-my-wallet');
+        }
+      : undefined;
+
+    const onFinish: FetchSSEOptions['onFinish'] | undefined = refreshBillingAfterFinish
+      ? async (content, context) => {
+          try {
+            return await options?.onFinish?.(content, context);
+          } finally {
+            await refreshBillingAfterFinish();
+          }
+        }
+      : options?.onFinish;
 
     return fetchSSE(API_ENDPOINTS.chat(provider), {
       body: JSON.stringify(requestBody),
@@ -511,7 +530,7 @@ class ChatService {
       method: 'POST',
       onAbort: options?.onAbort,
       onErrorHandle: options?.onErrorHandle,
-      onFinish: options?.onFinish,
+      onFinish,
       onMessageHandle: options?.onMessageHandle,
       requestContext: {
         apiMode,

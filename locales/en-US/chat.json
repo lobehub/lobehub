@@ -632,6 +632,8 @@
   "messageAction.continueGeneration": "Continue Generating",
   "messageAction.continueGenerationUnsupported": "The current model doesn’t support continuing an assistant message. Try regenerating instead.",
   "messageAction.copyOperationId": "Copy Operation ID",
+  "messageAction.cost": "Cost",
+  "messageAction.cost": "Cost",
   "messageAction.delAndRegenerate": "Delete and Regenerate",
   "messageAction.deleteDisabledByThreads": "This message has a subtopic and can’t be deleted",
   "messageAction.expand": "Expand Message",

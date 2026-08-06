@@ -632,6 +632,8 @@
   "messageAction.continueGeneration": "继续生成",
   "messageAction.continueGenerationUnsupported": "当前模型不支持继续生成助理消息，请尝试重新生成。",
   "messageAction.copyOperationId": "复制 Operation ID",
+  "messageAction.cost": "费用",
+  "messageAction.cost": "费用",
   "messageAction.delAndRegenerate": "删除并重新生成",
   "messageAction.deleteDisabledByThreads": "该消息有子话题，无法删除",
   "messageAction.expand": "展开消息",

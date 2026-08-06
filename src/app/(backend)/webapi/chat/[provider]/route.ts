@@ -9,14 +9,11 @@ import type { LobeChatDatabase } from '@/database/type';
 import { createTraceOptions, initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import {
   AICO_BILLING_CONTEXT_HEADER,
+  type AicoBillingContext,
   decodeBillingContextHeader,
   parseAicoBillingContext,
-  type AicoBillingContext,
 } from '@/server/services/aico/billingContext';
-import {
-  AicoManagedPolicy,
-  AicoManagedPolicyError,
-} from '@/server/services/aico/managedPolicy';
+import { AicoManagedPolicy, AicoManagedPolicyError } from '@/server/services/aico/managedPolicy';
 import { AicoOpenRouterKeyService } from '@/server/services/openrouter/keyService';
 import { type ChatStreamPayload } from '@/types/openai/chat';
 import { createErrorResponse } from '@/utils/errorResponse';
@@ -53,6 +50,7 @@ const recordManagedUsage = async (params: {
 
   let orgId: string | null = null;
   let orgMemberId: string | null = null;
+  const keyService = new AicoOpenRouterKeyService(db);
 
   if (billing.source === 'organization') {
     orgId = billing.organizationId;
@@ -60,8 +58,11 @@ const recordManagedUsage = async (params: {
     const me = members.find((m) => m.userId === userId && m.status === 'active');
     if (me) {
       orgMemberId = me.id;
-      await new AicoOpenRouterKeyService(db).syncMemberUsage(me.id).catch(() => null);
+      await keyService.syncMemberUsage(me.id).catch(() => null);
     }
+  } else {
+    // Warm personal remaining from OpenRouter so the next sources fetch is current.
+    await keyService.getUserRemaining(userId).catch(() => null);
   }
 
   await new AicoBillingModel(db).recordUsage({

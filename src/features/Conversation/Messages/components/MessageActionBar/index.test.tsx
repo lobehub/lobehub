@@ -82,6 +82,25 @@ describe('MessageActionBar', () => {
     expect(actionGroup).toHaveStyle({ background: 'transparent', borderRadius: '0' });
   });
 
+  it('renders a trailing control inside the shared action container', () => {
+    permissionMock.canEdit = true;
+
+    render(
+      <MessageActionBar
+        bar={['edit', 'copy']}
+        trailing={<button>Cost</button>}
+        ctx={{
+          data: { content: 'hello', role: 'assistant' } as UIChatMessage,
+          id: 'message-1',
+          role: 'assistant',
+        }}
+      />,
+    );
+
+    const container = screen.getByTestId('action-container');
+    expect(container).toContainElement(screen.getByRole('button', { name: 'Cost' }));
+  });
+
   it('keeps read-only comments available to workspace viewers', () => {
     actionMocks.commentsAvailable = true;
     permissionMock.canEdit = false;
