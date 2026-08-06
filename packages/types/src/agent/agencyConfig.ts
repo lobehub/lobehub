@@ -141,9 +141,9 @@ const CODEX_FAST_SERVICE_TIER_VALUES = ['fast', 'priority'] as const;
  *   process on the desktop or a connected device; uses `command`, `args`, `env`,
  *   `systemContext`.
  *
- * - **Remote platform** (`openclaw` | `hermes`): dispatched to a machine
- *   connected via `lh connect`; device is identified by `LobeAgentAgencyConfig.boundDeviceId`.
- *   `platformAgentId` selects the named agent on the remote platform (defaults to `'main'`).
+ * - **Platform task** (`openclaw` | `hermes`): runs on this desktop when
+ *   `executionTarget` is `local`, or on a machine connected via `lh connect`
+ *   when it is `device`. `platformAgentId` selects the named platform agent.
  */
 export interface HeterogeneousProviderConfig {
   /** Additional CLI arguments for the agent command (local CLI only). */
@@ -606,11 +606,11 @@ export const buildHeteroExecArgs = (
  *               automatically; with several online the model selects one via the
  *               remote-device tool. The ONLY mode that touches a device the user
  *               did not explicitly select. Opt-in: never a silent default.
- * - `local`   : in-process spawn on the user's Electron desktop (desktop only)
+ * - `local`   : run on the user's Electron desktop (desktop only)
  * - `device`  : dispatched to an `lh connect` device identified by `boundDeviceId`
  * - `sandbox` : server-spawned cloud sandbox
  *
- * Remote hetero agents (`openclaw` | `hermes`) are always `device`.
+ * Platform task agents (`openclaw` | `hermes`) support `local` and `device` targets.
  */
 export type DeviceExecutionTarget = 'auto' | 'device' | 'local' | 'none' | 'sandbox';
 
@@ -640,14 +640,12 @@ export type AgentModelSelectionPolicy = 'fixed' | 'member';
 export interface LobeAgentAgencyConfig {
   /**
    * Device ID of the machine connected via `lh connect`.
-   * Required when `executionTarget === 'device'` (and always set for remote
-   * hetero agents `openclaw` / `hermes`).
+   * Required when `executionTarget === 'device'`.
    */
   boundDeviceId?: string;
   /**
    * Execution target for the hetero agent. When omitted, resolves to a
-   * platform default: `'local'` on desktop, `'none'` on web (or `'device'` for
-   * remote hetero providers).
+   * platform default: `'local'` on desktop and `'none'` on web.
    */
   executionTarget?: DeviceExecutionTarget;
   /**

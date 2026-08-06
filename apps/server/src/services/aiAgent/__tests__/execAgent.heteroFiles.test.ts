@@ -7,6 +7,7 @@ const {
   mockDeviceFindWorkspaceDeviceById,
   mockBuildRemoteDeviceHeteroContext,
   mockDispatchAgentRun,
+  mockExecuteToolCall,
   mockGetHeterogeneousResumeSessionId,
   mockMessageCreate,
   mockResolveAttachmentsByFileIds,
@@ -19,6 +20,7 @@ const {
   mockDeviceFindByDeviceId: vi.fn(),
   mockDeviceFindWorkspaceDeviceById: vi.fn(),
   mockDispatchAgentRun: vi.fn().mockResolvedValue({ success: true }),
+  mockExecuteToolCall: vi.fn().mockResolvedValue({ success: true }),
   mockGetHeterogeneousResumeSessionId: vi.fn().mockResolvedValue(undefined),
   mockIngestAttachment: vi.fn(),
   mockMessageCreate: vi.fn(),
@@ -187,6 +189,7 @@ vi.mock('@/server/modules/Mecha', () => ({
 vi.mock('@/server/services/deviceGateway', () => ({
   deviceGateway: {
     dispatchAgentRun: mockDispatchAgentRun,
+    executeToolCall: mockExecuteToolCall,
     isConfigured: false,
     queryDeviceList: vi.fn().mockResolvedValue([]),
     resolveDeviceWorkspaceId: vi.fn().mockResolvedValue(undefined),
@@ -211,6 +214,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     mockResolveAttachmentsByFileIds.mockResolvedValue({ ...emptyResolvedAttachments });
     mockSpawnHeteroSandbox.mockResolvedValue(undefined);
     mockDispatchAgentRun.mockResolvedValue({ success: true });
+    mockExecuteToolCall.mockResolvedValue({ success: true });
     mockGetHeterogeneousResumeSessionId.mockResolvedValue(undefined);
     mockDeviceFindByDeviceId.mockResolvedValue({ defaultCwd: '/Users/alice/repo' });
     mockDeviceFindWorkspaceDeviceById.mockResolvedValue(undefined);
@@ -218,6 +222,9 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     heteroAgentConfig.agencyConfig = { heterogeneousProvider: { type: 'claude-code' } } as any;
     heteroAgentConfig.model = 'claude-code';
     heteroAgentConfig.provider = 'anthropic';
+    delete (heteroAgentConfig as any).userId;
+    delete (heteroAgentConfig as any).visibility;
+    delete (heteroAgentConfig as any).workspaceId;
 
     service = new AiAgentService(mockDb, userId);
   });
@@ -731,6 +738,47 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       expect(mockPublishAgentRuntimeInit).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({ heteroType: 'claude-code' }),
+      );
+    });
+
+    it('keeps the conversation workspace separate from a personal platform device scope', async () => {
+      heteroAgentConfig.agencyConfig = {
+        executionTarget: 'local',
+        heterogeneousProvider: { type: 'openclaw' },
+      } as any;
+      (heteroAgentConfig as any).userId = userId;
+      (heteroAgentConfig as any).visibility = 'public';
+      (heteroAgentConfig as any).workspaceId = 'workspace-a';
+      service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-a' });
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        localDeviceId: 'personal-desktop',
+        prompt: 'do the task on this computer',
+      } as any);
+
+      expect(mockExecuteToolCall).toHaveBeenCalledWith(
+        {
+          deviceId: 'personal-desktop',
+          userId,
+          workspaceId: undefined,
+        },
+        expect.objectContaining({
+          apiName: 'runHeteroTask',
+          arguments: expect.any(String),
+        }),
+        120_000,
+      );
+      const toolCall = mockExecuteToolCall.mock.calls.at(-1)?.[1];
+      expect(JSON.parse(toolCall.arguments)).toEqual(
+        expect.objectContaining({
+          agentType: 'openclaw',
+          workspaceId: 'workspace-a',
+        }),
+      );
+      const seed = findRunningOpSeed();
+      expect(seed.runningOperation).toEqual(
+        expect.objectContaining({ deviceId: 'personal-desktop', heteroType: 'openclaw' }),
       );
     });
   });

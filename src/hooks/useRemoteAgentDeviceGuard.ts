@@ -19,7 +19,7 @@ interface UseRemoteAgentDeviceGuardResult {
 }
 
 /**
- * Checks whether the bound device is online and, for remote-only hetero
+ * Checks whether the bound device is online and, for notify-based hetero
  * platforms, whether that platform is available on the device. Used in
  * HeterogeneousChatInput before device-dispatched hetero runs.
  */
