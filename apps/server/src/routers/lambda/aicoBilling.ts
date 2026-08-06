@@ -91,10 +91,18 @@ export const aicoBillingRouter = router({
    * settled usage from OpenRouter when a managed key exists.
    */
   getMyBillingSources: billingProcedure.query(async ({ ctx }) => {
-    const [wallet, orgs] = await Promise.all([
+    const [wallet, orgs, trialConfig, trialRow, trialActiveRaw] = await Promise.all([
       ctx.billingModel.getOrCreateUserWallet(ctx.userId),
       ctx.organizationModel.listForUser(ctx.userId),
+      ctx.billingModel.getTrialConfig(),
+      ctx.billingModel.getUserTrial(ctx.userId),
+      ctx.billingModel.isTrialActive(ctx.userId),
     ]);
+
+    // Same gate as getMyTrial / managed policy — never advertise a trial chat cannot use.
+    const trialEnabled = !isProduction() && aicoEnv.AICO_ALLOW_TRIAL && trialConfig.enabled;
+    const trialActive = trialEnabled && trialActiveRaw;
+    const trialAvailable = trialEnabled && !trialRow;
 
     const keyService = ctx.keyService;
     const personalRemaining = (
@@ -154,6 +162,8 @@ export const aicoBillingRouter = router({
       preferredBillingSource: wallet.preferredBillingSource as 'personal' | 'organization',
       preferredOrganizationId: wallet.preferredOrganizationId,
       sources: [personal, ...organizationSources],
+      trialActive,
+      trialAvailable,
     };
   }),
 

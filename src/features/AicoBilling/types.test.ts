@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   type AicoBillingSource,
   billingContextKey,
+  canChatWithBillingSource,
   findBillingSource,
   formatRemainingUsd,
+  getBillingChatBlockReason,
   isSameBillingContext,
   preferenceToBillingContext,
 } from './types';
@@ -96,5 +98,55 @@ describe('AicoBilling types helpers', () => {
   it('formatRemainingUsd formats decimal strings', () => {
     expect(formatRemainingUsd('12.5')).toBe('$12.50');
     expect(formatRemainingUsd(undefined)).toBe('$0.00');
+  });
+
+  describe('getBillingChatBlockReason / canChatWithBillingSource', () => {
+    const emptyPersonal: AicoBillingSource = {
+      hasManagedKey: true,
+      isActive: true,
+      remainingMicroUsd: '0',
+      remainingUsd: '0.000000',
+      source: 'personal',
+    };
+
+    it('blocks personal $0 without trial', () => {
+      expect(getBillingChatBlockReason(emptyPersonal, { trialActive: false })).toBe(
+        'PERSONAL_FUNDS_UNAVAILABLE',
+      );
+      expect(canChatWithBillingSource(emptyPersonal, { trialActive: false })).toBe(false);
+    });
+
+    it('allows personal $0 when trial is active and key exists', () => {
+      expect(getBillingChatBlockReason(emptyPersonal, { trialActive: true })).toBeNull();
+      expect(canChatWithBillingSource(emptyPersonal, { trialActive: true })).toBe(true);
+    });
+
+    it('blocks personal $0 trial without managed key', () => {
+      const noKey = { ...emptyPersonal, hasManagedKey: false };
+      expect(getBillingChatBlockReason(noKey, { trialActive: true })).toBe(
+        'MANAGED_KEY_UNAVAILABLE',
+      );
+    });
+
+    it('blocks org $0 even when trial is active', () => {
+      const emptyOrg: AicoBillingSource = {
+        hasManagedKey: true,
+        isActive: true,
+        organizationId: 'org-1',
+        organizationName: 'Acme',
+        remainingMicroUsd: '0',
+        remainingUsd: '0.000000',
+        renewalBlocked: false,
+        source: 'organization',
+      };
+      expect(getBillingChatBlockReason(emptyOrg, { trialActive: true })).toBe(
+        'MEMBER_BUDGET_UNFUNDED',
+      );
+    });
+
+    it('allows funded sources', () => {
+      expect(canChatWithBillingSource(sources[0], { trialActive: false })).toBe(true);
+      expect(canChatWithBillingSource(sources[1], { trialActive: false })).toBe(true);
+    });
   });
 });

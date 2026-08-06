@@ -18,12 +18,19 @@ export default {
   'errors.managedKey.description':
     'Top up your wallet or use organization credit so a managed key can be provisioned. You do not need to enter a provider API key.',
   'errors.managedKey.title': '{{brandName}} uses managed API keys',
+  'errors.MEMBER_BUDGET_INACTIVE': 'Your organization member budget is inactive.',
+  'errors.MEMBER_BUDGET_RENEWAL_BLOCKED':
+    'Organization budget renewal is pending or failed — chat is blocked until it completes.',
+  'errors.MEMBER_BUDGET_UNFUNDED': 'The selected organization budget has no remaining credit.',
   'errors.MEMBER_NOT_FOUND': 'Member not found.',
   'errors.MOCK_TOPUP_DISABLED': 'Mock topup is disabled in this environment.',
   'errors.MODEL_NOT_ALLOWED': 'You do not have access to this model.',
   'errors.ORG_NOT_ACTIVE': 'This organization is inactive or suspended.',
   'errors.ORG_NOT_FOUND': 'Organization not found.',
   'errors.ORG_WALLET_EMPTY': 'Organization wallet balance is insufficient.',
+  'errors.PERSONAL_FUNDS_UNAVAILABLE':
+    'Your personal wallet has no remaining credit. Top up or start a free trial.',
+  'errors.PERSONAL_WALLET_INACTIVE': 'Your personal wallet is inactive.',
   'errors.PHONE_VERIFICATION_REQUIRED': 'Please verify your phone number to continue.',
   'errors.verifyPhoneAction': 'Verify phone',
   'errors.TEAM_NOT_FOUND': 'Team not found.',
@@ -248,6 +255,11 @@ export default {
   'billing.switchFailed': 'Could not switch billing source',
   'billing.switcherAria': 'Billing source {{label}}, {{remaining}} remaining',
   'billing.switched': 'Using {{label}} credits',
+  'billing.fundsBlocked.title': 'Cannot chat with this billing source',
+  'billing.fundsBlocked.descWithTrial':
+    'Your personal wallet has no remaining credit. Top up your wallet or start a free trial.',
+  'billing.fundsBlocked.goWallet': 'Go to wallet',
+  'billing.fundsBlocked.startTrial': 'Start free trial',
 
   'wallet.amountToman': 'Amount (toman)',
   'wallet.amountUsd': 'Amount (USD)',
