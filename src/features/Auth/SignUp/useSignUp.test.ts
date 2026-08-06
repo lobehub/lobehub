@@ -25,7 +25,7 @@ vi.mock('@/libs/better-auth/auth-client', () => ({
 }));
 
 vi.mock('@lobechat/business-const', () => ({
-  BRANDING_NAME: 'Aico',
+  BRANDING_NAME: 'Panachat',
 }));
 
 vi.mock('@/business/client/hooks/useBusinessSignup', () => ({

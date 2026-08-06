@@ -14,7 +14,7 @@
   "features.groupChat.title": "Discussion de groupe (multi-agents)",
   "features.heteroSessionImport.desc": "Ajoutez une entrée \"Importer les sessions d'agent local\" au menu de la liste des sujets : analysez les transcriptions locales de Claude Code / Codex CLI et importez-les comme sujets, avec une synchronisation incrémentielle lors de la réimportation.",
   "features.heteroSessionImport.title": "Importation de sessions d'agent local",
-  "features.imessage.desc": "Connecter les agents à iMessage via le pont local LobeHub Desktop BlueBubbles.",
+  "features.imessage.desc": "Connecter les agents à iMessage via le pont local Panachat Desktop BlueBubbles.",
   "features.imessage.title": "Canal iMessage",
   "features.inAppBrowser.desc": "Afficher l'onglet Navigateur dans le panneau latéral de la conversation : un navigateur intégré qui ouvre les résultats de recherche sur place et permet aux agents de naviguer de manière visible.",
   "features.inAppBrowser.title": "Navigateur intégré",

@@ -1,4 +1,4 @@
-import { BRANDING_LOGO_URL, BRANDING_NAME } from '@lobechat/business-const';
+import { BRANDING_LOGO_URL, getLocalizedBrandingName } from '@lobechat/business-const';
 import { type IconType } from '@lobehub/icons';
 import { type FlexboxProps } from '@lobehub/ui';
 import { Flexbox } from '@lobehub/ui';
@@ -6,6 +6,7 @@ import { type LobeChatProps } from '@lobehub/ui/brand';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { type ImageProps } from '@/libs/next/Image';
 import Image from '@/libs/next/Image';
@@ -19,7 +20,14 @@ const styles = createStaticStyles(({ css }) => {
   };
 });
 
+const useBrandName = () => {
+  const { i18n } = useTranslation();
+  return getLocalizedBrandingName(i18n.language);
+};
+
 const CustomTextLogo = memo<FlexboxProps & { size: number }>(({ size, style, ...rest }) => {
+  const brandName = useBrandName();
+
   return (
     <Flexbox
       height={size}
@@ -31,16 +39,18 @@ const CustomTextLogo = memo<FlexboxProps & { size: number }>(({ size, style, ...
       }}
       {...rest}
     >
-      {BRANDING_NAME}
+      {brandName}
     </Flexbox>
   );
 });
 
 const CustomImageLogo = memo<Omit<ImageProps, 'alt' | 'src'> & { size: number }>(
   ({ size, ...rest }) => {
+    const brandName = useBrandName();
+
     return (
       <Image
-        alt={BRANDING_NAME}
+        alt={brandName}
         height={size}
         src={BRANDING_LOGO_URL}
         unoptimized={true}

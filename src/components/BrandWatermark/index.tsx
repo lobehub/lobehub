@@ -1,11 +1,12 @@
 'use client';
 
-import { ORG_NAME, UTM_SOURCE } from '@lobechat/business-const';
+import { getLocalizedOrgName, UTM_SOURCE } from '@lobechat/business-const';
 import { type FlexboxProps } from '@lobehub/ui';
 import { Flexbox } from '@lobehub/ui';
 import { LobeHub } from '@lobehub/ui/brand';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { OFFICIAL_SITE } from '@/const/url';
 import { isCustomORG } from '@/const/version';
@@ -22,6 +23,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 const BrandWatermark = memo<Omit<FlexboxProps, 'children'>>(({ style, ...rest }) => {
+  const { i18n } = useTranslation();
+  const orgName = getLocalizedOrgName(i18n.language);
+
   return (
     <Flexbox
       horizontal
@@ -34,7 +38,7 @@ const BrandWatermark = memo<Omit<FlexboxProps, 'children'>>(({ style, ...rest })
     >
       <span>Powered by</span>
       {isCustomORG ? (
-        <span>{ORG_NAME}</span>
+        <span>{orgName}</span>
       ) : (
         <a
           className={styles.logoLink}

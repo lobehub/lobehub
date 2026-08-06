@@ -5,7 +5,7 @@
   "action.connect.short": "Connecter",
   "action.connecting": "En attente d'autorisation…",
   "action.create.error": "Échec de la création de la tâche. Veuillez réessayer.",
-  "action.create.success": "Tâche planifiée ajoutée. Retrouvez-la dans Lobe AI.",
+  "action.create.success": "Tâche planifiée ajoutée. Retrouvez-la dans Panachat AI.",
   "action.createButton": "Ajouter une tâche",
   "action.creating": "Création en cours...",
   "action.dismiss.error": "Échec de la suppression. Veuillez réessayer.",

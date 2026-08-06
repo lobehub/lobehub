@@ -266,7 +266,7 @@ export default {
   'wallet.mockTopup': 'Mock topup',
   'wallet.provider': 'AI provider',
   'wallet.subtitle': 'Your USD wallet. Managed keys stay server-side.',
-  'wallet.title': 'Aico wallet',
+  'wallet.title': 'Panachat wallet',
   'wallet.topupFailed': 'Topup failed',
   'wallet.topupSubmit': 'Complete mock purchase',
   'wallet.topupSuccess': 'Credited {{toman}} toman (≈ ${{usd}})',

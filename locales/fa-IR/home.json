@@ -96,7 +96,7 @@
   "project.create": "پروژه جدید",
   "project.deleteConfirm": "این پروژه حذف خواهد شد و امکان بازیابی آن وجود ندارد. برای ادامه تأیید کنید.",
   "recommendations.heteroAgent.cta": "افزودن ایجنت",
-  "recommendations.heteroAgent.description": "CLI {{name}} در این دستگاه شناسایی شد — ایجنت {{name}} را اضافه کنید تا از Aico با آن گفتگو کنید.",
+  "recommendations.heteroAgent.description": "CLI {{name}} در این دستگاه شناسایی شد — ایجنت {{name}} را اضافه کنید تا از پاناچت با آن گفتگو کنید.",
   "recommendations.heteroAgent.tag": "ایجنت کدنویسی",
   "recommendations.heteroAgent.title": "افزودن ایجنت {{name}}",
   "recommendations.subtitle": "برخی پیشنهادات برای تنظیمات شما",

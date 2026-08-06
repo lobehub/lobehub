@@ -1028,7 +1028,7 @@ export default {
   'settingSelfIteration.enabled.desc':
     'Allow this assistant to review recent signals and improve its own skills when the self-iteration workflow runs.',
   'settingSelfIteration.enabled.managedDesc':
-    'Always on for Lobe AI while Self-Iteration is available.',
+    'Always on for Panachat AI while Self-Iteration is available.',
   'settingSelfIteration.enabled.title': 'Enable Self-Iteration',
   'settingSelfIteration.title': 'Self-Iteration',
   'settingsSearch.empty': 'No settings found for "{{keyword}}"',
@@ -2333,7 +2333,7 @@ When I am ___, I need ___
   'workspace.general.copyLobeAI.modal.copyOptions.title': 'Copy options',
   'workspace.general.copyLobeAI.modal.copyOptions.unsupported': 'Unavailable',
   'workspace.general.copyLobeAI.modal.create': 'Copy {{count}} agent(s)',
-  'workspace.general.copyLobeAI.modal.defaultInboxTitle': 'LobeAI',
+  'workspace.general.copyLobeAI.modal.defaultInboxTitle': 'Panachat AI',
   'workspace.general.copyLobeAI.modal.done': 'Done',
   'workspace.general.copyLobeAI.modal.failed': 'Failed to copy agents',
   'workspace.general.copyLobeAI.modal.goToTarget': 'Go to {{target}}',
@@ -2538,7 +2538,7 @@ When I am ___, I need ___
   'workspace.waitlistPage.enabledSubtitle': 'Workspace is already enabled for your account.',
   'workspace.waitlistPage.enabledTitle': 'Workspace is ready for you',
   'workspace.waitlistPage.entryCta': 'Join Workspace Beta',
-  'workspace.waitlistPage.goHome': 'Back to LobeHub',
+  'workspace.waitlistPage.goHome': 'Back to Panachat',
   'workspace.waitlistPage.organizationLabel': 'Organization / Group (optional)',
   'workspace.waitlistPage.organizationPlaceholder': 'Company, school, or family…',
   'workspace.waitlistPage.pendingSubtitle':
@@ -2845,15 +2845,15 @@ When I am ___, I need ___
   'workspace.onboarding.toast.failed': 'Could not save. Please try again.',
   'workspace.onboarding.toast.installAgentsFailed':
     "Couldn't add the selected agents. You can install them later from the marketplace.",
-  'workspace.onboarding.step1.heading': 'Personalize LobeAI',
+  'workspace.onboarding.step1.heading': 'Personalize Panachat AI',
   'workspace.onboarding.step1.subtitle':
     'Give your workspace assistant an identity your team will recognize.',
   'workspace.onboarding.step1.avatarLabel': 'Avatar',
   'workspace.onboarding.step1.avatarHint': 'Pick an emoji or upload an image.',
   'workspace.onboarding.step1.avatarTooLarge': 'Avatar file must be smaller than 5MB.',
   'workspace.onboarding.step1.avatarUploadFailed': 'Failed to upload avatar',
-  'workspace.onboarding.step1.nameLabel': "LobeAI's name",
-  'workspace.onboarding.step1.namePlaceholder': 'e.g. LobeAI',
+  'workspace.onboarding.step1.nameLabel': "Panachat AI's name",
+  'workspace.onboarding.step1.namePlaceholder': 'e.g. Panachat AI',
   'workspace.onboarding.step1.suggestion.title': 'Need ideas? Pick one to start.',
   'workspace.onboarding.step1.suggestion.switch': 'Try another set',
   'workspace.onboarding.step1.guide.name.title': 'Give It a Name',

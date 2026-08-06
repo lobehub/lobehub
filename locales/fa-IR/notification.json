@@ -18,8 +18,8 @@
   "email.footer.contactSupport": "تماس با پشتیبانی",
   "email.footer.joinDiscord": "به دیسکورد بپیوندید",
   "email.footer.manage": "مدیریت اعلان‌ها",
-  "email.footer.preference": "شما این ایمیل را به دلیل تنظیمات اعلان‌های خود در Aico دریافت کرده‌اید.",
-  "email.footer.system": "این یک اعلان مهم حساب از Aico است.",
+  "email.footer.preference": "شما این ایمیل را به دلیل تنظیمات اعلان‌های خود در پاناچت دریافت کرده‌اید.",
+  "email.footer.system": "این یک اعلان مهم حساب از پاناچت است.",
   "email.viewDetails": "مشاهده جزئیات",
   "image_generation_completed": "تصویر شما با موضوع «{{prompt}}» آماده است.",
   "image_generation_completed_title": "تولید تصویر تکمیل شد",
@@ -78,6 +78,6 @@
   "workspace_primary_ownership_transferred_title": "شما اکنون مالک اصلی {{workspaceName}} هستید",
   "workspace_subscription_expired": "اشتراک فضای کاری \"{{workspaceName}}\" به پایان رسیده است. ظرف {{days}} روز تمدید کنید تا دسترسی کامل بازیابی شود، در غیر این صورت فضای کاری کاهش سطح خواهد یافت.",
   "workspace_subscription_expired_title": "اشتراک برای {{workspaceName}} به پایان رسید",
-  "workspace_waitlist_approved": "دسترسی بتای Workspace شما آماده است. به LobeHub بروید تا اولین Workspace خود را ایجاد کرده و تیم خود را دعوت کنید.",
+  "workspace_waitlist_approved": "دسترسی بتای Workspace شما آماده است. به پاناچت بروید تا اولین Workspace خود را ایجاد کرده و تیم خود را دعوت کنید.",
   "workspace_waitlist_approved_title": "دسترسی بتای Workspace تأیید شد"
 }

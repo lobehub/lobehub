@@ -1,5 +1,6 @@
 'use client';
 
+import { BRANDING_NAME } from '@lobechat/business-const';
 import { Block, Flexbox, Tag, Text } from '@lobehub/ui';
 import { Button, toast } from '@lobehub/ui/base-ui';
 import { Form, Table } from 'antd';
@@ -142,7 +143,7 @@ export const AicoWallet = () => {
             description: wallet?.hasManagedKey
               ? t('wallet.keyProvisioned')
               : t('wallet.keyPending'),
-            value: providerStatus?.brandName ?? 'Aico',
+            value: providerStatus?.brandName ?? BRANDING_NAME,
           }}
         />
       </div>

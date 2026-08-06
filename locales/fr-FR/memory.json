@@ -10,7 +10,7 @@
   "activity.notes": "Notes",
   "analysis.action.button": "Demander une analyse des souvenirs",
   "analysis.modal.cancel": "Annuler",
-  "analysis.modal.helper": "Par défaut, Lobe AI analysera toutes les conversations non traitées. Il est possible de sélectionner une plage de dates à analyser.",
+  "analysis.modal.helper": "Par défaut, Panachat AI analysera toutes les conversations non traitées. Il est possible de sélectionner une plage de dates à analyser.",
   "analysis.modal.rangePlaceholder": "Aucune plage sélectionnée ; toutes les conversations seront analysées.",
   "analysis.modal.rangeSelected": "Analyse des conversations du {{start}} au {{end}}",
   "analysis.modal.submit": "Demander une analyse des souvenirs",

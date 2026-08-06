@@ -252,7 +252,7 @@
   "wallet.previewUsd": "معادل فعلی: ${{usd}}",
   "wallet.provider": "ارائه‌دهنده هوش مصنوعی",
   "wallet.subtitle": "کیف پول دلاری شما. کلیدهای مدیریت‌شده سمت سرور می‌مانند.",
-  "wallet.title": "کیف پول Aico",
+  "wallet.title": "کیف پول پاناچت",
   "wallet.topupFailed": "شارژ ناموفق بود",
   "wallet.topupSubmit": "تکمیل خرید آزمایشی",
   "wallet.topupSuccess": "{{toman}} تومان واریز شد (≈ ${{usd}})",
