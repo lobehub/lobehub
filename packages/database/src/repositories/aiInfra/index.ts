@@ -165,7 +165,11 @@ export class AiInfraRepos {
             const mergedModel = {
               ...item,
               abilities: !isEmpty(user.abilities) ? user.abilities : item.abilities || {},
-              config: !isEmpty(user.config) ? user.config : item.config,
+              // Deep-merge instead of replacing: a user row holding only a
+              // reasoning preference (`config.chatConfig`) must not drop the
+              // builtin card's `config.deploymentName` (Azure/Volcengine-style
+              // providers resolve the request model from it)
+              config: !isEmpty(user.config) ? merge(item.config || {}, user.config) : item.config,
               contextWindowTokens:
                 typeof user.contextWindowTokens === 'number'
                   ? user.contextWindowTokens
