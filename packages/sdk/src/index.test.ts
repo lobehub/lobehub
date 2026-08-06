@@ -64,6 +64,25 @@ describe('createLobeHub', () => {
     expect(requests[0].url).toBe(`${DEFAULT_BASE_URL}/api/v1/agents/agt_123`);
   });
 
+  it('preserves per-call Headers instances and tuple arrays on write methods', async () => {
+    const { fetch, requests } = captureFetch();
+    const lobehub = createLobeHub({ apiKey: 'sk-lh-test', fetch });
+
+    await lobehub.agentGroups.create({
+      body: { name: 'group' },
+      headers: new Headers([['X-Trace', '1']]),
+    });
+    await lobehub.agents.create({
+      body: { systemRole: 'r', title: 't' },
+      headers: [['X-Tuple', '2']],
+    });
+
+    expect(requests[0].headers.get('x-trace')).toBe('1');
+    expect(requests[0].headers.get('content-type')).toBe('application/json');
+    expect(requests[1].headers.get('x-tuple')).toBe('2');
+    expect(requests[1].headers.get('content-type')).toBe('application/json');
+  });
+
   it('keeps client instances isolated between SDK instances', async () => {
     const a = captureFetch();
     const b = captureFetch();

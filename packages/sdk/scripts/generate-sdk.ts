@@ -10,7 +10,7 @@
  *   bun scripts/generate-sdk.ts          # regenerate src/generated
  *   bun scripts/generate-sdk.ts --check  # verify src/generated is up to date
  */
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -20,6 +20,37 @@ import config from '../openapi-ts.config';
 
 const PKG_ROOT = path.join(import.meta.dirname, '..');
 const OUTPUT_DIR = path.join(PKG_ROOT, 'src', 'generated');
+
+/**
+ * hey-api's generated write methods merge caller headers with an object
+ * spread (`{ 'Content-Type': …, ...options.headers }`), which silently drops
+ * `Headers` instances and corrupts tuple arrays — both allowed by the
+ * `HeadersInit` type. Rewrite the spread to the client's own `mergeHeaders`,
+ * which normalizes every HeadersInit shape. Applied identically in generate
+ * and --check modes, so the byte-level comparison is unaffected.
+ * (Upstream: generator template flaw in @hey-api/openapi-ts 0.99.)
+ */
+const rewriteHeaderSpreads = (dir: string) => {
+  const sdkPath = path.join(dir, 'sdk.gen.ts');
+  const source = readFileSync(sdkPath, 'utf8');
+  const rewritten = source
+    .replaceAll(
+      /headers: \{\s*'Content-Type': ('application\/json'|null),\s*\.\.\.options\.headers\s*\}/g,
+      // Array.isArray guard: mergeHeaders reads plain objects via Object.entries,
+      // which turns a tuple array into numeric keys — normalize tuples first.
+      "headers: mergeHeaders({ 'Content-Type': $1 }, Array.isArray(options.headers) ? new Headers(options.headers) : options.headers)",
+    )
+    .replace(
+      'import { type Client, type ClientMeta, formDataBodySerializer,',
+      'import { type Client, type ClientMeta, formDataBodySerializer, mergeHeaders,',
+    );
+  if (rewritten === source || !rewritten.includes('mergeHeaders,')) {
+    throw new Error(
+      'rewriteHeaderSpreads: expected generated header-spread pattern not found — check the generator output against the rewrite rules.',
+    );
+  }
+  writeFileSync(sdkPath, rewritten);
+};
 
 const listFiles = (dir: string, base = dir): string[] =>
   readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -33,6 +64,7 @@ if (process.argv.includes('--check')) {
   const tempDir = mkdtempSync(path.join(tmpdir(), 'lobehub-sdk-check-'));
   try {
     await createClient({ ...config, logs: { level: 'silent' }, output: tempDir });
+    rewriteHeaderSpreads(tempDir);
 
     const expected = listFiles(tempDir).sort();
     const committed = listFiles(OUTPUT_DIR).sort();
@@ -57,5 +89,6 @@ if (process.argv.includes('--check')) {
 } else {
   rmSync(OUTPUT_DIR, { force: true, recursive: true });
   await createClient(config);
+  rewriteHeaderSpreads(OUTPUT_DIR);
   console.log(`✓ Generated ${path.relative(PKG_ROOT, OUTPUT_DIR)} from openapi.yml`);
 }
