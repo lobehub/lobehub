@@ -1088,5 +1088,44 @@ describe('AiInfraRepos', () => {
         units: [{ name: 'textInput', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' }],
       });
     });
+
+    it('should exclude free models marked by :free id or (free) display name', async () => {
+      const mockProviders = [
+        {
+          enabled: true,
+          id: 'openrouter',
+          name: 'OpenRouter',
+          sort: 1,
+          source: 'builtin' as const,
+        },
+      ];
+
+      vi.spyOn(repo, 'getAiProviderList').mockResolvedValue(mockProviders);
+      vi.spyOn(repo.aiModelModel, 'getAllModels').mockResolvedValue([]);
+      vi.spyOn(repo as any, 'fetchBuiltinModels').mockResolvedValue([
+        {
+          displayName: 'Llama 3.3 70B Instruct',
+          enabled: true,
+          id: 'meta-llama/llama-3.3-70b-instruct:free',
+          type: 'chat' as const,
+        },
+        {
+          displayName: 'Gemma 2 9B (free)',
+          enabled: true,
+          id: 'google/gemma-2-9b-it',
+          type: 'chat' as const,
+        },
+        {
+          displayName: 'GPT-4o',
+          enabled: true,
+          id: 'openai/gpt-4o',
+          type: 'chat' as const,
+        },
+      ]);
+
+      const result = await repo.getEnabledModels();
+
+      expect(result.map((m) => m.id)).toEqual(['openai/gpt-4o']);
+    });
   });
 });

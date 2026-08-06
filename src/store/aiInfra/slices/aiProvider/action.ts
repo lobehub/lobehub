@@ -11,7 +11,7 @@ import type {
   ModelParamsSchema,
   Pricing,
 } from 'model-bank';
-import { isAiModelVisible } from 'model-bank/aiModel';
+import { isAiModelVisible, isFreeAiModel } from 'model-bank/aiModel';
 import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
@@ -124,7 +124,11 @@ const createProviderModelCollector = (
 ) => {
   return async (enabledAiModels: EnabledAiModel[], providerId: string) => {
     const filteredModels = enabledAiModels.filter(
-      (model) => model.providerId === providerId && model.type === type && isAiModelVisible(model),
+      (model) =>
+        model.providerId === providerId &&
+        model.type === type &&
+        isAiModelVisible(model) &&
+        !isFreeAiModel(model),
     );
 
     if (!filteredModels.length) return [];
