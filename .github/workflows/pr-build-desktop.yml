@@ -245,6 +245,8 @@ jobs:
         id: baseline_run
         uses: actions/github-script@v8
         with:
+          # github-script JSON-encodes return values by default; we need the raw run id string
+          result-encoding: string
           script: |
             const finder = require('${{ github.workspace }}/.github/scripts/find-size-baseline.cjs');
             return await finder({ github, context, workflowId: 'release-desktop-canary.yml', artifactPrefix: 'asar-size-baseline-' });
@@ -290,6 +292,7 @@ jobs:
               title: 'Desktop ASAR',
               report,
               failed: ${{ steps.asar_size_check.outcome == 'failure' }},
+              identifier: 'asar',
             });
 
   # 合并 macOS 多架构 latest-mac.yml 文件

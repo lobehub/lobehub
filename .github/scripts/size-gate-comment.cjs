@@ -3,13 +3,18 @@
  * Follows the same identifier-based update-or-create pattern as pr-comment.js.
  *
  * Usage (inside actions/github-script):
- *   const comment = require('<workspace>/.github/scripts/size-gate-comment.js');
- *   await comment({ github, context, title: 'Web Bundle Size (dist)', report, failed });
+ *   const comment = require('<workspace>/.github/scripts/size-gate-comment.cjs');
+ *   await comment({ github, context, title: 'Web dist', report, failed, identifier: 'web' });
+ *
+ * `identifier` keeps one comment per gate: the web (e2e) and desktop (asar)
+ * workflows run independently on the same PR and must not overwrite each other.
  */
-const COMMENT_IDENTIFIER = '<!-- SIZE-GATE-COMMENT -->';
+const sizeGateComment = async ({ github, context, title, report, failed, identifier }) => {
+  if (!identifier)
+    throw new Error('sizeGateComment requires an `identifier` (e.g. "web" | "asar")');
+  const commentIdentifier = `<!-- SIZE-GATE-COMMENT-${identifier} -->`;
 
-const sizeGateComment = async ({ github, context, title, report, failed }) => {
-  const body = `${COMMENT_IDENTIFIER}
+  const body = `${commentIdentifier}
 ### ${failed ? '❌' : '✅'} Bundle Size Gate — ${title}
 
 ${report}
@@ -23,7 +28,7 @@ ${report}
     repo: context.repo.repo,
   });
 
-  const existing = comments.find((comment) => comment.body.includes(COMMENT_IDENTIFIER));
+  const existing = comments.find((comment) => comment.body.includes(commentIdentifier));
 
   if (existing) {
     await github.rest.issues.updateComment({

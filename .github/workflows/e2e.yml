@@ -99,6 +99,8 @@ jobs:
         id: baseline_run
         uses: actions/github-script@v8
         with:
+          # github-script JSON-encodes return values by default; we need the raw run id string
+          result-encoding: string
           script: |
             const finder = require('${{ github.workspace }}/.github/scripts/find-size-baseline.cjs');
             return await finder({ github, context, workflowId: 'e2e.yml', artifactName: 'bundle-size-baseline-web' });
@@ -145,6 +147,7 @@ jobs:
               title: 'Web dist',
               report,
               failed: ${{ steps.dist_size_check.outcome == 'failure' }},
+              identifier: 'web',
             });
 
       - name: Start E2E server

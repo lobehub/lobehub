@@ -142,15 +142,26 @@ const check = (args) => {
   const { current, baseline, label = 'Bundle', report } = args;
   if (!current) die('check requires --current <file.json>');
 
+  // Emit a visible "skipped" section so the PR comment / step summary explain
+  // why the gate passed instead of falling back to a misleading placeholder.
+  const skipWithNotice = (reason) => {
+    const section = `### ⚠️ ${label}\n\n${reason}\n\n> Gate skipped — no failure is reported.`;
+    console.warn(`\n${section}\n`);
+    if (report) appendReport(report, section);
+    if (process.env.GITHUB_STEP_SUMMARY) appendReport(process.env.GITHUB_STEP_SUMMARY, section);
+  };
+
   if (!fs.existsSync(current)) {
-    console.warn(`⚠️ current report ${current} not found, skipping ${label} check`);
+    skipWithNotice(
+      `Current size report \`${current}\` not found — the measure step did not produce it.`,
+    );
     return;
   }
   const currentSizes = JSON.parse(fs.readFileSync(current, 'utf8')).sizes || {};
 
   if (!baseline || !fs.existsSync(baseline)) {
-    console.warn(
-      `⚠️ baseline ${baseline || '(not provided)'} not found for ${label} — first run? Skipping gate.`,
+    skipWithNotice(
+      `No baseline found (\`${baseline || '(not provided)'}\`). This is expected on first rollout or after baseline artifacts expire — the gate activates once a canary build publishes a baseline.`,
     );
     return;
   }
