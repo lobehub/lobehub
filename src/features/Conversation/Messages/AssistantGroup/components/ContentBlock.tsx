@@ -99,6 +99,15 @@ const ContentBlock = memo<ContentBlockProps>(
       return errorBlock;
     }
 
+    // A freshly created step block can mount before anything about it is
+    // renderable — no content/reasoning has streamed yet and the reasoning op
+    // hasn't started. Mounting the wrapper anyway would consume a flex `gap`
+    // slot in the parent block list, visibly pushing the next sibling (e.g. the
+    // message footer) down a beat before the block's content appears.
+    if (!showReasoning && !showMessageContent && !showImageItems && !errorBlock) {
+      return null;
+    }
+
     return (
       <Flexbox gap={8} id={domId ?? id}>
         {showReasoning && (

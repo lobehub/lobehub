@@ -270,6 +270,17 @@ describe('AssistantGroup ContentBlock', () => {
     expect(screen.getByText('reasoning')).toBeInTheDocument();
   });
 
+  it('renders nothing for an empty block waiting for its first stream chunk', () => {
+    // A new step block mounts before any content/reasoning streams and before
+    // the reasoning op starts. Rendering an empty wrapper would consume a flex
+    // gap slot in the block list and visibly push the next sibling down.
+    const { container } = render(
+      <ContentBlock assistantId="assistant-1" content="" id="block-1" />,
+    );
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it('keeps the streaming reasoning placeholder when no reasoning object exists yet', () => {
     isInReasoningMock = true;
 

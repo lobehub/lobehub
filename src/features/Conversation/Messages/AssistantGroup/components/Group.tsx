@@ -206,10 +206,20 @@ const Group = memo<GroupChildrenProps>(
       messageStateSelectors.isMessageCollapsed(id)(s),
       messageStateSelectors.isAssistantGroupItemGenerating(id)(s),
     ]);
+    // A running op whose visible output already ended (`visible_output_end` →
+    // `metadata.visibleLoadingDone`) only has terminal bookkeeping left
+    // (server-side persistence, agent_runtime_end, completeRun). Treating it as
+    // still active would delay process folding by seconds after the answer
+    // finished streaming. Safe to fold early: `stream_start` resets the flag,
+    // so a follow-up step re-activates the operation.
     const hasActiveOperation = useChatStore((s) =>
       operationSelectors
         .getOperationsByMessage(id)(s)
-        .some((op) => ACTIVE_OPERATION_STATUSES.has(op.status)),
+        .some(
+          (op) =>
+            ACTIVE_OPERATION_STATUSES.has(op.status) &&
+            !(op.status === 'running' && op.metadata.visibleLoadingDone),
+        ),
     );
     const turnDurationMs = useConversationStore((s) => getTurnDurationMs(s.dbMessages, blocks));
     const contextValue = useMemo(() => ({ assistantGroupId: id }), [id]);
