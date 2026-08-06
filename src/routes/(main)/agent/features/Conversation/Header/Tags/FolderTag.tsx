@@ -4,6 +4,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { isDesktop } from '@/const/version';
+import { useAgentContext } from '@/features/Conversation/useAgentContext';
 import { localFileService } from '@/services/electron/localFileService';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
@@ -33,8 +34,9 @@ const styles = createStaticStyles(({ css }) => ({
 
 const FolderTag = memo(() => {
   const { t } = useTranslation('tool');
+  const { topicId } = useAgentContext();
 
-  const topicBoundDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
+  const topicBoundDirectory = useChatStore(topicSelectors.getTopicWorkingDirectory(topicId));
 
   if (!isDesktop || !topicBoundDirectory) return null;
   const handleOpen = () => {

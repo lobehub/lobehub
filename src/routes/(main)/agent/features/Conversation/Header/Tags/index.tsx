@@ -3,6 +3,7 @@ import { cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useAgentContext } from '@/features/Conversation/useAgentContext';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useSessionStore } from '@/store/session';
@@ -14,13 +15,15 @@ import ThreadSwitcher from './ThreadSwitcher';
 
 const TitleTags = memo(() => {
   const { t } = useTranslation(['topic', 'chat']);
-  const activeThreadId = useChatStore((s) => s.activeThreadId);
+  const { threadId, topicId } = useAgentContext();
   const threadTitle = useChatStore((s) =>
-    s.activeThreadId && s.activeTopicId
-      ? s.threadMaps[s.activeTopicId]?.find((thread) => thread.id === s.activeThreadId)?.title
+    threadId && topicId
+      ? s.threadMaps[topicId]?.find((thread) => thread.id === threadId)?.title
       : undefined,
   );
-  const topicTitle = useChatStore((s) => topicSelectors.currentActiveTopic(s)?.title);
+  const topicTitle = useChatStore((s) =>
+    topicId ? topicSelectors.getTopicById(topicId)(s)?.title : undefined,
+  );
   const isGroupSession = useSessionStore(sessionSelectors.isCurrentSessionGroupSession);
 
   if (isGroupSession) {
@@ -36,7 +39,7 @@ const TitleTags = memo(() => {
 
   return (
     <Flexbox allowShrink horizontal align={'center'} gap={6} style={{ marginLeft: 8, minWidth: 0 }}>
-      {activeThreadId ? (
+      {threadId ? (
         <>
           <span
             style={{

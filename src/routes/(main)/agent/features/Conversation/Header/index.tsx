@@ -5,13 +5,13 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
 
 import { AgentMigrationBadge, useAgentTransferJob } from '@/features/AgentTransferMigration';
+import { useAgentContext } from '@/features/Conversation/useAgentContext';
 import NavHeader from '@/features/NavHeader';
 import OpenInAppButton from '@/features/OpenInAppButton';
 import TopicCommentButton from '@/features/TopicComment/TopicCommentButton';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useAgentStore } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
-import { useChatStore } from '@/store/chat';
 
 import HeaderActions from './HeaderActions';
 import ShareButton from './ShareButton';
@@ -125,11 +125,12 @@ const headerStyles = createStaticStyles(({ css }) => ({
 }));
 
 const Header = memo(() => {
-  const agentId = useChatStore((s) => s.activeAgentId);
+  const { agentId, topicId } = useAgentContext();
   // No home/desktop fallback: the IDE button should only show up once the user
   // explicitly picked a working directory (topic / agent / device default).
   const workingDirectory = useEffectiveWorkingDirectory(agentId || undefined, {
     homeFallback: false,
+    topicId,
   });
   const isLocalSystemEnabled = useAgentStore((s) =>
     agentId ? chatConfigByIdSelectors.isLocalSystemEnabledById(agentId)(s) : false,
