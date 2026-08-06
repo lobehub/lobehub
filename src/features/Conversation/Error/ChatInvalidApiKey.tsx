@@ -7,10 +7,14 @@ import urlJoin from 'url-join';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useProviderName } from '@/hooks/useProviderName';
+import { useClientDataSWR } from '@/libs/swr';
+import { lambdaClient } from '@/libs/trpc/client';
 import { type GlobalLLMProviderKey } from '@/types/user/settings/modelProvider';
 
 import { useConversationStore } from '../store';
 import BaseErrorForm from './BaseErrorForm';
+import { isAicoManagedProviderMode } from './isAicoManagedProviderMode';
+import ManagedKeyError from './ManagedKeyError';
 
 interface ChatInvalidAPIKeyProps {
   id: string;
@@ -21,6 +25,13 @@ const ChatInvalidAPIKey = memo<ChatInvalidAPIKeyProps>(({ id, provider }) => {
   const navigate = useWorkspaceAwareNavigate();
   const [deleteMessage] = useConversationStore((s) => [s.deleteMessage]);
   const providerName = useProviderName(provider as GlobalLLMProviderKey);
+
+  const { data: managedStatus } = useClientDataSWR('aico-provider-status', () =>
+    lambdaClient.aicoBilling.getManagedProviderStatus.query(),
+  );
+  if (isAicoManagedProviderMode(managedStatus?.managed)) {
+    return <ManagedKeyError onNavigate={() => deleteMessage(id)} />;
+  }
 
   return (
     <BaseErrorForm

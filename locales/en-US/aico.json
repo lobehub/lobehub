@@ -34,6 +34,8 @@
   "errors.TRIAL_PHONE_ALREADY_USED": "Trial has already been used with this phone number.",
   "errors.TRIAL_PHONE_BLOCKED": "This phone number is not eligible for trial.",
   "errors.TRIAL_REQUEST_LIMIT": "Trial request limit has been reached.",
+  "errors.managedKey.description": "Top up your wallet or use organization credit so a managed key can be provisioned. You do not need to enter a provider API key.",
+  "errors.managedKey.title": "{{brandName}} uses managed API keys",
   "errors.verifyPhoneAction": "Verify phone",
   "invite.accept": "Accept invitation",
   "invite.accepted": "You joined the organization",

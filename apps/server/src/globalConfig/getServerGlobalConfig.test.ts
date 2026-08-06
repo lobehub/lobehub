@@ -163,7 +163,9 @@ describe('getServerGlobalConfig', () => {
 
     expect(providerConfig[ModelProvider.LobeHub]).toBeUndefined();
     expect(providerConfig[ModelProvider.OpenAI]).toBeUndefined();
-    expect(providerConfig[ModelProvider.DeepSeek].enabled).toBe(true);
+    // Aico: native DeepSeek BYOK off; managed OpenRouter on.
+    expect(providerConfig[ModelProvider.DeepSeek].enabled).toBe(false);
+    expect(providerConfig[ModelProvider.OpenRouter].enabled).toBe(true);
   });
 
   it('should enable gateway mode for business builds', async () => {

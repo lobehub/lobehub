@@ -15,6 +15,9 @@ export default {
   'errors.INVITE_NOT_FOUND': 'Invitation not found.',
   'errors.INVITE_NOT_PENDING': 'This invitation can no longer be accepted.',
   'errors.MANAGED_KEY_UNAVAILABLE': 'Managed key is unavailable. Please try again later.',
+  'errors.managedKey.description':
+    'Top up your wallet or use organization credit so a managed key can be provisioned. You do not need to enter a provider API key.',
+  'errors.managedKey.title': '{{brandName}} uses managed API keys',
   'errors.MEMBER_NOT_FOUND': 'Member not found.',
   'errors.MOCK_TOPUP_DISABLED': 'Mock topup is disabled in this environment.',
   'errors.MODEL_NOT_ALLOWED': 'You do not have access to this model.',

@@ -9,12 +9,10 @@ const enabledOpenCodeZenModels = opencodezenModels
 const providerDefaults: Partial<
   Record<ModelProvider, { enabled?: boolean; enabledModels?: string[]; fetchOnClient?: boolean }>
 > = {
-  [ModelProvider.Anthropic]: { enabled: true },
-  [ModelProvider.DeepSeek]: { enabled: true },
-  [ModelProvider.Google]: { enabled: true },
+  // Aico: only the managed OpenRouter surface is enabled by default (BYOK off).
+  [ModelProvider.OpenRouter]: { enabled: true },
   [ModelProvider.LMStudio]: { fetchOnClient: true },
   [ModelProvider.Ollama]: { fetchOnClient: true },
-  [ModelProvider.OpenAI]: { enabled: true },
   [ModelProvider.OpenCodeZen]: { enabledModels: enabledOpenCodeZenModels },
 };
 
