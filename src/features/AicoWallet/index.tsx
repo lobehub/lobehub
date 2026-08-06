@@ -275,7 +275,7 @@ export const AicoWallet = () => {
                   {t('wallet.trialActivate')}
                 </Button>
               ) : (
-                <Flexbox gap={8}>
+                <Flexbox horizontal gap={8} wrap="wrap">
                   <Button
                     type="primary"
                     onClick={() => {

@@ -58,6 +58,8 @@ export default {
   'changelog': 'Changelog',
   'alreadyUpToDate': 'Already Up to Date',
   'checkForUpdates': 'Check for Updates',
+  'chunkError.refreshRequired':
+    'There is a new version for the web app. Refresh the page to update',
   'downloadingUpdate': 'Downloading {{percent}}%',
   'restartToUpdate': 'Restart to Update',
   'clientDB.autoInit.title': 'Initializing PGlite Database',

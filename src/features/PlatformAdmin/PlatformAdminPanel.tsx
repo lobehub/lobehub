@@ -3,7 +3,6 @@
 import { Block, Flexbox, Tag, Text } from '@lobehub/ui';
 import { Button, Select, Switch, Tabs, toast } from '@lobehub/ui/base-ui';
 import { Form, Input, InputNumber, Table } from 'antd';
-import { createStaticStyles } from 'antd-style';
 import {
   Building2Icon,
   CircleDollarSignIcon,
@@ -16,26 +15,9 @@ import { useTranslation } from 'react-i18next';
 
 import { toastAicoError } from '@/business/client/resolveAicoErrorMessage';
 import StatisticCard from '@/components/StatisticCard';
+import { AICO_TABLE_SCROLL, aicoPanelStyles } from '@/features/AicoPanels';
 import { useClientDataSWR } from '@/libs/swr';
 import { lambdaClient } from '@/libs/trpc/client';
-
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  grid: css`
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 12px;
-  `,
-  page: css`
-    width: 100%;
-    max-width: 1100px;
-  `,
-  section: css`
-    padding: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgContainer};
-  `,
-}));
 
 const usd = (n: number | string | undefined | null) => `$${Number(n ?? 0).toFixed(2)}`;
 
@@ -101,8 +83,8 @@ export const PlatformAdminPanel = () => {
 
   if (error) {
     return (
-      <Flexbox className={styles.page} gap={8}>
-        <Block className={styles.section} variant="outlined">
+      <Flexbox className={aicoPanelStyles.page} gap={8}>
+        <Block className={aicoPanelStyles.section} variant="outlined">
           <Flexbox gap={8}>
             <Text strong>{t('platform.forbiddenTitle')}</Text>
             <Text type="secondary">{t('platform.forbiddenDesc')}</Text>
@@ -113,9 +95,9 @@ export const PlatformAdminPanel = () => {
   }
 
   return (
-    <Flexbox className={styles.page} gap={20}>
+    <Flexbox className={aicoPanelStyles.page} gap={20}>
       <Flexbox gap={4}>
-        <Flexbox horizontal align="center" gap={8}>
+        <Flexbox horizontal align="center" gap={8} wrap="wrap">
           <ShieldIcon size={20} />
           <Text strong as="h1" style={{ fontSize: 22, margin: 0 }}>
             {t('platform.title')}
@@ -124,7 +106,7 @@ export const PlatformAdminPanel = () => {
         <Text type="secondary">{t('platform.subtitle')}</Text>
       </Flexbox>
 
-      <div className={styles.grid}>
+      <div className={aicoPanelStyles.grid}>
         <StatisticCard
           title={t('platform.revenue')}
           statistic={{
@@ -153,64 +135,69 @@ export const PlatformAdminPanel = () => {
         />
       </div>
 
-      <Tabs
-        activeKey={tab}
-        items={[
-          { key: 'overview', label: t('platform.tabs.overview') },
-          { key: 'orgs', label: t('platform.tabs.orgs') },
-          { key: 'models', label: t('platform.tabs.models') },
-          { key: 'trial', label: t('platform.tabs.trial') },
-          { key: 'wallets', label: t('platform.tabs.wallets') },
-          { key: 'credits', label: t('platform.tabs.credits') },
-        ]}
-        onChange={setTab}
-      />
+      <div className={aicoPanelStyles.tabs}>
+        <Tabs
+          activeKey={tab}
+          items={[
+            { key: 'overview', label: t('platform.tabs.overview') },
+            { key: 'orgs', label: t('platform.tabs.orgs') },
+            { key: 'models', label: t('platform.tabs.models') },
+            { key: 'trial', label: t('platform.tabs.trial') },
+            { key: 'wallets', label: t('platform.tabs.wallets') },
+            { key: 'credits', label: t('platform.tabs.credits') },
+          ]}
+          onChange={setTab}
+        />
+      </div>
 
       {tab === 'overview' && (
-        <Block className={styles.section} variant="outlined">
+        <Block className={aicoPanelStyles.section} variant="outlined">
           <Flexbox gap={12}>
             <Text strong>{t('platform.recentTx')}</Text>
-            <Table
-              dataSource={financials?.recentTransactions || []}
-              pagination={{ pageSize: 15 }}
-              rowKey="id"
-              size="middle"
-              columns={[
-                { dataIndex: 'type', title: t('wallet.columns.type') },
-                {
-                  dataIndex: 'amountUsd',
-                  title: t('wallet.columns.usd'),
-                  render: (v) => (v == null ? '—' : Number(v).toFixed(4)),
-                },
-                {
-                  dataIndex: 'amountToman',
-                  title: t('wallet.columns.toman'),
-                  render: (v: number) => v?.toLocaleString?.() ?? v,
-                },
-                {
-                  dataIndex: 'orgId',
-                  title: t('platform.columns.org'),
-                  render: (v: string | null) => (v ? v.slice(0, 12) : '—'),
-                },
-                {
-                  dataIndex: 'userId',
-                  title: t('platform.columns.userId'),
-                  render: (v: string | null) => (v ? v.slice(0, 12) : '—'),
-                },
-                {
-                  dataIndex: 'createdAt',
-                  title: t('wallet.columns.date'),
-                  render: (v: string | Date) => new Date(v).toLocaleString(),
-                },
-              ]}
-            />
+            <div className={aicoPanelStyles.tableScroll}>
+              <Table
+                dataSource={financials?.recentTransactions || []}
+                pagination={{ pageSize: 15 }}
+                rowKey="id"
+                scroll={AICO_TABLE_SCROLL}
+                size="middle"
+                columns={[
+                  { dataIndex: 'type', title: t('wallet.columns.type') },
+                  {
+                    dataIndex: 'amountUsd',
+                    title: t('wallet.columns.usd'),
+                    render: (v) => (v == null ? '—' : Number(v).toFixed(4)),
+                  },
+                  {
+                    dataIndex: 'amountToman',
+                    title: t('wallet.columns.toman'),
+                    render: (v: number) => v?.toLocaleString?.() ?? v,
+                  },
+                  {
+                    dataIndex: 'orgId',
+                    title: t('platform.columns.org'),
+                    render: (v: string | null) => (v ? v.slice(0, 12) : '—'),
+                  },
+                  {
+                    dataIndex: 'userId',
+                    title: t('platform.columns.userId'),
+                    render: (v: string | null) => (v ? v.slice(0, 12) : '—'),
+                  },
+                  {
+                    dataIndex: 'createdAt',
+                    title: t('wallet.columns.date'),
+                    render: (v: string | Date) => new Date(v).toLocaleString(),
+                  },
+                ]}
+              />
+            </div>
           </Flexbox>
         </Block>
       )}
 
       {tab === 'orgs' && (
         <Flexbox gap={16}>
-          <Block className={styles.section} variant="outlined">
+          <Block className={aicoPanelStyles.section} variant="outlined">
             <Flexbox gap={16}>
               <Flexbox horizontal align="center" gap={8}>
                 <Building2Icon size={18} />
@@ -233,7 +220,7 @@ export const PlatformAdminPanel = () => {
                   }
                 }}
               >
-                <Flexbox horizontal gap={12} style={{ flexWrap: 'wrap' }}>
+                <div className={aicoPanelStyles.formRow}>
                   <Form.Item
                     label={t('platform.orgName')}
                     name="name"
@@ -250,7 +237,7 @@ export const PlatformAdminPanel = () => {
                   >
                     <Input />
                   </Form.Item>
-                </Flexbox>
+                </div>
                 <Button htmlType="submit" loading={busy} type="primary">
                   {t('platform.createSubmit')}
                 </Button>
@@ -258,7 +245,7 @@ export const PlatformAdminPanel = () => {
             </Flexbox>
           </Block>
 
-          <Block className={styles.section} variant="outlined">
+          <Block className={aicoPanelStyles.section} variant="outlined">
             <Flexbox gap={16}>
               <Text strong>{t('platform.assignManager')}</Text>
               <Form
@@ -278,7 +265,7 @@ export const PlatformAdminPanel = () => {
                   }
                 }}
               >
-                <Flexbox horizontal gap={12} style={{ flexWrap: 'wrap' }}>
+                <div className={aicoPanelStyles.formRow}>
                   <Form.Item
                     label={t('platform.orgId')}
                     name="orgId"
@@ -313,7 +300,7 @@ export const PlatformAdminPanel = () => {
                       ]}
                     />
                   </Form.Item>
-                </Flexbox>
+                </div>
                 <Button htmlType="submit" loading={busy} type="primary">
                   {t('platform.assignSubmit')}
                 </Button>
@@ -321,83 +308,86 @@ export const PlatformAdminPanel = () => {
             </Flexbox>
           </Block>
 
-          <Block className={styles.section} variant="outlined">
+          <Block className={aicoPanelStyles.section} variant="outlined">
             <Flexbox gap={12}>
               <Text strong>{t('platform.orgsTitle')}</Text>
-              <Table
-                dataSource={data?.items || []}
-                loading={isLoading}
-                pagination={false}
-                rowKey="id"
-                columns={[
-                  {
-                    dataIndex: 'publicCode',
-                    title: t('platform.columns.publicId'),
-                    render: (v: string) => (v ? <Tag>{v}</Tag> : '—'),
-                  },
-                  { dataIndex: 'name', title: t('platform.columns.name') },
-                  {
-                    dataIndex: 'status',
-                    title: t('platform.columns.status'),
-                    render: (v: string) => (
-                      <Tag color={v === 'active' ? 'success' : 'warning'}>{v}</Tag>
-                    ),
-                  },
-                  { dataIndex: 'memberCount', title: t('platform.columns.members') },
-                  {
-                    dataIndex: 'walletBalanceUsd',
-                    title: t('platform.columns.walletUsd'),
-                    render: (v) => usd(v),
-                  },
-                  {
-                    key: 'actions',
-                    title: t('platform.columns.actions'),
-                    render: (_, row) => (
-                      <Flexbox horizontal gap={8}>
-                        {row.status === 'active' ? (
-                          <Button
-                            size="small"
-                            onClick={async () => {
-                              await lambdaClient.platformAdmin.suspendOrganization.mutate({
-                                orgId: row.id,
-                              });
-                              await mutate();
-                            }}
-                          >
-                            {t('platform.suspend')}
-                          </Button>
-                        ) : (
-                          <Button
-                            size="small"
-                            onClick={async () => {
-                              await lambdaClient.platformAdmin.activateOrganization.mutate({
-                                orgId: row.id,
-                              });
-                              await mutate();
-                            }}
-                          >
-                            {t('platform.activate')}
-                          </Button>
-                        )}
-                      </Flexbox>
-                    ),
-                  },
-                ]}
-              />
+              <div className={aicoPanelStyles.tableScroll}>
+                <Table
+                  dataSource={data?.items || []}
+                  loading={isLoading}
+                  pagination={false}
+                  rowKey="id"
+                  scroll={AICO_TABLE_SCROLL}
+                  columns={[
+                    {
+                      dataIndex: 'publicCode',
+                      title: t('platform.columns.publicId'),
+                      render: (v: string) => (v ? <Tag>{v}</Tag> : '—'),
+                    },
+                    { dataIndex: 'name', title: t('platform.columns.name') },
+                    {
+                      dataIndex: 'status',
+                      title: t('platform.columns.status'),
+                      render: (v: string) => (
+                        <Tag color={v === 'active' ? 'success' : 'warning'}>{v}</Tag>
+                      ),
+                    },
+                    { dataIndex: 'memberCount', title: t('platform.columns.members') },
+                    {
+                      dataIndex: 'walletBalanceUsd',
+                      title: t('platform.columns.walletUsd'),
+                      render: (v) => usd(v),
+                    },
+                    {
+                      key: 'actions',
+                      title: t('platform.columns.actions'),
+                      render: (_, row) => (
+                        <Flexbox horizontal gap={8} wrap="wrap">
+                          {row.status === 'active' ? (
+                            <Button
+                              size="small"
+                              onClick={async () => {
+                                await lambdaClient.platformAdmin.suspendOrganization.mutate({
+                                  orgId: row.id,
+                                });
+                                await mutate();
+                              }}
+                            >
+                              {t('platform.suspend')}
+                            </Button>
+                          ) : (
+                            <Button
+                              size="small"
+                              onClick={async () => {
+                                await lambdaClient.platformAdmin.activateOrganization.mutate({
+                                  orgId: row.id,
+                                });
+                                await mutate();
+                              }}
+                            >
+                              {t('platform.activate')}
+                            </Button>
+                          )}
+                        </Flexbox>
+                      ),
+                    },
+                  ]}
+                />
+              </div>
             </Flexbox>
           </Block>
         </Flexbox>
       )}
 
       {tab === 'models' && (
-        <Block className={styles.section} variant="outlined">
+        <Block className={aicoPanelStyles.section} variant="outlined">
           <Flexbox gap={16}>
             <Flexbox horizontal align="center" gap={8}>
               <RefreshCwIcon size={18} />
               <Text strong>{t('platform.modelsTitle')}</Text>
             </Flexbox>
             <Text type="secondary">{t('platform.modelsHint')}</Text>
-            <div className={styles.grid}>
+            <div className={aicoPanelStyles.grid}>
               <StatisticCard
                 statistic={{ value: modelSync?.modelCount ?? 0 }}
                 title={t('platform.modelsCount')}
@@ -445,7 +435,7 @@ export const PlatformAdminPanel = () => {
       )}
 
       {tab === 'trial' && (
-        <Block className={styles.section} variant="outlined">
+        <Block className={aicoPanelStyles.section} variant="outlined">
           <Flexbox gap={16}>
             <Text strong>{t('platform.trialTitle')}</Text>
             <Form
@@ -477,7 +467,7 @@ export const PlatformAdminPanel = () => {
               <Form.Item label={t('platform.trialEnabled')} name="enabled" valuePropName="checked">
                 <Switch />
               </Form.Item>
-              <Flexbox horizontal gap={12} style={{ flexWrap: 'wrap' }}>
+              <div className={aicoPanelStyles.formRow}>
                 <Form.Item
                   label={t('platform.trialDays')}
                   name="durationDays"
@@ -500,7 +490,7 @@ export const PlatformAdminPanel = () => {
                 >
                   <InputNumber min={0.01} step={0.1} style={{ width: '100%' }} />
                 </Form.Item>
-              </Flexbox>
+              </div>
               <Form.Item label={t('platform.trialModels')} name="allowedModelIds">
                 <Input.TextArea placeholder="openai/gpt-4o-mini (empty = all)" rows={2} />
               </Form.Item>
@@ -513,61 +503,64 @@ export const PlatformAdminPanel = () => {
       )}
 
       {tab === 'wallets' && (
-        <Block className={styles.section} variant="outlined">
+        <Block className={aicoPanelStyles.section} variant="outlined">
           <Flexbox gap={12}>
             <Text strong>{t('platform.b2cTitle')}</Text>
-            <Table
-              dataSource={userWallets || []}
-              pagination={{ pageSize: 20 }}
-              rowKey="userId"
-              columns={[
-                {
-                  dataIndex: 'publicCode',
-                  title: t('platform.columns.publicId'),
-                  render: (v: string | null) => (v ? <Tag>{v}</Tag> : '—'),
-                },
-                {
-                  dataIndex: 'userId',
-                  title: t('platform.columns.userId'),
-                  render: (v: string) => v.slice(0, 14),
-                },
-                {
-                  dataIndex: 'balanceUsd',
-                  title: t('platform.columns.walletUsd'),
-                  render: (v: number) => usd(v),
-                },
-                {
-                  dataIndex: 'hasManagedKey',
-                  title: t('platform.columns.key'),
-                  render: (v: boolean) => (v ? '✓' : '—'),
-                },
-                {
-                  key: 'actions',
-                  title: t('platform.columns.actions'),
-                  render: (_, row) => (
-                    <Button
-                      size="small"
-                      onClick={() => {
-                        userCreditForm.setFieldsValue({
-                          email: undefined,
-                          userId: row.userId,
-                        });
-                        setTab('credits');
-                      }}
-                    >
-                      {t('platform.creditUserAction')}
-                    </Button>
-                  ),
-                },
-              ]}
-            />
+            <div className={aicoPanelStyles.tableScroll}>
+              <Table
+                dataSource={userWallets || []}
+                pagination={{ pageSize: 20 }}
+                rowKey="userId"
+                scroll={AICO_TABLE_SCROLL}
+                columns={[
+                  {
+                    dataIndex: 'publicCode',
+                    title: t('platform.columns.publicId'),
+                    render: (v: string | null) => (v ? <Tag>{v}</Tag> : '—'),
+                  },
+                  {
+                    dataIndex: 'userId',
+                    title: t('platform.columns.userId'),
+                    render: (v: string) => v.slice(0, 14),
+                  },
+                  {
+                    dataIndex: 'balanceUsd',
+                    title: t('platform.columns.walletUsd'),
+                    render: (v: number) => usd(v),
+                  },
+                  {
+                    dataIndex: 'hasManagedKey',
+                    title: t('platform.columns.key'),
+                    render: (v: boolean) => (v ? '✓' : '—'),
+                  },
+                  {
+                    key: 'actions',
+                    title: t('platform.columns.actions'),
+                    render: (_, row) => (
+                      <Button
+                        size="small"
+                        onClick={() => {
+                          userCreditForm.setFieldsValue({
+                            email: undefined,
+                            userId: row.userId,
+                          });
+                          setTab('credits');
+                        }}
+                      >
+                        {t('platform.creditUserAction')}
+                      </Button>
+                    ),
+                  },
+                ]}
+              />
+            </div>
           </Flexbox>
         </Block>
       )}
 
       {tab === 'credits' && (
         <Flexbox gap={16}>
-          <Block className={styles.section} variant="outlined">
+          <Block className={aicoPanelStyles.section} variant="outlined">
             <Flexbox gap={16}>
               <Text strong>{t('platform.manualCredit')}</Text>
               <Text type="secondary">{t('platform.manualCreditHint')}</Text>
@@ -613,7 +606,7 @@ export const PlatformAdminPanel = () => {
             </Flexbox>
           </Block>
 
-          <Block className={styles.section} variant="outlined">
+          <Block className={aicoPanelStyles.section} variant="outlined">
             <Flexbox gap={16}>
               <Text strong>{t('platform.manualUserCredit')}</Text>
               <Text type="secondary">{t('platform.manualUserCreditHint')}</Text>
@@ -643,7 +636,7 @@ export const PlatformAdminPanel = () => {
                   }
                 }}
               >
-                <Flexbox horizontal gap={12} style={{ flexWrap: 'wrap' }}>
+                <div className={aicoPanelStyles.formRow}>
                   <Form.Item
                     label={t('platform.userEmail')}
                     name="email"
@@ -669,7 +662,7 @@ export const PlatformAdminPanel = () => {
                       }))}
                     />
                   </Form.Item>
-                </Flexbox>
+                </div>
                 <Form.Item
                   label={t('platform.amountToman')}
                   name="amountToman"

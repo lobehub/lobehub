@@ -1,6 +1,6 @@
 import { useTheme } from 'next-themes';
 import type { ComponentType, CSSProperties, ReactElement } from 'react';
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import type { RouteObject } from 'react-router';
 import { Outlet, useRouteError } from 'react-router';
 
@@ -30,9 +30,11 @@ const AuthErrorBoundary = () => {
   const error = useRouteError() as Error;
   const { resolvedTheme } = useTheme();
 
-  if (typeof window !== 'undefined' && isChunkLoadError(error)) {
-    notifyChunkError(error);
-  }
+  useEffect(() => {
+    if (isChunkLoadError(error)) {
+      notifyChunkError(error);
+    }
+  }, [error]);
 
   // index.auth.html paints the body black in dark mode before React mounts
   const isDark = resolvedTheme === 'dark';

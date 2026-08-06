@@ -1,4 +1,5 @@
 import { toast } from '@lobehub/ui/base-ui';
+import { t } from 'i18next';
 
 const CHUNK_ERROR_PATTERNS = [
   'Failed to fetch dynamically imported module', // Chrome / Vite
@@ -9,6 +10,9 @@ const CHUNK_ERROR_PATTERNS = [
   'Loading CSS chunk', // Webpack CSS
   'ChunkLoadError', // Webpack error name
 ];
+
+const FALLBACK_REFRESH_MESSAGE =
+  'There is a new version for the web app. Refresh the page to update';
 
 /**
  * Detect whether an error (or its message) was caused by a failed chunk / dynamic import.
@@ -24,6 +28,7 @@ export function isChunkLoadError(error: unknown): boolean {
 }
 
 const RELOAD_KEY = 'lobe-chunk-reload';
+const TOAST_KEY = 'lobe-chunk-reload-toast';
 
 const notifiedErrors = new WeakSet<object>();
 
@@ -38,6 +43,20 @@ function isAlreadyNotified(error: unknown): boolean {
   return false;
 }
 
+function getRefreshMessage(): string {
+  const message = t('chunkError.refreshRequired', {
+    defaultValue: FALLBACK_REFRESH_MESSAGE,
+    ns: 'common',
+  });
+
+  // i18n may not be ready yet (early boot); never surface the raw key.
+  if (!message || message === 'chunkError.refreshRequired') {
+    return FALLBACK_REFRESH_MESSAGE;
+  }
+
+  return message;
+}
+
 /**
  * Auto-reload on chunk load error. Uses sessionStorage to prevent infinite reload loops.
  */
@@ -48,7 +67,12 @@ export function notifyChunkError(error?: unknown): void {
   // that is still missing after the reload lands on the toast instead of
   // re-arming another reload.
   if (sessionStorage.getItem(RELOAD_KEY)) {
-    toast.error('There is a new version for the web app. Refresh the page to update');
+    // Toast at most once per tab session — distinct Error instances after a
+    // deploy must not spam the user.
+    if (sessionStorage.getItem(TOAST_KEY)) return;
+
+    sessionStorage.setItem(TOAST_KEY, '1');
+    toast.error(getRefreshMessage());
     return;
   }
 
