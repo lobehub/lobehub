@@ -27,6 +27,7 @@ const PERSONAL_TOP_LEVEL_SEGMENTS = new Set([
   'invite',
   'me',
   'memory',
+  'note',
   'onboarding',
   'page',
   'resource',

@@ -69,6 +69,7 @@ const WORKSPACE_MIRRORED_FIRST_SEGMENTS = new Set([
   'group',
   'image',
   'memory',
+  'note',
   'page',
   'project',
   'projects',

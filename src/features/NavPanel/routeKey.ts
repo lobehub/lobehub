@@ -37,6 +37,10 @@ export const resolveNavPanelKey = (
       return 'memory';
     }
 
+    case 'note': {
+      return 'note';
+    }
+
     case 'page': {
       return 'page';
     }

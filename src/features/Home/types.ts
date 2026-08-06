@@ -1,1 +1,1 @@
-export type HomeMode = 'chat' | 'task';
+export type HomeMode = 'chat' | 'note' | 'task';

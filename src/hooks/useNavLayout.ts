@@ -66,6 +66,12 @@ export const useNavLayout = (): NavLayout => {
           title: t('tab.resource'),
           url: '/resource',
         },
+        {
+          icon: getRouteById('note')!.icon,
+          key: SidebarTabKey.Note,
+          title: t('tab.note'),
+          url: '/note',
+        },
       ] as NavItem[],
     [t, toggleCommandMenu],
   );

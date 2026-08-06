@@ -15,6 +15,7 @@ const SPA_ROUTE_ROOTS = new Set([
   'group',
   'image',
   'memory',
+  'note',
   'page',
   'resource',
   'settings',

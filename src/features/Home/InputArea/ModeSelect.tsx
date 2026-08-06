@@ -1,7 +1,7 @@
 import { Flexbox, Icon } from '@lobehub/ui';
 import { Button, Popover } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { ChevronDownIcon, InfinityIcon, ListTodoIcon } from 'lucide-react';
+import { ChevronDownIcon, InfinityIcon, ListTodoIcon, NotebookPenIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -101,6 +101,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const MODES = [
   { icon: InfinityIcon, key: 'chat' },
   { icon: ListTodoIcon, key: 'task' },
+  { icon: NotebookPenIcon, key: 'note' },
 ] as const;
 
 interface ModeSelectProps {
@@ -159,7 +160,7 @@ const ModeSelect = memo<ModeSelectProps>(({ onChange, value }) => {
               <Flexbox className={styles.optionText} flex={1}>
                 <div className={styles.optionTitle}>{t(`dashboard.mode.${key}`)}</div>
                 <div className={styles.optionDesc}>
-                  {key === 'chat' ? tChat('chatMode.agentDesc') : t('dashboard.modeDesc.task')}
+                  {key === 'chat' ? tChat('chatMode.agentDesc') : t(`dashboard.modeDesc.${key}`)}
                 </div>
               </Flexbox>
             </Flexbox>
