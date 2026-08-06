@@ -1,6 +1,15 @@
-import { FileSnapshotStore, type ISnapshotStore } from '@lobechat/agent-tracing';
+import type { ISnapshotStore } from '@lobechat/agent-tracing';
 
 import { S3SnapshotStore } from '@/server/modules/AgentTracing';
+
+const loadFileSnapshotStore = (): ISnapshotStore => {
+  // Lazy require keeps Turbopack from tracing `.agent-tracing/` (and unrelated
+  // repo dirs like docker-compose/deploy/data) during production builds.
+  // Do not use a dynamic module-name variable here — the bundler must see a
+  // static string or the `@/` alias fails to resolve at runtime.
+  const { FileSnapshotStore } = require('@lobechat/agent-tracing/file-store');
+  return new FileSnapshotStore();
+};
 
 const ENABLE_AGENT_S3_TRACING_VALUE = '1';
 
@@ -13,11 +22,12 @@ export const shouldUseAgentS3Tracing = () => {
 };
 
 /**
- * Constructor injection for tests. The defaults are the statically-imported
- * stores — never load them via a dynamic `require(moduleName)`: the module name
- * goes through an indirection the bundler can't statically analyze, so the `@/`
- * build-time alias fails to resolve at runtime and the store silently becomes
- * `null` (this once disabled ALL production snapshots).
+ * Constructor injection for tests. Production defaults use a static
+ * `require('@lobechat/agent-tracing/file-store')` in development only — never
+ * load stores via a dynamic `require(moduleName)`: the module name goes through
+ * an indirection the bundler can't statically analyze, so the `@/` build-time
+ * alias fails to resolve at runtime and the store silently becomes `null`
+ * (this once disabled ALL production snapshots).
  */
 export interface SnapshotStoreFactories {
   createFile?: () => ISnapshotStore;
@@ -47,7 +57,7 @@ export const createDefaultSnapshotStore = (
   }
 
   if (process.env.NODE_ENV === 'development') {
-    return (factories.createFile ?? (() => new FileSnapshotStore()))();
+    return (factories.createFile ?? loadFileSnapshotStore)();
   }
 
   return null;

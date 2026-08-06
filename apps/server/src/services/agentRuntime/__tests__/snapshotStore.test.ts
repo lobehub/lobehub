@@ -70,9 +70,8 @@ describe('agent runtime snapshot store defaults', () => {
   });
 
   it('constructs a real store via the default (non-injected) path', () => {
-    // Guards the regression: the default path must build a store with NO dynamic
-    // require. In dev that is the statically-imported FileSnapshotStore
-    // (S3 needs creds, so dev is the safe env to assert a non-null default).
+    // Guards the regression: the default path must build a store with a static
+    // require('@lobechat/agent-tracing') — not a dynamic module-name variable.
     setEnv('development');
 
     expect(createDefaultSnapshotStore()).not.toBeNull();

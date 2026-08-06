@@ -1,0 +1,15 @@
+# Mount dev runtime data outside the repo (see PANACHAT_DEV_DATA_DIR in dev/.env).
+# Used with: docker compose -f docker-compose.yml -f docker-compose.aico.data.override.yml
+
+services:
+  postgresql:
+    volumes:
+      - ${PANACHAT_DEV_DATA_DIR}/postgres:/var/lib/postgresql/data
+
+  redis:
+    volumes:
+      - ${PANACHAT_DEV_DATA_DIR}/redis:/data
+
+  rustfs:
+    volumes:
+      - ${PANACHAT_DEV_DATA_DIR}/rustfs:/data

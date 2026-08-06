@@ -4,6 +4,7 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
+    "./file-store": "./src/store/file-store.ts",
     "./store": "./src/store/types.ts",
     "./recorder": "./src/recorder/index.ts"
   },

@@ -11,6 +11,7 @@
 import { execSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import * as dotenv from 'dotenv';
@@ -18,7 +19,10 @@ import dotenvExpand from 'dotenv-expand';
 
 const CACHE_DIR = join(process.cwd(), '.cache/db-persistence');
 const SNAPSHOT_FILE = join(CACHE_DIR, 'latest.json');
-const POSTGRES_DATA_DIR = join(process.cwd(), 'docker-compose/dev/data');
+const POSTGRES_DATA_DIR = join(
+  process.env.PANACHAT_DEV_DATA_DIR ?? join(homedir(), '.local/share/panachat-data-dev'),
+  'postgres',
+);
 
 type UserRow = {
   createdAt: string;
