@@ -11,6 +11,7 @@ import { aiModelService } from '@/services/aiModel';
 import { withSWR } from '~test-utils';
 
 import { useAiInfraStore as useStore } from '../../store';
+import { aiModelSelectors } from './selectors';
 
 vi.mock('zustand/traditional');
 
@@ -709,6 +710,23 @@ describe('AiModelAction', () => {
   });
 
   describe('ensureModelReasoningConfig', () => {
+    beforeEach(() => {
+      vi.spyOn(aiModelSelectors, 'isModelHasReasoningExtendParams').mockReturnValue(() => true);
+    });
+
+    it('should skip the fetch for models without reasoning extend params', async () => {
+      vi.spyOn(aiModelSelectors, 'isModelHasReasoningExtendParams').mockReturnValue(() => false);
+
+      const { result } = renderHook(() => useStore());
+      const serviceSpy = vi.spyOn(aiModelService, 'getAiModelReasoningConfig');
+
+      await act(async () => {
+        await result.current.ensureModelReasoningConfig('gpt-4o', 'openai');
+      });
+
+      expect(serviceSpy).not.toHaveBeenCalled();
+    });
+
     it('should fetch and cache the config when the key is absent', async () => {
       const { result } = renderHook(() => useStore());
       const serviceSpy = vi

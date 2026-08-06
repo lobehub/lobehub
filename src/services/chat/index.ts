@@ -33,7 +33,7 @@ import {
   agentChatConfigSelectors,
   agentSelectors,
 } from '@/store/agent/selectors';
-import { aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
+import { aiModelSelectors, aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 import { getChatStoreState } from '@/store/chat';
 import { getToolStoreState } from '@/store/tool';
 import {
@@ -335,6 +335,19 @@ class ChatService {
       provider: payload.provider!,
       subAgentChatConfigOverride: resolvedAgentConfig.subAgentChatConfigOverride,
     });
+
+    // For models governed by the reasoning extend-params family the user-level
+    // model-instance config is the single source of truth, so drop the legacy
+    // per-agent Advanced `params.reasoning_effort` — otherwise a stale agent
+    // value would leak into the payload whenever no instance value overlays it.
+    if (
+      aiModelSelectors.isModelHasReasoningExtendParams(
+        payload.model,
+        payload.provider!,
+      )(getAiInfraStoreState())
+    ) {
+      delete (params as Record<string, unknown>).reasoning_effort;
+    }
 
     return {
       options: { ...options, agentId: targetAgentId, topicId },

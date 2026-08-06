@@ -17,6 +17,7 @@ import type { AiInfraStore } from '@/store/aiInfra/store';
 import type { StoreSetter } from '@/store/types';
 
 import { modelReasoningConfigKey } from './initialState';
+import { aiModelSelectors } from './selectors';
 import { deduplicateRemoteModels } from './utils';
 
 const MAX_DUPLICATE_MODEL_IDS_IN_WARNING = 3;
@@ -246,6 +247,11 @@ export class AiModelActionImpl {
    * swallowed so the send path falls back to defaults instead of breaking.
    */
   ensureModelReasoningConfig = async (id: string, provider: string): Promise<void> => {
+    // The config only matters for models declaring reasoning-family extend
+    // params (resolveModelExtendParams ignores it otherwise) — skip the
+    // blocking round trip for everything else.
+    if (!aiModelSelectors.isModelHasReasoningExtendParams(id, provider)(this.#get())) return;
+
     const key = modelReasoningConfigKey(provider, id);
     if (key in this.#get().modelReasoningConfigMap) return;
 

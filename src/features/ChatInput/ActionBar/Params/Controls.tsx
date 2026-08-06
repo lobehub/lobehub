@@ -546,6 +546,11 @@ const Controls = memo<ControlsProps>(({ setUpdating, updating, variant = 'popove
   const hasModelConfig = (modelExtendParamsList ?? []).some(
     (param) => !REASONING_PARAMS_SET.has(param),
   );
+  // Same reason: hide the legacy Advanced raw `params.reasoning_effort` for
+  // those models — the send path strips it in favor of the instance config
+  const hasReasoningExtendParams = (modelExtendParamsList ?? []).some((param) =>
+    REASONING_PARAMS_SET.has(param),
+  );
   const enableAgentMode = useAgentStore(agentByIdSelectors.getAgentEnableModeById(agentId));
   const [form] = AntdForm.useForm();
   const [advancedOpen, setAdvancedOpen] = useState(() => getStoredOpen(ADVANCED_OPEN_STORAGE_KEY));
@@ -1044,44 +1049,51 @@ const Controls = memo<ControlsProps>(({ setUpdating, updating, variant = 'popove
                       />
                     )}
                   </ControlRow>
-                  <ControlRow
-                    tag="reasoning_effort"
-                    title={t('settingModel.reasoningEffort.title')}
-                    tooltip={t('settingModel.reasoningEffort.desc')}
-                    action={
-                      <Switch
-                        checked={Boolean(enableReasoningEffort)}
-                        size={'small'}
-                        onChange={(checked) => {
-                          if (checked && typeof reasoningEffortValue !== 'string') {
-                            form.setFieldValue(['params', 'reasoning_effort'], 'medium');
+                  {!hasReasoningExtendParams && (
+                    <ControlRow
+                      tag="reasoning_effort"
+                      title={t('settingModel.reasoningEffort.title')}
+                      tooltip={t('settingModel.reasoningEffort.desc')}
+                      action={
+                        <Switch
+                          checked={Boolean(enableReasoningEffort)}
+                          size={'small'}
+                          onChange={(checked) => {
+                            if (checked && typeof reasoningEffortValue !== 'string') {
+                              form.setFieldValue(['params', 'reasoning_effort'], 'medium');
+                            }
+                            handleFieldChange(['chatConfig', 'enableReasoningEffort'], checked);
+                          }}
+                        />
+                      }
+                    >
+                      {enableReasoningEffort && (
+                        <Select
+                          size={'small'}
+                          style={{ width: '100%' }}
+                          options={[
+                            { label: t('settingModel.reasoningEffort.options.low'), value: 'low' },
+                            {
+                              label: t('settingModel.reasoningEffort.options.medium'),
+                              value: 'medium',
+                            },
+                            {
+                              label: t('settingModel.reasoningEffort.options.high'),
+                              value: 'high',
+                            },
+                          ]}
+                          value={
+                            typeof reasoningEffortValue === 'string'
+                              ? reasoningEffortValue
+                              : 'medium'
                           }
-                          handleFieldChange(['chatConfig', 'enableReasoningEffort'], checked);
-                        }}
-                      />
-                    }
-                  >
-                    {enableReasoningEffort && (
-                      <Select
-                        size={'small'}
-                        style={{ width: '100%' }}
-                        options={[
-                          { label: t('settingModel.reasoningEffort.options.low'), value: 'low' },
-                          {
-                            label: t('settingModel.reasoningEffort.options.medium'),
-                            value: 'medium',
-                          },
-                          { label: t('settingModel.reasoningEffort.options.high'), value: 'high' },
-                        ]}
-                        value={
-                          typeof reasoningEffortValue === 'string' ? reasoningEffortValue : 'medium'
-                        }
-                        onChange={(value) => {
-                          handleFieldChange(['params', 'reasoning_effort'], value);
-                        }}
-                      />
-                    )}
-                  </ControlRow>
+                          onChange={(value) => {
+                            handleFieldChange(['params', 'reasoning_effort'], value);
+                          }}
+                        />
+                      )}
+                    </ControlRow>
+                  )}
                 </div>
               )}
             </>
