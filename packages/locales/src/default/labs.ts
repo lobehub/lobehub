@@ -39,9 +39,6 @@ export default {
   'features.oauthApps.desc':
     'Show OAuth app management in personal and workspace settings. This feature is hidden by default.',
   'features.oauthApps.title': 'OAuth Apps',
-  'features.platformAgent.desc':
-    'Show the "Connect Agent" entry in the create menu. Connected agents (e.g. OpenClaw, Hermes) run on your own devices and communicate back via lh connect.',
-  'features.platformAgent.title': 'Connect Agent',
   'features.taskVerify.desc':
     'Add a delivery-acceptance section to the task detail: describe acceptance in one sentence and let AI generate editable verify criteria.',
   'features.taskVerify.title': 'Task Delivery Acceptance',

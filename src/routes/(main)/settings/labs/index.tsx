@@ -12,7 +12,6 @@ import { useTranslation } from 'react-i18next';
 import AsyncError from '@/components/AsyncError';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
-import { useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, preferenceSelectors } from '@/store/user/selectors';
 
@@ -34,7 +33,6 @@ const LabsForm = memo(() => {
     refreshUserState,
     enableAgentGraphConfig,
     enableInputMarkdown,
-    enablePlatformAgent,
     enableImessage,
     enableClaudeCodeSdk,
     enableCodexAppServer,
@@ -52,7 +50,6 @@ const LabsForm = memo(() => {
     s.refreshUserState,
     labPreferSelectors.enableAgentGraphConfig(s),
     labPreferSelectors.enableInputMarkdown(s),
-    labPreferSelectors.enablePlatformAgent(s),
     labPreferSelectors.enableImessage(s),
     labPreferSelectors.enableClaudeCodeSdk(s),
     labPreferSelectors.enableCodexAppServer(s),
@@ -64,8 +61,6 @@ const LabsForm = memo(() => {
     labPreferSelectors.enableTopicAcceptance(s),
     s.updateLab,
   ]);
-
-  const hasGatewayUrl = useServerConfigStore((s) => !!s.serverConfig.agentGatewayUrl);
 
   if (!isUserStateInit) {
     // A failed user-state init must show error + Retry, not a permanent skeleton
@@ -148,23 +143,6 @@ const LabsForm = memo(() => {
       label: tLabs('features.oauthApps.title'),
       minWidth: undefined,
     },
-    ...(hasGatewayUrl
-      ? [
-          {
-            children: (
-              <Switch
-                checked={enablePlatformAgent}
-                loading={!isPreferenceInit}
-                onChange={(checked: boolean) => updateLab({ enablePlatformAgent: checked })}
-              />
-            ),
-            className: styles.labItem,
-            desc: tLabs('features.platformAgent.desc'),
-            label: tLabs('features.platformAgent.title'),
-            minWidth: undefined,
-          } satisfies FormItemProps,
-        ]
-      : []),
     {
       children: (
         <Switch
