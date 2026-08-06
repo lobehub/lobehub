@@ -7,7 +7,11 @@ import {
   HOME_COUNT_MAX,
   HOME_COUNT_MIN,
   HOME_CUSTOMIZE_DEFAULTS,
+  HOME_PRESETS,
+  type HomePresetKey,
   type HomeWidgetKey,
+  isHomeMinimalLayout,
+  resolveHomePreset,
 } from './config';
 
 export const toggleHiddenWidget = (hidden: string[], key: HomeWidgetKey): string[] =>
@@ -17,8 +21,10 @@ export const clampHomeCount = (value: number): number =>
   Math.min(HOME_COUNT_MAX, Math.max(HOME_COUNT_MIN, value));
 
 interface HomeCustomization {
+  applyPreset: (key: HomePresetKey) => void;
   hiddenWidgets: string[];
   isWidgetHidden: (key: HomeWidgetKey) => boolean;
+  preset: HomePresetKey | undefined;
   recentsCount: number;
   reset: () => void;
   setRecentsCount: (value: number) => void;
@@ -28,6 +34,13 @@ interface HomeCustomization {
   togglePortrait: () => void;
   toggleWidget: (key: HomeWidgetKey) => void;
 }
+
+export const useHomeMinimalLayout = (): boolean => {
+  const hiddenWidgets = useGlobalStore(systemStatusSelectors.hiddenHomeWidgets);
+  const showPortrait = useGlobalStore(systemStatusSelectors.showHomePortrait);
+
+  return isHomeMinimalLayout({ hiddenWidgets, showPortrait });
+};
 
 export const useHomeCustomization = (): HomeCustomization => {
   const hiddenWidgets = useGlobalStore(systemStatusSelectors.hiddenHomeWidgets);
@@ -64,6 +77,23 @@ export const useHomeCustomization = (): HomeCustomization => {
     [updateSystemStatus],
   );
 
+  const applyPreset = useCallback(
+    (key: HomePresetKey) => {
+      const preset = HOME_PRESETS[key];
+
+      updateSystemStatus(
+        {
+          hiddenHomeWidgets: [...preset.hiddenWidgets],
+          homeRecentsCount: preset.count,
+          homeTaskCount: preset.count,
+          showHomePortrait: preset.showPortrait,
+        },
+        'homeCustomize',
+      );
+    },
+    [updateSystemStatus],
+  );
+
   const reset = useCallback(() => {
     updateSystemStatus(HOME_CUSTOMIZE_DEFAULTS, 'homeCustomize');
   }, [updateSystemStatus]);
@@ -74,8 +104,10 @@ export const useHomeCustomization = (): HomeCustomization => {
   );
 
   return {
+    applyPreset,
     hiddenWidgets,
     isWidgetHidden,
+    preset: resolveHomePreset({ hiddenWidgets, showPortrait }),
     recentsCount,
     reset,
     setRecentsCount,

@@ -1,5 +1,11 @@
 import { WEB_ONBOARDING } from '@lobechat/builtin-agents';
-import { ClaudeCodeIdentifier as ClaudeCodeToolIdentifier } from '@lobechat/builtin-tool-claude-code/client';
+import {
+  ClaudeCodeIdentifier as ClaudeCodeToolIdentifier,
+  ClaudeCodeInspectors,
+  ClaudeCodeInterventions,
+  ClaudeCodeRenders,
+  ClaudeCodeStreamings,
+} from '@lobechat/builtin-tool-claude-code/client';
 import {
   GroupAgentBuilderApiName,
   GroupAgentBuilderIdentifier,
@@ -21,8 +27,10 @@ import {
 import { getBuiltinRenderDisplayControl } from '@lobechat/builtin-tools/displayControls';
 import { builtinToolIdentifiers } from '@lobechat/builtin-tools/identifiers';
 import { getBuiltinInspector } from '@lobechat/builtin-tools/inspectors';
+import { getBuiltinIntervention } from '@lobechat/builtin-tools/interventions';
 import { registerBuiltinToolSurfaces } from '@lobechat/builtin-tools/register';
 import { getBuiltinRender } from '@lobechat/builtin-tools/renders';
+import { getBuiltinStreaming } from '@lobechat/builtin-tools/streamings';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 describe('builtin tool registry', () => {
@@ -56,6 +64,21 @@ describe('builtin tool registry', () => {
     expect(getBuiltinInspector(ClaudeCodeToolIdentifier, apiName)).toBeDefined();
     expect(getBuiltinRender(ClaudeCodeToolIdentifier, apiName)).toBeDefined();
     expect(getBuiltinRenderDisplayControl(ClaudeCodeToolIdentifier, apiName)).toBe('expand');
+  });
+
+  it('registers Claude-compatible surfaces for Qoder', () => {
+    for (const [apiName, render] of Object.entries(ClaudeCodeRenders)) {
+      expect(getBuiltinRender('qoder', apiName)).toBe(render);
+    }
+    for (const [apiName, inspector] of Object.entries(ClaudeCodeInspectors)) {
+      expect(getBuiltinInspector('qoder', apiName)).toBe(inspector);
+    }
+    for (const [apiName, streaming] of Object.entries(ClaudeCodeStreamings)) {
+      expect(getBuiltinStreaming('qoder', apiName)).toBe(streaming);
+    }
+    for (const [apiName, intervention] of Object.entries(ClaudeCodeInterventions)) {
+      expect(getBuiltinIntervention('qoder', apiName)).toBe(intervention);
+    }
   });
 
   it('registers the Codex error inspector', () => {
@@ -94,6 +117,7 @@ describe('builtin tool registry', () => {
     expect(
       getBuiltinRender(ClaudeCodeToolIdentifier, UserInteractionApiName.askUserQuestion),
     ).toBeDefined();
+    expect(getBuiltinIntervention('qoder', UserInteractionApiName.askUserQuestion)).toBeDefined();
   });
 
   it('exposes the marketplace APIs under the web onboarding manifest', () => {

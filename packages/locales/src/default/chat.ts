@@ -814,6 +814,17 @@ export default {
   'piInstallGuide.menuNotification.title': 'Pi CLI not found',
   'piInstallGuide.reason': 'LobeHub could not start Pi: {{message}}',
   'piInstallGuide.title': 'Install Pi CLI',
+  'qoderInstallGuide.actions.openDocs': 'Open Install Guide',
+  'qoderInstallGuide.actions.openSystemTools': 'Open System Tools',
+  'qoderInstallGuide.afterInstall':
+    'After installing, run `qodercli login`, then retry your message or click Re-detect in System Tools.',
+  'qoderInstallGuide.desc':
+    'Qoder needs its CLI to run locally. Install it and make sure the qodercli command is available in your PATH.',
+  'qoderInstallGuide.installWithBrew': 'npm install',
+  'qoderInstallGuide.installWithNpm': 'Recommended install',
+  'qoderInstallGuide.menuNotification.title': 'Qoder CLI not found',
+  'qoderInstallGuide.reason': 'LobeHub could not start Qoder: {{message}}',
+  'qoderInstallGuide.title': 'Install Qoder CLI',
   'addAgent': 'Add Agent',
   'addAgentFromList': 'Add from Agent list',
   'addAgentFromMarket': 'Add from Market',
@@ -823,8 +834,9 @@ export default {
   'newCodexAgent': 'Add Codex',
   'newOpenCodeAgent': 'Add OpenCode',
   'newPiAgent': 'Add Pi',
-  'newPlatformAgent': 'Connect Local Agent',
-  'newPlatformAgentDesc': 'Connect to Claude Code, Codex, and other local agents',
+  'newQoderAgent': 'Add Qoder',
+  'newPlatformAgent': 'Connect an Agent',
+  'newPlatformAgentDesc': 'Connect Claude Code, Codex, Hermes, OpenClaw, and other agents',
   'newGroupChat': 'Create Group',
   'agent.publishToWorkspace': 'Publish to Workspace',
   'agent.publishToWorkspaceErrorFixedPrivateDevice':
@@ -908,6 +920,7 @@ export default {
   'connectAgent.providerDesc.amp': 'Sourcegraph coding agent CLI',
   'connectAgent.providerDesc.opencode': 'Open-source coding agent CLI',
   'connectAgent.providerDesc.pi': 'Minimal coding agent CLI',
+  'connectAgent.providerDesc.qoder': 'Qoder coding agent CLI',
   'connectAgent.providerDesc.openclaw': 'Personal agent platform',
   'connectAgent.providerDesc.hermes': 'Personal agent platform',
 

@@ -1,10 +1,15 @@
 export type HeterogeneousAgentMenuLabelKey =
-  'newAmpAgent' | 'newClaudeCodeAgent' | 'newCodexAgent' | 'newOpenCodeAgent' | 'newPiAgent';
+  | 'newAmpAgent'
+  | 'newClaudeCodeAgent'
+  | 'newCodexAgent'
+  | 'newOpenCodeAgent'
+  | 'newPiAgent'
+  | 'newQoderAgent';
 
 /**
- * Config for local CLI hetero agents (Amp, Claude Code, Codex, OpenCode, Pi) that run as
- * desktop subprocesses via Electron IPC. Remote device agents (openclaw,
- * hermes) have their own setup flow and are not listed here.
+ * Config for local CLI hetero agents (Amp, Claude Code, Codex, OpenCode, Pi, Qoder) that run as
+ * desktop subprocesses via Electron IPC. Platform task agents (openclaw,
+ * hermes) use a separate notify-based runner and are not listed here.
  */
 export interface HeterogeneousAgentConfig {
   command: string;
@@ -12,7 +17,7 @@ export interface HeterogeneousAgentConfig {
   menuKey: string;
   menuLabelKey: HeterogeneousAgentMenuLabelKey;
   title: string;
-  type: 'amp' | 'claude-code' | 'codex' | 'opencode' | 'pi';
+  type: 'amp' | 'claude-code' | 'codex' | 'opencode' | 'pi' | 'qoder';
 }
 
 export const HETEROGENEOUS_AGENT_CONFIGS = [
@@ -56,15 +61,23 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
     title: 'Pi',
     type: 'pi',
   },
+  {
+    command: 'qodercli',
+    iconId: 'Qoder',
+    menuKey: 'newQoderAgent',
+    menuLabelKey: 'newQoderAgent',
+    title: 'Qoder',
+    type: 'qoder',
+  },
 ] as const satisfies readonly HeterogeneousAgentConfig[];
 
 export const getHeterogeneousAgentConfig = (type: string) =>
   HETEROGENEOUS_AGENT_CONFIGS.find((config) => config.type === type);
 
 /**
- * Config for remote platform hetero agents that communicate back via
- * agentNotify.notify. Unlike local CLI agents these are always bound to
- * a device via `lh connect` and do not run as desktop subprocesses.
+ * Config for platform task hetero agents that communicate back via
+ * agentNotify.notify. They can run on this desktop or a connected device,
+ * but use a different execution protocol from local CLI stream adapters.
  * Add new remote platform types here to automatically propagate display
  * names across the UI (model tag, loading indicator, agent list, etc.).
  */
@@ -81,7 +94,7 @@ export const REMOTE_HETEROGENEOUS_AGENT_CONFIGS = [
 /** Union of all local CLI hetero types. */
 export type LocalHeterogeneousAgentType = (typeof HETEROGENEOUS_AGENT_CONFIGS)[number]['type'];
 
-/** Union of all remote platform hetero types. */
+/** Union of all notify-based platform task hetero types. */
 export type RemoteHeterogeneousAgentType =
   (typeof REMOTE_HETEROGENEOUS_AGENT_CONFIGS)[number]['type'];
 
@@ -90,6 +103,6 @@ export type HeterogeneousAgentType = LocalHeterogeneousAgentType | RemoteHeterog
 
 const REMOTE_HETERO_TYPES = new Set<string>(REMOTE_HETEROGENEOUS_AGENT_CONFIGS.map((c) => c.type));
 
-/** Returns true when `type` identifies a remote platform agent (OpenClaw or Hermes). */
+/** Returns true when `type` identifies a notify-based platform agent. */
 export const isRemoteHeterogeneousType = (type: string): type is RemoteHeterogeneousAgentType =>
   REMOTE_HETERO_TYPES.has(type);

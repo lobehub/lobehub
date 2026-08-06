@@ -222,4 +222,59 @@ describe('heterogeneous agent model discovery', () => {
       expect.any(Function),
     );
   });
+
+  it('parses and discovers Qoder built-in names and custom model IDs', async () => {
+    const stdout = [
+      'MODEL',
+      'Auto',
+      'Claude Sonnet 4.5',
+      'Team Gateway (team-model-id)',
+      'Team Gateway (team-model-id)',
+      'Long custom model (model-id-that-was-truncated-at-forty-ch…)',
+      '',
+    ].join('\n');
+    resolveExecFile(stdout);
+    const { listHeterogeneousAgentModels, parseQoderModelCatalog } = await importModule();
+
+    expect(parseQoderModelCatalog(stdout)).toEqual([
+      { id: 'Auto', modelId: 'Auto', providerId: 'qoder' },
+      { id: 'Claude Sonnet 4.5', modelId: 'Claude Sonnet 4.5', providerId: 'qoder' },
+      {
+        id: 'team-model-id',
+        label: 'Team Gateway',
+        modelId: 'team-model-id',
+        providerId: 'qoder',
+      },
+    ]);
+
+    await expect(
+      listHeterogeneousAgentModels({
+        command: '/custom/qodercli',
+        cwd: '/repo',
+        env: { QODER_CONFIG_DIR: '/config' },
+        type: 'qoder',
+      }),
+    ).resolves.toMatchObject({
+      models: [
+        { id: 'Auto', modelId: 'Auto', providerId: 'qoder' },
+        { id: 'Claude Sonnet 4.5', modelId: 'Claude Sonnet 4.5', providerId: 'qoder' },
+        {
+          id: 'team-model-id',
+          label: 'Team Gateway',
+          modelId: 'team-model-id',
+          providerId: 'qoder',
+        },
+      ],
+      status: 'success',
+    });
+    expect(execFileMock).toHaveBeenLastCalledWith(
+      '/custom/qodercli',
+      ['--list-models'],
+      expect.objectContaining({
+        cwd: '/repo',
+        env: { QODER_CONFIG_DIR: '/config' },
+      }),
+      expect.any(Function),
+    );
+  });
 });

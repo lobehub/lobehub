@@ -110,6 +110,7 @@ import {
   isDeviceLockedPlan,
   resolveExecutionPlan,
   resolveToolMode,
+  resolveWorkspaceScoped,
 } from '@/helpers/executionTarget';
 import { shouldEnableBuiltinSkill } from '@/helpers/skillFilters';
 import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
@@ -1196,6 +1197,7 @@ export class AiAgentService {
       clientIp,
       userAgent,
       deviceId: requestedDeviceId,
+      localDeviceId,
       botPlatformContext,
       discordContext,
       existingMessageIds = [],
@@ -1908,7 +1910,7 @@ export class AiAgentService {
     // 3.5. Hetero-agent early exit — local CLI and remote platform agents bypass the
     // server-side LLM pipeline.  After topic + message creation we hand off to
     // the device gateway (desktop) or cloud sandbox, which will push events
-    // back via `heteroIngest` / `heteroFinish` (amp / claude-code / codex / opencode / pi) or
+    // back via `heteroIngest` / `heteroFinish` (amp / claude-code / codex / opencode / pi / qoder) or
     // `agentNotify.notify` (openclaw / hermes).
     //
     // Detection: prefer agencyConfig.heterogeneousProvider.type (set by the UI),
@@ -1917,7 +1919,7 @@ export class AiAgentService {
     const heteroProviderType = agentConfig.agencyConfig?.heterogeneousProvider?.type;
     const isHeteroAgent = !!heteroProviderType || isHeterogeneousAgentModelId(model);
     const heteroType = (heteroProviderType ?? model) as
-      'amp' | 'claude-code' | 'codex' | 'hermes' | 'openclaw' | 'opencode' | 'pi';
+      'amp' | 'claude-code' | 'codex' | 'hermes' | 'openclaw' | 'opencode' | 'pi' | 'qoder';
 
     // ── Shared turn setup (runs for BOTH hetero and normal agents) ──────────
     // Everything up to and including persisting the turn is identical for both
@@ -2212,7 +2214,8 @@ export class AiAgentService {
         heteroType === 'claude-code' ||
         heteroType === 'codex' ||
         heteroType === 'opencode' ||
-        heteroType === 'pi'
+        heteroType === 'pi' ||
+        heteroType === 'qoder'
           ? buildHeteroExecArgs(
               agentConfig.agencyConfig?.heterogeneousProvider?.type === heteroType
                 ? agentConfig.agencyConfig.heterogeneousProvider
@@ -2235,8 +2238,36 @@ export class AiAgentService {
         userId: this.userId,
       };
 
-      const remoteDeviceId =
-        effectiveRequestedDeviceId || agentConfig.agencyConfig?.boundDeviceId || undefined;
+      const platformPlan = isRemoteHetero
+        ? resolveExecutionPlan({
+            agencyConfig: agentConfig.agencyConfig,
+            canUseDevice,
+            clientExecutionAvailable: Boolean(localDeviceId),
+            isHetero: true,
+            localDeviceId,
+            requestedDeviceId: effectiveRequestedDeviceId,
+            sandboxExecutionAvailable: false,
+            trigger: requestTriggerMetadata?.trigger,
+            workspaceScoped: resolveWorkspaceScoped(
+              isPublicWorkspaceAgent && !canManageAgent,
+              memberDeviceOverride,
+            ),
+          })
+        : undefined;
+      const remoteDeviceId = platformPlan?.kind === 'device' ? platformPlan.deviceId : undefined;
+      const remoteDeviceWorkspaceId = remoteDeviceId
+        ? await this.resolveDeviceWorkspaceId(remoteDeviceId)
+        : undefined;
+      const usesCallersPersonalDevice =
+        platformPlan?.kind === 'device' &&
+        !remoteDeviceWorkspaceId &&
+        (effectiveRequestedDeviceId === remoteDeviceId ||
+          (platformPlan.target === 'local' &&
+            agentConfig.agencyConfig?.executionTargetSelectionPolicy !== 'fixed') ||
+          (!canManageAgent && memberDeviceOverride?.boundDeviceId === remoteDeviceId));
+      const remoteDeviceUserId = usesCallersPersonalDevice
+        ? this.userId
+        : (agentConfig.userId ?? this.userId);
 
       // Register the run's lifecycle hooks so the hetero terminal path fires
       // onComplete/onError through the same `hookDispatcher` the normal LLM
@@ -2258,7 +2289,12 @@ export class AiAgentService {
           hooks: serializedHooks,
           // Store deviceId + heteroType so interruptTask can cancel remote processes
           ...(isRemoteHetero && remoteDeviceId
-            ? { deviceId: remoteDeviceId, heteroType }
+            ? {
+                deviceId: remoteDeviceId,
+                deviceUserId: remoteDeviceUserId,
+                deviceWorkspaceId: remoteDeviceWorkspaceId,
+                heteroType,
+              }
             : undefined),
           operationId,
           scope: appContext?.scope ?? undefined,
@@ -2266,13 +2302,13 @@ export class AiAgentService {
         },
       });
 
-      // Remote hetero agents (openclaw / hermes) dispatch to the device identified
-      // by agencyConfig.boundDeviceId and communicate back via agentNotify.notify.
-      // They always go through the gateway WS channel — open the stream now so the
-      // frontend can subscribe before the first lh notify arrives.
+      // Notify-based platform agents (openclaw / hermes) communicate back via
+      // agentNotify.notify. A local run uses the requesting desktop's device ID;
+      // a remote run uses agencyConfig.boundDeviceId. Both use the gateway transport,
+      // so open the stream before the first notify arrives.
 
       if (isRemoteHetero) {
-        // Remote hetero agents are device-only — there is no sandbox to
+        // Platform task agents require either this desktop or a connected device — there is no sandbox to
         // degrade to, so a denied sender (external bot user) is refused
         // outright instead of reaching the owner's machine.
         if (!canUseDevice) {
@@ -2304,12 +2340,12 @@ export class AiAgentService {
           };
         }
         if (!remoteDeviceId) {
-          log('execAgent: openclaw/hermes requires a bound device (boundDeviceId not set)');
+          log('execAgent: openclaw/hermes requires a local or connected device');
           await this.finalizeHeteroDispatchError({
             agentId: resolvedAgentId,
             assistantMessageId: assistantMessageRecord.id,
-            detail: 'No device bound to this agent. Configure boundDeviceId.',
-            message: 'No bound device for remote hetero agent',
+            detail: 'No local or connected device is available for this agent.',
+            message: 'No execution device for platform agent',
             operationId,
             topicId,
           });
@@ -2319,7 +2355,7 @@ export class AiAgentService {
             autoStarted: false,
             createdAt: new Date().toISOString(),
             error: 'No bound device',
-            message: 'Remote hetero agent requires boundDeviceId',
+            message: 'Platform agent requires a local or connected device',
             operationId,
             status: 'error',
             success: false,
@@ -2344,9 +2380,12 @@ export class AiAgentService {
 
         // lh connect only handles tool_call_request (not agent_run_request),
         // so we use executeToolCall with the runHeteroTask tool instead of dispatchAgentRun.
-        const remoteDeviceWorkspaceId = await this.resolveDeviceWorkspaceId(remoteDeviceId);
         const result = await deviceGateway.executeToolCall(
-          { deviceId: remoteDeviceId, userId: this.userId, workspaceId: remoteDeviceWorkspaceId },
+          {
+            deviceId: remoteDeviceId,
+            userId: remoteDeviceUserId,
+            workspaceId: remoteDeviceWorkspaceId,
+          },
           {
             apiName: 'runHeteroTask',
             arguments: JSON.stringify({
@@ -2361,7 +2400,7 @@ export class AiAgentService {
               // topic so agentNotify can resolve the workspace-owned topic.
               // Without this the device's notify call falls back to personal
               // mode and TopicModel.findById returns NOT_FOUND.
-              workspaceId: remoteDeviceWorkspaceId,
+              workspaceId: this.workspaceId,
             }),
             identifier: 'runHeteroTask',
           },
@@ -2455,7 +2494,10 @@ export class AiAgentService {
               agentId: resolvedAgentId,
               assistantMessageId: assistantMessageRecord.id,
               detail:
-                heteroType === 'amp' || heteroType === 'opencode' || heteroType === 'pi'
+                heteroType === 'amp' ||
+                heteroType === 'opencode' ||
+                heteroType === 'pi' ||
+                heteroType === 'qoder'
                   ? 'No device bound. Pick a local or connected device in the Execution Device switcher.'
                   : 'No device bound. Pick a device in the Execution Device switcher, or switch to Cloud sandbox.',
               message: 'No bound device for hetero agent',
@@ -5394,18 +5436,35 @@ export class AiAgentService {
       throw new Error('Operation ID not found');
     }
 
+    // Not every cancellation entry point knows the topic (reconnect, task,
+    // bot/messenger stop). Recover it from the owner-scoped operation row so
+    // device cancellation is symmetric across every caller.
+    let resolvedTopicId = topicId;
+    if (!resolvedTopicId) {
+      const operation = await this.agentOperationModel.findById(resolvedOperationId);
+      resolvedTopicId = operation?.topicId ?? undefined;
+    }
+
     // 2. Cancel remote hetero process (openclaw / hermes) if applicable.
     // Check topic.metadata.runningOperation for device + heteroType info seeded by execAgent.
     // This runs regardless of whether interruptOperation succeeds — the remote process
     // is independent of the local operation registry.
-    if (topicId) {
-      const topic = await this.topicModel.findById(topicId);
+    if (resolvedTopicId) {
+      const topic = await this.topicModel.findById(resolvedTopicId);
       const runningOp = (topic?.metadata as any)?.runningOperation as
-        { deviceId?: string; heteroType?: string; operationId?: string } | undefined;
+        | {
+            deviceId?: string;
+            deviceUserId?: string;
+            deviceWorkspaceId?: string;
+            heteroType?: string;
+            operationId?: string;
+          }
+        | undefined;
 
       if (
         runningOp?.deviceId &&
         runningOp.heteroType &&
+        runningOp.operationId === resolvedOperationId &&
         isRemoteHeterogeneousType(runningOp.heteroType)
       ) {
         const taskId = runningOp.operationId ?? resolvedOperationId;
@@ -5415,12 +5474,13 @@ export class AiAgentService {
           runningOp.deviceId,
           taskId,
         );
-        const cancelWorkspaceId = await this.resolveDeviceWorkspaceId(runningOp.deviceId);
+        const cancelWorkspaceId =
+          runningOp.deviceWorkspaceId ?? (await this.resolveDeviceWorkspaceId(runningOp.deviceId));
         await deviceGateway
           .executeToolCall(
             {
               deviceId: runningOp.deviceId,
-              userId: this.userId,
+              userId: runningOp.deviceUserId ?? this.userId,
               workspaceId: cancelWorkspaceId,
             },
             {

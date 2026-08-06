@@ -100,6 +100,31 @@ describe('shouldShowHeteroModelSelector', () => {
     ).toBe(false);
   });
 
+  it('shows Qoder models only when a concrete catalog target is available', () => {
+    expect(
+      shouldShowHeteroModelSelector({
+        executionTarget: 'local',
+        isDesktopClient: true,
+        providerType: 'qoder',
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowHeteroModelSelector({
+        boundDeviceId: 'remote-device',
+        executionTarget: 'device',
+        isDesktopClient: false,
+        providerType: 'qoder',
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowHeteroModelSelector({
+        executionTarget: 'auto',
+        isDesktopClient: false,
+        providerType: 'qoder',
+      }),
+    ).toBe(false);
+  });
+
   it.each([
     ['device', undefined],
     ['auto', 'remote-device'],

@@ -74,6 +74,9 @@ describe('hasVisibleRailWidget', () => {
     expect(hasVisibleRailWidget({ ...railColumn, hiddenWidgets: ['running', 'news'] })).toBe(true);
   });
 
+  // Covers both kinds of section the rail never shows: the ones this column
+  // suppresses by prop, and the main column's own recents/tasks — counting
+  // either would keep an empty rail on screen forever.
   it('drops the rail once every widget it hosts is off, ignoring the ones it never shows', () => {
     expect(
       hasVisibleRailWidget({ ...railColumn, hiddenWidgets: ['running', 'news', 'suggestions'] }),

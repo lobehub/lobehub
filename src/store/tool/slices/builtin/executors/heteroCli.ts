@@ -9,7 +9,7 @@ import {
 
 /**
  * Hook-only executor for a heterogeneous CLI agent's tool identifier
- * (`amp` / `claude-code` / `codex` / `opencode` / `pi` — set by the adapters in
+ * (`amp` / `claude-code` / `codex` / `opencode` / `pi` / `qoder` — set by the adapters in
  * `packages/heterogeneous-agents/src/adapters/*`). These agents run their OWN
  * tools, so this executor is NEVER invoked: `apiEnum` is empty → `hasApi()` is
  * always false → the client-tool dispatch (`hasExecutor`) never routes to
@@ -95,7 +95,7 @@ class HeteroCliExecutor extends BaseExecutor<typeof EMPTY_API_ENUM> {
   };
 }
 
-// AMP's shell tool is `shell_command`; CC's is `Bash`; Codex's is
+// AMP's shell tool is `shell_command`; CC and Qoder use `Bash`; Codex's is
 // `command_execution`; OpenCode and Pi both use `bash`.
 export const ampExecutor = new HeteroCliExecutor('amp', new Set(['shell_command']));
 export const claudeCodeExecutor = new HeteroCliExecutor('claude-code', new Set(['Bash']), {
@@ -105,3 +105,4 @@ export const claudeCodeExecutor = new HeteroCliExecutor('claude-code', new Set([
 export const codexExecutor = new HeteroCliExecutor('codex', new Set(['command_execution']));
 export const openCodeExecutor = new HeteroCliExecutor('opencode', new Set(['bash']));
 export const piExecutor = new HeteroCliExecutor('pi', new Set(['bash']));
+export const qoderExecutor = new HeteroCliExecutor('qoder', new Set(['Bash']));

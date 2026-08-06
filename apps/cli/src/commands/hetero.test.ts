@@ -102,7 +102,10 @@ describe('hetero exec command', () => {
     stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     mockResolveHeteroSpawnCommand.mockReset();
     mockResolveHeteroSpawnCommand.mockImplementation(
-      async (agentType: 'amp' | 'claude-code' | 'codex' | 'opencode' | 'pi', command?: string) => ({
+      async (
+        agentType: 'amp' | 'claude-code' | 'codex' | 'opencode' | 'pi' | 'qoder',
+        command?: string,
+      ) => ({
         command:
           command ??
           (agentType === 'amp'
@@ -113,7 +116,9 @@ describe('hetero exec command', () => {
                 ? 'opencode'
                 : agentType === 'pi'
                   ? 'pi'
-                  : 'claude'),
+                  : agentType === 'qoder'
+                    ? 'qodercli'
+                    : 'claude'),
       }),
     );
     mockSpawnAgent.mockReset();
@@ -200,6 +205,33 @@ describe('hetero exec command', () => {
     });
     // operationId auto-generated when omitted (uuid v4 shape)
     expect(call.operationId).toMatch(/^[0-9a-f-]{36}$/i);
+  });
+
+  it('runs Qoder with its default command and forwards model but not effort', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'qoder',
+      '--prompt',
+      'do thing',
+      '--model',
+      'Claude Sonnet 4.5',
+      '--effort',
+      'high',
+    ]);
+
+    expect(mockResolveHeteroSpawnCommand).toHaveBeenCalledWith('qoder', undefined);
+    expect(mockSpawnAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'qoder',
+        command: 'qodercli',
+        extraArgs: ['--model', 'Claude Sonnet 4.5'],
+        prompt: 'do thing',
+      }),
+    );
   });
 
   it('uses the provided --operation-id verbatim', async () => {

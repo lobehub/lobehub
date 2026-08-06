@@ -27,6 +27,9 @@ import {
   OPENCODE_CLI_INSTALL_DOCS_URL,
   PI_CLI_INSTALL_COMMANDS,
   PI_CLI_INSTALL_DOCS_URL,
+  QODER_CLI_AUTH_DOCS_URL,
+  QODER_CLI_INSTALL_COMMANDS,
+  QODER_CLI_INSTALL_DOCS_URL,
 } from '@lobechat/electron-client-ipc/types/heterogeneous-agent';
 import type { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import type {
@@ -136,6 +139,7 @@ const CLI_AUTH_REQUIRED_PATTERNS = [
   /no models available/i,
 ] as const;
 const AMP_AUTH_REQUIRED_PATTERNS = [/please (?:log|sign) in/i, /amp_api_key/i] as const;
+const QODER_AUTH_REQUIRED_PATTERNS = [/not logged in/i, /please run \/login/i] as const;
 const CODEX_RESUME_CWD_MISMATCH_PATTERNS = [
   /working directory/i,
   /\bcwd\b/i,
@@ -426,6 +430,9 @@ export default class HeterogeneousAgentCtr {
       case 'pi': {
         return 'pi';
       }
+      case 'qoder': {
+        return 'qodercli';
+      }
       default: {
         return 'claude';
       }
@@ -497,6 +504,19 @@ export default class HeterogeneousAgentCtr {
     };
   }
 
+  private buildQoderCliMissingError(session: AgentSession): HeterogeneousAgentSessionError {
+    const command = this.resolveSessionCommand(session);
+
+    return {
+      agentType: 'qoder',
+      code: HeterogeneousAgentSessionErrorCode.CliNotFound,
+      command,
+      docsUrl: QODER_CLI_INSTALL_DOCS_URL,
+      installCommands: QODER_CLI_INSTALL_COMMANDS,
+      message: `Qoder CLI was not found. Install it and make sure \`${command}\` can be executed.`,
+    };
+  }
+
   private buildCliMissingError(session: AgentSession): HeterogeneousAgentSessionError | undefined {
     switch (session.agentType) {
       case 'amp': {
@@ -513,6 +533,9 @@ export default class HeterogeneousAgentCtr {
       }
       case 'pi': {
         return this.buildPiCliMissingError(session);
+      }
+      case 'qoder': {
+        return this.buildQoderCliMissingError(session);
       }
       default: {
         return;
@@ -578,6 +601,16 @@ export default class HeterogeneousAgentCtr {
           command,
           docsUrl: PI_CLI_INSTALL_DOCS_URL,
           message: 'Pi could not authenticate. Run `pi`, use `/login`, then retry.',
+          stderr,
+        };
+      }
+      case 'qoder': {
+        return {
+          agentType: 'qoder',
+          code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+          command,
+          docsUrl: QODER_CLI_AUTH_DOCS_URL,
+          message: 'Qoder could not authenticate. Run `qodercli login`, then retry.',
           stderr,
         };
       }
@@ -660,7 +693,9 @@ export default class HeterogeneousAgentCtr {
     const patterns =
       session.agentType === 'amp'
         ? [...CLI_AUTH_REQUIRED_PATTERNS, ...AMP_AUTH_REQUIRED_PATTERNS]
-        : CLI_AUTH_REQUIRED_PATTERNS;
+        : session.agentType === 'qoder'
+          ? [...CLI_AUTH_REQUIRED_PATTERNS, ...QODER_AUTH_REQUIRED_PATTERNS]
+          : CLI_AUTH_REQUIRED_PATTERNS;
     if (!patterns.some((pattern) => pattern.test(message))) return;
 
     return this.buildCliAuthRequiredError(session, message);
@@ -738,7 +773,9 @@ export default class HeterogeneousAgentCtr {
               ? 'opencode'
               : session.agentType === 'pi'
                 ? 'pi'
-                : undefined;
+                : session.agentType === 'qoder'
+                  ? 'qodercli'
+                  : undefined;
     if (!defaultCommand) return;
 
     const command = this.resolveSessionCommand(session);
@@ -1254,11 +1291,11 @@ export default class HeterogeneousAgentCtr {
       });
     }
 
-    // Stand up the AskUserQuestion MCP bridge for claude-code prompts BEFORE
+    // Stand up the AskUserQuestion MCP bridge for supported prompts BEFORE
     // building the spawn plan so the driver can wire the temp config path
-    // into `--mcp-config`. Codex / future agents skip this entirely.
+    // into `--mcp-config`. Other agents skip this entirely.
     const intervention =
-      session.agentType === 'claude-code'
+      session.agentType === 'claude-code' || session.agentType === 'qoder'
         ? await this.setupInterventionForOp(params.operationId, {
             agentId: params.agentId,
             topicId: params.topicId,

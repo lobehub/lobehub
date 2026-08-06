@@ -15,6 +15,8 @@ import { pickString } from '@lobechat/utils';
 import { installMarketplaceAgents } from '@/services/installMarketplaceAgents';
 import { topicService } from '@/services/topic';
 
+const QODER_IDENTIFIER = 'qoder';
+
 interface SubmitToolInteractionOptions {
   createUserMessage?: boolean;
   pluginState?: Record<string, unknown>;
@@ -161,7 +163,10 @@ const findCustomInteractionSubmitHandler = (identifier: string, apiName?: string
  * because the answer ships back through IPC, not through a synthetic user
  * turn.
  */
-const HETERO_CUSTOM_INTERACTION_IDENTIFIERS = new Set<string>([ClaudeCodeIdentifier]);
+const HETERO_CUSTOM_INTERACTION_IDENTIFIERS = new Set<string>([
+  ClaudeCodeIdentifier,
+  QODER_IDENTIFIER,
+]);
 
 export const isHeteroInteractionIdentifier = (identifier: string) =>
   HETERO_CUSTOM_INTERACTION_IDENTIFIERS.has(identifier);

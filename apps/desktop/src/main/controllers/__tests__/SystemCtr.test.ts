@@ -97,6 +97,12 @@ vi.mock('@/utils/platform', () => ({
   macOS: vi.fn(() => true),
 }));
 
+// Sever RemoteServerConfigCtr's heavy import chain — the class only serves as
+// the getController token here, and mockApp.getController ignores it anyway.
+vi.mock('../RemoteServerConfigCtr', () => ({
+  default: class MockRemoteServerConfigCtr {},
+}));
+
 vi.mock('font-list', () => ({
   getFonts2: fontListGetFonts2Mock,
 }));
@@ -130,9 +136,17 @@ const mockI18n = {
   ns: vi.fn((namespace: string) => (key: string) => `${namespace}.${key}`),
 };
 
+const mockGetDesktopBootstrapIdentity = vi.fn(() => ({
+  isIdentityResolved: true,
+  userId: 'user_1',
+}));
+
 const mockApp = {
   appStoragePath: '/mock/storage',
   browserManager: mockBrowserManager,
+  getController: vi.fn(() => ({
+    getDesktopBootstrapIdentity: mockGetDesktopBootstrapIdentity,
+  })),
   i18n: mockI18n,
   storeManager: mockStoreManager,
 } as unknown as App;
@@ -178,6 +192,37 @@ describe('SystemController', () => {
       await invokeIpc('system.setDesktopOnboardingCompleted', true);
 
       expect(mockStoreManager.set).toHaveBeenCalledWith('desktopOnboardingCompleted', true);
+    });
+  });
+
+  describe('setLastWorkspaceSlug', () => {
+    it("records the slug under the current account's entry", async () => {
+      mockStoreManager.get.mockReturnValueOnce({ user_2: 'other' });
+
+      await invokeIpc('system.setLastWorkspaceSlug', 'acme');
+
+      expect(mockStoreManager.set).toHaveBeenCalledWith('lastWorkspaceSlugByAccount', {
+        user_1: 'acme',
+        user_2: 'other',
+      });
+    });
+
+    it("clears only the current account's entry on personal scope", async () => {
+      mockStoreManager.get.mockReturnValueOnce({ user_1: 'acme', user_2: 'other' });
+
+      await invokeIpc('system.setLastWorkspaceSlug', null);
+
+      expect(mockStoreManager.set).toHaveBeenCalledWith('lastWorkspaceSlugByAccount', {
+        user_2: 'other',
+      });
+    });
+
+    it('does nothing when no account identity is available', async () => {
+      mockGetDesktopBootstrapIdentity.mockReturnValueOnce({ isIdentityResolved: true } as any);
+
+      await invokeIpc('system.setLastWorkspaceSlug', 'acme');
+
+      expect(mockStoreManager.set).not.toHaveBeenCalled();
     });
   });
 

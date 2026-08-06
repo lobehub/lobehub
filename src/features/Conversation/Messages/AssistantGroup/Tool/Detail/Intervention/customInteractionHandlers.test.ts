@@ -12,6 +12,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { installMarketplaceAgents } from '@/services/installMarketplaceAgents';
 
 import {
+  isCustomInteractionIdentifier,
   prepareCustomInteractionSubmit,
   recordCustomInteractionResolution,
 } from './customInteractionHandlers';
@@ -101,6 +102,10 @@ describe('customInteractionHandlers', () => {
       options: { createUserMessage: false, pluginState: { askUserAnswers: payload } },
       payload,
     });
+  });
+
+  it('routes Qoder tools through the heterogeneous custom interaction flow', () => {
+    expect(isCustomInteractionIdentifier('qoder', 'askUserQuestion')).toBe(true);
   });
 
   it('persists skipped marketplace picks from the original tool arguments', async () => {

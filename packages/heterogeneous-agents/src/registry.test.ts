@@ -6,6 +6,7 @@ import {
   CodexAdapter,
   OpenCodeAdapter,
   PiAdapter,
+  QoderAdapter,
 } from './adapters';
 import { createAdapter, listAgentTypes } from './registry';
 
@@ -34,6 +35,10 @@ describe('registry', () => {
       expect(createAdapter('pi')).toBeInstanceOf(PiAdapter);
     });
 
+    it('creates a QoderAdapter for "qoder"', () => {
+      expect(createAdapter('qoder')).toBeInstanceOf(QoderAdapter);
+    });
+
     it('throws for unknown agent type', () => {
       expect(() => createAdapter('unknown-agent')).toThrow('Unknown agent type: "unknown-agent"');
     });
@@ -47,6 +52,7 @@ describe('registry', () => {
       expect(types).toContain('codex');
       expect(types).toContain('opencode');
       expect(types).toContain('pi');
+      expect(types).toContain('qoder');
     });
   });
 });

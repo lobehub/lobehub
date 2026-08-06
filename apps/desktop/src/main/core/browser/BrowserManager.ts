@@ -274,10 +274,27 @@ export class BrowserManager {
   private resolveMainWindowInitialPath(
     isOnboardingCompleted: boolean,
     pendingRestoreRoute: string,
+    lastWorkspaceSlug: string,
   ): string {
     if (!isOnboardingCompleted) return '/desktop-onboarding';
     if (pendingRestoreRoute) return pendingRestoreRoute;
+    // Shape guard: a corrupted store value must not produce an unloadable path.
+    if (lastWorkspaceSlug && /^[a-z0-9-]+$/.test(lastWorkspaceSlug)) {
+      return `/${lastWorkspaceSlug}`;
+    }
     return '/';
+  }
+
+  /**
+   * The account's remembered workspace slug, so the main window boots straight
+   * at `/{slug}` with no post-load redirect. The account comes from the stored
+   * OIDC token — no token (signed out) means no memory to apply.
+   */
+  private getLastWorkspaceSlug(remoteServerConfigCtr: RemoteServerConfigCtr): string {
+    const { userId } = remoteServerConfigCtr.getDesktopBootstrapIdentity();
+    if (!userId) return '';
+
+    return this.app.storeManager.get('lastWorkspaceSlugByAccount', {})[userId] ?? '';
   }
 
   /**
@@ -302,6 +319,7 @@ export class BrowserManager {
         const initialPath = this.resolveMainWindowInitialPath(
           isOnboardingCompleted,
           pendingRestoreRoute,
+          this.getLastWorkspaceSlug(remoteServerConfigCtr),
         );
         browser = {
           ...browser,

@@ -242,6 +242,8 @@ const ExecAgentSchema = z
       .optional(),
     /** Explicit device ID to bind to the topic and activate for this run */
     deviceId: z.string().optional(),
+    /** Current desktop device hint, honored only for an effective local target */
+    localDeviceId: z.string().optional(),
     /** Optional existing message IDs to include in context */
     existingMessageIds: z.array(z.string()).optional().default([]),
     /** File IDs of already-uploaded attachments to attach to the new user message */
@@ -555,7 +557,7 @@ const AgentStreamEventSchema = z.object({
  * → topic reverse-lookup is unreliable per design decision).
  */
 const HeteroIngestSchema = z.object({
-  agentType: z.enum(['amp', 'claude-code', 'codex', 'opencode', 'pi']),
+  agentType: z.enum(['amp', 'claude-code', 'codex', 'opencode', 'pi', 'qoder']),
   /** Initial assistant placeholder message id forwarded from the sandbox env var.
    * When present, `loadOrCreateState` uses it directly and skips the DB read of
    * topic.metadata.runningOperation, eliminating the replica-lag race condition. */
@@ -572,7 +574,7 @@ const HeteroIngestSchema = z.object({
  * (CC's per-cwd id), kept here so the server can resume next time.
  */
 const HeteroFinishSchema = z.object({
-  agentType: z.enum(['amp', 'claude-code', 'codex', 'opencode', 'pi']),
+  agentType: z.enum(['amp', 'claude-code', 'codex', 'opencode', 'pi', 'qoder']),
   error: z
     .object({
       /**
@@ -882,6 +884,7 @@ export const aiAgentRouter = router({
       appContext,
       autoStart = true,
       deviceId,
+      localDeviceId,
       existingMessageIds = [],
       fileIds,
       mentionedAgents,
@@ -931,6 +934,7 @@ export const aiAgentRouter = router({
         // intentionally not part of the client-passable input schema.
         clientIp: ctx.clientIp ?? undefined,
         deviceId,
+        localDeviceId,
         existingMessageIds,
         fileIds,
         mentionedAgents,

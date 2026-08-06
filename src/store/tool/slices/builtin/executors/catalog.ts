@@ -20,6 +20,7 @@ import {
   codexExecutor,
   openCodeExecutor,
   piExecutor,
+  qoderExecutor,
 } from './heteroCli';
 import { activatorExecutor } from './lobe-activator';
 import { agentDocumentsExecutor } from './lobe-agent-documents';
@@ -41,6 +42,7 @@ export const builtinToolExecutors = [
   codexExecutor,
   openCodeExecutor,
   piExecutor,
+  qoderExecutor,
   agentBuilderExecutor,
   agentDocumentsExecutor,
   agentManagementExecutor,

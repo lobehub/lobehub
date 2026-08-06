@@ -15,6 +15,7 @@ describe('heterogeneous agent config', () => {
       'codex',
       'opencode',
       'pi',
+      'qoder',
     ]);
   });
 
@@ -44,6 +45,11 @@ describe('heterogeneous agent config', () => {
       title: 'Pi',
       type: 'pi',
     });
+    expect(getHeterogeneousAgentConfig('qoder')).toMatchObject({
+      command: 'qodercli',
+      title: 'Qoder',
+      type: 'qoder',
+    });
   });
 
   it('derives display labels from the shared config source', () => {
@@ -55,6 +61,7 @@ describe('heterogeneous agent config', () => {
       'openclaw': 'OpenClaw',
       'opencode': 'OpenCode',
       'pi': 'Pi',
+      'qoder': 'Qoder',
     });
   });
 
@@ -62,6 +69,7 @@ describe('heterogeneous agent config', () => {
     expect(isRemoteHeterogeneousType('amp')).toBe(false);
     expect(isRemoteHeterogeneousType('opencode')).toBe(false);
     expect(isRemoteHeterogeneousType('pi')).toBe(false);
+    expect(isRemoteHeterogeneousType('qoder')).toBe(false);
     expect(isRemoteHeterogeneousType('openclaw')).toBe(true);
     expect(isRemoteHeterogeneousType('hermes')).toBe(true);
   });

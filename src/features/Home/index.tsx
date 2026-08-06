@@ -13,6 +13,7 @@ import { taskDetailSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
+import { isHomeMinimalLayout } from './CustomizeModal/config';
 import HomeHeader from './HomeHeader';
 import HomeModeContent from './HomeModeContent';
 import HomePortrait from './HomePortrait';
@@ -53,6 +54,14 @@ const BUBBLE_GAP = 16;
 const GREETING_LANE = COLLAPSED_CONTENT_OFFSET * 2 + PORTRAIT_LANE + BUBBLE_MAX_WIDTH + BUBBLE_GAP;
 /** Under this the greeting, the bubble and the portrait cannot share a line. */
 const BUBBLE_INLINE_MIN = 1080;
+const MINIMAL_STACK_GAP = 24;
+/**
+ * The greeting's line box — 22px at a 1.4 line-height, from HomeHeader. Its
+ * height plus the gap is what the block must shed below itself to land the
+ * composer, not the pair's midpoint, on the center of the lane.
+ */
+const MINIMAL_GREETING_LINE = Math.round(22 * 1.4);
+const MINIMAL_LIFT = MINIMAL_GREETING_LINE + MINIMAL_STACK_GAP;
 
 const styles = createStaticStyles(({ css }) => ({
   // Both rows size to their content and the page scrolls around the whole grid
@@ -160,6 +169,20 @@ const styles = createStaticStyles(({ css }) => ({
     grid-area: 2 / 1;
     min-width: 0;
   `,
+  // Nothing stacks under the composer any more, so the page stops being a
+  // dashboard: greeting and composer read as one block, on a measure of their
+  // own rather than the dashboard's full span.
+  //
+  // The route centers this block with auto margins, which would put the pair's
+  // midpoint on the center and leave the composer — the thing you actually look
+  // at — sitting low. The trailing pad is counted into the centered box, so it
+  // lifts everything by half its height and hands the composer the center.
+  minimal: css`
+    width: 100%;
+    max-inline-size: 760px;
+    margin-inline: auto;
+    padding-block-end: ${MINIMAL_LIFT}px;
+  `,
   portrait: css`
     grid-area: 1 / 2;
     transition: transform ${RAIL_TRANSITION_DURATION}ms ease-out;
@@ -245,6 +268,7 @@ const Home = memo(() => {
   const showHomeRail = useGlobalStore(systemStatusSelectors.showHomeRail);
   const showHomePortrait = useGlobalStore(systemStatusSelectors.showHomePortrait);
   const hiddenWidgets = useGlobalStore(systemStatusSelectors.hiddenHomeWidgets);
+  const minimal = isHomeMinimalLayout({ hiddenWidgets, showPortrait: showHomePortrait });
   const [mode, setMode] = useState<HomeMode>('chat');
   const [inputValue, setInputValue] = useState('');
 
@@ -272,6 +296,21 @@ const Home = memo(() => {
     },
     [handleInputValueChange],
   );
+
+  if (minimal)
+    return (
+      <Flexbox className={styles.minimal} gap={MINIMAL_STACK_GAP}>
+        <HomeHeader centered />
+        <div className={styles.inputArea}>
+          <InputArea
+            inputValue={inputValue}
+            mode={mode}
+            onInputValueChange={handleInputValueChange}
+            onModeChange={setMode}
+          />
+        </div>
+      </Flexbox>
+    );
 
   return (
     <Flexbox className={styles.grid}>
