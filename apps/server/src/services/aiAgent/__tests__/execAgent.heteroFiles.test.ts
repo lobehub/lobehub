@@ -175,6 +175,7 @@ vi.mock('@/server/services/agentRuntime', () => ({
       operationId: 'op-123',
       success: true,
     }),
+    interruptOperation: vi.fn().mockResolvedValue(true),
   })),
 }));
 
@@ -778,7 +779,74 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       );
       const seed = findRunningOpSeed();
       expect(seed.runningOperation).toEqual(
-        expect.objectContaining({ deviceId: 'personal-desktop', heteroType: 'openclaw' }),
+        expect.objectContaining({
+          deviceId: 'personal-desktop',
+          deviceUserId: userId,
+          heteroType: 'openclaw',
+        }),
+      );
+    });
+
+    it("routes a fixed local platform target through the author's personal principal", async () => {
+      heteroAgentConfig.agencyConfig = {
+        boundDeviceId: 'author-desktop',
+        executionTarget: 'local',
+        executionTargetSelectionPolicy: 'fixed',
+        heterogeneousProvider: { type: 'openclaw' },
+      } as any;
+      (heteroAgentConfig as any).userId = 'author-user';
+      (heteroAgentConfig as any).visibility = 'public';
+      (heteroAgentConfig as any).workspaceId = 'workspace-a';
+      service = new AiAgentService(mockDb, 'member-user', { workspaceId: 'workspace-a' });
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        localDeviceId: 'member-desktop',
+        prompt: 'run the fixed task',
+      } as any);
+
+      expect(mockExecuteToolCall).toHaveBeenCalledWith(
+        {
+          deviceId: 'author-desktop',
+          userId: 'author-user',
+          workspaceId: undefined,
+        },
+        expect.objectContaining({ apiName: 'runHeteroTask' }),
+        120_000,
+      );
+      const seed = findRunningOpSeed();
+      expect(seed.runningOperation).toEqual(
+        expect.objectContaining({
+          deviceId: 'author-desktop',
+          deviceUserId: 'author-user',
+          heteroType: 'openclaw',
+        }),
+      );
+    });
+
+    it('cancels a platform task through the principal persisted at dispatch', async () => {
+      topicMock.findById.mockResolvedValue({
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-1',
+            deviceId: 'author-desktop',
+            deviceUserId: 'author-user',
+            heteroType: 'openclaw',
+            operationId: 'operation-1',
+          },
+        },
+      });
+
+      await service.interruptTask({ operationId: 'operation-1', topicId: 'topic-1' });
+
+      expect(mockExecuteToolCall).toHaveBeenCalledWith(
+        {
+          deviceId: 'author-desktop',
+          userId: 'author-user',
+          workspaceId: undefined,
+        },
+        expect.objectContaining({ apiName: 'cancelHeteroTask' }),
+        5_000,
       );
     });
   });
