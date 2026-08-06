@@ -17,5 +17,5 @@ export const HETEROGENEOUS_TYPE_LABELS: Record<string, string> = Object.fromEntr
 export const getHeterogeneousTypeLabel = (type?: string | null): string | undefined => {
   if (!type) return undefined;
 
-  return HETEROGENEOUS_TYPE_LABELS[type] ?? type;
+  return Object.hasOwn(HETEROGENEOUS_TYPE_LABELS, type) ? HETEROGENEOUS_TYPE_LABELS[type] : type;
 };

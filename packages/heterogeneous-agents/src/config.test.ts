@@ -68,6 +68,7 @@ describe('heterogeneous agent config', () => {
   it('resolves display labels with safe fallbacks', () => {
     expect(getHeterogeneousTypeLabel('hermes')).toBe('Hermes');
     expect(getHeterogeneousTypeLabel('future-runtime')).toBe('future-runtime');
+    expect(getHeterogeneousTypeLabel('toString')).toBe('toString');
     expect(getHeterogeneousTypeLabel(null)).toBeUndefined();
     expect(getHeterogeneousTypeLabel()).toBeUndefined();
   });
