@@ -451,6 +451,7 @@ export default {
   'plans.cancelDowngrade': 'Cancel Scheduled Downgrade',
   'plans.cancelDowngradeSuccess': 'Scheduled downgrade has been cancelled',
   'plans.restoreSubscription': 'Restore Subscription',
+  'plans.restoreSubscriptionError': 'Could not restore your subscription',
   'plans.restoreSubscriptionSuccess': 'Subscription has been restored',
   'plans.pendingDowngrade': 'Pending Downgrade',
   'plans.embeddingStorage.embeddings': 'entries',

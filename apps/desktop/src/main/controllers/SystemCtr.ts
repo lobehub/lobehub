@@ -19,6 +19,7 @@ import * as electronIs from '@/utils/platform';
 import { getSystemLanguage, resolveUILocale } from '@/utils/system-language';
 
 import { ControllerModule, IpcMethod } from './index';
+import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 
 const logger = createLogger('controllers:SystemCtr');
 
@@ -77,6 +78,18 @@ export default class SystemController extends ControllerModule {
   @IpcMethod()
   setDesktopOnboardingCompleted(completed: boolean): void {
     this.app.storeManager.set('desktopOnboardingCompleted', completed);
+  }
+
+  @IpcMethod()
+  setLastWorkspaceSlug(slug: string | null): void {
+    const { userId } = this.app.getController(RemoteServerConfigCtr).getDesktopBootstrapIdentity();
+    if (!userId) return;
+
+    const slugByAccount = { ...this.app.storeManager.get('lastWorkspaceSlugByAccount', {}) };
+    if (slug) slugByAccount[userId] = slug;
+    else delete slugByAccount[userId];
+
+    this.app.storeManager.set('lastWorkspaceSlugByAccount', slugByAccount);
   }
 
   @IpcMethod()

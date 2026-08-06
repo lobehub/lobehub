@@ -823,8 +823,8 @@ export default {
   'newCodexAgent': 'Add Codex',
   'newOpenCodeAgent': 'Add OpenCode',
   'newPiAgent': 'Add Pi',
-  'newPlatformAgent': 'Connect Local Agent',
-  'newPlatformAgentDesc': 'Connect to Claude Code, Codex, and other local agents',
+  'newPlatformAgent': 'Connect an Agent',
+  'newPlatformAgentDesc': 'Connect Claude Code, Codex, Hermes, OpenClaw, and other agents',
   'newGroupChat': 'Create Group',
   'agent.publishToWorkspace': 'Publish to Workspace',
   'agent.publishToWorkspaceErrorFixedPrivateDevice':
@@ -1615,6 +1615,8 @@ export default {
   'upload.clientMode.visionNotSupported':
     'The current model does not support visual recognition. Please switch to a different model to use this feature.',
   'upload.preview.prepareTasks': 'Preparing chunks...',
+  'upload.preview.status.cancelled': 'Upload cancelled',
+  'upload.preview.status.error': 'Upload failed',
   'upload.preview.status.pending': 'Preparing to upload...',
   'upload.preview.status.processing': 'Processing file...',
   'upload.validation.unsupportedFileType':

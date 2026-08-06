@@ -719,9 +719,44 @@ const aside = drawer && [...drawer.parentElement.children].find((c) => c.tagName
 ```
 
 Then assert on `aside.innerText` line count plus a count of text-free rounded boxes
-(the skeleton rows). Distinguish the two skeleton states explicitly: the whole panel
-collapsing to \~8 text-free rows is the nav-panel fallback, while fixed items present
-with only the list area shimmering is ordinary data loading.
+(the skeleton rows). Distinguish the two skeleton states explicitly: a text-free panel
+carrying `[data-testid="nav-sidebar-skeleton"]` is the nav-panel fallback, while fixed
+items present with only the list area shimmering is ordinary data loading. Do NOT
+identify the fallback by a row count — it is shaped per navKey now
+(`NAV_SKELETON_SHAPES`), so memory/discover render header plus a nav list and no body
+at all, while settings renders a search box plus four accordion groups.
+
+### Park a route's lazy chunk to hold its pending sidebar on screen
+
+**Situation:** verifying what a route's `NavPanel` fallback (or any `dynamicElement`
+Suspense fallback) actually renders. The pending state lasts a few hundred ms, so no
+screenshot or `agent-browser eval` catches it.
+
+**Doesn't work:** network throttling, or adding a debug flag that force-renders the
+fallback. Throttling does not bound the module fetch predictably, and a force-render
+flag proves the component renders, not that the product path reaches it.
+
+**Works:** raw CDP `Fetch.enable` intercepts `app://renderer/...` module requests in
+the Electron renderer. Park the route's layout chunk and the portal never registers,
+so the fallback stays up indefinitely — measure and screenshot at leisure, then kill
+the CDP connection to release the request and measure the settled sidebar in the same
+session.
+
+```js
+Fetch.enable({ patterns: [{ requestStage: 'Request', urlPattern: '*settings/_layout*' }] });
+// on Fetch.requestPaused: keep the requestId, never continueRequest
+// [paused] app://renderer/src/routes/(main)/settings/_layout/index.tsx?t=1785957215039
+```
+
+Two traps. The pattern must name the **layout** chunk only: a broad `*settings*`
+also parks `store/user/slices/settings/*` and the router's own `routeMeta`, which
+stalls boot instead of the route. And the layout module is not always under the path
+you guess — the agent sidebar registers from `(main)/agent/_layout`, not
+`(main)/agent/(chat)/_layout`; when the measurement comes back `mode: real`, the
+pattern missed, it is not a product finding.
+
+Drive the navigation with `app-probe.sh goto <route>` (a full reload, so the module
+is re-requested and re-parked).
 
 ### Boot-phase UI cannot be observed by CDP polling — sample in-page, and mirror the timer
 
@@ -912,6 +947,87 @@ Gate on a real authenticated TRPC call rather than on the page rendering: a 200 
 `$SERVER_URL/` proves nothing about the lambda routes. Remember `apps/cli` and
 `apps/desktop` are standalone installs (PROJECT.md §1), so each also needs its own
 `pnpm install` in a fresh worktree.
+
+### The dev Electron instance may be a thin client on PRODUCTION — read `dataSyncConfig` before any write
+
+**Situation:** starting `electron-dev.sh` to verify a frontend change, then driving flows that
+create or mutate product objects (labels, groups, agents, forwarded topics, saved edits).
+
+**Doesn't work:** assuming the instance talks to a local backend because the run also started one.
+The seeded login snapshot carries its own target, and `{"storageMode":"cloud","active":true}` means
+the renderer runs your working-tree code while every request goes to `app.lobehub.com` with the
+user's real account. `app-probe.sh server-auth` returns 200, which reads as "the local stack is
+wired up" and encourages exactly the writes that then land in production. The local dev server the
+run started sits unused.
+
+**Works:** read the target first and let it decide the test's write budget.
+
+```bash
+agent-browser --cdp 9222 eval '(() => JSON.stringify(window.__LOBE_STORES.electron().dataSyncConfig))()'
+# {"storageMode":"cloud","active":true}   -> production account; keep the run read-only
+# {"storageMode":"selfHost","remoteServerUrl":"http://localhost:3111", ...} -> local backend
+```
+
+On `cloud`, verify open / render / close only, treat every submit as a user-owned decision, and
+prove afterwards that nothing was written (re-read the relevant store count). Note this also makes
+the whole local-server bring-up unnecessary — check the target before spending minutes on it.
+
+### Asserting a modal's exit window: `data-ending-style` is never set, and `record-gif.sh` is far too slow
+
+**Situation:** proving what a base-ui modal does during its \~120ms exit — typically that the body
+stays mounted while the panel fades, rather than blanking at the start of the animation.
+
+**Doesn't work:** three separate traps.
+
+- Gating on `panel.hasAttribute("data-ending-style")`. `base-ui/Modal/style.mjs` does carry a
+  `[data-ending-style]` rule, but the imperative host animates through motion/react, so the
+  attribute stays absent for the whole exit. Filtering samples on it yields an empty set and reads
+  as "the exit never happened".
+- Polling the state from the driver. A `Runtime.evaluate` round trip is the same order of magnitude
+  as the window itself, so the driver only ever observes before and after.
+- `scripts/record-gif.sh`. Its own header caps effective rate at 1–2 fps; a 120ms window gets at
+  most one frame.
+
+**Works:** sample inside the page and capture frames from the compositor.
+
+```js
+// exit-window signal = opacity decay on popupInner ([role=dialog] > :first-child)
+const tick = () =>
+  samples.push({
+    t: performance.now() - t0,
+    connected: panel.isConnected,
+    opacity: getComputedStyle(panel).opacity,
+    panelH: panel.getBoundingClientRect().height,
+    contentKids: content.children.length,
+    contentTextLen: content.innerText.length,
+  });
+setInterval(tick, 8);
+```
+
+A body that survives the exit holds `contentTextLen` / `contentKids` constant while opacity decays,
+and the panel shrinks only \~1.5% (the `scale(0.98)` exit transform) instead of collapsing to the
+56px header. For the visual half, drive raw CDP `Page.startScreencast` (frames land only when the
+compositor paints, so they cluster inside the animation — \~9 frames in the 120ms window) and replay
+those unmodified frames slowly with ffmpeg. Do not slow the product's own transition: the exit is a
+JS animation, so a CSS `transition-duration` override does nothing anyway.
+
+### Day-scoped fixtures must use the browser's measured timezone, not an assumed one
+
+**Situation:** seeding backdated rows (briefs, activity, digests) whose UI grouping is
+by the viewer's _local calendar day_ (`dayjs().startOf('day')` on the client).
+
+**Doesn't work:** computing the day boundaries from an assumed timezone (the user's
+usual locale, the server tz, or the shell's). On this harness the agent-browser
+Chromium reports `America/Los_Angeles`, so a "today 14:00 CST" timestamp lands on the
+browser's _yesterday_ — the day view renders empty and reads exactly like the
+feature not fetching, while the server endpoint returns the rows when probed with
+the "correct" (assumed-tz) window.
+
+**Works:** before seeding, read the tz the grouping actually uses —
+`agent-browser eval 'Intl.DateTimeFormat().resolvedOptions().timeZone'` — and derive
+every `[startAt, endAt)` from that. When a day view comes back empty, diff the
+client's real request window (fetch wrapper on the batch URL) against the seeded
+timestamps before suspecting the query.
 
 ## Detailed references
 

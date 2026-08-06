@@ -1,10 +1,7 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import {
-  HETEROGENEOUS_TYPE_LABELS,
-  isRemoteHeterogeneousType,
-} from '@lobechat/heterogeneous-agents';
+import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import type { DeviceExecutionTarget } from '@lobechat/types';
 import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -342,8 +339,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const heteroType = agencyConfig?.heterogeneousProvider?.type;
   const boundDeviceId = agencyConfig?.boundDeviceId;
 
-  // Local heterogeneous agents (remote types already early-return
-  // below) bring their own toolchain and must execute somewhere, so `'none'`
+  // Heterogeneous agents bring their own toolchain and must execute somewhere, so `'none'`
   // (plain chat, no execution environment) isn't a valid target for them: hide
   // the option and never fall back to / honour a stale stored `'none'`.
   const isHetero = !!heteroType;
@@ -435,8 +431,6 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     isWorkspacePreferenceLoading,
   ]);
 
-  // Don't render for remote hetero agents — they use RemoteAgentConfigCard in profile.
-  if (heteroType && isRemoteHeterogeneousType(heteroType)) return null;
   if (!canShowExecutionTarget) return null;
 
   const boundDevice =

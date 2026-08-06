@@ -112,6 +112,61 @@ describe('buildTaskRunPrompt', () => {
     expect(result).toMatchSnapshot();
   });
 
+  it('should render a heartbeat automation line with the interval and a no-terminal warning', () => {
+    const result = buildTaskRunPrompt(
+      {
+        task: {
+          ...baseTask,
+          automationMode: 'heartbeat',
+          heartbeatInterval: 14_400,
+          identifier: 'TASK-1',
+          instruction: '每 4 小时监听 Discord 频道',
+          name: 'Discord 监听',
+        },
+      },
+      NOW,
+    );
+
+    expect(result).toContain('Automation: heartbeat, every 4h');
+    expect(result).toContain('NEVER set this task to completed');
+  });
+
+  it('should render a schedule automation line with the cron pattern and timezone', () => {
+    const result = buildTaskRunPrompt(
+      {
+        task: {
+          ...baseTask,
+          automationMode: 'schedule',
+          identifier: 'TASK-1',
+          instruction: '每天早上汇总',
+          name: '每日汇总',
+          schedulePattern: '0 9 * * *',
+          scheduleTimezone: 'Asia/Shanghai',
+        },
+      },
+      NOW,
+    );
+
+    expect(result).toContain('Automation: cron "0 9 * * *" (Asia/Shanghai)');
+    expect(result).toContain('NEVER set this task to completed');
+  });
+
+  it('should not render an automation line for non-automation tasks', () => {
+    const result = buildTaskRunPrompt(
+      {
+        task: {
+          ...baseTask,
+          identifier: 'TASK-1',
+          instruction: '一次性任务',
+          name: '一次性任务',
+        },
+      },
+      NOW,
+    );
+
+    expect(result).not.toContain('Automation:');
+  });
+
   it('should prioritize user feedback at the top', () => {
     const result = buildTaskRunPrompt(
       {

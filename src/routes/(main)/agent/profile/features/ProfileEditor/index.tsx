@@ -37,7 +37,7 @@ const styles = createStaticStyles(({ css }) => ({
     container-type: inline-size;
   `,
   configPanel: css`
-    padding: 16px;
+    padding: 24px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorFillQuaternary};

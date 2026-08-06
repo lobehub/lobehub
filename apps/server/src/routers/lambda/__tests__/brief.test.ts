@@ -50,4 +50,13 @@ describe('briefRouter — reads stay open to every workspace role', () => {
   it('does not gate list', async () => {
     await expect(createCaller().list({ limit: 50, offset: 0 })).rejects.not.toThrow(/^GATE:/);
   });
+
+  it('does not gate listNewsByDay', async () => {
+    await expect(
+      createCaller().listNewsByDay({
+        endAt: new Date('2026-08-06T00:00:00Z'),
+        startAt: new Date('2026-08-05T00:00:00Z'),
+      }),
+    ).rejects.not.toThrow(/^GATE:/);
+  });
 });

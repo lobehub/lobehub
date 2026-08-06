@@ -240,12 +240,14 @@ export async function buildTaskPrompt(
     parentTask: parentTaskContext,
     task: {
       assigneeAgentId: task.assigneeAgentId,
+      automationMode: task.automationMode,
       dependencies: dependencies.map((d: any) => ({
         dependsOn: depIdToIdentifier.get(d.dependsOnId) ?? d.dependsOnId,
         type: d.type,
       })),
       description: task.description,
       ...(taskFiles.length > 0 ? { files: taskFiles } : {}),
+      heartbeatInterval: task.heartbeatInterval,
       id: task.id,
       identifier: task.identifier,
       instruction: task.instruction,
@@ -253,6 +255,8 @@ export async function buildTaskPrompt(
       parentIdentifier,
       priority: task.priority,
       review: taskModel.getReviewConfig(task) as any,
+      schedulePattern: task.schedulePattern,
+      scheduleTimezone: task.scheduleTimezone,
       status: task.status,
       verify: verifyEnabled
         ? {

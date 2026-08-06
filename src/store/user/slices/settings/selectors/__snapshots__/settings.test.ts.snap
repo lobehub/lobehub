@@ -99,6 +99,11 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
     "model": "gpt-5.6-luna",
     "provider": "openai",
   },
+  "topicAutoSummary": {
+    "enabled": true,
+    "model": "deepseek-v4-flash",
+    "provider": "deepseek",
+  },
   "translation": {
     "model": "gpt-5.6-luna",
     "provider": "openai",

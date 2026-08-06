@@ -49,7 +49,6 @@
   "dependencies": {
     "@lobehub/fluent-emoji": "^4.1.0",
     "@lydell/node-pty": "1.2.0-beta.12",
-    "@napi-rs/canvas": "^0.1.100",
     "electron-log": "^5.4.4",
     "font-list": "^2.1.0",
     "get-windows": "^9.3.0",
@@ -127,7 +126,6 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "@napi-rs/canvas",
       "electron",
       "electron-builder",
       "node-mac-permissions"

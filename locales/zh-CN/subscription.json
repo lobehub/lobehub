@@ -449,6 +449,7 @@
   "plans.plan.ultimate.desc": "适合需要复杂 AI 对话的重度用户",
   "plans.plan.ultimate.title": "专业版",
   "plans.restoreSubscription": "恢复订阅",
+  "plans.restoreSubscriptionError": "订阅恢复失败",
   "plans.restoreSubscriptionSuccess": "订阅已恢复",
   "plans.storage.title": "数据存储",
   "plans.subscribe": "订阅",

@@ -354,7 +354,7 @@ describe('Agent profile EditorCanvas', () => {
   it('does not bubble mode-switch clicks to the click-to-focus wrapper', () => {
     // The profile page wraps the canvas in a click-to-focus area; a bubbled
     // toggle click would focus the editor and scroll to the caret at the
-    // document end. See LOBE-12593.
+    // document end.
     const onWrapperClick = vi.fn();
     render(
       <div onClick={onWrapperClick}>

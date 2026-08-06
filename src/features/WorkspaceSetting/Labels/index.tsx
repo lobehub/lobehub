@@ -26,9 +26,9 @@ import { usePermission } from '@/hooks/usePermission';
 import { useHomeStore } from '@/store/home';
 import { agentLabelSelectors } from '@/store/home/selectors';
 
-import DeleteLabelModal from './DeleteLabelModal';
+import { openDeleteLabelModal } from './DeleteLabelModal';
 import { isDuplicateLabelNameError } from './errors';
-import LabelFormModal from './LabelFormModal';
+import { openLabelFormModal } from './LabelFormModal';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   dot: css`
@@ -255,15 +255,6 @@ const WorkspaceLabelsContent = memo(() => {
   // Linear-style scope filter: the default "workspace" scope lists active
   // labels; "archived" surfaces archived ones so they can be restored.
   const [scope, setScope] = useState<'archived' | 'workspace'>('workspace');
-  const [formModal, setFormModal] = useState<{
-    label?: AgentLabelListItem;
-    open: boolean;
-    restoreOnSave?: boolean;
-  }>({
-    open: false,
-  });
-  const [deleteTarget, setDeleteTarget] = useState<AgentLabelListItem | undefined>();
-
   const visibleLabels = useMemo(() => {
     const query = keyword.trim().toLowerCase();
     const matched = query
@@ -278,11 +269,9 @@ const WorkspaceLabelsContent = memo(() => {
       key={label.id}
       label={label}
       manageBlockedReason={manageBlockedReason}
-      onDelete={setDeleteTarget}
-      onEdit={(target) => setFormModal({ label: target, open: true })}
-      onRestoreConflict={(target) =>
-        setFormModal({ label: target, open: true, restoreOnSave: true })
-      }
+      onDelete={(target) => openDeleteLabelModal(target)}
+      onEdit={(target) => openLabelFormModal({ label: target })}
+      onRestoreConflict={(target) => openLabelFormModal({ label: target, restoreOnSave: true })}
     />
   );
 
@@ -291,7 +280,7 @@ const WorkspaceLabelsContent = memo(() => {
       disabled={!canManage}
       icon={PlusIcon}
       type={'primary'}
-      onClick={() => setFormModal({ open: true })}
+      onClick={() => openLabelFormModal()}
     >
       {t('workspaceSetting.labels.actions.create')}
     </Button>
@@ -364,17 +353,6 @@ const WorkspaceLabelsContent = memo(() => {
           {visibleLabels.map(renderRow)}
         </Flexbox>
       )}
-      <LabelFormModal
-        label={formModal.label}
-        open={formModal.open}
-        restoreOnSave={formModal.restoreOnSave}
-        onCancel={() => setFormModal({ open: false })}
-      />
-      <DeleteLabelModal
-        label={deleteTarget}
-        open={!!deleteTarget}
-        onClose={() => setDeleteTarget(undefined)}
-      />
     </Flexbox>
   );
 });

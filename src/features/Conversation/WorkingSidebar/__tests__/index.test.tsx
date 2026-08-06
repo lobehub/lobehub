@@ -11,6 +11,7 @@ import AgentWorkingSidebar from '../index';
 interface CapturedRightPanelProps {
   children?: ReactNode;
   defaultWidth?: number | string;
+  expand?: boolean;
   maxWidth?: number | string;
   onSizeChange?: (size?: { height?: number | string; width?: number | string }) => void;
   width?: number | string;
@@ -433,6 +434,39 @@ describe('AgentWorkingSidebar — controlled panel width', () => {
     unmount();
     render(<AgentWorkingSidebar />);
     expect(rightPanel.current?.width).toBe(500);
+  });
+
+  // Regression: dragging the panel wide persisted a width that immediately
+  // failed the fits check, so releasing the drag unmounted the whole sidebar —
+  // and, with the too-wide value stored, it never came back at that window
+  // size. A stored width beyond the row's budget must render clamped (and cap
+  // further dragging) instead of hiding the panel.
+  it('clamps a stored width that outgrew the row instead of hiding the panel', () => {
+    globalStore.status.workingSidebarWidth = 1250;
+
+    render(<AgentWorkingSidebar availableWidth={1540} />);
+
+    expect(rightPanel.current?.expand).toBe(true);
+    // 1540 - CONVERSATION_KEEP_WIDTH (420)
+    expect(rightPanel.current?.width).toBe(1120);
+    expect(rightPanel.current?.maxWidth).toBe(1120);
+    // the clamp is render-only: the user's preference survives for wider rows
+    expect(globalStore.updateSystemStatus).not.toHaveBeenCalled();
+  });
+
+  it('still yields the whole panel when even the minimum width leaves no room', () => {
+    render(<AgentWorkingSidebar availableWidth={600} />);
+
+    // 600 - 420 = 180 < the 300 minimum — nothing to clamp to, so it hides
+    expect(rightPanel.current?.expand).toBe(false);
+  });
+
+  it('keeps a fitting stored width untouched on a measured row', () => {
+    render(<AgentWorkingSidebar availableWidth={1540} />);
+
+    expect(rightPanel.current?.expand).toBe(true);
+    expect(rightPanel.current?.width).toBe(360);
+    expect(rightPanel.current?.maxWidth).toBe(1120);
   });
 
   it('ignores a size update with no width', () => {

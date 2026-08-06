@@ -17,7 +17,7 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import { type LobeGroupSession } from '@/types/session';
 
 import ListItem from '../../ListItem';
-import CreateGroupModal from '../../Modals/CreateGroupModal';
+import { openCreateGroupModal } from '../../Modals/CreateGroupModal';
 import Actions from './Actions';
 
 interface SessionItemProps {
@@ -26,7 +26,6 @@ interface SessionItemProps {
 
 const SessionItem = memo<SessionItemProps>(({ id }) => {
   const [open, setOpen] = useState(false);
-  const [createGroupModalOpen, setCreateGroupModalOpen] = useState(false);
 
   const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);
 
@@ -79,7 +78,7 @@ const SessionItem = memo<SessionItemProps>(({ id }) => {
       <Actions
         group={group}
         id={id}
-        openCreateGroupModal={() => setCreateGroupModalOpen(true)}
+        openCreateGroupModal={() => openCreateGroupModal(id)}
         parentType={sessionType}
         setOpen={setOpen}
       />
@@ -117,40 +116,33 @@ const SessionItem = memo<SessionItemProps>(({ id }) => {
       : avatar;
 
   return (
-    <>
-      <ListItem
-        actions={actions}
-        active={active}
-        addon={addon}
-        avatar={sessionAvatar as any} // Fix: Bypass complex intersection type ReactNode & avatar type
-        avatarBackground={avatarBackground}
-        date={updateAt?.valueOf()}
-        draggable={isDesktop}
-        key={id}
-        loading={loading}
-        pin={pin}
-        showAction={open}
-        title={title}
-        type={sessionType}
-        styles={{
-          container: {
-            gap: 12,
-          },
-          content: {
-            gap: 6,
-            maskImage: `linear-gradient(90deg, #000 90%, transparent)`,
-          },
-        }}
-        onDoubleClick={handleDoubleClick}
-        onDragEnd={handleDragEnd}
-        onDragStart={handleDragStart}
-      />
-      <CreateGroupModal
-        id={id}
-        open={createGroupModalOpen}
-        onCancel={() => setCreateGroupModalOpen(false)}
-      />
-    </>
+    <ListItem
+      actions={actions}
+      active={active}
+      addon={addon}
+      avatar={sessionAvatar as any} // Fix: Bypass complex intersection type ReactNode & avatar type
+      avatarBackground={avatarBackground}
+      date={updateAt?.valueOf()}
+      draggable={isDesktop}
+      key={id}
+      loading={loading}
+      pin={pin}
+      showAction={open}
+      title={title}
+      type={sessionType}
+      styles={{
+        container: {
+          gap: 12,
+        },
+        content: {
+          gap: 6,
+          maskImage: `linear-gradient(90deg, #000 90%, transparent)`,
+        },
+      }}
+      onDoubleClick={handleDoubleClick}
+      onDragEnd={handleDragEnd}
+      onDragStart={handleDragStart}
+    />
   );
 }, shallow);
 

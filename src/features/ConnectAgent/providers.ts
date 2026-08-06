@@ -9,8 +9,8 @@ import { Amp, ClaudeCode, Codex, HermesAgent, OpenClaw, OpenCode, Pi } from '@lo
 
 /**
  * One row in the connect wizard's agent inventory. `kind` mirrors the domain
- * split: `cli` agents spawn as processes (locally or on a bound device),
- * `platform` agents are always device-bound and reached over the gateway.
+ * split: `cli` agents use stream adapters, while `platform` agents use the
+ * notify-based task runner on this desktop or a bound device.
  */
 export interface ConnectableProvider {
   /** CDN avatar to stamp on created cli agents (platform agents use the device profile's). */
@@ -63,3 +63,13 @@ export const CONNECTABLE_PROVIDERS: ConnectableProvider[] = [
 
 export const getConnectableProvider = (type: HeterogeneousAgentType) =>
   CONNECTABLE_PROVIDERS.find((provider) => provider.type === type);
+
+export const buildPlatformAgencyConfig = (
+  type: RemoteHeterogeneousAgentType,
+  target: { deviceId: string; kind: 'device' } | { kind: 'local' },
+) => ({
+  ...(target.kind === 'device'
+    ? { boundDeviceId: target.deviceId, executionTarget: 'device' as const }
+    : undefined),
+  heterogeneousProvider: { type },
+});

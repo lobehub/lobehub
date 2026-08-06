@@ -1,6 +1,7 @@
 'use client';
 
 import { AGENT_CHAT_URL } from '@lobechat/const';
+import { type ModalInstance } from '@lobehub/ui/base-ui';
 import {
   createContext,
   lazy,
@@ -9,26 +10,23 @@ import {
   Suspense,
   use,
   useCallback,
+  useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
 import EditingPopover from '@/features/EditingPopover';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import LabelFormModal from '@/features/WorkspaceSetting/Labels/LabelFormModal';
+import { openLabelFormModal } from '@/features/WorkspaceSetting/Labels/LabelFormModal';
+import type { OpenCreateAgentModalOptions } from '@/routes/(main)/home/_layout/hooks/useCreateModal';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
 
 import ConfigGroupModal from './Modals/ConfigGroupModal';
-import CreateGroupModal from './Modals/CreateGroupModal';
-
-const CreateAgentModal = lazy(() =>
-  import('@/routes/(main)/home/_layout/hooks/useCreateModal').then((module) => ({
-    default: module.CreateAgentModal,
-  })),
-);
+import { openCreateGroupModal } from './Modals/CreateGroupModal';
 
 const ChatGroupWizard = lazy(() =>
   import('@/components/ChatGroupWizard').then((module) => ({
@@ -102,13 +100,12 @@ export const useOptionalAgentModal = () => {
 interface CreateModalRendererProps {
   groupId?: string;
   onClose: () => void;
-  open: boolean;
   type: 'agent' | 'group';
   visibility?: 'private' | 'public';
 }
 
 const CreateModalRenderer = memo<CreateModalRendererProps>(
-  ({ open, type, groupId, onClose, visibility }) => {
+  ({ type, groupId, onClose, visibility }) => {
     const navigate = useWorkspaceAwareNavigate();
     const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
     const storeCreateAgent = useAgentStore((s) => s.createAgent);
@@ -152,18 +149,39 @@ const CreateModalRenderer = memo<CreateModalRendererProps>(
       navigate(AGENT_CHAT_URL(inboxAgentId, false));
     }, [inboxAgentId, navigate]);
 
-    return (
-      <CreateAgentModal
-        agentId={inboxAgentId}
-        open={open}
-        type={type}
-        onClose={onClose}
-        onCreateBlank={handleCreateBlank}
-        onOpenSkills={handleOpenSkills}
-        onSubmit={handleSubmit}
-        onTryInLobeAI={handleTryInLobeAI}
-      />
-    );
+    // Mounted only while the modal should be open, so the open/close bridge is
+    // just this component's lifetime — the panel itself lives in the ModalHost.
+    const openArgsRef = useRef<OpenCreateAgentModalOptions>(undefined);
+    openArgsRef.current = {
+      agentId: inboxAgentId,
+      type,
+      onClosed: onClose,
+      onCreateBlank: handleCreateBlank,
+      onOpenSkills: handleOpenSkills,
+      onSubmit: handleSubmit,
+      onTryInLobeAI: handleTryInLobeAI,
+    };
+
+    useEffect(() => {
+      // Imported here rather than at module scope so the create-agent chunk (it
+      // pulls in the whole ChatInput stack) still loads only when the modal opens.
+      let cancelled = false;
+      let instance: ModalInstance | undefined;
+
+      void import('@/routes/(main)/home/_layout/hooks/useCreateModal').then(
+        ({ openCreateAgentModal }) => {
+          if (cancelled) return;
+          instance = openCreateAgentModal(openArgsRef.current!);
+        },
+      );
+
+      return () => {
+        cancelled = true;
+        instance?.close();
+      };
+    }, []);
+
+    return null;
   },
 );
 
@@ -172,12 +190,7 @@ interface AgentModalProviderProps {
 }
 
 export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) => {
-  // CreateGroupModal state
-  const [createGroupModalOpen, setCreateGroupModalOpen] = useState(false);
-  const [createGroupSessionId, setCreateGroupSessionId] = useState<string | undefined>(undefined);
-  const [createGroupVisibility, setCreateGroupVisibility] = useState<
-    'private' | 'public' | undefined
-  >(undefined);
+  const createGroupModalRef = useRef<ModalInstance>(undefined);
 
   // ConfigGroupModal state
   const [configGroupModalOpen, setConfigGroupModalOpen] = useState(false);
@@ -195,12 +208,6 @@ export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) =
   const [memberSelectionCallbacks, setMemberSelectionCallbacks] =
     useState<MemberSelectionCallbacks>({});
 
-  // Create-label modal state
-  const [createLabelModalOpen, setCreateLabelModalOpen] = useState(false);
-  const [createLabelAssignTo, setCreateLabelAssignTo] = useState<
-    { agentId: string; currentLabelIds: string[] } | undefined
-  >(undefined);
-
   // CreateAgentModal state
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createModalType, setCreateModalType] = useState<'agent' | 'group'>('agent');
@@ -212,14 +219,14 @@ export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) =
   const contextValue = useMemo<AgentModalContextValue>(
     () => ({
       closeAllModals: () => {
-        setCreateGroupModalOpen(false);
+        createGroupModalRef.current?.close();
         setConfigGroupModalOpen(false);
         setGroupWizardOpen(false);
         setMemberSelectionOpen(false);
         setCreateModalOpen(false);
       },
       closeConfigGroupModal: () => setConfigGroupModalOpen(false),
-      closeCreateGroupModal: () => setCreateGroupModalOpen(false),
+      closeCreateGroupModal: () => createGroupModalRef.current?.close(),
       closeGroupWizardModal: () => setGroupWizardOpen(false),
       closeMemberSelectionModal: () => setMemberSelectionOpen(false),
       openConfigGroupModal: (scope?: 'private' | 'public') => {
@@ -227,13 +234,10 @@ export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) =
         setConfigGroupModalOpen(true);
       },
       openCreateGroupModal: (sessionId?: string, visibility?: 'private' | 'public') => {
-        setCreateGroupSessionId(sessionId);
-        setCreateGroupVisibility(visibility);
-        setCreateGroupModalOpen(true);
+        createGroupModalRef.current = openCreateGroupModal({ id: sessionId, visibility });
       },
       openCreateLabelModal: (assignTo?: { agentId: string; currentLabelIds: string[] }) => {
-        setCreateLabelAssignTo(assignTo);
-        setCreateLabelModalOpen(true);
+        openLabelFormModal({ assignTo });
       },
       openCreateModal: (type: 'agent' | 'group', options?: OpenCreateModalOptions) => {
         setCreateModalType(type);
@@ -257,34 +261,14 @@ export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) =
   return (
     <AgentModalContext value={contextValue}>
       {createModalOpen && (
-        <Suspense fallback={null}>
-          <CreateModalRenderer
-            open
-            groupId={createModalGroupId}
-            type={createModalType}
-            visibility={createModalVisibility}
-            onClose={() => setCreateModalOpen(false)}
-          />
-        </Suspense>
+        <CreateModalRenderer
+          groupId={createModalGroupId}
+          type={createModalType}
+          visibility={createModalVisibility}
+          onClose={() => setCreateModalOpen(false)}
+        />
       )}
       {children}
-
-      {/* All modals rendered at top level */}
-      {createLabelModalOpen && (
-        <LabelFormModal
-          open
-          assignTo={createLabelAssignTo}
-          onCancel={() => setCreateLabelModalOpen(false)}
-        />
-      )}
-      {createGroupModalOpen && (
-        <CreateGroupModal
-          id={createGroupSessionId}
-          open={createGroupModalOpen}
-          visibility={createGroupVisibility}
-          onCancel={() => setCreateGroupModalOpen(false)}
-        />
-      )}
 
       <ConfigGroupModal
         open={configGroupModalOpen}

@@ -64,7 +64,7 @@ const getMenuLayout = (items: ReturnType<typeof useGroupDropdownMenu>) =>
   });
 
 describe('Category useGroupDropdownMenu', () => {
-  it('includes Connect Local Agent with the current category context', () => {
+  it('includes Connect an Agent with the current category context', () => {
     const { result } = renderHook(() =>
       useGroupDropdownMenu({
         anchor: null,

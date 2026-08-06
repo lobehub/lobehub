@@ -1,13 +1,12 @@
 import { isDesktop } from '@lobechat/const';
 import { type MenuProps } from '@lobehub/ui';
-import { ActionIcon, DropdownMenu, Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu, Flexbox, Text, Tooltip } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { ArrowRight, Plus, Unlink } from 'lucide-react';
 import { type CSSProperties } from 'react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { notification } from '@/components/AntdStaticMethods';
 import AuthIcons from '@/components/AuthIcons';
 import { isBuiltinProvider, normalizeProviderId } from '@/libs/better-auth/utils/client';
 import { useServerConfigStore } from '@/store/serverConfig';
@@ -48,13 +47,9 @@ export const SSOProvidersList = memo(() => {
     // Better-auth link/unlink operations are not available on desktop
     if (isDesktop) return;
 
-    // Prevent unlink if this is the only login method
-    if (!allowUnlink) {
-      notification.error({
-        message: t('profile.sso.unlink.forbidden'),
-      });
-      return;
-    }
+    // The control is disabled when this is the only login method. Keep the
+    // guard for callers outside the rendered list and for state races.
+    if (!allowUnlink) return;
     confirmModal({
       content: t('profile.sso.unlink.description', { provider }),
       okButtonProps: {
@@ -118,15 +113,25 @@ export const SSOProvidersList = memo(() => {
             )}
           </Flexbox>
           {!isDesktop && (
-            <ActionIcon
-              disabled={!allowUnlink}
-              icon={Unlink}
-              size={'small'}
-              onClick={() => handleUnlinkSSO(item.provider)}
-            />
+            <Tooltip title={!allowUnlink ? t('profile.sso.unlink.forbidden') : undefined}>
+              <span>
+                <ActionIcon
+                  disabled={!allowUnlink}
+                  icon={Unlink}
+                  size={'small'}
+                  onClick={() => handleUnlinkSSO(item.provider)}
+                />
+              </span>
+            </Tooltip>
           )}
         </Flexbox>
       ))}
+
+      {!isDesktop && !allowUnlink && (
+        <Text fontSize={11} type="secondary">
+          {t('profile.sso.unlink.forbidden')}
+        </Text>
+      )}
 
       {/* Link Account Button - Only show for logged in users with available providers */}
       {enableAuthActions && availableProviders.length > 0 && (

@@ -25,8 +25,10 @@ export interface BinaryInfo {
 
 export type HeterogeneousCliAgentType = 'amp' | 'claude-code' | 'codex' | 'opencode' | 'pi';
 
+export type DetectableHeterogeneousAgentType = HeterogeneousCliAgentType | 'hermes' | 'openclaw';
+
 export interface DetectHeterogeneousAgentCommandParams {
-  agentType: HeterogeneousCliAgentType;
+  agentType: DetectableHeterogeneousAgentType;
   command: string;
 }
 

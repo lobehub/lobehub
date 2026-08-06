@@ -97,6 +97,8 @@ export default eslint(
       '.i18nrc.js',
       // vendored code (copied from @microsoft/fetch-event-source)
       'packages/utils/src/client/fetchEventSource/parse.ts',
+      // generated files (regenerate with `bun generate:openapi` in packages/openapi)
+      'packages/openapi/openapi.yml',
     ],
     next: true,
     react: 'next',
@@ -282,6 +284,8 @@ export default eslint(
       'react/no-unknown-property': 0,
       'regexp/match-any': 0,
       'unicorn/better-regex': 0,
+      // conflicts with prettier, which lowercases hex literals
+      'unicorn/number-literal-case': 0,
     },
   },
   // TypeScript files - enforce consistent type imports

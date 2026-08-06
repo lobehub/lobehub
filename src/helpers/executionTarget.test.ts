@@ -6,6 +6,7 @@ import {
   type ExecutionPlan,
   executionTargetToRuntimeMode,
   isDeviceLockedPlan,
+  isHeterogeneousSandboxExecutionAvailable,
   resolveExecutionPlan,
   resolveExecutionTarget,
   resolveRuntimeMode,
@@ -25,6 +26,17 @@ const piCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig
   heterogeneousProvider: { command: 'pi', type: 'pi' },
   ...over,
 });
+const openClawCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({
+  heterogeneousProvider: { type: 'openclaw' },
+  ...over,
+});
+
+describe('isHeterogeneousSandboxExecutionAvailable', () => {
+  it('keeps notify-based platform agents on local or connected devices', () => {
+    expect(isHeterogeneousSandboxExecutionAvailable('openclaw')).toBe(false);
+    expect(isHeterogeneousSandboxExecutionAvailable('hermes')).toBe(false);
+  });
+});
 
 describe('resolveWorkspaceScoped', () => {
   it('preserves shared-row coercion until a workspace member explicitly selects a target', () => {
@@ -37,6 +49,22 @@ describe('resolveWorkspaceScoped', () => {
 });
 
 describe('resolveExecutionTarget', () => {
+  it('keeps legacy bound platform agents on their remote device', () => {
+    const legacy = openClawCfg({ boundDeviceId: 'legacy-device' });
+
+    expect(resolveExecutionTarget(legacy, { clientExecutionAvailable: true })).toBe('device');
+    expect(resolveExecutionTarget(legacy, { clientExecutionAvailable: false })).toBe('device');
+  });
+
+  it('lets an explicit platform local target override its fallback binding', () => {
+    expect(
+      resolveExecutionTarget(
+        openClawCfg({ boundDeviceId: 'fallback-device', executionTarget: 'local' }),
+        { clientExecutionAvailable: true },
+      ),
+    ).toBe('local');
+  });
+
   it('returns the stored target verbatim when set', () => {
     expect(
       resolveExecutionTarget(cfg({ executionTarget: 'device' }), {
@@ -378,6 +406,108 @@ describe('resolveRuntimeMode', () => {
 });
 
 describe('resolveExecutionPlan', () => {
+  it('uses a desktop hint only for a platform local target', () => {
+    expect(
+      resolveExecutionPlan({
+        agencyConfig: openClawCfg({ executionTarget: 'local' }),
+        clientExecutionAvailable: true,
+        isHetero: true,
+        localDeviceId: 'this-desktop',
+        sandboxExecutionAvailable: false,
+      }),
+    ).toEqual({ deviceId: 'this-desktop', kind: 'device', target: 'local' });
+
+    expect(
+      resolveExecutionPlan({
+        agencyConfig: openClawCfg({
+          boundDeviceId: 'remote-device',
+          executionTarget: 'device',
+        }),
+        clientExecutionAvailable: true,
+        isHetero: true,
+        localDeviceId: 'this-desktop',
+        sandboxExecutionAvailable: false,
+      }),
+    ).toEqual({ deviceId: 'remote-device', kind: 'device', target: 'device' });
+
+    expect(
+      resolveExecutionPlan({
+        agencyConfig: openClawCfg({
+          boundDeviceId: 'stale-remote-device',
+          executionTarget: 'local',
+        }),
+        clientExecutionAvailable: true,
+        isHetero: true,
+        sandboxExecutionAvailable: false,
+      }),
+    ).toEqual({ kind: 'device-unrouted', reason: 'no-bound-device', target: 'local' });
+
+    // Schedules, bots, and other server-only triggers have no "this desktop".
+    // A local platform target must fail closed instead of picking an arbitrary
+    // online device; users must bind an explicit remote device for those runs.
+    expect(
+      resolveExecutionPlan({
+        agencyConfig: openClawCfg({ executionTarget: 'local' }),
+        clientExecutionAvailable: false,
+        isHetero: true,
+        onlineDeviceIds: ['some-online-device'],
+        sandboxExecutionAvailable: false,
+      }),
+    ).toEqual({ kind: 'none', target: 'none' });
+
+    expect(
+      resolveExecutionPlan({
+        agencyConfig: openClawCfg({ boundDeviceId: 'legacy-device' }),
+        clientExecutionAvailable: false,
+        isHetero: true,
+        sandboxExecutionAvailable: false,
+      }),
+    ).toEqual({ deviceId: 'legacy-device', kind: 'device', target: 'device' });
+
+    expect(
+      resolveExecutionPlan({
+        agencyConfig: openClawCfg({
+          boundDeviceId: 'workspace-device',
+          executionTarget: 'device',
+          executionTargetSelectionPolicy: 'fixed',
+        }),
+        clientExecutionAvailable: true,
+        isHetero: true,
+        localDeviceId: 'this-desktop',
+        requestedDeviceId: 'member-device',
+        sandboxExecutionAvailable: false,
+      }),
+    ).toEqual({ deviceId: 'workspace-device', kind: 'device', target: 'device' });
+
+    expect(
+      resolveExecutionPlan({
+        agencyConfig: openClawCfg({
+          boundDeviceId: 'author-desktop',
+          executionTarget: 'local',
+          executionTargetSelectionPolicy: 'fixed',
+        }),
+        clientExecutionAvailable: true,
+        isHetero: true,
+        localDeviceId: 'member-desktop',
+        sandboxExecutionAvailable: false,
+      }),
+    ).toEqual({ deviceId: 'author-desktop', kind: 'device', target: 'local' });
+  });
+
+  it('does not dispatch a stale platform binding for none or unsupported sandbox', () => {
+    for (const executionTarget of ['none', 'sandbox'] as const) {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: openClawCfg({ boundDeviceId: 'stale-device', executionTarget }),
+          clientExecutionAvailable: executionTarget !== 'none',
+          isHetero: true,
+          localDeviceId: 'this-desktop',
+          sandboxExecutionAvailable: false,
+        }),
+      ).toEqual({ kind: 'none', target: 'none' });
+    }
+  });
+
   const ONLINE_A = ['device-a'];
   const ONLINE_AB = ['device-a', 'device-b'];
 

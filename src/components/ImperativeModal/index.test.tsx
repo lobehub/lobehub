@@ -1,6 +1,6 @@
 import { Input, MotionProvider } from '@lobehub/ui';
 import { ModalHost } from '@lobehub/ui/base-ui';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { motion } from 'motion/react';
 import { useState } from 'react';
 import { describe, expect, it } from 'vitest';
@@ -8,11 +8,11 @@ import { describe, expect, it } from 'vitest';
 import ImperativeModal from '.';
 
 /** A modal whose input is controlled by state living in the CALLER's tree. */
-const Harness = () => {
+const Harness = ({ open = true }: { open?: boolean }) => {
   const [value, setValue] = useState('');
   return (
     <MotionProvider motion={motion}>
-      <ImperativeModal destroyOnHidden open title={'title'}>
+      <ImperativeModal open={open} title={'title'}>
         <Input
           autoFocus
           data-testid={'field'}
@@ -78,5 +78,20 @@ describe('ImperativeModal', () => {
 
     expect(writes).toEqual([]);
     expect(field.value).toBe('lala');
+  });
+
+  it('keeps the body mounted while the modal plays its exit animation', async () => {
+    // Regression: children used to unmount in the same commit that flipped
+    // `open` to false, so the panel went blank and snapped to header height for
+    // the whole exit transition.
+    const { rerender } = render(<Harness />);
+
+    await screen.findByTestId('field');
+
+    await act(async () => {
+      rerender(<Harness open={false} />);
+    });
+
+    expect(screen.queryByTestId('field')).not.toBeNull();
   });
 });

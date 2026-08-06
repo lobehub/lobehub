@@ -6,7 +6,7 @@ import { Alert, Center, Flexbox, Icon, Input, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
-import { Cloud, Server, Undo2Icon } from 'lucide-react';
+import { Cloud, LogOutIcon, Server, Undo2Icon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
@@ -15,6 +15,7 @@ import { OFFICIAL_SITE } from '@/const/url';
 import { isDesktop } from '@/const/version';
 import UserInfo from '@/features/User/UserInfo';
 import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
+import { useSignOut } from '@/hooks/useSignOut';
 import { remoteServerService } from '@/services/electron/remoteServer';
 import { electronSystemService } from '@/services/electron/system';
 import { useElectronStore } from '@/store/electron';
@@ -55,19 +56,24 @@ const loginMethodMetas = {
   },
 } as const satisfies Record<LoginMethod, unknown>;
 
+// `status` hosts render this step as a connection panel for already-signed-in users,
+// where the wizard's "back" and "next" have no meaning.
+type LoginStepMode = 'onboarding' | 'status';
+
 interface LoginStepProps {
+  mode?: LoginStepMode;
   onBack: () => void;
   onNext: () => void;
 }
 
-const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
+const LoginStep = memo<LoginStepProps>(({ mode = 'onboarding', onBack, onNext }) => {
   const { t } = useTranslation('desktop-onboarding');
   const [endpoint, setEndpoint] = useState('');
   const [cloudLoginStatus, setCloudLoginStatus] = useState<LoginStatus>('idle');
   const [authProgress, setAuthProgress] = useState<AuthorizationProgress | null>(null);
   const [selfhostLoginStatus, setSelfhostLoginStatus] = useState<LoginStatus>('idle');
   const [pendingLoginMethod, setPendingLoginMethod] = useState<LoginMethod | null>(null);
-  const [isSuccessDismissed, setIsSuccessDismissed] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const [remoteError, setRemoteError] = useState<string | null>(null);
   const [showEndpoint, setShowEndpoint] = useState(false);
   const [hasLegacyLocalDb, setHasLegacyLocalDb] = useState(false);
@@ -91,6 +97,8 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
     s.refreshServerConfig,
     s.clearRemoteServerSyncError,
   ]);
+
+  const signOut = useSignOut();
 
   useDataSyncConfig();
 
@@ -132,10 +140,9 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
           : null;
   const hasLocalLoginResult = cloudLoginStatus !== 'idle' || selfhostLoginStatus !== 'idle';
 
-  const successLoginMethod = isSuccessDismissed
-    ? null
-    : (statusSuccessLoginMethod ??
-      (!hasLocalLoginResult && !pendingLoginMethod ? authorizedLoginMethod : null));
+  const successLoginMethod =
+    statusSuccessLoginMethod ??
+    (!hasLocalLoginResult && !pendingLoginMethod ? authorizedLoginMethod : null);
 
   // Determine if user can proceed (either method succeeding is sufficient)
   const canStart = () => {
@@ -153,7 +160,6 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
     setRemoteError(null);
     clearRemoteServerSyncError();
     setPendingLoginMethod('cloud');
-    setIsSuccessDismissed(false);
     setCloudLoginStatus('loading');
     setSelfhostLoginStatus('idle');
     setDesktopAutoOidcFirstOpenHandled();
@@ -177,21 +183,18 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
     setRemoteError(null);
     clearRemoteServerSyncError();
     setPendingLoginMethod('selfhost');
-    setIsSuccessDismissed(false);
     setCloudLoginStatus('idle');
     setSelfhostLoginStatus('loading');
     await connectRemoteServer({ remoteServerUrl: url, storageMode: 'selfHost' });
   };
 
-  const handleBackToLoginMethods = (method: LoginMethod) => {
-    setIsSuccessDismissed(true);
-    setPendingLoginMethod(null);
-    setCloudLoginStatus('idle');
-    setSelfhostLoginStatus('idle');
-    setAuthProgress(null);
-    setRemoteError(null);
-    clearRemoteServerSyncError();
-    setShowEndpoint(method === 'selfhost');
+  const handleSignOut = async () => {
+    setIsSigningOut(true);
+    try {
+      await signOut();
+    } finally {
+      setIsSigningOut(false);
+    }
   };
 
   // Sync local UI status with real remote config
@@ -234,7 +237,6 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
     setRemoteError(null);
     clearRemoteServerSyncError();
     setAuthProgress(null);
-    setIsSuccessDismissed(false);
     if (pendingLoginMethod === 'cloud') {
       setCloudLoginStatus('success');
       setSelfhostLoginStatus('idle');
@@ -303,15 +305,27 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
   };
 
   const renderSuccessContent = (method: LoginMethod) => {
+    const isStatusMode = mode === 'status';
+    const serverUrl = dataSyncConfig?.remoteServerUrl;
+
+    const title = isStatusMode
+      ? [method === 'cloud' ? t('screen5.status.cloud.title') : t('screen5.status.selfhost.title')]
+      : [t('screen5.title'), t('screen5.title2'), t('screen5.title3')];
+
+    const description = !isStatusMode
+      ? t('screen5.description')
+      : method === 'selfhost' && serverUrl
+        ? t('screen5.status.selfhost.description', { url: serverUrl })
+        : t('screen5.status.description');
+
     return (
       <Center gap={32} style={{ height: '100%', minHeight: '100%' }}>
         <Flexbox align={'flex-start'} justify={'flex-start'} style={{ width: '100%' }}>
-          <LobeMessage sentences={[t('screen5.title'), t('screen5.title2'), t('screen5.title3')]} />
-          <Text as={'p'}>{t('screen5.description')}</Text>
+          <LobeMessage sentences={title} />
+          <Text as={'p'}>{description}</Text>
         </Flexbox>
 
         <Flexbox gap={16} style={{ width: '100%' }}>
-          <Alert style={{ width: '100%' }} title={t('authResult.success.title')} type={'success'} />
           <UserInfo
             style={{
               background: cssVar.colorFillSecondary,
@@ -321,16 +335,28 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
         </Flexbox>
 
         <Flexbox horizontal justify={'space-between'} style={{ marginTop: 32 }}>
-          <Button
-            icon={Undo2Icon}
-            style={{ color: cssVar.colorTextDescription }}
-            type={'text'}
-            onClick={() => handleBackToLoginMethods(method)}
-          >
-            {t('back')}
-          </Button>
+          {isStatusMode ? (
+            <Button
+              disabled={isSigningOut}
+              icon={LogOutIcon}
+              style={{ color: cssVar.colorTextDescription }}
+              type={'text'}
+              onClick={handleSignOut}
+            >
+              {isSigningOut ? t('screen5.actions.signingOut') : t('screen5.actions.signOut')}
+            </Button>
+          ) : (
+            <Button
+              icon={Undo2Icon}
+              style={{ color: cssVar.colorTextDescription }}
+              type={'text'}
+              onClick={onBack}
+            >
+              {t('back')}
+            </Button>
+          )}
           <Button type={'primary'} onClick={onNext}>
-            {t('next')}
+            {isStatusMode ? t('screen5.actions.done') : t('next')}
           </Button>
         </Flexbox>
       </Center>

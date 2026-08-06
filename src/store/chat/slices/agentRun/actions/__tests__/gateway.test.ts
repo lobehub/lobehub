@@ -37,10 +37,14 @@ const mockToolInterventionConfig = vi.hoisted(() => ({
   allowList: [] as string[],
   approvalMode: 'manual' as 'allow-list' | 'auto-run' | 'manual',
 }));
+const mockUserState = vi.hoisted(() => ({
+  profile: { id: 'user-1' },
+  workspaceUserPreference: { agentDeviceOverrides: {} as Record<string, any> },
+}));
 
 vi.mock('@/store/user', () => ({
   useUserStore: {
-    getState: vi.fn(() => ({})),
+    getState: vi.fn(() => mockUserState),
   },
 }));
 
@@ -53,6 +57,9 @@ vi.mock('@/store/user/selectors', () => ({
   toolInterventionSelectors: {
     allowList: () => mockToolInterventionConfig.allowList,
     approvalMode: () => mockToolInterventionConfig.approvalMode,
+  },
+  userProfileSelectors: {
+    userId: (state: typeof mockUserState) => state.profile.id,
   },
 }));
 
@@ -85,6 +92,11 @@ vi.mock('@/services/electron/gatewayConnection', () => ({
 vi.mock('@/store/agent', () => ({ getAgentStoreState: () => mockAgentStore.state }));
 
 vi.mock('@/store/agent/selectors', () => ({
+  agentByIdSelectors: {
+    getAgencyConfigById: (agentId: string) => (state: any) =>
+      state.agentMap?.[agentId]?.agencyConfig,
+    getAgentById: (agentId: string) => (state: any) => state.agentMap?.[agentId],
+  },
   agentSelectors: { currentAgentWorkingDirectory: () => () => undefined },
   chatConfigByIdSelectors: {
     getChatConfigById: (agentId: string) => (state: any) =>
@@ -1036,7 +1048,10 @@ describe('GatewayActionImpl', () => {
 
       // Server task was created before the signal flipped — best-effort
       // interrupt must fire so the agent run stops server-side.
-      expect(interruptTaskSpy).toHaveBeenCalledWith({ operationId: 'server-op-cancel' });
+      expect(interruptTaskSpy).toHaveBeenCalledWith({
+        operationId: 'server-op-cancel',
+        topicId: 'topic-1',
+      });
 
       // No child op, no message association, no WS connect, no parent complete
       // — the cancel must short-circuit the whole hand-off.
@@ -1397,9 +1412,15 @@ describe('GatewayActionImpl', () => {
         mockRuntime.isLocal = false;
         mockRuntime.isChatMode = false;
         mockGateway.getDeviceInfo.mockReset();
+        mockAgentStore.state.agentMap = {};
+        mockUserState.workspaceUserPreference.agentDeviceOverrides = {};
       });
 
       const send = async () => {
+        mockAgentStore.state.agentMap['agent-1'] ??= {
+          agencyConfig: { executionTarget: mockRuntime.isLocal ? 'local' : 'sandbox' },
+          userId: 'user-1',
+        };
         const { action } = createExecuteTestAction();
         vi.mocked(aiAgentService.execAgentTask).mockResolvedValue(successResult);
         await action.executeGatewayAgent({
@@ -1430,9 +1451,8 @@ describe('GatewayActionImpl', () => {
         await send();
 
         expect(mockGateway.getDeviceInfo).not.toHaveBeenCalled();
-        expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
-          expect.objectContaining({ deviceId: undefined }),
-          expect.anything(),
+        expect(vi.mocked(aiAgentService.execAgentTask).mock.calls.at(-1)?.[0]).not.toHaveProperty(
+          'deviceId',
         );
       });
 
@@ -1447,9 +1467,8 @@ describe('GatewayActionImpl', () => {
         await send();
 
         expect(mockGateway.getDeviceInfo).not.toHaveBeenCalled();
-        expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
-          expect.objectContaining({ deviceId: undefined }),
-          expect.anything(),
+        expect(vi.mocked(aiAgentService.execAgentTask).mock.calls.at(-1)?.[0]).not.toHaveProperty(
+          'deviceId',
         );
       });
 
@@ -1460,10 +1479,94 @@ describe('GatewayActionImpl', () => {
         await send();
 
         expect(mockGateway.getDeviceInfo).not.toHaveBeenCalled();
+        expect(vi.mocked(aiAgentService.execAgentTask).mock.calls.at(-1)?.[0]).not.toHaveProperty(
+          'deviceId',
+        );
+      });
+
+      it('uses a workspace member local override instead of the shared remote device', async () => {
+        mockEnv.isDesktop = true;
+        mockGateway.getDeviceInfo.mockResolvedValue({ deviceId: 'device-local-member' });
+        mockAgentStore.state.agentMap['agent-1'] = {
+          agencyConfig: { boundDeviceId: 'workspace-device', executionTarget: 'device' },
+          userId: 'workspace-owner',
+          visibility: 'public',
+          workspaceId: 'workspace-1',
+        };
+        mockUserState.workspaceUserPreference.agentDeviceOverrides['agent-1'] = {
+          boundDeviceId: 'device-local-member',
+          executionTarget: 'local',
+        };
+
+        await send();
+
         expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
-          expect.objectContaining({ deviceId: undefined }),
+          expect.objectContaining({ deviceId: 'device-local-member' }),
           expect.anything(),
         );
+      });
+
+      it('does not preset this desktop for a workspace member remote override', async () => {
+        mockEnv.isDesktop = true;
+        mockAgentStore.state.agentMap['agent-1'] = {
+          agencyConfig: { executionTarget: 'local' },
+          userId: 'workspace-owner',
+          visibility: 'public',
+          workspaceId: 'workspace-1',
+        };
+        mockUserState.workspaceUserPreference.agentDeviceOverrides['agent-1'] = {
+          boundDeviceId: 'remote-device',
+          executionTarget: 'device',
+        };
+
+        await send();
+
+        expect(mockGateway.getDeviceInfo).not.toHaveBeenCalled();
+        expect(vi.mocked(aiAgentService.execAgentTask).mock.calls.at(-1)?.[0]).not.toHaveProperty(
+          'deviceId',
+        );
+      });
+
+      it('sends a distinct local device hint for a local platform agent', async () => {
+        mockEnv.isDesktop = true;
+        mockGateway.getDeviceInfo.mockResolvedValue({ deviceId: 'this-desktop' });
+        mockAgentStore.state.agentMap['agent-1'] = {
+          agencyConfig: {
+            executionTarget: 'local',
+            heterogeneousProvider: { type: 'openclaw' },
+          },
+          userId: 'user-1',
+        };
+
+        await send();
+
+        expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
+          expect.objectContaining({ localDeviceId: 'this-desktop' }),
+          expect.anything(),
+        );
+        expect(vi.mocked(aiAgentService.execAgentTask).mock.calls.at(-1)?.[0]).not.toHaveProperty(
+          'deviceId',
+        );
+      });
+
+      it('sends a harmless desktop hint without overriding a remote platform target', async () => {
+        mockEnv.isDesktop = true;
+        mockGateway.getDeviceInfo.mockResolvedValue({ deviceId: 'this-desktop' });
+        mockAgentStore.state.agentMap['agent-1'] = {
+          agencyConfig: {
+            boundDeviceId: 'remote-device',
+            executionTarget: 'device',
+            heterogeneousProvider: { type: 'hermes' },
+          },
+          userId: 'user-1',
+        };
+
+        await send();
+
+        expect(mockGateway.getDeviceInfo).toHaveBeenCalled();
+        const request = vi.mocked(aiAgentService.execAgentTask).mock.calls.at(-1)?.[0];
+        expect(request).not.toHaveProperty('deviceId');
+        expect(request).toHaveProperty('localDeviceId', 'this-desktop');
       });
     });
   });

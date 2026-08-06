@@ -7,6 +7,7 @@ import InterestsRow from './InterestsRow';
 
 const mocks = vi.hoisted(() => ({
   interests: [] as string[],
+  saveToast: vi.fn(),
   updateInterests: vi.fn(),
 }));
 
@@ -32,7 +33,14 @@ vi.mock('react-i18next', () => ({
   useTranslation: (namespace: string) => ({
     t: (key: string) => {
       if (namespace === 'auth') {
-        return ({ 'profile.interests': 'Interests' } as Record<string, string>)[key] ?? key;
+        return (
+          (
+            {
+              'profile.interests': 'Interests',
+              'profile.saveError': 'Could not save interests',
+            } as Record<string, string>
+          )[key] ?? key
+        );
       }
 
       return (
@@ -48,10 +56,8 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/components/Error/fetchErrorNotification', () => ({
-  fetchErrorNotification: {
-    error: vi.fn(),
-  },
+vi.mock('@/store/utils/saveToast', () => ({
+  saveToast: mocks.saveToast,
 }));
 
 vi.mock('@/store/user', () => ({
@@ -76,6 +82,7 @@ vi.mock('./ProfileRow', () => ({
 
 beforeEach(() => {
   mocks.interests = [];
+  mocks.saveToast.mockReset();
   mocks.updateInterests.mockReset();
   mocks.updateInterests.mockResolvedValue(undefined);
 });
@@ -108,5 +115,38 @@ describe('InterestsRow', () => {
     await waitFor(() => {
       expect(mocks.updateInterests).toHaveBeenCalledWith(['自定义']);
     });
+  });
+
+  it('reports a failed save through the shared save toast without touching the row layout', async () => {
+    const user = userEvent.setup();
+    const failure = new Error('network detail');
+    mocks.updateInterests.mockRejectedValueOnce(failure);
+
+    render(<InterestsRow />);
+
+    await user.click(screen.getByRole('button', { name: '编程与开发' }));
+
+    await waitFor(() => {
+      expect(mocks.saveToast).toHaveBeenCalledWith(failure, {
+        retry: expect.any(Function),
+        title: 'Could not save interests',
+      });
+    });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('retries the same payload from the toast action', async () => {
+    const user = userEvent.setup();
+    mocks.updateInterests.mockRejectedValueOnce(new Error('network detail'));
+
+    render(<InterestsRow />);
+
+    await user.click(screen.getByRole('button', { name: '编程与开发' }));
+
+    await waitFor(() => expect(mocks.saveToast).toHaveBeenCalled());
+
+    await mocks.saveToast.mock.calls[0][1].retry();
+
+    expect(mocks.updateInterests).toHaveBeenNthCalledWith(2, ['coding']);
   });
 });
