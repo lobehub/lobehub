@@ -1,4 +1,3 @@
-import { ModelIcon } from '@lobehub/icons';
 import { Flexbox, Tag, Text, Tooltip, TooltipGroup } from '@lobehub/ui';
 import { Button, Select, type SelectProps, Switch } from '@lobehub/ui/base-ui';
 import { toast } from '@lobehub/ui/base-ui';
@@ -7,6 +6,7 @@ import { type ReactNode } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { BrandedModelIcon } from '@/components/Branding/BrandedModelIcon';
 import { ModelItemRender, ProviderItemRender, TAG_CLASSNAME } from '@/components/ModelSelect';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
@@ -242,7 +242,7 @@ const ModelSelect = memo<ModelSelectProps>(
         label: (
           <Flexbox gap={4}>
             <Flexbox horizontal align={'center'} gap={8}>
-              <ModelIcon model={value.model} size={20} />
+              <BrandedModelIcon model={value.model} size={20} />
               <Text ellipsis style={{ fontSize: 14 }}>
                 {meta?.displayName || value.model}
               </Text>
