@@ -1,9 +1,14 @@
 'use client';
 
+import {
+  AGENT_ARTWORK_STYLES,
+  type AgentArtworkStyle,
+  DEFAULT_AGENT_ARTWORK_STYLE,
+} from '@lobechat/prompts';
 import { ActionIcon, Alert, Avatar, Center, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
-import { Button, toast } from '@lobehub/ui/base-ui';
+import { Button, type DropdownItem, DropdownMenu, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ImageIcon, Trash2, UploadIcon, WandSparkles } from 'lucide-react';
+import { Check, ImageIcon, Trash2, UploadIcon, WandSparkles } from 'lucide-react';
 import { memo, useCallback, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -199,6 +204,9 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
     const backgroundInputId = useId();
     const [avatarUploading, setAvatarUploading] = useState(false);
     const [backgroundUploading, setBackgroundUploading] = useState(false);
+    const [artworkStyle, setArtworkStyle] = useState<AgentArtworkStyle>(
+      DEFAULT_AGENT_ARTWORK_STYLE,
+    );
     const generating = generation?.status === 'generating' ? generation.kind : null;
     const generationError = generation?.status === 'error' ? generation.kind : null;
     const backgroundGenerationActive = generation?.kind === 'background';
@@ -237,7 +245,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
     );
 
     const generateArtwork = useCallback(
-      async (kind: 'avatar' | 'background') => {
+      async (kind: 'avatar' | 'background', style: AgentArtworkStyle) => {
         if (!canEdit || !canGenerate) return;
 
         try {
@@ -247,6 +255,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
             kind,
             name,
             referenceImageUrl: kind === 'background' ? avatar : backgroundUrl,
+            style,
             systemRole,
             title,
           });
@@ -266,6 +275,23 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
         systemRole,
         title,
       ],
+    );
+
+    // Generating opens a style menu instead of firing directly — picking the
+    // rendering style is the whole point of the control, and the last pick is
+    // remembered for both artwork kinds so avatar and cover stay one system.
+    const buildStyleItems = useCallback(
+      (kind: 'avatar' | 'background'): DropdownItem[] =>
+        AGENT_ARTWORK_STYLES.map((style) => ({
+          icon: style === artworkStyle ? Check : undefined,
+          key: style,
+          label: t(`settingAgent.artwork.style.${style}`),
+          onClick: () => {
+            setArtworkStyle(style);
+            void generateArtwork(kind, style);
+          },
+        })),
+      [artworkStyle, generateArtwork, t],
     );
 
     return (
@@ -304,7 +330,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
                 <Button
                   icon={WandSparkles}
                   size={'small'}
-                  onClick={() => void generateArtwork('background')}
+                  onClick={() => void generateArtwork('background', artworkStyle)}
                 >
                   {t('settingAgent.artwork.retry')}
                 </Button>
@@ -327,14 +353,15 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
                     {t('settingAgent.artwork.background.upload')}
                   </Button>
                   {canGenerate ? (
-                    <Button
-                      icon={WandSparkles}
-                      loading={generating === 'background'}
-                      size={'small'}
-                      onClick={() => void generateArtwork('background')}
-                    >
-                      {t('settingAgent.artwork.background.generate')}
-                    </Button>
+                    <DropdownMenu items={() => buildStyleItems('background')}>
+                      <Button
+                        icon={WandSparkles}
+                        loading={generating === 'background'}
+                        size={'small'}
+                      >
+                        {t('settingAgent.artwork.background.generate')}
+                      </Button>
+                    </DropdownMenu>
                   ) : null}
                 </Flexbox>
               </Flexbox>
@@ -357,12 +384,9 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
               </Tooltip>
               {canGenerate ? (
                 <Tooltip title={t('settingAgent.artwork.background.generate')}>
-                  <ActionIcon
-                    glass
-                    icon={WandSparkles}
-                    loading={generating === 'background'}
-                    onClick={() => void generateArtwork('background')}
-                  />
+                  <DropdownMenu items={() => buildStyleItems('background')}>
+                    <ActionIcon glass icon={WandSparkles} loading={generating === 'background'} />
+                  </DropdownMenu>
                 </Tooltip>
               ) : null}
               {backgroundUrl ? (
@@ -426,13 +450,11 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
                             ) : null}
                           </Center>
                           {generating !== 'avatar' ? (
-                            <Button
-                              className={styles.generatedAction}
-                              icon={WandSparkles}
-                              onClick={() => void generateArtwork('avatar')}
-                            >
-                              {t('settingAgent.artwork.avatar.generateAction')}
-                            </Button>
+                            <DropdownMenu items={() => buildStyleItems('avatar')}>
+                              <Button className={styles.generatedAction} icon={WandSparkles}>
+                                {t('settingAgent.artwork.avatar.generateAction')}
+                              </Button>
+                            </DropdownMenu>
                           ) : null}
                           {generationError === 'avatar' ? (
                             <Alert

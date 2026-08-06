@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildAgentArtworkPrompt } from './index';
+import { AGENT_ARTWORK_STYLES, buildAgentArtworkPrompt } from './index';
 
 describe('buildAgentArtworkPrompt', () => {
   it('injects escaped Agent identity and description into the avatar prompt', () => {
@@ -52,5 +52,53 @@ describe('buildAgentArtworkPrompt', () => {
 
     expect(prompt).toContain('attached existing profile background as the visual source of truth');
     expect(prompt).toContain('same identity system');
+  });
+
+  it('defaults to the editorial style direction', () => {
+    const prompt = buildAgentArtworkPrompt({ id: 'agent-1', kind: 'avatar' });
+
+    expect(prompt).toContain('polished editorial illustration');
+  });
+
+  it('renders a distinct direction for every style preset', () => {
+    const prompts = AGENT_ARTWORK_STYLES.map((style) =>
+      buildAgentArtworkPrompt({ id: 'agent-1', kind: 'background', style }),
+    );
+
+    expect(new Set(prompts).size).toBe(AGENT_ARTWORK_STYLES.length);
+    expect(prompts.find((p) => p.includes('watercolor'))).toBeTruthy();
+    expect(prompts.find((p) => p.includes('risograph'))).toBeTruthy();
+  });
+
+  it('applies the chosen style to both avatar and background prompts', () => {
+    const avatar = buildAgentArtworkPrompt({ id: 'agent-1', kind: 'avatar', style: 'clay' });
+    const background = buildAgentArtworkPrompt({
+      id: 'agent-1',
+      kind: 'background',
+      style: 'clay',
+    });
+
+    expect(avatar).toContain('clay-style scene');
+    expect(background).toContain('clay-style scene');
+  });
+
+  it('steers the motif away from generic technology clichés in every prompt', () => {
+    for (const kind of ['avatar', 'background'] as const) {
+      const prompt = buildAgentArtworkPrompt({ id: 'agent-1', kind });
+
+      expect(prompt).toContain('Avoid generic AI and technology clichés');
+    }
+  });
+
+  it('keeps the style direction authoritative over the reference image style', () => {
+    const prompt = buildAgentArtworkPrompt({
+      id: 'designer',
+      kind: 'background',
+      referenceImageUrl: 'https://example.com/avatar.png',
+      style: 'watercolor',
+    });
+
+    expect(prompt).toContain('hand-painted watercolor');
+    expect(prompt).not.toContain('illustration style');
   });
 });
