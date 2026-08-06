@@ -643,6 +643,27 @@ describe('useSignIn', () => {
   });
 
   describe('handleVerifyPhoneOtp', () => {
+    it('should show a localized error when the phone is not verified for login', async () => {
+      mockPhoneSendOtp.mockResolvedValue({
+        error: { code: 'PHONE_NUMBER_NOT_VERIFIED', message: 'PHONE_NUMBER_NOT_VERIFIED' },
+      });
+
+      const { result } = renderHook(() => useSignIn());
+
+      act(() => {
+        result.current.handleGoToPhone();
+      });
+
+      await act(async () => {
+        await result.current.handleSendPhoneOtp({ phoneNumber: '09121234567' });
+      });
+
+      expect(result.current.step).toBe('phone');
+      expect(mockMessageError).toHaveBeenCalledWith(
+        'betterAuth.verifyPhone.errors.phoneNotVerifiedForLogin',
+      );
+    });
+
     it('should redirect to onboarding after successful phone OTP (avoids chat-home flash)', async () => {
       mockPhoneSendOtp.mockResolvedValue({ error: null });
       mockPhoneVerify.mockResolvedValue({ error: null });

@@ -22,6 +22,7 @@ import {
 } from '@/libs/better-auth/email-templates';
 import { isValidIranianPhoneNumber, normalizeIranianPhoneNumber } from '@/libs/better-auth/phone';
 import { emailWhitelist } from '@/libs/better-auth/plugins/email-whitelist';
+import { phoneLoginGate } from '@/libs/better-auth/plugins/phone-login-gate';
 import { initBetterAuthSSOProviders } from '@/libs/better-auth/sso';
 import { createSecondaryStorage, getTrustedOrigins } from '@/libs/better-auth/utils/config';
 import { parseSSOProviders } from '@/libs/better-auth/utils/server';
@@ -300,6 +301,7 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
     plugins: [
       ...customOptions.plugins,
       emailWhitelist(),
+      phoneLoginGate(),
       expo(),
       admin(),
       // Email OTP plugin for mobile verification
@@ -326,7 +328,7 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
           });
         },
       }),
-      // Aico Phase 1: phone OTP sign-in + optional verify for trial (not a login gate)
+      // Aico Phase 1: phone OTP sign-in for previously verified numbers + optional verify for trial
       phoneNumber({
         allowedAttempts: 3,
         expiresIn: OTP_EXPIRES_IN,

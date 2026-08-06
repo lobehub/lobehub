@@ -83,6 +83,10 @@ vi.mock('@/libs/better-auth/plugins/email-whitelist', () => ({
   emailWhitelist: vi.fn(() => ({ id: 'email-whitelist' })),
 }));
 
+vi.mock('@/libs/better-auth/plugins/phone-login-gate', () => ({
+  phoneLoginGate: vi.fn(() => ({ id: 'phone-login-gate' })),
+}));
+
 vi.mock('@/libs/better-auth/sso', () => ({
   initBetterAuthSSOProviders: vi.fn(() => ({
     genericOAuthProviders: [],
@@ -224,5 +228,14 @@ describe('defineConfig', () => {
       signUpOnVerification?: unknown;
     };
     expect(phoneOpts.signUpOnVerification).toBeUndefined();
+  });
+
+  it('should register the phone login gate plugin', async () => {
+    const { phoneLoginGate } = await import('./plugins/phone-login-gate');
+    const { defineConfig } = await import('./define-config');
+
+    defineConfig({ plugins: [] });
+
+    expect(phoneLoginGate).toHaveBeenCalled();
   });
 });

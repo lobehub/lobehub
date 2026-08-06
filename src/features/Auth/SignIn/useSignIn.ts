@@ -63,6 +63,10 @@ const mapPhoneOtpError = (
     case 'PHONE_NUMBER_EXIST': {
       return t('betterAuth.verifyPhone.errors.phoneExists');
     }
+    case 'PHONE_NUMBER_NOT_VERIFIED':
+    case 'PHONE_NUMBER_NOT_EXIST': {
+      return t('betterAuth.verifyPhone.errors.phoneNotVerifiedForLogin');
+    }
     default: {
       if (code === 'TOO_MANY_REQUESTS' || fallback.toLowerCase().includes('too many')) {
         return t('betterAuth.verifyPhone.errors.rateLimited');
@@ -400,9 +404,8 @@ export const useSignIn = () => {
         return;
       }
 
-      // Phone OTP is both sign-in and sign-up. Always land on onboarding first so
-      // new users never flash the chat home; finished users are bounced home by
-      // useUserStateRedirect once user state loads.
+      // Phone OTP signs in existing verified-phone users only (signup via phone is disabled).
+      // Finished users are bounced home by useUserStateRedirect once user state loads.
       window.location.href = buildOnboardingRedirectUrl(callbackUrl);
     } finally {
       setLoading(false);
