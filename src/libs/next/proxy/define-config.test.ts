@@ -79,3 +79,24 @@ describe('defineConfig Workbench SPA rewrite', () => {
     expect(new URL(index!).pathname).toMatch(/^\/spa\/[^/]+\/agent\/agt_1\/docs$/);
   });
 });
+
+describe('defineConfig public legal routes', () => {
+  it('keeps terms and privacy on auth SPA', async () => {
+    const terms = await run('http://localhost:3010/terms?hl=fa-IR');
+    const privacy = await run('http://localhost:3010/privacy?hl=fa-IR');
+
+    expect(new URL(terms!).pathname).toBe('/spa-auth/fa-IR/terms');
+    expect(new URL(privacy!).pathname).toBe('/spa-auth/fa-IR/privacy');
+  });
+
+  it('does not redirect unauthenticated users away from /terms', async () => {
+    const { auth } = await import('@/auth');
+    vi.mocked(auth.api.getSession).mockResolvedValueOnce(null as never);
+
+    const terms = await middleware(new NextRequest('http://localhost:3010/terms'));
+    expect(terms?.status).not.toBe(307);
+    expect(terms?.status).not.toBe(302);
+    expect(terms?.headers.get('location')).toBeNull();
+    expect(terms?.headers.get('x-middleware-rewrite')).toContain('/spa-auth/');
+  });
+});

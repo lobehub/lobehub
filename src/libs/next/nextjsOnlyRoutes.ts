@@ -14,4 +14,8 @@ export const authSpaRoutes = [
   '/verify-phone',
   '/oauth',
   '/market-auth-callback',
+  // Legal docs linked from signup/signin consent — must stay on the auth SPA so
+  // unauthenticated users can open them without entering the main app.
+  '/terms',
+  '/privacy',
 ];

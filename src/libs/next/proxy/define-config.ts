@@ -219,6 +219,9 @@ export function defineConfig() {
     '/verify-email',
     '/verify-phone',
     '/reset-password',
+    // Legal docs linked from auth consent — must be readable before sign-in.
+    '/terms',
+    '/privacy',
     // oauth
     // Make only the consent view public (GET page), not other oauth paths
     '/oauth/consent/(.*)',
