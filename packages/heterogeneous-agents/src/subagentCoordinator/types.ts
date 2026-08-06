@@ -64,6 +64,21 @@ export interface SubagentRun {
    * over still resolves back to the right run.
    */
   lifetimeToolCallIds: Set<string>;
+  /**
+   * Run-lifetime set of every CC `message.id` this run has already opened an
+   * in-thread assistant for (the current turn's id included). The turn-boundary
+   * check alone (`subagentMessageId !== currentSubagentMessageId`) recognizes
+   * only a replay of the CURRENT turn; a redelivered batch replayed on a cold
+   * replica can carry events of EARLIER turns, whose ids differ from the
+   * rehydrated current id and would read as fresh boundaries — minting a
+   * duplicate assistant row per replayed turn and re-flushing its content (the
+   * durable subagent-text duplication path). This ledger lets `ensureRun` drop
+   * any event whose turn id was already materialized. Rehydrated from each
+   * assistant row's persisted `metadata.subagentMessageId`, so it survives cold
+   * replicas — the subagent peer of the main reducer's `currentMainMessageId`
+   * replay guard, extended over the whole run instead of just the open turn.
+   */
+  seenSubagentMessageIds: Set<string>;
   /** The subagent Thread this spawn's messages belong to. */
   threadId: string;
   /** Per-turn tool persistence state. */
@@ -116,6 +131,20 @@ export const createSubagentRunsState = (): SubagentRunsState => ({
  * turn behavior as before, no duplicate thread.
  */
 export interface SubagentRunSnapshot {
+  /**
+   * Persisted content of the in-flight turn's assistant row, restored into
+   * {@link SubagentRun.accContent}. Subagent text is append-semantics (each CC
+   * emission is a one-shot full block, but a turn may span several emissions
+   * across batches), so a cold replica starting the accumulator EMPTY would
+   * flush only the post-handoff tail and durably truncate the turn's earlier
+   * blocks. Restoring the row's content re-anchors the append. Safe against
+   * re-append duplication because redelivered already-applied events are
+   * dropped before the reducer runs (server applied-event ledger) — only
+   * genuinely new emissions append onto the restored prefix.
+   */
+  accContent?: string;
+  /** Persisted reasoning of the in-flight turn's assistant row — see {@link accContent}. */
+  accReasoning?: string;
   /** Latest in-thread assistant id (where a continuation turn would otherwise append). */
   currentAssistantId: string;
   /** CC `message.id` of the in-flight turn, from the latest assistant's `metadata.subagentMessageId`. */
@@ -126,6 +155,13 @@ export interface SubagentRunSnapshot {
   lifetimeToolCallIds?: string[];
   /** The spawn tool_use id (`thread.metadata.sourceToolCallId`) — the run key. */
   parentToolCallId: string;
+  /**
+   * Every CC `message.id` the thread's assistant rows already carry
+   * (`metadata.subagentMessageId`), restored into
+   * {@link SubagentRun.seenSubagentMessageIds} so a replayed earlier-turn event
+   * on a cold replica is dropped instead of minting a duplicate assistant row.
+   */
+  seenSubagentMessageIds?: string[];
   /** The existing isolation Thread this run owns. */
   threadId: string;
 }
@@ -133,9 +169,11 @@ export interface SubagentRunSnapshot {
 /**
  * Rebuild a {@link SubagentRunsState} from DB-derived snapshots of in-flight
  * runs. Use on a cold start so a continuing subagent reuses its existing thread
- * instead of forking a new one. `accContent` / `accReasoning` / per-turn
- * `toolState` start empty — the next turn boundary opens a fresh in-thread
- * assistant, and inner tool_results still resolve through `lifetimeToolCallIds`.
+ * instead of forking a new one. Per-turn `toolState` starts empty — the next
+ * turn boundary opens a fresh in-thread assistant, and inner tool_results still
+ * resolve through `lifetimeToolCallIds`. `accContent` / `accReasoning` restore
+ * from the in-flight assistant row (see {@link SubagentRunSnapshot.accContent})
+ * so a post-handoff append continues the turn instead of truncating it.
  *
  * `finalizedParentToolCallIds` seeds {@link SubagentRunsState.finalizedParents}
  * — `parentToolCallId`s whose thread already finalized (`Active`). These are NOT
@@ -148,13 +186,20 @@ export const rehydrateSubagentRunsState = (
 ): SubagentRunsState => {
   const runs = new Map<string, SubagentRun>();
   for (const s of snapshots) {
+    // The current turn's id belongs in the seen ledger even when the snapshot
+    // builder omitted the array (defensive union — an id can never be "current
+    // but unseen").
+    const seenSubagentMessageIds = new Set(s.seenSubagentMessageIds ?? []);
+    if (s.currentSubagentMessageId) seenSubagentMessageIds.add(s.currentSubagentMessageId);
+
     runs.set(s.parentToolCallId, {
-      accContent: '',
-      accReasoning: '',
+      accContent: s.accContent ?? '',
+      accReasoning: s.accReasoning ?? '',
       currentAssistantId: s.currentAssistantId,
       currentSubagentMessageId: s.currentSubagentMessageId ?? '',
       lastChainParentId: s.lastChainParentId ?? s.currentAssistantId,
       lifetimeToolCallIds: new Set(s.lifetimeToolCallIds ?? []),
+      seenSubagentMessageIds,
       threadId: s.threadId,
       toolState: { payloads: [], persistedIds: new Set(), toolMsgIdByCallId: new Map() },
     });

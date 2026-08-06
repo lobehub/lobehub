@@ -11,6 +11,7 @@ import * as verifyService from '@/server/services/verify';
 
 import type { HeterogeneousPersistenceHandler } from '..';
 import { HeterogeneousAgentService, StaleHeteroOperationError } from '..';
+import { HeteroEventLedger, type HeteroLedgerRedis } from '../HeteroEventLedger';
 import { HeteroTraceRecorder } from '../HeteroTraceRecorder';
 
 // Force queue/production mode so the terminal funnel takes the serialized-webhook
@@ -41,24 +42,53 @@ const createFakeStreamManager = () => {
 };
 
 const createFakePersistenceHandler = () => {
-  // Faithful publish-gate fake: same latch semantics as the real handler
-  // (filter by event identity, latch per event) so batch-retry tests exercise
-  // the real skip/resume behavior instead of a stub that returns everything.
-  const publishedKeys = new Set<string>();
-  const gateKey = (event: AgentStreamEvent) =>
-    `${event.stepIndex}:${event.type}:${event.timestamp}`;
   const handler = {
-    filterUnpublishedEvents: vi.fn((_operationId: string, events: AgentStreamEvent[]) =>
-      events.filter((event) => !publishedKeys.has(gateKey(event))),
-    ),
     finish: vi.fn(async () => {}),
     ingest: vi.fn(async () => {}),
-    markEventPublished: vi.fn((_operationId: string, event: AgentStreamEvent) => {
-      publishedKeys.add(gateKey(event));
-    }),
   };
   return handler as unknown as HeterogeneousPersistenceHandler & typeof handler;
 };
+
+/**
+ * In-memory stand-in for the ledger's Redis slice. Shared across service
+ * instances in a test to model the one thing that survives replica death.
+ */
+const createFakeLedgerRedis = () => {
+  const sets = new Map<string, Set<string>>();
+  const redis: HeteroLedgerRedis = {
+    del: vi.fn(async (key: string) => (sets.delete(key) ? 1 : 0)),
+    expire: vi.fn(async () => 1),
+    sadd: vi.fn(async (key: string, ...members: string[]) => {
+      let set = sets.get(key);
+      if (!set) {
+        set = new Set();
+        sets.set(key, set);
+      }
+      let added = 0;
+      for (const member of members) {
+        if (!set.has(member)) {
+          set.add(member);
+          added += 1;
+        }
+      }
+      return added;
+    }),
+    smismember: vi.fn(async (key: string, ...members: string[]) =>
+      members.map((member) => (sets.get(key)?.has(member) ? 1 : 0)),
+    ),
+  };
+  return { redis, sets };
+};
+
+/**
+ * Fresh, test-scoped ledgers so no state bleeds through the module singletons.
+ * Pass `redis` to make them durable (cold-replica tests share one fake Redis
+ * across two "replicas"); omit it for the memory-only baseline.
+ */
+const createLedgers = (redis?: HeteroLedgerRedis) => ({
+  appliedLedger: new HeteroEventLedger('applied', () => redis ?? null),
+  publishLedger: new HeteroEventLedger('published', () => redis ?? null),
+});
 
 const buildEvent = (
   type: AgentStreamEvent['type'],
@@ -72,14 +102,21 @@ const buildEvent = (
   type,
 });
 
-const createService = (overrides: { streamEventManager?: IStreamEventManager } = {}) => {
+const createService = (
+  overrides: {
+    ledgerRedis?: HeteroLedgerRedis;
+    streamEventManager?: IStreamEventManager;
+  } = {},
+) => {
   const { manager, published } = createFakeStreamManager();
   const persistenceHandler = createFakePersistenceHandler();
+  const ledgers = createLedgers(overrides.ledgerRedis);
   const service = new HeterogeneousAgentService({} as any, 'user-test', {
+    ...ledgers,
     persistenceHandler,
     streamEventManager: overrides.streamEventManager ?? manager,
   });
-  return { manager, persistenceHandler, published, service };
+  return { ...ledgers, manager, persistenceHandler, published, service };
 };
 
 describe('HeterogeneousAgentService', () => {
@@ -143,6 +180,7 @@ describe('HeterogeneousAgentService', () => {
       };
       const persistenceHandler = createFakePersistenceHandler();
       const service = new HeterogeneousAgentService({} as any, 'user-test', {
+        ...createLedgers(),
         persistenceHandler,
         streamEventManager: manager as IStreamEventManager,
       });
@@ -213,6 +251,7 @@ describe('HeterogeneousAgentService', () => {
       };
       const persistenceHandler = createFakePersistenceHandler();
       const service = new HeterogeneousAgentService({} as any, 'user-test', {
+        ...createLedgers(),
         persistenceHandler,
         streamEventManager: manager as IStreamEventManager,
       });
@@ -250,6 +289,136 @@ describe('HeterogeneousAgentService', () => {
       appendBatch.mockRestore();
     });
 
+    it('COLD-replica redelivery: the durable gate republishes nothing and skips the trace fold', async () => {
+      // The cross-replica case the in-memory latch can never cover: the batch
+      // fully succeeded on replica A but the tRPC response was lost, and the
+      // BatchIngester retry lands on replica B whose in-memory state is empty.
+      // Only the Redis-backed ledger (modeled by the shared fake) knows the
+      // events were already delivered — a fresh service instance with a fresh
+      // ledger instance IS the cold replica.
+      const appendBatch = vi
+        .spyOn(HeteroTraceRecorder.prototype, 'appendBatch')
+        .mockResolvedValue();
+      const { redis } = createFakeLedgerRedis();
+      const events: AgentStreamEvent[] = [
+        buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'hi' }),
+        buildEvent('tool_start', 1, { toolCallId: 'tc-1' }),
+      ];
+
+      const replicaA = createService({ ledgerRedis: redis });
+      await replicaA.service.heteroIngest({
+        agentType: 'claude-code',
+        events,
+        operationId: 'op-test',
+        topicId: 'topic-1',
+      });
+      expect(replicaA.published).toHaveLength(2);
+      expect(appendBatch).toHaveBeenCalledTimes(1);
+
+      const replicaB = createService({ ledgerRedis: redis });
+      await replicaB.service.heteroIngest({
+        agentType: 'claude-code',
+        events,
+        operationId: 'op-test',
+        topicId: 'topic-1',
+      });
+
+      // Zero duplicate publishes, and no second fold of the same batch.
+      expect(replicaB.published).toHaveLength(0);
+      expect(appendBatch).toHaveBeenCalledTimes(1);
+      appendBatch.mockRestore();
+    });
+
+    it('COLD-replica retry after a mid-publish crash resumes from the first unpublished event', async () => {
+      // Attempt 1 delivers the head then dies; the `finally` persists the
+      // head's latch durably before the error propagates. The retry lands on
+      // a cold replica: it must publish ONLY the tail — the durable latch is
+      // the only thing preventing a head duplicate there.
+      const { redis } = createFakeLedgerRedis();
+      const events: AgentStreamEvent[] = [
+        buildEvent('stream_start', 0, { assistantMessage: { id: 'asst-1' } }),
+        buildEvent('stream_chunk', 1, { chunkType: 'text', content: 'hello' }),
+        buildEvent('agent_runtime_end', 2, { reason: 'success' }),
+      ];
+
+      const published: any[] = [];
+      let publishCalls = 0;
+      const failingManager: Partial<IStreamEventManager> = {
+        publishStreamEvent: vi.fn(async (_operationId, event) => {
+          publishCalls += 1;
+          if (publishCalls === 2) throw new Error('replica died');
+          published.push(event);
+          return `id-${published.length}`;
+        }),
+      };
+      const replicaA = new HeterogeneousAgentService({} as any, 'user-test', {
+        ...createLedgers(redis),
+        persistenceHandler: createFakePersistenceHandler(),
+        streamEventManager: failingManager as IStreamEventManager,
+      });
+      await expect(
+        replicaA.heteroIngest({
+          agentType: 'claude-code',
+          events,
+          operationId: 'op-test',
+          topicId: 'topic-1',
+        }),
+      ).rejects.toThrow('replica died');
+      expect(published.map((event) => event.type)).toEqual(['stream_start']);
+
+      const replicaB = createService({ ledgerRedis: redis });
+      await replicaB.service.heteroIngest({
+        agentType: 'claude-code',
+        events,
+        operationId: 'op-test',
+        topicId: 'topic-1',
+      });
+
+      // The tail only: no duplicate of the head published by replica A.
+      expect(replicaB.published.map((entry) => entry.event.type)).toEqual([
+        'stream_chunk',
+        'agent_runtime_end',
+      ]);
+    });
+
+    it('heteroFinish drops both durable ledgers for the operation', async () => {
+      const { redis, sets } = createFakeLedgerRedis();
+      const { service } = createService({ ledgerRedis: redis });
+
+      await service.heteroIngest({
+        agentType: 'claude-code',
+        events: [buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'hi' })],
+        operationId: 'op-test',
+        topicId: 'topic-1',
+      });
+      expect(sets.has('hetero_evt:published:op-test')).toBe(true);
+
+      await service.heteroFinish({
+        agentType: 'claude-code',
+        operationId: 'op-test',
+        result: 'success',
+        topicId: 'topic-1',
+      });
+
+      expect(sets.has('hetero_evt:published:op-test')).toBe(false);
+      expect(sets.has('hetero_evt:applied:op-test')).toBe(false);
+      // `cancelled` must NOT clean up — the real terminal result still needs
+      // the dedupe for its trailing batch (verified via a second op).
+      await service.heteroIngest({
+        agentType: 'claude-code',
+        events: [buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'hi' })],
+        operationId: 'op-cancel',
+        topicId: 'topic-1',
+      });
+      await service.heteroFinish({
+        agentType: 'claude-code',
+        operationId: 'op-cancel',
+        result: 'cancelled',
+        topicId: 'topic-1',
+      });
+      expect(sets.has('hetero_evt:published:op-cancel')).toBe(true);
+    });
+
     it('persists before publishing — DB is the source of truth fetchAndReplace reads', async () => {
       const callOrder: string[] = [];
       const manager: Partial<IStreamEventManager> = {
@@ -259,16 +428,13 @@ describe('HeterogeneousAgentService', () => {
         }),
       };
       const persistenceHandler = {
-        filterUnpublishedEvents: vi.fn(
-          (_operationId: string, events: AgentStreamEvent[]) => events,
-        ),
         finish: vi.fn(async () => {}),
         ingest: vi.fn(async () => {
           callOrder.push('persist');
         }),
-        markEventPublished: vi.fn(),
       } as unknown as HeterogeneousPersistenceHandler;
       const service = new HeterogeneousAgentService({} as any, 'user-test', {
+        ...createLedgers(),
         persistenceHandler,
         streamEventManager: manager as IStreamEventManager,
       });
@@ -294,6 +460,7 @@ describe('HeterogeneousAgentService', () => {
         }),
       } as unknown as HeterogeneousPersistenceHandler;
       const service = new HeterogeneousAgentService({} as any, 'user-test', {
+        ...createLedgers(),
         persistenceHandler,
         streamEventManager: manager as IStreamEventManager,
       });
@@ -320,6 +487,7 @@ describe('HeterogeneousAgentService', () => {
         }),
       } as unknown as HeterogeneousPersistenceHandler;
       const service = new HeterogeneousAgentService({} as any, 'user-test', {
+        ...createLedgers(),
         persistenceHandler,
         streamEventManager: manager as IStreamEventManager,
       });
@@ -631,6 +799,7 @@ describe('HeterogeneousAgentService', () => {
       } as any;
       const { manager } = createFakeStreamManager();
       const service = new HeterogeneousAgentService({} as any, 'user-test', {
+        ...createLedgers(),
         persistenceHandler: createFakePersistenceHandler(),
         snapshotStore: null,
         streamEventManager: manager,
@@ -741,6 +910,7 @@ describe('HeterogeneousAgentService', () => {
 
     const makeService = (store: ReturnType<typeof makeStore>) =>
       new HeterogeneousAgentService({} as any, 'user-test', {
+        ...createLedgers(),
         persistenceHandler: createFakePersistenceHandler(),
         snapshotStore: null,
         streamEventManager: createFakeStreamManager().manager,

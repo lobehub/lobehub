@@ -49,6 +49,7 @@ const emptyToolState = (): SubagentTurnToolState => ({
 const copyRun = (run: SubagentRun): SubagentRun => ({
   ...run,
   lifetimeToolCallIds: new Set(run.lifetimeToolCallIds),
+  seenSubagentMessageIds: new Set(run.seenSubagentMessageIds),
   toolState: copyToolState(run.toolState),
 });
 
@@ -95,9 +96,12 @@ interface ReduceResult {
  * prior-turn flush). The returned `run` is a fresh copy safe to mutate further
  * by the caller before it calls `withRun` to fold it back into state.
  *
- * Returns `run: null` when the parent already FINALIZED (its thread is `Active`,
- * tracked in `finalizedParents`): the event is a stale replay of a completed
- * spawn — re-creating its thread would duplicate it. The caller drops the event.
+ * Returns `run: null` in two stale-replay cases the caller must drop:
+ * the parent already FINALIZED (its thread is `Active`, tracked in
+ * `finalizedParents`) — re-creating its thread would duplicate it — or the
+ * event's turn id was already materialized by an EARLIER turn of a live run
+ * (tracked in `seenSubagentMessageIds`) — re-opening it would duplicate the
+ * turn's assistant row and its content.
  */
 const ensureRun = (
   state: SubagentRunsState,
@@ -164,6 +168,7 @@ const ensureRun = (
       currentSubagentMessageId: subCtx.subagentMessageId ?? '',
       lastChainParentId: firstAssistantId,
       lifetimeToolCallIds: new Set(),
+      seenSubagentMessageIds: new Set(subCtx.subagentMessageId ? [subCtx.subagentMessageId] : []),
       threadId,
       toolState: emptyToolState(),
     };
@@ -171,6 +176,26 @@ const ensureRun = (
   }
 
   const run = copyRun(existing);
+
+  // ─── Stale replay of an EARLIER turn → no-op (no duplicate assistant row) ───
+  // The boundary check below only recognizes a replay of the CURRENT turn
+  // (id === currentSubagentMessageId). A redelivered batch replayed on a cold
+  // replica can carry earlier turns too; their ids differ from the rehydrated
+  // current id and would read as fresh boundaries, minting a duplicate
+  // assistant row per replayed turn and re-flushing its content into it — the
+  // durable subagent-text duplication path. `seenSubagentMessageIds` is the
+  // run-lifetime ledger of every turn id already materialized (DB-rehydrated
+  // from each row's `metadata.subagentMessageId`), so a seen-but-not-current id
+  // is provably a replay: CC message ids are unique per turn and a finished
+  // turn never resumes after a later one opened. Drop the event — its content
+  // and tools were already persisted when the turn originally rolled.
+  if (
+    subCtx.subagentMessageId &&
+    subCtx.subagentMessageId !== run.currentSubagentMessageId &&
+    run.seenSubagentMessageIds.has(subCtx.subagentMessageId)
+  ) {
+    return { intents, run: null, state };
+  }
 
   // ─── Turn boundary (new subagentMessageId) → flush prior turn + new assistant ───
   if (subCtx.subagentMessageId && subCtx.subagentMessageId !== run.currentSubagentMessageId) {
@@ -200,6 +225,7 @@ const ensureRun = (
     run.currentAssistantId = nextAssistantId;
     run.currentSubagentMessageId = subCtx.subagentMessageId;
     run.lastChainParentId = nextAssistantId;
+    run.seenSubagentMessageIds.add(subCtx.subagentMessageId);
     run.toolState = emptyToolState();
     run.accContent = '';
     run.accReasoning = '';

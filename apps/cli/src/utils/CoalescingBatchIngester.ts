@@ -67,10 +67,13 @@ export class CoalescingBatchIngester {
     //   2. The accumulators are single shared buffers with no subagent
     //      scope. Folding subagent blocks in would (a) splice main-agent text
     //      into the subagent message via the shared buffer, and (b) emit a
-    //      `replace` snapshot that the server's subagent path *appends*
-    //      (`persistSubagentText` has no snapshot semantics) → duplicated /
+    //      `replace` snapshot that the server's subagent path *appends* (the
+    //      subagent reducer has no snapshot semantics) → duplicated /
     //      cross-scope content. Forwarding the raw block straight through lets
-    //      the server append it exactly once, correctly.
+    //      the server append it exactly once — a guarantee held server-side by
+    //      the durable applied-event ledger plus the run's seen-turn ledger
+    //      (`seenSubagentMessageIds`), which drop redelivered blocks before
+    //      they can re-append.
     if (this.isMainDelta(event, 'text')) {
       // Reasoning precedes text within a message — flush a pending reasoning
       // snapshot first so within-batch order matches emission order.

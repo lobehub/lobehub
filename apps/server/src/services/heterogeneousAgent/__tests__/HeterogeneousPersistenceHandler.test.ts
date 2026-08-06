@@ -438,35 +438,6 @@ describe('HeterogeneousPersistenceHandler', () => {
       expect(h.messageModel.create.mock.calls.length).toBe(createCallsAfterFirst);
     });
 
-    it('gates publishing per operation and releases the gate when the operation finishes', async () => {
-      const h = createHarness({
-        assistantMessageId: 'asst-1',
-        operationId: 'op-1',
-        topicId: 'topic-1',
-      });
-      const first = buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'x' });
-      const second = buildEvent('stream_chunk', 1, { chunkType: 'text', content: 'y' });
-
-      // Without operation state (nothing ingested yet, or a cold replica):
-      // treat everything as unpublished and latch nothing — degraded
-      // republish-all rather than silently dropping events.
-      expect(h.handler.filterUnpublishedEvents('op-1', [first, second])).toEqual([first, second]);
-      h.handler.markEventPublished('op-1', first);
-      expect(h.handler.filterUnpublishedEvents('op-1', [first, second])).toEqual([first, second]);
-
-      await h.handler.ingest({ events: [first, second], operationId: 'op-1', topicId: 'topic-1' });
-
-      // Latch per event: only unlatched events remain.
-      h.handler.markEventPublished('op-1', first);
-      expect(h.handler.filterUnpublishedEvents('op-1', [first, second])).toEqual([second]);
-      h.handler.markEventPublished('op-1', second);
-      expect(h.handler.filterUnpublishedEvents('op-1', [first, second])).toEqual([]);
-
-      // finish() drops the per-operation state — the gate goes with it.
-      await h.handler.finish({ operationId: 'op-1', result: 'success' });
-      expect(h.handler.filterUnpublishedEvents('op-1', [first, second])).toEqual([first, second]);
-    });
-
     it('does NOT collide bursty events sharing (stepIndex, type, timestamp) when their data differs', async () => {
       // Producer-side reality: CC adapters stamp every event with `Date.now()`,
       // so multiple `stream_chunk` events within the same step burst through

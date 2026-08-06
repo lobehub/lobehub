@@ -11,6 +11,7 @@ import type {
 } from '@lobechat/heterogeneous-agents';
 import {
   createMainAgentRunState,
+  getEventScope,
   isHeteroStatusGuideErrorData,
   reduceMainAgent,
   rehydrateSubagentRunsState,
@@ -24,59 +25,16 @@ import type { ThreadModel } from '@/database/models/thread';
 import type { TopicModel } from '@/database/models/topic';
 import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorForState';
 
+import { eventKey } from './eventIdentity';
+import {
+  heteroAppliedEventLedger,
+  type HeteroEventLedger,
+  heteroPublishedEventLedger,
+} from './HeteroEventLedger';
+
 const log = debug('lobe-server:hetero-agent:persistence');
 
 const generateThreadId = () => `thd_${createNanoId(16)()}`;
-
-/**
- * Stable 32-bit FNV-1a hash of a string. Cheap to compute, collision odds are
- * negligible at this scope (a few thousand events per operation), and the
- * output is short enough to keep the per-operation `processedKeys` set small.
- */
-const fnv1a = (input: string): string => {
-  let hash = 0x81_1c_9d_c5;
-  for (let i = 0; i < input.length; i += 1) {
-    hash ^= input.charCodeAt(i);
-    // FNV prime 0x01000193, applied via bit shifts to stay in 32-bit math.
-    hash = (hash + ((hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24))) >>> 0;
-  }
-  return hash.toString(36);
-};
-
-/**
- * Per-event idempotency key. CLI BatchIngester retries the SAME event objects
- * on transient failures, so the same `(stepIndex, type, data)` triple is
- * stable across retries — and distinct between back-to-back events even when
- * they share a millisecond timestamp.
- *
- * Why not just `(stepIndex, type, timestamp)`: producers stamp events with
- * `Date.now()` (see `claudeCode.ts` / `codex.ts` adapters), and CC bursts
- * multiple `stream_chunk` events through the same step within a single
- * millisecond. Without a content fingerprint, later chunks would collide with
- * earlier ones, get treated as duplicates, and be dropped — silently
- * truncating assistant output.
- *
- * Why not hash full `data`: tools_calling payloads can carry large argument
- * strings; a stable JSON.stringify on every event is cheap enough but the
- * resulting key would balloon the `processedKeys` set. Hashing keeps the key
- * bounded.
- */
-const eventKey = (event: AgentStreamEvent): string => {
-  // Fingerprint the data via stable JSON. Order is irrelevant — adapters
-  // produce events with consistent key order, and even if they didn't, the
-  // important property is "same event input → same output", which holds.
-  const dataJson = (() => {
-    try {
-      return JSON.stringify(event.data ?? null);
-    } catch {
-      // Cyclic / unstringifiable payload: fall back to a coarse fingerprint.
-      // Real wire data is always JSON-serializable, so this branch only fires
-      // on bad test inputs.
-      return String(typeof event.data);
-    }
-  })();
-  return `${event.stepIndex}:${event.type}:${event.timestamp}:${fnv1a(dataJson)}`;
-};
 
 interface AssistantDbSnapshot {
   content: string;
@@ -122,16 +80,14 @@ interface OperationState {
   lastStepIndex: number;
   main: MainAgentRunState;
   operationId: string;
-  processedKeys: Set<string>;
   /**
-   * Publish gate, peer of `processedKeys` but for the live-stream sink.
-   * Persistence and publish fail independently: a batch can persist fully
-   * yet die inside the publish loop — its retry must republish ONLY the
-   * unpublished tail — while a batch whose tRPC response was lost after
-   * full success must republish nothing. Keyed by `eventKey`, latched only
-   * after the event's XADD succeeds.
+   * In-memory dedupe of events this PROCESS already applied. The durable,
+   * cross-replica peer is the `applied` {@link HeteroEventLedger}, marked
+   * batch-granularly after the flush — this per-event set is what keeps a
+   * same-process partial-batch retry exact (it marks each event the moment
+   * its handler succeeds, before any flush ran).
    */
-  publishedKeys: Set<string>;
+  processedKeys: Set<string>;
   /**
    * Run-global DB index for every tool message in the topic, keyed by
    * `tool_call_id`. Main and subagent reducers keep only their per-turn maps;
@@ -151,8 +107,18 @@ interface OperationState {
  */
 const operationStates = new Map<string, OperationState>();
 
-/** Test-only reset hook to clear the singleton between specs. */
-export const __resetOperationStatesForTesting = () => operationStates.clear();
+/**
+ * Test-only reset simulating a fresh replica process: clears the per-operation
+ * state map AND the module ledgers' in-memory layers, since all of them die
+ * with the process. The ledgers' durable Redis layer (when a test wires one)
+ * is intentionally untouched — that is precisely the part that survives a real
+ * replica death.
+ */
+export const __resetOperationStatesForTesting = () => {
+  operationStates.clear();
+  heteroAppliedEventLedger.__clearMemoryForTesting();
+  heteroPublishedEventLedger.__clearMemoryForTesting();
+};
 
 export class StaleHeteroOperationError extends Error {
   constructor(message: string) {
@@ -162,6 +128,12 @@ export class StaleHeteroOperationError extends Error {
 }
 
 export interface HeterogeneousPersistenceHandlerDeps {
+  /**
+   * Durable cross-replica applied-events ledger. Defaults to the shared
+   * module singleton; injectable so tests can pass an instance wired to a
+   * fake Redis (or a fresh memory-only one).
+   */
+  appliedLedger?: HeteroEventLedger;
   messageModel: MessageModel;
   threadModel: ThreadModel;
   topicModel: TopicModel;
@@ -194,28 +166,47 @@ export interface HeterogeneousPersistenceHandlerDeps {
  *     authoritative for cloud runs, so silent partial writes would diverge
  *     DB from what the WS subscribers see.
  *
- * Multi-replica caveat: state is per-Node-process. Cloud sandbox routing
- * must be sticky to a single replica per operationId, otherwise turn
- * boundaries on the second replica would lose the chain-parent and
- * pre-existing tool map. (Phase 3 sandbox owns the endpoint per-instance,
- * so this is not a problem in practice.)
+ * Multi-replica posture: in-memory state is per-Node-process, but every
+ * piece a cold replica needs is recoverable — reducer projections rehydrate
+ * from the DB (assistant snapshot, tool index, subagent runs incl. flushed
+ * accumulators and the seen-turn ledger), and cross-replica event dedupe is
+ * durable via the `applied` {@link HeteroEventLedger}, so a batch retry
+ * landing on a different replica re-applies nothing it can't safely
+ * re-apply. Residual: `lastToolMsgIdEver` (signal-turn chain anchor) is
+ * memory-only, so a signal turn opened right after a non-sticky handoff can
+ * anchor to the spine instead of the last tool.
  */
 export class HeterogeneousPersistenceHandler {
+  private readonly appliedLedger: HeteroEventLedger;
   private readonly deps: HeterogeneousPersistenceHandlerDeps;
 
   constructor(deps: HeterogeneousPersistenceHandlerDeps) {
     this.deps = deps;
+    this.appliedLedger = deps.appliedLedger ?? heteroAppliedEventLedger;
   }
 
   /**
    * Process a batch of events for an operation. Sequential within the batch.
    *
-   * Idempotency contract: an event is marked `processed` ONLY after its
-   * handler resolves cleanly. If a handler throws, the event stays unmarked
-   * so a follow-up retry processes it again, and the throw bubbles to
-   * `heteroIngest` → tRPC → BatchIngester so the producer re-sends. Events
-   * that already succeeded earlier in the batch are skipped on retry via
-   * the dedupe map, so the retry only re-runs the failed event onward.
+   * Idempotency contract, two layers with different granularity:
+   *
+   *   - Same-process (`processedKeys`): an event is marked ONLY after its
+   *     handler resolves cleanly. If a handler throws, the event stays
+   *     unmarked so a follow-up retry processes it again, and the throw
+   *     bubbles to `heteroIngest` → tRPC → BatchIngester so the producer
+   *     re-sends. Events that already succeeded earlier in the batch are
+   *     skipped on retry, so the retry only re-runs the failed event onward.
+   *   - Cross-replica (`applied` ledger): keys are durably recorded once per
+   *     batch, only after EVERY event applied and the content flush landed —
+   *     the point at which all of the batch's effects are DB-visible. A retry
+   *     landing on a cold replica skips ledger-known events entirely, so a
+   *     redelivered fully-applied batch degenerates to the already-supported
+   *     cold-replica handoff (rehydrate from DB, apply nothing) instead of a
+   *     replay against guards that don't all hold under re-reduction (e.g.
+   *     subagent text append). Flush-before-mark means a crash between the
+   *     two can re-apply one batch (idempotent for everything the reducers
+   *     guard; see `seenSubagentMessageIds` for the subagent-turn guard) —
+   *     never lose one.
    */
   async ingest(params: {
     assistantMessageId?: string;
@@ -243,10 +234,27 @@ export class HeterogeneousPersistenceHandler {
     await this.refreshMainStateFromDb(state);
     await this.refreshSubagentRunsFromDb(state);
 
-    for (const event of params.events) {
-      const key = eventKey(event);
+    const keys = params.events.map((event) => eventKey(event));
+    const durablyApplied = await this.appliedLedger.knownKeys(params.operationId, keys);
+
+    const newlyAppliedKeys: string[] = [];
+    // Subagent runs whose accumulators this batch touched — the only ones
+    // whose content flush below is due. Tracked here (not in the reducer)
+    // because scope is a wire-level fact of the event.
+    const dirtySubagentParents = new Set<string>();
+
+    for (const [i, event] of params.events.entries()) {
+      const key = keys[i];
       if (state.processedKeys.has(key)) {
         log('skip duplicate event %s op=%s', key, state.operationId);
+        continue;
+      }
+      if (durablyApplied.has(key)) {
+        // Another replica applied AND flushed this event; its effects are in
+        // the DB projections this replica just rehydrated from. Re-reducing
+        // would replay onto state that already contains the outcome.
+        state.processedKeys.add(key);
+        log('skip durably applied event %s op=%s', key, state.operationId);
         continue;
       }
 
@@ -256,36 +264,22 @@ export class HeterogeneousPersistenceHandler {
       // only on success so a retry can complete the lost write.
       await this.handleEvent(state, event);
       state.processedKeys.add(key);
+      newlyAppliedKeys.push(key);
       state.lastStepIndex = Math.max(state.lastStepIndex, event.stepIndex);
+
+      const scope = getEventScope(event);
+      if (scope.kind === 'subagent') dirtySubagentParents.add(scope.ctx.parentToolCallId);
     }
 
     // Flush accumulated content after every batch so a subsequent replica
     // picking up this operation always sees the latest content in the DB,
     // even if it never processes a step boundary or terminal event.
-    await this.flushBatchContent(state);
-  }
+    await this.flushBatchContent(state, dirtySubagentParents);
 
-  /**
-   * Events of the batch not yet successfully published to the live stream.
-   * See `OperationState.publishedKeys` for why this gate is separate from
-   * the persistence dedupe. Without state (already finished, or a retry on
-   * a cold replica) every event is treated as unpublished — degrading to
-   * republish-all. Main-agent text/reasoning survive that via their
-   * `replace`-snapshot seq guards; the accepted cross-replica residuals are
-   * subagent text (append semantics), tool lifecycle replays (benign client
-   * upserts), and a duplicate trace fold — closing those needs a durable
-   * publish identity (tracked follow-up), not a bigger in-memory map.
-   */
-  filterUnpublishedEvents(operationId: string, events: AgentStreamEvent[]): AgentStreamEvent[] {
-    const state = operationStates.get(operationId);
-    if (!state) return events;
-
-    return events.filter((event) => !state.publishedKeys.has(eventKey(event)));
-  }
-
-  /** Latch an event as published so a batch retry skips its XADD. */
-  markEventPublished(operationId: string, event: AgentStreamEvent): void {
-    operationStates.get(operationId)?.publishedKeys.add(eventKey(event));
+    // Durably mark the batch applied ONLY now — after every handler and the
+    // flush succeeded. An event-level throw above skips this entirely, so the
+    // retry (warm or cold) still sees the batch as unapplied.
+    await this.appliedLedger.persist(params.operationId, newlyAppliedKeys);
   }
 
   /**
@@ -464,7 +458,6 @@ export class HeterogeneousPersistenceHandler {
       main: createMainAgentRunState(currentAssistantMessageId),
       operationId,
       processedKeys: new Set(),
-      publishedKeys: new Set(),
       toolMsgIdByCallId: new Map(),
       topicId,
     };
@@ -735,9 +728,11 @@ export class HeterogeneousPersistenceHandler {
     parentToolCallId: string,
     threadId: string,
     messages: Array<{
+      content?: unknown;
       id: string;
       metadata?: Record<string, any> | null;
       parentId?: string | null;
+      reasoning?: { content?: string } | null;
       role: string;
       tool_call_id?: string;
     }>,
@@ -759,12 +754,36 @@ export class HeterogeneousPersistenceHandler {
         ? currentAssistant.metadata.subagentMessageId
         : undefined;
 
+    // Every turn id the thread has materialized a row for, in row order —
+    // the durable ledger behind the reducer's replayed-earlier-turn drop.
+    const seenSubagentMessageIds = assistants
+      .map((m) => m.metadata?.subagentMessageId)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0);
+
+    // Restore the in-flight turn's flushed accumulators so a post-handoff
+    // append CONTINUES the turn instead of restarting it (and truncating the
+    // pre-handoff blocks at the next flush). ONLY safe while the applied
+    // ledger is durable: the restore pairs with the ledger's replay skip, and
+    // without it a redelivered text event would re-append onto content that
+    // already contains it. A memory-only ledger also means a single replica,
+    // where the handoff this restore exists for cannot happen — so gating on
+    // durability loses nothing there. LOADING_FLAT never appears on subagent
+    // rows (they are created with '') — guarded anyway for parity with
+    // `toAssistantSnapshot`.
+    const restorable = this.appliedLedger.isDurable;
+    const rawContent = typeof currentAssistant.content === 'string' ? currentAssistant.content : '';
+    const accContent = restorable && rawContent !== LOADING_FLAT ? rawContent : '';
+    const accReasoning = restorable ? (currentAssistant.reasoning?.content ?? '') : '';
+
     return {
+      accContent: accContent || undefined,
+      accReasoning: accReasoning || undefined,
       currentAssistantId: currentAssistant.id,
       currentSubagentMessageId,
       lastChainParentId,
       lifetimeToolCallIds: toolRows.map((m) => m.tool_call_id!),
       parentToolCallId,
+      seenSubagentMessageIds,
       threadId,
     };
   }
@@ -1139,14 +1158,41 @@ export class HeterogeneousPersistenceHandler {
    * This ensures a subsequent replica always finds the latest text in the DB
    * even if the current replica never processes a step-boundary or terminal
    * event (which are the normal flush triggers).
+   *
+   * `dirtySubagentParents` extends the same guarantee to subagent turns:
+   * their accumulators used to persist only on a turn boundary / tool batch /
+   * finalize, so a turn whose text arrived in one batch but whose boundary
+   * arrived on ANOTHER replica flushed nothing — the post-handoff replica
+   * rehydrated an empty accumulator and the turn's earlier text was lost.
+   * Flushing every batch is also what makes the `SubagentRunSnapshot`
+   * content restore meaningful: the row a cold replica restores from is at
+   * most one batch behind. Only runs this batch actually touched are
+   * written, and empty accumulators never clobber persisted content.
    */
-  private async flushBatchContent(state: OperationState): Promise<void> {
-    if (!state.main.accContent && !state.main.accReasoning) return;
-    const update: Record<string, any> = {};
-    if (state.main.accContent) update.content = state.main.accContent;
-    if (state.main.accReasoning) update.reasoning = { content: state.main.accReasoning };
-    if (Object.keys(state.main.turnMetadata).length > 0) update.metadata = state.main.turnMetadata;
-    await this.deps.messageModel.update(state.main.currentAssistantId, update);
+  private async flushBatchContent(
+    state: OperationState,
+    dirtySubagentParents?: Set<string>,
+  ): Promise<void> {
+    if (state.main.accContent || state.main.accReasoning) {
+      const update: Record<string, any> = {};
+      if (state.main.accContent) update.content = state.main.accContent;
+      if (state.main.accReasoning) update.reasoning = { content: state.main.accReasoning };
+      if (Object.keys(state.main.turnMetadata).length > 0) {
+        update.metadata = state.main.turnMetadata;
+      }
+      await this.deps.messageModel.update(state.main.currentAssistantId, update);
+    }
+
+    for (const parentToolCallId of dirtySubagentParents ?? []) {
+      // A run this batch touched AND finalized (parent tool_result / terminal
+      // drain) is gone from the map — its finalize already flushed it.
+      const run = state.main.subagents.runs.get(parentToolCallId);
+      if (!run || (!run.accContent && !run.accReasoning)) continue;
+      const update: Record<string, any> = {};
+      if (run.accContent) update.content = run.accContent;
+      if (run.accReasoning) update.reasoning = { content: run.accReasoning };
+      await this.deps.messageModel.update(run.currentAssistantId, update);
+    }
   }
 
   private async applySubagentIntent(state: OperationState, intent: SubagentIntent) {

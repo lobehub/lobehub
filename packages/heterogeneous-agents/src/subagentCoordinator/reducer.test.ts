@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createSubagentRunsState, reduceSubagentRuns } from './index';
+import { createSubagentRunsState, reduceSubagentRuns, rehydrateSubagentRunsState } from './index';
 import type { SubagentIntent, SubagentReduceCtx } from './types';
 
 /** Deterministic id factory: `thd_1`, `msg_1`, `msg_2`, … per kind. */
@@ -370,5 +370,70 @@ describe('subagent reducer', () => {
     const r2 = reduceSubagentRuns(r1.state, toolsEvent('task-1', 'm1', [tool('tc-1')]), makeCtx());
     expect(r1.state.runs.get('task-1')!.toolState.persistedIds.size).toBe(0);
     expect(r2.state.runs.get('task-1')!.toolState.persistedIds.size).toBe(1);
+  });
+});
+
+describe('subagent reducer — replayed-earlier-turn ledger (seenSubagentMessageIds)', () => {
+  it('tracks every materialized turn id across boundaries', () => {
+    const { state } = run([
+      textEvent('task-1', 'm1', 'turn one'),
+      textEvent('task-1', 'm2', 'turn two'),
+      textEvent('task-1', 'm3', 'turn three'),
+    ]);
+    expect([...state.runs.get('task-1')!.seenSubagentMessageIds].sort()).toEqual([
+      'm1',
+      'm2',
+      'm3',
+    ]);
+  });
+
+  it('drops a replayed EARLIER turn instead of opening a duplicate assistant (live run)', () => {
+    // m1 then m2 — the run's current turn is m2, m1 is history.
+    const r1 = run([textEvent('task-1', 'm1', 'one'), textEvent('task-1', 'm2', 'two')]);
+
+    // A cold-replica redelivery replays m1's text. Without the ledger this
+    // reads as a boundary (m1 !== current m2) and mints a duplicate row.
+    const replay = reduceSubagentRuns(r1.state, textEvent('task-1', 'm1', 'one'), makeCtx());
+    expect(replay.intents).toEqual([]);
+    // State untouched: same current turn, accumulator not polluted.
+    const runState = replay.state.runs.get('task-1')!;
+    expect(runState.currentSubagentMessageId).toBe('m2');
+    expect(runState.accContent).toBe('two');
+  });
+
+  it('drops replayed earlier-turn TOOLS too (no assistant.tools[] rewrite onto the wrong turn)', () => {
+    const r1 = run([toolsEvent('task-1', 'm1', [tool('tc-1')]), textEvent('task-1', 'm2', 'two')]);
+    const replay = reduceSubagentRuns(
+      r1.state,
+      toolsEvent('task-1', 'm1', [tool('tc-1')]),
+      makeCtx(),
+    );
+    expect(replay.intents).toEqual([]);
+  });
+
+  it('rehydrates the ledger (and the flushed accumulators) from a snapshot, unioning the current turn id', () => {
+    const state = rehydrateSubagentRunsState([
+      {
+        accContent: 'Hello ',
+        accReasoning: 'thinking',
+        currentAssistantId: 'asst-in-thread-2',
+        currentSubagentMessageId: 'm2',
+        parentToolCallId: 'task-1',
+        seenSubagentMessageIds: ['m1'],
+        threadId: 'thd-1',
+      },
+    ]);
+    const runState = state.runs.get('task-1')!;
+    expect([...runState.seenSubagentMessageIds].sort()).toEqual(['m1', 'm2']);
+    expect(runState.accContent).toBe('Hello ');
+    expect(runState.accReasoning).toBe('thinking');
+
+    // Replayed earlier turn on the rehydrated state → dropped.
+    const replay = reduceSubagentRuns(state, textEvent('task-1', 'm1', 'one'), makeCtx());
+    expect(replay.intents).toEqual([]);
+
+    // Same-turn continuation on the rehydrated state → appends to the restore.
+    const cont = reduceSubagentRuns(state, textEvent('task-1', 'm2', 'world'), makeCtx());
+    expect(cont.state.runs.get('task-1')!.accContent).toBe('Hello world');
   });
 });

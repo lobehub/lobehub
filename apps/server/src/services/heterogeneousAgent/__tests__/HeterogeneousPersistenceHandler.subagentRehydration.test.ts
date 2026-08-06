@@ -2,6 +2,7 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { HeteroEventLedger, type HeteroLedgerRedis } from '../HeteroEventLedger';
 import {
   __resetOperationStatesForTesting,
   HeterogeneousPersistenceHandler,
@@ -61,6 +62,14 @@ interface FakeThread {
 
 const createHarness = (params: {
   assistantMessageId: string;
+  /**
+   * Wire the harness's applied ledger to a fake Redis, making it DURABLE:
+   * `coldReplica()` then models a replica death where the ledger survives.
+   * Omit for the memory-only baseline (ledger dies with the replica), which
+   * is also the crash-window / degraded-Redis posture the reducer guards
+   * must cover on their own.
+   */
+  ledgerRedis?: HeteroLedgerRedis;
   operationId: string;
   topicId: string;
 }) => {
@@ -179,13 +188,26 @@ const createHarness = (params: {
     updateMetadata: vi.fn(async () => {}),
   };
 
+  const appliedLedger = new HeteroEventLedger('applied', () => params.ledgerRedis ?? null);
   const handler = new HeterogeneousPersistenceHandler({
+    appliedLedger,
     messageModel: messageModel as any,
     threadModel: threadModel as any,
     topicModel: topicModel as any,
   });
 
-  return { handler, messages, threadModel, threads };
+  /**
+   * Simulate this operation's next batch landing on a fresh replica: the
+   * per-operation state map AND the injected ledger's in-memory layer die
+   * with the process. Only a `ledgerRedis`-wired ledger keeps its durable
+   * half — exactly like production.
+   */
+  const coldReplica = () => {
+    __resetOperationStatesForTesting();
+    appliedLedger.__clearMemoryForTesting();
+  };
+
+  return { appliedLedger, coldReplica, handler, messageModel, messages, threadModel, threads };
 };
 
 const buildEvent = (
@@ -248,7 +270,7 @@ describe('HeterogeneousPersistenceHandler — subagent run survives a cold repli
 
     // ── Cold replica: the warm in-memory operation state is gone, but the DB
     //    (threads + messages) persists. ──
-    __resetOperationStatesForTesting();
+    h.coldReplica();
 
     // ── Batch 2 (replica B): the SAME subagent run continues with a new turn.
     //    Mirroring the adapter, this later event carries NO spawnMetadata. ──
@@ -318,7 +340,7 @@ describe('HeterogeneousPersistenceHandler — subagent run survives a cold repli
     expect(h.threads.get(finishedThreadId)!.status).toBe('active');
 
     // ── Cold replica: warm state gone, DB persists. ──
-    __resetOperationStatesForTesting();
+    h.coldReplica();
 
     // ── Replay of the SAME first event (processedKeys is empty on the fresh
     //    replica, so it is NOT deduped away — it really re-enters the reducer). ──
@@ -365,7 +387,7 @@ describe('HeterogeneousPersistenceHandler — subagent run survives a cold repli
       topicId: 'topic-1',
     });
 
-    __resetOperationStatesForTesting(); // cold replica
+    h.coldReplica(); // cold replica
 
     // Batch 2 (replica B): the SAME turn's cumulative array is re-seen (inner-1
     // again) plus a new inner-2.
@@ -476,7 +498,7 @@ describe('HeterogeneousPersistenceHandler — subagent run survives a cold repli
     // The turn id was persisted so a cold replica can recover it.
     expect(assistantsOf()[0].metadata?.subagentMessageId).toBe('sub-1');
 
-    __resetOperationStatesForTesting(); // cold replica
+    h.coldReplica(); // cold replica
 
     // Batch 2 (fresh replica): SAME turn sub-1 continues (cumulative [t1, t2]).
     await h.handler.ingest({
@@ -501,5 +523,191 @@ describe('HeterogeneousPersistenceHandler — subagent run survives a cold repli
     );
     expect(toolRows).toHaveLength(2);
     expect(new Set(toolRows.map((m) => m.parentId))).toEqual(new Set([assistants[0].id]));
+  });
+});
+
+/**
+ * The durable-corruption residual of #17309: subagent text has APPEND
+ * semantics on the wire (each CC emission is a one-shot full block, a turn may
+ * span several emissions), so unlike main-agent text (producer-seq'd `replace`
+ * snapshots) it is NOT intrinsically idempotent under cold-replica replay.
+ * Three cooperating pieces close it:
+ *
+ *   1. the durable `applied` ledger skips redelivered already-applied events
+ *      before they reach the reducer (the common lost-response retry);
+ *   2. the run's `seenSubagentMessageIds` ledger (DB-rehydrated) drops a
+ *      replayed EARLIER turn that slips past the ledger (crash window /
+ *      degraded Redis), which used to mint duplicate assistant rows with
+ *      duplicated content;
+ *   3. per-batch accumulator flush + (durable-ledger-gated) accumulator
+ *      restore, so a same-turn continuation across a cold handoff appends to
+ *      the persisted prefix instead of truncating it.
+ */
+describe('HeterogeneousPersistenceHandler — durable subagent text idempotency', () => {
+  beforeEach(() => __resetOperationStatesForTesting());
+  afterEach(() => __resetOperationStatesForTesting());
+
+  const createLedgerRedis = (): HeteroLedgerRedis => {
+    const sets = new Map<string, Set<string>>();
+    return {
+      del: async (key: string) => (sets.delete(key) ? 1 : 0),
+      expire: async () => 1,
+      sadd: async (key: string, ...members: string[]) => {
+        let set = sets.get(key);
+        if (!set) {
+          set = new Set();
+          sets.set(key, set);
+        }
+        let added = 0;
+        for (const member of members) {
+          if (!set.has(member)) {
+            set.add(member);
+            added += 1;
+          }
+        }
+        return added;
+      },
+      smismember: async (key: string, ...members: string[]) =>
+        members.map((member) => (sets.get(key)?.has(member) ? 1 : 0)),
+    };
+  };
+
+  const PARENT = 'tc-spawn-1';
+  const subText = (
+    stepIndex: number,
+    content: string,
+    subagentMessageId: string,
+    options: { spawn?: boolean } = {},
+  ) =>
+    buildEvent('stream_chunk', stepIndex, {
+      chunkType: 'text',
+      content,
+      subagent: {
+        parentToolCallId: PARENT,
+        ...(options.spawn ? { spawnMetadata: { prompt: 'go', subagentType: 'Explore' } } : {}),
+        subagentMessageId,
+      },
+    });
+
+  it('a redelivered MULTI-TURN batch replayed on a cold replica mints no duplicate turn rows and no duplicated content (seen-turn ledger)', async () => {
+    // Memory-only ledger: the replay REACHES the reducer — this is the crash
+    // window (batch applied but died before the durable mark) or a degraded
+    // Redis, exactly what the reducer-level guard must survive alone.
+    const h = createHarness({
+      assistantMessageId: 'asst-1',
+      operationId: 'op-1',
+      topicId: 'topic-1',
+    });
+    const batch = [subText(0, 'block1', 'sub-1', { spawn: true }), subText(1, 'block2', 'sub-2')];
+
+    await h.handler.ingest({
+      assistantMessageId: 'asst-1',
+      events: batch,
+      operationId: 'op-1',
+      topicId: 'topic-1',
+    });
+
+    const threadId = [...h.threads.keys()][0];
+    const assistantsOf = () =>
+      [...h.messages.values()].filter((m) => m.role === 'assistant' && m.threadId === threadId);
+    const bySub = (id: string) =>
+      assistantsOf().filter((m) => m.metadata?.subagentMessageId === id);
+    expect(assistantsOf()).toHaveLength(2);
+    expect(bySub('sub-1')[0].content).toBe('block1'); // boundary flush
+    expect(bySub('sub-2')[0].content).toBe('block2'); // per-batch flush
+
+    h.coldReplica();
+
+    // Same batch redelivered: the sub-1 events' turn id differs from the
+    // rehydrated CURRENT turn (sub-2), which used to read as a fresh boundary
+    // → duplicate assistant row per replayed turn, content re-flushed into it.
+    await h.handler.ingest({
+      assistantMessageId: 'asst-1',
+      events: batch,
+      operationId: 'op-1',
+      topicId: 'topic-1',
+    });
+
+    expect(assistantsOf()).toHaveLength(2); // no third / fourth row
+    expect(bySub('sub-1')).toHaveLength(1);
+    expect(bySub('sub-2')).toHaveLength(1);
+    expect(bySub('sub-1')[0].content).toBe('block1'); // not doubled
+    expect(bySub('sub-2')[0].content).toBe('block2');
+  });
+
+  it('a redelivered fully-applied batch on a cold replica re-applies nothing (durable applied ledger pairs with the accumulator restore)', async () => {
+    const h = createHarness({
+      assistantMessageId: 'asst-1',
+      ledgerRedis: createLedgerRedis(),
+      operationId: 'op-1',
+      topicId: 'topic-1',
+    });
+    const batch = [subText(0, 'hello', 'sub-1', { spawn: true })];
+
+    await h.handler.ingest({
+      assistantMessageId: 'asst-1',
+      events: batch,
+      operationId: 'op-1',
+      topicId: 'topic-1',
+    });
+    const threadId = [...h.threads.keys()][0];
+    const assistantsOf = () =>
+      [...h.messages.values()].filter((m) => m.role === 'assistant' && m.threadId === threadId);
+    expect(assistantsOf()[0].content).toBe('hello');
+    const createCallsAfterFirst = h.messageModel.create.mock.calls.length;
+
+    h.coldReplica();
+
+    // With the ledger durable, the cold replica ALSO restores the turn's
+    // accumulator from the row ('hello'). If the redelivered event were
+    // re-reduced it would append onto that restore → 'hellohello'. The ledger
+    // skip is what makes restore + replay coexist.
+    await h.handler.ingest({
+      assistantMessageId: 'asst-1',
+      events: batch,
+      operationId: 'op-1',
+      topicId: 'topic-1',
+    });
+
+    expect(h.messageModel.create.mock.calls.length).toBe(createCallsAfterFirst);
+    expect(assistantsOf()).toHaveLength(1);
+    expect(assistantsOf()[0].content).toBe('hello');
+  });
+
+  it('a same-turn text continuation across a cold handoff appends to the restored accumulator instead of truncating (per-batch flush + restore)', async () => {
+    const h = createHarness({
+      assistantMessageId: 'asst-1',
+      ledgerRedis: createLedgerRedis(),
+      operationId: 'op-1',
+      topicId: 'topic-1',
+    });
+
+    // Batch 1 (replica A): the turn's FIRST text block. The per-batch flush
+    // must persist it even though no boundary / tool / finalize ran.
+    await h.handler.ingest({
+      assistantMessageId: 'asst-1',
+      events: [subText(0, 'Hello ', 'sub-1', { spawn: true })],
+      operationId: 'op-1',
+      topicId: 'topic-1',
+    });
+    const threadId = [...h.threads.keys()][0];
+    const assistantsOf = () =>
+      [...h.messages.values()].filter((m) => m.role === 'assistant' && m.threadId === threadId);
+    expect(assistantsOf()[0].content).toBe('Hello ');
+
+    h.coldReplica();
+
+    // Batch 2 (replica B, cold): the SAME turn's next block — a genuinely new
+    // event, not a redelivery. The replica must restore 'Hello ' from the row
+    // and append, not restart the accumulator and flush only the tail.
+    await h.handler.ingest({
+      assistantMessageId: 'asst-1',
+      events: [subText(1, 'world', 'sub-1')],
+      operationId: 'op-1',
+      topicId: 'topic-1',
+    });
+
+    expect(assistantsOf()).toHaveLength(1);
+    expect(assistantsOf()[0].content).toBe('Hello world');
   });
 });

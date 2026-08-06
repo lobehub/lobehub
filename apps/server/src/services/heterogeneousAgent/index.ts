@@ -14,6 +14,12 @@ import type { SerializedHook } from '@/server/services/agentRuntime/hooks/types'
 import { createDefaultSnapshotStore } from '@/server/services/agentRuntime/snapshotStore';
 import { instantiateVerifyPlanOnStart } from '@/server/services/verify';
 
+import { eventKey } from './eventIdentity';
+import {
+  heteroAppliedEventLedger,
+  type HeteroEventLedger,
+  heteroPublishedEventLedger,
+} from './HeteroEventLedger';
 import {
   HeterogeneousPersistenceHandler,
   StaleHeteroOperationError,
@@ -57,8 +63,16 @@ export interface HeterogeneousFinishParams {
 }
 
 export interface HeterogeneousAgentServiceOptions {
+  /**
+   * Inject the durable applied-events ledger (used by tests). Forwarded into
+   * the default persistence handler; ignored when `persistenceHandler` is
+   * injected (that handler already carries its own).
+   */
+  appliedLedger?: HeteroEventLedger;
   /** Inject a pre-built persistence handler (used by tests). */
   persistenceHandler?: HeterogeneousPersistenceHandler;
+  /** Inject the durable published-events ledger (used by tests). */
+  publishLedger?: HeteroEventLedger;
   /** Inject a snapshot store (used by tests); defaults to the env-resolved store. */
   snapshotStore?: ISnapshotStore | null;
   /** Inject a pre-built manager (used by tests). */
@@ -84,9 +98,11 @@ export interface HeterogeneousAgentServiceOptions {
  * `topic.metadata.heterogeneousSessions`.
  */
 export class HeterogeneousAgentService {
+  private readonly appliedLedger: HeteroEventLedger;
   private readonly db: LobeChatDatabase;
   private readonly messageModel: MessageModel;
   private readonly persistenceHandler: HeterogeneousPersistenceHandler;
+  private readonly publishLedger: HeteroEventLedger;
   private readonly streamEventManager: IStreamEventManager;
   private readonly topicModel: TopicModel;
   private readonly traceRecorder: HeteroTraceRecorder;
@@ -105,12 +121,15 @@ export class HeterogeneousAgentService {
     this.messageModel = new MessageModel(db, userId, workspaceId);
     this.streamEventManager = options.streamEventManager ?? createStreamEventManager();
     this.topicModel = options.topicModel ?? new TopicModel(db, userId, workspaceId);
+    this.publishLedger = options.publishLedger ?? heteroPublishedEventLedger;
+    this.appliedLedger = options.appliedLedger ?? heteroAppliedEventLedger;
     this.traceRecorder = new HeteroTraceRecorder(
       options.snapshotStore !== undefined ? options.snapshotStore : createDefaultSnapshotStore(),
     );
     this.persistenceHandler =
       options.persistenceHandler ??
       new HeterogeneousPersistenceHandler({
+        appliedLedger: this.appliedLedger,
         messageModel: this.messageModel,
         threadModel: new ThreadModel(db, userId, workspaceId),
         topicModel: this.topicModel,
@@ -151,15 +170,21 @@ export class HeterogeneousAgentService {
     }
 
     // Publish only events not yet delivered to the stream. The publish gate
-    // (`publishedKeys`, peer of the persistence dedupe) makes a BatchIngester
-    // retry invisible to live subscribers: a batch that fully succeeded but
-    // lost its tRPC response republishes nothing, while one that died
-    // mid-publish resumes from the first unpublished event — each event is
-    // latched only after its own XADD succeeds. Sequential publish preserves
-    // stepIndex ordering — Redis XADD itself is serialized but awaiting
-    // in-order avoids interleaving with concurrent ingest batches sharing the
-    // same operationId.
-    const unpublished = this.persistenceHandler.filterUnpublishedEvents(operationId, events);
+    // (the `published` ledger, peer of the persistence dedupe) makes a
+    // BatchIngester retry invisible to live subscribers — INCLUDING a retry
+    // landing on a cold replica, since the ledger's keys live in Redis
+    // alongside the stream itself: a batch that fully succeeded but lost its
+    // tRPC response republishes nothing, while one that died mid-publish
+    // resumes from the first unpublished event. Each event is latched
+    // in-memory right after its own XADD succeeds, and the batch's latches
+    // are made durable ONCE in the `finally` — XADD-before-latch means a
+    // crash can duplicate at most one batch, never lose events. Sequential
+    // publish preserves stepIndex ordering — Redis XADD itself is serialized
+    // but awaiting in-order avoids interleaving with concurrent ingest
+    // batches sharing the same operationId.
+    const keys = events.map((event) => eventKey(event));
+    const publishedKeys = await this.publishLedger.knownKeys(operationId, keys);
+    const unpublished = events.filter((_, i) => !publishedKeys.has(keys[i]));
     if (unpublished.length < events.length) {
       log(
         'heteroIngest: skip %d already-published events op=%s',
@@ -167,15 +192,26 @@ export class HeterogeneousAgentService {
         operationId,
       );
     }
-    for (const event of unpublished) {
-      // Each event already carries operationId; pass through unchanged so the
-      // wire shape on the WS side is identical to gateway-driven runs.
-      await this.streamEventManager.publishStreamEvent(operationId, {
-        data: event.data,
-        stepIndex: event.stepIndex,
-        type: event.type,
-      });
-      this.persistenceHandler.markEventPublished(operationId, event);
+    const latchedKeys: string[] = [];
+    try {
+      for (const event of unpublished) {
+        // Each event already carries operationId; pass through unchanged so the
+        // wire shape on the WS side is identical to gateway-driven runs.
+        await this.streamEventManager.publishStreamEvent(operationId, {
+          data: event.data,
+          stepIndex: event.stepIndex,
+          type: event.type,
+        });
+        const key = eventKey(event);
+        this.publishLedger.markMemory(operationId, key);
+        latchedKeys.push(key);
+      }
+    } finally {
+      // Durable latch for everything that made it into the stream, even when
+      // a later XADD threw (the throw still propagates so the producer
+      // retries the batch). `persist` swallows its own Redis failures, so
+      // this `finally` never masks the original error.
+      await this.publishLedger.persist(operationId, latchedKeys);
     }
 
     // Accumulate the execution-trace snapshot LAST. The recorder has no
@@ -183,7 +219,11 @@ export class HeterogeneousAgentService {
     // and trigger a BatchIngester retry of this same batch — otherwise a publish
     // failure above would re-fold these events and double-count the snapshot.
     // Gating on the publish gate also skips the pure-redelivery batch (full
-    // success whose response was lost), which would otherwise double-fold here.
+    // success whose response was lost) — cold replicas included, via the
+    // durable ledger — which would otherwise double-fold here. Residual: a
+    // crash between the `finally` latch above and this fold loses the batch's
+    // fold (trace under-counts one batch) — preferred over the double-count,
+    // and only reachable through a process death in that window.
     if (unpublished.length > 0) {
       await this.traceRecorder.appendBatch(operationId, events);
     }
@@ -390,6 +430,16 @@ export class HeterogeneousAgentService {
       completionReason,
     );
     log('heteroFinish: dispatched completion lifecycle for op=%s result=%s', operationId, result);
+
+    // Drop the operation's event ledgers LAST (never on `cancelled`, which
+    // returned above — a final success/error batch can still arrive after it
+    // and must keep its dedupe). By this point `runningOperation` is cleared,
+    // so a straggler retry fails persistence with StaleHeteroOperationError
+    // and never reaches the publish loop — the ledgers have no remaining
+    // reader. Best-effort: on a missed cleanup (throw above / crash) the
+    // Redis TTL reaps the keys.
+    await this.publishLedger.cleanup(operationId);
+    await this.appliedLedger.cleanup(operationId);
   }
 
   /**
