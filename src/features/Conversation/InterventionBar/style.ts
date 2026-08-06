@@ -21,7 +21,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     overflow-y: visible;
     flex: 1;
     min-height: 0;
-    padding-block: 6px 8px;
+    padding-block: 0 8px;
   `,
   tab: css`
     cursor: pointer;

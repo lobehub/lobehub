@@ -1,12 +1,21 @@
 'use client';
 
 import type { BuiltinInterventionProps } from '@lobechat/types';
+import {
+  ReactCodeblockPlugin,
+  ReactCodePlugin,
+  ReactHRPlugin,
+  ReactLinkPlugin,
+  ReactListPlugin,
+  ReactTablePlugin,
+} from '@lobehub/editor';
+import { Editor, useEditor } from '@lobehub/editor/react';
 import { ActionIcon, Block, Flexbox, Icon, Input, Text, TextArea } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { InputNumber } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronRight, Plus, Trash2 } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { CreateGoalParams, GoalCriterionDraft } from '../../types';
@@ -28,10 +37,16 @@ const styles = createStaticStyles(({ css }) => ({
     z-index: 2;
     inset-block-start: 0;
 
-    padding-block: 6px 10px;
+    padding-block: 0 6px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
     background: ${cssVar.colorBgContainer};
+  `,
+  instructionEditor: css`
+    padding-block: 8px;
+    padding-inline: 12px;
+    border-radius: ${cssVar.borderRadiusLG};
+    background: ${cssVar.colorFillQuaternary};
   `,
   list: css`
     overflow: hidden;
@@ -75,6 +90,8 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextTertiary};
   `,
   titleInput: css`
+    padding-block: 2px;
+    padding-inline: 0;
     font-size: 15px;
     font-weight: 600;
   `,
@@ -118,8 +135,9 @@ const Section = memo<SectionProps>(({ children, extra, label, onToggle, open }) 
 Section.displayName = 'CreateGoalSection';
 
 const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
-  ({ args, onArgsChange }) => {
+  ({ args, onArgsChange, registerBeforeApprove }) => {
     const { t } = useTranslation('plugin');
+    const editor = useEditor();
     const [openSections, setOpenSections] = useState({
       budget: true,
       criteria: true,
@@ -146,6 +164,20 @@ const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
         return next;
       });
 
+    // The instruction lives in the rich editor, not in args — folding it back
+    // on every keystroke would rerender the card and fight the editor's own
+    // state. It merges into args once, right before approval submits them.
+    const saveInstruction = useCallback(async () => {
+      if (!editor) return;
+      const markdown = String(editor.getDocument('markdown') ?? '');
+      await onArgsChange?.({ ...args, instruction: markdown });
+    }, [editor, onArgsChange, args]);
+
+    useEffect(
+      () => registerBeforeApprove?.('createGoal', saveInstruction),
+      [registerBeforeApprove, saveInstruction],
+    );
+
     return (
       <Flexbox gap={12}>
         <Flexbox className={styles.header}>
@@ -162,11 +194,21 @@ const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
           open={openSections.instruction}
           onToggle={() => toggleSection('instruction')}
         >
-          <TextArea
-            autoSize={{ maxRows: 5, minRows: 2 }}
-            value={args.instruction}
-            onChange={(event) => patch({ instruction: event.target.value })}
-          />
+          <Flexbox className={styles.instructionEditor}>
+            <Editor
+              content={args.instruction}
+              editor={editor}
+              type={'markdown'}
+              plugins={[
+                ReactCodePlugin,
+                ReactCodeblockPlugin,
+                ReactHRPlugin,
+                ReactLinkPlugin,
+                ReactListPlugin,
+                ReactTablePlugin,
+              ]}
+            />
+          </Flexbox>
         </Section>
 
         <Section
