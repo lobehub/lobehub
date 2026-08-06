@@ -1,18 +1,17 @@
 'use client';
 
+import { useAicoPanelContainerProps } from '@/features/AicoPanels';
 import { PlatformAdminPanel } from '@/features/PlatformAdmin';
 import SettingContainer from '@/features/Setting/SettingContainer';
 
-const PlatformAdminPage = () => (
-  <SettingContainer
-    flex={1}
-    maxWidth={1100}
-    paddingBlock={'24px 48px'}
-    paddingInline={24}
-    style={{ minHeight: 0 }}
-  >
-    <PlatformAdminPanel />
-  </SettingContainer>
-);
+const PlatformAdminPage = () => {
+  const containerProps = useAicoPanelContainerProps(1100);
+
+  return (
+    <SettingContainer {...containerProps}>
+      <PlatformAdminPanel />
+    </SettingContainer>
+  );
+};
 
 export default PlatformAdminPage;

@@ -1,18 +1,17 @@
 'use client';
 
+import { useAicoPanelContainerProps } from '@/features/AicoPanels';
 import { OrgAdminMembers } from '@/features/OrgAdmin';
 import SettingContainer from '@/features/Setting/SettingContainer';
 
-const OrgMembersPage = () => (
-  <SettingContainer
-    flex={1}
-    maxWidth={960}
-    paddingBlock={'24px 48px'}
-    paddingInline={24}
-    style={{ minHeight: 0 }}
-  >
-    <OrgAdminMembers />
-  </SettingContainer>
-);
+const OrgMembersPage = () => {
+  const containerProps = useAicoPanelContainerProps(960);
+
+  return (
+    <SettingContainer {...containerProps}>
+      <OrgAdminMembers />
+    </SettingContainer>
+  );
+};
 
 export default OrgMembersPage;
