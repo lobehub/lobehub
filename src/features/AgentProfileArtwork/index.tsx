@@ -8,7 +8,7 @@ import {
 import { ActionIcon, Alert, Avatar, Center, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { Button, type DropdownItem, DropdownMenu, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { Check, ImageIcon, Trash2, UploadIcon, WandSparkles } from 'lucide-react';
+import { Check, ImageIcon, MoreHorizontal, Trash2, UploadIcon, WandSparkles } from 'lucide-react';
 import { memo, useCallback, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -104,9 +104,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   emptyBackgroundHint: css`
     color: ${cssVar.colorTextSecondary};
-  `,
-  generatedAction: css`
-    width: 100%;
   `,
   generatedPreview: css`
     position: relative;
@@ -277,9 +274,10 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
       ],
     );
 
-    // Generating opens a style menu instead of firing directly — picking the
-    // rendering style is the whole point of the control, and the last pick is
-    // remembered for both artwork kinds so avatar and cover stay one system.
+    // The generate buttons fire directly with the remembered style; the style
+    // menu lives behind a separate "…" trigger beside them. Picking a style
+    // there also generates, and the pick is remembered for both artwork kinds
+    // so avatar and cover stay one system.
     const buildStyleItems = useCallback(
       (kind: 'avatar' | 'background'): DropdownItem[] =>
         AGENT_ARTWORK_STYLES.map((style) => ({
@@ -353,15 +351,23 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
                     {t('settingAgent.artwork.background.upload')}
                   </Button>
                   {canGenerate ? (
-                    <DropdownMenu items={() => buildStyleItems('background')}>
+                    <>
                       <Button
                         icon={WandSparkles}
                         loading={generating === 'background'}
                         size={'small'}
+                        onClick={() => void generateArtwork('background', artworkStyle)}
                       >
                         {t('settingAgent.artwork.background.generate')}
                       </Button>
-                    </DropdownMenu>
+                      <DropdownMenu items={() => buildStyleItems('background')}>
+                        <Button
+                          aria-label={t('settingAgent.artwork.styleMenu')}
+                          icon={MoreHorizontal}
+                          size={'small'}
+                        />
+                      </DropdownMenu>
+                    </>
                   ) : null}
                 </Flexbox>
               </Flexbox>
@@ -383,11 +389,21 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
                 />
               </Tooltip>
               {canGenerate ? (
-                <Tooltip title={t('settingAgent.artwork.background.generate')}>
-                  <DropdownMenu items={() => buildStyleItems('background')}>
-                    <ActionIcon glass icon={WandSparkles} loading={generating === 'background'} />
-                  </DropdownMenu>
-                </Tooltip>
+                <>
+                  <Tooltip title={t('settingAgent.artwork.background.generate')}>
+                    <ActionIcon
+                      glass
+                      icon={WandSparkles}
+                      loading={generating === 'background'}
+                      onClick={() => void generateArtwork('background', artworkStyle)}
+                    />
+                  </Tooltip>
+                  <Tooltip title={t('settingAgent.artwork.styleMenu')}>
+                    <DropdownMenu items={() => buildStyleItems('background')}>
+                      <ActionIcon glass icon={MoreHorizontal} />
+                    </DropdownMenu>
+                  </Tooltip>
+                </>
               ) : null}
               {backgroundUrl ? (
                 <Tooltip title={t('settingAgent.artwork.background.remove')}>
@@ -450,11 +466,21 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
                             ) : null}
                           </Center>
                           {generating !== 'avatar' ? (
-                            <DropdownMenu items={() => buildStyleItems('avatar')}>
-                              <Button className={styles.generatedAction} icon={WandSparkles}>
+                            <Flexbox horizontal gap={8}>
+                              <Button
+                                icon={WandSparkles}
+                                style={{ flex: 1 }}
+                                onClick={() => void generateArtwork('avatar', artworkStyle)}
+                              >
                                 {t('settingAgent.artwork.avatar.generateAction')}
                               </Button>
-                            </DropdownMenu>
+                              <DropdownMenu items={() => buildStyleItems('avatar')}>
+                                <Button
+                                  aria-label={t('settingAgent.artwork.styleMenu')}
+                                  icon={MoreHorizontal}
+                                />
+                              </DropdownMenu>
+                            </Flexbox>
                           ) : null}
                           {generationError === 'avatar' ? (
                             <Alert

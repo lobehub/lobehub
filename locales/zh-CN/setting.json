@@ -700,6 +700,7 @@
   "settingAgent.artwork.style.photographic": "极简摄影",
   "settingAgent.artwork.style.riso": "复古版画",
   "settingAgent.artwork.style.watercolor": "水彩手绘",
+  "settingAgent.artwork.styleMenu": "生成风格",
   "settingAgent.artwork.uploadFailed": "暂时无法上传图片，请重试",
   "settingAgent.avatar.sizeExceeded": "图片大小超过 1MB 限制，请选择更小的图片",
   "settingAgent.avatar.title": "助理头像",

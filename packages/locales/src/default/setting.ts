@@ -758,6 +758,7 @@ export default {
   'settingAgent.artwork.style.photographic': 'Minimal Photography',
   'settingAgent.artwork.style.riso': 'Retro Print',
   'settingAgent.artwork.style.watercolor': 'Watercolor',
+  'settingAgent.artwork.styleMenu': 'Generation style',
   'settingAgent.artwork.uploadFailed': 'Could not upload the image. Try again.',
   'settingAgent.backgroundColor.title': 'Background Color',
   'settingAgent.description.desc': 'A brief introduction to your agent, not for character setting',
