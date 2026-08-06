@@ -374,10 +374,25 @@ export class AiInfraRepos {
     }
 
     // Filter out DB residual models that are no longer in the builtin list for branding provider
+    const builtinIds = new Set(defaultModels.map((m) => m.id));
     if (providerId === BRANDING_PROVIDER) {
-      const builtinIds = new Set(defaultModels.map((m) => m.id));
       mergedModel = mergedModel.filter((m) => builtinIds.has(m.id));
     }
+
+    // Preference-only shells — rows persisting just `config.chatConfig` (created
+    // by updateModelReasoningConfig, or left behind when clearRemoteModels
+    // demotes a remote row with a saved reasoning preference) — carry no
+    // user-visible identity. With no builtin card to merge onto, hide the
+    // ID-only entry instead of listing a ghost disabled model.
+    mergedModel = mergedModel.filter(
+      (m) =>
+        builtinIds.has(m.id) ||
+        m.source != null ||
+        m.enabled != null ||
+        m.displayName != null ||
+        m.contextWindowTokens != null ||
+        m.releasedAt != null,
+    );
 
     mergedModel = mergedModel.filter(isAiModelVisible);
 
