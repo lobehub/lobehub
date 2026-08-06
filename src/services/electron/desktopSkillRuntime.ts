@@ -27,9 +27,16 @@ class DesktopSkillRuntimeService {
     return prepared.extractedDir;
   }
 
-  private async resolveSkill(params: { id?: string; name?: string }) {
+  private async resolveSkill(params: { id?: string; identifier?: string; name?: string }) {
     const skillById = params.id ? await agentSkillService.getById(params.id) : undefined;
-    return skillById ?? (params.name ? await agentSkillService.getByName(params.name) : undefined);
+    if (skillById) return skillById;
+    const skillByName = params.name ? await agentSkillService.getByName(params.name) : undefined;
+    if (skillByName) return skillByName;
+    // Fallback for /skill slash-preloaded skills: their persisted tag carries
+    // only the identifier (no DB id), and identifier may differ from name.
+    return params.identifier
+      ? await agentSkillService.getByIdentifier(params.identifier)
+      : undefined;
   }
 
   async resolveExecutionDirectory(
@@ -43,7 +50,11 @@ class DesktopSkillRuntimeService {
     // skill activated before/after them. Mirrors the server exec paths'
     // "last resolvable skill wins the cwd" semantics.
     for (const activated of [...activatedSkills].reverse()) {
-      const skill = await this.resolveSkill({ id: activated.id, name: activated.name });
+      const skill = await this.resolveSkill({
+        id: activated.id,
+        identifier: activated.identifier,
+        name: activated.name,
+      });
       if (!skill?.zipFileHash) continue;
 
       return this.prepareSkillDirectoryForSkill(skill);

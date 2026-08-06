@@ -276,7 +276,13 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     for (const activatedSkill of activatedSkills) {
       if (!activatedSkill.name) continue;
 
-      const skill = await this.skillModel.findByName(activatedSkill.name);
+      let skill = await this.skillModel.findByName(activatedSkill.name);
+
+      // /skill slash-preloaded skills persist only the identifier (no DB id),
+      // and identifier may differ from name — fall back to findByIdentifier.
+      if (!skill && activatedSkill.identifier) {
+        skill = await this.skillModel.findByIdentifier(activatedSkill.identifier);
+      }
 
       if (!skill) {
         log('No persisted skill bundle found for activated skill: %s', activatedSkill.name);

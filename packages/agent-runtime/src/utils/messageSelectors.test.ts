@@ -107,10 +107,12 @@ describe('TODO state selectors', () => {
   const item = { status: 'processing' as const, text: 'Ship the fix' };
 
   it('normalizes canonical and legacy states, including empty clear tombstones', () => {
-    expect(normalizeTodosState({ items: [item], updatedAt: 'canonical-time' }, 'fallback')).toEqual({
-      items: [item],
-      updatedAt: 'canonical-time',
-    });
+    expect(normalizeTodosState({ items: [item], updatedAt: 'canonical-time' }, 'fallback')).toEqual(
+      {
+        items: [item],
+        updatedAt: 'canonical-time',
+      },
+    );
     expect(normalizeTodosState([item], 'fallback')).toEqual({
       items: [item],
       updatedAt: 'fallback',
@@ -129,7 +131,9 @@ describe('TODO state selectors', () => {
   it('rejects alternate fields and malformed items', () => {
     expect(normalizeTodosState({ tasks: [item] }, 'fallback')).toBeUndefined();
     expect(normalizeTodosState({ todoList: [item] }, 'fallback')).toBeUndefined();
-    expect(normalizeTodosState({ items: [{ status: 'unknown', text: 'bad' }] }, 'fallback')).toBeUndefined();
+    expect(
+      normalizeTodosState({ items: [{ status: 'unknown', text: 'bad' }] }, 'fallback'),
+    ).toBeUndefined();
     expect(normalizeTodosState({ items: [{ status: 'todo' }] }, 'fallback')).toBeUndefined();
   });
 
@@ -472,6 +476,56 @@ describe('extractActivatedSkillsFromMessages', () => {
         ],
         role: 'assistantGroup',
       } as any),
+    ];
+
+    expect(extractActivatedSkillsFromMessages(messages)).toBeUndefined();
+  });
+
+  // Regression: the /skill slash preload path inlines skill content into the
+  // user message as a <selected_skill_context> block WITHOUT a synthetic
+  // activateSkill tool call. extractActivatedSkillsFromMessages must still
+  // recognize these skills so execScript can resolve their cwd.
+  it('should extract skills from /skill slash preload tags in user messages', () => {
+    const messages = [
+      createMessage({
+        content:
+          'Generate marketing images\n\n' +
+          '<system_context_start>\n' +
+          '<selected_skill_context>\n' +
+          '<selected_skills>\n' +
+          '  <skill identifier="multi-size-marketing-adapter" name="Multi-Size Marketing Adapter">\n' +
+          '  SKILL.md content here\n' +
+          '  </skill>\n' +
+          '</selected_skills>\n' +
+          '</selected_skill_context>\n' +
+          '<system_context_end>',
+        role: 'user',
+      } as any),
+    ];
+
+    expect(extractActivatedSkillsFromMessages(messages)).toEqual([
+      { identifier: 'multi-size-marketing-adapter', name: 'multi-size-marketing-adapter' },
+    ]);
+  });
+
+  it('should extract self-closing slash preload skill tags without content', () => {
+    const messages = [
+      createMessage({
+        content:
+          'do thing\n\n<selected_skills>\n  <skill identifier="pdf-tools" name="PDF Tools" />\n</selected_skills>',
+        role: 'user',
+      } as any),
+    ];
+
+    expect(extractActivatedSkillsFromMessages(messages)).toEqual([
+      { identifier: 'pdf-tools', name: 'pdf-tools' },
+    ]);
+  });
+
+  it('should not treat ordinary user messages as skill activations', () => {
+    const messages = [
+      createMessage({ content: 'hi', role: 'user' } as any),
+      createMessage({ content: 'activate the xlsx skill please', role: 'user' } as any),
     ];
 
     expect(extractActivatedSkillsFromMessages(messages)).toBeUndefined();

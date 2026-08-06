@@ -1,3 +1,4 @@
+import { parseSelectedSkillTags } from '@lobechat/context-engine';
 import type { StepActivatedSkill, StepContextTodos, UIChatMessage } from '@lobechat/types';
 import { isNonEmptyString, isPlainRecord } from '@lobechat/utils/object';
 
@@ -173,9 +174,7 @@ export const normalizeTodosState = (
   if (!items || !items.every(isTodoItem)) return undefined;
 
   const updatedAt =
-    isPlainRecord(value) && isNonEmptyString(value.updatedAt)
-      ? value.updatedAt
-      : fallbackUpdatedAt;
+    isPlainRecord(value) && isNonEmptyString(value.updatedAt) ? value.updatedAt : fallbackUpdatedAt;
 
   return { items, updatedAt };
 };
@@ -268,6 +267,22 @@ export const extractActivatedSkillsFromMessages = (
             });
           }
         }
+      }
+    }
+
+    // Skills activated via the /skill slash preload path: their content is
+    // inlined into the user message as a <selected_skill_context> block (see
+    // formatSelectedSkillsContext in @lobechat/context-engine) WITHOUT a
+    // synthetic activateSkill tool call, so the tool-invocation scan above
+    // can't see them. Parse the persisted <skill identifier="..." name="...">
+    // tags so execScript can still resolve their cwd. The identifier doubles
+    // as `name` (DB skills commonly have name === identifier); consumers fall
+    // back to getByIdentifier when identifier differs from name.
+    if (msg.role === 'user' && typeof msg.content === 'string') {
+      for (const tag of parseSelectedSkillTags(msg.content)) {
+        const key = tag.identifier;
+        skillsMap.delete(key);
+        skillsMap.set(key, { identifier: tag.identifier, name: tag.identifier });
       }
     }
   }

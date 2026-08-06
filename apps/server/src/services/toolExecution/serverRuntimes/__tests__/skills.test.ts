@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => {
     },
     findAll: vi.fn(),
     findById: vi.fn(),
+    findByIdentifier: vi.fn(),
     findByName: vi.fn(),
     isLhCommand: vi.fn(),
     getAgentConfigById: vi.fn(),
@@ -55,6 +56,7 @@ vi.mock('@/database/models/agentSkill', () => ({
   AgentSkillModel: vi.fn(() => ({
     findAll: mocks.findAll,
     findById: mocks.findById,
+    findByIdentifier: mocks.findByIdentifier,
     findByName: mocks.findByName,
   })),
 }));
@@ -142,6 +144,21 @@ describe('skillsRuntime', () => {
 
       return undefined;
     });
+    // /skill slash-preloaded skills resolve by identifier when findByName misses
+    // (their persisted tag carries only the identifier, which may differ from the
+    // DB skill name).
+    mocks.findByIdentifier.mockImplementation(async (identifier: string) => {
+      if (identifier === 'marketing-adapter') {
+        return {
+          id: 'marketing-skill-id',
+          identifier: 'marketing-adapter',
+          name: 'Multi-Size Marketing Adapter',
+          zipFileHash: 'zip-hash-2',
+        };
+      }
+
+      return undefined;
+    });
     mocks.getAgentSkills.mockResolvedValue([]);
     mocks.getUserSettings.mockResolvedValue({ market: { accessToken: 'market-token' } });
     // Pass-through by default: the runtime now routes both runCommand and
@@ -199,6 +216,38 @@ describe('skillsRuntime', () => {
         description: 'Run skill script',
         skillZipUrls: {
           'user-skill': 'https://files.example.com/user-skill.zip',
+        },
+      }),
+    );
+  }, 20_000);
+
+  it('resolves slash-preloaded skills by identifier when findByName misses', async () => {
+    const { skillsRuntime } = await import('../skills');
+    const runtime = await skillsRuntime.factory({
+      serverDB: {} as never,
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    // A /skill slash-preloaded skill: name carries the identifier (the only
+    // key persisted in the <skill> tag), which differs from the DB skill name.
+    const result = await runtime.execScript({
+      activatedSkills: [{ identifier: 'marketing-adapter', name: 'marketing-adapter' }],
+      command: 'python scripts/plan_layouts.py',
+      description: 'Run layout planner',
+    });
+
+    expect(result.success).toBe(true);
+    expect(mocks.findByName).toHaveBeenCalledWith('marketing-adapter');
+    expect(mocks.findByIdentifier).toHaveBeenCalledWith('marketing-adapter');
+    // The fallback resolved the archive, so its zip url is attached under the
+    // skill's DB name (Multi-Size Marketing Adapter).
+    expect(mocks.sandboxService.callTool).toHaveBeenCalledWith(
+      'execScript',
+      expect.objectContaining({
+        skillZipUrls: {
+          'Multi-Size Marketing Adapter': 'https://files.example.com/user-skill.zip',
         },
       }),
     );

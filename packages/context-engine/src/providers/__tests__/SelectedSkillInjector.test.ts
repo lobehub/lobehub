@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { PipelineContext } from '../../types';
-import { SelectedSkillInjector } from '../SelectedSkillInjector';
+import { parseSelectedSkillTags, SelectedSkillInjector } from '../SelectedSkillInjector';
 
 const createContext = (messages: any[] = []): PipelineContext => ({
   initialState: {
@@ -97,5 +97,65 @@ describe('SelectedSkillInjector', () => {
     expect(content.match(/<!-- SYSTEM CONTEXT \(NOT PART OF USER QUERY\) -->/g)).toHaveLength(1);
     expect(content).toContain('<current_page_context>');
     expect(content).toContain('<selected_skill_context>');
+  });
+});
+
+describe('parseSelectedSkillTags', () => {
+  it('parses content-bearing skill tags', () => {
+    const content =
+      '<selected_skills>\n' +
+      '  <skill identifier="marketing-adapter" name="Multi-Size Marketing Adapter">\n' +
+      '  SKILL.md content\n' +
+      '  </skill>\n' +
+      '</selected_skills>';
+
+    expect(parseSelectedSkillTags(content)).toEqual([
+      { identifier: 'marketing-adapter', name: 'Multi-Size Marketing Adapter' },
+    ]);
+  });
+
+  it('parses self-closing skill tags', () => {
+    const content =
+      '<selected_skills>\n  <skill identifier="pdf-tools" name="PDF Tools" />\n</selected_skills>';
+
+    expect(parseSelectedSkillTags(content)).toEqual([
+      { identifier: 'pdf-tools', name: 'PDF Tools' },
+    ]);
+  });
+
+  it('parses multiple skills and tolerates attribute order', () => {
+    const content =
+      '<selected_skills>\n' +
+      '  <skill name="Grep" identifier="grep" />\n' +
+      '  <skill identifier="translate" name="Translate" />\n' +
+      '</selected_skills>';
+
+    expect(parseSelectedSkillTags(content)).toEqual([
+      { identifier: 'grep', name: 'Grep' },
+      { identifier: 'translate', name: 'Translate' },
+    ]);
+  });
+
+  it('skips tags without an identifier', () => {
+    const content =
+      '<selected_skills>\n  <skill name="No Identifier" />\n  <skill identifier="ok" />\n</selected_skills>';
+
+    expect(parseSelectedSkillTags(content)).toEqual([{ identifier: 'ok' }]);
+  });
+
+  it('returns an empty array for ordinary user messages (no selected_skills block)', () => {
+    expect(parseSelectedSkillTags('hi, please help me with images')).toEqual([]);
+    expect(parseSelectedSkillTags('')).toEqual([]);
+  });
+
+  it('round-trips with formatSelectedSkills', async () => {
+    const { formatSelectedSkills } = await import('../SelectedSkillInjector');
+    const skills = [
+      { identifier: 'a', name: 'A' },
+      { identifier: 'b', name: 'B' },
+    ];
+    const formatted = formatSelectedSkills(skills)!;
+
+    expect(parseSelectedSkillTags(formatted).map((t) => t.identifier)).toEqual(['a', 'b']);
   });
 });

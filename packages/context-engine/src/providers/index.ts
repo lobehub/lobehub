@@ -30,6 +30,7 @@ export { PlanInjector } from './PlanInjector';
 export {
   formatSelectedSkills,
   formatSelectedSkillsContext,
+  parseSelectedSkillTags,
   SelectedSkillInjector,
 } from './SelectedSkillInjector';
 export {
