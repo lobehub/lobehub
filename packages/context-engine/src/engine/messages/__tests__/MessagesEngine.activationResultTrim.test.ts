@@ -151,8 +151,8 @@ describe('MessagesEngine — activation result trimming (LOBE-5684)', () => {
       const systemMessage = result.messages.find((m) => m.role === 'system');
       expect(systemMessage?.content).toContain(CREDS_SYSTEM_ROLE);
       const toolMessage = result.messages.find((m) => m.role === 'tool');
-      expect(toolMessage?.content).toContain('Creds (lobe-creds, 1 API)');
-      expect(toolMessage?.content).toContain('available in the system prompt');
+      expect(toolMessage?.content).toContain('Successfully activated tools: lobe-creds.listCreds.');
+      expect(toolMessage?.content).toContain('in the system prompt');
     });
 
     it('should keep the tool result as the single channel when the manifest is not injected', async () => {

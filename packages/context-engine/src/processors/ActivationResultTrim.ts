@@ -86,13 +86,15 @@ export interface ActivationResultTrimConfig {
 export class ActivationResultTrimProcessor extends BaseProcessor {
   readonly name = 'ActivationResultTrimProcessor';
 
-  private injectedToolIds: Set<string>;
+  private injectedManifestsById: Map<string, LobeToolManifest>;
   private injectedSkillsByIdentifier: Map<string, SkillMeta>;
   private injectedSkillsByName: Map<string, SkillMeta>;
 
   constructor(config: ActivationResultTrimConfig, options: ProcessorOptions = {}) {
     super(options);
-    this.injectedToolIds = new Set((config.injectedManifests ?? []).map((m) => m.identifier));
+    this.injectedManifestsById = new Map(
+      (config.injectedManifests ?? []).map((m) => [m.identifier, m]),
+    );
     this.injectedSkillsByIdentifier = new Map(
       (config.injectedSkills ?? []).map((s) => [s.identifier, s]),
     );
@@ -103,7 +105,7 @@ export class ActivationResultTrimProcessor extends BaseProcessor {
   }
 
   protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
-    if (this.injectedToolIds.size === 0 && this.injectedSkillsByIdentifier.size === 0) {
+    if (this.injectedManifestsById.size === 0 && this.injectedSkillsByIdentifier.size === 0) {
       return this.markAsExecuted(context);
     }
 
@@ -194,7 +196,7 @@ export class ActivationResultTrimProcessor extends BaseProcessor {
     // activation must keep its full text as the only channel for the
     // uncovered items.
     const allToolsInjected = activatedTools.every(
-      (tool) => tool.identifier && this.injectedToolIds.has(tool.identifier),
+      (tool) => tool.identifier && this.injectedManifestsById.has(tool.identifier),
     );
     const allSkillsInjected = activatedSkills.every((skill) => !!this.findInjectedSkill(skill));
     if (!allToolsInjected || !allSkillsInjected) return undefined;
@@ -217,15 +219,16 @@ export class ActivationResultTrimProcessor extends BaseProcessor {
 
     const parts: string[] = [];
 
-    const toolSummaries = activatedTools.map((tool) => {
-      const apiCount =
-        typeof tool.apiCount === 'number'
-          ? `, ${tool.apiCount} API${tool.apiCount === 1 ? '' : 's'}`
-          : '';
-      return `${tool.name ?? tool.identifier} (${tool.identifier}${apiCount})`;
+    // List the newly callable APIs (`identifier.apiName`) so the model knows
+    // exactly which functions the activation added to the tools array.
+    const activatedApiNames = activatedTools.flatMap((tool) => {
+      const manifest = this.injectedManifestsById.get(tool.identifier!)!;
+      return manifest.api.length > 0
+        ? manifest.api.map((api) => `${tool.identifier}.${api.name}`)
+        : [tool.identifier!];
     });
-    if (toolSummaries.length > 0) {
-      parts.push(`Successfully activated tools: ${toolSummaries.join(', ')}.`);
+    if (activatedApiNames.length > 0) {
+      parts.push(`Successfully activated tools: ${activatedApiNames.join(', ')}.`);
     }
 
     if (activatedSkills.length > 0) {
@@ -241,9 +244,7 @@ export class ActivationResultTrimProcessor extends BaseProcessor {
       parts.push(`Not found: ${state.notFound.join(', ')}.`);
     }
 
-    parts.push(
-      'Full usage instructions and API descriptions for the activated items are available in the system prompt.',
-    );
+    parts.push('Usage instructions for the activated items are in the system prompt.');
 
     return parts.join('\n');
   }

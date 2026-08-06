@@ -67,8 +67,10 @@ describe('ActivationResultTrimProcessor', () => {
 
       const content = result.messages[0].content as string;
       expect(content).not.toContain(CREDS_SYSTEM_ROLE);
-      expect(content).toContain('Creds (lobe-creds, 2 APIs)');
-      expect(content).toContain('available in the system prompt');
+      expect(content).toContain(
+        'Successfully activated tools: lobe-creds.listCreds, lobe-creds.createCred.',
+      );
+      expect(content).toContain('in the system prompt');
       expect(result.metadata.activationResultTrim?.trimmedMessages).toBe(1);
       expect(result.metadata.activationResultTrim?.savedChars).toBeGreaterThan(0);
     });
