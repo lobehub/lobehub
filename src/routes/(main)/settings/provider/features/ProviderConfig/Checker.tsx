@@ -136,7 +136,11 @@ const Checker = memo<ConnectionCheckerProps>(
         },
 
         onFinish: async (value) => {
-          if (!isError && value) {
+          // If onError already fired, keep that specific error rather than
+          // overwriting it with the generic ConnectionCheckFailed message.
+          if (isError) return;
+
+          if (value) {
             setError(undefined);
             setPass(true);
           } else {
