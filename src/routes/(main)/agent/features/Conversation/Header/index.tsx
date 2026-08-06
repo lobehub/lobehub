@@ -7,11 +7,10 @@ import { memo } from 'react';
 import NavHeader from '@/features/NavHeader';
 import OpenInAppButton from '@/features/OpenInAppButton';
 import TopicCommentButton from '@/features/TopicComment/TopicCommentButton';
+import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
-import { useElectronStore } from '@/store/electron';
 
 import HeaderActions from './HeaderActions';
 import ShareButton from './ShareButton';
@@ -92,17 +91,14 @@ const headerStyles = createStaticStyles(({ css }) => ({
 
 const Header = memo(() => {
   const agentId = useChatStore((s) => s.activeAgentId);
-  const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
-  const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
-  const agentWorkingDirectory = useAgentStore((s) =>
-    agentId
-      ? agentByIdSelectors.getAgentWorkingDirectoryById(agentId, currentDeviceId)(s)
-      : undefined,
-  );
+  // No home/desktop fallback: the IDE button should only show up once the user
+  // explicitly picked a working directory (topic / agent / device default).
+  const workingDirectory = useEffectiveWorkingDirectory(agentId || undefined, {
+    homeFallback: false,
+  });
   const isLocalSystemEnabled = useAgentStore((s) =>
     agentId ? chatConfigByIdSelectors.isLocalSystemEnabledById(agentId)(s) : false,
   );
-  const effectiveWorkingDirectory = topicWorkingDirectory || agentWorkingDirectory || '';
 
   return (
     <div className={headerStyles.container}>
@@ -121,8 +117,8 @@ const Header = memo(() => {
         }
         right={
           <Flexbox horizontal align={'center'} className={headerStyles.rightContent} gap={4}>
-            {isLocalSystemEnabled && (
-              <OpenInAppButton workingDirectory={effectiveWorkingDirectory} />
+            {isLocalSystemEnabled && workingDirectory && (
+              <OpenInAppButton workingDirectory={workingDirectory} />
             )}
             <TopicCommentButton />
             <ShareButton />
