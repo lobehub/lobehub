@@ -5,7 +5,7 @@ import 'antd/dist/reset.css';
 import { type NeutralColors, type PrimaryColors } from '@lobehub/ui';
 import { ConfigProvider, FontLoader, ThemeProvider } from '@lobehub/ui';
 import { ConfigProvider as AntdConfigProvider } from 'antd';
-import { createStaticStyles, cx, useTheme } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import * as m from 'motion/react-m';
 import { type ReactNode } from 'react';
 import { memo, useEffect, useState } from 'react';
@@ -14,6 +14,7 @@ import AntdStaticMethods from '@/components/AntdStaticMethods';
 import Link from '@/components/Link';
 import { LOBE_THEME_NEUTRAL_COLOR, LOBE_THEME_PRIMARY_COLOR } from '@/const/theme';
 import { useIsDark } from '@/hooks/useIsDark';
+import { useLocaleThemeFont } from '@/hooks/useLocaleThemeFont';
 import { getUILocaleAndResources } from '@/libs/getUILocaleAndResources';
 import type { UILocaleResources } from '@/libs/getUILocaleAndResources.utils';
 import { resolveUILocale } from '@/libs/getUILocaleAndResources.utils';
@@ -105,7 +106,7 @@ const AppTheme = memo<AppThemeProps>(
   }) => {
     const language = useGlobalStore(systemStatusSelectors.language);
     const documentDir = getDocumentDirection(language);
-    const antdTheme = useTheme();
+    const { fontFamily, fontURL } = useLocaleThemeFont({ customFontFamily, customFontURL, language });
     const isDark = useIsDark();
 
     const [primaryColor, neutralColor, animationMode] = useUserStore((s) => [
@@ -161,15 +162,13 @@ const AppTheme = memo<AppThemeProps>(
         theme={{
           cssVar: { key: 'lobe-vars' },
           token: {
-            fontFamily: customFontFamily
-              ? `${customFontFamily},${antdTheme.fontFamily}`
-              : undefined,
+            fontFamily,
             motion: animationMode !== 'disabled',
             motionUnit: animationMode === 'agile' ? 0.05 : 0.1,
           },
         }}
       >
-        {!!customFontURL && <FontLoader url={customFontURL} />}
+        {!!fontURL && <FontLoader url={fontURL} />}
         <GlobalStyle />
         <AntdStaticMethods />
         <ConfigProvider

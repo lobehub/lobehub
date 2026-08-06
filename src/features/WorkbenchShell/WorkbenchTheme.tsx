@@ -3,6 +3,7 @@
 import 'antd/dist/reset.css';
 
 import ConfigProvider from '@lobehub/ui/es/ConfigProvider/index';
+import FontLoader from '@lobehub/ui/es/FontLoader/index';
 import ThemeProvider from '@lobehub/ui/es/ThemeProvider/index';
 import { App } from 'antd';
 import { domMax, LazyMotion } from 'motion/react';
@@ -11,12 +12,14 @@ import { memo, type PropsWithChildren } from 'react';
 
 import AntdStaticMethods from '@/components/AntdStaticMethods';
 import { useIsDark } from '@/hooks/useIsDark';
+import { useLocaleThemeFont } from '@/hooks/useLocaleThemeFont';
 import Image from '@/libs/next/Image';
 import Link from '@/libs/next/Link';
 
 const WorkbenchTheme = memo<PropsWithChildren>(({ children }) => {
   const isDark = useIsDark();
   const appearance = isDark ? 'dark' : 'light';
+  const { fontFamily, fontURL } = useLocaleThemeFont();
 
   return (
     <ThemeProvider
@@ -25,8 +28,14 @@ const WorkbenchTheme = memo<PropsWithChildren>(({ children }) => {
       defaultAppearance={appearance}
       defaultThemeMode={appearance}
       style={{ height: '100%', minHeight: '100dvh', width: '100%' }}
-      theme={{ cssVar: { key: 'lobe-vars' } }}
+      theme={{
+        cssVar: { key: 'lobe-vars' },
+        token: {
+          fontFamily,
+        },
+      }}
     >
+      {!!fontURL && <FontLoader url={fontURL} />}
       <App style={{ height: '100%' }}>
         <AntdStaticMethods />
         <ConfigProvider config={{ aAs: Link, imgAs: Image, imgUnoptimized: true }} motion={m}>
