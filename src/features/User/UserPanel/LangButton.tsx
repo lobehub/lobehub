@@ -5,7 +5,7 @@ import { ChevronRight, Languages } from 'lucide-react';
 import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { localeOptions } from '@/locales/resources';
+import { visibleLocaleOptions } from '@/locales/resources';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 import { electronStylish } from '@/styles/electron';
@@ -40,7 +40,7 @@ const LangButton = memo<{ placement?: DropdownMenuProps['placement']; size?: num
         type: 'checkbox',
       };
 
-      const localeItems = localeOptions.map<DropdownMenuCheckboxItem>((item) => ({
+      const localeItems = visibleLocaleOptions.map<DropdownMenuCheckboxItem>((item) => ({
         checked: language === item.value,
         closeOnClick: true,
         key: item.value,

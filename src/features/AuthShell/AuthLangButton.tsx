@@ -12,7 +12,7 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { LOBE_LOCALE_COOKIE } from '@/const/locale';
-import { localeOptions, normalizeLocale } from '@/locales/resources';
+import { normalizeLocale, visibleLocaleOptions } from '@/locales/resources';
 import { applyDocumentDirection } from '@/utils/client/applyDocumentDirection';
 
 const setCookieSimple = (key: string, value: string, days: number) => {
@@ -27,7 +27,7 @@ const AuthLangButton = memo<{ size?: number }>((props) => {
 
   const items = useMemo<DropdownMenuCheckboxItem[]>(
     () =>
-      localeOptions.map((item) => ({
+      visibleLocaleOptions.map((item) => ({
         checked: current === item.value,
         closeOnClick: true,
         key: item.value,

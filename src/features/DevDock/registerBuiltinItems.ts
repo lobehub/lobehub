@@ -17,7 +17,7 @@ import {
 
 import { isDesktop } from '@/const/version';
 import FlagOverrideBadge from '@/features/DevFeatureFlagPanel/Badge';
-import { localeOptions } from '@/locales/resources';
+import { visibleLocaleOptions } from '@/locales/resources';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 import type { LocaleMode } from '@/types/locale';
@@ -139,7 +139,7 @@ export const registerBuiltinDevDockItems = () => {
         { label: 'auto · Follow system', value: 'auto' },
         // Dev tool — the locale code is what you actually want to read here, the
         // native name is only there to tell the CJK variants apart at a glance.
-        ...localeOptions.map((item) => ({
+        ...visibleLocaleOptions.map((item) => ({
           label: `${item.value} · ${item.label}`,
           value: item.value,
         })),

@@ -19,7 +19,7 @@ import {
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { localeOptions } from '@/locales/resources';
+import { visibleLocaleOptions } from '@/locales/resources';
 
 const translateStyle = css`
   .ant-dropdown-menu-sub {
@@ -134,7 +134,7 @@ export const useChatListActionsBar = ({
         sfSymbol: 'square.and.arrow.up',
       },
       translate: {
-        children: localeOptions.map((i) => ({
+        children: visibleLocaleOptions.map((i) => ({
           key: i.value,
           label: t(`lang.${i.value}`),
         })),

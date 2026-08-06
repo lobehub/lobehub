@@ -34,8 +34,8 @@ describe('normalizeSystemLanguage', () => {
     expect(normalizeSystemLanguage(input)).toBe(expected);
   });
 
-  it.each([undefined, '', 'xx-XX'])('falls back to en-US for %s', (input) => {
-    expect(normalizeSystemLanguage(input)).toBe('en-US');
+  it.each([undefined, '', 'xx-XX'])('falls back to fa-IR for %s', (input) => {
+    expect(normalizeSystemLanguage(input)).toBe('fa-IR');
   });
 });
 

@@ -28,6 +28,9 @@ export const loadI18nNamespaceModule = async (
   const { defaultLang, normalizeLocale, lng, ns } = params;
 
   if (lng === defaultLang) {
+    const localeMod = localeModules[getLocaleKey(defaultLang, ns)];
+    if (localeMod) return localeMod;
+
     const mod = defaultModules[getDefaultKey(ns)];
     if (!mod) throw new Error(`Missing default namespace: ${ns}`);
     return mod;

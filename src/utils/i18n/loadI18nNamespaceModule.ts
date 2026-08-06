@@ -8,7 +8,7 @@ export interface LoadI18nNamespaceModuleParams {
 export const loadI18nNamespaceModule = async (params: LoadI18nNamespaceModuleParams) => {
   const { defaultLang, normalizeLocale, lng, ns } = params;
 
-  if (lng === defaultLang) return import(`@/locales/default/${ns}`);
+  if (lng === defaultLang) return import(`@/../locales/${defaultLang}/${ns}.json`);
 
   try {
     return import(`@/../locales/${normalizeLocale(lng)}/${ns}.json`);

@@ -2,6 +2,12 @@ import i18next from 'i18next';
 import resourcesToBackend from 'i18next-resources-to-backend';
 import { initReactI18next } from 'react-i18next';
 
+import faAuth from '@/../locales/fa-IR/auth.json';
+import faAuthError from '@/../locales/fa-IR/authError.json';
+import faCommon from '@/../locales/fa-IR/common.json';
+import faError from '@/../locales/fa-IR/error.json';
+import faMarketAuth from '@/../locales/fa-IR/marketAuth.json';
+import faOauth from '@/../locales/fa-IR/oauth.json';
 import { DEFAULT_LANG } from '@/const/locale';
 import defaultAuth from '@/locales/default/auth';
 import defaultAuthError from '@/locales/default/authError';
@@ -11,6 +17,14 @@ import defaultMarketAuth from '@/locales/default/marketAuth';
 import defaultOauth from '@/locales/default/oauth';
 import { normalizeLocale } from '@/locales/resources';
 
+const mergeNamespace = (
+  fallbackResources: Record<string, unknown>,
+  localeResources: Record<string, unknown>,
+) => ({
+  ...fallbackResources,
+  ...localeResources,
+});
+
 const defaultResources = {
   auth: defaultAuth,
   authError: defaultAuthError,
@@ -18,6 +32,15 @@ const defaultResources = {
   error: defaultError,
   marketAuth: defaultMarketAuth,
   oauth: defaultOauth,
+};
+
+const bundledDefaultResources = {
+  auth: mergeNamespace(defaultAuth, faAuth),
+  authError: mergeNamespace(defaultAuthError, faAuthError),
+  common: mergeNamespace(defaultCommon, faCommon),
+  error: mergeNamespace(defaultError, faError),
+  marketAuth: mergeNamespace(defaultMarketAuth, faMarketAuth),
+  oauth: mergeNamespace(defaultOauth, faOauth),
 };
 
 type AuthI18nNamespace = keyof typeof defaultResources;
@@ -120,7 +143,7 @@ export const createAuthI18n = (lang?: string) => {
         keySeparator: false,
         lng: lang,
         ns: [],
-        // Bundle en-US synchronously so the first render never suspends: with the
+        // Bundle fa-IR synchronously so the first render never suspends: with the
         // default useSuspense=true and no Suspense boundary above AuthShell, every
         // retry of the initial mount re-creates this instance and the auth SPA
         // remounts forever with a blank #root.
@@ -129,7 +152,7 @@ export const createAuthI18n = (lang?: string) => {
           bindI18nStore: 'added',
           useSuspense: false,
         },
-        resources: { [DEFAULT_LANG]: defaultResources },
+        resources: { [DEFAULT_LANG]: bundledDefaultResources },
         // Silence the Locize promotional console.info printed on init (i18next >= 25)
         showSupportNotice: false,
       });

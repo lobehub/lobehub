@@ -4,6 +4,7 @@ import { ModalHost, ToastHost, TooltipGroup } from '@lobehub/ui/base-ui';
 import { StyleProvider } from 'antd-style';
 import { memo, type PropsWithChildren } from 'react';
 
+import { DEFAULT_LANG } from '@/const/locale';
 import { ServerConfigStoreProvider } from '@/store/serverConfig/Provider';
 import type { SPAServerConfig } from '@/types/spaServerConfig';
 
@@ -12,7 +13,7 @@ import WorkbenchTheme from './WorkbenchTheme';
 
 const WorkbenchShell = memo<PropsWithChildren>(({ children }) => {
   const serverConfig: SPAServerConfig | undefined = window.__SERVER_CONFIG__;
-  const locale = document.documentElement.lang || 'en-US';
+  const locale = document.documentElement.lang || DEFAULT_LANG;
 
   return (
     <WorkbenchLocale defaultLang={locale}>

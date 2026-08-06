@@ -53,7 +53,14 @@ type LocaleOptions = {
   value: Locales;
 }[];
 
+/** Locales shown in language pickers (others remain supported but hidden). */
+export const VISIBLE_LOCALES = ['fa-IR', 'en-US', 'fr-FR'] as const satisfies readonly Locales[];
+
 export const localeOptions: LocaleOptions = [
+  {
+    label: 'فارسی',
+    value: 'fa-IR',
+  },
   {
     label: 'English',
     value: 'en-US',
@@ -122,10 +129,10 @@ export const localeOptions: LocaleOptions = [
     label: 'Български',
     value: 'bg-BG',
   },
-  {
-    label: 'فارسی',
-    value: 'fa-IR',
-  },
 ] as LocaleOptions;
+
+export const visibleLocaleOptions = localeOptions.filter((option) =>
+  VISIBLE_LOCALES.includes(option.value),
+);
 
 export const supportLocales: string[] = [...locales, 'en', 'zh'];

@@ -1,23 +1,23 @@
+import { BRANDING_CLOUD_NAME, BRANDING_EMAIL, BRANDING_NAME, ORG_NAME } from '@lobechat/const';
 import i18n from 'i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 import resourcesToBackend from 'i18next-resources-to-backend';
 import { initReactI18next } from 'react-i18next';
 
-import chat from '@/../locales/en-US/chat.json';
-import common from '@/../locales/en-US/common.json';
-import error from '@/../locales/en-US/error.json';
-import home from '@/../locales/en-US/home.json';
+import chat from '@/../locales/fa-IR/chat.json';
+import common from '@/../locales/fa-IR/common.json';
+import error from '@/../locales/fa-IR/error.json';
+import home from '@/../locales/fa-IR/home.json';
 import { DEFAULT_LANG } from '@/const/locale';
 import { getDebugConfig } from '@/envs/debug';
 // Sync load bundled fallback resources without Suspense on first render.
 // Use src/locales/default/*.ts as the runtime fallback source, then overlay
-// locales/en-US/*.json so dev-preview JSON can still customize English copy
+// locales/fa-IR/*.json so dev-preview JSON can still customize Persian copy
 // without dropping newly added default keys.
 import defaultChat from '@/locales/default/chat';
 import defaultCommon from '@/locales/default/common';
 import defaultError from '@/locales/default/error';
 import defaultHome from '@/locales/default/home';
-import { BRANDING_CLOUD_NAME, BRANDING_EMAIL, BRANDING_NAME, ORG_NAME } from '@lobechat/const';
 import { normalizeLocale } from '@/locales/resources';
 import { applyDocumentDirection } from '@/utils/client/applyDocumentDirection';
 import { isOnServerSide } from '@/utils/env';
@@ -86,11 +86,11 @@ export const createI18nNext = (lang?: string) => {
         defaultNS: ['error', 'common', 'chat'],
         fallbackLng: DEFAULT_LANG,
         initAsync,
-        // Keep init synchronous so components can render with bundled en-US resources
+        // Keep init synchronous so components can render with bundled fa-IR resources
         // before the user's actual language finishes loading in the background.
         ns: [],
 
-        // Preload default language (en-US) synchronously to avoid Suspense on first render
+        // Preload default language (fa-IR) synchronously to avoid Suspense on first render
         resources: {
           ...bundledLanguageResources,
         },
@@ -107,7 +107,7 @@ export const createI18nNext = (lang?: string) => {
           escapeValue: false,
         },
         // Re-render components when new language resources are loaded from backend,
-        // so preloaded en-US fallback gets replaced by the user's actual language.
+        // so preloaded fa-IR fallback gets replaced by the user's actual language.
         react: {
           bindI18nStore: 'added',
           useSuspense: false,

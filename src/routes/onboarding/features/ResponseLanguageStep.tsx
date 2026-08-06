@@ -8,7 +8,7 @@ import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { Locales } from '@/locales/resources';
-import { localeOptions, normalizeLocale } from '@/locales/resources';
+import { normalizeLocale, visibleLocaleOptions } from '@/locales/resources';
 import { useGlobalStore } from '@/store/global';
 import { useUserStore } from '@/store/user';
 
@@ -83,7 +83,7 @@ const ResponseLanguageStep = memo<ResponseLanguageStepProps>(({ onBack, onNext }
       <Flexbox horizontal align={'center'} gap={12}>
         <Select
           showSearch
-          options={localeOptions}
+          options={visibleLocaleOptions}
           size="large"
           value={value}
           optionRender={(item) => (

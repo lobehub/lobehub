@@ -3,7 +3,7 @@ import { LanguagesIcon } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { localeOptions } from '@/locales/resources';
+import { visibleLocaleOptions } from '@/locales/resources';
 
 import { useConversationStore } from '../../../../store';
 import { defineAction } from '../defineAction';
@@ -23,7 +23,7 @@ export const translateAction = defineAction({
 
     return useMemo(
       () => ({
-        children: localeOptions.map((i) => ({
+        children: visibleLocaleOptions.map((i) => ({
           handleClick: () => translateMessage(ctx.id, i.value),
           key: i.value,
           label: t(`lang.${i.value}`, { ns: 'common' }),

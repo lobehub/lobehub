@@ -5,6 +5,7 @@ import dayjs from 'dayjs';
 import { memo, type PropsWithChildren, useEffect, useState } from 'react';
 import { isRtlLang } from 'rtl-detect';
 
+import { DEFAULT_LANG } from '@/const/locale';
 import type { DayjsLocaleGlobEntry } from '@/utils/dayjsLocale';
 import { loadDayjsLocaleModule, normalizeDayjsLocale } from '@/utils/dayjsLocale';
 import { getAntdLocale } from '@/utils/locale';
@@ -46,7 +47,7 @@ interface WorkbenchLocaleProps extends PropsWithChildren {
 
 const WorkbenchLocale = memo<WorkbenchLocaleProps>(({ children, defaultLang }) => {
   const [i18n] = useState(() => createWorkbenchI18n(defaultLang));
-  const [lang, setLang] = useState(defaultLang ?? 'en-US');
+  const [lang, setLang] = useState(defaultLang ?? DEFAULT_LANG);
   const [antdLocale, setAntdLocale] = useState<any>();
 
   if (!i18n.instance.isInitialized) void i18n.init();
@@ -58,7 +59,7 @@ const WorkbenchLocale = memo<WorkbenchLocaleProps>(({ children, defaultLang }) =
       setAntdLocale(nextAntdLocale);
     };
 
-    void applyLocale(i18n.instance.language || defaultLang || 'en-US');
+    void applyLocale(i18n.instance.language || defaultLang || DEFAULT_LANG);
     i18n.instance.on('languageChanged', applyLocale);
 
     return () => {
