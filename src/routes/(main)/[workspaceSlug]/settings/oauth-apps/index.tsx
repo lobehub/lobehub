@@ -1,5 +1,5 @@
 'use client';
 
-import Page from '@/routes/(main)/settings/oauth-apps';
+import Page from '@/features/Settings/oauth-apps';
 
 export default Page;

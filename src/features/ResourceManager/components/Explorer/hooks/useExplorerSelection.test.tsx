@@ -1,8 +1,8 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
-import { initialState } from '@/routes/(main)/resource/features/store/initialState';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { initialState } from '@/features/ResourceManager/store/initialState';
 
 import { isExplorerItemSelectable, useExplorerSelectionActions } from './useExplorerSelection';
 

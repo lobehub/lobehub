@@ -13,7 +13,7 @@ vi.mock('@/business/client/hooks/useIsWorkspaceLoading', () => ({
   useIsWorkspaceLoading: () => false,
 }));
 
-vi.mock('@/routes/(main)/settings/service-model', () => ({
+vi.mock('@/features/Settings/service-model', () => ({
   default: () => <div data-testid="service-model-page">service model settings</div>,
 }));
 

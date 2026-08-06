@@ -8,9 +8,9 @@ import { EllipsisIcon, EyeIcon, EyeOffIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useGroupDropdownMenu } from '@/routes/(main)/home/_layout/Body/Agent/List/AgentGroupItem/useDropdownMenu';
-import { useAgentDropdownMenu } from '@/routes/(main)/home/_layout/Body/Agent/List/AgentItem/useDropdownMenu';
-import { useAgentModal } from '@/routes/(main)/home/_layout/Body/Agent/ModalProvider';
+import { useGroupDropdownMenu } from '@/features/HomeSidebar/Body/Agent/List/AgentGroupItem/useDropdownMenu';
+import { useAgentDropdownMenu } from '@/features/HomeSidebar/Body/Agent/List/AgentItem/useDropdownMenu';
+import { useAgentModal } from '@/features/HomeSidebar/Body/Agent/ModalProvider';
 
 type MenuItems = NonNullable<MenuProps['items']>;
 

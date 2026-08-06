@@ -6,13 +6,13 @@ import { memo, useCallback, useEffect, useRef } from 'react';
 import { Navigate, useNavigate } from 'react-router';
 
 import Loading from '@/components/Loading/BrandTextLoading';
+import OnboardingContainer from '@/features/Onboarding/Layout';
+import AgentPickerStep from '@/features/Onboarding/steps/AgentPickerStep';
+import FullNameStep from '@/features/Onboarding/steps/FullNameStep';
+import InterestsStep from '@/features/Onboarding/steps/InterestsStep';
+import ProSettingsStep from '@/features/Onboarding/steps/ProSettingsStep';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useOnboardingAgentTemplates } from '@/hooks/useOnboardingAgentTemplates';
-import OnboardingContainer from '@/routes/onboarding/_layout';
-import AgentPickerStep from '@/routes/onboarding/features/AgentPickerStep';
-import FullNameStep from '@/routes/onboarding/features/FullNameStep';
-import InterestsStep from '@/routes/onboarding/features/InterestsStep';
-import ProSettingsStep from '@/routes/onboarding/features/ProSettingsStep';
 import {
   trackOnboardingStepCompleted,
   trackOnboardingStepViewed,

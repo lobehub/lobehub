@@ -1,8 +1,8 @@
 import { useCallback } from 'react';
 
 import { isDesktop } from '@/const/version';
-import { navigateToDesktopOnboarding } from '@/routes/(desktop)/desktop-onboarding/navigation';
-import { DesktopOnboardingScreen } from '@/routes/(desktop)/desktop-onboarding/types';
+import { navigateToDesktopOnboarding } from '@/features/DesktopOnboarding/navigation';
+import { DesktopOnboardingScreen } from '@/features/DesktopOnboarding/types';
 import { useUserStore } from '@/store/user';
 
 export const useSignOut = () => {

@@ -1,0 +1,43 @@
+'use client';
+
+import { memo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { DeviceConnectModal, DeviceManager } from '@/features/DeviceManager';
+import SettingHeader from '@/features/Settings/features/SettingHeader';
+
+interface PageProps {
+  showSettingHeader?: boolean;
+}
+
+const Page = memo<PageProps>(({ showSettingHeader = true }) => {
+  const { t } = useTranslation('setting');
+  const [open, setOpen] = useState(false);
+  const [initialTab, setInitialTab] = useState<'cli' | 'desktop'>();
+
+  const handleConnect = (tab?: 'cli' | 'desktop') => {
+    setInitialTab(tab);
+    setOpen(true);
+  };
+
+  return (
+    <>
+      {/* "Connect device" moved into the device list header (next to Refresh) —
+          keep the page header to the title only. */}
+      {showSettingHeader && <SettingHeader title={t('devices.title')} />}
+
+      <DeviceManager scope={'personal'} onConnect={handleConnect} />
+
+      <DeviceConnectModal
+        initialTab={initialTab}
+        open={open}
+        scope={'personal'}
+        onClose={() => setOpen(false)}
+      />
+    </>
+  );
+});
+
+Page.displayName = 'DevicesSettings';
+
+export default Page;

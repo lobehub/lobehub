@@ -4,7 +4,7 @@ import { cssVar } from 'antd-style';
 import { Suspense, useCallback } from 'react';
 
 import { BrandTextLoading } from '@/components/Loading';
-import LoginStep from '@/routes/(desktop)/desktop-onboarding/features/LoginStep';
+import LoginStep from '@/features/DesktopOnboarding/steps/LoginStep';
 import { useElectronStore } from '@/store/electron';
 import { isMacOS } from '@/utils/platform';
 

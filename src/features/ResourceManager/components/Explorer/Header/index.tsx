@@ -11,10 +11,10 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { useFileBatchTransferActions } from '@/business/client/hooks/useFileBatchTransferActions';
 import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner';
 import NavHeader from '@/features/NavHeader';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { getExplorerSelectedCount } from '@/features/ResourceManager/store/selectors';
 import { openWorkspaceDeleteAllModal } from '@/features/WorkspaceDeleteAllModal';
 import { usePermission } from '@/hooks/usePermission';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
-import { getExplorerSelectedCount } from '@/routes/(main)/resource/features/store/selectors';
 import { useFileStore } from '@/store/file';
 import { FilesTabs } from '@/types/files';
 

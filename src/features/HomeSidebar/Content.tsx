@@ -1,9 +1,10 @@
 import { memo } from 'react';
 
 import SideBarLayout from '@/features/NavPanel/SideBarLayout';
-import Body from '@/routes/(main)/home/_layout/Body';
-import { AgentModalProvider } from '@/routes/(main)/home/_layout/Body/Agent/ModalProvider';
-import Header from '@/routes/(main)/home/_layout/Header';
+
+import Body from './Body';
+import { AgentModalProvider } from './Body/Agent/ModalProvider';
+import Header from './Header';
 
 const HomeSidebarContent = memo(() => {
   return (

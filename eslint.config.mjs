@@ -228,11 +228,12 @@ export default eslint(
     },
   },
   {
-    files: ['src/features/Home/**/*.{ts,tsx}', 'src/routes/(main)/home/**/*.{ts,tsx}'],
-    ignores: [
-      'src/routes/(main)/home/_layout/hooks/useCreateModal.tsx',
-      'src/features/Home/InputArea/EditorInput.tsx',
+    files: [
+      'src/features/Home/**/*.{ts,tsx}',
+      'src/features/HomeLayout/**/*.{ts,tsx}',
+      'src/routes/(main)/home/**/*.{ts,tsx}',
     ],
+    ignores: ['src/features/Home/InputArea/EditorInput.tsx'],
     rules: {
       'no-restricted-imports': createRestrictedImportRule({
         paths: [
@@ -241,6 +242,34 @@ export default eslint(
               'Home cold-path modules must use stable Conversation subpaths instead of the root barrel that exports ChatInput.',
             name: '@/features/Conversation',
           },
+        ],
+        patterns: [
+          {
+            message:
+              'Home cold-path modules must not statically import ChatInput. Load an isolated editor entry with import().',
+            regex:
+              '^@/features/ChatInput(?:$|/(?!(?:store/initialState|utils/contextSelections)$).+)',
+          },
+        ],
+      }),
+    },
+  },
+  {
+    // The home sidebar tree carries both sets of constraints: it is a shell tree
+    // rendered outside TabHost, and it is also a home cold path. Flat config
+    // replaces `no-restricted-imports` rather than merging it, so the shell paths
+    // have to be repeated here instead of relying on the shell block above.
+    files: ['src/features/HomeSidebar/**/*.{ts,tsx}'],
+    ignores: ['src/features/HomeSidebar/hooks/useCreateModal.tsx'],
+    rules: {
+      'no-restricted-imports': createRestrictedImportRule({
+        paths: [
+          {
+            message:
+              'Home cold-path modules must use stable Conversation subpaths instead of the root barrel that exports ChatInput.',
+            name: '@/features/Conversation',
+          },
+          ...shellRouterRestrictedPaths,
         ],
         patterns: [
           {
