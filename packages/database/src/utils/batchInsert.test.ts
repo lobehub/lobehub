@@ -77,6 +77,22 @@ describe('splitCrossBatchSelfReferences', () => {
     expect(rows[0].parentId).toBe(`row-${INSERT_BATCH_SIZE + 5}`);
   });
 
+  it('restates the row updatedAt in the fixup patch so $onUpdate cannot restamp it', () => {
+    const updatedAt = new Date('2026-01-01T00:00:00Z');
+    const rows = Array.from({ length: INSERT_BATCH_SIZE + 10 }, (_, i) => ({
+      id: `row-${i}`,
+      parentId: null as string | null,
+      updatedAt,
+    }));
+    rows[0].parentId = `row-${INSERT_BATCH_SIZE + 5}`;
+
+    const { fixups } = splitCrossBatchSelfReferences(rows, ['parentId']);
+
+    expect(fixups).toEqual([
+      { id: 'row-0', patch: { parentId: `row-${INSERT_BATCH_SIZE + 5}`, updatedAt } },
+    ]);
+  });
+
   it('ignores references to ids outside the inserted set', () => {
     const rows = makeRows(3);
     rows[2].parentId = 'external-id';

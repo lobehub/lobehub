@@ -17,7 +17,7 @@ export const insertInBatches = async <T>(
 
 export interface SelfReferenceFixup<F extends string> {
   id: string;
-  patch: Partial<Record<F, string>>;
+  patch: Partial<Record<F, string>> & { updatedAt?: Date };
 }
 
 /**
@@ -30,7 +30,7 @@ export interface SelfReferenceFixup<F extends string> {
  */
 export const splitCrossBatchSelfReferences = <
   F extends string,
-  T extends { id: string } & {
+  T extends { id: string; updatedAt?: Date | null } & {
     [K in F]?: string | null;
   },
 >(
@@ -60,7 +60,13 @@ export const splitCrossBatchSelfReferences = <
 
     if (!hasDeferredReference) return row;
 
-    fixups.push({ id: row.id, patch });
+    // The deferred UPDATE must restate the row's `updatedAt`: tables sharing
+    // `updatedAt().$onUpdate(() => new Date())` would otherwise restamp only
+    // the fixed-up rows and break recency ordering of copied histories.
+    fixups.push({
+      id: row.id,
+      patch: row.updatedAt ? { ...patch, updatedAt: row.updatedAt } : patch,
+    });
 
     const sanitized = { ...row };
     for (const field of Object.keys(patch) as F[]) sanitized[field] = null as T[F];

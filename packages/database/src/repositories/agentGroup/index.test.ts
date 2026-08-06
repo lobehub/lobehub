@@ -2023,6 +2023,9 @@ describe('AgentGroupRepository', () => {
         parentId: i % 2 === 1 ? `copy-large-msg-${String(i - 1).padStart(4, '0')}` : null,
         role: i % 2 === 0 ? 'user' : 'assistant',
         topicId: 'copy-large-topic',
+        // explicit historical stamps so the cross-batch fixup UPDATE would
+        // visibly restamp them if it forgot to restate `updatedAt`
+        updatedAt: new Date(base + i * 1000),
         userId,
         workspaceId,
       }));
@@ -2031,7 +2034,9 @@ describe('AgentGroupRepository', () => {
       }
       await serverDB
         .update(messages)
-        .set({ parentId: 'copy-large-msg-0700' })
+        // restate updatedAt: this seeding backfill would otherwise restamp the
+        // source row via $onUpdate before the copy even runs
+        .set({ parentId: 'copy-large-msg-0700', updatedAt: new Date(base) })
         .where(eq(messages.id, 'copy-large-msg-0000'));
 
       const wsRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
@@ -2054,6 +2059,10 @@ describe('AgentGroupRepository', () => {
 
       const copiedByContent = new Map(copiedMessages.map((message) => [message.content, message]));
       const copiedIds = new Set(copiedMessages.map((message) => message.id));
+
+      // the deferred fixup UPDATE restated `updatedAt` instead of letting
+      // `$onUpdate` restamp the cross-batch row to "now"
+      expect(copiedByContent.get('msg 0')?.updatedAt).toEqual(new Date(base));
 
       // every in-order reply chain survived the chunked insert
       for (let i = 1; i < messageCount; i += 2) {
