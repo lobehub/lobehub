@@ -658,6 +658,28 @@ describe('AiModelAction', () => {
       expect(mutate).toHaveBeenCalledWith(['aiModel:reasoningConfig', 'openai', 'gpt-5.2']);
     });
 
+    it('should clear the updating marker before revalidating', async () => {
+      const { result } = renderHook(() => useStore());
+      vi.spyOn(aiModelService, 'updateAiModelReasoningConfig').mockResolvedValue(undefined as any);
+
+      // The fetch hook's onSuccess skips writes while the key is marked
+      // updating, so revalidating before the marker clears would discard the
+      // server-merged config (sibling fields preserved by the partial write)
+      const updatingKeysAtMutate: string[][] = [];
+      vi.mocked(mutate).mockImplementationOnce(async () => {
+        updatingKeysAtMutate.push([...useStore.getState().modelReasoningConfigUpdatingKeys]);
+        return undefined as any;
+      });
+
+      await act(async () => {
+        await result.current.updateModelReasoningConfig('gpt-5.2', 'openai', {
+          gpt5_2ReasoningEffort: 'high',
+        });
+      });
+
+      expect(updatingKeysAtMutate).toEqual([[]]);
+    });
+
     it('should rollback the optimistic value and toast on failure', async () => {
       act(() => {
         useStore.setState({

@@ -207,7 +207,6 @@ export class AiModelActionImpl {
 
     try {
       await aiModelService.updateAiModelReasoningConfig(id, provider, value);
-      await mutate(aiModelKeys.reasoningConfig(provider, id));
     } catch (error) {
       this.#set(
         (state) => ({
@@ -230,6 +229,13 @@ export class AiModelActionImpl {
         `updateModelReasoningConfig/settled/${key}`,
       );
     }
+
+    // Revalidate only AFTER the updating marker is cleared: the server merges
+    // this partial write into previously saved fields, and the fetch hook's
+    // onSuccess skips writes while the key is marked updating — revalidating
+    // inside the try block would drop server-preserved sibling fields whenever
+    // the optimistic base (`previous`) had not been fetched yet.
+    await mutate(aiModelKeys.reasoningConfig(provider, id));
   };
 
   useFetchAiModelReasoningConfig = (

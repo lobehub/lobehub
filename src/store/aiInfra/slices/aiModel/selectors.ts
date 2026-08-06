@@ -127,6 +127,19 @@ const isModelHasReasoningExtendParams =
     modelReasoningExtendParams(id, provider)(s).length > 0;
 
 /**
+ * Whether the model exposes extend params beyond the reasoning family. The
+ * reasoning family is edited through the ChatInput Effort control (user-level
+ * model-instance config), so surfaces rendering a ControlsForm with
+ * `hideReasoningParams` must gate on this instead of `isModelHasExtendParams`,
+ * otherwise a reasoning-only model shows an empty popover.
+ */
+const isModelHasNonReasoningExtendParams =
+  (id: string, provider: string) => (s: AIProviderStoreState) =>
+    (modelExtendParams(id, provider)(s) ?? []).some(
+      (param) => !REASONING_EXTEND_PARAMS_SET.has(param),
+    );
+
+/**
  * The user's saved per-model-instance reasoning defaults (personal scope).
  */
 const modelReasoningConfig = (id: string, provider: string) => (s: AIProviderStoreState) =>
@@ -196,6 +209,7 @@ export const aiModelSelectors = {
   isModelHasBuiltinSearchConfig,
   isModelHasContextWindowToken,
   isModelHasExtendParams,
+  isModelHasNonReasoningExtendParams,
   isModelHasReasoningExtendParams,
   isModelLoading,
   isModelReasoningConfigUpdating,
