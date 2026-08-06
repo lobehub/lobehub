@@ -13,7 +13,8 @@ import { type DevDockLayout as DevDockLayoutComponent } from './index';
 
 let SPAGlobalProvider: typeof SPAGlobalProviderComponent;
 let DevDockLayout: typeof DevDockLayoutComponent;
-const { canAccessDevDock, devDockRenderError } = vi.hoisted(() => ({
+const { cacheGateReleased, canAccessDevDock, devDockRenderError } = vi.hoisted(() => ({
+  cacheGateReleased: { current: true },
   canAccessDevDock: vi.fn(() => false),
   devDockRenderError: { current: null as Error | null },
 }));
@@ -124,7 +125,7 @@ vi.mock('@/layout/GlobalProvider/CacheHydrationGate', async () => {
 
   return {
     default: ({ children }: { children?: ReactNode }) =>
-      React.createElement(React.Fragment, null, children),
+      cacheGateReleased.current ? React.createElement(React.Fragment, null, children) : null,
   };
 });
 
@@ -198,6 +199,7 @@ describe('SPAGlobalProvider', () => {
   });
 
   beforeEach(() => {
+    cacheGateReleased.current = true;
     canAccessDevDock.mockReturnValue(false);
     devDockRenderError.current = null;
     setDevDockUnlocked(false);
