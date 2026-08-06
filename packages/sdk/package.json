@@ -1,0 +1,23 @@
+{
+  "name": "@lobehub/sdk",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Official TypeScript SDK for the LobeHub REST API, generated from the OpenAPI spec",
+  "homepage": "https://github.com/lobehub/lobehub/tree/canary/packages/sdk",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/generated/types.gen.ts"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "generate": "bun scripts/generate-sdk.ts",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage --silent='passed-only'"
+  },
+  "devDependencies": {
+    "@hey-api/openapi-ts": "^0.99.0",
+    "tsdown": "^0.21.10",
+    "typescript": "^6.0.3"
+  }
+}

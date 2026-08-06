@@ -99,6 +99,8 @@ export default eslint(
       'packages/utils/src/client/fetchEventSource/parse.ts',
       // generated files (regenerate with `bun generate:openapi` in packages/openapi)
       'packages/openapi/openapi.yml',
+      // generated files (regenerate with `bun generate` in packages/sdk)
+      'packages/sdk/src/generated/**',
     ],
     next: true,
     react: 'next',
