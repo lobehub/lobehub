@@ -351,6 +351,28 @@ describe('AiModelModel', () => {
         gpt5_6ReasoningEffort: 'high',
       });
     });
+
+    it('should survive clearing remote models after a sync', async () => {
+      await aiProviderModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
+        gpt5_6ReasoningEffort: 'high',
+      });
+
+      // Sync marks plain rows as remote, but must not claim the preference row —
+      // clearRemoteModels deletes remote rows wholesale
+      await aiProviderModel.batchUpdateAiModels('openai', [
+        { enabled: true, id: 'gpt-5.6-sol', source: 'remote', type: 'chat' },
+        { enabled: true, id: 'some-remote-model', source: 'remote', type: 'chat' },
+      ] as AiProviderModelListItem[]);
+      await aiProviderModel.clearRemoteModels('openai');
+
+      expect(await aiProviderModel.getModelReasoningConfig('gpt-5.6-sol', 'openai')).toEqual({
+        gpt5_6ReasoningEffort: 'high',
+      });
+      // The plain remote row is still cleared as before
+      expect(await aiProviderModel.findByIdAndProvider('some-remote-model', 'openai')).toBe(
+        undefined,
+      );
+    });
   });
 
   describe('getModelListByProviderId', () => {

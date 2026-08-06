@@ -447,8 +447,16 @@ export class AiModelModel {
             THEN COALESCE(ai_models.type, excluded.type)
             ELSE ai_models.type
           END`,
-          // source marks model origin (remote/custom/builtin); once set, never overwrite
-          source: sql`COALESCE(ai_models.source, excluded.source)`,
+          // source marks model origin (remote/custom/builtin); once set, never overwrite.
+          // A source-NULL row holding a personal reasoning preference
+          // (config.chatConfig, see updateModelReasoningConfig) must NOT be
+          // claimed as remote: clearRemoteModels deletes `source = 'remote'`
+          // rows wholesale, which would silently wipe the user's preference.
+          source: sql`CASE
+            WHEN ai_models.source IS NULL AND ai_models.config -> 'chatConfig' IS NOT NULL
+            THEN ai_models.source
+            ELSE COALESCE(ai_models.source, excluded.source)
+          END`,
           updatedAt: sql`excluded.updated_at`,
           // Note: enabled is intentionally omitted to preserve user toggle state
         },
