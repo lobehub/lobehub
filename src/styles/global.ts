@@ -84,10 +84,12 @@ const genGlobalStyle = ({ token }: { prefixCls: string; token: Theme }) => css`
    * Tabs / Segmented indicators (Settings → Appearance animation, platform/org
    * admin tabs, etc.): JS writes physical offsetLeft into --active-tab-left /
    * --active-item-left, but component CSS binds logical inset-inline-start.
-   * Under RTL that mirrors the pill away from the active option. Always force
-   * physical \`left\` (safe in LTR too — left === inset-inline-start there).
-   * Do not gate on html[dir=rtl] only: antd direction=rtl can nest :dir(rtl)
-   * without html.dir matching yet.
+   * Under document RTL that places the pill from the wrong edge.
+   *
+   * Fix: force direction:ltr on the indicator so inset-inline-start resolves to
+   * physical left (matching the JS offset). Do not fight with left +
+   * inset-inline overrides — inset-inline:auto after left wipes the offset
+   * under RTL (inline-end maps to left), which left the pill on the wrong tab.
    */
   :dir(rtl) [role='switch'],
   html[dir='rtl'] [role='switch'] {
@@ -96,21 +98,10 @@ const genGlobalStyle = ({ token }: { prefixCls: string; token: Theme }) => css`
     direction: ltr;
   }
 
-  /* stylelint-disable liberty/use-logical-spec -- indicator offsets are physical */
-  [role='tablist'] > [role='presentation'] {
-    right: auto !important;
-    left: var(--active-tab-left) !important;
-    inset-inline: auto !important;
-    transition-property: left, top, inset-block-start, width, height, transform !important;
-  }
-
+  [role='tablist'] > [role='presentation'],
   [data-orientation] > [aria-hidden='true']:first-of-type {
-    right: auto !important;
-    left: var(--active-item-left) !important;
-    inset-inline: auto !important;
-    transition-property: left, top, inset-block-start, width, height, transform !important;
+    direction: ltr;
   }
-  /* stylelint-enable liberty/use-logical-spec */
 `;
 
 export default genGlobalStyle;
