@@ -241,13 +241,15 @@ describe('skillsRuntime', () => {
     expect(result.success).toBe(true);
     expect(mocks.findByName).toHaveBeenCalledWith('marketing-adapter');
     expect(mocks.findByIdentifier).toHaveBeenCalledWith('marketing-adapter');
-    // The fallback resolved the archive, so its zip url is attached under the
-    // skill's DB name (Multi-Size Marketing Adapter).
+    // The archive is keyed by the activated name (the identifier), which is the
+    // key both the device path (`archiveByName.get(activated.name)`) and the
+    // sandbox path (`skillZipUrls[skill.name]`) look up by — so cwd resolution
+    // does not fall back to the working directory for identifier ≠ name skills.
     expect(mocks.sandboxService.callTool).toHaveBeenCalledWith(
       'execScript',
       expect.objectContaining({
         skillZipUrls: {
-          'Multi-Size Marketing Adapter': 'https://files.example.com/user-skill.zip',
+          'marketing-adapter': 'https://files.example.com/user-skill.zip',
         },
       }),
     );
