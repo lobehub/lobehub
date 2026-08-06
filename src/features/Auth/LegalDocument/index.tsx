@@ -5,7 +5,7 @@ import { Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   back: css`
