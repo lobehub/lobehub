@@ -425,7 +425,7 @@ export class Messages extends HeyApiClient {
         });
     }
     
-    public deleteAll<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1MessagesData, ThrowOnError>): RequestResult<DeleteApiV1MessagesResponses, unknown, ThrowOnError> {
+    public deleteMany<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1MessagesData, ThrowOnError>): RequestResult<DeleteApiV1MessagesResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteApiV1MessagesResponses, unknown, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/messages',

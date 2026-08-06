@@ -15,7 +15,8 @@ import { defineConfig } from '@hey-api/openapi-ts';
  */
 const METHOD_NAME_OVERRIDES: Record<string, string> = {
   'DELETE /api/v1/knowledge-bases/{id}/files/batch': 'removeFiles',
-  'DELETE /api/v1/messages': 'deleteAll',
+  // batch delete of selected ids (body requires non-empty messageIds), not "all"
+  'DELETE /api/v1/messages': 'deleteMany',
   'GET /api/v1/health': 'check',
   'GET /api/v1/users/me': 'me',
   'POST /api/v1/files/batches': 'uploadBatch',
