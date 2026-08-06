@@ -440,18 +440,6 @@ describe('useSignIn', () => {
       expect(mockMessageError).toHaveBeenCalled();
     });
 
-    it('should save last auth provider to localStorage', async () => {
-      mockSignInSocial.mockResolvedValue({ url: 'https://google.com/auth' });
-
-      const { result } = renderHook(() => useSignIn());
-
-      await act(async () => {
-        await result.current.handleSocialSignIn('google');
-      });
-
-      expect(localStorage.getItem('lobehub:auth:last-provider:v1')).toBe('google');
-    });
-
     it('should stop social sign in when business pre-check rejects', async () => {
       mockEnableBusinessFeatures = true;
       mockBusinessSignin.preSocialSigninCheck.mockResolvedValue(false);
@@ -644,16 +632,6 @@ describe('useSignIn', () => {
   });
 
   describe('provider sorting', () => {
-    it('should sort last used provider first', () => {
-      localStorage.setItem('lobehub:auth:last-provider:v1', 'github');
-
-      const { result } = renderHook(() => useSignIn());
-
-      expect(result.current.oAuthSSOProviders[0]).toBe('github');
-
-      localStorage.removeItem('lobehub:auth:last-provider:v1');
-    });
-
     it('should use business SSO providers when business features are enabled by server config', () => {
       mockEnableBusinessFeatures = true;
       mockBusinessSignin.ssoProviders = ['saml'];

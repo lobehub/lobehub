@@ -20,8 +20,6 @@ import { buildOnboardingRedirectUrl, sanitizeRedirectPath } from '@/utils/onboar
 
 import { EMAIL_REGEX, USERNAME_REGEX } from './SignInEmailStep';
 
-const LAST_AUTH_PROVIDER_KEY = 'lobehub:auth:last-provider:v1';
-
 type Step = 'email' | 'password' | 'emailSent' | 'phone' | 'phoneOtp';
 
 type SentEmailType = 'magicLink' | 'resetPassword';
@@ -98,13 +96,6 @@ export const useSignIn = () => {
   const [phoneE164, setPhoneE164] = useState('');
   const [sentInfo, setSentInfo] = useState<SentEmailInfo | null>(null);
   const [isSocialOnly, setIsSocialOnly] = useState(false);
-  const [lastAuthProvider] = useState(() => {
-    try {
-      return localStorage.getItem(LAST_AUTH_PROVIDER_KEY);
-    } catch {
-      return null;
-    }
-  });
   const serverConfigInit = useAuthServerConfigStore((s) => s.serverConfigInit);
   const oAuthSSOProviders = useAuthServerConfigStore((s) => s.serverConfig.oAuthSSOProviders) || [];
   const { getAdditionalData, preSocialSigninCheck, ssoProviders } = useBusinessSignin();
@@ -302,12 +293,6 @@ export const useSignIn = () => {
         return;
       }
 
-      try {
-        localStorage.setItem(LAST_AUTH_PROVIDER_KEY, provider);
-      } catch {
-        // Ignore localStorage errors (e.g., quota exceeded, private mode)
-      }
-
       const callbackUrl = searchParams.get('callbackUrl') || '/';
       // First-time OAuth users land on onboarding first (phone verify is only for trial)
       const newUserCallbackURL = buildOnboardingRedirectUrl(callbackUrl);
@@ -412,12 +397,6 @@ export const useSignIn = () => {
         return;
       }
 
-      try {
-        localStorage.setItem(LAST_AUTH_PROVIDER_KEY, 'phone');
-      } catch {
-        // Ignore localStorage errors
-      }
-
       // Phone OTP is both sign-in and sign-up. Always land on onboarding first so
       // new users never flash the chat home; finished users are bounced home by
       // useUserStateRedirect once user state loads.
@@ -486,13 +465,6 @@ export const useSignIn = () => {
   };
 
   const resolvedProviders = enableBusinessFeatures ? ssoProviders : oAuthSSOProviders;
-  const sortedProviders = lastAuthProvider
-    ? [...resolvedProviders].sort((a, b) => {
-        if (a === lastAuthProvider) return -1;
-        if (b === lastAuthProvider) return 1;
-        return 0;
-      })
-    : resolvedProviders;
 
   return {
     disableEmailPassword,
@@ -511,9 +483,8 @@ export const useSignIn = () => {
     handleSocialSignIn,
     handleVerifyPhoneOtp,
     isSocialOnly,
-    lastAuthProvider,
     loading,
-    oAuthSSOProviders: sortedProviders,
+    oAuthSSOProviders: resolvedProviders,
     otpForm,
     phoneDisplay: phoneE164,
     phoneForm,

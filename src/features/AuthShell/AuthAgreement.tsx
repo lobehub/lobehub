@@ -37,18 +37,19 @@ const persistAgreement = (accepted: boolean) => {
 const styles = createStaticStyles(({ css, cssVar }) => ({
   link: css`
     cursor: pointer;
-    color: inherit;
-    text-decoration: underline;
+    font-weight: 600;
+    color: ${cssVar.colorPrimary};
+    text-decoration: none;
 
     &:active,
     &:focus,
-    &:hover,
-    &:visited {
+    &:hover {
+      color: ${cssVar.colorPrimaryHover};
       text-decoration: underline;
     }
 
     &:visited {
-      color: ${cssVar.colorLinkActive};
+      color: ${cssVar.colorPrimary};
     }
   `,
 }));

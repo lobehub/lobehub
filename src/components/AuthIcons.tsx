@@ -21,7 +21,7 @@ const iconComponents: { [key: string]: any } = {
   'cloudflare': Cloudflare.Color,
   'cognito': Aws.Color,
   'github': Github,
-  'google': Google.Color,
+  'google': Google,
   'logto': Logto.Color,
   'microsoft': Microsoft.Color,
   'microsoft-entra-id': MicrosoftEntra.Color,
