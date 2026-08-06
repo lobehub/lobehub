@@ -34,6 +34,8 @@
   "errors.TRIAL_PHONE_ALREADY_USED": "该手机号已使用过试用。",
   "errors.TRIAL_PHONE_BLOCKED": "该手机号不符合试用条件。",
   "errors.TRIAL_REQUEST_LIMIT": "试用请求次数已达上限。",
+  "errors.managedKey.description": "请先充值钱包或使用组织额度以开通托管密钥。无需自行填写提供商 API Key。",
+  "errors.managedKey.title": "{{brandName}} 使用托管 API 密钥",
   "errors.verifyPhoneAction": "验证手机号",
   "invite.accept": "接受邀请",
   "invite.accepted": "你已加入组织",

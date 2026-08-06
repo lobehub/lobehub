@@ -8,8 +8,12 @@ import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
 import BaseErrorForm from '@/features/Conversation/Error/BaseErrorForm';
+import { isAicoManagedProviderMode } from '@/features/Conversation/Error/isAicoManagedProviderMode';
+import ManagedKeyError from '@/features/Conversation/Error/ManagedKeyError';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useProviderName } from '@/hooks/useProviderName';
+import { useClientDataSWR } from '@/libs/swr';
+import { lambdaClient } from '@/libs/trpc/client';
 import { type GlobalLLMProviderKey } from '@/types/user/settings/modelProvider';
 
 interface GenerationInvalidAPIKeyProps {
@@ -21,6 +25,13 @@ const GenerationInvalidAPIKey = memo<GenerationInvalidAPIKeyProps>(({ provider, 
   const { t } = useTranslation(['modelProvider', 'error']);
   const navigate = useWorkspaceAwareNavigate();
   const providerName = useProviderName(provider as GlobalLLMProviderKey);
+
+  const { data: managedStatus } = useClientDataSWR('aico-provider-status', () =>
+    lambdaClient.aicoBilling.getManagedProviderStatus.query(),
+  );
+  if (isAicoManagedProviderMode(managedStatus?.managed)) {
+    return <ManagedKeyError onNavigate={onNavigate} />;
+  }
 
   return (
     <BaseErrorForm

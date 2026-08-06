@@ -47,7 +47,11 @@ export const getServerGlobalConfig = async () => {
       enabledKey: 'ENABLED_AWS_BEDROCK',
       modelListKey: 'AWS_BEDROCK_MODEL_LIST',
     },
+    // Native DeepSeek BYOK is not used — Aico chats via managed OpenRouter keys.
     deepseek: {
+      enabled: false,
+    },
+    openrouter: {
       enabled: true,
     },
     giteeai: {

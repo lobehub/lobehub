@@ -26,6 +26,8 @@
   "errors.TRIAL_PHONE_ALREADY_USED": "دوره آزمایشی با این شماره قبلاً استفاده شده است.",
   "errors.TRIAL_PHONE_BLOCKED": "این شماره برای دوره آزمایشی مجاز نیست.",
   "errors.TRIAL_REQUEST_LIMIT": "سقف درخواست‌های دوره آزمایشی تمام شده است.",
+  "errors.managedKey.description": "کیف پول را شارژ کنید یا از اعتبار سازمان استفاده کنید تا کلید مدیریت‌شده ساخته شود. نیازی به وارد کردن کلید API ارائه‌دهنده نیست.",
+  "errors.managedKey.title": "{{brandName}} از کلیدهای API مدیریت‌شده استفاده می‌کند",
   "errors.verifyPhoneAction": "تأیید موبایل",
   "invite.accept": "پذیرش دعوت‌نامه",
   "invite.accepted": "به سازمان پیوستید",

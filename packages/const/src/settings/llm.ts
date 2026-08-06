@@ -15,7 +15,7 @@ export const DEFAULT_EMBEDDING_MODEL = 'text-embedding-3-small';
  * its own official provider) moves the sub-agent along with the main model
  * instead of leaving it pointed at a provider that build doesn't serve.
  */
-export const DEFAULT_SUB_AGENT_MODEL = 'deepseek-v4-flash';
+export const DEFAULT_SUB_AGENT_MODEL = 'deepseek/deepseek-chat-v3.1';
 
 /**
  * Resolve the model a sub-agent runs on from the spawning agent's
