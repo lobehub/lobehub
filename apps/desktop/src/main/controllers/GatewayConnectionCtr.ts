@@ -1,4 +1,4 @@
-import { execFileSync, execSync, spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -669,33 +669,22 @@ export default class GatewayConnectionCtr extends ControllerModule {
   }): Promise<{ available: boolean; reason?: string; version?: string }> {
     const { platform } = args;
 
-    const binaryMap: Record<string, string> = {
+    const platformMap: Record<string, 'hermes' | 'openclaw'> = {
       hermes: 'hermes',
       openclaw: 'openclaw',
     };
 
-    const binary = binaryMap[platform];
-    if (!binary) {
+    const platformType = platformMap[platform];
+    if (!platformType) {
       return { available: false, reason: `Unknown platform: ${platform}` };
     }
 
-    const whichCmd = process.platform === 'win32' ? `where ${binary}` : `which ${binary}`;
-
-    try {
-      execSync(whichCmd, { stdio: 'pipe' });
-    } catch {
+    const status = await resolveRemotePlatformCommand(platformType);
+    if (!status.available) {
       return { available: false, reason: `${platform} is not installed on this device` };
     }
 
-    try {
-      const raw = execSync(`${binary} --version`, {
-        encoding: 'utf8',
-        stdio: 'pipe',
-      }).trim();
-      return { available: true, version: raw };
-    } catch {
-      return { available: true };
-    }
+    return status.version ? { available: true, version: status.version } : { available: true };
   }
 
   private async getAgentProfile(args: { agentId?: string; platform: string }): Promise<{
@@ -930,7 +919,9 @@ export default class GatewayConnectionCtr extends ControllerModule {
       });
 
       child.on('close', (code, signal) => {
-        this.clearPlatformTaskKillTimer(pid);
+        // Do not clear the process-group kill timer here: the group leader can
+        // exit while detached tool children keep running. Escalation only stops
+        // once the whole group is confirmed gone (see killPlatformProcessTree).
         if (this.platformTasks.get(taskId)?.pid !== pid) return;
 
         this.platformTasks.delete(taskId);
@@ -1028,7 +1019,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
       });
 
       child.on('close', (code, signal) => {
-        this.clearPlatformTaskKillTimer(pid);
+        // Keep any pending process-group escalation; see openclaw close handler.
         if (this.platformTasks.get(taskId)?.pid !== pid) return;
 
         this.platformTasks.delete(taskId);
@@ -1126,11 +1117,29 @@ export default class GatewayConnectionCtr extends ControllerModule {
       this.clearPlatformTaskKillTimer(pid);
       const timer = setTimeout(() => {
         this.platformTaskKillTimers.delete(pid);
+        // The group leader's `close` can fire while detached tool children are
+        // still alive; only stop escalating once the whole group is gone.
+        if (!this.isPlatformProcessGroupAlive(pid)) return;
         logger.warn('Platform task did not exit after signal, escalating to SIGKILL:', pid);
         this.killPlatformProcessTree(pid, 'SIGKILL');
       }, 2000);
       timer.unref();
       this.platformTaskKillTimers.set(pid, timer);
+    }
+  }
+
+  /** Whether the detached platform process group (or its leader) is still alive. */
+  private isPlatformProcessGroupAlive(pid: number): boolean {
+    try {
+      process.kill(-pid, 0);
+      return true;
+    } catch {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch {
+        return false;
+      }
     }
   }
 
