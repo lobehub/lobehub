@@ -83,6 +83,35 @@ describe('createLobeHub', () => {
     expect(requests[1].headers.get('content-type')).toBe('application/json');
   });
 
+  it('normalizes tuple-array headers at client level and on read methods', async () => {
+    const { fetch, requests } = captureFetch();
+    const lobehub = createLobeHub({
+      apiKey: 'sk-lh-test',
+      fetch,
+      headers: [['X-Client', 'a']],
+    });
+
+    await lobehub.agents.list({ headers: [['X-Call', 'b']] });
+
+    expect(requests[0].headers.get('x-client')).toBe('a');
+    expect(requests[0].headers.get('x-call')).toBe('b');
+  });
+
+  it('drops a client-default Content-Type on form-data uploads', async () => {
+    const { fetch, requests } = captureFetch();
+    const lobehub = createLobeHub({
+      apiKey: 'sk-lh-test',
+      fetch,
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    await lobehub.files.create({ body: { file: new Blob(['x']), hash: 'h', size: 1 } });
+
+    const contentType = requests[0].headers.get('content-type');
+    expect(contentType).not.toBe('application/json');
+    expect(contentType ?? 'multipart/form-data').toContain('multipart/form-data');
+  });
+
   it('keeps client instances isolated between SDK instances', async () => {
     const a = captureFetch();
     const b = captureFetch();

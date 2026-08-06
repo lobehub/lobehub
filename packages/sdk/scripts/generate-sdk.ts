@@ -21,35 +21,72 @@ import config from '../openapi-ts.config';
 const PKG_ROOT = path.join(import.meta.dirname, '..');
 const OUTPUT_DIR = path.join(PKG_ROOT, 'src', 'generated');
 
+const MERGE_METHOD_HEADERS_HELPER = `
+const mergeMethodHeaders = (
+    defaults: Record<string, unknown>,
+    headers: Options['headers'],
+): Record<string, unknown> => {
+    const merged = { ...defaults };
+    if (!headers) {
+        return merged;
+    }
+    const entries = headers instanceof Headers ? [...headers.entries()] : Array.isArray(headers) ? headers : Object.entries(headers);
+    for (const [key, value] of entries) {
+        merged[key] = value;
+    }
+    return merged;
+};
+`;
+
 /**
- * hey-api's generated write methods merge caller headers with an object
- * spread (`{ 'Content-Type': …, ...options.headers }`), which silently drops
- * `Headers` instances and corrupts tuple arrays — both allowed by the
- * `HeadersInit` type. Rewrite the spread to the client's own `mergeHeaders`,
- * which normalizes every HeadersInit shape. Applied identically in generate
- * and --check modes, so the byte-level comparison is unaffected.
- * (Upstream: generator template flaw in @hey-api/openapi-ts 0.99.)
+ * hey-api 0.99's generated headers handling breaks on legal HeadersInit
+ * shapes; rewrite the output in two places (applied identically in generate
+ * and --check modes, so the byte-level comparison is unaffected):
+ *
+ * 1. `mergeHeaders` reads plain objects via `Object.entries`, which turns a
+ *    tuple array (`[['X-Trace','1']]`) into numeric keys — normalize tuple
+ *    arrays through `new Headers()` first. This covers client-level defaults
+ *    and read-method per-call headers.
+ * 2. Write methods merge caller headers with an object spread
+ *    (`{ 'Content-Type': …, ...options.headers }`), which silently drops
+ *    `Headers` instances and corrupts tuple arrays. Rewrite the spread to a
+ *    helper that normalizes every HeadersInit shape into a PLAIN object —
+ *    not a `Headers` — so the `'Content-Type': null` deletion sentinel on
+ *    form-data methods survives until the client's final merge
+ *    (`mergeHeaders(_config.headers, options.headers)`), where it must be
+ *    able to delete a client-default Content-Type.
  */
 const rewriteHeaderSpreads = (dir: string) => {
   const sdkPath = path.join(dir, 'sdk.gen.ts');
-  const source = readFileSync(sdkPath, 'utf8');
-  const rewritten = source
+  const sdkSource = readFileSync(sdkPath, 'utf8');
+  const importAnchor = "} from './types.gen';\n";
+  const sdkRewritten = sdkSource
     .replaceAll(
       /headers: \{\s*'Content-Type': ('application\/json'|null),\s*\.\.\.options\.headers\s*\}/g,
-      // Array.isArray guard: mergeHeaders reads plain objects via Object.entries,
-      // which turns a tuple array into numeric keys — normalize tuples first.
-      "headers: mergeHeaders({ 'Content-Type': $1 }, Array.isArray(options.headers) ? new Headers(options.headers) : options.headers)",
+      "headers: mergeMethodHeaders({ 'Content-Type': $1 }, options.headers)",
     )
-    .replace(
-      'import { type Client, type ClientMeta, formDataBodySerializer,',
-      'import { type Client, type ClientMeta, formDataBodySerializer, mergeHeaders,',
-    );
-  if (rewritten === source || !rewritten.includes('mergeHeaders,')) {
+    .replace(importAnchor, importAnchor + MERGE_METHOD_HEADERS_HELPER);
+  if (sdkRewritten === sdkSource || !sdkRewritten.includes('mergeMethodHeaders(')) {
     throw new Error(
-      'rewriteHeaderSpreads: expected generated header-spread pattern not found — check the generator output against the rewrite rules.',
+      'rewriteHeaderSpreads: expected generated header-spread pattern not found in sdk.gen.ts — check the generator output against the rewrite rules.',
     );
   }
-  writeFileSync(sdkPath, rewritten);
+  writeFileSync(sdkPath, sdkRewritten);
+
+  const utilsPath = path.join(dir, 'client', 'utils.gen.ts');
+  const utilsSource = readFileSync(utilsPath, 'utf8');
+  const iteratorLine =
+    'const iterator = header instanceof Headers ? headersEntries(header) : Object.entries(header);';
+  const utilsRewritten = utilsSource.replace(
+    iteratorLine,
+    'const iterator = header instanceof Headers ? headersEntries(header) : Array.isArray(header) ? headersEntries(new Headers(header as Array<[string, string]>)) : Object.entries(header);',
+  );
+  if (utilsRewritten === utilsSource) {
+    throw new Error(
+      'rewriteHeaderSpreads: expected mergeHeaders iterator line not found in client/utils.gen.ts — check the generator output against the rewrite rules.',
+    );
+  }
+  writeFileSync(utilsPath, utilsRewritten);
 };
 
 const listFiles = (dir: string, base = dir): string[] =>
