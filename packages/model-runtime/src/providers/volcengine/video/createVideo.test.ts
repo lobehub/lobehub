@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CreateVideoOptions } from '../../../core/openaiCompatibleFactory';
 import type { CreateVideoPayload } from '../../../types/video';
-import { createVolcengineVideo } from './createVideo';
+import { createVolcengineVideo, pollVolcengineVideoStatus } from './createVideo';
 
 vi.mock('debug', () => ({
   default: vi.fn(() => vi.fn()),
@@ -17,6 +17,7 @@ describe('createVolcengineVideo', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    delete process.env.VOLCENGINE_VIDEO_USE_WEBHOOK;
 
     payload = {
       model: 'doubao-video-model',
@@ -53,6 +54,54 @@ describe('createVolcengineVideo', () => {
 
       expect((result as any).useWebhook).toBe(true);
     });
+  });
+
+  describe('webhook toggle via VOLCENGINE_VIDEO_USE_WEBHOOK', () => {
+    it('should default to webhook flow and attach callback_url when unset', async () => {
+      mockFetch.mockResolvedValue({
+        json: () => Promise.resolve({ id: 'task-1' }),
+        ok: true,
+      });
+      payload.callbackUrl = 'https://example.com/webhook';
+
+      const result = await createVolcengineVideo(payload, options);
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.callback_url).toBe('https://example.com/webhook');
+      expect((result as any).useWebhook).toBe(true);
+    });
+
+    it('should keep webhook flow when explicitly set to "1"', async () => {
+      process.env.VOLCENGINE_VIDEO_USE_WEBHOOK = '1';
+      mockFetch.mockResolvedValue({
+        json: () => Promise.resolve({ id: 'task-1' }),
+        ok: true,
+      });
+      payload.callbackUrl = 'https://example.com/webhook';
+
+      const result = await createVolcengineVideo(payload, options);
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.callback_url).toBe('https://example.com/webhook');
+      expect((result as any).useWebhook).toBe(true);
+    });
+
+    it('should disable webhook and omit callback_url when set to "0"', async () => {
+      process.env.VOLCENGINE_VIDEO_USE_WEBHOOK = '0';
+      mockFetch.mockResolvedValue({
+        json: () => Promise.resolve({ id: 'task-poll' }),
+        ok: true,
+      });
+      payload.callbackUrl = 'https://example.com/webhook';
+
+      const result = await createVolcengineVideo(payload, options);
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.callback_url).toBeUndefined();
+      expect(result).toEqual({ inferenceId: 'task-poll' });
+      expect((result as any).useWebhook).toBeUndefined();
+    });
+  });
 
     it('should send minimal body with only prompt', async () => {
       mockFetch.mockResolvedValue({
@@ -283,5 +332,120 @@ describe('createVolcengineVideo', () => {
         'Invalid response: missing task id',
       );
     });
+  });
+});
+
+describe('pollVolcengineVideoStatus', () => {
+  let options: CreateVideoOptions;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    options = {
+      apiKey: 'test-api-key',
+      provider: 'volcengine',
+    };
+  });
+
+  it('should GET the task status endpoint with Authorization header', async () => {
+    mockFetch.mockResolvedValue({
+      json: () => Promise.resolve({ id: 'task-1', status: 'running' }),
+      ok: true,
+    });
+
+    await pollVolcengineVideoStatus('task-1', options);
+
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(url).toBe(
+      'https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks/task-1',
+    );
+    expect(init.method).toBe('GET');
+    expect(init.headers.Authorization).toBe('Bearer test-api-key');
+  });
+
+  it('should return success with videoUrl when succeeded', async () => {
+    mockFetch.mockResolvedValue({
+      json: () =>
+        Promise.resolve({
+          content: { video_url: 'https://cdn.example.com/v.mp4' },
+          id: 'task-1',
+          status: 'succeeded',
+        }),
+      ok: true,
+    });
+
+    const result = await pollVolcengineVideoStatus('task-1', options);
+
+    expect(result).toEqual({ status: 'success', videoUrl: 'https://cdn.example.com/v.mp4' });
+  });
+
+  it('should return failed when succeeded but missing video_url', async () => {
+    mockFetch.mockResolvedValue({
+      json: () => Promise.resolve({ id: 'task-1', status: 'succeeded' }),
+      ok: true,
+    });
+
+    const result = await pollVolcengineVideoStatus('task-1', options);
+
+    expect(result.status).toBe('failed');
+  });
+
+  it('should return failed with error message when failed', async () => {
+    mockFetch.mockResolvedValue({
+      json: () =>
+        Promise.resolve({ error: { message: 'content moderation' }, id: 'task-1', status: 'failed' }),
+      ok: true,
+    });
+
+    const result = await pollVolcengineVideoStatus('task-1', options);
+
+    expect(result).toEqual({ error: 'content moderation', status: 'failed' });
+  });
+
+  it('should return failed for expired task', async () => {
+    mockFetch.mockResolvedValue({
+      json: () => Promise.resolve({ id: 'task-1', status: 'expired' }),
+      ok: true,
+    });
+
+    const result = await pollVolcengineVideoStatus('task-1', options);
+
+    expect(result).toEqual({ error: 'Video generation task expired', status: 'failed' });
+  });
+
+  it('should return pending for queued / running status', async () => {
+    mockFetch.mockResolvedValue({
+      json: () => Promise.resolve({ id: 'task-1', status: 'queued' }),
+      ok: true,
+    });
+
+    const result = await pollVolcengineVideoStatus('task-1', options);
+
+    expect(result).toEqual({ status: 'pending' });
+  });
+
+  it('should use custom baseURL when provided', async () => {
+    options.baseURL = 'https://custom-endpoint.com/api/v3';
+    mockFetch.mockResolvedValue({
+      json: () => Promise.resolve({ id: 'task-1', status: 'running' }),
+      ok: true,
+    });
+
+    await pollVolcengineVideoStatus('task-1', options);
+
+    expect(mockFetch.mock.calls[0][0]).toBe(
+      'https://custom-endpoint.com/api/v3/contents/generations/tasks/task-1',
+    );
+  });
+
+  it('should throw on HTTP error', async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 404,
+      text: () => Promise.resolve('Not Found'),
+    });
+
+    await expect(pollVolcengineVideoStatus('task-1', options)).rejects.toThrow(
+      'Volcengine video status API error: 404 Not Found',
+    );
   });
 });
