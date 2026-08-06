@@ -290,6 +290,24 @@ describe('localSystemRuntime', () => {
       expect(parseArgs()).toEqual({ cwd: '/Users/me/repo', path: 'passwd' });
     });
 
+    // Search apis take `scope`, not `cwd` — but downstream `cwd` doubles as a
+    // legacy search-root alias and as the base a relative `scope` resolves
+    // against, so leaving it in place would let an audited workspace-relative
+    // `scope` execute somewhere else entirely.
+    it.each([
+      [LocalSystemApiName.globFiles, { cwd: '/', pattern: 'passwd', scope: 'etc' }],
+      [LocalSystemApiName.grepContent, { cwd: '/', pattern: 'root', scope: 'etc' }],
+      [LocalSystemApiName.searchFiles, { cwd: '/', keywords: 'passwd', scope: 'etc' }],
+    ])('strips an off-contract cwd from %s while keeping the audited scope', async (api, args) => {
+      mockExecuteToolCall.mockClear();
+      const proxy = buildProxy('/Users/me/repo');
+      await proxy[api](args);
+
+      const forwarded = JSON.parse(mockExecuteToolCall.mock.calls[0][1].arguments);
+      expect(forwarded.cwd).toBeUndefined();
+      expect(forwarded.scope).toBe('etc');
+    });
+
     it('injects cwd into file ops so the daemon can resolve a relative path', async () => {
       const proxy = buildProxy('/Users/me/repo');
       await proxy[LocalSystemApiName.readFile]({ path: 'src/index.ts' });
