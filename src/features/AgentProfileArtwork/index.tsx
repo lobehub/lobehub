@@ -57,10 +57,11 @@ const styles = createStaticStyles(({ css }) => ({
 
     overflow: hidden;
 
+    /* The cover bleeds flush to the pane edges, so rounded corners would leave
+       bare notches in the two narrow strips where it meets them. */
     width: calc(100% + 32px);
     height: 160px;
     margin-inline: -16px;
-    border-radius: ${cssVar.borderRadiusLG};
 
     background: transparent;
     background-position: center;
@@ -292,6 +293,50 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
       [artworkStyle, generateArtwork, t],
     );
 
+    // On the existing-cover hover bar every artwork action folds into the one
+    // "…" menu: regenerate, the style presets, and remove.
+    const buildBackgroundMenuItems = useCallback((): DropdownItem[] => {
+      const items: DropdownItem[] = [];
+
+      if (canGenerate) {
+        items.push(
+          {
+            icon: WandSparkles,
+            key: 'generate',
+            label: t('settingAgent.artwork.background.generate'),
+            onClick: () => void generateArtwork('background', artworkStyle),
+          },
+          {
+            children: buildStyleItems('background'),
+            key: 'styles',
+            label: t('settingAgent.artwork.styleMenu'),
+            type: 'group',
+          },
+        );
+      }
+
+      if (backgroundUrl) {
+        if (items.length > 0) items.push({ type: 'divider' });
+        items.push({
+          danger: true,
+          icon: Trash2,
+          key: 'remove',
+          label: t('settingAgent.artwork.background.remove'),
+          onClick: () => onBackgroundChange(null),
+        });
+      }
+
+      return items;
+    }, [
+      artworkStyle,
+      backgroundUrl,
+      buildStyleItems,
+      canGenerate,
+      generateArtwork,
+      onBackgroundChange,
+      t,
+    ]);
+
     return (
       <div style={{ paddingBlockEnd: 36, position: 'relative' }}>
         <div
@@ -388,28 +433,11 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
                   onClick={openBackgroundFilePicker}
                 />
               </Tooltip>
-              {canGenerate ? (
-                <>
-                  <Tooltip title={t('settingAgent.artwork.background.generate')}>
-                    <ActionIcon
-                      glass
-                      icon={WandSparkles}
-                      loading={generating === 'background'}
-                      onClick={() => void generateArtwork('background', artworkStyle)}
-                    />
-                  </Tooltip>
-                  <Tooltip title={t('settingAgent.artwork.styleMenu')}>
-                    <DropdownMenu items={() => buildStyleItems('background')}>
-                      <ActionIcon glass icon={MoreHorizontal} />
-                    </DropdownMenu>
-                  </Tooltip>
-                </>
-              ) : null}
-              {backgroundUrl ? (
-                <Tooltip title={t('settingAgent.artwork.background.remove')}>
-                  <ActionIcon glass icon={Trash2} onClick={() => onBackgroundChange(null)} />
-                </Tooltip>
-              ) : null}
+              <Tooltip title={t('more', { ns: 'common' })}>
+                <DropdownMenu items={() => buildBackgroundMenuItems()}>
+                  <ActionIcon glass icon={MoreHorizontal} loading={generating === 'background'} />
+                </DropdownMenu>
+              </Tooltip>
             </Flexbox>
           ) : null}
         </div>
