@@ -126,7 +126,7 @@ export default {
   'betterAuth.signin.orContinueWith': 'or',
   'betterAuth.signin.continueWithPhone': 'Continue with phone',
   'betterAuth.signin.phone.description':
-    'Enter your mobile number. We’ll text a code — new numbers create an account automatically.',
+    'Enter a mobile number already verified on your account. We’ll text a sign-in code.',
   'betterAuth.signin.phone.otpDescription': 'Enter the 6-digit code sent to {{phone}}',
   'betterAuth.signin.phone.otpTitle': 'Enter verification code',
   'betterAuth.signin.phone.sendCode': 'Send code',
@@ -192,6 +192,8 @@ export default {
     'This phone number is already verified on your account.',
   'betterAuth.verifyPhone.errors.phoneExists':
     'This phone number is already linked to another account.',
+  'betterAuth.verifyPhone.errors.phoneNotVerifiedForLogin':
+    'This number isn’t verified for sign-in. Sign in with email, then verify your phone in settings.',
   'betterAuth.verifyPhone.errors.rateLimited':
     'Too many requests. Please wait a minute and try again.',
   'betterAuth.verifyPhone.errors.tooManyAttempts':
