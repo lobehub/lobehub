@@ -279,7 +279,10 @@ describe('LocalSystemExecutionRuntime.executeToolCall — working directory anch
     );
   });
 
-  it('resolves a relative model-supplied cwd against the working directory', async () => {
+  // Security: the out-of-scope intervention audit inspects path/scope fields
+  // but not `cwd`. A model-supplied cwd on the audited (renderer) path could
+  // smuggle a relative path outside the workspace — it must be ignored.
+  it('ignores a model-supplied cwd when a trusted working directory is present', async () => {
     const service = createService({
       runCommand: vi.fn().mockResolvedValue({ exit_code: 0, success: true }),
     });
@@ -287,13 +290,50 @@ describe('LocalSystemExecutionRuntime.executeToolCall — working directory anch
 
     await runtime.executeToolCall(
       'runCommand',
-      { command: 'ls', cwd: 'packages' },
+      { command: 'cat passwd', cwd: '/etc' },
       { workingDirectory: WD },
     );
 
-    expect(service.runCommand).toHaveBeenCalledWith(
-      expect.objectContaining({ cwd: `${WD}/packages` }),
+    expect(service.runCommand).toHaveBeenCalledWith(expect.objectContaining({ cwd: WD }));
+  });
+
+  it('ignores a model-supplied cwd for file ops on the audited path', async () => {
+    const service = createService({
+      readLocalFile: vi.fn().mockResolvedValue({ content: '', success: true }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    await runtime.executeToolCall(
+      'readFile',
+      { cwd: '/etc', path: 'passwd' },
+      { workingDirectory: WD },
     );
+
+    expect(service.readLocalFile).toHaveBeenCalledWith(expect.objectContaining({ cwd: WD }));
+  });
+
+  it('ignores a model-supplied grep/glob cwd alias on the audited path', async () => {
+    const service = createService({
+      globFiles: vi.fn().mockResolvedValue({ files: [], success: true, total_files: 0 }),
+      grepContent: vi.fn().mockResolvedValue({ matches: [], success: true, total_matches: 0 }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    await runtime.executeToolCall(
+      'globFiles',
+      { cwd: '/etc', pattern: '*' },
+      { workingDirectory: WD },
+    );
+    expect(service.globFiles).toHaveBeenCalledWith(expect.objectContaining({ scope: WD }));
+
+    await runtime.executeToolCall(
+      'grepContent',
+      { cwd: '/etc', pattern: 'root' },
+      { workingDirectory: WD },
+    );
+    const grepForwarded = (service.grepContent as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(grepForwarded.cwd).toBe(WD);
+    expect(grepForwarded.path).toBe(WD);
   });
 
   it.each([

@@ -123,9 +123,16 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
   ): Promise<BuiltinServerRuntimeOutput | null> {
     const name = LEGACY_API_ALIASES[apiName] ?? apiName;
     const workingDirectory = options?.workingDirectory;
-    // Model-supplied `cwd` (rare — most manifests hide it) resolved against the
-    // device-bound working directory; absent → the working directory itself.
-    const cwd = resolvePathWithScope(args.cwd, workingDirectory);
+    // Trust boundary: when the caller supplies a workingDirectory (renderer
+    // executor — the path where the out-of-scope intervention audit runs), a
+    // model-supplied `cwd` must NOT be honored. The audit only inspects
+    // `path`/`file_path`/`directory`/`scope` fields, so a relative path
+    // smuggled past it via `cwd` (e.g. `readFile({ path: 'passwd', cwd:
+    // '/etc' })`) would execute outside the audited scope. Reaching outside the
+    // workspace requires an absolute path field, which the audit does see.
+    // Without a workingDirectory (gateway / CLI), `args.cwd` is the
+    // server-injected device-bound value and is trusted as-is.
+    const cwd = workingDirectory ?? args.cwd;
 
     switch (name) {
       case 'listFiles': {
@@ -207,16 +214,24 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
       case 'grepContent': {
         // Anchor the search root on the working directory and forward the FULL
         // param set (glob / output_mode / -i / -A / … ) — stripping flags here
-        // silently defeated the agent's filters in the past.
+        // silently defeated the agent's filters in the past. `cwd` is a legacy
+        // search-root alias that takes precedence downstream — strip a
+        // model-supplied one on the audited path (see trust boundary above).
         return this.grepContent({
           ...resolveArgsWithScope(args, 'path', workingDirectory),
+          // `cwd` outranks the resolved `path` downstream, so a trusted caller's
+          // resolved root must not be shadowed by an untrusted value; keep it
+          // only on the trusted (gateway / CLI) path.
+          cwd: workingDirectory ? undefined : args.cwd,
           pattern: args.pattern,
         });
       }
 
       case 'globFiles': {
+        // `cwd` is a legacy alias for `scope` — only honored when trusted (see
+        // trust boundary above).
         return this.globFiles({
-          directory: resolvePathWithScope(args.scope ?? args.cwd, workingDirectory),
+          directory: resolvePathWithScope(args.scope, cwd),
           limit: normalizeLimit(args.limit),
           pattern: args.pattern,
         });
