@@ -284,6 +284,8 @@ export default eslint(
       'react/no-unknown-property': 0,
       'regexp/match-any': 0,
       'unicorn/better-regex': 0,
+      // conflicts with prettier, which lowercases hex literals
+      'unicorn/number-literal-case': 0,
     },
   },
   // TypeScript files - enforce consistent type imports
