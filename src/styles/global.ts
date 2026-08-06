@@ -93,16 +93,20 @@ const genGlobalStyle = ({ token }: { prefixCls: string; token: Theme }) => css`
   }
 
   /* stylelint-disable liberty/use-logical-spec -- indicator offsets are physical */
+  :dir(rtl) [role='tablist'] > [role='presentation'],
   html[dir='rtl'] [role='tablist'] > [role='presentation'] {
+    right: auto !important;
     left: var(--active-tab-left) !important;
-    inset-inline-start: unset !important;
-    transition-property: left, inset-block-start, width, height, transform;
+    inset-inline: auto !important;
+    transition-property: left, inset-block-start, top, width, height, transform !important;
   }
 
+  :dir(rtl) [data-orientation] > [aria-hidden='true']:first-of-type,
   html[dir='rtl'] [data-orientation] > [aria-hidden='true']:first-of-type {
+    right: auto !important;
     left: var(--active-item-left) !important;
-    inset-inline-start: unset !important;
-    transition-property: left, inset-block-start, width, height;
+    inset-inline: auto !important;
+    transition-property: left, inset-block-start, top, width, height, transform !important;
   }
   /* stylelint-enable liberty/use-logical-spec */
 `;

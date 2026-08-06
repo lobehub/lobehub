@@ -18,4 +18,15 @@ describe('applyDocumentDirection', () => {
     applyDocumentDirection('en-US');
     expect(document.documentElement.dir).toBe('ltr');
   });
+
+  it('resolves auto locale from document lang for direction', () => {
+    document.documentElement.lang = 'fa-IR';
+
+    applyDocumentDirection('auto');
+    expect(document.documentElement.dir).toBe('rtl');
+
+    document.documentElement.lang = 'en-US';
+    applyDocumentDirection('auto');
+    expect(document.documentElement.dir).toBe('ltr');
+  });
 });
