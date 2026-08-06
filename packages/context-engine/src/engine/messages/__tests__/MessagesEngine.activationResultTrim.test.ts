@@ -238,6 +238,36 @@ describe('MessagesEngine — activation result trimming (LOBE-5684)', () => {
     });
   });
 
+  it('should not trim when a system-replace agent document discards the injections', async () => {
+    // AgentDocumentSystemReplaceInjector replaces the whole assembled system
+    // message AFTER the providers appended the activation docs — the tool
+    // result must stay the single content channel.
+    const engine = new MessagesEngine(
+      createParams({
+        agentDocuments: [
+          {
+            content: 'You are a totally custom agent.',
+            filename: 'persona.md',
+            loadPosition: 'system-replace',
+          },
+        ],
+        messages: activateToolsMessages(),
+        toolsConfig: { manifests: [credsManifest], tools: ['lobe-creds'] },
+      }),
+    );
+
+    const result = await engine.process();
+
+    expect(countInPayload(result.messages, CREDS_SYSTEM_ROLE)).toBe(1);
+    const toolMessage = result.messages.find((m) => m.role === 'tool');
+    expect(toolMessage?.content).toContain(CREDS_SYSTEM_ROLE);
+    // The replaced system message carries only the agent document (here folded
+    // into the progressive index) — the provider injections are gone.
+    const systemMessage = result.messages.find((m) => m.role === 'system');
+    expect(systemMessage?.content).not.toContain(CREDS_SYSTEM_ROLE);
+    expect(systemMessage?.content).toContain('persona.md');
+  });
+
   it('should stay byte-stable across subsequent requests (prompt-cache friendly)', async () => {
     const params = createParams({
       messages: activateToolsMessages(),

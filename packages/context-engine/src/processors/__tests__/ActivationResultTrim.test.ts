@@ -283,6 +283,22 @@ describe('ActivationResultTrimProcessor', () => {
       expect(result.messages[0].content).toBe(original.content);
     });
 
+    it('should skip trimming entirely when a system-replace document discarded the system prompt', async () => {
+      const processor = new ActivationResultTrimProcessor({
+        injectedManifests: [credsManifest],
+        injectedSkills: [powershellSkill],
+      });
+      const original = activateToolsMessage();
+      const context = createContext([original, activateSkillMessage()]);
+      context.metadata.agentDocumentSystemReplace = { replaced: true };
+
+      const result = await processor.process(context);
+
+      expect(result.messages[0].content).toBe(original.content);
+      expect(result.messages[1].content).toContain(SKILL_CONTENT);
+      expect(result.metadata.activationResultTrim).toBeUndefined();
+    });
+
     it('should be a no-op when nothing is injected', async () => {
       const processor = new ActivationResultTrimProcessor({});
       const original = activateToolsMessage();

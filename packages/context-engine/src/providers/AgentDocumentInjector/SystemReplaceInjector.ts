@@ -5,6 +5,20 @@ import type { PipelineContext, ProcessorOptions } from '../../types';
 import type { AgentContextDocument, AgentDocumentFilterContext } from './shared';
 import { combineDocuments, getDocumentsForPositions } from './shared';
 
+declare module '../../types' {
+  interface PipelineContextMetadataOverrides {
+    /**
+     * Set when a `system-replace` agent document discarded the assembled
+     * system message. Downstream processors that rely on Phase 2 system-prompt
+     * injections (e.g. ActivationResultTrimProcessor) must treat those
+     * injections as absent.
+     */
+    agentDocumentSystemReplace?: {
+      replaced: boolean;
+    };
+  }
+}
+
 const log = debug('context-engine:provider:AgentDocumentSystemReplaceInjector');
 
 export interface AgentDocumentSystemReplaceInjectorConfig extends AgentDocumentFilterContext {
@@ -57,6 +71,8 @@ export class AgentDocumentSystemReplaceInjector extends BaseProcessor {
     } else {
       clonedContext.messages.unshift(message as any);
     }
+
+    clonedContext.metadata.agentDocumentSystemReplace = { replaced: true };
 
     log('Replaced system message with %d agent documents', docs.length);
     return this.markAsExecuted(clonedContext);

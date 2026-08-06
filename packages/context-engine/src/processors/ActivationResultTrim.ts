@@ -107,6 +107,15 @@ export class ActivationResultTrimProcessor extends BaseProcessor {
       return this.markAsExecuted(context);
     }
 
+    // A `system-replace` agent document discarded the assembled system message
+    // AFTER the providers appended their docs — the injections this trim
+    // relies on never reached the final prompt, so the activation results stay
+    // the single content channel and must be kept intact.
+    if (context.metadata.agentDocumentSystemReplace?.replaced) {
+      log('System message was replaced by an agent document, skipping trim');
+      return this.markAsExecuted(context);
+    }
+
     const clonedContext = this.cloneContext(context);
     let trimmedMessages = 0;
     let savedChars = 0;
