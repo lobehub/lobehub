@@ -1,10 +1,11 @@
 'use client';
 
-import { BarList } from '@lobehub/charts';
+import { BarChart, BarList } from '@lobehub/charts';
 import { Block, Flexbox, Tag, Text } from '@lobehub/ui';
 import { Button, Select, Tabs, toast } from '@lobehub/ui/base-ui';
-import { Form, Input, InputNumber, Table } from 'antd';
+import { DatePicker, Form, Input, InputNumber, Table } from 'antd';
 import { createStaticStyles } from 'antd-style';
+import dayjs from 'dayjs';
 import { Building2Icon, CircleDollarSignIcon, UsersIcon, WalletIcon } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -49,7 +50,14 @@ type InviteForm = {
   role: 'admin' | 'member';
 };
 
-const usd = (n: number | undefined | null) => `$${Number(n ?? 0).toFixed(2)}`;
+const usd = (n: number | string | undefined | null) => `$${Number(n ?? 0).toFixed(2)}`;
+
+/** Default inclusive UTC window: last 30 calendar days including today. */
+const defaultRange = (): [string, string] => {
+  const to = dayjs().format('YYYY-MM-DD');
+  const from = dayjs().subtract(29, 'day').format('YYYY-MM-DD');
+  return [from, to];
+};
 
 export const OrgAdminMembers = () => {
   const { t } = useTranslation('aico');
@@ -57,6 +65,8 @@ export const OrgAdminMembers = () => {
   const { orgId: orgIdParam } = useParams<{ orgId?: string }>();
   const [selectedOrgId, setSelectedOrgId] = useState(orgIdParam || '');
   const [tab, setTab] = useState('overview');
+  const [[rangeFrom, rangeTo], setRange] = useState(defaultRange);
+  const [chartMemberId, setChartMemberId] = useState<string>('all');
   const phoneVerified = useUserStore((s) =>
     Boolean(userProfileSelectors.userProfile(s)?.phoneNumberVerified),
   );
@@ -112,21 +122,87 @@ export const OrgAdminMembers = () => {
     lambdaClient.aicoBilling.getFxRate.query(),
   );
 
+  const { data: usageChart, mutate: mutateUsageChart } = useClientDataSWR(
+    selectedOrgId
+      ? ['aico-org-usage-chart', selectedOrgId, rangeFrom, rangeTo, chartMemberId]
+      : null,
+    () =>
+      chartMemberId === 'all'
+        ? lambdaClient.organization.getOrgUsageChart.query({
+            from: rangeFrom,
+            orgId: selectedOrgId,
+            to: rangeTo,
+          })
+        : lambdaClient.organization.getMemberUsageChart.query({
+            from: rangeFrom,
+            orgId: selectedOrgId,
+            orgMemberId: chartMemberId,
+            to: rangeTo,
+          }),
+  );
+
+  const { data: txHistory, mutate: mutateTxHistory } = useClientDataSWR(
+    selectedOrgId && tab === 'wallet'
+      ? ['aico-org-tx-history', selectedOrgId, rangeFrom, rangeTo]
+      : null,
+    () =>
+      lambdaClient.organization.getTransactionHistory.query({
+        from: rangeFrom,
+        orgId: selectedOrgId,
+        to: rangeTo,
+      }),
+  );
+
   const refreshAll = async () => {
-    await Promise.all([mutate(), mutateWallet(), mutateTeams(), mutateDashboard()]);
+    await Promise.all([
+      mutate(),
+      mutateWallet(),
+      mutateTeams(),
+      mutateDashboard(),
+      mutateUsageChart(),
+      mutateTxHistory(),
+    ]);
   };
+
+  const spendCategory = t('org.usageSpend');
+  const chartData = useMemo(
+    () =>
+      (usageChart || []).map((point) => ({
+        date: point.date,
+        [spendCategory]: Number(point.costUsd),
+      })),
+    [spendCategory, usageChart],
+  );
+  const hasChartSpend = useMemo(
+    () => (usageChart || []).some((point) => Number(point.costMicroUsd) > 0),
+    [usageChart],
+  );
 
   const usageBars = useMemo(
     () =>
       (dashboard?.members || [])
-        .filter((m) => m.limitUsd > 0 || m.usedUsd > 0)
+        .filter((m) => Number(m.periodAmountUsd) > 0 || Number(m.settledUsageUsd) > 0)
         .map((m) => ({
           name: m.publicCode || m.userId.slice(0, 10),
-          value: Number(m.usedUsd.toFixed(4)),
+          value: Number(Number(m.settledUsageUsd).toFixed(4)),
         }))
         .sort((a, b) => b.value - a.value)
         .slice(0, 12),
     [dashboard?.members],
+  );
+
+  const rangePicker = (
+    <Flexbox horizontal align="center" gap={12} wrap="wrap">
+      <Text type="secondary">{t('org.usageRange')}</Text>
+      <DatePicker.RangePicker
+        allowClear={false}
+        value={[dayjs(rangeFrom), dayjs(rangeTo)]}
+        onChange={(values) => {
+          if (!values?.[0] || !values[1]) return;
+          setRange([values[0].format('YYYY-MM-DD'), values[1].format('YYYY-MM-DD')]);
+        }}
+      />
+    </Flexbox>
   );
 
   const handleInvite = async (values: InviteForm) => {
@@ -259,7 +335,10 @@ export const OrgAdminMembers = () => {
             value: usd(dashboard?.allocatedUsd),
           }}
         />
-        <StatisticCard statistic={{ value: usd(dashboard?.usedUsd) }} title={t('org.stat.used')} />
+        <StatisticCard
+          statistic={{ value: usd(dashboard?.settledUsageUsd) }}
+          title={t('org.stat.used')}
+        />
         <StatisticCard
           statistic={{ prefix: <UsersIcon size={16} />, value: dashboard?.memberCount ?? 0 }}
           title={t('org.stat.members')}
@@ -285,8 +364,29 @@ export const OrgAdminMembers = () => {
             <Flexbox gap={12}>
               <Text strong>{t('org.usageChart')}</Text>
               <Text type="secondary">{t('org.usageChartHint')}</Text>
-              {usageBars.length > 0 ? (
-                <BarList data={usageBars} valueFormatter={(v) => usd(v)} />
+              {rangePicker}
+              <Flexbox horizontal align="center" gap={12} wrap="wrap">
+                <Text type="secondary">{t('org.usageMemberFilter')}</Text>
+                <Select
+                  style={{ minWidth: 220 }}
+                  value={chartMemberId}
+                  options={[
+                    { label: t('org.usageMemberAll'), value: 'all' },
+                    ...(dashboard?.members || []).map((m) => ({
+                      label: m.publicCode || m.userId.slice(0, 12),
+                      value: m.memberId,
+                    })),
+                  ]}
+                  onChange={setChartMemberId}
+                />
+              </Flexbox>
+              {hasChartSpend ? (
+                <BarChart
+                  categories={[spendCategory]}
+                  data={chartData}
+                  index="date"
+                  valueFormatter={(v) => usd(v)}
+                />
               ) : (
                 <Text type="secondary">{t('org.usageEmpty')}</Text>
               )}
@@ -296,6 +396,9 @@ export const OrgAdminMembers = () => {
           <Block className={styles.section} variant="outlined">
             <Flexbox gap={12}>
               <Text strong>{t('org.memberUsageTitle')}</Text>
+              {usageBars.length > 0 ? (
+                <BarList data={usageBars} valueFormatter={(v) => usd(v)} />
+              ) : null}
               <Table
                 dataSource={dashboard?.members || []}
                 pagination={false}
@@ -314,19 +417,19 @@ export const OrgAdminMembers = () => {
                     render: (v: string | null) => v || t('org.unspecifiedTeam'),
                   },
                   {
-                    dataIndex: 'limitUsd',
+                    dataIndex: 'periodAmountUsd',
                     title: t('org.columns.limit'),
-                    render: (v: number) => usd(v),
+                    render: (v: string) => usd(v),
                   },
                   {
-                    dataIndex: 'usedUsd',
+                    dataIndex: 'settledUsageUsd',
                     title: t('org.columns.used'),
-                    render: (v: number) => usd(v),
+                    render: (v: string) => usd(v),
                   },
                   {
                     dataIndex: 'remainingUsd',
                     title: t('org.columns.remaining'),
-                    render: (v: number) => usd(v),
+                    render: (v: string) => usd(v),
                   },
                 ]}
               />
@@ -747,6 +850,47 @@ export const OrgAdminMembers = () => {
                   {t('org.topupSubmit')}
                 </Button>
               </Form>
+            </Flexbox>
+          </Block>
+
+          <Block className={styles.section} variant="outlined">
+            <Flexbox gap={12}>
+              <Text strong>{t('org.txTitle')}</Text>
+              <Text type="secondary">{t('org.txHint')}</Text>
+              {rangePicker}
+              {(txHistory || []).length > 0 ? (
+                <Table
+                  dataSource={txHistory || []}
+                  pagination={{ pageSize: 20 }}
+                  rowKey="id"
+                  size="middle"
+                  columns={[
+                    {
+                      dataIndex: 'createdAt',
+                      title: t('wallet.columns.date'),
+                      render: (v: string) => new Date(v).toLocaleString(),
+                    },
+                    { dataIndex: 'type', title: t('wallet.columns.type') },
+                    {
+                      dataIndex: 'amountToman',
+                      title: t('wallet.columns.toman'),
+                      render: (v: string) => Number(v).toLocaleString(),
+                    },
+                    {
+                      dataIndex: 'amountUsd',
+                      title: t('wallet.columns.usd'),
+                      render: (v: string) => usd(v),
+                    },
+                    {
+                      dataIndex: 'description',
+                      title: t('org.txDescription'),
+                      render: (v: string | null) => v || '—',
+                    },
+                  ]}
+                />
+              ) : (
+                <Text type="secondary">{t('org.txEmpty')}</Text>
+              )}
             </Flexbox>
           </Block>
         </Flexbox>

@@ -1,9 +1,9 @@
-import { and, count, desc, eq, ilike, inArray, ne, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gte, ilike, inArray, lte, ne, or, sql } from 'drizzle-orm';
 
 import {
   aicoUserPublicIds,
-  memberBudgets,
   type MemberBudgetItem,
+  memberBudgets,
   modelAccessRules,
   type NewOrganization,
   type OrganizationInviteItem,
@@ -16,12 +16,17 @@ import {
   organizationTeamMembers,
   organizationTeams,
   platformAdmins,
+  usageLogs,
   walletTransactions,
 } from '../schemas/aicoOrganization';
 import { users } from '../schemas/user';
 import type { LobeChatDatabase } from '../type';
+import {
+  type BudgetPeriod,
+  isBudgetPeriod,
+  periodToOpenRouterLimitReset,
+} from '../utils/aicoMoney';
 import { randomSlug } from '../utils/idGenerator';
-import { type BudgetPeriod, isBudgetPeriod, periodToOpenRouterLimitReset } from '../utils/aicoMoney';
 
 export type OrgMemberRole = 'owner' | 'admin' | 'member';
 export type OrgInviteRole = 'admin' | 'member';
@@ -88,7 +93,9 @@ const computePeriodWindow = (period: BudgetPeriod, now = new Date()): PeriodWind
     }
     case 'monthly': {
       const start = startOfUtcMonth(now);
-      const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1, 0, 0, 0, 0));
+      const end = new Date(
+        Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1, 0, 0, 0, 0),
+      );
       return { end, nextRenewalAt: end, start };
     }
     case 'total': {
@@ -206,7 +213,9 @@ export class OrganizationModel {
         return org;
       });
     } catch (error) {
-      if (isUniqueConstraintViolation(error)) throw new Error('USER_ALREADY_IN_ORGANIZATION');
+      if (isUniqueConstraintViolation(error)) {
+        throw new Error('USER_ALREADY_IN_ORGANIZATION', { cause: error });
+      }
       throw error;
     }
   };
@@ -697,7 +706,9 @@ export class OrganizationModel {
         return { member, orgId: invite.orgId };
       });
     } catch (error) {
-      if (isUniqueConstraintViolation(error)) throw new Error('USER_ALREADY_IN_ORGANIZATION');
+      if (isUniqueConstraintViolation(error)) {
+        throw new Error('USER_ALREADY_IN_ORGANIZATION', { cause: error });
+      }
       throw error;
     }
   };
@@ -1229,4 +1240,143 @@ export class OrganizationModel {
       unallocatedMicroUsd: balanceMicroUsd,
     };
   };
+
+  // ─── Transaction history & usage charts ────────────────────────────
+
+  /**
+   * Org wallet ledger for a closed date range (inclusive UTC days).
+   * `from` / `to` are UTC calendar dates (`YYYY-MM-DD`).
+   */
+  getTransactionHistory = async (params: {
+    from: string;
+    limit?: number;
+    orgId: string;
+    to: string;
+  }) => {
+    const { fromDate, toDate } = parseInclusiveUtcDateRange(params.from, params.to);
+    const limit = Math.min(Math.max(params.limit ?? 200, 1), 500);
+
+    return this.db.query.walletTransactions.findMany({
+      where: and(
+        eq(walletTransactions.orgId, params.orgId),
+        gte(walletTransactions.createdAt, fromDate),
+        lte(walletTransactions.createdAt, toDate),
+      ),
+      orderBy: [desc(walletTransactions.createdAt)],
+      limit,
+    });
+  };
+
+  /**
+   * Daily org usage buckets from `usage_logs` (inclusive UTC date range).
+   * Days with no spend are filled with zeros so charts stay continuous.
+   */
+  getOrgUsageChart = async (params: { from: string; orgId: string; to: string }) => {
+    return this.getUsageChartPoints({
+      from: params.from,
+      orgId: params.orgId,
+      to: params.to,
+    });
+  };
+
+  /**
+   * Daily usage buckets for one org member (inclusive UTC date range).
+   */
+  getMemberUsageChart = async (params: {
+    from: string;
+    orgId: string;
+    orgMemberId: string;
+    to: string;
+  }) => {
+    const member = await this.db.query.organizationMembers.findFirst({
+      where: and(
+        eq(organizationMembers.id, params.orgMemberId),
+        eq(organizationMembers.orgId, params.orgId),
+      ),
+    });
+    if (!member) throw new Error('MEMBER_NOT_FOUND');
+
+    return this.getUsageChartPoints({
+      from: params.from,
+      orgId: params.orgId,
+      orgMemberId: params.orgMemberId,
+      to: params.to,
+    });
+  };
+
+  private getUsageChartPoints = async (params: {
+    from: string;
+    orgId: string;
+    orgMemberId?: string;
+    to: string;
+  }): Promise<Array<{ costMicroUsd: number; date: string; totalTokens: number }>> => {
+    const { fromDate, toDate, days } = parseInclusiveUtcDateRange(params.from, params.to);
+
+    const conditions = [
+      eq(usageLogs.orgId, params.orgId),
+      gte(usageLogs.createdAt, fromDate),
+      lte(usageLogs.createdAt, toDate),
+    ];
+    if (params.orgMemberId) {
+      conditions.push(eq(usageLogs.orgMemberId, params.orgMemberId));
+    }
+
+    const rows = await this.db
+      .select({
+        costMicroUsd: sql<number>`COALESCE(SUM(${usageLogs.costMicroUsd}), 0)`,
+        date: sql<string>`to_char(date_trunc('day', ${usageLogs.createdAt} AT TIME ZONE 'UTC'), 'YYYY-MM-DD')`,
+        totalTokens: sql<number>`COALESCE(SUM(${usageLogs.totalTokens}), 0)`,
+      })
+      .from(usageLogs)
+      .where(and(...conditions))
+      .groupBy(sql`date_trunc('day', ${usageLogs.createdAt} AT TIME ZONE 'UTC')`)
+      .orderBy(sql`date_trunc('day', ${usageLogs.createdAt} AT TIME ZONE 'UTC')`);
+
+    const byDate = new Map(
+      rows.map((row) => [
+        row.date,
+        {
+          costMicroUsd: Number(row.costMicroUsd) || 0,
+          totalTokens: Number(row.totalTokens) || 0,
+        },
+      ]),
+    );
+
+    return days.map((date) => {
+      const hit = byDate.get(date);
+      return {
+        costMicroUsd: hit?.costMicroUsd ?? 0,
+        date,
+        totalTokens: hit?.totalTokens ?? 0,
+      };
+    });
+  };
 }
+
+/** Inclusive UTC calendar-day range helpers for org statements / charts. */
+const UTC_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_USAGE_RANGE_DAYS = 366;
+
+const parseInclusiveUtcDateRange = (
+  from: string,
+  to: string,
+): { days: string[]; fromDate: Date; toDate: Date } => {
+  if (!UTC_DATE_RE.test(from) || !UTC_DATE_RE.test(to)) {
+    throw new Error('INVALID_DATE_RANGE');
+  }
+  if (from > to) throw new Error('INVALID_DATE_RANGE');
+
+  const fromDate = new Date(`${from}T00:00:00.000Z`);
+  const toDate = new Date(`${to}T23:59:59.999Z`);
+  if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) {
+    throw new Error('INVALID_DATE_RANGE');
+  }
+
+  const days: string[] = [];
+  for (let t = fromDate.getTime(); t <= toDate.getTime(); t += DAY_MS) {
+    days.push(new Date(t).toISOString().slice(0, 10));
+    if (days.length > MAX_USAGE_RANGE_DAYS) throw new Error('DATE_RANGE_TOO_LARGE');
+  }
+
+  return { days, fromDate, toDate };
+};

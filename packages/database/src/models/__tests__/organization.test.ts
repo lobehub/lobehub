@@ -10,6 +10,7 @@ import {
   platformAdmins,
   platformTrialConfig,
   trialAbuseBlocklist,
+  usageLogs,
   userTrials,
   userWallets,
   walletTransactions,
@@ -31,6 +32,7 @@ beforeEach(async () => {
   await serverDB.delete(trialAbuseBlocklist);
   await serverDB.delete(userTrials);
   await serverDB.delete(platformTrialConfig);
+  await serverDB.delete(usageLogs);
   await serverDB.delete(userWallets);
   await serverDB.delete(walletTransactions);
   await serverDB.delete(organizationTeamMembers);
@@ -51,6 +53,7 @@ afterEach(async () => {
   await serverDB.delete(trialAbuseBlocklist);
   await serverDB.delete(userTrials);
   await serverDB.delete(platformTrialConfig);
+  await serverDB.delete(usageLogs);
   await serverDB.delete(userWallets);
   await serverDB.delete(walletTransactions);
   await serverDB.delete(organizationTeamMembers);
@@ -136,25 +139,25 @@ describe('OrganizationModel', () => {
     expect(await orgModel.getMemberRole(adminId, org.id)).toBe('admin');
 
     const { organization, transaction } = await orgModel.addManualCredit({
+      amountMicroUsd: 10_000_000,
       amountToman: 50_000,
-      amountUsd: 10,
       createdByUserId: ownerId,
       description: 'test credit',
-      fxRate: 5000,
+      fxRateTomanPerUsd: 5000,
       orgId: org.id,
     });
     expect(transaction.type).toBe('manual_credit');
     expect(organization.walletBalanceToman).toBe(50_000);
-    expect(Number(organization.walletBalanceUsd)).toBe(10);
+    expect(Number(organization.walletBalanceMicroUsd)).toBe(10_000_000);
   });
 
   it('allocates member credit from org wallet without over-allocating', async () => {
     const org = await orgModel.createOrganization({ name: 'Alloc Org', ownerUserId: ownerId });
     await orgModel.addManualCredit({
+      amountMicroUsd: 20_000_000,
       amountToman: 100_000,
-      amountUsd: 20,
       createdByUserId: ownerId,
-      fxRate: 5000,
+      fxRateTomanPerUsd: 5000,
       orgId: org.id,
     });
 
@@ -172,20 +175,22 @@ describe('OrganizationModel', () => {
     });
 
     const { budget, organization } = await orgModel.allocateMemberCredit({
-      amountUsd: 10,
       createdByUserId: ownerId,
       orgId: org.id,
       orgMemberId: member.id,
+      period: 'total',
+      periodAmountMicroUsd: 10_000_000,
     });
-    expect(Number(budget.limitUsd)).toBe(10);
-    expect(Number(organization.walletBalanceUsd)).toBe(10);
+    expect(Number(budget.periodAmountMicroUsd)).toBe(10_000_000);
+    expect(Number(organization.walletBalanceMicroUsd)).toBe(10_000_000);
 
     await expect(
       orgModel.allocateMemberCredit({
-        amountUsd: 15,
         createdByUserId: ownerId,
         orgId: org.id,
         orgMemberId: member.id,
+        period: 'total',
+        periodAmountMicroUsd: 15_000_000,
       }),
     ).rejects.toThrow('INSUFFICIENT_ORG_BALANCE');
   });
@@ -219,18 +224,24 @@ describe('OrganizationModel', () => {
 describe('AicoBillingModel', () => {
   it('mock topup credits user wallet', async () => {
     const { wallet, transaction } = await billingModel.mockTopupUser({
+      amountMicroUsd: 20_000_000,
       amountToman: 100_000,
-      amountUsd: 20,
       createdByUserId: ownerId,
-      fxRate: 5000,
+      fxRateTomanPerUsd: 5000,
       userId: ownerId,
     });
     expect(transaction.type).toBe('topup');
     expect(wallet.balanceToman).toBe(100_000);
-    expect(Number(wallet.balanceUsd)).toBe(20);
+    expect(Number(wallet.balanceMicroUsd)).toBe(20_000_000);
   });
 
   it('activates trial once per user/phone and blocks abuse fingerprints', async () => {
+    await billingModel.updateTrialConfig({
+      enabled: true,
+      trialBudgetMicroUsd: 1_000_000,
+      updatedByUserId: ownerId,
+    });
+
     const trial = await billingModel.activateTrial({
       phone: '+989121234567',
       userId: memberId,
@@ -246,5 +257,80 @@ describe('AicoBillingModel', () => {
     await expect(
       billingModel.activateTrial({ phone: '+989999999999', userId: adminId }),
     ).rejects.toThrow('TRIAL_PHONE_BLOCKED');
+  });
+
+  it('getTransactionHistory returns org ledger rows inside the date range', async () => {
+    const org = await orgModel.createOrganization({ name: 'History Org', ownerUserId: ownerId });
+    await orgModel.addManualCredit({
+      amountMicroUsd: 10_000_000,
+      amountToman: 50_000,
+      createdByUserId: ownerId,
+      description: 'pilot credit',
+      fxRateTomanPerUsd: 5000,
+      orgId: org.id,
+      type: 'manual_credit',
+    });
+
+    const today = new Date().toISOString().slice(0, 10);
+    const rows = await orgModel.getTransactionHistory({
+      from: today,
+      orgId: org.id,
+      to: today,
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.type).toBe('manual_credit');
+    expect(rows[0]?.amountToman).toBe(50_000);
+    expect(rows[0]?.amountMicroUsd).toBe(10_000_000);
+
+    const empty = await orgModel.getTransactionHistory({
+      from: '2020-01-01',
+      orgId: org.id,
+      to: '2020-01-02',
+    });
+    expect(empty).toHaveLength(0);
+  });
+
+  it('getOrgUsageChart and getMemberUsageChart bucket usage by UTC day', async () => {
+    const org = await orgModel.createOrganization({ name: 'Chart Org', ownerUserId: ownerId });
+    const members = await orgModel.listMembers(org.id);
+    const ownerMember = members.find((m) => m.userId === ownerId)!;
+
+    await billingModel.recordUsage({
+      billingSource: 'organization',
+      completionTokens: 20,
+      costMicroUsd: 1_500_000,
+      modelId: 'openai/gpt-4o',
+      orgId: org.id,
+      orgMemberId: ownerMember.id,
+      promptTokens: 10,
+      totalTokens: 30,
+      userId: ownerId,
+    });
+
+    const day = new Date().toISOString().slice(0, 10);
+    const orgChart = await orgModel.getOrgUsageChart({ from: day, orgId: org.id, to: day });
+    expect(orgChart).toHaveLength(1);
+    expect(orgChart[0]).toMatchObject({
+      costMicroUsd: 1_500_000,
+      date: day,
+      totalTokens: 30,
+    });
+
+    const memberChart = await orgModel.getMemberUsageChart({
+      from: day,
+      orgId: org.id,
+      orgMemberId: ownerMember.id,
+      to: day,
+    });
+    expect(memberChart[0]?.costMicroUsd).toBe(1_500_000);
+
+    await expect(
+      orgModel.getMemberUsageChart({
+        from: day,
+        orgId: org.id,
+        orgMemberId: 'missing-member',
+        to: day,
+      }),
+    ).rejects.toThrow('MEMBER_NOT_FOUND');
   });
 });

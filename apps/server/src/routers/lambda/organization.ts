@@ -26,6 +26,38 @@ import { SmsService } from '@/server/services/sms';
 
 const INVITE_EXPIRY_DAYS = 3;
 
+const utcDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD')
+  .refine((value) => !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`)), 'Invalid calendar date');
+
+const mapOrgDateRangeError = (error: unknown): TRPCError => {
+  const message = error instanceof Error ? error.message : 'INTERNAL_ERROR';
+  if (
+    message === 'INVALID_DATE_RANGE' ||
+    message === 'DATE_RANGE_TOO_LARGE' ||
+    message === 'MEMBER_NOT_FOUND'
+  ) {
+    return new TRPCError({ code: 'BAD_REQUEST', message });
+  }
+  return new TRPCError({
+    cause: error,
+    code: 'INTERNAL_SERVER_ERROR',
+    message: 'Failed to load organization analytics',
+  });
+};
+
+const serializeUsageChartPoint = (point: {
+  costMicroUsd: number;
+  date: string;
+  totalTokens: number;
+}) => ({
+  costMicroUsd: String(point.costMicroUsd),
+  costUsd: microUsdToDecimalString(point.costMicroUsd),
+  date: point.date,
+  totalTokens: point.totalTokens,
+});
+
 const requireVerifiedPhone = async (serverDB: LobeChatDatabase, userId: string) => {
   const user = await serverDB.query.users.findFirst({ where: eq(users.id, userId) });
   if (!user?.phone || !user.phoneNumberVerified) {
@@ -623,6 +655,82 @@ export const organizationRouter = router({
         settledUsageMicroUsd: String(budget.settledUsageMicroUsd ?? 0),
         settledUsageUsd: microUsdToDecimalString(budget.settledUsageMicroUsd ?? 0),
       };
+    }),
+
+  /** Org wallet statement for an inclusive UTC date range (`YYYY-MM-DD`). */
+  getTransactionHistory: orgProcedure
+    .input(
+      z.object({
+        from: utcDateSchema,
+        limit: z.number().int().min(1).max(500).optional(),
+        orgId: z.string().min(1),
+        to: utcDateSchema,
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      await requireOrgManager(ctx.organizationModel, ctx.userId, input.orgId);
+      try {
+        const rows = await ctx.organizationModel.getTransactionHistory({
+          from: input.from,
+          limit: input.limit,
+          orgId: input.orgId,
+          to: input.to,
+        });
+        return rows.map((row) => ({
+          amountMicroUsd: String(row.amountMicroUsd ?? 0),
+          amountToman: tomanString(row.amountToman ?? 0),
+          amountUsd: microUsdToDecimalString(row.amountMicroUsd ?? 0),
+          createdAt: row.createdAt.toISOString(),
+          description: row.description,
+          id: row.id,
+          orgMemberId: row.orgMemberId,
+          type: row.type,
+        }));
+      } catch (error) {
+        throw mapOrgDateRangeError(error);
+      }
+    }),
+
+  /** Daily org usage chart points for an inclusive UTC date range. */
+  getOrgUsageChart: orgProcedure
+    .input(z.object({ from: utcDateSchema, orgId: z.string().min(1), to: utcDateSchema }))
+    .query(async ({ ctx, input }) => {
+      await requireOrgManager(ctx.organizationModel, ctx.userId, input.orgId);
+      try {
+        const points = await ctx.organizationModel.getOrgUsageChart({
+          from: input.from,
+          orgId: input.orgId,
+          to: input.to,
+        });
+        return points.map(serializeUsageChartPoint);
+      } catch (error) {
+        throw mapOrgDateRangeError(error);
+      }
+    }),
+
+  /** Daily member usage chart points for an inclusive UTC date range. */
+  getMemberUsageChart: orgProcedure
+    .input(
+      z.object({
+        from: utcDateSchema,
+        orgId: z.string().min(1),
+        orgMemberId: z.string().min(1),
+        to: utcDateSchema,
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      await requireOrgManager(ctx.organizationModel, ctx.userId, input.orgId);
+      try {
+        const points = await ctx.organizationModel.getMemberUsageChart({
+          from: input.from,
+          orgId: input.orgId,
+          orgMemberId: input.orgMemberId,
+          to: input.to,
+        });
+        return points.map(serializeUsageChartPoint);
+      } catch (error) {
+        throw mapOrgDateRangeError(error);
+      }
     }),
 });
 
