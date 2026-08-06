@@ -204,6 +204,42 @@ a source-order regression test, and say in the report that the runtime path need
 packaged build (`DESKTOP_RENDERER_STATIC` / `resolveRendererFilePath` maps
 `apps/desktop/index.html`, `popup.html`, `overlay.html`).
 
+### Measuring production-bundle startup behavior without packaging the app
+
+**Situation:** a claim depends on the built renderer (chunk splitting, lazy-route
+boundaries, startup paint timing), which dev-mode Vite cannot reproduce.
+
+**Doesn't work:** measuring in the dev instance (unbundled modules make lazy vs
+eager indistinguishable), or trusting `performance.getEntriesByType('resource')`
+to identify what loaded — the `app://` protocol emits no resource-timing entries
+at all (0 JS resources on a fully loaded page).
+
+**Works:** build the renderer (`cd apps/desktop && vite build --config
+vite.renderer.config.ts`), then launch a pool instance with the static override:
+
+```bash
+DESKTOP_RENDERER_STATIC=1 .agents/acceptance/scripts/electron-dev.sh start 1
+```
+
+The dev main process serves `apps/desktop/dist/renderer` over `app://renderer/`
+with the seeded login. Prove which build is loaded via the modulepreload hashes
+in the live DOM, not resource timing:
+
+```js
+[...document.querySelectorAll('link[rel=modulepreload]')]
+  .map((l) => l.href)
+  .find((h) => h.includes('<chunk-under-test>'));
+```
+
+Paint metrics survive post-hoc collection: a buffered
+`PerformanceObserver({ type: 'largest-contentful-paint', buffered: true })` plus
+`performance.getEntriesByType('paint')` read after load give FCP/DCL and the full
+LCP-candidate timeline. `restart 1` re-seeds userData, so each restart is a
+comparable cold start; `location.reload()` gives low-variance warm samples. For
+A/B builds, swap `dist/renderer` directories between restarts — remote-image LCP
+entries are network-noisy, so compare text-paint candidates and DCL across ≥5
+cold samples per variant before attributing a delta.
+
 ### Driving and probing a real Electron popup window
 
 **Situation:** verifying `entry.popup.tsx` behavior (its own HTML shell, no `BootShell`).
