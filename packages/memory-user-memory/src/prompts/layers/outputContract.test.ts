@@ -38,16 +38,21 @@ describe('memory layer prompt output contracts', () => {
 
   /**
    * @example
-   * Identity actions are nested directly below `actions`.
+   * Identity actions are direct root properties.
    */
   it('matches the identity actions schema', () => {
     /**
      * @example
-     * The prompt contains `{ "actions": ... }` and never references `withIdentities`.
+     * The prompt contains `{ "add": [], "update": [], "remove": [] }` without a wrapper.
      */
     expect({
-      hasActionsExample: identityPrompt.includes('{ "actions":'),
+      hasActionsExample: identityPrompt.includes('{ "add": [], "update": [], "remove": [] }'),
       hasLegacyWrapper: identityPrompt.includes('withIdentities'),
-    }).toEqual({ hasActionsExample: true, hasLegacyWrapper: false });
+      hasUnexpectedActionsWrapper: identityPrompt.includes('{ "actions":'),
+    }).toEqual({
+      hasActionsExample: true,
+      hasLegacyWrapper: false,
+      hasUnexpectedActionsWrapper: false,
+    });
   });
 });

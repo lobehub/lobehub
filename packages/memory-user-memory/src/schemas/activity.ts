@@ -284,7 +284,15 @@ export const ActivityMemorySchema: GenerateObjectSchema = {
                 status: {
                   description:
                     'Lifecycle status when mentioned. Use planned/completed/cancelled/ongoing/on_hold/pending. Use null if unclear.',
-                  enum: ['planned', 'completed', 'cancelled', 'ongoing', 'on_hold', 'pending'],
+                  enum: [
+                    'planned',
+                    'completed',
+                    'cancelled',
+                    'ongoing',
+                    'on_hold',
+                    'pending',
+                    null,
+                  ],
                   type: ['string', 'null'],
                 },
                 tags: {
