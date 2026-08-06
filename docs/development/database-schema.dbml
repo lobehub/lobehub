@@ -646,6 +646,56 @@ table agent_skills {
   }
 }
 
+table agent_history_job_agents {
+  job_id text [not null]
+  agent_id text [not null]
+
+  indexes {
+    (job_id, agent_id) [pk]
+    agent_id [name: 'agent_history_job_agents_agent_id_idx']
+  }
+}
+
+table agent_history_job_topics {
+  job_id text [not null]
+  topic_id text [not null]
+  priority boolean [not null, default: false]
+  activity_at "timestamp with time zone" [not null]
+
+  indexes {
+    (job_id, topic_id) [pk]
+    topic_id [name: 'agent_history_job_topics_topic_id_idx']
+    (job_id, priority, activity_at) [name: 'agent_history_job_topics_pick_idx']
+  }
+}
+
+table agent_history_jobs {
+  id text [pk, not null]
+  status text [not null, default: 'pending']
+  type text [not null, default: 'transfer']
+  agent_ids jsonb [not null]
+  session_ids jsonb [not null]
+  group_ids jsonb [not null, default: `[]`]
+  source_user_id text [not null]
+  source_workspace_id text
+  target_user_id text [not null]
+  target_workspace_id text
+  total_topics integer [not null]
+  completed_topics integer [not null, default: 0]
+  completed_at "timestamp with time zone"
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    status [name: 'agent_history_jobs_status_idx']
+    source_user_id [name: 'agent_history_jobs_source_user_id_idx']
+    target_user_id [name: 'agent_history_jobs_target_user_id_idx']
+    source_workspace_id [name: 'agent_history_jobs_source_workspace_id_idx']
+    target_workspace_id [name: 'agent_history_jobs_target_workspace_id_idx']
+  }
+}
+
 table ai_models {
   id varchar(150) [not null]
   "_id" uuid [pk, not null, default: `gen_random_uuid()`]
