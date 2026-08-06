@@ -443,6 +443,10 @@ export default {
   'builtins.lobe-task.goal.optional': 'Optional',
   'builtins.lobe-task.goal.required': 'Required',
   'builtins.lobe-task.goal.roundBudget': 'Iteration budget',
+  'builtins.lobe-task.goal.roundsUnit': 'rounds',
+  'builtins.lobe-task.goal.sectionBudget': 'Budget',
+  'builtins.lobe-task.goal.sectionInstruction': 'Task instruction',
+  'builtins.lobe-task.goal.uncapped': 'Uncapped',
   'builtins.lobe-task.goal.running': 'Round 1 · running',
   'builtins.lobe-task.goal.runningHint':
     '{{count}} checks will run automatically when this round completes',

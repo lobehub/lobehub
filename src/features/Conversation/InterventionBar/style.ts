@@ -15,7 +15,10 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     margin-block-end: 12px;
   `,
   content: css`
-    overflow-y: auto;
+    /* ChatInput's maxHeight owns the vertical scrolling; an overflow:auto here
+      never scrolls itself but still severs position:sticky inside intervention
+      bodies from that real scroll container. */
+    overflow-y: visible;
     flex: 1;
     min-height: 0;
     padding-block: 6px 8px;
