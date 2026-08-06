@@ -399,6 +399,20 @@ export const computeChatCost = (
   const hasDedicatedAudioCacheReadUnit = pricingUnitNames.has('audioInput_cacheRead');
   const hasDedicatedAudioInputUnit = pricingUnitNames.has('audioInput');
   const hasDedicatedImageCacheReadUnit = pricingUnitNames.has('imageInput_cacheRead');
+
+  if (
+    typeof usage.inputCachedTokens === 'number' &&
+    usage.inputCachedTokens > 0 &&
+    typeof usage.inputAudioTokens === 'number' &&
+    usage.inputAudioTokens > 0 &&
+    typeof usage.inputCachedAudioTokens !== 'number' &&
+    (hasDedicatedAudioInputUnit || hasDedicatedAudioCacheReadUnit)
+  ) {
+    // Aggregate cache usage does not reveal how many audio tokens received cache pricing.
+    // Dedicated audio units make that split material, so returning a cost would require guessing.
+    return undefined;
+  }
+
   const resolverContext: UnitQuantityResolverContext = {
     hasDedicatedAudioCacheReadUnit,
     hasDedicatedAudioInputUnit,

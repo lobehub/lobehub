@@ -494,6 +494,117 @@ describe('computeChatPricing', () => {
       expect(result?.totalCost).toBe(0.000_28);
     });
 
+    it('does not produce a cost when aggregate cache usage omits the cached audio split', () => {
+      const pricing: Pricing = {
+        units: [
+          { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+          {
+            name: 'textInput_cacheRead',
+            rate: 0.1,
+            strategy: 'fixed',
+            unit: 'millionTokens',
+          },
+          { name: 'audioInput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+          {
+            name: 'audioInput_cacheRead',
+            rate: 1,
+            strategy: 'fixed',
+            unit: 'millionTokens',
+          },
+        ],
+      };
+      const usage: ModelTokensUsage = {
+        inputAudioTokens: 80,
+        inputCachedTokens: 40,
+        inputCacheMissTokens: 60,
+        inputTextTokens: 20,
+        totalInputTokens: 100,
+        totalTokens: 100,
+      };
+
+      const result = computeChatCost(pricing, usage);
+
+      expect(result).toBeUndefined();
+    });
+
+    it('continues when the provider explicitly reports zero audio tokens', () => {
+      const pricing: Pricing = {
+        units: [
+          { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+          {
+            name: 'textInput_cacheRead',
+            rate: 0.1,
+            strategy: 'fixed',
+            unit: 'millionTokens',
+          },
+          { name: 'audioInput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+          {
+            name: 'audioInput_cacheRead',
+            rate: 1,
+            strategy: 'fixed',
+            unit: 'millionTokens',
+          },
+        ],
+      };
+      const usage: ModelTokensUsage = {
+        inputAudioTokens: 0,
+        inputCachedTokens: 40,
+        inputCacheMissTokens: 60,
+        inputTextTokens: 100,
+        totalInputTokens: 100,
+        totalTokens: 100,
+      };
+
+      const result = computeChatCost(pricing, usage);
+
+      expect(result).toBeDefined();
+      expect(result?.breakdown.find((item) => item.unit.name === 'textInput')?.quantity).toBe(60);
+      expect(
+        result?.breakdown.find((item) => item.unit.name === 'textInput_cacheRead')?.quantity,
+      ).toBe(40);
+      expect(result?.breakdown.find((item) => item.unit.name === 'audioInput')?.quantity).toBe(0);
+    });
+
+    it('continues when the provider explicitly reports zero cached audio tokens', () => {
+      const pricing: Pricing = {
+        units: [
+          { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+          {
+            name: 'textInput_cacheRead',
+            rate: 0.1,
+            strategy: 'fixed',
+            unit: 'millionTokens',
+          },
+          { name: 'audioInput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+          {
+            name: 'audioInput_cacheRead',
+            rate: 1,
+            strategy: 'fixed',
+            unit: 'millionTokens',
+          },
+        ],
+      };
+      const usage: ModelTokensUsage = {
+        inputAudioTokens: 20,
+        inputCachedAudioTokens: 0,
+        inputCachedTextTokens: 40,
+        inputCachedTokens: 40,
+        inputCacheMissTokens: 60,
+        inputTextTokens: 80,
+        totalInputTokens: 100,
+        totalTokens: 100,
+      };
+
+      const result = computeChatCost(pricing, usage);
+
+      expect(result).toBeDefined();
+      expect(result?.breakdown.find((item) => item.unit.name === 'textInput')?.quantity).toBe(40);
+      expect(result?.breakdown.find((item) => item.unit.name === 'audioInput')?.quantity).toBe(20);
+      expect(
+        result?.breakdown.find((item) => item.unit.name === 'audioInput_cacheRead')?.quantity,
+      ).toBe(0);
+    });
+
     it('does not change legacy image/video fallback allocation when adding audio support', () => {
       const pricing: Pricing = {
         units: [{ name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' }],
