@@ -1032,7 +1032,7 @@ describe('DataSlice', () => {
       };
       const localVoiceMessage: UIChatMessage = {
         id: 'tmp-voice-message',
-        audioList: [{ id: 'tmp-audio', url: 'blob:voice-preview' }],
+        audioList: [{ alt: 'voice.webm', id: 'tmp-audio', url: 'blob:voice-preview' }],
         content: '',
         metadata: { scope: LOCAL_MESSAGE_SCOPE },
         role: 'user',
@@ -1066,7 +1066,7 @@ describe('DataSlice', () => {
     it('should keep an earlier local-only voice row ahead of a later fetched message', async () => {
       const localVoiceMessage: UIChatMessage = {
         id: 'tmp-voice-message',
-        audioList: [{ id: 'tmp-audio', url: 'blob:voice-preview' }],
+        audioList: [{ alt: 'voice.webm', id: 'tmp-audio', url: 'blob:voice-preview' }],
         content: '',
         metadata: { scope: LOCAL_MESSAGE_SCOPE },
         role: 'user',
@@ -1114,7 +1114,7 @@ describe('DataSlice', () => {
       };
       const settledLocalVoiceMessage: UIChatMessage = {
         id: 'tmp-settled-voice-message',
-        audioList: [{ id: 'tmp-audio', url: 'blob:stale-voice-preview' }],
+        audioList: [{ alt: 'voice.webm', id: 'tmp-audio', url: 'blob:stale-voice-preview' }],
         content: '',
         metadata: { scope: LOCAL_MESSAGE_SCOPE },
         role: 'user',
@@ -1143,7 +1143,9 @@ describe('DataSlice', () => {
     it('should let a fetched server row replace a newer local-only row with the same id', async () => {
       const fetchedMessage: UIChatMessage = {
         id: 'tmp-voice-message',
-        audioList: [{ id: 'persisted-audio', url: 'https://example.com/voice.webm' }],
+        audioList: [
+          { alt: 'voice.webm', id: 'persisted-audio', url: 'https://example.com/voice.webm' },
+        ],
         content: 'Persisted message',
         role: 'user',
         createdAt: 1000,
@@ -1151,7 +1153,7 @@ describe('DataSlice', () => {
       };
       const localVoiceMessage: UIChatMessage = {
         id: 'tmp-voice-message',
-        audioList: [{ id: 'tmp-audio', url: 'blob:voice-preview' }],
+        audioList: [{ alt: 'voice.webm', id: 'tmp-audio', url: 'blob:voice-preview' }],
         content: '',
         metadata: { scope: LOCAL_MESSAGE_SCOPE },
         role: 'user',

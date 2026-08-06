@@ -489,11 +489,20 @@ const VoiceMessage = memo(() => {
   const { t } = useTranslation('chat');
   const agentId = useAgentId();
   const { model, provider } = useEffectiveModel(agentId);
-  const canRecordVoiceMessage = useVoiceMessageCapability(model, provider);
+  const fallbackCanRecordVoiceMessage = useVoiceMessageCapability(model, provider);
   const storeApi = useStoreApi();
-  const [activeAudioInputMode, onVoiceMessageSend, setActiveAudioInputMode] = useChatInputStore(
-    (s) => [s.activeAudioInputMode, s.onVoiceMessageSend, s.setActiveAudioInputMode],
-  );
+  const [
+    activeAudioInputMode,
+    injectedCanRecordVoiceMessage,
+    onVoiceMessageSend,
+    setActiveAudioInputMode,
+  ] = useChatInputStore((s) => [
+    s.activeAudioInputMode,
+    s.canRecordVoiceMessage,
+    s.onVoiceMessageSend,
+    s.setActiveAudioInputMode,
+  ]);
+  const canRecordVoiceMessage = injectedCanRecordVoiceMessage ?? fallbackCanRecordVoiceMessage;
   const recorder = useVoiceMessageRecorder();
   const canRecordVoiceMessageRef = useRef(canRecordVoiceMessage);
   canRecordVoiceMessageRef.current = canRecordVoiceMessage;

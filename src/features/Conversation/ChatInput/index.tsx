@@ -48,7 +48,7 @@ import {
 import GoalArmedChip from './VerifyTray/GoalArmedChip';
 import { useGoalArmStore } from './VerifyTray/goalArmStore';
 import GoalTray from './VerifyTray/GoalTray';
-import { canSendVoiceMessage } from './voiceMessageCapability';
+import { canSendVoiceMessage, useCanSendVoiceMessage } from './voiceMessageCapability';
 
 /** Max recent messages to feed into auto-complete context (≈10 conversation turns) */
 const MAX_CONTEXT_MESSAGES = 25;
@@ -188,6 +188,7 @@ const ChatInput = memo<ChatInputProps>(
     const dbMessages = useConversationStore(dataSelectors.dbMessages);
     const context = useConversationStore((s) => s.context);
     const contextKey = useMemo(() => messageMapKey(context), [context]);
+    const canRecordVoiceMessage = useCanSendVoiceMessage(context);
     const [agentId, inputMessage, sendMessage, stopGenerating] = useConversationStore((s) => [
       s.context.agentId,
       s.inputMessage,
@@ -490,6 +491,7 @@ const ChatInput = memo<ChatInputProps>(
       <ChatInputProvider
         agentId={agentId}
         allowExpand={allowExpand}
+        canRecordVoiceMessage={canRecordVoiceMessage}
         contextSelectionKey={contextKey}
         contextWindowMessages={contextWindowMessages}
         draftKey={contextKey}

@@ -8,7 +8,7 @@ import { LOCAL_MESSAGE_SCOPE } from '@/store/chat/utils/localMessages';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useFileStore } from '@/store/file/store';
 
-import type { SendVoiceMessageParams } from './action';
+import type { SendVoiceMessageParams, VoiceMessageSend, VoiceMessageSendOptions } from './action';
 
 const context = { agentId: 'agent-voice', topicId: 'topic-voice' };
 const messagesKey = messageMapKey(context);
@@ -162,7 +162,7 @@ describe('VoiceMessageAction', () => {
 
   it('keeps a successful optimistic row when the send lifecycle adopted the uploaded audio', async () => {
     vi.spyOn(useFileStore.getState(), 'uploadWithProgress').mockResolvedValue(uploadedResult);
-    const send = vi.fn(async (file: UploadFileItem, { messageId }: { messageId: string }) => {
+    const send = vi.fn<VoiceMessageSend>(async (file, { messageId }) => {
       adoptUploadedFile(file, messageId);
     });
 
@@ -181,7 +181,7 @@ describe('VoiceMessageAction', () => {
 
   it('removes a successful local row when queue-like acceptance did not adopt it', async () => {
     vi.spyOn(useFileStore.getState(), 'uploadWithProgress').mockResolvedValue(uploadedResult);
-    const send = vi.fn().mockResolvedValue(undefined);
+    const send = vi.fn<VoiceMessageSend>().mockResolvedValue(undefined);
 
     const messageId = startVoiceMessage({ send });
 
@@ -195,7 +195,7 @@ describe('VoiceMessageAction', () => {
       .spyOn(useFileStore.getState(), 'uploadWithProgress')
       .mockRejectedValueOnce(new Error('upload failed'))
       .mockResolvedValueOnce(uploadedResult);
-    const send = vi.fn(async (file: UploadFileItem, { messageId }: { messageId: string }) => {
+    const send = vi.fn<VoiceMessageSend>(async (file, { messageId }) => {
       adoptUploadedFile(file, messageId);
     });
 
@@ -219,7 +219,7 @@ describe('VoiceMessageAction', () => {
 
   it('restores one playable local row when the send lifecycle deletes it before failing', async () => {
     vi.spyOn(useFileStore.getState(), 'uploadWithProgress').mockResolvedValue(uploadedResult);
-    const send = vi.fn(async (_file: UploadFileItem, { messageId }: { messageId: string }) => {
+    const send = vi.fn<VoiceMessageSend>(async (_file, { messageId }) => {
       useChatStore.getState().internal_dispatchMessage({ id: messageId, type: 'deleteMessage' });
       throw new Error('send failed');
     });
@@ -246,7 +246,7 @@ describe('VoiceMessageAction', () => {
     vi.spyOn(useFileStore.getState(), 'uploadWithProgress').mockResolvedValue(uploadedResult);
     const sendResult = deferred();
     let sendSignal: AbortSignal | undefined;
-    const send = vi.fn((_file: UploadFileItem, { signal }: { signal: AbortSignal }) => {
+    const send = vi.fn<VoiceMessageSend>((_file, { signal }) => {
       sendSignal = signal;
       return sendResult.promise;
     });
@@ -271,7 +271,7 @@ describe('VoiceMessageAction', () => {
     vi.spyOn(useFileStore.getState(), 'uploadWithProgress').mockResolvedValue(uploadedResult);
     const sendResult = deferred();
     let uploadedFile: UploadFileItem | undefined;
-    const send = vi.fn((file: UploadFileItem) => {
+    const send = vi.fn<VoiceMessageSend>((file) => {
       uploadedFile = file;
       return sendResult.promise;
     });
@@ -299,7 +299,7 @@ describe('VoiceMessageAction', () => {
       .spyOn(useFileStore.getState(), 'uploadWithProgress')
       .mockRejectedValueOnce(new Error('upload failed'))
       .mockImplementationOnce(() => retryUpload.promise);
-    const send = vi.fn().mockResolvedValue(undefined);
+    const send = vi.fn<VoiceMessageSend>().mockResolvedValue(undefined);
 
     const messageId = startVoiceMessage({ send });
     await waitFor(() =>
@@ -324,11 +324,11 @@ describe('VoiceMessageAction', () => {
       .mockImplementationOnce(() => firstUpload.promise)
       .mockImplementationOnce(() => secondUpload.promise);
     const sendOrder: string[] = [];
-    const firstSend = vi.fn(async (file: UploadFileItem, { messageId }: { messageId: string }) => {
+    const firstSend = vi.fn<VoiceMessageSend>(async (file, { messageId }) => {
       sendOrder.push('first');
       adoptUploadedFile(file, messageId);
     });
-    const secondSend = vi.fn(async (file: UploadFileItem, { messageId }: { messageId: string }) => {
+    const secondSend = vi.fn<VoiceMessageSend>(async (file, { messageId }) => {
       sendOrder.push('second');
       adoptUploadedFile(file, messageId);
     });
@@ -368,9 +368,8 @@ describe('VoiceMessageAction', () => {
     });
     vi.spyOn(useFileStore.getState(), 'uploadWithProgress').mockResolvedValue(uploadedResult);
     const canSend = vi.fn(() => true);
-    const send = vi.fn(
-      async (file: UploadFileItem, options: { context: typeof targetContext; messageId: string }) =>
-        adoptUploadedFile(file, options.messageId, options.context),
+    const send = vi.fn<VoiceMessageSend>(async (file, options: VoiceMessageSendOptions) =>
+      adoptUploadedFile(file, options.messageId, options.context),
     );
 
     const messageId = startVoiceMessage({ canSend, context: sourceContext, send });
@@ -426,7 +425,7 @@ describe('VoiceMessageAction', () => {
       .spyOn(useFileStore.getState(), 'uploadWithProgress')
       .mockRejectedValueOnce(new Error('upload failed'))
       .mockResolvedValueOnce(uploadedResult);
-    const send = vi.fn(async (file: UploadFileItem, { messageId }: { messageId: string }) => {
+    const send = vi.fn<VoiceMessageSend>(async (file, { messageId }) => {
       adoptUploadedFile(file, messageId);
     });
     const messageId = startVoiceMessage({ canSend, send });
@@ -458,11 +457,12 @@ describe('VoiceMessageAction', () => {
     let uploadSignal: AbortSignal | undefined;
     vi.spyOn(useFileStore.getState(), 'uploadWithProgress').mockImplementation(
       ({ abortController }) => {
+        if (!abortController) throw new Error('Expected upload abort controller');
         uploadSignal = abortController.signal;
         return upload.promise;
       },
     );
-    const send = vi.fn();
+    const send = vi.fn<VoiceMessageSend>().mockResolvedValue(undefined);
     const removeFile = vi.mocked(fileService.removeUnreferencedFile);
 
     const messageId = startVoiceMessage({ send });
@@ -486,7 +486,7 @@ describe('VoiceMessageAction', () => {
     vi.spyOn(useFileStore.getState(), 'uploadWithProgress')
       .mockRejectedValueOnce(new Error('upload failed'))
       .mockImplementationOnce(() => retryUpload.promise);
-    const send = vi.fn();
+    const send = vi.fn<VoiceMessageSend>().mockResolvedValue(undefined);
     const messageId = startVoiceMessage({ send });
 
     await waitFor(() =>

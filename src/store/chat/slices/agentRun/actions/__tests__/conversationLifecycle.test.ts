@@ -12,6 +12,10 @@ import { messageService } from '@/services/message';
 import * as agentGroupStore from '@/store/agentGroup';
 import { setPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
+import type {
+  VoiceMessageSend,
+  VoiceMessageSendOptions,
+} from '@/store/chat/slices/voiceMessage/action';
 import { LOCAL_MESSAGE_SCOPE } from '@/store/chat/utils/localMessages';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
@@ -554,6 +558,7 @@ describe('ConversationLifecycle actions', () => {
         const localVoiceMessage = createMockMessage({
           audioList: [
             {
+              alt: 'voice.webm',
               durationMs: 1200,
               id: 'tmp-audio',
               mimeType: 'audio/webm',
@@ -653,10 +658,7 @@ describe('ConversationLifecycle actions', () => {
             } as any;
           });
 
-        const sendThroughLifecycle = (
-          file: any,
-          options: { context: typeof context; messageId: string; signal: AbortSignal },
-        ) =>
+        const sendThroughLifecycle: VoiceMessageSend = (file, options: VoiceMessageSendOptions) =>
           new Promise<void>((resolve, reject) => {
             let accepted = false;
             void result.current
@@ -2141,7 +2143,7 @@ describe('ConversationLifecycle actions', () => {
         const context = { agentId, threadId: null, topicId };
         const key = messageMapKey(context);
         const localVoiceMessage = createMockMessage({
-          audioList: [{ id: 'tmp-audio', url: 'blob:voice-preview' }],
+          audioList: [{ alt: 'voice.webm', id: 'tmp-audio', url: 'blob:voice-preview' }],
           content: '',
           id: 'tmp-other-voice-message',
           metadata: { scope: LOCAL_MESSAGE_SCOPE },

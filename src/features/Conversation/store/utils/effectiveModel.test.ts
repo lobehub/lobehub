@@ -1,3 +1,4 @@
+import { act, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { useAgentStore } from '@/store/agent';
@@ -7,6 +8,7 @@ import { useUserStore } from '@/store/user';
 import {
   getEffectiveConversationModel,
   getEffectiveConversationModelConfig,
+  useEffectiveConversationModelConfig,
 } from './effectiveModel';
 
 const AGENT_ID = 'agt_test';
@@ -143,5 +145,109 @@ describe('getEffectiveConversationModel', () => {
     } as any);
 
     expect(getEffectiveConversationModel({ agentId: AGENT_ID })).toBe('gpt-5.2');
+  });
+});
+
+describe('useEffectiveConversationModelConfig', () => {
+  it('reacts when a public workspace member selects a personal model override', () => {
+    act(() => {
+      useAgentStore.setState({
+        agentMap: {
+          [AGENT_ID]: {
+            chatConfig: {},
+            model: 'shared-model',
+            provider: 'openai',
+            userId: 'user_author',
+            visibility: 'public',
+            workspaceId: 'ws_1',
+          },
+        },
+      } as any);
+      useUserStore.setState({
+        user: { id: 'user_member' },
+        workspaceUserPreference: {},
+      } as any);
+    });
+
+    const { result } = renderHook(() => useEffectiveConversationModelConfig({ agentId: AGENT_ID }));
+
+    expect(result.current).toEqual({ model: 'shared-model', provider: 'openai' });
+
+    act(() => {
+      useUserStore.setState({
+        workspaceUserPreference: {
+          agentModelOverrides: {
+            [AGENT_ID]: { model: 'member-model', provider: 'anthropic' },
+          },
+        },
+      });
+    });
+
+    expect(result.current).toEqual({ model: 'member-model', provider: 'anthropic' });
+  });
+
+  it('prefers subAgentId over agentId when resolving the shared model', () => {
+    const parentAgentId = 'agt_parent';
+    const subAgentId = 'agt_sub';
+    act(() => {
+      useAgentStore.setState({
+        agentMap: {
+          [parentAgentId]: { chatConfig: {}, model: 'parent-model', provider: 'openai' },
+          [subAgentId]: { chatConfig: {}, model: 'subagent-model', provider: 'google' },
+        },
+      } as any);
+      useUserStore.setState({ workspaceUserPreference: {} });
+    });
+
+    const { result } = renderHook(() =>
+      useEffectiveConversationModelConfig({ agentId: parentAgentId, subAgentId }),
+    );
+
+    expect(result.current).toEqual({ model: 'subagent-model', provider: 'google' });
+  });
+
+  it('prefers the topic model over the subagent and its member override', () => {
+    const parentAgentId = 'agt_topic_parent';
+    const subAgentId = 'agt_topic_sub';
+    act(() => {
+      useAgentStore.setState({
+        agentMap: {
+          [parentAgentId]: { chatConfig: {}, model: 'parent-model', provider: 'openai' },
+          [subAgentId]: {
+            chatConfig: {},
+            model: 'subagent-model',
+            provider: 'google',
+            userId: 'user_author',
+            visibility: 'public',
+            workspaceId: 'ws_1',
+          },
+        },
+      } as any);
+      useChatStore.setState({
+        topicDataMap: {
+          [`agent_${parentAgentId}`]: {
+            items: [{ id: TOPIC_ID, model: 'topic-model', provider: 'anthropic' }],
+          },
+        },
+      } as any);
+      useUserStore.setState({
+        user: { id: 'user_member' },
+        workspaceUserPreference: {
+          agentModelOverrides: {
+            [subAgentId]: { model: 'member-model', provider: 'openai' },
+          },
+        },
+      } as any);
+    });
+
+    const { result } = renderHook(() =>
+      useEffectiveConversationModelConfig({
+        agentId: parentAgentId,
+        subAgentId,
+        topicId: TOPIC_ID,
+      }),
+    );
+
+    expect(result.current).toEqual({ model: 'topic-model', provider: 'anthropic' });
   });
 });

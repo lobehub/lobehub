@@ -59,6 +59,7 @@ export interface PublicState {
   activeAudioInputMode?: 'dictation' | 'voiceMessage';
   agentId?: string;
   allowExpand?: boolean;
+  canRecordVoiceMessage?: boolean;
   contextSelectionKey?: string;
   contextWindowMessages?: ContextWindowMessage[];
   draftKey?: string;
