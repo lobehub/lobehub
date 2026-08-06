@@ -270,6 +270,34 @@ export class AicoOpenRouterKeyService {
    */
   resolveUserApiKey = async (_userId: string): Promise<string | null> => null;
 
+  /**
+   * Spendable remaining for a personal wallet. Prefers OpenRouter
+   * `limit_remaining` (enforced spend left on the managed key); falls back to
+   * deposited `balanceMicroUsd` when no key exists or OR is unreachable.
+   */
+  getUserRemaining = async (
+    userId: string,
+  ): Promise<{ remainingMicroUsd: number; usageMicroUsd: number | null }> => {
+    const wallet = await this.billingModel.getOrCreateUserWallet(userId);
+    const balanceMicroUsd = Number(wallet.balanceMicroUsd ?? 0);
+
+    if (!wallet.openrouterKeyId || this.isStaleManagedKeyId(wallet.openrouterKeyId)) {
+      return { remainingMicroUsd: Math.max(0, balanceMicroUsd), usageMicroUsd: null };
+    }
+
+    try {
+      const info = await this.client.getKey(wallet.openrouterKeyId);
+      const usageMicro = Number(openRouterUsdToMicroFloor(info.usage));
+      const remaining =
+        info.limitRemaining == null
+          ? Math.max(0, balanceMicroUsd - usageMicro)
+          : Number(openRouterUsdToMicroFloor(info.limitRemaining));
+      return { remainingMicroUsd: Math.max(0, remaining), usageMicroUsd: usageMicro };
+    } catch {
+      return { remainingMicroUsd: Math.max(0, balanceMicroUsd), usageMicroUsd: null };
+    }
+  };
+
   syncMemberUsage = async (orgMemberId: string) => {
     const budget = await this.orgModel.getMemberBudget(orgMemberId);
     if (!budget?.openrouterKeyId) return null;

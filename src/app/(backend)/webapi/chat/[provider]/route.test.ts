@@ -67,6 +67,7 @@ describe('POST handler', () => {
         'test-user-id',
         'test-provider',
         undefined,
+        { billingContext: undefined, modelId: 'test-model' },
       );
     });
 

@@ -144,6 +144,8 @@ export class AicoChatGuard {
       }
     } else if (billingSource === 'organization' && orgMemberId) {
       await this.keyService.syncMemberUsage(orgMemberId).catch(() => null);
+    } else if (billingSource === 'personal') {
+      await this.keyService.getUserRemaining(userId).catch(() => null);
     }
 
     await this.billingModel.recordUsage({

@@ -9,6 +9,7 @@ import {
   type MessageActionContext,
   type MessageActionSlot,
 } from '../../components/MessageActionBar';
+import MessageCostBadge from '../../components/MessageCostBadge';
 
 const DEFAULT_BAR_WITH_TOOLS: MessageActionSlot[] = ['delAndRegenerate', 'copy'];
 const DEFAULT_BAR: MessageActionSlot[] = ['edit', 'copy'];
@@ -81,6 +82,7 @@ export const GroupActionsBar = memo<GroupActionsProps>(
         ctx={ctx}
         leading={<ReactionPicker messageId={id} />}
         menu={actionsConfig?.menu ?? DEFAULT_MENU}
+        trailing={<MessageCostBadge metadata={data.metadata} usage={data.usage} />}
       />
     );
   },

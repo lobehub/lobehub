@@ -86,6 +86,8 @@ export const aicoBillingRouter = router({
   /**
    * Personal wallet + each org membership budget as separate spendable sources.
    * Credits never pool — each source has its own remaining balance and managed key.
+   * Personal remaining prefers OpenRouter `limit_remaining`; org remaining syncs
+   * settled usage from OpenRouter when a managed key exists.
    */
   getMyBillingSources: billingProcedure.query(async ({ ctx }) => {
     const [wallet, orgs] = await Promise.all([
@@ -93,7 +95,13 @@ export const aicoBillingRouter = router({
       ctx.organizationModel.listForUser(ctx.userId),
     ]);
 
-    const personalRemaining = Number(wallet.balanceMicroUsd ?? 0);
+    const keyService = ctx.keyService;
+    const personalRemaining = (
+      await keyService.getUserRemaining(ctx.userId).catch(() => ({
+        remainingMicroUsd: Number(wallet.balanceMicroUsd ?? 0),
+      }))
+    ).remainingMicroUsd;
+
     const personal = {
       hasManagedKey: Boolean(wallet.openrouterKeyId),
       isActive: Boolean(wallet.isActive),
@@ -108,6 +116,8 @@ export const aicoBillingRouter = router({
           const members = await ctx.organizationModel.listMembers(org.id);
           const me = members.find((m) => m.userId === ctx.userId && m.status === 'active');
           if (!me) return null;
+
+          await keyService.syncMemberUsage(me.id).catch(() => null);
 
           const budget = await ctx.organizationModel.getMemberBudget(me.id);
           const reservedMicroUsd = Number(budget?.reservedMicroUsd ?? 0);
