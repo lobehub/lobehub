@@ -2254,6 +2254,19 @@ export class AiAgentService {
           })
         : undefined;
       const remoteDeviceId = platformPlan?.kind === 'device' ? platformPlan.deviceId : undefined;
+      const remoteDeviceWorkspaceId = remoteDeviceId
+        ? await this.resolveDeviceWorkspaceId(remoteDeviceId)
+        : undefined;
+      const usesCallersPersonalDevice =
+        platformPlan?.kind === 'device' &&
+        !remoteDeviceWorkspaceId &&
+        (effectiveRequestedDeviceId === remoteDeviceId ||
+          (platformPlan.target === 'local' &&
+            agentConfig.agencyConfig?.executionTargetSelectionPolicy !== 'fixed') ||
+          (!canManageAgent && memberDeviceOverride?.boundDeviceId === remoteDeviceId));
+      const remoteDeviceUserId = usesCallersPersonalDevice
+        ? this.userId
+        : (agentConfig.userId ?? this.userId);
 
       // Register the run's lifecycle hooks so the hetero terminal path fires
       // onComplete/onError through the same `hookDispatcher` the normal LLM
@@ -2275,7 +2288,12 @@ export class AiAgentService {
           hooks: serializedHooks,
           // Store deviceId + heteroType so interruptTask can cancel remote processes
           ...(isRemoteHetero && remoteDeviceId
-            ? { deviceId: remoteDeviceId, heteroType }
+            ? {
+                deviceId: remoteDeviceId,
+                deviceUserId: remoteDeviceUserId,
+                deviceWorkspaceId: remoteDeviceWorkspaceId,
+                heteroType,
+              }
             : undefined),
           operationId,
           scope: appContext?.scope ?? undefined,
@@ -2361,9 +2379,12 @@ export class AiAgentService {
 
         // lh connect only handles tool_call_request (not agent_run_request),
         // so we use executeToolCall with the runHeteroTask tool instead of dispatchAgentRun.
-        const remoteDeviceWorkspaceId = await this.resolveDeviceWorkspaceId(remoteDeviceId);
         const result = await deviceGateway.executeToolCall(
-          { deviceId: remoteDeviceId, userId: this.userId, workspaceId: remoteDeviceWorkspaceId },
+          {
+            deviceId: remoteDeviceId,
+            userId: remoteDeviceUserId,
+            workspaceId: remoteDeviceWorkspaceId,
+          },
           {
             apiName: 'runHeteroTask',
             arguments: JSON.stringify({
@@ -5418,7 +5439,14 @@ export class AiAgentService {
     if (topicId) {
       const topic = await this.topicModel.findById(topicId);
       const runningOp = (topic?.metadata as any)?.runningOperation as
-        { deviceId?: string; heteroType?: string; operationId?: string } | undefined;
+        | {
+            deviceId?: string;
+            deviceUserId?: string;
+            deviceWorkspaceId?: string;
+            heteroType?: string;
+            operationId?: string;
+          }
+        | undefined;
 
       if (
         runningOp?.deviceId &&
@@ -5432,12 +5460,13 @@ export class AiAgentService {
           runningOp.deviceId,
           taskId,
         );
-        const cancelWorkspaceId = await this.resolveDeviceWorkspaceId(runningOp.deviceId);
+        const cancelWorkspaceId =
+          runningOp.deviceWorkspaceId ?? (await this.resolveDeviceWorkspaceId(runningOp.deviceId));
         await deviceGateway
           .executeToolCall(
             {
               deviceId: runningOp.deviceId,
-              userId: this.userId,
+              userId: runningOp.deviceUserId ?? this.userId,
               workspaceId: cancelWorkspaceId,
             },
             {
