@@ -1,5 +1,6 @@
 import { Input } from 'antd';
 import { createStaticStyles } from 'antd-style';
+import type { FocusEventHandler } from 'react';
 
 const styles = createStaticStyles(({ css }) => ({
   otp: css`
@@ -21,9 +22,41 @@ const styles = createStaticStyles(({ css }) => ({
 
 interface OtpCodeInputProps {
   autoFocus?: boolean;
+  disabled?: boolean;
+  id?: string;
+  onBlur?: FocusEventHandler;
+  /** Injected by Form.Item — required for OTP to bind into the form. */
+  onChange?: (value: string) => void;
   size?: 'large' | 'middle' | 'small';
+  status?: 'error' | 'warning';
+  /** Injected by Form.Item — required for OTP to bind into the form. */
+  value?: string;
 }
 
-export const OtpCodeInput = ({ autoFocus, size = 'large' }: OtpCodeInputProps) => (
-  <Input.OTP autoFocus={autoFocus} className={styles.otp} length={6} size={size} />
+/**
+ * Form.Item-compatible OTP input. Must forward value/onChange so Ant Design
+ * Form can read the entered code (otherwise submit always fails "required").
+ */
+export const OtpCodeInput = ({
+  autoFocus,
+  disabled,
+  id,
+  onBlur,
+  onChange,
+  size = 'large',
+  status,
+  value,
+}: OtpCodeInputProps) => (
+  <Input.OTP
+    autoFocus={autoFocus}
+    className={styles.otp}
+    disabled={disabled}
+    id={id}
+    length={6}
+    size={size}
+    status={status}
+    value={value}
+    onBlur={onBlur}
+    onChange={onChange}
+  />
 );
