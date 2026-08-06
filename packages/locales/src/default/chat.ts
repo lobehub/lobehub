@@ -835,8 +835,8 @@ export default {
   'newOpenCodeAgent': 'Add OpenCode',
   'newPiAgent': 'Add Pi',
   'newQoderAgent': 'Add Qoder',
-  'newPlatformAgent': 'Connect Local Agent',
-  'newPlatformAgentDesc': 'Connect to Claude Code, Codex, and other local agents',
+  'newPlatformAgent': 'Connect an Agent',
+  'newPlatformAgentDesc': 'Connect Claude Code, Codex, Hermes, OpenClaw, and other agents',
   'newGroupChat': 'Create Group',
   'agent.publishToWorkspace': 'Publish to Workspace',
   'agent.publishToWorkspaceErrorFixedPrivateDevice':
