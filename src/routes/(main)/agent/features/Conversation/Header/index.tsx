@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
+import { Avatar, Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
 
@@ -11,7 +11,8 @@ import OpenInAppButton from '@/features/OpenInAppButton';
 import TopicCommentButton from '@/features/TopicComment/TopicCommentButton';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useAgentStore } from '@/store/agent';
-import { chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { useElectronStore } from '@/store/electron';
 
 import HeaderActions from './HeaderActions';
 import ShareButton from './ShareButton';
@@ -132,6 +133,10 @@ const Header = memo(() => {
     homeFallback: false,
     topicId,
   });
+  const splitView = useElectronStore((s) => s.splitView);
+  const agentMeta = useAgentStore((s) =>
+    agentId ? agentSelectors.getAgentMetaById(agentId)(s) : undefined,
+  );
   const isLocalSystemEnabled = useAgentStore((s) =>
     agentId ? chatConfigByIdSelectors.isLocalSystemEnabledById(agentId)(s) : false,
   );
@@ -151,6 +156,17 @@ const Header = memo(() => {
             className={headerStyles.leftContent}
             gap={4}
           >
+            {splitView && agentMeta && (
+              <Avatar
+                alt={agentMeta.title}
+                avatar={agentMeta.avatar}
+                background={agentMeta.backgroundColor}
+                shape={'square'}
+                size={24}
+                style={{ flex: 'none', marginInlineStart: 8 }}
+                title={agentMeta.title}
+              />
+            )}
             <Tags />
             <HeaderActions />
           </Flexbox>
