@@ -24,7 +24,6 @@ const SignIn = () => {
     handleSocialSignIn,
     handleVerifyPhoneOtp,
     isSocialOnly,
-    lastAuthProvider,
     loading,
     oAuthSSOProviders,
     otpForm,
@@ -83,7 +82,6 @@ const SignIn = () => {
       disableEmailPassword={disableEmailPassword}
       form={form as any}
       isSocialOnly={isSocialOnly}
-      lastAuthProvider={lastAuthProvider}
       loading={loading}
       oAuthSSOProviders={oAuthSSOProviders}
       serverConfigInit={serverConfigInit}

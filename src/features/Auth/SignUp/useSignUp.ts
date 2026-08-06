@@ -10,7 +10,8 @@ import type { AuthFetchOptions } from '@/features/Auth/utils/authFetchOptions';
 import { withCaptchaToken } from '@/features/Auth/utils/authFetchOptions';
 import { useAuthServerConfigStore } from '@/features/AuthShell';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
-import { signUp } from '@/libs/better-auth/auth-client';
+import { signIn, signUp } from '@/libs/better-auth/auth-client';
+import { isBuiltinProvider, normalizeProviderId } from '@/libs/better-auth/utils/client';
 import { buildOnboardingRedirectUrl } from '@/utils/onboardingRedirect';
 
 import type { BaseSignUpFormValues } from './types';
@@ -27,12 +28,22 @@ interface SignUpErrorLike {
   message?: string;
 }
 
+const resolveDisplayName = (values: SignUpFormValues) => {
+  const fullName = [values.firstName, values.lastName]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(' ');
+
+  return fullName || values.email.split('@')[0];
+};
+
 export const useSignUp = () => {
   const { t } = useTranslation(['auth', 'authError']);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [form] = Form.useForm<SignUpFormValues>();
   const [loading, setLoading] = useState(false);
+  const [socialLoading, setSocialLoading] = useState<string | null>(null);
   const { getCaptchaTokenOnError, getFetchOptions, preSocialSignupCheck, businessElement } =
     useBusinessSignup(form);
   const enableEmailVerification = useAuthServerConfigStore(
@@ -56,7 +67,6 @@ export const useSignUp = () => {
       // New users always go through onboarding first; the original target is
       // threaded via the `callbackUrl` query param and restored on finish.
       const redirectUrl = buildOnboardingRedirectUrl(callbackUrl);
-      const username = values.email.split('@')[0];
       const fetchOptions = await getFetchOptions();
 
       const submit = async (nextFetchOptions?: AuthFetchOptions) =>
@@ -64,7 +74,7 @@ export const useSignUp = () => {
           callbackURL: redirectUrl,
           email: values.email,
           fetchOptions: nextFetchOptions,
-          name: username,
+          name: resolveDisplayName(values),
           password: values.password,
         });
 
@@ -116,5 +126,50 @@ export const useSignUp = () => {
     }
   };
 
-  return { businessElement, form, loading, onSubmit: handleSignUp };
+  const handleSocialSignIn = async (provider: string) => {
+    setSocialLoading(provider);
+    const normalizedProvider = normalizeProviderId(provider);
+    await trackLoginOrSignupClicked({
+      provider: normalizedProvider,
+      spm: 'signup.social.click',
+    });
+
+    try {
+      if (enableBusinessFeatures && !(await preSocialSignupCheck(form.getFieldsValue()))) {
+        setSocialLoading(null);
+        return;
+      }
+
+      const callbackUrl = searchParams.get('callbackUrl') || '/';
+      const newUserCallbackURL = buildOnboardingRedirectUrl(callbackUrl);
+
+      const result = isBuiltinProvider(normalizedProvider)
+        ? await signIn.social({
+            callbackURL: callbackUrl,
+            newUserCallbackURL,
+            provider: normalizedProvider,
+          })
+        : await signIn.oauth2({
+            callbackURL: callbackUrl,
+            newUserCallbackURL,
+            providerId: normalizedProvider,
+          });
+
+      if (result && 'error' in result && result.error) throw result.error;
+    } catch (error) {
+      console.error(`${normalizedProvider} sign up error:`, error);
+      toast.error(t('betterAuth.signin.socialError'));
+    } finally {
+      setSocialLoading(null);
+    }
+  };
+
+  return {
+    businessElement,
+    form,
+    loading,
+    onSocialSignIn: handleSocialSignIn,
+    onSubmit: handleSignUp,
+    socialLoading,
+  };
 };
