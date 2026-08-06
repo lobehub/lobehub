@@ -1,15 +1,16 @@
 ---
 name: i18n
-description: 'LobeHub i18n with react-i18next. Use for user-facing strings, locale keys, namespaces, useTranslation, t(), interpolation, zh-CN/en-US previews, hardcoded UI copy, or bun run i18n.'
+description: 'LobeHub/Aico i18n with react-i18next. Use for user-facing strings, locale keys, namespaces, useTranslation, t(), interpolation, fa-IR/fr-FR/en-US/zh-CN previews, hardcoded UI copy, or bun run i18n.'
 user-invocable: false
 ---
 
-# LobeHub Internationalization Guide
+# LobeHub / Aico Internationalization Guide
 
-- Default language: English (en-US)
 - Framework: react-i18next
-- **Only edit files in `packages/locales/src/default/`** - Never edit JSON files in `locales/` (except hand-written en-US/zh-CN previews)
-- Leave generated locales to the daily `auto-i18n.yml` workflow by default; run `bun run i18n` manually only when they are needed immediately
+- **Aico default language: Persian (`fa-IR`)** — see `DEFAULT_LANG` / `VISIBLE_LOCALES` in `packages/locales/src/resources.ts`
+- **Visible product languages:** `fa-IR`, `en-US`, `fr-FR` (must be hand-translated in-PR)
+- Author English source in `packages/locales/src/default/` — never edit generated JSON for non-visible locales by hand
+- Leave non-visible locales to the daily `auto-i18n.yml` workflow by default; run `bun run i18n` only when those are needed immediately
 
 ## Key Naming Convention
 
@@ -49,13 +50,19 @@ export default {
 'clientDB.solve.backup.title': '数据备份',
 ```
 
-## Workflow
+## Workflow (Aico)
 
 1. Add keys to `packages/locales/src/default/{namespace}.ts`
-2. Export new namespace in `packages/locales/src/default/index.ts`
-3. For dev preview: manually translate `locales/zh-CN/{namespace}.json` and `locales/en-US/{namespace}.json`
-4. Leave all other locales to `.github/workflows/auto-i18n.yml`, which runs daily and opens an automated translation PR
-5. Run `bun run i18n` manually only when the branch needs those translations immediately; it is slow and requires `OPENAI_API_KEY`
+2. Export new namespace in `packages/locales/src/default/index.ts` when creating a namespace
+3. In the **same PR**, update:
+   - `locales/en-US/{namespace}.json` (English mirror)
+   - `locales/fa-IR/{namespace}.json` (**required** — Persian)
+   - `locales/fr-FR/{namespace}.json` (**required** — French; create the file if missing)
+   - `locales/zh-CN/{namespace}.json` (hand-translate for shared upstream namespaces)
+4. Leave `ar`, `de-DE`, `ja-JP`, etc. to `.github/workflows/auto-i18n.yml`
+5. Run `bun run i18n` manually only when non-visible locales are needed immediately; it is slow and requires `OPENAI_API_KEY`
+
+Do **not** ship new Aico UI copy with English-only `fa-IR` / `fr-FR` (or missing keys that fall back to English).
 
 ## Usage
 
@@ -74,6 +81,6 @@ t('common:save');
 
 ## Common Namespaces
 
-**Most used:** `common` (shared UI), `chat` (chat features), `setting` (settings)
+**Most used:** `common` (shared UI), `chat` (chat features), `setting` (settings), `aico` (Aico B2B/wallet/admin)
 
 Others: auth, changelog, components, discover, editor, electron, error, file, hotkey, knowledgeBase, memory, models, plugin, portal, providers, tool, topic

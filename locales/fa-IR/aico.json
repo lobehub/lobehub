@@ -180,6 +180,7 @@
   "platform.created": "سازمان ایجاد شد",
   "platform.creditFailed": "افزودن اعتبار ناموفق بود",
   "platform.creditSubmit": "افزودن اعتبار",
+  "platform.creditUserAction": "اعتبار",
   "platform.credited": "اعتبار افزوده شد",
   "platform.description": "توضیحات",
   "platform.forbiddenDesc": "فقط مدیران پلتفرم می‌توانند این صفحه را باز کنند.",

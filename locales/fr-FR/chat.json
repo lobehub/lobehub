@@ -583,6 +583,7 @@
   "messageAction.continueGeneration": "Continuer la génération",
   "messageAction.continueGenerationUnsupported": "Le modèle actuel ne prend pas en charge la continuation d'un message de l'assistant. Essayez de régénérer à la place.",
   "messageAction.copyOperationId": "Copier l'ID de l'opération",
+  "messageAction.cost": "Coût",
   "messageAction.delAndRegenerate": "Supprimer et régénérer",
   "messageAction.deleteDisabledByThreads": "Ce message contient un sous-sujet et ne peut pas être supprimé",
   "messageAction.expand": "Développer le message",
