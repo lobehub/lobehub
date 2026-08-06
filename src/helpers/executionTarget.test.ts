@@ -478,6 +478,20 @@ describe('resolveExecutionPlan', () => {
         sandboxExecutionAvailable: false,
       }),
     ).toEqual({ deviceId: 'workspace-device', kind: 'device', target: 'device' });
+
+    expect(
+      resolveExecutionPlan({
+        agencyConfig: openClawCfg({
+          boundDeviceId: 'author-desktop',
+          executionTarget: 'local',
+          executionTargetSelectionPolicy: 'fixed',
+        }),
+        clientExecutionAvailable: true,
+        isHetero: true,
+        localDeviceId: 'member-desktop',
+        sandboxExecutionAvailable: false,
+      }),
+    ).toEqual({ deviceId: 'author-desktop', kind: 'device', target: 'local' });
   });
 
   it('does not dispatch a stale platform binding for none or unsupported sandbox', () => {

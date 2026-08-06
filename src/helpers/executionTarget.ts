@@ -428,6 +428,7 @@ export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): Execut
   // route the run somewhere else.
   const effectiveRequestedDeviceId =
     agencyConfig?.executionTargetSelectionPolicy === 'fixed' ? undefined : requestedDeviceId;
+  const isFixedSelection = agencyConfig?.executionTargetSelectionPolicy === 'fixed';
   const wantsDevice =
     !!effectiveRequestedDeviceId || target === 'device' || target === 'local' || target === 'auto';
 
@@ -450,7 +451,9 @@ export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): Execut
   const boundDeviceId =
     effectiveRequestedDeviceId ||
     (target === 'local'
-      ? localDeviceId || (isPlatformTask ? undefined : agencyConfig?.boundDeviceId)
+      ? isFixedSelection
+        ? agencyConfig?.boundDeviceId
+        : localDeviceId || (isPlatformTask ? undefined : agencyConfig?.boundDeviceId)
       : target === 'auto'
         ? undefined
         : agencyConfig?.boundDeviceId);
