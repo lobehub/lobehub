@@ -7,7 +7,6 @@ import {
   Center,
   copyToClipboard,
   DraggablePanel,
-  Drawer,
   Empty,
   Flexbox,
   Icon,
@@ -15,7 +14,7 @@ import {
   Text,
 } from '@lobehub/ui';
 import type { DropdownItem } from '@lobehub/ui/base-ui';
-import { Button, DropdownMenu, Select, toast } from '@lobehub/ui/base-ui';
+import { Button, Drawer, DropdownMenu, Select, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx, useResponsive } from 'antd-style';
 import dayjs from 'dayjs';
 import {
