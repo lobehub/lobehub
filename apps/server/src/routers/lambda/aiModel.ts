@@ -119,7 +119,22 @@ export const aiModelRouter = router({
     .input(CreateAiModelSchema)
     .mutation(async ({ input, ctx }) => {
       const existingModel = await ctx.aiModelModel.findByIdAndProvider(input.id, input.providerId);
-      if (existingModel) throwDuplicateAiModelError(input.id);
+      if (existingModel) {
+        // A preference-only shell (just a saved reasoning config, hidden from
+        // lists — e.g. left after clearing remote models) is not a real
+        // duplicate: promote it into the custom model being created. `update`
+        // upserts and shallow-merges `config`, preserving the chatConfig.
+        if (!AiModelModel.isPreferenceOnlyRow(existingModel)) {
+          throwDuplicateAiModelError(input.id);
+        }
+
+        await ctx.aiModelModel.update(input.id, input.providerId, {
+          ...input,
+          enabled: input.enabled ?? true,
+          source: 'custom',
+        });
+        return input.id;
+      }
 
       try {
         const data = await ctx.aiModelModel.create(input);

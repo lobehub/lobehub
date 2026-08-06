@@ -92,10 +92,11 @@ export const resolveServerCallLlmContextHints = async ({
   // Custom/remote user models aren't in the bundled model bank, so both cards
   // miss. Fall back to the user's own AI model record so server-side runs still
   // surface identity (the inbox `{{model}}` fallback no longer exists).
+  let userModelRow: Awaited<ReturnType<AiModelModel['findByIdAndProvider']>> | undefined;
   if (!modelDisplayName && aiModelModel) {
     try {
-      const userModel = await aiModelModel.findByIdAndProvider(model, provider);
-      modelDisplayName = userModel?.displayName ?? undefined;
+      userModelRow = await aiModelModel.findByIdAndProvider(model, provider);
+      modelDisplayName = userModelRow?.displayName ?? undefined;
     } catch (error) {
       log('Failed to resolve user model display name for %s: %O', model, error);
     }
@@ -110,6 +111,13 @@ export const resolveServerCallLlmContextHints = async ({
   // `transformToAiModelList` re-namespacing behavior.
   if (!modelExtendParams || modelExtendParams.length === 0) {
     modelExtendParams = readExtendParams(canonicalModelCard);
+  }
+
+  // Custom/remote user models miss both cards; their extend params live on the
+  // user's own DB row (`settings.extendParams`). Reuse the row already fetched
+  // for the displayName fallback — no extra read on the hot path.
+  if ((!modelExtendParams || modelExtendParams.length === 0) && userModelRow) {
+    modelExtendParams = userModelRow.settings?.extendParams;
   }
 
   // Reasoning fields (effort family + reasoningMode) are user-level

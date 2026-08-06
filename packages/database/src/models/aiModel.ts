@@ -84,6 +84,26 @@ export class AiModelModel {
     return array.length === 0;
   }
 
+  /**
+   * Whether a row exists only to persist the personal reasoning preference
+   * (`config.chatConfig`): created by {@link AiModelModel.updateModelReasoningConfig}
+   * or left behind when {@link AiModelModel.clearRemoteModels} demotes a remote
+   * row. Such shells carry no user-visible identity — list reads hide them and
+   * duplicate checks must not treat them as real models.
+   */
+  static isPreferenceOnlyRow = (row: {
+    contextWindowTokens?: number | null;
+    displayName?: string | null;
+    enabled?: boolean | null;
+    releasedAt?: string | null;
+    source?: string | null;
+  }) =>
+    row.source == null &&
+    row.enabled == null &&
+    row.displayName == null &&
+    row.contextWindowTokens == null &&
+    row.releasedAt == null;
+
   create = async (params: NewAiModelItem) => {
     const values = this.normalizeAiModelValues(params);
 

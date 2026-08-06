@@ -408,6 +408,32 @@ describe('AiModelModel', () => {
         undefined,
       );
     });
+
+    it('should identify preference-only shells', async () => {
+      await aiProviderModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
+        gpt5_6ReasoningEffort: 'high',
+      });
+      await aiProviderModel.create({ enabled: true, id: 'real-model', providerId: 'openai' });
+
+      const shell = await aiProviderModel.findByIdAndProvider('gpt-5.6-sol', 'openai');
+      const realModel = await aiProviderModel.findByIdAndProvider('real-model', 'openai');
+
+      expect(AiModelModel.isPreferenceOnlyRow(shell!)).toBe(true);
+      expect(AiModelModel.isPreferenceOnlyRow(realModel!)).toBe(false);
+
+      // Promoting a shell via update (the createAiModel duplicate-bypass path)
+      // keeps the saved preference
+      await aiProviderModel.update('gpt-5.6-sol', 'openai', {
+        displayName: 'Recreated',
+        enabled: true,
+        source: 'custom',
+      });
+      expect(await aiProviderModel.getModelReasoningConfig('gpt-5.6-sol', 'openai')).toEqual({
+        gpt5_6ReasoningEffort: 'high',
+      });
+      const promoted = await aiProviderModel.findByIdAndProvider('gpt-5.6-sol', 'openai');
+      expect(AiModelModel.isPreferenceOnlyRow(promoted!)).toBe(false);
+    });
   });
 
   describe('getModelListByProviderId', () => {

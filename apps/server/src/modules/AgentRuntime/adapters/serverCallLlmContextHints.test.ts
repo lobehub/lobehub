@@ -78,6 +78,24 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
     expect(hints.resolvedExtendParams).toEqual({ reasoning_effort: 'high' });
   });
 
+  it('should resolve extend params from the user DB row for custom models', async () => {
+    findByIdAndProviderMock.mockResolvedValue({
+      displayName: 'My Custom Reasoner',
+      settings: { extendParams: ['reasoningEffort'] },
+    });
+    getModelReasoningConfigMock.mockResolvedValue({ reasoningEffort: 'high' });
+
+    const hints = await resolveServerCallLlmContextHints({
+      ctx: createCtx({ chatConfig: {} }),
+      llmPayload,
+      model: 'my-custom-model',
+      provider: 'custom-provider',
+    });
+
+    expect(getModelReasoningConfigMock).toHaveBeenCalledWith('my-custom-model', 'custom-provider');
+    expect(hints.resolvedExtendParams).toEqual({ reasoning_effort: 'high' });
+  });
+
   it('should skip the reasoning config DB read for models without reasoning extend params', async () => {
     const hints = await resolveServerCallLlmContextHints({
       ctx: createCtx({ chatConfig: {} }),

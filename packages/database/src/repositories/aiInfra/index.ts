@@ -385,13 +385,7 @@ export class AiInfraRepos {
     // user-visible identity. With no builtin card to merge onto, hide the
     // ID-only entry instead of listing a ghost disabled model.
     mergedModel = mergedModel.filter(
-      (m) =>
-        builtinIds.has(m.id) ||
-        m.source != null ||
-        m.enabled != null ||
-        m.displayName != null ||
-        m.contextWindowTokens != null ||
-        m.releasedAt != null,
+      (m) => builtinIds.has(m.id) || !AiModelModel.isPreferenceOnlyRow(m),
     );
 
     mergedModel = mergedModel.filter(isAiModelVisible);
