@@ -19,6 +19,7 @@ import {
   resolveFxTopupPayload,
 } from '@/features/AicoBilling/FxTopupFields';
 import { aicoPanelStyles } from '@/features/AicoPanels';
+import { presentInviteLink } from '@/features/OrgAdmin/InviteLinkModal';
 import { buildPhoneVerifyRedirectUrl, isValidIranianPhoneNumber } from '@/libs/better-auth/phone';
 import { useClientDataSWR } from '@/libs/swr';
 import { lambdaClient } from '@/libs/trpc/client';
@@ -137,13 +138,14 @@ export const OrgAdminMembers = () => {
     }
     setInviting(true);
     try {
-      await lambdaClient.organization.inviteMember.mutate({
+      const result = await lambdaClient.organization.inviteMember.mutate({
         identifierType: values.identifierType,
         identifierValue: values.identifierValue,
         orgId: selectedOrgId,
         role: values.role,
       });
-      toast.success(t('org.invite.sent'));
+      // Modal is primary feedback (one-shot inviteUrl); listMembers never re-exposes the token.
+      presentInviteLink(result.inviteUrl);
       form.resetFields(['identifierValue']);
       await mutate();
     } catch (error) {
