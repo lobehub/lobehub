@@ -976,6 +976,24 @@ compositor paints, so they cluster inside the animation — \~9 frames in the 12
 those unmodified frames slowly with ffmpeg. Do not slow the product's own transition: the exit is a
 JS animation, so a CSS `transition-duration` override does nothing anyway.
 
+### Day-scoped fixtures must use the browser's measured timezone, not an assumed one
+
+**Situation:** seeding backdated rows (briefs, activity, digests) whose UI grouping is
+by the viewer's _local calendar day_ (`dayjs().startOf('day')` on the client).
+
+**Doesn't work:** computing the day boundaries from an assumed timezone (the user's
+usual locale, the server tz, or the shell's). On this harness the agent-browser
+Chromium reports `America/Los_Angeles`, so a "today 14:00 CST" timestamp lands on the
+browser's _yesterday_ — the day view renders empty and reads exactly like the
+feature not fetching, while the server endpoint returns the rows when probed with
+the "correct" (assumed-tz) window.
+
+**Works:** before seeding, read the tz the grouping actually uses —
+`agent-browser eval 'Intl.DateTimeFormat().resolvedOptions().timeZone'` — and derive
+every `[startAt, endAt)` from that. When a day view comes back empty, diff the
+client's real request window (fetch wrapper on the batch URL) against the seeded
+timestamps before suspecting the query.
+
 ## Detailed references
 
 - [Probe field notes](./references/probe-field-notes.md) — all historical
