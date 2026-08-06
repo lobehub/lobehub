@@ -9,7 +9,6 @@ import { topicSelectors } from '@/store/chat/selectors';
 import { useSessionStore } from '@/store/session';
 import { sessionSelectors } from '@/store/session/selectors';
 
-import FolderTag from './FolderTag';
 import MemberCountTag from './MemberCountTag';
 import ThreadSwitcher from './ThreadSwitcher';
 
@@ -67,22 +66,19 @@ const TitleTags = memo(() => {
           <ThreadSwitcher title={fallbackThreadTitle} />
         </>
       ) : (
-        <>
-          <span
-            style={{
-              color: cssVar.colorText,
-              fontSize: 14,
-              fontWeight: 600,
-              minWidth: 0,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {fallbackTopicTitle}
-          </span>
-          <FolderTag />
-        </>
+        <span
+          style={{
+            color: cssVar.colorText,
+            fontSize: 14,
+            fontWeight: 600,
+            minWidth: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {fallbackTopicTitle}
+        </span>
       )}
     </Flexbox>
   );
