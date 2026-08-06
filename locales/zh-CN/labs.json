@@ -32,5 +32,9 @@
   "features.topicAcceptance.title": "话题验收",
   "group.desktop": "桌面端",
   "group.general": "通用",
+  "stage.alpha.desc": "仅供内部测试，暂不建议尝鲜，随时可能变动或损坏。",
+  "stage.alpha.label": "Alpha",
+  "stage.beta.desc": "相对进入可用阶段，核心流程可正常使用，细节仍在打磨。",
+  "stage.beta.label": "Beta",
   "title": "实验室"
 }

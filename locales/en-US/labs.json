@@ -32,5 +32,9 @@
   "features.topicAcceptance.title": "Topic Acceptance",
   "group.desktop": "Desktop",
   "group.general": "General",
+  "stage.alpha.desc": "Internal testing only. Not recommended for daily use yet — it may change or break at any time.",
+  "stage.alpha.label": "Alpha",
+  "stage.beta.desc": "Relatively usable. The core flow works, while details are still being polished.",
+  "stage.beta.label": "Beta",
   "title": "Labs"
 }

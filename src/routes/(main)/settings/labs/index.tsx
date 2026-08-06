@@ -2,7 +2,7 @@
 
 import { isDesktop } from '@lobechat/const';
 import { type FormGroupItemType, type FormItemProps } from '@lobehub/ui';
-import { Alert, Flexbox, Form, Skeleton } from '@lobehub/ui';
+import { Alert, Flexbox, Form, Skeleton, Tag, Tooltip } from '@lobehub/ui';
 import { Switch } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { FlaskConicalIcon } from 'lucide-react';
@@ -14,6 +14,7 @@ import { FORM_STYLE } from '@/const/layoutTokens';
 import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, preferenceSelectors } from '@/store/user/selectors';
+import { type UserLab } from '@/types/user';
 
 const styles = createStaticStyles(({ css }) => ({
   labItem: css`
@@ -22,6 +23,33 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
 }));
+
+/**
+ * Maturity stage of a lab experiment:
+ * - alpha: internal testing only, not recommended for daily use yet
+ * - beta: relatively usable — core flow works, details still being polished
+ */
+type LabStage = 'alpha' | 'beta';
+
+const StageTag = memo<{ stage: LabStage }>(({ stage }) => {
+  const { t } = useTranslation('labs');
+
+  return (
+    <Tooltip title={t(`stage.${stage}.desc`)}>
+      <Tag color={stage === 'alpha' ? 'warning' : 'info'} size={'small'}>
+        {t(`stage.${stage}.label`)}
+      </Tag>
+    </Tooltip>
+  );
+});
+
+interface LabToggle {
+  checked: boolean;
+  desc: string;
+  flag: keyof UserLab;
+  stage: LabStage;
+  title: string;
+}
 
 const LabsForm = memo(() => {
   const { t: tLabs } = useTranslation('labs');
@@ -75,164 +103,117 @@ const LabsForm = memo(() => {
     return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
   }
 
+  const toFormItem = ({ checked, desc, flag, stage, title }: LabToggle): FormItemProps => ({
+    children: (
+      <Switch
+        checked={checked}
+        loading={!isPreferenceInit}
+        onChange={(next: boolean) => updateLab({ [flag]: next })}
+      />
+    ),
+    className: styles.labItem,
+    desc,
+    label: (
+      <Flexbox horizontal align={'center'} gap={8}>
+        {title}
+        <StageTag stage={stage} />
+      </Flexbox>
+    ),
+    minWidth: undefined,
+  });
+
   // Cross-surface experiments. Platform-specific ones (Electron main-process
   // features) live in the Desktop group below; everything else is General.
-  const generalItems: FormItemProps[] = [
+  const generalItems: LabToggle[] = [
     {
-      children: (
-        <Switch
-          checked={enableAgentGraphConfig}
-          loading={!isPreferenceInit}
-          onChange={(checked: boolean) => updateLab({ enableAgentGraphConfig: checked })}
-        />
-      ),
-      className: styles.labItem,
+      checked: enableAgentGraphConfig,
       desc: tLabs('features.agentGraphConfig.desc'),
-      label: tLabs('features.agentGraphConfig.title'),
-      minWidth: undefined,
-    } satisfies FormItemProps,
+      flag: 'enableAgentGraphConfig',
+      stage: 'alpha',
+      title: tLabs('features.agentGraphConfig.title'),
+    },
     {
-      children: (
-        <Switch
-          checked={enableInputMarkdown}
-          loading={!isPreferenceInit}
-          onChange={(checked) => updateLab({ enableInputMarkdown: checked })}
-        />
-      ),
-      className: styles.labItem,
+      checked: enableInputMarkdown,
       desc: tLabs('features.inputMarkdown.desc'),
-      label: tLabs('features.inputMarkdown.title'),
-      minWidth: undefined,
+      flag: 'enableInputMarkdown',
+      stage: 'beta',
+      title: tLabs('features.inputMarkdown.title'),
     },
     {
-      children: (
-        <Switch
-          checked={enableMessageTextSelectionActions}
-          loading={!isPreferenceInit}
-          onChange={(checked) => updateLab({ enableMessageTextSelectionActions: checked })}
-        />
-      ),
-      className: styles.labItem,
+      checked: enableMessageTextSelectionActions,
       desc: tLabs('features.messageTextSelectionActions.desc'),
-      label: tLabs('features.messageTextSelectionActions.title'),
-      minWidth: undefined,
+      flag: 'enableMessageTextSelectionActions',
+      stage: 'alpha',
+      title: tLabs('features.messageTextSelectionActions.title'),
     },
     {
-      children: (
-        <Switch
-          checked={enableTopicAcceptance}
-          loading={!isPreferenceInit}
-          onChange={(checked) => updateLab({ enableTopicAcceptance: checked })}
-        />
-      ),
-      className: styles.labItem,
+      checked: enableTopicAcceptance,
       desc: tLabs('features.topicAcceptance.desc'),
-      label: tLabs('features.topicAcceptance.title'),
-      minWidth: undefined,
+      flag: 'enableTopicAcceptance',
+      stage: 'alpha',
+      title: tLabs('features.topicAcceptance.title'),
     },
     {
-      children: (
-        <Switch
-          checked={enableOAuthApps}
-          loading={!isPreferenceInit}
-          onChange={(checked) => updateLab({ enableOAuthApps: checked })}
-        />
-      ),
-      className: styles.labItem,
+      checked: enableOAuthApps,
       desc: tLabs('features.oauthApps.desc'),
-      label: tLabs('features.oauthApps.title'),
-      minWidth: undefined,
+      flag: 'enableOAuthApps',
+      stage: 'beta',
+      title: tLabs('features.oauthApps.title'),
     },
     {
-      children: (
-        <Switch
-          checked={enableArtifactDeployment}
-          loading={!isPreferenceInit}
-          onChange={(checked: boolean) => updateLab({ enableArtifactDeployment: checked })}
-        />
-      ),
-      className: styles.labItem,
+      checked: enableArtifactDeployment,
       desc: tLabs('features.artifactDeployment.desc'),
-      label: tLabs('features.artifactDeployment.title'),
-      minWidth: undefined,
-    } satisfies FormItemProps,
+      flag: 'enableArtifactDeployment',
+      stage: 'beta',
+      title: tLabs('features.artifactDeployment.title'),
+    },
   ];
 
   // Desktop-only experiments: local agent runtimes, iMessage bridge, and the
   // in-app browser (renderer-retained Electron webviews).
-  const desktopItems: FormItemProps[] = [
+  const desktopItems: LabToggle[] = [
     {
-      children: (
-        <Switch
-          checked={enableImessage}
-          loading={!isPreferenceInit}
-          onChange={(checked: boolean) => updateLab({ enableImessage: checked })}
-        />
-      ),
-      className: styles.labItem,
+      checked: enableImessage,
       desc: tLabs('features.imessage.desc'),
-      label: tLabs('features.imessage.title'),
-      minWidth: undefined,
-    } satisfies FormItemProps,
-    {
-      children: (
-        <Switch
-          checked={enableClaudeCodeSdk}
-          loading={!isPreferenceInit}
-          onChange={(checked: boolean) => updateLab({ enableClaudeCodeSdk: checked })}
-        />
-      ),
-      className: styles.labItem,
-      desc: tLabs('features.claudeCodeSdk.desc'),
-      label: tLabs('features.claudeCodeSdk.title'),
-      minWidth: undefined,
+      flag: 'enableImessage',
+      stage: 'alpha',
+      title: tLabs('features.imessage.title'),
     },
     {
-      children: (
-        <Switch
-          checked={enableCodexAppServer}
-          loading={!isPreferenceInit}
-          onChange={(checked: boolean) => updateLab({ enableCodexAppServer: checked })}
-        />
-      ),
-      className: styles.labItem,
+      checked: enableClaudeCodeSdk,
+      desc: tLabs('features.claudeCodeSdk.desc'),
+      flag: 'enableClaudeCodeSdk',
+      stage: 'alpha',
+      title: tLabs('features.claudeCodeSdk.title'),
+    },
+    {
+      checked: enableCodexAppServer,
       desc: tLabs('features.codexAppServer.desc'),
-      label: tLabs('features.codexAppServer.title'),
-      minWidth: undefined,
+      flag: 'enableCodexAppServer',
+      stage: 'alpha',
+      title: tLabs('features.codexAppServer.title'),
     },
     // rides on the Claude Code hetero-agent stack: scans local CLI
     // transcripts via the Electron main process — desktop only
     {
-      children: (
-        <Switch
-          checked={enableHeteroSessionImport}
-          loading={!isPreferenceInit}
-          onChange={(checked: boolean) => updateLab({ enableHeteroSessionImport: checked })}
-        />
-      ),
-      className: styles.labItem,
+      checked: enableHeteroSessionImport,
       desc: tLabs('features.heteroSessionImport.desc'),
-      label: tLabs('features.heteroSessionImport.title'),
-      minWidth: undefined,
+      flag: 'enableHeteroSessionImport',
+      stage: 'beta',
+      title: tLabs('features.heteroSessionImport.title'),
     },
     {
-      children: (
-        <Switch
-          checked={enableInAppBrowser}
-          loading={!isPreferenceInit}
-          onChange={(checked: boolean) => updateLab({ enableInAppBrowser: checked })}
-        />
-      ),
-      className: styles.labItem,
+      checked: enableInAppBrowser,
       desc: tLabs('features.inAppBrowser.desc'),
-      label: tLabs('features.inAppBrowser.title'),
-      minWidth: undefined,
+      flag: 'enableInAppBrowser',
+      stage: 'beta',
+      title: tLabs('features.inAppBrowser.title'),
     },
   ];
 
   const items: FormGroupItemType[] = [
     {
-      children: generalItems,
+      children: generalItems.map((item) => toFormItem(item)),
       title: tLabs('group.general'),
     },
   ];
@@ -241,7 +222,7 @@ const LabsForm = memo(() => {
   // are main-process features that do not exist on web.
   if (isDesktop) {
     items.push({
-      children: desktopItems,
+      children: desktopItems.map((item) => toFormItem(item)),
       title: tLabs('group.desktop'),
     });
   }
