@@ -13,6 +13,14 @@ const lintRestrictedImports = async (filePath: string, code: string): Promise<st
     .map(({ message }) => message);
 };
 
+const lintRestrictedSyntax = async (filePath: string, code: string): Promise<string[]> => {
+  const [result] = await eslint.lintText(code, { filePath });
+
+  return result.messages
+    .filter(({ ruleId }) => ruleId === 'no-restricted-syntax')
+    .map(({ message }) => message);
+};
+
 const forbiddenImports = [
   [
     'Conversation internal root barrel',
@@ -151,5 +159,77 @@ describe('performance import boundaries', () => {
 
   it.each(allowedImports)('allows %s', async (_name, filePath, code) => {
     await expect(lintRestrictedImports(filePath, code)).resolves.toEqual([]);
+  });
+});
+
+const useRefLazyInitFixture = 'src/hooks/useRef-lazy-init-lint-fixture.tsx';
+
+const forbiddenUseRefInits = [
+  [
+    'useRef(function call)',
+    `import { useRef } from 'react';\nexport const C = () => { const r = useRef(getPlatform()); return r; };`,
+  ],
+  [
+    'useRef(new Map)',
+    `import { useRef } from 'react';\nexport const C = () => { const r = useRef(new Map()); return r; };`,
+  ],
+  [
+    'useRef(new Set) with type args',
+    `import { useRef } from 'react';\nexport const C = () => { const r = useRef<Set<string>>(new Set()); return r; };`,
+  ],
+  [
+    'useRef(Date.now())',
+    `import { useRef } from 'react';\nexport const C = () => { const r = useRef(Date.now()); return r; };`,
+  ],
+  [
+    'useRef(Symbol())',
+    `import { useRef } from 'react';\nexport const C = () => { const r = useRef(Symbol('x')); return r; };`,
+  ],
+  [
+    'React.useRef(new Map)',
+    `import React from 'react';\nexport const C = () => { const r = React.useRef(new Map()); return r; };`,
+  ],
+  [
+    'useRef(useSingleton(...))',
+    `import { useRef } from 'react';\nimport { useSingleton } from '@/hooks/useSingleton';\nexport const C = () => { const r = useRef(useSingleton(() => new Map())); return r; };`,
+  ],
+] as const;
+
+const allowedUseRefInits = [
+  [
+    'useRef(null)',
+    `import { useRef } from 'react';\nexport const C = () => { const r = useRef(null); return r; };`,
+  ],
+  [
+    'useRef(false)',
+    `import { useRef } from 'react';\nexport const C = () => { const r = useRef(false); return r; };`,
+  ],
+  [
+    'useRef(identifier)',
+    `import { useRef } from 'react';\nexport const C = (v: string) => { const r = useRef(v); return r; };`,
+  ],
+  [
+    'useRef(arrow function)',
+    `import { useRef } from 'react';\nexport const C = () => { const r = useRef(() => {}); return r; };`,
+  ],
+  [
+    'useSingleton alone',
+    `import { useSingleton } from '@/hooks/useSingleton';\nexport const C = () => useSingleton(() => new Map());`,
+  ],
+  [
+    'useSingleton mutable box',
+    `import { useSingleton } from '@/hooks/useSingleton';\nexport const C = () => { const r = useSingleton(() => ({ current: new Map() })); r.current = new Map(); return r; };`,
+  ],
+] as const;
+
+describe('useRef lazy-init boundary', () => {
+  it.each(forbiddenUseRefInits)('rejects %s', async (_name, code) => {
+    await expect(lintRestrictedSyntax(useRefLazyInitFixture, code)).resolves.toEqual([
+      expect.stringContaining('useSingleton'),
+    ]);
+  });
+
+  it.each(allowedUseRefInits)('allows %s', async (_name, code) => {
+    await expect(lintRestrictedSyntax(useRefLazyInitFixture, code)).resolves.toEqual([]);
   });
 });

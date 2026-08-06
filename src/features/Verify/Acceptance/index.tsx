@@ -42,7 +42,7 @@ import {
   X,
   XCircle,
 } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 
@@ -52,6 +52,7 @@ import { openCheckEditModal } from '@/features/Conversation/ChatInput/VerifyTray
 import { openGoalModal } from '@/features/Conversation/ChatInput/VerifyTray/GoalModal';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
+import { useSingleton } from '@/hooks/useSingleton';
 // The workspace-scoped mutate — a bare `import { mutate } from 'swr'` misses
 // every `useClientDataSWR` subscriber (augmented keys + custom cache provider).
 import { mutate as globalMutate } from '@/libs/swr';
@@ -386,7 +387,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
     // Which aggregates have had their one-time defaults (expand/collapse + filter)
     // applied. A Set, not a single id, so returning to an already-seeded aggregate
     // does NOT re-apply defaults and clobber the toggles the user made.
-    const seededIdsRef = useRef<Set<string>>(new Set());
+    const seededIds = useSingleton(() => new Set<string>());
     const [highlightRound, setHighlightRound] = useState<number | null>(null);
     const [ledgerExpand, setLedgerExpand] = useState(!isEmbedded);
     const [topicPanelOpen, setTopicPanelOpen] = useState(false);
@@ -482,15 +483,15 @@ const AcceptancePage = memo<AcceptancePageProps>(
 
     // Exceptions and visually-evidenced checks start expanded (P-08) — a check
     // still awaiting the user's review shows its evidence (screenshots included)
-    // up front, not folded away. Seeded once per aggregate (see `seededIdsRef`),
+    // up front, not folded away. Seeded once per aggregate (see `seededIds`),
     // and only after its checks have arrived, so the user's own toggling is never
     // overwritten and an aggregate whose checks stream in a beat late still seeds.
     // A check the user already accepted is settled business and stays folded
     // regardless of its evidence; groups accepted in full start collapsed too.
     useEffect(() => {
       if (!data || data.checks.length === 0) return;
-      if (seededIdsRef.current.has(acceptanceId ?? '')) return;
-      seededIdsRef.current.add(acceptanceId ?? '');
+      if (seededIds.has(acceptanceId ?? '')) return;
+      seededIds.add(acceptanceId ?? '');
       setExpanded(
         new Set(
           data.checks
@@ -533,6 +534,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
       t,
       isEmbedded,
       urlFilterRaw,
+      seededIds,
       setSearchParams,
       setExpanded,
       setCollapsedGroups,

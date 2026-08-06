@@ -133,6 +133,7 @@ vi.mock('../Review', () => ({
 }));
 vi.mock('../ProgressSection', () => ({ default: () => <div /> }));
 vi.mock('../ResourcesSection', () => ({ default: () => <div /> }));
+vi.mock('@/features/NavPanel/components/SkeletonList', () => ({ default: () => <div /> }));
 vi.mock('../ParamsSection', () => ({
   default: () => {
     if (paramsSectionState.suspend) throw paramsSectionState.pending;

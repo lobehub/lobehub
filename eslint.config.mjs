@@ -59,6 +59,32 @@ const createRestrictedImportRule = ({ paths = [], patterns } = {}) => [
   },
 ];
 
+// useRef(initial) re-evaluates `initial` on every render. Ban call/new expressions
+// so expensive work and empty Map/Set allocations don't happen as throwaway inits.
+// Use useSingleton(() => ...) for a once-created value; do not wrap it in useRef.
+const useRefLazyInitMessage =
+  "Do not pass a call or `new` expression to useRef() — the argument is evaluated on every render. Use useSingleton(() => ...) from '@/hooks/useSingleton' instead (do not wrap useSingleton in useRef).";
+
+const useRefLazyInitRestrictedSyntax = [
+  {
+    message: useRefLazyInitMessage,
+    selector: "CallExpression[callee.name='useRef'] > CallExpression.arguments:first-child",
+  },
+  {
+    message: useRefLazyInitMessage,
+    selector:
+      "CallExpression[callee.property.name='useRef'] > CallExpression.arguments:first-child",
+  },
+  {
+    message: useRefLazyInitMessage,
+    selector: "CallExpression[callee.name='useRef'] > NewExpression.arguments:first-child",
+  },
+  {
+    message: useRefLazyInitMessage,
+    selector: "CallExpression[callee.property.name='useRef'] > NewExpression.arguments:first-child",
+  },
+];
+
 export default eslint(
   {
     ignores: [
@@ -329,6 +355,7 @@ export default eslint(
           fixStyle: 'separate-type-imports',
         },
       ],
+      'no-restricted-syntax': ['error', ...useRefLazyInitRestrictedSyntax],
     },
   },
   // MDX files
@@ -360,6 +387,7 @@ export default eslint(
     rules: {
       'no-restricted-syntax': [
         'error',
+        ...useRefLazyInitRestrictedSyntax,
         {
           message: 'Chinese characters are not allowed in aiModels files. Use English instead.',
           selector: 'Literal[value=/[\\u4e00-\\u9fff]/]',

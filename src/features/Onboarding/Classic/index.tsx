@@ -13,6 +13,7 @@ import InterestsStep from '@/features/Onboarding/steps/InterestsStep';
 import ProSettingsStep from '@/features/Onboarding/steps/ProSettingsStep';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useOnboardingAgentTemplates } from '@/hooks/useOnboardingAgentTemplates';
+import { useSingleton } from '@/hooks/useSingleton';
 import {
   trackOnboardingStepCompleted,
   trackOnboardingStepViewed,
@@ -57,8 +58,8 @@ const ClassicOnboardingPage = memo(() => {
   const enableComposio = useServerConfigStore(serverConfigSelectors.enableComposio);
   const serverConfigInit = useServerConfigStore((s) => s.serverConfigInit);
   const shouldSkipProSettingsStep = serverConfigInit && !enableComposio;
-  const autoSkippedStepKeysRef = useRef<Set<string>>(new Set());
-  const viewedStepKeysRef = useRef<Set<string>>(new Set());
+  const autoSkippedStepKeys = useSingleton(() => new Set<string>());
+  const viewedStepKeys = useSingleton(() => new Set<string>());
   const legacyRemappedRef = useRef(false);
 
   useOnboardingAgentTemplates(isUserStateInit && commonStepsCompleted);
@@ -92,16 +93,23 @@ const ClassicOnboardingPage = memo(() => {
     }
 
     const payload = CLASSIC_STEP_TRACKING[PRO_SETTINGS_STEP];
-    if (autoSkippedStepKeysRef.current.has(payload.step)) return;
+    if (autoSkippedStepKeys.has(payload.step)) return;
 
-    autoSkippedStepKeysRef.current.add(payload.step);
+    autoSkippedStepKeys.add(payload.step);
     trackOnboardingStepCompleted({
       ...payload,
       action: 'auto_skip',
       skipped: true,
     });
     goToNextStep();
-  }, [commonStepsCompleted, currentStep, goToNextStep, isUserStateInit, shouldSkipProSettingsStep]);
+  }, [
+    autoSkippedStepKeys,
+    commonStepsCompleted,
+    currentStep,
+    goToNextStep,
+    isUserStateInit,
+    shouldSkipProSettingsStep,
+  ]);
 
   useEffect(() => {
     if (!isUserStateInit || !commonStepsCompleted) return;
@@ -110,9 +118,9 @@ const ClassicOnboardingPage = memo(() => {
     }
 
     const payload = getClassicStepTrackingPayload(currentStep);
-    if (!payload || viewedStepKeysRef.current.has(payload.step)) return;
+    if (!payload || viewedStepKeys.has(payload.step)) return;
 
-    viewedStepKeysRef.current.add(payload.step);
+    viewedStepKeys.add(payload.step);
     trackOnboardingStepViewed(payload);
   }, [
     commonStepsCompleted,
@@ -120,6 +128,7 @@ const ClassicOnboardingPage = memo(() => {
     isUserStateInit,
     serverConfigInit,
     shouldSkipProSettingsStep,
+    viewedStepKeys,
   ]);
 
   const goToNextStepFromFullName = useCallback(() => {

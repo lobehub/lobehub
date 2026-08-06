@@ -103,6 +103,7 @@
     "prettier": "prettier -c --write \"**/**\"",
     "pull": "git pull",
     "qstash": "pnpx @upstash/qstash-cli@latest dev",
+    "react-devtools": "cd apps/desktop && pnpm run react-devtools",
     "reinstall": "rm -rf .next && rm -rf node_modules && rm -rf ./packages/*/node_modules && pnpm -r exec rm -rf node_modules && pnpm install",
     "reinstall:desktop": "rm -rf pnpm-lock.yaml && rm -rf node_modules && pnpm -r exec rm -rf node_modules && pnpm install --node-linker=hoisted",
     "release": "semantic-release",

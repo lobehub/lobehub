@@ -1,8 +1,22 @@
+import type React from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { startSkillDrag } from '@/features/ChatInput/InputEditor/ActionTag/skillDragData';
-import { SkillSection, SkillsList, useProjectSkills } from '@/features/SkillsList';
+import {
+  type SkillListItem,
+  SkillSection,
+  SkillsList,
+  useProjectSkills,
+} from '@/features/SkillsList';
+
+const handleSkillDragStart = (item: SkillListItem, event: React.DragEvent) => {
+  startSkillDrag(event, {
+    category: 'projectSkill',
+    label: item.name,
+    type: item.name,
+  });
+};
 
 interface DeviceLevelSkillsProps {
   /** Bound remote device id; when set, skills are scanned over RPC. */
@@ -42,13 +56,7 @@ const DeviceLevelSkills = memo<DeviceLevelSkillsProps>(
         items={deviceItems}
         onOpenFile={onOpenFile}
         onOpenSkill={onOpenSkill}
-        onSkillDragStart={(item, event) => {
-          startSkillDrag(event, {
-            category: 'projectSkill',
-            label: item.name,
-            type: item.name,
-          });
-        }}
+        onSkillDragStart={handleSkillDragStart}
       />
     );
 

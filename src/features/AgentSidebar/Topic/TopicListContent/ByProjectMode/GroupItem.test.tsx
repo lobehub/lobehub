@@ -165,7 +165,6 @@ describe('Project topic group item', () => {
     render(
       <GroupItem
         expanded
-        activeTopicId={undefined}
         group={{
           children: [],
           id: 'project:/Users/me/project',
