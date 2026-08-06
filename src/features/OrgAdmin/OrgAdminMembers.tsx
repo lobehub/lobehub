@@ -18,6 +18,7 @@ import {
   type FxTopupFormValues,
   resolveFxTopupPayload,
 } from '@/features/AicoBilling/FxTopupFields';
+import { aicoPanelStyles } from '@/features/AicoPanels';
 import { buildPhoneVerifyRedirectUrl, isValidIranianPhoneNumber } from '@/libs/better-auth/phone';
 import { useClientDataSWR } from '@/libs/swr';
 import { lambdaClient } from '@/libs/trpc/client';
@@ -265,16 +266,18 @@ export const OrgAdminMembers = () => {
         />
       </div>
 
-      <Tabs
-        activeKey={tab}
-        items={[
-          { key: 'overview', label: t('org.tabs.overview') },
-          { key: 'members', label: t('org.tabs.members') },
-          { key: 'teams', label: t('org.tabs.teams') },
-          { key: 'wallet', label: t('org.tabs.wallet') },
-        ]}
-        onChange={setTab}
-      />
+      <div className={aicoPanelStyles.tabs}>
+        <Tabs
+          activeKey={tab}
+          items={[
+            { key: 'overview', label: t('org.tabs.overview') },
+            { key: 'members', label: t('org.tabs.members') },
+            { key: 'teams', label: t('org.tabs.teams') },
+            { key: 'wallet', label: t('org.tabs.wallet') },
+          ]}
+          onChange={setTab}
+        />
+      </div>
 
       {tab === 'overview' && (
         <Flexbox gap={16}>

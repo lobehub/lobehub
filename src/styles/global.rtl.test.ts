@@ -22,8 +22,12 @@ describe('global RTL control fixes', () => {
 
   it('maps Tabs selection indicators to physical left (Response Animation)', () => {
     expect(source).toContain("html[dir='rtl'] [role='tablist'] > [role='presentation']");
+    expect(source).toContain(":dir(rtl) [role='tablist'] > [role='presentation']");
     expect(source).toContain('left: var(--active-tab-left) !important');
-    expect(source).toContain('inset-inline-start: unset !important');
+    expect(source).toContain('inset-inline: auto !important');
+    expect(source).toContain(
+      'transition-property: left, inset-block-start, top, width, height, transform !important',
+    );
     // Prior broken formula used containing-block % and --active-tab-right
     expect(source).not.toContain('var(--active-tab-right)');
     expect(source).not.toContain('(var(--active-tab-width) - 100%)');
@@ -33,6 +37,7 @@ describe('global RTL control fixes', () => {
     expect(source).toContain(
       "html[dir='rtl'] [data-orientation] > [aria-hidden='true']:first-of-type",
     );
+    expect(source).toContain(":dir(rtl) [data-orientation] > [aria-hidden='true']:first-of-type");
     expect(source).toContain('left: var(--active-item-left) !important');
     expect(source).toContain('liberty/use-logical-spec');
   });

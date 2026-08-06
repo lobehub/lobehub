@@ -82,17 +82,18 @@ export const aicoPanelStyles = createStaticStyles(({ css, cssVar }) => ({
     -webkit-overflow-scrolling: touch;
   `,
   tabs: css`
-    overflow-x: auto;
     width: 100%;
     min-width: 0;
 
-    -webkit-overflow-scrolling: touch;
-
-    /* Keep tab labels on one scrollable row on narrow screens */
+    /* Scroll on tablist so base-ui indicator offsets include scrollLeft */
     [role='tablist'] {
+      overflow-x: auto;
       flex-wrap: nowrap;
-      width: max-content;
-      min-width: 100%;
+
+      width: 100%;
+      max-width: 100%;
+
+      -webkit-overflow-scrolling: touch;
     }
   `,
 }));
