@@ -105,6 +105,14 @@ export const authRoutes: RouteObject[] = [
         path: 'market-auth-callback',
       },
       {
+        element: lazyElement(() => import('@/routes/auth/terms')),
+        path: 'terms',
+      },
+      {
+        element: lazyElement(() => import('@/routes/auth/privacy')),
+        path: 'privacy',
+      },
+      {
         element: lazyElement(() => import('@/routes/auth/oauth/consent/[uid]')),
         path: 'oauth/consent/:uid',
       },

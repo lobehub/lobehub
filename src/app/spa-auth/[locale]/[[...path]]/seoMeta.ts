@@ -33,6 +33,20 @@ export async function buildAuthSeoEntry(locale: string, pathname: string): Promi
         title: t('betterAuth.signup.title'),
       };
     }
+    case '/terms': {
+      return {
+        canonicalPath: '/terms',
+        description: t('legal.terms.intro', { appName: BRANDING_NAME, orgName: ORG_NAME }),
+        title: t('legal.terms.title'),
+      };
+    }
+    case '/privacy': {
+      return {
+        canonicalPath: '/privacy',
+        description: t('legal.privacy.intro', { appName: BRANDING_NAME, orgName: ORG_NAME }),
+        title: t('legal.privacy.title'),
+      };
+    }
     default: {
       return {
         description: t('signin.subtitle', { appName: BRANDING_NAME }),
