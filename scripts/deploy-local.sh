@@ -9,9 +9,6 @@
 #   ./scripts/deploy-local.sh -r|--restart # restart containers
 #   ./scripts/deploy-local.sh -i|--info    # containers / HTTP / migrations
 #   ./scripts/deploy-local.sh -k|--kill    # stop containers
-#
-# Optional env:
-#   AICO_LEGACY_DEPLOY_DIR  One-time .env migration source (default: ~/docker-lobehub/lobehub-db)
 
 set -euo pipefail
 
@@ -19,7 +16,6 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DEPLOY_DIR="$ROOT/docker-compose/deploy"
 IMAGE="aico/lobehub:local"
 TAG="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo local)"
-LEGACY_DEPLOY_DIR="${AICO_LEGACY_DEPLOY_DIR:-$HOME/docker-lobehub/lobehub-db}"
 CONTAINER_NAME="lobehub"
 POSTGRES_CONTAINER="lobe-postgres"
 STAGE=""
@@ -76,10 +72,6 @@ Aliases (same actions):
   --build-only          → -b
   status, --status      → -i
   stop, --stop, --down  → -k
-
-Environment:
-  AICO_LEGACY_DEPLOY_DIR   Legacy deploy directory for one-time .env migration
-                           (default: ~/docker-lobehub/lobehub-db)
 EOF
       exit 0
       ;;
@@ -179,12 +171,6 @@ compose_in_deploy_dir() {
       -f docker-compose.aico.override.yml \
       "$@"
   )
-}
-
-stop_legacy_deploy() {
-  if [[ -f "$LEGACY_DEPLOY_DIR/docker-compose.yml" ]]; then
-    (cd "$LEGACY_DEPLOY_DIR" && docker compose down 2>/dev/null) || true
-  fi
 }
 
 verify_deploy_health() {
@@ -323,38 +309,9 @@ show_status() {
   return "$exit_code"
 }
 
-# One-time migration from a legacy external deploy dir. After deploy/.env exists, edit it directly.
 if [[ ! -f "$DEPLOY_DIR/.env" ]]; then
-  if [[ $STATUS -eq 1 ]]; then
-    echo "Missing $DEPLOY_DIR/.env — stack not configured yet." >&2
-    exit 1
-  fi
-  if [[ -f "$LEGACY_DEPLOY_DIR/.env" ]]; then
-    echo "Creating infra-only deploy env from legacy deploy dir → $DEPLOY_DIR/.env"
-    require_cmd python3
-    python3 <<PY
-from pathlib import Path
-
-src = Path("$LEGACY_DEPLOY_DIR/.env")
-dst = Path("$DEPLOY_DIR/.env")
-keep = {
-    'LOBE_PORT', 'RUSTFS_PORT', 'RUSTFS_ADMIN_PORT', 'LOBE_DB_NAME', 'POSTGRES_PASSWORD',
-    'RUSTFS_ACCESS_KEY', 'RUSTFS_SECRET_KEY', 'RUSTFS_LOBE_BUCKET', 'JWKS_KEY',
-}
-out = []
-for line in src.read_text().splitlines():
-    stripped = line.strip()
-    if not stripped or stripped.startswith('#') or '=' not in line:
-        continue
-    key, _ = line.split('=', 1)
-    if key in keep:
-        out.append(line)
-dst.write_text('\n'.join(out) + '\n')
-PY
-  else
-    echo "Missing $DEPLOY_DIR/.env — copy from docker-compose/deploy/.env.example.aico and configure infra secrets." >&2
-    exit 1
-  fi
+  echo "Missing $DEPLOY_DIR/.env — copy from docker-compose/deploy/.env.example.aico and configure infra secrets." >&2
+  exit 1
 fi
 
 if [[ $STATUS -eq 1 ]]; then
@@ -466,7 +423,6 @@ if [[ $START_IF_NEEDED -eq 1 ]]; then
     exit 0
   fi
   echo "==> Not running — starting stack from $DEPLOY_DIR"
-  stop_legacy_deploy
   compose_in_deploy_dir up -d
   verify_deploy_health
   exit 0
@@ -474,7 +430,6 @@ fi
 
 if [[ $RESTART -eq 1 ]]; then
   url="$(app_url)"
-  stop_legacy_deploy
   if is_app_running; then
     echo "==> Restarting containers from $DEPLOY_DIR"
     compose_in_deploy_dir restart
@@ -488,7 +443,6 @@ fi
 
 if [[ $DEPLOY -eq 1 ]]; then
   echo "==> Force-deploying from $DEPLOY_DIR"
-  stop_legacy_deploy
   compose_in_deploy_dir up -d --force-recreate lobe
   verify_deploy_health
 fi
