@@ -191,7 +191,8 @@ export const HeterogeneousAgentModelSelector = memo<HeterogeneousAgentModelSelec
       handleOpenChangeComplete: completeOpenChange,
       open,
     } = useMenuContentLifecycle(onSelect);
-    const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId);
+    const { agencyConfig, isPreferenceLoading, workspaceScoped } =
+      useEffectiveAgencyConfig(agentId);
     const cwd = useEffectiveWorkingDirectory(agentId);
     const provider = agencyConfig?.heterogeneousProvider;
     useElectronStore((s) => s.useFetchGatewayDeviceInfo)();
@@ -214,8 +215,10 @@ export const HeterogeneousAgentModelSelector = memo<HeterogeneousAgentModelSelec
     const { data, error, isLoading, isValidating, mutate } = useHeterogeneousAgentModelCatalog({
       cwd,
       deviceId: rpcDeviceId,
-      enabled: targetReady,
+      isPreferenceLoading,
+      open,
       provider,
+      targetReady,
       type,
     });
 

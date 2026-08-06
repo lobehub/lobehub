@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import type { PropsWithChildren } from 'react';
 import { createElement } from 'react';
 import { SWRConfig } from 'swr';
@@ -34,8 +34,10 @@ describe('useHeterogeneousAgentModelCatalog', () => {
       const { result } = renderHook(
         () =>
           useHeterogeneousAgentModelCatalog({
-            enabled: true,
+            isPreferenceLoading: false,
+            open: false,
             provider: { type },
+            targetReady: true,
             type,
           }),
         { wrapper: createWrapper() },
@@ -46,14 +48,16 @@ describe('useHeterogeneousAgentModelCatalog', () => {
     },
   );
 
-  it('does not load a catalog until its execution target is ready', async () => {
+  it('does not preload the shared fallback while a member device preference is loading', async () => {
     const listModels = vi.spyOn(heterogeneousAgentCatalogService, 'listModels');
 
     const { result } = renderHook(
       () =>
         useHeterogeneousAgentModelCatalog({
-          enabled: false,
+          isPreferenceLoading: true,
+          open: false,
           provider: { type: 'opencode' },
+          targetReady: true,
           type: 'opencode',
         }),
       { wrapper: createWrapper() },
@@ -63,5 +67,68 @@ describe('useHeterogeneousAgentModelCatalog', () => {
 
     expect(listModels).not.toHaveBeenCalled();
     expect(result.current.isLoading).toBe(false);
+  });
+
+  it('does not load a catalog until its execution target is ready', async () => {
+    const listModels = vi.spyOn(heterogeneousAgentCatalogService, 'listModels');
+
+    renderHook(
+      () =>
+        useHeterogeneousAgentModelCatalog({
+          isPreferenceLoading: false,
+          open: false,
+          provider: { type: 'opencode' },
+          targetReady: false,
+          type: 'opencode',
+        }),
+      { wrapper: createWrapper() },
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(listModels).not.toHaveBeenCalled();
+  });
+
+  it('revalidates a failed preload when the selector opens', async () => {
+    const failedCatalog = {
+      error: { code: 'device_unavailable' as const, message: 'Device unavailable' },
+      status: 'error' as const,
+      updatedAt: 1,
+    };
+    const loadedCatalog = {
+      models: [{ id: 'provider/model', modelId: 'model', providerId: 'provider' }],
+      status: 'success' as const,
+      updatedAt: 2,
+    };
+    let resolveRetry: (catalog: typeof loadedCatalog) => void = () => {};
+    const retry = new Promise<typeof loadedCatalog>((resolve) => {
+      resolveRetry = resolve;
+    });
+    const listModels = vi
+      .spyOn(heterogeneousAgentCatalogService, 'listModels')
+      .mockResolvedValueOnce(failedCatalog)
+      .mockReturnValueOnce(retry);
+
+    const { rerender, result } = renderHook(
+      ({ open }) =>
+        useHeterogeneousAgentModelCatalog({
+          isPreferenceLoading: false,
+          open,
+          provider: { type: 'qoder' },
+          targetReady: true,
+          type: 'qoder',
+        }),
+      { initialProps: { open: false }, wrapper: createWrapper() },
+    );
+
+    await waitFor(() => expect(result.current.error?.name).toBe('device_unavailable'));
+
+    rerender({ open: true });
+
+    await waitFor(() => expect(listModels).toHaveBeenCalledTimes(2));
+
+    act(() => resolveRetry(loadedCatalog));
+
+    await waitFor(() => expect(result.current.data).toEqual(loadedCatalog));
   });
 });

@@ -2,6 +2,7 @@ import type {
   HeterogeneousProviderConfig,
   ListHeterogeneousAgentModelsParams,
 } from '@lobechat/types';
+import { useEffect, useRef } from 'react';
 import useSWR from 'swr';
 
 import { heterogeneousAgentCatalogService } from '@/services/heterogeneousAgent';
@@ -24,24 +25,29 @@ const fingerprintConfig = (provider: HeterogeneousProviderConfig | undefined) =>
 interface UseHeterogeneousAgentModelCatalogParams {
   cwd?: string;
   deviceId?: string;
-  enabled: boolean;
+  isPreferenceLoading: boolean;
+  open: boolean;
   provider?: HeterogeneousProviderConfig;
+  targetReady: boolean;
   type: ListHeterogeneousAgentModelsParams['type'];
 }
 
 /**
- * Keep the catalog request active for the selector's entire mounted lifetime so
- * the models start loading with the conversation page rather than on menu open.
+ * Preload after the member's effective target settles, then revalidate a failed
+ * preload if the user opens the selector after the target becomes available.
  */
 export const useHeterogeneousAgentModelCatalog = ({
   cwd,
   deviceId,
-  enabled,
+  isPreferenceLoading,
+  open,
   provider,
+  targetReady,
   type,
-}: UseHeterogeneousAgentModelCatalogParams) =>
-  useSWR(
-    enabled
+}: UseHeterogeneousAgentModelCatalogParams) => {
+  const wasOpenRef = useRef(open);
+  const response = useSWR(
+    targetReady && !isPreferenceLoading
       ? [
           'heterogeneous-agent-model-catalog',
           type,
@@ -72,3 +78,13 @@ export const useHeterogeneousAgentModelCatalog = ({
       shouldRetryOnError: false,
     },
   );
+
+  useEffect(() => {
+    const hasJustOpened = open && !wasOpenRef.current;
+    wasOpenRef.current = open;
+
+    if (hasJustOpened && response.error) void response.mutate();
+  }, [open, response.error, response.mutate]);
+
+  return response;
+};
