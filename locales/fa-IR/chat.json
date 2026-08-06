@@ -585,6 +585,7 @@
   "messageAction.continueGeneration": "ادامه تولید",
   "messageAction.continueGenerationUnsupported": "مدل فعلی از ادامه پیام دستیار پشتیبانی نمی‌کند. به جای آن، دوباره تولید کنید.",
   "messageAction.copyOperationId": "کپی شناسه عملیات",
+  "messageAction.cost": "هزینه",
   "messageAction.delAndRegenerate": "حذف و بازتولید",
   "messageAction.deleteDisabledByThreads": "این پیام دارای زیرموضوع است و قابل حذف نیست",
   "messageAction.expand": "باز کردن پیام",

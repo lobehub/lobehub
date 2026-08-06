@@ -125,9 +125,10 @@ bun run check [changed-files...]
 ### i18n
 
 - Add keys to a namespace file under `packages/locales/src/default/` (e.g. `agent.ts`, `auth.ts`)
-- Ship en-US and zh-CN by hand in the same PR: author the English source in `packages/locales/src/default/*.ts`, mirror it to `locales/en-US/`, and hand-translate `locales/zh-CN/`.
-- Leave all other locales to the daily CI workflow (`.github/workflows/auto-i18n.yml`), which runs `bun run i18n` and opens an automated translation PR. Missing locale keys fall back to English until that PR is merged.
-- Run `bun run i18n` manually only when the translated locales are needed immediately instead of waiting for the daily workflow. It is slow and requires `OPENAI_API_KEY`; don't hand-translate the generated locales.
+- **Aico visible locales** (`VISIBLE_LOCALES`): `fa-IR` (default / main user base), `en-US`, `fr-FR`. In the same PR, hand-translate **`locales/fa-IR/`** and **`locales/fr-FR/`** for every new/changed key (create the JSON file if a namespace is missing, e.g. `aico`).
+- Also ship `locales/en-US/` (mirror of English source) and hand-translate `locales/zh-CN/` for upstream-shared namespaces.
+- Leave other locales to the daily CI workflow (`.github/workflows/auto-i18n.yml`), which runs `bun run i18n` and opens an automated translation PR. Do **not** rely on English fallback for new `fa-IR` / `fr-FR` copy.
+- Run `bun run i18n` manually only when non-visible locales are needed immediately; it is slow and requires `OPENAI_API_KEY`.
 
 ### Code Style
 

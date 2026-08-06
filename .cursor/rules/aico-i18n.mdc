@@ -1,0 +1,19 @@
+---
+description: Aico i18n — hand-translate fa-IR + fr-FR when adding locale keys
+alwaysApply: true
+---
+
+# Aico locale hand-translations
+
+Visible product languages: **`fa-IR` (Persian, default / main user base)**, **`en-US`**, **`fr-FR`**.
+
+When adding or changing user-facing i18n keys in the same PR:
+
+1. Author English in `packages/locales/src/default/{namespace}.ts`
+2. Mirror to `locales/en-US/{namespace}.json`
+3. Hand-translate **`locales/fa-IR/{namespace}.json`** (required — do not ship raw keys or English-only for Persian)
+4. Hand-translate **`locales/fr-FR/{namespace}.json`** (required — create the file if the namespace is missing, e.g. `aico`)
+5. Still hand-translate `locales/zh-CN/{namespace}.json` when touching upstream-shared namespaces (keeps LobeHub preview path working)
+6. Leave other locales to `.github/workflows/auto-i18n.yml` / `bun run i18n`
+
+Do **not** rely on English fallback for `fa-IR` or `fr-FR` on new Aico copy. Prefer real Persian/French wording; keep `{{variables}}`, brand tokens, and identifiers unchanged.
