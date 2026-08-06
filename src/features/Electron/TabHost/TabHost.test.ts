@@ -157,6 +157,36 @@ describe('TabHost', () => {
     expect(slotB.style.display).toBe('');
   });
 
+  it('keeps both split panes visible and moves focus without hiding either router', async () => {
+    const tabs = [
+      { id: 'a', lastVisited: 2, url: '/item/a' },
+      { id: 'b', lastVisited: 1, url: '/item/b' },
+    ];
+    useElectronStore.setState({
+      ...initialState,
+      activeTabId: 'a',
+      splitView: { primaryTabId: 'a', ratio: 0.5, secondaryTabId: 'b' },
+      tabs,
+    });
+
+    renderHost();
+
+    const slotA = (await screen.findByTestId('param-a')).parentElement!;
+    const slotB = (await screen.findByTestId('param-b')).parentElement!;
+    expect(slotA.style.display).toBe('');
+    expect(slotB.style.display).toBe('');
+    expect(slotA).toHaveAttribute('data-pane', 'primary');
+    expect(slotB).toHaveAttribute('data-pane', 'secondary');
+
+    act(() => {
+      slotB.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    });
+
+    expect(useElectronStore.getState().activeTabId).toBe('b');
+    expect(slotA.style.display).toBe('');
+    expect(slotB.style.display).toBe('');
+  });
+
   it('disposes a router evicted past the LRU cap and recreates it fresh when reactivated', async () => {
     const baseTabs: TabItem[] = Array.from({ length: MAX_LIVE_TAB_ROUTERS }, (_, index) => ({
       id: `t${index}`,

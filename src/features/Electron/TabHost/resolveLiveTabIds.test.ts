@@ -43,6 +43,12 @@ describe('resolveLiveTabIds', () => {
     expect(resolveLiveTabIds([tab('a', 1)], null, 0)).toEqual([]);
   });
 
+  it('retains both visible split panes even when one is older than the LRU cap', () => {
+    const tabs = [tab('left', 1), tab('recent', 3), tab('right', 2)];
+
+    expect(resolveLiveTabIds(tabs, 'right', 2, ['left', 'right'])).toEqual(['left', 'right']);
+  });
+
   it('exposes the default cap', () => {
     expect(MAX_LIVE_TAB_ROUTERS).toBe(3);
   });

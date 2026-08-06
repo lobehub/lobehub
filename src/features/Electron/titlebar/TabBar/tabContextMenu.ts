@@ -5,16 +5,21 @@ type TabContextMenuLabelKey =
   | 'tab.closeLeftTabs'
   | 'tab.closeOtherTabs'
   | 'tab.closeRightTabs'
+  | 'tab.closeSplitView'
+  | 'tab.openInSplitView'
   | 'tab.pin'
   | 'tab.unpin';
 
 interface TabContextMenuParams {
   id: string;
   index: number;
+  inSplitView: boolean;
   onClose: (id: string) => void;
   onCloseLeft: (id: string) => void;
   onCloseOthers: (id: string) => void;
   onCloseRight: (id: string) => void;
+  onCloseSplitView: () => void;
+  onOpenInSplitView: (id: string) => void;
   onTogglePin: (id: string) => void;
   pinned: boolean;
   pinnedCount: number;
@@ -28,10 +33,13 @@ interface TabContextMenuParams {
 export const buildTabContextMenuItems = ({
   id,
   index,
+  inSplitView,
   onClose,
   onCloseLeft,
   onCloseOthers,
   onCloseRight,
+  onCloseSplitView,
+  onOpenInSplitView,
   onTogglePin,
   pinned,
   pinnedCount,
@@ -47,6 +55,11 @@ export const buildTabContextMenuItems = ({
       key: 'togglePin',
       label: pinned ? t('tab.unpin') : t('tab.pin'),
       onClick: () => onTogglePin(id),
+    },
+    {
+      key: inSplitView ? 'closeSplitView' : 'openInSplitView',
+      label: t(inSplitView ? 'tab.closeSplitView' : 'tab.openInSplitView'),
+      onClick: () => (inSplitView ? onCloseSplitView() : onOpenInSplitView(id)),
     },
     { type: 'divider' },
     {

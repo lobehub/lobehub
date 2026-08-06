@@ -175,6 +175,21 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
       background-color: ${cssVar.colorFillTertiary};
     }
   `,
+  tabSplitVisible: css`
+    &::after {
+      content: '';
+
+      position: absolute;
+      inset-block-end: 1px;
+      inset-inline: 8px;
+
+      height: 1px;
+      border-radius: 1px;
+
+      opacity: 0.65;
+      background: ${cssVar.colorPrimary};
+    }
+  `,
   overflowButton: css`
     cursor: default;
 
