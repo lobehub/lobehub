@@ -16,6 +16,7 @@ export const HETEROGENEOUS_AGENT_MODEL_IDS = [
   'codex',
   'opencode',
   'pi',
+  'qoder',
 ] as const;
 
 const HETEROGENEOUS_AGENT_MODEL_ID_SET = new Set<string>(HETEROGENEOUS_AGENT_MODEL_IDS);
