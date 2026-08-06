@@ -252,7 +252,7 @@
   "wallet.previewUsd": "当前约合：${{usd}}",
   "wallet.provider": "AI 供应商",
   "wallet.subtitle": "你的 USD 钱包。托管密钥仅保存在服务端。",
-  "wallet.title": "Aico 钱包",
+  "wallet.title": "Panachat 钱包",
   "wallet.topupFailed": "充值失败",
   "wallet.topupSubmit": "完成模拟购买",
   "wallet.topupSuccess": "已入账 {{toman}} toman（约 ${{usd}}）",

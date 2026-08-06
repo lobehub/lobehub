@@ -1,5 +1,6 @@
 'use client';
 
+import { getLocalizedBrandingName } from '@lobechat/business-const';
 import {
   Accordion,
   AccordionItem,
@@ -32,7 +33,8 @@ const ProviderList = (props: {
   onProviderSelect: (providerKey: string) => void;
 }) => {
   const { onProviderSelect, mobile } = props;
-  const { t } = useTranslation('modelProvider');
+  const { t, i18n } = useTranslation('modelProvider');
+  const brandName = getLocalizedBrandingName(i18n.language);
   const [open, setOpen] = useState(false);
 
   const { data: managedStatus } = useClientDataSWR('aico-provider-status', () =>
@@ -80,16 +82,16 @@ const ProviderList = (props: {
     if (!aicoManaged) return enabledModelProviderList;
     const openrouter = enabledModelProviderList.find((p) => p.id === 'openrouter');
     if (openrouter) {
-      return [{ ...openrouter, name: 'Aico' }];
+      return [{ ...openrouter, name: brandName }];
     }
     return [
       {
         id: 'openrouter',
-        name: 'Aico',
+        name: brandName,
         enabled: true,
       } as (typeof enabledModelProviderList)[number],
     ];
-  }, [aicoManaged, enabledModelProviderList]);
+  }, [aicoManaged, brandName, enabledModelProviderList]);
 
   // Sort model providers based on sort type
   const sortedDisabledProviders = useMemo(() => {
@@ -153,7 +155,7 @@ const ProviderList = (props: {
           }
           title={
             <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-              {aicoManaged ? 'Aico' : t('menu.list.enabled')}
+              {aicoManaged ? brandName : t('menu.list.enabled')}
             </Text>
           }
         >

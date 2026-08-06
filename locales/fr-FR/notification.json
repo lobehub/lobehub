@@ -18,8 +18,8 @@
   "email.footer.contactSupport": "Contacter le support",
   "email.footer.joinDiscord": "Rejoindre Discord",
   "email.footer.manage": "Gérer les notifications",
-  "email.footer.preference": "Vous avez reçu cet e-mail en raison de vos paramètres de notification sur LobeHub.",
-  "email.footer.system": "Ceci est une notification importante de compte de LobeHub.",
+  "email.footer.preference": "Vous avez reçu cet e-mail en raison de vos paramètres de notification sur Panachat.",
+  "email.footer.system": "Ceci est une notification importante de compte de Panachat.",
   "email.viewDetails": "Voir les détails",
   "image_generation_completed": "Votre image « {{prompt}} » est prête.",
   "image_generation_completed_title": "Génération d’image terminée",
@@ -78,6 +78,6 @@
   "workspace_primary_ownership_transferred_title": "Vous êtes désormais le propriétaire principal de {{workspaceName}}",
   "workspace_subscription_expired": "L'abonnement pour l'espace de travail \"{{workspaceName}}\" a pris fin. Renouvelez dans les {{days}} jours pour restaurer l'accès complet avant que l'espace de travail ne soit rétrogradé.",
   "workspace_subscription_expired_title": "Abonnement terminé pour {{workspaceName}}",
-  "workspace_waitlist_approved": "Votre accès bêta à Workspace est prêt. Rendez-vous sur LobeHub pour créer votre premier espace de travail et inviter votre équipe.",
+  "workspace_waitlist_approved": "Votre accès bêta à Workspace est prêt. Rendez-vous sur Panachat pour créer votre premier espace de travail et inviter votre équipe.",
   "workspace_waitlist_approved_title": "Accès bêta à Workspace approuvé"
 }

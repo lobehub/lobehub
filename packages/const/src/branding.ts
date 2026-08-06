@@ -1,8 +1,18 @@
 export {
   BRANDING_CLOUD_NAME,
+  BRANDING_CLOUD_NAME_FA,
   BRANDING_EMAIL,
+  BRANDING_INBOX_NAME,
+  BRANDING_INBOX_NAME_FA,
   BRANDING_LOGO_URL,
   BRANDING_NAME,
+  BRANDING_NAME_FA,
+  getLocalizedBrandingCloudName,
+  getLocalizedBrandingInboxName,
+  getLocalizedBrandingName,
+  getLocalizedOrgName,
+  isPersianBrandingLocale,
   LOBE_CHAT_CLOUD,
   ORG_NAME,
+  ORG_NAME_FA,
 } from '@lobechat/business-const';

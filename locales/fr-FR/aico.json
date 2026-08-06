@@ -252,7 +252,7 @@
   "wallet.previewUsd": "Équivalent actuel : ${{usd}}",
   "wallet.provider": "Fournisseur d'IA",
   "wallet.subtitle": "Votre portefeuille USD. Les clés gérées restent côté serveur.",
-  "wallet.title": "Portefeuille Aico",
+  "wallet.title": "Portefeuille Panachat",
   "wallet.topupFailed": "Échec du rechargement",
   "wallet.topupSubmit": "Finaliser l'achat fictif",
   "wallet.topupSuccess": "Crédit de {{toman}} toman (≈ ${{usd}})",

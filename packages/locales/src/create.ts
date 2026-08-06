@@ -1,4 +1,9 @@
-import { BRANDING_CLOUD_NAME, BRANDING_EMAIL, BRANDING_NAME, ORG_NAME } from '@lobechat/const';
+import {
+  BRANDING_EMAIL,
+  getLocalizedBrandingCloudName,
+  getLocalizedBrandingName,
+  getLocalizedOrgName,
+} from '@lobechat/const';
 import i18n from 'i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 import resourcesToBackend from 'i18next-resources-to-backend';
@@ -61,9 +66,20 @@ export const createI18nNext = (lang?: string) => {
         );
       }),
     );
-  // Dynamically set HTML direction on language change
+  const brandingVariables = (lng?: string) => ({
+    appName: getLocalizedBrandingName(lng),
+    cloudName: getLocalizedBrandingCloudName(lng),
+    orgName: getLocalizedOrgName(lng),
+    supportEmail: BRANDING_EMAIL.support || 'support@example.com',
+  });
+
+  // Dynamically set HTML direction + localized brand tokens on language change
   instance.on('languageChanged', (lng) => {
     applyDocumentDirection(lng);
+    instance.options.interpolation = {
+      ...instance.options.interpolation,
+      defaultVariables: brandingVariables(lng),
+    };
   });
   return {
     init: (params: { initAsync?: boolean } = {}) => {
@@ -98,12 +114,7 @@ export const createI18nNext = (lang?: string) => {
         partialBundledLanguages: true,
 
         interpolation: {
-          defaultVariables: {
-            appName: BRANDING_NAME,
-            cloudName: BRANDING_CLOUD_NAME,
-            orgName: ORG_NAME,
-            supportEmail: BRANDING_EMAIL.support || 'support@example.com',
-          },
+          defaultVariables: brandingVariables(initialLang),
           escapeValue: false,
         },
         // Re-render components when new language resources are loaded from backend,

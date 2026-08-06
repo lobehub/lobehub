@@ -737,7 +737,8 @@ export default {
 
   'models.parameterList.type': 'Type',
 
-  'models.providerInfo.apiTooltip': '{{appName}} supports using a custom API key for this provider.',
+  'models.providerInfo.apiTooltip':
+    '{{appName}} supports using a custom API key for this provider.',
 
   'models.providerInfo.input': 'Input Price',
 
@@ -1077,7 +1078,7 @@ export default {
 
   'skills.details.sidebar.agent.title': 'Send this prompt to your Agent to install this Skill',
 
-  'skills.details.sidebar.agent.useOnLobeAI': 'Use on LobeAI',
+  'skills.details.sidebar.agent.useOnLobeAI': 'Use on Panachat AI',
 
   'skills.details.sidebar.directoryLayout': 'Directory Layout',
 
@@ -1085,7 +1086,8 @@ export default {
 
   'skills.details.sidebar.installCommand': 'Install Command',
 
-  'skills.details.sidebar.platform.layout.lobehub': 'Skills are managed by {{appName}} automatically',
+  'skills.details.sidebar.platform.layout.lobehub':
+    'Skills are managed by {{appName}} automatically',
 
   'skills.details.sidebar.platform.layout.resourcesHint': 'other resources',
 

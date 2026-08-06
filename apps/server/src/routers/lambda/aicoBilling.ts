@@ -1,3 +1,4 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
 import { TRPCError } from '@trpc/server';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -359,7 +360,7 @@ export const aicoBillingRouter = router({
     ).some(Boolean);
 
     return {
-      brandName: 'Aico',
+      brandName: BRANDING_NAME,
       hasCredit: Boolean(wallet?.openrouterKeyId) || trialActive || hasOrgCredit,
       managed: true,
       providerId: 'aico',

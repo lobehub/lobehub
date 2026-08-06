@@ -1,3 +1,4 @@
+import { BRANDING_INBOX_NAME } from '@lobechat/business-const';
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { ChatHeader } from '@lobehub/ui/mobile';
 import { cssVar } from 'antd-style';
@@ -21,7 +22,7 @@ const ChatHeaderTitle = memo(() => {
   const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
   const title = useAgentStore(agentSelectors.currentAgentTitle);
 
-  const displayTitle = isInbox ? 'Lobe AI' : title;
+  const displayTitle = isInbox ? BRANDING_INBOX_NAME : title;
 
   return (
     <ChatHeader.Title
