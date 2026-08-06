@@ -16,17 +16,18 @@ describe('global RTL control fixes', () => {
 
   it('keeps switches LTR under dir=rtl', () => {
     expect(source).toContain("html[dir='rtl'] [role='switch']");
+    expect(source).toContain(":dir(rtl) [role='switch']");
     expect(source).toContain('--switch-dir: 1');
     expect(source).toContain('direction: ltr');
   });
 
-  it('maps Tabs selection indicators to physical left (Response Animation)', () => {
-    expect(source).toContain("html[dir='rtl'] [role='tablist'] > [role='presentation']");
-    expect(source).toContain(":dir(rtl) [role='tablist'] > [role='presentation']");
+  it('maps Tabs selection indicators to physical left (incl. Settings animation)', () => {
+    // Ungated: physical left works in LTR and fixes RTL regardless of html.dir timing
+    expect(source).toContain("[role='tablist'] > [role='presentation']");
     expect(source).toContain('left: var(--active-tab-left) !important');
     expect(source).toContain('inset-inline: auto !important');
     expect(source).toContain(
-      'transition-property: left, inset-block-start, top, width, height, transform !important',
+      'transition-property: left, top, inset-block-start, width, height, transform !important',
     );
     // Prior broken formula used containing-block % and --active-tab-right
     expect(source).not.toContain('var(--active-tab-right)');
@@ -34,10 +35,7 @@ describe('global RTL control fixes', () => {
   });
 
   it('maps Segmented selection indicators to physical left', () => {
-    expect(source).toContain(
-      "html[dir='rtl'] [data-orientation] > [aria-hidden='true']:first-of-type",
-    );
-    expect(source).toContain(":dir(rtl) [data-orientation] > [aria-hidden='true']:first-of-type");
+    expect(source).toContain("[data-orientation] > [aria-hidden='true']:first-of-type");
     expect(source).toContain('left: var(--active-item-left) !important');
     expect(source).toContain('liberty/use-logical-spec');
   });
