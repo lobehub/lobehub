@@ -36,12 +36,13 @@ const styles = createStaticStyles(({ css }) => ({
     position: sticky;
     z-index: 2;
 
-    /* The intervention scroller carries 8px top padding; sticky pins below it
-      and lets content bleed through the strip. Pin above it instead. */
+    /* The intervention scroller carries 8px top padding; pinning at 0 would
+      leave that strip uncovered for content to bleed through. Pin above it and
+      pay the offset back as padding, so the title holds its resting position
+      while the sticky box still covers the strip. */
     inset-block-start: -8px;
 
-    padding-block: 0 6px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+    padding-block: 8px 6px;
 
     background: ${cssVar.colorBgContainer};
   `,
@@ -50,6 +51,15 @@ const styles = createStaticStyles(({ css }) => ({
     padding-inline: 12px;
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorFillQuaternary};
+
+    /* The editor defaults to a document-reading 16px; inside a confirmation
+      card the instruction is one field among several, so it matches the
+      criteria rows rather than dwarfing them. */
+    &,
+    & * {
+      font-size: 13px;
+      line-height: 1.65;
+    }
   `,
   list: css`
     overflow: hidden;
@@ -83,6 +93,13 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorInfo};
 
     background: ${cssVar.colorInfoBg};
+  `,
+  section: css`
+    padding-block: 10px;
+
+    & + & {
+      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+    }
   `,
   sectionHeader: css`
     cursor: pointer;
@@ -119,7 +136,7 @@ interface SectionProps {
  * fold away, instead of three flat blocks bleeding into each other.
  */
 const Section = memo<SectionProps>(({ children, extra, label, onToggle, open }) => (
-  <Flexbox gap={7}>
+  <Flexbox className={styles.section} gap={7}>
     <Flexbox
       horizontal
       align={'center'}
@@ -201,7 +218,7 @@ const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
     );
 
     return (
-      <Flexbox gap={12}>
+      <Flexbox>
         <Flexbox className={styles.header}>
           <Input
             className={styles.titleInput}
