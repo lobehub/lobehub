@@ -2,7 +2,7 @@ import { type BuiltinAgentSlug } from '@lobechat/builtin-agents';
 import { BUILTIN_AGENTS } from '@lobechat/builtin-agents';
 import { DEFAULT_AGENT_CONFIG } from '@lobechat/const';
 import { type LobeChatDatabase } from '@lobechat/database';
-import { type AgentItem, type LobeAgentConfig } from '@lobechat/types';
+import { type AgentItem, type LobeAgentChatConfig, type LobeAgentConfig } from '@lobechat/types';
 import { cleanObject, merge } from '@lobechat/utils';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
@@ -31,7 +31,14 @@ const log = debug('lobe-agent:service');
  * Used when returning agent config from database (id is always present).
  */
 export type AgentConfigWithId = LobeAgentConfig &
-  Pick<AgentItem, 'id' | 'slug' | 'userId' | 'visibility' | 'workspaceId'>;
+  Pick<AgentItem, 'id' | 'slug' | 'userId' | 'visibility' | 'workspaceId'> & {
+    /**
+     * Raw callSubAgent chatConfig override, stamped by execAgent alongside the
+     * merged chatConfig. The LLM context hints need it to re-apply explicit
+     * sub-agent reasoning choices over the user's model-instance defaults.
+     */
+    subAgentChatConfigOverride?: Partial<LobeAgentChatConfig>;
+  };
 
 interface AgentWelcomeData {
   openQuestions: string[];

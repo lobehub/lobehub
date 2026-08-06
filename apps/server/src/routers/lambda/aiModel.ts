@@ -1,6 +1,7 @@
 import { TRPCError } from '@trpc/server';
 import { type AiProviderModelListItem } from 'model-bank';
 import {
+  AiModelReasoningConfigSchema,
   AiModelTypeSchema,
   CreateAiModelSchema,
   ToggleAiModelEnableSchema,
@@ -138,6 +139,15 @@ export const aiModelRouter = router({
       return ctx.aiModelModel.findById(input.id);
     }),
 
+  // Personal-scope by design (workspaceId ignored): the user's default reasoning
+  // params for a model instance are keyed by userId + providerId + modelId and
+  // shared across workspaces. See AiModelModel.getModelReasoningConfig.
+  getAiModelReasoningConfig: aiModelProcedure
+    .input(z.object({ id: z.string(), providerId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      return await ctx.aiModelModel.getModelReasoningConfig(input.id, input.providerId);
+    }),
+
   getAiProviderModelList: aiModelProcedure
     .input(
       z.object({
@@ -187,6 +197,19 @@ export const aiModelRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       return ctx.aiModelModel.update(input.id, input.providerId, input.value);
+    }),
+
+  updateAiModelReasoningConfig: aiModelProcedure
+    .use(withScopedPermission('ai_model:update'))
+    .input(
+      z.object({
+        id: z.string(),
+        providerId: z.string(),
+        value: AiModelReasoningConfigSchema,
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      return ctx.aiModelModel.updateModelReasoningConfig(input.id, input.providerId, input.value);
     }),
 
   updateAiModelOrder: aiModelProcedure

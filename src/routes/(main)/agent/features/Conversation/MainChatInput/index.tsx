@@ -39,7 +39,7 @@ const MainChatInput = memo(() => {
     ? promptTransformRightActions
     : contextWindowRightActions;
 
-  const leftActions: ActionKeys[] = useMemo(() => ['model', 'plus'], []);
+  const leftActions: ActionKeys[] = useMemo(() => ['model', 'effort', 'plus'], []);
 
   return (
     <>

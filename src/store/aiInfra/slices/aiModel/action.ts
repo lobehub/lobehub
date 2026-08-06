@@ -2,6 +2,7 @@ import { toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
 import type {
+  AiModelReasoningConfig,
   AiModelSortMap,
   AiProviderModelListItem,
   CreateAiModelParams,
@@ -15,6 +16,7 @@ import { aiModelService } from '@/services/aiModel';
 import type { AiInfraStore } from '@/store/aiInfra/store';
 import type { StoreSetter } from '@/store/types';
 
+import { modelReasoningConfigKey } from './initialState';
 import { deduplicateRemoteModels } from './utils';
 
 const MAX_DUPLICATE_MODEL_IDS_IN_WARNING = 3;
@@ -176,6 +178,85 @@ export class AiModelActionImpl {
     await this.#get().refreshAiModelList();
 
     this.#get().internal_toggleAiModelLoading(params.id, false);
+  };
+
+  /**
+   * Optimistically saves the user's per-model-instance reasoning defaults
+   * (personal scope, cross-workspace). Rolls the local value back and surfaces
+   * an error toast when the request fails.
+   */
+  updateModelReasoningConfig = async (
+    id: string,
+    provider: string,
+    value: AiModelReasoningConfig,
+  ): Promise<void> => {
+    const key = modelReasoningConfigKey(provider, id);
+    const previous = this.#get().modelReasoningConfigMap[key];
+
+    this.#set(
+      (state) => ({
+        modelReasoningConfigMap: {
+          ...state.modelReasoningConfigMap,
+          [key]: { ...previous, ...value },
+        },
+        modelReasoningConfigUpdatingKeys: [...state.modelReasoningConfigUpdatingKeys, key],
+      }),
+      false,
+      `updateModelReasoningConfig/optimistic/${key}`,
+    );
+
+    try {
+      await aiModelService.updateAiModelReasoningConfig(id, provider, value);
+      await mutate(aiModelKeys.reasoningConfig(provider, id));
+    } catch (error) {
+      this.#set(
+        (state) => ({
+          modelReasoningConfigMap: { ...state.modelReasoningConfigMap, [key]: previous },
+        }),
+        false,
+        `updateModelReasoningConfig/rollback/${key}`,
+      );
+
+      toast.error(t('reasoningEffort.updateFailed', { ns: 'chat' }));
+      throw error;
+    } finally {
+      this.#set(
+        (state) => ({
+          modelReasoningConfigUpdatingKeys: state.modelReasoningConfigUpdatingKeys.filter(
+            (i) => i !== key,
+          ),
+        }),
+        false,
+        `updateModelReasoningConfig/settled/${key}`,
+      );
+    }
+  };
+
+  useFetchAiModelReasoningConfig = (
+    id: string | undefined,
+    provider: string | undefined,
+  ): SWRResponse<AiModelReasoningConfig | undefined> => {
+    return useClientDataSWR<AiModelReasoningConfig | undefined>(
+      id && provider ? aiModelKeys.reasoningConfig(provider, id) : null,
+      ([, provider, id]) =>
+        aiModelService.getAiModelReasoningConfig(id as string, provider as string),
+      {
+        onSuccess: (data) => {
+          const key = modelReasoningConfigKey(provider!, id!);
+          // Don't clobber an in-flight optimistic value with a stale response
+          if (this.#get().modelReasoningConfigUpdatingKeys.includes(key)) return;
+          if (isEqual(data, this.#get().modelReasoningConfigMap[key])) return;
+
+          this.#set(
+            (state) => ({
+              modelReasoningConfigMap: { ...state.modelReasoningConfigMap, [key]: data },
+            }),
+            false,
+            `useFetchAiModelReasoningConfig/${key}`,
+          );
+        },
+      },
+    );
   };
 
   updateAiModelsConfig = async (

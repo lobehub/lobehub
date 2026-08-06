@@ -1,5 +1,7 @@
 import { and, asc, desc, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import type {
+  AiModelConfig,
+  AiModelReasoningConfig,
   AiModelSortMap,
   AiProviderModelListItem,
   EnabledAiModel,
@@ -27,6 +29,12 @@ export class AiModelModel {
 
   private scopeWhere = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, aiModels);
+
+  /**
+   * Personal scope regardless of the active workspace (userId + workspaceId IS NULL).
+   * Used by the model-instance reasoning-config helpers, which are cross-workspace.
+   */
+  private personalScopeWhere = () => buildWorkspaceWhere({ userId: this.userId }, aiModels);
 
   private values<T extends object>(base: T) {
     return buildWorkspacePayload({ userId: this.userId, workspaceId: this.workspaceId }, base);
@@ -178,12 +186,84 @@ export class AiModelModel {
   update = async (id: string, providerId: string, value: Partial<AiModelSelectItem>) => {
     const normalizedValue = this.normalizeAiModelValues(value);
 
+    const set: Record<string, unknown> = { ...normalizedValue };
+    // Shallow-merge `config` instead of replacing the column: callers send partial
+    // config (the model-config modal only knows `deploymentName`), and a full
+    // replace would silently wipe sibling keys such as the user's `chatConfig`
+    // model-instance reasoning defaults.
+    if (normalizedValue.config !== undefined && normalizedValue.config !== null) {
+      set.config = sql`COALESCE(ai_models.config, '{}'::jsonb) || excluded.config`;
+    }
+
     return this.db
       .insert(aiModels)
       .values(this.values({ ...normalizedValue, id, providerId, updatedAt: new Date() }))
       .onConflictDoUpdate({
-        set: normalizedValue,
+        set,
         ...this.conflictTarget(),
+      });
+  };
+
+  /**
+   * Personal-scope read of the user's per-model-instance reasoning defaults
+   * (`config.chatConfig`). Deliberately ignores the active workspace: the
+   * preference is keyed by userId + providerId + modelId and shared across
+   * workspaces by design.
+   */
+  getModelReasoningConfig = async (
+    id: string,
+    providerId: string,
+  ): Promise<AiModelReasoningConfig | undefined> => {
+    const row = await this.db.query.aiModels.findFirst({
+      columns: { config: true },
+      where: and(
+        eq(aiModels.id, id),
+        eq(aiModels.providerId, providerId),
+        this.personalScopeWhere(),
+      ),
+    });
+
+    return (row?.config as AiModelConfig | null)?.chatConfig;
+  };
+
+  /**
+   * Personal-scope partial update of `config.chatConfig` (see
+   * getModelReasoningConfig for the scoping rationale).
+   */
+  updateModelReasoningConfig = async (
+    id: string,
+    providerId: string,
+    chatConfig: AiModelReasoningConfig,
+  ) => {
+    const config: AiModelConfig = { chatConfig };
+
+    return this.db
+      .insert(aiModels)
+      .values({
+        config,
+        id,
+        providerId,
+        updatedAt: new Date(),
+        userId: this.userId,
+        // No `enabled` / `source` on purpose: a row created only to hold the
+        // preference must not flip model visibility (enabled NULL falls back to
+        // the builtin default in AiInfraRepos.getEnabledModels) nor claim an
+        // origin that would block later remote-sync updates.
+        workspaceId: null,
+      })
+      .onConflictDoUpdate({
+        set: {
+          // Nested merge: keep sibling config keys (deploymentName, enabledSearch)
+          // and previously saved chatConfig fields absent from this partial write.
+          config: sql`jsonb_set(
+            COALESCE(ai_models.config, '{}'::jsonb),
+            '{chatConfig}',
+            COALESCE(ai_models.config -> 'chatConfig', '{}'::jsonb) || ${JSON.stringify(chatConfig)}::jsonb
+          )`,
+          updatedAt: new Date(),
+        },
+        target: [aiModels.id, aiModels.providerId, aiModels.userId],
+        targetWhere: isNull(aiModels.workspaceId),
       });
   };
 

@@ -1,7 +1,61 @@
 import type { LobeAgentChatConfig } from '@lobechat/types';
-import type { ExtendParamsType } from 'model-bank';
+import type { AiModelReasoningConfig, ExtendParamsType } from 'model-bank';
+import { MODEL_REASONING_EXTEND_PARAMS } from 'model-bank';
 
 import { isAdaptiveThinkingDefaultOnModel } from '../providers/anthropic/modelId';
+
+export interface ResolveEffectiveReasoningChatConfigContext {
+  /**
+   * The agent's chat config. Migrated reasoning fields (effort family +
+   * reasoningMode) are stripped — since the model-instance migration they are
+   * user-level per-model settings, and legacy agent values must not leak into
+   * outbound payloads.
+   */
+  agentChatConfig: LobeAgentChatConfig;
+  /**
+   * The user's per-model-instance defaults (`ai_models.config.chatConfig`,
+   * personal scope).
+   */
+  modelReasoningConfig?: AiModelReasoningConfig | null;
+  /**
+   * Explicit sub-agent overrides (`agencyConfig.subagent.chatConfig`). Unlike the
+   * main agent, a sub-agent's reasoning fields stay honored when the user set them,
+   * winning over the model-instance defaults.
+   */
+  subAgentReasoningOverrides?: AiModelReasoningConfig | null;
+}
+
+const pickReasoningFields = (config?: AiModelReasoningConfig | null): AiModelReasoningConfig => {
+  const result: AiModelReasoningConfig = {};
+  if (!config) return result;
+
+  for (const key of MODEL_REASONING_EXTEND_PARAMS) {
+    const value = config[key];
+    if (value !== undefined) (result as Record<string, unknown>)[key] = value;
+  }
+
+  return result;
+};
+
+/**
+ * Builds the effective chat config for reasoning-param resolution, shared by the
+ * client chat service and the server agent runtime so both produce the same
+ * payload: agent config without the migrated fields ← model-instance defaults ←
+ * explicit sub-agent overrides. Field-level model support is still enforced by
+ * `applyModelExtendParams`, which only reads fields the model card declares.
+ */
+export const resolveEffectiveReasoningChatConfig = (
+  ctx: ResolveEffectiveReasoningChatConfigContext,
+): LobeAgentChatConfig => {
+  const base: LobeAgentChatConfig = { ...ctx.agentChatConfig };
+  for (const key of MODEL_REASONING_EXTEND_PARAMS) delete base[key];
+
+  return {
+    ...base,
+    ...pickReasoningFields(ctx.modelReasoningConfig),
+    ...pickReasoningFields(ctx.subAgentReasoningOverrides),
+  };
+};
 
 /**
  * Extended parameters for model runtime
@@ -28,10 +82,7 @@ export interface ModelExtendParams {
 }
 
 type ThinkingLevelExtendParam =
-  | 'thinkingLevel'
-  | 'thinkingLevel2'
-  | 'thinkingLevel3'
-  | 'thinkingLevel4';
+  'thinkingLevel' | 'thinkingLevel2' | 'thinkingLevel3' | 'thinkingLevel4';
 
 type ThinkingLevelValue = NonNullable<LobeAgentChatConfig['thinkingLevel']>;
 

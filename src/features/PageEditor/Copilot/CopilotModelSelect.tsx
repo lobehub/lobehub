@@ -89,7 +89,7 @@ const CopilotModelSelect = memo(() => {
       </ModelSwitchPanel>
       {isModelHasExtendParams && (
         <ActionPopover
-          content={<ControlsForm disabled={!canEdit} />}
+          content={<ControlsForm hideReasoningParams disabled={!canEdit} />}
           minWidth={350}
           open={settingsOpen}
           placement={'topRight'}

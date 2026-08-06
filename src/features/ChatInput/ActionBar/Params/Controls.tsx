@@ -10,6 +10,7 @@ import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { debounce } from 'es-toolkit/compat';
 import isEqual from 'fast-deep-equal';
 import { ChevronDown, ChevronUp } from 'lucide-react';
+import { MODEL_REASONING_EXTEND_PARAMS } from 'model-bank';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -418,6 +419,8 @@ const PARAM_CONFIG = {
 
 const PARAM_ORDER: ParamKey[] = ['temperature', 'top_p', 'frequency_penalty', 'presence_penalty'];
 
+const REASONING_PARAMS_SET = new Set<string>(MODEL_REASONING_EXTEND_PARAMS);
+
 const ADVANCED_OPEN_STORAGE_KEY = 'lobehub-chat-input-params-advanced-open';
 const MODEL_CONFIG_OPEN_STORAGE_KEY = 'lobehub-chat-input-params-model-config-open';
 
@@ -533,7 +536,16 @@ const Controls = memo<ControlsProps>(({ setUpdating, updating, variant = 'popove
     (s) => agentByIdSelectors.getAgentConfigById(agentId)(s) || DEFAULT_AGENT_CONFIG,
     isEqual,
   );
-  const { disabledParams, hasModelConfig, model, provider } = useParamsModelConfig(agentId);
+  const { disabledParams, model, provider } = useParamsModelConfig(agentId);
+  const modelExtendParamsList = useAiInfraStore(
+    aiModelSelectors.modelExtendParams(model, provider),
+    isEqual,
+  );
+  // Reasoning fields are user-level model-instance settings now (edited via
+  // the ChatInput Effort control); only non-reasoning params warrant this section
+  const hasModelConfig = (modelExtendParamsList ?? []).some(
+    (param) => !REASONING_PARAMS_SET.has(param),
+  );
   const enableAgentMode = useAgentStore(agentByIdSelectors.getAgentEnableModeById(agentId));
   const [form] = AntdForm.useForm();
   const [advancedOpen, setAdvancedOpen] = useState(() => getStoredOpen(ADVANCED_OPEN_STORAGE_KEY));
@@ -944,6 +956,7 @@ const Controls = memo<ControlsProps>(({ setUpdating, updating, variant = 'popove
               {modelConfigOpen && (
                 <div className={styles.modelConfigSection}>
                   <ControlsForm
+                    hideReasoningParams
                     disabled={!canCreate}
                     model={model}
                     provider={provider}

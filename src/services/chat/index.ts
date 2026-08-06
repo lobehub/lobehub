@@ -326,6 +326,7 @@ class ChatService {
       chatConfig,
       model: payload.model,
       provider: payload.provider!,
+      subAgentChatConfigOverride: resolvedAgentConfig.subAgentChatConfigOverride,
     });
 
     return {

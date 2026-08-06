@@ -206,6 +206,9 @@ export class StreamingExecutorActionImpl {
                   chatConfig:
                     resolveSubAgentChatConfig(resolvedAgentConfig.chatConfig, chatConfigOverride) ??
                     resolvedAgentConfig.chatConfig,
+                  // Keep the raw override so the model-params resolver can re-apply
+                  // explicit sub-agent reasoning choices over model-instance defaults
+                  subAgentChatConfigOverride: chatConfigOverride,
                 }
               : {}),
           }

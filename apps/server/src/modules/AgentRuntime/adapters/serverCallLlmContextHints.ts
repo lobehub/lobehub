@@ -6,9 +6,10 @@ import {
   isDeepSeekV4FamilyModel,
   isKimiAlwaysPreserveThinkingModel,
   type ModelExtendParams,
+  resolveEffectiveReasoningChatConfig,
 } from '@lobechat/model-runtime';
-import type { UIChatMessage } from '@lobechat/types';
-import { type ExtendParamsType, ModelProvider } from 'model-bank';
+import type { LobeAgentChatConfig, UIChatMessage } from '@lobechat/types';
+import { type AiModelReasoningConfig, type ExtendParamsType, ModelProvider } from 'model-bank';
 
 import { AiModelModel } from '@/database/models/aiModel';
 
@@ -78,18 +79,47 @@ export const resolveServerCallLlmContextHints = async ({
     modelCard?.displayName ??
     (provider === ModelProvider.LobeHub ? canonicalModelCard?.displayName : undefined);
 
+  const aiModelModel =
+    ctx.serverDB && ctx.userId
+      ? new AiModelModel(ctx.serverDB, ctx.userId, ctx.workspaceId)
+      : undefined;
+
   // Custom/remote user models aren't in the bundled model bank, so both cards
   // miss. Fall back to the user's own AI model record so server-side runs still
   // surface identity (the inbox `{{model}}` fallback no longer exists).
-  if (!modelDisplayName && ctx.serverDB && ctx.userId) {
+  if (!modelDisplayName && aiModelModel) {
     try {
-      const aiModelModel = new AiModelModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
       const userModel = await aiModelModel.findByIdAndProvider(model, provider);
       modelDisplayName = userModel?.displayName ?? undefined;
     } catch (error) {
       log('Failed to resolve user model display name for %s: %O', model, error);
     }
   }
+
+  // Reasoning fields (effort family + reasoningMode) are user-level
+  // model-instance settings (personal scope, cross-workspace): same-named
+  // agent chatConfig values are ignored and the saved per-model config applies
+  // instead — except explicit sub-agent overrides, which stay honored.
+  let modelReasoningConfig: AiModelReasoningConfig | undefined;
+  if (aiModelModel) {
+    try {
+      modelReasoningConfig = await aiModelModel.getModelReasoningConfig(model, provider);
+    } catch (error) {
+      log('Failed to resolve model reasoning config for %s: %O', model, error);
+    }
+  }
+
+  const agentChatConfig: LobeAgentChatConfig | undefined = agentConfig?.chatConfig;
+  const subAgentChatConfigOverride: Partial<LobeAgentChatConfig> | undefined =
+    agentConfig?.subAgentChatConfigOverride ?? undefined;
+  const effectiveChatConfig =
+    agentChatConfig || modelReasoningConfig || subAgentChatConfigOverride
+      ? resolveEffectiveReasoningChatConfig({
+          agentChatConfig: agentChatConfig ?? {},
+          modelReasoningConfig,
+          subAgentReasoningOverrides: subAgentChatConfigOverride,
+        })
+      : undefined;
 
   let modelExtendParams = readExtendParams(modelCard);
 
@@ -124,7 +154,7 @@ export const resolveServerCallLlmContextHints = async ({
   // forces reasoning history in the payload builder — suppressing it there
   // would reintroduce the 400/answer-hidden behavior.
   const deepseekV4ThinkingDisabled =
-    isDeepSeekV4FamilyModel(model) && agentConfig?.chatConfig?.deepseekV4ReasoningEffort === 'none';
+    isDeepSeekV4FamilyModel(model) && effectiveChatConfig?.deepseekV4ReasoningEffort === 'none';
   const deepseekForcesPreserveThinking =
     isDeepSeekThinkingEligibleModel(model) && !deepseekV4ThinkingDisabled;
   const modelForcesPreserveThinking = kimiForcesPreserveThinking || deepseekForcesPreserveThinking;
@@ -143,9 +173,9 @@ export const resolveServerCallLlmContextHints = async ({
       ? preserveThinkingConfigured
       : undefined;
 
-  const resolvedModelExtendParams = agentConfig?.chatConfig
+  const resolvedModelExtendParams = effectiveChatConfig
     ? applyModelExtendParams({
-        chatConfig: agentConfig.chatConfig,
+        chatConfig: effectiveChatConfig,
         extendParams: modelExtendParams as ExtendParamsType[] | undefined,
         model,
       })
