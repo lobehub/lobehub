@@ -2008,7 +2008,9 @@ describe('AgentGroupRepository', () => {
         workspaceId,
       });
 
-      const messageCount = 1201;
+      // 2401 rows × 31 `messages` columns ≈ 74k bind parameters — above the
+      // 65,535 cap, so the pre-fix unbatched INSERT provably fails here.
+      const messageCount = 2401;
       const base = Date.parse('2026-01-01T00:00:00Z');
       const sourceRows = Array.from({ length: messageCount }, (_, i) => ({
         content: `msg ${i}`,
