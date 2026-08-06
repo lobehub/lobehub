@@ -238,6 +238,38 @@ export class AiModelActionImpl {
     await mutate(aiModelKeys.reasoningConfig(provider, id));
   };
 
+  /**
+   * Best-effort imperative warm-up of the model-instance reasoning config for
+   * non-React callers — e.g. the client sub-agent executor, whose override
+   * model may never mount a ChatInput fetch hook. No-op when the key is
+   * already cached or an optimistic update is in flight; fetch failures are
+   * swallowed so the send path falls back to defaults instead of breaking.
+   */
+  ensureModelReasoningConfig = async (id: string, provider: string): Promise<void> => {
+    const key = modelReasoningConfigKey(provider, id);
+    if (key in this.#get().modelReasoningConfigMap) return;
+
+    try {
+      const data = await aiModelService.getAiModelReasoningConfig(id, provider);
+
+      const state = this.#get();
+      if (state.modelReasoningConfigUpdatingKeys.includes(key)) return;
+      if (key in state.modelReasoningConfigMap) return;
+
+      this.#set(
+        (s) => ({
+          // An empty config keeps the key (value undefined) so repeated calls
+          // don't refetch a model that simply has nothing saved yet
+          modelReasoningConfigMap: { ...s.modelReasoningConfigMap, [key]: data },
+        }),
+        false,
+        `ensureModelReasoningConfig/${key}`,
+      );
+    } catch {
+      // best-effort: resolver falls back to level defaults
+    }
+  };
+
   useFetchAiModelReasoningConfig = (
     id: string | undefined,
     provider: string | undefined,

@@ -1043,6 +1043,17 @@ export class StreamingExecutorActionImpl {
       const parentAgentConfig = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
       const parentEffectiveModel =
         topicSelectors.getTopicModelById(topicId)(this.#get()) ?? parentAgentConfig;
+      const subAgentModel = resolveSubAgentModel(
+        parentAgentConfig?.agencyConfig?.subagent,
+        parentEffectiveModel,
+      );
+      // Warm the sub-agent model's user-level reasoning config before the run:
+      // the ChatInput loader only fetches the parent's effective model, while
+      // resolveModelExtendParams reads this cache synchronously mid-run.
+      await getAiInfraStoreState().ensureModelReasoningConfig(
+        subAgentModel.model,
+        subAgentModel.provider,
+      );
       const runtimeResult = await this.#get().executeClientAgent({
         chatConfigOverride: getSubAgentChatConfigOverride(
           parentAgentConfig?.agencyConfig?.subagent,
@@ -1050,10 +1061,7 @@ export class StreamingExecutorActionImpl {
         context: subContext,
         isSubAgent: true,
         messages: subMessages,
-        modelOverride: resolveSubAgentModel(
-          parentAgentConfig?.agencyConfig?.subagent,
-          parentEffectiveModel,
-        ),
+        modelOverride: subAgentModel,
         operationId: taskOperationId,
         parentMessageId: userMessageId,
         parentMessageType: 'user',

@@ -708,6 +708,74 @@ describe('AiModelAction', () => {
     });
   });
 
+  describe('ensureModelReasoningConfig', () => {
+    it('should fetch and cache the config when the key is absent', async () => {
+      const { result } = renderHook(() => useStore());
+      const serviceSpy = vi
+        .spyOn(aiModelService, 'getAiModelReasoningConfig')
+        .mockResolvedValue({ reasoningEffort: 'high' });
+
+      await act(async () => {
+        await result.current.ensureModelReasoningConfig('gpt-5.2', 'openai');
+      });
+
+      expect(serviceSpy).toHaveBeenCalledWith('gpt-5.2', 'openai');
+      expect(useStore.getState().modelReasoningConfigMap['openai/gpt-5.2']).toEqual({
+        reasoningEffort: 'high',
+      });
+    });
+
+    it('should keep the key for an empty config so it is not refetched', async () => {
+      const { result } = renderHook(() => useStore());
+      const serviceSpy = vi
+        .spyOn(aiModelService, 'getAiModelReasoningConfig')
+        .mockResolvedValue(undefined);
+
+      await act(async () => {
+        await result.current.ensureModelReasoningConfig('gpt-5.2', 'openai');
+        await result.current.ensureModelReasoningConfig('gpt-5.2', 'openai');
+      });
+
+      expect(serviceSpy).toHaveBeenCalledTimes(1);
+      expect('openai/gpt-5.2' in useStore.getState().modelReasoningConfigMap).toBe(true);
+    });
+
+    it('should not fetch when the config is already cached', async () => {
+      act(() => {
+        useStore.setState({
+          modelReasoningConfigMap: { 'openai/gpt-5.2': { reasoningEffort: 'low' } },
+        });
+      });
+
+      const { result } = renderHook(() => useStore());
+      const serviceSpy = vi.spyOn(aiModelService, 'getAiModelReasoningConfig');
+
+      await act(async () => {
+        await result.current.ensureModelReasoningConfig('gpt-5.2', 'openai');
+      });
+
+      expect(serviceSpy).not.toHaveBeenCalled();
+      expect(useStore.getState().modelReasoningConfigMap['openai/gpt-5.2']).toEqual({
+        reasoningEffort: 'low',
+      });
+    });
+
+    it('should swallow fetch failures', async () => {
+      const { result } = renderHook(() => useStore());
+      vi.spyOn(aiModelService, 'getAiModelReasoningConfig').mockRejectedValue(
+        new Error('Service error'),
+      );
+
+      await act(async () => {
+        await expect(
+          result.current.ensureModelReasoningConfig('gpt-5.2', 'openai'),
+        ).resolves.toBeUndefined();
+      });
+
+      expect('openai/gpt-5.2' in useStore.getState().modelReasoningConfigMap).toBe(false);
+    });
+  });
+
   describe('updateAiModelsConfig', () => {
     it('should update model config and refresh list', async () => {
       const updateData = {
