@@ -14,6 +14,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DEPLOY_DIR="$ROOT/docker-compose/deploy"
+PANACHAT_DATA_DIR="${PANACHAT_DATA_DIR:-$HOME/.local/share/panachat-data}"
 IMAGE="aico/lobehub:local"
 TAG="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo local)"
 CONTAINER_NAME="lobehub"
@@ -72,6 +73,9 @@ Aliases (same actions):
   --build-only          → -b
   status, --status      → -i
   stop, --stop, --down  → -k
+
+Environment:
+  PANACHAT_DATA_DIR     Host data root (default: ~/.local/share/panachat-data)
 EOF
       exit 0
       ;;
@@ -161,6 +165,50 @@ is_app_running() {
   [[ "$(docker inspect -f '{{.State.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo missing)" == "running" ]]
 }
 
+load_panachat_data_dir() {
+  if [[ -f "$DEPLOY_DIR/.env" ]]; then
+    local from_env
+    from_env="$(grep -E '^PANACHAT_DATA_DIR=' "$DEPLOY_DIR/.env" 2>/dev/null | cut -d= -f2- || true)"
+    if [[ -n "$from_env" ]]; then
+      PANACHAT_DATA_DIR="$from_env"
+    fi
+  fi
+}
+
+ensure_panachat_data_env() {
+  mkdir -p "$PANACHAT_DATA_DIR"/{postgres,redis,rustfs}
+
+  if [[ -f "$DEPLOY_DIR/.env" ]] && ! grep -qE '^PANACHAT_DATA_DIR=' "$DEPLOY_DIR/.env"; then
+    printf '\n# PanaChat runtime data (outside repo). Subdirs: postgres/, redis/, rustfs/\nPANACHAT_DATA_DIR=%s\n' \
+      "$PANACHAT_DATA_DIR" >>"$DEPLOY_DIR/.env"
+  fi
+}
+
+has_postgres_cluster() {
+  local dir="$1"
+  docker run --rm -v "$dir:/data:ro" alpine sh -c 'test -f /data/PG_VERSION' 2>/dev/null
+}
+
+migrate_legacy_deploy_data() {
+  local legacy="$DEPLOY_DIR/data"
+  local target="$PANACHAT_DATA_DIR/postgres"
+
+  if has_postgres_cluster "$target"; then
+    return 0
+  fi
+
+  if ! has_postgres_cluster "$legacy"; then
+    return 0
+  fi
+
+  echo "==> Migrating postgres data from $legacy to $target"
+  mkdir -p "$target"
+  docker run --rm \
+    -v "$legacy:/from:ro" \
+    -v "$target:/to" \
+    alpine sh -c 'cp -a /from/. /to/'
+}
+
 compose_in_deploy_dir() {
   (
     cd "$DEPLOY_DIR"
@@ -169,6 +217,7 @@ compose_in_deploy_dir() {
       --env-file .env \
       -f docker-compose.yml \
       -f docker-compose.aico.override.yml \
+      -f docker-compose.aico.data.override.yml \
       "$@"
   )
 }
@@ -223,6 +272,7 @@ show_status() {
   echo "Aico deploy status"
   echo "------------------"
   printf "App URL:     %s\n" "$app_url"
+  printf "Data dir:    %s\n" "$PANACHAT_DATA_DIR"
   printf "Repo HEAD:   %s\n" "$TAG"
   printf "Image:       %s\n" "$IMAGE"
 
@@ -314,6 +364,9 @@ if [[ ! -f "$DEPLOY_DIR/.env" ]]; then
   exit 1
 fi
 
+load_panachat_data_dir
+ensure_panachat_data_env
+
 if [[ $STATUS -eq 1 ]]; then
   set +e
   show_status
@@ -322,13 +375,7 @@ fi
 
 if [[ $STOP -eq 1 ]]; then
   echo "==> Stopping deployment from $DEPLOY_DIR"
-  cd "$DEPLOY_DIR"
-  docker compose \
-    --env-file ../../.env \
-    --env-file .env \
-    -f docker-compose.yml \
-    -f docker-compose.aico.override.yml \
-    down
+  compose_in_deploy_dir down
   echo "==> Deployment stopped"
   exit 0
 fi
@@ -423,6 +470,7 @@ if [[ $START_IF_NEEDED -eq 1 ]]; then
     exit 0
   fi
   echo "==> Not running — starting stack from $DEPLOY_DIR"
+  migrate_legacy_deploy_data
   compose_in_deploy_dir up -d
   verify_deploy_health
   exit 0
@@ -435,6 +483,7 @@ if [[ $RESTART -eq 1 ]]; then
     compose_in_deploy_dir restart
   else
     echo "==> Not running — starting stack from $DEPLOY_DIR"
+    migrate_legacy_deploy_data
     compose_in_deploy_dir up -d
   fi
   verify_deploy_health
@@ -443,6 +492,7 @@ fi
 
 if [[ $DEPLOY -eq 1 ]]; then
   echo "==> Force-deploying from $DEPLOY_DIR"
+  migrate_legacy_deploy_data
   compose_in_deploy_dir up -d --force-recreate lobe
   verify_deploy_health
 fi

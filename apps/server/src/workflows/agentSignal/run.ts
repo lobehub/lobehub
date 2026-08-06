@@ -115,7 +115,7 @@ const createDefaultSnapshotStore = (): ISnapshotStore | null => {
     // - `runAgentSignalWorkflow` only persisted OTel observability before this bridge.
     // - `agent-tracing inspect -S` therefore showed zero events for workflow-triggered runs.
 
-    const { FileSnapshotStore } = require('@lobechat/agent-tracing');
+    const { FileSnapshotStore } = require('@lobechat/agent-tracing/file-store');
     return new FileSnapshotStore();
   } catch {
     return null;
