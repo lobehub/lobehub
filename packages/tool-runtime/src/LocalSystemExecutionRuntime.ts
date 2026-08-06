@@ -123,15 +123,16 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
   ): Promise<BuiltinServerRuntimeOutput | null> {
     const name = LEGACY_API_ALIASES[apiName] ?? apiName;
     const workingDirectory = options?.workingDirectory;
-    // Trust boundary: when the caller supplies a workingDirectory (renderer
-    // executor — the path where the out-of-scope intervention audit runs), a
-    // model-supplied `cwd` must NOT be honored. The audit only inspects
-    // `path`/`file_path`/`directory`/`scope` fields, so a relative path
-    // smuggled past it via `cwd` (e.g. `readFile({ path: 'passwd', cwd:
-    // '/etc' })`) would execute outside the audited scope. Reaching outside the
-    // workspace requires an absolute path field, which the audit does see.
-    // Without a workingDirectory (gateway / CLI), `args.cwd` is the
-    // server-injected device-bound value and is trusted as-is.
+    // Trust boundary — `cwd` is never a manifest field, so no legitimate call
+    // carries a model-chosen one, and the out-of-scope intervention audit does
+    // not inspect it (it reads `path`/`file_path`/`directory`/`scope`). Left
+    // trusted, `readFile({ path: 'passwd', cwd: '/etc' })` would look
+    // workspace-relative to the audit and then execute against `/etc`.
+    // - Caller supplied a `workingDirectory` (renderer executor, where the
+    //   audit runs): it always wins; `args.cwd` is discarded.
+    // - No `workingDirectory` (gateway / CLI): `args.cwd` is server-controlled
+    //   — the server runtime overwrites/strips any off-contract `cwd` before
+    //   dispatch (see `serverRuntimes/localSystem.ts`), so it is trusted here.
     const cwd = workingDirectory ?? args.cwd;
 
     switch (name) {

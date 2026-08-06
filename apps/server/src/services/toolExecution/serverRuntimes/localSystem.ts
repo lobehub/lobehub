@@ -76,12 +76,29 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
         // or explicitly passed `.` (a relative reference that resolves to
         // process.cwd() on the device side — the LobeHub install directory on
         // packaged desktop instead of the user's actual workspace).
-        const scopeValue: unknown = workingDirArg ? args?.[workingDirArg] : undefined;
-        const needsInjection = scopeValue == null || scopeValue === '.';
-        let finalArgs =
-          workingDirArg && context.workingDirectory && needsInjection
-            ? { ...args, [workingDirArg]: context.workingDirectory }
-            : args;
+        //
+        // `cwd` and `scope` differ in how much the model is trusted:
+        // - `scope` IS a manifest field (the model may legitimately point a
+        //   search at a subdirectory), and the out-of-scope intervention audit
+        //   inspects it. Only fill it in when absent/`.`.
+        // - `cwd` is NOT in the manifest — the model can never legitimately set
+        //   it, and the audit does not inspect it. A provider that forwards
+        //   unknown arguments would otherwise let `readFile({ path: 'passwd',
+        //   cwd: '/etc' })` slip past the audit (only `path` is checked, and it
+        //   looks workspace-relative) and then execute against `/etc`. So an
+        //   off-contract `cwd` is always overwritten, and dropped entirely when
+        //   there is no working directory to overwrite it with.
+        let finalArgs = args;
+        if (workingDirArg === 'cwd') {
+          const { cwd: _modelSuppliedCwd, ...rest } = (args ?? {}) as Record<string, unknown>;
+          finalArgs = context.workingDirectory
+            ? { ...rest, cwd: context.workingDirectory }
+            : (rest as typeof args);
+        } else if (workingDirArg && context.workingDirectory) {
+          const scopeValue: unknown = args?.[workingDirArg];
+          const needsInjection = scopeValue == null || scopeValue === '.';
+          if (needsInjection) finalArgs = { ...args, [workingDirArg]: context.workingDirectory };
+        }
 
         // A device shell has its own `lh`, so nothing is rewritten — but the
         // CLI would resolve to the device credentials' PERSONAL scope, which is

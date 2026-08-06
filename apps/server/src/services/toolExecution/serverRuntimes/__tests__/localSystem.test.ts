@@ -271,11 +271,23 @@ describe('localSystemRuntime', () => {
       expect(parseArgs()).toEqual({ pattern: '**/*.ts', scope: '/explicit' });
     });
 
-    it('does not override an explicit cwd/scope supplied by the model', async () => {
+    // Security: `cwd` is not a manifest field, so a model can never legitimately
+    // set it — and the out-of-scope intervention audit does not inspect it. If a
+    // provider forwards the unknown argument, honoring it would let
+    // `readFile({ path: 'passwd', cwd: '/etc' })` pass the audit (only `path` is
+    // checked, and it looks workspace-relative) and then execute against /etc.
+    it('overrides an off-contract cwd supplied by the model', async () => {
       const proxy = buildProxy('/Users/me/repo');
       await proxy[LocalSystemApiName.runCommand]({ command: 'ls', cwd: '/explicit' });
 
-      expect(parseArgs()).toEqual({ command: 'ls', cwd: '/explicit' });
+      expect(parseArgs()).toEqual({ command: 'ls', cwd: '/Users/me/repo' });
+    });
+
+    it('drops an off-contract cwd on file ops when a working directory is bound', async () => {
+      const proxy = buildProxy('/Users/me/repo');
+      await proxy[LocalSystemApiName.readFile]({ cwd: '/etc', path: 'passwd' });
+
+      expect(parseArgs()).toEqual({ cwd: '/Users/me/repo', path: 'passwd' });
     });
 
     it('injects cwd into file ops so the daemon can resolve a relative path', async () => {
@@ -314,6 +326,15 @@ describe('localSystemRuntime', () => {
       await proxy[LocalSystemApiName.runCommand]({ command: 'pwd' });
 
       expect(parseArgs()).toEqual({ command: 'pwd' });
+    });
+
+    // With nothing trusted to overwrite it with, an off-contract cwd is dropped
+    // rather than forwarded — the device then falls back to its own default.
+    it('strips an off-contract cwd when no working directory is bound', async () => {
+      const proxy = buildProxy(undefined);
+      await proxy[LocalSystemApiName.readFile]({ cwd: '/etc', path: 'passwd' });
+
+      expect(parseArgs()).toEqual({ path: 'passwd' });
     });
   });
 
