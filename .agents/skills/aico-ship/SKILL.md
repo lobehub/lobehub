@@ -36,6 +36,8 @@ Do **not** run Plane `search_work_items` or `gh issue list --search` before crea
 
 Only reuse a tracker if this chat (or the user) already supplied a specific `#n` or `AICO-xx`.
 
+**Do not create a second GitHub issue or Plane item** when this chat already has one for the same work (e.g. user says “issue 94” and you were about to open #95). Reuse every `#n` / `AICO-xx` already in the thread.
+
 ## Creating an “issue”
 
 Create **both**:
@@ -72,20 +74,38 @@ When implementation is done (or the user asks to ship / open a PR / “do the wo
 
 1. If this chat has no `#n` / `AICO-xx`, create GitHub (EN) + Plane (FA) and cross-link — **no** prior search
 2. Follow the `pr` skill for branch (off `canary` if needed), gitmoji commit, push, and `gh pr create --base canary`
-3. PR body **must** include `Fixes #n` (not only `Related to`) and Plane `AICO-xx` / browse URL
+3. PR body **must** include `Fixes #n` (not only `Related to`) for **every** GitHub issue this PR finishes, and Plane `AICO-xx` / browse URL for each related work item
 4. Plane: state → **Testing** (review stand-in; not Done until merge) + Persian completion comment with PR URL (`plane` skill format)
 
 ## PR body (Aico)
+
+GitHub auto-closes issues on merge when the PR body uses closing keywords (`Fixes`, `Closes`, or `Resolves`) — **one issue per line**. `Related to #n` does **not** close.
 
 ```markdown
 #### 🔗 Related Issue
 
 Fixes #123
+Fixes #124
 
-Plane: [AICO-xx](https://plane.panafor.com/panaforai/browse/AICO-xx)
+Plane: [AICO-12](https://plane.panafor.com/panaforai/browse/AICO-12)
+Plane: [AICO-13](https://plane.panafor.com/panaforai/browse/AICO-13)
 ```
 
-Multiple finished GitHub issues → one `Fixes #n` line each.
+### Multiple issues in one PR
+
+When one PR finishes several trackers (same fix, duplicate issues, or a bundled closeout):
+
+1. Collect **all** `#n` / `AICO-xx` already in this chat — do not ship with only the newest duplicate.
+2. Put **each** finished GitHub issue on its own `Fixes #n` line in the PR body (GitHub merges the close on PR merge).
+3. Link every related Plane item in the PR body; move each to **Testing** and comment with the PR URL.
+4. If duplicate GitHub issues exist for the same work, include **all** of them in `Fixes #n` so merge closes every duplicate — do not leave siblings open like #94 when #95 was the only `Fixes` line.
+
+Example (this session’s locale work should have been):
+
+```markdown
+Fixes #94
+Fixes #95
+```
 
 ## After merge
 

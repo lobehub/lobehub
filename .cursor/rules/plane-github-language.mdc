@@ -17,5 +17,5 @@ Short rules (details in `aico-ship`):
 
 - “Create an issue” → **both** GitHub (EN) and Plane (FA), then cross-link
 - **No duplicate search** — create from this Cursor session; reuse only an `#n` / `AICO-xx` already in this chat
-- PR that finishes the work → `Fixes #n` + Plane `AICO-xx`; Plane state **Testing** + Persian completion comment (not Done until merge)
+- PR that finishes the work → one `Fixes #n` line **per** GitHub issue it closes (multiple issues → multiple `Fixes #n` lines); Plane `AICO-xx` for each related item; Plane state **Testing** + Persian completion comment (not Done until merge)
 - Auto-run closeout when the user asks to ship/PR/workflow, or the change is a clear product fix/feature; otherwise suggest once
