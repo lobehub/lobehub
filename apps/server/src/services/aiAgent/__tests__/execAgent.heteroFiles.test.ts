@@ -787,11 +787,9 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       );
     });
 
-    it("routes a fixed local platform target through the author's personal principal", async () => {
+    it("routes a legacy author binding through the author's personal principal", async () => {
       heteroAgentConfig.agencyConfig = {
         boundDeviceId: 'author-desktop',
-        executionTarget: 'local',
-        executionTargetSelectionPolicy: 'fixed',
         heterogeneousProvider: { type: 'openclaw' },
       } as any;
       (heteroAgentConfig as any).userId = 'author-user';
@@ -802,7 +800,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       await service.execAgent({
         agentId: 'agent-1',
         localDeviceId: 'member-desktop',
-        prompt: 'run the fixed task',
+        prompt: 'run the legacy-bound task',
       } as any);
 
       expect(mockExecuteToolCall).toHaveBeenCalledWith(
@@ -848,6 +846,50 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
         expect.objectContaining({ apiName: 'cancelHeteroTask' }),
         5_000,
       );
+    });
+
+    it('recovers the topic from the operation when the cancellation caller omits it', async () => {
+      (service as any).agentOperationModel.findById = vi
+        .fn()
+        .mockResolvedValue({ topicId: 'topic-from-operation' });
+      topicMock.findById.mockResolvedValue({
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-1',
+            deviceId: 'member-desktop',
+            deviceUserId: userId,
+            heteroType: 'hermes',
+            operationId: 'operation-1',
+          },
+        },
+      });
+
+      await service.interruptTask({ operationId: 'operation-1' });
+
+      expect(topicMock.findById).toHaveBeenCalledWith('topic-from-operation');
+      expect(mockExecuteToolCall).toHaveBeenCalledWith(
+        expect.objectContaining({ deviceId: 'member-desktop', userId }),
+        expect.objectContaining({ apiName: 'cancelHeteroTask' }),
+        5_000,
+      );
+    });
+
+    it('does not cancel a newer operation currently running on the same topic', async () => {
+      topicMock.findById.mockResolvedValue({
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-2',
+            deviceId: 'member-desktop',
+            deviceUserId: userId,
+            heteroType: 'openclaw',
+            operationId: 'operation-2',
+          },
+        },
+      });
+
+      await service.interruptTask({ operationId: 'operation-1', topicId: 'topic-1' });
+
+      expect(mockExecuteToolCall).not.toHaveBeenCalled();
     });
   });
 });

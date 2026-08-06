@@ -158,6 +158,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
   /** In-memory registry for running platform agent tasks (openclaw / hermes). */
   private readonly platformTasks = new Map<string, PlatformTaskEntry>();
+  private readonly platformTaskKillTimers = new Map<number, NodeJS.Timeout>();
 
   /** Maps topicId → hermes session_id for multi-turn conversation continuity. */
   private readonly hermesSessionMap = new Map<string, string>();
@@ -884,11 +885,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
       // lock will cause the new one to exit with code 1.
       for (const [existingTaskId, entry] of this.platformTasks) {
         if (entry.topicId === topicId && entry.agentType === 'openclaw') {
-          try {
-            process.kill(entry.pid, 'SIGTERM');
-          } catch {
-            // Already exited — nothing to do.
-          }
+          this.killPlatformProcessTree(entry.pid, 'SIGTERM');
           this.platformTasks.delete(existingTaskId);
         }
       }
@@ -933,6 +930,9 @@ export default class GatewayConnectionCtr extends ControllerModule {
       });
 
       child.on('close', (code, signal) => {
+        this.clearPlatformTaskKillTimer(pid);
+        if (this.platformTasks.get(taskId)?.pid !== pid) return;
+
         this.platformTasks.delete(taskId);
         if (code !== 0 || signal !== null) {
           const text = signal
@@ -978,11 +978,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
       // Kill any existing hermes process for this topicId before spawning a new one.
       for (const [existingTaskId, entry] of this.platformTasks) {
         if (entry.topicId === topicId && entry.agentType === 'hermes') {
-          try {
-            process.kill(entry.pid, 'SIGTERM');
-          } catch {
-            // Already exited — nothing to do.
-          }
+          this.killPlatformProcessTree(entry.pid, 'SIGTERM');
           this.platformTasks.delete(existingTaskId);
         }
       }
@@ -1032,6 +1028,9 @@ export default class GatewayConnectionCtr extends ControllerModule {
       });
 
       child.on('close', (code, signal) => {
+        this.clearPlatformTaskKillTimer(pid);
+        if (this.platformTasks.get(taskId)?.pid !== pid) return;
+
         this.platformTasks.delete(taskId);
 
         if (code !== 0 || signal !== null) {
@@ -1099,6 +1098,50 @@ export default class GatewayConnectionCtr extends ControllerModule {
     throw new Error(`Unsupported agentType: ${agentType}`);
   }
 
+  /** Kill the complete detached platform-agent process tree. */
+  private killPlatformProcessTree(pid: number, signal: NodeJS.Signals): void {
+    if (process.platform === 'win32') {
+      try {
+        spawn('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' });
+      } catch {
+        // The wrapper already exited.
+      }
+      return;
+    }
+
+    let signalled = false;
+    try {
+      process.kill(-pid, signal);
+      signalled = true;
+    } catch {
+      try {
+        process.kill(pid, signal);
+        signalled = true;
+      } catch {
+        // The process tree already exited.
+      }
+    }
+
+    if (signalled && signal !== 'SIGKILL') {
+      this.clearPlatformTaskKillTimer(pid);
+      const timer = setTimeout(() => {
+        this.platformTaskKillTimers.delete(pid);
+        logger.warn('Platform task did not exit after signal, escalating to SIGKILL:', pid);
+        this.killPlatformProcessTree(pid, 'SIGKILL');
+      }, 2000);
+      timer.unref();
+      this.platformTaskKillTimers.set(pid, timer);
+    }
+  }
+
+  private clearPlatformTaskKillTimer(pid: number): void {
+    const timer = this.platformTaskKillTimers.get(pid);
+    if (!timer) return;
+
+    clearTimeout(timer);
+    this.platformTaskKillTimers.delete(pid);
+  }
+
   private async cancelHeteroTask(args: { signal?: string; taskId: string }): Promise<string> {
     const { signal = 'SIGINT', taskId } = args;
     const entry = this.platformTasks.get(taskId);
@@ -1107,19 +1150,8 @@ export default class GatewayConnectionCtr extends ControllerModule {
       return JSON.stringify({ message: `No task found with taskId: ${taskId}`, success: false });
     }
 
-    // Both openclaw and hermes: kill by PID; the close handler sends the done signal.
-    try {
-      process.kill(entry.pid, signal);
-    } catch {
-      this.platformTasks.delete(taskId);
-      await this.sendNotify({
-        agentId: entry.agentId,
-        content: 'Task already completed or cancelled',
-        role: 'assistant',
-        topicId: entry.topicId,
-        workspaceId: entry.workspaceId,
-      });
-    }
+    // The close handler sends the terminal notify after the whole tree exits.
+    this.killPlatformProcessTree(entry.pid, signal as NodeJS.Signals);
 
     return JSON.stringify({ pid: entry.pid, signal, taskId });
   }

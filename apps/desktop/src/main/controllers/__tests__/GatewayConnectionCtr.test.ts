@@ -1051,6 +1051,7 @@ describe('GatewayConnectionCtr', () => {
 
     it('kills an existing concurrent openclaw process for the same topicId before spawning', async () => {
       const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+      const notifySpy = vi.spyOn(ctr as any, 'sendNotify');
 
       // First task
       const child1 = makeMockChild(1111);
@@ -1085,10 +1086,98 @@ describe('GatewayConnectionCtr', () => {
       );
       await vi.advanceTimersByTimeAsync(0);
 
-      expect(killSpy).toHaveBeenCalledWith(1111, 'SIGTERM');
+      expect(killSpy).toHaveBeenCalledWith(-1111, 'SIGTERM');
       expect(spawnMock).toHaveBeenCalledTimes(2);
 
+      // The replaced child may close after the new operation has started. It must
+      // neither send a terminal notify for the new operation nor remove its task.
+      child1._emit('close', null, 'SIGTERM');
+      expect(notifySpy).not.toHaveBeenCalled();
+
+      client.simulateToolCallRequest(
+        'cancelHeteroTask',
+        { signal: 'SIGINT', taskId: 'task-2' },
+        'req-cancel-2',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      expect(killSpy).toHaveBeenCalledWith(-2222, 'SIGINT');
+
       killSpy.mockRestore();
+    });
+
+    it('kills the complete detached process group when cancelling a task', async () => {
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+      const child = makeMockChild(5555);
+      spawnMock.mockReturnValue(child);
+      const client = await connectAndOpen();
+      client.simulateToolCallRequest(
+        'runHeteroTask',
+        {
+          agentType: 'openclaw',
+          operationId: 'op-cancel',
+          prompt: 'work',
+          taskId: 'task-cancel',
+          topicId: 'topic-cancel',
+        },
+        'req-run-cancel',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      client.simulateToolCallRequest(
+        'cancelHeteroTask',
+        { signal: 'SIGINT', taskId: 'task-cancel' },
+        'req-cancel',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(killSpy).toHaveBeenCalledWith(-5555, 'SIGINT');
+
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(killSpy).toHaveBeenCalledWith(-5555, 'SIGKILL');
+      killSpy.mockRestore();
+    });
+
+    it('does not escalate cancellation after the platform task exits', async () => {
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+      const child = makeMockChild(5556);
+      spawnMock.mockReturnValue(child);
+      const client = await connectAndOpen();
+      client.simulateToolCallRequest(
+        'runHeteroTask',
+        {
+          agentType: 'openclaw',
+          operationId: 'op-cancel-exit',
+          prompt: 'work',
+          taskId: 'task-cancel-exit',
+          topicId: 'topic-cancel-exit',
+        },
+        'req-run-cancel-exit',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      client.simulateToolCallRequest(
+        'cancelHeteroTask',
+        { signal: 'SIGINT', taskId: 'task-cancel-exit' },
+        'req-cancel-exit',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      child._emit('close', 0, null);
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(killSpy).toHaveBeenCalledWith(-5556, 'SIGINT');
+      expect(killSpy).not.toHaveBeenCalledWith(-5556, 'SIGKILL');
+      killSpy.mockRestore();
+    });
+
+    it('uses taskkill to terminate the full Windows wrapper process tree', () => {
+      const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32');
+
+      (ctr as any).killPlatformProcessTree(6666, 'SIGINT');
+
+      expect(spawnMock).toHaveBeenCalledWith('taskkill', ['/pid', '6666', '/T', '/F'], {
+        stdio: 'ignore',
+      });
+      platformSpy.mockRestore();
     });
 
     it('does not kill processes for a different topicId', async () => {

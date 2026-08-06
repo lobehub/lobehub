@@ -5432,12 +5432,21 @@ export class AiAgentService {
       throw new Error('Operation ID not found');
     }
 
+    // Not every cancellation entry point knows the topic (reconnect, task,
+    // bot/messenger stop). Recover it from the owner-scoped operation row so
+    // device cancellation is symmetric across every caller.
+    let resolvedTopicId = topicId;
+    if (!resolvedTopicId) {
+      const operation = await this.agentOperationModel.findById(resolvedOperationId);
+      resolvedTopicId = operation?.topicId ?? undefined;
+    }
+
     // 2. Cancel remote hetero process (openclaw / hermes) if applicable.
     // Check topic.metadata.runningOperation for device + heteroType info seeded by execAgent.
     // This runs regardless of whether interruptOperation succeeds — the remote process
     // is independent of the local operation registry.
-    if (topicId) {
-      const topic = await this.topicModel.findById(topicId);
+    if (resolvedTopicId) {
+      const topic = await this.topicModel.findById(resolvedTopicId);
       const runningOp = (topic?.metadata as any)?.runningOperation as
         | {
             deviceId?: string;
@@ -5451,6 +5460,7 @@ export class AiAgentService {
       if (
         runningOp?.deviceId &&
         runningOp.heteroType &&
+        runningOp.operationId === resolvedOperationId &&
         isRemoteHeterogeneousType(runningOp.heteroType)
       ) {
         const taskId = runningOp.operationId ?? resolvedOperationId;
