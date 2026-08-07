@@ -17,6 +17,8 @@ export const apiKeys = pgTable(
     key: varchar('key', { length: 256 }).notNull().unique(), // encrypted API key
     keyHash: varchar('key_hash', { length: 128 }).unique(), // hash of api key for authentication lookup
     enabled: boolean('enabled').default(true), // whether the API key is enabled
+    // capability scopes; NULL = full access (legacy keys), ['*'] = explicit full access
+    scopes: text('scopes').array(),
     expiresAt: timestamptz('expires_at'), // expires time
     lastUsedAt: timestamptz('last_used_at'), // last used time
     userId: text('user_id')

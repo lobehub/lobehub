@@ -302,7 +302,7 @@ table agent_eval_runs {
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-
+    
     dataset_id [name: 'agent_eval_runs_dataset_id_idx']
     experiment_id [name: 'agent_eval_runs_experiment_id_idx']
     parent_run_id [name: 'agent_eval_runs_parent_run_id_idx']
@@ -764,6 +764,7 @@ table api_keys {
   key varchar(256) [not null, unique]
   key_hash varchar(128) [unique]
   enabled boolean [default: true]
+  scopes text[]
   expires_at "timestamp with time zone"
   last_used_at "timestamp with time zone"
   user_id text [not null]
@@ -1886,7 +1887,7 @@ table project_completion_reviews {
     (project_id, created_at) [name: 'project_completion_reviews_project_id_created_at_idx']
     reviewer_user_id [name: 'project_completion_reviews_reviewer_user_id_idx']
     workspace_id [name: 'project_completion_reviews_workspace_id_idx']
-
+    
   }
 }
 
@@ -1935,7 +1936,7 @@ table projects {
     workspace_id [name: 'projects_workspace_id_idx']
     (workspace_id, visibility, user_id) [name: 'projects_workspace_visibility_idx']
     (status, updated_at) [name: 'projects_status_updated_at_idx']
-
+    
   }
 }
 
@@ -2485,7 +2486,7 @@ table tasks {
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-
+    
     (identifier, created_by_user_id) [name: 'tasks_identifier_idx', unique]
     created_by_user_id [name: 'tasks_created_by_user_id_idx']
     created_by_agent_id [name: 'tasks_created_by_agent_id_idx']
@@ -2655,10 +2656,10 @@ table topic_comments {
 
   indexes {
     (topic_id, author_user_id, client_id) [name: 'topic_comments_topic_id_author_user_id_client_id_unique', unique]
-
-
-
-
+    
+    
+    
+    
     (parent_comment_id, created_at, id) [name: 'topic_comments_parent_comment_id_created_at_id_idx']
     (topic_id, created_at, id) [name: 'topic_comments_topic_id_created_at_id_idx']
     (topic_id, message_id) [name: 'topic_comments_topic_id_message_id_idx']
@@ -3147,7 +3148,7 @@ table verify_runs {
     workspace_id [name: 'verify_runs_workspace_id_idx']
     acceptance_id [name: 'verify_runs_acceptance_id_idx']
     (acceptance_id, round_index) [name: 'verify_runs_acceptance_round_unique', unique]
-
+    
     operation_id [name: 'verify_runs_operation_id_unique', unique]
     source [name: 'verify_runs_source_idx']
     user_decision [name: 'verify_runs_user_decision_idx']

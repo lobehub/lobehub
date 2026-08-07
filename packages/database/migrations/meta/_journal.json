@@ -945,6 +945,13 @@
       "when": 1786064297919,
       "tag": "0134_add_projects",
       "breakpoints": true
+    },
+    {
+      "idx": 135,
+      "version": "7",
+      "when": 1786081524115,
+      "tag": "0135_api_keys_add_scopes",
+      "breakpoints": true
     }
   ],
   "version": "6"
