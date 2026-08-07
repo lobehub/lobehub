@@ -25,6 +25,8 @@ beforeEach(() => {
   useTaskStore.setState({
     activeTaskId: 'T-1',
     taskDetailMap: { 'T-1': { ...mockDetail } },
+    taskGroups: [],
+    tasks: [],
   });
 });
 
@@ -102,6 +104,59 @@ describe('TaskLifecycleSliceAction', () => {
       });
 
       await useTaskStore.getState().updateTaskStatus('T-1', 'paused');
+    });
+
+    it('should immediately synchronize list and kanban collections', async () => {
+      useTaskStore.setState({
+        taskGroups: [
+          { key: 'backlog', tasks: [{ identifier: 'T-1', status: 'backlog' }], total: 1 },
+          { key: 'done', tasks: [], total: 0 },
+        ] as any,
+        tasks: [{ identifier: 'T-1', status: 'backlog' }] as any,
+      });
+      vi.mocked(taskService.updateStatus).mockImplementation(async () => {
+        const state = useTaskStore.getState();
+
+        expect(state.tasks.find((task) => task.identifier === 'T-1')?.status).toBe('completed');
+        expect(state.taskGroups.find((group) => group.key === 'backlog')).toMatchObject({
+          tasks: [],
+          total: 0,
+        });
+        expect(state.taskGroups.find((group) => group.key === 'done')).toMatchObject({
+          tasks: [expect.objectContaining({ identifier: 'T-1', status: 'completed' })],
+          total: 1,
+        });
+
+        return { success: true } as any;
+      });
+
+      await useTaskStore.getState().updateTaskStatus('T-1', 'completed');
+    });
+
+    it('should roll list and kanban collections back when the status update fails', async () => {
+      useTaskStore.setState({
+        taskGroups: [
+          { key: 'backlog', tasks: [{ identifier: 'T-1', status: 'backlog' }], total: 1 },
+          { key: 'done', tasks: [], total: 0 },
+        ] as any,
+        tasks: [{ identifier: 'T-1', status: 'backlog' }] as any,
+      });
+      vi.mocked(taskService.updateStatus).mockRejectedValue(new Error('fail'));
+
+      await expect(useTaskStore.getState().updateTaskStatus('T-1', 'completed')).rejects.toThrow(
+        'fail',
+      );
+
+      const state = useTaskStore.getState();
+      expect(state.tasks.find((task) => task.identifier === 'T-1')?.status).toBe('backlog');
+      expect(state.taskGroups.find((group) => group.key === 'backlog')).toMatchObject({
+        tasks: [expect.objectContaining({ identifier: 'T-1', status: 'backlog' })],
+        total: 1,
+      });
+      expect(state.taskGroups.find((group) => group.key === 'done')).toMatchObject({
+        tasks: [],
+        total: 0,
+      });
     });
 
     it('should call updateStatus with canceled', async () => {

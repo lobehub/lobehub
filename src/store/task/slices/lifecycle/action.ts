@@ -12,6 +12,19 @@ const log = debug('lobe-store:task-lifecycle');
 
 type Setter = StoreSetter<TaskStore>;
 
+const taskGroupKeyByStatus: Record<TaskStatus, string> = {
+  backlog: 'backlog',
+  canceled: 'canceled',
+  completed: 'done',
+  failed: 'needsInput',
+  paused: 'needsInput',
+  running: 'running',
+  scheduled: 'running',
+};
+
+const isTaskStatus = (status: string | undefined): status is TaskStatus =>
+  status !== undefined && status in taskGroupKeyByStatus;
+
 export const createTaskLifecycleSlice = (set: Setter, get: () => TaskStore, _api?: unknown) =>
   new TaskLifecycleSliceActionImpl(set, get, _api);
 
@@ -115,11 +128,23 @@ export class TaskLifecycleSliceActionImpl {
     extraUpdate?: Partial<TaskDetailData>,
     error?: string,
   ): Promise<void> => {
+    const previousStatusCandidate =
+      this.#get().taskDetailMap[id]?.status ??
+      this.#get().tasks.find((task) => task.identifier === id)?.status ??
+      this.#get()
+        .taskGroups.flatMap((group) => group.tasks)
+        .find((task) => task.identifier === id)?.status;
+    const previousStatus = isTaskStatus(previousStatusCandidate)
+      ? previousStatusCandidate
+      : undefined;
+
     this.#get().internal_dispatchTaskDetail({
       id,
       type: 'updateTaskDetail',
       value: { status, ...extraUpdate },
     });
+    this.#patchTaskCollectionsStatus(id, status);
+
     await runMutation(this.#set, this.#get, {
       mutate: async () => {
         await taskService.updateStatus(id, status, error);
@@ -129,6 +154,7 @@ export class TaskLifecycleSliceActionImpl {
       name: 'transitionStatus',
       onError: async (err) => {
         console.error(`[TaskStore] Failed to transition task to ${status}:`, err);
+        if (previousStatus) this.#patchTaskCollectionsStatus(id, previousStatus);
         await this.#get().internal_refreshTaskDetail(id);
         saveToast(err, {
           retry: () => void this.#transitionStatus(id, status, extraUpdate, error),
@@ -136,6 +162,40 @@ export class TaskLifecycleSliceActionImpl {
       },
       setStatus: (s) => this.#get().internal_setTaskSaveStatus(id, s),
     });
+  };
+
+  #patchTaskCollectionsStatus = (id: string, status: TaskStatus): void => {
+    const { taskGroups, tasks } = this.#get();
+    const listTask = tasks.find((task) => task.identifier === id);
+    const groupedTask = taskGroups
+      .flatMap((group) => group.tasks)
+      .find((task) => task.identifier === id);
+    if (!listTask && !groupedTask) return;
+
+    const targetGroupKey = taskGroupKeyByStatus[status];
+    const nextTasks = listTask
+      ? tasks.map((item) => (item.identifier === id ? { ...item, status } : item))
+      : tasks;
+    const nextTaskGroups = groupedTask
+      ? taskGroups.map((group) => {
+          const containsTask = group.tasks.some((item) => item.identifier === id);
+          const belongsToTarget = group.key === targetGroupKey;
+          const filteredTasks = group.tasks.filter((item) => item.identifier !== id);
+          const patchedGroupedTask = { ...groupedTask, status };
+
+          return {
+            ...group,
+            tasks: belongsToTarget ? [...filteredTasks, patchedGroupedTask] : filteredTasks,
+            total: group.total - (containsTask ? 1 : 0) + (belongsToTarget ? 1 : 0),
+          };
+        })
+      : taskGroups;
+
+    this.#set(
+      { taskGroups: nextTaskGroups, tasks: nextTasks },
+      false,
+      'transitionStatus/patchTaskCollections',
+    );
   };
 }
 
