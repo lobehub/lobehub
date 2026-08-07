@@ -23,11 +23,16 @@ import { openCriterionEditModal } from './CriterionEditModal';
 
 const styles = createStaticStyles(({ css }) => ({
   criterion: css`
-    padding-block: 3px;
+    cursor: pointer;
+    padding-block: 7px;
     padding-inline: 10px;
 
     & + & {
       border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+    }
+
+    &:hover {
+      background: ${cssVar.colorFillQuaternary};
     }
   `,
   header: css`
@@ -64,8 +69,6 @@ const styles = createStaticStyles(({ css }) => ({
     padding: 0;
   `,
   criterionTitle: css`
-    padding-block: 4px;
-    padding-inline: 0;
     font-size: 13px;
   `,
   optional: css`
@@ -176,6 +179,12 @@ const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
       instruction: true,
     });
     const patch = (value: Partial<CreateGoalParams>) => onArgsChange?.({ ...args, ...value });
+    const openEditModal = (index: number) =>
+      openCriterionEditModal({
+        criterion: args.criteria[index],
+        onSubmit: (value) => updateCriterion(index, value),
+        seq: index + 1,
+      });
     const updateCriterion = (index: number, value: Partial<GoalCriterionDraft>) =>
       patch({
         criteria: args.criteria.map((item, itemIndex) =>
@@ -265,24 +274,26 @@ const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
                   className={styles.criterion}
                   gap={8}
                   key={index}
+                  onClick={() => openEditModal(index)}
                 >
                   <Text as={'span'} className={styles.seq}>
                     C{index + 1}
                   </Text>
-                  <Input
-                    className={styles.criterionTitle}
-                    style={{ flex: 1 }}
-                    value={criterion.title}
-                    variant={'borderless'}
-                    onChange={(event) => updateCriterion(index, { title: event.target.value })}
-                  />
+                  {/* Read-only on purpose. A focusable input sitting in a dense
+                    list is one stray click away from silently rewriting a
+                    criterion; edits belong in the modal, where they are
+                    deliberate and cancellable. */}
+                  <Text ellipsis className={styles.criterionTitle} style={{ flex: 1 }}>
+                    {criterion.title}
+                  </Text>
                   <Button
                     className={(criterion.required ?? true) ? styles.required : styles.optional}
                     size={'small'}
                     type={'text'}
-                    onClick={() =>
-                      updateCriterion(index, { required: !(criterion.required ?? true) })
-                    }
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      updateCriterion(index, { required: !(criterion.required ?? true) });
+                    }}
                   >
                     {(criterion.required ?? true)
                       ? t('builtins.lobe-task.goal.required')
@@ -292,22 +303,20 @@ const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
                     icon={Pencil}
                     size={'small'}
                     title={t('builtins.lobe-task.goal.editCriterion', { seq: index + 1 })}
-                    onClick={() =>
-                      openCriterionEditModal({
-                        criterion,
-                        onSubmit: (value) => updateCriterion(index, value),
-                        seq: index + 1,
-                      })
-                    }
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openEditModal(index);
+                    }}
                   />
                   <ActionIcon
                     icon={Trash2}
                     size={'small'}
-                    onClick={() =>
+                    onClick={(event) => {
+                      event.stopPropagation();
                       patch({
                         criteria: args.criteria.filter((_, itemIndex) => itemIndex !== index),
-                      })
-                    }
+                      });
+                    }}
                   />
                 </Flexbox>
               ))}
