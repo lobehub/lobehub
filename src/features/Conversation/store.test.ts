@@ -197,6 +197,47 @@ describe('ConversationStore', () => {
   });
 
   describe('UI Actions', () => {
+    describe('fillInputMessage', () => {
+      it('should replace the composer content and focus the editor', () => {
+        const context: ConversationContext = {
+          agentId: 'session-1',
+          topicId: null,
+          threadId: null,
+        };
+        const editor = {
+          focus: vi.fn(),
+          setDocument: vi.fn(),
+        };
+        const store = createStore({ context });
+
+        act(() => {
+          store.getState().setEditor(editor);
+          store.getState().updateInputMessage('Existing draft');
+          store.getState().fillInputMessage('Editable opening question');
+        });
+
+        expect(store.getState().inputMessage).toBe('Editable opening question');
+        expect(editor.setDocument).toHaveBeenNthCalledWith(1, 'text', '');
+        expect(editor.setDocument).toHaveBeenNthCalledWith(2, 'text', 'Editable opening question');
+        expect(editor.focus).toHaveBeenCalledOnce();
+      });
+
+      it('should update the input state before the editor is ready', () => {
+        const context: ConversationContext = {
+          agentId: 'session-1',
+          topicId: null,
+          threadId: null,
+        };
+        const store = createStore({ context });
+
+        act(() => {
+          store.getState().fillInputMessage('Editable opening question');
+        });
+
+        expect(store.getState().inputMessage).toBe('Editable opening question');
+      });
+    });
+
     describe('updateInputMessage', () => {
       it('should update input message', () => {
         const context: ConversationContext = {
