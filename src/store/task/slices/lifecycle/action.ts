@@ -30,7 +30,9 @@ export const createTaskLifecycleSlice = (set: Setter, get: () => TaskStore, _api
 
 export class TaskLifecycleSliceActionImpl {
   readonly #get: () => TaskStore;
+  #nextStatusTransitionVersion = 0;
   readonly #set: Setter;
+  readonly #statusTransitionVersions = new Map<string, number>();
 
   constructor(set: Setter, get: () => TaskStore, _api?: unknown) {
     void _api;
@@ -128,6 +130,9 @@ export class TaskLifecycleSliceActionImpl {
     extraUpdate?: Partial<TaskDetailData>,
     error?: string,
   ): Promise<void> => {
+    const transitionVersion = ++this.#nextStatusTransitionVersion;
+    this.#statusTransitionVersions.set(id, transitionVersion);
+
     const previousStatusCandidate =
       this.#get().taskDetailMap[id]?.status ??
       this.#get().tasks.find((task) => task.identifier === id)?.status ??
@@ -145,23 +150,56 @@ export class TaskLifecycleSliceActionImpl {
     });
     this.#patchTaskCollectionsStatus(id, status);
 
-    await runMutation(this.#set, this.#get, {
-      mutate: async () => {
-        await taskService.updateStatus(id, status, error);
-        await this.#get().internal_refreshTaskDetail(id);
-        await this.#get().refreshTaskList();
-      },
-      name: 'transitionStatus',
-      onError: async (err) => {
-        console.error(`[TaskStore] Failed to transition task to ${status}:`, err);
-        if (previousStatus) this.#patchTaskCollectionsStatus(id, previousStatus);
-        await this.#get().internal_refreshTaskDetail(id);
-        saveToast(err, {
-          retry: () => void this.#transitionStatus(id, status, extraUpdate, error),
-        });
-      },
-      setStatus: (s) => this.#get().internal_setTaskSaveStatus(id, s),
-    });
+    try {
+      await runMutation(this.#set, this.#get, {
+        mutate: async () => {
+          await taskService.updateStatus(id, status, error);
+        },
+        name: 'transitionStatus',
+        onError: async (err) => {
+          console.error(`[TaskStore] Failed to transition task to ${status}:`, err);
+          if (this.#statusTransitionVersions.get(id) !== transitionVersion) return;
+
+          if (previousStatus) this.#patchTaskCollectionsStatus(id, previousStatus);
+          try {
+            await this.#get().internal_refreshTaskDetail(id);
+          } catch (refreshError) {
+            console.error(
+              `[TaskStore] Failed to refresh task ${id} after status failure:`,
+              refreshError,
+            );
+          }
+          saveToast(err, {
+            retry: () => void this.#transitionStatus(id, status, extraUpdate, error),
+          });
+        },
+        setStatus: (s) => {
+          if (this.#statusTransitionVersions.get(id) === transitionVersion) {
+            this.#get().internal_setTaskSaveStatus(id, s);
+          }
+        },
+      });
+
+      if (this.#statusTransitionVersions.get(id) !== transitionVersion) return;
+
+      const refreshResults = await Promise.allSettled([
+        this.#get().internal_refreshTaskDetail(id),
+        this.#get().refreshTaskList(),
+      ]);
+      for (const refreshResult of refreshResults) {
+        if (refreshResult.status === 'rejected') {
+          log(
+            'Failed to refresh task %s after successful status update: %O',
+            id,
+            refreshResult.reason,
+          );
+        }
+      }
+    } finally {
+      if (this.#statusTransitionVersions.get(id) === transitionVersion) {
+        this.#statusTransitionVersions.delete(id);
+      }
+    }
   };
 
   #patchTaskCollectionsStatus = (id: string, status: TaskStatus): void => {
