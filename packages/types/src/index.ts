@@ -31,6 +31,7 @@ export * from './llm';
 export * from './message';
 export * from './meta';
 export * from './plugins';
+export * from './project';
 export * from './rag';
 export * from './redis';
 export * from './search';

@@ -30,6 +30,7 @@ const prefixes = {
   messageGroups: 'mg',
   messages: 'msg',
   plugins: 'plg',
+  projects: 'prj',
   sessionGroups: 'sg',
   sessions: 'ssn',
   threads: 'thd',

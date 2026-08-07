@@ -938,6 +938,13 @@
       "when": 1786032217905,
       "tag": "0133_common_veda",
       "breakpoints": true
+    },
+    {
+      "idx": 134,
+      "version": "7",
+      "when": 1786064297919,
+      "tag": "0134_add_projects",
+      "breakpoints": true
     }
   ],
   "version": "6"

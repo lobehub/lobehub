@@ -302,7 +302,7 @@ table agent_eval_runs {
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-    
+
     dataset_id [name: 'agent_eval_runs_dataset_id_idx']
     experiment_id [name: 'agent_eval_runs_experiment_id_idx']
     parent_run_id [name: 'agent_eval_runs_parent_run_id_idx']
@@ -1825,6 +1825,120 @@ table oidc_sessions {
   }
 }
 
+table project_agents {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  project_id text [not null]
+  agent_id text [not null]
+  added_by_user_id text
+  workspace_id text
+  role text
+  responsibility text
+  enabled boolean [not null, default: true]
+  sort_order integer [not null, default: 0]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (project_id, agent_id) [name: 'project_agents_project_id_agent_id_unique', unique]
+    (project_id, sort_order) [name: 'project_agents_project_id_sort_order_idx']
+    agent_id [name: 'project_agents_agent_id_idx']
+    workspace_id [name: 'project_agents_workspace_id_idx']
+  }
+}
+
+table project_chat_groups {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  project_id text [not null]
+  chat_group_id text [not null]
+  added_by_user_id text
+  workspace_id text
+  role text
+  responsibility text
+  enabled boolean [not null, default: true]
+  sort_order integer [not null, default: 0]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (project_id, chat_group_id) [name: 'project_chat_groups_project_id_chat_group_id_unique', unique]
+    (project_id, sort_order) [name: 'project_chat_groups_project_id_sort_order_idx']
+    chat_group_id [name: 'project_chat_groups_chat_group_id_idx']
+    workspace_id [name: 'project_chat_groups_workspace_id_idx']
+  }
+}
+
+table project_completion_reviews {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  project_id text [not null]
+  reviewer_user_id text
+  workspace_id text
+  round integer [not null]
+  decision text [not null]
+  comment text
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (project_id, round) [name: 'project_completion_reviews_project_id_round_unique', unique]
+    (project_id, created_at) [name: 'project_completion_reviews_project_id_created_at_idx']
+    reviewer_user_id [name: 'project_completion_reviews_reviewer_user_id_idx']
+    workspace_id [name: 'project_completion_reviews_workspace_id_idx']
+
+  }
+}
+
+table project_knowledge_bases {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  project_id text [not null]
+  knowledge_base_id text [not null]
+  added_by_user_id text
+  workspace_id text
+  enabled boolean [not null, default: true]
+  sort_order integer [not null, default: 0]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (project_id, knowledge_base_id) [name: 'project_knowledge_bases_project_id_knowledge_base_id_unique', unique]
+    (project_id, sort_order) [name: 'project_knowledge_bases_project_id_sort_order_idx']
+    knowledge_base_id [name: 'project_knowledge_bases_knowledge_base_id_idx']
+    workspace_id [name: 'project_knowledge_bases_workspace_id_idx']
+  }
+}
+
+table projects {
+  id text [pk, not null]
+  slug varchar(100)
+  name varchar(255) [not null]
+  description text
+  avatar text
+  status text [not null, default: 'backlog']
+  user_id text [not null]
+  workspace_id text
+  visibility text [not null, default: 'public']
+  completed_review_id uuid
+  started_at "timestamp with time zone"
+  completed_at "timestamp with time zone"
+  archived_at "timestamp with time zone"
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (slug, user_id) [name: 'projects_slug_user_id_unique', unique]
+    (workspace_id, slug) [name: 'projects_slug_workspace_id_unique', unique]
+    user_id [name: 'projects_user_id_idx']
+    workspace_id [name: 'projects_workspace_id_idx']
+    (workspace_id, visibility, user_id) [name: 'projects_workspace_visibility_idx']
+    (status, updated_at) [name: 'projects_status_updated_at_idx']
+
+  }
+}
+
 table push_tokens {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   user_id text [not null]
@@ -2339,6 +2453,7 @@ table tasks {
   seq integer [not null]
   created_by_user_id text [not null]
   workspace_id text
+  project_id text
   created_by_agent_id text
   assignee_user_id text
   assignee_agent_id text
@@ -2370,7 +2485,7 @@ table tasks {
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-    
+
     (identifier, created_by_user_id) [name: 'tasks_identifier_idx', unique]
     created_by_user_id [name: 'tasks_created_by_user_id_idx']
     created_by_agent_id [name: 'tasks_created_by_agent_id_idx']
@@ -2382,6 +2497,7 @@ table tasks {
     automation_mode [name: 'tasks_automation_mode_idx']
     (status, last_heartbeat_at) [name: 'tasks_heartbeat_idx']
     workspace_id [name: 'tasks_workspace_id_idx']
+    (project_id, status) [name: 'tasks_project_id_status_idx']
     (workspace_id, visibility, created_by_user_id) [name: 'tasks_workspace_visibility_idx']
     (workspace_id, identifier) [name: 'tasks_identifier_workspace_id_unique', unique]
   }
@@ -2539,10 +2655,10 @@ table topic_comments {
 
   indexes {
     (topic_id, author_user_id, client_id) [name: 'topic_comments_topic_id_author_user_id_client_id_unique', unique]
-    
-    
-    
-    
+
+
+
+
     (parent_comment_id, created_at, id) [name: 'topic_comments_parent_comment_id_created_at_id_idx']
     (topic_id, created_at, id) [name: 'topic_comments_topic_id_created_at_id_idx']
     (topic_id, message_id) [name: 'topic_comments_topic_id_message_id_idx']
@@ -3031,7 +3147,7 @@ table verify_runs {
     workspace_id [name: 'verify_runs_workspace_id_idx']
     acceptance_id [name: 'verify_runs_acceptance_id_idx']
     (acceptance_id, round_index) [name: 'verify_runs_acceptance_round_unique', unique]
-    
+
     operation_id [name: 'verify_runs_operation_id_unique', unique]
     source [name: 'verify_runs_source_idx']
     user_decision [name: 'verify_runs_user_decision_idx']
