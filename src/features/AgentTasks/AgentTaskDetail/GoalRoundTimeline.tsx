@@ -5,9 +5,18 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import GoalRoundPopover from './GoalRoundPopover';
+
 interface GoalRound {
   report: { verdict?: string | null } | null;
-  run: { createdAt: Date | string; roundIndex?: number | null; status?: string | null };
+  run: {
+    createdAt: Date | string;
+    id?: string;
+    roundIndex?: number | null;
+    status?: string | null;
+  };
+  /** Owner-only: what the round spent. Absent for shared links and old rows. */
+  usage?: { cost: number; tokens: number } | null;
 }
 
 const styles = createStaticStyles(({ css }) => ({
@@ -32,13 +41,23 @@ const styles = createStaticStyles(({ css }) => ({
     min-width: 0;
   `,
   round: css`
+    cursor: pointer;
+
     position: relative;
+
     height: 11px;
     border-radius: 4px;
+
     background: ${cssVar.colorInfoBgHover};
+
+    transition: opacity 0.15s;
 
     &[data-active='true'] {
       background: ${cssVar.colorInfo};
+    }
+
+    &:hover {
+      opacity: 0.75;
     }
   `,
   total: css`
@@ -97,16 +116,24 @@ const GoalRoundTimeline = memo<{ rounds?: GoalRound[] }>(({ rounds = [] }) => {
         {t('taskDetail.goalTimeline.title')}
       </Text>
       <div className={styles.rail}>
-        {rounds.map(({ report, run }, index) => (
-          <div
-            className={styles.round}
-            data-active={run.status === 'running' || index === rounds.length - 1}
+        {rounds.map(({ report, run, usage }, index) => (
+          <GoalRoundPopover
+            duration={formatGoalDuration(durations[index])}
+            index={run.roundIndex ?? index + 1}
             key={`${run.roundIndex ?? index}-${new Date(run.createdAt).getTime()}`}
-            style={{ width: goalRoundWidth(durations[index], base) }}
-            title={t('taskDetail.goalTimeline.round', { index: run.roundIndex ?? index + 1 })}
+            status={run.status}
+            usage={usage}
+            verdict={report?.verdict}
           >
-            {report?.verdict === 'fail' && <span className={styles.dot} />}
-          </div>
+            <div
+              className={styles.round}
+              data-active={run.status === 'running' || index === rounds.length - 1}
+              data-goal-round={run.roundIndex ?? index + 1}
+              style={{ width: goalRoundWidth(durations[index], base) }}
+            >
+              {report?.verdict === 'fail' && <span className={styles.dot} />}
+            </div>
+          </GoalRoundPopover>
         ))}
         {/* Reads as the rail's own caption, right where the rounds end. */}
         <span className={styles.total}>

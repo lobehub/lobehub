@@ -12,6 +12,7 @@ import {
   requireWorkspaceRoleWhenScoped,
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { TaskModel } from '@/database/models/task';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
@@ -352,6 +353,18 @@ export const acceptanceRouter = router({
       };
 
       const reportsByRun = new Map(reports.map((r) => [r.verifyRunId!, r]));
+      // What each round actually spent. Owner-only: cost is the author's
+      // operating detail, not something a shared link should expose.
+      // `isOwner` already implies a signed-in viewer; the explicit id check is
+      // what narrows it for the model, which is owner-scoped by construction.
+      const usageByOperation =
+        isOwner && ctx.userId
+          ? await new AgentOperationModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined)
+              .findUsageByOperations(
+                runs.flatMap((run) => (run.operationId ? [run.operationId] : [])),
+              )
+              .catch(() => new Map<string, { cost: number; tokens: number }>())
+          : new Map<string, { cost: number; tokens: number }>();
       const rounds = runs.map((run) => {
         // `origin` points at the author's private topic/agent — never hand it
         // to a visitor holding nothing but the shared link.
@@ -374,7 +387,11 @@ export const acceptanceRouter = router({
             },
           };
         }
-        return { report: reportsByRun.get(run.id) ?? null, run: publicRun };
+        return {
+          report: reportsByRun.get(run.id) ?? null,
+          run: publicRun,
+          usage: (run.operationId ? usageByOperation.get(run.operationId) : undefined) ?? null,
+        };
       });
       const latestReport = [...rounds].reverse().find((r) => r.report)?.report ?? null;
 
