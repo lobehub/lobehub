@@ -300,6 +300,21 @@ export interface WebSearchArgs {
   query?: string;
 }
 
+/** Structured source metadata synthesized from compatible WebSearch results. */
+export interface WebSearchResult {
+  hostname?: string;
+  link: string;
+  snippet?: string;
+  title?: string;
+}
+
+/** Bounded WebSearch result state persisted alongside the text fallback. */
+export interface WebSearchPluginState {
+  durationSeconds?: number;
+  query?: string;
+  results?: WebSearchResult[];
+}
+
 /**
  * Arguments for CC's built-in `WebFetch` tool. CC fetches a URL and asks the
  * model to extract `prompt` from the page; the tool_result is the model's
