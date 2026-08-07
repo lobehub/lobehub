@@ -11,7 +11,11 @@ import { useParams } from 'react-router';
 import AsyncError from '@/components/AsyncError';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import NavItem from '@/features/NavPanel/components/NavItem';
-import { getProjectAgentPath, getProjectLibraryPath } from '@/features/Projects/Layout/navigation';
+import {
+  getProjectAgentPath,
+  getProjectLibraryPath,
+  getProjectTasksPath,
+} from '@/features/Projects/Layout/navigation';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useProjectStore } from '@/store/project';
 import { useUserStore } from '@/store/user';
@@ -120,7 +124,7 @@ const ProjectWorkspace = memo(() => {
                 <Flexbox align="center" flex={1} gap={10} justify="center" padding={24}>
                   <Icon icon={CheckSquareIcon} size={28} />
                   <Text type="secondary">{t('overview.tasksEmpty')}</Text>
-                  <Button icon={PlusIcon} onClick={() => navigate('/tasks')}>
+                  <Button icon={PlusIcon} onClick={() => navigate(getProjectTasksPath(projectId!))}>
                     {t('overview.openTasks')}
                   </Button>
                 </Flexbox>

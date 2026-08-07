@@ -8,6 +8,7 @@ import {
   agents,
   briefs,
   documents,
+  projects,
   tasks,
   topics,
   users,
@@ -430,6 +431,21 @@ describe('TaskModel', () => {
       // Omitting the flag must not narrow anything.
       expect((await model.list()).total).toBe(3);
     });
+
+    it('should filter by projectId', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const [project] = await serverDB
+        .insert(projects)
+        .values({ name: 'Scoped project', userId })
+        .returning();
+      await model.create({ instruction: 'Project task', projectId: project.id });
+      await model.create({ instruction: 'Unrelated task' });
+
+      const result = await model.list({ projectId: project.id });
+
+      expect(result.total).toBe(1);
+      expect(result.tasks[0].instruction).toBe('Project task');
+    });
   });
 
   describe('groupList', () => {
@@ -568,6 +584,24 @@ describe('TaskModel', () => {
       expect(goals[0].tasks.map((task) => task.id)).toEqual([goal.id]);
       expect(ordinary[0].tasks).toHaveLength(1);
       expect(ordinary[0].tasks[0].instruction).toBe('Ordinary task');
+    });
+
+    it('should group only tasks from the requested project', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const [project] = await serverDB
+        .insert(projects)
+        .values({ name: 'Scoped project', userId })
+        .returning();
+      await model.create({ instruction: 'Project task', projectId: project.id });
+      await model.create({ instruction: 'Unrelated task' });
+
+      const [group] = await model.groupList({
+        groups: [{ key: 'backlog', statuses: ['backlog'] }],
+        projectId: project.id,
+      });
+
+      expect(group.total).toBe(1);
+      expect(group.tasks[0].instruction).toBe('Project task');
     });
 
     it('should aggregate run cost and duration for the returned task batch', async () => {

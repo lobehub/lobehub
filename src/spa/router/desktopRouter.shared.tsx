@@ -827,6 +827,14 @@ export const sharedMainAreaChildren: RouteObject[] = [
         ),
         path: 'library/:id',
       },
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/project/[projectId]/tasks'),
+          'Desktop > Project Tasks',
+        ),
+        handle: { meta: tasksRouteMeta },
+        path: 'tasks',
+      },
     ],
     element: dynamicLayout(
       () => import('@/routes/(main)/project/_layout'),
