@@ -10,15 +10,16 @@ import {
   ReactTablePlugin,
 } from '@lobehub/editor';
 import { Editor, useEditor } from '@lobehub/editor/react';
-import { ActionIcon, Block, Flexbox, Icon, Input, Text, TextArea } from '@lobehub/ui';
+import { ActionIcon, Block, Flexbox, Icon, Input, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { InputNumber } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ChevronRight, Plus, Trash2 } from 'lucide-react';
+import { ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { CreateGoalParams, GoalCriterionDraft } from '../../types';
+import { openCriterionEditModal } from './CriterionEditModal';
 
 const styles = createStaticStyles(({ css }) => ({
   criterion: css`
@@ -29,20 +30,17 @@ const styles = createStaticStyles(({ css }) => ({
       border-block-start: 1px solid ${cssVar.colorBorderSecondary};
     }
   `,
-  criterionHead: css`
-    cursor: pointer;
-  `,
   header: css`
     position: sticky;
     z-index: 2;
 
-    /* The intervention scroller carries 8px top padding; pinning at 0 would
-      leave that strip uncovered for content to bleed through. Pin above it and
-      pay the offset back as padding, so the title holds its resting position
-      while the sticky box still covers the strip. */
+    /* Chrome measures sticky against the scroller's CONTENT box, so top: 0
+      would pin 8px below where the header actually rests (the root cancels
+      that padding) and shove it down. -8px makes the pinned and resting
+      positions identical — the title simply never moves. */
     inset-block-start: -8px;
 
-    padding-block: 8px 6px;
+    padding-block: 4px 6px;
 
     background: ${cssVar.colorBgContainer};
   `,
@@ -81,6 +79,15 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextSecondary};
 
     background: ${cssVar.colorFillSecondary};
+  `,
+  /**
+   * Cancels the intervention scroller's own top padding. It has to sit on the
+   * card root, not on the sticky header: a sticky box is clamped to its
+   * containing block, so pulling the header alone just gets clamped back and
+   * leaves that strip for content to scroll through.
+   */
+  root: css`
+    margin-block-start: -8px;
   `,
   required: css`
     flex: none;
@@ -168,10 +175,6 @@ const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
       criteria: true,
       instruction: true,
     });
-    // The judge prompt is reference material, not the decision itself — every
-    // criterion starts folded to a single title row.
-    const [expandedCriteria, setExpandedCriteria] = useState<Set<number>>(() => new Set());
-
     const patch = (value: Partial<CreateGoalParams>) => onArgsChange?.({ ...args, ...value });
     const updateCriterion = (index: number, value: Partial<GoalCriterionDraft>) =>
       patch({
@@ -181,14 +184,6 @@ const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
       });
     const toggleSection = (key: keyof typeof openSections) =>
       setOpenSections((previous) => ({ ...previous, [key]: !previous[key] }));
-    const toggleCriterion = (index: number) =>
-      setExpandedCriteria((previous) => {
-        const next = new Set(previous);
-        if (next.has(index)) next.delete(index);
-        else next.add(index);
-        return next;
-      });
-
     // The instruction lives in the rich editor; args carry its persisted
     // draft. The editor mounts once from the persisted value (a changing
     // `content` prop would reset it mid-edit), while edits flow back through
@@ -218,7 +213,7 @@ const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
     );
 
     return (
-      <Flexbox>
+      <Flexbox className={styles.root}>
         <Flexbox className={styles.header}>
           <Input
             className={styles.titleInput}
@@ -263,91 +258,59 @@ const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
         >
           <Flexbox gap={7}>
             <Block className={styles.list} variant={'outlined'}>
-              {args.criteria.map((criterion, index) => {
-                const expanded = expandedCriteria.has(index);
-
-                return (
-                  <Flexbox className={styles.criterion} gap={6} key={index}>
-                    <Flexbox
-                      horizontal
-                      align={'center'}
-                      className={styles.criterionHead}
-                      gap={8}
-                      onClick={() => toggleCriterion(index)}
-                    >
-                      <Icon
-                        color={cssVar.colorTextQuaternary}
-                        icon={ChevronRight}
-                        size={13}
-                        style={{
-                          flex: 'none',
-                          transform: expanded ? 'rotate(90deg)' : 'none',
-                          transition: 'transform 0.2s',
-                        }}
-                      />
-                      <Text as={'span'} className={styles.seq}>
-                        C{index + 1}
-                      </Text>
-                      <Input
-                        className={styles.criterionTitle}
-                        style={{ flex: 1 }}
-                        value={criterion.title}
-                        variant={'borderless'}
-                        onChange={(event) => updateCriterion(index, { title: event.target.value })}
-                        onClick={(event) => event.stopPropagation()}
-                      />
-                      <Button
-                        className={(criterion.required ?? true) ? styles.required : styles.optional}
-                        size={'small'}
-                        type={'text'}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          updateCriterion(index, { required: !(criterion.required ?? true) });
-                        }}
-                      >
-                        {(criterion.required ?? true)
-                          ? t('builtins.lobe-task.goal.required')
-                          : t('builtins.lobe-task.goal.optional')}
-                      </Button>
-                      <ActionIcon
-                        icon={Trash2}
-                        size={'small'}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          patch({
-                            criteria: args.criteria.filter((_, itemIndex) => itemIndex !== index),
-                          });
-                        }}
-                      />
-                    </Flexbox>
-                    {expanded &&
-                      (criterion.verifierType === 'program' ? (
-                        <TextArea
-                          autoSize={{ maxRows: 4, minRows: 1 }}
-                          placeholder={t('builtins.lobe-task.goal.script')}
-                          value={String(criterion.verifierConfig?.command ?? '')}
-                          onChange={(event) =>
-                            updateCriterion(index, {
-                              verifierConfig: {
-                                ...criterion.verifierConfig,
-                                command: event.target.value,
-                              },
-                            })
-                          }
-                        />
-                      ) : (
-                        <TextArea
-                          autoSize={{ maxRows: 4, minRows: 1 }}
-                          placeholder={t('builtins.lobe-task.goal.instruction')}
-                          value={criterion.instruction ?? ''}
-                          onChange={(event) =>
-                            updateCriterion(index, { instruction: event.target.value })
-                          }
-                        />
-                      ))}
-                  </Flexbox>
-                );
-              })}
+              {args.criteria.map((criterion, index) => (
+                <Flexbox
+                  horizontal
+                  align={'center'}
+                  className={styles.criterion}
+                  gap={8}
+                  key={index}
+                >
+                  <Text as={'span'} className={styles.seq}>
+                    C{index + 1}
+                  </Text>
+                  <Input
+                    className={styles.criterionTitle}
+                    style={{ flex: 1 }}
+                    value={criterion.title}
+                    variant={'borderless'}
+                    onChange={(event) => updateCriterion(index, { title: event.target.value })}
+                  />
+                  <Button
+                    className={(criterion.required ?? true) ? styles.required : styles.optional}
+                    size={'small'}
+                    type={'text'}
+                    onClick={() =>
+                      updateCriterion(index, { required: !(criterion.required ?? true) })
+                    }
+                  >
+                    {(criterion.required ?? true)
+                      ? t('builtins.lobe-task.goal.required')
+                      : t('builtins.lobe-task.goal.optional')}
+                  </Button>
+                  <ActionIcon
+                    icon={Pencil}
+                    size={'small'}
+                    title={t('builtins.lobe-task.goal.editCriterion', { seq: index + 1 })}
+                    onClick={() =>
+                      openCriterionEditModal({
+                        criterion,
+                        onSubmit: (value) => updateCriterion(index, value),
+                        seq: index + 1,
+                      })
+                    }
+                  />
+                  <ActionIcon
+                    icon={Trash2}
+                    size={'small'}
+                    onClick={() =>
+                      patch({
+                        criteria: args.criteria.filter((_, itemIndex) => itemIndex !== index),
+                      })
+                    }
+                  />
+                </Flexbox>
+              ))}
             </Block>
             <Flexbox horizontal>
               <Button
