@@ -135,6 +135,13 @@ describe('Labs settings page', () => {
     expect(screen.getByText('features.messageTextSelectionActions.title')).toBeDefined();
   });
 
+  it('renders the desktop split view as an alpha lab toggle', () => {
+    renderPage();
+
+    const splitView = screen.getByText('features.desktopSplitView.title');
+    expect(within(splitView).getByText('stage.alpha.label')).toBeDefined();
+  });
+
   it('renders the OAuth Apps lab toggle', () => {
     renderPage();
 
@@ -158,8 +165,8 @@ describe('Labs settings page', () => {
 
     const alphaTags = screen.getAllByText('stage.alpha.label');
     const betaTags = screen.getAllByText('stage.beta.label');
-    // Every toggle carries exactly one stage tag (6 general + 5 desktop).
-    expect(alphaTags.length + betaTags.length).toBe(11);
+    // Every toggle carries exactly one stage tag (6 general + 6 desktop).
+    expect(alphaTags.length + betaTags.length).toBe(12);
   });
 
   it('marks internal-testing experiments as alpha and usable ones as beta', () => {

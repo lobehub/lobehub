@@ -27,6 +27,8 @@ import { useRegisterDesktopTabHotkeys } from '@/hooks/useHotkeys/desktopTabScope
 import { usePermission } from '@/hooks/usePermission';
 import { electronSystemService } from '@/services/electron/system';
 import { useElectronStore } from '@/store/electron';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 import { electronStylish } from '@/styles/electron';
 
 import { useResolvedTabs } from './hooks/useResolvedTabs';
@@ -60,6 +62,7 @@ const TabBar = () => {
   const [stripWidth, stripRef] = useStripWidth();
   const { tabs, activeTabId } = useResolvedTabs();
   const splitView = useElectronStore((s) => s.splitView);
+  const splitViewEnabled = useUserStore(labPreferSelectors.enableDesktopSplitView);
   const activateTab = useElectronStore((s) => s.activateTab);
   const addNewTab = useElectronStore((s) => s.addNewTab);
   const removeTab = useElectronStore((s) => s.removeTab);
@@ -249,6 +252,7 @@ const TabBar = () => {
                   item={tab}
                   key={placement.id}
                   pinnedCount={pinnedTabs.length}
+                  splitViewEnabled={splitViewEnabled}
                   tier={resolveTabTier(placement.width)}
                   totalCount={tabs.length}
                   width={placement.width}

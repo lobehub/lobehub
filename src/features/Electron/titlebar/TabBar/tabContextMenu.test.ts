@@ -19,6 +19,7 @@ const build = (index: number, totalCount: number, pinned = false, pinnedCount = 
     onTogglePin: vi.fn(),
     pinned,
     pinnedCount,
+    splitViewEnabled: true,
     t: (key) => key,
     totalCount,
   });
@@ -63,6 +64,30 @@ describe('pin entry', () => {
 });
 
 describe('split view entry', () => {
+  it('hides split view while the alpha lab is disabled', () => {
+    const items = buildTabContextMenuItems({
+      id: 'tab-1',
+      inSplitView: false,
+      index: 0,
+      onClose: vi.fn(),
+      onCloseLeft: vi.fn(),
+      onCloseOthers: vi.fn(),
+      onCloseRight: vi.fn(),
+      onCloseSplitView: vi.fn(),
+      onOpenInSplitView: vi.fn(),
+      onTogglePin: vi.fn(),
+      pinned: false,
+      pinnedCount: 0,
+      splitViewEnabled: false,
+      t: (key) => key,
+      totalCount: 2,
+    });
+
+    expect(items.some((item) => item && 'key' in item && item.key === 'openInSplitView')).toBe(
+      false,
+    );
+  });
+
   it('offers opening a tab in split view', () => {
     const items = build(0, 2);
     const entry = items.find((item) => !!item && 'key' in item && item.key === 'openInSplitView');
@@ -84,6 +109,7 @@ describe('split view entry', () => {
       onTogglePin: vi.fn(),
       pinned: false,
       pinnedCount: 0,
+      splitViewEnabled: true,
       t: (key) => key,
       totalCount: 2,
     });

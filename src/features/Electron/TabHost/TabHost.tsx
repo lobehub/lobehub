@@ -15,6 +15,8 @@ import { RouterProvider } from 'react-router/dom';
 
 import { createTabRouter } from '@/spa/router/tabRouter';
 import { useElectronStore } from '@/store/electron';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors, preferenceSelectors } from '@/store/user/selectors';
 
 import { MAX_LIVE_TAB_ROUTERS, resolveLiveTabIds } from './resolveLiveTabIds';
 import { TabIdContext } from './TabIdContext';
@@ -79,18 +81,26 @@ const TabHost = ({ createRouter = createTabRouter }: TabHostProps) => {
   const tabs = useElectronStore((s) => s.tabs);
   const activeTabId = useElectronStore((s) => s.activeTabId);
   const splitView = useElectronStore((s) => s.splitView);
+  const isPreferenceInit = useUserStore(preferenceSelectors.isPreferenceInit);
+  const splitViewEnabled = useUserStore(labPreferSelectors.enableDesktopSplitView);
+  const closeSplitView = useElectronStore((s) => s.closeSplitView);
   const focusTabPane = useElectronStore((s) => s.focusTabPane);
   const setSplitRatio = useElectronStore((s) => s.setSplitRatio);
+  const effectiveSplitView = isPreferenceInit && splitViewEnabled ? splitView : null;
 
   const visibleTabIds = useMemo(
     () =>
-      splitView
-        ? [splitView.primaryTabId, splitView.secondaryTabId]
+      effectiveSplitView
+        ? [effectiveSplitView.primaryTabId, effectiveSplitView.secondaryTabId]
         : activeTabId
           ? [activeTabId]
           : [],
-    [activeTabId, splitView],
+    [activeTabId, effectiveSplitView],
   );
+
+  useEffect(() => {
+    if (isPreferenceInit && !splitViewEnabled && splitView) closeSplitView();
+  }, [closeSplitView, isPreferenceInit, splitView, splitViewEnabled]);
 
   const liveIds = useMemo(
     () => resolveLiveTabIds(tabs, activeTabId, MAX_LIVE_TAB_ROUTERS, visibleTabIds),
@@ -120,10 +130,10 @@ const TabHost = ({ createRouter = createTabRouter }: TabHostProps) => {
   };
 
   const handleDividerKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!splitView) return;
+    if (!effectiveSplitView) return;
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
     event.preventDefault();
-    setSplitRatio(splitView.ratio + (event.key === 'ArrowLeft' ? -0.05 : 0.05));
+    setSplitRatio(effectiveSplitView.ratio + (event.key === 'ArrowLeft' ? -0.05 : 0.05));
   };
 
   return (
@@ -132,11 +142,15 @@ const TabHost = ({ createRouter = createTabRouter }: TabHostProps) => {
         .filter((tab) => liveSet.has(tab.id))
         .map((tab) => {
           const isVisible = visibleSet.has(tab.id);
-          const isPrimary = splitView?.primaryTabId === tab.id;
-          const paneStyle: CSSProperties = splitView
+          const isPrimary = effectiveSplitView?.primaryTabId === tab.id;
+          const paneStyle: CSSProperties = effectiveSplitView
             ? isPrimary
-              ? { ...slotStyle, right: 'auto', width: `${splitView.ratio * 100}%` }
-              : { ...slotStyle, left: 'auto', width: `${(1 - splitView.ratio) * 100}%` }
+              ? { ...slotStyle, right: 'auto', width: `${effectiveSplitView.ratio * 100}%` }
+              : {
+                  ...slotStyle,
+                  left: 'auto',
+                  width: `${(1 - effectiveSplitView.ratio) * 100}%`,
+                }
             : slotStyle;
 
           return (
@@ -146,7 +160,7 @@ const TabHost = ({ createRouter = createTabRouter }: TabHostProps) => {
               <div
                 className={styles.pane}
                 data-focused={tab.id === activeTabId ? 'true' : undefined}
-                data-pane={splitView ? (isPrimary ? 'primary' : 'secondary') : 'single'}
+                data-pane={effectiveSplitView ? (isPrimary ? 'primary' : 'secondary') : 'single'}
                 style={isVisible ? paneStyle : hiddenSlotStyle}
                 onFocusCapture={() => focusTabPane(tab.id)}
                 onPointerDownCapture={() => focusTabPane(tab.id)}
@@ -164,16 +178,16 @@ const TabHost = ({ createRouter = createTabRouter }: TabHostProps) => {
             </Activity>
           );
         })}
-      {splitView && (
+      {effectiveSplitView && (
         <div
           aria-label={t('tab.resizeSplitView')}
           aria-orientation="vertical"
           aria-valuemax={75}
           aria-valuemin={25}
-          aria-valuenow={Math.round(splitView.ratio * 100)}
+          aria-valuenow={Math.round(effectiveSplitView.ratio * 100)}
           className={styles.divider}
           role="separator"
-          style={{ left: `${splitView.ratio * 100}%` }}
+          style={{ left: `${effectiveSplitView.ratio * 100}%` }}
           tabIndex={0}
           onDoubleClick={() => setSplitRatio(0.5)}
           onKeyDown={handleDividerKeyDown}

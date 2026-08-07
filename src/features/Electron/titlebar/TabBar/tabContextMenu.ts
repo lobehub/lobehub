@@ -23,6 +23,7 @@ interface TabContextMenuParams {
   onTogglePin: (id: string) => void;
   pinned: boolean;
   pinnedCount: number;
+  splitViewEnabled: boolean;
   t: (key: TabContextMenuLabelKey) => string;
   totalCount: number;
 }
@@ -43,6 +44,7 @@ export const buildTabContextMenuItems = ({
   onTogglePin,
   pinned,
   pinnedCount,
+  splitViewEnabled,
   t,
   totalCount,
 }: TabContextMenuParams): GenericItemType[] => {
@@ -56,11 +58,13 @@ export const buildTabContextMenuItems = ({
       label: pinned ? t('tab.unpin') : t('tab.pin'),
       onClick: () => onTogglePin(id),
     },
-    {
-      key: inSplitView ? 'closeSplitView' : 'openInSplitView',
-      label: t(inSplitView ? 'tab.closeSplitView' : 'tab.openInSplitView'),
-      onClick: () => (inSplitView ? onCloseSplitView() : onOpenInSplitView(id)),
-    },
+    splitViewEnabled || inSplitView
+      ? {
+          key: inSplitView ? 'closeSplitView' : 'openInSplitView',
+          label: t(inSplitView ? 'tab.closeSplitView' : 'tab.openInSplitView'),
+          onClick: () => (inSplitView ? onCloseSplitView() : onOpenInSplitView(id)),
+        }
+      : null,
     { type: 'divider' },
     {
       disabled: totalCount === 1,

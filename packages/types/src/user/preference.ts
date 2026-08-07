@@ -170,6 +170,10 @@ export const UserLabSchema = z.object({
    */
   enableCodexAppServer: z.boolean().optional(),
   /**
+   * enable displaying two desktop tabs side by side
+   */
+  enableDesktopSplitView: z.boolean().optional(),
+  /**
    * one-click import of local Claude Code / Codex CLI sessions as topics (desktop only)
    */
   enableHeteroSessionImport: z.boolean().optional(),

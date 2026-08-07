@@ -19,6 +19,9 @@ export default {
   'features.codexAppServer.desc':
     'Run Codex sessions through the local app-server instead of one-shot CLI processes. Enables token streaming and native turn control.',
   'features.codexAppServer.title': 'Codex App Server Runtime',
+  'features.desktopSplitView.desc':
+    'Show two desktop tabs side by side, with independent navigation and a resizable divider.',
+  'features.desktopSplitView.title': 'Split Tab View',
   'features.heteroSessionImport.desc':
     'Add an "Import Local Agent Sessions" entry to the topic list menu: scan local Claude Code / Codex CLI transcripts and import them as topics, with incremental sync on re-import.',
   'features.heteroSessionImport.title': 'Local Agent Session Import',
