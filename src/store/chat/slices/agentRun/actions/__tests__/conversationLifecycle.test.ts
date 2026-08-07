@@ -6,12 +6,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { agentService } from '@/services/agent';
 import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
+import * as skillPreload from '@/services/chat/mecha/skillPreload';
 import { messageService } from '@/services/message';
 import * as agentGroupStore from '@/store/agentGroup';
 import { setPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
+import { fileChatSelectors, useFileStore } from '@/store/file';
 import { getSessionStoreState } from '@/store/session';
 import * as toolStoreModule from '@/store/tool';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/pageAgentRuntime';
@@ -68,6 +70,7 @@ beforeEach(() => {
   vi.spyOn(sessionStore, 'triggerSessionUpdate').mockResolvedValue(undefined);
   vi.spyOn(agentService, 'getAgentConfigById').mockResolvedValue(createMockAgentConfig() as any);
   useUserStore.setState({ workspaceUserPreference: {} });
+  useFileStore.setState({ chatContextSelectionsByContext: {} });
 
   act(() => {
     useChatStore.setState({
@@ -473,10 +476,17 @@ describe('ConversationLifecycle actions', () => {
         expect(result.current.executeClientAgent).toHaveBeenCalled();
       });
 
-      it('should adopt the minted topic id for the whole send (no _new -> topic transition)', async () => {
+      it('should adopt the minted topic id and move context added during preflight', async () => {
         const { result } = renderHook(() => useChatStore());
         const agentId = TEST_IDS.SESSION_ID;
         const newBucketKey = messageMapKey({ agentId, topicId: null });
+        let resolveSkillPreload!: (value: []) => void;
+        const skillPreloadPromise = new Promise<[]>((resolve) => {
+          resolveSkillPreload = resolve;
+        });
+        const skillPreloadSpy = vi
+          .spyOn(skillPreload, 'resolveSelectedSkillsWithContent')
+          .mockReturnValue(skillPreloadPromise);
         let resolveServerSend!: (value: any) => void;
         const serverSendPromise = new Promise<any>((resolve) => {
           resolveServerSend = resolve;
@@ -511,14 +521,26 @@ describe('ConversationLifecycle actions', () => {
           });
         });
 
+        await waitFor(() => expect(skillPreloadSpy).toHaveBeenCalled());
+
+        const pendingSelection = {
+          content: 'context added while preparing the first send',
+          id: 'pending-selection',
+          type: 'text' as const,
+        };
+        act(() => {
+          useFileStore.getState().addChatContextSelection({
+            contextKey: newBucketKey,
+            selection: pendingSelection,
+          });
+          resolveSkillPreload([]);
+        });
+
         await waitFor(() => expect(sendMessageInServerSpy).toHaveBeenCalled());
 
         // The conversation adopted the minted id BEFORE the server answered:
         // activeTopicId already points at it, the optimistic pair lives in the
-        // minted bucket (NOT `_new`), and the id is marked as creating. This is
-        // the invariant that keeps the conversation surface's contextKey stable
-        // for the whole send — the remount/blank-frame flicker cannot happen
-        // when the key never changes.
+        // minted bucket (NOT `_new`), and the id is marked as creating.
         const midState = useChatStore.getState();
         const mintedTopicId = midState.activeTopicId!;
         expect(mintedTopicId).toMatch(/^tpc_/);
@@ -528,6 +550,12 @@ describe('ConversationLifecycle actions', () => {
         const mintedBucketKey = messageMapKey({ agentId, topicId: mintedTopicId });
         expect(midState.dbMessagesMap[mintedBucketKey]?.length).toBe(2);
         expect(midState.dbMessagesMap[newBucketKey] ?? []).toEqual([]);
+        expect(
+          fileChatSelectors.chatContextSelections(mintedBucketKey)(useFileStore.getState()),
+        ).toEqual([pendingSelection]);
+        expect(
+          fileChatSelectors.chatContextSelections(newBucketKey)(useFileStore.getState()),
+        ).toEqual([]);
 
         await act(async () => {
           resolveServerSend({

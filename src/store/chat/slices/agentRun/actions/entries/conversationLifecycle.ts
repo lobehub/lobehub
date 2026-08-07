@@ -81,6 +81,7 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { snapshotAgentModel } from '@/store/chat/utils/snapshotAgentModel';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { getElectronStoreState } from '@/store/electron';
+import { getFileStoreState } from '@/store/file/store';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/pageAgentRuntime';
@@ -426,10 +427,11 @@ export class ConversationLifecycleActionImpl {
      * bucket, `activeTopicId` and the sidebar row all use it from the first
      * frame, and the server honours it verbatim (`newTopic.id` / `clientIds`).
      *
-     * This is what removes the `_new` → topic transition — the conversation's
-     * `contextKey` never changes, so the conversation surface never remounts
-     * and the virtualized list never repaints from an empty viewport (the
-     * first-send "messages vanish for a frame" flicker).
+     * This removes the server-confirmation re-key: optimistic messages use the
+     * final topic key immediately, so the virtualized list does not repaint from
+     * an empty viewport when the server responds. The composer still pivots once
+     * from `_new` to this minted key below, and its pending context is migrated
+     * before that switch.
      *
      * Isolated-topic callers keep the legacy flow (they re-subscribe via
      * `onTopicCreated` and never render the main conversation surface).
@@ -727,6 +729,10 @@ export class ConversationLifecycleActionImpl {
         },
         'sendMessage/optimisticCreateTopic',
       );
+      getFileStoreState().moveChatContextSelections(
+        messageMapKey({ ...operationContext, topicId: null }),
+        currentContextKey,
+      );
       await this.#get().switchTopic(mintedTopicId, { skipRefreshMessage: true });
     }
 
@@ -911,6 +917,10 @@ export class ConversationLifecycleActionImpl {
       if (!optimisticTopic || !optimisticTopicActive) return;
 
       if (this.#get().activeTopicId === optimisticTopic.id) {
+        getFileStoreState().moveChatContextSelections(
+          currentContextKey,
+          messageMapKey({ ...operationContext, topicId: null }),
+        );
         void this.#get().switchTopic(null, { skipRefreshMessage: true });
       }
       this.#get().internal_dispatchTopic(
@@ -1042,6 +1052,7 @@ export class ConversationLifecycleActionImpl {
       const heteroResponseMeta = heteroData as SendMessageServerResponseMeta;
       const heteroMessageKey = messageMapKey(heteroContext);
       this.#get().moveQueuedMessages(currentContextKey, heteroMessageKey);
+      getFileStoreState().moveChatContextSelections(currentContextKey, heteroMessageKey);
       // Legacy queue location: follow-ups enqueued behind an op still
       // registered under the pre-mint `_new` key.
       if (willCreateNewTopic)
@@ -1469,6 +1480,7 @@ export class ConversationLifecycleActionImpl {
       };
       const finalMessageKey = messageMapKey(finalContext);
       this.#get().moveQueuedMessages(currentContextKey, finalMessageKey);
+      getFileStoreState().moveChatContextSelections(currentContextKey, finalMessageKey);
       // Legacy queue location: follow-ups enqueued behind an op still
       // registered under the pre-mint `_new` key.
       if (willCreateNewTopic)

@@ -106,6 +106,25 @@ export class FileActionImpl {
     this.#set({ chatUploadFileList: nextValue }, false, `dispatchChatFileList/${payload.type}`);
   };
 
+  moveChatContextSelections = (fromContextKey: string, toContextKey: string): void => {
+    if (fromContextKey === toContextKey) return;
+
+    const currentMap = this.#get().chatContextSelectionsByContext;
+    const source = currentMap[fromContextKey];
+    if (!source || source.length === 0) return;
+
+    const sourceIds = new Set(source.map((item) => item.id));
+    const target = currentMap[toContextKey] ?? [];
+    const nextTarget = [...source, ...target.filter((item) => !sourceIds.has(item.id))];
+    const { [fromContextKey]: _removed, ...nextMap } = currentMap;
+
+    this.#set(
+      { chatContextSelectionsByContext: { ...nextMap, [toContextKey]: nextTarget } },
+      false,
+      n('moveChatContextSelections'),
+    );
+  };
+
   removeChatContextSelection = ({ contextKey, id }: { contextKey: string; id: string }): void => {
     const currentMap = this.#get().chatContextSelectionsByContext;
     const current = currentMap[contextKey];

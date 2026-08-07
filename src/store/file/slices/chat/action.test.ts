@@ -118,6 +118,39 @@ describe('useFileStore:chat', () => {
     expect(result.current.chatContextSelectionsByContext).toEqual({});
   });
 
+  it('moves context selections to a new conversation key without overwriting the target', () => {
+    const { result } = renderHook(() => useStore());
+    const sourceSelection: ChatContextContent = {
+      content: 'source selection',
+      id: 'shared-selection',
+      type: 'text',
+    };
+    const targetSelection: ChatContextContent = {
+      content: 'stale target selection',
+      id: 'shared-selection',
+      type: 'text',
+    };
+    const targetOnlySelection: ChatContextContent = {
+      content: 'target only',
+      id: 'target-only',
+      type: 'text',
+    };
+
+    act(() => {
+      useStore.setState({
+        chatContextSelectionsByContext: {
+          'topic-new': [sourceSelection],
+          'topic-real': [targetSelection, targetOnlySelection],
+        },
+      });
+      result.current.moveChatContextSelections('topic-new', 'topic-real');
+    });
+
+    expect(result.current.chatContextSelectionsByContext).toEqual({
+      'topic-real': [sourceSelection, targetOnlySelection],
+    });
+  });
+
   it('clearChatUploadFileList should clear the inputFilesList', () => {
     const { result } = renderHook(() => useStore());
 
