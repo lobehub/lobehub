@@ -475,7 +475,10 @@ export class VerifyRunModel {
       .where(
         and(
           eq(verifyRuns.id, runId),
-          sql`coalesce(${verifyRuns.metadata}, '{}'::jsonb) -> 'taskDrivenAt' IS NULL`,
+          // Null-testing a jsonb arrow expression in a WHERE clause takes the
+          // production engine down (XX000), so compare an extracted value
+          // against a sentinel instead — see the jsonbNullTest guard.
+          sql`coalesce(${verifyRuns.metadata} ->> 'taskDrivenAt', '') = ''`,
           this.ownership(),
         ),
       )
