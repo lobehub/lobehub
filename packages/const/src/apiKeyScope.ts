@@ -340,6 +340,10 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
   // prefills the convert-to-skill form via an LLM call
   // (`SystemAgentService.generateSkillMeta` → `modelRuntime.generateObject`)
   'agentDocument.generateSkillMeta': ['model:invoke'],
+  // home sidebar procedures read/reorganize the agent inventory, not chat data
+  'home.getSidebarAgentList': ['agent:read'],
+  'home.searchAgents': ['agent:read'],
+  'home.updateAgentSessionGroupId': ['agent:write'],
   // task orchestration starts `execAgent` runs (run/runReadySubtasks) or calls
   // `generateObject` judges (runReview) — same boundary as `aiAgent.*`
   'task.run': AGENT_RUN_SCOPES,
