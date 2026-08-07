@@ -557,7 +557,9 @@ export class AiModelModel {
           and(
             eq(aiModels.providerId, providerId),
             eq(aiModels.source, AiModelSourceEnum.Remote),
-            sql`${aiModels.config} -> 'chatConfig' IS NOT NULL`,
+            // NOT `config -> 'chatConfig' IS NOT NULL`: jsonb null tests in
+            // WHERE clauses crash the production engine (see jsonbNullTest)
+            sql`COALESCE(${aiModels.config} ->> 'chatConfig', '') <> ''`,
             this.scopeWhere(),
           ),
         );
