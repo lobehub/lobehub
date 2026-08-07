@@ -450,6 +450,60 @@ describe('TaskModel', () => {
       expect(result[0].total).toBe(1);
       expect(result[0].tasks).toHaveLength(1);
     });
+
+    it('should filter tasks by the goal marker', async () => {
+      const model = new TaskModel(serverDB, userId);
+
+      const goal = await model.create({ instruction: 'Persistent objective' });
+      await model.update(goal.id, { config: { goal: { maxIterations: 5 } } });
+      await model.create({ instruction: 'Ordinary task' });
+
+      const goals = await model.groupList({
+        groups: [{ key: 'goals', statuses: ['backlog'] }],
+        hasGoal: true,
+      });
+      const ordinary = await model.groupList({
+        groups: [{ key: 'tasks', statuses: ['backlog'] }],
+        hasGoal: false,
+      });
+
+      expect(goals[0].tasks.map((task) => task.id)).toEqual([goal.id]);
+      expect(ordinary[0].tasks).toHaveLength(1);
+      expect(ordinary[0].tasks[0].instruction).toBe('Ordinary task');
+    });
+
+    it('should aggregate run cost and duration for the returned task batch', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({ instruction: 'Measured goal' });
+      const startedAt = new Date('2026-08-06T10:00:00.000Z');
+
+      await serverDB.insert(topics).values([
+        {
+          completedAt: new Date('2026-08-06T10:01:00.000Z'),
+          id: 'group-list-run-1',
+          totalCost: 0.015,
+          userId,
+        },
+        {
+          completedAt: new Date('2026-08-06T10:03:00.000Z'),
+          id: 'group-list-run-2',
+          totalCost: 0.025,
+          userId,
+        },
+      ]);
+      await serverDB.insert(taskTopics).values([
+        { createdAt: startedAt, seq: 1, taskId: task.id, topicId: 'group-list-run-1', userId },
+        { createdAt: startedAt, seq: 2, taskId: task.id, topicId: 'group-list-run-2', userId },
+      ]);
+
+      const [group] = await model.groupList({
+        groups: [{ key: 'goals', statuses: ['backlog'] }],
+      });
+      const measuredTask = group.tasks.find(({ id }) => id === task.id);
+
+      expect(measuredTask?.totalRunCost).toBeCloseTo(0.04);
+      expect(measuredTask?.totalRunDuration).toBe(240_000);
+    });
   });
 
   describe('findSubtasks', () => {

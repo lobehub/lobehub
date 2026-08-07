@@ -723,6 +723,7 @@ export class TaskService {
             ? { schedule: { pattern: s.schedulePattern, timezone: s.scheduleTimezone } }
             : {}),
           status: s.status,
+          updatedAt: s.updatedAt ? new Date(s.updatedAt).toISOString() : undefined,
         };
       });
     };
@@ -822,6 +823,7 @@ export class TaskService {
         return {
           author: topicAgentId ? authorMap.get(topicAgentId) : undefined,
           completedAt: toISO(t.completedAt),
+          cost: t.totalCost == null ? null : Number(t.totalCost),
           // Raw last assistant message of the run, shown alongside
           // the synthesized summary on the run card.
           content: handoff?.content,
@@ -931,6 +933,7 @@ export class TaskService {
       subtasks,
       activities: activities.length > 0 ? activities : undefined,
       topicCount: topics.length > 0 ? topics.length : undefined,
+      updatedAt: task.updatedAt ? new Date(task.updatedAt).toISOString() : undefined,
       workspace: workspaceFolders.length > 0 ? workspaceFolders : undefined,
       workspaceId: task.workspaceId ?? null,
     };

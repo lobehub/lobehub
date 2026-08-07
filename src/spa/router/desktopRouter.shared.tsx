@@ -20,6 +20,7 @@ import {
 } from '@/business/client/BusinessDesktopRoutes';
 import ContentLoading from '@/components/Loading/ContentLoading';
 import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
+import { goalsRouteMeta } from '@/features/AgentGoals/routeMeta';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import { agentsRouteMeta } from '@/features/AgentViewAll/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
@@ -119,6 +120,22 @@ export const sharedMainAreaChildren: RouteObject[] = [
               'Desktop > Chat > DocumentLayout',
             ),
             path: 'docs',
+          },
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/agent/goals'),
+              'Desktop > Chat > Goals',
+            ),
+            handle: { meta: goalsRouteMeta },
+            path: 'goals',
+          },
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/agent/goal/[goalId]'),
+              'Desktop > Chat > Goal Detail',
+            ),
+            handle: { meta: goalsRouteMeta },
+            path: 'goal/:goalId',
           },
           {
             element: dynamicElement(

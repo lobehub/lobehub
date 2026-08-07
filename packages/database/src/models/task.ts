@@ -29,6 +29,7 @@ import { merge } from '@/utils/merge';
 import { documents } from '../schemas/file';
 import type { NewTaskComment, TaskCommentItem } from '../schemas/task';
 import { taskComments, taskDependencies, taskDocuments, tasks, taskTopics } from '../schemas/task';
+import { topics } from '../schemas/topic';
 import { works } from '../schemas/work';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
@@ -444,6 +445,8 @@ export class TaskModel {
       statuses: string[];
     }>;
     parentTaskId?: string | null;
+    /** Only return tasks carrying the goal-controller marker in `config.goal`. */
+    hasGoal?: boolean;
     /** Same semantics as `list({ visibility })` — UI narrowing on top of the
      *  already ownership-filtered set. */
     visibility?: 'private' | 'public';
@@ -457,10 +460,12 @@ export class TaskModel {
       total: number;
     }>
   > {
-    const { groups, assigneeAgentId, parentTaskId, visibility } = options;
+    const { groups, assigneeAgentId, hasGoal, parentTaskId, visibility } = options;
 
     const baseConditions = [this.ownership()];
     if (assigneeAgentId) baseConditions.push(eq(tasks.assigneeAgentId, assigneeAgentId));
+    if (hasGoal === true) baseConditions.push(sql`${tasks.config} -> 'goal' IS NOT NULL`);
+    if (hasGoal === false) baseConditions.push(sql`${tasks.config} -> 'goal' IS NULL`);
     if (visibility) baseConditions.push(eq(tasks.visibility, visibility));
     if (parentTaskId === null) {
       baseConditions.push(isNull(tasks.parentTaskId));
@@ -508,7 +513,35 @@ export class TaskModel {
       }),
     );
 
-    return results;
+    const taskIds = Array.from(
+      new Set(results.flatMap((group) => group.tasks.map(({ id }) => id))),
+    );
+    const runStats =
+      taskIds.length === 0
+        ? []
+        : await this.db
+            .select({
+              taskId: taskTopics.taskId,
+              totalRunCost: sql<number>`coalesce(sum(${topics.totalCost}), 0)`.mapWith(Number),
+              totalRunDuration:
+                sql<number>`coalesce(sum(extract(epoch from (${topics.completedAt} - ${taskTopics.createdAt})) * 1000) filter (where ${topics.completedAt} is not null), 0)`.mapWith(
+                  Number,
+                ),
+            })
+            .from(taskTopics)
+            .innerJoin(topics, eq(topics.id, taskTopics.topicId))
+            .where(inArray(taskTopics.taskId, taskIds))
+            .groupBy(taskTopics.taskId);
+    const runStatsByTaskId = new Map(runStats.map((stats) => [stats.taskId, stats]));
+
+    return results.map((group) => ({
+      ...group,
+      tasks: group.tasks.map((task) => ({
+        ...task,
+        totalRunCost: runStatsByTaskId.get(task.id)?.totalRunCost ?? 0,
+        totalRunDuration: runStatsByTaskId.get(task.id)?.totalRunDuration ?? 0,
+      })),
+    }));
   }
 
   async list(options?: {

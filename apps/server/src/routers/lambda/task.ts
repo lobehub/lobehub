@@ -129,6 +129,7 @@ const groupListSchema = z.object({
     )
     .min(1)
     .max(10),
+  hasGoal: z.boolean().optional(),
   parentTaskId: z.string().nullish(),
   visibility: z.enum(['private', 'public']).optional(),
 });

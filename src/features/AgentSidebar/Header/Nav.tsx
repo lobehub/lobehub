@@ -7,6 +7,7 @@ import {
   MessagesSquareIcon,
   RadioTowerIcon,
   SearchIcon,
+  TargetIcon,
 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -26,6 +27,8 @@ import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 const Nav = memo(() => {
   const { t } = useTranslation('chat');
@@ -34,6 +37,7 @@ const Nav = memo(() => {
   const agentId = params.aid;
   const { pathname } = useActiveLocation();
   const isProfileActive = pathname.includes('/profile');
+  const isGoalsActive = pathname.endsWith('/goals');
   const isChannelActive = pathname.includes('/channel');
   // Topic IDs are prefixed `topics_`, so /agent/:aid/topics_abc would also match
   // pathname.includes('/topics') — anchor to end to avoid that false positive.
@@ -56,6 +60,7 @@ const Nav = memo(() => {
   const switchTopic = useChatStore((s) => s.switchTopic);
   const [openNewTopicOrSaveTopic] = useChatStore((s) => [s.openNewTopicOrSaveTopic]);
   const isNewTopicSendInFlight = useChatStore(topicSelectors.isNewTopicSendInFlight);
+  const enableTopicAcceptance = useUserStore(labPreferSelectors.enableTopicAcceptance);
 
   const { mutate } = useActionSWR(topicActionKeys.openNewOrSave(), openNewTopicOrSaveTopic);
   const handleNewTopic = () => {
@@ -84,6 +89,15 @@ const Nav = memo(() => {
           toggleCommandMenu(true);
         }}
       />
+      <NavItem
+        active={isTopicsActive}
+        icon={MessagesSquareIcon}
+        title={tTopic('management.sidebarEntry')}
+        onClick={() => {
+          switchTopic(null, { skipRefreshMessage: true });
+          router.push(urlJoin('/agent', agentId!, 'topics'));
+        }}
+      />
       {!hideProfile && (
         <NavItem
           active={isProfileActive}
@@ -95,15 +109,17 @@ const Nav = memo(() => {
           }}
         />
       )}
-      <NavItem
-        active={isTopicsActive}
-        icon={MessagesSquareIcon}
-        title={tTopic('management.sidebarEntry')}
-        onClick={() => {
-          switchTopic(null, { skipRefreshMessage: true });
-          router.push(urlJoin('/agent', agentId!, 'topics'));
-        }}
-      />
+      {enableTopicAcceptance && (
+        <NavItem
+          active={isGoalsActive}
+          icon={TargetIcon}
+          title={t('goalList.title')}
+          onClick={() => {
+            switchTopic(null, { skipRefreshMessage: true });
+            router.push(urlJoin('/agent', agentId!, 'goals'));
+          }}
+        />
+      )}
       {!hideChannel && (
         <NavItem
           active={isChannelActive}

@@ -37,6 +37,7 @@ export default {
   'navigation.stats': 'Statistics',
   'navigation.task': 'Task',
   'navigation.tasks': 'Tasks',
+  'navigation.goals': 'Goals',
   'navigation.topics': 'Topics',
   'navigation.unpin': 'Unpin',
   'navigation.verifyReports': 'Verification Reports',

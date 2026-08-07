@@ -930,7 +930,7 @@ describe('TaskService', () => {
       });
     });
 
-    it('should propagate topic completedAt to the topic activity', async () => {
+    it('should propagate topic completedAt and cost to the topic activity', async () => {
       const task = {
         assigneeAgentId: null,
         assigneeUserId: null,
@@ -957,6 +957,7 @@ describe('TaskService', () => {
           handoff: null,
           seq: 1,
           status: 'completed',
+          totalCost: '0.0425',
           topicId: 'topic-done',
         },
         {
@@ -965,6 +966,7 @@ describe('TaskService', () => {
           handoff: null,
           seq: 2,
           status: 'running',
+          totalCost: null,
           topicId: 'topic-running',
         },
       ];
@@ -987,7 +989,9 @@ describe('TaskService', () => {
       const done = topicActivities.find((a) => a.id === 'topic-done');
       const running = topicActivities.find((a) => a.id === 'topic-running');
       expect(done?.completedAt).toBe('2024-01-03T00:01:30.000Z');
+      expect(done?.cost).toBe(0.0425);
       expect(running?.completedAt).toBeUndefined();
+      expect(running?.cost).toBeNull();
     });
 
     it('should not include topicCount when no topics exist', async () => {

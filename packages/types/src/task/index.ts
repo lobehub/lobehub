@@ -271,6 +271,8 @@ export interface TaskItem {
   sortOrder: number | null;
   startedAt: Date | null;
   status: string;
+  totalRunCost?: number | null;
+  totalRunDuration?: number | null;
   totalTopics: number | null;
   updatedAt: Date;
   // 'private' tasks are only visible to their creator in workspace mode.
@@ -348,6 +350,7 @@ export interface TaskDetailSubtask {
   runningTopic?: TaskDetailSubtaskRunningTopic | null;
   schedule?: { pattern?: string | null; timezone?: string | null };
   status: string;
+  updatedAt?: string;
 }
 
 export interface TaskDetailWorkspaceNode {
@@ -397,6 +400,8 @@ export interface TaskDetailActivity {
    */
   completedAt?: string;
   content?: string;
+  /** Topic-only: denormalized total run cost in USD. */
+  cost?: number | null;
   createdAt?: string;
   cronJobId?: string | null;
   /** Comment-only: rich Lexical JSON state. When present, supersedes `content` for rendering. */
@@ -504,6 +509,7 @@ export interface TaskDetailData {
   status: string;
   subtasks?: TaskDetailSubtask[];
   topicCount?: number;
+  updatedAt?: string;
   userId?: string | null;
   /** Task-level verify (delivery-acceptance) gate config; `tasks.config.verify`. */
   verify?: TaskVerifyConfig | null;

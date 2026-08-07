@@ -22,6 +22,9 @@ import type {
 import { lambdaClient } from '@/libs/trpc/client';
 
 export type AcceptanceBundle = Awaited<ReturnType<typeof lambdaClient.acceptance.getBundle.query>>;
+export type AcceptanceBySubject = Awaited<
+  ReturnType<typeof lambdaClient.acceptance.getBySubject.query>
+>;
 export type AcceptanceListItem = Awaited<
   ReturnType<typeof lambdaClient.acceptance.list.query>
 >[number];

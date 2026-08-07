@@ -41,6 +41,7 @@ vi.mock('lucide-react', () => ({
   MessagesSquareIcon: () => null,
   RadioTowerIcon: () => null,
   SearchIcon: () => null,
+  TargetIcon: () => null,
 }));
 
 vi.mock('react-i18next', () => ({
@@ -137,6 +138,18 @@ vi.mock('@/store/serverConfig', () => ({
   ) => selector({ featureFlags: { isAgentEditable: true } }),
 }));
 
+vi.mock('@/store/user', () => ({
+  useUserStore: (selector: (state: unknown) => unknown) =>
+    selector({ preference: { lab: { enableTopicAcceptance: true } } }),
+}));
+
+vi.mock('@/store/user/selectors', () => ({
+  labPreferSelectors: {
+    enableTopicAcceptance: (state: { preference: { lab?: { enableTopicAcceptance?: boolean } } }) =>
+      state.preference.lab?.enableTopicAcceptance ?? false,
+  },
+}));
+
 describe('Agent sidebar header nav', () => {
   beforeEach(() => {
     mutateMock.mockReset();
@@ -194,6 +207,7 @@ describe('Agent sidebar header nav', () => {
 
   it('shows message channels for Codex agents', () => {
     agentMock.heterogeneousProviderType = 'codex';
+
     usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
 
     render(<Nav />);
@@ -208,5 +222,25 @@ describe('Agent sidebar header nav', () => {
     render(<Nav />);
 
     expect(screen.queryByRole('button', { name: 'tab.integration' })).not.toBeInTheDocument();
+  });
+
+  it('navigates to the agent goals page', () => {
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+    fireEvent.click(screen.getByRole('button', { name: 'goalList.title' }));
+
+    expect(switchTopicMock).toHaveBeenCalledWith(null, { skipRefreshMessage: true });
+    expect(pushMock).toHaveBeenCalledWith('/agent/agt_eH4zL98zBx5u/goals');
+  });
+
+  it('places topics above profile and goals in the agent navigation', () => {
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+
+    const labels = screen.getAllByRole('button').map((button) => button.textContent);
+    expect(labels.indexOf('management.sidebarEntry')).toBeLessThan(labels.indexOf('tab.profile'));
+    expect(labels.indexOf('tab.profile')).toBeLessThan(labels.indexOf('goalList.title'));
   });
 });

@@ -28,6 +28,7 @@ class TaskService {
       offset?: number;
       statuses: string[];
     }>;
+    hasGoal?: boolean;
     parentTaskId?: string | null;
     visibility?: 'private' | 'public';
   }) => lambdaClient.task.groupList.query(params);
