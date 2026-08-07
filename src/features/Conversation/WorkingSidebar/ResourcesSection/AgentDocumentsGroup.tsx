@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
+import { withErrorBoundary } from '@/components/ErrorBoundary';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { buildAgentDocumentPath } from '@/features/AgentDocumentPage/navigation';
 import { DocumentExplorerTree } from '@/features/AgentDocumentsExplorer';
@@ -672,4 +673,4 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
 
 AgentDocumentsGroup.displayName = 'AgentDocumentsGroup';
 
-export default AgentDocumentsGroup;
+export default withErrorBoundary(AgentDocumentsGroup, { variant: 'alert' });
