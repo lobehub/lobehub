@@ -320,7 +320,7 @@ class AgentService {
    */
   getTransferJobStatus = async (
     agentId: string,
-    topicIds?: string[],
+    topicIds: string[],
   ): Promise<{
     completedTopics: number;
     jobId: string;

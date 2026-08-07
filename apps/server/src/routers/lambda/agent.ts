@@ -788,10 +788,11 @@ export const agentRouter = router({
         /**
          * Topics the client currently shows (sidebar rows + active topic).
          * `pendingTopicIds` is the intersection with the job's queue, keeping
-         * the 3s poll payload bounded however large the backfill is. Omitted →
-         * full queue (compat with released clients).
+         * the 3s poll payload bounded however large the backfill is. Required
+         * so no caller can pull the whole queue (this endpoint ships with the
+         * clients that send it — there is no released-client compat to keep).
          */
-        topicIds: z.array(z.string()).max(1000).optional(),
+        topicIds: z.array(z.string()).max(1000),
       }),
     )
     .query(async ({ input, ctx }) => {
