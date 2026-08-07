@@ -148,6 +148,21 @@ export class FileActionImpl {
     );
   };
 
+  restoreChatContextSelections = (contextKey: string, selections: ChatContextContent[]): void => {
+    if (selections.length === 0) return;
+
+    const currentMap = this.#get().chatContextSelectionsByContext;
+    const restoredIds = new Set(selections.map((item) => item.id));
+    const current = currentMap[contextKey] ?? [];
+    const next = [...selections, ...current.filter((item) => !restoredIds.has(item.id))];
+
+    this.#set(
+      { chatContextSelectionsByContext: { ...currentMap, [contextKey]: next } },
+      false,
+      n('restoreChatContextSelections'),
+    );
+  };
+
   removeChatUploadFile = async (id: string): Promise<void> => {
     const { chatUploadFileList, dispatchChatUploadFileList } = this.#get();
 

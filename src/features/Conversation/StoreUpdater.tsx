@@ -2,7 +2,7 @@
 
 import { type UIChatMessage } from '@lobechat/types';
 import debug from 'debug';
-import { memo, useEffect, useLayoutEffect, useRef } from 'react';
+import { memo, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { createStoreUpdater } from 'zustand-utils';
 
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -10,8 +10,10 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useConversationStoreApi } from './store';
 import {
   type ActionsBarConfig,
+  type ComposerTarget,
   type ConversationContext,
   type ConversationHooks,
+  createComposerTarget,
   type MessagesChangeMeta,
   type OperationState,
 } from './types';
@@ -23,6 +25,7 @@ export interface StoreUpdaterProps {
    * Actions bar configuration by message type
    */
   actionsBar?: ActionsBarConfig;
+  composerTarget?: ComposerTarget;
   context: ConversationContext;
   /**
    * Whether external messages have been initialized
@@ -54,6 +57,7 @@ export interface StoreUpdaterProps {
 const StoreUpdater = memo<StoreUpdaterProps>(
   ({
     actionsBar,
+    composerTarget,
     context,
     hasInitMessages,
     hooks,
@@ -66,8 +70,13 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     const useStoreUpdater = createStoreUpdater(storeApi);
     const prevMessagesRef = useRef<UIChatMessage[] | undefined>(undefined);
     const contextKey = messageMapKey(context);
+    const resolvedComposerTarget = useMemo(
+      () => composerTarget ?? createComposerTarget(contextKey),
+      [composerTarget, contextKey],
+    );
 
     useStoreUpdater('actionsBar', actionsBar);
+    useStoreUpdater('composerTarget', resolvedComposerTarget);
     useStoreUpdater('context', context);
     useStoreUpdater('hooks', hooks!);
     useStoreUpdater('onMessagesChange', onMessagesChange);

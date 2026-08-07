@@ -151,6 +151,31 @@ describe('useFileStore:chat', () => {
     });
   });
 
+  it('restores submitted selections without overwriting context added while sending', () => {
+    const { result } = renderHook(() => useStore());
+    const submittedSelection: ChatContextContent = {
+      content: 'submitted selection',
+      id: 'submitted',
+      type: 'text',
+    };
+    const newerSelection: ChatContextContent = {
+      content: 'newer selection',
+      id: 'newer',
+      type: 'text',
+    };
+
+    act(() => {
+      useStore.setState({
+        chatContextSelectionsByContext: { topic: [newerSelection] },
+      });
+      result.current.restoreChatContextSelections('topic', [submittedSelection]);
+    });
+
+    expect(result.current.chatContextSelectionsByContext).toEqual({
+      topic: [submittedSelection, newerSelection],
+    });
+  });
+
   it('clearChatUploadFileList should clear the inputFilesList', () => {
     const { result } = renderHook(() => useStore());
 

@@ -4,11 +4,13 @@ import { Flexbox } from '@lobehub/ui';
 import { memo, useCallback, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router';
 
+import { type ComposerTarget, createComposerTarget } from '@/features/Conversation/types';
 import FloatingChatPanel from '@/features/FloatingChatPanel';
 import { useDocumentChatTopic } from '@/features/FloatingChatPanel/useDocumentChatTopic';
 import { PageEditor } from '@/features/PageEditor';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import Header from './Header';
 import { buildAgentDocumentsPath } from './navigation';
@@ -50,6 +52,21 @@ const AgentDocumentPage = memo<AgentDocumentPageProps>(({ documentId }) => {
     agentId: ownsDocument ? chatAgentId : undefined,
     documentId: ownsDocument ? documentId : undefined,
   });
+  const askCopilotTarget = useMemo<ComposerTarget>(
+    () =>
+      chatAgentId && docChatTopicId
+        ? createComposerTarget(
+            messageMapKey({
+              agentId: chatAgentId,
+              documentId,
+              scope: 'main',
+              threadId: null,
+              topicId: docChatTopicId,
+            }),
+          )
+        : { reason: 'no-composer', writable: false },
+    [chatAgentId, docChatTopicId, documentId],
+  );
 
   const backToChat = useCallback(
     () => navigate(agentId ? `/agent/${agentId}` : '/agent'),
@@ -105,6 +122,7 @@ const AgentDocumentPage = memo<AgentDocumentPageProps>(({ documentId }) => {
       <Flexbox flex={1} style={{ minHeight: 0 }} width={'100%'}>
         <PageEditor
           fullWidthHeader
+          askCopilotTarget={askCopilotTarget}
           header={header}
           key={documentId}
           // A skill index's visible name is the bundle title; renaming must go

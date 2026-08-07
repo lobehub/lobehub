@@ -17,6 +17,7 @@ const sendMessageMock = vi.hoisted(() => vi.fn());
 const clearContentMock = vi.hoisted(() => vi.fn());
 const clearChatUploadFileListMock = vi.hoisted(() => vi.fn());
 const clearChatContextSelectionsMock = vi.hoisted(() => vi.fn());
+const restoreChatContextSelectionsMock = vi.hoisted(() => vi.fn());
 const createTaskMock = vi.hoisted(() => vi.fn());
 const runTaskMock = vi.hoisted(() => vi.fn());
 const toggleTaskAgentPanelMock = vi.hoisted(() => vi.fn());
@@ -36,6 +37,7 @@ const fileState = vi.hoisted(() => ({
   chatUploadFileList: [],
   clearChatContextSelections: clearChatContextSelectionsMock,
   clearChatUploadFileList: clearChatUploadFileListMock,
+  restoreChatContextSelections: restoreChatContextSelectionsMock,
 }));
 
 const homeState = vi.hoisted(() => ({
@@ -182,6 +184,7 @@ describe('Home InputArea useSend', () => {
     clearContentMock.mockReset();
     clearChatUploadFileListMock.mockReset();
     clearChatContextSelectionsMock.mockReset();
+    restoreChatContextSelectionsMock.mockReset();
     createTaskMock.mockReset();
     runTaskMock.mockReset();
     toggleTaskAgentPanelMock.mockReset();
@@ -364,6 +367,9 @@ describe('Home InputArea useSend', () => {
     expect(routerMock.push).toHaveBeenCalledWith('/agent/agt_inbox');
 
     const sentPayload = sendMessageMock.mock.calls[0][0];
+
+    sentPayload.onPreflightFailure();
+    expect(restoreChatContextSelectionsMock).toHaveBeenCalledWith('home:chat:agt_inbox', []);
 
     await act(async () => {
       await sentPayload.onTopicCreated('tpc_created');

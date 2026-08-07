@@ -2,6 +2,7 @@ import { type UIChatMessage } from '@lobechat/types';
 
 import {
   type ActionsBarConfig,
+  type ComposerTarget,
   type ConversationContext,
   type ConversationHooks,
   type MessagesChangeMeta,
@@ -22,6 +23,11 @@ export interface State extends DataState, InputState, MessageStateState, VirtuaL
    * Actions bar configuration by message type
    */
   actionsBar?: ActionsBarConfig;
+
+  /**
+   * Composer capability for this mounted conversation surface
+   */
+  composerTarget: ComposerTarget;
 
   /**
    * Conversation context (data coordinates)
@@ -60,6 +66,7 @@ export const initialState: State = {
   ...virtuaListInitialState,
 
   actionsBar: undefined,
+  composerTarget: { reason: 'unresolved', writable: false },
   context: {
     agentId: '',
     threadId: null,

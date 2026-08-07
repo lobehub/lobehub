@@ -62,6 +62,7 @@ export const useSend = (mode: HomeMode = 'chat') => {
   const sendMessage = useChatStore((s) => s.sendMessage);
   const clearChatUploadFileList = useFileStore((s) => s.clearChatUploadFileList);
   const clearChatContextSelections = useFileStore((s) => s.clearChatContextSelections);
+  const restoreChatContextSelections = useFileStore((s) => s.restoreChatContextSelections);
 
   const homeInputLoading = useHomeStore((s) => s.homeInputLoading);
   const createTask = useTaskStore((s) => s.createTask);
@@ -241,6 +242,9 @@ export const useSend = (mode: HomeMode = 'chat') => {
               editorData,
               files: fileList,
               message,
+              onPreflightFailure: () => {
+                restoreChatContextSelections(contextSelectionKey, contextList);
+              },
               onTopicCreated: (topicId) => {
                 router.replace(AGENT_CHAT_TOPIC_URL(selectedAgentId, topicId, false));
               },
@@ -270,6 +274,7 @@ export const useSend = (mode: HomeMode = 'chat') => {
       activeWorkspaceId,
       sendMessage,
       clearChatContextSelections,
+      restoreChatContextSelections,
       clearChatUploadFileList,
       contextSelectionKey,
       router,

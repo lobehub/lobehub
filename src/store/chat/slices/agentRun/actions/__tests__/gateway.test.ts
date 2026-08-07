@@ -30,6 +30,11 @@ vi.mock('@/services/topic', () => ({
   },
 }));
 
+const moveChatContextSelections = vi.hoisted(() => vi.fn());
+vi.mock('@/store/file/store', () => ({
+  getFileStoreState: () => ({ moveChatContextSelections }),
+}));
+
 const mockUserDefaultConfig = vi.hoisted(() => ({
   disableGatewayMode: undefined as boolean | undefined,
 }));
@@ -160,6 +165,7 @@ function createTestAction() {
 
 describe('GatewayActionImpl', () => {
   beforeEach(() => {
+    moveChatContextSelections.mockClear();
     mockAgentStore.state = { activeAgentId: undefined, agentMap: {} };
     mockUserDefaultConfig.disableGatewayMode = undefined;
     mockToolInterventionConfig.approvalMode = 'manual';
@@ -776,6 +782,20 @@ describe('GatewayActionImpl', () => {
           title: '666',
         },
       });
+      expect(moveChatContextSelections).toHaveBeenCalledWith(
+        messageMapKey({
+          agentId: 'agent-1',
+          scope: 'main',
+          threadId: null,
+          topicId: 'tmp-topic',
+        }),
+        messageMapKey({
+          agentId: 'agent-1',
+          scope: 'main',
+          threadId: null,
+          topicId: 'topic-1',
+        }),
+      );
     });
 
     it('should keep optimistic topic metadata when replacing the placeholder topic id', async () => {

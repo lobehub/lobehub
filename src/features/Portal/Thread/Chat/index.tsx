@@ -14,6 +14,7 @@ import {
 } from '@/features/Conversation';
 import SkeletonList from '@/features/Conversation/components/SkeletonList';
 import { useChatFollowUp } from '@/features/Conversation/hooks/useChatFollowUp';
+import { type ComposerTarget, resolveThreadComposerTarget } from '@/features/Conversation/types';
 import { mergeConversationHooks } from '@/features/Conversation/utils/mergeConversationHooks';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useAgentStore } from '@/store/agent';
@@ -31,10 +32,11 @@ import { useThreadActionsBarConfig } from './useThreadActionsBarConfig';
  * Must be inside ConversationProvider to access the store
  */
 interface ThreadChatContentProps {
-  isSubagentThread: boolean;
+  composerWritable: boolean;
+  readOnly: boolean;
 }
 
-const ThreadChatContent = memo<ThreadChatContentProps>(({ isSubagentThread }) => {
+const ThreadChatContent = memo<ThreadChatContentProps>(({ composerWritable, readOnly }) => {
   // Get display messages from ConversationStore to determine thread divider position
   // With the new backend API, parent messages have threadId === null
   // and thread messages have threadId === context.threadId
@@ -70,14 +72,14 @@ const ThreadChatContent = memo<ThreadChatContentProps>(({ isSubagentThread }) =>
       return (
         <MessageItem
           inPortalThread
-          disableEditing={isSubagentThread || isParentMessage}
+          disableEditing={readOnly || isParentMessage}
           endRender={enableThreadDivider ? <ThreadDivider /> : undefined}
           id={id}
           index={index}
         />
       );
     },
-    [threadSourceInfo.sourceMessageId, threadSourceInfo.sourceMessageIndex, isSubagentThread],
+    [threadSourceInfo.sourceMessageId, threadSourceInfo.sourceMessageIndex, readOnly],
   );
 
   return (
@@ -101,7 +103,7 @@ const ThreadChatContent = memo<ThreadChatContentProps>(({ isSubagentThread }) =>
           <ChatList itemContent={itemContent} />
         </Flexbox>
       </Suspense>
-      {!isSubagentThread && <ChatInput leftActions={['typo']} rightActions={['contextWindow']} />}
+      {composerWritable && <ChatInput leftActions={['typo']} rightActions={['contextWindow']} />}
     </>
   );
 });
@@ -132,12 +134,14 @@ const ThreadChat = memo(() => {
   // executor on every spawn — unambiguous marker to flip the thread into a
   // read-only record (hides composer, wipes per-message actions, disables
   // double-click editing).
-  const isSubagentThread = useChatStore(
-    (s) => !!portalThreadSelectors.portalCurrentThread(s)?.metadata?.sourceToolCallId,
-  );
+  const portalThread = useChatStore(portalThreadSelectors.portalCurrentThread);
+  const threadMetadataResolved = !portalThreadId || !!portalThread;
+  const isSubagentThread = !!portalThread?.metadata?.sourceToolCallId;
 
   // Get thread-specific actionsBar config
-  const actionsBarConfig = useThreadActionsBarConfig({ readonly: isSubagentThread });
+  const actionsBarConfig = useThreadActionsBarConfig({
+    readonly: !threadMetadataResolved || isSubagentThread,
+  });
 
   // Build ConversationContext for thread
   // When creating new thread (!portalThreadId), use isNew + scope: 'thread'
@@ -180,6 +184,15 @@ const ThreadChat = memo(() => {
 
   // Generate messageMapKey for direct subscription to dbMessagesMap
   const chatKey = useMemo(() => messageMapKey(keyContext), [keyContext]);
+  const composerTarget = useMemo<ComposerTarget>(
+    () =>
+      resolveThreadComposerTarget({
+        contextKey: chatKey,
+        metadataResolved: threadMetadataResolved,
+        sourceToolCallId: portalThread?.metadata?.sourceToolCallId,
+      }),
+    [chatKey, portalThread?.metadata?.sourceToolCallId, threadMetadataResolved],
+  );
 
   // Subscribe directly to dbMessagesMap for reactive updates
   // This ensures optimistic updates work (read/write use same key)
@@ -232,6 +245,7 @@ const ThreadChat = memo(() => {
   return (
     <ConversationProvider
       actionsBar={actionsBarConfig}
+      composerTarget={composerTarget}
       context={context}
       hasInitMessages={!!messages}
       hooks={hooks}
@@ -242,7 +256,10 @@ const ThreadChat = memo(() => {
         replaceMessages(msgs, { context: ctx, source: meta?.source });
       }}
     >
-      <ThreadChatContent isSubagentThread={isSubagentThread} />
+      <ThreadChatContent
+        composerWritable={composerTarget.writable}
+        readOnly={!composerTarget.writable}
+      />
     </ConversationProvider>
   );
 });

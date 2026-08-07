@@ -11,7 +11,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useConversationStore } from '@/features/Conversation/store';
-import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import type { ComposerTarget } from '@/features/Conversation/types';
 import { useFileStore } from '@/store/file';
 
 import { usePageAgentPanelControl } from '../RightPanel/OverrideContext';
@@ -28,16 +28,20 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-export const useAskCopilotItem = (editor: IEditor | undefined): ChatInputActionsProps['items'] => {
+export const useAskCopilotItem = (
+  editor: IEditor | undefined,
+  explicitComposerTarget?: ComposerTarget,
+): ChatInputActionsProps['items'] => {
   const { t } = useTranslation('common');
-  const contextSelectionKey = useConversationStore((s) => messageMapKey(s.context));
+  const providerComposerTarget = useConversationStore((s) => s.composerTarget);
+  const composerTarget = explicitComposerTarget ?? providerComposerTarget;
   const addSelectionContext = useFileStore((s) => s.addChatContextSelection);
   const pageId = usePageEditorStore((s) => s.documentId);
   const setRightPanelMode = usePageEditorStore((s) => s.setRightPanelMode);
   const { toggle: togglePageAgentPanel } = usePageAgentPanelControl();
 
   return useMemo(() => {
-    if (!editor) return [];
+    if (!editor || !composerTarget.writable) return [];
 
     const label = t('cmdk.askLobeAI');
 
@@ -69,7 +73,7 @@ export const useAskCopilotItem = (editor: IEditor | undefined): ChatInputActions
 
               // Store action handles deduplication
               addSelectionContext({
-                contextKey: contextSelectionKey,
+                contextKey: composerTarget.contextKey,
                 selection: {
                   content,
                   format,
@@ -111,7 +115,7 @@ export const useAskCopilotItem = (editor: IEditor | undefined): ChatInputActions
     ];
   }, [
     addSelectionContext,
-    contextSelectionKey,
+    composerTarget,
     editor,
     pageId,
     setRightPanelMode,

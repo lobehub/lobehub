@@ -588,6 +588,26 @@ describe('ConversationLifecycle actions', () => {
         expect(endState.creatingTopicIds).not.toContain(mintedTopicId);
       });
 
+      it('should return composer context ownership when preflight fails', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const preflightError = new Error('skill preload failed');
+        const onPreflightFailure = vi.fn();
+        vi.spyOn(skillPreload, 'resolveSelectedSkillsWithContent').mockRejectedValue(
+          preflightError,
+        );
+
+        await expect(
+          result.current.sendMessage({
+            context: createTestContext(),
+            message: TEST_CONTENT.USER_MESSAGE,
+            onPreflightFailure,
+          }),
+        ).rejects.toBe(preflightError);
+
+        expect(onPreflightFailure).toHaveBeenCalledOnce();
+        expect(result.current.operations).toEqual({});
+      });
+
       it('should show an optimistic topic while the first message is still creating the server topic', async () => {
         const { result } = renderHook(() => useChatStore());
         const agentId = TEST_IDS.SESSION_ID;

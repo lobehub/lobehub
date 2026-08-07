@@ -54,7 +54,7 @@ import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
-import { chatPortalSelectors } from '@/store/chat/selectors';
+import { chatPortalSelectors, portalThreadSelectors } from '@/store/chat/selectors';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useElectronStore } from '@/store/electron';
@@ -63,6 +63,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
+import { type ComposerTarget, createComposerTarget, resolveThreadComposerTarget } from '../types';
 import Files from './Files';
 import { sidebarWidthBudget } from './fitsBesidePortal';
 import Overview from './Overview';
@@ -197,36 +198,57 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   ]);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const workspaceId = useActiveWorkspaceId();
-  const [topicId, currentPortalView, portalOpen, openTopicComments, contextSelectionKey] =
-    useChatStore((s) => {
-      const portalView = chatPortalSelectors.currentView(s);
-      const showPortal = chatPortalSelectors.showStandalonePortal(s);
-      const portalThreadView =
-        showPortal && portalView?.type === PortalViewType.Thread ? portalView : undefined;
+  const [
+    topicId,
+    currentPortalView,
+    portalOpen,
+    openTopicComments,
+    portalThread,
+    chatAgentId,
+    chatGroupId,
+    chatThreadId,
+  ] = useChatStore((s) => [
+    s.activeTopicId,
+    chatPortalSelectors.currentView(s),
+    chatPortalSelectors.showStandalonePortal(s),
+    s.openTopicComments,
+    portalThreadSelectors.portalCurrentThread(s),
+    s.activeAgentId,
+    s.activeGroupId,
+    s.activeThreadId,
+  ]);
+  const composerTarget = useMemo<ComposerTarget>(() => {
+    if (!portalOpen || currentPortalView?.type !== PortalViewType.Thread) {
+      return createComposerTarget(
+        messageMapKey({
+          agentId: chatAgentId,
+          groupId: chatGroupId,
+          threadId: chatThreadId,
+          topicId,
+        }),
+      );
+    }
 
-      return [
-        s.activeTopicId,
-        portalView,
-        showPortal,
-        s.openTopicComments,
-        messageMapKey(
-          portalThreadView
-            ? {
-                agentId: s.activeAgentId,
-                isNew: !portalThreadView.threadId,
-                scope: 'thread',
-                threadId: portalThreadView.threadId,
-                topicId: s.activeTopicId,
-              }
-            : {
-                agentId: s.activeAgentId,
-                groupId: s.activeGroupId,
-                threadId: s.activeThreadId,
-                topicId: s.activeTopicId,
-              },
-        ),
-      ];
+    return resolveThreadComposerTarget({
+      contextKey: messageMapKey({
+        agentId: chatAgentId,
+        isNew: !currentPortalView.threadId,
+        scope: 'thread',
+        threadId: currentPortalView.threadId,
+        topicId,
+      }),
+      metadataResolved: !currentPortalView.threadId || !!portalThread,
+      sourceToolCallId: portalThread?.metadata?.sourceToolCallId,
     });
+  }, [
+    chatAgentId,
+    chatGroupId,
+    chatThreadId,
+    currentPortalView,
+    portalOpen,
+    portalThread,
+    topicId,
+  ]);
   const portalWidth = getPortalViewWidth({
     legacyWidth: legacyPortalWidth,
     viewType: currentPortalView?.type,
@@ -905,7 +927,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
             <Flexbox className={activeTab === 'review' ? styles.pane : styles.paneHidden}>
               <Review
                 active={activeTab === 'review'}
-                contextSelectionKey={contextSelectionKey}
+                composerTarget={composerTarget}
                 deviceId={remoteDeviceId}
                 showTree={showReviewTree}
                 workingDirectory={workingDirectory}
@@ -932,7 +954,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                 >
                   <BrowserPane
                     agentId={activeAgentId}
-                    contextSelectionKey={contextSelectionKey}
+                    composerTarget={composerTarget}
                     sessionId={sessionId}
                     onMetadataChange={(metadata) => {
                       const metadataKey = `${openTabsContextKey}:${tab}`;

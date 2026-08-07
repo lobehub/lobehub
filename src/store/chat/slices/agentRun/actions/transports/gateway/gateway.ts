@@ -31,6 +31,7 @@ import { topicSelectors } from '@/store/chat/selectors';
 import type { ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
+import { getFileStoreState } from '@/store/file/store';
 import type { StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import {
@@ -633,6 +634,10 @@ export class GatewayActionImpl {
             title: optimisticTopic.title,
           },
         });
+        getFileStoreState().moveChatContextSelections(
+          messageMapKey({ ...messageContext, topicId: optimisticTopic.id }),
+          messageMapKey({ ...messageContext, topicId: result.topicId }),
+        );
       }
       try {
         const newContext = { ...messageContext, topicId: result.topicId };

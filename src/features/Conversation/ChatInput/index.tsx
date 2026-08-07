@@ -356,6 +356,9 @@ const ChatInput = memo<ChatInputProps>(
           editorData,
           files: currentFileList,
           message,
+          onPreflightFailure: () => {
+            useFileStore.getState().restoreChatContextSelections(contextKey, currentContextList);
+          },
           pageSelections,
         });
       },

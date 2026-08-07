@@ -121,6 +121,8 @@ export interface SendMessageWithContextParams extends SendMessageParams {
    * sibling panel.
    */
   inputEditor?: ChatInputEditor | null;
+  /** Restore composer-owned context when sending fails before a message owns it. */
+  onPreflightFailure?: () => void;
   /**
    * Called as soon as the backend reports a newly created topic id, so callers
    * with an isolated topic scope (e.g. Task Manager) can switch their UI to the
@@ -266,6 +268,7 @@ export class ConversationLifecycleActionImpl {
     messages: inputMessages,
     parentId: inputParentId,
     pageSelections,
+    onPreflightFailure,
     onTopicCreated,
   }: SendMessageWithContextParams): Promise<SendMessageResult | undefined> => {
     let editorData = inputEditorData;
@@ -293,7 +296,10 @@ export class ConversationLifecycleActionImpl {
           }
         : undefined;
 
-    if (!agentId) return;
+    if (!agentId) {
+      onPreflightFailure?.();
+      return;
+    }
 
     const agentState = getAgentStoreState();
     const agentConfig = agentSelectors.getAgentConfigById(agentId)(agentState);
@@ -460,7 +466,10 @@ export class ConversationLifecycleActionImpl {
       !metadata?.localSystemToolSnapshots?.length &&
       (!!heterogeneousProvider || isLocalSystemEnabled);
     const localSystemToolSnapshots = canMaterializeLocalFiles
-      ? await materializeLocalSystemToolSnapshots(localFileReferences)
+      ? await materializeLocalSystemToolSnapshots(localFileReferences).catch((error) => {
+          onPreflightFailure?.();
+          throw error;
+        })
       : [];
     const userMessageMetadata =
       metadata ||
@@ -480,6 +489,9 @@ export class ConversationLifecycleActionImpl {
     const enrichedSelectedSkills = await resolveSelectedSkillsWithContent({
       message,
       selectedSkills,
+    }).catch((error) => {
+      onPreflightFailure?.();
+      throw error;
     });
     const enrichedSelectedTools = resolveSelectedToolsWithContent({
       message,
@@ -491,7 +503,10 @@ export class ConversationLifecycleActionImpl {
     const hasFile = !!fileIdList && fileIdList.length > 0;
 
     // if message is empty or no files, then stop
-    if (!message && !hasFile) return;
+    if (!message && !hasFile) {
+      onPreflightFailure?.();
+      return;
+    }
 
     const newTopicTitle = markdownToTxt(message).slice(0, 80) || t('defaultTitle', { ns: 'topic' });
 

@@ -11,7 +11,6 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
-import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { fileChatSelectors, useFileStore } from '@/store/file';
 
 import { useConversationStore } from '../../../store';
@@ -69,7 +68,7 @@ const TextSelectionActionLayer = memo<TextSelectionActionLayerProps>(({ children
   const toolbarRef = useRef<HTMLDivElement | null>(null);
   const [activeSelection, setActiveSelection] = useState<ActiveSelection | null>(null);
 
-  const contextSelectionKey = useConversationStore((s) => messageMapKey(s.context));
+  const composerTarget = useConversationStore((s) => s.composerTarget);
   const addChatContextSelection = useFileStore((s) => s.addChatContextSelection);
 
   const hideToolbar = useCallback(() => {
@@ -82,7 +81,7 @@ const TextSelectionActionLayer = memo<TextSelectionActionLayerProps>(({ children
   }, [hideToolbar]);
 
   const updateSelection = useCallback(() => {
-    if (disabled) {
+    if (disabled || !composerTarget.writable) {
       hideToolbar();
       return;
     }
@@ -117,7 +116,7 @@ const TextSelectionActionLayer = memo<TextSelectionActionLayerProps>(({ children
       position: getSelectionToolbarPosition(rect, window.innerWidth),
       text,
     });
-  }, [disabled, hideToolbar]);
+  }, [composerTarget.writable, disabled, hideToolbar]);
 
   const scheduleSelectionUpdate = useCallback(() => {
     window.setTimeout(updateSelection, 0);
@@ -147,9 +146,9 @@ const TextSelectionActionLayer = memo<TextSelectionActionLayerProps>(({ children
 
   const addSelectionToConversation = useCallback(() => {
     const text = activeSelection?.text;
-    if (!text) return;
+    if (!text || !composerTarget.writable) return;
 
-    const currentSelections = fileChatSelectors.chatContextSelections(contextSelectionKey)(
+    const currentSelections = fileChatSelectors.chatContextSelections(composerTarget.contextKey)(
       useFileStore.getState(),
     );
     const existing = currentSelections.find((item) => isSameTextSelectionContext(item, text));
@@ -161,9 +160,9 @@ const TextSelectionActionLayer = memo<TextSelectionActionLayerProps>(({ children
         title: t('textSelection.title'),
       });
 
-    addChatContextSelection({ contextKey: contextSelectionKey, selection: context });
+    addChatContextSelection({ contextKey: composerTarget.contextKey, selection: context });
     toast.success(t('textSelection.added'));
-  }, [activeSelection?.text, addChatContextSelection, contextSelectionKey, t]);
+  }, [activeSelection?.text, addChatContextSelection, composerTarget, t]);
 
   const handleAddToConversation = useCallback(() => {
     addSelectionToConversation();

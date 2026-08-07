@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
+import type { ComposerTarget } from '../../types';
 import AgentWorkingSidebar from '../index';
 
 // ─── captured RightPanel props ────────────────────────────────────────────────
@@ -61,14 +62,14 @@ const paramsSectionState = vi.hoisted(() => ({
 
 const browserPanes = vi.hoisted(() => ({
   current: [] as {
-    contextSelectionKey: string;
+    composerTarget: ComposerTarget;
     onMetadataChange?: (metadata: { faviconUrl?: string; title: string; url: string }) => void;
     sessionId: string;
   }[],
 }));
 
 const renderedReview = vi.hoisted(() => ({
-  current: undefined as { contextSelectionKey: string } | undefined,
+  current: undefined as { composerTarget: ComposerTarget } | undefined,
 }));
 
 const localStorageState = vi.hoisted(() => ({
@@ -91,6 +92,7 @@ const chatStore = vi.hoisted(() => ({
   openTopicComments: vi.fn(),
   portalStack: [] as Array<{ startMessageId?: string; threadId?: string; type: string }>,
   showPortal: false,
+  threadMaps: {} as Record<string, any[]>,
 }));
 
 const globalStore = vi.hoisted(() => ({
@@ -124,7 +126,7 @@ vi.mock('../Files', () => ({
   },
 }));
 vi.mock('../Review', () => ({
-  default: (props: { contextSelectionKey: string }) => {
+  default: (props: { composerTarget: ComposerTarget }) => {
     renderedReview.current = props;
     return <div />;
   },
@@ -352,6 +354,7 @@ beforeEach(() => {
   chatStore.activeTopicId = undefined;
   chatStore.portalStack = [];
   chatStore.showPortal = false;
+  chatStore.threadMaps = {};
   chatStore.openTopicComments.mockReset();
   agentStore.activeAgentId = undefined;
   agentStore.isHeterogeneous = false;
@@ -852,6 +855,7 @@ describe('AgentWorkingSidebar — tab strip', () => {
     chatStore.activeTopicId = topicId;
     chatStore.portalStack = [{ threadId, type: PortalViewType.Thread }];
     chatStore.showPortal = true;
+    chatStore.threadMaps = { [topicId]: [{ agentId, id: threadId, topicId }] };
     reviewState.repoType = 'git';
     reviewState.workingDirectory = '/repo';
     localStorageState.openTabsByContext = { [`topic:${topicId}`]: ['browser'] };
@@ -860,8 +864,42 @@ describe('AgentWorkingSidebar — tab strip', () => {
     render(<AgentWorkingSidebar />);
 
     await waitFor(() => expect(browserPanes.current.at(-1)).toBeDefined());
-    expect(browserPanes.current.at(-1)?.contextSelectionKey).toBe(expectedKey);
-    expect(renderedReview.current?.contextSelectionKey).toBe(expectedKey);
+    expect(browserPanes.current.at(-1)?.composerTarget).toEqual({
+      contextKey: expectedKey,
+      writable: true,
+    });
+    expect(renderedReview.current?.composerTarget).toEqual({
+      contextKey: expectedKey,
+      writable: true,
+    });
+  });
+
+  it('marks Browser and Review context actions read-only for a subagent thread', async () => {
+    const topicId = 'topic';
+    const threadId = 'subagent-thread';
+    chatStore.activeAgentId = 'agent';
+    chatStore.activeTopicId = topicId;
+    chatStore.portalStack = [{ threadId, type: PortalViewType.Thread }];
+    chatStore.showPortal = true;
+    chatStore.threadMaps = {
+      [topicId]: [{ id: threadId, metadata: { sourceToolCallId: 'tool-call' }, topicId }],
+    };
+    reviewState.repoType = 'git';
+    reviewState.workingDirectory = '/repo';
+    localStorageState.openTabsByContext = { [`topic:${topicId}`]: ['browser'] };
+    globalStore.status.workingSidebarTab = 'browser';
+
+    render(<AgentWorkingSidebar />);
+
+    await waitFor(() => expect(browserPanes.current.at(-1)).toBeDefined());
+    expect(browserPanes.current.at(-1)?.composerTarget).toEqual({
+      reason: 'read-only',
+      writable: false,
+    });
+    expect(renderedReview.current?.composerTarget).toEqual({
+      reason: 'read-only',
+      writable: false,
+    });
   });
 
   it('uses browser page metadata for the tab title and favicon', async () => {

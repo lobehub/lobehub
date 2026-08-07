@@ -14,6 +14,7 @@ import { gitService } from '@/services/git';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 
+import type { ComposerTarget } from '../../types';
 import type { DiffSelectedLineRange } from './selection';
 import { buildCodeContextSelection } from './selection';
 
@@ -305,7 +306,7 @@ export const FileItemHeader = memo<FileItemHeaderProps>(
 FileItemHeader.displayName = 'ReviewFileItemHeader';
 
 interface FileItemBodyProps {
-  contextSelectionKey: string;
+  composerTarget: ComposerTarget;
   /** Whether the Collapse panel is expanded — gates the heavy PatchDiff render. */
   expanded: boolean;
   filePath: string;
@@ -321,7 +322,7 @@ interface FileItemBodyProps {
 
 const FileItemBody = memo<FileItemBodyProps>(
   ({
-    contextSelectionKey,
+    composerTarget,
     filePath,
     patch,
     isBinary,
@@ -340,10 +341,12 @@ const FileItemBody = memo<FileItemBodyProps>(
 
     const diffOptions = useMemo(
       () => ({
-        enableGutterUtility: true,
+        enableGutterUtility: composerTarget.writable,
         enableLineSelection: true,
         lineDiffType: textDiff ? ('word-alt' as const) : ('none' as const),
         onGutterUtilityClick: (range: DiffSelectedLineRange) => {
+          if (!composerTarget.writable) return;
+
           const selection = buildCodeContextSelection({
             filePath,
             language,
@@ -355,7 +358,7 @@ const FileItemBody = memo<FileItemBodyProps>(
           if (!selection) return;
 
           addChatContextSelection({
-            contextKey: contextSelectionKey,
+            contextKey: composerTarget.contextKey,
             selection: {
               ...selection,
               id: `code-selection-${nanoid(6)}`,
@@ -369,7 +372,7 @@ const FileItemBody = memo<FileItemBodyProps>(
       }),
       [
         addChatContextSelection,
-        contextSelectionKey,
+        composerTarget,
         filePath,
         language,
         patch,
