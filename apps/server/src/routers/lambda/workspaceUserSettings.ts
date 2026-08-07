@@ -25,6 +25,9 @@ const workspaceUserSettingsProcedure = wsCompatProcedure.use(serverDatabase).use
   }
   return opts.next({
     ctx: {
+      // re-declare with the narrowed type so downstream procedures see a
+      // guaranteed string instead of the compat middleware's nullable field
+      workspaceId: ctx.workspaceId,
       workspaceUserSettingsModel: new WorkspaceUserSettingsModel(
         ctx.serverDB,
         ctx.userId,
