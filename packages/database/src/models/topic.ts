@@ -186,9 +186,8 @@ const STATUS_SORT_RANK = sql`CASE ${topics.status}
   WHEN 'running' THEN 3
   WHEN 'scheduled' THEN 4
   WHEN 'active' THEN 5
-  WHEN 'paused' THEN 6
-  WHEN 'completed' THEN 7
-  WHEN 'archived' THEN 8
+  WHEN 'completed' THEN 6
+  WHEN 'archived' THEN 7
   ELSE 5 END`;
 
 // Favorites always float to the top; the rest are ordered by the requested

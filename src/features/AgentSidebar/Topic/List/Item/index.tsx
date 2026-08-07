@@ -9,7 +9,7 @@ import { Flexbox, Icon, Popover, Skeleton, Tag, Text, Tooltip } from '@lobehub/u
 import { createStaticStyles, cssVar, useTheme } from 'antd-style';
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
-import { HashIcon, MessageSquareDashed } from 'lucide-react';
+import { MessageSquareDashed } from 'lucide-react';
 import type { CSSProperties, DragEvent, RefObject } from 'react';
 import { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -177,14 +177,11 @@ const TopicItemRow = memo<TopicItemRowProps>(
   }) => {
     const { t } = useTranslation('topic');
     const { isDarkMode } = useTheme();
-    // Rows render by the dozen, so agent-level reads share ONE subscription:
-    // - heterogeneous agents (Claude Code, Codex, …) don't have chat-style
-    //   topic semantics, so their rows skip the default `#` placeholder icon;
-    // - only workspace-shared (`public`) agents get the creator avatar — a
-    //   workspace-private agent's topics all belong to the viewer.
-    const [activeAgentId, isHeterogeneousAgent, isSharedAgent] = useAgentStore((s) => [
+    // Rows render by the dozen, so agent-level reads share ONE subscription.
+    // Only workspace-shared (`public`) agents get the creator avatar — a
+    // workspace-private agent's topics all belong to the viewer.
+    const [activeAgentId, isSharedAgent] = useAgentStore((s) => [
       s.activeAgentId,
-      agentSelectors.isCurrentAgentHeterogeneous(s),
       agentSelectors.currentAgentVisibility(s) === 'public',
     ]);
     const activeWorkspaceSlug = useActiveWorkspaceSlug();
@@ -398,7 +395,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
       // above — and above the PR marker, which shares this single icon slot.
       if (hasUnread) return <UnreadDot />;
       // Persisted execution state is the topic's primary status. Keep every
-      // non-idle state above git metadata so scheduled / paused / completed
+      // non-idle state above git metadata so scheduled / completed
       // topics cannot be mistaken for merely open / merged / closed PRs.
       // `running` is handled exclusively by shouldShowRunningIcon above so
       // the masked post-output tail cannot fall back to a static running icon.
@@ -433,19 +430,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
       return null;
     })();
 
-    const hashIconNode = (
-      <Icon
-        icon={HashIcon}
-        size={'small'}
-        style={{
-          color: cssVar.colorTextDescription,
-          // Heterogeneous agents (Claude Code, Codex, …) have no chat-style
-          // topic semantics, so suppress the `#` glyph while keeping its
-          // box so the title stays aligned with sibling rows.
-          visibility: isHeterogeneousAgent ? 'hidden' : undefined,
-        }}
-      />
-    );
+    const idleIconPlaceholder = <span aria-hidden style={{ flex: 'none', width: 16 }} />;
 
     // Workspace mode (creator resolvable): the creator's round avatar is the
     // primary visual and always leads the row; the row's own icon — execution
@@ -456,7 +441,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
     const leadingIconNode = author ? (
       <TopicCreatorAvatar corner={ownIconNode} userId={userId} />
     ) : (
-      (ownIconNode ?? hashIconNode)
+      (ownIconNode ?? idleIconPlaceholder)
     );
 
     const navItem = (
