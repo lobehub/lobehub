@@ -355,9 +355,10 @@ export const userRouter = router({
       onboarding: state.onboarding,
       preference: state.preference as UserPreference,
       // restricted API keys must not read decrypted provider/tool credentials
+      // or Marketplace OAuth tokens
       settings:
         ctx.apiKeyScopes !== undefined && !isFullAccessApiKey(ctx.apiKeyScopes)
-          ? { ...state.settings, keyVaults: undefined }
+          ? { ...state.settings, keyVaults: undefined, market: undefined }
           : state.settings,
       userId: ctx.userId,
       username: state.username,
@@ -716,19 +717,22 @@ export const userRouter = router({
     // presence, not truthiness: `keyVaults: null` is an explicit credential clear
     const hasKeyVaultsUpdate = 'keyVaults' in (input as Partial<UserSettings>);
 
-    // `keyVaults` are provider/tool credentials consumed by runtime auth — a
-    // restricted key needs `model:write` on top of the namespace's
-    // `user:write` to touch (or clear) them; full-access keys pass through.
+    // credential-bearing settings: `keyVaults` holds provider/tool credentials,
+    // `market` holds Marketplace OAuth access/refresh tokens. A restricted key
+    // needs `model:write` on top of the namespace's `user:write` to touch (or
+    // clear) either; full-access keys pass through.
+    const touchedCredentialFields = ['keyVaults', 'market'].filter(
+      (field) => field in (input as Partial<UserSettings>),
+    );
     if (
-      hasKeyVaultsUpdate &&
+      touchedCredentialFields.length > 0 &&
       ctx.apiKeyScopes !== undefined &&
       !isFullAccessApiKey(ctx.apiKeyScopes) &&
       !hasApiKeyScope(ctx.apiKeyScopes, 'model:write')
     ) {
       throw new TRPCError({
         code: 'FORBIDDEN',
-        message:
-          "This API key cannot update credentials ('keyVaults'): missing required scope 'model:write'.",
+        message: `This API key cannot update credential settings ('${touchedCredentialFields.join("', '")}'): missing required scope 'model:write'.`,
       });
     }
 

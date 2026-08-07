@@ -80,7 +80,11 @@ export class ProviderController extends BaseController {
       const providerService = new ProviderService(db, this.getUserId(c), this.getWorkspaceId(c));
       const created = await providerService.createProvider({ ...body, source: 'custom' });
 
-      return this.success(c, created, 'Provider created successfully');
+      return this.success(
+        c,
+        created && this.isRestrictedApiKey(c) ? { ...created, keyVaults: undefined } : created,
+        'Provider created successfully',
+      );
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -100,7 +104,11 @@ export class ProviderController extends BaseController {
       const providerService = new ProviderService(db, this.getUserId(c), this.getWorkspaceId(c));
       const updated = await providerService.updateProvider(request);
 
-      return this.success(c, updated, 'Provider updated successfully');
+      return this.success(
+        c,
+        updated && this.isRestrictedApiKey(c) ? { ...updated, keyVaults: undefined } : updated,
+        'Provider updated successfully',
+      );
     } catch (error) {
       return this.handleError(c, error);
     }

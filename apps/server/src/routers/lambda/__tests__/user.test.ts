@@ -639,6 +639,17 @@ describe('userRouter', () => {
       });
     });
 
+    it('rejects market token updates from restricted keys without model:write', async () => {
+      await expect(
+        namespacedRouter
+          .createCaller({ ...mockCtx, apiKeyScopes: ['user:write'] })
+          .user.updateSettings({ market: { accessToken: 'x' } } as any),
+      ).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: expect.stringContaining('model:write'),
+      });
+    });
+
     it('rejects keyVaults clears (null) from restricted keys without model:write', async () => {
       await expect(
         namespacedRouter
