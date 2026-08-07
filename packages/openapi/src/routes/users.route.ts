@@ -6,7 +6,7 @@ import { getAllScopePermissions, getScopePermissions } from '@/utils/rbac';
 import { zValidator } from '../common/validator';
 import { UserController } from '../controllers';
 import { requireAuth } from '../middleware/auth';
-import { requireAnyPermission } from '../middleware/permission-check';
+import { requireAnyPermission, requireApiKeyScope } from '../middleware/permission-check';
 import {
   CreateUserRequestSchema,
   UpdateUserRequestSchema,
@@ -26,6 +26,8 @@ UserRoutes.get(
   '/me',
   describeRoute({ summary: 'Get current authenticated user', tags: ['users'] }),
   requireAuth,
+  // no RBAC permission, but restricted API keys still need the user domain
+  requireApiKeyScope('user:read'),
   async (c) => {
     const userController = new UserController();
     return await userController.getCurrentUser(c);
