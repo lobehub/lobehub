@@ -8,6 +8,7 @@ import { ChatGroupModel } from '@/database/models/chatGroup';
 import { WorkspaceUserSettingsModel } from '@/database/models/workspaceUserSettings';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { EditLockService } from '@/server/services/editLock';
 import { assertCanEditResource } from '@/server/services/resourcePermission';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 
@@ -90,6 +91,7 @@ export const workspaceUserSettingsRouter = router({
         if (canOrganize) {
           const agentModel = new AgentModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
           const chatGroupModel = new ChatGroupModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
+          const editLockService = new EditLockService(ctx.userId);
           for (const [itemId, groupId] of Object.entries(legacyAssignments)) {
             try {
               // The legacy map keys generic sidebar item ids: agents move via
@@ -105,6 +107,10 @@ export const workspaceUserSettingsRouter = router({
                   userId: ctx.userId,
                   workspaceId: ctx.workspaceId,
                 });
+                // Mirror `agentGroup.updateGroup`'s collaborative edit lock:
+                // skip the move while another member actively edits the group.
+                const blockedBy = await editLockService.getBlockingHolder('chatGroup', itemId);
+                if (blockedBy) throw new Error('Group is being edited by another user');
                 await chatGroupModel.update(itemId, { groupId: groupId ?? null });
               } else {
                 await agentModel.updateSessionGroupId(itemId, groupId ?? null);
