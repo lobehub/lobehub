@@ -269,6 +269,14 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
  * scope does not capture, e.g. a knowledge-write mutation that internally
  * invokes a model.
  */
+/**
+ * Boundary note: embedding calls (chunk semantic search / memory search /
+ * re-embed) are deliberately NOT gated by `model:invoke`. They are
+ * retrieval/indexing infrastructure owned by their domain scope, their
+ * per-call cost is marginal, and file-upload pipelines trigger the same
+ * embedding work outside this guard anyway. Whether embeddings deserve their
+ * own scope (e.g. `model:embed`) is tracked in LOBE-12910.
+ */
 const AGENT_RUN_SCOPES: ApiKeyScope[] = ['chat:write', 'model:invoke'];
 
 export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
@@ -280,12 +288,16 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
   'aiAgent.execSubAgentTask': AGENT_RUN_SCOPES,
   'aiAgent.scheduleAgentRun': AGENT_RUN_SCOPES,
   'aiAgent.startExecution': AGENT_RUN_SCOPES,
+  // notify's user/continue paths call `aiAgentService.execAgent` — another run entry
+  'agentNotify.notify': AGENT_RUN_SCOPES,
   // persists tool results into the topic's message history
   'aiChat.archiveToolResult': ['chat:write'],
   // creates user/assistant messages and topics alongside the model call
   'aiChat.sendMessageInServer': ['chat:write'],
   // connectivity test sends a real (1-token) chat request to the provider
   'aiProvider.checkProviderConnectivity': ['model:invoke'],
+  // runs a ComfyUI image-generation workflow, not a config write
+  'comfyui.createImage': ['model:invoke'],
   // prefills the convert-to-skill form via an LLM call
   // (`SystemAgentService.generateSkillMeta` → `modelRuntime.generateObject`)
   'agentDocument.generateSkillMeta': ['model:invoke'],
