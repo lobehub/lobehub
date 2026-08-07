@@ -4,6 +4,7 @@ import {
   AGENT_DOCUMENT_SKILL_CATEGORY,
   AGENT_SIGNAL_SOURCE_TYPE,
 } from '@lobechat/const';
+import type { ErrorBoundary as LobeErrorBoundary } from '@lobehub/ui';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type * as ReactRouterDom from 'react-router';
@@ -20,42 +21,60 @@ const navigateMock = vi.hoisted(() => vi.fn());
 const openDocumentMock = vi.hoisted(() => vi.fn());
 const removeDocumentMock = vi.hoisted(() => vi.fn());
 const useParamsMock = vi.hoisted(() => vi.fn());
+const documentExplorerShouldThrow = vi.hoisted(() => ({ current: false }));
 
 vi.mock('@lobehub/ui/base-ui', () => ({
   confirmModal: modalConfirm,
   toast: { error: messageError, success: messageSuccess },
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  Accordion: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  AccordionItem: ({ children, title }: { children?: ReactNode; title?: ReactNode }) => (
-    <div>
-      {title}
-      {children}
-    </div>
-  ),
-  ActionIcon: ({ onClick, title }: { onClick?: (e: React.MouseEvent) => void; title?: string }) => (
-    <button aria-label={title} onClick={onClick}>
-      {title}
-    </button>
-  ),
-  Center: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Empty: ({ description }: { description?: ReactNode }) => <div>{description}</div>,
-  Flexbox: ({
-    children,
-    onClick,
-    ...props
-  }: {
-    children?: ReactNode;
-    onClick?: () => void;
-    [key: string]: unknown;
-  }) => (
-    <div onClick={onClick} {...props}>
-      {children}
-    </div>
-  ),
-  Text: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-}));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<{ ErrorBoundary: typeof LobeErrorBoundary }>();
+  return {
+    Accordion: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+    AccordionItem: ({ children, title }: { children?: ReactNode; title?: ReactNode }) => (
+      <div>
+        {title}
+        {children}
+      </div>
+    ),
+    ActionIcon: ({
+      onClick,
+      title,
+    }: {
+      onClick?: (e: React.MouseEvent) => void;
+      title?: string;
+    }) => (
+      <button aria-label={title} onClick={onClick}>
+        {title}
+      </button>
+    ),
+    Alert: ({ message, title }: { message?: ReactNode; title?: ReactNode }) => (
+      <div role="alert">
+        <div>{title}</div>
+        <div>{message}</div>
+      </div>
+    ),
+    Center: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+    Empty: ({ description }: { description?: ReactNode }) => <div>{description}</div>,
+    ErrorBoundary: actual.ErrorBoundary,
+    Flexbox: ({
+      children,
+      onClick,
+      ...props
+    }: {
+      children?: ReactNode;
+      onClick?: () => void;
+      [key: string]: unknown;
+    }) => (
+      <div onClick={onClick} {...props}>
+        {children}
+      </div>
+    ),
+    Highlighter: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+    Text: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  };
+});
 
 vi.mock('@/components/NeuralNetworkLoading', () => ({
   default: () => <div data-testid="neural-network-loading" />,
@@ -102,17 +121,23 @@ vi.mock('@/features/AgentDocumentsExplorer', () => ({
     data: { documentId: string; id: string; title?: string }[];
     onOpenDocument?: (documentId: string, agentDocumentId?: string) => void;
   }) => (
-    <div data-doc-count={data.length} data-testid="document-explorer-tree">
-      {data.map((doc) => (
-        <button
-          data-testid={`tree-open-${doc.id}`}
-          key={doc.id}
-          onClick={() => onOpenDocument?.(doc.documentId, doc.id)}
-        >
-          {doc.title}
-        </button>
-      ))}
-    </div>
+    documentExplorerShouldThrow.current ? (
+      (() => {
+        throw new Error('document tree render failed');
+      })()
+    ) : (
+      <div data-doc-count={data.length} data-testid="document-explorer-tree">
+        {data.map((doc) => (
+          <button
+            data-testid={`tree-open-${doc.id}`}
+            key={doc.id}
+            onClick={() => onOpenDocument?.(doc.documentId, doc.id)}
+          >
+            {doc.title}
+          </button>
+        ))}
+      </div>
+    )
   ),
 }));
 
@@ -313,6 +338,7 @@ describe('AgentDocumentsGroup', () => {
     removeDocumentMock.mockReset();
     removeDocumentMock.mockResolvedValue({ deleted: true, id: 'doc-1' });
     useParamsMock.mockReturnValue({});
+    documentExplorerShouldThrow.current = false;
   });
 
   it('defaults to the Skills tab and renders skill bundles via SkillsList', () => {
@@ -453,6 +479,21 @@ describe('AgentDocumentsGroup', () => {
     // Skill bundle, skill index, and web items are filtered out before reaching
     // the tree — only the file-backed document survives.
     expect(tree).toHaveAttribute('data-doc-count', '1');
+  });
+
+  it('contains document tree render failures in an alert boundary', () => {
+    documentExplorerShouldThrow.current = true;
+    useClientDataSWR.mockReturnValue({
+      data: [fileDocRow],
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    render(<AgentDocumentsGroup activeFilter="documents" />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Render Error');
+    expect(screen.getByRole('alert')).toHaveTextContent('document tree render failed');
   });
 
   it('opens document tree files in the portal by default', () => {
