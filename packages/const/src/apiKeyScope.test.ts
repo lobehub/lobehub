@@ -120,6 +120,14 @@ describe('requiredApiKeyScopeForTrpc', () => {
     expect(requiredApiKeyScopeForTrpc('aiProvider.checkProviderConnectivity', 'mutation')).toEqual({
       scopes: ['model:write', 'model:invoke'],
     });
+    // MCP tool execution needs agent:write on top of the model tier
+    expect(requiredApiKeyScopeForTrpc('mcp.callTool', 'mutation')).toEqual({
+      scopes: ['model:invoke', 'agent:write'],
+    });
+    // onboarding generation triggers stack model:invoke on user:write
+    expect(requiredApiKeyScopeForTrpc('user.startOnboardingUnderstanding', 'mutation')).toEqual({
+      scopes: ['user:write', 'model:invoke'],
+    });
     // sibling procedures in the namespace are untouched
     expect(requiredApiKeyScopeForTrpc('agentDocument.createDocument', 'mutation')).toEqual({
       scopes: ['knowledge:write'],

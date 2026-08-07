@@ -300,6 +300,9 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
   'comfyui.createImage': ['model:invoke'],
   // extracts follow-up actions via `AiGenerationService.generateObject`
   'followUpAction.extract': ['model:invoke'],
+  // executes a server-side MCP tool call with caller-supplied endpoint/args —
+  // a model-only key must not trigger arbitrary tool side effects
+  'mcp.callTool': ['agent:write'],
   // prefills the convert-to-skill form via an LLM call
   // (`SystemAgentService.generateSkillMeta` → `modelRuntime.generateObject`)
   'agentDocument.generateSkillMeta': ['model:invoke'],

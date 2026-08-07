@@ -3,6 +3,7 @@ import {
   formatWebOnboardingStateMessage,
 } from '@lobechat/builtin-tool-web-onboarding/utils';
 import { isDesktop } from '@lobechat/const';
+import { hasApiKeyScope, isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { applyMarkdownPatch, formatMarkdownPatchError } from '@lobechat/markdown-patch';
 import type {
   ConfirmOnboardingUnderstandingInput,
@@ -708,6 +709,22 @@ export const userRouter = router({
 
   updateSettings: userProcedure.input(UserSettingsSchema).mutation(async ({ ctx, input }) => {
     const { keyVaults, ...res } = input as Partial<UserSettings>;
+
+    // `keyVaults` are provider/tool credentials consumed by runtime auth — a
+    // restricted key needs `model:write` on top of the namespace's
+    // `user:write` to touch them (full-access keys pass through).
+    if (
+      keyVaults &&
+      ctx.apiKeyScopes !== undefined &&
+      !isFullAccessApiKey(ctx.apiKeyScopes) &&
+      !hasApiKeyScope(ctx.apiKeyScopes, 'model:write')
+    ) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message:
+          "This API key cannot update credentials ('keyVaults'): missing required scope 'model:write'.",
+      });
+    }
 
     if (ctx.workspaceId && (hasOwnerSettingChange(res) || hasMemberSettingChange(res))) {
       const rbac = new RbacModel(ctx.serverDB, ctx.userId);
