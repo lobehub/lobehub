@@ -782,7 +782,18 @@ export const agentRouter = router({
    * Returns null when no backfill is running for the agent.
    */
   getTransferJobStatus: agentProcedure
-    .input(z.object({ agentId: z.string() }))
+    .input(
+      z.object({
+        agentId: z.string(),
+        /**
+         * Topics the client currently shows (sidebar rows + active topic).
+         * `pendingTopicIds` is the intersection with the job's queue, keeping
+         * the 3s poll payload bounded however large the backfill is. Omitted →
+         * full queue (compat with released clients).
+         */
+        topicIds: z.array(z.string()).max(1000).optional(),
+      }),
+    )
     .query(async ({ input, ctx }) => {
       // Scope check: only report migration state for agents visible to the
       // caller's current personal/workspace scope (agent ids are guessable).
@@ -791,7 +802,11 @@ export const agentRouter = router({
 
       const job = await AgentTransferJobModel.findPendingJobForAgent(ctx.serverDB, input.agentId);
       if (!job) return null;
-      const pendingTopicIds = await AgentTransferJobModel.getPendingTopicIds(ctx.serverDB, job.id);
+      const pendingTopicIds = await AgentTransferJobModel.getPendingTopicIds(
+        ctx.serverDB,
+        job.id,
+        input.topicIds,
+      );
       return {
         completedTopics: job.completedTopics,
         jobId: job.id,

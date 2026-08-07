@@ -320,13 +320,14 @@ class AgentService {
    */
   getTransferJobStatus = async (
     agentId: string,
+    topicIds?: string[],
   ): Promise<{
     completedTopics: number;
     jobId: string;
     pendingTopicIds: string[];
     totalTopics: number;
   } | null> => {
-    return lambdaClient.agent.getTransferJobStatus.query({ agentId });
+    return lambdaClient.agent.getTransferJobStatus.query({ agentId, topicIds });
   };
 
   /**

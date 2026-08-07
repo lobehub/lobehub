@@ -2,7 +2,6 @@ import { AgentPluginEntrySchema, InsertChatGroupSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
-import { startAgentTransferJob } from '@/business/server/agent-transfer/jobRunner';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentModel } from '@/database/models/agent';
@@ -714,10 +713,6 @@ export const agentGroupRouter = router({
         }
         throw error;
       }
-
-      // Heavy history goes through an async backfill — kick the driver now
-      // that the transfer transaction has committed (same as agent.transferAgents).
-      if (result?.transferJobId) startAgentTransferJob(ctx.serverDB, result.transferJobId);
 
       if (ctx.workspaceId) {
         await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).removeAll(

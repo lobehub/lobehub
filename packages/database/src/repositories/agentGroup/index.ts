@@ -1,12 +1,11 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import type { AgentGroupDetail, AgentGroupMember, AgentPluginEntry } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
-import { and, asc, count, eq, inArray, ne, not, or, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, ne, not, or, sql } from 'drizzle-orm';
 
 import {
   AGENT_TRANSFER_IN_PROGRESS,
   AgentTransferJobModel,
-  getAgentTransferSyncMessageThreshold,
   rewriteMessageScopeForTopics,
   rewriteResidualMessageScope,
 } from '../../models/agentTransferJob';
@@ -1053,40 +1052,23 @@ export class AgentGroupRepository {
           .where(inArray(threads.topicId, movedTopicIds));
       }
 
-      // Message scope rewrite — same fast/slow split as
-      // AgentModel.transferAgents (see its step 7 for the rationale): small
-      // histories rewrite inline (topics + a group-linked topicless residual),
-      // heavy ones are drained topic-by-topic by an async backfill job.
-      const [{ affectedMessages }] = await trx
-        .select({ affectedMessages: count() })
-        .from(messages)
-        .where(
-          movedTopicIds.length > 0
-            ? or(inArray(messages.topicId, movedTopicIds), eq(messages.groupId, groupId))
-            : eq(messages.groupId, groupId),
-        );
-
+      // Message scope rewrite — always inline for group transfers. Unlike
+      // AgentModel.transferAgents, groups have no async-backfill UX yet (the
+      // migration status endpoint, pending-topic gating, and prioritize flow
+      // are all keyed to agent conversations), so a queued group topic would
+      // open as an empty, writable history with no explanation. Keep group
+      // transfers synchronous until group-aware gating exists; the group
+      // surface is far smaller than the workspace agent-migration path the
+      // async job was built for.
       const targetScope = { userId: targetUserId, workspaceId: targetWorkspaceId };
-      let transferJobId: string | null = null;
-      if (affectedMessages <= getAgentTransferSyncMessageThreshold()) {
-        await rewriteMessageScopeForTopics(trx, movedTopicIds, targetScope);
-        await rewriteResidualMessageScope(
-          trx,
-          { agentIds: [], groupIds: [groupId], sessionIds: [] },
-          targetScope,
-        );
-      } else {
-        transferJobId = await AgentTransferJobModel.createJob(trx, {
-          agentIds,
-          groupIds: [groupId],
-          sessionIds: [],
-          source: { userId: this.userId, workspaceId: this.workspaceId ?? null },
-          target: targetScope,
-          topics: movedTopics.map((topic) => ({ activityAt: topic.updatedAt, id: topic.id })),
-        });
-      }
+      await rewriteMessageScopeForTopics(trx, movedTopicIds, targetScope);
+      await rewriteResidualMessageScope(
+        trx,
+        { agentIds: [], groupIds: [groupId], sessionIds: [] },
+        targetScope,
+      );
 
-      return { groupId, transferJobId };
+      return { groupId, transferJobId: null };
     });
   }
 

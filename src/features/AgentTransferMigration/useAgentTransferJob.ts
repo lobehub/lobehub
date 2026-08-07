@@ -1,5 +1,21 @@
 import { useClientPollingSWR } from '@/libs/swr';
 import { agentService } from '@/services/agent';
+import { useChatStore } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/selectors';
+
+/**
+ * Topics this client can currently show for the active agent: the loaded
+ * sidebar list plus the open topic. Sent with the status poll so the server
+ * only reports pending state for these instead of the job's whole queue
+ * (which can hold tens of thousands of topics).
+ */
+const getVisibleTopicIds = (): string[] => {
+  const state = useChatStore.getState();
+  const loaded = topicSelectors.currentTopics(state)?.map((topic) => topic.id) ?? [];
+  const active = state.activeTopicId;
+  const ids = active && !loaded.includes(active) ? [...loaded, active] : loaded;
+  return ids.slice(0, 1000);
+};
 
 export interface AgentTransferJobStatus {
   completedTopics: number;
@@ -23,7 +39,7 @@ export interface AgentTransferJobStatus {
 export const useAgentTransferJob = (agentId?: string | null) =>
   useClientPollingSWR<AgentTransferJobStatus | null>(
     agentId ? ['agent-transfer-job', agentId] : null,
-    () => agentService.getTransferJobStatus(agentId!),
+    () => agentService.getTransferJobStatus(agentId!, getVisibleTopicIds()),
     {
       dedupingInterval: 2500,
       refreshInterval: (data) => (data ? 3000 : 0),

@@ -281,12 +281,29 @@ export class AgentTransferJobModel {
     return row;
   };
 
-  /** Topic ids of a pending job that still await rewrite (UI gray-out set). */
-  static getPendingTopicIds = async (db: LobeChatDatabase, jobId: string): Promise<string[]> => {
+  /**
+   * Topic ids of a pending job that still await rewrite (UI gray-out set).
+   *
+   * When `candidateTopicIds` is given, only their intersection with the queue
+   * is returned: a job can hold tens of thousands of queued topics, so status
+   * polls ask about the topics they can actually show instead of shipping the
+   * whole queue to every viewing client.
+   */
+  static getPendingTopicIds = async (
+    db: LobeChatDatabase,
+    jobId: string,
+    candidateTopicIds?: string[],
+  ): Promise<string[]> => {
+    if (candidateTopicIds && candidateTopicIds.length === 0) return [];
     const rows = await db
       .select({ topicId: agentHistoryJobTopics.topicId })
       .from(agentHistoryJobTopics)
-      .where(eq(agentHistoryJobTopics.jobId, jobId));
+      .where(
+        and(
+          eq(agentHistoryJobTopics.jobId, jobId),
+          candidateTopicIds ? inArray(agentHistoryJobTopics.topicId, candidateTopicIds) : undefined,
+        ),
+      );
     return rows.map((row) => row.topicId);
   };
 
