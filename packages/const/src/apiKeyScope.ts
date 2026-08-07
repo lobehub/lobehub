@@ -364,6 +364,9 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
  * blocked here by path prefix.
  */
 export const TRPC_BLOCKED_PATH_PREFIXES: string[] = [
+  // returns an unrestricted user JWT that passes `oidcAuth` as non-API-key
+  // auth and would bypass the scope guard entirely
+  'aiAgent.refreshGatewayToken',
   // sandbox execution mints a full LOBEHUB_JWT for `lh` commands
   // (`preprocessLhCommand`), which would bypass the key's scopes entirely
   'market.callCodeInterpreterTool',
