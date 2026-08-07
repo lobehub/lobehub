@@ -12,7 +12,7 @@ describe('userUsageSettingsSelectors', () => {
         initialState as UserStore,
       );
 
-      expect(result).toBe(2);
+      expect(result).toBe(0.5);
     });
 
     it('should read the persisted threshold from general settings', () => {
