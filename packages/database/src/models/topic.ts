@@ -19,6 +19,7 @@ import {
   count,
   desc,
   eq,
+  exists,
   getTableColumns,
   gt,
   gte,
@@ -28,6 +29,7 @@ import {
   lte,
   ne,
   not,
+  notExists,
   or,
   sql,
 } from 'drizzle-orm';
@@ -36,6 +38,8 @@ import type { TopicItem } from '../schemas';
 import {
   agentOperations,
   agents,
+  agentsToSessions,
+  chatGroups,
   messagePlugins,
   messages,
   threads,
@@ -250,6 +254,58 @@ export class TopicModel {
 
   private messageOwnership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messages);
+
+  /**
+   * Topic rows inherit visibility from their owning group or agent. Legacy
+   * session-only rows resolve through `agentsToSessions`; rows without any
+   * resolvable workspace resource remain creator-only. Callers must join both
+   * `agents` and `chatGroups` before using this filter.
+   */
+  private resourceAccess = () => {
+    const workspaceId = this.workspaceId;
+    const scope = { userId: this.userId, workspaceId };
+    const groupAccess = and(isNotNull(topics.groupId), buildWorkspaceWhere(scope, chatGroups));
+    const agentAccess = and(
+      isNull(topics.groupId),
+      isNotNull(topics.agentId),
+      buildWorkspaceWhere(scope, agents),
+    );
+    const noDirectResource = and(isNull(topics.groupId), isNull(topics.agentId));
+
+    if (!workspaceId) {
+      return or(groupAccess, agentAccess, and(noDirectResource, eq(topics.userId, this.userId)));
+    }
+
+    const linkedWorkspaceAgents = (extraCondition?: SQL) =>
+      this.db
+        .select({ agentId: agentsToSessions.agentId })
+        .from(agentsToSessions)
+        .innerJoin(agents, eq(agents.id, agentsToSessions.agentId))
+        .where(
+          and(
+            eq(agentsToSessions.sessionId, topics.sessionId),
+            eq(agents.workspaceId, workspaceId),
+            extraCondition,
+          ),
+        );
+    const hasLinkedWorkspaceAgent = exists(linkedWorkspaceAgents());
+
+    return or(
+      groupAccess,
+      agentAccess,
+      and(
+        noDirectResource,
+        isNotNull(topics.sessionId),
+        hasLinkedWorkspaceAgent,
+        notExists(linkedWorkspaceAgents(not(buildWorkspaceWhere(scope, agents)))),
+      ),
+      and(
+        noDirectResource,
+        eq(topics.userId, this.userId),
+        or(isNull(topics.sessionId), not(hasLinkedWorkspaceAgent)),
+      ),
+    );
+  };
   // **************** Query *************** //
 
   query = async ({
@@ -349,6 +405,7 @@ export class TopicModel {
     if (groupId) {
       const whereCondition = and(
         this.ownership(),
+        this.resourceAccess(),
         eq(topics.groupId, groupId),
         includeTriggerCondition,
         excludeTriggerCondition,
@@ -393,6 +450,8 @@ export class TopicModel {
                 ...detailColumns,
               } as any)
               .from(topics)
+              .leftJoin(agents, eq(topics.agentId, agents.id))
+              .leftJoin(chatGroups, eq(topics.groupId, chatGroups.id))
               .where(whereCondition)
               .orderBy(...orderBy)
               .limit(pageSize)
@@ -403,6 +462,8 @@ export class TopicModel {
           this.db
             .select({ count: count(topics.id) })
             .from(topics)
+            .leftJoin(agents, eq(topics.agentId, agents.id))
+            .leftJoin(chatGroups, eq(topics.groupId, chatGroups.id))
             .where(whereCondition),
         ),
       ]);
@@ -428,6 +489,7 @@ export class TopicModel {
 
       const agentWhere = and(
         this.ownership(),
+        this.resourceAccess(),
         agentCondition,
         includeTriggerCondition,
         excludeTriggerCondition,
@@ -469,6 +531,8 @@ export class TopicModel {
                 ...detailColumns,
               } as any)
               .from(topics)
+              .leftJoin(agents, eq(topics.agentId, agents.id))
+              .leftJoin(chatGroups, eq(topics.groupId, chatGroups.id))
               .where(agentWhere)
               .orderBy(...orderBy)
               .limit(pageSize)
@@ -482,6 +546,8 @@ export class TopicModel {
             this.db
               .select({ count: count(topics.id) })
               .from(topics)
+              .leftJoin(agents, eq(topics.agentId, agents.id))
+              .leftJoin(chatGroups, eq(topics.groupId, chatGroups.id))
               .where(agentWhere),
           { isInbox: !!isInbox },
         ),
@@ -498,6 +564,7 @@ export class TopicModel {
     // Fallback to containerId-based query (backward compatibility)
     const whereCondition = and(
       this.ownership(),
+      this.resourceAccess(),
       this.matchContainer(containerId),
       includeTriggerCondition,
       excludeTriggerCondition,
@@ -541,6 +608,8 @@ export class TopicModel {
               ...detailColumns,
             } as any)
             .from(topics)
+            .leftJoin(agents, eq(topics.agentId, agents.id))
+            .leftJoin(chatGroups, eq(topics.groupId, chatGroups.id))
             .where(whereCondition)
             .orderBy(...orderBy)
             .limit(pageSize)
@@ -551,13 +620,20 @@ export class TopicModel {
         this.db
           .select({ count: count(topics.id) })
           .from(topics)
+          .leftJoin(agents, eq(topics.agentId, agents.id))
+          .leftJoin(chatGroups, eq(topics.groupId, chatGroups.id))
           .where(whereCondition),
       ),
     ]);
 
     // Remove internal fields before returning
 
-    const cleanItems = items.map(({ agentId: _agentId, sessionId: _sessionId, ...rest }) => rest);
+    // The conditional detail projection is intentionally cast above; joins
+    // cause Drizzle to widen that `any` selection to a nested table shape even
+    // though the runtime rows remain the explicitly selected flat columns.
+    const cleanItems = (items as any[]).map(
+      ({ agentId: _agentId, sessionId: _sessionId, ...rest }) => rest,
+    );
 
     logTiming(timing, 'db.topic.query:done', {
       itemCount: cleanItems.length,
@@ -635,6 +711,7 @@ export class TopicModel {
   } = {}): Promise<TopicListItem[]> => {
     const where = and(
       this.ownership(),
+      this.resourceAccess(),
       statuses && statuses.length > 0
         ? inArray(topics.status, statuses as ChatTopicStatus[])
         : undefined,
@@ -675,6 +752,8 @@ export class TopicModel {
           runStartedAt: runStartedAtColumn,
         })
         .from(topics)
+        .leftJoin(agents, eq(topics.agentId, agents.id))
+        .leftJoin(chatGroups, eq(topics.groupId, chatGroups.id))
         .where(where)
         .orderBy(desc(topics.updatedAt))
         .limit(pageSize);
@@ -713,6 +792,8 @@ export class TopicModel {
         runStartedAt: runStartedAtColumn,
       })
       .from(topics)
+      .leftJoin(agents, eq(topics.agentId, agents.id))
+      .leftJoin(chatGroups, eq(topics.groupId, chatGroups.id))
       .where(where)
       .orderBy(desc(topics.updatedAt))
       .limit(pageSize);
@@ -744,20 +825,32 @@ export class TopicModel {
     const [topicsByTitle, topicIdsByMessages] = await Promise.all([
       // Query topics matching by title (BM25)
       this.db
-        .select()
+        .select(getTableColumns(topics))
         .from(topics)
-        .where(and(this.ownership(), scopeCondition, sql`${topics.title} @@@ ${bm25Query}`))
+        .leftJoin(agents, eq(topics.agentId, agents.id))
+        .leftJoin(chatGroups, eq(topics.groupId, chatGroups.id))
+        .where(
+          and(
+            this.ownership(),
+            this.resourceAccess(),
+            scopeCondition,
+            sql`${topics.title} @@@ ${bm25Query}`,
+          ),
+        )
         .orderBy(desc(topics.updatedAt)),
       // Query topic IDs matching by message content (BM25)
       this.db
         .select({ topicId: messages.topicId })
         .from(messages)
         .innerJoin(topics, eq(messages.topicId, topics.id))
+        .leftJoin(agents, eq(topics.agentId, agents.id))
+        .leftJoin(chatGroups, eq(topics.groupId, chatGroups.id))
         .where(
           and(
             this.messageOwnership(),
             sql`${messages.content} @@@ ${bm25Query}`,
             this.ownership(),
+            this.resourceAccess(),
             scopeCondition,
           ),
         )
@@ -773,10 +866,13 @@ export class TopicModel {
       .map((t) => t.topicId)
       .filter((id): id is string => id !== null);
 
-    const topicsByMessages = await this.db.query.topics.findMany({
-      orderBy: [desc(topics.updatedAt)],
-      where: and(this.ownership(), inArray(topics.id, topicIds)),
-    });
+    const topicsByMessages = await this.db
+      .select(getTableColumns(topics))
+      .from(topics)
+      .leftJoin(agents, eq(topics.agentId, agents.id))
+      .leftJoin(chatGroups, eq(topics.groupId, chatGroups.id))
+      .where(and(this.ownership(), this.resourceAccess(), inArray(topics.id, topicIds)))
+      .orderBy(desc(topics.updatedAt));
 
     // Merge results and deduplicate
     const allTopics = [...topicsByTitle];
@@ -810,9 +906,12 @@ export class TopicModel {
         count: count(topics.id),
       })
       .from(topics)
+      .leftJoin(agents, eq(topics.agentId, agents.id))
+      .leftJoin(chatGroups, eq(topics.groupId, chatGroups.id))
       .where(
         genWhere([
           this.ownership(),
+          this.resourceAccess(),
           agentCondition,
           params?.containerId ? this.matchContainer(params.containerId) : undefined,
           params?.range
@@ -839,8 +938,10 @@ export class TopicModel {
         title: topics.title,
       })
       .from(topics)
-      .where(and(this.ownership()))
       .leftJoin(messages, eq(topics.id, messages.topicId))
+      .leftJoin(agents, eq(topics.agentId, agents.id))
+      .leftJoin(chatGroups, eq(topics.groupId, chatGroups.id))
+      .where(and(this.ownership(), this.resourceAccess()))
       .groupBy(topics.id)
       .orderBy(desc(sql`count`))
       .having(({ count }) => gt(count, 0))
@@ -877,9 +978,11 @@ export class TopicModel {
       })
       .from(topics)
       .leftJoin(agents, eq(topics.agentId, agents.id))
+      .leftJoin(chatGroups, eq(topics.groupId, chatGroups.id))
       .where(
         and(
           this.ownership(),
+          this.resourceAccess(),
           or(
             // Group topics: has groupId
             not(isNull(topics.groupId)),

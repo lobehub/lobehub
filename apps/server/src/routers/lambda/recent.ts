@@ -40,21 +40,28 @@ export const recentRouter = router({
       z
         .object({
           limit: z.number().optional(),
-          /** Restrict a workspace feed to the viewer's own items (mine/team toggle). */
+          /** @deprecated Use `view`; retained for clients deployed before the scope fix. */
           mineOnly: z.boolean().optional(),
           types: z.array(z.enum(['topic', 'document', 'task'])).optional(),
+          view: z.enum(['mine', 'team']).optional(),
           withTopicPreview: z.boolean().optional(),
         })
         .optional(),
     )
     .query(async ({ ctx, input }): Promise<RecentItem[]> => {
       const limit = input?.limit ?? 10;
+      const legacyView =
+        input?.mineOnly === undefined
+          ? undefined
+          : input.mineOnly
+            ? ('mine' as const)
+            : ('team' as const);
 
       const items = await ctx.recentModel.queryRecent(
         limit,
         input?.types,
         input?.withTopicPreview,
-        input?.mineOnly,
+        input?.view ?? legacyView,
       );
 
       return items.map((item) => {

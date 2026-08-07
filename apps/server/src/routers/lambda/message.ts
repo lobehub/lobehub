@@ -27,6 +27,10 @@ import {
   assertCanUseCreateMessageTargets,
   assertCanUseMessageTargets,
   assertCanUseTopicTargets,
+  assertCanViewConversationTargets,
+  assertCanViewSessionTargets,
+  assertCanViewThreadTargets,
+  assertCanViewTopicTargets,
 } from './_helpers/conversationResourceGuard';
 import { resolveAgentIdFromSession, resolveContext } from './_helpers/resolveContext';
 import { basicContextSchema } from './_schema/context';
@@ -321,6 +325,7 @@ export const messageRouter = router({
   diagnoseTopic: messageProcedure
     .input(z.object({ agentId: z.string().nullish(), topicId: z.string() }))
     .query(async ({ ctx, input }) => {
+      await assertCanViewTopicTargets(guardCtx(ctx), [input.topicId]);
       return ctx.topicDoctorRepo.diagnose(input);
     }),
 
@@ -333,6 +338,7 @@ export const messageRouter = router({
     .use(withScopedPermission('message:update'))
     .input(z.object({ agentId: z.string().nullish(), topicId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      await assertCanUseTopicTargets(guardCtx(ctx), [input.topicId]);
       return ctx.topicDoctorRepo.repair(input);
     }),
 
@@ -397,13 +403,26 @@ export const messageRouter = router({
       }
 
       // Authenticated access - require userId
-      if (!ctx.userId) {
+      const userId = ctx.userId;
+      if (!userId) {
         throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Authentication required' });
       }
 
       const wsId = ctx.workspaceId ?? undefined;
-      const messageModel = new MessageModel(ctx.serverDB, ctx.userId, wsId);
-      const fileService = new FileService(ctx.serverDB, ctx.userId, wsId);
+      const messageModel = new MessageModel(ctx.serverDB, userId, wsId);
+      const fileService = new FileService(ctx.serverDB, userId, wsId);
+      const accessCtx = guardCtx({ ...ctx, userId });
+
+      if (queryParams.threadId) {
+        await assertCanViewThreadTargets(accessCtx, [queryParams.threadId]);
+      }
+      if (queryParams.topicId) {
+        await assertCanViewTopicTargets(accessCtx, [queryParams.topicId]);
+      } else if (queryParams.sessionId) {
+        await assertCanViewSessionTargets(accessCtx, [queryParams.sessionId]);
+      } else {
+        await assertCanViewConversationTargets(accessCtx, [queryParams]);
+      }
 
       return messageModel.query(queryParams, {
         postProcessUrl: (path, file) => fileService.getFileAccessUrl({ id: file.id, url: path }),

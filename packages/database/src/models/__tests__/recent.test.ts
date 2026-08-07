@@ -1,13 +1,16 @@
 // @vitest-environment node
+import { sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import {
   agents,
+  agentsToSessions,
   chatGroups,
   documents,
   knowledgeBases,
   messages,
+  sessions,
   tasks,
   topics,
   users,
@@ -658,7 +661,13 @@ describe('RecentModel', () => {
         await serverDB
           .insert(workspaces)
           .values({ id: workspaceId, name: 'ws', primaryOwnerId: userId, slug: workspaceId });
-        await serverDB.insert(agents).values({ id: 'agent-ws', userId, slug: 'inbox' });
+        await serverDB.insert(agents).values({
+          id: 'agent-ws',
+          slug: 'inbox',
+          userId,
+          visibility: 'public',
+          workspaceId,
+        });
         await serverDB.insert(topics).values([
           {
             agentId: 'agent-ws',
@@ -686,11 +695,188 @@ describe('RecentModel', () => {
         expect(result.map((r) => r.userId)).toEqual([userId, otherUserId]);
       });
 
-      it('narrows to the viewer own topics when mineOnly is set', async () => {
-        const result = await workspaceModel.queryRecent(10, ['topic'], false, true);
+      it('narrows to the viewer own topics in Mine', async () => {
+        const result = await workspaceModel.queryRecent(10, ['topic'], false, 'mine');
 
         expect(result.map((r) => r.id)).toEqual(['topic-ws-mine']);
         expect(result[0].userId).toBe(userId);
+      });
+
+      it('keeps the viewer own private topic in the accessible feed', async () => {
+        await serverDB.insert(agents).values([
+          {
+            id: 'agent-ws-private-mine',
+            userId,
+            visibility: 'private',
+            workspaceId,
+          },
+          {
+            id: 'agent-ws-private-other',
+            userId: otherUserId,
+            visibility: 'private',
+            workspaceId,
+          },
+        ]);
+        await serverDB.insert(topics).values([
+          {
+            agentId: 'agent-ws-private-mine',
+            id: 'topic-ws-private-mine',
+            updatedAt: now(),
+            userId,
+            workspaceId,
+          },
+          {
+            agentId: 'agent-ws-private-other',
+            id: 'topic-ws-private-other',
+            updatedAt: now(),
+            userId: otherUserId,
+            workspaceId,
+          },
+        ]);
+
+        const result = await workspaceModel.queryRecent(10, ['topic']);
+
+        expect(result.map((r) => r.id)).toContain('topic-ws-private-mine');
+        expect(result.map((r) => r.id)).not.toContain('topic-ws-private-other');
+      });
+
+      it('excludes private agent and group topics from Team before applying the limit', async () => {
+        await serverDB.insert(agents).values({
+          id: 'agent-ws-private-team',
+          userId,
+          visibility: 'private',
+          workspaceId,
+        });
+        await serverDB.insert(chatGroups).values({
+          id: 'group-ws-private-team',
+          userId,
+          visibility: 'private',
+          workspaceId,
+        });
+        await serverDB.insert(topics).values([
+          {
+            agentId: 'agent-ws-private-team',
+            id: 'topic-ws-private-agent',
+            updatedAt: now(),
+            userId,
+            workspaceId,
+          },
+          {
+            groupId: 'group-ws-private-team',
+            id: 'topic-ws-private-group',
+            updatedAt: now(),
+            userId,
+            workspaceId,
+          },
+        ]);
+
+        const result = await workspaceModel.queryRecent(2, ['topic'], false, 'team');
+
+        expect(result.map((r) => r.id)).toEqual(['topic-ws-mine', 'topic-ws-other']);
+      });
+
+      it('preserves legacy session topic visibility and routing across Mine and Team', async () => {
+        await serverDB.insert(sessions).values([
+          { id: 'recent-legacy-public-session', userId: otherUserId, workspaceId },
+          { id: 'recent-legacy-private-session', userId, workspaceId },
+        ]);
+        await serverDB.insert(agents).values([
+          {
+            id: 'recent-legacy-public-agent',
+            userId: otherUserId,
+            visibility: 'public',
+            workspaceId,
+          },
+          {
+            id: 'recent-legacy-private-agent',
+            userId,
+            visibility: 'private',
+            workspaceId,
+          },
+        ]);
+        await serverDB.insert(agentsToSessions).values([
+          {
+            agentId: 'recent-legacy-public-agent',
+            sessionId: 'recent-legacy-public-session',
+            userId: otherUserId,
+            workspaceId,
+          },
+          {
+            agentId: 'recent-legacy-private-agent',
+            sessionId: 'recent-legacy-private-session',
+            userId,
+            workspaceId,
+          },
+        ]);
+        await serverDB.insert(topics).values([
+          {
+            id: 'recent-legacy-public-topic',
+            sessionId: 'recent-legacy-public-session',
+            updatedAt: now(),
+            userId: otherUserId,
+            workspaceId,
+          },
+          {
+            id: 'recent-legacy-private-topic',
+            sessionId: 'recent-legacy-private-session',
+            updatedAt: now(),
+            userId,
+            workspaceId,
+          },
+        ]);
+
+        const accessible = await workspaceModel.queryRecent(10, ['topic']);
+        const mine = await workspaceModel.queryRecent(10, ['topic'], false, 'mine');
+        const team = await workspaceModel.queryRecent(10, ['topic'], false, 'team');
+
+        expect(accessible).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              id: 'recent-legacy-public-topic',
+              routeId: 'recent-legacy-public-agent',
+            }),
+            expect.objectContaining({
+              id: 'recent-legacy-private-topic',
+              routeId: 'recent-legacy-private-agent',
+            }),
+          ]),
+        );
+        expect(mine).toEqual(
+          expect.arrayContaining([expect.objectContaining({ id: 'recent-legacy-private-topic' })]),
+        );
+        expect(mine.map((item) => item.id)).not.toContain('recent-legacy-public-topic');
+        expect(team).toEqual(
+          expect.arrayContaining([expect.objectContaining({ id: 'recent-legacy-public-topic' })]),
+        );
+        expect(team.map((item) => item.id)).not.toContain('recent-legacy-private-topic');
+      });
+
+      it('treats legacy NULL visibility as public in Team', async () => {
+        await serverDB.execute(sql`ALTER TABLE agents ALTER COLUMN visibility DROP NOT NULL`);
+
+        try {
+          await serverDB.execute(
+            sql`INSERT INTO agents (id, user_id, workspace_id, visibility) VALUES (${'recent-legacy-null-agent'}, ${otherUserId}, ${workspaceId}, NULL)`,
+          );
+          await serverDB.insert(topics).values({
+            agentId: 'recent-legacy-null-agent',
+            id: 'recent-legacy-null-topic',
+            updatedAt: now(),
+            userId: otherUserId,
+            workspaceId,
+          });
+
+          const team = await workspaceModel.queryRecent(10, ['topic'], false, 'team');
+
+          expect(team).toEqual(
+            expect.arrayContaining([expect.objectContaining({ id: 'recent-legacy-null-topic' })]),
+          );
+        } finally {
+          await serverDB.execute(
+            sql`UPDATE agents SET visibility = 'public' WHERE visibility IS NULL`,
+          );
+          await serverDB.execute(sql`ALTER TABLE agents ALTER COLUMN visibility SET NOT NULL`);
+        }
       });
     });
   });

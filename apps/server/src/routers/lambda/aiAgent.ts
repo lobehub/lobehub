@@ -30,6 +30,7 @@ import { unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
 import {
   assertCanUseMessageTargets,
   assertCanUseTopicTargets,
+  assertCanViewThreadTargets,
 } from '@/server/routers/lambda/_helpers/conversationResourceGuard';
 import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/workspaceAgentGuard';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
@@ -1318,6 +1319,11 @@ export const aiAgentRouter = router({
       const { threadId } = input;
 
       log('getSubAgentTaskStatus: threadId=%s', threadId);
+
+      await assertCanViewThreadTargets(
+        { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId },
+        [threadId],
+      );
 
       // 1. Find thread by threadId
       const thread = await ctx.threadModel.findById(threadId);

@@ -24,6 +24,7 @@ import {
   threads,
   topics,
   users,
+  workspaces,
 } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { MessageModel } from '../../message';
@@ -1412,6 +1413,184 @@ describe('MessageModel Query Tests', () => {
       expect(result).toHaveLength(2);
       expect(result[0].id).toBe('2');
       expect(result[1].id).toBe('1');
+    });
+
+    it('does not let direct message targets override private topic visibility', async () => {
+      await serverDB.insert(workspaces).values({
+        id: 'message-list-workspace',
+        name: 'Message List Workspace',
+        primaryOwnerId: userId,
+        slug: 'message-list-workspace',
+      });
+      await serverDB.insert(agents).values([
+        {
+          id: 'message-list-public-agent',
+          userId,
+          visibility: 'public',
+          workspaceId: 'message-list-workspace',
+        },
+        {
+          id: 'message-list-private-agent',
+          userId,
+          visibility: 'private',
+          workspaceId: 'message-list-workspace',
+        },
+      ]);
+      await serverDB.insert(chatGroups).values({
+        id: 'message-list-public-group',
+        title: 'Message List Public Group',
+        userId,
+        visibility: 'public',
+        workspaceId: 'message-list-workspace',
+      });
+      await serverDB.insert(topics).values([
+        {
+          agentId: 'message-list-public-agent',
+          id: 'message-list-public-topic',
+          userId,
+          workspaceId: 'message-list-workspace',
+        },
+        {
+          agentId: 'message-list-private-agent',
+          id: 'message-list-private-topic',
+          userId,
+          workspaceId: 'message-list-workspace',
+        },
+      ]);
+      await serverDB.insert(messages).values([
+        {
+          content: 'public workspace message',
+          id: 'message-list-public-message',
+          role: 'assistant',
+          topicId: 'message-list-public-topic',
+          userId,
+          workspaceId: 'message-list-workspace',
+        },
+        {
+          content: 'private workspace message',
+          id: 'message-list-private-message',
+          role: 'assistant',
+          topicId: 'message-list-private-topic',
+          userId,
+          workspaceId: 'message-list-workspace',
+        },
+        {
+          agentId: 'message-list-public-agent',
+          content: 'private workspace child-agent message',
+          id: 'message-list-private-child-message',
+          role: 'assistant',
+          topicId: 'message-list-private-topic',
+          userId,
+          workspaceId: 'message-list-workspace',
+        },
+        {
+          content: 'private workspace child-group message',
+          groupId: 'message-list-public-group',
+          id: 'message-list-private-child-group-message',
+          role: 'assistant',
+          topicId: 'message-list-private-topic',
+          userId,
+          workspaceId: 'message-list-workspace',
+        },
+      ]);
+
+      const memberModel = new MessageModel(serverDB, otherUserId, 'message-list-workspace');
+
+      await expect(memberModel.queryAll()).resolves.toEqual([
+        expect.objectContaining({ id: 'message-list-public-message' }),
+      ]);
+      if (process.env.TEST_SERVER_DB === '1') {
+        await expect(memberModel.queryByKeyword('workspace')).resolves.toEqual([
+          expect.objectContaining({ id: 'message-list-public-message' }),
+        ]);
+      }
+    });
+
+    it('inherits legacy session visibility from the linked agent', async () => {
+      const workspaceId = 'message-legacy-workspace';
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Message Legacy Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      await serverDB.insert(sessions).values([
+        { id: 'message-legacy-public-session', userId, workspaceId },
+        { id: 'message-legacy-private-session', userId, workspaceId },
+      ]);
+      await serverDB.insert(agents).values([
+        {
+          id: 'message-legacy-public-agent',
+          userId,
+          visibility: 'public',
+          workspaceId,
+        },
+        {
+          id: 'message-legacy-private-agent',
+          userId,
+          visibility: 'private',
+          workspaceId,
+        },
+      ]);
+      await serverDB.insert(agentsToSessions).values([
+        {
+          agentId: 'message-legacy-public-agent',
+          sessionId: 'message-legacy-public-session',
+          userId,
+          workspaceId,
+        },
+        {
+          agentId: 'message-legacy-private-agent',
+          sessionId: 'message-legacy-private-session',
+          userId,
+          workspaceId,
+        },
+      ]);
+      await serverDB.insert(topics).values([
+        {
+          id: 'message-legacy-public-topic',
+          sessionId: 'message-legacy-public-session',
+          userId,
+          workspaceId,
+        },
+        {
+          id: 'message-legacy-private-topic',
+          sessionId: 'message-legacy-private-session',
+          userId,
+          workspaceId,
+        },
+      ]);
+      await serverDB.insert(messages).values([
+        {
+          content: 'legacy public message',
+          createdAt: new Date('2024-01-01'),
+          id: 'message-legacy-public',
+          role: 'assistant',
+          topicId: 'message-legacy-public-topic',
+          userId,
+          workspaceId,
+        },
+        {
+          content: 'legacy private message',
+          createdAt: new Date('2024-01-02'),
+          id: 'message-legacy-private',
+          role: 'assistant',
+          topicId: 'message-legacy-private-topic',
+          userId,
+          workspaceId,
+        },
+      ]);
+
+      const memberModel = new MessageModel(serverDB, otherUserId, workspaceId);
+      const ownerModel = new MessageModel(serverDB, userId, workspaceId);
+
+      await expect(memberModel.queryAll()).resolves.toEqual([
+        expect.objectContaining({ id: 'message-legacy-public' }),
+      ]);
+      await expect(ownerModel.queryAll()).resolves.toEqual([
+        expect.objectContaining({ id: 'message-legacy-private' }),
+        expect.objectContaining({ id: 'message-legacy-public' }),
+      ]);
     });
   });
 

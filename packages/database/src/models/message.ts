@@ -42,6 +42,8 @@ import {
   count,
   desc,
   eq,
+  exists,
+  getTableColumns,
   gt,
   gte,
   inArray,
@@ -49,6 +51,7 @@ import {
   isNull,
   lte,
   not,
+  notExists,
   or,
   sql,
 } from 'drizzle-orm';
@@ -58,7 +61,9 @@ import { sanitizeNullBytes } from '@/utils/sanitizeNullBytes';
 import { today } from '@/utils/time';
 
 import {
+  agents,
   agentsToSessions,
+  chatGroups,
   chunks,
   documents,
   embeddings,
@@ -73,6 +78,7 @@ import {
   messageTranslates,
   messageTTS,
   threads,
+  topics,
   users,
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
@@ -374,6 +380,74 @@ export class MessageModel {
   private ownership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messages);
 
+  private effectiveAgentId = () =>
+    sql<
+      string | null
+    >`CASE WHEN ${messages.topicId} IS NOT NULL THEN ${topics.agentId} ELSE ${messages.agentId} END`;
+
+  private effectiveGroupId = () =>
+    sql<
+      string | null
+    >`CASE WHEN ${messages.topicId} IS NOT NULL THEN ${topics.groupId} ELSE ${messages.groupId} END`;
+
+  /**
+   * Unscoped message lists/searches inherit visibility from the owning topic,
+   * including its legacy session mapping. Messages without a topic use their
+   * direct target instead.
+   * Callers must join `topics`, `agents`, and `chatGroups` before applying this
+   * filter.
+   */
+  private resourceAccess = () => {
+    const workspaceId = this.workspaceId;
+    const scope = { userId: this.userId, workspaceId };
+    const groupId = this.effectiveGroupId();
+    const agentId = this.effectiveAgentId();
+    const creatorId = sql<
+      string | null
+    >`CASE WHEN ${messages.topicId} IS NOT NULL THEN ${topics.userId} ELSE ${messages.userId} END`;
+    const groupAccess = and(isNotNull(groupId), buildWorkspaceWhere(scope, chatGroups));
+    const agentAccess = and(
+      isNull(groupId),
+      isNotNull(agentId),
+      buildWorkspaceWhere(scope, agents),
+    );
+    const noDirectResource = and(isNull(groupId), isNull(agentId));
+
+    if (!workspaceId) {
+      return or(groupAccess, agentAccess, and(noDirectResource, eq(messages.userId, this.userId)));
+    }
+
+    const linkedWorkspaceAgents = (extraCondition?: SQL) =>
+      this.db
+        .select({ agentId: agentsToSessions.agentId })
+        .from(agentsToSessions)
+        .innerJoin(agents, eq(agents.id, agentsToSessions.agentId))
+        .where(
+          and(
+            eq(agentsToSessions.sessionId, topics.sessionId),
+            eq(agents.workspaceId, workspaceId),
+            extraCondition,
+          ),
+        );
+    const hasLinkedWorkspaceAgent = exists(linkedWorkspaceAgents());
+
+    return or(
+      groupAccess,
+      agentAccess,
+      and(
+        noDirectResource,
+        isNotNull(topics.sessionId),
+        hasLinkedWorkspaceAgent,
+        notExists(linkedWorkspaceAgents(not(buildWorkspaceWhere(scope, agents)))),
+      ),
+      and(
+        noDirectResource,
+        eq(creatorId, this.userId),
+        or(isNull(topics.sessionId), not(hasLinkedWorkspaceAgent)),
+      ),
+    );
+  };
+
   private pluginsOwnership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messagePlugins);
 
@@ -439,6 +513,17 @@ export class MessageModel {
       agentCondition = this.matchSession(sessionId);
     }
 
+    // Root/inbox messages have no conversation resource whose visibility can
+    // authorize workspace-wide reads, so they remain private to their creator.
+    const rootCreatorCondition =
+      !agentId &&
+      !groupId &&
+      !topicId &&
+      !threadId &&
+      (!sessionId || sessionId === INBOX_SESSION_ID)
+        ? eq(messages.userId, this.userId)
+        : undefined;
+
     // For thread queries, we need to fetch complete thread data (parent + thread messages)
     if (threadId) {
       const threadCondition = await runTimedStage(
@@ -503,6 +588,7 @@ export class MessageModel {
       conversationCondition,
       this.matchGroup(groupId),
       this.matchThread(threadId),
+      rootCreatorCondition,
     );
 
     const messageItems = await this.queryWithWhere({
@@ -1878,9 +1964,12 @@ export class MessageModel {
     const offset = current * pageSize;
 
     const result = await this.db
-      .select()
+      .select(getTableColumns(messages))
       .from(messages)
-      .where(and(this.ownership()))
+      .leftJoin(topics, eq(messages.topicId, topics.id))
+      .leftJoin(agents, eq(agents.id, this.effectiveAgentId()))
+      .leftJoin(chatGroups, eq(chatGroups.id, this.effectiveGroupId()))
+      .where(and(this.ownership(), this.resourceAccess()))
       .orderBy(desc(messages.createdAt))
       .limit(pageSize)
       .offset(offset);
@@ -1902,9 +1991,14 @@ export class MessageModel {
 
     const bm25Query = sanitizeBm25Query(keyword);
     const result = await this.db
-      .select()
+      .select(getTableColumns(messages))
       .from(messages)
-      .where(and(this.ownership(), sql`${messages.content} @@@ ${bm25Query}`))
+      .leftJoin(topics, eq(messages.topicId, topics.id))
+      .leftJoin(agents, eq(agents.id, this.effectiveAgentId()))
+      .leftJoin(chatGroups, eq(chatGroups.id, this.effectiveGroupId()))
+      .where(
+        and(this.ownership(), this.resourceAccess(), sql`${messages.content} @@@ ${bm25Query}`),
+      )
       .orderBy(desc(messages.createdAt));
 
     return result as DBMessageItem[];

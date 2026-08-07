@@ -6,6 +6,7 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { MessageModel } from '@/database/models/message';
 import { ThreadModel } from '@/database/models/thread';
 import { updateThreadSchema } from '@/database/schemas';
+import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { type ThreadItem } from '@/types/topic/thread';
@@ -13,6 +14,16 @@ import { createThreadSchema } from '@/types/topic/thread';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+import {
+  assertCanUseTopicTargets,
+  assertCanViewTopicTargets,
+} from './_helpers/conversationResourceGuard';
+
+const guardCtx = (ctx: {
+  serverDB: LobeChatDatabase;
+  userId: string;
+  workspaceId?: string | null;
+}) => ({ db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId });
 
 /**
  * `ThreadModel.create` uses `onConflictDoNothing()` and returns undefined when
@@ -54,6 +65,8 @@ export const threadRouter = router({
     .use(withScopedPermission('topic:create'))
     .input(createThreadSchema)
     .mutation(async ({ input, ctx }) => {
+      await assertCanUseTopicTargets(guardCtx(ctx), [input.topicId]);
+
       const thread = ensureThreadCreated(
         await ctx.threadModel.create({
           id: input.id,
@@ -77,6 +90,8 @@ export const threadRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      await assertCanUseTopicTargets(guardCtx(ctx), [input.topicId]);
+
       const thread = ensureThreadCreated(
         await ctx.threadModel.create({
           id: input.id,
@@ -101,6 +116,7 @@ export const threadRouter = router({
   getThreads: threadProcedure
     .input(z.object({ topicId: z.string() }))
     .query(async ({ input, ctx }) => {
+      await assertCanViewTopicTargets(guardCtx(ctx), [input.topicId]);
       return ctx.threadModel.queryByTopicId(input.topicId);
     }),
 

@@ -34,6 +34,7 @@ vi.mock('@/database/core/db-adaptor', () => ({
 describe('Message Router Integration Tests', () => {
   let serverDB: LobeChatDatabase;
   let userId: string;
+  let otherUserId: string | undefined;
   let testSessionId: string;
   let testTopicId: string;
   let testAgentId: string;
@@ -42,6 +43,7 @@ describe('Message Router Integration Tests', () => {
     serverDB = await getTestDB();
     testDB = serverDB; // Set the test DB for the mock
     userId = await createTestUser(serverDB);
+    otherUserId = undefined;
 
     // Create test agent
     const { agents } = await import('@/database/schemas');
@@ -86,6 +88,7 @@ describe('Message Router Integration Tests', () => {
 
   afterEach(async () => {
     await cleanupTestUser(serverDB, userId);
+    if (otherUserId) await cleanupTestUser(serverDB, otherUserId);
   });
 
   describe('createMessage', () => {
@@ -627,6 +630,82 @@ describe('Message Router Integration Tests', () => {
         const page2Ids = page2.map((m) => m.id);
         expect(page1Ids).not.toEqual(page2Ids);
       }
+    });
+
+    it('does not expose private agent topic messages to another workspace member', async () => {
+      const { agents, workspaceMembers, workspaces } = await import('@/database/schemas');
+      otherUserId = await createTestUser(serverDB);
+      const [workspace] = await serverDB
+        .insert(workspaces)
+        .values({ name: 'Private message workspace', primaryOwnerId: userId, slug: userId })
+        .returning();
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'owner', userId, workspaceId: workspace.id },
+        { role: 'member', userId: otherUserId, workspaceId: workspace.id },
+      ]);
+      await serverDB.insert(agents).values({
+        id: 'private-workspace-message-agent',
+        userId,
+        visibility: 'private',
+        workspaceId: workspace.id,
+      });
+      await serverDB.insert(topics).values({
+        agentId: 'private-workspace-message-agent',
+        id: 'private-workspace-message-topic',
+        userId,
+        workspaceId: workspace.id,
+      });
+      const { threads } = await import('@/database/schemas');
+      await serverDB.insert(threads).values({
+        id: 'private-workspace-message-thread',
+        topicId: 'private-workspace-message-topic',
+        type: 'continuation',
+        userId,
+        workspaceId: workspace.id,
+      });
+      await serverDB.insert(messages).values({
+        agentId: 'private-workspace-message-agent',
+        content: 'private workspace content',
+        id: 'private-workspace-message',
+        role: 'assistant',
+        topicId: 'private-workspace-message-topic',
+        userId,
+        workspaceId: workspace.id,
+      });
+      await serverDB.insert(messages).values({
+        agentId: 'private-workspace-message-agent',
+        content: 'private workspace thread content',
+        id: 'private-workspace-thread-message',
+        role: 'assistant',
+        threadId: 'private-workspace-message-thread',
+        topicId: 'private-workspace-message-topic',
+        userId,
+        workspaceId: workspace.id,
+      });
+
+      const ownerCaller = messageRouter.createCaller({
+        ...createTestContext(userId),
+        workspaceId: workspace.id,
+      });
+      const otherCaller = messageRouter.createCaller({
+        ...createTestContext(otherUserId),
+        workspaceId: workspace.id,
+      });
+
+      await expect(
+        ownerCaller.getMessages({ topicId: 'private-workspace-message-topic' }),
+      ).resolves.toEqual([expect.objectContaining({ content: 'private workspace content' })]);
+      await expect(
+        otherCaller.getMessages({ topicId: 'private-workspace-message-topic' }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(
+        ownerCaller.getMessages({ threadId: 'private-workspace-message-thread' }),
+      ).resolves.toEqual([
+        expect.objectContaining({ content: 'private workspace thread content' }),
+      ]);
+      await expect(
+        otherCaller.getMessages({ threadId: 'private-workspace-message-thread' }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     });
 
     it('should return workspace topic messages via topicShareId for a link share', async () => {

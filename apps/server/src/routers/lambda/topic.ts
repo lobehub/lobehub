@@ -44,6 +44,9 @@ import {
   assertCanUseConversationTargets,
   assertCanUseSessionTargets,
   assertCanUseTopicTargets,
+  assertCanViewConversationTargets,
+  assertCanViewSessionTargets,
+  assertCanViewTopicTargets,
 } from './_helpers/conversationResourceGuard';
 import {
   batchResolveAgentIdFromSessions,
@@ -145,6 +148,7 @@ export const topicRouter = router({
   getTopicDetail: topicProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ input, ctx }) => {
+      await assertCanViewTopicTargets(guardCtx(ctx), [input.id]);
       const topic = await ctx.topicModel.findById(input.id);
       if (!topic) return null;
       return topic;
@@ -160,6 +164,7 @@ export const topicRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
+      await assertCanViewTopicTargets(guardCtx(ctx), [input.topicId]);
       const topic = await ctx.topicModel.findById(input.topicId);
 
       if (!topic) {
@@ -185,6 +190,7 @@ export const topicRouter = router({
   getTopicContext: topicProcedure
     .input(z.object({ topicId: z.string() }))
     .query(async ({ input, ctx }) => {
+      await assertCanViewTopicTargets(guardCtx(ctx), [input.topicId]);
       const topic = await ctx.topicModel.findById(input.topicId);
 
       if (!topic) {
@@ -478,6 +484,7 @@ export const topicRouter = router({
   getShareInfo: topicProcedure
     .input(z.object({ topicId: z.string() }))
     .query(async ({ input, ctx }) => {
+      await assertCanViewTopicTargets(guardCtx(ctx), [input.topicId]);
       return ctx.topicShareModel.getByTopicId(input.topicId);
     }),
 
@@ -521,6 +528,7 @@ export const topicRouter = router({
 
       // If groupId is provided, query by groupId directly
       if (groupId) {
+        await assertCanViewConversationTargets(guardCtx(ctx), [{ groupId }]);
         const result = await ctx.topicModel.query({
           excludeStatuses,
           excludeTriggers,
@@ -541,6 +549,12 @@ export const topicRouter = router({
           ctx.userId,
           ctx.workspaceId ?? undefined,
         );
+      }
+
+      if (effectiveAgentId) {
+        await assertCanViewConversationTargets(guardCtx(ctx), [{ agentId: effectiveAgentId }]);
+      } else if (sessionId) {
+        await assertCanViewSessionTargets(guardCtx(ctx), [sessionId]);
       }
 
       const result = await ctx.topicModel.query({
@@ -838,6 +852,14 @@ export const topicRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
+      if (input.groupId) {
+        await assertCanViewConversationTargets(guardCtx(ctx), [{ groupId: input.groupId }]);
+      } else if (input.agentId) {
+        await assertCanViewConversationTargets(guardCtx(ctx), [{ agentId: input.agentId }]);
+      } else if (input.sessionId) {
+        await assertCanViewSessionTargets(guardCtx(ctx), [input.sessionId]);
+      }
+
       const resolved = await resolveContext(
         { agentId: input.agentId, sessionId: input.sessionId },
         ctx.serverDB,

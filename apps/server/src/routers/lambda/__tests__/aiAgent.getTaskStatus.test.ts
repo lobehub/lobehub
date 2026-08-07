@@ -7,6 +7,8 @@ import {
   sessions,
   threads,
   topics,
+  workspaceMembers,
+  workspaces,
 } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { ThreadStatus, ThreadType } from '@lobechat/types';
@@ -42,6 +44,7 @@ vi.mock('@/server/services/aiChat', () => ({
 
 describe('aiAgentRouter.getSubAgentTaskStatus', () => {
   let serverDB: LobeChatDatabase;
+  let otherUserId: string | undefined;
   let userId: string;
   let testAgentId: string;
   let testGroupId: string;
@@ -52,6 +55,7 @@ describe('aiAgentRouter.getSubAgentTaskStatus', () => {
     serverDB = await getTestDB();
     testDB = serverDB;
     userId = await createTestUser(serverDB);
+    otherUserId = undefined;
 
     // Create test agent
     const [agent] = await serverDB
@@ -114,6 +118,7 @@ describe('aiAgentRouter.getSubAgentTaskStatus', () => {
 
   afterEach(async () => {
     await cleanupTestUser(serverDB, userId);
+    if (otherUserId) await cleanupTestUser(serverDB, otherUserId);
     vi.clearAllMocks();
   });
 
@@ -144,6 +149,48 @@ describe('aiAgentRouter.getSubAgentTaskStatus', () => {
           threadId: 'non-existent-thread-id',
         }),
       ).rejects.toThrow('Thread not found');
+    });
+
+    it('rejects another workspace member reading a private agent thread status', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const [workspace] = await serverDB
+        .insert(workspaces)
+        .values({ name: 'Private task workspace', primaryOwnerId: userId, slug: userId })
+        .returning();
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'owner', userId, workspaceId: workspace.id },
+        { role: 'member', userId: otherUserId, workspaceId: workspace.id },
+      ]);
+      await serverDB.insert(agents).values({
+        id: 'private-task-status-agent',
+        userId,
+        visibility: 'private',
+        workspaceId: workspace.id,
+      });
+      await serverDB.insert(topics).values({
+        agentId: 'private-task-status-agent',
+        id: 'private-task-status-topic',
+        userId,
+        workspaceId: workspace.id,
+      });
+      await serverDB.insert(threads).values({
+        id: 'private-task-status-thread',
+        status: ThreadStatus.Processing,
+        topicId: 'private-task-status-topic',
+        type: ThreadType.Isolation,
+        userId,
+        workspaceId: workspace.id,
+      });
+
+      const caller = aiAgentRouter.createCaller({
+        jwtPayload: { userId: otherUserId },
+        userId: otherUserId,
+        workspaceId: workspace.id,
+      });
+
+      await expect(
+        caller.getSubAgentTaskStatus({ threadId: 'private-task-status-thread' }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     });
 
     it('should return completed status from Thread', async () => {

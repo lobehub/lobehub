@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { INBOX_SESSION_ID } from '@lobechat/const';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
@@ -81,6 +82,48 @@ describe('MessageModel workspace scope', () => {
         topicId: 'workspace-topic',
       }),
     ).resolves.toEqual([expect.objectContaining({ id: 'workspace-message' })]);
+  });
+
+  it('scopes root and inbox messages to their creator', async () => {
+    const memberId = 'message-workspace-root-member';
+    await serverDB.insert(users).values({ id: memberId });
+    await serverDB.insert(messages).values([
+      {
+        content: 'owner root message',
+        id: 'owner-root-message',
+        role: 'user',
+        userId,
+        workspaceId,
+      },
+      {
+        content: 'member root message',
+        id: 'member-root-message',
+        role: 'user',
+        userId: memberId,
+        workspaceId,
+      },
+      {
+        content: 'shared topic message',
+        id: 'shared-topic-message',
+        role: 'user',
+        sessionId: 'workspace-session',
+        topicId: 'workspace-topic',
+        userId,
+        workspaceId,
+      },
+    ]);
+
+    const memberModel = new MessageModel(serverDB, memberId, workspaceId);
+
+    await expect(memberModel.query({})).resolves.toEqual([
+      expect.objectContaining({ id: 'member-root-message' }),
+    ]);
+    await expect(memberModel.query({ sessionId: INBOX_SESSION_ID })).resolves.toEqual([
+      expect.objectContaining({ id: 'member-root-message' }),
+    ]);
+    await expect(memberModel.query({ topicId: 'workspace-topic' })).resolves.toEqual([
+      expect.objectContaining({ id: 'shared-topic-message' }),
+    ]);
   });
 
   describe('message file references after a visibility flip', () => {

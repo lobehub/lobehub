@@ -1,7 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { agents, agentsToSessions, messages, sessions, topics, users } from '../../../schemas';
+import {
+  agents,
+  agentsToSessions,
+  messages,
+  sessions,
+  topics,
+  users,
+  workspaces,
+} from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { TopicModel } from '../../topic';
 
@@ -99,6 +107,64 @@ describe('TopicModel - Stats', () => {
         const result = await topicModel.count({ agentId: 'empty-agent' });
         expect(result).toBe(0);
       });
+    });
+
+    it('counts only topics whose resources are visible in a workspace', async () => {
+      const workspaceId = 'topic-count-workspace';
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Topic Count Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      await serverDB.insert(agents).values([
+        {
+          id: 'count-workspace-public-agent',
+          userId,
+          visibility: 'public',
+          workspaceId,
+        },
+        {
+          id: 'count-workspace-private-agent',
+          userId,
+          visibility: 'private',
+          workspaceId,
+        },
+        {
+          id: 'count-workspace-own-private-agent',
+          userId: userId2,
+          visibility: 'private',
+          workspaceId,
+        },
+      ]);
+      await serverDB.insert(topics).values([
+        {
+          agentId: 'count-workspace-public-agent',
+          id: 'count-workspace-public-topic',
+          userId,
+          workspaceId,
+        },
+        {
+          agentId: 'count-workspace-private-agent',
+          id: 'count-workspace-private-topic',
+          userId,
+          workspaceId,
+        },
+        {
+          agentId: 'count-workspace-own-private-agent',
+          id: 'count-workspace-own-private-topic',
+          userId: userId2,
+          workspaceId,
+        },
+      ]);
+
+      const memberModel = new TopicModel(serverDB, userId2, workspaceId);
+
+      await expect(memberModel.count()).resolves.toBe(2);
+      await expect(memberModel.count({ agentId: 'count-workspace-private-agent' })).resolves.toBe(
+        0,
+      );
+      await expect(memberModel.count({ agentId: 'count-workspace-public-agent' })).resolves.toBe(1);
     });
   });
 
