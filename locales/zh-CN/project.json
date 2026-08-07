@@ -1,0 +1,16 @@
+{
+  "create.action": "创建项目",
+  "create.namePlaceholder": "你正在推进什么事情？",
+  "create.title": "新建项目",
+  "disabled.action": "前往实验室开启",
+  "disabled.title": "项目工作空间目前处于 Alpha 阶段",
+  "overview.noDescription": "一个围绕长期目标组织工作的独立空间。",
+  "overview.openTasks": "打开任务工作台",
+  "overview.tasksEmpty": "这个项目还没有关联任务。",
+  "overview.tasksTitle": "项目任务",
+  "sections.agents": "智能体",
+  "sections.knowledgeBases": "资料库",
+  "sections.tasks": "任务",
+  "sidebar.emptyAction": "创建第一个项目",
+  "sidebar.title": "项目"
+}

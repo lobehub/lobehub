@@ -811,6 +811,16 @@ export const sharedMainAreaChildren: RouteObject[] = [
 
   // Task workspace routes (cross-agent)
   {
+    element: dynamicElement(
+      () => import('@/routes/(main)/project/[projectId]'),
+      'Desktop > Project Workspace',
+      { preloadId: 'project' },
+    ),
+    errorElement: <ErrorBoundary resetPath=".." />,
+    path: 'project/:projectId',
+  },
+
+  {
     children: [
       {
         children: [

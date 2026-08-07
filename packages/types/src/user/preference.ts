@@ -202,6 +202,10 @@ export const UserLabSchema = z.object({
    */
   enableOAuthApps: z.boolean().optional(),
   /**
+   * enable the project workspace experiment
+   */
+  enableProjects: z.boolean().optional(),
+  /**
    * enable the task delivery-acceptance (verify) config UI on the task detail
    */
   enableTaskVerify: z.boolean().optional(),

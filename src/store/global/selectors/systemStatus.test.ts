@@ -198,6 +198,7 @@ describe('systemStatusSelectors', () => {
         status: { sidebarItems: stored },
       });
       expect(systemStatusSelectors.sidebarItems(null)(s)).toEqual([
+        'project',
         'private',
         'agent',
         'recents',
@@ -214,6 +215,7 @@ describe('systemStatusSelectors', () => {
     it('should preserve a canonically-positioned spacer', () => {
       const stored = [
         'pages',
+        'project',
         'recents',
         'private',
         'agent',
@@ -251,6 +253,7 @@ describe('systemStatusSelectors', () => {
       expect(systemStatusSelectors.sidebarItems(null)(s)).toEqual([
         'tasks',
         'pages',
+        'project',
         'recents',
         'private',
         'agent',
@@ -293,6 +296,7 @@ describe('systemStatusSelectors', () => {
       // accordion slot uses the user's legacy order; `private` (added after
       // the legacy state was saved) is backfilled at the head of the block.
       expect(items).toEqual([
+        'project',
         'tasks',
         'resource',
         'private',
@@ -314,6 +318,7 @@ describe('systemStatusSelectors', () => {
       // `private` (new accordion entry not present in legacy state) is
       // backfilled at the head of the block; recents/agent keep legacy order.
       expect(items).toEqual([
+        'project',
         'tasks',
         'resource',
         'private',

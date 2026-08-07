@@ -1,0 +1,16 @@
+{
+  "create.action": "Create project",
+  "create.namePlaceholder": "What are you working on?",
+  "create.title": "New project",
+  "disabled.action": "Enable in Labs",
+  "disabled.title": "Project workspaces are an Alpha experiment",
+  "overview.noDescription": "A dedicated workspace for this long-running goal.",
+  "overview.openTasks": "Open task workspace",
+  "overview.tasksEmpty": "No tasks belong to this project yet.",
+  "overview.tasksTitle": "Project tasks",
+  "sections.agents": "Agents",
+  "sections.knowledgeBases": "Libraries",
+  "sections.tasks": "Tasks",
+  "sidebar.emptyAction": "Create your first project",
+  "sidebar.title": "Projects"
+}

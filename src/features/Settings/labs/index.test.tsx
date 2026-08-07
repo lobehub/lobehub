@@ -165,7 +165,7 @@ describe('Labs settings page', () => {
 
     const alphaTags = screen.getAllByText('stage.alpha.label');
     const betaTags = screen.getAllByText('stage.beta.label');
-    // Every toggle carries exactly one stage tag (6 general + 6 desktop).
+    // Every toggle carries exactly one stage tag.
     expect(alphaTags.length + betaTags.length).toBe(12);
   });
 
