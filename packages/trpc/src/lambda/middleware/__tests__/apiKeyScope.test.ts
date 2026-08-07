@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createCallerFactory } from '@/libs/trpc/lambda';
+import { createCallerFactory, publicProcedure } from '@/libs/trpc/lambda';
 import { trpc } from '@/libs/trpc/lambda/init';
 
 import { apiKeyScopeGuard } from '../apiKeyScope';
@@ -22,6 +22,11 @@ const testRouter = trpc.router({
     createApiKey: guarded.mutation(() => 'minted'),
   }),
   healthcheck: guarded.query(() => 'ok'),
+  // public procedures can still serve authenticated data off ctx.userId, so
+  // the real `publicProcedure` must carry the guard as well
+  message: trpc.router({
+    getMessages: publicProcedure.query(() => 'messages'),
+  }),
   unknownNamespace: trpc.router({
     doThing: guarded.mutation(() => 'done'),
   }),
@@ -99,6 +104,29 @@ describe('apiKeyScopeGuard', () => {
       const caller = createCaller({ apiKeyScopes: ['agent:read'], userId: 'user-1' } as any);
 
       await expect(caller.healthcheck()).resolves.toBe('ok');
+    });
+  });
+
+  describe('publicProcedure', () => {
+    it('anonymous access is untouched', async () => {
+      const caller = createCaller({} as any);
+
+      await expect(caller.message.getMessages()).resolves.toBe('messages');
+    });
+
+    it('enforces scopes for API-key-authenticated calls', async () => {
+      const caller = createCaller({ apiKeyScopes: ['agent:read'], userId: 'user-1' } as any);
+
+      await expect(caller.message.getMessages()).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: expect.stringContaining('chat:read'),
+      });
+    });
+
+    it('allows API-key calls holding the required scope', async () => {
+      const caller = createCaller({ apiKeyScopes: ['chat:read'], userId: 'user-1' } as any);
+
+      await expect(caller.message.getMessages()).resolves.toBe('messages');
     });
   });
 });

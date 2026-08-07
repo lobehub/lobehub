@@ -27,7 +27,11 @@ export const router = trpc.router;
  **/
 const baseProcedure = trpc.procedure.use(openTelemetry);
 
-export const publicProcedure = baseProcedure;
+// `apiKeyScopeGuard` also covers public procedures: `createLambdaContext`
+// authenticates an `X-API-Key` before procedure selection, and several public
+// procedures serve authenticated data off `ctx.userId`. The guard is a no-op
+// without API-key auth, so anonymous access is untouched.
+export const publicProcedure = baseProcedure.use(apiKeyScopeGuard);
 
 // procedure that asserts that the user is logged in
 // `apiKeyScopeGuard` narrows API-key-authenticated calls to the key's scopes;
