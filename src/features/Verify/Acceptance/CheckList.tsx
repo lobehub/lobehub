@@ -648,9 +648,7 @@ const IterationTimeline = memo<{
   evidenceById: Map<string, AcceptanceEvidence>;
   historyReviews: AcceptanceCheckReviewEntry[];
   onRound?: (round: number) => void;
-  /** Open an agent judge's verification run (its trace IS the argument). */
-  onOpenTrace?: (verifierOperationId: string) => void | Promise<void>;
-}>(({ check, evidenceById, historyReviews, onOpenTrace, onRound }) => {
+}>(({ check, evidenceById, historyReviews, onRound }) => {
   const { t } = useTranslation('verify');
 
   const merged: HistoryStep[] = [
@@ -1377,7 +1375,6 @@ const CheckRow = memo<{
                 check={check}
                 evidenceById={evidenceById}
                 historyReviews={historyReviews}
-                onOpenTrace={onOpenTrace}
                 onRound={onRound}
               />
             )}

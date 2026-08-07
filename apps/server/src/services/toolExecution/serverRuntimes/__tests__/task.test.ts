@@ -83,7 +83,10 @@ describe('createTaskRuntime', () => {
       expect(taskModel.updateTaskConfig.mock.invocationCallOrder[0]).toBeLessThan(
         taskCaller.updateVerifyConfig.mock.invocationCallOrder[0],
       );
-      expect(result.state).toEqual(
+      // The success branch is the only one carrying `state`; narrow to it so
+      // this asserts the shape rather than the union.
+      expect(result).toHaveProperty('state');
+      expect((result as { state: unknown }).state).toEqual(
         expect.objectContaining({ identifier: 'T-1', success: true, taskId: 'task-db-1' }),
       );
     });
