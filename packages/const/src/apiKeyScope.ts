@@ -313,6 +313,11 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
   'generationBatch.deleteGenerationBatch': ['file:write'],
   'generationTopic.deleteTopic': ['file:write'],
   'generationTopic.updateTopic': ['file:write'],
+  // Market tool-execution surface (mounted on the tools router): external
+  // tool calls burn quota / cause side effects; file export writes files
+  'market.callCloudMcpEndpoint': ['model:invoke'],
+  'market.connectCallTool': ['model:invoke'],
+  'market.exportAndUploadFile': ['file:write'],
   // executes a server-side MCP tool call with caller-supplied endpoint/args —
   // a model-only key must not trigger arbitrary tool side effects
   'mcp.callTool': ['agent:write'],
@@ -346,6 +351,10 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
  * blocked here by path prefix.
  */
 export const TRPC_BLOCKED_PATH_PREFIXES: string[] = [
+  // sandbox execution mints a full LOBEHUB_JWT for `lh` commands
+  // (`preprocessLhCommand`), which would bypass the key's scopes entirely
+  'market.callCodeInterpreterTool',
+  'market.execInSandbox',
   // marketplace credential management: list/decrypt/create/delete/share/inject
   // of external credentials — same class as the blocked connector/composio surfaces
   'market.creds.',
