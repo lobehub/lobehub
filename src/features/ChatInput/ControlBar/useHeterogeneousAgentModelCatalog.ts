@@ -25,6 +25,7 @@ const fingerprintConfig = (provider: HeterogeneousProviderConfig | undefined) =>
 interface UseHeterogeneousAgentModelCatalogParams {
   cwd?: string;
   deviceId?: string;
+  isDeviceListLoading: boolean;
   isPreferenceLoading: boolean;
   open: boolean;
   provider?: HeterogeneousProviderConfig;
@@ -33,12 +34,14 @@ interface UseHeterogeneousAgentModelCatalogParams {
 }
 
 /**
- * Preload after the member's effective target settles, then revalidate a failed
- * preload if the user opens the selector after the target becomes available.
+ * Preload after the member's effective target and device directory settle, then
+ * revalidate a failed preload if the user opens the selector after the target
+ * becomes available.
  */
 export const useHeterogeneousAgentModelCatalog = ({
   cwd,
   deviceId,
+  isDeviceListLoading,
   isPreferenceLoading,
   open,
   provider,
@@ -47,7 +50,7 @@ export const useHeterogeneousAgentModelCatalog = ({
 }: UseHeterogeneousAgentModelCatalogParams) => {
   const wasOpenRef = useRef(open);
   const response = useSWR(
-    targetReady && !isPreferenceLoading
+    targetReady && !isDeviceListLoading && !isPreferenceLoading
       ? [
           'heterogeneous-agent-model-catalog',
           type,

@@ -34,6 +34,7 @@ describe('useHeterogeneousAgentModelCatalog', () => {
       const { result } = renderHook(
         () =>
           useHeterogeneousAgentModelCatalog({
+            isDeviceListLoading: false,
             isPreferenceLoading: false,
             open: false,
             provider: { type },
@@ -54,6 +55,7 @@ describe('useHeterogeneousAgentModelCatalog', () => {
     const { result } = renderHook(
       () =>
         useHeterogeneousAgentModelCatalog({
+          isDeviceListLoading: false,
           isPreferenceLoading: true,
           open: false,
           provider: { type: 'opencode' },
@@ -69,12 +71,54 @@ describe('useHeterogeneousAgentModelCatalog', () => {
     expect(result.current.isLoading).toBe(false);
   });
 
+  it('waits for the device default directory before preloading the catalog', async () => {
+    const pendingCatalog = new Promise<
+      Awaited<ReturnType<typeof heterogeneousAgentCatalogService.listModels>>
+    >(() => {});
+    const listModels = vi
+      .spyOn(heterogeneousAgentCatalogService, 'listModels')
+      .mockReturnValue(pendingCatalog);
+    const initialProps: { cwd?: string; isDeviceListLoading: boolean } = {
+      cwd: undefined,
+      isDeviceListLoading: true,
+    };
+
+    const { rerender } = renderHook(
+      ({ cwd, isDeviceListLoading }: { cwd?: string; isDeviceListLoading: boolean }) =>
+        useHeterogeneousAgentModelCatalog({
+          cwd,
+          deviceId: 'device-1',
+          isDeviceListLoading,
+          isPreferenceLoading: false,
+          open: false,
+          provider: { type: 'opencode' },
+          targetReady: true,
+          type: 'opencode',
+        }),
+      {
+        initialProps,
+        wrapper: createWrapper(),
+      },
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(listModels).not.toHaveBeenCalled();
+
+    rerender({ cwd: '/repo/device-default', isDeviceListLoading: false });
+
+    await waitFor(() => expect(listModels).toHaveBeenCalledTimes(1));
+    expect(listModels).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: '/repo/device-default', deviceId: 'device-1' }),
+    );
+  });
+
   it('does not load a catalog until its execution target is ready', async () => {
     const listModels = vi.spyOn(heterogeneousAgentCatalogService, 'listModels');
 
     renderHook(
       () =>
         useHeterogeneousAgentModelCatalog({
+          isDeviceListLoading: false,
           isPreferenceLoading: false,
           open: false,
           provider: { type: 'opencode' },
@@ -112,6 +156,7 @@ describe('useHeterogeneousAgentModelCatalog', () => {
     const { rerender, result } = renderHook(
       ({ open }) =>
         useHeterogeneousAgentModelCatalog({
+          isDeviceListLoading: false,
           isPreferenceLoading: false,
           open,
           provider: { type: 'qoder' },
