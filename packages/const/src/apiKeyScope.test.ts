@@ -155,6 +155,18 @@ describe('requiredApiKeyScopeForTrpc', () => {
     });
   });
 
+  it('blocks sensitive nested sub-surfaces regardless of the parent namespace', () => {
+    expect(requiredApiKeyScopeForTrpc('market.creds.list', 'query')).toEqual({ blocked: true });
+    expect(requiredApiKeyScopeForTrpc('market.creds.createKV', 'mutation')).toEqual({
+      blocked: true,
+    });
+    expect(requiredApiKeyScopeForTrpc('market.oidc.getToken', 'query')).toEqual({ blocked: true });
+    // the rest of the market surface keeps its agent scopes
+    expect(requiredApiKeyScopeForTrpc('market.getAgentsByPlugin', 'query')).toEqual({
+      scopes: ['agent:read'],
+    });
+  });
+
   it('fails closed on unknown namespaces', () => {
     expect(requiredApiKeyScopeForTrpc('brandNewRouter.doThing', 'mutation')).toEqual({
       blocked: true,

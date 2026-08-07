@@ -336,6 +336,20 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
   'webBrowsing.upsertCrawledDocument': ['knowledge:write'],
 };
 
+/**
+ * Nested sub-surfaces denied to restricted keys regardless of the parent
+ * namespace rule. The namespace table only sees the first path segment, so
+ * sensitive subrouters mounted inside an otherwise-scoped namespace must be
+ * blocked here by path prefix.
+ */
+export const TRPC_BLOCKED_PATH_PREFIXES: string[] = [
+  // marketplace credential management: list/decrypt/create/delete/share/inject
+  // of external credentials — same class as the blocked connector/composio surfaces
+  'market.creds.',
+  // marketplace OIDC auth flows carry tokens
+  'market.oidc.',
+];
+
 export type TrpcScopeDecision = { scopes: ApiKeyScope[] } | { open: true } | { blocked: true };
 
 /**
@@ -347,6 +361,9 @@ export const requiredApiKeyScopeForTrpc = (
   path: string,
   type: 'query' | 'mutation' | 'subscription',
 ): TrpcScopeDecision => {
+  if (TRPC_BLOCKED_PATH_PREFIXES.some((prefix) => path.startsWith(prefix)))
+    return { blocked: true };
+
   const namespace = path.split('.')[0];
   const rule = TRPC_NAMESPACE_API_KEY_RULES[namespace];
 
