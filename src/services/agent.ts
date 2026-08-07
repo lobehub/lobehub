@@ -314,11 +314,34 @@ class AgentService {
     return lambdaClient.agent.rankAgents.query(limit);
   };
 
+  /**
+   * Async history-backfill progress for a transferred agent (null when no
+   * backfill is running), including the topic ids still awaiting migration.
+   */
+  getTransferJobStatus = async (
+    agentId: string,
+  ): Promise<{
+    completedTopics: number;
+    jobId: string;
+    pendingTopicIds: string[];
+    totalTopics: number;
+  } | null> => {
+    return lambdaClient.agent.getTransferJobStatus.query({ agentId });
+  };
+
+  /**
+   * The user opened a topic whose history is still migrating — jump it to the
+   * front of the backfill queue. `pending: false` means it already migrated.
+   */
+  prioritizeTransferTopic = async (topicId: string): Promise<{ pending: boolean }> => {
+    return lambdaClient.agent.prioritizeTransferTopic.mutate({ topicId });
+  };
+
   transferAgent = async (
     agentId: string,
     targetWorkspaceId: string | null,
     targetVisibility?: 'private' | 'public',
-  ): Promise<{ agentId: string; slug: string | null }> => {
+  ): Promise<{ agentId: string; slug: string | null; transferJobId: string | null }> => {
     return lambdaClient.agent.transferAgent.mutate({
       agentId,
       targetVisibility,
@@ -334,7 +357,7 @@ class AgentService {
     agentIds: string[],
     targetWorkspaceId: string | null,
     targetVisibility?: 'private' | 'public',
-  ): Promise<{ agentId: string; slug: string | null }[]> => {
+  ): Promise<{ agentId: string; slug: string | null; transferJobId: string | null }[]> => {
     return lambdaClient.agent.transferAgents.mutate({
       agentIds,
       targetVisibility,

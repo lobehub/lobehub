@@ -239,6 +239,8 @@ export default {
   'transfer.ownerOnly': 'Only workspace owners can transfer resources created by other members.',
   'transfer.resourceNotFound':
     'This resource no longer exists or you no longer have access. Refresh and try again.',
+  'transfer.transferInProgress':
+    'A previous move of this resource is still migrating its history. Try again once it finishes.',
   'transfer.sameWorkspace':
     'This resource is already in the selected workspace. Choose another target.',
   'transfer.targetNoWriteAccess':

@@ -125,6 +125,7 @@
   "transfer.resourceNotFound": "هذا المورد لم يعد موجودًا أو لم يعد لديك حق الوصول إليه. قم بالتحديث وحاول مرة أخرى.",
   "transfer.sameWorkspace": "هذا المورد موجود بالفعل في مساحة العمل المحددة. اختر هدفًا آخر.",
   "transfer.targetNoWriteAccess": "تحتاج إلى وصول كعضو أو مالك لنقل الموارد إلى مساحة العمل المستهدفة.",
+  "transfer.transferInProgress": "لا يزال النقل السابق لهذه المورد يقوم بترحيل تاريخه. حاول مرة أخرى بمجرد الانتهاء.",
   "tts.responseError": "فشل طلب الخدمة، يرجى التحقق من الإعدادات أو إعادة المحاولة.",
   "unknownError.copyTraceId": "تم نسخ معرف التتبع",
   "unknownError.copyTraceIdTooltip": "انقر للنسخ",

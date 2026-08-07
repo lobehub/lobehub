@@ -8,6 +8,10 @@ import { useTranslation } from 'react-i18next';
 
 import { useBusinessConversationAnalytics } from '@/business/client/hooks/useBusinessConversationAnalytics';
 import AgentHome from '@/features/AgentHome';
+import {
+  TopicMigrationPlaceholder,
+  useTopicMigrationPending,
+} from '@/features/AgentTransferMigration';
 import ChatMiniMap from '@/features/ChatMiniMap';
 import { ChatList, ConversationProvider } from '@/features/Conversation';
 import ComposerDraftReceiver from '@/features/Conversation/ComposerDraftReceiver';
@@ -111,6 +115,12 @@ const Conversation = memo(() => {
   });
   const businessAnalyticsHooks = useBusinessConversationAnalytics(context);
 
+  // A topic still awaiting its transfer backfill shows a placeholder instead
+  // of an empty (not-yet-migrated) history, and blocks sending — the server
+  // could not assemble the missing context anyway. Opening it jumps it to the
+  // front of the backfill queue, so the wait is typically a few seconds.
+  const { topicPending } = useTopicMigrationPending(context.agentId, context.topicId);
+
   const hooks = useMemo(
     () => mergeConversationHooks(businessAnalyticsHooks, chatFollowUpHooks),
     [businessAnalyticsHooks, chatFollowUpHooks],
@@ -137,37 +147,48 @@ const Conversation = memo(() => {
           position: 'relative',
         }}
       >
-        <ChatList
-          defaultWorkflowExpandLevel={isHeterogeneousAgent ? { streaming: 'full' } : undefined}
-          headerSlot={<div aria-hidden className={styles.floatingHeaderSpacer} />}
-          welcome={<AgentHome />}
-          footerSlot={
-            isSubagentThread ? (
-              <Flexbox
-                horizontal
-                align={'center'}
-                justify={'center'}
-                paddingBlock={6}
-                paddingInline={16}
-              >
-                <span
-                  style={{
-                    color: cssVar.colorTextDescription,
-                    fontSize: 12,
-                    textAlign: 'center',
-                  }}
+        {topicPending ? (
+          <TopicMigrationPlaceholder agentId={context.agentId} topicId={context.topicId} />
+        ) : (
+          <ChatList
+            defaultWorkflowExpandLevel={isHeterogeneousAgent ? { streaming: 'full' } : undefined}
+            headerSlot={<div aria-hidden className={styles.floatingHeaderSpacer} />}
+            welcome={<AgentHome />}
+            footerSlot={
+              isSubagentThread ? (
+                <Flexbox
+                  horizontal
+                  align={'center'}
+                  justify={'center'}
+                  paddingBlock={6}
+                  paddingInline={16}
                 >
-                  {t('thread.subagentReadOnlyHint')}
-                </span>
-              </Flexbox>
-            ) : undefined
-          }
-        />
+                  <span
+                    style={{
+                      color: cssVar.colorTextDescription,
+                      fontSize: 12,
+                      textAlign: 'center',
+                    }}
+                  >
+                    {t('thread.subagentReadOnlyHint')}
+                  </span>
+                </Flexbox>
+              ) : undefined
+            }
+          />
+        )}
       </Flexbox>
-      {!isSubagentThread && (
+      {!isSubagentThread && !topicPending && (
         <MessageForwardFooter>
           {isHeterogeneousAgent ? <HeterogeneousChatInput /> : <MainChatInput />}
         </MessageForwardFooter>
+      )}
+      {topicPending && (
+        <Flexbox horizontal align={'center'} justify={'center'} paddingBlock={6} paddingInline={16}>
+          <span style={{ color: cssVar.colorTextDescription, fontSize: 12, textAlign: 'center' }}>
+            {t('transferMigration.inputDisabledHint')}
+          </span>
+        </Flexbox>
       )}
       <ExposeMainEditor />
       <ComposerDraftReceiver />

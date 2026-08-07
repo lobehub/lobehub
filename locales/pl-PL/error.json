@@ -125,6 +125,7 @@
   "transfer.resourceNotFound": "Ten zasób już nie istnieje lub nie masz do niego dostępu. Odśwież stronę i spróbuj ponownie.",
   "transfer.sameWorkspace": "Ten zasób znajduje się już w wybranej przestrzeni roboczej. Wybierz inny cel.",
   "transfer.targetNoWriteAccess": "Potrzebujesz dostępu jako Członek lub Właściciel, aby przenosić zasoby do docelowej przestrzeni roboczej.",
+  "transfer.transferInProgress": "Poprzednie przeniesienie tego zasobu nadal migruje jego historię. Spróbuj ponownie, gdy proces się zakończy.",
   "tts.responseError": "Błąd żądania usługi. Sprawdź konfigurację lub spróbuj ponownie.",
   "unknownError.copyTraceId": "ID Śladu Skopiowane",
   "unknownError.copyTraceIdTooltip": "Kliknij, aby skopiować",

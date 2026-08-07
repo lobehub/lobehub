@@ -125,6 +125,7 @@
   "transfer.resourceNotFound": "このリソースは存在しないか、アクセス権がありません。再読み込みしてもう一度お試しください。",
   "transfer.sameWorkspace": "このリソースはすでに選択されたワークスペースにあります。別のターゲットを選択してください。",
   "transfer.targetNoWriteAccess": "ターゲットワークスペースにリソースを移動するには、メンバーまたは所有者のアクセス権が必要です。",
+  "transfer.transferInProgress": "このリソースの以前の移動が履歴を移行中です。完了するまで待ってから再試行してください。",
   "tts.responseError": "リクエストが失敗しました。設定を確認してから再試行してください",
   "unknownError.copyTraceId": "トレースIDをコピーしました",
   "unknownError.copyTraceIdTooltip": "クリックしてコピー",

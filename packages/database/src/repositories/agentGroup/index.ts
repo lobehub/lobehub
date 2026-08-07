@@ -1,8 +1,15 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import type { AgentGroupDetail, AgentGroupMember, AgentPluginEntry } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
-import { and, asc, eq, inArray, ne, not, sql } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, ne, not, or, sql } from 'drizzle-orm';
 
+import {
+  AGENT_TRANSFER_IN_PROGRESS,
+  AgentTransferJobModel,
+  getAgentTransferSyncMessageThreshold,
+  rewriteMessageScopeForTopics,
+  rewriteResidualMessageScope,
+} from '../../models/agentTransferJob';
 import {
   hasForeignTopicComments,
   syncTopicCommentsOnTopicTransfer,
@@ -917,7 +924,7 @@ export class AgentGroupRepository {
     targetUserId: string,
     targetVisibility?: 'private' | 'public',
     options: { rejectForeignTopicCommentAuthors?: boolean } = {},
-  ): Promise<{ groupId: string } | null> {
+  ): Promise<{ groupId: string; transferJobId: string | null } | null> {
     const sourceGroup = await this.db.query.chatGroups.findFirst({
       where: and(eq(chatGroups.id, groupId), this.groupOwnership()),
     });
@@ -931,6 +938,22 @@ export class AgentGroupRepository {
         .where(eq(chatGroupsAgents.chatGroupId, groupId));
 
       const agentIds = memberRows.map((row) => row.agentId);
+
+      // Same lock-then-guard as AgentModel.transferAgents: serialize with a
+      // concurrent transfer of any member agent BEFORE consulting the pending
+      // job table, so two racing transfers cannot both pass the guard.
+      if (agentIds.length > 0) {
+        await trx
+          .select({ id: agents.id })
+          .from(agents)
+          .where(inArray(agents.id, agentIds))
+          .orderBy(asc(agents.id))
+          .for('update');
+      }
+      if (await AgentTransferJobModel.hasPendingJobForAgents(trx, agentIds)) {
+        throw new Error(AGENT_TRANSFER_IN_PROGRESS);
+      }
+
       const ownershipUpdate = {
         userId: targetUserId,
         workspaceId: targetWorkspaceId,
@@ -1014,10 +1037,9 @@ export class AgentGroupRepository {
         .update(topics)
         .set(ownershipUpdate)
         .where(eq(topics.groupId, groupId))
-        .returning({ id: topics.id });
+        .returning({ id: topics.id, updatedAt: topics.updatedAt });
       const movedTopicIds = movedTopics.map((topic) => topic.id);
       await trx.update(threads).set(ownershipUpdate).where(eq(threads.groupId, groupId));
-      await trx.update(messages).set(ownershipUpdate).where(eq(messages.groupId, groupId));
 
       // Topic comments denormalize the topic's workspaceId — move them with
       // the topic (or drop them when leaving workspace scope entirely),
@@ -1029,13 +1051,42 @@ export class AgentGroupRepository {
           .update(threads)
           .set(ownershipUpdate)
           .where(inArray(threads.topicId, movedTopicIds));
-        await trx
-          .update(messages)
-          .set(ownershipUpdate)
-          .where(inArray(messages.topicId, movedTopicIds));
       }
 
-      return { groupId };
+      // Message scope rewrite — same fast/slow split as
+      // AgentModel.transferAgents (see its step 7 for the rationale): small
+      // histories rewrite inline (topics + a group-linked topicless residual),
+      // heavy ones are drained topic-by-topic by an async backfill job.
+      const [{ affectedMessages }] = await trx
+        .select({ affectedMessages: count() })
+        .from(messages)
+        .where(
+          movedTopicIds.length > 0
+            ? or(inArray(messages.topicId, movedTopicIds), eq(messages.groupId, groupId))
+            : eq(messages.groupId, groupId),
+        );
+
+      const targetScope = { userId: targetUserId, workspaceId: targetWorkspaceId };
+      let transferJobId: string | null = null;
+      if (affectedMessages <= getAgentTransferSyncMessageThreshold()) {
+        await rewriteMessageScopeForTopics(trx, movedTopicIds, targetScope);
+        await rewriteResidualMessageScope(
+          trx,
+          { agentIds: [], groupIds: [groupId], sessionIds: [] },
+          targetScope,
+        );
+      } else {
+        transferJobId = await AgentTransferJobModel.createJob(trx, {
+          agentIds,
+          groupIds: [groupId],
+          sessionIds: [],
+          source: { userId: this.userId, workspaceId: this.workspaceId ?? null },
+          target: targetScope,
+          topics: movedTopics.map((topic) => ({ activityAt: topic.updatedAt, id: topic.id })),
+        });
+      }
+
+      return { groupId, transferJobId };
     });
   }
 

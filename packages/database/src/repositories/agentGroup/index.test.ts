@@ -1578,7 +1578,7 @@ describe('AgentGroupRepository', () => {
       const wsRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
       const result = await wsRepo.transferToWorkspace('transfer-group', targetWorkspaceId, userId);
 
-      expect(result).toEqual({ groupId: 'transfer-group' });
+      expect(result).toEqual({ groupId: 'transfer-group', transferJobId: null });
 
       const group = await serverDB.query.chatGroups.findFirst({
         where: (cg, { eq }) => eq(cg.id, 'transfer-group'),

@@ -19,6 +19,7 @@ import { TOPIC_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import RingLoadingIcon from '@/components/RingLoading';
 import UnreadDot from '@/components/UnreadDot';
 import { isDesktop } from '@/const/version';
+import { TopicMigrationIndicator } from '@/features/AgentTransferMigration';
 import DirIcon from '@/features/ChatInput/ControlBar/DirIcon';
 import { useHasDraft } from '@/features/ChatInput/draftStorage';
 import { startTopicDrag } from '@/features/ChatInput/InputEditor/ReferTopic/topicDragData';
@@ -463,12 +464,17 @@ const TopicItemRow = memo<TopicItemRowProps>(
           actions={() => <Actions fav={fav} id={id} status={status} title={title} />}
           active={isTopicActive}
           description={workingDirectoryNode}
-          extra={<RunningElapsedTime agentId={activeAgentId} topicId={id} />}
           href={href}
           icon={leadingIconNode}
           slots={{ titlePrefix: draftPrefix }}
           title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
           titleColor={cssVar.colorText}
+          extra={
+            <>
+              <TopicMigrationIndicator agentId={activeAgentId} topicId={id} />
+              <RunningElapsedTime agentId={activeAgentId} topicId={id} />
+            </>
+          }
           onClick={handleClick}
           onDoubleClick={() => void handleDoubleClick()}
           onDragStart={handleDragStart}

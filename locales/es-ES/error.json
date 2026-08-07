@@ -125,6 +125,7 @@
   "transfer.resourceNotFound": "Este recurso ya no existe o ya no tienes acceso. Actualiza la página e inténtalo de nuevo.",
   "transfer.sameWorkspace": "Este recurso ya está en el espacio de trabajo seleccionado. Elige otro destino.",
   "transfer.targetNoWriteAccess": "Necesitas acceso de Miembro o Propietario para mover recursos al espacio de trabajo de destino.",
+  "transfer.transferInProgress": "Un movimiento anterior de este recurso todavía está migrando su historial. Intenta nuevamente cuando haya terminado.",
   "tts.responseError": "Error en la solicitud del servicio. Verifica la configuración.",
   "unknownError.copyTraceId": "ID de Rastreo Copiado",
   "unknownError.copyTraceIdTooltip": "Haz clic para copiar",

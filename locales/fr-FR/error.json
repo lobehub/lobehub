@@ -125,6 +125,7 @@
   "transfer.resourceNotFound": "Cette ressource n'existe plus ou vous n'y avez plus accès. Actualisez et réessayez.",
   "transfer.sameWorkspace": "Cette ressource se trouve déjà dans l'espace de travail sélectionné. Choisissez une autre destination.",
   "transfer.targetNoWriteAccess": "Vous devez avoir un accès Membre ou Propriétaire pour déplacer des ressources dans l'espace de travail cible.",
+  "transfer.transferInProgress": "Un déplacement précédent de cette ressource est encore en cours de migration de son historique. Réessayez une fois terminé.",
   "tts.responseError": "Échec de la requête du service, veuillez vérifier la configuration ou réessayer",
   "unknownError.copyTraceId": "ID de Traçage Copié",
   "unknownError.copyTraceIdTooltip": "Cliquez pour copier",

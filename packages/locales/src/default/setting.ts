@@ -2350,6 +2350,8 @@ When I am ___, I need ___
   'workspace.general.leave.confirm.content':
     'You will lose access to "{{name}}" immediately. You can rejoin only if you are invited again.',
   'workspace.general.transferAgents.modal.back': 'Back',
+  'workspace.general.transferAgents.modal.backgroundMigration':
+    'Chat history is large, so it keeps migrating in the background. The agents are ready to use now; older conversations light up one by one as they finish.',
   'workspace.general.transferAgents.modal.continue': 'Continue',
   'workspace.general.transferAgents.modal.done': 'Done',
   'workspace.general.transferAgents.modal.failed': 'Failed to move agents',

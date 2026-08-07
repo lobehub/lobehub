@@ -2320,6 +2320,7 @@
   "workspace.general.transferAgentGroups.modal.transfer": "转移 {{count}} 个代理组",
   "workspace.general.transferAgentGroups.modal.untitledGroup": "未命名代理组",
   "workspace.general.transferAgents.modal.back": "返回",
+  "workspace.general.transferAgents.modal.backgroundMigration": "历史消息较多,正在后台继续迁移。Agent 现在即可使用;历史会话会随迁移完成逐个恢复显示。",
   "workspace.general.transferAgents.modal.continue": "继续",
   "workspace.general.transferAgents.modal.done": "完成",
   "workspace.general.transferAgents.modal.failed": "移动助理失败",

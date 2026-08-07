@@ -4,6 +4,7 @@ import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
 
+import { AgentMigrationBadge, useAgentTransferJob } from '@/features/AgentTransferMigration';
 import NavHeader from '@/features/NavHeader';
 import OpenInAppButton from '@/features/OpenInAppButton';
 import TopicCommentButton from '@/features/TopicComment/TopicCommentButton';
@@ -74,9 +75,43 @@ const headerStyles = createStaticStyles(({ css }) => ({
       pointer-events: auto;
       overflow: visible;
 
-      /* Hug the title pill so the transparent middle stays click-through */
+      /* Hug the title pill so the transparent middle stays click-through;
+         kept narrow so the floating pill covers less of the stream below */
       flex-grow: 0;
-      max-width: 300px;
+      max-width: 220px;
+    }
+  `,
+  // Migration chip, narrow/solid mode: in-flow at the head of the right-hand
+  // action group, so it reads as a status alongside the actions and can never
+  // collide with the (uncapped) title. Hidden once the header switches to
+  // floating mode (the centered overlay takes over).
+  migrationChipInline: css`
+    flex-shrink: 0;
+
+    ${FLOATING_HEADER_QUERY} {
+      display: none;
+    }
+  `,
+  // Migration chip, wide/floating mode: centered against the whole header row
+  // (not the leftover space between slots, which skews with title width). The
+  // wrapper is click-through; the chip re-enables its own pointer events.
+  // Collisions can't happen here — the floating title pill is capped narrow.
+  migrationChipOverlay: css`
+    pointer-events: none;
+
+    position: absolute;
+    z-index: 11;
+    inset-block-start: 0;
+    inset-inline: 0;
+
+    display: none;
+    align-items: center;
+    justify-content: center;
+
+    height: 44px;
+
+    ${FLOATING_HEADER_QUERY} {
+      display: flex;
     }
   `,
   slotRight: css`
@@ -100,6 +135,10 @@ const Header = memo(() => {
     agentId ? chatConfigByIdSelectors.isLocalSystemEnabledById(agentId)(s) : false,
   );
 
+  // History-backfill chip in the center slot; the hook shares one SWR key with
+  // the rest of the migration UI, so this adds no extra polling.
+  const { data: transferJob } = useAgentTransferJob(agentId);
+
   return (
     <div className={headerStyles.container}>
       <NavHeader
@@ -117,6 +156,11 @@ const Header = memo(() => {
         }
         right={
           <Flexbox horizontal align={'center'} className={headerStyles.rightContent} gap={4}>
+            {transferJob && agentId && (
+              <div className={headerStyles.migrationChipInline}>
+                <AgentMigrationBadge agentId={agentId} />
+              </div>
+            )}
             {isLocalSystemEnabled && workingDirectory && (
               <OpenInAppButton workingDirectory={workingDirectory} />
             )}
@@ -130,6 +174,11 @@ const Header = memo(() => {
           right: headerStyles.slotRight,
         }}
       />
+      {transferJob && agentId && (
+        <div className={headerStyles.migrationChipOverlay}>
+          <AgentMigrationBadge agentId={agentId} />
+        </div>
+      )}
     </div>
   );
 });

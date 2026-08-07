@@ -125,6 +125,7 @@
   "transfer.resourceNotFound": "Bu kaynak artık mevcut değil veya artık erişiminiz yok. Yenileyin ve tekrar deneyin.",
   "transfer.sameWorkspace": "Bu kaynak zaten seçilen çalışma alanında. Başka bir hedef seçin.",
   "transfer.targetNoWriteAccess": "Kaynakları hedef çalışma alanına taşımak için Üye veya Sahip erişimine ihtiyacınız var.",
+  "transfer.transferInProgress": "Bu kaynağın önceki bir taşıma işlemi hâlâ geçmişini aktarıyor. Tamamlandığında tekrar deneyin.",
   "tts.responseError": "Hizmet isteği başarısız oldu, lütfen yapılandırmayı kontrol edin veya tekrar deneyin",
   "unknownError.copyTraceId": "İzleme Kimliği Kopyalandı",
   "unknownError.copyTraceIdTooltip": "Kopyalamak için tıklayın",

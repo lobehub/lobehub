@@ -125,6 +125,7 @@
   "transfer.resourceNotFound": "Tài nguyên này không còn tồn tại hoặc bạn không còn quyền truy cập. Vui lòng làm mới và thử lại.",
   "transfer.sameWorkspace": "Tài nguyên này đã nằm trong không gian làm việc được chọn. Vui lòng chọn mục tiêu khác.",
   "transfer.targetNoWriteAccess": "Bạn cần quyền Thành viên hoặc Chủ sở hữu để di chuyển tài nguyên vào không gian làm việc mục tiêu.",
+  "transfer.transferInProgress": "Một lần di chuyển trước đó của tài nguyên này vẫn đang chuyển lịch sử của nó. Vui lòng thử lại sau khi hoàn tất.",
   "tts.responseError": "Yêu cầu dịch vụ thất bại, vui lòng kiểm tra cấu hình hoặc thử lại",
   "unknownError.copyTraceId": "ID Dấu vết đã được sao chép",
   "unknownError.copyTraceIdTooltip": "Nhấn để sao chép",

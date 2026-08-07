@@ -125,6 +125,7 @@
   "transfer.resourceNotFound": "此资源已不存在或您已无法访问。请刷新后重试。",
   "transfer.sameWorkspace": "此资源已在选定的工作区中。请选择其他目标。",
   "transfer.targetNoWriteAccess": "您需要成员或所有者权限才能将资源移动到目标工作区。",
+  "transfer.transferInProgress": "该资源上一次移动的历史数据仍在迁移中,请等待完成后再试。",
   "tts.responseError": "请求失败。请检查配置后重试",
   "unknownError.copyTraceId": "Trace ID 已复制",
   "unknownError.copyTraceIdTooltip": "点击复制",

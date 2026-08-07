@@ -57,6 +57,13 @@ import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../
 import { normalizeInboxAgentMeta } from '../utils/inboxAgent';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import {
+  AGENT_TRANSFER_IN_PROGRESS,
+  AgentTransferJobModel,
+  getAgentTransferSyncMessageThreshold,
+  rewriteMessageScopeForTopics,
+  rewriteResidualMessageScope,
+} from './agentTransferJob';
+import {
   hasForeignTopicComments,
   syncTopicCommentsOnTopicTransfer,
   TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS,
@@ -1814,7 +1821,7 @@ export class AgentModel {
     targetUserId: string,
     targetVisibility?: 'private' | 'public',
     options: { rejectForeignTopicCommentAuthors?: boolean } = {},
-  ): Promise<{ agentId: string; slug: string | null }> => {
+  ): Promise<{ agentId: string; slug: string | null; transferJobId: string | null }> => {
     const [result] = await this.transferAgents(
       [agentId],
       targetWorkspaceId,
@@ -1837,16 +1844,31 @@ export class AgentModel {
     targetUserId: string,
     targetVisibility?: 'private' | 'public',
     options: { rejectForeignTopicCommentAuthors?: boolean } = {},
-  ): Promise<{ agentId: string; slug: string | null }[]> => {
+  ): Promise<{ agentId: string; slug: string | null; transferJobId: string | null }[]> => {
     if (agentIds.length === 0) return [];
 
     return this.db.transaction(async (trx) => {
-      // 1. Verify all agents exist and belong to current scope
-      const foundAgents = await trx.query.agents.findMany({
-        where: and(inArray(agents.id, agentIds), this.ownership()),
-      });
+      // 1. Verify all agents exist and belong to current scope. FOR UPDATE so
+      // two concurrent transfers of the same agent serialize HERE, before the
+      // pending-job guard below: the loser re-reads after the winner commits
+      // and either no longer finds the agent in its scope, or sees the
+      // winner's freshly inserted job. Without the lock both would pass the
+      // guard first (check-then-act) and enqueue duplicate jobs.
+      const foundAgents = await trx
+        .select()
+        .from(agents)
+        .where(and(inArray(agents.id, agentIds), this.ownership()))
+        .for('update');
       if (foundAgents.length !== new Set(agentIds).size) throw new Error('Agent not found');
       const agentById = new Map(foundAgents.map((agent) => [agent.id, agent]));
+
+      // 1a. An unfinished backfill still owns these agents' message rewrite —
+      // a second transfer would race it (and re-enqueue topics the first job
+      // is still draining). Runs under the row locks above, so the check is
+      // race-free against a concurrent transfer's own job insert.
+      if (await AgentTransferJobModel.hasPendingJobForAgents(trx, agentIds)) {
+        throw new Error(AGENT_TRANSFER_IN_PROGRESS);
+      }
 
       // 2. Resolve slug conflicts in the target scope with a single query:
       //    fetch every existing slug that could collide (exact match or
@@ -2008,7 +2030,7 @@ export class AgentModel {
         .update(topics)
         .set({ ...ownershipUpdate, updatedAt: topics.updatedAt })
         .where(topicCondition!)
-        .returning({ id: topics.id });
+        .returning({ id: topics.id, updatedAt: topics.updatedAt });
 
       // 6a. Topic comments denormalize the topic's workspaceId — move them
       // with the topic (or drop them when leaving workspace scope entirely),
@@ -2019,15 +2041,45 @@ export class AgentModel {
         targetWorkspaceId,
       );
 
-      // 7. Update messages (linked via sessionId or agentId)
+      // 7. Message scope rewrite — fast/slow split. Rewriting a message row
+      // maintains every message index (incl. the multi-GB BM25 index), so a
+      // heavy agent's history cannot be rewritten inside this transaction:
+      // above the threshold the rewrite is recorded as an async backfill job
+      // (drained topic-by-topic; see AgentTransferJobModel) and the rows keep
+      // their source-scope snapshot until the job reaches them.
+      //
+      // Both paths anchor on the moved topics (plus a topicless residual by
+      // session/agent linkage) rather than the legacy session/agent-only
+      // condition, so topic-only rows (OpenAPI create shape) and the message
+      // child tables move too instead of stranding in the source scope.
       const messageCondition =
         sessionIds.length > 0
           ? or(inArray(messages.sessionId, sessionIds), inArray(messages.agentId, agentIds))
           : inArray(messages.agentId, agentIds);
-      await trx
-        .update(messages)
-        .set({ ...ownershipUpdate, updatedAt: messages.updatedAt })
-        .where(messageCondition!);
+      const movedTopicIds = movedTopics.map((topic) => topic.id);
+      const [{ affectedMessages }] = await trx
+        .select({ affectedMessages: count() })
+        .from(messages)
+        .where(
+          movedTopicIds.length > 0
+            ? or(inArray(messages.topicId, movedTopicIds), messageCondition!)
+            : messageCondition!,
+        );
+
+      const targetScope = { userId: targetUserId, workspaceId: targetWorkspaceId };
+      let transferJobId: string | null = null;
+      if (affectedMessages <= getAgentTransferSyncMessageThreshold()) {
+        await rewriteMessageScopeForTopics(trx, movedTopicIds, targetScope);
+        await rewriteResidualMessageScope(trx, { agentIds, sessionIds }, targetScope);
+      } else {
+        transferJobId = await AgentTransferJobModel.createJob(trx, {
+          agentIds,
+          sessionIds,
+          source: { userId: this.userId, workspaceId: this.workspaceId ?? null },
+          target: targetScope,
+          topics: movedTopics.map((topic) => ({ activityAt: topic.updatedAt, id: topic.id })),
+        });
+      }
 
       // 8. Update threads (linked via agentId)
       await trx
@@ -2109,6 +2161,7 @@ export class AgentModel {
       return agentIds.map((id) => ({
         agentId: id,
         slug: resolvedSlugs.get(id) ?? agentById.get(id)?.slug ?? null,
+        transferJobId,
       }));
     });
   };

@@ -125,6 +125,7 @@
   "transfer.resourceNotFound": "이 리소스는 더 이상 존재하지 않거나 접근 권한이 없습니다. 새로고침 후 다시 시도하세요.",
   "transfer.sameWorkspace": "이 리소스는 이미 선택한 워크스페이스에 있습니다. 다른 대상 워크스페이스를 선택하세요.",
   "transfer.targetNoWriteAccess": "대상 워크스페이스로 리소스를 이동하려면 멤버 또는 소유자 권한이 필요합니다.",
+  "transfer.transferInProgress": "이 리소스의 이전 이동이 아직 기록을 마이그레이션 중입니다. 완료된 후 다시 시도하세요.",
   "tts.responseError": "요청이 실패했습니다. 설정을 확인한 후 다시 시도하세요",
   "unknownError.copyTraceId": "추적 ID 복사됨",
   "unknownError.copyTraceIdTooltip": "클릭하여 복사",

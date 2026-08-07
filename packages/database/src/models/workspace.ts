@@ -7,6 +7,7 @@ import {
   workspaces,
 } from '../schemas/workspace';
 import type { LobeChatDatabase } from '../type';
+import { AGENT_TRANSFER_PENDING_OWNER_DELETE, AgentTransferJobModel } from './agentTransferJob';
 
 const getActiveMembershipRole = async (
   db: LobeChatDatabase,
@@ -96,6 +97,13 @@ export class WorkspaceModel {
   };
 
   delete = async (id: string) => {
+    // See UserModel.deleteUser: while an agent-transfer backfill still points
+    // at this workspace (as source or target), unmigrated message snapshots
+    // would be cascade-deleted with it. Reject and let the caller retry after
+    // the job drains.
+    if (await AgentTransferJobModel.hasPendingJobTouchingWorkspace(this.db, id)) {
+      throw new Error(AGENT_TRANSFER_PENDING_OWNER_DELETE);
+    }
     return this.db
       .delete(workspaces)
       .where(and(eq(workspaces.id, id), eq(workspaces.primaryOwnerId, this.userId)));

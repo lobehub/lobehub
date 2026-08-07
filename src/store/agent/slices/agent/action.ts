@@ -236,7 +236,7 @@ export class AgentSliceActionImpl {
     agentId: string,
     targetWorkspaceId: string | null,
     targetVisibility?: 'private' | 'public',
-  ): Promise<{ agentId: string; slug: string | null }> => {
+  ): Promise<{ agentId: string; slug: string | null; transferJobId: string | null }> => {
     return agentService.transferAgent(agentId, targetWorkspaceId, targetVisibility);
   };
 
