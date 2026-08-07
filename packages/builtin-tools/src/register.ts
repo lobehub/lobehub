@@ -151,6 +151,11 @@ import {
   WebOnboardingManifest,
   WebOnboardingRenders,
 } from '@lobechat/builtin-tool-web-onboarding/client';
+import {
+  createReadLocalFileInspector,
+  createRunCommandInspector,
+  createWriteLocalFileInspector,
+} from '@lobechat/shared-tool-ui/inspectors';
 import { RunCommandRender } from '@lobechat/shared-tool-ui/renders';
 import type {
   BuiltinInspector,
@@ -175,6 +180,31 @@ import { registerBuiltinStreamings } from './streamings';
 import { TwitterIdentifier, TwitterInspectors } from './twitter';
 
 const QODER_IDENTIFIER = 'qoder';
+const OPENCODE_IDENTIFIER = 'opencode';
+const PI_IDENTIFIER = 'pi';
+
+const heterogeneousCliInspectors: Record<string, BuiltinInspector> = {
+  bash: createRunCommandInspector(
+    'builtins.lobe-local-system.apiName.runCommand',
+  ) as BuiltinInspector,
+  read: createReadLocalFileInspector(
+    'builtins.lobe-local-system.apiName.readFile',
+  ) as BuiltinInspector,
+  write: createWriteLocalFileInspector(
+    'builtins.lobe-local-system.apiName.writeFile',
+  ) as BuiltinInspector,
+};
+
+const heterogeneousCliRenders: Record<string, BuiltinRender> = {
+  bash: RunCommandRender as BuiltinRender,
+  read: LocalSystemRenders[LocalSystemApiName.readFile] as BuiltinRender,
+  write: LocalSystemRenders[LocalSystemApiName.writeFile] as BuiltinRender,
+};
+
+const heterogeneousCliStreamings: Record<string, BuiltinStreaming> = {
+  bash: LocalSystemStreamings[LocalSystemApiName.runCommand] as BuiltinStreaming,
+  write: LocalSystemStreamings[LocalSystemApiName.writeFile] as BuiltinStreaming,
+};
 
 let builtinToolSurfacesRegistered = false;
 
@@ -214,6 +244,8 @@ export const registerBuiltinToolSurfaces = (): void => {
     [LobeActivatorManifest.identifier]: LobeActivatorRenders as Record<string, BuiltinRender>,
     [WebBrowsingManifest.identifier]: WebBrowsingRenders as Record<string, BuiltinRender>,
     [WebOnboardingManifest.identifier]: WebOnboardingRenders as Record<string, BuiltinRender>,
+    [OPENCODE_IDENTIFIER]: heterogeneousCliRenders,
+    [PI_IDENTIFIER]: heterogeneousCliRenders,
     codex: {
       ...CodexRenders,
       command_execution: RunCommandRender as BuiltinRender,
@@ -269,6 +301,8 @@ export const registerBuiltinToolSurfaces = (): void => {
     [UserInteractionIdentifier]: UserInteractionInspectors as Record<string, BuiltinInspector>,
     [WebBrowsingManifest.identifier]: WebBrowsingInspectors as Record<string, BuiltinInspector>,
     [WebOnboardingManifest.identifier]: WebOnboardingInspectors as Record<string, BuiltinInspector>,
+    [OPENCODE_IDENTIFIER]: heterogeneousCliInspectors,
+    [PI_IDENTIFIER]: heterogeneousCliInspectors,
     codex: CodexInspectors,
     [GithubIdentifier]: GithubInspectors,
     [LinearIdentifier]: LinearInspectors,
@@ -300,7 +334,9 @@ export const registerBuiltinToolSurfaces = (): void => {
     [LocalSystemManifest.identifier]: LocalSystemStreamings as Record<string, BuiltinStreaming>,
     [MemoryManifest.identifier]: MemoryStreamings as Record<string, BuiltinStreaming>,
     [MessageManifest.identifier]: MessageStreamings as Record<string, BuiltinStreaming>,
+    [OPENCODE_IDENTIFIER]: heterogeneousCliStreamings,
     [PageAgentManifest.identifier]: PageAgentStreamings as Record<string, BuiltinStreaming>,
+    [PI_IDENTIFIER]: heterogeneousCliStreamings,
   });
 
   registerBuiltinInterventions({

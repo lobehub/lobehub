@@ -12,6 +12,11 @@ import {
 } from '@lobechat/builtin-tool-group-agent-builder';
 import { GroupAgentBuilderInspectors } from '@lobechat/builtin-tool-group-agent-builder/client';
 import { LobeAgentApiName, LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
+import {
+  LocalSystemApiName,
+  LocalSystemRenders,
+  LocalSystemStreamings,
+} from '@lobechat/builtin-tool-local-system/client';
 import { RemoteDeviceApiName, RemoteDeviceIdentifier } from '@lobechat/builtin-tool-remote-device';
 import { SkillStoreApiName, SkillStoreIdentifier } from '@lobechat/builtin-tool-skill-store';
 import { SkillStoreInspectors, SkillStoreRenders } from '@lobechat/builtin-tool-skill-store/client';
@@ -83,6 +88,29 @@ describe('builtin tool registry', () => {
 
   it('registers the Codex error inspector', () => {
     expect(getBuiltinInspector('codex', 'error')).toBeDefined();
+  });
+
+  it.each(['opencode', 'pi'])('registers shared file and shell surfaces for %s', (identifier) => {
+    for (const apiName of ['bash', 'read', 'write']) {
+      expect(getBuiltinInspector(identifier, apiName)).toBeDefined();
+      expect(getBuiltinRender(identifier, apiName)).toBeDefined();
+    }
+
+    expect(getBuiltinRender(identifier, 'bash')).toBe(
+      LocalSystemRenders[LocalSystemApiName.runCommand],
+    );
+    expect(getBuiltinRender(identifier, 'read')).toBe(
+      LocalSystemRenders[LocalSystemApiName.readFile],
+    );
+    expect(getBuiltinRender(identifier, 'write')).toBe(
+      LocalSystemRenders[LocalSystemApiName.writeFile],
+    );
+    expect(getBuiltinStreaming(identifier, 'bash')).toBe(
+      LocalSystemStreamings[LocalSystemApiName.runCommand],
+    );
+    expect(getBuiltinStreaming(identifier, 'write')).toBe(
+      LocalSystemStreamings[LocalSystemApiName.writeFile],
+    );
   });
 
   it('registers remote device inspectors and renders', () => {
