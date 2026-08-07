@@ -83,6 +83,20 @@ const CC_TODO_WRITE_TOOL_NAME = 'TodoWrite';
 const CC_TASK_CREATE_TOOL_NAME = 'TaskCreate';
 const CC_TASK_UPDATE_TOOL_NAME = 'TaskUpdate';
 const CC_TASK_LIST_TOOL_NAME = 'TaskList';
+const CC_WEB_SEARCH_TOOL_NAME = 'WebSearch';
+
+/**
+ * Qoder includes the structured WebSearch response beside the model-facing
+ * text block. Keep the persisted state bounded: the raw provider payload can
+ * contain extra fields (for example host logos) and is not safe to store as-is.
+ */
+const WEB_SEARCH_MAX_RESULTS = 8;
+const WEB_SEARCH_MAX_RESULT_CANDIDATES = 32;
+const WEB_SEARCH_MAX_QUERY_LENGTH = 512;
+const WEB_SEARCH_MAX_TITLE_LENGTH = 512;
+const WEB_SEARCH_MAX_LINK_LENGTH = 2048;
+const WEB_SEARCH_MAX_SNIPPET_LENGTH = 2048;
+const WEB_SEARCH_MAX_HOSTNAME_LENGTH = 255;
 
 /**
  * tool_result confirmation emitted by CC for a successful `TaskCreate`.
@@ -191,6 +205,19 @@ interface ClaudeCodeTaskEntry {
   description?: string;
   status: ClaudeCodeTodoStatus;
   subject: string;
+}
+
+interface SynthesizedWebSearchResult {
+  hostname?: string;
+  link: string;
+  snippet?: string;
+  title?: string;
+}
+
+interface SynthesizedWebSearchPluginState {
+  durationSeconds?: number;
+  query?: string;
+  results?: SynthesizedWebSearchResult[];
 }
 
 const CLAUDE_CODE_CLI_INSTALL_DOCS_URL =
@@ -433,6 +460,88 @@ const asRecord = (value: unknown): Record<string, unknown> | undefined =>
   value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : undefined;
+
+const normalizeBoundedString = (value: unknown, maxLength: number): string | undefined => {
+  if (typeof value !== 'string') return;
+
+  const trimmed = value.trim();
+  if (!trimmed) return;
+
+  let normalized = trimmed.slice(0, maxLength);
+  const finalCodeUnit = normalized.charCodeAt(normalized.length - 1);
+  if (finalCodeUnit >= 0xd800 && finalCodeUnit <= 0xdbff) normalized = normalized.slice(0, -1);
+
+  return normalized || undefined;
+};
+
+const normalizeWebSearchLink = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') return;
+
+  const link = value.trim();
+  if (!link || link.length > WEB_SEARCH_MAX_LINK_LENGTH) return;
+
+  try {
+    const protocol = new URL(link).protocol;
+    return protocol === 'http:' || protocol === 'https:' ? link : undefined;
+  } catch {
+    return;
+  }
+};
+
+/**
+ * Normalize Qoder's top-level `tool_use_result` into the bounded plugin state
+ * consumed by the WebSearch card. This intentionally accepts only the known
+ * source fields instead of persisting the provider payload wholesale.
+ */
+const synthesizeWebSearchPluginState = (
+  toolUseResult: unknown,
+): SynthesizedWebSearchPluginState | undefined => {
+  const raw = asRecord(toolUseResult);
+  if (!raw) return;
+
+  const query = normalizeBoundedString(raw.query, WEB_SEARCH_MAX_QUERY_LENGTH);
+  const durationSeconds =
+    typeof raw.durationSeconds === 'number' &&
+    Number.isFinite(raw.durationSeconds) &&
+    raw.durationSeconds >= 0
+      ? raw.durationSeconds
+      : undefined;
+
+  const rawResults = Array.isArray(raw.results) ? raw.results : undefined;
+  const hasResults = rawResults !== undefined;
+  const results: SynthesizedWebSearchResult[] = [];
+  if (rawResults) {
+    for (const value of rawResults.slice(0, WEB_SEARCH_MAX_RESULT_CANDIDATES)) {
+      if (results.length >= WEB_SEARCH_MAX_RESULTS) break;
+
+      const result = asRecord(value);
+      if (!result) continue;
+
+      const link = normalizeWebSearchLink(result.link);
+      if (!link) continue;
+
+      const title = normalizeBoundedString(result.title, WEB_SEARCH_MAX_TITLE_LENGTH);
+      const snippet = normalizeBoundedString(result.snippet, WEB_SEARCH_MAX_SNIPPET_LENGTH);
+      const hostname = normalizeBoundedString(result.hostname, WEB_SEARCH_MAX_HOSTNAME_LENGTH);
+      if (!title && !snippet && !hostname) continue;
+
+      results.push({
+        ...(hostname ? { hostname } : {}),
+        link,
+        ...(snippet ? { snippet } : {}),
+        ...(title ? { title } : {}),
+      });
+    }
+  }
+
+  if (!query && durationSeconds === undefined && !hasResults) return;
+
+  return {
+    ...(durationSeconds === undefined ? {} : { durationSeconds }),
+    ...(query ? { query } : {}),
+    ...(hasResults ? { results } : {}),
+  };
+};
 
 const getPathValue = (raw: Record<string, unknown>, path: string[]): unknown => {
   let current: unknown = raw;
@@ -1668,6 +1777,13 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     const content = raw.message?.content;
     if (!Array.isArray(content)) return [];
 
+    // `tool_use_result` is event-level and carries no tool id. Associate it
+    // only when the event has exactly one tool_result block; otherwise it is
+    // impossible to attach the provider metadata without risking cross-tool
+    // state corruption.
+    const toolResultCount = content.filter((block) => block?.type === 'tool_result').length;
+    const structuredToolUseResult = toolResultCount === 1 ? raw.tool_use_result : undefined;
+
     const subagentCtx: SubagentEventContext | undefined = raw.parent_tool_use_id
       ? { parentToolCallId: raw.parent_tool_use_id }
       : undefined;
@@ -1751,11 +1867,20 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
           ? this.applyTaskToolResult(toolCallId, !!block.is_error, resultContent)
           : undefined;
 
-      // Images are mutually exclusive with Todo/Task results in practice (a
-      // `Read` is neither), but merge defensively so a future producer that
-      // carries both doesn't clobber one. `data` is still raw base64 here; the
-      // runtime pipeline uploads and rewrites these entries before persistence.
-      let pluginState: Record<string, any> | undefined = todoWritePluginState ?? taskPluginState;
+      const webSearchPluginState =
+        !block.is_error && this.toolPayloadById.get(toolCallId)?.apiName === CC_WEB_SEARCH_TOOL_NAME
+          ? synthesizeWebSearchPluginState(structuredToolUseResult)
+          : undefined;
+
+      // These result types are mutually exclusive in practice, but merge
+      // defensively so a future producer carrying multiple structured fields
+      // cannot clobber an existing state fragment. Image `data` is still raw
+      // base64 here; the runtime pipeline uploads and rewrites it before
+      // persistence.
+      let pluginState: Record<string, any> | undefined;
+      for (const state of [todoWritePluginState, taskPluginState, webSearchPluginState]) {
+        if (state) pluginState = { ...pluginState, ...state };
+      }
       if (images.length > 0) {
         pluginState = { ...pluginState, images };
       }

@@ -119,6 +119,70 @@ describe('QoderAdapter', () => {
     });
   });
 
+  it('preserves Qoder WebSearch structured sources on tool_result and tool_end', () => {
+    const adapter = new QoderAdapter();
+    adapter.adapt({ subtype: 'init', type: 'system' });
+    adapter.adapt({
+      message: {
+        content: [
+          {
+            id: 'web-search-1',
+            input: { query: 'TradingView copper futures symbol ticker' },
+            name: 'WebSearch',
+            type: 'tool_use',
+          },
+        ],
+        id: 'msg-search',
+      },
+      type: 'assistant',
+    });
+
+    const events = adapter.adapt({
+      message: {
+        content: [
+          {
+            content: 'Web search results for query: "TradingView copper futures symbol ticker"',
+            tool_use_id: 'web-search-1',
+            type: 'tool_result',
+          },
+        ],
+        role: 'user',
+      },
+      tool_use_result: {
+        durationSeconds: 2.938580792,
+        query: 'TradingView copper futures symbol ticker',
+        results: [
+          {
+            hostname: 'www.tradingview.com',
+            link: 'https://www.tradingview.com/symbols/COMEX-HG1!/',
+            snippet: 'The current price of Copper Futures is 6.7190 USD',
+            title: 'HG1! Charts and Quotes - Futures',
+          },
+        ],
+      },
+      type: 'user',
+    });
+
+    const result = events.find((event) => event.type === 'tool_result');
+    const end = events.find((event) => event.type === 'tool_end');
+    expect(result?.data.pluginState).toEqual({
+      durationSeconds: 2.938580792,
+      query: 'TradingView copper futures symbol ticker',
+      results: [
+        {
+          hostname: 'www.tradingview.com',
+          link: 'https://www.tradingview.com/symbols/COMEX-HG1!/',
+          snippet: 'The current price of Copper Futures is 6.7190 USD',
+          title: 'HG1! Charts and Quotes - Futures',
+        },
+      ],
+    });
+    expect(end?.data).toMatchObject({
+      payload: { toolCalling: { identifier: 'qoder' } },
+      result: { state: result?.data.pluginState, success: true },
+    });
+  });
+
   it('emits one structured Qoder auth error even though Qoder exits successfully', () => {
     const adapter = new QoderAdapter();
     adapter.adapt({ subtype: 'init', type: 'system' });
