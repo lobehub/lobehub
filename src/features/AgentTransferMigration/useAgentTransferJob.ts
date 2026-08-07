@@ -13,7 +13,9 @@ const getVisibleTopicIds = (): string[] => {
   const state = useChatStore.getState();
   const loaded = topicSelectors.currentTopics(state)?.map((topic) => topic.id) ?? [];
   const active = state.activeTopicId;
-  const ids = active && !loaded.includes(active) ? [...loaded, active] : loaded;
+  // The active topic goes first so the cap can never trim it away — its
+  // pending state gates the conversation surface.
+  const ids = active ? [active, ...loaded.filter((id) => id !== active)] : loaded;
   return ids.slice(0, 1000);
 };
 

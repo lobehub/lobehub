@@ -1,7 +1,7 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import type { AgentGroupDetail, AgentGroupMember, AgentPluginEntry } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
-import { and, asc, eq, inArray, ne, not, or, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, ne, not, sql } from 'drizzle-orm';
 
 import {
   AGENT_TRANSFER_IN_PROGRESS,
