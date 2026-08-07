@@ -45,6 +45,15 @@ const logger = createLogger('controllers:GatewayConnectionCtr');
 // package deps — importing one risks the @lobechat/types stub runtime leak.
 const BrowserIdentifier = 'lobe-browser';
 
+function parseHermesSessionId(stderr: string): string | undefined {
+  for (const line of stderr.split(/\r?\n/).reverse()) {
+    const match = line.match(/^session_id:\s*(\S+)\s*$/);
+    if (match) return match[1];
+  }
+
+  return undefined;
+}
+
 /**
  * Inject the lh-notify protocol into the first turn of a new hetero-agent session.
  * Tells the agent binary how to push results back to the LobeHub chat UI via `lh notify`.
@@ -981,7 +990,8 @@ export default class GatewayConnectionCtr extends ControllerModule {
         hermesArgs.push('--resume', existingSessionId);
       }
 
-      // Hermes prints "session_id: <id>\n<response>" to stdout in --quiet mode.
+      // Hermes keeps stdout response-only in --quiet mode and prints the final
+      // session_id to stderr so callers can resume the session on the next turn.
       const child =
         process.platform === 'win32'
           ? execa(commandStatus.path, hermesArgs, {
@@ -989,7 +999,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
               detached: true,
               env: childEnv,
               reject: false,
-              stderr: 'ignore',
+              stderr: 'pipe',
               stdin: 'ignore',
               stdout: 'pipe',
             })
@@ -997,7 +1007,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
               cwd: workDir,
               detached: true,
               env: childEnv,
-              stdio: ['ignore', 'pipe', 'ignore'],
+              stdio: ['ignore', 'pipe', 'pipe'],
             });
 
       const pid = child.pid;
@@ -1013,9 +1023,13 @@ export default class GatewayConnectionCtr extends ControllerModule {
         workspaceId,
       });
 
+      let stderr = '';
       let stdout = '';
       child.stdout.on('data', (chunk: Buffer) => {
         stdout += chunk.toString();
+      });
+      child.stderr.on('data', (chunk: Buffer) => {
+        stderr += chunk.toString();
       });
 
       child.on('close', (code, signal) => {
@@ -1047,10 +1061,10 @@ export default class GatewayConnectionCtr extends ControllerModule {
           return;
         }
 
-        // Parse "session_id: <id>" from the first line, response from the rest.
-        const sessionIdMatch = stdout.match(/^session_id:\s*(\S+)/m);
-        const sessionId = sessionIdMatch?.[1];
-        const response = stdout.replace(/^session_id:[^\n]*\n?/, '').trim();
+        // Diagnostics may precede the final ID, and context compaction can rotate
+        // it, so persist the last complete session_id line emitted this turn.
+        const sessionId = parseHermesSessionId(stderr);
+        const response = stdout.trim();
 
         if (sessionId) this.hermesSessionMap.set(topicId, sessionId);
 
