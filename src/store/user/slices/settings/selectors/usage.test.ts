@@ -18,13 +18,13 @@ describe('userUsageSettingsSelectors', () => {
     it('should read the persisted threshold from general settings', () => {
       const s: UserState = merge(initialState, {
         settings: {
-          general: { costEstimateWarningThreshold: 0.5 },
+          general: { costEstimateWarningThreshold: 1.25 },
         },
       });
 
       const result = userUsageSettingsSelectors.costEstimateWarningThreshold(s as UserStore);
 
-      expect(result).toBe(0.5);
+      expect(result).toBe(1.25);
     });
   });
 });
