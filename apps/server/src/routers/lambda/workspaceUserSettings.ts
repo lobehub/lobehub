@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentModel } from '@/database/models/agent';
+import { ChatGroupModel } from '@/database/models/chatGroup';
 import { WorkspaceUserSettingsModel } from '@/database/models/workspaceUserSettings';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -87,14 +88,21 @@ export const workspaceUserSettingsRouter = router({
         });
         if (canOrganize) {
           const agentModel = new AgentModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
-          for (const [agentId, groupId] of Object.entries(legacyAssignments)) {
+          const chatGroupModel = new ChatGroupModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
+          for (const [itemId, groupId] of Object.entries(legacyAssignments)) {
             try {
-              await agentModel.updateSessionGroupId(agentId, groupId ?? null);
+              // The legacy map keys generic sidebar item ids: agents move via
+              // `agents.sessionGroupId`, chat groups via `chat_groups.groupId`.
+              if (itemId.startsWith('cg_')) {
+                await chatGroupModel.update(itemId, { groupId: groupId ?? null });
+              } else {
+                await agentModel.updateSessionGroupId(itemId, groupId ?? null);
+              }
             } catch (error) {
               // Best-effort per entry: a vanished folder or a visibility
               // mismatch must not fail the preference write itself.
               console.warn(
-                `[workspaceUserSettings] skipped legacy sidebar assignment for ${agentId}:`,
+                `[workspaceUserSettings] skipped legacy sidebar assignment for ${itemId}:`,
                 error,
               );
             }
