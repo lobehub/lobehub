@@ -12,6 +12,7 @@
   "sections.agents": "智能体",
   "sections.knowledgeBases": "资料库",
   "sections.tasks": "任务",
+  "sidebar.agentsEmpty": "还没有关联智能体",
   "sidebar.emptyAction": "创建第一个项目",
   "sidebar.librariesEmpty": "还没有关联资料库",
   "sidebar.title": "项目"

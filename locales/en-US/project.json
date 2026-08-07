@@ -12,6 +12,7 @@
   "sections.agents": "Agents",
   "sections.knowledgeBases": "Libraries",
   "sections.tasks": "Tasks",
+  "sidebar.agentsEmpty": "No agents are connected yet",
   "sidebar.emptyAction": "Create your first project",
   "sidebar.librariesEmpty": "No libraries are connected yet",
   "sidebar.title": "Projects"

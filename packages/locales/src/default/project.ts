@@ -13,6 +13,7 @@ export default {
   'sections.knowledgeBases': 'Libraries',
   'sections.tasks': 'Tasks',
   'sidebar.emptyAction': 'Create your first project',
+  'sidebar.agentsEmpty': 'No agents are connected yet',
   'sidebar.librariesEmpty': 'No libraries are connected yet',
   'sidebar.title': 'Projects',
 };

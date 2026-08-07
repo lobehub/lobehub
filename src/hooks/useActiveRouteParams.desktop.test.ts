@@ -61,6 +61,19 @@ describe('useActiveRouteParams (desktop)', () => {
     expect(result.current.aid).toBe('agt_params_case');
   });
 
+  it('resolves nested project resource params for portal sidebars', () => {
+    useElectronStore.setState({
+      activeTabId: 't1',
+      tabs: [tab('t1', '/project/prj_portal/library/kb_portal')],
+    });
+
+    const { result } = renderHook(() =>
+      useActiveRouteParams<{ id?: string; projectId?: string }>(),
+    );
+
+    expect(result.current).toMatchObject({ id: 'kb_portal', projectId: 'prj_portal' });
+  });
+
   it('re-resolves after switching back to a previously visited url', () => {
     useElectronStore.setState({
       activeTabId: 't1',

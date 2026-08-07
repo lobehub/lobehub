@@ -11,6 +11,7 @@ import { useParams } from 'react-router';
 import AsyncError from '@/components/AsyncError';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import NavItem from '@/features/NavPanel/components/NavItem';
+import { getProjectAgentPath, getProjectLibraryPath } from '@/features/Projects/Layout/navigation';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useProjectStore } from '@/store/project';
 import { useUserStore } from '@/store/user';
@@ -19,7 +20,24 @@ import { labPreferSelectors } from '@/store/user/selectors';
 const styles = createStaticStyles(({ css }) => ({
   content: css`
     overflow: auto;
+
+    width: 100%;
+    max-width: 1200px;
+    margin-inline: auto;
     padding: 32px;
+  `,
+  dashboard: css`
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+    gap: 16px;
+
+    @media (width <= 900px) {
+      grid-template-columns: 1fr;
+    }
+  `,
+  resourceList: css`
+    min-height: 196px;
+    padding: 20px;
   `,
   shell: css`
     overflow: hidden;
@@ -92,29 +110,73 @@ const ProjectWorkspace = memo(() => {
             </Block>
           ))}
         </Flexbox>
-        <Block style={{ padding: 20 }} variant="filled">
-          <Flexbox gap={12}>
-            <Text fontSize={16} weight={600}>
-              {t('overview.tasksTitle')}
-            </Text>
-            {(detail.tasks ?? []).length === 0 ? (
-              <Flexbox align="center" gap={10} padding={24}>
-                <Text type="secondary">{t('overview.tasksEmpty')}</Text>
-                <Button icon={PlusIcon} onClick={() => navigate('/tasks')}>
-                  {t('overview.openTasks')}
-                </Button>
+        <div className={styles.dashboard}>
+          <Block className={styles.resourceList} variant="filled">
+            <Flexbox gap={12}>
+              <Text fontSize={16} weight={600}>
+                {t('overview.tasksTitle')}
+              </Text>
+              {(detail.tasks ?? []).length === 0 ? (
+                <Flexbox align="center" flex={1} gap={10} justify="center" padding={24}>
+                  <Icon icon={CheckSquareIcon} size={28} />
+                  <Text type="secondary">{t('overview.tasksEmpty')}</Text>
+                  <Button icon={PlusIcon} onClick={() => navigate('/tasks')}>
+                    {t('overview.openTasks')}
+                  </Button>
+                </Flexbox>
+              ) : (
+                (detail.tasks ?? []).map((task) => (
+                  <NavItem
+                    key={task.id}
+                    title={task.name || task.instruction}
+                    onClick={() => navigate(`/task/${task.id}`)}
+                  />
+                ))
+              )}
+            </Flexbox>
+          </Block>
+          <Flexbox gap={16}>
+            <Block className={styles.resourceList} variant="filled">
+              <Flexbox gap={8}>
+                <Text fontSize={16} weight={600}>
+                  {t('sections.agents')}
+                </Text>
+                {(detail.agents ?? []).length === 0 ? (
+                  <Text type="secondary">{t('sidebar.agentsEmpty')}</Text>
+                ) : (
+                  (detail.agents ?? []).map(({ agent, binding }) => (
+                    <NavItem
+                      description={binding.role || undefined}
+                      icon={BotIcon}
+                      key={agent.id}
+                      title={agent.title}
+                      onClick={() => navigate(getProjectAgentPath(agent.id))}
+                    />
+                  ))
+                )}
               </Flexbox>
-            ) : (
-              (detail.tasks ?? []).map((task) => (
-                <NavItem
-                  key={task.id}
-                  title={task.name || task.instruction}
-                  onClick={() => navigate(`/task/${task.id}`)}
-                />
-              ))
-            )}
+            </Block>
+            <Block className={styles.resourceList} variant="filled">
+              <Flexbox gap={8}>
+                <Text fontSize={16} weight={600}>
+                  {t('sections.knowledgeBases')}
+                </Text>
+                {(detail.knowledgeBases ?? []).length === 0 ? (
+                  <Text type="secondary">{t('sidebar.librariesEmpty')}</Text>
+                ) : (
+                  (detail.knowledgeBases ?? []).map(({ knowledgeBase }) => (
+                    <NavItem
+                      icon={BookOpenIcon}
+                      key={knowledgeBase.id}
+                      title={knowledgeBase.name}
+                      onClick={() => navigate(getProjectLibraryPath(projectId!, knowledgeBase.id))}
+                    />
+                  ))
+                )}
+              </Flexbox>
+            </Block>
           </Flexbox>
-        </Block>
+        </div>
       </Flexbox>
     </Flexbox>
   );
