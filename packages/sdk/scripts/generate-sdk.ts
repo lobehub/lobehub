@@ -16,7 +16,11 @@ import path from 'node:path';
 
 import { createClient } from '@hey-api/openapi-ts';
 
-import config from '../openapi-ts.config';
+import configThenable from '../openapi-ts.config';
+
+// defineConfig returns a thenable — resolve it once so the object can be
+// spread and passed to createClient with proper types.
+const config = await configThenable;
 
 const PKG_ROOT = path.join(import.meta.dirname, '..');
 const OUTPUT_DIR = path.join(PKG_ROOT, 'src', 'generated');

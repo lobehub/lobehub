@@ -105,7 +105,7 @@ describe('createLobeHub', () => {
       headers: { 'Content-Type': 'application/json' },
     });
 
-    await lobehub.files.create({ body: { file: new Blob(['x']), hash: 'h', size: 1 } });
+    await lobehub.files.create({ body: { file: new Blob(['x']) } });
 
     const contentType = requests[0].headers.get('content-type');
     expect(contentType).not.toBe('application/json');
