@@ -321,6 +321,9 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
   'task.run': AGENT_RUN_SCOPES,
   'task.runReadySubtasks': AGENT_RUN_SCOPES,
   'task.runReview': ['model:invoke'],
+  // deletes the whole settings row, including stored provider credentials —
+  // same bar as the `updateSettings` keyVaults guard
+  'user.resetSettings': ['model:write'],
   // onboarding understanding triggers enqueue generation workflows
   // (persona / task-recommendation `generateObject` steps run async via QStash)
   'user.retryOnboardingUnderstandingSource': ['model:invoke'],

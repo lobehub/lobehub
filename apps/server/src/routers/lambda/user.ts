@@ -354,7 +354,11 @@ export const userRouter = router({
       lastName: state.lastName,
       onboarding: state.onboarding,
       preference: state.preference as UserPreference,
-      settings: state.settings,
+      // restricted API keys must not read decrypted provider/tool credentials
+      settings:
+        ctx.apiKeyScopes !== undefined && !isFullAccessApiKey(ctx.apiKeyScopes)
+          ? { ...state.settings, keyVaults: undefined }
+          : state.settings,
       userId: ctx.userId,
       username: state.username,
 

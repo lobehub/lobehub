@@ -1,5 +1,7 @@
 import type { Context } from 'hono';
 
+import { isFullAccessApiKey } from '@/const/apiKeyScope';
+
 import { BaseController } from '../common/base.controller';
 import { ProviderService } from '../services/provider.service';
 import type {
@@ -16,6 +18,16 @@ import type {
  * Provider controller, responsible for handling Provider-related HTTP requests
  */
 export class ProviderController extends BaseController {
+  /**
+   * Restricted API keys must not exfiltrate decrypted provider credentials
+   * through the read endpoints.
+   */
+  private isRestrictedApiKey(c: Context): boolean {
+    if (c.get('authType') !== 'apikey') return false;
+
+    return !isFullAccessApiKey(c.get('apiKeyScopes') as string[] | null | undefined);
+  }
+
   async handleGetProviders(c: Context): Promise<Response> {
     try {
       const query = this.getQuery<ProviderListQuery>(c);
@@ -23,6 +35,13 @@ export class ProviderController extends BaseController {
       const providerService = new ProviderService(db, this.getUserId(c), this.getWorkspaceId(c));
 
       const result = await providerService.getProviders(query);
+
+      if (result?.providers && this.isRestrictedApiKey(c)) {
+        result.providers = result.providers.map((provider) => ({
+          ...provider,
+          keyVaults: undefined,
+        }));
+      }
 
       return this.success(c, result, 'Provider list retrieved successfully');
     } catch (error) {
@@ -38,6 +57,14 @@ export class ProviderController extends BaseController {
       const db = await this.getDatabase();
       const providerService = new ProviderService(db, this.getUserId(c), this.getWorkspaceId(c));
       const provider = await providerService.getProviderDetail(request);
+
+      if (provider && this.isRestrictedApiKey(c)) {
+        return this.success(
+          c,
+          { ...provider, keyVaults: undefined },
+          'Provider details retrieved successfully',
+        );
+      }
 
       return this.success(c, provider, 'Provider details retrieved successfully');
     } catch (error) {
