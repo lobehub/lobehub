@@ -8,6 +8,7 @@ import { ChatGroupModel } from '@/database/models/chatGroup';
 import { WorkspaceUserSettingsModel } from '@/database/models/workspaceUserSettings';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { assertCanEditResource } from '@/server/services/resourcePermission';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 
 /**
@@ -94,6 +95,16 @@ export const workspaceUserSettingsRouter = router({
               // The legacy map keys generic sidebar item ids: agents move via
               // `agents.sessionGroupId`, chat groups via `chat_groups.groupId`.
               if (itemId.startsWith('cg_')) {
+                // Same per-resource gate as `agentGroup.updateGroup` — the
+                // workspace-wide organize grant alone must not allow editing a
+                // group whose General Access is view/use only.
+                await assertCanEditResource({
+                  db: ctx.serverDB,
+                  resourceId: itemId,
+                  resourceType: 'agentGroup',
+                  userId: ctx.userId,
+                  workspaceId: ctx.workspaceId,
+                });
                 await chatGroupModel.update(itemId, { groupId: groupId ?? null });
               } else {
                 await agentModel.updateSessionGroupId(itemId, groupId ?? null);
