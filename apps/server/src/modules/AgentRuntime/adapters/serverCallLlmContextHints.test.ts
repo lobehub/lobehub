@@ -115,6 +115,24 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
     expect(hints.resolvedExtendParams).toEqual({ reasoning_effort: 'high' });
   });
 
+  it('should treat an explicitly emptied extendParams row as an opt-out', async () => {
+    // Clearing extendParams in provider settings replaces the card's list on
+    // the client (array-replacement merge); the server must not fall back to
+    // the bundled card and resurrect the removed reasoning params
+    findByIdAndProviderMock.mockResolvedValue({ settings: { extendParams: [] } });
+    getModelReasoningConfigMock.mockResolvedValue({ reasoningEffort: 'high' });
+
+    const hints = await resolveServerCallLlmContextHints({
+      ctx: createCtx({ chatConfig: {} }),
+      llmPayload,
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    expect(getModelReasoningConfigMock).not.toHaveBeenCalled();
+    expect(hints.resolvedExtendParams).toEqual({});
+  });
+
   it('should skip the reasoning config DB read for models without reasoning extend params', async () => {
     const hints = await resolveServerCallLlmContextHints({
       ctx: createCtx({ chatConfig: {} }),

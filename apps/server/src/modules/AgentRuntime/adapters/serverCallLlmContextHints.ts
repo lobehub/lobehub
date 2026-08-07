@@ -106,22 +106,22 @@ export const resolveServerCallLlmContextHints = async ({
   modelDisplayName = userModelRow?.displayName ?? modelDisplayName;
 
   // User-edited settings win over the bundled card, matching the client's
-  // `getEnabledModels` settings merge (arrays replace wholesale there).
-  const userExtendParams = userModelRow?.settings?.extendParams;
-  let modelExtendParams: string[] | undefined =
-    userExtendParams && userExtendParams.length > 0 ? userExtendParams : undefined;
+  // `getEnabledModels` settings merge (arrays replace wholesale there, so an
+  // explicit empty array is an opt-out from the card's params, not a miss —
+  // only a row without `extendParams` falls back to the cards).
+  let modelExtendParams: string[] | undefined = userModelRow?.settings?.extendParams ?? undefined;
 
-  if (!modelExtendParams || modelExtendParams.length === 0) {
+  if (modelExtendParams === undefined) {
     modelExtendParams = readExtendParams(modelCard);
-  }
 
-  // Aggregation providers (e.g. `lobehub`) may serve a model without copying
-  // its origin `settings.extendParams`. Fall back to the canonical model card
-  // (matched by id across any provider) so reasoning/thinking params like
-  // `thinkingLevel` still reach the model. Mirrors the client-side
-  // `transformToAiModelList` re-namespacing behavior.
-  if (!modelExtendParams || modelExtendParams.length === 0) {
-    modelExtendParams = readExtendParams(canonicalModelCard);
+    // Aggregation providers (e.g. `lobehub`) may serve a model without copying
+    // its origin `settings.extendParams`. Fall back to the canonical model card
+    // (matched by id across any provider) so reasoning/thinking params like
+    // `thinkingLevel` still reach the model. Mirrors the client-side
+    // `transformToAiModelList` re-namespacing behavior.
+    if (!modelExtendParams || modelExtendParams.length === 0) {
+      modelExtendParams = readExtendParams(canonicalModelCard);
+    }
   }
 
   // Reasoning fields (effort family + reasoningMode) are user-level
