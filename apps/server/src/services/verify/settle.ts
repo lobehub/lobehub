@@ -91,6 +91,10 @@ export const driveTaskFromVerify = async (
     // Only act on a terminally settled run (skip pending / verifying / repairing).
     if (run?.status !== 'passed' && run?.status !== 'failed' && run?.status !== 'errored') return;
     if ((run.metadata as { taskDrivenAt?: string } | null)?.taskDrivenAt) return; // already drove
+    // Cheap read above, authoritative claim here: concurrent verifier
+    // callbacks would otherwise both pass the read and both act — spawning two
+    // rounds, or one spawning while the other pauses the task it just started.
+    if (!(await runModel.claimTaskDrive(run.id))) return;
 
     const operationModel = new AgentOperationModel(db, userId, workspaceId);
     const op = await operationModel.findById(operationId);
@@ -188,13 +192,9 @@ export const driveTaskFromVerify = async (
             userId,
             workspaceId,
           });
-          // Stamp idempotency and return: no brief, no pause, no creator
-          // callback — the loop continues silently until it converges or a
-          // budget runs out.
-          await runModel.setMetadata(run.id, {
-            ...(run.metadata as Record<string, unknown> | null),
-            taskDrivenAt: new Date().toISOString(),
-          });
+          // No brief, no pause, no creator callback — the loop continues
+          // silently until it converges or a budget runs out. The drive marker
+          // was already stamped by the claim above.
           return;
         }
         if (outcome === 'exhausted-cost' || outcome === 'exhausted-rounds') exhausted = outcome;
@@ -275,12 +275,7 @@ export const driveTaskFromVerify = async (
       );
     }
 
-    // `setMetadata` replaces the whole jsonb bag — spread the existing keys so
-    // the stamp can't clobber `maxRepairRounds` and friends.
-    await runModel.setMetadata(run.id, {
-      ...(run.metadata as Record<string, unknown> | null),
-      taskDrivenAt: new Date().toISOString(),
-    });
+    // The drive marker was stamped by the claim at the top of this function.
   } catch (error) {
     log('driveTaskFromVerify failed for op %s (non-fatal): %O', operationId, error);
   }

@@ -14,6 +14,8 @@ interface GoalRound {
     id?: string;
     roundIndex?: number | null;
     status?: string | null;
+    /** Last write to the row — the closest thing to "when this round ended". */
+    updatedAt?: Date | string | null;
   };
   /** Owner-only: what the round spent. Absent for shared links and old rows. */
   usage?: { cost: number; tokens: number } | null;
@@ -82,6 +84,27 @@ export const formatGoalDuration = (milliseconds: number) => {
 
 export const shouldShowGoalRoundTimeline = (roundCount: number) => roundCount > 1;
 
+const SETTLED_RUN_STATUSES = new Set(['passed', 'failed', 'errored']);
+
+export const isSettledRound = (status?: string | null): boolean =>
+  Boolean(status && SETTLED_RUN_STATUSES.has(status));
+
+/**
+ * When a round stopped.
+ *
+ * A settled round must not keep measuring against the clock: reopening the
+ * task days later would otherwise bill those idle days to the last round and
+ * stretch its bar accordingly. Only a round still in flight runs up to now.
+ */
+export const goalRoundEnd = (
+  run: { status?: string | null; updatedAt?: Date | string | null },
+  now: number,
+): number => {
+  if (!isSettledRound(run.status) || !run.updatedAt) return now;
+  const settled = new Date(run.updatedAt).getTime();
+  return Number.isFinite(settled) ? settled : now;
+};
+
 /** Narrowest a round can render and still read as a block rather than a tick. */
 const ROUND_BASE_WIDTH = 28;
 /** Beyond this a long round would push the rail past the panel. */
@@ -103,17 +126,22 @@ const GoalRoundTimeline = memo<{ rounds?: GoalRound[] }>(({ rounds = [] }) => {
   const { t } = useTranslation('chat');
   if (!shouldShowGoalRoundTimeline(rounds.length)) return null;
 
+  const now = Date.now();
   const start = new Date(rounds[0].run.createdAt).getTime();
-  const elapsed = Math.max(1, Date.now() - start);
 
-  // Each round spans until the next one opens; the last runs up to now.
+  // Each round spans until the next one opens; the last one until it settled,
+  // or until now while it is still running.
   const durations = rounds.map(({ run }, index) => {
     const from = new Date(run.createdAt).getTime();
     const to =
-      index + 1 < rounds.length ? new Date(rounds[index + 1].run.createdAt).getTime() : Date.now();
+      index + 1 < rounds.length
+        ? new Date(rounds[index + 1].run.createdAt).getTime()
+        : goalRoundEnd(run, now);
     return Math.max(1, to - from);
   });
   const base = durations[0];
+  // Total ends where the last round ends, for the same reason.
+  const elapsed = Math.max(1, goalRoundEnd(rounds.at(-1)!.run, now) - start);
 
   return (
     <Flexbox gap={8}>
@@ -136,7 +164,11 @@ const GoalRoundTimeline = memo<{ rounds?: GoalRound[] }>(({ rounds = [] }) => {
               data-goal-round={run.roundIndex ?? index + 1}
               style={{ width: goalRoundWidth(durations[index], base) }}
             >
-              {report?.verdict === 'fail' && <span className={styles.dot} />}
+              {/* An agent-verified round may carry no report at all, so the
+                run's own status is the more reliable failure signal. */}
+              {(report?.verdict === 'failed' || run.status === 'failed') && (
+                <span className={styles.dot} />
+              )}
             </div>
           </GoalRoundPopover>
         ))}

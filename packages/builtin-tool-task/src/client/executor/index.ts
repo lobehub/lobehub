@@ -332,7 +332,11 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       // them sequential so the verify write cannot overwrite the goal metadata.
       await taskService.updateConfig(identifier, {
         goal: {
-          maxIterations: params.maxIterations ?? null,
+          // `null` is the user's explicit "no cap"; `undefined` means they
+          // never chose, which must fall back to the documented default.
+          // Coercing the second into the first made an uncapped loop the
+          // default for every goal that omitted the field.
+          maxIterations: params.maxIterations,
           maxTotalCost: params.maxTotalCost ?? null,
           originTopicId: ctx.topicId ?? null,
         },

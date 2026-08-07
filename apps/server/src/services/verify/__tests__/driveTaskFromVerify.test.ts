@@ -12,6 +12,7 @@ vi.mock('../reporter', () => ({
 
 const {
   runFindByOperation,
+  runClaimTaskDrive,
   runSetMetadata,
   opFindById,
   taskFindById,
@@ -30,6 +31,7 @@ const {
   goalSyncMock: vi.fn(),
   opFindById: vi.fn(),
   runFindByOperation: vi.fn(),
+  runClaimTaskDrive: vi.fn().mockResolvedValue(true),
   runSetMetadata: vi.fn(),
   serviceUpdateStatus: vi.fn(),
   statusRecompute: vi.fn(),
@@ -62,6 +64,7 @@ vi.mock('../statusService', () => ({
 
 vi.mock('@/database/models/verifyRun', () => ({
   VerifyRunModel: vi.fn(() => ({
+    claimTaskDrive: runClaimTaskDrive,
     findByOperation: runFindByOperation,
     setMetadata: runSetMetadata,
   })),
@@ -93,6 +96,7 @@ const db = {} as any;
 describe('driveTaskFromVerify', () => {
   beforeEach(() => {
     [
+      runClaimTaskDrive,
       runFindByOperation,
       runSetMetadata,
       opFindById,
@@ -106,6 +110,9 @@ describe('driveTaskFromVerify', () => {
       goalContinueMock,
       goalSyncMock,
     ].forEach((m) => m.mockReset());
+    // The drive is claimed before any side effect; unclaimed means "someone
+    // else is driving this run", which every test here is not.
+    runClaimTaskDrive.mockResolvedValue(true);
     opFindById.mockResolvedValue({ taskId: 'task-1', topicId: 'topic-done' });
     taskFindById.mockResolvedValue({
       assigneeAgentId: 'a1',
@@ -129,7 +136,7 @@ describe('driveTaskFromVerify', () => {
       taskIdentifier: 'T-1',
       topicId: 'topic-done',
     });
-    expect(runSetMetadata).toHaveBeenCalled();
+    expect(runClaimTaskDrive).toHaveBeenCalledWith('run-1');
   });
 
   it('passed → keeps a recurring task scheduled', async () => {
@@ -149,7 +156,7 @@ describe('driveTaskFromVerify', () => {
     expect(deliverMock).toHaveBeenCalledWith(
       expect.objectContaining({ reason: 'done', taskId: 'task-1' }),
     );
-    expect(runSetMetadata).toHaveBeenCalled();
+    expect(runClaimTaskDrive).toHaveBeenCalledWith('run-1');
   });
 
   it('settles the owning task when the passing verify run belongs to a repair child', async () => {
@@ -289,14 +296,23 @@ describe('driveTaskFromVerify', () => {
       expect(briefCreate).not.toHaveBeenCalled();
       expect(taskUpdateStatus).not.toHaveBeenCalled();
       expect(deliverMock).not.toHaveBeenCalled();
-      // Idempotency stamp merges the existing metadata instead of clobbering it.
-      expect(runSetMetadata).toHaveBeenCalledWith(
-        'run-1',
-        expect.objectContaining({ maxRepairRounds: 2, taskDrivenAt: expect.any(String) }),
-      );
+      // The claim both stamps the marker and proves we own this drive.
+      expect(runClaimTaskDrive).toHaveBeenCalledWith('run-1');
       expect(goalSyncMock).toHaveBeenCalledWith(
         expect.objectContaining({ state: expect.objectContaining({ phase: 'running' }) }),
       );
+    });
+
+    it('does nothing when another callback already claimed the drive', async () => {
+      // Two verifier callbacks can settle together; only the claim winner acts.
+      runClaimTaskDrive.mockResolvedValue(false);
+
+      await driveTaskFromVerify({} as never, 'user-1', 'op-1');
+
+      expect(goalContinueMock).not.toHaveBeenCalled();
+      expect(taskUpdateStatus).not.toHaveBeenCalled();
+      expect(serviceUpdateStatus).not.toHaveBeenCalled();
+      expect(briefCreate).not.toHaveBeenCalled();
     });
 
     it('failed + budget exhausted → pauses with budget-specific brief copy', async () => {

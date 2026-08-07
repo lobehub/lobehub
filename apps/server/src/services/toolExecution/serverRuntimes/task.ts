@@ -282,7 +282,11 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
         // can lose either the goal marker or verify config to last-write-wins.
         await taskModel().updateTaskConfig(created.taskId, {
           goal: {
-            maxIterations: args.maxIterations ?? null,
+            // `null` is the user's explicit "no cap"; `undefined` means they
+            // never chose, which must fall back to the documented default.
+            // Coercing the second into the first made an uncapped loop the
+            // default for every goal that omitted the field.
+            maxIterations: args.maxIterations,
             maxTotalCost: args.maxTotalCost ?? null,
             originTopicId: topicId ?? null,
           },

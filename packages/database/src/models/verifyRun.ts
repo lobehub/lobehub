@@ -454,6 +454,36 @@ export class VerifyRunModel {
    * stamp per-run knobs like the task's `maxRepairRounds` override, and to carry
    * them onto a repair round's run so it derives the same cap.
    */
+  /**
+   * Claim the right to drive the task from this run, exactly once.
+   *
+   * The settle path reads `taskDrivenAt`, decides, and only then writes it —
+   * so two verifier callbacks landing together can both pass the read and both
+   * act (spawning two rounds, or one spawning while the other pauses the task
+   * it just started). The claim moves that decision into a single conditional
+   * UPDATE: the row is only stamped if nobody stamped it, and the loser learns
+   * it lost from the empty result.
+   *
+   * @returns true when this caller owns the drive, false when it was taken.
+   */
+  claimTaskDrive = async (runId: string): Promise<boolean> => {
+    const claimed = await this.db
+      .update(verifyRuns)
+      .set({
+        metadata: sql`coalesce(${verifyRuns.metadata}, '{}'::jsonb) || jsonb_build_object('taskDrivenAt', ${new Date().toISOString()}::text)`,
+      })
+      .where(
+        and(
+          eq(verifyRuns.id, runId),
+          sql`coalesce(${verifyRuns.metadata}, '{}'::jsonb) -> 'taskDrivenAt' IS NULL`,
+          this.ownership(),
+        ),
+      )
+      .returning({ id: verifyRuns.id });
+
+    return claimed.length > 0;
+  };
+
   setMetadata = async (runId: string, metadata: Record<string, unknown>): Promise<void> => {
     await this.db
       .update(verifyRuns)

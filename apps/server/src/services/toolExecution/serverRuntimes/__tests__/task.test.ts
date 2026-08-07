@@ -29,6 +29,45 @@ vi.mock('@/server/services/verify/planGenerator', () => ({
 
 describe('createTaskRuntime', () => {
   describe('createGoal', () => {
+    it('leaves an omitted round budget unset so the default cap applies', async () => {
+      verifyMocks.createCriteriaFromDrafts.mockResolvedValueOnce(['criterion-1']);
+      const taskCaller = {
+        run: vi.fn().mockResolvedValue({ operationId: 'op-1', topicId: 'topic-1' }),
+        updateVerifyConfig: vi.fn().mockResolvedValue(undefined),
+      };
+      const taskModel = { updateTaskConfig: vi.fn().mockResolvedValue(undefined) };
+      const taskService = {
+        createTask: vi.fn().mockResolvedValue({
+          id: 'task-db-1',
+          identifier: 'T-1',
+          name: 'Ship homepage',
+          priority: 0,
+          status: 'backlog',
+        }),
+      };
+      const runtime = createTaskRuntime({
+        agentId: 'agt-1',
+        agentModel: { existsById: vi.fn().mockResolvedValue(true) } as any,
+        db: {} as any,
+        taskCaller: taskCaller as any,
+        taskModel: taskModel as any,
+        taskService: taskService as any,
+        topicId: 'origin-topic',
+        userId: 'user-1',
+      });
+
+      await runtime.createGoal({
+        criteria: [{ title: 'LCP under two seconds' }],
+        instruction: 'Make the homepage fast.',
+        name: 'Ship homepage',
+      });
+
+      // `null` means "uncapped"; coercing an omitted budget into it would let a
+      // failing goal spawn rounds forever.
+      const [, config] = taskModel.updateTaskConfig.mock.calls[0];
+      expect(config.goal.maxIterations).toBeUndefined();
+    });
+
     it('creates, configures, and starts one verified task', async () => {
       verifyMocks.createCriteriaFromDrafts.mockResolvedValueOnce(['criterion-1']);
       const taskCaller = {

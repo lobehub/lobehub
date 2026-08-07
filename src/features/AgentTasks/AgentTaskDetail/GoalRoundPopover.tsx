@@ -44,8 +44,8 @@ const GoalRoundPopover = memo<GoalRoundPopoverProps>(
     const { t } = useTranslation('chat');
 
     const verdictLabel = (() => {
-      if (verdict === 'pass' || status === 'passed') return t('taskDetail.runVerify.passed');
-      if (verdict === 'fail' || status === 'failed') return t('taskDetail.runVerify.failed');
+      if (verdict === 'passed' || status === 'passed') return t('taskDetail.runVerify.passed');
+      if (verdict === 'failed' || status === 'failed') return t('taskDetail.runVerify.failed');
       if (status === 'errored') return t('taskDetail.runVerify.errored');
       if (status === 'running' || status === 'verifying') return t('taskDetail.runVerify.running');
       if (status) return t('taskDetail.runVerify.pending');

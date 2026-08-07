@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   formatGoalDuration,
+  goalRoundEnd,
   goalRoundWidth,
   shouldShowGoalRoundTimeline,
 } from './GoalRoundTimeline';
@@ -47,5 +48,30 @@ describe('goalRoundWidth', () => {
   it('falls back to the base width for unusable durations', () => {
     expect(goalRoundWidth(0, 60_000)).toBe(28);
     expect(goalRoundWidth(60_000, 0)).toBe(28);
+  });
+});
+
+describe('goalRoundEnd', () => {
+  const now = new Date('2026-08-07T12:00:00Z').getTime();
+  const settledAt = '2026-08-05T12:00:00Z';
+
+  it('stops a settled round at its own timestamp, not the clock', () => {
+    // Reopening the task two days later must not bill those days to the round.
+    expect(goalRoundEnd({ status: 'passed', updatedAt: settledAt }, now)).toBe(
+      new Date(settledAt).getTime(),
+    );
+    expect(goalRoundEnd({ status: 'failed', updatedAt: settledAt }, now)).toBe(
+      new Date(settledAt).getTime(),
+    );
+  });
+
+  it('runs an in-flight round up to now', () => {
+    expect(goalRoundEnd({ status: 'running', updatedAt: settledAt }, now)).toBe(now);
+    expect(goalRoundEnd({ status: 'verifying', updatedAt: settledAt }, now)).toBe(now);
+  });
+
+  it('falls back to now when the settled timestamp is missing or unusable', () => {
+    expect(goalRoundEnd({ status: 'passed' }, now)).toBe(now);
+    expect(goalRoundEnd({ status: 'passed', updatedAt: 'not-a-date' }, now)).toBe(now);
   });
 });
