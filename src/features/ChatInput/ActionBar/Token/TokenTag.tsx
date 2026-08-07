@@ -1,5 +1,5 @@
 import { TokenTag } from '@lobehub/ui/chat';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useUserStore } from '@/store/user';
@@ -9,16 +9,27 @@ import ActionPopover from '../components/ActionPopover';
 import TokenDetails from './TokenDetails';
 import { useTokenBreakdown } from './useTokenBreakdown';
 
-// Module-scope element keeps ActionPopover's `content` referentially stable so
-// tag updates can't cascade a rebuild of the details panel; the popover mounts
-// it (and its own counting) only while open.
-const content = <TokenDetails />;
-
 const Token = memo(() => {
   const { t } = useTranslation('chat');
 
-  const { maxTokens, totalToken } = useTokenBreakdown();
+  const { chatsToken, historySummaryToken, maxTokens, systemRoleToken, toolsToken, totalToken } =
+    useTokenBreakdown();
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
+  const content = useMemo(
+    () => (
+      <TokenDetails
+        breakdown={{
+          chatsToken,
+          historySummaryToken,
+          maxTokens,
+          systemRoleToken,
+          toolsToken,
+          totalToken,
+        }}
+      />
+    ),
+    [chatsToken, historySummaryToken, maxTokens, systemRoleToken, toolsToken, totalToken],
+  );
 
   // Keep the composer quiet for regular users until context pressure is real;
   // dev mode always shows the tag for inspection.

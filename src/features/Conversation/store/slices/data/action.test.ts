@@ -335,6 +335,39 @@ describe('DataSlice', () => {
       // …but nothing is echoed back to the external store.
       expect(onMessagesChange).not.toHaveBeenCalled();
     });
+
+    it('discards an async replacement when the store has switched conversations', () => {
+      const oldContext = { agentId: 'agent-1', threadId: null, topicId: 'topic-old' };
+      const currentContext = { agentId: 'agent-1', threadId: null, topicId: 'topic-current' };
+      const currentMessages: UIChatMessage[] = [
+        {
+          content: 'current topic',
+          createdAt: 2000,
+          id: 'msg-current',
+          role: 'user',
+          updatedAt: 2000,
+        },
+      ];
+      const store = createStore({ context: currentContext, initialMessages: currentMessages });
+      const onMessagesChange = vi.fn();
+      store.setState({ onMessagesChange });
+
+      store.getState().replaceMessages(
+        [
+          {
+            content: 'late old topic result',
+            createdAt: 1000,
+            id: 'msg-old',
+            role: 'assistant',
+            updatedAt: 1000,
+          },
+        ],
+        { expectedContext: oldContext },
+      );
+
+      expect(store.getState().dbMessages).toEqual(currentMessages);
+      expect(onMessagesChange).not.toHaveBeenCalled();
+    });
   });
 
   describe('selectors', () => {
@@ -634,6 +667,54 @@ describe('DataSlice', () => {
       await waitFor(() => {
         expect(onMessagesChange).toHaveBeenCalledWith(mockMessages, context, { source: 'fetch' });
       });
+    });
+
+    it('discards a fetch result that resolves after switching conversations', async () => {
+      let resolveFetch!: (messages: UIChatMessage[]) => void;
+      vi.mocked(messageService.getMessages).mockReturnValue(
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        }),
+      );
+
+      const oldContext = { agentId: 'test-session', threadId: null, topicId: 'topic-old' };
+      const currentContext = { agentId: 'test-session', threadId: null, topicId: 'topic-current' };
+      const currentMessages: UIChatMessage[] = [
+        {
+          content: 'current topic',
+          createdAt: 2000,
+          id: 'msg-current',
+          role: 'user',
+          updatedAt: 2000,
+        },
+      ];
+      const store = createStore({ context: oldContext });
+      const onMessagesChange = vi.fn();
+      store.setState({ onMessagesChange });
+
+      store.getState().useFetchMessages(oldContext);
+      store.setState({
+        context: currentContext,
+        dbMessages: currentMessages,
+        displayMessages: currentMessages,
+        messagesInit: true,
+      });
+
+      await act(async () => {
+        resolveFetch([
+          {
+            content: 'late old topic result',
+            createdAt: 1000,
+            id: 'msg-old',
+            role: 'assistant',
+            updatedAt: 1000,
+          },
+        ]);
+        await Promise.resolve();
+      });
+
+      expect(store.getState().dbMessages).toEqual(currentMessages);
+      expect(onMessagesChange).not.toHaveBeenCalled();
     });
 
     it('should pass null threadId when provided as null', async () => {

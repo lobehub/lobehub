@@ -8,13 +8,17 @@ import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import TokenProgress from './TokenProgress';
-import { useTokenBreakdown } from './useTokenBreakdown';
+import { type TokenBreakdown } from './useTokenBreakdown';
 
-const TokenDetails = memo(() => {
+interface TokenDetailsProps {
+  breakdown: TokenBreakdown;
+}
+
+const TokenDetails = memo<TokenDetailsProps>(({ breakdown }) => {
   const { t } = useTranslation(['chat', 'components']);
 
   const { chatsToken, historySummaryToken, maxTokens, systemRoleToken, toolsToken, totalToken } =
-    useTokenBreakdown();
+    breakdown;
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
 
   return (
