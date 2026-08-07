@@ -36,6 +36,9 @@ vi.mock('@/store/chat/selectors', () => ({
     currentTopicMetadata: (s: { topicMetadata?: object }) => s.topicMetadata,
     currentTopicWorkingDirectory: (s: { topicWorkingDirectory?: string }) =>
       s.topicWorkingDirectory,
+    getTopicById: () => (s: { topicMetadata?: object }) => ({ metadata: s.topicMetadata }),
+    getTopicWorkingDirectory: () => (s: { topicWorkingDirectory?: string }) =>
+      s.topicWorkingDirectory,
   },
 }));
 vi.mock('@/store/device', () => ({
@@ -136,6 +139,22 @@ describe('useEffectiveWorkingDirectory', () => {
     );
 
     expect(result.current).toBe('/repo/topic-project');
+  });
+
+  it('resolves a route-scoped topic override', () => {
+    setupStores({
+      agencyConfig: { workingDirByDevice: { 'device-A': '/repo/project' } },
+      topicWorkingDirectory: '/repo/split-pane-topic',
+    });
+
+    const { result } = renderHook(() =>
+      useEffectiveWorkingDirectory('agent-1', {
+        homeFallback: false,
+        topicId: 'topic-in-split-pane',
+      }),
+    );
+
+    expect(result.current).toBe('/repo/split-pane-topic');
   });
 
   it('keeps the device default cwd with homeFallback disabled', () => {
