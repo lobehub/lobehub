@@ -58,7 +58,9 @@ export const store: CreateStore = (publicState) => (set, get) => ({
   handleSendButton: () => {
     const editor = get().editor;
     if (!editor) return;
-    if (get().sendButtonProps?.disabled) return;
+
+    const { resolveSendBlocked, sendButtonProps } = get();
+    if (resolveSendBlocked ? resolveSendBlocked() : sendButtonProps?.disabled) return;
 
     // Drop any pending AI input-completion ghost before serializing the message.
     // The suggestion is materialized as real placeholder nodes inside the

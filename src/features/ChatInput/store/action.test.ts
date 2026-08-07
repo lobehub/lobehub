@@ -131,6 +131,65 @@ describe('ChatInput store actions', () => {
     expect(dispatchCommand).not.toHaveBeenCalled();
   });
 
+  // Regression: sendButtonProps.disabled mirrors editor content through the
+  // editor's debounced onChange, so a fast type→Enter arrives while the
+  // mirror still reads "empty" and used to be silently dropped.
+  it('sends via resolveSendBlocked even when the stale disabled mirror says blocked', () => {
+    const onSend = vi.fn();
+    const editor = {
+      cleanDocument: vi.fn(),
+      focus: vi.fn(),
+      getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : { root: {} })),
+    };
+    const store = createStore({
+      editor: editor as unknown as IEditor,
+      onSend,
+      resolveSendBlocked: () => false,
+      sendButtonProps: { disabled: true, generating: false, onStop: vi.fn() },
+    });
+
+    store.getState().handleSendButton();
+
+    expect(onSend).toHaveBeenCalledOnce();
+  });
+
+  it('blocks the send when resolveSendBlocked reports blocked', () => {
+    const onSend = vi.fn();
+    const editor = {
+      cleanDocument: vi.fn(),
+      focus: vi.fn(),
+      getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : { root: {} })),
+    };
+    const store = createStore({
+      editor: editor as unknown as IEditor,
+      onSend,
+      resolveSendBlocked: () => true,
+      sendButtonProps: { disabled: false, generating: false, onStop: vi.fn() },
+    });
+
+    store.getState().handleSendButton();
+
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it('keeps gating on sendButtonProps.disabled when no resolver is provided', () => {
+    const onSend = vi.fn();
+    const editor = {
+      cleanDocument: vi.fn(),
+      focus: vi.fn(),
+      getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : { root: {} })),
+    };
+    const store = createStore({
+      editor: editor as unknown as IEditor,
+      onSend,
+      sendButtonProps: { disabled: true, generating: false, onStop: vi.fn() },
+    });
+
+    store.getState().handleSendButton();
+
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
   it('does not record history when no send handler is configured', () => {
     const editor = {
       cleanDocument: vi.fn(),

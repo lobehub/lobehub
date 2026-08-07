@@ -293,6 +293,33 @@ const ChatInput = memo<ChatInputProps>(
     // disableSend hard-blocks regardless of content (host surface is read-only).
     const disabled =
       isInputEmpty || isUploadingFiles || (!!disableQueue && isInputQueueBlocked) || !!disableSend;
+
+    // `disabled` above lags the editor: `inputMessage` mirrors content through
+    // the editor's debounced onChange, so a fast type→Enter arrives while the
+    // mirror still reads empty and the send would be silently dropped. Gate
+    // Enter/click on live state instead — handleSend re-validates all of these
+    // at trigger time, so this only mirrors the visual disabled semantics.
+    const customDisabled = customSendButtonProps?.disabled;
+    const resolveSendBlocked = useCallback(() => {
+      if (disableSend) return true;
+      if (customDisabled !== undefined) return customDisabled;
+
+      const fileStore = useFileStore.getState();
+      if (fileChatSelectors.isUploadingFiles(fileStore)) return true;
+
+      const { context: liveContext, editor } = storeApi.getState();
+      if (
+        disableQueue &&
+        operationSelectors.isInputLoadingByContext(liveContext)(useChatStore.getState())
+      )
+        return true;
+
+      const hasText = String(editor?.getMarkdownContent?.() || '').trim().length > 0;
+      const hasFiles = fileChatSelectors.chatUploadFileList(fileStore).length > 0;
+      const hasContextSelections =
+        fileChatSelectors.chatContextSelections(messageMapKey(liveContext))(fileStore).length > 0;
+      return !hasText && !hasFiles && !hasContextSelections;
+    }, [customDisabled, disableQueue, disableSend, storeApi]);
     const shouldUsePlainSendButton = !showSendMenu && !!sendMenu;
     const businessAlerts = useBusinessChatInputAlerts();
     const businessSendAreaPrefix = getBusinessChatInputSendAreaPrefix(sendAreaPrefix);
@@ -449,6 +476,7 @@ const ChatInput = memo<ChatInputProps>(
         getMessages={getMessages}
         leftActions={leftActions}
         mentionItems={mentionItems}
+        resolveSendBlocked={resolveSendBlocked}
         rightActions={rightActions}
         sendButtonProps={sendButtonProps}
         sendMenu={showSendMenu ? sendMenu : undefined}

@@ -31,6 +31,7 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
     allowExpand = true,
     slashPlacement,
     getMessages,
+    resolveSendBlocked,
   }) => {
     const editor = useEditor();
     const slashMenuRef = useRef<HTMLDivElement>(null);
@@ -68,6 +69,7 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
           leftActions={leftActions}
           mentionItems={mentionItems}
           mobile={mobile}
+          resolveSendBlocked={resolveSendBlocked}
           rightActions={rightActions}
           sendButtonProps={sendButtonProps}
           sendMenu={sendMenu}

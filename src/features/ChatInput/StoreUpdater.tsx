@@ -33,6 +33,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     allowExpand,
     slashPlacement,
     getMessages,
+    resolveSendBlocked,
   }) => {
     const storeApi = useStoreApi();
     const useStoreUpdater = createStoreUpdater(storeApi);
@@ -60,6 +61,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     useStoreUpdater('getMessages', getMessages);
 
     useStoreUpdater('sendButtonProps', sendButtonProps);
+    useStoreUpdater('resolveSendBlocked', resolveSendBlocked);
     useStoreUpdater('onSend', onSend);
     useStoreUpdater('onMarkdownContentChange', onMarkdownContentChange);
 

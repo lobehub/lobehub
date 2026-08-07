@@ -67,6 +67,15 @@ export interface PublicState {
   mobile?: boolean;
   onMarkdownContentChange?: (content: string) => void;
   onSend?: SendButtonHandler;
+  /**
+   * Live send gate consulted by `handleSendButton` instead of
+   * `sendButtonProps.disabled`. The disabled flag mirrors editor content
+   * through the editor's debounced onChange, so a fast type→Enter arrives
+   * while the mirror still reads "empty" and the send would be silently
+   * dropped. Only hosts whose onSend re-validates its own gates should
+   * provide this.
+   */
+  resolveSendBlocked?: () => boolean;
   rightActions: ActionKeys[];
   sendButtonProps?: SendButtonProps;
   sendMenu?: MenuProps;
