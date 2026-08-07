@@ -1,10 +1,5 @@
 // Disable the auto sort key eslint rule to make the code more logic and readable
-import type { CallAgentParams, CallAgentState } from '@lobechat/builtin-tool-agent-management';
-import {
-  AgentManagementApiName,
-  AgentManagementIdentifier,
-  createCallAgentManifest,
-} from '@lobechat/builtin-tool-agent-management';
+import { createCallAgentManifest } from '@lobechat/builtin-tool-agent-management';
 import { isDesktop, isHeterogeneousAgentModelId, LOADING_FLAT } from '@lobechat/const';
 import { formatSelectedSkillsContext, formatSelectedToolsContext } from '@lobechat/context-engine';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
@@ -275,7 +270,7 @@ export class ConversationLifecycleActionImpl {
     let editorData = inputEditorData;
     const { executeClientAgent, mainInputEditor } = this.#get();
     const targetInputEditor = inputEditor ?? mainInputEditor;
-    const { agentId } = context;
+    const ownerAgentId = context.agentId;
     const selectedSkills = parseSelectedSkillsFromEditorData(editorData);
     const selectedTools = parseSelectedToolsFromEditorData(editorData);
     const mentionedAgents = parseMentionedAgentsFromEditorData(editorData);
@@ -297,7 +292,7 @@ export class ConversationLifecycleActionImpl {
           }
         : undefined;
 
-    if (!agentId) {
+    if (!ownerAgentId) {
       onPreflightFailure?.();
       return;
     }
@@ -1011,6 +1006,7 @@ export class ConversationLifecycleActionImpl {
             // provider up front; the adapter backfills the actual model later
             // if the CLI reports it.
             newAssistantMessage: {
+              agentId: directMentionRoute ? agentId : undefined,
               id: tempAssistantId,
               provider: heterogeneousProvider.type,
             },
@@ -1125,6 +1121,38 @@ export class ConversationLifecycleActionImpl {
           clearNewKey: true,
           skipRefreshMessage: true,
         });
+      }
+
+      let directMentionThreadId: string | undefined;
+      let heteroExecutionAssistantId = heteroData.assistantMessageId;
+      let heteroExecutionContext = heteroContext;
+
+      if (directMentionRoute) {
+        if (!heteroTopicId) throw new Error('Direct mention requires a persisted topic');
+
+        const task = await aiAgentService.createClientTaskThread({
+          agentId,
+          assistantMessage: { provider: heterogeneousProvider.type },
+          instruction: message,
+          parentMessageId: heteroData.assistantMessageId,
+          title: message.slice(0, 50),
+          topicId: heteroTopicId,
+        });
+        if (!task.assistantMessageId) {
+          throw new Error('Direct mention thread is missing an assistant placeholder');
+        }
+
+        directMentionThreadId = task.threadId;
+        heteroExecutionAssistantId = task.assistantMessageId;
+        heteroExecutionContext = {
+          ...heteroContext,
+          agentId,
+          scope: 'sub_agent',
+          subAgentId: agentId,
+          threadId: task.threadId,
+        };
+        this.#get().replaceMessages(task.threadMessages, { context: heteroExecutionContext });
+        void this.#get().refreshThreads();
       }
 
       // No temp-message cleanup: the optimistic rows were created under the very
@@ -1448,6 +1476,7 @@ export class ConversationLifecycleActionImpl {
           // Pass groupId for group chat scenarios
           groupId: operationContext.groupId ?? undefined,
           newAssistantMessage: {
+            agentId: directMentionRoute ? agentId : undefined,
             id: tempAssistantId,
             // Pass isSupervisor metadata for group orchestration
             metadata: operationContext.isSupervisor

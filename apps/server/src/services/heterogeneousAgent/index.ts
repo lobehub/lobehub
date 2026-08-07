@@ -6,6 +6,7 @@ import {
   isHeteroStatusGuideErrorData,
   type LocalHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
+import { ThreadStatus } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';

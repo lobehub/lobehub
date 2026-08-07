@@ -2000,7 +2000,7 @@ describe('ConversationLifecycle actions', () => {
             newAssistantMessage: {
               id: expect.stringMatching(/^msg_/),
               provider: 'codex',
-            }),
+            },
           }),
           expect.any(AbortController),
         );

@@ -2029,7 +2029,7 @@ export class AiAgentService {
       ? undefined
       : await this.messageModel.create(
           {
-            agentId: persistAgentId,
+            agentId: conversationAgentId,
             content: prompt,
             files: runAttachments.fileIds,
             // Group reads filter on messages.groupId (MessageModel.query group
@@ -2070,7 +2070,7 @@ export class AiAgentService {
     // run seeds model + provider as usual.
     const assistantMessageRecord = await this.messageModel.create(
       {
-        agentId: persistAgentId,
+        agentId: assistantAgentId,
         content: LOADING_FLAT,
         // Stamp groupId so the assistant turn is visible in the group read path
         // (MessageModel.query filters group chats by messages.groupId).

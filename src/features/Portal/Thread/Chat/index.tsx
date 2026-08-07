@@ -35,93 +35,48 @@ import { useThreadActionsBarConfig } from './useThreadActionsBarConfig';
  */
 interface ThreadChatContentProps {
   composerWritable: boolean;
+  isHeterogeneousAgent: boolean;
   readOnly: boolean;
 }
 
-const ThreadChatContent = memo<ThreadChatContentProps>(({ composerWritable, readOnly }) => {
-  // Get display messages from ConversationStore to determine thread divider position
-  // With the new backend API, parent messages have threadId === null
-  // and thread messages have threadId === context.threadId
-  const displayMessages = useConversationStore(conversationSelectors.displayMessages);
+const ThreadChatContent = memo<ThreadChatContentProps>(
+  ({ composerWritable, isHeterogeneousAgent, readOnly }) => {
+    const inputMode = getThreadInputMode({
+      isExternallyOwnedThread: readOnly,
+      isHeterogeneousAgent,
+    });
+    const displayMessages = useConversationStore(conversationSelectors.displayMessages);
 
-    // Find the last parent message (source message) - it's the last message with threadId === null
     const threadSourceInfo = useMemo(() => {
-      // Find the index of the last parent message (threadId is null or undefined)
       let sourceMessageIndex = -1;
       let sourceMessageId: string | undefined;
 
-    for (const [i, msg] of displayMessages.entries()) {
-      // Parent messages don't have threadId
-      if (!msg.threadId) {
-        sourceMessageIndex = i;
-        sourceMessageId = msg.id;
-      }
-    }
-
-    return { sourceMessageId, sourceMessageIndex };
-  }, [displayMessages]);
-
-  // Custom item content renderer for thread-specific features
-  const itemContent = useCallback(
-    (index: number, id: string) => {
-      // Check if this message needs ThreadDivider (after thread source message)
-      const enableThreadDivider = threadSourceInfo.sourceMessageId === id;
-
-      // Check if this is a parent message (should be read-only)
-      // Parent messages are those with index <= sourceMessageIndex
-      const isParentMessage = index <= threadSourceInfo.sourceMessageIndex;
-
-      return (
-        <MessageItem
-          inPortalThread
-          disableEditing={readOnly || isParentMessage}
-          endRender={enableThreadDivider ? <ThreadDivider /> : undefined}
-          id={id}
-          index={index}
-        />
-      );
-    },
-    [threadSourceInfo.sourceMessageId, threadSourceInfo.sourceMessageIndex, readOnly],
-  );
-
-  return (
-    <>
-      <Suspense
-        fallback={
-          <Flexbox flex={1} height={'100%'}>
-            <SkeletonList />
-          </Flexbox>
+      for (const [i, msg] of displayMessages.entries()) {
+        if (!msg.threadId) {
+          sourceMessageIndex = i;
+          sourceMessageId = msg.id;
         }
       }
 
       return { sourceMessageId, sourceMessageIndex };
     }, [displayMessages]);
 
-    // Custom item content renderer for thread-specific features
     const itemContent = useCallback(
       (index: number, id: string) => {
-        // Check if this message needs ThreadDivider (after thread source message)
         const enableThreadDivider = threadSourceInfo.sourceMessageId === id;
-
-        // Check if this is a parent message (should be read-only)
-        // Parent messages are those with index <= sourceMessageIndex
         const isParentMessage = index <= threadSourceInfo.sourceMessageIndex;
 
         return (
           <MessageItem
             inPortalThread
-            disableEditing={isExternallyOwnedThread || isParentMessage}
+            disableEditing={readOnly || isParentMessage}
             endRender={enableThreadDivider ? <ThreadDivider /> : undefined}
             id={id}
             index={index}
           />
         );
       },
-      [
-        threadSourceInfo.sourceMessageId,
-        threadSourceInfo.sourceMessageIndex,
-        isExternallyOwnedThread,
-      ],
+      [threadSourceInfo.sourceMessageId, threadSourceInfo.sourceMessageIndex, readOnly],
     );
 
     return (
@@ -133,13 +88,22 @@ const ThreadChatContent = memo<ThreadChatContentProps>(({ composerWritable, read
             </Flexbox>
           }
         >
-          <ChatList itemContent={itemContent} />
-        </Flexbox>
-      </Suspense>
-      {composerWritable && <ChatInput leftActions={['typo']} rightActions={['contextWindow']} />}
-    </>
-  );
-});
+          <Flexbox
+            flex={1}
+            style={{ overflowX: 'hidden', overflowY: 'auto', position: 'relative' }}
+            width={'100%'}
+          >
+            <ChatList itemContent={itemContent} />
+          </Flexbox>
+        </Suspense>
+        {composerWritable && inputMode === 'heterogeneous' && <HeterogeneousChatInput />}
+        {composerWritable && inputMode === 'default' && (
+          <ChatInput leftActions={['typo']} rightActions={['contextWindow']} />
+        )}
+      </>
+    );
+  },
+);
 
 ThreadChatContent.displayName = 'ThreadChatContent';
 
@@ -170,6 +134,10 @@ const ThreadChat = memo(() => {
   const portalThread = useChatStore(portalThreadSelectors.portalCurrentThread);
   const threadMetadataResolved = !portalThreadId || !!portalThread;
   const isSubagentThread = !!portalThread?.metadata?.sourceToolCallId;
+  const threadAgentId = portalThread?.agentId || activeAgentId;
+  const isHeterogeneousAgent = useAgentStore(
+    agentByIdSelectors.isAgentHeterogeneousById(threadAgentId || ''),
+  );
 
   // Get thread-specific actionsBar config
   const actionsBarConfig = useThreadActionsBarConfig({
@@ -291,6 +259,7 @@ const ThreadChat = memo(() => {
     >
       <ThreadChatContent
         composerWritable={composerTarget.writable}
+        isHeterogeneousAgent={isHeterogeneousAgent}
         readOnly={!composerTarget.writable}
       />
     </ConversationProvider>

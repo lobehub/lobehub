@@ -170,6 +170,7 @@ export const AiSendMessageServerSchema = z.object({
   agentId: z.string().optional(),
   groupId: z.string().optional(),
   newAssistantMessage: z.object({
+    agentId: z.string().optional(),
     id: clientEntityId('messages'),
     metadata: z.record(z.string(), z.unknown()).optional(),
     model: z.string().optional(),
