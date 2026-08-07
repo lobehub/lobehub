@@ -55,6 +55,7 @@ const BASE_REF_OVERRIDES_STORAGE_KEY = 'lobechat-review-base-overrides';
 
 interface ReviewProps {
   active: boolean;
+  contextSelectionKey: string;
   /**
    * Target device the working directory lives on. Undefined for local desktop;
    * set for a remote / web-bound device so git ops route through the device RPCs.
@@ -225,7 +226,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 const Review = memo<ReviewProps>(
-  ({ active, deviceId, onToggleTree, showTree, workingDirectory }) => {
+  ({ active, contextSelectionKey, deviceId, onToggleTree, showTree, workingDirectory }) => {
     const { t } = useTranslation('chat');
     const [mode, setMode] = useLocalStorageState<ReviewMode>(REVIEW_MODE_STORAGE_KEY, 'unstaged');
     // Per-repo base-ref override — when set, the branch diff compares against
@@ -670,6 +671,7 @@ const Review = memo<ReviewProps>(
                         const expanded = activeKeys.includes(key);
                         return (
                           <FileRow
+                            contextSelectionKey={contextSelectionKey}
                             dataFileKey={key}
                             deviceId={deviceId}
                             entry={entry}

@@ -56,6 +56,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface FileRowProps {
+  contextSelectionKey: string;
   /** Scroll anchor — the tree-nav rail scrolls to `[data-file-key]` on select. */
   dataFileKey?: string;
   /** Target device the repo lives on — undefined for local desktop. */
@@ -81,6 +82,7 @@ interface FileRowProps {
 
 const FileRow = memo<FileRowProps>(
   ({
+    contextSelectionKey,
     dataFileKey,
     deviceId,
     entry,
@@ -148,6 +150,7 @@ const FileRow = memo<FileRowProps>(
             >
               <FileItemBody
                 expanded
+                contextSelectionKey={contextSelectionKey}
                 filePath={entry.filePath}
                 isBinary={entry.isBinary}
                 patch={entry.patch}

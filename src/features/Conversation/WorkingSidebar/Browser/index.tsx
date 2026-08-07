@@ -23,7 +23,6 @@ import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { electronBrowserSidebarService } from '@/services/electron/browserSidebar';
 import { browserWebviewRegistry } from '@/services/electron/browserWebviewRegistry';
 import { useChatStore } from '@/store/chat';
-import { chatSelectors } from '@/store/chat/selectors';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 
@@ -152,13 +151,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 interface BrowserPaneProps {
   /** The conversation the chat input belongs to — screenshots are attached there. */
   agentId?: string;
+  contextSelectionKey: string;
   onMetadataChange?: (metadata: { faviconUrl?: string; title: string; url: string }) => void;
   sessionId: string;
 }
 
-const BrowserPane = memo<BrowserPaneProps>(({ agentId, onMetadataChange, sessionId }) => {
+const BrowserPane = memo<BrowserPaneProps>((props) => {
+  const { agentId, contextSelectionKey, onMetadataChange, sessionId } = props;
   const { t } = useTranslation('chat');
-  const contextSelectionKey = useChatStore(chatSelectors.currentChatKey);
   const state = useBrowserSidebarState(sessionId);
   const [address, setAddress] = useState('');
   const [isEditing, setIsEditing] = useState(false);

@@ -916,11 +916,11 @@ export class ConversationLifecycleActionImpl {
     const rollbackOptimisticTopic = (action: string) => {
       if (!optimisticTopic || !optimisticTopicActive) return;
 
+      getFileStoreState().moveChatContextSelections(
+        currentContextKey,
+        messageMapKey({ ...operationContext, topicId: null }),
+      );
       if (this.#get().activeTopicId === optimisticTopic.id) {
-        getFileStoreState().moveChatContextSelections(
-          currentContextKey,
-          messageMapKey({ ...operationContext, topicId: null }),
-        );
         void this.#get().switchTopic(null, { skipRefreshMessage: true });
       }
       this.#get().internal_dispatchTopic(

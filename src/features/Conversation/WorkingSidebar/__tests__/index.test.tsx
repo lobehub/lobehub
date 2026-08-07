@@ -2,6 +2,9 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { MouseEvent, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { PortalViewType } from '@/store/chat/slices/portal/initialState';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+
 import AgentWorkingSidebar from '../index';
 
 // ─── captured RightPanel props ────────────────────────────────────────────────
@@ -58,9 +61,14 @@ const paramsSectionState = vi.hoisted(() => ({
 
 const browserPanes = vi.hoisted(() => ({
   current: [] as {
+    contextSelectionKey: string;
     onMetadataChange?: (metadata: { faviconUrl?: string; title: string; url: string }) => void;
     sessionId: string;
   }[],
+}));
+
+const renderedReview = vi.hoisted(() => ({
+  current: undefined as { contextSelectionKey: string } | undefined,
 }));
 
 const localStorageState = vi.hoisted(() => ({
@@ -76,9 +84,13 @@ const dropdownMenuState = vi.hoisted(() => ({
 const workspace = vi.hoisted(() => ({ id: undefined as string | undefined }));
 
 const chatStore = vi.hoisted(() => ({
+  activeAgentId: undefined as string | undefined,
+  activeGroupId: undefined as string | undefined,
+  activeThreadId: undefined as string | undefined,
   activeTopicId: undefined as string | undefined,
   openTopicComments: vi.fn(),
-  portalStack: [] as Array<{ topicId?: string; type: string }>,
+  portalStack: [] as Array<{ startMessageId?: string; threadId?: string; type: string }>,
+  showPortal: false,
 }));
 
 const globalStore = vi.hoisted(() => ({
@@ -111,7 +123,12 @@ vi.mock('../Files', () => ({
     return <div data-testid="files" />;
   },
 }));
-vi.mock('../Review', () => ({ default: () => <div /> }));
+vi.mock('../Review', () => ({
+  default: (props: { contextSelectionKey: string }) => {
+    renderedReview.current = props;
+    return <div />;
+  },
+}));
 vi.mock('../ProgressSection', () => ({ default: () => <div /> }));
 vi.mock('../ResourcesSection', () => ({ default: () => <div /> }));
 vi.mock('../ParamsSection', () => ({
@@ -329,8 +346,12 @@ beforeEach(() => {
   localStorageState.openTabsByContext = { 'draft:default:none': ['params'] };
   localStorageState.pinnedTabsByAgent = {};
   workspace.id = undefined;
+  chatStore.activeAgentId = undefined;
+  chatStore.activeGroupId = undefined;
+  chatStore.activeThreadId = undefined;
   chatStore.activeTopicId = undefined;
   chatStore.portalStack = [];
+  chatStore.showPortal = false;
   chatStore.openTopicComments.mockReset();
   agentStore.activeAgentId = undefined;
   agentStore.isHeterogeneous = false;
@@ -339,6 +360,7 @@ beforeEach(() => {
   effectiveConfig.workspaceScoped = false;
   platform.isDesktop = true;
   filesProps.current = undefined;
+  renderedReview.current = undefined;
   reviewState.repoType = undefined;
   reviewState.setRepoType = undefined;
   reviewState.showTree = false;
@@ -818,6 +840,28 @@ describe('AgentWorkingSidebar — tab strip', () => {
     expect(sessionIds.find((id) => id !== 'draft-agent:default')).toMatch(
       /^draft-agent:default:tab:/,
     );
+  });
+
+  it('routes Browser and Review context selections to the open portal thread', async () => {
+    const agentId = 'agent';
+    const topicId = 'topic';
+    const threadId = 'thread';
+    const expectedKey = messageMapKey({ agentId, threadId, topicId });
+    agentStore.activeAgentId = agentId;
+    chatStore.activeAgentId = agentId;
+    chatStore.activeTopicId = topicId;
+    chatStore.portalStack = [{ threadId, type: PortalViewType.Thread }];
+    chatStore.showPortal = true;
+    reviewState.repoType = 'git';
+    reviewState.workingDirectory = '/repo';
+    localStorageState.openTabsByContext = { [`topic:${topicId}`]: ['browser'] };
+    globalStore.status.workingSidebarTab = 'browser';
+
+    render(<AgentWorkingSidebar />);
+
+    await waitFor(() => expect(browserPanes.current.at(-1)).toBeDefined());
+    expect(browserPanes.current.at(-1)?.contextSelectionKey).toBe(expectedKey);
+    expect(renderedReview.current?.contextSelectionKey).toBe(expectedKey);
   });
 
   it('uses browser page metadata for the tab title and favicon', async () => {

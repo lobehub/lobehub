@@ -11,8 +11,6 @@ import { memo, type MouseEvent, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { gitService } from '@/services/git';
-import { useChatStore } from '@/store/chat';
-import { chatSelectors } from '@/store/chat/selectors';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 
@@ -307,6 +305,7 @@ export const FileItemHeader = memo<FileItemHeaderProps>(
 FileItemHeader.displayName = 'ReviewFileItemHeader';
 
 interface FileItemBodyProps {
+  contextSelectionKey: string;
   /** Whether the Collapse panel is expanded — gates the heavy PatchDiff render. */
   expanded: boolean;
   filePath: string;
@@ -322,6 +321,7 @@ interface FileItemBodyProps {
 
 const FileItemBody = memo<FileItemBodyProps>(
   ({
+    contextSelectionKey,
     filePath,
     patch,
     isBinary,
@@ -333,7 +333,6 @@ const FileItemBody = memo<FileItemBodyProps>(
     textDiff,
   }) => {
     const { t } = useTranslation('chat');
-    const contextSelectionKey = useChatStore(chatSelectors.currentChatKey);
     const addChatContextSelection = useFileStore((s) => s.addChatContextSelection);
     const fileName = path.basename(filePath);
     const ext = path.extname(filePath).slice(1).toLowerCase();

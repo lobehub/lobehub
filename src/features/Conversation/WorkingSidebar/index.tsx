@@ -56,6 +56,7 @@ import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -196,12 +197,36 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   ]);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const workspaceId = useActiveWorkspaceId();
-  const [topicId, currentPortalView, portalOpen, openTopicComments] = useChatStore((s) => [
-    s.activeTopicId,
-    chatPortalSelectors.currentView(s),
-    chatPortalSelectors.showStandalonePortal(s),
-    s.openTopicComments,
-  ]);
+  const [topicId, currentPortalView, portalOpen, openTopicComments, contextSelectionKey] =
+    useChatStore((s) => {
+      const portalView = chatPortalSelectors.currentView(s);
+      const showPortal = chatPortalSelectors.showStandalonePortal(s);
+      const portalThreadView =
+        showPortal && portalView?.type === PortalViewType.Thread ? portalView : undefined;
+
+      return [
+        s.activeTopicId,
+        portalView,
+        showPortal,
+        s.openTopicComments,
+        messageMapKey(
+          portalThreadView
+            ? {
+                agentId: s.activeAgentId,
+                isNew: !portalThreadView.threadId,
+                scope: 'thread',
+                threadId: portalThreadView.threadId,
+                topicId: s.activeTopicId,
+              }
+            : {
+                agentId: s.activeAgentId,
+                groupId: s.activeGroupId,
+                threadId: s.activeThreadId,
+                topicId: s.activeTopicId,
+              },
+        ),
+      ];
+    });
   const portalWidth = getPortalViewWidth({
     legacyWidth: legacyPortalWidth,
     viewType: currentPortalView?.type,
@@ -880,6 +905,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
             <Flexbox className={activeTab === 'review' ? styles.pane : styles.paneHidden}>
               <Review
                 active={activeTab === 'review'}
+                contextSelectionKey={contextSelectionKey}
                 deviceId={remoteDeviceId}
                 showTree={showReviewTree}
                 workingDirectory={workingDirectory}
@@ -906,6 +932,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                 >
                   <BrowserPane
                     agentId={activeAgentId}
+                    contextSelectionKey={contextSelectionKey}
                     sessionId={sessionId}
                     onMetadataChange={(metadata) => {
                       const metadataKey = `${openTabsContextKey}:${tab}`;

@@ -1229,6 +1229,89 @@ describe('ConversationLifecycle actions', () => {
         expect(useChatStore.getState().activeTopicId).not.toBe(optimisticTopicId);
       });
 
+      it('should restore optimistic topic selections after switching away before rollback', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const topicKey = topicMapKey({ agentId });
+        const newContextKey = messageMapKey({ agentId, topicId: null });
+        const otherTopicId = 'other-topic';
+        let resolveServerSend!: (value: any) => void;
+        const serverSendPromise = new Promise<any>((resolve) => {
+          resolveServerSend = resolve;
+        });
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: undefined,
+            executeClientAgent: vi.fn().mockResolvedValue(undefined),
+            summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
+            topicDataMap: {
+              [topicKey]: {
+                currentPage: 0,
+                hasMore: false,
+                isExpandingPageSize: false,
+                isLoadingMore: false,
+                items: [],
+                pageSize: 20,
+                total: 0,
+              },
+            },
+          });
+        });
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockReturnValue(serverSendPromise);
+
+        let sendPromise!: ReturnType<typeof result.current.sendMessage>;
+        act(() => {
+          sendPromise = result.current.sendMessage({
+            context: { agentId, threadId: null, topicId: null },
+            message: TEST_CONTENT.USER_MESSAGE,
+          });
+        });
+
+        await waitFor(() =>
+          expect(useChatStore.getState().topicDataMap[topicKey]?.items[0]?.id).toMatch(/^tpc_/),
+        );
+        const optimisticTopicId = useChatStore.getState().topicDataMap[topicKey]!.items[0].id;
+        const optimisticContextKey = messageMapKey({ agentId, topicId: optimisticTopicId });
+        const pendingSelection = {
+          content: 'context added before the failed send',
+          id: 'rollback-selection',
+          type: 'text' as const,
+        };
+
+        act(() => {
+          useFileStore.getState().addChatContextSelection({
+            contextKey: optimisticContextKey,
+            selection: pendingSelection,
+          });
+          useChatStore.setState({ activeTopicId: otherTopicId });
+        });
+
+        await act(async () => {
+          resolveServerSend({
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            messages: [
+              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+              createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+            ],
+            topics: undefined,
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          } as any);
+          await sendPromise;
+        });
+
+        expect(useChatStore.getState().activeTopicId).toBe(otherTopicId);
+        expect(useChatStore.getState().topicDataMap[topicKey]?.items ?? []).toEqual([]);
+        expect(
+          fileChatSelectors.chatContextSelections(newContextKey)(useFileStore.getState()),
+        ).toEqual([pendingSelection]);
+        expect(
+          fileChatSelectors.chatContextSelections(optimisticContextKey)(useFileStore.getState()),
+        ).toEqual([]);
+      });
+
       it('should persist selected tool tags into user message content before runtime execution', async () => {
         const { result } = renderHook(() => useChatStore());
 
