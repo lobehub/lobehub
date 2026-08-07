@@ -144,8 +144,9 @@ const extractTopicWorkingDirectory = (topic: ChatTopic | undefined): string | un
 };
 
 /**
- * Get a topic's working directory by id, falling back to the active topic when
- * no id is given. Prefer the explicit-id form for async work (e.g. a streaming
+ * Get a topic's working directory by id, falling back to the active topic only
+ * when the argument is omitted. An explicit null represents a new-topic route
+ * and therefore has no topic-level directory. Prefer the explicit-id form for async work (e.g. a streaming
  * tool call): the executing topic is captured at request time, so reading the
  * *active* topic here would return the wrong project if the user switched topics
  * mid-stream.
@@ -153,7 +154,9 @@ const extractTopicWorkingDirectory = (topic: ChatTopic | undefined): string | un
 const getTopicWorkingDirectory =
   (id?: string | null) =>
   (s: ChatStoreState): string | undefined =>
-    extractTopicWorkingDirectory(id ? getTopicById(id)(s) : currentActiveTopic(s));
+    id === null
+      ? undefined
+      : extractTopicWorkingDirectory(id ? getTopicById(id)(s) : currentActiveTopic(s));
 
 /**
  * Get current active topic's working directory.

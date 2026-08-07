@@ -185,6 +185,13 @@ describe('TabHost', () => {
     expect(useElectronStore.getState().activeTabId).toBe('b');
     expect(slotA.style.display).toBe('');
     expect(slotB.style.display).toBe('');
+
+    act(() => {
+      useElectronStore.setState({ activeTabId: 'a' });
+      slotB.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    });
+
+    expect(useElectronStore.getState().activeTabId).toBe('b');
   });
 
   it('disposes a router evicted past the LRU cap and recreates it fresh when reactivated', async () => {

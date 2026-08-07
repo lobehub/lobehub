@@ -264,7 +264,10 @@ describe('topicSelectors', () => {
 
     it('falls back to the active topic when no id is given', () => {
       expect(topicSelectors.getTopicWorkingDirectory()(wdState)).toBe('/project-a');
-      expect(topicSelectors.getTopicWorkingDirectory(null)(wdState)).toBe('/project-a');
+    });
+
+    it('treats an explicit null as a new-topic route without a directory', () => {
+      expect(topicSelectors.getTopicWorkingDirectory(null)(wdState)).toBeUndefined();
     });
 
     it('returns undefined for an unknown topic id', () => {

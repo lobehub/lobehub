@@ -148,6 +148,7 @@ const TabHost = ({ createRouter = createTabRouter }: TabHostProps) => {
                 data-focused={tab.id === activeTabId ? 'true' : undefined}
                 data-pane={splitView ? (isPrimary ? 'primary' : 'secondary') : 'single'}
                 style={isVisible ? paneStyle : hiddenSlotStyle}
+                onFocusCapture={() => focusTabPane(tab.id)}
                 onPointerDownCapture={() => focusTabPane(tab.id)}
               >
                 <TabIdContext value={tab.id}>
