@@ -4,7 +4,7 @@ import { Alert, Button } from '@lobehub/ui/base-ui';
 import { type FormInstance, type InputRef } from 'antd';
 import { Badge, Divider, Form } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { Mail } from 'lucide-react';
+import { KeyRound, Mail } from 'lucide-react';
 import { type CSSProperties, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -45,9 +45,11 @@ export interface SignInEmailStepProps {
   oAuthSSOProviders: string[];
   onCheckUser: (values: { email: string }) => Promise<void>;
   onGoToSignup: () => void;
+  onPasskeySignIn: () => void;
   onResetEmail: () => void;
   onSetPassword: () => void;
   onSocialSignIn: (provider: string) => void;
+  passkeyLoading: boolean;
   serverConfigInit: boolean;
   sessionExpired?: boolean;
   socialLoading: string | null;
@@ -60,11 +62,13 @@ export const SignInEmailStep = ({
   lastAuthProvider,
   loading,
   oAuthSSOProviders,
+  passkeyLoading,
   serverConfigInit,
   sessionExpired,
   socialLoading,
   onCheckUser,
   onGoToSignup,
+  onPasskeySignIn,
   onResetEmail,
   onSetPassword,
   onSocialSignIn,
@@ -145,6 +149,21 @@ export const SignInEmailStep = ({
               button
             );
           })}
+          <Button
+            block
+            icon={<Icon icon={KeyRound} />}
+            loading={passkeyLoading}
+            size="large"
+            styles={{ icon: PROVIDER_ICON_STYLE }}
+            type="fill"
+            onClick={() =>
+              continueWithAgreement(() => {
+                onPasskeySignIn();
+              })
+            }
+          >
+            {t('betterAuth.signin.passkeyButton')}
+          </Button>
           {showEmailForm && divider}
         </Flexbox>
       )}

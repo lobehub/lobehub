@@ -1,0 +1,81 @@
+import { message } from '@lobehub/ui';
+import { useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { useListPasskeys } from '@/libs/better-auth/auth-client';
+
+export interface PasskeyItem {
+  createdAt?: Date | string | null;
+  id: string;
+  name?: string | null;
+}
+
+/**
+ * Passkey registration and removal for the signed-in user.
+ *
+ * `useListPasskeys` is the plugin's own reactive query, so the list refreshes
+ * itself after mutations instead of us keeping a duplicate copy in a store.
+ *
+ * WebAuthn surfaces user cancellation as a thrown `NotAllowedError` rather than
+ * an API error. That is an ordinary outcome — the user dismissed the browser
+ * prompt — so it must not be reported as a failure.
+ */
+export const usePasskeys = () => {
+  const { t } = useTranslation('auth');
+  const { data, isPending, refetch } = useListPasskeys();
+
+  const addPasskey = useCallback(async () => {
+    const { passkey } = await import('@/libs/better-auth/auth-client');
+
+    try {
+      const result = await passkey.addPasskey();
+
+      // better-auth returns errors in the payload; only a thrown error means
+      // the browser-side ceremony itself failed.
+      if (result?.error) {
+        message.error(result.error.message || t('profile.passkey.addError'));
+        return false;
+      }
+
+      message.success(t('profile.passkey.addSuccess'));
+      await refetch();
+      return true;
+    } catch (error) {
+      // The user dismissed the platform prompt, or no authenticator is
+      // available. Neither deserves an error toast.
+      if (
+        error instanceof Error &&
+        (error.name === 'NotAllowedError' || error.name === 'AbortError')
+      ) {
+        return false;
+      }
+      message.error(t('profile.passkey.addError'));
+      return false;
+    }
+  }, [refetch, t]);
+
+  const deletePasskey = useCallback(
+    async (id: string) => {
+      const { passkey } = await import('@/libs/better-auth/auth-client');
+
+      const result = await passkey.deletePasskey({ id });
+      if (result?.error) {
+        message.error(result.error.message || t('profile.passkey.deleteError'));
+        return false;
+      }
+
+      message.success(t('profile.passkey.deleteSuccess'));
+      await refetch();
+      return true;
+    },
+    [refetch, t],
+  );
+
+  return {
+    addPasskey,
+    deletePasskey,
+    isLoading: isPending,
+    passkeys: (data ?? []) as PasskeyItem[],
+    refetch,
+  };
+};

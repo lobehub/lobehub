@@ -1,3 +1,4 @@
+import { passkeyClient } from '@better-auth/passkey/client';
 import { CLIENT_VERSION_HEADER, CURRENT_VERSION } from '@lobechat/const';
 import {
   adminClient,
@@ -12,6 +13,7 @@ import { type auth } from '@/auth';
 export const {
   changeEmail,
   linkSocial,
+  passkey,
   oauth2,
   accountInfo,
   listAccounts,
@@ -22,6 +24,7 @@ export const {
   signOut,
   signUp,
   unlinkAccount,
+  useListPasskeys,
   useSession,
 } = createAuthClient({
   fetchOptions: {
@@ -35,5 +38,8 @@ export const {
     genericOAuthClient(),
     // Always include magicLinkClient - server will reject if not enabled
     magicLinkClient(),
+    // The passkey plugin is always enabled server-side (see define-config.ts),
+    // so the client counterpart can be registered unconditionally too.
+    passkeyClient(),
   ],
 });

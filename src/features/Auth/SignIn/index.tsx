@@ -17,6 +17,7 @@ const SignIn = () => {
     handleGoToSignup,
     handleResendEmail,
     handleSignIn,
+    handlePasskeySignIn,
     handleSocialSignIn,
     isSocialOnly,
     lastAuthProvider,
@@ -26,6 +27,7 @@ const SignIn = () => {
     sessionExpired,
     sentInfo,
     serverConfigInit,
+    passkeyLoading,
     socialLoading,
     step,
   } = useSignIn();
@@ -62,11 +64,13 @@ const SignIn = () => {
       lastAuthProvider={lastAuthProvider}
       loading={loading}
       oAuthSSOProviders={oAuthSSOProviders}
+      passkeyLoading={passkeyLoading}
       serverConfigInit={serverConfigInit}
       sessionExpired={sessionExpired}
       socialLoading={socialLoading}
       onCheckUser={handleCheckUser}
       onGoToSignup={handleGoToSignup}
+      onPasskeySignIn={handlePasskeySignIn}
       onResetEmail={handleBackToEmail}
       onSetPassword={handleForgotPassword}
       onSocialSignIn={handleSocialSignIn}

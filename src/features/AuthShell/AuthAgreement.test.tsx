@@ -78,9 +78,11 @@ describe('SignInEmailStep', () => {
           isSocialOnly={false}
           loading={false}
           oAuthSSOProviders={['google']}
+          passkeyLoading={false}
           socialLoading={null}
           onCheckUser={vi.fn(async () => {})}
           onGoToSignup={vi.fn()}
+          onPasskeySignIn={vi.fn()}
           onResetEmail={vi.fn()}
           onSetPassword={vi.fn()}
           onSocialSignIn={onSocialSignIn}

@@ -54,6 +54,7 @@ export const useSignIn = () => {
   // slow network can't be double-clicked into multiple emails.
   const [sending, setSending] = useState(false);
   const [socialLoading, setSocialLoading] = useState<string | null>(null);
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
   const [sentInfo, setSentInfo] = useState<SentEmailInfo | null>(null);
@@ -294,6 +295,34 @@ export const useSignIn = () => {
     }
   };
 
+  const handlePasskeySignIn = async () => {
+    setPasskeyLoading(true);
+    await trackLoginOrSignupClicked({
+      provider: 'passkey',
+      spm: 'signin.passkey.click',
+    });
+
+    try {
+      const callbackUrl = searchParams.get('callbackUrl') || '/';
+      const result = await signIn.passkey();
+
+      if (result && 'error' in result && result.error) throw result.error;
+
+      // Unlike OAuth there is no provider redirect, so navigate ourselves.
+      navigate(callbackUrl);
+    } catch (error) {
+      // Dismissing the platform prompt raises NotAllowedError/AbortError.
+      // That is the user changing their mind, not a failure worth reporting.
+      const name = error instanceof Error ? error.name : '';
+      if (name !== 'NotAllowedError' && name !== 'AbortError') {
+        console.error('passkey sign in error:', error);
+        toast.error(t('betterAuth.signin.passkeyError'));
+      }
+    } finally {
+      setPasskeyLoading(false);
+    }
+  };
+
   const handleBackToEmail = () => {
     setStep('email');
     setEmail('');
@@ -385,6 +414,7 @@ export const useSignIn = () => {
     handleGoToSignup,
     handleResendEmail,
     handleSignIn,
+    handlePasskeySignIn,
     handleSocialSignIn,
     isSocialOnly,
     lastAuthProvider,
@@ -394,6 +424,7 @@ export const useSignIn = () => {
     sessionExpired,
     sentInfo,
     serverConfigInit: enableBusinessFeatures ? true : serverConfigInit,
+    passkeyLoading,
     socialLoading,
     step,
   };
