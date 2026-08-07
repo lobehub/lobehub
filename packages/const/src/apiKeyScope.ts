@@ -312,7 +312,11 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
   'generation.deleteGeneration': ['file:write'],
   'generationBatch.deleteGenerationBatch': ['file:write'],
   'generationTopic.deleteTopic': ['file:write'],
+  // sharing/visibility control is asset management, not generation
+  'generationTopic.setTopicVisibility': ['file:write'],
   'generationTopic.updateTopic': ['file:write'],
+  // fetches caller-supplied image data and uploads a cover file
+  'generationTopic.updateTopicCover': ['file:write'],
   // Market tool-execution surface (mounted on the tools router): external
   // tool calls burn quota / cause side effects; file export writes files
   'market.callCloudMcpEndpoint': ['model:invoke'],
