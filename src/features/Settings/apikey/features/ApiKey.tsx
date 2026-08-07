@@ -14,6 +14,7 @@ import urlJoin from 'url-join';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { type LiteTableColumn } from '@/components/LiteTable';
 import LiteTable from '@/components/LiteTable';
+import { isFullAccessApiKey } from '@/const/apiKeyScope';
 import { usePermission } from '@/hooks/usePermission';
 import { useClientDataSWR } from '@/libs/swr';
 import { apiKeyKeys } from '@/libs/swr/keys';
@@ -154,6 +155,28 @@ const ApiKey: FC = () => {
         ),
       title: t('apikey.list.columns.key'),
       width: 230,
+    },
+    {
+      key: 'scopes',
+      render: (apiKey: ApiKeyItem) => {
+        // scopes are immutable after creation, so this column is read-only
+        if (isFullAccessApiKey(apiKey.scopes)) {
+          return <span>{t('apikey.scopes.fullAccess')}</span>;
+        }
+
+        const scopes = apiKey.scopes!;
+        const shown = scopes.slice(0, 2).join(', ');
+        const rest = scopes.length - 2;
+
+        return (
+          <span title={scopes.join(', ')}>
+            {shown}
+            {rest > 0 ? ` +${rest}` : ''}
+          </span>
+        );
+      },
+      title: t('apikey.list.columns.scopes'),
+      width: 150,
     },
     ...(activeWorkspaceId
       ? [

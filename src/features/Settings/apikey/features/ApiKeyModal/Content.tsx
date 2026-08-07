@@ -7,11 +7,13 @@ import { type Dayjs } from 'dayjs';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { API_KEY_FULL_ACCESS_SCOPE, type ApiKeyScope } from '@/const/apiKeyScope';
 import { type CreateApiKeyParams } from '@/types/apiKey';
 
 import ApiKeyDatePicker from '../ApiKeyDatePicker';
+import ScopeSelector from './ScopeSelector';
 
-type FormValues = Omit<CreateApiKeyParams, 'expiresAt'> & {
+type FormValues = Omit<CreateApiKeyParams, 'expiresAt' | 'scopes'> & {
   expiresAt: Dayjs | null;
 };
 
@@ -24,13 +26,21 @@ const ApiKeyModalContent: FC<ApiKeyModalContentProps> = ({ onSubmit }) => {
   const { close } = useModalContext();
   const [form] = Form.useForm<FormValues>();
   const [loading, setLoading] = useState(false);
+  // scopes are immutable after creation, so the choice only exists here
+  const [fullAccess, setFullAccess] = useState(true);
+  const [selectedScopes, setSelectedScopes] = useState<ApiKeyScope[]>([]);
+
+  const scopeMissing = !fullAccess && selectedScopes.length === 0;
 
   const handleFinish = async (values: FormValues) => {
+    if (scopeMissing) return;
+
     setLoading(true);
     try {
       await onSubmit({
         ...values,
         expiresAt: values.expiresAt ? values.expiresAt.toDate() : null,
+        scopes: fullAccess ? [API_KEY_FULL_ACCESS_SCOPE] : selectedScopes,
       } satisfies CreateApiKeyParams);
       close();
     } finally {
@@ -60,7 +70,27 @@ const ApiKeyModalContent: FC<ApiKeyModalContentProps> = ({ onSubmit }) => {
           <ApiKeyDatePicker style={{ width: '100%' }} />
         </Form.Item>
 
-        <Button block htmlType={'submit'} loading={loading} type={'primary'}>
+        <Form.Item
+          help={scopeMissing ? t('apikey.form.fields.scopes.required') : undefined}
+          label={t('apikey.form.fields.scopes.label')}
+          style={itemStyle}
+          validateStatus={scopeMissing ? 'error' : undefined}
+        >
+          <ScopeSelector
+            fullAccess={fullAccess}
+            selected={selectedScopes}
+            onFullAccessChange={setFullAccess}
+            onSelectedChange={setSelectedScopes}
+          />
+        </Form.Item>
+
+        <Button
+          block
+          disabled={scopeMissing}
+          htmlType={'submit'}
+          loading={loading}
+          type={'primary'}
+        >
           {t('apikey.form.submit')}
         </Button>
       </Flexbox>

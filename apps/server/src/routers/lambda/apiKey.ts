@@ -1,3 +1,4 @@
+import { API_KEY_FULL_ACCESS_SCOPE, isValidApiKeyScope } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -32,6 +33,13 @@ export const apiKeyRouter = router({
       z.object({
         expiresAt: z.date().nullish(),
         name: z.string(),
+        // Scopes are set at creation time only (immutable afterwards).
+        // `undefined`/`null` = full access; entries must come from the
+        // catalog — unknown scope strings are rejected.
+        scopes: z
+          .array(z.string().refine(isValidApiKeyScope, { message: 'Unknown API key scope' }))
+          .min(1)
+          .nullish(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -42,7 +50,12 @@ export const apiKeyRouter = router({
         });
       }
 
-      return await ctx.apiKeyModel.create(input);
+      // normalize: an explicit full-access selection stores exactly ['*']
+      const scopes = input.scopes?.includes(API_KEY_FULL_ACCESS_SCOPE)
+        ? [API_KEY_FULL_ACCESS_SCOPE]
+        : input.scopes;
+
+      return await ctx.apiKeyModel.create({ ...input, scopes });
     }),
 
   deleteAllApiKeys: apiKeyProcedure

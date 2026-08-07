@@ -11,6 +11,7 @@
 import { openTelemetry } from '../middleware/openTelemetry';
 import { userAuth } from '../middleware/userAuth';
 import { trpc } from './init';
+import { apiKeyScopeGuard } from './middleware/apiKeyScope';
 import { heteroOperationAuth } from './middleware/heteroOperationAuth';
 import { oidcAuth } from './middleware/oidcAuth';
 
@@ -29,7 +30,9 @@ const baseProcedure = trpc.procedure.use(openTelemetry);
 export const publicProcedure = baseProcedure;
 
 // procedure that asserts that the user is logged in
-export const authedProcedure = baseProcedure.use(oidcAuth).use(userAuth);
+// `apiKeyScopeGuard` narrows API-key-authenticated calls to the key's scopes;
+// session/OIDC auth and full-access keys pass through untouched.
+export const authedProcedure = baseProcedure.use(oidcAuth).use(userAuth).use(apiKeyScopeGuard);
 
 // procedure for hetero-agent ingest/finish endpoints — requires a `hetero-operation` JWT
 export const heteroAuthedProcedure = baseProcedure.use(heteroOperationAuth).use(userAuth);

@@ -1,0 +1,286 @@
+/**
+ * API Key Scopes
+ *
+ * A scope describes what a signed API key is allowed to do. The effective
+ * permission of a request is always the intersection of the issuer's own
+ * permissions (RBAC / workspace role) and the key's scopes — scopes can only
+ * narrow, never widen.
+ *
+ * Storage semantics on `api_keys.scopes`:
+ * - `NULL`  → full access (every key issued before scopes existed)
+ * - `['*']` → full access, explicitly chosen at creation time
+ * - list    → restricted key; each entry must be a member of `API_KEY_SCOPES`
+ *
+ * Scopes are immutable after creation (same as GitHub tokens): re-issue the
+ * key to change its powers.
+ */
+
+export const API_KEY_FULL_ACCESS_SCOPE = '*';
+
+/**
+ * The selectable scope catalog. `model:invoke` is its own tier because it is
+ * the one that burns money (chat/completions, image, video, asr).
+ *
+ * Deliberately absent (a restricted key can never obtain them):
+ * - `api_key:*` — keys must not mint keys (self-provisioning)
+ * - `rbac:*`, member/role management — privilege escalation surface
+ * - billing (spend / subscription / top-up / credits)
+ */
+export const API_KEY_SCOPES = [
+  API_KEY_FULL_ACCESS_SCOPE,
+  'agent:read',
+  'agent:write',
+  'chat:read',
+  'chat:write',
+  'model:invoke',
+  'model:read',
+  'model:write',
+  'file:read',
+  'file:write',
+  'knowledge:read',
+  'knowledge:write',
+  'workspace:read',
+  'workspace:write',
+  'user:read',
+  'user:write',
+] as const;
+
+export type ApiKeyScope = (typeof API_KEY_SCOPES)[number];
+
+const API_KEY_SCOPE_SET: ReadonlySet<string> = new Set(API_KEY_SCOPES);
+
+export const isValidApiKeyScope = (scope: string): scope is ApiKeyScope =>
+  API_KEY_SCOPE_SET.has(scope);
+
+/**
+ * `NULL` (legacy key) and `['*']` both mean full access.
+ */
+export const isFullAccessApiKey = (scopes?: string[] | null): boolean =>
+  !scopes || scopes.includes(API_KEY_FULL_ACCESS_SCOPE);
+
+/**
+ * Does this scope list satisfy `required`? `x:write` implies `x:read` so a
+ * write-capable key never has to double-select the read box.
+ */
+export const hasApiKeyScope = (
+  scopes: string[] | null | undefined,
+  required: ApiKeyScope,
+): boolean => {
+  if (isFullAccessApiKey(scopes)) return true;
+  if (scopes!.includes(required)) return true;
+
+  if (required.endsWith(':read')) {
+    const writeTwin = required.replace(/:read$/, ':write');
+    return scopes!.includes(writeTwin);
+  }
+
+  return false;
+};
+
+// ---------------------------------------------------------------------------
+// OpenAPI (Hono) projection: RBAC permission action → required scope
+// ---------------------------------------------------------------------------
+
+/**
+ * RBAC resource (the part before `:` in a permission action) → scope domain.
+ * `null` means the resource is never reachable with a restricted key.
+ */
+const PERMISSION_RESOURCE_TO_SCOPE_DOMAIN: Record<string, string | null> = {
+  agent: 'agent',
+  agent_label: 'agent',
+  ai_model: 'model',
+  ai_provider: 'model',
+  api_key: null,
+  document: 'knowledge',
+  file: 'file',
+  knowledge_base: 'knowledge',
+  message: 'chat',
+  rbac: null,
+  session: 'chat',
+  session_group: 'chat',
+  topic: 'chat',
+  topic_comment: 'chat',
+  translation: 'chat',
+  user: 'user',
+  workspace: 'workspace',
+  workspace_audit: 'workspace',
+  workspace_member: 'workspace',
+  workspace_role: null,
+};
+
+const READ_ACTIONS = new Set(['read']);
+
+/**
+ * Map an RBAC permission action to the API key scope required to use it.
+ * Accepts both the bare action form (`agent:create`) and the scope-suffixed
+ * permission code form (`agent:create:owner`).
+ *
+ * Returns:
+ * - an `ApiKeyScope` — restricted keys holding it may proceed
+ * - `null` — the action is off-limits to restricted keys (fail closed)
+ */
+export const requiredApiKeyScopeForPermission = (permission: string): ApiKeyScope | null => {
+  const [resource, action] = permission.split(':');
+  if (!resource || !action) return null;
+
+  // the single money-burning action gets its own tier
+  if (resource === 'ai_model' && action === 'invoke') return 'model:invoke';
+
+  const domain = PERMISSION_RESOURCE_TO_SCOPE_DOMAIN[resource];
+  if (!domain) return null;
+
+  const suffix = READ_ACTIONS.has(action) ? 'read' : 'write';
+  const scope = `${domain}:${suffix}`;
+
+  return isValidApiKeyScope(scope) ? scope : null;
+};
+
+// ---------------------------------------------------------------------------
+// tRPC lambda projection: router namespace → required scope
+// ---------------------------------------------------------------------------
+
+/**
+ * Per-namespace rule for the tRPC lambda surface (also covers the tools
+ * router, which shares `authedProcedure`).
+ *
+ * - `'open'`     → no scope required (bootstrap / public info)
+ * - `'blocked'`  → restricted keys can never call it (full-access keys can)
+ * - `{ read, write }` → scope for queries / mutations; `null` blocks that half
+ * - `{ any }`    → same scope for queries and mutations
+ */
+export type TrpcNamespaceScopeRule =
+  | 'open'
+  | 'blocked'
+  | { any: ApiKeyScope }
+  | { read: ApiKeyScope | null; write: ApiKeyScope | null };
+
+const rw = (read: ApiKeyScope | null, write: ApiKeyScope | null): TrpcNamespaceScopeRule => ({
+  read,
+  write,
+});
+
+/**
+ * Every namespace mounted on the lambda (and tools) router MUST appear here —
+ * the guard denies unknown namespaces, and a consistency test in
+ * `apps/server` fails when a newly added router is left uncategorized.
+ */
+export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule> = {
+  accountDeletion: 'blocked',
+  acceptance: 'blocked',
+  agent: rw('agent:read', 'agent:write'),
+  // bot channel wiring carries channel credentials
+  agentBotProvider: 'blocked',
+  agentDocument: rw('knowledge:read', 'knowledge:write'),
+  agentEval: 'blocked',
+  agentEvalExternal: 'blocked',
+  agentLabel: rw('agent:read', 'agent:write'),
+  agentNotify: rw('agent:read', 'agent:write'),
+  agentQuota: rw('agent:read', null),
+  agentSignal: rw('agent:read', 'agent:write'),
+  agentSkills: rw('agent:read', 'agent:write'),
+  aiAgent: rw('agent:read', 'agent:write'),
+  aiChat: { any: 'model:invoke' },
+  aiModel: rw('model:read', 'model:write'),
+  aiProvider: rw('model:read', 'model:write'),
+  // keys must not mint or manage keys
+  apiKey: 'blocked',
+  asr: { any: 'model:invoke' },
+  botMessage: rw('chat:read', 'chat:write'),
+  brief: rw('chat:read', 'chat:write'),
+  changelog: 'open',
+  chunk: rw('knowledge:read', 'knowledge:write'),
+  comfyui: rw('model:read', 'model:write'),
+  // third-party integrations hold external credentials
+  composio: 'blocked',
+  config: 'open',
+  connector: 'blocked',
+  device: 'blocked',
+  document: rw('knowledge:read', 'knowledge:write'),
+  exporter: { any: 'chat:read' },
+  file: rw('file:read', 'file:write'),
+  followUpAction: rw('chat:read', 'chat:write'),
+  generation: { any: 'model:invoke' },
+  generationBatch: { any: 'model:invoke' },
+  generationTopic: { any: 'model:invoke' },
+  group: rw('agent:read', 'agent:write'),
+  healthcheck: 'open',
+  home: rw('chat:read', 'chat:write'),
+  image: { any: 'model:invoke' },
+  importer: rw('chat:read', 'chat:write'),
+  klavis: 'blocked',
+  knowledge: rw('knowledge:read', 'knowledge:write'),
+  knowledgeBase: rw('knowledge:read', 'knowledge:write'),
+  llmGenerationTracing: 'blocked',
+  market: rw('agent:read', 'agent:write'),
+  // tool execution inside a chat run
+  mcp: { any: 'model:invoke' },
+  message: rw('chat:read', 'chat:write'),
+  // IM channel management carries channel credentials
+  messenger: 'blocked',
+  notebook: rw('knowledge:read', 'knowledge:write'),
+  notification: rw('user:read', 'user:write'),
+  oauthApp: 'blocked',
+  oauthDeviceFlow: 'blocked',
+  pageShare: rw('chat:read', 'chat:write'),
+  plugin: rw('agent:read', 'agent:write'),
+  project: rw('agent:read', 'agent:write'),
+  pushToken: 'blocked',
+  ragEval: 'blocked',
+  recent: rw('chat:read', null),
+  referral: 'blocked',
+  resourcePermission: 'blocked',
+  search: rw('chat:read', null),
+  session: rw('chat:read', 'chat:write'),
+  sessionGroup: rw('chat:read', 'chat:write'),
+  share: rw('chat:read', 'chat:write'),
+  spend: 'blocked',
+  storageOverage: 'blocked',
+  subscription: 'blocked',
+  task: rw('agent:read', 'agent:write'),
+  taskTemplate: rw('agent:read', 'agent:write'),
+  thread: rw('chat:read', 'chat:write'),
+  topUp: 'blocked',
+  topic: rw('chat:read', 'chat:write'),
+  topicComment: rw('chat:read', 'chat:write'),
+  upload: rw('file:read', 'file:write'),
+  usage: 'blocked',
+  user: rw('user:read', 'user:write'),
+  userMemories: rw('user:read', 'user:write'),
+  userMemory: rw('user:read', 'user:write'),
+  verify: 'blocked',
+  video: { any: 'model:invoke' },
+  waitlist: 'blocked',
+  webBrowsing: { any: 'model:invoke' },
+  work: rw('agent:read', 'agent:write'),
+  workspace: rw('workspace:read', 'workspace:write'),
+  workspaceAuditLog: rw('workspace:read', null),
+  workspaceCredits: 'blocked',
+  workspaceCreds: 'blocked',
+  workspaceData: 'blocked',
+  workspaceMember: rw('workspace:read', null),
+  workspaceUsage: 'blocked',
+  workspaceUserSettings: rw('workspace:read', 'workspace:write'),
+};
+
+export type TrpcScopeDecision = { scope: ApiKeyScope } | { open: true } | { blocked: true };
+
+/**
+ * Decide what a restricted API key needs to call `path` (`namespace.proc`).
+ * Unknown namespaces are blocked — fail closed, so a newly added router is
+ * never silently exposed to restricted keys.
+ */
+export const requiredApiKeyScopeForTrpc = (
+  path: string,
+  type: 'query' | 'mutation' | 'subscription',
+): TrpcScopeDecision => {
+  const namespace = path.split('.')[0];
+  const rule = TRPC_NAMESPACE_API_KEY_RULES[namespace];
+
+  if (!rule) return { blocked: true };
+  if (rule === 'open') return { open: true };
+  if (rule === 'blocked') return { blocked: true };
+  if ('any' in rule) return { scope: rule.any };
+
+  const scope = type === 'query' ? rule.read : rule.write;
+  return scope ? { scope } : { blocked: true };
+};
