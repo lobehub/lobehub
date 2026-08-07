@@ -10,7 +10,7 @@ import { DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import {
   useKeepSidebarGroupsListed,
   useKeepSidebarListed,
-} from '@/routes/(main)/home/_layout/Body/Agent/List/useAgentList';
+} from '@/features/HomeSidebar/Body/Agent/List/useAgentList';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useHomeStore } from '@/store/home';

@@ -19,20 +19,20 @@ const mocks = vi.hoisted(() => ({
   useFetchResources: vi.fn(),
 }));
 
-vi.mock('@/routes/(main)/resource/features/hooks/useFolderPath', () => ({
+vi.mock('@/features/ResourceManager/hooks/useFolderPath', () => ({
   useFolderPath: () => ({ currentFolderSlug: null }),
 }));
 
-vi.mock('@/routes/(main)/resource/features/hooks/useResourceManagerUrlSync', () => ({
+vi.mock('@/features/ResourceManager/hooks/useResourceManagerUrlSync', () => ({
   useResourceManagerUrlSync: vi.fn(),
 }));
 
-vi.mock('@/routes/(main)/resource/features/store', () => ({
+vi.mock('@/features/ResourceManager/store', () => ({
   useResourceManagerStore: (selector: (state: typeof mocks.resourceManagerState) => unknown) =>
     selector(mocks.resourceManagerState),
 }));
 
-vi.mock('@/routes/(main)/resource/features/store/selectors', () => ({
+vi.mock('@/features/ResourceManager/store/selectors', () => ({
   getResourceQueryVisibility: (
     libraryId: string | undefined,
     visibility: 'private' | 'workspace',

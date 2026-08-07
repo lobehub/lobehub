@@ -5,12 +5,12 @@ import { memo, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import AgentListContent from '@/features/HomeSidebar/Body/Agent/List/AgentListContent';
+import { AgentModalProvider } from '@/features/HomeSidebar/Body/Agent/ModalProvider';
+import PrivateList from '@/features/HomeSidebar/Body/Private/List';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
-import AgentListContent from '@/routes/(main)/home/_layout/Body/Agent/List/AgentListContent';
-import { AgentModalProvider } from '@/routes/(main)/home/_layout/Body/Agent/ModalProvider';
-import PrivateList from '@/routes/(main)/home/_layout/Body/Private/List';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 

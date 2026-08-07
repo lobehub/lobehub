@@ -8,8 +8,8 @@ import { type UIEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
-import { sortFileList } from '@/routes/(main)/resource/features/store/selectors';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { sortFileList } from '@/features/ResourceManager/store/selectors';
 import { useFileStore } from '@/store/file';
 import { type FileListItem } from '@/types/files';
 import type { ResourceQueryParams } from '@/types/resource';

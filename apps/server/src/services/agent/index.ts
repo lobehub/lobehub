@@ -86,15 +86,30 @@ export class AgentService {
 
     const mergedConfig = this.mergeDefaultConfig(agent, defaultAgentConfig);
     if (!mergedConfig) return null;
-    const identity = { slug: (mergedConfig as { slug?: string | null }).slug ?? slug };
+
+    return this.applyBuiltinIdentity(mergedConfig, slug);
+  }
+
+  /**
+   * Builtin agent rows are provisioned without avatar/title (see
+   * `AgentModel.getBuiltinAgent`) — their identity lives in the builtin-agents
+   * package definition, and in branding constants for the inbox. Every read
+   * path that returns an agent snapshot must re-apply that identity: the
+   * client treats `fetchAgentConfig` responses as authoritative full snapshots
+   * and replaces its cached entry, so a snapshot missing the avatar clobbers a
+   * previously correct one and the UI falls back to the default robot avatar.
+   */
+  private applyBuiltinIdentity<T extends LobeAgentConfig>(config: T, fallbackSlug?: string): T {
+    const slug = (config as { slug?: string | null }).slug ?? fallbackSlug;
+    const identity = { slug };
     const normalizedConfig = {
-      ...mergedConfig,
-      avatar: normalizeInboxAgentAvatar(mergedConfig.avatar, identity),
-      title: normalizeInboxAgentTitle(mergedConfig.title, identity),
+      ...config,
+      avatar: normalizeInboxAgentAvatar(config.avatar, identity),
+      title: normalizeInboxAgentTitle(config.title, identity),
     };
 
     // Use builtin avatar as fallback only when DB has no custom avatar
-    const builtinAgent = BUILTIN_AGENTS[slug as BuiltinAgentSlug];
+    const builtinAgent = slug ? BUILTIN_AGENTS[slug as BuiltinAgentSlug] : undefined;
     if (builtinAgent?.avatar && !normalizedConfig.avatar) {
       return { ...normalizedConfig, avatar: builtinAgent.avatar };
     }
@@ -118,7 +133,10 @@ export class AgentService {
       this.userModel.getUserSettingsDefaultAgentConfig(),
     ]);
 
-    return this.mergeDefaultConfig(agent, defaultAgentConfig) as AgentConfigWithId | null;
+    const config = this.mergeDefaultConfig(agent, defaultAgentConfig) as AgentConfigWithId | null;
+    if (!config) return null;
+
+    return this.applyBuiltinIdentity(config);
   }
 
   /**
@@ -141,16 +159,18 @@ export class AgentService {
     const config = this.mergeDefaultConfig(agent, defaultAgentConfig);
     if (!config) return null;
 
+    const normalizedConfig = this.applyBuiltinIdentity(config);
+
     // Merge AI-generated welcome data if available
     if (welcomeData) {
       return {
-        ...config,
+        ...normalizedConfig,
         openingMessage: welcomeData.welcomeMessage,
         openingQuestions: welcomeData.openQuestions,
       };
     }
 
-    return config;
+    return normalizedConfig;
   }
 
   /**

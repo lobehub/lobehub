@@ -141,25 +141,19 @@ function formatSize(doc: Pick<AgentContextDocument, 'content' | 'contentCharCoun
 }
 
 /**
- * Render a Date / ISO string as a short relative-time token like "2d ago".
+ * Render a Date / ISO string as an absolute UTC date like "2026-04-27".
+ *
+ * Deliberately NOT a relative time ("15m ago"): the index sits at the very
+ * front of the prompt, so any string that drifts as wall-clock time passes
+ * invalidates the provider-side prompt cache on every request even when no
+ * document changed. An absolute date only changes when the document itself
+ * is updated. See https://github.com/lobehub/lobehub/issues/15624
  */
-function formatRelative(at: Date | string | undefined, now: Date): string {
+function formatUpdatedDate(at: Date | string | undefined): string {
   if (!at) return '—';
   const date = typeof at === 'string' ? new Date(at) : at;
   if (Number.isNaN(date.getTime())) return '—';
-
-  const sec = Math.max(0, Math.floor((now.getTime() - date.getTime()) / 1000));
-  if (sec < 60) return 'now';
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}m ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h ago`;
-  const day = Math.floor(hr / 24);
-  if (day < 30) return `${day}d ago`;
-  const month = Math.floor(day / 30);
-  if (month < 12) return `${month}mo ago`;
-  const year = Math.floor(day / 365);
-  return `${year}y ago`;
+  return date.toISOString().slice(0, 10);
 }
 
 const TITLE_MAX_WIDTH = 60;
@@ -176,18 +170,14 @@ function truncate(s: string, max: number): string {
  * Render a list of progressive docs as a fixed-width table:
  *
  *   TITLE                ID                                    SIZE    UPDATED
- *   daily-brief.txt      2af6eb88-8bdb-468f-887f-620baa394efa  1.4k    2d ago
+ *   daily-brief.txt      2af6eb88-8bdb-468f-887f-620baa394efa  1.4k    2026-04-27
  */
-function buildIndexTable(
-  docs: AgentContextDocument[],
-  context: AgentDocumentFilterContext,
-): string {
-  const now = context.currentTime ?? new Date();
+function buildIndexTable(docs: AgentContextDocument[]): string {
   const rows = docs.map((d) => ({
     id: d.id ?? '',
     size: formatSize(d),
     title: truncate(pickRowTitle(d), TITLE_MAX_WIDTH),
-    updated: formatRelative(d.updatedAt, now),
+    updated: formatUpdatedDate(d.updatedAt),
   }));
 
   const titleWidth = Math.max('TITLE'.length, ...rows.map((r) => r.title.length));
@@ -279,13 +269,13 @@ function formatFolderSummary(docs: AgentContextDocument[]): string {
 /**
  * Render collapsed folders as a fixed-width table, newest folder first:
  *
- *   📁 dailyBrief  2af6…394efa  18 docs, 4.3k–20k  1mo ago
- *   📁 周报         6b1c…07d21  9 docs             1mo ago
+ *   📁 dailyBrief  2af6…394efa  18 docs, 4.3k–20k  2026-03-29
+ *   📁 周报         6b1c…07d21  9 docs             2026-03-27
  *
  * The ID column is the folder's `documentId` — the value the model passes to
  * `listDocuments(parentId=…)` to expand the folder on demand.
  */
-function buildFolderTable(folders: FolderGroup[], now: Date): string {
+function buildFolderTable(folders: FolderGroup[]): string {
   const rows = folders
     .map((f) => ({
       id: f.parentId,
@@ -306,7 +296,7 @@ function buildFolderTable(folders: FolderGroup[], now: Date): string {
         row.title.padEnd(titleWidth),
         row.id.padEnd(idWidth),
         row.summary.padEnd(summaryWidth),
-        row.time ? formatRelative(new Date(row.time), now) : '—',
+        row.time ? formatUpdatedDate(new Date(row.time)) : '—',
       ].join(sep),
     )
     .join('\n');
@@ -361,7 +351,6 @@ export function combineDocuments(
     // Loose docs render as flat rows; docs sharing a folder (≥2) collapse into
     // one summary row so archive-heavy agents don't spend tokens on every entry.
     const { flat, folders } = partitionFolders(userDocs);
-    const now = context.currentTime ?? new Date();
 
     const headerLines: string[] = [
       `${userDocs.length} user-created doc${userDocs.length === 1 ? '' : 's'}. Use readDocument(id) for full content.`,
@@ -378,8 +367,8 @@ export function combineDocuments(
     }
 
     const bodyBlocks: string[] = [];
-    if (flat.length > 0) bodyBlocks.push(buildIndexTable(sortByRecency(flat), context));
-    if (folders.length > 0) bodyBlocks.push(buildFolderTable(folders, now));
+    if (flat.length > 0) bodyBlocks.push(buildIndexTable(sortByRecency(flat)));
+    if (folders.length > 0) bodyBlocks.push(buildFolderTable(folders));
     const tableBlock = bodyBlocks.length > 0 ? `\n\n${bodyBlocks.join('\n\n')}` : '';
 
     parts.push(

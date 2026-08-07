@@ -48,9 +48,11 @@ const Nav = memo(() => {
     agentSelectors.currentAgentHeterogeneousProviderType,
   );
   const hideProfile = !isAgentEditable || !isAccessResolved || !canEditContent || !canEditResource;
-  // Claude Code agents can use message channels; other hetero providers (e.g. codex) still hide it.
-  const hideChannel =
-    hideProfile || (!!heterogeneousProviderType && heterogeneousProviderType !== 'claude-code');
+  const supportsMessageChannels =
+    !heterogeneousProviderType ||
+    heterogeneousProviderType === 'claude-code' ||
+    heterogeneousProviderType === 'codex';
+  const hideChannel = hideProfile || !supportsMessageChannels;
   const switchTopic = useChatStore((s) => s.switchTopic);
   const [openNewTopicOrSaveTopic] = useChatStore((s) => [s.openNewTopicOrSaveTopic]);
   const isNewTopicSendInFlight = useChatStore(topicSelectors.isNewTopicSendInFlight);

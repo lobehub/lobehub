@@ -13,7 +13,7 @@ vi.mock('@/business/client/hooks/useFetchWorkspaceMembers', () => ({
   useFetchWorkspaceMembers: useFetchWorkspaceMembersMock,
 }));
 
-vi.mock('@/routes/(main)/settings/stats/features/overview/WorkspaceWelcome', () => ({
+vi.mock('@/features/Settings/stats/features/overview/WorkspaceWelcome', () => ({
   default: () => <div>Workspace Welcome</div>,
 }));
 
@@ -24,7 +24,7 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/routes/(main)/settings/stats', () => ({
+vi.mock('@/features/Settings/stats', () => ({
   default: (props: {
     resolveUser: (userId: string) => { avatar?: string | null; name: string };
     showSettingHeader?: boolean;

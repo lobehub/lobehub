@@ -22,9 +22,9 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
+import { openCustomizeSidebarModal } from '@/features/HomeSidebar/Body/CustomizeSidebarModal';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useInitRecents } from '@/hooks/useInitRecents';
-import { openCustomizeSidebarModal } from '@/routes/(main)/home/_layout/Body/CustomizeSidebarModal';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { reorderSidebarItems } from '@/store/global/selectors/systemStatus';

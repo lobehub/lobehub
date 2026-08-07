@@ -8,12 +8,12 @@ import { createStaticStyles, cssVar, cx } from 'antd-style';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { showContextMenu } from '@/libs/contextMenu';
 import {
   getTransparentDragImage,
   useDragActive,
   useSetCurrentDrag,
-} from '@/routes/(main)/resource/features/DndContextWrapper';
+} from '@/features/ResourceManager/DndContextWrapper';
+import { showContextMenu } from '@/libs/contextMenu';
 import { documentService } from '@/services/document';
 import { getChunkTargetId, useFileStore } from '@/store/file';
 import { type FileListItem } from '@/types/files';

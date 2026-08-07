@@ -18,6 +18,9 @@ const permissionMock = vi.hoisted(() => ({
   create_content: true,
   edit_own_content: true,
 }));
+const agentMock = vi.hoisted(() => ({
+  heterogeneousProviderType: undefined as string | undefined,
+}));
 
 vi.mock('@/features/ResourcePermission/useResourceAccess', () => ({
   useResourceAccess: () => ({ canEditResource: true, isAccessResolved: true }),
@@ -98,12 +101,13 @@ vi.mock('@/hooks/usePermission', () => ({
 }));
 
 vi.mock('@/store/agent', () => ({
-  useAgentStore: (selector: (state: unknown) => unknown) => selector({}),
+  useAgentStore: (selector: (state: typeof agentMock) => unknown) => selector(agentMock),
 }));
 
 vi.mock('@/store/agent/selectors', () => ({
   agentSelectors: {
-    currentAgentHeterogeneousProviderType: () => undefined,
+    currentAgentHeterogeneousProviderType: (state: typeof agentMock) =>
+      state.heterogeneousProviderType,
   },
 }));
 
@@ -144,6 +148,7 @@ describe('Agent sidebar header nav', () => {
     usePathnameMock.mockReset();
     permissionMock.create_content = true;
     permissionMock.edit_own_content = true;
+    agentMock.heterogeneousProviderType = undefined;
 
     useParamsMock.mockReturnValue({ aid: 'agt_eH4zL98zBx5u', topicId: 'tpc_2FCHvjS7d4CA' });
   });
@@ -185,5 +190,23 @@ describe('Agent sidebar header nav', () => {
 
     expect(pushMock).not.toHaveBeenCalled();
     expect(mutateMock).not.toHaveBeenCalled();
+  });
+
+  it('shows message channels for Codex agents', () => {
+    agentMock.heterogeneousProviderType = 'codex';
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+
+    expect(screen.getByRole('button', { name: 'tab.integration' })).toBeInTheDocument();
+  });
+
+  it('hides message channels for device-only heterogeneous agents', () => {
+    agentMock.heterogeneousProviderType = 'opencode';
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+
+    expect(screen.queryByRole('button', { name: 'tab.integration' })).not.toBeInTheDocument();
   });
 });
