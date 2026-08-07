@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+
 import { useClientPollingSWR } from '@/libs/swr';
 import { agentService } from '@/services/agent';
 import { useChatStore } from '@/store/chat';
@@ -38,8 +40,8 @@ export interface AgentTransferJobStatus {
  * sits just under the tick: each tick issues ONE request no matter how many
  * rows are visible.
  */
-export const useAgentTransferJob = (agentId?: string | null) =>
-  useClientPollingSWR<AgentTransferJobStatus | null>(
+export const useAgentTransferJob = (agentId?: string | null) => {
+  const response = useClientPollingSWR<AgentTransferJobStatus | null>(
     agentId ? ['agent-transfer-job', agentId] : null,
     () => agentService.getTransferJobStatus(agentId!, getVisibleTopicIds()),
     {
@@ -47,3 +49,18 @@ export const useAgentTransferJob = (agentId?: string | null) =>
       refreshInterval: (data) => (data ? 3000 : 0),
     },
   );
+
+  // The candidate set is an implicit fetcher argument, not part of the SWR
+  // key: opening a topic that the previous (capped) candidates missed would
+  // otherwise read stale `pendingTopicIds` until the next 3s tick, leaving
+  // the conversation ungated against unmigrated history. Revalidate the
+  // moment the active topic changes while a job is pending.
+  const activeTopicId = useChatStore((s) => s.activeTopicId);
+  const hasPendingJob = !!response.data;
+  const { mutate } = response;
+  useEffect(() => {
+    if (hasPendingJob) void mutate();
+  }, [activeTopicId, hasPendingJob, mutate]);
+
+  return response;
+};

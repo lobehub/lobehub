@@ -38,11 +38,14 @@ export const TopicMigrationPlaceholder = memo<MigrationBannerProps>(({ agentId, 
   const { t } = useTranslation('chat');
   const { mutate } = useAgentTransferJob(agentId);
   const refreshMessages = useChatStore((s) => s.refreshMessages);
-  const prioritized = useRef(false);
+  // Tracks WHICH topic was prioritized (not just whether one was): switching
+  // straight from one pending topic to another reuses this component, and the
+  // new topic must jump the queue too.
+  const prioritizedTopicId = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!topicId || prioritized.current) return;
-    prioritized.current = true;
+    if (!topicId || prioritizedTopicId.current === topicId) return;
+    prioritizedTopicId.current = topicId;
 
     void agentService
       .prioritizeTransferTopic(topicId)
@@ -55,7 +58,7 @@ export const TopicMigrationPlaceholder = memo<MigrationBannerProps>(({ agentId, 
         }
       })
       .catch(() => {
-        prioritized.current = false;
+        if (prioritizedTopicId.current === topicId) prioritizedTopicId.current = null;
       });
   }, [topicId, mutate, refreshMessages]);
 
