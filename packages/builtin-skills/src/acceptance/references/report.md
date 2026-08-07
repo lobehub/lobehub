@@ -144,18 +144,28 @@ free prose; they render under the check next to the outcome.
 ### Before/after comparison pairs
 
 The page renders a complete pair under tinted bands (red `before`, green
-`after`). Both halves need the same string `id`; set `layout`
-(`horizontal` default; `vertical` for wide, short strips) and a `label` stating
-the measured delta on each side:
+`after`). Both halves need the same string `id`; use `layout: "horizontal"` for
+a left/right comparison and `layout: "vertical"` for a top/bottom comparison.
+When omitted, `layout` defaults to `horizontal`. Add a `label` stating the
+measured delta on each side:
 
 ```json
 "evidence": [
   { "path": "assets/before.png",
-    "comparison": { "id": "topic-row", "role": "before", "layout": "vertical", "label": "before: 11px" } },
+    "comparison": { "id": "topic-row", "role": "before", "layout": "horizontal", "label": "before: 11px" } },
   { "path": "assets/after.png",
-    "comparison": { "id": "topic-row", "role": "after", "layout": "vertical", "label": "after: 12px" } }
+    "comparison": { "id": "topic-row", "role": "after", "layout": "horizontal", "label": "after: 12px" } }
 ]
 ```
+
+Choose the layout by comparison intent, not by the source image dimensions:
+
+- `horizontal` — before on the left, after on the right. Use it when the reader
+  should compare the same region across two versions at a glance. This is the
+  normal choice for full-page or full-window before/after screenshots.
+- `vertical` — before on top, after below. Use it when preserving each image's
+  full width matters more than simultaneous scanning, such as a very wide,
+  shallow toolbar or timeline strip.
 
 A comparison pair means the same view in two states — sequential steps of a
 flow are ordinary ordered evidence with captions, not a pair.
