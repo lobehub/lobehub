@@ -5,6 +5,43 @@ import { initialState } from '@/store/file/initialState';
 import { fileManagerSelectors, getChunkTargetId } from './selectors';
 
 describe('fileManagerSelectors', () => {
+  describe('overviewUploadingStatus', () => {
+    it('keeps failed uploads in the error state instead of treating them as completed', () => {
+      const state = {
+        ...initialState,
+        dockUploadFileList: [
+          {
+            file: { name: 'failed.pdf' },
+            id: 'failed-upload',
+            status: 'error',
+          },
+        ],
+      } as any;
+
+      expect(fileManagerSelectors.overviewUploadingStatus(state)).toBe('error');
+    });
+
+    it('reports active work while another upload is already in error', () => {
+      const state = {
+        ...initialState,
+        dockUploadFileList: [
+          {
+            file: { name: 'failed.pdf' },
+            id: 'failed-upload',
+            status: 'error',
+          },
+          {
+            file: { name: 'active.pdf' },
+            id: 'active-upload',
+            status: 'uploading',
+          },
+        ],
+      } as any;
+
+      expect(fileManagerSelectors.overviewUploadingStatus(state)).toBe('uploading');
+    });
+  });
+
   describe('getFileByChunkTargetId', () => {
     it('should find resources by linked file id when they are not in fileList', () => {
       const state = {

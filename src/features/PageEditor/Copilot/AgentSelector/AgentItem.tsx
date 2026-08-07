@@ -4,8 +4,8 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import HeterogeneousTag from '@/features/HeterogeneousTag';
+import AgentAvatar from '@/features/HomeSidebar/Body/Agent/List/AgentItem/Avatar';
 import NavItem from '@/features/NavPanel/components/NavItem';
-import AgentAvatar from '@/routes/(main)/home/_layout/Body/Agent/List/AgentItem/Avatar';
 
 interface AgentItemProps {
   active: boolean;

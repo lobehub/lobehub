@@ -6,28 +6,29 @@ Keep it concrete and compact: report observed state, not generic readiness claim
 ## Readiness verdicts
 
 - **✅ Ready**: every prerequisite for the proposed run is verified.
-- **⚠️ Ready with warnings**: execution can proceed; list non-blocking limitations and
-  their effect on evidence or scope.
-- **❌ Blocked**: execution cannot start until one or more prerequisites are resolved.
-- **⏳ Pending**: an agent-owned check is actively being resolved and has not reached a
-  final readiness verdict yet.
+- **⚠️ Ready with warnings**: execution can proceed; list non-blocking limitations
+  and their effect on evidence or scope.
+- **❌ Blocked**: execution cannot start until one or more prerequisites are
+  resolved.
+- **⏳ Pending**: an agent-owned check is actively being resolved and has not
+  reached a final readiness verdict yet.
 
 Always prefix the overall verdict and every Status cell with its emoji marker:
 `✅ Ready`, `⚠️ Warning`, `❌ Blocked`, or `⏳ Pending`. Do not use color words or
 bare status text without the marker; the table must remain scannable in clients
 that do not render semantic colors.
 
-Fix safe environment mechanics yourself before reporting. Separate remaining
-items by owner:
+Fix safe environment mechanics yourself before reporting. Separate remaining items
+by owner:
 
-- **Codex-owned**: dependencies, processes, ports, generated local env, seeded
+- **Agent-owned**: dependencies, processes, ports, generated local env, seeded
   fixtures, navigation, retries, and other work possible within the task's scope.
 - **User-owned**: secrets the user must supply, device/2FA approval, permissions
   only the user can grant, destructive authorization, or an unresolved product
   choice that materially changes the plan.
 
-Never put a Codex-owned item under “Needed from you.” If none remain, write
-`None` explicitly.
+Never put an agent-owned item under "Needed from you." If none remain, write `None`
+explicitly.
 
 ## Template
 
@@ -41,7 +42,7 @@ Environment
 | Workspace / branch | <✅ Ready/⚠️ Warning/❌ Blocked/⏳ Pending> | <path, branch/worktree, relevant dirty-state note>  |
 | Dependencies       | <✅ Ready/⚠️ Warning/❌ Blocked/⏳ Pending> | <root and selected standalone app status>           |
 | Runtime / ports    | <✅ Ready/⚠️ Warning/❌ Blocked/⏳ Pending> | <resolved URLs/ports and ownership or availability> |
-| Required services  | <✅ Ready/⚠️ Warning/❌ Blocked/⏳ Pending> | <DB, Redis, QStash, dev server—only those in scope> |
+| Required services  | <✅ Ready/⚠️ Warning/❌ Blocked/⏳ Pending> | <DB, cache, queue, dev server—only those in scope>  |
 | Auth               | <✅ Ready/⚠️ Warning/❌ Blocked/⏳ Pending> | <selected surface and verified signed-in state>     |
 | Evidence capture   | <✅ Ready/⚠️ Warning/❌ Blocked/⏳ Pending> | <CDP or OS capture readiness>                       |
 
@@ -60,40 +61,44 @@ Scope and assumptions
 
 Needed before execution
 
-- Codex will resolve: <remaining non-blocking or in-progress agent-owned work, or None>
+- Agent will resolve: <remaining non-blocking or in-progress agent-owned work, or None>
 - Needed from you: <exact user-owned prerequisite and why it is required, or None>
 ```
 
-Do not include irrelevant environment rows. Add a row when the run has another
-hard prerequisite, such as a native bot app, gateway, fixture repository, or
-specific external account.
+Do not include irrelevant environment rows. Add a row when the run has another hard
+prerequisite, such as a native app, gateway, fixture repository, or specific
+external account.
 
-When a check refines or replaces a requirement from an earlier Acceptance round, keep the
-old stable id if it is the same assertion. If the semantic assertion needs a new id, declare
-the replacement explicitly with `supersedes: ['old-check-id']`; title similarity is never a
-merge signal. For every user-visible UI case, plan a dedicated screenshot or recording for
-that exact claim—program output may supplement it but cannot replace visual evidence.
+When a check refines or replaces a requirement from an earlier Acceptance round,
+keep the old stable id if it is the same assertion. If the semantic assertion needs
+a new id, declare the replacement explicitly with `supersedes: ['old-check-id']`;
+title similarity is never a merge signal. For every user-visible UI case, plan a
+dedicated screenshot or recording for that exact claim — program output may
+supplement it but cannot replace visual evidence.
 
-On a follow-up round, seed the plan from `lh verify acceptance view <subject> --json`
-before writing any case (see SKILL.md "Before the next round"). Per-check policy:
+On a follow-up round, seed the plan from
+`lh acceptance view <subject> --json` before writing any case:
 
-- `userReview.action == "accept"` — user-settled. OMIT it from the new plan
-  entirely: no re-run, no restating. The union carries it forward untouched;
-  a settled check is not yours to touch again.
-- `userReview.action == "reject"` with `stale: false` — the round's primary work
-  items. Quote the user's `comment` / `annotations[].comment` in the plan case's
-  expected outcome so the fix is verified against the actual feedback, and reuse
-  the EXACT stable id so the re-run lands on the same union row (same `C#`).
-- everything else — plan by the check's own `state` (failed / uncertain first),
-  again reusing stable ids; only a semantic change warrants a new id, and then
-  ONLY with `supersedes: ['old-id']` — a fresh id without it renders as a new
-  parallel row, not an iteration.
+- Accepted checks are user-settled; omit them from the new plan.
+- Rejected, non-stale checks are the primary repair items. Carry their comments
+  and annotations into the expected outcome, and reuse their exact stable ids.
+- Plan all remaining checks from their current state, again reusing stable ids.
+  A semantic replacement requires a new id plus `supersedes: ['old-id']`.
+- Treat `supersedes` as persistent lineage. When a later round reuses a successor
+  id, copy its complete historical `supersedes` list into the new plan again.
+  Never assume an earlier round made the relationship permanent: the Acceptance
+  union uses the latest plan snapshot for that id, so a later omission can split
+  the successor and replaced check back into parallel rows.
+- Before publish, compare every reused plan id against `acceptance view`. If its
+  latest or historical plan declared `supersedes`, fail the preflight until the
+  new plan carries the same complete list (unless this round deliberately creates
+  another semantic replacement and declares that new chain explicitly).
 
 ## Confirmation behavior
 
-After the feedback, use the runtime structured question tool
-(`request_user_input` / ask-user-question equivalent). Do not bury the question
-inside the template text.
+For the first run attached to a subject Acceptance, use the runtime structured
+question tool (`request_user_input` / ask-user-question equivalent) after the
+feedback. Do not bury the question inside the template text.
 
 When the verdict is **Ready** or **Ready with warnings**, use:
 
@@ -109,3 +114,20 @@ When the verdict is **Blocked**, do not offer Start. Use:
 Match button labels to the user's language. Wait for the user's response. If the
 user resolves a blocker, re-check the affected environment item and present an
 updated gate; do not rely only on the user's statement that it is fixed.
+
+### Follow-up rounds
+
+The first approved plan authorizes later repair-and-reverify iterations on the
+same subject Acceptance. For a follow-up triggered by user feedback or an
+iteration request:
+
+- read `lh acceptance view <subject> --json`;
+- silently re-check environment and auth;
+- repair and re-run the affected stable check ids;
+- publish a new immutable round to the same Acceptance automatically;
+- do not ask the user to approve another routine plan.
+
+Present a new confirmation gate only when scope, business goal, evidence surface,
+external authority, destructiveness, or a user-owned prerequisite materially
+changes. A code revision, local server restart, fixture update, screenshot
+recapture, retry, or automatic follow-up publication does not reset approval.

@@ -13,6 +13,7 @@ import Group from './Group';
 let mockIsCollapsed = false;
 let mockIsGenerating = false;
 let mockDbMessages: { createdAt?: Date | number | string | null; id: string }[] = [];
+let mockOperations: { metadata: Record<string, unknown>; status: string }[] = [];
 
 vi.mock('@lobehub/ui', () => ({
   Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
@@ -30,7 +31,7 @@ vi.mock('@/store/chat', () => ({
 
 vi.mock('@/store/chat/slices/operation/selectors', () => ({
   operationSelectors: {
-    getOperationsByMessage: () => () => [],
+    getOperationsByMessage: () => () => mockOperations,
   },
 }));
 
@@ -179,6 +180,7 @@ describe('Group', () => {
     mockIsCollapsed = false;
     mockIsGenerating = false;
     mockDbMessages = [];
+    mockOperations = [];
   });
 
   it('keeps a long mixed single-tool block inline in its natural order', () => {
@@ -407,6 +409,62 @@ describe('Group', () => {
     // sibling for every turn, latest or not — never swallowed into the fold.
     expect(fold.contains(answer)).toBe(false);
     expect(fold.contains(screen.getByTestId('workflow-segment'))).toBe(true);
+    expect(fold).toHaveAttribute('data-step-count', '2');
+  });
+
+  it('folds as soon as the operation’s visible output ends, before terminal completion', () => {
+    // After `visible_output_end` the op stays `running` for seconds of terminal
+    // bookkeeping (persistence, agent_runtime_end, completeRun). Folding must
+    // key off the visible end, not the terminal status flip.
+    mockOperations = [{ metadata: { visibleLoadingDone: true }, status: 'running' }];
+
+    render(
+      <Group
+        enableProcessFold
+        isLatestItem
+        id="assistant-1"
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: 'Running the checks.',
+            id: 'block-1',
+            tools: [
+              { apiName: 'bash', id: 'tool-1', result: { content: 'ok' } } as any,
+              { apiName: 'bash', id: 'tool-2', result: { content: 'ok' } } as any,
+            ],
+          }),
+          blk({ content: 'Here is the final answer.', id: 'block-2' }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId('process-fold')).toBeInTheDocument();
+  });
+
+  it('does not fold while the operation is still visibly running', () => {
+    mockOperations = [{ metadata: {}, status: 'running' }];
+
+    render(
+      <Group
+        enableProcessFold
+        isLatestItem
+        id="assistant-1"
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: 'Running the checks.',
+            id: 'block-1',
+            tools: [
+              { apiName: 'bash', id: 'tool-1', result: { content: 'ok' } } as any,
+              { apiName: 'bash', id: 'tool-2', result: { content: 'ok' } } as any,
+            ],
+          }),
+          blk({ content: 'Here is the final answer.', id: 'block-2' }),
+        ]}
+      />,
+    );
+
+    expect(screen.queryByTestId('process-fold')).not.toBeInTheDocument();
   });
 
   it('keeps the latest finished turn’s final answer visible outside the fold', () => {
@@ -533,6 +591,55 @@ describe('Group', () => {
             id: 'block-1',
             tools: [{ apiName: 'bash', id: 'tool-1', result: { content: 'done' } } as any],
           }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId('tail-running')).toHaveAttribute('data-id', 'assistant-1');
+  });
+
+  it('does not add a tail indicator when the inline segment ends on a LOADING_FLAT placeholder', () => {
+    // The settled tool is followed by a LOADING_FLAT placeholder that stays
+    // inside the inline segment; that block mounts MessageContent and renders
+    // its OWN running line, so the tail must NOT stack a second identical one.
+    mockIsGenerating = true;
+    render(
+      <Group
+        isLatestItem
+        id="assistant-1"
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: '',
+            id: 'block-1',
+            tools: [{ apiName: 'bash', id: 'tool-1', result: { content: 'done' } } as any],
+          }),
+          blk({ content: LOADING_FLAT, id: 'block-2' }),
+        ]}
+      />,
+    );
+
+    expect(screen.queryByTestId('tail-running')).not.toBeInTheDocument();
+  });
+
+  it('keeps the tail indicator when the trailing block is a blank content:"" shell', () => {
+    // The gateway emits an empty `content: ''` assistant shell on stream_start.
+    // ContentBlock does NOT mount MessageContent for it (no text/LOADING_FLAT/
+    // tools), so it renders no running line of its own — the tail must stay to
+    // fill the gap after the settled tool until the first content chunk lands.
+    mockIsGenerating = true;
+    render(
+      <Group
+        isLatestItem
+        id="assistant-1"
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: '',
+            id: 'block-1',
+            tools: [{ apiName: 'bash', id: 'tool-1', result: { content: 'done' } } as any],
+          }),
+          blk({ content: '', id: 'block-2' }),
         ]}
       />,
     );

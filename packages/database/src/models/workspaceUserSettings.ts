@@ -1,4 +1,5 @@
 import type { WorkspaceUserPreference } from '@lobechat/types';
+import { mergeNotificationSettings } from '@lobechat/utils/mergeNotificationSettings';
 import { and, eq } from 'drizzle-orm';
 
 import { workspaceUserSettings } from '../schemas/workspace';
@@ -68,11 +69,11 @@ export class WorkspaceUserSettingsModel {
    */
   updatePreference = async (patch: Partial<WorkspaceUserPreference>) => {
     const current = (await this.getPreference()) ?? {};
-    // `agentDeviceOverrides` merges one level deeper: clients patch a single
-    // agent's override built from their LOCAL copy of the map, which may be
-    // stale or empty (picker used before the preference fetch settled), and a
-    // top-level replace would silently drop this user's saved choices for
-    // every other agent. Individual per-agent entries still replace wholesale.
+    // Per-agent override maps merge one level deeper: clients patch a single
+    // agent's leaf from a local copy that may be stale or empty (for example a
+    // picker used before the preference fetch settles). A top-level replace
+    // would silently drop this user's choices for every other agent.
+    // Individual per-agent entries still replace wholesale.
     const next: WorkspaceUserPreference = {
       ...current,
       ...patch,
@@ -81,6 +82,55 @@ export class WorkspaceUserSettingsModel {
             agentDeviceOverrides: {
               ...current.agentDeviceOverrides,
               ...patch.agentDeviceOverrides,
+            },
+          }
+        : {}),
+      ...(patch.agentModelOverrides
+        ? {
+            agentModelOverrides: {
+              ...current.agentModelOverrides,
+              ...patch.agentModelOverrides,
+            },
+          }
+        : {}),
+      ...(patch.notification
+        ? { notification: mergeNotificationSettings(current.notification, patch.notification) }
+        : {}),
+      ...(patch.agentModeOverrides
+        ? {
+            agentModeOverrides: {
+              ...current.agentModeOverrides,
+              ...patch.agentModeOverrides,
+            },
+          }
+        : {}),
+      ...(patch.sidebarAgentVisibilityOverrides
+        ? {
+            sidebarAgentVisibilityOverrides: {
+              ...current.sidebarAgentVisibilityOverrides,
+              ...patch.sidebarAgentVisibilityOverrides,
+            },
+          }
+        : {}),
+      // Deprecated, but still merged: the fields stay on the API, so a client
+      // from before the shared-sidebar change can still patch a single item.
+      // A top-level replace would let one such write shred the rest of that
+      // user's saved map — which is exactly the data the deprecation promises
+      // to leave intact for a rollback. Drop these two once the fields leave
+      // `WorkspaceUserPreference`.
+      ...(patch.sidebarGroupAssignments
+        ? {
+            sidebarGroupAssignments: {
+              ...current.sidebarGroupAssignments,
+              ...patch.sidebarGroupAssignments,
+            },
+          }
+        : {}),
+      ...(patch.sidebarPinnedOverrides
+        ? {
+            sidebarPinnedOverrides: {
+              ...current.sidebarPinnedOverrides,
+              ...patch.sidebarPinnedOverrides,
             },
           }
         : {}),

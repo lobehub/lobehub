@@ -13,19 +13,8 @@ import type {
   VerifyVerdict,
 } from '@lobechat/types';
 import { toRecord } from '@lobechat/utils/object';
-import {
-  Block,
-  Center,
-  Drawer,
-  Empty,
-  Flexbox,
-  Highlighter,
-  Icon,
-  Image,
-  Markdown,
-  Text,
-} from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Block, Center, Empty, Flexbox, Icon, Image, Markdown, Text } from '@lobehub/ui';
+import { Button, Drawer } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import type { TFunction } from 'i18next';
 import {
@@ -57,29 +46,33 @@ import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import Loading from '@/components/Loading/BrandTextLoading';
-import { useTextFileLoader } from '@/features/FileViewer/hooks/useTextFileLoader';
 import type { VerifyEvidenceWithUrl } from '@/services/verify';
-import { getLanguageFromFilename } from '@/utils/fileLanguage';
 
 import {
   EvidenceComparisonCard,
   type EvidenceComparisonMeta,
   isFilenameLike,
+  meaningfulEvidenceCaption,
   readEvidenceComparison,
 } from './components/EvidenceComparisonCard';
+import {
+  CollapsibleMarkdownEvidence,
+  DocumentViewer,
+  filenameFromUrl,
+  markdownTextEvidenceTypes,
+} from './components/MarkdownEvidence';
+import { readVisualizationManifest } from './components/visualization';
+import { VisualizationRenderer } from './components/VisualizationRenderer';
 import { useVerifyReportBundle } from './hooks';
-import { buildCheckRows, type CheckRowData, type CheckState, renderableSurfaces } from './utils';
+import {
+  buildCheckRows,
+  type CheckRowData,
+  type CheckState,
+  extractUuid,
+  renderableSurfaces,
+} from './utils';
 
 type Filter = 'all' | CheckState;
-
-/** Best-effort filename from a (possibly signed) file URL, for syntax highlighting. */
-const filenameFromUrl = (url: string): string => {
-  try {
-    return new URL(url).pathname.split('/').pop() || 'document';
-  } catch {
-    return 'document';
-  }
-};
 
 const styles = createStaticStyles(({ css }) => ({
   scroll: css`
@@ -120,6 +113,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   summary: css`
     max-width: 100%;
+    line-height: 1.6;
     color: ${cssVar.colorText};
   `,
   meta: css`
@@ -882,12 +876,6 @@ const styles = createStaticStyles(({ css }) => ({
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
   `,
-  docViewer: css`
-    overflow: auto;
-    height: 100%;
-    padding-block: 12px;
-    padding-inline: 16px;
-  `,
 }));
 
 const VERDICT_META: Record<
@@ -938,7 +926,12 @@ const imageEvidenceTypes = new Set(['gif', 'screenshot']);
 const isInlineVisualEvidence = (evidence: VerifyEvidenceWithUrl) =>
   Boolean(evidence.fileUrl && (imageEvidenceTypes.has(evidence.type) || evidence.type === 'video'));
 
-/** Evidence with a directly renderable payload in the check body, no click-to-open. */
+/**
+ * Evidence with a directly renderable payload in the check body, no
+ * click-to-open. File-backed documents stay behind the file card on purpose —
+ * an uploaded artifact is long by definition, and rendering it inline drowns
+ * the check list.
+ */
 const isInlineEvidence = (evidence: VerifyEvidenceWithUrl) =>
   Boolean(evidence.content) || isInlineVisualEvidence(evidence);
 
@@ -1111,42 +1104,6 @@ const evidenceComparison = (evidence: VerifyEvidenceWithUrl): EvidenceComparison
   return readEvidenceComparison(evidence.metadata);
 };
 
-/** A file-backed text evidence, decoded + syntax highlighted (avoids mojibake). */
-const DocumentViewer = memo<{ fileName?: string | null; url: string }>(({ fileName, url }) => {
-  const { t } = useTranslation('verify');
-  const { fileData, loading, error } = useTextFileLoader(url);
-
-  if (loading)
-    return (
-      <Center flex={1} height={'100%'}>
-        <Loading debugId="verify-document-viewer" />
-      </Center>
-    );
-
-  if (error || fileData === null)
-    return (
-      <Center flex={1} gap={8} height={'100%'}>
-        <Text type="secondary">{t('report.document.failed')}</Text>
-        <a href={url} rel="noreferrer" target="_blank">
-          {t('report.document.openOriginal')}
-        </a>
-      </Center>
-    );
-
-  return (
-    <Flexbox className={styles.docViewer}>
-      <Highlighter
-        wrap
-        language={getLanguageFromFilename(fileName || filenameFromUrl(url))}
-        showLanguage={false}
-        variant={'borderless'}
-      >
-        {fileData}
-      </Highlighter>
-    </Flexbox>
-  );
-});
-
 const InteractionCostPanel = memo<{ cost: VerifyInteractionCost }>(({ cost }) => {
   const { t } = useTranslation('verify');
   const phases = cost.phases ?? [];
@@ -1259,14 +1216,17 @@ const EvidenceItem = memo<{
 }>(({ evidence: e, flat, index }) => {
   const { t } = useTranslation('verify');
   const label = evidenceDisplayName(e, t, index);
-  const description = e.description && e.description !== label ? e.description : null;
+  const description = meaningfulEvidenceCaption(e.description, label);
   // Inline media (image/gif/video) speaks for itself — the raw filename header
   // is visual noise, so only keep a meaningful caption (description) for it.
   const isMedia = isInlineVisualEvidence(e);
+  const isInlineProse = Boolean(e.content) && markdownTextEvidenceTypes.has(e.type);
+  const hideLabel =
+    isMedia || (markdownTextEvidenceTypes.has(e.type) && isFilenameLike(label)) || isInlineProse;
 
   return (
     <Flexbox gap={6}>
-      {!isMedia && (
+      {!hideLabel && (
         <Text strong fontSize={13}>
           {label}
         </Text>
@@ -1292,8 +1252,14 @@ const EvidenceItem = memo<{
         <video controls className={styles.evidenceVideo} src={e.fileUrl} />
       ) : e.fileUrl ? (
         <div className={styles.evidenceDoc}>
-          <DocumentViewer fileName={e.fileName} url={e.fileUrl} />
+          <DocumentViewer
+            fileName={e.fileName}
+            markdown={markdownTextEvidenceTypes.has(e.type)}
+            url={e.fileUrl}
+          />
         </div>
+      ) : e.content && markdownTextEvidenceTypes.has(e.type) ? (
+        <CollapsibleMarkdownEvidence>{e.content}</CollapsibleMarkdownEvidence>
       ) : e.content ? (
         <div className={styles.evidenceText}>{e.content}</div>
       ) : (
@@ -1341,21 +1307,17 @@ const EvidenceDrawer = memo<{
   title: string;
 }>(({ evidence, onClose, open, title }) => (
   <Drawer
-    destroyOnHidden
     containerMaxWidth={'100%'}
     open={open}
     placement={'right'}
     title={title}
     width={'min(1120px, calc(100vw - 48px))'}
     styles={{
-      body: {
-        height: '100%',
-        padding: 0,
-      },
       bodyContent: {
         height: '100%',
         minHeight: 0,
         overflow: 'hidden',
+        padding: 0,
       },
     }}
     onClose={onClose}
@@ -1410,6 +1372,7 @@ const CheckRow = memo<{ defaultOpen: boolean; row: CheckRowData }>(({ defaultOpe
   const meta = VERDICT_META[state];
   const evidence = result?.evidence ?? [];
   const evidenceCount = evidence.length;
+  const visualization = readVisualizationManifest(result?.metadata);
   // An agent-authored plan item records how it meant to check this and what it
   // expected to see (prose), plus the evidence media it is required to produce
   // (a closed set the executor's coverage gate enforces).
@@ -1428,6 +1391,7 @@ const CheckRow = memo<{ defaultOpen: boolean; row: CheckRowData }>(({ defaultOpe
   const hasBody =
     Boolean(result?.toulmin?.evidence) ||
     Boolean(result?.suggestion) ||
+    Boolean(visualization) ||
     Boolean(planConfig.method) ||
     Boolean(planConfig.expected) ||
     requiredEvidence.length > 0 ||
@@ -1532,6 +1496,7 @@ const CheckRow = memo<{ defaultOpen: boolean; row: CheckRowData }>(({ defaultOpe
             <p className={styles.reasoning}>{result.toulmin.evidence}</p>
           )}
           {result?.suggestion && <p className={styles.suggestion}>{result.suggestion}</p>}
+          {visualization && <VisualizationRenderer manifest={visualization} />}
           {evidenceCount > 0 && (
             <>
               <div className={styles.evidenceList}>
@@ -1747,7 +1712,9 @@ interface ReportViewerProps {
 const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
   const { t } = useTranslation('verify');
   const { runId: routeRunId } = useParams<{ runId: string }>();
-  const verifyRunId = explicitRunId ?? routeRunId ?? null;
+  // Route params come from shared links whose autolinker may have glued
+  // trailing punctuation onto the id — salvage the leading UUID.
+  const verifyRunId = explicitRunId ?? extractUuid(routeRunId) ?? null;
   const { data, error, isLoading, mutate } = useVerifyReportBundle(verifyRunId);
   const [filter, setFilter] = useState<Filter>('all');
 

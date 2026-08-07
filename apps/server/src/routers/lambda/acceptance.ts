@@ -3,6 +3,7 @@ import {
   acceptanceSubjectTypes,
   acceptanceVisibilities,
 } from '@lobechat/const/verify';
+import type { AcceptanceAttachment } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -11,10 +12,13 @@ import {
   requireWorkspaceRoleWhenScoped,
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { AgentOperationModel } from '@/database/models/agentOperation';
+import { TaskModel } from '@/database/models/task';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { AcceptanceItem } from '@/database/schemas/verify';
 import { acceptances } from '@/database/schemas/verify';
+import { isUuid } from '@/database/utils/uuid';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import {
@@ -119,12 +123,14 @@ export const acceptanceRouter = router({
         requirement: z.string().max(2000).optional(),
         subjectId: z.string(),
         subjectType: subjectTypeSchema,
+        title: z.string().trim().min(1).max(500).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       try {
         return await ctx.acceptanceService.ensureForSubject(input.subjectType, input.subjectId, {
           requirement: input.requirement,
+          title: input.title,
         });
       } catch (error) {
         throw new TRPCError({
@@ -142,7 +148,95 @@ export const acceptanceRouter = router({
         input.subjectType,
         input.subjectId,
       );
-      return acceptance ?? null;
+      if (!acceptance) return null;
+
+      // `delivered` alone is ambiguous for the subject's status surface: a
+      // converged delivery waiting for sign-off and a failed one waiting for a
+      // decision both land there. The latest round's verdict is what tells
+      // them apart, so ship it with the aggregate instead of forcing callers
+      // to load the whole bundle for one field.
+      const latest = await ctx.acceptanceService.latestRound(acceptance.id);
+      return {
+        ...acceptance,
+        latestRunStatus: latest?.status ?? null,
+        latestRunUserDecision: latest?.userDecision ?? null,
+      };
+    }),
+
+  /**
+   * Persist a subject's standing acceptance checklist (the topic tray). Ensures
+   * the aggregate exists, then writes the list into its `config.checklist` — so
+   * the criteria live with the verify aggregate, not in client storage.
+   */
+  saveChecklist: acceptanceWriteProcedure
+    .input(
+      z.object({
+        checklist: z.array(
+          z.object({
+            id: z.string(),
+            method: z.string().optional(),
+            name: z.string(),
+          }),
+        ),
+        subjectId: z.string(),
+        subjectType: subjectTypeSchema,
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const aggregate = await ctx.acceptanceService.ensureForSubject(
+          input.subjectType,
+          input.subjectId,
+        );
+        await ctx.acceptanceService.acceptanceModel.update(aggregate.id, {
+          config: { ...aggregate.config, checklist: input.checklist },
+        });
+        return { checklist: input.checklist, id: aggregate.id };
+      } catch (error) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: error instanceof Error ? error.message : 'Acceptance subject not found',
+        });
+      }
+    }),
+
+  /**
+   * Set (or update) a subject's acceptance goal — the one-sentence outcome the
+   * conversation is delivering. Unlike `ensure`, this overwrites: the goal is a
+   * user-editable field, so a later edit must stick.
+   */
+  saveGoal: acceptanceWriteProcedure
+    .input(
+      z.object({
+        requirement: z.string().max(2000),
+        subjectId: z.string(),
+        subjectType: subjectTypeSchema,
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const aggregate = await ctx.acceptanceService.ensureForSubject(
+          input.subjectType,
+          input.subjectId,
+        );
+        await ctx.acceptanceService.acceptanceModel.update(aggregate.id, {
+          requirement: input.requirement,
+        });
+        // A Task acceptance is instantiated from tasks.config.verify. Mirror
+        // edits back to that source so the next run cannot restore an older goal.
+        if (input.subjectType === 'task') {
+          const taskModel = new TaskModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
+          const task = await taskModel.resolve(input.subjectId);
+          if (!task) throw new Error('Task not found in the current workspace');
+          await taskModel.updateVerifyConfig(task.id, { requirement: input.requirement });
+        }
+        return { id: aggregate.id, requirement: input.requirement };
+      } catch (error) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: error instanceof Error ? error.message : 'Acceptance subject not found',
+        });
+      }
     }),
 
   /**
@@ -160,9 +254,14 @@ export const acceptanceRouter = router({
   getBundle: publicAcceptanceProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
-      const acceptance = await ctx.serverDB.query.acceptances.findFirst({
-        where: eq(acceptances.id, input.id),
-      });
+      // Public entry fed by shared links: a chat autolinker can glue trailing
+      // CJK punctuation onto the URL, so a malformed uuid must read as
+      // NOT_FOUND instead of aborting in Postgres (22P02 → 500).
+      const acceptance = isUuid(input.id)
+        ? await ctx.serverDB.query.acceptances.findFirst({
+            where: eq(acceptances.id, input.id),
+          })
+        : undefined;
       if (!acceptance) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Acceptance not found' });
       }
@@ -229,7 +328,43 @@ export const acceptanceRouter = router({
         evidenceByResult.set(e.checkResultId, bucket);
       }
 
+      // Resolve the files backing user feedback (uploaded/pasted screenshots)
+      // to URLs with the same owner-scoped resolver the evidence uses — one
+      // batch for every attachment id across check rejects and group feedback.
+      const attachmentIds = new Set<string>();
+      for (const result of results)
+        for (const id of result.userDecisionDetail?.fileIds ?? []) attachmentIds.add(id);
+      for (const run of runs)
+        for (const entry of run.decisionDetail?.groupFeedback ?? [])
+          for (const id of entry.fileIds ?? []) attachmentIds.add(id);
+      const attachmentById = new Map<string, AcceptanceAttachment>();
+      await Promise.all(
+        [...attachmentIds].map(async (id) => {
+          const meta = await resolveFileMeta(id);
+          attachmentById.set(id, { id, name: meta.fileName ?? undefined, url: meta.fileUrl });
+        }),
+      );
+      const toAttachments = (fileIds?: string[]): AcceptanceAttachment[] | undefined => {
+        if (!fileIds?.length) return undefined;
+        const resolved = fileIds
+          .map((id) => attachmentById.get(id))
+          .filter((a): a is AcceptanceAttachment => Boolean(a));
+        return resolved.length > 0 ? resolved : undefined;
+      };
+
       const reportsByRun = new Map(reports.map((r) => [r.verifyRunId!, r]));
+      // What each round actually spent. Owner-only: cost is the author's
+      // operating detail, not something a shared link should expose.
+      // `isOwner` already implies a signed-in viewer; the explicit id check is
+      // what narrows it for the model, which is owner-scoped by construction.
+      const usageByOperation =
+        isOwner && ctx.userId
+          ? await new AgentOperationModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined)
+              .findUsageByOperations(
+                runs.flatMap((run) => (run.operationId ? [run.operationId] : [])),
+              )
+              .catch(() => new Map<string, { cost: number; tokens: number }>())
+          : new Map<string, { cost: number; tokens: number }>();
       const rounds = runs.map((run) => {
         // `origin` points at the author's private topic/agent — never hand it
         // to a visitor holding nothing but the shared link.
@@ -238,7 +373,25 @@ export const acceptanceRouter = router({
           const { origin: _origin, ...publicMetadata } = run.metadata;
           publicRun = { ...run, metadata: publicMetadata };
         }
-        return { report: reportsByRun.get(run.id) ?? null, run: publicRun };
+        // Enrich group feedback with resolved attachment URLs for the client.
+        const groupFeedback = publicRun.decisionDetail?.groupFeedback;
+        if (groupFeedback?.some((entry) => entry.fileIds?.length)) {
+          publicRun = {
+            ...publicRun,
+            decisionDetail: {
+              ...publicRun.decisionDetail,
+              groupFeedback: groupFeedback.map((entry) => {
+                const attachments = toAttachments(entry.fileIds);
+                return attachments ? { ...entry, attachments } : entry;
+              }),
+            },
+          };
+        }
+        return {
+          report: reportsByRun.get(run.id) ?? null,
+          run: publicRun,
+          usage: (run.operationId ? usageByOperation.get(run.operationId) : undefined) ?? null,
+        };
       });
       const latestReport = [...rounds].reverse().find((r) => r.report)?.report ?? null;
 
@@ -260,15 +413,25 @@ export const acceptanceRouter = router({
             resultsById,
             currentRoundIndex,
           );
+          // The standing verdict mirrors the latest review — resolve its
+          // attachments too so the row's feedback card can render them.
+          const resolvedReviews = reviews.map((review) => {
+            const attachments = toAttachments(review.fileIds);
+            return attachments ? { ...review, attachments } : review;
+          });
+          const latestAttachments = toAttachments(reviews.at(-1)?.fileIds);
           return {
             ...check,
             evidence: check.result ? (evidenceByResult.get(check.result.id) ?? []) : [],
-            reviews,
+            reviews: resolvedReviews,
             timeline: check.timeline.map((entry) => ({
               ...entry,
               evidence: evidenceByResult.get(entry.resultId) ?? [],
             })),
-            userReview,
+            userReview:
+              userReview && latestAttachments
+                ? { ...userReview, attachments: latestAttachments }
+                : userReview,
           };
         }),
         latestReport,
@@ -280,6 +443,53 @@ export const acceptanceRouter = router({
 
   /** Recent acceptances (with subject headers), newest first — list panel + CLI. */
   list: acceptanceProcedure.query(async ({ ctx }) => ctx.acceptanceService.listWithSubjects()),
+
+  /**
+   * Feedback addressed to a check GROUP (business category) rather than any
+   * single check — for concerns that don't invalidate an individual check
+   * (which may well be accepted) but still need to reach the next round.
+   * Append-only, stamped with the current round for the same staleness rule
+   * as check-level rejects.
+   */
+  addGroupFeedback: acceptanceWriteProcedure
+    .input(
+      z.object({
+        category: z.string().max(200),
+        comment: z.string().trim().min(1).max(2000),
+        fileIds: z.array(z.string()).max(10).optional(),
+        id: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const acceptance = await resolveAcceptance(ctx, input.id);
+      assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
+
+      // The feedback is addressed to the CURRENT round and lives on its run's
+      // decision detail — the same home as the round's terminal accept/reject
+      // note, so staleness falls out of the round chain and a deleted round
+      // takes its feedback along.
+      const { runs } = await ctx.acceptanceService.loadRounds(acceptance.id);
+      const currentRun = runs.at(-1);
+      if (!currentRun) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'No verification round to address feedback to',
+        });
+      }
+
+      const entry = {
+        category: input.category,
+        comment: input.comment,
+        createdAt: new Date().toISOString(),
+        ...(input.fileIds?.length ? { fileIds: input.fileIds } : {}),
+      };
+      await new VerifyRunModel(
+        ctx.serverDB,
+        acceptance.userId,
+        acceptance.workspaceId ?? undefined,
+      ).appendGroupFeedback(currentRun.id, entry);
+      return { entry: { ...entry, roundIndex: currentRun.roundIndex }, success: true };
+    }),
 
   /**
    * The user's verdict on individual union checks — `accept` settles a check
@@ -310,15 +520,17 @@ export const acceptanceRouter = router({
             .optional(),
           checkItemIds: z.array(z.string()).min(1).max(200),
           comment: z.string().max(2000).optional(),
+          fileIds: z.array(z.string()).max(10).optional(),
           id: z.string(),
         })
-        // A reject IS its feedback — without a note (either global or on an
-        // annotated region) the next round has nothing to act on.
+        // A reject IS its feedback — without a note (global, on an annotated
+        // region, or a screenshot attachment) the next round has nothing to act on.
         .refine(
           (value) =>
             value.action !== 'reject' ||
             Boolean(value.comment?.trim()) ||
-            Boolean(value.annotations?.some((annotation) => annotation.comment?.trim())),
+            Boolean(value.annotations?.some((annotation) => annotation.comment?.trim())) ||
+            Boolean(value.fileIds?.length),
           { message: 'Rejecting a check requires a comment' },
         ),
     )
@@ -332,6 +544,7 @@ export const acceptanceRouter = router({
           annotations: input.annotations,
           checkItemIds: input.checkItemIds,
           comment: input.comment?.trim() || undefined,
+          fileIds: input.fileIds,
         });
       } catch (error) {
         throw new TRPCError({
@@ -367,6 +580,27 @@ export const acceptanceRouter = router({
     }),
 
   /**
+   * The user sent the delivery back for a repair round (the in-app 打回重跑
+   * dispatch). Stamps the aggregate `repairing` so every surface reflects the
+   * send-back immediately; the next round's ingest recomputes the status from
+   * real run state, so a stale stamp cannot stick.
+   */
+  markRepairing: acceptanceWriteProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const acceptance = await resolveAcceptance(ctx, input.id);
+      assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
+
+      if (acceptance.status !== 'delivered' && acceptance.status !== 'errored') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `Only a settled acceptance can be sent back (status: ${acceptance.status})`,
+        });
+      }
+      return ctx.acceptanceService.acceptanceModel.updateStatus(acceptance.id, 'repairing');
+    }),
+
+  /**
    * The user rejects the delivery. The comment is a re-tasking input: it is
    * recorded on the current round's decision and seeds the next repair/verify
    * round (spawned by the runtime for agent rounds, or by the next
@@ -379,5 +613,94 @@ export const acceptanceRouter = router({
       assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
 
       return ctx.acceptanceService.reject(acceptance.id, input.comment);
+    }),
+
+  /**
+   * Rename the acceptance in the caller's list — a display-title override kept
+   * on the aggregate's metadata. The subject's own title (the source topic /
+   * task / document) is left untouched, so renaming the sidebar entry never
+   * mutates the origin conversation.
+   */
+  rename: acceptanceWriteProcedure
+    .input(z.object({ id: z.string(), title: z.string().trim().min(1).max(200) }))
+    .mutation(async ({ ctx, input }) => {
+      const acceptance = await resolveAcceptance(ctx, input.id);
+      assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
+
+      return ctx.acceptanceService.acceptanceModel.update(acceptance.id, {
+        metadata: { ...acceptance.metadata, title: input.title },
+      });
+    }),
+
+  /**
+   * Manually move the acceptance's user-facing lifecycle state from the list —
+   * an owner override (mark accepted / closed / rejected, or reopen for another look).
+   *
+   * accept / reject go through the SERVICE, never a bare status write: the
+   * service applies `requireDecidableAcceptance` (a premature `accepted` is
+   * sticky in recomputeStatus and could never be corrected by a later verifier
+   * result) and stamps the decision on the current round. Reopen is only
+   * meaningful for an already-decided aggregate — a still-running round must
+   * not be forced back to a decision-pending state by hand.
+   */
+  updateStatus: acceptanceWriteProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        status: z.enum(['delivered', 'accepted', 'closed', 'rejected']),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const acceptance = await resolveAcceptance(ctx, input.id);
+      assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
+
+      try {
+        if (input.status === 'accepted') {
+          await ctx.acceptanceService.accept(acceptance.id);
+        } else if (input.status === 'closed') {
+          await ctx.acceptanceService.acceptanceModel.updateStatus(acceptance.id, 'closed');
+        } else if (input.status === 'rejected') {
+          await ctx.acceptanceService.reject(
+            acceptance.id,
+            'Rejected from the acceptance list — needs another round.',
+          );
+        } else {
+          // Reopen (→ delivered): only a decided aggregate can be re-opened; a
+          // live round recomputes its own status and must not be clobbered.
+          if (
+            acceptance.status !== 'accepted' &&
+            acceptance.status !== 'closed' &&
+            acceptance.status !== 'rejected'
+          ) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: `Only a decided acceptance can be reopened (status: ${acceptance.status})`,
+            });
+          }
+          await ctx.acceptanceService.acceptanceModel.updateStatus(acceptance.id, 'delivered');
+        }
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: error instanceof Error ? error.message : 'Failed to update status',
+        });
+      }
+      return { success: true };
+    }),
+
+  /**
+   * Delete the acceptance aggregate. Its chained verify runs detach
+   * (acceptance_id → null via the FK's `set null`) rather than cascade-delete,
+   * so the individual round reports stay reachable; only the grouping goes.
+   */
+  remove: acceptanceWriteProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const acceptance = await resolveAcceptance(ctx, input.id);
+      assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
+
+      await ctx.acceptanceService.acceptanceModel.delete(acceptance.id);
+      return { success: true };
     }),
 });

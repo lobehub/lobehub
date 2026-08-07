@@ -111,11 +111,12 @@ const ChangeDeviceContent = memo<ChangeDeviceContentProps>(
 
     // Workspace-keyed SWR fetch (see useDeviceList) — the raw lambdaQuery key
     // has no workspace dimension, so the list went stale across workspace
-    // switches (LOBE-11904).
+    // switches.
     const { data: devices, isLoading: loadingDevices } = useDeviceList();
 
     const onlineDevices = (devices ?? []).filter(
-      (d) => d.online && (!isWorkspaceAgent || d.scope === 'workspace'),
+      (d) =>
+        d.online && (!isWorkspaceAgent || (d.scope === 'workspace' && d.visibility === 'public')),
     );
 
     const checkCapability = useCallback(

@@ -3,8 +3,8 @@
 import { isDesktop } from '@lobechat/const';
 import type { ImessageBridgeConfig, ImessageBridgeStatus } from '@lobechat/electron-client-ipc';
 import { Flexbox, FormItem, Icon, Tag, Text } from '@lobehub/ui';
-import { Button, Switch } from '@lobehub/ui/base-ui';
-import { App, Form as AntdForm } from 'antd';
+import { Button, Switch, toast } from '@lobehub/ui/base-ui';
+import { Form as AntdForm } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { KeyRound, Link2, Wrench } from 'lucide-react';
 import { memo, use, useCallback, useEffect, useState } from 'react';
@@ -68,7 +68,7 @@ const getErrorMessage = (error: unknown) =>
 const CredentialExtras = memo(() => {
   const { t: _t } = useTranslation('agent');
   const t = _t as (key: string) => string;
-  const { message } = App.useApp();
+
   const form = AntdForm.useFormInstance();
   const applicationId = AntdForm.useWatch('applicationId', form) as string | undefined;
   const appId = applicationId?.trim();
@@ -196,7 +196,7 @@ const CredentialExtras = memo(() => {
     try {
       await persistConfig(next);
     } catch (error) {
-      message.error(getErrorMessage(error));
+      toast.error(getErrorMessage(error));
     } finally {
       setOptimisticEnabled(null);
       setToggling(false);
@@ -213,10 +213,10 @@ const CredentialExtras = memo(() => {
       const config = buildBridgeConfig(enabled);
       await imessageBridgeService.testConfig(config);
       setTestStatus('success');
-      message.success(t('channel.imessage.bridgeTestSuccess'));
+      toast.success(t('channel.imessage.bridgeTestSuccess'));
     } catch (error) {
       setTestStatus('failed');
-      message.error(`${t('channel.imessage.bridgeTestFailed')}: ${getErrorMessage(error)}`);
+      toast.error(`${t('channel.imessage.bridgeTestFailed')}: ${getErrorMessage(error)}`);
     } finally {
       setTesting(false);
     }

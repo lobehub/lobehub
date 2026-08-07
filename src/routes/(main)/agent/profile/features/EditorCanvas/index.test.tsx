@@ -14,6 +14,9 @@ const editorProps = vi.hoisted(() => ({
 const autoSaveHintProps = vi.hoisted(() => ({
   last: undefined as any,
 }));
+const codeEditorPaneProps = vi.hoisted(() => ({
+  last: undefined as any,
+}));
 
 const editorDocuments = {
   json: undefined as unknown,
@@ -105,8 +108,28 @@ vi.mock('@/components/Editor/AutoSaveHint', () => ({
   }),
 }));
 
-vi.mock('@/components/AntdStaticMethods', () => ({
-  message: {
+vi.mock('@/components/CodeEditorPane', () => ({
+  default: vi.fn((props: any) => {
+    codeEditorPaneProps.last = props;
+    return (
+      <textarea
+        data-testid="prompt-source-editor"
+        readOnly={props.readOnly}
+        value={props.value}
+        onChange={(event) => props.onChange?.(event.target.value)}
+      />
+    );
+  }),
+}));
+
+vi.mock('@/components/InfoTooltip', () => ({
+  default: ({ title }: { title: string }) => (
+    <button aria-label={title} data-testid="prompt-description-tooltip" type="button" />
+  ),
+}));
+
+vi.mock('@lobehub/ui/base-ui', () => ({
+  toast: {
     error: (...args: unknown[]) => messageError(...args),
   },
 }));
@@ -165,6 +188,8 @@ describe('Agent profile EditorCanvas', () => {
     vi.clearAllMocks();
     editorProps.last = undefined;
     autoSaveHintProps.last = undefined;
+    codeEditorPaneProps.last = undefined;
+    localStorage.clear();
     permissionState.allowed = false;
     agentStoreMock.listeners.clear();
     agentStoreState.activeAgentId = 'agent-a';
@@ -199,6 +224,158 @@ describe('Agent profile EditorCanvas', () => {
 
     expect(editorProps.last?.lineEmptyPlaceholder).toBe('settingAgent.prompt.editorPlaceholder');
     expect(editorProps.last?.placeholder).toBe('settingAgent.prompt.editorPlaceholder');
+  });
+
+  it('switches between the visual editor and Markdown source mode', async () => {
+    agentStoreState.agentMap = {
+      'agent-a': {
+        editorData: undefined,
+        systemRole: '# Core instructions',
+      },
+    };
+
+    render(<EditorCanvas />);
+    act(() => editorProps.last?.onInit());
+
+    fireEvent.click(screen.getByRole('button', { name: 'settingAgent.prompt.mode.source' }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('prompt-source-editor')).toHaveValue('# Core instructions'),
+    );
+    expect(codeEditorPaneProps.last?.language).toBe('markdown');
+    expect(screen.getByRole('button', { name: 'settingAgent.prompt.mode.source' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'settingAgent.prompt.mode.visual' }));
+
+    expect(screen.queryByTestId('prompt-source-editor')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'settingAgent.prompt.mode.visual' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
+  it('seeds source mode from the persisted Markdown when editor data also exists', async () => {
+    const editorData = { root: { children: ['parsed source'] } };
+    const persistedMarkdown = '<details>\n\n  raw spacing\n\n</details>';
+    agentStoreState.agentMap = {
+      'agent-a': {
+        editorData,
+        systemRole: persistedMarkdown,
+      },
+    };
+    editorDocuments.markdown = 'normalized markdown';
+
+    render(<EditorCanvas />);
+    act(() => editorProps.last?.onInit());
+    await waitFor(() => expect(editor.setDocument).toHaveBeenCalledWith('json', editorData));
+
+    fireEvent.click(screen.getByRole('button', { name: 'settingAgent.prompt.mode.source' }));
+
+    expect(await screen.findByTestId('prompt-source-editor')).toHaveValue(persistedMarkdown);
+  });
+
+  it('ignores source change callbacks caused by a programmatic value sync', async () => {
+    permissionState.allowed = true;
+    const initialEditorData = { root: { children: ['initial'] } };
+    const serverEditorData = { root: { children: ['server'] } };
+    agentStoreState.agentMap = {
+      'agent-a': { editorData: initialEditorData, systemRole: 'initial prompt' },
+    };
+
+    render(<EditorCanvas />);
+    act(() => editorProps.last?.onInit());
+    fireEvent.click(screen.getByRole('button', { name: 'settingAgent.prompt.mode.source' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('prompt-source-editor')).toHaveValue('initial prompt'),
+    );
+
+    act(() => {
+      agentStoreState.agentMap = {
+        'agent-a': { editorData: serverEditorData, systemRole: 'server prompt' },
+      };
+      agentStoreMock.listeners.forEach((listener) => listener());
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('prompt-source-editor')).toHaveValue('server prompt'),
+    );
+
+    act(() => codeEditorPaneProps.last?.onChange('server prompt'));
+
+    expect(handleContentChange).not.toHaveBeenCalled();
+    expect(setHasEdited).not.toHaveBeenCalled();
+
+    act(() => codeEditorPaneProps.last?.onChange('user prompt'));
+
+    expect(handleContentChange).toHaveBeenCalledWith(
+      'agent-a',
+      expect.any(Function),
+      editor,
+      'user prompt',
+    );
+    expect(setHasEdited).toHaveBeenCalledWith(true);
+  });
+
+  it('converts Markdown source edits into the shared rich document and autosave payload', async () => {
+    permissionState.allowed = true;
+    agentStoreState.agentMap = {
+      'agent-a': {
+        editorData: undefined,
+        systemRole: '# Initial role',
+      },
+    };
+
+    render(<EditorCanvas />);
+    act(() => editorProps.last?.onInit());
+    await waitFor(() =>
+      expect(editor.setDocument).toHaveBeenCalledWith('markdown', '# Initial role'),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'settingAgent.prompt.mode.source' }));
+
+    fireEvent.change(await screen.findByTestId('prompt-source-editor'), {
+      target: { value: '# Updated role\n\nFollow the user.' },
+    });
+
+    expect(editor.setDocument).toHaveBeenCalledWith(
+      'markdown',
+      '# Updated role\n\nFollow the user.',
+    );
+    expect(handleContentChange).toHaveBeenCalledWith(
+      'agent-a',
+      expect.any(Function),
+      editor,
+      '# Updated role\n\nFollow the user.',
+    );
+    expect(setHasEdited).toHaveBeenCalledWith(true);
+  });
+
+  it('does not bubble mode-switch clicks to the click-to-focus wrapper', () => {
+    // The profile page wraps the canvas in a click-to-focus area; a bubbled
+    // toggle click would focus the editor and scroll to the caret at the
+    // document end.
+    const onWrapperClick = vi.fn();
+    render(
+      <div onClick={onWrapperClick}>
+        <EditorCanvas />
+      </div>,
+    );
+    act(() => editorProps.last?.onInit());
+
+    fireEvent.click(screen.getByRole('button', { name: 'settingAgent.prompt.mode.source' }));
+    fireEvent.click(screen.getByRole('button', { name: 'settingAgent.prompt.mode.visual' }));
+
+    expect(onWrapperClick).not.toHaveBeenCalled();
+  });
+
+  it('moves the prompt description into the title tooltip', () => {
+    render(<EditorCanvas />);
+
+    expect(screen.queryByText('settingAgent.prompt.desc')).not.toBeInTheDocument();
+    expect(screen.getByTestId('prompt-description-tooltip')).toHaveAccessibleName(
+      'settingAgent.prompt.desc',
+    );
   });
 
   it('binds a draft save to its original agent and loads the next agent content', async () => {

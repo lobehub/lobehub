@@ -1,6 +1,6 @@
 import { lambdaClient } from '@/libs/trpc/client';
 
-type MessengerPlatform = 'telegram' | 'slack' | 'discord';
+type MessengerPlatform = 'telegram' | 'slack' | 'discord' | 'wechat';
 
 class MessengerService {
   availablePlatforms = async () => {
@@ -49,6 +49,26 @@ class MessengerService {
 
   uninstallInstallation = async (params: { installationId: string }) => {
     return lambdaClient.messenger.uninstallInstallation.mutate(params);
+  };
+
+  createWechatQrSession = async () => {
+    return lambdaClient.messenger.createWechatQrSession.mutate();
+  };
+
+  pollWechatQrSession = async (sessionId: string) => {
+    return lambdaClient.messenger.pollWechatQrSession.mutate({ sessionId });
+  };
+
+  getMessengerPushWindow = async (platform: MessengerPlatform, tenantId?: string) => {
+    return lambdaClient.messenger.getMessengerPushWindow.query({ platform, tenantId });
+  };
+
+  sendMessengerPush = async (params: {
+    content: string;
+    platform: MessengerPlatform;
+    tenantId?: string;
+  }) => {
+    return lambdaClient.messenger.sendMessengerPush.mutate(params);
   };
 }
 

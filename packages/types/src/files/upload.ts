@@ -15,12 +15,7 @@ export interface FileUploadState {
 }
 
 export type FileUploadStatus =
-  | 'pending'
-  | 'uploading'
-  | 'processing'
-  | 'success'
-  | 'error'
-  | 'cancelled';
+  'pending' | 'uploading' | 'processing' | 'success' | 'error' | 'cancelled';
 
 export type FileProcessStatus = 'pending' | 'chunking' | 'embedding' | 'success' | 'error';
 
@@ -32,10 +27,16 @@ export interface UploadFileItem {
    * AbortController to cancel the upload
    */
   abortController?: AbortController;
+  /** Agent that owns the draft upload, used to retry in the same conversation context. */
+  agentId?: string;
   /**
    * base64 data, it will use in other data
    */
   base64Url?: string;
+  /** Human-readable reason retained on the originating upload surface. */
+  error?: string;
+  /** Stable business reason used to render an in-context remedy action. */
+  errorCode?: string;
   file: File;
   /**
    * the file url after upload,it will be s3 url
@@ -43,6 +44,8 @@ export interface UploadFileItem {
    */
   fileUrl?: string;
   id: string;
+  knowledgeBaseId?: string;
+  parentId?: string;
   /**
    * blob url for local preview
    * it will use in the file preview before send the message
@@ -58,6 +61,7 @@ export interface UploadFileItem {
   status: FileUploadStatus;
   tasks?: FileParsingTask;
   uploadState?: FileUploadState;
+  visibility?: 'private' | 'public';
 }
 
 export const FileMetadataSchema = z.object({

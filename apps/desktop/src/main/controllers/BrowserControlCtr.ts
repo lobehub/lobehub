@@ -359,10 +359,6 @@ export default class BrowserControlCtr extends ControllerModule {
       } as T;
     }
 
-    // Every tool call counts as use, so the pool's memory cap never discards a
-    // page an agent is in the middle of driving.
-    this.sidebar.touchPage(sessionId);
-
     try {
       return await action(guest);
     } catch (error) {
@@ -379,9 +375,7 @@ export default class BrowserControlCtr extends ControllerModule {
   }
 
   /**
-   * The overlay is injected into the page rather than drawn in renderer DOM: a
-   * WebContentsView always paints above the window's web contents, so nothing
-   * the renderer draws can sit on top of the page any more.
+   * The overlay is injected into the guest so it follows page scrolling and zoom.
    */
   private inject(guest: WebContents, script: string) {
     guest.executeJavaScript(script).catch((error: Error) => {

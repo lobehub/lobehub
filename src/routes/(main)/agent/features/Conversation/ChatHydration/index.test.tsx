@@ -14,6 +14,7 @@ const setSearchParamsMock = vi.hoisted(() => vi.fn());
 const useLocationMock = vi.hoisted(() => vi.fn());
 const useParamsMock = vi.hoisted(() => vi.fn());
 const useSearchParamsMock = vi.hoisted(() => vi.fn());
+const workspaceMock = vi.hoisted(() => ({ activeSlug: null as string | null }));
 
 vi.hoisted(() => {
   const storage = {
@@ -42,6 +43,11 @@ vi.mock('react-router', async () => {
   };
 });
 
+vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
+  getActiveWorkspaceSlug: () => workspaceMock.activeSlug,
+  useActiveWorkspaceSlug: () => workspaceMock.activeSlug,
+}));
+
 describe('ChatHydration', () => {
   beforeEach(() => {
     navigateMock.mockReset();
@@ -49,6 +55,7 @@ describe('ChatHydration', () => {
     useLocationMock.mockReset();
     useParamsMock.mockReset();
     useSearchParamsMock.mockReset();
+    workspaceMock.activeSlug = null;
 
     useChatStore.setState(
       {
@@ -153,6 +160,56 @@ describe('ChatHydration', () => {
       expect(navigateMock).toHaveBeenCalledWith('/agent/agt_test/tpc_789?thread=thd_456', {
         replace: true,
       });
+    });
+  });
+
+  it('preserves the routed topic when the workspace activates after mount', async () => {
+    useParamsMock.mockReturnValue({ aid: 'agt_test', topicId: 'tpc_previous' });
+    useLocationMock.mockReturnValue({
+      hash: '',
+      pathname: '/acme/agent/agt_test/tpc_previous',
+      search: '',
+    });
+    useSearchParamsMock.mockReturnValue([new URLSearchParams(''), setSearchParamsMock]);
+    useChatStore.setState({ activeTopicId: 'tpc_previous' }, false);
+
+    render(<ChatHydration />);
+    navigateMock.mockClear();
+
+    // Workspace URL sync updates the Zustand store before React can rerender
+    // consumers of the active slug. Resetting workspace-scoped chat state in
+    // that same call stack must rehydrate the routed topic without navigating.
+    workspaceMock.activeSlug = 'acme';
+    await act(async () => {
+      useChatStore.setState({ activeTopicId: undefined }, false);
+    });
+
+    await waitFor(() => {
+      expect(useChatStore.getState().activeTopicId).toBe('tpc_previous');
+      expect(navigateMock).not.toHaveBeenCalled();
+    });
+  });
+
+  it('still clears the routed topic after an explicit topic switch', async () => {
+    workspaceMock.activeSlug = 'acme';
+    useParamsMock.mockReturnValue({ aid: 'agt_test', topicId: 'tpc_previous' });
+    useLocationMock.mockReturnValue({
+      hash: '',
+      pathname: '/acme/agent/agt_test/tpc_previous',
+      search: '',
+    });
+    useSearchParamsMock.mockReturnValue([new URLSearchParams(''), setSearchParamsMock]);
+    useChatStore.setState({ activeTopicId: 'tpc_previous' }, false);
+
+    render(<ChatHydration />);
+    navigateMock.mockClear();
+
+    await act(async () => {
+      await useChatStore.getState().switchTopic(null, { skipRefreshMessage: true });
+    });
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith('/acme/agent/agt_test', { replace: true });
     });
   });
 });

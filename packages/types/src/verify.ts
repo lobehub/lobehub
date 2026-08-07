@@ -49,12 +49,14 @@ export type VerifyUserDecision = 'accepted' | 'rejected' | 'overridden';
  * is not coupled to task-only workflows: a future run can accept a topic,
  * document, artifact, release, etc. without another schema reshape.
  */
-export type AcceptanceSubjectType = 'task' | 'topic' | 'document';
+export type AcceptanceSubjectType = 'task' | 'topic' | 'document' | 'standalone';
 
 /**
  * Business-level acceptance state. Check-level and run-level verdicts stay in the
  * verify vocabulary (`passed` / `failed`); the aggregate exposes the user's
- * outcome language (`accepted` / `rejected`).
+ * outcome language (`accepted` / `rejected`). `closed` is a reversible archive
+ * state for an acceptance that is no longer needed; unlike `accepted`, it does
+ * not record a positive delivery decision.
  *
  * `delivered`: verification settled (passed OR failed) and the aggregate now
  * waits for the user's accept/reject — the human decision closes the lifecycle,
@@ -67,6 +69,7 @@ export type AcceptanceStatus =
   | 'repairing'
   | 'delivered'
   | 'accepted'
+  | 'closed'
   | 'rejected'
   | 'errored';
 
@@ -91,7 +94,23 @@ export interface AcceptanceVisualRender {
  * a topic-level override, or a document acceptance rule, so it lives with the
  * generic aggregate rather than only in task types.
  */
+/**
+ * One user-authored acceptance criterion in a subject's standing checklist
+ * (e.g. the topic acceptance tray). Every item is judged by the verify agent;
+ * `method` is the optional "how to check" note.
+ */
+export interface AcceptanceChecklistItem {
+  id: string;
+  method?: string;
+  name: string;
+}
+
 export interface AcceptanceConfig {
+  /**
+   * The subject's standing, user-editable acceptance checklist (topic tray).
+   * Persisted here so it lives with the verify aggregate, not in client storage.
+   */
+  checklist?: AcceptanceChecklistItem[];
   enabled?: boolean;
   maxIterations?: number;
   verifierAgentId?: string;
@@ -99,17 +118,59 @@ export interface AcceptanceConfig {
   verifyRubricId?: string;
 }
 
-/** Generic acceptance extension bag for cross-subject state we have not modeled yet. */
-export interface AcceptanceMetadata {
-  [key: string]: unknown;
+/**
+ * A file the user attached to their feedback (an uploaded/pasted screenshot),
+ * resolved to a display URL. The stored form is a bare `fileId` on the decision
+ * detail; this is the enriched view the acceptance page renders, produced by the
+ * bundle read (which resolves the id to a signed URL as the aggregate's owner).
+ */
+export interface AcceptanceAttachment {
+  id: string;
+  /** Original file name, when known. */
+  name?: string;
+  /** Resolved (possibly signed) URL — null when the file no longer resolves. */
+  url: string | null;
 }
 
 /**
- * The user's per-check verdict on the acceptance union. `accept` is sticky —
- * an accepted check stays settled across later rounds; `reject` binds to the
- * round it was made on and becomes iteration history once a newer round lands.
+ * User feedback addressed to a check GROUP (business category) rather than any
+ * single check — the "this concern doesn't belong to a check I could reject"
+ * channel. Stored on the round it judges ({@link VerifyRunDecisionDetail});
+ * this is the derived view the acceptance page consumes, with `roundIndex`
+ * read off that run, so the check-reject staleness rule (consumed once a
+ * newer round lands) applies structurally.
  */
-export type AcceptanceCheckReviewAction = 'accept' | 'reject';
+export interface AcceptanceGroupFeedback {
+  /** Attachments backing the feedback, resolved to URLs by the bundle read. */
+  attachments?: AcceptanceAttachment[];
+  /** The group's category label ('' targets the uncategorized bucket). */
+  category: string;
+  comment: string;
+  /** When the feedback was written (ISO 8601). */
+  createdAt: string;
+  /** Uploaded/pasted screenshots backing the feedback (FKs to files). */
+  fileIds?: string[];
+  /** The round the feedback was addressed to — its run's own round index. */
+  roundIndex: number;
+}
+
+/** One group-scoped feedback entry as stored on a round's decision detail. */
+export type VerifyRunGroupFeedbackEntry = Omit<AcceptanceGroupFeedback, 'roundIndex'>;
+
+/** Generic acceptance extension bag for cross-subject state we have not modeled yet. */
+export interface AcceptanceMetadata {
+  [key: string]: unknown;
+  /** User-set display-title override for the acceptance (sidebar rename). */
+  title?: string;
+}
+
+/**
+ * The user's per-check verdict on the acceptance union. `accept` and `ignore`
+ * are sticky — both settle the check across later rounds; `reject` binds to
+ * the round it was made on and becomes iteration history once a newer round
+ * lands.
+ */
+export type AcceptanceCheckReviewAction = 'accept' | 'ignore' | 'reject';
 
 /**
  * A user-drawn region on one evidence image, in coordinates normalized to the
@@ -139,6 +200,8 @@ export interface VerifyCheckDecisionDetail {
   decidedAt?: string;
   /** Who made the decision (user id) — set when it may differ from the row owner. */
   decidedBy?: string;
+  /** Uploaded/pasted screenshots backing the reject (FKs to files). */
+  fileIds?: string[];
   /**
    * The acceptance round that was CURRENT when the decision was made. A
    * carried-forward check's result row belongs to an older round, so the
@@ -201,7 +264,7 @@ export type VerifySurface = 'web' | 'desktop' | 'cli' | 'mobile' | 'bot';
 
 /** The medium of a captured evidence artifact. */
 export type VerifyEvidenceType =
-  'screenshot' | 'gif' | 'video' | 'text' | 'dom_snapshot' | 'transcript';
+  'screenshot' | 'gif' | 'video' | 'text' | 'markdown' | 'dom_snapshot' | 'transcript';
 
 /** Who / what captured an evidence artifact (provenance). */
 export type VerifyEvidenceCapturedBy = 'agent-browser' | 'cdp' | 'cli' | 'program' | 'llm_judge';
@@ -221,6 +284,14 @@ export interface VerifyRunDecisionDetail {
   decidedBy?: string;
   /** Attachments backing the decision (annotated screenshots, etc.) — FKs to files. */
   fileIds?: string[];
+  /**
+   * Group-scoped review feedback addressed to THIS round — concerns that
+   * belong to no single check (whose checks may well be accepted) yet must
+   * reach the next round. Lives here, not on the acceptance aggregate, so a
+   * round carries its own feedback (and takes it along when deleted) and
+   * staleness falls out of the round chain.
+   */
+  groupFeedback?: VerifyRunGroupFeedbackEntry[];
 }
 
 /**
@@ -415,6 +486,116 @@ export interface VerifyRunMetadata {
   origin?: VerifyRunOrigin;
 }
 
+export type VerifyVisualizationValue = boolean | null | number | string;
+
+export interface VerifyVisualizationField {
+  key: string;
+  label?: string;
+  type: 'boolean' | 'category' | 'number' | 'string' | 'temporal';
+  unit?: string;
+}
+
+/** Small inline dataset used by one or more check-result views. */
+export interface VerifyVisualizationDataset {
+  fields: VerifyVisualizationField[];
+  id: string;
+  rows: Record<string, VerifyVisualizationValue>[];
+}
+
+interface VerifyVisualizationViewBase {
+  context?: string;
+  dataset: string;
+  id: string;
+  title?: string;
+  version: 1;
+}
+
+export interface VerifyMetricComparisonView extends VerifyVisualizationViewBase {
+  encoding: {
+    after: string;
+    afterSamples?: string;
+    before: string;
+    beforeSamples?: string;
+    direction?: string;
+    label: string;
+    statistic?: string;
+    target?: string;
+    unit?: string;
+  };
+  type: 'metric-comparison';
+}
+
+export interface VerifyLineChartView extends VerifyVisualizationViewBase {
+  encoding: {
+    series: {
+      field: string;
+      label?: string;
+      /** Visual role: muted baselines stay gray while primary/accent series carry emphasis. */
+      style?: 'accent' | 'muted' | 'primary';
+    }[];
+    x: string;
+    xLabel?: string;
+    yLabel?: string;
+  };
+  type: 'line-chart';
+}
+
+export interface VerifyScatterPlotView extends VerifyVisualizationViewBase {
+  encoding: {
+    color?: string;
+    label?: string;
+    x: string;
+    xLabel?: string;
+    y: string;
+    yLabel?: string;
+  };
+  type: 'scatter-plot';
+}
+
+export interface VerifyHeatmapView extends VerifyVisualizationViewBase {
+  encoding: { value: string; x: string; y: string };
+  type: 'heatmap';
+}
+
+export interface VerifyBarChartView extends VerifyVisualizationViewBase {
+  encoding: {
+    category: string;
+    series: { field: string; label?: string }[];
+    valueLabel?: string;
+  };
+  type: 'bar-chart';
+}
+
+export interface VerifyTableView extends VerifyVisualizationViewBase {
+  encoding?: {
+    columns?: string[];
+    /** Bold the best numeric value in each configured metric column. */
+    highlights?: { field: string; mode: 'max' | 'min' }[];
+  };
+  type: 'table';
+}
+
+export type VerifyVisualizationView =
+  | VerifyBarChartView
+  | VerifyHeatmapView
+  | VerifyLineChartView
+  | VerifyMetricComparisonView
+  | VerifyScatterPlotView
+  | VerifyTableView;
+
+/** Versioned structured presentation manifest attached to one check result. */
+export interface VerifyVisualizationManifest {
+  datasets: VerifyVisualizationDataset[];
+  schemaVersion: 1;
+  views: VerifyVisualizationView[];
+}
+
+/** Known check-result metadata. Remains open for verifier-specific extensions. */
+export interface VerifyCheckResultMetadata {
+  [key: string]: unknown;
+  visualization?: VerifyVisualizationManifest;
+}
+
 /**
  * Immutable snapshot of one check item, frozen into `agent_operations.verify_plan`
  * when the plan is confirmed. The resolved content (title / verifierConfig) is
@@ -516,6 +697,10 @@ export interface ToulminVerdict {
 export interface RequiredEvidenceSpec {
   /** What the capturer should produce — guidance only, not validated. */
   hint?: string;
+  /** Semantic medium the verifier must actually understand, not merely observe exists. */
+  modality?: 'audio' | 'document' | 'image' | 'structured' | 'text' | 'video';
+  /** Where the evidence is expected to come from. */
+  scope?: 'deliverable' | 'run_evidence' | 'task_artifacts';
   /** The evidence medium that must be present for this criterion. */
   type: VerifyEvidenceType;
 }

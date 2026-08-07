@@ -62,6 +62,7 @@ export interface AgentStreamEvent {
 export type StreamChunkType =
   | 'text'
   | 'reasoning'
+  | 'tool_state'
   | 'tools_calling'
   | 'image'
   | 'grounding'
@@ -76,9 +77,34 @@ export interface StreamChunkData {
   grounding?: any;
   imageList?: any[];
   images?: any[];
+  pluginState?: Record<string, unknown>;
   reasoning?: string;
   reasoningParts?: Array<{ text: string; type: 'text' } | { image: string; type: 'image' }>;
+  /**
+   * `lh hetero exec` coalesces main-agent text deltas into full-text
+   * snapshots: `content` carries the WHOLE message so far and must replace
+   * the accumulated text, not append to it. Absent on plain deltas.
+   */
+  snapshotMode?: 'replace';
+  /**
+   * Sequence for `replace` snapshots. Text/reasoning producers keep it
+   * operation-monotonic; `tool_state` keeps it monotonic per toolCallId.
+   * Consumers drop a snapshot whose seq is ≤ the matching last-applied one.
+   */
+  snapshotSeq?: number;
+  toolCallId?: string;
   toolsCalling?: any[];
+}
+
+/** Replace-only, non-terminal state snapshot for a running tool message. */
+export interface ToolStateChunkData {
+  chunkType: 'tool_state';
+  pluginState: Record<string, unknown>;
+  snapshotMode: 'replace';
+  snapshotSeq: number;
+  /** Subagent context is intentionally structural to avoid a package cycle. */
+  subagent?: { parentToolCallId: string; [key: string]: unknown };
+  toolCallId: string;
 }
 
 // ─── Typed Event Data ───
@@ -91,7 +117,7 @@ export interface StreamChunkData {
  * uiMessages snapshot is resolved BEFORE this row is created, so the snapshot
  * never contains it — without a local insert, every stream_chunk/stream_end
  * dispatch for the step targets a missing id and is silently dropped
- * (LOBE-11501). Older servers send only `{ id }`; clients fall back to a DB
+ *. Older servers send only `{ id}`; clients fall back to a DB
  * refetch in that case.
  */
 export interface StreamStartAssistantMessage {

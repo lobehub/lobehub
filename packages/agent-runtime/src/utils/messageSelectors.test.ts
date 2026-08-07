@@ -5,7 +5,9 @@ import {
   collectFromMessages,
   extractActivatedSkillsFromMessages,
   extractActivatedToolIdsFromMessages,
+  extractTodosFromMessages,
   findInMessages,
+  normalizeTodosState,
 } from './messageSelectors';
 
 const createMessage = (overrides: Partial<UIChatMessage> = {}): UIChatMessage =>
@@ -98,6 +100,96 @@ describe('collectFromMessages', () => {
     });
 
     expect(result).toEqual(['tool']);
+  });
+});
+
+describe('TODO state selectors', () => {
+  const item = { status: 'processing' as const, text: 'Ship the fix' };
+
+  it('normalizes canonical and legacy states, including empty clear tombstones', () => {
+    expect(normalizeTodosState({ items: [item], updatedAt: 'canonical-time' }, 'fallback')).toEqual({
+      items: [item],
+      updatedAt: 'canonical-time',
+    });
+    expect(normalizeTodosState([item], 'fallback')).toEqual({
+      items: [item],
+      updatedAt: 'fallback',
+    });
+    expect(normalizeTodosState({ items: [] }, 'fallback')).toEqual({
+      items: [],
+      updatedAt: 'fallback',
+    });
+    expect(normalizeTodosState({ items: [item], updatedAt: 42 }, 'fallback')).toEqual({
+      items: [item],
+      updatedAt: 'fallback',
+    });
+    expect(normalizeTodosState([], 'fallback')).toEqual({ items: [], updatedAt: 'fallback' });
+  });
+
+  it('rejects alternate fields and malformed items', () => {
+    expect(normalizeTodosState({ tasks: [item] }, 'fallback')).toBeUndefined();
+    expect(normalizeTodosState({ todoList: [item] }, 'fallback')).toBeUndefined();
+    expect(normalizeTodosState({ items: [{ status: 'unknown', text: 'bad' }] }, 'fallback')).toBeUndefined();
+    expect(normalizeTodosState({ items: [{ status: 'todo' }] }, 'fallback')).toBeUndefined();
+  });
+
+  it('selects the newest valid exact pluginState.todos from any producer', () => {
+    const messages = [
+      createToolMessage({
+        plugin: { identifier: 'producer-a' },
+        pluginState: { todos: { items: [{ status: 'todo', text: 'old' }], updatedAt: 'old' } },
+      } as any),
+      createToolMessage({
+        content: JSON.stringify({ todos: { items: [item] } }),
+        plugin: { identifier: 'producer-b' },
+        pluginState: { tasks: [item] },
+      } as any),
+      createToolMessage({
+        plugin: { identifier: 'producer-c' },
+        pluginState: { todos: { items: [{ status: 'completed', text: 'new' }], updatedAt: 'new' } },
+      } as any),
+      createToolMessage({
+        plugin: { identifier: 'producer-d' },
+        pluginState: { todos: { items: [{ status: 'invalid', text: 'skip' }] } },
+      } as any),
+    ];
+
+    expect(extractTodosFromMessages(messages)).toEqual({
+      items: [{ status: 'completed', text: 'new' }],
+      updatedAt: 'new',
+    });
+  });
+
+  it('extracts equivalent TODO state from flat, grouped, and compressed messages', () => {
+    const todos = { items: [item], updatedAt: 'same' };
+    const flat = createToolMessage({ pluginState: { todos } });
+    const grouped = createMessage({
+      children: [
+        {
+          id: 'assistant',
+          tools: [{ id: 'call', result: { id: 'result', state: { todos } } }],
+        },
+      ],
+      role: 'supervisor',
+    } as any);
+    const compressed = createMessage({
+      compressedMessages: [grouped],
+      role: 'compressedGroup',
+    } as any);
+
+    expect(extractTodosFromMessages([flat])).toEqual(todos);
+    expect(extractTodosFromMessages([grouped])).toEqual(todos);
+    expect(extractTodosFromMessages([compressed])).toEqual(todos);
+  });
+
+  it('does not read TODO-like values from arguments or content', () => {
+    const message = createToolMessage({
+      content: JSON.stringify({ todos: [item] }),
+      plugin: { arguments: JSON.stringify({ todos: [item] }) },
+      pluginState: { todoList: [item] },
+    } as any);
+
+    expect(extractTodosFromMessages([message])).toBeUndefined();
   });
 });
 

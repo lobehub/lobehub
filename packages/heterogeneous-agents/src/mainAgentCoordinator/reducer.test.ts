@@ -55,6 +55,21 @@ const toolsEvent = (tools: any[]) => ({
   type: 'stream_chunk',
 });
 
+const toolStateEvent = (
+  toolCallId: string,
+  snapshotSeq: number,
+  pluginState: Record<string, unknown>,
+) => ({
+  data: {
+    chunkType: 'tool_state',
+    pluginState,
+    snapshotMode: 'replace',
+    snapshotSeq,
+    toolCallId,
+  },
+  type: 'stream_chunk',
+});
+
 const toolResultEvent = (toolCallId: string, content: string, extra: Record<string, any> = {}) => ({
   data: { content, toolCallId, ...extra },
   type: 'tool_result',
@@ -108,6 +123,40 @@ describe('main agent reducer', () => {
     expect(state.accContent).toBe('Hello world');
   });
 
+  it('emits a replace-only tool-state intent without mutating reducer state', () => {
+    const pluginState = { todos: { items: [{ status: 'processing', text: 'Implement' }] } };
+    const initial = createMainAgentRunState('A0');
+    const result = reduceMainAgent(initial, toolStateEvent('todo-1', 2, pluginState), makeCtx());
+
+    expect(result.intents).toEqual([
+      {
+        kind: 'updateToolState',
+        pluginState,
+        snapshotSeq: 2,
+        toolCallId: 'todo-1',
+      },
+    ]);
+    expect(result.state).toBe(initial);
+  });
+
+  it('ignores malformed tool-state chunks', () => {
+    const { steps } = run([
+      toolStateEvent('todo-1', 0, { todos: {} }),
+      {
+        data: {
+          chunkType: 'tool_state',
+          pluginState: [],
+          snapshotMode: 'replace',
+          snapshotSeq: 1,
+          toolCallId: 'todo-1',
+        },
+        type: 'stream_chunk',
+      },
+    ]);
+
+    expect(steps).toEqual([[], []]);
+  });
+
   it('replace-mode text snapshots replace, and stale sequences are dropped', () => {
     const { steps, state } = run([
       textEvent('v2', { snapshotMode: 'replace', snapshotSeq: 2 }),
@@ -119,6 +168,31 @@ describe('main agent reducer', () => {
     expect(steps[2]).toEqual([{ content: 'v3', kind: 'streamContent', messageId: 'A0' }]);
     expect(state.accContent).toBe('v3');
     expect(state.lastTextSnapshotSeq).toBe(3);
+  });
+
+  it('replaces reasoning snapshots and drops stale or redelivered seqs', () => {
+    const snapshot = (reasoning: string, snapshotSeq: number) => ({
+      data: { chunkType: 'reasoning', reasoning, snapshotMode: 'replace', snapshotSeq },
+      type: 'stream_chunk',
+    });
+    const { state, steps } = run([
+      snapshot('thinking', 1),
+      snapshot('thinking done', 2),
+      // Redelivered seq 2 (batch retry on a cold replica) — must be a no-op,
+      // not an append: appending would duplicate the reasoning durably.
+      snapshot('thinking done', 2),
+      // Stale out-of-order snapshot — dropped.
+      snapshot('thinking', 1),
+    ]);
+
+    expect(steps[1]).toEqual([
+      { kind: 'streamContent', messageId: 'A0', reasoning: 'thinking done' },
+    ]);
+    expect(steps[2]).toEqual([]);
+    expect(steps[3]).toEqual([]);
+    expect(state.accReasoning).toBe('thinking done');
+    expect(state.lastReasoningSnapshotSeq).toBe(2);
+    expect(state.turnMetadata.heteroReasoningSnapshotSeq).toBe(2);
   });
 
   it('accumulates reasoning separately', () => {

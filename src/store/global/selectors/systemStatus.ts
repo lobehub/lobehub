@@ -8,8 +8,8 @@ import type {
 } from '../initialState';
 import {
   DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS,
-  DEFAULT_MODEL_DETAIL_PANEL_EXPANDED_KEYS,
   INITIAL_STATUS,
+  MODEL_DETAIL_PANEL_EXPANDABLE_KEYS,
   WORKSPACE_OVERRIDABLE_FIELDS,
 } from '../initialState';
 
@@ -367,6 +367,11 @@ const showSystemRole = (s: GlobalState) => s.status.showSystemRole;
 const mobileShowTopic = (s: GlobalState) => s.status.mobileShowTopic;
 const mobileShowPortal = (s: GlobalState) => s.status.mobileShowPortal;
 const showAgentBuilderPanel = (s: GlobalState) => s.status.showAgentBuilderPanel;
+const showHomeRail = (s: GlobalState) => s.status.showHomeRail ?? true;
+const showHomePortrait = (s: GlobalState) => s.status.showHomePortrait ?? true;
+const hiddenHomeWidgets = (s: GlobalState): string[] => s.status.hiddenHomeWidgets ?? [];
+const homeRecentsCount = (s: GlobalState): number => s.status.homeRecentsCount ?? 8;
+const homeTaskCount = (s: GlobalState): number => s.status.homeTaskCount ?? 8;
 const showRightPanel = (s: GlobalState) => s.status.showRightPanel;
 const showLeftPanel = (s: GlobalState) => s.status.showLeftPanel;
 const showPageAgentPanel = (s: GlobalState) => s.status.showPageAgentPanel;
@@ -380,8 +385,11 @@ const showImageTopicPanel = (s: GlobalState) => s.status.showImageTopicPanel;
 const hidePWAInstaller = (s: GlobalState) => s.status.hidePWAInstaller;
 const isShowCredit = (s: GlobalState) => s.status.isShowCredit;
 const language = (s: GlobalState) => s.status.language || 'auto';
-const modelDetailPanelExpandedKeys = (s: GlobalState): ModelDetailPanelExpandedKey[] =>
-  s.status.modelDetailPanelExpandedKeys ?? [...DEFAULT_MODEL_DETAIL_PANEL_EXPANDED_KEYS];
+const modelDetailPanelExpandedKeys = (s: GlobalState): ModelDetailPanelExpandedKey[] => {
+  const collapsedKeys = s.status.modelDetailPanelCollapsedKeys ?? [];
+
+  return MODEL_DETAIL_PANEL_EXPANDABLE_KEYS.filter((key) => !collapsedKeys.includes(key));
+};
 const modelSwitchPanelGroupMode = (s: GlobalState) =>
   s.status.modelSwitchPanelGroupMode || 'byProvider';
 const modelSwitchPanelWidth = (s: GlobalState) => s.status.modelSwitchPanelWidth || 460;
@@ -392,9 +400,15 @@ const leftPanelWidth = (s: GlobalState): number => {
   return normalizeNavPanelWidth(s.status.leftPanelWidth);
 };
 const portalWidth = (s: GlobalState) => s.status.portalWidth || 400;
+const portalWidths = (s: GlobalState) => s.status.portalWidths;
 const filePanelWidth = (s: GlobalState) => s.status.filePanelWidth;
 const groupAgentBuilderPanelWidth = (s: GlobalState) => s.status.groupAgentBuilderPanelWidth || 360;
 const imagePanelWidth = (s: GlobalState) => s.status.imagePanelWidth;
+const agentListViewMode = (s: GlobalState) => s.status.agentListViewMode || 'list';
+const agentListViewOptions = (s: GlobalState) => s.status.agentListViewOptions;
+const agentListExpandedGroupKeys = (s: GlobalState) => s.status.agentListExpandedGroupKeys ?? [];
+const agentListSidebarSectionCollapsed = (s: GlobalState) =>
+  s.status.agentListSidebarSectionCollapsed ?? false;
 const imageTopicViewMode = (s: GlobalState) => s.status.imageTopicViewMode || 'grid';
 const imageTopicPanelWidth = (s: GlobalState) => s.status.imageTopicPanelWidth;
 const verifyReportPanelWidth = (s: GlobalState) => s.status.verifyReportPanelWidth || 300;
@@ -439,6 +453,10 @@ const homeSelectedAgentId = (s: GlobalState) => s.status.homeSelectedAgentId;
 
 export const systemStatusSelectors = {
   agentBuilderPanelWidth,
+  agentListExpandedGroupKeys,
+  agentListSidebarSectionCollapsed,
+  agentListViewMode,
+  agentListViewOptions,
   agentPageSize,
   chatInputHeight,
   disabledModelProvidersSortType,
@@ -447,9 +465,12 @@ export const systemStatusSelectors = {
   filePanelWidth,
   getAgentSystemRoleExpanded,
   groupAgentBuilderPanelWidth,
+  hiddenHomeWidgets,
   hiddenSidebarSections,
   hidePWAInstaller,
+  homeRecentsCount,
   homeSelectedAgentId,
+  homeTaskCount,
   imagePanelWidth,
   imageTopicViewMode,
   imageTopicPanelWidth,
@@ -467,6 +488,7 @@ export const systemStatusSelectors = {
   pageAgentPanelWidth,
   pagePageSize,
   portalWidth,
+  portalWidths,
   privateAgentPageSize,
   recentPageSize,
   taskCreateInlineCollapsed,
@@ -479,6 +501,8 @@ export const systemStatusSelectors = {
   sessionGroupKeys,
   showAgentBuilderPanel,
   showFilePanel,
+  showHomePortrait,
+  showHomeRail,
   showImagePanel,
   showImageTopicPanel,
   showLeftPanel,

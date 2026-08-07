@@ -9,13 +9,11 @@
 # With --subject (task:<id> | topic:<id> | document:<id>) the run is grouped
 # under its acceptance:
 #   .records/reports/<type>-<id>/<YYYYMMDD-HHMMSS>-<slug>/
-# and the group dir gets an acceptance.json marker (created once, updatedAt
-# bumped per run). The subject is also pre-filled into result.json so
-# `lh verify ingest-report` attaches the run without an explicit --subject.
+# and the group directory gets an acceptance.json marker. The subject is also
+# pre-filled into result.json so acceptance run ingest attaches the run automatically.
 #
-# Without --subject the legacy flat layout is used:
-#   .records/reports/<YYYYMMDD-HHMMSS>-<slug>/
-# Every run ultimately needs a subject at ingest time — prefer passing it here.
+# Run this from the CONSUMER repo root — the report is created relative to the
+# current working directory, not relative to this script's own location.
 #
 # Prints the report directory path (capture it: DIR=$(report-init.sh my-test)).
 
@@ -30,10 +28,17 @@ fi
 SLUG="${1:?Usage: report-init.sh [--subject <type:id>] <slug> [title]}"
 TITLE="${2:-$SLUG}"
 
-# Anchor to the checkout being TESTED (cwd's git toplevel — correct when the
-# main checkout's script is invoked inside a worktree); fall back to the
-# script's own checkout outside any repo.
-REPO_ROOT="$(git rev-parse --show-toplevel 2> /dev/null || { cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd; })"
+json_escape() {
+  local s=$1
+  s=${s//\\/\\\\}
+  s=${s//\"/\\\"}
+  s=${s//$'\n'/\\n}
+  s=${s//$'\r'/\\r}
+  s=${s//$'\t'/\\t}
+  printf '%s' "$s"
+}
+
+REPO_ROOT="$(pwd)"
 TS="$(date +%Y%m%d-%H%M%S)"
 
 SUBJECT_JSON="null"
@@ -45,7 +50,7 @@ if [[ -n "$SUBJECT" ]]; then
   SUBJECT_KEY="${SUBJECT/:/-}"
   GROUP_DIR="$REPO_ROOT/.records/reports/$SUBJECT_KEY"
   DIR="$GROUP_DIR/$TS-$SLUG"
-  SUBJECT_JSON="\"$SUBJECT\""
+  SUBJECT_JSON="\"$(json_escape "$SUBJECT")\""
 else
   DIR="$REPO_ROOT/.records/reports/$TS-$SLUG"
 fi
@@ -55,28 +60,27 @@ BRANCH=$(git -C "$REPO_ROOT" branch --show-current 2> /dev/null || echo "unknown
 COMMIT=$(git -C "$REPO_ROOT" rev-parse --short HEAD 2> /dev/null || echo "unknown")
 DATE_ISO=$(date '+%Y-%m-%dT%H:%M:%S%z')
 
-# acceptance.json marks the group dir: what acceptance these runs belong to.
-# Created on the first run; only updatedAt/lastRun move afterwards (the title
-# from the first scaffold wins — it names the acceptance, not the round).
+# acceptance.json records the group identity. The first title names the
+# acceptance; later runs update only the timestamp and latest round.
 if [[ -n "$SUBJECT" ]]; then
   ACCEPTANCE_JSON="$GROUP_DIR/acceptance.json"
   if [[ ! -f "$ACCEPTANCE_JSON" ]]; then
     cat > "$ACCEPTANCE_JSON" << EOF
 {
-  "subject": "$SUBJECT",
-  "title": "$TITLE",
-  "createdAt": "$DATE_ISO",
-  "updatedAt": "$DATE_ISO",
-  "lastRun": "$TS-$SLUG"
+  "subject": "$(json_escape "$SUBJECT")",
+  "title": "$(json_escape "$TITLE")",
+  "createdAt": "$(json_escape "$DATE_ISO")",
+  "updatedAt": "$(json_escape "$DATE_ISO")",
+  "lastRun": "$(json_escape "$TS-$SLUG")"
 }
 EOF
   else
     node -e '
       const fs = require("fs");
-      const [file, ts, iso] = process.argv.slice(1);
+      const [file, run, iso] = process.argv.slice(1);
       const data = JSON.parse(fs.readFileSync(file, "utf8"));
       data.updatedAt = iso;
-      data.lastRun = ts;
+      data.lastRun = run;
       fs.writeFileSync(file, JSON.stringify(data, null, 2) + "\n");
     ' "$ACCEPTANCE_JSON" "$TS-$SLUG" "$DATE_ISO"
   fi
@@ -111,12 +115,12 @@ EOF
 # build / CDP dev instance; that goes on the plan item's \`method\`).
 cat > "$DIR/result.json" << EOF
 {
-  "title": "$TITLE",
+  "title": "$(json_escape "$TITLE")",
   "scenario": "coding",
-  "createdAt": "$DATE_ISO",
+  "createdAt": "$(json_escape "$DATE_ISO")",
   "subject": $SUBJECT_JSON,
-  "branch": "$BRANCH",
-  "commit": "$COMMIT",
+  "branch": "$(json_escape "$BRANCH")",
+  "commit": "$(json_escape "$COMMIT")",
   "surfaces": [],
   "entry": "",
   "plan": [],

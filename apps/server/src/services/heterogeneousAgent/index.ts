@@ -1,6 +1,7 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { type ISnapshotStore, parseOperationId } from '@lobechat/agent-tracing';
 import type { LobeChatDatabase } from '@lobechat/database';
+import type { LocalHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -22,7 +23,7 @@ import { HeteroTraceRecorder } from './HeteroTraceRecorder';
 
 const log = debug('lobe-server:hetero-agent-service');
 
-export type HeterogeneousAgentType = 'amp' | 'claude-code' | 'codex';
+export type HeterogeneousAgentType = LocalHeterogeneousAgentType;
 
 export type HeterogeneousFinishResult = 'success' | 'error' | 'cancelled';
 
@@ -74,7 +75,7 @@ export interface HeterogeneousAgentServiceOptions {
 
 /**
  * Server-side ingest handler for heterogeneous agent CLIs (`lh hetero exec`
- * for Amp / Claude Code / Codex). Receives `AgentStreamEvent` batches from the
+ * for Amp / Claude Code / Codex / OpenCode / Pi / Qoder). Receives `AgentStreamEvent` batches from the
  * producer and republishes them through the existing `StreamEventManager`
  * fanout, so renderer-side gateway WS subscribers see the same wire shape
  * regardless of whether the run came from the agent gateway or a CLI process.
@@ -150,10 +151,24 @@ export class HeterogeneousAgentService {
       throw err;
     }
 
-    // Sequential publish preserves stepIndex ordering — Redis XADD itself is
-    // serialized but awaiting in-order avoids interleaving with concurrent
-    // ingest batches sharing the same operationId.
-    for (const event of events) {
+    // Publish only events not yet delivered to the stream. The publish gate
+    // (`publishedKeys`, peer of the persistence dedupe) makes a BatchIngester
+    // retry invisible to live subscribers: a batch that fully succeeded but
+    // lost its tRPC response republishes nothing, while one that died
+    // mid-publish resumes from the first unpublished event — each event is
+    // latched only after its own XADD succeeds. Sequential publish preserves
+    // stepIndex ordering — Redis XADD itself is serialized but awaiting
+    // in-order avoids interleaving with concurrent ingest batches sharing the
+    // same operationId.
+    const unpublished = this.persistenceHandler.filterUnpublishedEvents(operationId, events);
+    if (unpublished.length < events.length) {
+      log(
+        'heteroIngest: skip %d already-published events op=%s',
+        events.length - unpublished.length,
+        operationId,
+      );
+    }
+    for (const event of unpublished) {
       // Each event already carries operationId; pass through unchanged so the
       // wire shape on the WS side is identical to gateway-driven runs.
       await this.streamEventManager.publishStreamEvent(operationId, {
@@ -161,15 +176,18 @@ export class HeterogeneousAgentService {
         stepIndex: event.stepIndex,
         type: event.type,
       });
+      this.persistenceHandler.markEventPublished(operationId, event);
     }
 
     // Accumulate the execution-trace snapshot LAST. The recorder has no
     // per-event idempotency, so it must run only after every step that can throw
     // and trigger a BatchIngester retry of this same batch — otherwise a publish
     // failure above would re-fold these events and double-count the snapshot.
-    // It's the final statement and best-effort (never throws), so it folds each
-    // batch exactly once (on the attempt that gets this far).
-    await this.traceRecorder.appendBatch(operationId, events);
+    // Gating on the publish gate also skips the pure-redelivery batch (full
+    // success whose response was lost), which would otherwise double-fold here.
+    if (unpublished.length > 0) {
+      await this.traceRecorder.appendBatch(operationId, events);
+    }
   }
 
   async heteroFinish(params: HeterogeneousFinishParams): Promise<void> {
@@ -243,6 +261,11 @@ export class HeterogeneousAgentService {
           ? currentMsgRef.msgId
           : topic?.metadata?.runningOperation?.assistantMessageId;
       await this.topicModel.updateMetadata(topicId, { runningOperation: null });
+      // Settle `status: 'running'` for runs with no renderer attached (e.g. a
+      // cron-dispatched scheduled resume) — otherwise nothing ever moves the
+      // topic off `running`. Guarded in the model: an attached client's own
+      // terminal write ('active'/'unread') is never clobbered.
+      await this.topicModel.settleRunningStatus(topicId);
     } catch (err) {
       log('heteroFinish: failed to clear runningOperation (non-fatal): %O', err);
     }

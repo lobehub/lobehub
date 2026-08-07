@@ -3,11 +3,13 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 
+import type { LocalHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
+import { HETEROGENEOUS_AGENT_CONFIGS } from '@lobechat/heterogeneous-agents';
 import type * as HeteroSpawn from '@lobechat/heterogeneous-agents/spawn';
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { registerHeteroCommand } from './hetero';
+import { registerHeteroCommand, SUPPORTED_AGENT_TYPES } from './hetero';
 
 const { mockResolveHeteroSpawnCommand, mockSpawnAgent } = vi.hoisted(() => ({
   mockResolveHeteroSpawnCommand: vi.fn(),
@@ -102,9 +104,20 @@ describe('hetero exec command', () => {
     stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     mockResolveHeteroSpawnCommand.mockReset();
     mockResolveHeteroSpawnCommand.mockImplementation(
-      async (agentType: 'amp' | 'claude-code' | 'codex', command?: string) => ({
+      async (agentType: LocalHeterogeneousAgentType, command?: string) => ({
         command:
-          command ?? (agentType === 'amp' ? 'amp' : agentType === 'codex' ? 'codex' : 'claude'),
+          command ??
+          (agentType === 'amp'
+            ? 'amp'
+            : agentType === 'codex'
+              ? 'codex'
+              : agentType === 'opencode'
+                ? 'opencode'
+                : agentType === 'pi'
+                  ? 'pi'
+                  : agentType === 'qoder'
+                    ? 'qodercli'
+                    : 'claude'),
       }),
     );
     mockSpawnAgent.mockReset();
@@ -150,6 +163,12 @@ describe('hetero exec command', () => {
     }
   };
 
+  it('supports exactly the local agent descriptor types', () => {
+    expect([...SUPPORTED_AGENT_TYPES].toSorted()).toEqual(
+      HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type).toSorted(),
+    );
+  });
+
   it('rejects unsupported agent types via process.exit(2)', async () => {
     await runCmd(['hetero', 'exec', '--type', 'kimi-cli', '--prompt', 'hi']);
     expect(exitSpy).toHaveBeenCalledWith(2);
@@ -191,6 +210,33 @@ describe('hetero exec command', () => {
     });
     // operationId auto-generated when omitted (uuid v4 shape)
     expect(call.operationId).toMatch(/^[0-9a-f-]{36}$/i);
+  });
+
+  it('runs Qoder with its default command and forwards model but not effort', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'qoder',
+      '--prompt',
+      'do thing',
+      '--model',
+      'Claude Sonnet 4.5',
+      '--effort',
+      'high',
+    ]);
+
+    expect(mockResolveHeteroSpawnCommand).toHaveBeenCalledWith('qoder', undefined);
+    expect(mockSpawnAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'qoder',
+        command: 'qodercli',
+        extraArgs: ['--model', 'Claude Sonnet 4.5'],
+        prompt: 'do thing',
+      }),
+    );
   });
 
   it('uses the provided --operation-id verbatim', async () => {
@@ -350,6 +396,72 @@ describe('hetero exec command', () => {
     );
   });
 
+  it('runs OpenCode with model, resume, and native args while ignoring effort and speed', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'opencode',
+      '--prompt',
+      'do thing',
+      '--resume',
+      'session-open-1',
+      '--model',
+      'anthropic/claude-sonnet-4',
+      '--effort',
+      'high',
+      '--speed',
+      'fast',
+      '--agent-arg=--variant',
+      '--agent-arg=max',
+    ]);
+
+    expect(mockResolveHeteroSpawnCommand).toHaveBeenCalledWith('opencode', undefined);
+    expect(mockSpawnAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'opencode',
+        command: 'opencode',
+        extraArgs: ['--variant', 'max', '--model', 'anthropic/claude-sonnet-4'],
+        resumeSessionId: 'session-open-1',
+      }),
+    );
+  });
+
+  it('runs Pi with model, resume, and native args while ignoring effort and speed', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'pi',
+      '--prompt',
+      'do thing',
+      '--resume',
+      'pi-session-1',
+      '--model',
+      'anthropic/claude-sonnet-4-5',
+      '--effort',
+      'high',
+      '--speed',
+      'fast',
+      '--agent-arg=--provider',
+      '--agent-arg=anthropic',
+    ]);
+
+    expect(mockResolveHeteroSpawnCommand).toHaveBeenCalledWith('pi', undefined);
+    expect(mockSpawnAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'pi',
+        command: 'pi',
+        extraArgs: ['--provider', 'anthropic', '--model', 'anthropic/claude-sonnet-4-5'],
+        resumeSessionId: 'pi-session-1',
+      }),
+    );
+  });
+
   it('streams events to stdout as JSONL, one line per event', async () => {
     const events = [
       { data: { foo: 1 }, operationId: 'op-1', stepIndex: 0, timestamp: 1, type: 'stream_start' },
@@ -396,6 +508,107 @@ describe('hetero exec command', () => {
 
     await runCmd(['hetero', 'exec', '--type', 'claude-code', '--prompt', 'hi']);
     expect(exitSpy).toHaveBeenCalledWith(130);
+  });
+
+  it('flushes terminal tool events before finishing a server-ingest run as cancelled', async () => {
+    let sigintHandler: (() => void) | undefined;
+    vi.spyOn(process, 'on').mockImplementation(((event: string, listener: () => void) => {
+      if (event === 'SIGINT') sigintHandler = listener;
+      return process;
+    }) as typeof process.on);
+
+    let resolveFirstEvent: ((result: IteratorResult<Record<string, unknown>>) => void) | undefined;
+    let eventIndex = 0;
+    const events: AsyncIterable<Record<string, unknown>> = {
+      [Symbol.asyncIterator]() {
+        return {
+          next: async () => {
+            if (eventIndex === 0) {
+              eventIndex += 1;
+              return new Promise<IteratorResult<Record<string, unknown>>>((resolve) => {
+                resolveFirstEvent = resolve;
+              });
+            }
+            if (eventIndex === 1) {
+              eventIndex += 1;
+              return {
+                done: false,
+                value: {
+                  data: { isSuccess: false, toolCallId: 'todo-1' },
+                  operationId: 'op-cancel',
+                  stepIndex: 0,
+                  timestamp: 2,
+                  type: 'tool_end',
+                },
+              };
+            }
+            return { done: true, value: undefined };
+          },
+        };
+      },
+    };
+    const stderr = new PassThrough();
+    stderr.end();
+    const kill = vi.fn();
+    mockSpawnAgent.mockResolvedValue({
+      events,
+      exit: Promise.resolve({ code: null, signal: 'SIGINT' }),
+      kill,
+      pid: 12_345,
+      stderr,
+    });
+
+    const callOrder: string[] = [];
+    mockHeteroIngestMutate.mockImplementation(async ({ events: batch }) => {
+      callOrder.push(...batch.map((event: { type: string }) => event.type));
+      return { ack: true };
+    });
+    mockHeteroFinishMutate.mockImplementation(async ({ result }) => {
+      callOrder.push(`finish:${result}`);
+      return { ack: true };
+    });
+
+    const command = runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'codex',
+      '--prompt',
+      'hi',
+      '--topic',
+      'topic-1',
+      '--operation-id',
+      'op-cancel',
+      '--render',
+      'none',
+    ]);
+    for (let i = 0; i < 20 && !sigintHandler; i += 1) await Promise.resolve();
+
+    sigintHandler?.();
+    expect(kill).toHaveBeenCalledWith('SIGINT');
+    expect(mockHeteroFinishMutate).not.toHaveBeenCalled();
+
+    resolveFirstEvent?.({
+      done: false,
+      value: {
+        data: {
+          content: 'Todo list update interrupted.',
+          isError: true,
+          pluginState: { todos: { items: [] } },
+          toolCallId: 'todo-1',
+        },
+        operationId: 'op-cancel',
+        stepIndex: 0,
+        timestamp: 1,
+        type: 'tool_result',
+      },
+    });
+    await command;
+
+    expect(callOrder).toEqual(['tool_result', 'tool_end', 'finish:cancelled']);
+    expect(mockHeteroFinishMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ error: undefined, result: 'cancelled' }),
+    );
   });
 
   it('combines --prompt + --image into mixed content blocks', async () => {
@@ -888,11 +1101,12 @@ describe('hetero exec command', () => {
     });
   });
 
-  it('sends full text snapshots before tools and waits for finish until all server ingests ack', async () => {
+  it('batches snapshot + tool + terminal events into ordered ingest calls and finishes after the ack', async () => {
     const callOrder: string[] = [];
     mockHeteroIngestMutate.mockImplementation(async ({ events }: any) => {
-      const first = events[0];
-      callOrder.push(`ingest:${first.type}:${first.data?.chunkType ?? 'terminal'}`);
+      for (const event of events) {
+        callOrder.push(`ingest:${event.type}:${event.data?.chunkType ?? 'terminal'}`);
+      }
       return { ack: true };
     });
     mockHeteroFinishMutate.mockImplementation(async () => {
@@ -962,13 +1176,17 @@ describe('hetero exec command', () => {
       'none',
     ]);
 
-    expect(mockHeteroIngestMutate).toHaveBeenCalledTimes(3);
+    // The whole run fits one batched ingest call (3 events ≪ MAX_BATCH) —
+    // NOT one serial round-trip per event as before.
+    expect(mockHeteroIngestMutate).toHaveBeenCalledTimes(1);
     expect(mockHeteroIngestMutate.mock.calls[0][0].events[0].data).toMatchObject({
       chunkType: 'text',
       content: 'hello world',
       snapshotMode: 'replace',
       snapshotSeq: 1,
     });
+    // Within-batch order preserved (server processes a batch sequentially),
+    // and finish is only sent after every ingest acked.
     expect(callOrder).toEqual([
       'ingest:stream_chunk:text',
       'ingest:stream_chunk:tools_calling',

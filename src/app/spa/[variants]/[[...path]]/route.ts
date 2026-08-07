@@ -1,4 +1,4 @@
-import { BRANDING_NAME, ORG_NAME } from '@lobechat/business-const';
+import { APPLE_APP_STORE_ID, BRANDING_NAME, ORG_NAME } from '@lobechat/business-const';
 import { OG_URL } from '@lobechat/const';
 
 import { getServerFeatureFlagsValue } from '@/config/featureFlags';
@@ -50,12 +50,12 @@ function buildClientEnv(): SPAClientEnv {
   };
 }
 
-async function buildSeoMeta(locale: string): Promise<string> {
+async function buildSeoMeta(locale: string, isMobile: boolean): Promise<string> {
   const { t } = await translation('metadata', locale);
   const title = t('chat.title', { appName: BRANDING_NAME });
   const description = t('chat.description', { appName: BRANDING_NAME });
 
-  return [
+  const metas = [
     `<title>${title}</title>`,
     `<meta name="description" content="${description}" />`,
     `<meta property="og:title" content="${title}" />`,
@@ -70,7 +70,13 @@ async function buildSeoMeta(locale: string): Promise<string> {
     `<meta name="twitter:description" content="${description}" />`,
     `<meta name="twitter:image" content="${OG_URL}" />`,
     `<meta name="twitter:site" content="${isCustomORG ? `@${ORG_NAME}` : '@lobehub'}" />`,
-  ].join('\n    ');
+  ];
+
+  if (isMobile && APPLE_APP_STORE_ID) {
+    metas.push(`<meta name="apple-itunes-app" content="app-id=${APPLE_APP_STORE_ID}" />`);
+  }
+
+  return metas.join('\n    ');
 }
 
 export async function GET(
@@ -89,7 +95,7 @@ export async function GET(
   };
 
   const template = await getTemplate(isMobile);
-  const seoMeta = await buildSeoMeta(locale);
+  const seoMeta = await buildSeoMeta(locale, isMobile);
 
   return renderSpaHtml(template, { seoMeta, serverConfig: spaConfig });
 }

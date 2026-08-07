@@ -66,6 +66,7 @@ const createSchema = z.object({
   name: z.string().optional(),
   parentTaskId: z.string().optional(),
   priority: z.number().min(0).max(4).optional(),
+  projectId: z.string().optional(),
   schedulePattern: z.string().optional(),
   scheduleTimezone: z.string().optional(),
   // When omitted, the server derives visibility from the parent task or the
@@ -180,6 +181,14 @@ async function resolveSafeParentTaskId(
     throw new TRPCError({
       code: 'BAD_REQUEST',
       message: 'Task cannot be parented to its own descendant',
+    });
+  }
+
+  const task = await resolveOrThrow(model, taskId);
+  if (task.projectId !== parent.projectId) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'Parent task must belong to the same project',
     });
   }
 
@@ -313,7 +322,7 @@ export const taskRouter = router({
     .mutation(async ({ input, ctx }) => {
       try {
         const comment = await ctx.taskModel.updateComment(input.commentId, input.content, {
-          editorData: input.editorData,
+          editorData: input.editorData === undefined ? null : input.editorData,
         });
         if (!comment) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'Comment not found' });
@@ -348,6 +357,9 @@ export const taskRouter = router({
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         console.error('[task:addDependency]', error);
+        if (error instanceof Error && error.message.includes('project boundaries')) {
+          throw new TRPCError({ cause: error, code: 'BAD_REQUEST', message: error.message });
+        }
         throw new TRPCError({
           cause: error,
           code: 'INTERNAL_SERVER_ERROR',
@@ -1058,7 +1070,16 @@ export const taskRouter = router({
 
       const updateData =
         parentTaskId === undefined ? data : { ...data, parentTaskId: resolvedParentTaskId };
-      const task = await model.update(resolved.id, updateData);
+      // `instruction` is the markdown source of truth while `editorData` is its
+      // rich-text mirror. Text-only callers (for example the editTask builtin)
+      // cannot produce Lexical JSON, so discard the stale mirror and let the
+      // editor rebuild from markdown. Callers that provide both fields keep
+      // their explicit editor state.
+      const normalizedUpdateData =
+        updateData.instruction !== undefined && updateData.editorData === undefined
+          ? { ...updateData, editorData: null }
+          : updateData;
+      const task = await model.update(resolved.id, normalizedUpdateData);
       if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
       return { data: task, message: 'Task updated', success: true };
     } catch (error) {
@@ -1096,7 +1117,7 @@ export const taskRouter = router({
         // The creator can always change visibility on their own tasks. In
         // workspace mode, workspace owners may still promote other members'
         // tasks (mirrors the transferTask policy at line ~1166), but demoting
-        // to private stays creator-only (LOBE-11760): the task would land in
+        // to private stays creator-only: the task would land in
         // the creator's private list, so an owner-initiated demotion just
         // appropriates another member's data.
         if (ctx.workspaceId && resolved.createdByUserId !== ctx.userId) {

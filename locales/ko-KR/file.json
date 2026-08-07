@@ -197,6 +197,8 @@
   "pageList.workspaceTitle": "워크스페이스",
   "portal.openInPageEditor": "문서에서 편집",
   "preview.downloadFile": "파일 다운로드",
+  "preview.raw": "원본",
+  "preview.render": "미리보기",
   "preview.unsupportedFileAndContact": "이 파일 형식은 온라인 미리보기를 지원하지 않습니다. 미리보기 기능이 필요하시면 <1>의견을 보내주세요</1>",
   "resource": "리소스",
   "resourceList.batchCopyDescription": "선택한 리소스를 다른 작업 공간으로 복제합니다.",
@@ -246,6 +248,7 @@
   "uploadDock.body.item.pending": "업로드 준비 중...",
   "uploadDock.body.item.processing": "파일 처리 중...",
   "uploadDock.body.item.restTime": "남은 시간 {{time}}",
+  "uploadDock.body.item.retry": "업로드 다시 시도",
   "uploadDock.fileQueueInfo": "{{count}}개 파일을 업로드 중이며, 나머지 {{remaining}}개 파일은 대기 중입니다",
   "uploadDock.header.cancelAll": "모두 취소",
   "uploadDock.totalCount": "총 {{count}}개 항목",
@@ -254,5 +257,13 @@
   "uploadDock.uploadStatus.pending": "업로드 대기 중",
   "uploadDock.uploadStatus.processing": "업로드 중",
   "uploadDock.uploadStatus.success": "업로드 완료",
-  "uploadDock.uploadStatus.uploading": "업로드 중"
+  "uploadDock.uploadStatus.uploading": "업로드 중",
+  "work.empty.desc": "에이전트가 생성한 작업 — 작업, 문서, Linear 및 GitHub 항목 — 이 여기에 수집됩니다.",
+  "work.empty.title": "아직 작업이 없습니다",
+  "work.group": "작업",
+  "work.loadError": "작업을 로드하는 중 문제가 발생했습니다.",
+  "work.loadErrorTitle": "작업을 로드할 수 없습니다",
+  "work.loadMoreError": "추가 작업을 로드하지 못했습니다.",
+  "work.retry": "다시 시도",
+  "work.topicGroup.other": "기타"
 }

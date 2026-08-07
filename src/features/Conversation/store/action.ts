@@ -2,7 +2,14 @@ import { parse } from '@lobechat/conversation-flow';
 import { type UIChatMessage } from '@lobechat/types';
 import { type StateCreator } from 'zustand/vanilla';
 
-import { type ConversationContext, type ConversationHooks } from '../types';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+
+import {
+  type ComposerTarget,
+  type ConversationContext,
+  type ConversationHooks,
+  createComposerTarget,
+} from '../types';
 import { type State } from './initialState';
 import { initialState } from './initialState';
 import { type DataAction } from './slices/data/action';
@@ -37,6 +44,7 @@ export type ConversationStore = Store;
 // ===== Store Creator =====
 
 export interface CreateStoreParams {
+  composerTarget?: ComposerTarget;
   context: ConversationContext;
   hooks?: ConversationHooks;
   /**
@@ -61,9 +69,10 @@ type CreateStore = (
 ) => StateCreator<Store, [['zustand/devtools', never]]>;
 
 export const createStoreAction: CreateStore =
-  ({ context, hooks = {}, initialMessages, skipFetch }) =>
+  ({ composerTarget, context, hooks = {}, initialMessages, skipFetch }) =>
   (...params) => ({
     ...initialState,
+    composerTarget: composerTarget ?? createComposerTarget(messageMapKey(context)),
     context,
     hooks,
     skipFetch,

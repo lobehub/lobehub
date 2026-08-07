@@ -26,6 +26,49 @@ const groqChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 131_072,
+    description:
+      'Qwen3.6 27B is an open-source dense model with strong performance in reasoning, coding, and general capabilities. It supports thinking mode by default, offering balanced performance and efficiency.',
+    displayName: 'Qwen3.6 27B',
+    enabled: true,
+    family: 'qwen',
+    generation: 'qwen3.6',
+    id: 'qwen/qwen3.6-27b',
+    maxOutput: 16_384,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-23',
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 196_608,
+    description:
+      'MiniMax M2.7 is a 229B-parameter MoE model (~10B active) built for agentic workflows and real-world software engineering. It interleaves thinking with actions across multi-step tasks and is available on Groq for Enterprise customers.',
+    displayName: 'MiniMax M2.7',
+    family: 'minimax',
+    generation: 'minimax-m2.7',
+    id: 'minimaxai/minimax-m2.7',
+    maxOutput: 131_072,
+    releasedAt: '2026-03-18',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
     },
     contextWindowTokens: 131_072,
     description:
@@ -43,6 +86,9 @@ const groqChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-08-06',
+    settings: {
+      extendParams: ['reasoningEffort'],
+    },
     type: 'chat',
   },
   {
@@ -66,40 +112,8 @@ const groqChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-08-06',
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 131_072,
-    displayName: 'Llama 4 Scout (17Bx16E)',
-    enabled: true,
-    family: 'llama',
-    generation: 'llama-4',
-    id: 'meta-llama/llama-4-scout-17b-16e-instruct',
-    knowledgeCutoff: '2024-08',
-    maxOutput: 8192,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.11, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.34, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      reasoning: true,
-    },
-    contextWindowTokens: 131_072,
-    displayName: 'Qwen3 32B',
-    family: 'qwen',
-    generation: 'qwen3',
-    id: 'qwen/qwen3-32b',
-    maxOutput: 40_960,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.29, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.59, strategy: 'fixed', unit: 'millionTokens' },
-      ],
+    settings: {
+      extendParams: ['reasoningEffort'],
     },
     type: 'chat',
   },

@@ -15,11 +15,18 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
   assertBotAccessSettings,
+  assertWatchKeywordsWritable,
   invalidateBotAfterUpdate,
   mergeBotSettingsForPersist,
 } from '@/server/services/bot/agentBotProviderSettings';
 import { getBotMessageRouter } from '@/server/services/bot/BotMessageRouter';
-import { mergeWithDefaults, platformRegistry } from '@/server/services/bot/platforms';
+import {
+  type BotProviderFieldValues,
+  collectFieldFormatViolations,
+  formatFieldFormatViolations,
+  mergeWithDefaults,
+  platformRegistry,
+} from '@/server/services/bot/platforms';
 import { GatewayService } from '@/server/services/gateway';
 import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
 
@@ -59,6 +66,30 @@ function assertAccessSettingsForTRPC(settings: Record<string, unknown> | undefin
   }
 }
 
+/**
+ * Reject credentials that can't possibly work before they reach the database.
+ *
+ * These fields attract the wrong value — an OAuth authorize URL in the
+ * public-key box, an API key in place of a bot token — and the bot then fails
+ * to connect with no obvious cause. The form enforces the same schema patterns
+ * client-side; this stops anything that skips it.
+ */
+function assertFieldFormatsForTRPC(
+  platform: string | undefined,
+  values: BotProviderFieldValues,
+): void {
+  if (!platform) return;
+
+  const entry = platformRegistry.getPlatform(platform);
+  const violations = collectFieldFormatViolations(entry?.schema, values);
+  if (violations.length === 0) return;
+
+  throw new TRPCError({
+    code: 'BAD_REQUEST',
+    message: `Invalid format for ${formatFieldFormatViolations(violations)}`,
+  });
+}
+
 export const agentBotProviderRouter = router({
   listPlatforms: authedProcedure.query(async ({ ctx }) => {
     return Promise.all(
@@ -91,11 +122,23 @@ export const agentBotProviderRouter = router({
         workspaceId: ctx.workspaceId ?? undefined,
       });
 
+      assertFieldFormatsForTRPC(input.platform, {
+        applicationId: input.applicationId,
+        credentials: input.credentials,
+      });
+
       const payload = {
         ...input,
         settings: mergeBotSettingsForPersist(input.platform, input.settings),
       };
       assertAccessSettingsForTRPC(payload.settings);
+      await assertWatchKeywordsWritable({
+        applicationId: input.applicationId,
+        platform: input.platform,
+        settings: payload.settings,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
       try {
         return await ctx.agentBotProviderModel.create(payload);
       } catch (e: any) {
@@ -346,12 +389,29 @@ export const agentBotProviderRouter = router({
         });
       }
 
+      // Only the sections the caller actually sent are checked, so a partial
+      // update (e.g. toggling a setting) never trips on untouched fields.
+      assertFieldFormatsForTRPC(targetPlatform, {
+        applicationId: value.applicationId,
+        credentials: value.credentials,
+      });
+
       if (value.settings !== undefined) {
         value.settings = mergeBotSettingsForPersist(
           value.platform ?? existing?.platform,
           value.settings,
         );
         assertAccessSettingsForTRPC(value.settings);
+        if (targetPlatform) {
+          await assertWatchKeywordsWritable({
+            applicationId: targetApplicationId,
+            existingSettings: existing?.settings,
+            platform: targetPlatform,
+            settings: value.settings,
+            userId: ctx.userId,
+            workspaceId: existing?.workspaceId ?? ctx.workspaceId ?? undefined,
+          });
+        }
       }
 
       const result = await ctx.agentBotProviderModel.update(id, value);
@@ -361,6 +421,7 @@ export const agentBotProviderRouter = router({
           {
             applicationId: existing.applicationId,
             platform: existing.platform,
+            settings: existing.settings,
             userId: ctx.userId,
           },
           value,

@@ -118,7 +118,7 @@ describe('scheduledTopicDispatch', () => {
     expect(mocks.execAgent.mock.calls[0][0]).not.toHaveProperty('resume', true);
     // `suppressUserMessage` writes no user row, so the assistant turn anchors on
     // `parentMessageId` alone — without it the reply persists as a second root and
-    // renders above the prompt it answers (LOBE-11489).
+    // renders above the prompt it answers.
     expect(mocks.execAgent.mock.calls[0][0]).toMatchObject({ parentMessageId: 'user-scheduled' });
     // Success hands the run to execAgent, so the topic leaves `scheduled`.
     expect(mocks.clearScheduledRun).toHaveBeenCalledWith(

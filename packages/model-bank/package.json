@@ -4,6 +4,9 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
+    "./aiModel": "./src/types/aiModel.ts",
+    "./aiProvider": "./src/types/aiProvider.ts",
+    "./modelProvider": "./src/const/modelProvider.ts",
     "./modelProviders": "./src/modelProviders/index.ts",
     "./modelProviders/lobehub": "./src/modelProviders/lobehub.ts",
     "./ai21": "./src/aiModels/ai21.ts",
@@ -20,6 +23,7 @@
     "./bedrock": "./src/aiModels/bedrock.ts",
     "./bfl": "./src/aiModels/bfl.ts",
     "./cerebras": "./src/aiModels/cerebras.ts",
+    "./chatGPT": "./src/aiModels/chatGPT.ts",
     "./cloudflare": "./src/aiModels/cloudflare.ts",
     "./cohere": "./src/aiModels/cohere.ts",
     "./cometapi": "./src/aiModels/cometapi.ts",
@@ -89,6 +93,7 @@
     "./zenmux": "./src/aiModels/zenmux.ts",
     "./zeroone": "./src/aiModels/zeroone.ts",
     "./zhipu": "./src/aiModels/zhipu.ts",
+    "./standardParameters": "./src/standard-parameters/index.ts",
     "./types": "./src/types/index.ts"
   },
   "scripts": {

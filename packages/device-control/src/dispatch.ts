@@ -1,3 +1,4 @@
+import { moveLocalFiles, renameLocalFile, writeLocalFile } from '@lobechat/local-file-shell/file';
 import {
   addGitWorktree,
   checkoutGitBranch,
@@ -12,21 +13,20 @@ import {
   listGitBranches,
   listGitRemoteBranches,
   listGitWorktrees,
-  moveLocalFiles,
   pullGitBranch,
   pushGitBranch,
   removeGitWorktree,
   renameGitBranch,
-  renameLocalFile,
   revertGitFile,
-  writeLocalFile,
-} from '@lobechat/local-file-shell';
+} from '@lobechat/local-file-shell/git';
 
+import { getClaudeCodeQuota, type GetClaudeCodeQuotaParams } from './claudeCodeQuota';
 import { prepareSkillDirectory } from './skillDirectory';
 import type {
   DeviceControlDeps,
   EnrollWorkspaceParams,
   InitWorkspaceParams,
+  ListHeterogeneousAgentModelsParams,
   ListProjectSkillsParams,
   LocalFilePreviewUrlParams,
   PrepareSkillDirectoryParams,
@@ -46,6 +46,8 @@ export const DEVICE_RPC_METHODS = [
   'enrollWorkspace',
   'unenrollWorkspace',
   'initWorkspace',
+  'listHeterogeneousAgentModels',
+  'getClaudeCodeQuota',
   'listProjectSkills',
   'prepareSkillDirectory',
   'statPath',
@@ -111,6 +113,17 @@ export const executeDeviceRpc = async (
 
     case 'initWorkspace': {
       return initWorkspace(params as InitWorkspaceParams, deps);
+    }
+
+    case 'listHeterogeneousAgentModels': {
+      if (!deps.listHeterogeneousAgentModels) {
+        throw new Error('This device client does not support heterogeneous agent model discovery');
+      }
+      return deps.listHeterogeneousAgentModels(params as ListHeterogeneousAgentModelsParams);
+    }
+
+    case 'getClaudeCodeQuota': {
+      return getClaudeCodeQuota(params as GetClaudeCodeQuotaParams);
     }
 
     case 'listProjectSkills': {

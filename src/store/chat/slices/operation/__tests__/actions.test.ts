@@ -538,6 +538,50 @@ describe('Operation Actions', () => {
 
       expect(result.current.operations[operationId!].status).toBe('cancelled');
     });
+
+    it('should not cancel a creating thread when cancelling the main conversation', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      let mainOperationId: string;
+      let threadOperationId: string;
+
+      act(() => {
+        mainOperationId = result.current.startOperation({
+          context: {
+            agentId: 'session1',
+            scope: 'main',
+            threadId: null,
+            topicId: 'topic1',
+          },
+          type: 'execAgentRuntime',
+        }).operationId;
+        threadOperationId = result.current.startOperation({
+          context: {
+            agentId: 'session1',
+            isNew: true,
+            scope: 'thread',
+            threadId: null,
+            topicId: 'topic1',
+          },
+          type: 'execAgentRuntime',
+        }).operationId;
+      });
+
+      act(() => {
+        const cancelled = result.current.cancelOperations({
+          agentId: 'session1',
+          scope: 'main',
+          status: 'running',
+          threadId: null,
+          topicId: 'topic1',
+          type: 'execAgentRuntime',
+        });
+        expect(cancelled).toEqual([mainOperationId!]);
+      });
+
+      expect(result.current.operations[mainOperationId!].status).toBe('cancelled');
+      expect(result.current.operations[threadOperationId!].status).toBe('running');
+    });
   });
 
   describe('cleanupCompletedOperations', () => {

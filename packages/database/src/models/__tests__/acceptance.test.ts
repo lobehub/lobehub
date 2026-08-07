@@ -44,6 +44,47 @@ describe('AcceptanceModel', () => {
     expect(second.requirement).toBe('All checks green');
   });
 
+  it('ensureForSubject backfills an EMPTY requirement from a later round', async () => {
+    const model = new AcceptanceModel(serverDB, userId);
+
+    // First ingest omitted the requirement — the aggregate starts blank.
+    const first = await model.ensureForSubject('topic', topicId);
+    expect(first.requirement).toBeNull();
+
+    // The first later round that supplies one fills the blank…
+    const second = await model.ensureForSubject('topic', topicId, {
+      requirement: 'Review UX polish ships end to end',
+    });
+    expect(second.id).toBe(first.id);
+    expect(second.requirement).toBe('Review UX polish ships end to end');
+    const persisted = await model.findBySubject('topic', topicId);
+    expect(persisted?.requirement).toBe('Review UX polish ships end to end');
+
+    // …and from then on the recorded statement is immutable again.
+    const third = await model.ensureForSubject('topic', topicId, {
+      requirement: 'Different text',
+    });
+    expect(third.requirement).toBe('Review UX polish ships end to end');
+  });
+
+  it('keeps the first standalone display title and backfills one when initially absent', async () => {
+    const model = new AcceptanceModel(serverDB, userId);
+    const subjectId = 'standalone-external-delivery';
+
+    const first = await model.ensureForSubject('standalone', subjectId);
+    expect(first.metadata?.title).toBeUndefined();
+
+    const titled = await model.ensureForSubject('standalone', subjectId, {
+      metadata: { title: 'External delivery' },
+    });
+    expect(titled.metadata?.title).toBe('External delivery');
+
+    const unchanged = await model.ensureForSubject('standalone', subjectId, {
+      metadata: { title: 'Replacement title' },
+    });
+    expect(unchanged.metadata?.title).toBe('External delivery');
+  });
+
   it('defaults visibility by scope: personal public, workspace private', async () => {
     const personal = new AcceptanceModel(serverDB, userId);
     const personalRow = await personal.ensureForSubject('topic', topicId);
@@ -80,9 +121,25 @@ describe('AcceptanceModel', () => {
     await model.updateStatus(row.id, 'accepted');
     expect((await model.findById(row.id))?.completedAt).toBeInstanceOf(Date);
 
+    await model.updateStatus(row.id, 'closed');
+    expect((await model.findById(row.id))?.completedAt).toBeInstanceOf(Date);
+
     // A new round re-opening the loop clears the completion stamp.
     await model.updateStatus(row.id, 'verifying');
     expect((await model.findById(row.id))?.completedAt).toBeNull();
+  });
+
+  it('findById reads a malformed uuid as not-found instead of aborting in Postgres', async () => {
+    // Chat autolinkers glue trailing CJK punctuation onto shared links, so the
+    // route param can arrive as `<uuid>（本轮` — 22P02 (→ 500) before the guard.
+    const model = new AcceptanceModel(serverDB, userId);
+    const row = await model.ensureForSubject('topic', topicId);
+
+    await expect(model.findById(`${row.id}（本轮`)).resolves.toBeUndefined();
+    await expect(model.findById('not-a-uuid')).resolves.toBeUndefined();
+
+    const runModel = new VerifyRunModel(serverDB, userId);
+    await expect(runModel.findById(`${row.id}（本轮`)).resolves.toBeUndefined();
   });
 });
 

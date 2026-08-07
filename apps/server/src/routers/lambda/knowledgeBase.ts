@@ -168,8 +168,6 @@ export const knowledgeBaseRouter = router({
         });
       }
 
-      if (kb.visibility === 'public') return { success: true };
-
       await ctx.knowledgeBaseModel.publishToWorkspace(input.id);
       return { success: true };
     }),
@@ -203,8 +201,6 @@ export const knowledgeBaseRouter = router({
           message: 'Only the creator can change a knowledge base’s visibility',
         });
       }
-
-      if (kb.visibility === input.visibility) return { success: true };
 
       await ctx.knowledgeBaseModel.setVisibility(input.id, input.visibility);
       return { success: true };

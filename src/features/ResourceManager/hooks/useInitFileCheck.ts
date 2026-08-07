@@ -1,0 +1,66 @@
+'use client';
+
+import { CUSTOM_DOCUMENT_FILE_TYPE, DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
+import { useEffect } from 'react';
+import { useSearchParams } from 'react-router';
+
+import { isPdfFile } from '@/features/FileViewer/fileType';
+import { documentSelectors, useFileStore } from '@/store/file';
+
+import { useResourceManagerStore } from '../store';
+
+/**
+ * Used for initial loading only, handle URL like:
+ *
+ * /resource?file=xxxxxx
+ */
+export const useInitFileCheck = () => {
+  const [searchParams] = useSearchParams();
+  const [setMode, setCurrentViewItemId] = useResourceManagerStore((s) => [
+    s.setMode,
+    s.setCurrentViewItemId,
+  ]);
+
+  const fileId = searchParams.get('file');
+
+  const useFetchKnowledgeItem = useFileStore((s) => s.useFetchKnowledgeItem);
+  const { data: fileData } = useFetchKnowledgeItem(fileId || undefined);
+  const documentData = useFileStore(documentSelectors.getDocumentById(fileId || undefined));
+
+  useEffect(() => {
+    if (fileId) {
+      setCurrentViewItemId(fileId);
+
+      if (fileData || documentData) {
+        const isPDF =
+          isPdfFile({
+            fileName: fileData?.name,
+            fileType: fileData?.fileType,
+            path: fileData?.url,
+          }) ||
+          isPdfFile({
+            fileName: documentData?.filename,
+            fileType: documentData?.fileType,
+            path: documentData?.source,
+          });
+
+        const isPage =
+          !isPDF &&
+          (fileData?.sourceType === DERIVED_DOCUMENT_SOURCE_TYPE ||
+            fileData?.fileType === CUSTOM_DOCUMENT_FILE_TYPE ||
+            !!documentData);
+
+        if (isPDF) {
+          setMode('editor');
+        } else if (isPage) {
+          setMode('page');
+        } else {
+          setMode('editor');
+        }
+      }
+    } else {
+      setMode('explorer');
+      setCurrentViewItemId(undefined);
+    }
+  }, [fileId, fileData, documentData]);
+};

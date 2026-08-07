@@ -13,7 +13,7 @@ import { BUILTIN_AGENT_SLUGS, getAgentRuntimeConfig } from '@lobechat/builtin-ag
 import { builtinSkills } from '@lobechat/builtin-skills';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { LobeAgentIdentifier, LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
-import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
+import { getShellSyntaxGuidance, LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MessageToolIdentifier } from '@lobechat/builtin-tool-message';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import type { DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
@@ -24,7 +24,11 @@ import {
 } from '@lobechat/builtin-tool-self-iteration';
 import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import { builtinTools, manualModeExcludeToolIds } from '@lobechat/builtin-tools';
-import { LOADING_FLAT } from '@lobechat/const';
+import {
+  isHeterogeneousAgentModelId,
+  LOADING_FLAT,
+  resolveSubAgentChatConfig,
+} from '@lobechat/const';
 import {
   type AgentGroupConfig,
   type AgentManagementContext,
@@ -36,13 +40,16 @@ import {
   type ToolSource,
 } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
+import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { buildTaskManagerDefaultsPrompt, resourcesTreePrompt } from '@lobechat/prompts';
 import type {
+  AgentModelOverride,
   ChatAudioItem,
   ChatFileItem,
   ChatTopicBotContext,
   ChatVideoItem,
+  ErrorType,
   ExecAgentParams,
   ExecAgentResult,
   ExecGroupAgentParams,
@@ -51,6 +58,7 @@ import type {
   ExecSubAgentResult,
   ExecVirtualSubAgentParams,
   LobeAgentAgencyConfig,
+  LobeAgentChatConfig,
   LobeAgentConfig,
   MessagePluginItem,
   RuntimeMentionedAgent,
@@ -61,23 +69,27 @@ import type {
 } from '@lobechat/types';
 import {
   buildHeteroExecArgs,
+  ChatErrorType,
   getActivePluginIds,
   getDisabledPluginIds,
   getWorkingDirEffectivePath,
   ReasoningGraphSchema,
   RequestTrigger,
-  resolveAgencyConfig,
+  resolveAgentAgencyConfig,
+  resolveAgentModelConfig,
   ThreadStatus,
   ThreadType,
 } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
+import type { ModelAbilities } from 'model-bank';
 
 import { AgentModel } from '@/database/models/agent';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { AiModelModel } from '@/database/models/aiModel';
+import { AiProviderModel } from '@/database/models/aiProvider';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
@@ -98,6 +110,8 @@ import {
   isDeviceCapablePlan,
   isDeviceLockedPlan,
   resolveExecutionPlan,
+  resolveToolMode,
+  resolveWorkspaceScoped,
 } from '@/helpers/executionTarget';
 import { shouldEnableBuiltinSkill } from '@/helpers/skillFilters';
 import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
@@ -151,6 +165,7 @@ import type { ConversationHistoryEntry } from '@/server/services/heterogeneousAg
 import { buildCloudHeteroContext } from '@/server/services/heterogeneousAgent/cloudHeteroContext';
 import { buildRemoteDeviceHeteroContext } from '@/server/services/heterogeneousAgent/remoteDeviceHeteroContext';
 import { MarketService } from '@/server/services/market';
+import { isResourceAuthorOrAdmin } from '@/server/services/resourcePermission';
 import {
   buildConnectorOwnershipPrompt,
   collectBorrowedConnectors,
@@ -170,9 +185,17 @@ import {
   resolveDeviceWorkingDirectory,
   resolveDeviceWorkingDirectoryConfig,
 } from './resolveDeviceWorkingDirectory';
+import { resolveServerSearchDecision } from './searchDecision';
 import { isWorkspaceCacheFresh, upsertWorkspaceScan } from './workspaceInitCache';
 
 const log = debug('lobe-server:ai-agent-service');
+
+/**
+ * Content written onto a tool row that the user stopped before it ran. Mirrors
+ * the runtime's aborted-tool wording so a stopped call reads the same whether
+ * it was settled here or by `resolve_aborted_tools`.
+ */
+const STOPPED_TOOL_CONTENT = 'Tool execution was aborted by user.';
 
 const createGraphAwareAgentFactory =
   (
@@ -222,18 +245,23 @@ function formatErrorForMetadata(error: unknown): Record<string, any> | undefined
   return { message: String(error) };
 }
 
-const getVisualAvailabilityFromFileTypes = (fileTypes: string[]) => ({
+const getMediaAvailabilityFromFileTypes = (fileTypes: string[]) => ({
+  hasAudios: fileTypes.some((fileType) => fileType.startsWith('audio')),
   hasImages: fileTypes.some((fileType) => fileType.startsWith('image')),
   hasVideos: fileTypes.some((fileType) => fileType.startsWith('video')),
 });
 
-interface VisualAvailabilityMessage {
+interface MediaAvailabilityMessage {
+  audioList?: unknown[];
   imageList?: unknown[];
   role?: string;
   videoList?: unknown[];
 }
 
-const getVisualAvailabilityFromMessages = (messages: VisualAvailabilityMessage[]) => ({
+const getMediaAvailabilityFromMessages = (messages: MediaAvailabilityMessage[]) => ({
+  hasAudios: messages.some(
+    (message) => message.role === 'user' && (message.audioList?.length ?? 0) > 0,
+  ),
   hasImages: messages.some(
     (message) => message.role === 'user' && (message.imageList?.length ?? 0) > 0,
   ),
@@ -242,9 +270,11 @@ const getVisualAvailabilityFromMessages = (messages: VisualAvailabilityMessage[]
   ),
 });
 
-const isVisualUnderstandingConfigured = () => {
+const isMultimodalUnderstandingConfigured = () => {
   try {
-    return !!toolsEnv.VISUAL_UNDERSTANDING_PROVIDER && !!toolsEnv.VISUAL_UNDERSTANDING_MODEL;
+    return (
+      !!toolsEnv.MULTIMODAL_UNDERSTANDING_PROVIDER && !!toolsEnv.MULTIMODAL_UNDERSTANDING_MODEL
+    );
   } catch {
     // The env proxy rejects server-only keys in client-like runtimes; treat that as disabled.
     return false;
@@ -328,6 +358,12 @@ interface InternalExecAgentParams extends ExecAgentParams {
   botContext?: ChatTopicBotContext;
   /** Bot platform context for injecting platform capabilities (e.g. markdown support) */
   botPlatformContext?: BotPlatformContext;
+  /**
+   * chatConfig overrides (thinking / reasoning-effort extend params) merged over
+   * the executing agent's own chatConfig, skipping nulled keys. Internal-only:
+   * set by the callSubAgent thread-run path, never client-passable.
+   */
+  chatConfigOverride?: Partial<LobeAgentChatConfig> | null;
   /** Cron job ID that triggered this execution (if trigger is 'cron') */
   cronJobId?: string;
   /** Disable only local-system while preserving other tools. Useful for signal-only evals. */
@@ -395,6 +431,24 @@ interface InternalExecAgentParams extends ExecAgentParams {
     rejectionReason?: string;
     toolCallId: string;
   };
+  /**
+   * Batch form of `resumeApproval` — every decision the user made in ONE
+   * action ("approve all" on a parallel tool batch). The service applies each
+   * decision to its tool message and resumes with a single `call_tools_batch`
+   * covering all approved tools, so the LLM is continued exactly once with the
+   * complete result set.
+   *
+   * Resolving a parallel batch as N sequential `resumeApproval` calls instead
+   * produces N operations, and each one continues the LLM while the tools not
+   * yet approved are still empty rows. Mutually exclusive with
+   * `resumeApproval`; when both are absent nothing approval-related runs.
+   */
+  resumeApprovals?: {
+    decision: 'approved' | 'rejected' | 'rejected_continue';
+    parentMessageId: string;
+    rejectionReason?: string;
+    toolCallId: string;
+  }[];
   /**
    * When present, this execAgent call resumes a previous op that paused on a
    * `humanIntervention: 'always'` tool (e.g. lobe-agent `askUserQuestion`). The
@@ -465,6 +519,33 @@ interface ResolvedWorkspaceInit {
   boundCwd?: string;
   workspace: WorkspaceInitResult;
 }
+
+/**
+ * Turn a raw device-gateway dispatch error code into a human-readable headline.
+ * The gateway returns terse machine codes (e.g. `GATEWAY_NOT_CONFIGURED`) which,
+ * surfaced verbatim, render as a cryptic error card. We rewrite the headline the
+ * caller keeps for non-web surfaces (IM bots) while retaining the raw code in
+ * `detail` for diagnostics. Web clients localize via the mapped error type below.
+ */
+const HETERO_DISPATCH_ERROR_HEADLINES: Record<string, string> = {
+  GATEWAY_NOT_CONFIGURED:
+    "The run device gateway isn't configured on the server, so this agent can't reach a device to run on. Configure the device gateway, or switch this agent to a connected local device.",
+};
+
+const humanizeHeteroDispatchError = (raw?: string): string =>
+  (raw && HETERO_DISPATCH_ERROR_HEADLINES[raw]) || raw || 'Device dispatch failed';
+
+/**
+ * Map a raw dispatch code to a dedicated `ChatErrorType` so the web client renders
+ * its own localized headline (the generic `ServerAgentRuntimeError` copy would
+ * otherwise mask the specific message). Unknown codes keep the generic type.
+ */
+const HETERO_DISPATCH_ERROR_TYPES: Record<string, ErrorType> = {
+  GATEWAY_NOT_CONFIGURED: ChatErrorType.DeviceGatewayNotConfigured,
+};
+
+const resolveHeteroDispatchErrorType = (raw?: string): ErrorType =>
+  (raw && HETERO_DISPATCH_ERROR_TYPES[raw]) || ChatErrorType.ServerAgentRuntimeError;
 
 /**
  * AI Agent Service
@@ -588,17 +669,31 @@ export class AiAgentService {
     agentId?: string;
     assistantMessageId: string;
     detail: string;
+    /**
+     * Client error type. Defaults to the generic `ServerAgentRuntimeError`; pass a
+     * dedicated `ChatErrorType` (e.g. `DeviceGatewayNotConfigured`) so the web
+     * client renders a specific localized headline instead of the generic copy.
+     */
+    errorType?: ErrorType;
     message: string;
     operationId: string;
     topicId: string;
   }): Promise<void> {
-    const { agentId, assistantMessageId, detail, message, operationId, topicId } = params;
+    const {
+      agentId,
+      assistantMessageId,
+      detail,
+      errorType = ChatErrorType.ServerAgentRuntimeError,
+      message,
+      operationId,
+      topicId,
+    } = params;
 
     // 1. Error bubble — written first so a stream subscriber reacting to the
     //    end event below re-reads a message that already carries the error.
     await this.messageModel.update(assistantMessageId, {
       content: '',
-      error: { body: { detail }, message, type: 'ServerAgentRuntimeError' },
+      error: { body: { detail }, message, type: errorType },
     });
 
     // 1b. Finalize the run through CompletionLifecycle's single entry — the SAME
@@ -613,7 +708,7 @@ export class AiAgentService {
       {
         agentId,
         assistantMessageId,
-        error: { message, type: 'ServerAgentRuntimeError' },
+        error: { message, type: errorType },
         operationId,
         serializedHooks: hookDispatcher.getSerializedHooks(operationId),
         topicId,
@@ -1100,7 +1195,10 @@ export class AiAgentService {
       appContext,
       autoStart = true,
       botContext,
+      clientIp,
+      userAgent,
       deviceId: requestedDeviceId,
+      localDeviceId,
       botPlatformContext,
       discordContext,
       existingMessageIds = [],
@@ -1109,6 +1207,7 @@ export class AiAgentService {
       functionTools,
       hooks,
       instructions,
+      chatConfigOverride,
       model: modelOverride,
       provider: providerOverride,
       stream,
@@ -1128,12 +1227,21 @@ export class AiAgentService {
       parentOperationId,
       resume,
       resumeApproval,
+      resumeApprovals,
       resumeToolResult,
       selectedToolIds,
       mentionedAgents,
       suppressUserMessage,
       ephemeralUserMessage,
     } = params;
+
+    // Honour client-minted row ids on a FRESH send only. Resume / regeneration
+    // replays reach this method too (resumeApproval, resumeToolResult,
+    // parentMessageId), and a replayed id there would collide with the row the
+    // original send already created — so those paths drop the ids defensively
+    // rather than trusting every caller to omit them.
+    const isResumeLike = !!resume || !!resumeApproval || !!resumeToolResult || !!parentMessageId;
+    const clientIds = isResumeLike ? undefined : params.clientIds;
 
     // Validate that either agentId or slug is provided
     if (!agentId && !slug) {
@@ -1185,17 +1293,16 @@ export class AiAgentService {
 
     // Use actual agent ID from config for subsequent operations
     const resolvedAgentId = agentConfig.id;
+    let memberDeviceOverride:
+      Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'> | undefined;
+    let memberModelOverride: AgentModelOverride | undefined;
+    let memberModeOverride: boolean | undefined;
 
-    // Layer this caller's per-user device override (LOBE-11689) over the shared
-    // agencyConfig so THIS user's Cloud Sandbox / workspace-device / local pick
-    // drives dispatch instead of whichever choice landed on the shared row.
-    // Only applied for workspace agents — personal agents already have a single
-    // owner whose choice IS the shared config. The override lives in the
-    // dedicated `workspace_user_settings` table (per-(workspace, user)) so it
-    // stays orthogonal to member-list queries and cascades on either identity
-    // delete. `resolveAgencyConfig` is a no-op when no override exists, so a
-    // first-open (or a member who hasn't touched the switcher) transparently
-    // sees the shared default.
+    // Layer this caller's workspace-scoped execution and model preferences over
+    // the shared Agent row. Device selection keeps its existing fallback rules;
+    // public Workspace Agents allow member choice by default unless the author
+    // explicitly fixes the model. Both overrides live in the dedicated per-
+    // (workspace, user) settings row and never mutate shared Agent config.
     if (this.workspaceId) {
       try {
         const workspaceUserSettings = new WorkspaceUserSettingsModel(
@@ -1204,13 +1311,67 @@ export class AiAgentService {
           this.workspaceId,
         );
         const preference = await workspaceUserSettings.getPreference();
-        const override = preference.agentDeviceOverrides?.[resolvedAgentId];
-        agentConfig.agencyConfig = resolveAgencyConfig(agentConfig.agencyConfig, override);
+        memberDeviceOverride = preference.agentDeviceOverrides?.[resolvedAgentId];
+        memberModelOverride = preference.agentModelOverrides?.[resolvedAgentId];
+        memberModeOverride = preference.agentModeOverrides?.[resolvedAgentId];
       } catch (error) {
-        // Losing the override is non-fatal: dispatch falls back to the shared
-        // agencyConfig, which is exactly the pre-LOBE-11689 behaviour.
-        log('execAgent: failed to load caller workspace_user_settings override: %O', error);
+        // Losing preferences is non-fatal: execution falls back to the shared
+        // Agent row.
+        log('execAgent: failed to load caller workspace_user_settings preferences: %O', error);
       }
+    }
+
+    let canManageAgent = agentConfig.userId === this.userId;
+    const agentWorkspaceId = agentConfig.workspaceId ?? this.workspaceId;
+    const isPublicWorkspaceAgent = !!agentWorkspaceId && agentConfig.visibility !== 'private';
+    if (isPublicWorkspaceAgent && !canManageAgent) {
+      try {
+        // Author-or-admin, NOT the configuration flag: this value decides whether
+        // the run ignores the member's own model / device / mode overrides, and a
+        // collaborative builtin must keep honoring them — the client runtime
+        // (`agentConfigResolver`) resolves the same distinction from authorship.
+        canManageAgent = await isResourceAuthorOrAdmin({
+          db: this.db,
+          meta: {
+            userId: agentConfig.userId,
+            visibility: agentConfig.visibility ?? 'public',
+            workspaceId: agentWorkspaceId,
+          },
+          resourceType: 'agent',
+          userId: this.userId,
+          workspaceId: agentWorkspaceId,
+        });
+      } catch (error) {
+        // Permission lookup failure is fail-closed: applying member policy is
+        // safer than accidentally granting shared-config semantics.
+        log('execAgent: failed to resolve Agent management access: %O', error);
+      }
+    }
+
+    agentConfig.agencyConfig = resolveAgentAgencyConfig(
+      agentConfig.agencyConfig,
+      memberDeviceOverride,
+      {
+        canManage: canManageAgent,
+        visibility: agentConfig.visibility,
+        workspaceId: agentWorkspaceId,
+      },
+    );
+    if (!canManageAgent && memberModeOverride !== undefined) {
+      agentConfig.chatConfig = {
+        ...agentConfig.chatConfig,
+        enableAgentMode: memberModeOverride,
+      };
+    }
+
+    // callSubAgent thinking / reasoning-effort overrides. A virtual sub-agent
+    // executes the same agent row, so `agentConfig.chatConfig` here IS the
+    // parent's chatConfig — merging the `agencyConfig.subagent.chatConfig`
+    // patch over it yields the sub-agent's effective config.
+    if (chatConfigOverride) {
+      agentConfig.chatConfig =
+        resolveSubAgentChatConfig(agentConfig.chatConfig, chatConfigOverride) ??
+        agentConfig.chatConfig;
     }
 
     // Persistence-attribution agent id. Background Agent Signal runs (memory /
@@ -1222,12 +1383,20 @@ export class AiAgentService {
     // documents stay keyed on `resolvedAgentId`.
     const persistAgentId = appContext?.agentSignal?.agentId ?? resolvedAgentId;
 
-    // Apply per-call model/provider overrides. Sources include task.config and
-    // the callSubAgent spawn site, which resolves the sub-agent's default model
-    // from the parent agent's `agencyConfig.subagent` and passes it explicitly —
-    // so this execution path never has to special-case sub-agents.
-    if (modelOverride) agentConfig.model = modelOverride;
-    if (providerOverride) agentConfig.provider = providerOverride;
+    // Resolve the final model once, keeping per-call task / sub-agent overrides
+    // above the caller's personal workspace choice and the shared Agent default.
+    // The callSubAgent spawn site resolves the sub-agent default and passes it
+    // explicitly, so this path never has to special-case sub-agents.
+    const effectiveModel = resolveAgentModelConfig(
+      { ...agentConfig, canManage: canManageAgent, workspaceId: agentWorkspaceId },
+      memberModelOverride,
+      {
+        ...(modelOverride ? { model: modelOverride } : {}),
+        ...(providerOverride ? { provider: providerOverride } : {}),
+      },
+    );
+    agentConfig.model = effectiveModel.model;
+    agentConfig.provider = effectiveModel.provider;
 
     log(
       'execAgent: got agent config for %s (id: %s), model: %s, provider: %s',
@@ -1359,7 +1528,16 @@ export class AiAgentService {
     // tRPC router get `resume: true` via the router, but the service-level
     // API allows resumeApproval alone — fold both into a single effective
     // flag so downstream resume branches don't need to know about approval.
-    const effectiveResume = resume || !!resumeApproval || !!resumeToolResult;
+    // Normalize the single and batch approval forms into one list so every
+    // branch below (validation, DB writes, resume context) has a single shape
+    // to reason about. `resumeApproval` stays the wire format for one decision.
+    const approvalDecisions = resumeApprovals?.length
+      ? resumeApprovals
+      : resumeApproval
+        ? [resumeApproval]
+        : [];
+
+    const effectiveResume = resume || approvalDecisions.length > 0 || !!resumeToolResult;
 
     // Both resume and suppressUserMessage run the turn off existing history
     // instead of appending a new user message — share the message-construction
@@ -1413,40 +1591,97 @@ export class AiAgentService {
     // tool_call_id / apiName / identifier / arguments / type fields live on
     // the plugin row and must be fetched separately.
     let resumeApprovalPlugin: MessagePluginItem | undefined;
+    /**
+     * Approved decisions paired with their plugin row, in the order the caller
+     * listed them. Drives the batch resume context at 16b; the tool message id
+     * doubles as the row `call_tools_batch` fills in place.
+     */
+    const approvedToolEntries: {
+      createdAt: Date;
+      plugin: MessagePluginItem;
+      toolMessageId: string;
+    }[] = [];
+    /** Assistant that emitted this batch — the pending tool rows' shared parent. */
+    let approvalOwnerAssistantId: string | undefined;
 
-    if (resumeApproval) {
-      if (!resumeParentMessage) {
-        throw new Error('resumeApproval requires parentMessageId to point at a tool message');
+    // Load and validate EVERY decision before applying any of them. The apply
+    // step writes per entry, so validating inline would leave a rejected batch
+    // half-persisted — some tools already marked approved with no run to
+    // execute them.
+    const validatedDecisions: {
+      entry: (typeof approvalDecisions)[number];
+      plugin: MessagePluginItem;
+      targetMessage: NonNullable<typeof resumeParentMessage>;
+    }[] = [];
+
+    for (const decisionEntry of approvalDecisions) {
+      // The single-decision form validated `parentMessageId` (the op-level
+      // resume anchor) as the target tool message. In the batch form each
+      // decision names its own tool message, so load and validate per entry —
+      // the op-level anchor is only one of them.
+      const targetMessage =
+        decisionEntry.parentMessageId === parentMessageId
+          ? resumeParentMessage
+          : await this.messageModel.findById(decisionEntry.parentMessageId);
+
+      if (!targetMessage) {
+        throw new Error(`resumeApproval: tool message not found: ${decisionEntry.parentMessageId}`);
       }
-      if (resumeParentMessage.role !== 'tool') {
+      if (targetMessage.role !== 'tool') {
         throw new Error(
-          `resumeApproval.parentMessageId must point at a role='tool' message, got role='${resumeParentMessage.role}'`,
+          `resumeApproval.parentMessageId must point at a role='tool' message, got role='${targetMessage.role}'`,
+        );
+      }
+      if (targetMessage.topicId !== appContext?.topicId) {
+        throw new Error('appContext.topicId does not match approval target message');
+      }
+
+      const plugin = await this.messageModel.findMessagePlugin(decisionEntry.parentMessageId);
+      if (!plugin) {
+        throw new Error(
+          `resumeApproval: no plugin row for tool message ${decisionEntry.parentMessageId}`,
+        );
+      }
+      if (plugin.toolCallId && plugin.toolCallId !== decisionEntry.toolCallId) {
+        throw new Error(
+          `resumeApproval.toolCallId mismatch for message ${decisionEntry.parentMessageId}: ` +
+            `stored=${plugin.toolCallId}, requested=${decisionEntry.toolCallId}`,
         );
       }
 
-      resumeApprovalPlugin = await this.messageModel.findMessagePlugin(
-        resumeApproval.parentMessageId,
+      validatedDecisions.push({ entry: decisionEntry, plugin, targetMessage });
+    }
+
+    // A batch resume executes every approved tool as ONE `call_tools_batch`
+    // under ONE assistant anchor and continues the LLM once. That is only
+    // meaningful when the calls actually came from the same assistant turn.
+    // The client scopes its selection, but a stale or hand-built request could
+    // mix an abandoned approval from an earlier turn into this one — which
+    // would run an unrelated tool and fold its result into a turn it does not
+    // belong to. Reject rather than silently anchoring on whichever entry came
+    // first.
+    const approvalOwnerIds = new Set(
+      validatedDecisions.map(({ targetMessage }) => targetMessage.parentId ?? '(none)'),
+    );
+    if (approvalOwnerIds.size > 1) {
+      throw new Error(
+        `resumeApprovals must resolve one assistant turn, got ${approvalOwnerIds.size} owners: ` +
+          [...approvalOwnerIds].join(', '),
       );
-      if (!resumeApprovalPlugin) {
-        throw new Error(
-          `resumeApproval: no plugin row for tool message ${resumeApproval.parentMessageId}`,
-        );
-      }
-      if (
-        resumeApprovalPlugin.toolCallId &&
-        resumeApprovalPlugin.toolCallId !== resumeApproval.toolCallId
-      ) {
-        throw new Error(
-          `resumeApproval.toolCallId mismatch for message ${resumeApproval.parentMessageId}: ` +
-            `stored=${resumeApprovalPlugin.toolCallId}, requested=${resumeApproval.toolCallId}`,
-        );
-      }
+    }
 
-      const { decision, rejectionReason } = resumeApproval;
+    for (const { entry: decisionEntry, plugin, targetMessage } of validatedDecisions) {
+      const { decision, rejectionReason } = decisionEntry;
       if (decision === 'approved') {
-        await this.messageModel.updateMessagePlugin(resumeApproval.parentMessageId, {
+        await this.messageModel.updateMessagePlugin(decisionEntry.parentMessageId, {
           intervention: { status: 'approved' },
         });
+        approvedToolEntries.push({
+          createdAt: targetMessage.createdAt,
+          plugin,
+          toolMessageId: decisionEntry.parentMessageId,
+        });
+        approvalOwnerAssistantId ??= targetMessage.parentId ?? undefined;
       } else {
         // rejected / rejected_continue both write the same rejection content
         // + intervention state. The difference surfaces later in how the new
@@ -1454,21 +1689,42 @@ export class AiAgentService {
         const rejectionContent = rejectionReason
           ? `User reject this tool calling with reason: ${rejectionReason}`
           : 'User reject this tool calling without reason';
-        await this.messageModel.updateToolMessage(resumeApproval.parentMessageId, {
+        await this.messageModel.updateToolMessage(decisionEntry.parentMessageId, {
           content: rejectionContent,
         });
-        await this.messageModel.updateMessagePlugin(resumeApproval.parentMessageId, {
+        await this.messageModel.updateMessagePlugin(decisionEntry.parentMessageId, {
           intervention: { rejectedReason: rejectionReason, status: 'rejected' },
         });
       }
 
+      // Kept for the single-decision resume context at 16b, which reads the
+      // plugin of the op-level anchor message.
+      if (decisionEntry.parentMessageId === parentMessageId) resumeApprovalPlugin = plugin;
+
       log(
         'execAgent: resumeApproval decision=%s applied to tool message %s (toolCallId=%s)',
         decision,
-        resumeApproval.parentMessageId,
-        resumeApproval.toolCallId,
+        decisionEntry.parentMessageId,
+        decisionEntry.toolCallId,
       );
     }
+
+    // The approval pause creates one row per pending tool sequentially, in the
+    // order the model emitted the calls — so row creation order IS declaration
+    // order, and sorting by it makes the resume independent of how the client
+    // happened to order its request array.
+    approvedToolEntries.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+    /**
+     * Spine anchor for a batch approval: the ASSISTANT that emitted the batch —
+     * i.e. the previous LLM call. A step is one LLM call, and tool rows are
+     * inline data of the call that produced them, never spine nodes. So the
+     * continuation assistant created below chains directly onto that assistant
+     * (`user → asst → asst …`, tools hanging off their caller) rather than onto
+     * one of the batch's tool rows, which would make the spine depend on which
+     * tool row you happened to pick and on the order they were written in.
+     */
+    const batchApprovalAnchorId = resumeApprovals?.length ? approvalOwnerAssistantId : undefined;
 
     // 2.7. Human-answer resume: a `humanIntervention: 'always'` tool (e.g.
     // lobe-agent `askUserQuestion`) paused this run. Write the human-provided
@@ -1530,7 +1786,28 @@ export class AiAgentService {
     // 3. Handle topic creation: if no topicId provided, create a new topic; otherwise reuse existing
     let topicId = appContext?.topicId;
     const isNewTopic = !topicId;
-    const topicBoundDeviceId = requestedDeviceId;
+    const isFixedExecutionTargetSelection =
+      !!this.workspaceId && agentConfig.agencyConfig?.executionTargetSelectionPolicy === 'fixed';
+    const isFixedDeviceTarget =
+      isFixedExecutionTargetSelection && agentConfig.agencyConfig?.executionTarget === 'device';
+    const effectiveRequestedDeviceId = isFixedExecutionTargetSelection
+      ? undefined
+      : requestedDeviceId;
+    const topicBoundDeviceId = isFixedDeviceTarget
+      ? agentConfig.agencyConfig?.boundDeviceId
+      : isFixedExecutionTargetSelection
+        ? undefined
+        : requestedDeviceId;
+
+    // Effective model/provider for this run. Defaults to the agent config, but a
+    // topic pins its own model in the top-level `topics.model`/`provider` columns
+    // (config source of truth) — snapshotted on creation, and honored below when
+    // reusing a topic whose model was switched while active. Keeps the Gateway/
+    // cloud path in sync with the client local path (see streamingExecutor +
+    // getTopicModelById).
+    let model = agentConfig.model!;
+    let provider = agentConfig.provider!;
+
     if (!topicId) {
       if (resume) {
         throw new Error('Resume mode requires the parent message to belong to a topic');
@@ -1540,10 +1817,10 @@ export class AiAgentService {
       // client-supplied initial metadata (e.g. repos selected before first message).
       const initialTopicMeta = appContext?.initialTopicMetadata;
       const metadata =
-        cronJobId || operationTaskId || botContext || requestedDeviceId || initialTopicMeta
+        cronJobId || operationTaskId || botContext || topicBoundDeviceId || initialTopicMeta
           ? {
               bot: botContext,
-              boundDeviceId: requestedDeviceId,
+              boundDeviceId: topicBoundDeviceId,
               cronJobId: cronJobId || undefined,
               taskId: operationTaskId,
               ...(initialTopicMeta?.repos && { repos: initialTopicMeta.repos }),
@@ -1557,23 +1834,31 @@ export class AiAgentService {
           : undefined;
 
       const fallbackTitleSource = markdownToTxt(prompt);
-      const newTopic = await this.topicModel.create({
-        agentId: resolvedAgentId,
-        // Persist the group association when running inside a group conversation.
-        // Without it the topic is created group-less and only shows under the
-        // member agent's topic list — never in the group sidebar (which queries
-        // `topics.groupId`), so the conversation silently "disappears" from the
-        // group. execGroupAgent normally pre-creates the topic, but any path
-        // that reaches execAgent without a topicId (e.g. the async/queue run)
-        // must carry the groupId through too (group topic sidebar + ownership fix).
-        groupId: appContext?.groupId,
-        metadata,
-        title:
-          title !== undefined
-            ? title
-            : fallbackTitleSource.slice(0, 50) + (fallbackTitleSource.length > 50 ? '...' : ''),
-        trigger,
-      });
+      // Second argument: the id the client already rendered this topic under
+      // (sidebar row, message bucket). Absent → the model mints one as before.
+      const newTopic = await this.topicModel.create(
+        {
+          agentId: resolvedAgentId,
+          // Persist the group association when running inside a group conversation.
+          // Without it the topic is created group-less and only shows under the
+          // member agent's topic list — never in the group sidebar (which queries
+          // `topics.groupId`), so the conversation silently "disappears" from the
+          // group. execGroupAgent normally pre-creates the topic, but any path
+          // that reaches execAgent without a topicId (e.g. the async/queue run)
+          // must carry the groupId through too (group topic sidebar + ownership fix).
+          groupId: appContext?.groupId,
+          metadata,
+          // Snapshot the effective model as the topic's pinned model (config).
+          model,
+          provider,
+          title:
+            title !== undefined
+              ? title
+              : fallbackTitleSource.slice(0, 50) + (fallbackTitleSource.length > 50 ? '...' : ''),
+          trigger,
+        },
+        clientIds?.topicId,
+      );
       topicId = newTopic.id;
       log(
         'execAgent: created new topic %s with trigger %s, groupId %s, cronJobId %s',
@@ -1584,13 +1869,27 @@ export class AiAgentService {
       );
     } else {
       log('execAgent: reusing existing topic %s', topicId);
+
+      // Honor a topic-pinned model (snapshotted on creation, updated when the
+      // user switched model while the topic was active) over the agent default.
+      // Explicit per-run values (such as callSubAgent) override their own field.
+      // The pinned model lives in the top-level `topics.model`/`provider` columns
+      // (config source of truth), NOT in metadata.
+      const existingTopic = await this.topicModel.findById(topicId);
+      const pinnedModel = existingTopic?.model;
+      if (pinnedModel) {
+        model = modelOverride || pinnedModel;
+        provider = providerOverride || existingTopic?.provider || provider;
+        log(
+          'execAgent: using topic-pinned model=%s provider=%s for topic %s',
+          model,
+          provider,
+          topicId,
+        );
+      }
     }
 
     await throwIfExecutionAborted('topic setup');
-
-    // Extract model and provider from agent config
-    const model = agentConfig.model!;
-    const provider = agentConfig.provider!;
 
     // Resolve device-tool access ONCE per turn, BEFORE the hetero early exit —
     // hetero dispatch routes the whole run to a user machine, so it must honour
@@ -1612,16 +1911,15 @@ export class AiAgentService {
     // 3.5. Hetero-agent early exit — local CLI and remote platform agents bypass the
     // server-side LLM pipeline.  After topic + message creation we hand off to
     // the device gateway (desktop) or cloud sandbox, which will push events
-    // back via `heteroIngest` / `heteroFinish` (claude-code / codex) or
+    // back via `heteroIngest` / `heteroFinish` (amp / claude-code / codex / opencode / pi / qoder) or
     // `agentNotify.notify` (openclaw / hermes).
     //
     // Detection: prefer agencyConfig.heterogeneousProvider.type (set by the UI),
-    // fall back to model field for backwards compatibility.
-    const HETERO_AGENT_MODELS = new Set<string>(['amp', 'claude-code', 'codex']);
+    // fall back to the legacy `model` field for backwards compatibility (shared
+    // with the inbox write guard via `isHeterogeneousAgentModelId`).
     const heteroProviderType = agentConfig.agencyConfig?.heterogeneousProvider?.type;
-    const isHeteroAgent = !!heteroProviderType || HETERO_AGENT_MODELS.has(model);
-    const heteroType = (heteroProviderType ?? model) as
-      'amp' | 'claude-code' | 'codex' | 'hermes' | 'openclaw';
+    const isHeteroAgent = !!heteroProviderType || isHeterogeneousAgentModelId(model);
+    const heteroType = (heteroProviderType ?? model) as HeterogeneousAgentType;
 
     // ── Shared turn setup (runs for BOTH hetero and normal agents) ──────────
     // Everything up to and including persisting the turn is identical for both
@@ -1652,7 +1950,7 @@ export class AiAgentService {
     // undefined for a topic that already has messages: `parentId: undefined`
     // persists a second ROOT, and the renderer walks the parentId forest
     // depth-first — an earlier root's still-growing subtree is emitted before a
-    // later root, so the newest reply lands ABOVE older messages (LOBE-11489).
+    // later root, so the newest reply lands ABOVE older messages.
     //
     // `getLatestSpineMessageId` skips tool rows and toolless signal turns, so it
     // can come back empty on a topic built entirely from signal callbacks; fall
@@ -1678,20 +1976,24 @@ export class AiAgentService {
     const userMessageParentId = await resolveUserMessageParentId();
     const userMessageRecord = runFromHistory
       ? undefined
-      : await this.messageModel.create({
-          agentId: persistAgentId,
-          content: prompt,
-          files: runAttachments.fileIds,
-          // Group reads filter on messages.groupId (MessageModel.query group
-          // branch), so a group turn must stamp groupId or the message never
-          // shows when the topic is reopened (group topic sidebar + ownership fix).
-          groupId: appContext?.groupId ?? undefined,
-          metadata: requestTriggerMetadata,
-          parentId: userMessageParentId,
-          role: 'user',
-          threadId: appContext?.threadId ?? undefined,
-          topicId,
-        });
+      : await this.messageModel.create(
+          {
+            agentId: persistAgentId,
+            content: prompt,
+            files: runAttachments.fileIds,
+            // Group reads filter on messages.groupId (MessageModel.query group
+            // branch), so a group turn must stamp groupId or the message never
+            // shows when the topic is reopened (group topic sidebar + ownership fix).
+            groupId: appContext?.groupId ?? undefined,
+            metadata: requestTriggerMetadata,
+            parentId: userMessageParentId,
+            role: 'user',
+            threadId: appContext?.threadId ?? undefined,
+            topicId,
+          },
+          // The id the client's optimistic user row already renders under.
+          clientIds?.userMessageId,
+        );
     if (userMessageRecord) {
       selfMessageIds.add(userMessageRecord.id);
       log('execAgent: created user message %s', userMessageRecord.id);
@@ -1715,22 +2017,29 @@ export class AiAgentService {
     // / `turn_metadata` (backfilled by HeterogeneousPersistenceHandler), and
     // seeding the agent's chat model would leak it into the model tag. A normal
     // run seeds model + provider as usual.
-    const assistantMessageRecord = await this.messageModel.create({
-      agentId: persistAgentId,
-      content: LOADING_FLAT,
-      // Stamp groupId so the assistant turn is visible in the group read path
-      // (MessageModel.query filters group chats by messages.groupId).
-      groupId: appContext?.groupId ?? undefined,
-      metadata: orchestrationMetadata,
-      model: isHeteroAgent ? undefined : model,
-      // Chain onto the user turn we just persisted; `parentMessageId` is the
-      // anchor only on a resume, where no user message is created.
-      parentId: userMessageRecord?.id ?? parentMessageId,
-      provider: isHeteroAgent ? heteroType : provider,
-      role: 'assistant',
-      threadId: appContext?.threadId ?? undefined,
-      topicId,
-    });
+    const assistantMessageRecord = await this.messageModel.create(
+      {
+        agentId: persistAgentId,
+        content: LOADING_FLAT,
+        // Stamp groupId so the assistant turn is visible in the group read path
+        // (MessageModel.query filters group chats by messages.groupId).
+        groupId: appContext?.groupId ?? undefined,
+        metadata: orchestrationMetadata,
+        model: isHeteroAgent ? undefined : model,
+        // Chain onto the user turn we just persisted; `parentMessageId` is the
+        // anchor only on a resume, where no user message is created. A batch
+        // approval overrides it with the assistant that emitted the batch — the
+        // previous LLM call — so the spine stays one node per call and never
+        // depends on which of the batch's tool rows the client sent as anchor.
+        parentId: userMessageRecord?.id ?? batchApprovalAnchorId ?? parentMessageId,
+        provider: isHeteroAgent ? heteroType : provider,
+        role: 'assistant',
+        threadId: appContext?.threadId ?? undefined,
+        topicId,
+      },
+      // The id the client's assistant placeholder already renders under.
+      clientIds?.assistantMessageId,
+    );
     selfMessageIds.add(assistantMessageRecord.id);
     assistantMessageRef.current = assistantMessageRecord.id;
     log('execAgent: created assistant message %s', assistantMessageRecord.id);
@@ -1841,7 +2150,7 @@ export class AiAgentService {
         agentConfig.agencyConfig?.heterogeneousProvider?.env?.GITHUB_CRED_KEY ?? 'github';
       try {
         // Inside a workspace, the GitHub cred must come from the workspace's shared
-        // organization credentials, not the operator's personal creds (LOBE-10978).
+        // organization credentials, not the operator's personal creds.
         const credsAccessor = this.workspaceId
           ? this.marketService.market.organizations.creds({ workspaceId: this.workspaceId })
           : this.marketService.market.creds;
@@ -1901,7 +2210,12 @@ export class AiAgentService {
           ? runAttachments.imageList.map((image) => ({ id: image.id, url: image.url }))
           : undefined;
       const heteroExecArgs =
-        heteroType === 'amp' || heteroType === 'claude-code' || heteroType === 'codex'
+        heteroType === 'amp' ||
+        heteroType === 'claude-code' ||
+        heteroType === 'codex' ||
+        heteroType === 'opencode' ||
+        heteroType === 'pi' ||
+        heteroType === 'qoder'
           ? buildHeteroExecArgs(
               agentConfig.agencyConfig?.heterogeneousProvider?.type === heteroType
                 ? agentConfig.agencyConfig.heterogeneousProvider
@@ -1924,8 +2238,36 @@ export class AiAgentService {
         userId: this.userId,
       };
 
-      const remoteDeviceId =
-        requestedDeviceId || agentConfig.agencyConfig?.boundDeviceId || undefined;
+      const platformPlan = isRemoteHetero
+        ? resolveExecutionPlan({
+            agencyConfig: agentConfig.agencyConfig,
+            canUseDevice,
+            clientExecutionAvailable: Boolean(localDeviceId),
+            isHetero: true,
+            localDeviceId,
+            requestedDeviceId: effectiveRequestedDeviceId,
+            sandboxExecutionAvailable: false,
+            trigger: requestTriggerMetadata?.trigger,
+            workspaceScoped: resolveWorkspaceScoped(
+              isPublicWorkspaceAgent && !canManageAgent,
+              memberDeviceOverride,
+            ),
+          })
+        : undefined;
+      const remoteDeviceId = platformPlan?.kind === 'device' ? platformPlan.deviceId : undefined;
+      const remoteDeviceWorkspaceId = remoteDeviceId
+        ? await this.resolveDeviceWorkspaceId(remoteDeviceId)
+        : undefined;
+      const usesCallersPersonalDevice =
+        platformPlan?.kind === 'device' &&
+        !remoteDeviceWorkspaceId &&
+        (effectiveRequestedDeviceId === remoteDeviceId ||
+          (platformPlan.target === 'local' &&
+            agentConfig.agencyConfig?.executionTargetSelectionPolicy !== 'fixed') ||
+          (!canManageAgent && memberDeviceOverride?.boundDeviceId === remoteDeviceId));
+      const remoteDeviceUserId = usesCallersPersonalDevice
+        ? this.userId
+        : (agentConfig.userId ?? this.userId);
 
       // Register the run's lifecycle hooks so the hetero terminal path fires
       // onComplete/onError through the same `hookDispatcher` the normal LLM
@@ -1947,7 +2289,12 @@ export class AiAgentService {
           hooks: serializedHooks,
           // Store deviceId + heteroType so interruptTask can cancel remote processes
           ...(isRemoteHetero && remoteDeviceId
-            ? { deviceId: remoteDeviceId, heteroType }
+            ? {
+                deviceId: remoteDeviceId,
+                deviceUserId: remoteDeviceUserId,
+                deviceWorkspaceId: remoteDeviceWorkspaceId,
+                heteroType,
+              }
             : undefined),
           operationId,
           scope: appContext?.scope ?? undefined,
@@ -1955,13 +2302,13 @@ export class AiAgentService {
         },
       });
 
-      // Remote hetero agents (openclaw / hermes) dispatch to the device identified
-      // by agencyConfig.boundDeviceId and communicate back via agentNotify.notify.
-      // They always go through the gateway WS channel — open the stream now so the
-      // frontend can subscribe before the first lh notify arrives.
+      // Notify-based platform agents (openclaw / hermes) communicate back via
+      // agentNotify.notify. A local run uses the requesting desktop's device ID;
+      // a remote run uses agencyConfig.boundDeviceId. Both use the gateway transport,
+      // so open the stream before the first notify arrives.
 
       if (isRemoteHetero) {
-        // Remote hetero agents are device-only — there is no sandbox to
+        // Platform task agents require either this desktop or a connected device — there is no sandbox to
         // degrade to, so a denied sender (external bot user) is refused
         // outright instead of reaching the owner's machine.
         if (!canUseDevice) {
@@ -1993,12 +2340,12 @@ export class AiAgentService {
           };
         }
         if (!remoteDeviceId) {
-          log('execAgent: openclaw/hermes requires a bound device (boundDeviceId not set)');
+          log('execAgent: openclaw/hermes requires a local or connected device');
           await this.finalizeHeteroDispatchError({
             agentId: resolvedAgentId,
             assistantMessageId: assistantMessageRecord.id,
-            detail: 'No device bound to this agent. Configure boundDeviceId.',
-            message: 'No bound device for remote hetero agent',
+            detail: 'No local or connected device is available for this agent.',
+            message: 'No execution device for platform agent',
             operationId,
             topicId,
           });
@@ -2008,7 +2355,7 @@ export class AiAgentService {
             autoStarted: false,
             createdAt: new Date().toISOString(),
             error: 'No bound device',
-            message: 'Remote hetero agent requires boundDeviceId',
+            message: 'Platform agent requires a local or connected device',
             operationId,
             status: 'error',
             success: false,
@@ -2033,9 +2380,12 @@ export class AiAgentService {
 
         // lh connect only handles tool_call_request (not agent_run_request),
         // so we use executeToolCall with the runHeteroTask tool instead of dispatchAgentRun.
-        const remoteDeviceWorkspaceId = await this.resolveDeviceWorkspaceId(remoteDeviceId);
         const result = await deviceGateway.executeToolCall(
-          { deviceId: remoteDeviceId, userId: this.userId, workspaceId: remoteDeviceWorkspaceId },
+          {
+            deviceId: remoteDeviceId,
+            userId: remoteDeviceUserId,
+            workspaceId: remoteDeviceWorkspaceId,
+          },
           {
             apiName: 'runHeteroTask',
             arguments: JSON.stringify({
@@ -2050,7 +2400,7 @@ export class AiAgentService {
               // topic so agentNotify can resolve the workspace-owned topic.
               // Without this the device's notify call falls back to personal
               // mode and TopicModel.findById returns NOT_FOUND.
-              workspaceId: remoteDeviceWorkspaceId,
+              workspaceId: this.workspaceId,
             }),
             identifier: 'runHeteroTask',
           },
@@ -2062,7 +2412,8 @@ export class AiAgentService {
             agentId: resolvedAgentId,
             assistantMessageId: assistantMessageRecord.id,
             detail: result.error ?? 'Device dispatch failed',
-            message: result.error ?? 'Device dispatch failed',
+            errorType: resolveHeteroDispatchErrorType(result.error),
+            message: humanizeHeteroDispatchError(result.error),
             operationId,
             topicId,
           });
@@ -2082,20 +2433,21 @@ export class AiAgentService {
           };
         }
       } else {
-        // Local CLI hetero (Amp / Claude Code / Codex) — fork between device dispatch
+        // Local CLI hetero (Amp / Claude Code / Codex / OpenCode / Pi) — fork between device dispatch
         // and cloud sandbox via the shared execution plan:
         //   - requestedDeviceId (topic-level override) always wins
         //   - executionTarget 'device' → dispatch to boundDeviceId (errors if unset)
         //   - executionTarget 'local' + boundDeviceId (desktop sync opened on web)
         //     → dispatch to that device
         //   - everything else ('sandbox' / unbound 'local' / 'none' / unset) → cloud
-        //     sandbox (the server can't spawn locally, and a hetero agent must
-        //     execute somewhere)
+        //     sandbox when the provider supports it; Amp and OpenCode remain
+        //     unrouted because they require a local or connected device
         // `onlineDeviceIds` is intentionally omitted: hetero dispatch trusts
         // the binding and fails loudly at the gateway if the device is offline.
-        // `canUseDevice` degrades device-capable targets to the sandbox for
-        // denied senders (e.g. external bot users) — without it a synced
-        // local/device binding would let them run on the owner's machine.
+        // `canUseDevice` degrades device-capable targets to the sandbox when
+        // available, or leaves device-only providers unrouted, for denied
+        // senders (e.g. external bot users). Without this a synced local/device
+        // binding would let them run on the owner's machine.
 
         // Register the op with the agent-gateway DO before dispatch, mirroring
         // the remote-hetero branch above. Local CLI hetero (claude-code / codex)
@@ -2130,7 +2482,7 @@ export class AiAgentService {
           isHetero: true,
           clientExecutionAvailable: false,
           requestedDeviceId,
-          sandboxExecutionAvailable: heteroType !== 'amp',
+          sandboxExecutionAvailable: heteroType === 'claude-code' || heteroType === 'codex',
           trigger: requestTriggerMetadata?.trigger,
         });
 
@@ -2142,7 +2494,10 @@ export class AiAgentService {
               agentId: resolvedAgentId,
               assistantMessageId: assistantMessageRecord.id,
               detail:
-                heteroType === 'amp'
+                heteroType === 'amp' ||
+                heteroType === 'opencode' ||
+                heteroType === 'pi' ||
+                heteroType === 'qoder'
                   ? 'No device bound. Pick a local or connected device in the Execution Device switcher.'
                   : 'No device bound. Pick a device in the Execution Device switcher, or switch to Cloud sandbox.',
               message: 'No bound device for hetero agent',
@@ -2206,7 +2561,9 @@ export class AiAgentService {
           const deviceSystemContext = buildRemoteDeviceHeteroContext({
             agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
             conversationHistory,
-            cwd: deviceCwd,
+            // The native CLI session already knows its cwd. Keep the explanatory workspace note
+            // on the first turn only so persistent resumed sessions do not accumulate duplicates.
+            cwd: resumeSessionId ? undefined : deviceCwd,
           });
 
           const result = await deviceGateway.dispatchAgentRun({
@@ -2225,7 +2582,8 @@ export class AiAgentService {
               agentId: resolvedAgentId,
               assistantMessageId: assistantMessageRecord.id,
               detail: result.error ?? 'Device dispatch failed',
-              message: result.error ?? 'Device dispatch failed',
+              errorType: resolveHeteroDispatchErrorType(result.error),
+              message: humanizeHeteroDispatchError(result.error),
               operationId,
               topicId,
             });
@@ -2245,9 +2603,8 @@ export class AiAgentService {
             };
           }
         } else {
-          if (heteroType === 'amp') {
-            const message =
-              'Amp requires a local or connected device; cloud sandbox execution is not supported.';
+          if (heteroType === 'amp' || heteroType === 'opencode') {
+            const message = `${heteroType === 'amp' ? 'Amp' : 'OpenCode'} requires a local or connected device; cloud sandbox execution is not supported.`;
             await this.finalizeHeteroDispatchError({
               agentId: resolvedAgentId,
               assistantMessageId: assistantMessageRecord.id,
@@ -2415,6 +2772,35 @@ export class AiAgentService {
     // Model metadata is needed both for tool support checks and agent-management context.
     const { loadModels } = await import('@/business/client/model-bank/loadModels');
     const builtinModels = await loadModels();
+    const [modelMetadataResult, providerMetadataResult] = await Promise.allSettled([
+      new AiModelModel(this.db, this.userId, this.workspaceId).findByIdAndProvider(model, provider),
+      new AiProviderModel(this.db, this.userId, this.workspaceId).findById(provider),
+    ]);
+    if (modelMetadataResult.status === 'rejected') {
+      log('execAgent: failed to load active model search metadata: %O', modelMetadataResult.reason);
+    }
+    if (providerMetadataResult.status === 'rejected') {
+      log(
+        'execAgent: failed to load active provider search metadata: %O',
+        providerMetadataResult.reason,
+      );
+    }
+    const activeModelMetadata =
+      modelMetadataResult.status === 'fulfilled' ? modelMetadataResult.value : undefined;
+    const activeProviderMetadata =
+      providerMetadataResult.status === 'fulfilled' ? providerMetadataResult.value : undefined;
+    const activeModelAbilities = activeModelMetadata?.abilities as ModelAbilities | undefined;
+    const searchDecision = resolveServerSearchDecision({
+      builtinModels,
+      chatConfig: agentConfig.chatConfig ?? undefined,
+      hasModelAbilitiesOverride:
+        !!activeModelAbilities && Object.keys(activeModelAbilities).length > 0,
+      model,
+      modelSearchAbility: activeModelAbilities?.search,
+      modelSearchImpl: activeModelMetadata?.settings?.searchImpl,
+      provider,
+      providerSearchMode: activeProviderMetadata?.settings?.searchMode,
+    });
     // Resolve file URLs before visual tool activation checks and context build.
     const fileService = new FileService(this.db, this.userId, this.workspaceId);
     const postProcessUrl = (path: string | null, file: { id?: string | null }) =>
@@ -2728,7 +3114,7 @@ export class AiAgentService {
             await getScopedOnlineDevices(this.db, this.userId, this.workspaceId)
           ).filter((d) => d.online);
           // A workspace agent whose caller pinned this desktop's personal
-          // deviceId via `users.preference.agentDeviceOverrides` (LOBE-11689,
+          // deviceId via `users.preference.agentDeviceOverrides` (
           // the `local` code path in `useSelectExecutionTarget`) needs its
           // personal device to be visible in this run's device pool — otherwise
           // `resolveExecutionPlan` treats the bound device as offline and the
@@ -2779,31 +3165,36 @@ export class AiAgentService {
         attachedFileTypes = fileRecords.map((file) => file.fileType || '');
       }
       const inputFileTypes = [...externalFileTypes, ...attachedFileTypes];
-      const inputVisualAvailability = getVisualAvailabilityFromFileTypes(inputFileTypes);
-      let historyVisualAvailability = { hasImages: false, hasVideos: false };
-      const visualUnderstandingConfigured = isVisualUnderstandingConfigured();
+      const inputMediaAvailability = getMediaAvailabilityFromFileTypes(inputFileTypes);
+      let historyMediaAvailability = { hasAudios: false, hasImages: false, hasVideos: false };
+      const multimodalUnderstandingConfigured = isMultimodalUnderstandingConfigured();
 
       if (
-        visualUnderstandingConfigured &&
-        ((!modelAbilities?.vision && !inputVisualAvailability.hasImages) ||
-          (!modelAbilities?.video && !inputVisualAvailability.hasVideos))
+        multimodalUnderstandingConfigured &&
+        ((!modelAbilities?.audio && !inputMediaAvailability.hasAudios) ||
+          (!modelAbilities?.vision && !inputMediaAvailability.hasImages) ||
+          (!modelAbilities?.video && !inputMediaAvailability.hasVideos))
       ) {
-        historyVisualAvailability = getVisualAvailabilityFromMessages(await loadHistoryMessages());
+        historyMediaAvailability = getMediaAvailabilityFromMessages(await loadHistoryMessages());
       }
 
+      const needsAudioUnderstanding =
+        (inputMediaAvailability.hasAudios || historyMediaAvailability.hasAudios) &&
+        !modelAbilities?.audio;
       const needsImageUnderstanding =
-        (inputVisualAvailability.hasImages || historyVisualAvailability.hasImages) &&
+        (inputMediaAvailability.hasImages || historyMediaAvailability.hasImages) &&
         !modelAbilities?.vision;
       const needsVideoUnderstanding =
-        (inputVisualAvailability.hasVideos || historyVisualAvailability.hasVideos) &&
+        (inputMediaAvailability.hasVideos || historyMediaAvailability.hasVideos) &&
         !modelAbilities?.video;
-      const shouldEnableVisualUnderstanding =
-        visualUnderstandingConfigured && (needsImageUnderstanding || needsVideoUnderstanding);
+      const shouldEnableMultimodalUnderstanding =
+        multimodalUnderstandingConfigured &&
+        (needsAudioUnderstanding || needsImageUnderstanding || needsVideoUnderstanding);
       agentPlugins = [
         ...agentPlugins,
         ...(hasTopicReference ? ['lobe-topic-reference'] : []),
         ...(isBotConversation ? [MessageToolIdentifier] : []),
-        ...(shouldEnableVisualUnderstanding ? [LobeAgentManifest.identifier] : []),
+        ...(shouldEnableMultimodalUnderstanding ? [LobeAgentManifest.identifier] : []),
       ];
 
       // Resolve THE device decision for this run. All rules live in
@@ -2835,6 +3226,33 @@ export class AiAgentService {
         requestedDeviceId,
         trigger: requestTriggerMetadata?.trigger,
       });
+      // A fixed device target must never degrade to the cloud sandbox or a
+      // different device. Persist a visible assistant error and fail the RPC
+      // before tool/runtime preparation so no operation can start elsewhere.
+      if (
+        isFixedDeviceTarget &&
+        resolveToolMode(agentConfig.chatConfig ?? undefined) !== 'chat' &&
+        executionPlan.kind !== 'device'
+      ) {
+        const detail =
+          executionPlan.kind === 'device-unrouted' &&
+          executionPlan.reason === 'bound-device-offline'
+            ? 'The device fixed by this agent is offline. Ask an editor to bring it online or change the agent device policy.'
+            : 'The device fixed by this agent is unavailable for this run. Ask an editor to check the agent device policy.';
+        await this.messageModel.update(assistantMessageRecord.id, {
+          content: '',
+          error: {
+            body: { detail },
+            message: 'Fixed agent device unavailable',
+            type: 'ServerAgentRuntimeError',
+          },
+        });
+        throw new TRPCError({
+          cause: { data: { code: 'FixedAgentDeviceUnavailable' } },
+          code: 'PRECONDITION_FAILED',
+          message: detail,
+        });
+      }
       // Device tools (local-system / remote-device proxy) only exist in a
       // device-capable session — `none` and `sandbox` sessions must never see
       // them, not even the proxy that could activate a device mid-run.
@@ -2846,7 +3264,7 @@ export class AiAgentService {
       const deviceLocked = isDeviceLockedPlan(executionPlan);
       activeDeviceId = executionPlan.kind === 'device' ? executionPlan.deviceId : undefined;
       // Which principal pool the routed device lives in. A workspace run with a
-      // per-user `local` override (LOBE-11689) routes to the caller's PERSONAL
+      // per-user `local` override routes to the caller's PERSONAL
       // device — the union above added it from the personal pool — and the
       // device runtimes must address it via `(userId, deviceId)`, not the
       // `workspace:<id>` pool where it has no connection. Carried through
@@ -2951,6 +3369,7 @@ export class AiAgentService {
         hasEnabledKnowledgeBases,
         isBotConversation,
         isGroupSupervisor,
+        modelAbilities,
         // Context-aware builtin manifests: inside a sub-agent (or group) run,
         // lobe-agent drops `callSubAgent` so the model can't recurse into nested
         // sub-agents (which the runtime rejects, looping until the inactivity
@@ -2968,6 +3387,7 @@ export class AiAgentService {
         },
         model,
         provider,
+        useApplicationBuiltinSearchTool: searchDecision.useApplicationBuiltinSearchTool,
       });
 
       // 5f. Generate tools and manifest map
@@ -3247,8 +3667,14 @@ export class AiAgentService {
         if (!systemInfo) return {};
         const device = onlineDevices.find((d) => d.deviceId === deviceId);
         log('execAgent: fetched device system info for %s', deviceId);
+        // Devices that don't report defaultShell run an older client whose
+        // runner still hardcodes cmd.exe on Windows — describe that honestly
+        // instead of the new PowerShell default.
+        const defaultShell =
+          systemInfo.defaultShell ?? (device?.platform === 'win32' ? 'cmd.exe' : '/bin/sh');
         return {
           arch: systemInfo.arch,
+          defaultShell,
           desktopPath: systemInfo.desktopPath,
           documentsPath: systemInfo.documentsPath,
           downloadsPath: systemInfo.downloadsPath,
@@ -3257,6 +3683,9 @@ export class AiAgentService {
           musicPath: systemInfo.musicPath,
           picturesPath: systemInfo.picturesPath,
           platform: device?.platform ?? 'unknown',
+          // Keep the syntax guidance consistent with the shell named above —
+          // the system role references both placeholders in one sentence.
+          shellSyntaxGuidance: getShellSyntaxGuidance(defaultShell),
           userDataPath: systemInfo.userDataPath,
           videosPath: systemInfo.videosPath,
           // `workingDirectory` is intentionally NOT taken from the live device
@@ -3612,7 +4041,42 @@ export class AiAgentService {
     // decision is persisted, there's nothing meaningful to do differently
     // server-side, and letting the LLM produce a brief acknowledgement keeps
     // the conversation cleanly terminated either way.
-    if (resumeApproval && resumeApprovalPlugin) {
+    // Batch approval: hand the runtime every approved tool at once so it runs a
+    // single `call_tools_batch` against the existing pending rows and continues
+    // the LLM exactly once, with the complete result set. Taken whenever the
+    // caller used the batch wire form; the single `resumeApproval` form keeps
+    // the established `call_tool` + `skipCreateToolMessage` path below.
+    if (resumeApprovals?.length && approvedToolEntries.length > 0) {
+      initialContext = {
+        initialContext: initialContext.initialContext,
+        payload: {
+          approvedToolCalls: approvedToolEntries.map(({ plugin }) => ({
+            apiName: plugin.apiName,
+            arguments: plugin.arguments,
+            id: plugin.toolCallId,
+            identifier: plugin.identifier,
+            type: plugin.type ?? 'default',
+          })),
+          assistantMessageId: assistantMessageRecord.id,
+          // The tool rows already exist and are parented to the assistant that
+          // emitted the calls; the batch executor addresses them through
+          // `toolMessageIds` and never inserts, so this only anchors the spine.
+          parentMessageId: approvalOwnerAssistantId ?? assistantMessageRecord.id,
+          toolMessageIds: Object.fromEntries(
+            approvedToolEntries
+              .filter(({ plugin }) => !!plugin.toolCallId)
+              .map(({ plugin, toolMessageId }) => [plugin.toolCallId!, toolMessageId]),
+          ),
+        } as any,
+        phase: 'human_approved_tool' as const,
+        session: {
+          messageCount: allMessages.length,
+          sessionId: operationId,
+          status: 'idle' as const,
+          stepCount: 0,
+        },
+      };
+    } else if (resumeApproval && resumeApprovalPlugin) {
       if (resumeApproval.decision === 'approved') {
         // Ask the runtime to execute the approved tool directly. Matches the
         // `phase: 'human_approved_tool'` contract used by the in-place
@@ -3879,6 +4343,7 @@ export class AiAgentService {
         agentGroup: operationAgentGroup,
         deviceSystemInfo: Object.keys(deviceSystemInfo).length > 0 ? deviceSystemInfo : undefined,
         executionPlan,
+        searchDecision,
         userTimezone,
         appContext: {
           // Background self-iteration runs execute under a builtin slug (so they
@@ -3888,6 +4353,12 @@ export class AiAgentService {
           // context (state.metadata.agentId) targets the reviewed agent; ordinary
           // runs (no marker) fall back to the resolved executing agent.
           agentId: appContext?.agentSignal?.agentId ?? resolvedAgentId,
+          // Propagate the originating request's client IP / user agent into
+          // state.metadata (via the `...appContext` spread in createOperation) so
+          // downstream LLM-call metadata can carry them for auditing and spend
+          // attribution.
+          clientIp,
+          userAgent,
           // When scope === 'agent_builder', agentId stays as the builder builtin so
           // message ownership and queryUiMessages remain correct. editingAgentId
           // carries the actual editing target separately; only the AgentBuilder server
@@ -4125,6 +4596,7 @@ export class AiAgentService {
    */
   execVirtualSubAgent = async (params: ExecVirtualSubAgentParams): Promise<ExecSubAgentResult> =>
     this.execAgentThreadRun(params, {
+      chatConfig: params.chatConfig,
       isSubAgent: true,
       logScope: 'execVirtualSubAgent',
       // Sub-agent model is resolved at the spawn site (callSubAgent runner) from
@@ -4336,6 +4808,12 @@ export class AiAgentService {
        * `resumeParentOnComplete` is set.
        */
       bridgeHookFactory?: (threadId: string) => AgentHook;
+      /**
+       * chatConfig overrides (thinking / reasoning-effort extend params) for
+       * the spawned run, merged over the executing agent's own chatConfig.
+       * Only set by the callSubAgent path.
+       */
+      chatConfig?: Partial<LobeAgentChatConfig> | null;
       isSubAgent: boolean;
       logScope: 'execSubAgent' | 'execVirtualSubAgent';
       /**
@@ -4464,6 +4942,7 @@ export class AiAgentService {
       agentId,
       appContext,
       autoStart: true,
+      chatConfigOverride: options.chatConfig,
       hooks,
       // Explicit sub-agent model override resolved at the spawn site.
       model: options.model,
@@ -4957,18 +5436,35 @@ export class AiAgentService {
       throw new Error('Operation ID not found');
     }
 
+    // Not every cancellation entry point knows the topic (reconnect, task,
+    // bot/messenger stop). Recover it from the owner-scoped operation row so
+    // device cancellation is symmetric across every caller.
+    let resolvedTopicId = topicId;
+    if (!resolvedTopicId) {
+      const operation = await this.agentOperationModel.findById(resolvedOperationId);
+      resolvedTopicId = operation?.topicId ?? undefined;
+    }
+
     // 2. Cancel remote hetero process (openclaw / hermes) if applicable.
     // Check topic.metadata.runningOperation for device + heteroType info seeded by execAgent.
     // This runs regardless of whether interruptOperation succeeds — the remote process
     // is independent of the local operation registry.
-    if (topicId) {
-      const topic = await this.topicModel.findById(topicId);
+    if (resolvedTopicId) {
+      const topic = await this.topicModel.findById(resolvedTopicId);
       const runningOp = (topic?.metadata as any)?.runningOperation as
-        { deviceId?: string; heteroType?: string; operationId?: string } | undefined;
+        | {
+            deviceId?: string;
+            deviceUserId?: string;
+            deviceWorkspaceId?: string;
+            heteroType?: string;
+            operationId?: string;
+          }
+        | undefined;
 
       if (
         runningOp?.deviceId &&
         runningOp.heteroType &&
+        runningOp.operationId === resolvedOperationId &&
         isRemoteHeterogeneousType(runningOp.heteroType)
       ) {
         const taskId = runningOp.operationId ?? resolvedOperationId;
@@ -4978,12 +5474,13 @@ export class AiAgentService {
           runningOp.deviceId,
           taskId,
         );
-        const cancelWorkspaceId = await this.resolveDeviceWorkspaceId(runningOp.deviceId);
+        const cancelWorkspaceId =
+          runningOp.deviceWorkspaceId ?? (await this.resolveDeviceWorkspaceId(runningOp.deviceId));
         await deviceGateway
           .executeToolCall(
             {
               deviceId: runningOp.deviceId,
-              userId: this.userId,
+              userId: runningOp.deviceUserId ?? this.userId,
               workspaceId: cancelWorkspaceId,
             },
             {
@@ -5031,6 +5528,88 @@ export class AiAgentService {
       operationId: resolvedOperationId,
       success: true,
       threadId: thread?.id,
+    };
+  }
+
+  /**
+   * Stop a run that is parked waiting for tool approval: settle the pending
+   * tool rows and terminate the operation, WITHOUT executing anything and
+   * without continuing the model.
+   *
+   * This is the "from this step on, don't go any further" action. It is not the
+   * same as rejecting a tool — a rejection resumes the model so it can respond
+   * to the refusal, whereas stopping ends the turn outright.
+   *
+   * Why it can't reuse the ordinary cancel path: when the runtime parks it
+   * emits a stream-terminal `waiting_for_human`, so the client marks its own
+   * operation `completed` and prunes it ~30s later, and the topic's
+   * `runningOperation` pointer is cleared. By the time the user decides to
+   * stop, the client no longer knows the parked operation id — so we resolve it
+   * here from the topic instead of trusting the caller.
+   *
+   * The tool rows are settled IN PLACE (the approval pause already created one
+   * row per pending call). Inserting fresh aborted rows would duplicate every
+   * tool in the turn and leave the originals `pending`, which is exactly what
+   * keeps the approval cards on screen after a stop.
+   */
+  async stopPendingApproval(params: { toolMessageIds: string[]; topicId: string }): Promise<{
+    operationId?: string;
+    settledToolMessageIds: string[];
+    success: boolean;
+  }> {
+    const { toolMessageIds, topicId } = params;
+
+    // Validate every target before writing any of them: a half-settled batch
+    // would clear some cards while leaving the rest pointing at a run that is
+    // already gone.
+    const targets: { id: string }[] = [];
+    for (const toolMessageId of toolMessageIds) {
+      const message = await this.messageModel.findById(toolMessageId);
+      if (!message)
+        throw new Error(`stopPendingApproval: tool message not found: ${toolMessageId}`);
+      if (message.role !== 'tool') {
+        throw new Error(
+          `stopPendingApproval.toolMessageIds must point at role='tool' messages, got role='${message.role}'`,
+        );
+      }
+      if (message.topicId !== topicId) {
+        throw new Error('stopPendingApproval: topicId does not match the target tool message');
+      }
+      targets.push({ id: toolMessageId });
+    }
+
+    for (const target of targets) {
+      await this.messageModel.updateToolMessage(target.id, {
+        content: STOPPED_TOOL_CONTENT,
+      });
+      await this.messageModel.updateMessagePlugin(target.id, {
+        intervention: { status: 'aborted' },
+      } as any);
+    }
+
+    // Retire the parked operation so the topic does not keep a run that can
+    // never be resumed. Resolved from the topic because the client has lost the
+    // id by now (see the doc comment above).
+    const parkedOperationId = await this.agentOperationModel.findLatestParkedOperationId(topicId);
+    if (parkedOperationId) {
+      await this.agentRuntimeService.interruptOperation(parkedOperationId);
+      await this.agentOperationModel.recordCompletion(parkedOperationId, {
+        completedAt: new Date(),
+        completionReason: 'interrupted',
+        status: 'interrupted',
+      });
+    }
+
+    log(
+      'stopPendingApproval: settled %d tool message(s), retired operation %s',
+      targets.length,
+      parkedOperationId ?? '(none)',
+    );
+
+    return {
+      operationId: parkedOperationId,
+      settledToolMessageIds: targets.map((t) => t.id),
+      success: true,
     };
   }
 }

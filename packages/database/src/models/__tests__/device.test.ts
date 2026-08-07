@@ -3,7 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { devices, users, workspaces } from '../../schemas';
+import { agents, devices, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { DeviceModel, WorkspaceDevicePrivateConflictError } from '../device';
 
@@ -104,6 +104,16 @@ describe('DeviceModel', () => {
     it('should return only the current user devices, newest lastSeen first', async () => {
       await deviceModel.register({ deviceId: 'dev-old', identitySource: 'machine-id' });
       await deviceModel.register({ deviceId: 'dev-new', identitySource: 'machine-id' });
+      // The in-memory test DB may assign both inserts the same millisecond.
+      // Pin distinct timestamps so this ordering assertion is deterministic.
+      await serverDB
+        .update(devices)
+        .set({ lastSeenAt: new Date('2026-01-01T00:00:00.000Z') })
+        .where(eq(devices.deviceId, 'dev-old'));
+      await serverDB
+        .update(devices)
+        .set({ lastSeenAt: new Date('2026-01-02T00:00:00.000Z') })
+        .where(eq(devices.deviceId, 'dev-new'));
       // a device owned by another user must not leak
       await new DeviceModel(serverDB, 'device-model-other-user').register({
         deviceId: 'other-dev',
@@ -131,6 +141,49 @@ describe('DeviceModel', () => {
 
       const personal = await deviceModel.queryPersonal();
       expect(personal.map((d) => d.deviceId)).toEqual(['p1']);
+    });
+
+    it('detects whether a workspace device is referenced by a fixed agent', async () => {
+      await serverDB.insert(devices).values({
+        deviceId: 'fixed-device',
+        identitySource: 'machine-id',
+        userId,
+        visibility: 'public',
+        workspaceId: wsId,
+      });
+      await serverDB.insert(agents).values({
+        agencyConfig: {
+          boundDeviceId: 'fixed-device',
+          executionTargetSelectionPolicy: 'fixed',
+          executionTarget: 'device',
+        },
+        id: 'fixed-agent',
+        title: 'Fixed agent',
+        userId,
+        workspaceId: wsId,
+      });
+
+      const wsModel = new DeviceModel(serverDB, userId, wsId);
+      expect(await wsModel.hasFixedAgentBinding('fixed-device')).toBe(true);
+      expect(await wsModel.hasFixedAgentBinding('other-device')).toBe(false);
+      expect(await deviceModel.hasFixedAgentBinding('fixed-device')).toBe(false);
+    });
+
+    it('ignores a stale device id on a fixed non-device target', async () => {
+      await serverDB.insert(agents).values({
+        agencyConfig: {
+          boundDeviceId: 'stale-device',
+          executionTarget: 'sandbox',
+          executionTargetSelectionPolicy: 'fixed',
+        },
+        id: 'fixed-sandbox-agent',
+        title: 'Fixed sandbox agent',
+        userId,
+        workspaceId: wsId,
+      });
+
+      const wsModel = new DeviceModel(serverDB, userId, wsId);
+      expect(await wsModel.hasFixedAgentBinding('stale-device')).toBe(false);
     });
 
     it('queryWorkspaceDevices returns every enrolled device (any owner), scoped to the workspace', async () => {

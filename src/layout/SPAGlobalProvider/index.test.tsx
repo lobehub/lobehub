@@ -1,13 +1,23 @@
 /**
  * @vitest-environment happy-dom
  */
-import { render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import { type ReactNode, useEffect } from 'react';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { setPostRenderReady } from '@/spa/atoms/app';
+import { setDevDockUnlocked } from '@/utils/devDockUnlock';
 
 import type SPAGlobalProviderComponent from './index';
+import { type DevDockLayout as DevDockLayoutComponent } from './index';
 
 let SPAGlobalProvider: typeof SPAGlobalProviderComponent;
+let DevDockLayout: typeof DevDockLayoutComponent;
+const { cacheGateReleased, canAccessDevDock, devDockRenderError } = vi.hoisted(() => ({
+  cacheGateReleased: { current: true },
+  canAccessDevDock: vi.fn(() => false),
+  devDockRenderError: { current: null as Error | null },
+}));
 
 vi.mock('@lobehub/ui', async () => {
   const React = await import('react');
@@ -18,6 +28,7 @@ vi.mock('@lobehub/ui', async () => {
     ContextMenuHost: () => React.createElement('div', { 'data-testid': 'context-menu-host' }),
     ModalHost: () => React.createElement('div', { 'data-testid': 'legacy-modal-host' }),
     TooltipGroup: Passthrough,
+    setContextMenuInterceptor: vi.fn(),
   };
 });
 
@@ -71,13 +82,16 @@ vi.mock('@/const/version', () => ({
   isDesktop: false,
 }));
 
-vi.mock('@/features/AgentMockDevtools', () => ({
-  default: () => null,
-}));
+vi.mock('@/features/DevDock', async () => {
+  const React = await import('react');
 
-vi.mock('@/features/DevFeatureFlagPanel', () => ({
-  default: () => null,
-}));
+  return {
+    default: () => {
+      if (devDockRenderError.current) throw devDockRenderError.current;
+      return React.createElement('div', { 'data-testid': 'dev-dock' });
+    },
+  };
+});
 
 vi.mock('@/layout/AuthProvider', async () => {
   const React = await import('react');
@@ -111,12 +125,12 @@ vi.mock('@/layout/GlobalProvider/CacheHydrationGate', async () => {
 
   return {
     default: ({ children }: { children?: ReactNode }) =>
-      React.createElement(React.Fragment, null, children),
+      cacheGateReleased.current ? React.createElement(React.Fragment, null, children) : null,
   };
 });
 
 vi.mock('@/layout/GlobalProvider/DynamicFavicon', () => ({
-  default: () => null,
+  default: () => <div data-testid="dynamic-favicon" />,
 }));
 
 vi.mock('@/layout/GlobalProvider/FaviconProvider', async () => {
@@ -163,6 +177,11 @@ vi.mock('@/store/serverConfig/Provider', async () => {
   };
 });
 
+vi.mock('@/store/serverConfig', () => ({
+  useServerConfigStore: (selector: (state: { canAccessDevDock: boolean }) => unknown) =>
+    selector({ canAccessDevDock: canAccessDevDock() }),
+}));
+
 vi.mock('./Locale', async () => {
   const React = await import('react');
 
@@ -174,12 +193,22 @@ vi.mock('./Locale', async () => {
 
 describe('SPAGlobalProvider', () => {
   beforeAll(async () => {
-    SPAGlobalProvider = (await import('./index')).default;
+    const loadedModule = await import('./index');
+    SPAGlobalProvider = loadedModule.default;
+    DevDockLayout = loadedModule.DevDockLayout;
   });
 
   beforeEach(() => {
-    vi.stubGlobal('__DEV__', false);
+    cacheGateReleased.current = true;
+    canAccessDevDock.mockReturnValue(false);
+    devDockRenderError.current = null;
+    setDevDockUnlocked(false);
     Reflect.deleteProperty(window, '__SERVER_CONFIG__');
+    setPostRenderReady(false);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('provides Market auth from the SPA global provider', () => {
@@ -192,5 +221,130 @@ describe('SPAGlobalProvider', () => {
     const routeContent = screen.getByTestId('spa-route-content');
 
     expect(routeContent.closest('[data-testid="market-auth-provider"]')).not.toBeNull();
+  });
+  it('mounts DevDock in dev builds even without server-resolved access', async () => {
+    render(
+      <DevDockLayout>
+        <div data-testid="spa-route-content" />
+      </DevDockLayout>,
+    );
+
+    expect(await screen.findByTestId('dev-dock')).toBeInTheDocument();
+  });
+
+  it('does not mount DevDock in production without an unlock', () => {
+    vi.stubEnv('PROD', true);
+    canAccessDevDock.mockReturnValue(true);
+
+    render(
+      <DevDockLayout>
+        <div data-testid="spa-route-content" />
+      </DevDockLayout>,
+    );
+
+    expect(screen.queryByTestId('dev-dock')).toBeNull();
+  });
+
+  it('does not mount DevDock in production without server access', () => {
+    vi.stubEnv('PROD', true);
+    setDevDockUnlocked(true);
+
+    render(
+      <DevDockLayout>
+        <div data-testid="spa-route-content" />
+      </DevDockLayout>,
+    );
+
+    expect(screen.queryByTestId('dev-dock')).toBeNull();
+  });
+
+  it('mounts DevDock in production with server access and an unlock', async () => {
+    vi.stubEnv('PROD', true);
+    canAccessDevDock.mockReturnValue(true);
+    setDevDockUnlocked(true);
+
+    render(
+      <DevDockLayout>
+        <div data-testid="spa-route-content" />
+      </DevDockLayout>,
+    );
+
+    expect(await screen.findByTestId('dev-dock')).toBeInTheDocument();
+  });
+
+  it('keeps the app alive when DevDock fails to load', async () => {
+    vi.stubEnv('PROD', true);
+    canAccessDevDock.mockReturnValue(true);
+    setDevDockUnlocked(true);
+    devDockRenderError.current = new TypeError(
+      "Cannot read properties of undefined (reading 'default')",
+    );
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    render(
+      <DevDockLayout>
+        <div data-testid="spa-route-content" />
+      </DevDockLayout>,
+    );
+
+    await waitFor(() => expect(consoleError).toHaveBeenCalled());
+    expect(screen.getByTestId('spa-route-content')).toBeInTheDocument();
+    expect(screen.queryByTestId('dev-dock')).toBeNull();
+    consoleError.mockRestore();
+  });
+
+  it('does not remount application providers when DevDock becomes available', async () => {
+    vi.stubEnv('PROD', true);
+    const mounted = vi.fn();
+    const unmounted = vi.fn();
+    const ProviderProbe = () => {
+      useEffect(() => {
+        mounted();
+        return unmounted;
+      }, []);
+      return <div data-testid="provider-probe" />;
+    };
+
+    const view = render(
+      <DevDockLayout>
+        <ProviderProbe />
+      </DevDockLayout>,
+    );
+    expect(mounted).toHaveBeenCalledOnce();
+
+    canAccessDevDock.mockReturnValue(true);
+    setDevDockUnlocked(true);
+    view.rerender(
+      <DevDockLayout>
+        <ProviderProbe />
+      </DevDockLayout>,
+    );
+
+    expect(await screen.findByTestId('dev-dock')).toBeInTheDocument();
+    expect(mounted).toHaveBeenCalledOnce();
+    expect(unmounted).not.toHaveBeenCalled();
+  });
+
+  it('mounts global interaction hosts with the application shell', () => {
+    render(
+      <SPAGlobalProvider>
+        <div />
+      </SPAGlobalProvider>,
+    );
+
+    expect(screen.getByTestId('legacy-modal-host')).toBeInTheDocument();
+    expect(screen.getByTestId('base-modal-host')).toBeInTheDocument();
+    expect(screen.getByTestId('toast-host')).toBeInTheDocument();
+    expect(screen.getByTestId('context-menu-host')).toBeInTheDocument();
+  });
+
+  it('does not mount the chat-store favicon subscriber before post-render initialization', () => {
+    render(
+      <SPAGlobalProvider>
+        <div />
+      </SPAGlobalProvider>,
+    );
+
+    expect(screen.queryByTestId('dynamic-favicon')).not.toBeInTheDocument();
   });
 });

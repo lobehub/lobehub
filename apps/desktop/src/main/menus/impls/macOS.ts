@@ -242,7 +242,15 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
       },
       {
         label: t('window.title'),
+        // Keep the role so macOS still appends the open-window list, but supply
+        // the submenu — Electron's generated one carries its own English labels.
         role: 'windowMenu',
+        submenu: [
+          { label: t('window.minimize'), role: 'minimize' },
+          { label: t('window.zoom'), role: 'zoom' },
+          { type: 'separator' },
+          { label: t('window.front'), role: 'front' },
+        ],
       },
       {
         label: t('help.title'),

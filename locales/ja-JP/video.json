@@ -26,6 +26,8 @@
   "generation.status.failed": "生成に失敗しました",
   "generation.status.generating": "生成中...",
   "generation.validation.endFrameRequiresStartFrame": "終了フレームを使用するには、開始フレームを設定してください。",
+  "notice.modelRemoved": "現在のモデルは{{name}}から利用できなくなりました。利用可能なモデルに切り替えてください。",
+  "notice.providerDisabled": "現在のモデルのプロバイダー{{name}}は無効になっています。有効にするか、利用可能なモデルに切り替えてください。",
   "topic.createNew": "新しいトピックを作成",
   "topic.createdBy": "{{name}} によって作成されました",
   "topic.deleteConfirm": "ビデオトピックを削除",

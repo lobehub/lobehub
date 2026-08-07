@@ -4,7 +4,6 @@ import type { Configuration, KoaContextWithOIDC } from 'oidc-provider';
 import Provider, { errors } from 'oidc-provider';
 import urlJoin from 'url-join';
 
-import { serverDBEnv } from '@/config/db';
 import { UserModel } from '@/database/models/user';
 import { appEnv } from '@/envs/app';
 import { getJWKS } from '@/libs/oidc-provider/jwt';
@@ -13,6 +12,7 @@ import { normalizeLocale } from '@/locales/resources';
 import { isOIDCUserBanned } from './access-control';
 import { DrizzleAdapter } from './adapter';
 import { defaultClaims, defaultClients, defaultScopes } from './config';
+import { getOIDCCookieKeys } from './cookies';
 import { createInteractionPolicy } from './interaction-policy';
 
 const logProvider = debug('lobe-oidc:provider');
@@ -38,17 +38,6 @@ export const oidcArtifactTTL = {
 } satisfies NonNullable<Configuration['ttl']>;
 
 /**
- * Get cookie keys using KEY_VAULTS_SECRET
- */
-const getCookieKeys = () => {
-  const key = serverDBEnv.KEY_VAULTS_SECRET;
-  if (!key) {
-    throw new Error('KEY_VAULTS_SECRET is required for OIDC Provider cookie encryption');
-  }
-  return [key];
-};
-
-/**
  * Create OIDC Provider instance
  * @param db - Database instance
  * @returns Configured OIDC Provider instance
@@ -57,7 +46,7 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
   // Get JWKS
   const jwks = getJWKS();
 
-  const cookieKeys = getCookieKeys();
+  const cookieKeys = getOIDCCookieKeys();
 
   const configuration: Configuration = {
     // 11. Database adapter

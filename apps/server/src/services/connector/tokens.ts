@@ -72,8 +72,8 @@ export const ensureFreshConnectorToken = async (
     });
 
     return { ...connector, credentials };
-  } catch (err) {
-    log('token refresh failed for connector=%s: %O', connector.id, err);
+  } catch {
+    log('token refresh failed for connector=%s', connector.id);
     return connector;
   }
 };

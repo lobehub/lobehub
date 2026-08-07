@@ -2,6 +2,7 @@ import { type LobeChatDatabase } from '@lobechat/database';
 import { CompressionRepository } from '@lobechat/database';
 import {
   type CreateMessageParams,
+  type HeterogeneousToolStateSnapshot,
   type QueryMessageParams,
   type UIChatMessage,
   type UpdateMessageParams,
@@ -76,6 +77,7 @@ export type MessageBatchOperation =
       type: 'updateToolMessage';
       value: {
         content?: string;
+        heterogeneousToolState?: HeterogeneousToolStateSnapshot;
         metadata?: Record<string, any>;
         pluginError?: any;
         pluginState?: Record<string, any>;
@@ -360,6 +362,7 @@ export class MessageService {
     id: string,
     value: {
       content?: string;
+      heterogeneousToolState?: HeterogeneousToolStateSnapshot;
       metadata?: Record<string, any>;
       pluginError?: any;
       pluginState?: Record<string, any>;

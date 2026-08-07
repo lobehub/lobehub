@@ -361,6 +361,53 @@ describe('HeterogeneousPersistenceHandler', () => {
       expect(asst.metadata?.heteroTextSnapshotSeq).toBe(2);
     });
 
+    it('replaces reasoning snapshots idempotently instead of re-appending on redelivery', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      await h.handler.ingest({
+        events: [
+          buildEvent('stream_chunk', 0, {
+            chunkType: 'reasoning',
+            reasoning: 'thinking hard',
+            snapshotMode: 'replace',
+            snapshotSeq: 1,
+          }),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      // Redelivery reaching the reducer (a cold replica has an empty
+      // processedKeys map — simulated here with a different timestamp so the
+      // in-memory dedupe does not swallow the event first). A raw delta would
+      // re-append and durably double the reasoning; the snapshot must not.
+      await h.handler.ingest({
+        events: [
+          buildEvent(
+            'stream_chunk',
+            0,
+            {
+              chunkType: 'reasoning',
+              reasoning: 'thinking hard',
+              snapshotMode: 'replace',
+              snapshotSeq: 1,
+            },
+            1_700_000_000_999,
+          ),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const asst = h.messages.get('asst-1')!;
+      expect(asst.reasoning?.content).toBe('thinking hard'); // NOT doubled
+      expect(asst.metadata?.heteroReasoningSnapshotSeq).toBe(1);
+    });
+
     it('drops events with the same (stepIndex, type, timestamp, dataFingerprint) key', async () => {
       const h = createHarness({
         assistantMessageId: 'asst-1',
@@ -389,6 +436,35 @@ describe('HeterogeneousPersistenceHandler', () => {
 
       // Same event re-ingested → idempotency skips it; no extra tool-message create
       expect(h.messageModel.create.mock.calls.length).toBe(createCallsAfterFirst);
+    });
+
+    it('gates publishing per operation and releases the gate when the operation finishes', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+      const first = buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'x' });
+      const second = buildEvent('stream_chunk', 1, { chunkType: 'text', content: 'y' });
+
+      // Without operation state (nothing ingested yet, or a cold replica):
+      // treat everything as unpublished and latch nothing — degraded
+      // republish-all rather than silently dropping events.
+      expect(h.handler.filterUnpublishedEvents('op-1', [first, second])).toEqual([first, second]);
+      h.handler.markEventPublished('op-1', first);
+      expect(h.handler.filterUnpublishedEvents('op-1', [first, second])).toEqual([first, second]);
+
+      await h.handler.ingest({ events: [first, second], operationId: 'op-1', topicId: 'topic-1' });
+
+      // Latch per event: only unlatched events remain.
+      h.handler.markEventPublished('op-1', first);
+      expect(h.handler.filterUnpublishedEvents('op-1', [first, second])).toEqual([second]);
+      h.handler.markEventPublished('op-1', second);
+      expect(h.handler.filterUnpublishedEvents('op-1', [first, second])).toEqual([]);
+
+      // finish() drops the per-operation state — the gate goes with it.
+      await h.handler.finish({ operationId: 'op-1', result: 'success' });
+      expect(h.handler.filterUnpublishedEvents('op-1', [first, second])).toEqual([first, second]);
     });
 
     it('does NOT collide bursty events sharing (stepIndex, type, timestamp) when their data differs', async () => {

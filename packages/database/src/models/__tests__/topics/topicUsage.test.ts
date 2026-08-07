@@ -131,7 +131,12 @@ beforeEach(async () => {
   // agent_operations.user_id is intentionally not a FK — clean up explicitly.
   await serverDB.delete(agentOperations);
   await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
-  await serverDB.insert(topics).values({ id: topicId, userId });
+  // Seed a pinned model on the topic (config). The usage roll-up must NEVER touch
+  // these columns — they hold the topic's configured model, not the measured
+  // dominant model (which lives in `cost.llm.byModel`).
+  await serverDB
+    .insert(topics)
+    .values({ id: topicId, model: 'pinned-model', provider: 'pinned-provider', userId });
 });
 
 afterEach(async () => {
@@ -162,8 +167,10 @@ describe('recomputeTopicUsage', () => {
     expect(topic.totalOutputTokens).toBe(50);
     expect(topic.totalTokens).toBe(150);
     expect(topic.totalCost).toBeCloseTo(0.0021, 6);
-    expect(topic.model).toBe('gpt-4o');
-    expect(topic.provider).toBe('openai');
+    // Roll-up preserves the pinned model (config) — it does not write the
+    // message's model into the column.
+    expect(topic.model).toBe('pinned-model');
+    expect(topic.provider).toBe('pinned-provider');
 
     expect(topic.usage).toEqual({
       humanInteraction: {
@@ -242,9 +249,11 @@ describe('recomputeTopicUsage', () => {
     expect(usage.llm.processingTimeMs).toBe(600);
     expect(usage.llm.tokens).toEqual({ input: 330, output: 170, total: 500 });
 
-    // dominant model = largest token volume (claude 300 > gpt-4o 200)
-    expect(topic.model).toBe('claude-3-5-sonnet');
-    expect(topic.provider).toBe('anthropic');
+    // The measured per-model breakdown lives in `cost.llm.byModel` (below); the
+    // roll-up does NOT promote a dominant model into the `model` column, which
+    // stays the pinned config.
+    expect(topic.model).toBe('pinned-model');
+    expect(topic.provider).toBe('pinned-provider');
 
     const byModel = (topic.cost as any).llm.byModel as any[];
     expect(byModel).toHaveLength(2);
@@ -375,8 +384,9 @@ describe('recomputeTopicUsage', () => {
     expect(topic.totalCost).toBeNull();
     expect(topic.usage).toBeNull();
     expect(topic.cost).toBeNull();
-    expect(topic.model).toBeNull();
-    expect(topic.provider).toBeNull();
+    // Usage aggregates reset to NULL, but the pinned model (config) is preserved.
+    expect(topic.model).toBe('pinned-model');
+    expect(topic.provider).toBe('pinned-provider');
   });
 
   it('short-circuits when the topic row is missing or owned by another user', async () => {
@@ -518,8 +528,9 @@ describe('recomputeTopicUsage', () => {
       expect(topic.totalInputTokens).toBeNull();
       expect(topic.totalOutputTokens).toBeNull();
       expect(topic.totalTokens).toBeNull();
-      expect(topic.model).toBeNull();
-      expect(topic.provider).toBeNull();
+      // Pinned model (config) is preserved even when usage aggregates reset.
+      expect(topic.model).toBe('pinned-model');
+      expect(topic.provider).toBe('pinned-provider');
       expect(topic.totalCost).toBeCloseTo(0.05, 6);
 
       expect((topic.usage as any).llm).toEqual({

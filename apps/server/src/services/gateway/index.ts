@@ -12,6 +12,7 @@ import {
   AgentBotProviderModel,
   type DecryptedBotProvider,
 } from '@/database/models/agentBotProvider';
+import { gatewayEnv } from '@/envs/gateway';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
   getInstallationStore,
@@ -22,11 +23,16 @@ import { messengerPlatformRegistry } from '@/server/services/messenger/platforms
 import { type BotRuntimeStatus, type BotRuntimeStatusSnapshot } from '@/types/botRuntimeStatus';
 
 import type { ConnectionMode } from '../bot/platforms';
-import { platformRegistry, resolveConnectionMode } from '../bot/platforms';
+import {
+  extractWatchKeywordEntries,
+  platformRegistry,
+  resolveConnectionMode,
+} from '../bot/platforms';
 import { BOT_CONNECT_QUEUE_EXPIRE_MS, BotConnectQueue } from './botConnectQueue';
 import { createGatewayManager, getGatewayManager } from './GatewayManager';
 import {
   getMessageGatewayClient,
+  type MessageGatewayCapabilities,
   type MessageGatewayConnectionStatus,
 } from './MessageGatewayClient';
 import { BOT_RUNTIME_STATUSES, getBotRuntimeStatus, updateBotRuntimeStatus } from './runtimeStatus';
@@ -62,6 +68,37 @@ const GATEWAY_SYNC_CONCURRENCY = 8;
  */
 const GATEWAY_SYNC_STALE_DISCONNECT_LIMIT = 50;
 
+/**
+ * Cap on registered-only wake-up connects per sync round. A registered-only id
+ * (in the registry but pruned from live stats) is usually a parked or
+ * self-waking dormant DO, but a stranded DO — alarm chain lost after a deploy
+ * cancelled its in-flight alarm invocation — looks identical and sleeps
+ * forever unless something wakes it. The `ensure` connect is that wake: parked
+ * connections answer 409 and keep their park, healthy ones no-op. The cap
+ * keeps a large parked backlog from turning every cron round into a fleet-wide
+ * wake storm; the remainder is retried on later rounds.
+ */
+const GATEWAY_SYNC_REGISTERED_ONLY_WAKE_LIMIT = 50;
+
+/**
+ * Uniformly sample up to `limit` ids via a partial Fisher-Yates shuffle.
+ * Stateless by design — the gateway cron runs in fresh serverless invocations,
+ * so a persisted round-robin cursor would need external storage; uniform
+ * sampling gives every candidate an expected candidates/limit-round latency
+ * without any state.
+ */
+const sampleIds = (ids: string[], limit: number): Set<string> => {
+  if (ids.length <= limit) return new Set(ids);
+  const pool = [...ids];
+  const picked = new Set<string>();
+  for (let i = 0; i < limit; i++) {
+    const j = i + Math.floor(Math.random() * (pool.length - i));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+    picked.add(pool[i]);
+  }
+  return picked;
+};
+
 interface DesiredGatewayConnection {
   connectionMode: ConnectionMode;
   platform: string;
@@ -70,8 +107,9 @@ interface DesiredGatewayConnection {
 
 interface ActualConnectionsSnapshot {
   /**
-   * False when the registered-ids call failed and the snapshot only covers
-   * live stats — dormant/hibernated connections may be missing from the map.
+   * True when registered ids were loaded successfully, making absence from
+   * `connections` authoritative. False means the snapshot only covers live
+   * stats, so dormant/hibernated connections may be missing from the map.
    */
   complete: boolean;
   /** connectionId → gateway status, or null for registered-only (pruned) ids. */
@@ -101,6 +139,19 @@ function mapGatewayStatusToRuntimeStatus(
 }
 
 const log = debug('lobe-server:service:gateway');
+
+/**
+ * Derive edge-filtering capabilities for a bot-channel connection from its
+ * settings. Monitoring is enabled purely by "has watch keywords configured":
+ * feature-access gating stays server-side (BotMessageRouter), so access
+ * changes never require a gateway reconnect and operators with existing
+ * rules are never cut off by a stale edge config.
+ */
+const resolveBotGatewayCapabilities = (
+  settings?: Record<string, unknown> | null,
+): MessageGatewayCapabilities => ({
+  messageMonitoring: { enabled: extractWatchKeywordEntries(settings ?? undefined).length > 0 },
+});
 
 const isVercel = !!process.env.VERCEL_ENV;
 
@@ -171,19 +222,23 @@ export class GatewayService {
     const { desired, desiredComplete, gated } = await this.buildDesiredConnections(
       serverDB,
       gateKeeper,
-      client,
     );
 
-    // Fetch actual AFTER the gated disconnects above so those ids have already
-    // dropped out of the gateway's view and don't get double-counted as stale.
     const actual = await this.fetchActualConnections(client);
+    const gatedDisconnected = await this.disconnectGatedConnections(client, actual, gated);
 
     // A partial desired set would make healthy connections look stale, so only
     // run the disconnect pass when every platform loaded successfully. A
     // partial ACTUAL set is fine — the pass only disconnects ids it can see.
     let stale = 0;
     if (actual && desiredComplete) {
-      stale = await this.disconnectStaleConnections(client, serverDB, actual.connections, desired);
+      stale = await this.disconnectStaleConnections(
+        client,
+        serverDB,
+        actual.connections,
+        desired,
+        gated,
+      );
     } else if (actual) {
       log('Gateway sync: desired set incomplete, skipping stale-connection cleanup this round');
     }
@@ -191,8 +246,27 @@ export class GatewayService {
     // ── desired − actual → connect ──
 
     let connected = 0;
+    let deferred = 0;
     let skipped = 0;
     let failed = 0;
+
+    // Registered-only wake candidates are SAMPLED, not taken head-first: the
+    // desired map iterates in a stable order, and parked connections (409,
+    // stay registered-only until their 7d expiry) would otherwise burn the
+    // whole cap on the same prefix every round, starving stranded DOs that
+    // sort after position N. Uniform sampling reaches every candidate within
+    // an expected candidates/limit rounds with no persisted cursor.
+    const registeredOnlyCandidates = [...desired.values()]
+      .map(({ provider }) => provider.id)
+      .filter(
+        (id) => (actual?.connections.has(id) ?? false) && actual?.connections.get(id) === null,
+      );
+    const registeredOnlyWakeIds = sampleIds(
+      registeredOnlyCandidates,
+      GATEWAY_SYNC_REGISTERED_ONLY_WAKE_LIMIT,
+    );
+    const registeredOnlyDeferred = registeredOnlyCandidates.length - registeredOnlyWakeIds.size;
+    let registeredOnlyWakes = 0;
 
     await pMap(
       desired.values(),
@@ -207,28 +281,42 @@ export class GatewayService {
             return;
           }
 
-          const status = await this.resolveGatewayStatus(client, provider.id, actual);
+          // Registered ids are the gateway's authoritative existence set. Use
+          // the status already present in live stats to recover an explicitly
+          // disconnected connection. Registered-only ids (status null — pruned
+          // from stats) get a capped ensure-connect wake instead of a skip:
+          // see GATEWAY_SYNC_REGISTERED_ONLY_WAKE_LIMIT. Never probe per-DO
+          // status here.
+          const exists = actual?.connections.has(provider.id) ?? false;
+          const snapshotStatus = actual?.connections.get(provider.id);
+          if (exists && snapshotStatus !== 'disconnected') {
+            if (snapshotStatus !== null) {
+              skipped++;
+              log('Gateway sync: %s already registered, skipping', provider.id);
+              return;
+            }
+            if (!registeredOnlyWakeIds.has(provider.id)) {
+              log(
+                'Gateway sync: %s registered-only, not sampled this round, deferring',
+                provider.id,
+              );
+              return;
+            }
+            registeredOnlyWakes++;
+            log('Gateway sync: %s registered-only, ensure-waking', provider.id);
+          }
 
-          if (status === 'connected' || status === 'connecting') {
-            skipped++;
-            log('Gateway sync: %s already %s, skipping', provider.id, status);
+          // Without a complete registry snapshot, absence from live stats does
+          // not prove the connection is missing. Fail safe and retry next round
+          // instead of degrading to an unbounded per-DO status probe fan-out.
+          if (!exists && !actual?.complete) {
+            deferred++;
+            log('Gateway sync: %s absent from incomplete snapshot, deferring', provider.id);
             return;
           }
-          // Dormant: gateway is running sparse alarm-driven polling and will
-          // self-wake when a message arrives. Reconnecting here would defeat
-          // the purpose — only manual reconnect (startClient) should override.
-          if (status === 'dormant') {
-            skipped++;
-            log('Gateway sync: %s dormant, skipping (DO is sparse-polling)', provider.id);
-            return;
-          }
-          // "error" means credential/config issue (e.g. WeChat session expired
-          // because the account connected elsewhere). Auto-retry is pointless —
-          // only user action (saving new credentials) can fix it.
-          if (status === 'error') {
-            skipped++;
-            log('Gateway sync: %s in error state, skipping', provider.id);
-            return;
+
+          if (snapshotStatus === 'disconnected') {
+            log('Gateway sync: %s reported disconnected in stats, reconnecting', provider.id);
           }
 
           const webhookPath = `/api/agent/webhooks/${platform}/${provider.applicationId}`;
@@ -239,6 +327,7 @@ export class GatewayService {
           const result = await client.connect(
             {
               applicationId: provider.applicationId,
+              capabilities: resolveBotGatewayCapabilities(provider.settings),
               connectionId: provider.id,
               connectionMode,
               credentials: provider.credentials,
@@ -273,15 +362,20 @@ export class GatewayService {
     );
 
     log(
-      'Gateway sync complete in %dms: desired=%d actual=%s connected=%d skipped=%d gated=%d stale=%d failed=%d',
+      'Gateway sync complete in %dms: desired=%d actual=%s snapshotComplete=%s connected=%d skipped=%d deferred=%d gated=%d gatedDisconnected=%d stale=%d failed=%d registeredOnlyWakes=%d registeredOnlyDeferred=%d',
       Date.now() - startedAt,
       desired.size,
       actual ? actual.connections.size : 'unavailable',
+      actual?.complete ?? false,
       connected,
       skipped,
-      gated,
+      deferred,
+      gated.size,
+      gatedDisconnected,
       stale,
       failed,
+      registeredOnlyWakes,
+      registeredOnlyDeferred,
     );
   }
 
@@ -289,24 +383,22 @@ export class GatewayService {
    * Build the set of connections that SHOULD exist on the gateway: enabled
    * persistent-mode providers whose owner passes the bot feature gate.
    *
-   * Paid-gated providers are disconnected inline (the generic stale pass
-   * can't produce their user-facing blocked message) and excluded from the
-   * desired set. If the gate check itself errors, the provider is kept in
-   * desired — a flaky subscription lookup must not tear down a healthy
-   * connection.
+   * Paid-gated providers are tracked separately and excluded from the desired
+   * set so the caller can disconnect only ids the gateway still holds. If the
+   * gate check itself errors, the provider is kept in desired — a flaky
+   * subscription lookup must not tear down a healthy connection.
    */
   private async buildDesiredConnections(
     serverDB: Awaited<ReturnType<typeof getServerDB>>,
     gateKeeper: KeyVaultsGateKeeper,
-    client: ReturnType<typeof getMessageGatewayClient>,
   ): Promise<{
     desired: Map<string, DesiredGatewayConnection>;
     desiredComplete: boolean;
-    gated: number;
+    gated: Set<string>;
   }> {
     const desired = new Map<string, DesiredGatewayConnection>();
     let desiredComplete = true;
-    let gated = 0;
+    const gated = new Set<string>();
 
     for (const definition of platformRegistry.listPlatforms()) {
       const platform = definition.id;
@@ -347,12 +439,7 @@ export class GatewayService {
           }
 
           if (!allowed) {
-            gated++;
-            try {
-              await client.disconnect(provider.id);
-            } catch (err) {
-              log('Gateway sync: paid-gated disconnect failed %s: %O', provider.id, err);
-            }
+            gated.add(provider.id);
             await updateBotRuntimeStatus({
               applicationId: provider.applicationId,
               errorMessage: getBotFeatureBlockedMessage(
@@ -362,7 +449,11 @@ export class GatewayService {
               platform,
               status: BOT_RUNTIME_STATUSES.failed,
             });
-            log('Gateway sync: paid-gated %s:%s, disconnected', platform, provider.applicationId);
+            log(
+              'Gateway sync: paid-gated %s:%s, excluded from desired set',
+              platform,
+              provider.applicationId,
+            );
             continue;
           }
 
@@ -378,46 +469,77 @@ export class GatewayService {
   }
 
   /**
+   * With a complete registry snapshot, disconnect paid-gated providers only
+   * when the connection still exists. When the snapshot is partial or
+   * unavailable, preserve access enforcement by falling back to disconnecting
+   * every gated id; that bounded set is independent of the desired-connection
+   * status fan-out this reconciliation avoids.
+   */
+  private async disconnectGatedConnections(
+    client: ReturnType<typeof getMessageGatewayClient>,
+    actual: ActualConnectionsSnapshot | null,
+    gated: Set<string>,
+  ): Promise<number> {
+    const connectionIds = actual?.complete
+      ? [...gated].filter((id) => actual.connections.has(id))
+      : [...gated];
+    let disconnected = 0;
+
+    await pMap(
+      connectionIds,
+      async (id) => {
+        try {
+          await client.disconnect(id);
+          disconnected++;
+          log('Gateway sync: paid-gated connection %s disconnected', id);
+        } catch (err) {
+          log('Gateway sync: paid-gated disconnect failed %s: %O', id, err);
+        }
+      },
+      { concurrency: GATEWAY_SYNC_CONCURRENCY },
+    );
+
+    return disconnected;
+  }
+
+  /**
    * Snapshot the gateway's view of existing connections: live stats (with
    * status) unioned with registered ids (dormant/hibernated connections the
    * AdminDO stats already pruned — status unknown, hence `null`).
    *
-   * Returns null when stats are unavailable; callers then fall back to
-   * per-connection status checks and skip stale-connection cleanup. The
-   * registered-ids call is best-effort: an older gateway without the admin
-   * endpoint (mid-rollout) or a transient failure must not disable
-   * reconciliation for the live connections stats already covers — the stale
-   * pass only ever disconnects ids present in the snapshot, so a partial
-   * snapshot just cleans up less. `complete: false` marks the partial case so
-   * status resolution won't treat "missing from snapshot" as disconnected.
+   * Registered ids are the authoritative existence set, so a successful call
+   * produces a complete snapshot even when stats are unavailable. When only
+   * stats succeed, the partial snapshot can still drive safe stale cleanup,
+   * but desired ids missing from it are deferred rather than probed one by one.
+   * Returns null only when neither endpoint is available.
    */
   private async fetchActualConnections(
     client: ReturnType<typeof getMessageGatewayClient>,
   ): Promise<ActualConnectionsSnapshot | null> {
     const connections = new Map<string, string | null>();
+    let statsAvailable = false;
 
     try {
       const stats = await client.getStats();
+      statsAvailable = true;
       for (const conn of stats.connections) {
         connections.set(conn.connectionId, conn.state.status);
       }
     } catch (err) {
       log('Gateway sync: failed to fetch gateway stats snapshot: %O', err);
-      return null;
     }
 
-    let complete = true;
     try {
       const { ids } = await client.getRegisteredIds();
       for (const id of ids) {
         if (!connections.has(id)) connections.set(id, null);
       }
+      return { complete: true, connections };
     } catch (err) {
-      complete = false;
       log('Gateway sync: registered-ids unavailable, using stats-only snapshot: %O', err);
     }
 
-    return { complete, connections };
+    return statsAvailable ? { complete: false, connections } : null;
   }
 
   /**
@@ -432,9 +554,10 @@ export class GatewayService {
     serverDB: Awaited<ReturnType<typeof getServerDB>>,
     actual: Map<string, string | null>,
     desired: Map<string, DesiredGatewayConnection>,
+    gated: Set<string>,
   ): Promise<number> {
     const allStaleIds = [...actual.keys()].filter(
-      (id) => !desired.has(id) && !isMessengerConnectionId(id),
+      (id) => !desired.has(id) && !gated.has(id) && !isMessengerConnectionId(id),
     );
     if (allStaleIds.length === 0) return 0;
 
@@ -509,39 +632,6 @@ export class GatewayService {
     );
 
     return disconnected;
-  }
-
-  /**
-   * Resolve a connection's gateway status from the reconciliation snapshot,
-   * falling back to a per-connection status call when the snapshot is missing
-   * (admin endpoints down) or only knows the id from the registered set.
-   * Returns undefined when the status can't be determined — callers treat
-   * that as "attempt connect" (the gateway upserts on connectionId, so a
-   * redundant connect is safe).
-   */
-  private async resolveGatewayStatus(
-    client: ReturnType<typeof getMessageGatewayClient>,
-    connectionId: string,
-    actual: ActualConnectionsSnapshot | null,
-  ): Promise<string | undefined> {
-    if (actual) {
-      const snapshot = actual.connections.get(connectionId);
-      // Unknown to the gateway entirely → connect. Only trustworthy when the
-      // snapshot is complete — a stats-only snapshot misses dormant ids, and
-      // treating those as disconnected would reconnect sparse-polling DOs.
-      if (snapshot === undefined && actual.complete) return 'disconnected';
-      // Known status from stats.
-      if (snapshot !== undefined && snapshot !== null) return snapshot;
-      // Registered but pruned from stats (likely dormant), or missing from an
-      // incomplete snapshot — ask the DO itself.
-    }
-
-    try {
-      const status = await client.getStatus(connectionId);
-      return status.state.status;
-    } catch {
-      return undefined;
-    }
   }
 
   async stop(): Promise<void> {
@@ -832,19 +922,29 @@ export class GatewayService {
 
     try {
       const client = getMessageGatewayClient();
+      const isPolling = connectionMode === 'polling';
       await client.connect({
         applicationId: creds.applicationId,
+        // Messenger-owned connections never consume passive channel
+        // monitoring — the shared bot only reacts to DMs and explicit
+        // mentions, so the gateway may drop ordinary channel messages.
+        capabilities: { messageMonitoring: { enabled: false } },
         connectionId,
-        // The user DO is purely an outbound surface for typing; no inbound
-        // events come back through this connection. Webhook mode prevents the
-        // gateway from opening per-user persistent connections (Telegram /
-        // Slack inbound already arrives at lobehub directly via webhooks;
-        // Discord inbound stays on the singleton WS).
-        connectionMode: 'webhook',
-        credentials: { botToken: creds.botToken },
+        // Webhook platforms only need an outbound typing surface. Polling
+        // platforms (WeChat) own a real per-user inbound lifecycle and must
+        // receive the complete QR-issued credential bundle.
+        connectionMode: isPolling ? 'polling' : 'webhook',
+        credentials: isPolling
+          ? {
+              baseUrl: creds.baseUrl,
+              botId: creds.botId,
+              botToken: creds.botToken,
+              webhookToken: gatewayEnv.MESSAGE_GATEWAY_SERVICE_TOKEN,
+            }
+          : { botToken: creds.botToken },
         platform,
         userId,
-        webhookPath: '',
+        webhookPath: isPolling ? `/api/agent/messenger/webhooks/${platform}` : '',
       });
 
       // Evict-on-add: the iterator yields keys in insertion order, so the
@@ -860,6 +960,34 @@ export class GatewayService {
     } catch (err) {
       log('ensureUserMessengerConnected: connect failed for %s: %O', connectionId, err);
       return null;
+    }
+  }
+
+  /**
+   * Stop a user-owned messenger connection during unlink or credential
+   * replacement. Cleanup is allowed while the gateway feature flag is off so
+   * a rollout rollback cannot strand a long-polling WeChat connection.
+   */
+  async disconnectUserMessenger(params: {
+    installationKey: string;
+    platform: MessengerPlatform;
+    userId: string;
+  }): Promise<void> {
+    const { installationKey, platform, userId } = params;
+    const connectionMode = messengerPlatformRegistry.getPlatform(platform)?.connectionMode;
+    if (connectionMode === 'websocket') return;
+
+    const connectionId = messengerConnectionIdForUser({ connectionMode, installationKey, userId });
+    userMessengerConnections.delete(connectionId);
+
+    const client = getMessageGatewayClient();
+    if (!client.isConfigured) return;
+
+    try {
+      await client.disconnect(connectionId);
+      log('disconnectUserMessenger: disconnected %s', connectionId);
+    } catch (error) {
+      log('disconnectUserMessenger: failed for %s: %O', connectionId, error);
     }
   }
 
@@ -911,6 +1039,7 @@ export class GatewayService {
 
     await client.connect({
       applicationId: provider.applicationId,
+      capabilities: resolveBotGatewayCapabilities(provider.settings),
       connectionId: provider.id,
       connectionMode,
       credentials: provider.credentials,

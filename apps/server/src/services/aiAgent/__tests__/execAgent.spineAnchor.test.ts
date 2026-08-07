@@ -153,7 +153,7 @@ const assistantMessageCall = () =>
   mockMessageCreate.mock.calls.find((call) => call[0].role === 'assistant');
 
 /**
- * Regression coverage for LOBE-11489: a user turn persisted with
+ * Regression coverage for a user turn persisted with
  * `parentId: undefined` into a non-empty topic becomes a second ROOT. The
  * renderer walks the parentId forest depth-first, so an earlier root's
  * still-growing subtree is emitted before a later root and the newest reply

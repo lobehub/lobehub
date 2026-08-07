@@ -5,6 +5,11 @@ import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
+import {
+  HETEROGENEOUS_AGENT_CONFIGS,
+  isLocalHeterogeneousType,
+  LOCAL_HETEROGENEOUS_AGENT_TYPES,
+} from '@lobechat/heterogeneous-agents';
 import type { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import { LobeBuiltinMcpServer } from '@lobechat/heterogeneous-agents/builtinMcp';
 import { resolveHeteroSpawnCommand } from '@lobechat/heterogeneous-agents/resolveCliCommand';
@@ -24,10 +29,12 @@ import {
 import type { Command } from 'commander';
 
 import { getTrpcClient } from '../api/client';
+import { CoalescingBatchIngester } from '../utils/CoalescingBatchIngester';
 import { log } from '../utils/logger';
 import { TrpcIngestSink } from '../utils/TrpcIngestSink';
 
-const SUPPORTED_AGENT_TYPES = new Set(['amp', 'claude-code', 'codex']);
+export const SUPPORTED_AGENT_TYPES = new Set<string>(LOCAL_HETEROGENEOUS_AGENT_TYPES);
+const SUPPORTED_AGENT_TITLES = HETEROGENEOUS_AGENT_CONFIGS.map(({ title }) => title).join(' / ');
 const CODEX_REASONING_EFFORT_CONFIG_KEY = 'model_reasoning_effort';
 const CODEX_SERVICE_TIER_CONFIG_KEY = 'service_tier';
 
@@ -122,10 +129,18 @@ const buildExtraArgs = (
               : []),
             ...(options.speed ? ['-c', `${CODEX_SERVICE_TIER_CONFIG_KEY}="${options.speed}"`] : []),
           ]
-        : [
-            ...(options.model ? ['--model', options.model] : []),
-            ...(options.effort ? ['--effort', options.effort] : []),
-          ];
+        : options.type === 'claude-code'
+          ? [
+              ...(options.model ? ['--model', options.model] : []),
+              ...(options.effort ? ['--effort', options.effort] : []),
+            ]
+          : options.type === 'opencode'
+            ? [...(options.model ? ['--model', options.model] : [])]
+            : options.type === 'pi'
+              ? [...(options.model ? ['--model', options.model] : [])]
+              : options.type === 'qoder'
+                ? [...(options.model ? ['--model', options.model] : [])]
+                : [];
   const extraArgs = [...(options.agentArg ?? []), ...selectorArgs];
 
   return extraArgs.length > 0 ? extraArgs : undefined;
@@ -252,111 +267,6 @@ const resolvePrompt = async (options: ExecOptions): Promise<ResolvedPrompt> => {
   return buildPromptFromText(raw, images);
 };
 
-class SerialServerIngester {
-  private accumulatedText = '';
-  private fatalError: Error | null = null;
-  private inflight: Promise<void> = Promise.resolve();
-  private nextSnapshotSeq = 0;
-  private pendingTextEvent: AgentStreamEvent | undefined;
-  private timer: ReturnType<typeof setTimeout> | null = null;
-
-  constructor(
-    private readonly sink: TrpcIngestSink,
-    private readonly snapshotFlushMs = 200,
-  ) {}
-
-  push(event: AgentStreamEvent): void {
-    if (this.fatalError) return;
-
-    // Text-snapshot coalescing is a MAIN-AGENT-ONLY transport optimization:
-    // it debounces the main agent's token-level text *deltas* into one
-    // `replace` snapshot to cut ingest calls. Subagent text is explicitly
-    // excluded (`!event.data?.subagent`) for two reasons:
-    //   1. Subagent text is emitted as ONE full block per turn (see
-    //      claudeCode adapter `handleSubagentAssistant` — "the full block IS
-    //      the only emission"), so there is nothing to coalesce.
-    //   2. `accumulatedText` is a single shared accumulator with no subagent
-    //      scope. Folding subagent blocks in would (a) splice main-agent text
-    //      into the subagent message via the shared buffer, and (b) emit a
-    //      `replace` snapshot that the server's subagent path *appends*
-    //      (`persistSubagentText` has no snapshot semantics) → duplicated /
-    //      cross-scope content. Forwarding the raw block straight through lets
-    //      the server append it exactly once, correctly.
-    if (
-      event.type === 'stream_chunk' &&
-      event.data?.chunkType === 'text' &&
-      typeof event.data?.content === 'string' &&
-      !event.data?.subagent
-    ) {
-      this.accumulatedText += event.data.content;
-      this.pendingTextEvent = event;
-      if (this.timer) clearTimeout(this.timer);
-      this.timer = setTimeout(() => {
-        this.timer = null;
-        this.queuePendingTextSnapshot();
-      }, this.snapshotFlushMs);
-      return;
-    }
-
-    this.queuePendingTextSnapshot();
-    // `accumulatedText` is a PER-MESSAGE accumulator: it coalesces the text
-    // deltas of the current assistant message into one `replace` snapshot.
-    // A new message boundary (`stream_start` / `stream_end`, emitted by the
-    // adapter's `openMainMessage`) must reset it — otherwise it spans the
-    // whole run and every later message's snapshot re-emits all prior
-    // messages' text verbatim, which the server then persists into the new
-    // DB message: cross-message text duplication. Reset
-    // AFTER flushing the just-ended message's pending snapshot above.
-    if (event.type === 'stream_start' || event.type === 'stream_end') {
-      this.accumulatedText = '';
-    }
-    this.enqueue(async () => {
-      await this.sink.ingest([event]);
-    });
-  }
-
-  async drain(): Promise<void> {
-    this.queuePendingTextSnapshot();
-    try {
-      await this.inflight;
-    } catch {
-      // `fatalError` is re-thrown below.
-    }
-    if (this.fatalError) throw this.fatalError;
-  }
-
-  private enqueue(task: () => Promise<void>) {
-    this.inflight = this.inflight.then(task).catch((err) => {
-      this.fatalError = err instanceof Error ? err : new Error(String(err));
-      throw this.fatalError;
-    });
-  }
-
-  private queuePendingTextSnapshot() {
-    if (!this.pendingTextEvent || this.fatalError) return;
-    if (this.timer) {
-      clearTimeout(this.timer);
-      this.timer = null;
-    }
-
-    const baseEvent = this.pendingTextEvent;
-    this.pendingTextEvent = undefined;
-    const snapshotEvent: AgentStreamEvent = {
-      ...baseEvent,
-      data: {
-        ...baseEvent.data,
-        content: this.accumulatedText,
-        snapshotMode: 'replace',
-        snapshotSeq: ++this.nextSnapshotSeq,
-      },
-    };
-
-    this.enqueue(async () => {
-      await this.sink.ingest([snapshotEvent]);
-    });
-  }
-}
-
 interface RawStreamDumpAttempt {
   /** Flush + close both file streams. Resolves once the bytes are on disk. */
   close: () => Promise<void>;
@@ -429,7 +339,7 @@ class RawStreamDump {
 }
 
 const exec = async (options: ExecOptions): Promise<void> => {
-  if (!SUPPORTED_AGENT_TYPES.has(options.type)) {
+  if (!isLocalHeterogeneousType(options.type)) {
     log.error(
       `Unsupported --type "${options.type}". Supported: ${[...SUPPORTED_AGENT_TYPES].join(', ')}`,
     );
@@ -481,9 +391,9 @@ const exec = async (options: ExecOptions): Promise<void> => {
   // Build the ingest sink — no-op for standalone mode, real tRPC sink for
   // server-ingest mode.  The tRPC client reads LOBEHUB_JWT (operation-scoped
   // JWT injected by the server) for authentication.
-  const agentType = options.type as 'amp' | 'claude-code' | 'codex';
+  const agentType = options.type;
   let sink: TrpcIngestSink | undefined;
-  let serverIngester: SerialServerIngester | undefined;
+  let serverIngester: CoalescingBatchIngester | undefined;
   // Uploader for tool_result images (CC `Read` on an image file). Reuses the
   // CLI's authenticated lambda client so the persisted event carries a
   // `{ fileId, url }` reference instead of heavy base64. Only wired in
@@ -500,7 +410,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
       options.topic!,
       process.env.LOBEHUB_ASSISTANT_MESSAGE_ID,
     );
-    serverIngester = new SerialServerIngester(sink);
+    serverIngester = new CoalescingBatchIngester(sink);
 
     uploadImage = createFileStoreImageUploader(async () => {
       const lambda = await getTrpcClient();
@@ -512,7 +422,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     });
   }
 
-  // ─── AskUserQuestion MCP — remote Human-in-the-loop (claude-code only) ──────
+  // ─── AskUserQuestion MCP — remote Human-in-the-loop ────────────────────────
   //
   // Mount the same `lobe_cc` MCP server the desktop app uses, but resolve the
   // bridge over the server's Redis stream instead of Electron IPC:
@@ -528,7 +438,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
   let askBridge: AskUserBridge | undefined;
   let askMcpConfigPath: string | undefined;
   const askPollAbort = new AbortController();
-  if (serverIngest && agentType === 'claude-code' && serverIngester) {
+  if (serverIngest && (agentType === 'claude-code' || agentType === 'qoder') && serverIngester) {
     askServer = new LobeBuiltinMcpServer();
     await askServer.start();
     askBridge = askServer.registerOperation(operationId);
@@ -621,7 +531,12 @@ const exec = async (options: ExecOptions): Promise<void> => {
     type: string,
     errnoCode?: string,
   ): { body?: Record<string, unknown>; message: string; type: string } => {
-    const classified = classifyHeteroProcessFailure({ agentType, detail: message, errnoCode });
+    const classified = classifyHeteroProcessFailure({
+      agentType,
+      command: options.command,
+      detail: message,
+      errnoCode,
+    });
     if (!classified) return { message, type };
     return { body: { ...classified }, message: classified.message, type: 'AgentRuntimeError' };
   };
@@ -638,6 +553,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
    *
    * Returns:
    *   code / signal — child exit info
+   *   cancelled      — true when this CLI received SIGINT/SIGTERM for the run
    *   sessionId     — CC session id from `system.init` (undefined on resume failure)
    *   ingestError   — true when a batch could not be flushed after retries
    *   resumeNotFound — true when a resume-not-found error was intercepted
@@ -659,6 +575,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     interceptResumeErrors: boolean,
     runLabel: string,
   ): Promise<{
+    cancelled: boolean;
     code: number | null;
     ingestError: boolean;
     resumeNotFound: boolean;
@@ -722,32 +639,17 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // Ctrl-C → SIGINT to the child's process group.
     // Repeated Ctrl-C escalates to SIGKILL.
     let interrupted = false;
-    const onSigint = async () => {
+    const onSigint = () => {
       if (interrupted) {
         handle.kill('SIGKILL');
         return;
       }
       interrupted = true;
       handle.kill('SIGINT');
-      if (serverIngester && sink) {
-        try {
-          await serverIngester.drain();
-          await sink.finish({ result: 'cancelled' });
-        } catch {
-          // best-effort; process is exiting anyway
-        }
-      }
     };
-    const onSigterm = async () => {
+    const onSigterm = () => {
+      interrupted = true;
       handle.kill('SIGTERM');
-      if (serverIngester && sink) {
-        try {
-          await serverIngester.drain();
-          await sink.finish({ result: 'cancelled' });
-        } catch {
-          // best-effort
-        }
-      }
     };
     process.on('SIGINT', onSigint);
     process.on('SIGTERM', onSigterm);
@@ -838,6 +740,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     }
 
     return {
+      cancelled: interrupted,
       code,
       ingestError,
       resumeNotFound,
@@ -855,11 +758,11 @@ const exec = async (options: ExecOptions): Promise<void> => {
   const interceptResume = !!options.resume;
   const extraArgs = [
     ...(buildExtraArgs(options) ?? []),
-    // Point CC at the lobe_cc AskUserQuestion MCP server we just mounted.
+    // Point the supported CLI at the lobe_cc AskUserQuestion MCP server we just mounted.
     ...(askMcpConfigPath ? ['--mcp-config', askMcpConfigPath] : []),
   ];
   // Resolve the CLI binary once, up front, and reuse it for both the initial
-  // run and the resume-retry. For the default bare command (`amp`/`codex`/`claude`)
+  // run and the resume-retry. For each provider's default bare command
   // this finds the validated binary — including an app-bundled Codex CLI when
   // a broken `codex` shim shadows PATH — so sandbox/terminal runs no longer
   // ENOENT on a stale global install. Custom commands are used verbatim.
@@ -896,7 +799,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
   // fresh session.  The server's `heteroSessionId` is updated with the new id,
   // breaking the stale-session loop.
   let result = first;
-  if (first.resumeNotFound) {
+  if (!first.cancelled && first.resumeNotFound) {
     log.info('Resume failed (session not found or context overflow) — retrying without --resume');
     result = await runOneAgent(
       {
@@ -934,7 +837,10 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // still exits 0, so the exit code alone would report `success`. Treat any
     // pushed terminal error as a failed run so the topic/task is marked failed.
     const exitedClean =
-      !result.ingestError && !result.sawTerminalError && (code === 0 || signal === 'SIGTERM');
+      !result.cancelled &&
+      !result.ingestError &&
+      !result.sawTerminalError &&
+      (code === 0 || signal === 'SIGTERM');
 
     // When the run failed, pass an error detail so the server surfaces a useful
     // message instead of the generic "Agent execution failed" fallback. Prefer
@@ -949,22 +855,23 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // re-deriving from the flattened message via the process-only classifier,
     // which would drop `agentType`/`code` and demote the client UI to the
     // generic error card.
-    const finishError = exitedClean
-      ? undefined
-      : result.terminalErrorData
-        ? {
-            body: { ...result.terminalErrorData },
-            message: String(result.terminalErrorData.message ?? errorDetail ?? ''),
-            type: 'AgentRuntimeError',
-          }
-        : errorDetail
-          ? buildFinishError(errorDetail.slice(-1024), 'AgentRuntimeError')
-          : undefined;
+    const finishError =
+      result.cancelled || exitedClean
+        ? undefined
+        : result.terminalErrorData
+          ? {
+              body: { ...result.terminalErrorData },
+              message: String(result.terminalErrorData.message ?? errorDetail ?? ''),
+              type: 'AgentRuntimeError',
+            }
+          : errorDetail
+            ? buildFinishError(errorDetail.slice(-1024), 'AgentRuntimeError')
+            : undefined;
 
     try {
       await sink.finish({
         error: finishError,
-        result: exitedClean ? 'success' : 'error',
+        result: result.cancelled ? 'cancelled' : exitedClean ? 'success' : 'error',
         sessionId,
       });
     } catch (err) {
@@ -993,7 +900,7 @@ export function registerHeteroCommand(program: Command) {
   const hetero = program
     .command('hetero')
     .description(
-      'Run heterogeneous agent CLIs (Amp / Claude Code / Codex) and stream their output',
+      `Run heterogeneous agent CLIs (${SUPPORTED_AGENT_TITLES}) and stream their output`,
     );
 
   hetero
@@ -1027,7 +934,7 @@ export function registerHeteroCommand(program: Command) {
     )
     .option(
       '-c, --command <bin>',
-      'Override the agent CLI binary name (default: `amp`, `claude`, or `codex`)',
+      'Override the agent CLI binary name (default: `amp`, `claude`, `codex`, `opencode`, `pi`, or `qodercli`)',
     )
     .option(
       '--operation-id <id>',

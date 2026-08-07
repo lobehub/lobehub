@@ -193,10 +193,18 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   // CreateMessageParamsSchema (the renderer executor's `messageService` path).
   heteroMessageId: z.string().optional(),
   heteroSessionId: z.string().optional(),
+  // Durable watermark for replace-only heterogeneous tool-state snapshots.
+  // The pair is scoped by operation so a later run may restart seq at 1.
+  heterogeneousToolStateOperationId: z.string().optional(),
+  heterogeneousToolStateSeq: z.number().int().positive().optional(),
   inspectExpanded: z.boolean().optional(),
   isMultimodal: z.boolean().optional(),
   isSupervisor: z.boolean().optional(),
   localSystemToolSnapshots: z.array(LocalSystemToolSnapshotSchema).optional(),
+  // Creation provenance (agent operation that produced this message). Listed
+  // here so zod does NOT strip the runtime's stamp from writes going through
+  // CreateMessageParamsSchema / UpdateMessageParamsSchema.
+  operationId: z.string().min(1).optional(),
   orchestrationRole: z.enum(['supervisor', 'member']).optional(),
   pageSelections: z.array(PageSelectionSchema).optional(),
   // Canonical nested shape — flat fields above are deprecated. Must be listed
@@ -281,6 +289,10 @@ export interface MessageMetadata {
   /** @deprecated use `metadata.performance` instead */
   duration?: number;
   finishType?: string;
+  /** Operation owning the durable heterogeneous tool-state watermark. */
+  heterogeneousToolStateOperationId?: string;
+  /** Last persisted replace-snapshot sequence for this tool message. */
+  heterogeneousToolStateSeq?: number;
   /**
    * The native id of this message inside the hetero agent (Claude Code /
    * Codex) that produced it — forensic provenance tying a row back to its
@@ -360,6 +372,16 @@ export interface MessageMetadata {
    * and so the standard message `role` stays `'assistant'` (training-friendly).
    * Supersedes the boolean {@link isSupervisor}, which is kept for back-compat.
    */
+  /**
+   * Creation provenance: id of the agent operation that produced this message
+   * (`agent_operations.id`), stamped when the runtime creates the assistant
+   * row. Always the message's OWN operation — for sub-agent (callAgent) turns
+   * this is the sub-operation, not the root; climb `parent_operation_id` for
+   * the root. Do not confuse with `work.rootOperationId` (Work display anchor,
+   * root op, only on Work-producing rounds) or `verifyOperationId` (the run a
+   * verify card verifies).
+   */
+  operationId?: string;
   orchestrationRole?: 'supervisor' | 'member';
   /** @deprecated use the top-level message `usage` field instead */
   outputAudioTokens?: number;

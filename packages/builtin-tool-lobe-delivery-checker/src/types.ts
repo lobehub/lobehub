@@ -1,3 +1,5 @@
+import type { RequiredEvidenceSpec } from '@lobechat/types';
+
 export const LobeDeliveryCheckerIdentifier = 'lobe-delivery-checker';
 
 export const LobeDeliveryCheckerApiName = {
@@ -32,6 +34,8 @@ export interface VerifyCriterionInput {
   onFail?: VerifyOnFailStrategy;
   /** Whether this check is required (must pass to deliver) vs optional. Defaults to true. */
   required?: boolean;
+  /** Artifacts that must be captured and semantically inspected for this check. */
+  requiredEvidence?: RequiredEvidenceSpec[];
   /** The short title of this check. */
   title: string;
   /** How this check is judged. Defaults to 'llm'. */

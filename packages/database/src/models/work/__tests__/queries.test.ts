@@ -86,13 +86,16 @@ describe('WorkModel · queries', () => {
 
     const selectSpy = vi.spyOn(serverDB, 'select');
     try {
+      // Opt in so the fan-out covers every registered type (default excludes the
+      // gated `file` type — see the includeFileWorks gating test below).
       const byOperations = await workModel.listByRootOperations({
+        includeFileWorks: true,
         rootOperationIds: ['op-batch-1', 'op-batch-2', 'op-batch-missing'],
       });
 
-      // One query per work type across all ids, not per (id x type). Three
-      // registered types now: document / external / task.
-      expect(selectSpy).toHaveBeenCalledTimes(3);
+      // One query per work type across all ids, not per (id x type). Four
+      // registered types now: document / external / file / task.
+      expect(selectSpy).toHaveBeenCalledTimes(4);
       expect(byOperations['op-batch-1']?.map((item) => item.resourceId)).toEqual([firstTask.id]);
       expect(byOperations['op-batch-2']?.map((item) => item.resourceId)).toEqual([secondTask.id]);
       expect(byOperations['op-batch-missing']).toEqual([]);
@@ -369,5 +372,75 @@ describe('WorkModel · queries', () => {
 
     const [stored] = await serverDB.select().from(works).where(eq(works.id, row.id));
     expect(stored.resourceId).toBeNull();
+  });
+
+  it('gates the file work type behind the includeFileWorks opt-in', async () => {
+    // Regression for the deployed-client skew: requests WITHOUT the opt-in must
+    // never see `file` works (old clients whose descriptor table lacks `file`
+    // crash on them); opted-in requests receive every type.
+    const taskModel = new TaskModel(serverDB, userId);
+    const workModel = new WorkModel(serverDB, userId);
+
+    const task = await taskModel.create({ instruction: 'Legacy task', name: 'Legacy task' });
+    await workModel.registerTask({
+      changeType: 'created',
+      rootOperationId: 'op-gate',
+      taskId: task.id,
+      toolCallId: 'gate-task-call',
+      toolIdentifier: 'lobe-task',
+      toolName: 'createTask',
+      topicId,
+    });
+    // No threadId: the version's threadId stays null so the default (no-thread)
+    // conversation query surfaces it alongside the task work.
+    await workModel.registerFile({
+      agentId,
+      filePath: '/mnt/data/report.pptx',
+      metadata: {
+        fileId: 'file-gate',
+        filePath: '/mnt/data/report.pptx',
+        fileUrl: 'https://cdn.example.com/report.pptx',
+      },
+      rootOperationId: 'op-gate',
+      title: 'report.pptx',
+      toolCallId: 'op:op-gate',
+      toolIdentifier: 'lobe-cloud-sandbox',
+      toolName: 'writeFile',
+      topicId,
+      userId,
+    });
+
+    const types = (items: { type: string }[]) => items.map((item) => item.type).sort();
+
+    // Default request → legacy set only.
+    const defaultEvents = await workModel.listByRootOperations({ rootOperationIds: ['op-gate'] });
+    expect(types(defaultEvents['op-gate'])).toEqual(['task']);
+    const defaultSummaries = await workModel.listSummariesByRootOperations({
+      rootOperationIds: ['op-gate'],
+    });
+    expect(types(defaultSummaries['op-gate'])).toEqual(['task']);
+    const defaultConversation = await workModel.listByConversation({ topicId });
+    expect(types(defaultConversation)).toEqual(['task']);
+    const defaultWorkspace = await workModel.listByWorkspace({});
+    expect(types(defaultWorkspace.items)).toEqual(['task']);
+
+    // Opted-in request → both types surface.
+    const optedEvents = await workModel.listByRootOperations({
+      includeFileWorks: true,
+      rootOperationIds: ['op-gate'],
+    });
+    expect(types(optedEvents['op-gate'])).toEqual(['file', 'task']);
+    const optedSummaries = await workModel.listSummariesByRootOperations({
+      includeFileWorks: true,
+      rootOperationIds: ['op-gate'],
+    });
+    expect(types(optedSummaries['op-gate'])).toEqual(['file', 'task']);
+    const optedConversation = await workModel.listByConversation({
+      includeFileWorks: true,
+      topicId,
+    });
+    expect(types(optedConversation)).toEqual(['file', 'task']);
+    const optedWorkspace = await workModel.listByWorkspace({ includeFileWorks: true });
+    expect(types(optedWorkspace.items)).toEqual(['file', 'task']);
   });
 });

@@ -11,7 +11,7 @@
 #   record-gif.sh <output.gif> <duration_seconds> [fps]
 #
 #   AB_TARGET="--cdp 9222"             # Electron (default; CDP_PORT honored)
-#   AB_TARGET="--session lobehub-dev"  # web agent-browser session
+#   AB_TARGET="--session your-session" # web agent-browser session
 #   GIF_WIDTH=960                      # output width (px), default 960
 #
 # Requires ffmpeg (`brew install ffmpeg`). Effective fps is capped by

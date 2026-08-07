@@ -42,6 +42,8 @@ import type {
   WriteFileState,
 } from './types';
 
+const MAX_AGENT_GLOB_RESULTS = 1000;
+
 /**
  * ComputerRuntime — abstract base for computer operations (file system, shell, search).
  *
@@ -474,7 +476,14 @@ export abstract class ComputerRuntime {
 
   async globFiles(args: GlobFilesParams): Promise<BuiltinServerRuntimeOutput> {
     try {
-      const result = await this.callService('globLocalFiles', args);
+      const requestedLimit =
+        Number.isFinite(args.limit) && args.limit && args.limit > 0
+          ? Math.floor(args.limit)
+          : MAX_AGENT_GLOB_RESULTS;
+      const result = await this.callService('globLocalFiles', {
+        ...args,
+        limit: Math.min(requestedLimit, MAX_AGENT_GLOB_RESULTS),
+      });
 
       if (!result.success) {
         return this.errorOutput(result, {

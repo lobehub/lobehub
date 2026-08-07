@@ -1,8 +1,8 @@
 'use client';
 
 import { Center, Flexbox, Icon, Input, Text, TextArea } from '@lobehub/ui';
-import { Select, useModalContext } from '@lobehub/ui/base-ui';
-import { App, Form } from 'antd';
+import { Select, toast, useModalContext } from '@lobehub/ui/base-ui';
+import { Form } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CheckIcon } from 'lucide-react';
 import { type FC, useEffect, useState } from 'react';
@@ -76,8 +76,8 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   presetGrid: css`
     display: grid;
-    gap: 8px;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
   `,
   presetIcon: css`
     border: 1px solid ${cssVar.colorBorderSecondary};
@@ -120,7 +120,7 @@ const DatasetCreateContent: FC<DatasetCreateContentProps> = ({
 }) => {
   const { t } = useTranslation('eval');
   const { close } = useModalContext();
-  const { message } = App.useApp();
+
   const [form] = Form.useForm();
   const [selectedPreset, setSelectedPreset] = useState<string>('custom');
   const [identifierTouched, setIdentifierTouched] = useState(false);
@@ -155,7 +155,7 @@ const DatasetCreateContent: FC<DatasetCreateContentProps> = ({
         preset: selectedPreset,
       });
     } catch (error: any) {
-      message.error(error?.message || t('dataset.create.error'));
+      toast.error(error?.message || t('dataset.create.error'));
     } finally {
       onLoadingChange?.(false);
     }

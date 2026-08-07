@@ -1,8 +1,8 @@
 import {
   type DeviceAttachment,
-  RemoteDeviceExecutionRuntime,
   RemoteDeviceIdentifier,
 } from '@lobechat/builtin-tool-remote-device';
+import { RemoteDeviceExecutionRuntime } from '@lobechat/builtin-tool-remote-device/executionRuntime';
 import debug from 'debug';
 
 import { deviceGateway } from '@/server/services/deviceGateway';

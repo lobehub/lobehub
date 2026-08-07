@@ -4,7 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AcceptanceService } from '../acceptanceService';
 
 const mocks = vi.hoisted(() => ({
+  attachToAcceptance: vi.fn(),
   findById: vi.fn(),
+  findRunById: vi.fn(),
+  ensureForSubject: vi.fn(),
   listByAcceptance: vi.fn(),
   setDecision: vi.fn(),
   taskResolve: vi.fn(),
@@ -13,12 +16,15 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/database/models/acceptance', () => ({
   AcceptanceModel: vi.fn(() => ({
+    ensureForSubject: mocks.ensureForSubject,
     findById: mocks.findById,
     updateStatus: mocks.updateStatus,
   })),
 }));
 vi.mock('@/database/models/verifyRun', () => ({
   VerifyRunModel: vi.fn(() => ({
+    attachToAcceptance: mocks.attachToAcceptance,
+    findById: mocks.findRunById,
     listByAcceptance: mocks.listByAcceptance,
     setDecision: mocks.setDecision,
   })),
@@ -31,6 +37,10 @@ vi.mock('@/database/models/task', () => ({
 }));
 vi.mock('@/database/models/topic', () => ({ TopicModel: vi.fn() }));
 vi.mock('@/database/models/document', () => ({ DocumentModel: vi.fn() }));
+vi.mock('../goalLoop', () => ({
+  maybeContinueGoalLoop: vi.fn().mockResolvedValue('spawn-failed'),
+  syncGoalToolState: vi.fn(),
+}));
 vi.mock('@/server/services/task', () => ({ TaskService: vi.fn() }));
 
 const service = () => new AcceptanceService({} as any, 'user-1');
@@ -46,6 +56,21 @@ describe('AcceptanceService decision gating', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.listByAcceptance.mockResolvedValue([{ id: 'run-1', roundIndex: 1 }]);
+  });
+
+  it('creates a standalone acceptance without resolving a LobeHub task, topic, or document', async () => {
+    mocks.ensureForSubject.mockResolvedValue({ id: 'acc-standalone' });
+
+    await service().ensureForSubject('standalone', 'external-delivery-1', {
+      requirement: 'The external delivery works',
+      title: 'External delivery',
+    });
+
+    expect(mocks.taskResolve).not.toHaveBeenCalled();
+    expect(mocks.ensureForSubject).toHaveBeenCalledWith('standalone', 'external-delivery-1', {
+      metadata: { title: 'External delivery' },
+      requirement: 'The external delivery works',
+    });
   });
 
   it.each(['pending', 'planned', 'verifying', 'repairing'])(
@@ -66,6 +91,34 @@ describe('AcceptanceService decision gating', () => {
     mocks.findById.mockResolvedValue(acceptance('rejected'));
     await expect(service().reject('acc-1', 'again')).rejects.toThrow('re-opens it');
     expect(mocks.setDecision).not.toHaveBeenCalled();
+  });
+
+  it('keeps a manually closed acceptance terminal during status recomputation', async () => {
+    mocks.findById.mockResolvedValue(acceptance('closed'));
+
+    await expect(service().recomputeStatus('acc-1')).resolves.toBe('closed');
+    expect(mocks.listByAcceptance).not.toHaveBeenCalled();
+    expect(mocks.updateStatus).not.toHaveBeenCalled();
+  });
+
+  it.each(['accepted', 'closed'])(
+    'refuses to attach a new round after the acceptance is %s',
+    async (status) => {
+      mocks.findById.mockResolvedValue(acceptance(status));
+      mocks.findRunById.mockResolvedValue({ acceptanceId: null, id: 'run-2' });
+
+      await expect(service().attachRun('run-2', 'acc-1')).rejects.toThrow(`already been ${status}`);
+      expect(mocks.attachToAcceptance).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps an already-attached run idempotent after acceptance', async () => {
+    mocks.findById.mockResolvedValue(acceptance('accepted'));
+    const existing = { acceptanceId: 'acc-1', id: 'run-1', roundIndex: 1 };
+    mocks.findRunById.mockResolvedValue(existing);
+
+    await expect(service().attachRun('run-1', 'acc-1')).resolves.toBe(existing);
+    expect(mocks.attachToAcceptance).not.toHaveBeenCalled();
   });
 
   it.each(['delivered', 'errored'])('accepts a settled (%s) delivery', async (status) => {

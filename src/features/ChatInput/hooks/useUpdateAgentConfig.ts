@@ -25,8 +25,11 @@ export const useUpdateAgentConfig = () => {
   );
 
   const updateAgentChatConfig = useCallback(
-    (config: Partial<LobeAgentChatConfig>) => {
-      return updateAgentChatConfigById(agentId, config);
+    (
+      config: Partial<LobeAgentChatConfig>,
+      options?: Parameters<typeof updateAgentChatConfigById>[2],
+    ) => {
+      return updateAgentChatConfigById(agentId, config, options);
     },
     [agentId, updateAgentChatConfigById],
   );

@@ -63,6 +63,8 @@
   "notSupportGuide.features.multiProviders.desc": "Supporta più fornitori di generazione immagini AI, inclusi OpenAI gpt-image-1, Google Imagen, FAL.ai e altri, offrendo un'ampia selezione di modelli.",
   "notSupportGuide.features.multiProviders.title": "Supporto multi-fornitore",
   "notSupportGuide.title": "La modalità di distribuzione attuale non supporta la generazione di immagini AI",
+  "notice.modelRemoved": "Il modello attuale non è più disponibile da {{name}}. Si prega di passare a un modello disponibile.",
+  "notice.providerDisabled": "Il provider {{name}} per il modello attuale è disabilitato. Si prega di abilitarlo o passare a un modello disponibile.",
   "topic.createNew": "Crea Nuovo Argomento",
   "topic.createdBy": "Creato da {{name}}",
   "topic.deleteConfirm": "Elimina argomento di generazione",

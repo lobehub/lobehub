@@ -1,10 +1,14 @@
 # agent-browser CLI Reference
 
-Generic reference for the `agent-browser` CLI — automate Chromium-based apps (Electron, Chrome, web) via Chrome DevTools Protocol. LobeHub-specific patterns live in [../ui/electron.md](../ui/electron.md) and [../ui/web.md](../ui/web.md); authentication recipes live in [auth.md](./auth.md).
+Generic reference for the `agent-browser` CLI — automate Chromium-based apps
+(Electron, Chrome, web) via Chrome DevTools Protocol. Surface-specific patterns
+live in [../surfaces/web.md](../surfaces/web.md) and
+[../surfaces/electron.md](../surfaces/electron.md); project auth recipes live in
+`.agents/acceptance/PROJECT.md`.
 
-Use `agent-browser` to automate Chromium-based apps via Chrome DevTools Protocol.
-
-Install via `npm i -g agent-browser`, `brew install agent-browser`, or `cargo install agent-browser`. Run `agent-browser install` to download Chrome. Run `agent-browser upgrade` to update.
+Install via `npm i -g agent-browser`, `brew install agent-browser`, or
+`cargo install agent-browser`. Run `agent-browser install` to download Chrome. Run
+`agent-browser upgrade` to update.
 
 ## Core Workflow
 
@@ -34,10 +38,11 @@ When a UI verification should report user-side interaction cost, run
 
 ```bash
 TRACE="$DIR/interaction-trace.jsonl"
+SESSION=your-session # from PROJECT.md; $SKILL_DIR = the skill's install dir
 
-./.agents/skills/agent-testing/scripts/agent-browser-klm.mjs \
+"$SKILL_DIR/scripts/agent-browser-klm.mjs" \
   --klm-trace "$TRACE" --klm-phase settings --klm-check case-1 \
-  --session lobehub-dev click @e4
+  --session "$SESSION" click @e4
 ```
 
 The wrapper forwards the real command to `agent-browser` and appends one JSONL
@@ -50,7 +55,7 @@ Mental effort is intentionally not guessed from DOM shape. After the first
 meaningful page view, add an explicit agent estimate:
 
 ```bash
-./.agents/skills/agent-testing/scripts/agent-browser-klm.mjs mental \
+"$SKILL_DIR/scripts/agent-browser-klm.mjs" mental \
   --klm-trace "$TRACE" --klm-phase first-view --m 2 --score 3 \
   --confidence 0.75 --reason "Need to understand current page state and choose the verify path"
 ```
@@ -58,12 +63,12 @@ meaningful page view, add an explicit agent estimate:
 Before publish, summarize the trace into the structured report:
 
 ```bash
-./.agents/skills/agent-testing/scripts/agent-browser-klm-analyze.mjs \
+"$SKILL_DIR/scripts/agent-browser-klm-analyze.mjs" \
   --trace "$TRACE" --result "$DIR/result.json" --write
 ```
 
-This populates `result.json.interactionCost` with the `goms-klm@lobe-v1`
-summary. The raw trace stays in the local report directory for audit/debug.
+This populates `result.json.interactionCost` with the `goms-klm@lobe-v1` summary.
+The raw trace stays in the local report directory for audit/debug.
 
 ## Command Chaining
 
@@ -72,7 +77,8 @@ summary. The raw trace stays in the local report directory for audit/debug.
 agent-browser open https://example.com && agent-browser wait --load networkidle && agent-browser snapshot -i
 ```
 
-Use `&&` when you don't need to read intermediate output. Run commands separately when you need to parse output first (e.g., snapshot to discover refs, then interact).
+Use `&&` when you don't need to read intermediate output. Run commands separately
+when you need to parse output first (e.g. snapshot to discover refs, then interact).
 
 ## Essential Commands
 
@@ -130,6 +136,7 @@ agent-browser network har stop ./capture.har   # Stop and save HAR file
 agent-browser set viewport 1920 1080          # Set viewport size (default: 1280x720)
 agent-browser set viewport 1920 1080 2        # 2x retina
 agent-browser set device "iPhone 14"          # Emulate device (viewport + user agent)
+agent-browser set offline on|off              # Toggle offline (under `set`, not a top-level cmd)
 
 # Capture
 agent-browser screenshot              # Screenshot to temp dir
@@ -137,27 +144,10 @@ agent-browser screenshot --full       # Full page screenshot
 agent-browser screenshot --annotate   # Annotated screenshot with numbered element labels
 agent-browser pdf output.pdf          # Save as PDF
 
-# Clipboard
-agent-browser clipboard read          # Read text from clipboard
-agent-browser clipboard write "text"  # Write text to clipboard
-agent-browser clipboard copy          # Copy current selection
-agent-browser clipboard paste         # Paste from clipboard
-
-# Dialogs (alert, confirm, prompt, beforeunload)
-agent-browser dialog accept           # Accept dialog
-agent-browser dialog accept "input"   # Accept prompt dialog with text
-agent-browser dialog dismiss          # Dismiss/cancel dialog
-agent-browser dialog status           # Check if dialog is open
-
 # Diff (compare page states)
-agent-browser diff snapshot                        # Compare current vs last snapshot
+agent-browser diff snapshot                          # Compare current vs last snapshot
 agent-browser diff screenshot --baseline before.png  # Visual pixel diff
-agent-browser diff url <url1> <url2>               # Compare two pages
-
-# Streaming
-agent-browser stream enable           # Start WebSocket streaming
-agent-browser stream status           # Inspect streaming state
-agent-browser stream disable          # Stop streaming
+agent-browser diff url <url1> <url2>                 # Compare two pages
 ```
 
 ## Batch Execution
@@ -191,9 +181,10 @@ agent-browser state save auth.json
 agent-browser state load auth.json
 ```
 
-### LobeHub dev server — inject better-auth cookie
-
-`agent-browser --headed` on macOS can create an off-screen Chromium window, blocking manual login. For a local LobeHub dev server (e.g. `localhost:3010`), copy the `better-auth.session_token` cookie out of a **Network request** in the user's own Chrome DevTools and load it via `state load`. See [auth.md](./auth.md) for the full recipe.
+For a local dev server where a headed login is awkward, copy the session cookie out
+of a **Network request** in your own browser's DevTools and load it via
+`state load`. The exact cookie name and origin for the project under test come from
+`PROJECT.md` §3.
 
 ## Semantic Locators (Alternative to Refs)
 
@@ -226,17 +217,9 @@ agent-browser eval -b "$(echo -n 'document.title' | base64)"
 
 ## Ref Lifecycle
 
-Refs (`@e1`, `@e2`, etc.) are invalidated when the page changes. Always re-snapshot after clicking links/buttons that navigate, form submissions, or dynamic content loading.
-
-## Annotated Screenshots (Vision Mode)
-
-```bash
-agent-browser screenshot --annotate
-# Output includes the image path and a legend:
-#   [1] @e1 button "Submit"
-#   [2] @e2 link "Home"
-agent-browser click @e2 # Click using ref from annotated screenshot
-```
+Refs (`@e1`, `@e2`, etc.) are invalidated when the page changes. Always re-snapshot
+after clicking links/buttons that navigate, form submissions, or dynamic content
+loading.
 
 ## Parallel Sessions
 
@@ -246,50 +229,48 @@ agent-browser --session site2 open https://site-b.com
 agent-browser session list
 ```
 
-## Connect to Existing Chrome
+Each session is a separate daemon socket, so a wedge in one session is scoped to
+that session, not the whole tool. Use distinct session names per target when driving
+more than one page.
+
+## Connect to Existing Chrome / Electron
 
 ```bash
 agent-browser --auto-connect snapshot # Auto-discover running Chrome
-agent-browser --cdp 9222 snapshot     # Explicit CDP port
-```
-
-## iOS Simulator (Mobile Safari)
-
-```bash
-agent-browser device list
-agent-browser -p ios --device "iPhone 16 Pro" open https://example.com
-agent-browser -p ios snapshot -i
-agent-browser -p ios tap @e1
-agent-browser -p ios swipe up
-agent-browser -p ios screenshot mobile.png
-agent-browser -p ios close
-```
-
-## Observability Dashboard
-
-```bash
-agent-browser dashboard install
-agent-browser dashboard start # Background server on port 4848
-agent-browser dashboard stop
-```
-
-## Cloud Providers
-
-Use `-p <provider>` to run against cloud browsers: `agentcore`, `browserbase`, `browserless`, `browseruse`, `kernel`.
-
-## Browser Engine Selection
-
-```bash
-agent-browser --engine lightpanda open example.com # 10x faster, 10x less memory
+agent-browser --cdp 9222 snapshot     # Explicit CDP port (Electron dev, remote-debugging Chrome)
 ```
 
 ## Gotchas
 
-- **Daemon can get stuck** — if commands hang, `agent-browser close --all` or `pkill -f agent-browser` to reset
-- **HMR invalidates everything** — after code changes, refs break. Re-snapshot or restart
-- **`snapshot -i` doesn't find contenteditable** — use `snapshot -i -C` for rich text editors
-- **`fill` doesn't work on contenteditable** — use `type` for chat inputs
-- **Screenshots go to `~/.agent-browser/tmp/screenshots/`** — read them with the `Read` tool
-- **Dialogs block all commands** — if commands time out, check `agent-browser dialog status`
-- **Default timeout is 25s** — override with `AGENT_BROWSER_DEFAULT_TIMEOUT` (ms) or use explicit waits
-- **Shell quoting corrupts eval** — use `eval --stdin <<'EVALEOF'` for complex JS
+- **Daemon can get stuck** — if commands hang, `agent-browser close --all` or
+  `pkill -f agent-browser` to reset. A screenshot RPC that is interrupted can leave
+  the session's socket half-consumed, after which every later `screenshot` fails
+  (`CDP response channel closed` / `Resource temporarily unavailable`) while
+  `eval` / `get url` keep working — reset with `close --all`, or bypass the daemon
+  with `scripts/cdp-screenshot.sh` (raw CDP).
+- **HMR invalidates everything** — after code changes, refs break. Re-snapshot or
+  restart.
+- **`snapshot -i` doesn't find contenteditable** — use `snapshot -i -C` for rich
+  text editors.
+- **`fill` doesn't work on contenteditable** — use `type` for rich-text inputs.
+- **Screenshots go to `~/.agent-browser/tmp/screenshots/`** unless you pass a path —
+  a relative path saves to the caller's cwd; pass an absolute path in longer scripts
+  so a lost cwd doesn't misplace the file. Read them with the `Read` tool.
+- **`network requests` under-reports** — it is not ground truth for "did the request
+  happen". To judge whether a fault landed, wrap `window.fetch` and record each
+  request's own outcome (see probe-mock-patterns).
+- **`set offline` trips Chrome's own offline interstitial**, not the app's error
+  state — its "Reconnect" copy also false-matches error-copy greps. Use it to break
+  connectivity, not to assert an app-level error.
+- **`wait --load networkidle` HANGS during a retry loop** (the network never idles)
+  and can blow the command timeout — use a fixed `wait <ms>` when a fetch is stuck
+  retrying. (macOS has no `timeout(1)` to bound it.)
+- **Dialogs block all commands** — if commands time out, check
+  `agent-browser dialog status`.
+- **Default timeout is 25s** — override with `AGENT_BROWSER_DEFAULT_TIMEOUT` (ms) or
+  use explicit waits.
+- **Shell quoting corrupts eval** — use `eval --stdin <<'EVALEOF'` for complex JS.
+- **A blank page at `about:blank` with a 1280px viewport usually means the previous
+  `open` failed** (exited non-zero without navigating). The session still answers
+  every later probe — against the fresh page it was born with. Read the `open` exit
+  code and stderr rather than assuming the page went blank.

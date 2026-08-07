@@ -1,11 +1,16 @@
-import { VerifySkill } from '@lobechat/builtin-skills';
+import { AcceptanceSkill } from '@lobechat/builtin-skills';
 import {
   normalizeVerifySurface,
   verifyRunScenarios,
   verifySurfaces,
   verifyVisibilities,
 } from '@lobechat/const/verify';
-import type { VerifyCheckItem, VerifyRunContext, VerifyRunScenario } from '@lobechat/types';
+import type {
+  VerifyCheckItem,
+  VerifyCheckResultMetadata,
+  VerifyRunContext,
+  VerifyRunScenario,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -29,6 +34,7 @@ import {
   verifyReports,
   verifyRuns,
 } from '@/database/schemas/verify';
+import { isUuid } from '@/database/utils/uuid';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import {
@@ -45,13 +51,17 @@ import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManag
 
 /**
  * Skills that `verify.getSkillBundle` will materialize to a builder's disk via
- * `lh verify init`. Keyed by identifier; add future pullable skills here. The
- * portable verify skill lives in @lobechat/builtin-skills but is intentionally
+ * `lh acceptance init`. Keyed by identifier; add future pullable skills here. The
+ * portable acceptance skill lives in @lobechat/builtin-skills but is intentionally
  * NOT in its `builtinSkills` runtime array (kept out of the homogeneous agent
  * runtime / tool picker), so it is referenced directly here.
+ *
+ * The legacy `verify` identifier is kept as an alias so cached callers passing
+ * `--skill verify` still resolve during the deprecation window.
  */
-const PULLABLE_SKILLS: Record<string, typeof VerifySkill> = {
-  [VerifySkill.identifier]: VerifySkill,
+const PULLABLE_SKILLS: Record<string, typeof AcceptanceSkill> = {
+  [AcceptanceSkill.identifier]: AcceptanceSkill,
+  verify: AcceptanceSkill,
 };
 
 const verifierTypeSchema = z.enum(['program', 'agent', 'llm']);
@@ -74,6 +84,7 @@ const evidenceTypeSchema = z.enum([
   'gif',
   'video',
   'text',
+  'markdown',
   'dom_snapshot',
   'transcript',
 ]);
@@ -335,6 +346,10 @@ export const verifyRouter = router({
       assertWorkspaceRowManageable(ctx, criterion.userId, 'verify criterion');
       return ctx.criterionModel.delete(input.id);
     }),
+
+  forkRubricCriteria: verifyWriteProcedure
+    .input(z.object({ ids: z.array(z.string()) }))
+    .mutation(async ({ ctx, input }) => ctx.criterionModel.forkRubricCriteria(input.ids)),
 
   listCriteria: verifyProcedure.query(async ({ ctx }) => ctx.criterionModel.query()),
 
@@ -744,6 +759,7 @@ export const verifyRouter = router({
           checkItemIndex: z.number().optional(),
           checkItemTitle: z.string().optional(),
           confidence: z.number().min(0).max(1).optional(),
+          metadata: z.unknown().nullish(),
           required: z.boolean().optional(),
           status: checkStatusSchema.optional(),
           // `.nullish()` (not `.optional()`) so a re-ingest can pass an explicit
@@ -776,6 +792,7 @@ export const verifyRouter = router({
         checkItemTitle: input.checkItemTitle,
         completedAt: new Date(),
         confidence: input.confidence,
+        metadata: input.metadata as VerifyCheckResultMetadata | null | undefined,
         required: input.required ?? true,
         // Prefer an explicit status; else derive from the verdict (the refine
         // guarantees at least one is present).
@@ -1051,6 +1068,10 @@ export const verifyRouter = router({
   getReportBundle: publicVerifyReportProcedure
     .input(verifyRunIdInputSchema)
     .query(async ({ ctx, input }) => {
+      // Public entry fed by shared links: a chat autolinker can glue trailing
+      // CJK punctuation onto the URL, so a malformed uuid must read as absent
+      // instead of aborting in Postgres (22P02 → 500).
+      if (!isUuid(input.verifyRunId)) return null;
       const found = await ctx.serverDB.query.verifyRuns.findFirst({
         where: eq(verifyRuns.id, input.verifyRunId),
       });

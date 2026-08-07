@@ -1,5 +1,5 @@
 import type { HeterogeneousAgentClientConfig } from '@lobechat/heterogeneous-agents/client';
-import { Amp, ClaudeCode, Codex } from '@lobehub/icons';
+import { Amp, ClaudeCode, Codex, OpenCode, Pi, Qoder } from '@lobehub/icons';
 import { createElement } from 'react';
 
 import type { RecommendedAction } from './types';
@@ -8,6 +8,9 @@ const avatarIcons = {
   'amp': Amp.Avatar,
   'claude-code': ClaudeCode.Avatar,
   'codex': Codex.Avatar,
+  'opencode': OpenCode.Avatar,
+  'pi': Pi.Avatar,
+  'qoder': Qoder.Avatar,
 } as const satisfies Record<HeterogeneousAgentClientConfig['type'], unknown>;
 
 /**

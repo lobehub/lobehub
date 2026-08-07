@@ -4,7 +4,9 @@ import pc from 'picocolors';
 import { getTrpcClient } from '../api/client';
 import { outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
-import { parseSubjectRef } from './verify';
+import { attachAcceptanceRunCommands } from './acceptanceRun';
+import type { ReviewAnnotationRegion } from './verifyHelpers';
+import { formatAnnotationRegion, parseSubjectRef } from './verifyHelpers';
 
 /**
  * Resolve an acceptance from either its uuid or a `type:id` subject reference —
@@ -45,14 +47,23 @@ const statusColor = (status: string): string => {
 const userGlyph = (userReview?: { action: string; stale: boolean } | null): string => {
   if (!userReview) return pc.dim('· pending');
   if (userReview.action === 'accept') return pc.green('✓ accepted');
+  if (userReview.action === 'ignore') return pc.dim('⊘ ignored');
   return userReview.stale ? pc.dim('· pending') : pc.red('✗ rejected');
 };
 
-export function registerAcceptanceCommands(verify: Command) {
-  const acceptance = verify
+/**
+ * The acceptance command set. Registered twice: as the first-class
+ * `lh acceptance` (the canonical spelling — the acceptance is the human-review
+ * loop's front door, not a verify implementation detail) and as the legacy
+ * `lh verify acceptance` alias existing docs/skills still reference.
+ */
+export function registerAcceptanceCommands(parent: Command, options?: { deprecated?: boolean }) {
+  const acceptance = parent
     .command('acceptance')
     .description(
-      'Manage subject-level delivery acceptances (the cross-round union of verify sessions)',
+      options?.deprecated
+        ? 'Deprecated alias — use `lh acceptance`'
+        : 'Delivery acceptances: the cross-round review loop (checks, feedback, decision)',
     );
 
   acceptance
@@ -165,6 +176,137 @@ export function registerAcceptanceCommands(verify: Command) {
     });
 
   acceptance
+    .command('feedback <idOrSubject>')
+    .description(
+      "The user's review feedback — check rejects (with region notes & attachments) plus group-scoped notes",
+    )
+    .option('--actionable', 'Only standing feedback the next repair round must act on')
+    .option('--json [fields]', 'Output JSON')
+    .action(
+      async (idOrSubject: string, options: { actionable?: boolean; json?: boolean | string }) => {
+        const id = await resolveAcceptanceId(idOrSubject);
+        const client = await getTrpcClient();
+        const bundle = await client.acceptance.getBundle.query({ id });
+
+        const currentRoundIndex = bundle.rounds.at(-1)?.run.roundIndex ?? 0;
+
+        interface FeedbackEntry {
+          actionable: boolean;
+          /**
+           * Kept whole. Dropping `evidenceId`/`rect` here used to leave the
+           * reader with a bare note and several plausible targets on the
+           * screenshot — the location is the actionable half of a region.
+           */
+          annotations?: (ReviewAnnotationRegion & { region?: string })[];
+          category?: string;
+          checkId?: string;
+          checkSeq?: number;
+          comment: string;
+          createdAt?: string;
+          fileIds?: string[];
+          kind: 'check' | 'group';
+          roundIndex: number;
+          title?: string;
+        }
+
+        // `evidenceId` is opaque on its own — resolve it to the artifact name the
+        // report used. An annotation can point at an older round's evidence, so
+        // the timeline is folded in alongside the check's current evidence.
+        interface EvidenceRow {
+          description?: string | null;
+          id?: string;
+        }
+        const evidenceLabels = new Map<string, string>();
+        for (const check of bundle.checks) {
+          const rows: EvidenceRow[] = [
+            ...(check.evidence ?? []),
+            ...(check.timeline ?? []).flatMap(
+              (entry: { evidence?: EvidenceRow[] }) => entry.evidence ?? [],
+            ),
+          ];
+          for (const row of rows) {
+            if (row?.id && row.description) evidenceLabels.set(row.id, row.description);
+          }
+        }
+
+        const entries: FeedbackEntry[] = [];
+        for (const check of bundle.checks) {
+          for (const review of check.reviews) {
+            if (review.action !== 'reject') continue;
+            // Standing = this reject is the check's latest verdict and no newer
+            // round has consumed it yet.
+            const standing = Boolean(
+              check.userReview &&
+              check.userReview.action === 'reject' &&
+              !check.userReview.stale &&
+              check.reviews.at(-1) === review,
+            );
+            entries.push({
+              actionable: standing,
+              annotations: review.annotations?.map((a: ReviewAnnotationRegion) => ({
+                ...a,
+                region: formatAnnotationRegion(a, evidenceLabels),
+              })),
+              checkId: check.id,
+              checkSeq: check.seq,
+              comment: review.comment ?? '',
+              createdAt: review.createdAt,
+              fileIds: review.fileIds,
+              kind: 'check',
+              roundIndex: review.roundIndex,
+              title: check.title,
+            });
+          }
+        }
+        for (const round of bundle.rounds) {
+          for (const entry of round.run.decisionDetail?.groupFeedback ?? []) {
+            const roundIndex = round.run.roundIndex ?? 0;
+            entries.push({
+              actionable: roundIndex >= currentRoundIndex,
+              category: entry.category,
+              comment: entry.comment,
+              createdAt: entry.createdAt,
+              fileIds: entry.fileIds,
+              kind: 'group',
+              roundIndex,
+            });
+          }
+        }
+        entries.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
+
+        const shown = options.actionable ? entries.filter((entry) => entry.actionable) : entries;
+
+        if (options.json !== undefined) {
+          outputJson(
+            { acceptanceId: id, currentRoundIndex, entries: shown },
+            typeof options.json === 'string' ? options.json : undefined,
+          );
+          return;
+        }
+
+        if (shown.length === 0) {
+          console.log(pc.dim(options.actionable ? 'No actionable feedback.' : 'No feedback yet.'));
+          return;
+        }
+        for (const entry of shown) {
+          const marker = entry.actionable ? pc.red('▶ actionable') : pc.dim('· addressed');
+          const label =
+            entry.kind === 'check'
+              ? `C${entry.checkSeq} ${truncate(entry.title ?? '', 60)}`
+              : `group · ${entry.category || 'overall'}`;
+          console.log(`${marker} ${label} ${pc.dim(`(r${entry.roundIndex})`)}`);
+          if (entry.comment) console.log(`    ${entry.comment}`);
+          for (const annotation of entry.annotations ?? []) {
+            if (annotation.comment) console.log(`    ${pc.dim('region:')} ${annotation.comment}`);
+            if (annotation.region) console.log(`      ${pc.dim(`└ ${annotation.region}`)}`);
+          }
+          if (entry.fileIds?.length)
+            console.log(`    ${pc.dim(`attachments: ${entry.fileIds.join(', ')}`)}`);
+        }
+      },
+    );
+
+  acceptance
     .command('accept <idOrSubject>')
     .description('Accept the delivery — the terminal user decision that closes the acceptance')
     .option('--comment <text>', 'Optional note recorded with the decision')
@@ -197,4 +339,9 @@ export function registerAcceptanceCommands(verify: Command) {
       }
       console.log(`${pc.red('✗')} Delivery rejected (${result.id}) — next round re-opens it`);
     });
+
+  // The canonical `lh acceptance init` + `lh acceptance run …` tree hangs off the
+  // first-class command only; the legacy `lh verify acceptance` alias stays a thin
+  // decision surface (its run commands keep their old `lh verify …` spellings).
+  if (!options?.deprecated) attachAcceptanceRunCommands(acceptance);
 }

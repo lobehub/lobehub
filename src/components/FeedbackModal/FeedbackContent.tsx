@@ -2,8 +2,8 @@
 
 import { BRANDING_EMAIL } from '@lobechat/business-const';
 import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, useModalContext } from '@lobehub/ui/base-ui';
-import { App, Form, Input, Upload } from 'antd';
+import { Button, toast, useModalContext } from '@lobehub/ui/base-ui';
+import { Form, Input, Upload } from 'antd';
 import { ImagePlus, Send } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
@@ -27,7 +27,7 @@ interface FormValues {
 
 const FeedbackContent = memo<FeedbackContentProps>(({ initialValues }) => {
   const { t } = useTranslation('common');
-  const { message } = App.useApp();
+
   const { close } = useModalContext();
   const [form] = Form.useForm<FormValues>();
 
@@ -42,7 +42,7 @@ const FeedbackContent = memo<FeedbackContentProps>(({ initialValues }) => {
     async (file: File) => {
       const MAX_SIZE = 5 * 1024 * 1024; // 5MB
       if (file.size > MAX_SIZE) {
-        message.error(t('feedback.errors.fileTooLarge'));
+        toast.error(t('feedback.errors.fileTooLarge'));
         return;
       }
 
@@ -51,16 +51,16 @@ const FeedbackContent = memo<FeedbackContentProps>(({ initialValues }) => {
         const result = await uploadWithProgress({ file });
         if (result?.url) {
           setScreenshotUrl(result.url);
-          message.success(t('feedback.screenshotUploaded'));
+          toast.success(t('feedback.screenshotUploaded'));
         }
       } catch (error) {
         console.error('[FeedbackModal] Screenshot upload failed:', error);
-        message.error(t('feedback.errors.uploadFailed'));
+        toast.error(t('feedback.errors.uploadFailed'));
       } finally {
         setUploadingScreenshot(false);
       }
     },
-    [message, t, uploadWithProgress],
+    [t, uploadWithProgress],
   );
 
   const handleRemoveScreenshot = useCallback(() => {
@@ -85,17 +85,17 @@ const FeedbackContent = memo<FeedbackContentProps>(({ initialValues }) => {
         title: values.title,
       });
 
-      message.success(t('feedback.success'));
+      toast.success(t('feedback.success'));
       form.resetFields();
       setScreenshotUrl(null);
       close();
     } catch (error: any) {
       console.error('[FeedbackModal] Submission failed:', error);
-      message.error(t('feedback.errors.submitFailed'));
+      toast.error(t('feedback.errors.submitFailed'));
     } finally {
       setLoading(false);
     }
-  }, [close, form, message, screenshotUrl, t, userEmail]);
+  }, [close, form, screenshotUrl, t, userEmail]);
 
   const handleCancel = useCallback(() => {
     form.resetFields();

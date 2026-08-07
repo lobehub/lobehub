@@ -36,6 +36,8 @@
  * - `tool_result` blocks are in `type: 'user'` events, not assistant events
  */
 
+import { getHeterogeneousAgentConfigOrThrow } from '../config';
+import type { HeteroErrorKind } from '../errors/specs';
 import { imagePlaceholder } from '../imageEcho';
 import type {
   AgentEventAdapter,
@@ -81,6 +83,20 @@ const CC_TODO_WRITE_TOOL_NAME = 'TodoWrite';
 const CC_TASK_CREATE_TOOL_NAME = 'TaskCreate';
 const CC_TASK_UPDATE_TOOL_NAME = 'TaskUpdate';
 const CC_TASK_LIST_TOOL_NAME = 'TaskList';
+const CC_WEB_SEARCH_TOOL_NAME = 'WebSearch';
+
+/**
+ * Qoder includes the structured WebSearch response beside the model-facing
+ * text block. Keep the persisted state bounded: the raw provider payload can
+ * contain extra fields (for example host logos) and is not safe to store as-is.
+ */
+const WEB_SEARCH_MAX_RESULTS = 8;
+const WEB_SEARCH_MAX_RESULT_CANDIDATES = 32;
+const WEB_SEARCH_MAX_QUERY_LENGTH = 512;
+const WEB_SEARCH_MAX_TITLE_LENGTH = 512;
+const WEB_SEARCH_MAX_LINK_LENGTH = 2048;
+const WEB_SEARCH_MAX_SNIPPET_LENGTH = 2048;
+const WEB_SEARCH_MAX_HOSTNAME_LENGTH = 255;
 
 /**
  * tool_result confirmation emitted by CC for a successful `TaskCreate`.
@@ -191,13 +207,31 @@ interface ClaudeCodeTaskEntry {
   subject: string;
 }
 
-const CLAUDE_CODE_CLI_INSTALL_DOCS_URL = 'https://docs.anthropic.com/en/docs/claude-code/setup';
+interface SynthesizedWebSearchResult {
+  hostname: string;
+  link: string;
+  snippet?: string;
+  title?: string;
+}
+
+interface SynthesizedWebSearchPluginState {
+  durationSeconds?: number;
+  query?: string;
+  results?: SynthesizedWebSearchResult[];
+}
+
+const CLAUDE_CODE_CLI_INSTALL_DOCS_URL =
+  getHeterogeneousAgentConfigOrThrow('claude-code').auth.docsUrl;
 
 const CLI_AUTH_REQUIRED_PATTERNS = [
   /failed to authenticate/i,
   /invalid authentication credentials/i,
   /authentication[_ ]error/i,
   /not authenticated/i,
+  // CC's phrasing when the resolved profile (e.g. an isolated CLAUDE_CONFIG_DIR)
+  // simply has no login at all, as opposed to a rejected credential.
+  /not logged in/i,
+  /please run \/login/i,
   /\bunauthorized\b/i,
   /\b401\b/,
 ] as const;
@@ -210,10 +244,32 @@ const CLI_AUTH_REQUIRED_PATTERNS = [
  * appears in Anthropic's transient server throttle, so leaning on it would
  * reintroduce the very misclassification this set exists to avoid.
  */
+/**
+ * Credit/balance exhaustion, e.g. `You've reached your Fable 5 limit. Run
+ * /usage-credits to continue or switch models with /model.` It renders the
+ * same guide as a plan window, but waiting for a reset never clears it.
+ */
+const CLI_CREDIT_LIMIT_PATTERNS = [
+  /you'?ve reached your .{0,40}\blimit\b/i,
+  /\/usage-credits\b/i,
+] as const;
+
 const CLI_USER_RATE_LIMIT_PATTERNS = [
   /you'?ve hit your limit/i,
+  // CC names the window in the wording it actually ships — `You've hit your
+  // session limit · resets 6:30pm (Asia/Shanghai)` and `You've hit your weekly
+  // limit · resets Jul 3 at 1pm`. Without these the bare `you've hit your
+  // limit` pattern misses every real message, leaving the 429 to fall through
+  // to the overloaded (retry) guide.
+  /you'?ve hit your \S+ limit/i,
+  ...CLI_CREDIT_LIMIT_PATTERNS,
   /usage limit reached/i,
   /\blimit reached\b/i,
+  // Gateways/proxies in front of the API localize the same quota rejection,
+  // e.g. `API Error: Request rejected (429) · [1234][已达到 5 小时使用上限，
+  // 2026-06-19 22:00:00 后可继续使用。…]`. English-only patterns classified
+  // these as a transient overload and told the user to just retry.
+  /使用上限/,
 ] as const;
 
 /**
@@ -229,12 +285,93 @@ const CLI_SERVER_THROTTLE_PATTERNS = [
   /server is temporarily limiting requests/i,
 ] as const;
 
+/**
+ * Transport-level failures: the connection dropped, stalled, or timed out
+ * before the run could finish. CC reports these as an `API Error:` line with
+ * no `api_error_status` at all, so neither the 429/529 check nor the
+ * overloaded wording claimed them and they fell through to the opaque generic
+ * card — with no retry affordance, even though retrying is exactly the right
+ * move. They share the transient/retry UX with a server overload, so they are
+ * classified as `overloaded` rather than earning a code the UI can't render.
+ */
+const CLI_NETWORK_ERROR_PATTERNS = [
+  /unable to connect to api/i,
+  /\beconnreset\b/i,
+  /\beconnrefused\b/i,
+  /\bconnectionrefused\b/i,
+  /\betimedout\b/i,
+  /\benotfound\b/i,
+  /connection closed mid-response/i,
+  /socket connection was closed/i,
+  /socket hang up/i,
+  /stream idle timeout/i,
+  /response stalled mid-stream/i,
+  /request timed out/i,
+] as const;
+
 const CLI_OVERLOADED_PATTERNS = [
   /overloaded_error/i,
   /\boverloaded\b/i,
-  /api error:\s*529\b/i,
+  // Any 5xx is a server-side condition with the same retry UX — the old
+  // 529-only pattern let `API Error: 500 Internal server error` (and the
+  // localized `API Error: 503 · [该模型当前访问量过大，请您稍后再试]`) fall
+  // through to the generic card.
+  /api error:\s*5\d\d\b/i,
   ...CLI_SERVER_THROTTLE_PATTERNS,
+  ...CLI_NETWORK_ERROR_PATTERNS,
 ] as const;
+
+/**
+ * CC's internal end-of-run diagnostic, e.g.
+ * `[ede_diagnostic] result_type=user last_content_type=n/a stop_reason=tool_use`.
+ * It rides in the result event's `errors` array on aborted runs. It is
+ * engineer-facing jargon, never a user-facing reason, so it must not become
+ * the error card's message — it belongs in the details pane.
+ */
+const CC_INTERNAL_DIAGNOSTIC_PATTERN = /^\[ede_diagnostic\]/i;
+
+/**
+ * Terminal reasons CC reports when a run was stopped rather than failed —
+ * a user pressing stop closes the SDK session / SIGINTs the tree, and CC
+ * winds down and exits **0**. The result event is still flagged `is_error`
+ * with no `result` text, so these used to surface the raw `[ede_diagnostic]`
+ * line as the failure message. They are by far the most common "error" in
+ * real traces, and none of them is a fault worth a red card's usual wording.
+ */
+const CLI_ABORTED_TERMINAL_REASONS = new Set(['aborted_streaming', 'aborted_tools']);
+
+/**
+ * The remaining long tail, each taken from real recorded traces. None of these
+ * has a dedicated status guide, so they ride the generic card — but they still
+ * earn a taxonomy `kind` so the failure is named in telemetry rather than
+ * pooled into the `agent_failed` catch-all.
+ */
+const CLI_TAIL_CLASSIFIERS: { kind: HeteroErrorKind; patterns: readonly RegExp[] }[] = [
+  {
+    // `No conversation found with session ID: <uuid>` — a stale `--resume` id.
+    // Arrives via the result event's `errors` array with turns=0 and no result
+    // text; the spawn layer recovers it, but the run still terminates here.
+    kind: 'resume_thread_not_found',
+    patterns: [/no conversation found with session id/i],
+  },
+  {
+    // `Claude Fable 5 is currently unavailable. Learn more: …` /
+    // `There's an issue with the selected model (claude-fable-5).`
+    kind: 'model_unavailable',
+    patterns: [/is currently unavailable/i, /issue with the selected model/i],
+  },
+  {
+    // `Failed to decode image: The image format Gif is not supported`
+    kind: 'unsupported_attachment',
+    patterns: [/failed to decode image/i, /image format \w+ is not supported/i],
+  },
+  {
+    // `API Error: 400 messages.6.content.2.server_tool_use.id: String should
+    // match pattern …` — a malformed request; retrying reproduces it exactly.
+    kind: 'invalid_request',
+    patterns: [/api error:\s*400\b/i, /string should match pattern/i],
+  },
+];
 
 /**
  * CC streams a synthetic assistant text turn when the underlying API call
@@ -310,6 +447,10 @@ const getCliResultErrors = (raw: any): string | undefined => {
   const text = raw.errors
     .map((entry: unknown) => getCliResultMessage(entry))
     .filter((entry?: string): entry is string => !!entry?.trim())
+    // Drop CC's internal end-of-run diagnostic: it is the ONLY `errors` entry
+    // on an aborted run, so letting it through made the error card read
+    // `[ede_diagnostic] result_type=user last_content_type=n/a …`.
+    .filter((entry: string) => !CC_INTERNAL_DIAGNOSTIC_PATTERN.test(entry.trim()))
     .join('\n');
 
   return text || undefined;
@@ -319,6 +460,95 @@ const asRecord = (value: unknown): Record<string, unknown> | undefined =>
   value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : undefined;
+
+const normalizeBoundedString = (value: unknown, maxLength: number): string | undefined => {
+  if (typeof value !== 'string') return;
+
+  const trimmed = value.trim();
+  if (!trimmed) return;
+
+  let normalized = trimmed.slice(0, maxLength);
+  const finalCodeUnit = normalized.charCodeAt(normalized.length - 1);
+  if (finalCodeUnit >= 0xd800 && finalCodeUnit <= 0xdbff) normalized = normalized.slice(0, -1);
+
+  return normalized || undefined;
+};
+
+const normalizeWebSearchLink = (
+  value: unknown,
+): Pick<SynthesizedWebSearchResult, 'hostname' | 'link'> | undefined => {
+  if (typeof value !== 'string') return;
+
+  const link = value.trim();
+  if (!link || link.length > WEB_SEARCH_MAX_LINK_LENGTH) return;
+
+  try {
+    const url = new URL(link);
+    if (
+      (url.protocol !== 'http:' && url.protocol !== 'https:') ||
+      !url.hostname ||
+      url.hostname.length > WEB_SEARCH_MAX_HOSTNAME_LENGTH
+    ) {
+      return;
+    }
+
+    return { hostname: url.hostname, link };
+  } catch {
+    return;
+  }
+};
+
+/**
+ * Normalize Qoder's top-level `tool_use_result` into the bounded plugin state
+ * consumed by the WebSearch card. This intentionally accepts only the known
+ * source fields instead of persisting the provider payload wholesale.
+ */
+const synthesizeWebSearchPluginState = (
+  toolUseResult: unknown,
+): SynthesizedWebSearchPluginState | undefined => {
+  const raw = asRecord(toolUseResult);
+  if (!raw) return;
+
+  const query = normalizeBoundedString(raw.query, WEB_SEARCH_MAX_QUERY_LENGTH);
+  const durationSeconds =
+    typeof raw.durationSeconds === 'number' &&
+    Number.isFinite(raw.durationSeconds) &&
+    raw.durationSeconds >= 0
+      ? raw.durationSeconds
+      : undefined;
+
+  const rawResults = Array.isArray(raw.results) ? raw.results : undefined;
+  const hasResults = rawResults !== undefined;
+  const results: SynthesizedWebSearchResult[] = [];
+  if (rawResults) {
+    for (const value of rawResults.slice(0, WEB_SEARCH_MAX_RESULT_CANDIDATES)) {
+      if (results.length >= WEB_SEARCH_MAX_RESULTS) break;
+
+      const result = asRecord(value);
+      if (!result) continue;
+
+      const normalizedLink = normalizeWebSearchLink(result.link);
+      if (!normalizedLink) continue;
+
+      const title = normalizeBoundedString(result.title, WEB_SEARCH_MAX_TITLE_LENGTH);
+      const snippet = normalizeBoundedString(result.snippet, WEB_SEARCH_MAX_SNIPPET_LENGTH);
+
+      results.push({
+        ...normalizedLink,
+        ...(snippet ? { snippet } : {}),
+        ...(title ? { title } : {}),
+      });
+    }
+  }
+
+  if (!query && durationSeconds === undefined && !hasResults) return;
+
+  return {
+    ...(durationSeconds === undefined ? {} : { durationSeconds }),
+    ...(query ? { query } : {}),
+    ...(hasResults ? { results } : {}),
+  };
+};
 
 const getPathValue = (raw: Record<string, unknown>, path: string[]): unknown => {
   let current: unknown = raw;
@@ -446,11 +676,68 @@ const getAuthRequiredTerminalError = (
     agentType: 'claude-code',
     clearEchoedContent: true,
     code: 'auth_required',
+    details: { kind: 'auth_required' satisfies HeteroErrorKind },
     docsUrl: CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
     error: rawMessage,
     message:
       'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
     stderr: rawMessage,
+  };
+};
+
+/**
+ * A run that was **stopped**, not one that failed — the single most common
+ * `is_error` result in real traces.
+ *
+ * CC flags a user stop `is_error` with `terminal_reason: 'aborted_streaming' |
+ * 'aborted_tools'`, an empty `result`, and only its internal `[ede_diagnostic]`
+ * line in `errors` — while exiting **0**. It is an outcome, not a fault, so it
+ * must not terminate as an `error`: that persists a red card, writes topic
+ * status `failed`, and frames the user's own stop as a crash.
+ *
+ * Instead it terminates as `agent_runtime_end` with `reason: 'interrupted'` —
+ * the reason the runtime already uses for a mid-stream cancel
+ * (`NON_COMPLETION_RUNTIME_END_REASONS`), which routes to a neutral `active`
+ * topic status with no unread badge and no completion notification, while
+ * still flushing whatever content the run produced before it was stopped.
+ *
+ * A stop that DID report a reason (a rate limit landing while winding down)
+ * is not this case — it belongs to the classifier that owns that reason.
+ */
+const isAbortedResult = (raw: any): boolean =>
+  CLI_ABORTED_TERMINAL_REASONS.has(raw?.terminal_reason) &&
+  !getCliResultMessage(raw?.result) &&
+  !getCliResultErrors(raw);
+
+const buildAbortedRuntimeEndData = (raw: any): Record<string, unknown> => ({
+  kind: 'aborted' satisfies HeteroErrorKind,
+  reason: 'interrupted',
+  ...(typeof raw.num_turns === 'number' ? { numTurns: raw.num_turns } : {}),
+  ...(typeof raw.subtype === 'string' ? { subtype: raw.subtype } : {}),
+  terminalReason: raw.terminal_reason,
+});
+
+/**
+ * Classify the long tail that has no dedicated guide card. The message is
+ * already self-explanatory, so it is surfaced verbatim; the value added here
+ * is the taxonomy `kind`, which keeps these out of the `agent_failed`
+ * catch-all whose volume drives what we carve out next.
+ */
+const getTailTerminalError = (result: unknown): HeterogeneousTerminalErrorData | undefined => {
+  const rawMessage = getCliResultMessage(result);
+  if (!rawMessage) return;
+
+  const entry = CLI_TAIL_CLASSIFIERS.find(({ patterns }) =>
+    patterns.some((pattern) => pattern.test(rawMessage)),
+  );
+  if (!entry) return;
+
+  return {
+    agentType: 'claude-code',
+    code: entry.kind,
+    details: { kind: entry.kind },
+    error: rawMessage,
+    message: rawMessage,
   };
 };
 
@@ -478,7 +765,13 @@ const buildFallbackTerminalError = (
     (subtype && CLI_ERROR_SUBTYPE_MESSAGES[subtype]) ||
     'Agent execution failed';
 
+  // `error_max_turns` is a named lifecycle outcome, not an unclassified
+  // failure; everything else that reaches here is the catch-all whose volume
+  // tells us which kind to carve out next.
+  const kind: HeteroErrorKind = subtype === 'error_max_turns' ? 'max_turns' : 'agent_failed';
+
   const details: Record<string, unknown> = {
+    kind,
     ...(raw.api_error_status == null ? {} : { apiErrorStatus: raw.api_error_status }),
     ...(typeof raw.duration_ms === 'number' ? { durationMs: raw.duration_ms } : {}),
     ...(streamedApiError && streamedApiError !== message ? { lastApiError: streamedApiError } : {}),
@@ -521,20 +814,38 @@ const getOverloadedTerminalError = (
   // A real user-quota limit is the rate-limit classifier's job — never steal
   // it here, even if it happened to ride in on a 429/529.
   if (isUserQuotaRateLimit(rateLimitInfo)) return;
+  // Nor an authentication failure that merely *mentions* a transport symptom,
+  // e.g. `Failed to authenticate. API Error: 401 The socket connection was
+  // closed unexpectedly.` — retrying that forever never signs the user in.
+  if (apiErrorStatus === 401 || apiErrorStatus === 403) return;
+  if (rawMessage && CLI_AUTH_REQUIRED_PATTERNS.some((pattern) => pattern.test(rawMessage))) return;
 
   const looksOverloaded =
-    // Both 529 (upstream overloaded) and a 429 with no quota signal (transient
-    // server throttle) are momentary server-side conditions — same retry UX.
-    apiErrorStatus === 529 ||
+    // Any 5xx (upstream overloaded / internal error) and a 429 with no quota
+    // signal (transient server throttle) are momentary server-side conditions
+    // — same retry UX.
+    (typeof apiErrorStatus === 'number' && apiErrorStatus >= 500 && apiErrorStatus < 600) ||
     apiErrorStatus === 429 ||
     (!!rawMessage && CLI_OVERLOADED_PATTERNS.some((pattern) => pattern.test(rawMessage)));
 
   if (!looksOverloaded || !rawMessage) return;
 
+  // Same `overloaded` guide code (and therefore the same auto-retry contract),
+  // but recorded as three distinct taxonomy kinds so telemetry can tell a bad
+  // local network apart from a genuinely busy provider.
+  const kind: HeteroErrorKind = CLI_NETWORK_ERROR_PATTERNS.some((pattern) =>
+    pattern.test(rawMessage),
+  )
+    ? 'network_drop'
+    : CLI_SERVER_THROTTLE_PATTERNS.some((pattern) => pattern.test(rawMessage))
+      ? 'server_throttle'
+      : 'server_overloaded';
+
   return {
     agentType: 'claude-code',
     clearEchoedContent: true,
     code: 'overloaded',
+    details: { kind },
     error: rawMessage,
     message: rawMessage,
     stderr: rawMessage,
@@ -563,10 +874,19 @@ const getRateLimitTerminalError = (
 
   if (!looksLikeUserLimit || !rawMessage) return;
 
+  // A credit/balance limit shares the `rate_limit` guide but not its remedy:
+  // waiting for a reset never clears it, so it is a distinct taxonomy kind.
+  const kind: HeteroErrorKind = CLI_CREDIT_LIMIT_PATTERNS.some((pattern) =>
+    pattern.test(rawMessage),
+  )
+    ? 'credit_limit'
+    : 'usage_limit';
+
   return {
     agentType: 'claude-code',
     clearEchoedContent: true,
     code: 'rate_limit',
+    details: { kind },
     error: rawMessage,
     message: rawMessage,
     rateLimitInfo,
@@ -1464,6 +1784,13 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     const content = raw.message?.content;
     if (!Array.isArray(content)) return [];
 
+    // `tool_use_result` is event-level and carries no tool id. Associate it
+    // only when the event has exactly one tool_result block; otherwise it is
+    // impossible to attach the provider metadata without risking cross-tool
+    // state corruption.
+    const toolResultCount = content.filter((block) => block?.type === 'tool_result').length;
+    const structuredToolUseResult = toolResultCount === 1 ? raw.tool_use_result : undefined;
+
     const subagentCtx: SubagentEventContext | undefined = raw.parent_tool_use_id
       ? { parentToolCallId: raw.parent_tool_use_id }
       : undefined;
@@ -1547,11 +1874,20 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
           ? this.applyTaskToolResult(toolCallId, !!block.is_error, resultContent)
           : undefined;
 
-      // Images are mutually exclusive with Todo/Task results in practice (a
-      // `Read` is neither), but merge defensively so a future producer that
-      // carries both doesn't clobber one. `data` is still raw base64 here; the
-      // runtime pipeline uploads and rewrites these entries before persistence.
-      let pluginState: Record<string, any> | undefined = todoWritePluginState ?? taskPluginState;
+      const webSearchPluginState =
+        !block.is_error && this.toolPayloadById.get(toolCallId)?.apiName === CC_WEB_SEARCH_TOOL_NAME
+          ? synthesizeWebSearchPluginState(structuredToolUseResult)
+          : undefined;
+
+      // These result types are mutually exclusive in practice, but merge
+      // defensively so a future producer carrying multiple structured fields
+      // cannot clobber an existing state fragment. Image `data` is still raw
+      // base64 here; the runtime pipeline uploads and rewrites it before
+      // persistence.
+      let pluginState: Record<string, any> | undefined;
+      for (const state of [todoWritePluginState, taskPluginState, webSearchPluginState]) {
+        if (state) pluginState = { ...pluginState, ...state };
+      }
       if (images.length > 0) {
         pluginState = { ...pluginState, images };
       }
@@ -1704,21 +2040,28 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     const classifiableResult =
       getCliResultMessage(raw.result) || getCliResultErrors(raw) || this.lastApiErrorText;
     const rateLimitError = getRateLimitTerminalError(classifiableResult, this.pendingRateLimitInfo);
-    const finalEvent: HeterogeneousAgentEvent | undefined = raw.is_error
-      ? this.makeEvent(
-          'error',
-          rateLimitError ||
-            getOverloadedTerminalError(
-              classifiableResult,
-              raw.api_error_status,
-              this.pendingRateLimitInfo,
-            ) ||
-            getAuthRequiredTerminalError(classifiableResult) ||
-            buildFallbackTerminalError(raw, this.lastApiErrorText),
-        )
-      : this.options.runtimeEndStrategy === 'on-result'
-        ? this.makeEvent('agent_runtime_end', {})
-        : undefined;
+    // A stop is resolved before any classifier: it reports no reason of its
+    // own, so every one of them would either miss it or mislabel it. It then
+    // follows the SAME runtime-end strategy as a clean finish, because it is
+    // now a non-error terminal like one.
+    const aborted = isAbortedResult(raw);
+    const finalEvent: HeterogeneousAgentEvent | undefined =
+      raw.is_error && !aborted
+        ? this.makeEvent(
+            'error',
+            rateLimitError ||
+              getOverloadedTerminalError(
+                classifiableResult,
+                raw.api_error_status,
+                this.pendingRateLimitInfo,
+              ) ||
+              getAuthRequiredTerminalError(classifiableResult) ||
+              getTailTerminalError(classifiableResult) ||
+              buildFallbackTerminalError(raw, this.lastApiErrorText),
+          )
+        : this.options.runtimeEndStrategy === 'on-result'
+          ? this.makeEvent('agent_runtime_end', aborted ? buildAbortedRuntimeEndData(raw) : {})
+          : undefined;
 
     this.pendingRateLimitInfo = undefined;
     this.lastApiErrorText = undefined;

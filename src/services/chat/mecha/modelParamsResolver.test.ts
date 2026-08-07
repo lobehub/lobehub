@@ -692,6 +692,29 @@ describe('thinking configuration', () => {
       expect(result.thinkingLevel).toBe('medium');
     });
 
+    it.each(['minimal', 'low', 'medium', 'high'] as const)(
+      'should forward the %s thinkingLevel for Gemini 3.6 Flash',
+      (thinkingLevel) => {
+        const result = resolveModelExtendParams({
+          chatConfig: { thinkingLevel } as any,
+          model: 'gemini-3.6-flash',
+          provider: 'google',
+        });
+
+        expect(result.thinkingLevel).toBe(thinkingLevel);
+      },
+    );
+
+    it('should use the Gemini 3.6 Flash default thinkingLevel when not configured', () => {
+      const result = resolveModelExtendParams({
+        chatConfig: {} as any,
+        model: 'gemini-3.6-flash',
+        provider: 'google',
+      });
+
+      expect(result.thinkingLevel).toBe('medium');
+    });
+
     it('should reuse thinkingLevel for Gemini 3.1 Flash-Lite models', () => {
       const result = resolveModelExtendParams({
         chatConfig: {
@@ -704,10 +727,32 @@ describe('thinking configuration', () => {
       expect(result.thinkingLevel).toBe('medium');
     });
 
+    it('should reuse thinkingLevel for Gemini 3.5 Flash-Lite', () => {
+      const result = resolveModelExtendParams({
+        chatConfig: {
+          thinkingLevel: 'high',
+        } as any,
+        model: 'gemini-3.5-flash-lite',
+        provider: 'google',
+      });
+
+      expect(result.thinkingLevel).toBe('high');
+    });
+
     it('should use the Flash-Lite default thinkingLevel when not configured', () => {
       const result = resolveModelExtendParams({
         chatConfig: {} as any,
         model: 'gemini-3.1-flash-lite-preview',
+        provider: 'google',
+      });
+
+      expect(result.thinkingLevel).toBe('minimal');
+    });
+
+    it('should use the Gemini 3.5 Flash-Lite default thinkingLevel when not configured', () => {
+      const result = resolveModelExtendParams({
+        chatConfig: {} as any,
+        model: 'gemini-3.5-flash-lite',
         provider: 'google',
       });
 

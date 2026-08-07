@@ -298,6 +298,26 @@ describe('bot messengers', () => {
   });
 
   describe('links set-agent', () => {
+    it('accepts WeChat as a link-management platform', async () => {
+      mockTrpcClient.messenger.setActiveAgent.mutate.mockResolvedValueOnce({ success: true });
+      await createProgram().parseAsync([
+        'node',
+        'test',
+        'bot',
+        'messengers',
+        'links',
+        'set-agent',
+        'wechat',
+        '--agent',
+        'agent_wechat',
+      ]);
+      expect(mockTrpcClient.messenger.setActiveAgent.mutate).toHaveBeenCalledWith({
+        agentId: 'agent_wechat',
+        platform: 'wechat',
+        tenantId: undefined,
+      });
+    });
+
     it('passes agentId through to setActiveAgent', async () => {
       mockTrpcClient.messenger.setActiveAgent.mutate.mockResolvedValueOnce({ success: true });
       await createProgram().parseAsync([

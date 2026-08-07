@@ -2,10 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { electronDevtoolsService } from '../devtools';
 
+const getAppCpuUsageMock = vi.fn();
 const openDevtoolsMock = vi.fn();
 vi.mock('@/utils/electron/ipc', () => ({
   ensureElectronIpc: vi.fn(() => ({
-    devtools: { openDevtools: openDevtoolsMock },
+    devtools: { getAppCpuUsage: getAppCpuUsageMock, openDevtools: openDevtoolsMock },
   })),
 }));
 const { ensureElectronIpc } = await import('@/utils/electron/ipc');
@@ -33,6 +34,15 @@ describe('DevtoolsService', () => {
       openDevtoolsMock.mockRejectedValueOnce(error);
 
       await expect(electronDevtoolsService.openDevtools()).rejects.toThrow(error);
+    });
+  });
+
+  describe('getAppCpuUsage', () => {
+    it('should return the cpu usage reported over ipc', async () => {
+      getAppCpuUsageMock.mockResolvedValueOnce({ percent: 12.5 });
+
+      await expect(electronDevtoolsService.getAppCpuUsage()).resolves.toEqual({ percent: 12.5 });
+      expect(getAppCpuUsageMock).toHaveBeenCalled();
     });
   });
 });

@@ -1,7 +1,7 @@
 import { ActionIcon, Flexbox, Icon, Input } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, toast } from '@lobehub/ui/base-ui';
 import { type FormInstance } from 'antd';
-import { App, Form } from 'antd';
+import { Form } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { LucidePlus, LucideTrash } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
@@ -70,7 +70,7 @@ const formListToRecord = (list: KeyValueItem[]): Record<string, any> => {
 const KeyValueEditor = memo<KeyValueEditorProps>(({ initialValue = {}, onFinish, onCancel }) => {
   const { t } = useTranslation(['tool', 'common']);
   const [form] = Form.useForm();
-  const { message } = App.useApp();
+
   const formRef = useRef<FormInstance>(null);
 
   useEffect(() => {
@@ -87,7 +87,7 @@ const KeyValueEditor = memo<KeyValueEditorProps>(({ initialValue = {}, onFinish,
       await onFinish?.(record);
     } catch (errorInfo) {
       console.error('Validation Failed:', errorInfo);
-      message.error(t('updateArgs.formValidationFailed') || 'Please check the form for errors.');
+      toast.error(t('updateArgs.formValidationFailed') || 'Please check the form for errors.');
     }
     setUpdating(false);
   };

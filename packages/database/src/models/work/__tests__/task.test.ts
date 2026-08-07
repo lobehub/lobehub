@@ -707,7 +707,7 @@ describe('WorkModel · task', () => {
     });
 
     // Tool-driven deletion: the task row is removed first, then the dispatch
-    // layer drops the Work by its internal id (LOBE-11606).
+    // layer drops the Work by its internal id.
     await taskModel.delete(task.id);
     await workModel.deleteTaskWork({ taskId: task.id });
 

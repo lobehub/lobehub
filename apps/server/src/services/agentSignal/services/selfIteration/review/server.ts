@@ -653,8 +653,21 @@ export const createReviewRuntimePrimitives = (
       if (!result) throw new Error('Skill target not found');
 
       return {
+        agentDocumentId: result.bundle.agentDocumentId,
+        documentId: result.index.documentId,
+        ...(result.expectedCurrentDocumentUpdatedAt
+          ? { expectedCurrentDocumentUpdatedAt: result.expectedCurrentDocumentUpdatedAt }
+          : {}),
+        ...(result.preMutationHistoryId ? { historyId: result.preMutationHistoryId } : {}),
         resourceId: result.bundle.agentDocumentId,
         summary: `Refined managed skill ${result.name}.`,
+        target: {
+          agentDocumentId: result.bundle.agentDocumentId,
+          documentId: result.bundle.documentId,
+          id: result.bundle.agentDocumentId,
+          title: result.title,
+          type: 'skill' as const,
+        },
       };
     },
     supersedeSelfReviewProposal: async (rawInput) => {

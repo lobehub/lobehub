@@ -18,11 +18,13 @@ import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { ChunkModel } from '@/database/models/chunk';
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
+import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { KnowledgeRepo } from '@/database/repositories/knowledge';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
+import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { AsyncTaskStatus, AsyncTaskType, type IAsyncTaskError } from '@/types/asyncTask';
 import type { FileListItem, KnowledgeItemStatus } from '@/types/files';
@@ -148,6 +150,7 @@ const fileProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => 
       documentService: new DocumentService(ctx.serverDB, ctx.userId, wsId),
       fileModel: new FileModel(ctx.serverDB, ctx.userId, wsId),
       fileService: new FileService(ctx.serverDB, ctx.userId, wsId),
+      knowledgeBaseModel: new KnowledgeBaseModel(ctx.serverDB, ctx.userId, wsId),
       knowledgeRepo: new KnowledgeRepo(ctx.serverDB, ctx.userId, wsId),
     },
   });
@@ -196,15 +199,25 @@ export const fileRouter = router({
         }
       }
 
+      let knowledgeBaseVisibility: 'private' | 'public' | undefined;
+      if (ctx.workspaceId && input.knowledgeBaseId) {
+        const knowledgeBase = await ctx.knowledgeBaseModel.findById(input.knowledgeBaseId);
+        if (!knowledgeBase) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Knowledge base not found' });
+        }
+        knowledgeBaseVisibility = knowledgeBase.visibility;
+      }
+
       // Visibility precedence (workspace mode only — personal mode ignores the
       // column entirely):
-      //   1. Explicit caller value wins.
-      //   2. Otherwise inherit the parent document's visibility so a file
+      //   1. A library upload always uses the knowledge base visibility.
+      //   2. Otherwise an explicit caller value wins.
+      //   3. Otherwise inherit the parent document's visibility so a file
       //      uploaded inside a private folder stays private.
-      //   3. Otherwise default top-level uploads to 'private' so new content
+      //   4. Otherwise default top-level uploads to 'private' so new content
       //      starts in the creator's private space (mirrors the Pages spec).
       const resolvedVisibility: 'private' | 'public' | undefined = ctx.workspaceId
-        ? (input.visibility ?? parentVisibility ?? 'private')
+        ? (knowledgeBaseVisibility ?? input.visibility ?? parentVisibility ?? 'private')
         : undefined;
 
       let actualSize = input.size;
@@ -515,6 +528,22 @@ export const fileRouter = router({
       }
 
       if (documentIds.length > 0) {
+        // Per-document delete guard, mirroring `document.deleteDocuments` — a
+        // query-driven sweep must not delete shared docs the member can't delete.
+        if (ctx.workspaceId) {
+          await Promise.all(
+            documentIds.map((id) =>
+              assertCanPerformResourceAction({
+                action: 'delete',
+                db: ctx.serverDB,
+                resourceId: id,
+                resourceType: 'document',
+                userId: ctx.userId,
+                workspaceId: ctx.workspaceId!,
+              }),
+            ),
+          );
+        }
         await ctx.documentService.deleteDocuments(documentIds, { restrictToCreator });
       }
 
@@ -821,7 +850,17 @@ export const fileRouter = router({
             message: input.entityType === 'folder' ? 'Folder not found' : 'Document not found',
           });
         }
-        assertWorkspaceRowManageable(ctx, document.userId, 'document');
+        // Transfer stays creator-only, mirroring `document.transferDocument`.
+        if (ctx.workspaceId) {
+          await assertCanPerformResourceAction({
+            action: 'transfer',
+            db: ctx.serverDB,
+            resourceId: input.id,
+            resourceType: 'document',
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId,
+          });
+        }
         // The transfer rehomes the entire subtree — a non-owner member must
         // not move teammates' documents/files along with their own folder.
         if (isWorkspaceNonOwner(ctx) && (await ctx.documentModel.subtreeHasForeignRows(input.id))) {

@@ -12,6 +12,7 @@ import isEqual from 'fast-deep-equal';
 import { memo, useCallback, useMemo } from 'react';
 
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
+import { applyToolNameMaxLength } from '@/helpers/applyToolNameMaxLength';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
@@ -118,6 +119,9 @@ const useMentionOptions = () => {
   const toggleAgentPlugin = useAgentStore((s) => s.toggleAgentPlugin);
 
   const baseItems = useMemo<MentionListOption[]>(() => {
+    // Mention metadata carries generated tool names, so it has to honour the
+    // deployment's `TOOL_NAME_MAX_LENGTH` like the tools payload does.
+    applyToolNameMaxLength();
     const state = useToolStore.getState();
 
     return installedTools.map((tool) => {
@@ -182,6 +186,9 @@ const useMentionOptions = () => {
   );
 
   const mentionMarkdownWriter = useCallback((mention: any) => {
+    // These names are written into the system prompt — they must match the tool
+    // names the same deployment sends to the model.
+    applyToolNameMaxLength();
     const metadata = (mention?.metadata || {}) as MentionMetadata;
     const pluginId = metadata.pluginIdentifier || metadata.identifier;
     const state = useToolStore.getState();

@@ -197,6 +197,8 @@
   "pageList.workspaceTitle": "مساحة العمل",
   "portal.openInPageEditor": "تحرير في الصفحة",
   "preview.downloadFile": "تنزيل الملف",
+  "preview.raw": "خام",
+  "preview.render": "معاينة",
   "preview.unsupportedFileAndContact": "تنسيق هذا الملف غير مدعوم حاليًا للمعاينة عبر الإنترنت. إذا كان لديك طلب للمعاينة، لا تتردد في <1>الاتصال بنا</1>.",
   "resource": "المورد",
   "resourceList.batchCopyDescription": "انسخ الموارد المحددة إلى مساحة عمل أخرى.",
@@ -246,6 +248,7 @@
   "uploadDock.body.item.pending": "جارٍ التحضير للتحميل...",
   "uploadDock.body.item.processing": "جارٍ معالجة الملف...",
   "uploadDock.body.item.restTime": "المتبقي {{time}}",
+  "uploadDock.body.item.retry": "إعادة محاولة التحميل",
   "uploadDock.fileQueueInfo": "يتم تحميل أول {{count}} ملف، {{remaining}} في الانتظار",
   "uploadDock.header.cancelAll": "إلغاء الكل",
   "uploadDock.totalCount": "إجمالي {{count}} عنصر",
@@ -254,5 +257,13 @@
   "uploadDock.uploadStatus.pending": "بانتظار التحميل",
   "uploadDock.uploadStatus.processing": "جارٍ التحميل",
   "uploadDock.uploadStatus.success": "تم التحميل بنجاح",
-  "uploadDock.uploadStatus.uploading": "جارٍ التحميل"
+  "uploadDock.uploadStatus.uploading": "جارٍ التحميل",
+  "work.empty.desc": "الأعمال التي ينتجها وكلاؤك — المهام، المستندات، عناصر Linear وGitHub — ستُجمع هنا.",
+  "work.empty.title": "لا توجد أعمال بعد",
+  "work.group": "الأعمال",
+  "work.loadError": "حدث خطأ أثناء تحميل الأعمال.",
+  "work.loadErrorTitle": "تعذر تحميل الأعمال",
+  "work.loadMoreError": "فشل في تحميل المزيد من الأعمال.",
+  "work.retry": "إعادة المحاولة",
+  "work.topicGroup.other": "أخرى"
 }

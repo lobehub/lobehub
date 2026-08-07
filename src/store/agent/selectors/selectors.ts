@@ -9,6 +9,7 @@ import {
   isDesktop,
 } from '@lobechat/const';
 import {
+  agentDisplayName,
   type AgentMode,
   type KnowledgeItem,
   type LobeAgentConfig,
@@ -38,6 +39,13 @@ const currentAgentData = (s: AgentStoreState) =>
 
 const currentAgentTitle = (s: AgentStoreState) => currentAgentData(s)?.title;
 
+/**
+ * The label to show for the active agent: personal name first, role as the
+ * fallback. Use this for rendering; `currentAgentTitle` stays the raw role for
+ * anything that edits or reasons about it.
+ */
+const currentAgentDisplayName = (s: AgentStoreState) => agentDisplayName(currentAgentData(s));
+
 const getDefaultAvatarByAgentId = (s: AgentStoreState, agentId?: string) => {
   const inboxAgentId = builtinAgentSelectors.inboxAgentId(s);
 
@@ -54,6 +62,12 @@ const currentAgentBackgroundColor = (s: AgentStoreState) =>
 
 const currentAgentTags = (s: AgentStoreState) => currentAgentData(s)?.tags || [];
 
+const currentAgentAuthorId = (s: AgentStoreState) => currentAgentData(s)?.userId;
+
+const currentAgentCreatedAt = (s: AgentStoreState) => currentAgentData(s)?.createdAt;
+
+const currentAgentVisibility = (s: AgentStoreState) => currentAgentData(s)?.visibility;
+
 /**
  * Get complete meta data for the current agent
  * Used to replace sessionMetaSelectors.currentAgentMeta
@@ -65,6 +79,7 @@ const currentAgentMeta = (s: AgentStoreState): MetaData => {
     backgroundColor: data?.backgroundColor || DEFAULT_BACKGROUND_COLOR,
     description: data?.description || undefined,
     marketIdentifier: data?.marketIdentifier || undefined,
+    name: data?.name || undefined,
     tags: data?.tags,
     title: data?.title || undefined,
   };
@@ -85,6 +100,7 @@ const getAgentMetaById =
       backgroundColor: data.backgroundColor || DEFAULT_BACKGROUND_COLOR,
       description: data.description || undefined,
       marketIdentifier: data.marketIdentifier || undefined,
+      name: data.name || undefined,
       tags: data.tags,
       title: data.title || undefined,
     };
@@ -335,8 +351,10 @@ const getAgentDocumentsById = (agentId: string) => (s: AgentStoreState) =>
 export const agentSelectors = {
   currentAgentExecutionTarget,
   currentAgentHeterogeneousProviderType,
+  currentAgentAuthorId,
   currentAgentAvatar,
   currentAgentBackgroundColor,
+  currentAgentCreatedAt,
   currentAgentConfig,
   currentAgentConfigError,
   currentAgentDescription,
@@ -353,7 +371,9 @@ export const agentSelectors = {
   currentAgentTTS,
   currentAgentTTSVoice,
   currentAgentTags,
+  currentAgentDisplayName,
   currentAgentTitle,
+  currentAgentVisibility,
   currentAgentWorkingDirectory,
   currentEnabledKnowledge,
   currentKnowledgeIds,

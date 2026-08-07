@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 
 import ChatInputNotice from '@/features/ChatInput/ChatInputNotice';
 import { useChatInputStore } from '@/features/ChatInput/store';
-import { LayoutContainerContext } from '@/routes/(main)/_layout/DesktopLayoutContainer/LayoutContainerContext';
+import { LayoutContainerContext } from '@/features/DesktopLayoutContainer/LayoutContainerContext';
 import { useChatStore } from '@/store/chat';
 import { chatSelectors } from '@/store/chat/selectors';
 import { fileChatSelectors, useFileStore } from '@/store/file';
@@ -91,6 +91,7 @@ interface DesktopChatInputProps extends ActionToolbarProps {
   controlBarSlot?: ReactNode;
   extentHeaderContent?: ReactNode;
   hidden?: boolean;
+  initialContent?: string;
   inputContainerProps?: ChatInputProps;
   /**
    * Swap the action bar and send area for skeleton placeholders while
@@ -120,6 +121,7 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
     extraActionItems,
     dropdownPlacement,
     hidden,
+    initialContent,
     isConfigLoading = false,
     leftContent,
     placeholder,
@@ -133,7 +135,10 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
       systemStatusSelectors.chatInputHeight(s),
       s.updateSystemStatus,
     ]);
-    const hasContextSelections = useFileStore(fileChatSelectors.chatContextSelectionHasItem);
+    const contextSelectionKey = useChatInputStore((s) => s.contextSelectionKey);
+    const hasContextSelections = useFileStore(
+      fileChatSelectors.chatContextSelectionHasItem(contextSelectionKey),
+    );
     const hasFiles = useFileStore(fileChatSelectors.chatUploadFileListHasItem);
     const [slashMenuRef, expand, showTypoBar, editor, leftActions] = useChatInputStore((s) => [
       s.slashMenuRef,
@@ -144,6 +149,10 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
     ]);
 
     const chatKey = useChatStore(chatSelectors.currentChatKey);
+
+    // The ControlBar (or the custom slot standing in for it) hosts the
+    // context-window token tag; without one, SendArea keeps it beside Send.
+    const hasControlBar = Boolean(controlBarSlot) || showControlBar;
 
     const setExpand = useChatInputStore((s) => s.setExpand);
     const skillDrop = useSkillDrop();
@@ -236,10 +245,10 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
                   (sendAreaPrefix ? (
                     <Flexbox horizontal align={'center'} gap={6}>
                       {sendAreaPrefix}
-                      <SendArea />
+                      <SendArea hideContextWindow={hasControlBar} />
                     </Flexbox>
                   ) : (
-                    <SendArea />
+                    <SendArea hideContextWindow={hasControlBar} />
                   ))
                 }
               />
@@ -258,7 +267,11 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
           {...inputContainerProps}
           className={cx(expand && styles.inputFullscreen, inputContainerProps?.className)}
         >
-          <InputEditor placeholder={placeholder} placeholderVariant={placeholderVariant} />
+          <InputEditor
+            initialContent={initialContent}
+            placeholder={placeholder}
+            placeholderVariant={placeholderVariant}
+          />
         </ChatInput>
         {controlBarSlot ?? (showControlBar && <ControlBar />)}
         {showFootnote && !expand && (

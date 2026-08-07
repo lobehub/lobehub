@@ -1,4 +1,8 @@
-import { DEFAULT_AGENT_CONFIG, resolveSubAgentModel } from '@lobechat/const';
+import {
+  DEFAULT_AGENT_CONFIG,
+  resolveSubAgentChatConfig,
+  resolveSubAgentModel,
+} from '@lobechat/const';
 import { Flexbox, Icon, SliderWithInput, TextArea } from '@lobehub/ui';
 import { Select, Switch } from '@lobehub/ui/base-ui';
 import { Form as AntdForm } from 'antd';
@@ -21,10 +25,11 @@ import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selec
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors } from '@/store/user/selectors';
-import type { LobeAgentConfig } from '@/types/agent';
+import type { LobeAgentChatConfig, LobeAgentConfig } from '@/types/agent';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
+import { useParamsModelConfig } from './useParamsModelConfig';
 
 interface ControlsProps {
   setUpdating: (updating: boolean) => void;
@@ -528,14 +533,8 @@ const Controls = memo<ControlsProps>(({ setUpdating, updating, variant = 'popove
     (s) => agentByIdSelectors.getAgentConfigById(agentId)(s) || DEFAULT_AGENT_CONFIG,
     isEqual,
   );
-  const agentModel = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
-  const agentProvider = useAgentStore((s) =>
-    agentByIdSelectors.getAgentModelProviderById(agentId)(s),
-  );
+  const { disabledParams, hasModelConfig, model, provider } = useParamsModelConfig(agentId);
   const enableAgentMode = useAgentStore(agentByIdSelectors.getAgentEnableModeById(agentId));
-  const hasModelConfig = useAiInfraStore(
-    aiModelSelectors.isModelHasExtendParams(agentModel ?? '', agentProvider ?? ''),
-  );
   const [form] = AntdForm.useForm();
   const [advancedOpen, setAdvancedOpen] = useState(() => getStoredOpen(ADVANCED_OPEN_STORAGE_KEY));
   const [modelConfigOpen, setModelConfigOpen] = useState(() =>
@@ -561,9 +560,6 @@ const Controls = memo<ControlsProps>(({ setUpdating, updating, variant = 'popove
   const showFollowUpHint = !globalFollowUpReady && Boolean(enableFollowUpChips);
   const enableReasoningEffort = form.getFieldValue(['chatConfig', 'enableReasoningEffort']);
   const reasoningEffortValue = form.getFieldValue(['params', 'reasoning_effort']);
-  const disabledParams = useAiInfraStore(
-    aiModelSelectors.modelDisabledParams(agentModel ?? '', agentProvider ?? ''),
-  );
   const { frequency_penalty, presence_penalty, temperature, top_p } = config.params ?? {};
 
   const historyCountFromStore = useAgentStore((s) =>
@@ -625,10 +621,26 @@ const Controls = memo<ControlsProps>(({ setUpdating, updating, variant = 'popove
     ? t('settingModel.params.panel.agentTitle')
     : t('settingModel.params.panel.title');
 
-  // Model the sub-agents this agent spawns via callSubAgent run on. Resolved
-  // through the same helper the runtime uses, so the panel can't show a model
-  // the run won't actually use.
-  const subAgentModelValue = resolveSubAgentModel(config.agencyConfig?.subagent);
+  // Explicit sub-agent model override, if any. When unset, sub-agents follow
+  // the parent run's effective model — rendered as the select's empty state
+  // (placeholder) rather than a concrete model, so the panel never shows a
+  // model the run won't actually use.
+  const subAgentModelValue = config.agencyConfig?.subagent?.model
+    ? resolveSubAgentModel(config.agencyConfig.subagent)
+    : undefined;
+  // Effective sub-agent chatConfig: the parent's chatConfig with the
+  // `agencyConfig.subagent.chatConfig` overrides merged on top — the exact
+  // config the sub-agent run uses, so the controls below are WYSIWYG.
+  const subAgentChatConfig = useMemo(
+    () => resolveSubAgentChatConfig(config.chatConfig, config.agencyConfig?.subagent?.chatConfig),
+    [config.chatConfig, config.agencyConfig?.subagent?.chatConfig],
+  );
+  const subAgentHasModelConfig = useAiInfraStore(
+    aiModelSelectors.isModelHasExtendParams(
+      subAgentModelValue?.model || '',
+      subAgentModelValue?.provider || '',
+    ),
+  );
 
   const handleToggle = useCallback(
     async (key: ParamKey, enabled: boolean) => {
@@ -729,6 +741,29 @@ const Controls = memo<ControlsProps>(({ setUpdating, updating, variant = 'popove
       }
     },
     [canCreate, setUpdating, updateAgentConfig],
+  );
+
+  // Back to "follow the main agent model". `null` rather than `undefined`: the
+  // config deep-merge skips `undefined` keys, which would keep the old override.
+  // The thinking overrides are cleared along with the model they were set for.
+  const handleSubAgentModelClear = useCallback(async () => {
+    if (!canCreate) return;
+    setUpdating(true);
+    try {
+      await updateAgentConfig({
+        agencyConfig: { subagent: { chatConfig: null, model: null, provider: null } },
+      });
+    } finally {
+      setUpdating(false);
+    }
+  }, [canCreate, setUpdating, updateAgentConfig]);
+
+  const handleSubAgentChatConfigChange = useCallback(
+    async (patch: Partial<LobeAgentChatConfig>) => {
+      if (!canCreate) return;
+      await updateAgentConfig({ agencyConfig: { subagent: { chatConfig: patch } } });
+    },
+    [canCreate, updateAgentConfig],
   );
 
   const handleAdvancedOpenChange = useCallback(() => {
@@ -873,11 +908,28 @@ const Controls = memo<ControlsProps>(({ setUpdating, updating, variant = 'popove
                 tooltip={t('settingModel.subAgentModel.desc')}
               >
                 <ModelSelect
+                  allowClear
                   disabled={!canCreate}
+                  placeholder={t('settingModel.subAgentModel.followParent')}
                   style={{ width: '100%' }}
                   value={subAgentModelValue}
                   onChange={handleSubAgentModelChange}
+                  onClear={handleSubAgentModelClear}
                 />
+                {/* Thinking / reasoning-effort controls for the overridden
+                 * sub-agent model. Hidden while following the parent model —
+                 * the sub-agent then inherits the parent's chatConfig wholesale,
+                 * so the main panel's controls already describe it. */}
+                {subAgentModelValue && subAgentHasModelConfig && (
+                  <ControlsForm
+                    chatConfig={subAgentChatConfig}
+                    disabled={!canCreate}
+                    model={subAgentModelValue.model}
+                    provider={subAgentModelValue.provider}
+                    onChatConfigChange={handleSubAgentChatConfigChange}
+                    onUpdatingChange={setUpdating}
+                  />
+                )}
               </ControlRow>
             )}
           </div>
@@ -893,8 +945,8 @@ const Controls = memo<ControlsProps>(({ setUpdating, updating, variant = 'popove
                 <div className={styles.modelConfigSection}>
                   <ControlsForm
                     disabled={!canCreate}
-                    model={agentModel}
-                    provider={agentProvider}
+                    model={model}
+                    provider={provider}
                     onUpdatingChange={setUpdating}
                   />
                 </div>

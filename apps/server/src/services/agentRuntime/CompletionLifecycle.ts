@@ -1,9 +1,9 @@
 import { isParkedStatus } from '@lobechat/agent-runtime';
-import type { MessageContentPart } from '@lobechat/types';
 import { deserializeParts } from '@lobechat/utils';
 import { isRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 
+import { notifyAgentRunCompleted } from '@/business/server/agent-run/notifyAgentRunCompleted';
 import {
   AgentOperationModel,
   type ChildUsageRollup,
@@ -21,8 +21,20 @@ import { extractSelfIterationCompletionPayload } from '@/server/services/agentSi
 import { instantiateVerifyPlanOnStart, runVerifyOnCompletion } from '@/server/services/verify';
 
 import { hookDispatcher, type SerializedHook } from './hooks';
+import { registerWorksForOperation } from './workRegistration';
 
 const log = debug('lobe-server:completion-lifecycle');
+
+/**
+ * Terminal reasons this lifecycle treats as a successful completion: the run
+ * produced a deliverable, even when it was stopped by a step/cost cap rather
+ * than finishing naturally. `persistCompletion` stores all three with
+ * status='done', and success-side effects (assistant-content recovery,
+ * file-Work registration) must cover the capped reasons too — gating them on
+ * `reason === 'done'` alone silently drops capped runs' artifacts.
+ */
+export const isSuccessLikeCompletionReason = (reason: string): boolean =>
+  reason === 'done' || reason === 'max_steps' || reason === 'cost_limit';
 
 type SignalEvent = { [key: string]: unknown; type: string };
 
@@ -493,6 +505,64 @@ export class CompletionLifecycle {
   }
 
   /**
+   * Register the operation's Works: entity files edited this round
+   * (pptx/xlsx/docx/pdf, …) as `file` Works — one version per operation,
+   * exported from the sandbox — plus github issue/PR Works recovered from
+   * hetero / device shell records (codex / claude-code / lobe-local-system
+   * `gh` runs), which never pass the skill-tool registration hook.
+   *
+   * Idempotent per state object: only when EVERY candidate registered (the
+   * returned outcome reports `failed === 0`) is a `_fileWorksRegistered` marker
+   * stamped onto `state.metadata` so the dispatchHooks backstop (which receives
+   * the same state later in the request) skips the duplicate scan. A PARTIAL
+   * failure leaves the marker unset so the backstop re-runs and retries just the
+   * failed candidates — file registration is idempotent per (operation, file)
+   * via a DB existence probe, github registration per (work, toolCallId) via
+   * the version write's unique guard, so a QStash retry that lost the marker is
+   * safe.
+   *
+   * The gateway/queue executor calls this BEFORE the terminal
+   * `coordinator.saveStepResult`: that save publishes `agent_runtime_end`,
+   * whose `uiMessages` snapshot the client adopts as the settled message list —
+   * Work rows must exist by then or the file-Work card stays absent until a
+   * manual refresh. When entity edits are present, the executor suppresses the
+   * early `visible_output_end`, so perceived loading covers export and
+   * registration until the terminal snapshot is published.
+   *
+   * Awaited, NOT fire-and-forget: on serverless the runtime can freeze the
+   * moment the response is sent, silently dropping any still-pending background
+   * write. Fully self-guarded — a failure only logs, never throws. Both a thrown
+   * whole-function failure AND a partial per-file failure (outcome `failed > 0`)
+   * leave the marker unset so a later call retries the outstanding files.
+   */
+  async registerFileWorks(operationId: string, state: any): Promise<void> {
+    if (state?.metadata?._fileWorksRegistered) return;
+    try {
+      const outcome = await registerWorksForOperation({
+        // The round's final assistant message — the shell github scan stamps the
+        // Work display anchor onto it for hetero runs (see registerWorksForOperation).
+        assistantMessageId: state?.metadata?.assistantMessageId ?? null,
+        // Live terminal totals: on the pre-snapshot path the op row's cost/usage
+        // columns are not persisted yet (recordCompletion runs later), so the
+        // registration must not rely on reading them back from the DB.
+        finalCost: state?.cost ?? null,
+        finalUsage: state?.usage ?? null,
+        operationId,
+        serverDB: this.serverDB,
+        userId: state?.metadata?.userId || this.userId,
+        workspaceId: this.workspaceId,
+      });
+      // Stamp the idempotency marker ONLY when nothing failed. A partial failure
+      // (some files exported/registered, others did not) must NOT be recorded as
+      // a completed registration, or the dispatchHooks backstop would skip the
+      // retry and the user gets neither a Work nor the edited-files fallback.
+      if (state?.metadata && outcome.failed === 0) state.metadata._fileWorksRegistered = true;
+    } catch (error) {
+      log('[%s] registerWorksForOperation failed (non-fatal): %O', operationId, error);
+    }
+  }
+
+  /**
    * The single terminal-completion entry for every path that does NOT have the
    * in-process runtime's rich `state` in hand: heterogeneous CLI exit
    * (`heteroFinish`), remote-agent done signal (`agentNotify`), and synchronous
@@ -526,8 +596,10 @@ export class CompletionLifecycle {
     // status (the async-tool resume CAS reads it) but must NOT fire `onComplete`
     // or unregister hooks — the op resumes under this same id and reaches its
     // real terminal state later, which is when consumers should be notified.
-    // (`waiting_for_human` differs: its resume runs under a NEW operationId, so
-    // firing + unregistering on the park is correct there.)
+    // (`waiting_for_human` also resumes under the same operationId, but its
+    // park DOES fire `onComplete` — hook consumers surface the approval request
+    // as the run's outcome; the final completion re-dispatches with the
+    // serialized hooks carried on `metadata._hooks`.)
     const isAsyncToolPark = reason === 'waiting_for_async_tool';
 
     try {
@@ -546,12 +618,12 @@ export class CompletionLifecycle {
       // `lastAssistantContent` comes off the Redis-backed `state.messages`,
       // while the assistant message row is persisted through a separate
       // `messageModel.update` path. When the two diverge (state entry empty
-      // but the DB row holds the full reply — LOBE-11632: bot completions
+      // but the DB row holds the full reply — Discord bot completions
       // arrived with no content while the app showed the reply), consumers
       // like the IM bot callback silently drop the reply. Recover from the DB
       // row — the same source of truth the app UI renders — before dispatch.
       if (
-        (reason === 'done' || reason === 'max_steps' || reason === 'cost_limit') &&
+        isSuccessLikeCompletionReason(reason) &&
         !event.lastAssistantContent?.trim() &&
         !event.attachments?.length
       ) {
@@ -564,6 +636,35 @@ export class CompletionLifecycle {
       }
 
       await hookDispatcher.dispatch(operationId, 'onComplete', event, metadata._hooks);
+
+      // Recall the user when a run finishes with a deliverable while they may be
+      // away (push / inbox). Fires on every success-like terminal — `done` plus
+      // the step/cost caps, which still produce a reply worth recalling — to
+      // match the desktop completion notification, which notifies on any clean
+      // (non-abort, non-error) terminal. Fire-and-forget through the
+      // `@/business` slot; the default implementation is a no-op. Sub-agent /
+      // group-member completions are internal steps of a parent run, never a
+      // user-facing recall — in-group members carry `orchestrationRole: 'member'`
+      // WITHOUT `isSubAgent` (see execAgentMember), so guard both.
+      if (
+        isSuccessLikeCompletionReason(reason) &&
+        metadata?.isSubAgent !== true &&
+        metadata?.orchestrationRole !== 'member'
+      ) {
+        void notifyAgentRunCompleted({
+          agentId: event.agentId || undefined,
+          duration: event.duration,
+          lastAssistantContent: event.lastAssistantContent,
+          operationId,
+          topicId: event.topicId,
+          userId: metadata?.userId || this.userId,
+          // Personal runs leave this undefined ⇒ bare deep link; workspace
+          // runs carry the id so the business slot can slug-prefix the URL.
+          workspaceId: this.workspaceId,
+        }).catch((error) =>
+          log('[%s] Completion notification failed (non-fatal): %O', operationId, error),
+        );
+      }
 
       // Delivery checker: on a successful completion, run the confirmed verify
       // plan against the deliverable. Fire-and-forget and self-guarded — a run
@@ -600,6 +701,24 @@ export class CompletionLifecycle {
           },
           this.workspaceId,
         );
+      }
+
+      // Register entity files edited this round as `file` Works. On the
+      // gateway/queue path this already ran BEFORE the terminal snapshot (see
+      // `registerFileWorks`) and no-ops via the state marker; here it is the
+      // backstop for every other terminal path (in-process runtime, hetero
+      // completions, already-terminal early exits). Guarded on success-LIKE
+      // reasons, not `done` alone: a run stopped by a step/cost cap still
+      // produced its edits and persists as status='done'.
+      //
+      // `waiting_for_human` deliberately does NOT register: the approval resume
+      // continues the SAME operationId (`processHumanIntervention` reschedules
+      // it), so pre-park edits are covered by the real terminal completion's
+      // scan. Registering at the park would persist `_fileWorksRegistered` into
+      // the park snapshot — skipping the terminal registration entirely — and
+      // freeze per-(op, file) versions at pre-approval content.
+      if (isSuccessLikeCompletionReason(reason)) {
+        await this.registerFileWorks(operationId, state);
       }
 
       if (reason === 'error') {
@@ -650,7 +769,7 @@ export class CompletionLifecycle {
   /**
    * Load the final assistant message row from the DB and return its text
    * content, for completions whose Redis-side state carried no assistant
-   * text (see the LOBE-11632 note in {@link dispatchHooks}). Non-fatal: any
+   * text (see the DB recovery note in {@link dispatchHooks}). Non-fatal: any
    * failure just leaves the event as-built.
    */
   private async recoverLastAssistantContent(
@@ -676,20 +795,12 @@ export class CompletionLifecycle {
       // in DisplayContent) rather than sniffing the string, so a legitimate
       // plain-text reply that happens to be a JSON array is preserved as-is.
       // Extract only the text parts; an image-only row recovers nothing.
-      const isMultimodal =
-        (row?.metadata as { isMultimodal?: boolean } | null | undefined)?.isMultimodal === true;
-      const parts = isMultimodal ? deserializeParts(raw) : null;
-      const content = parts
-        ? parts
-            .filter((p): p is Extract<MessageContentPart, { type: 'text' }> => p.type === 'text')
-            .map((p) => p.text)
-            .join('')
-        : raw;
-      if (!content.trim()) return undefined;
+      const content = extractTextFromMessage(row);
+      if (!content?.trim()) return undefined;
 
       // console (not debug) so state/DB divergence stays visible in
       // production logs — the silent variant of this is what made
-      // LOBE-11632 hard to diagnose.
+      // the Discord bot empty-reply issue hard to diagnose.
       console.warn(
         `[CompletionLifecycle][${operationId}] completion event had no assistant text; recovered ${content.length} chars from message ${assistantMessageId}`,
       );
@@ -714,10 +825,7 @@ export class CompletionLifecycle {
     // the turn has any text — so an image-only or tool-output final turn
     // doesn't fall through to an earlier assistant message and ship stale
     // text alongside the current attachments.
-    const lastAssistantMessage = messages
-      .slice()
-      .reverse()
-      .find((message) => message.role === 'assistant');
+    const lastAssistantMessage = findLastAssistantMessage(messages);
     const lastAssistantContent = lastAssistantMessage
       ? extractTextFromMessageContent(lastAssistantMessage.content)
       : undefined;
@@ -825,7 +933,7 @@ const buildAttachmentFromUrl = (
  * Pull text out of a message's `content` field. Accepts both string and
  * OpenAI-style multimodal arrays `[{ type: 'text', text }, { type: 'image_url', image_url: { url } }]`.
  */
-const extractTextFromMessageContent = (content: unknown): string | undefined => {
+export const extractTextFromMessageContent = (content: unknown): string | undefined => {
   if (typeof content === 'string') return content || undefined;
   if (!Array.isArray(content)) return undefined;
   const parts: string[] = [];
@@ -842,6 +950,23 @@ const extractTextFromMessageContent = (content: unknown): string | undefined => 
 };
 
 /**
+ * Extract text from either an in-memory message or a DB-rehydrated row.
+ * Persisted multimodal content is serialized, so only deserialize when the
+ * row's explicit metadata flag identifies that storage representation.
+ */
+export const extractTextFromMessage = (message: unknown): string | undefined => {
+  if (!isRecord(message)) return undefined;
+
+  const metadata = isRecord(message.metadata) ? message.metadata : undefined;
+  const content =
+    typeof message.content === 'string' && metadata?.isMultimodal === true
+      ? (deserializeParts(message.content) ?? message.content)
+      : message.content;
+
+  return extractTextFromMessageContent(content);
+};
+
+/**
  * Expand display-only assistant groups back into the assistant/tool sequence
  * expected by terminal lifecycle consumers.
  *
@@ -851,7 +976,9 @@ const extractTextFromMessageContent = (content: unknown): string | undefined => 
  * the persisted leaf turns rather than that virtual wrapper, otherwise they
  * lose both the final text and the message id used by DB recovery.
  */
-const normalizeCompletionMessages = (messages: unknown[]): Record<PropertyKey, unknown>[] => {
+export const normalizeCompletionMessages = (
+  messages: unknown[],
+): Record<PropertyKey, unknown>[] => {
   const normalized: Record<PropertyKey, unknown>[] = [];
 
   for (const message of messages) {
@@ -898,6 +1025,19 @@ const normalizeCompletionMessages = (messages: unknown[]): Record<PropertyKey, u
 
   return normalized;
 };
+
+/**
+ * Find the final assistant boundary after display-only groups have been
+ * normalized. Match by role rather than content so an empty/image-only final
+ * turn never falls through to stale text from an earlier assistant message.
+ */
+export const findLastAssistantMessage = (
+  messages: Record<PropertyKey, unknown>[],
+): Record<PropertyKey, unknown> | undefined =>
+  messages
+    .slice()
+    .reverse()
+    .find((message) => message.role === 'assistant');
 
 /**
  * Extract image/file parts from a message's `content` array. Each entry is

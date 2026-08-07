@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Debug Frontend with Browser'
+  short_description: 'Diagnose frontend state after isolated test setup'
+  default_prompt: 'Use $debug-frontend-with-browser after $agent-testing to isolate the first broken frontend state boundary.'

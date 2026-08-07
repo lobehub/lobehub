@@ -17,7 +17,7 @@ WeChat uses **polling** mode (long-polling) — no webhook URL or WebSocket setu
 WeChat requires a QR code scan to link your account, which is only supported through the LobeHub Web UI:
 
 1. Open your agent in LobeHub
-2. In the left sidebar, click **消息频道** (Message Channel)
+2. In the left sidebar, click **Message Channel** (消息频道)
 3. Select **WeChat** from the platform list on the right
 4. A QR code is displayed — scan it with WeChat to authenticate
 5. Once scanned, credentials are saved automatically and the bot connects

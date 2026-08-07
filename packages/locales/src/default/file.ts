@@ -254,6 +254,8 @@ export default {
   'resourceList.viewTransferred': 'View',
   'portal.openInPageEditor': 'Edit in Page',
   'preview.downloadFile': 'Download File',
+  'preview.raw': 'Raw',
+  'preview.render': 'Preview',
   'preview.unsupportedFileAndContact':
     'This file format is not currently supported for online preview. If you have a request for previewing, feel free to <1>contact us</1>.',
   'resource': 'Resource',
@@ -289,6 +291,7 @@ export default {
   'uploadDock.body.item.pending': 'Preparing to upload...',
   'uploadDock.body.item.processing': 'Processing file...',
   'uploadDock.body.item.restTime': 'Remaining {{time}}',
+  'uploadDock.body.item.retry': 'Retry upload',
   'uploadDock.fileQueueInfo':
     'Uploading the first {{count}} files, {{remaining}} remaining in queue',
   'uploadDock.totalCount': 'Total {{count}} items',

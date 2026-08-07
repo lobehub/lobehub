@@ -16,15 +16,29 @@ import {
 import { MessageModel } from '@/database/models/message';
 import { TopicShareModel } from '@/database/models/topicShare';
 import { CompressionRepository } from '@/database/repositories/compression';
+import { TopicDoctorRepo } from '@/database/repositories/topicDoctor';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
 import { type MessageBatchOperation, MessageService } from '@/server/services/message';
 
+import {
+  assertCanUseConversationTargets,
+  assertCanUseCreateMessageTargets,
+  assertCanUseMessageTargets,
+  assertCanUseTopicTargets,
+} from './_helpers/conversationResourceGuard';
 import { resolveAgentIdFromSession, resolveContext } from './_helpers/resolveContext';
 import { basicContextSchema } from './_schema/context';
 
 const { logTiming, runTimedStage } = createTimingHelpers('lobe-server:chat:lobehub:timing');
+
+/** Ctx slice consumed by the conversation General-access guards. */
+const guardCtx = (ctx: {
+  serverDB: Parameters<typeof assertCanUseMessageTargets>[0]['db'];
+  userId: string;
+  workspaceId?: string | null;
+}) => ({ db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId });
 
 const messageProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -36,6 +50,7 @@ const messageProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
       fileService: new FileService(ctx.serverDB, ctx.userId, wsId),
       messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
       messageService: new MessageService(ctx.serverDB, ctx.userId, wsId),
+      topicDoctorRepo: new TopicDoctorRepo(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
@@ -54,6 +69,11 @@ const messageAnalyticsSchema = z.object({
   topicId: z.string().optional(),
 });
 
+const heterogeneousToolStateSnapshotSchema = z.object({
+  operationId: z.string().min(1),
+  snapshotSeq: z.number().int().positive(),
+});
+
 const messageBatchOperationSchema = z.discriminatedUnion('type', [
   z.object({
     message: CreateNewMessageParamsSchema,
@@ -69,6 +89,7 @@ const messageBatchOperationSchema = z.discriminatedUnion('type', [
     type: z.literal('updateToolMessage'),
     value: z.object({
       content: z.string().optional(),
+      heterogeneousToolState: heterogeneousToolStateSnapshotSchema.optional(),
       metadata: z.record(z.string(), z.any()).optional(),
       pluginError: z.any().optional(),
       pluginState: z.record(z.string(), z.any()).optional(),
@@ -89,6 +110,7 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { id, fileIds, agentId, ...options } = input;
+      await assertCanUseMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -135,6 +157,15 @@ export const messageRouter = router({
         }),
       );
 
+      await assertCanUseMessageTargets(
+        guardCtx(ctx),
+        operations.flatMap((op) => (op.type === 'createMessage' ? [] : [op.id])),
+      );
+      await assertCanUseCreateMessageTargets(
+        guardCtx(ctx),
+        operations.flatMap((op) => (op.type === 'createMessage' ? [op.message] : [])),
+      );
+
       return ctx.messageService.batchMutate(operations);
     }),
 
@@ -155,6 +186,7 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { messageGroupId, agentId, groupId, threadId, topicId } = input;
+      await assertCanUseTopicTargets(guardCtx(ctx), [topicId]);
 
       return ctx.messageService.cancelCompression(messageGroupId, {
         agentId,
@@ -223,6 +255,7 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { topicId, messageIds, agentId, groupId, threadId } = input;
+      await assertCanUseTopicTargets(guardCtx(ctx), [topicId]);
 
       return ctx.messageService.createCompressionGroup(topicId, messageIds, {
         agentId,
@@ -247,6 +280,14 @@ export const messageRouter = router({
         ))!;
       }
 
+      await assertCanUseConversationTargets(guardCtx(ctx), [{ agentId, groupId: input.groupId }]);
+      // The declared agent/group is client-supplied and can be omitted or
+      // forged while still inserting into `topicId` — guard the topic's own
+      // DB-resolved target as well.
+      if (input.topicId) {
+        await assertCanUseTopicTargets(guardCtx(ctx), [input.topicId]);
+      }
+
       // Create message with the resolved agentId
       return ctx.messageService.createMessage({ ...input, agentId } as any);
     }),
@@ -268,8 +309,31 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { messageGroupId, content, ...params } = input;
+      await assertCanUseTopicTargets(guardCtx(ctx), [params.topicId]);
 
       return ctx.messageService.finalizeCompression(messageGroupId, content, params);
+    }),
+
+  /**
+   * Report the messages this topic's tree keeps off screen, and what could be done about it.
+   * Read-only — the repair is a separate, explicit call.
+   */
+  diagnoseTopic: messageProcedure
+    .input(z.object({ agentId: z.string().nullish(), topicId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return ctx.topicDoctorRepo.diagnose(input);
+    }),
+
+  /**
+   * Rewrite the minimum needed to put those messages back on screen. The patch is re-derived
+   * from the database here rather than taken from the client — this edits conversation
+   * history, so it runs off the server's own view of the tree.
+   */
+  repairTopic: messageProcedure
+    .use(withScopedPermission('message:update'))
+    .input(z.object({ agentId: z.string().nullish(), topicId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.topicDoctorRepo.repair(input);
     }),
 
   getHeatmaps: messageProcedure.query(async ({ ctx }) => {
@@ -288,6 +352,10 @@ export const messageRouter = router({
         agentId: z.string().nullish(),
         current: z.number().optional(),
         groupId: z.string().nullish(),
+        // Opt-in for `file` work summaries in the payload. Absent → the legacy
+        // set, so already-deployed clients (no `file` descriptor) never receive
+        // a `file` summary that would crash their works UI. New clients set it.
+        includeFileWorks: z.boolean().optional(),
         pageSize: z.number().optional(),
         sessionId: z.string().nullish(),
         // Mid-stream refetches skip the Work-summary assembly — see
@@ -368,6 +436,7 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { id, agentId, ...options } = input;
+      await assertCanUseMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -382,6 +451,8 @@ export const messageRouter = router({
     .use(withScopedPermission('message:delete'))
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      await assertCanUseMessageTargets(guardCtx(ctx), [input.id]);
+
       return ctx.messageModel.deleteMessageQuery(input.id);
     }),
 
@@ -396,6 +467,7 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { ids, agentId, ...options } = input;
+      await assertCanUseMessageTargets(guardCtx(ctx), ids);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -417,6 +489,11 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { agentId, ...options } = input;
+      // Row-based guard via the topic when available; sweeps without a topic
+      // fall back to the declared agent target.
+      if (options.topicId) await assertCanUseTopicTargets(guardCtx(ctx), [options.topicId]);
+      else
+        await assertCanUseConversationTargets(guardCtx(ctx), [{ agentId, groupId: input.groupId }]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -440,6 +517,9 @@ export const messageRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      if (input.topicId) await assertCanUseTopicTargets(guardCtx(ctx), [input.topicId]);
+      else await assertCanUseConversationTargets(guardCtx(ctx), [{ groupId: input.groupId }]);
+
       return ctx.messageModel.deleteMessagesBySession(null, input.topicId, input.groupId);
     }),
 
@@ -461,6 +541,7 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { id, value, agentId, ...options } = input;
+      await assertCanUseMessageTargets(guardCtx(ctx), [id]);
       const timingContext = { requestId: createTimingRequestId(), startedAt: Date.now() };
       logTiming(timingContext, 'lambda.message.update:start', {
         hasAgentId: !!agentId,
@@ -519,6 +600,7 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { messageGroupId, expanded, context } = input;
+      await assertCanUseTopicTargets(guardCtx(ctx), [context.topicId]);
 
       return ctx.messageService.updateMessageGroupMetadata(messageGroupId, { expanded }, context);
     }),
@@ -535,6 +617,7 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { id, value, agentId, ...options } = input;
+      await assertCanUseMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -550,6 +633,7 @@ export const messageRouter = router({
     .input(UpdateMessageRAGParamsSchema.extend(basicContextSchema.shape))
     .mutation(async ({ input, ctx }) => {
       const { id, value, agentId, ...options } = input;
+      await assertCanUseMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -572,6 +656,7 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { id, value, agentId, ...options } = input;
+      await assertCanUseMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -594,6 +679,7 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { id, value, agentId, ...options } = input;
+      await assertCanUseMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -616,6 +702,7 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { id, value, agentId, ...options } = input;
+      await assertCanUseMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -641,6 +728,7 @@ export const messageRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      await assertCanUseMessageTargets(guardCtx(ctx), [input.id]);
       if (input.value === false) {
         return ctx.messageModel.deleteMessageTTS(input.id);
       }
@@ -660,6 +748,13 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { toolCallId, value, agentId, ...options } = input;
+      // No message id in the input — guard by the topic row when present,
+      // falling back to the declared conversation target.
+      if (options.topicId) await assertCanUseTopicTargets(guardCtx(ctx), [options.topicId]);
+      else
+        await assertCanUseConversationTargets(guardCtx(ctx), [
+          { agentId, groupId: options.groupId },
+        ]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -682,6 +777,7 @@ export const messageRouter = router({
           id: z.string(),
           value: z.object({
             content: z.string().optional(),
+            heterogeneousToolState: heterogeneousToolStateSnapshotSchema.optional(),
             metadata: z.object({}).passthrough().optional(),
             pluginError: z.any().optional(),
             pluginState: z.object({}).passthrough().optional(),
@@ -691,6 +787,7 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { id, value, agentId, ...options } = input;
+      await assertCanUseMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -715,6 +812,7 @@ export const messageRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      await assertCanUseMessageTargets(guardCtx(ctx), [input.id]);
       if (input.value === false) {
         return ctx.messageModel.deleteMessageTranslate(input.id);
       }

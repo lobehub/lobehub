@@ -8,6 +8,7 @@ import { useNavigate, useParams } from 'react-router';
 import NotFound from '@/components/404';
 import AsyncBoundary from '@/components/AsyncBoundary';
 import Loading from '@/components/Loading/BrandTextLoading';
+import ResourceConfigAccessGate from '@/features/ResourcePermission/ResourceConfigAccessGate';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { useUserStore } from '@/store/user';
@@ -33,7 +34,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const ChannelPage = memo(() => {
+const ChannelContent = memo(() => {
   const { aid, platform } = useParams<{ aid?: string; platform?: string }>();
   const navigate = useNavigate();
   const { allowed: canEdit } = usePermission('edit_own_content');
@@ -171,6 +172,20 @@ const ChannelPage = memo(() => {
         </AsyncBoundary>
       </Flexbox>
     </Flexbox>
+  );
+});
+
+const ChannelPage = memo(() => {
+  const { aid } = useParams<{ aid?: string }>();
+
+  return (
+    <ResourceConfigAccessGate
+      redirectPath={`/agent/${aid ?? ''}`}
+      resourceId={aid}
+      resourceType="agent"
+    >
+      <ChannelContent />
+    </ResourceConfigAccessGate>
   );
 });
 

@@ -17,6 +17,7 @@ import { today } from '@/utils/time';
 import type { NewUser, UserItem, UserSettingsItem } from '../schemas';
 import { messages, nextauthAccounts, topics, users, userSettings } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { AGENT_TRANSFER_PENDING_OWNER_DELETE, AgentTransferJobModel } from './agentTransferJob';
 
 type DecryptUserKeyVaults = (
   encryptKeyVaultsStr: string | null,
@@ -343,6 +344,13 @@ export class UserModel {
   };
 
   static deleteUser = async (db: LobeChatDatabase, id: string) => {
+    // A pending agent-transfer backfill means message rows moved to (or from)
+    // this user still carry the other side's scope snapshot; cascading the
+    // delete now would destroy history the transfer already re-homed. The job
+    // window is minutes — the delete can simply be retried after it drains.
+    if (await AgentTransferJobModel.hasPendingJobTouchingUser(db, id)) {
+      throw new Error(AGENT_TRANSFER_PENDING_OWNER_DELETE);
+    }
     return db.delete(users).where(eq(users.id, id));
   };
 

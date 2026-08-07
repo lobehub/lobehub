@@ -11,6 +11,7 @@ Does the change do what the requirement asked, and does it hold up under real in
 ## Quick checklist
 
 - Edge cases: empty arrays/strings, zero, boundary indexes, first/last page, single-item collections
+- Text parsers/extractors (envelopes, markers, delimiters): enumerate the input space systematically instead of spot-checking — empty payload, marker-only payload, delimiter/marker literals occurring inside the body, truncated/partial input. When one delimiter lookup is found fragile, apply the same attack to every other `indexOf`/`lastIndexOf`/regex lookup in the function
 - Null/undefined flowing into code that assumes presence
 - Race conditions: concurrent mutations, stale closures, un-awaited promises whose order matters
 - Error handling: failure paths that leave state half-mutated or the UI stuck
@@ -29,6 +30,7 @@ Does the change do what the requirement asked, and does it hold up under real in
 2. Trace each error path to its end state: user feedback, state rollback, log.
 3. Compare behavior against the scope summary; deviations are findings even when the code is internally correct.
 4. For fixes: `ls` the sibling `__tests__/` and check the fixed scenario is actually covered, not just any test touched.
+5. For text-parsing functions: write the adversarial input list first (empty, marker-only, body-contains-delimiter, truncated), then read the code against each item — do not evaluate edge cases ad hoc as they come to mind.
 
 ## Violations
 

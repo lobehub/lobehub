@@ -63,6 +63,8 @@
   "notSupportGuide.features.multiProviders.desc": "Ondersteunt meerdere AI-afbeeldingsgeneratoren, waaronder OpenAI gpt-image-1, Google Imagen, FAL.ai en meer, met een ruime keuze aan modellen.",
   "notSupportGuide.features.multiProviders.title": "Ondersteuning voor meerdere providers",
   "notSupportGuide.title": "Huidige implementatiemodus ondersteunt geen AI-afbeeldingsgeneratie",
+  "notice.modelRemoved": "Het huidige model is niet langer beschikbaar bij {{name}}. Schakel over naar een beschikbaar model.",
+  "notice.providerDisabled": "De aanbieder {{name}} voor het huidige model is uitgeschakeld. Schakel het in of kies een beschikbaar model.",
   "topic.createNew": "Nieuw Onderwerp Maken",
   "topic.createdBy": "Gemaakt door {{name}}",
   "topic.deleteConfirm": "Generatieonderwerp verwijderen",

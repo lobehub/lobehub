@@ -5,6 +5,7 @@ import {
 } from '@lobechat/types';
 import debug from 'debug';
 
+import { resolveEffectiveWorkingDirectory } from '@/helpers/effectiveWorkingDirectory';
 import { type MCPToolCallResult } from '@/libs/mcp';
 import { mcpService } from '@/services/mcp';
 import { messageService } from '@/services/message';
@@ -82,7 +83,7 @@ export class PluginTypesActionImpl {
     if (!params) return { error: 'Invalid arguments', success: false };
 
     // Check if there's a registered executor in Tool Store (new architecture)
-    if (hasExecutor(payload.identifier, payload.apiName)) {
+    if (await hasExecutor(payload.identifier, payload.apiName)) {
       const { optimisticUpdateToolMessage, registerAfterCompletionCallback } = this.#get();
 
       // Get operation context
@@ -217,6 +218,11 @@ export class PluginTypesActionImpl {
           toolCallId: payload.id,
           toolMessageId: id,
           topicId,
+          workingDirectory: resolveEffectiveWorkingDirectory(
+            this.#get(),
+            topicId ?? rootRuntimeOperationContext?.topicId,
+            agentId ?? rootRuntimeOperationContext?.agentId,
+          ),
         });
 
       log('[BuiltinToolCall] invoke:end', {

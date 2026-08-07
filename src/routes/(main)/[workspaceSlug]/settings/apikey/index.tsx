@@ -1,13 +1,13 @@
 'use client';
 
 import WorkspaceApiKeyGuard from '@/business/client/BusinessSettingPages/WorkspaceApiKeyGuard';
+import Page from '@/features/Settings/apikey';
 import { WorkspaceAdminOnly } from '@/features/WorkspaceSetting';
-import Page from '@/routes/(main)/settings/apikey';
 
 const WorkspaceApiKeySetting = () => (
   <WorkspaceAdminOnly>
     <WorkspaceApiKeyGuard>
-      <Page />
+      <Page showSettingHeader={false} />
     </WorkspaceApiKeyGuard>
   </WorkspaceAdminOnly>
 );

@@ -118,7 +118,10 @@ const TaskDetailRunPauseAction = memo(() => {
     if (!isScheduled) return null;
     let next = null;
     if (automationMode === 'heartbeat') {
-      next = nextHeartbeatFiring(detail?.heartbeat?.lastAt, interval);
+      next = nextHeartbeatFiring(
+        detail?.heartbeat?.scheduledAt ?? detail?.heartbeat?.lastAt,
+        interval,
+      );
     } else if (automationMode === 'schedule' && schedulePattern) {
       next = nextScheduleFiring(schedulePattern, scheduleTimezone);
     }
@@ -128,6 +131,7 @@ const TaskDetailRunPauseAction = memo(() => {
     isScheduled,
     automationMode,
     detail?.heartbeat?.lastAt,
+    detail?.heartbeat?.scheduledAt,
     interval,
     schedulePattern,
     scheduleTimezone,

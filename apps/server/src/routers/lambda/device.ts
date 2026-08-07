@@ -1,4 +1,7 @@
-import { REMOTE_HETEROGENEOUS_AGENT_CONFIGS } from '@lobechat/heterogeneous-agents';
+import {
+  type HeterogeneousAgentScanMap,
+  REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
+} from '@lobechat/heterogeneous-agents';
 import type {
   DeviceChannel,
   DeviceListItem,
@@ -6,7 +9,7 @@ import type {
   DeviceWorkspaceShare,
   WorkingDirEntry,
 } from '@lobechat/types';
-import { deriveWorktreePath, workingDirConfigSchema } from '@lobechat/types';
+import { deriveWorktreePath, sortDevicesByActivity, workingDirConfigSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -37,6 +40,9 @@ const remotePlatformEnum = z.enum(
 
 const CAPABILITY_TIMEOUT_MS = 5_000;
 const PROFILE_TIMEOUT_MS = 5_000;
+// Batch scan probes every agent type (which + --version per binary, with
+// login-shell PATH fallback), so it gets a longer budget than a single probe.
+const SCAN_TIMEOUT_MS = 10_000;
 
 /**
  * A workspace device's user-editable fields (rename, working dirs, remove) may
@@ -54,6 +60,25 @@ const canEditWorkspaceDevice = (
   actorUserId: string,
   enrollerUserId: string,
 ): boolean => role === 'owner' || enrollerUserId === actorUserId;
+
+/**
+ * Fixed workspace agents promise every member the same execution device. Keep
+ * that promise intact until an editor changes the agent back to member choice
+ * (or binds a different public device) before hiding/removing this row.
+ */
+const assertDeviceNotBoundToFixedAgent = async (
+  model: DeviceModel,
+  deviceId: string,
+): Promise<void> => {
+  if (!(await model.hasFixedAgentBinding(deviceId))) return;
+
+  throw new TRPCError({
+    cause: { data: { code: 'DeviceBoundToFixedAgent' } },
+    code: 'PRECONDITION_FAILED',
+    message:
+      'This device is fixed to one or more workspace agents. Change those agent settings first.',
+  });
+};
 
 /**
  * Workspace-write gate: membership + at least `member` role (excludes viewer).
@@ -118,11 +143,16 @@ export const deviceRouter = router({
       z.object({
         deviceId: z.string(),
         platform: remotePlatformEnum,
+        scope: z.enum(['personal', 'workspace']).optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
       const result = await deviceGateway.executeToolCall(
-        { deviceId: input.deviceId, userId: ctx.userId, workspaceId: ctx.workspaceId },
+        {
+          deviceId: input.deviceId,
+          userId: ctx.userId,
+          workspaceId: input.scope === 'personal' ? undefined : ctx.workspaceId,
+        },
         {
           apiName: 'checkPlatformCapability',
           arguments: JSON.stringify({ platform: input.platform }),
@@ -145,6 +175,41 @@ export const deviceRouter = router({
         return { available: false, reason: 'Invalid response from device' };
       }
     }),
+
+  /**
+   * Scan the given device for every known heterogeneous agent type in one
+   * pass. Dispatches a `scanHeterogeneousAgents` tool call to the device via
+   * the gateway; the device probes each binary and returns an availability
+   * map. On gateway failure (offline device, older client without the tool)
+   * returns an empty map plus the error so the client can distinguish
+   * "nothing installed" from "scan failed".
+   */
+  scanAgents: deviceProcedure
+    .input(z.object({ deviceId: z.string() }))
+    .query(
+      async ({ ctx, input }): Promise<{ agents: HeterogeneousAgentScanMap; error?: string }> => {
+        const result = await deviceGateway.executeToolCall(
+          { deviceId: input.deviceId, userId: ctx.userId, workspaceId: ctx.workspaceId },
+          {
+            apiName: 'scanHeterogeneousAgents',
+            arguments: JSON.stringify({}),
+            identifier: 'local',
+          },
+          SCAN_TIMEOUT_MS,
+        );
+
+        if (!result.success) {
+          return { agents: {}, error: result.error ?? 'Device tool call failed' };
+        }
+
+        try {
+          const parsed = JSON.parse(result.content) as { agents?: HeterogeneousAgentScanMap };
+          return { agents: parsed.agents ?? {} };
+        } catch {
+          return { agents: {}, error: 'Invalid response from device' };
+        }
+      },
+    ),
 
   /**
    * Granular git reads for a directory on a remote device, each via its own
@@ -208,6 +273,53 @@ export const deviceRouter = router({
       });
       return result ?? null;
     }),
+
+  /**
+   * Claude Code subscription quota sampled by the device with its own local
+   * credentials, so web clients can show live quota for a bound-device run.
+   * `null` when the device is offline or its client predates this RPC.
+   */
+  getClaudeCodeQuota: deviceProcedure
+    .input(
+      z.object({
+        deviceId: z.string(),
+        env: z.record(z.string(), z.string()).optional(),
+        force: z.boolean().optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const result = await deviceGateway.claudeCodeQuota({
+        deviceId: input.deviceId,
+        env: input.env,
+        force: input.force,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      return result ?? null;
+    }),
+
+  /** Query a heterogeneous CLI's model catalog on the device that will execute the agent. */
+  listHeterogeneousAgentModels: deviceProcedure
+    .input(
+      z.object({
+        command: z.string().optional(),
+        cwd: z.string().optional(),
+        deviceId: z.string(),
+        env: z.record(z.string(), z.string()).optional(),
+        type: z.enum(['opencode', 'pi', 'qoder']),
+      }),
+    )
+    .query(async ({ ctx, input }) =>
+      deviceGateway.listHeterogeneousAgentModels({
+        command: input.command,
+        cwd: input.cwd,
+        deviceId: input.deviceId,
+        env: input.env,
+        type: input.type,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      }),
+    ),
 
   /**
    * List the git worktrees attached to the same repository as a directory on a
@@ -869,10 +981,15 @@ export const deviceRouter = router({
       return [...fromDb, ...ghosts];
     };
 
-    return [
+    // Ordered here rather than in SQL: `online` is the primary key and only the
+    // gateway knows it, so no per-pool `ORDER BY` can produce it — the two pools
+    // and their ghosts have to be merged first, then ordered as one list.
+    // Consumers (settings list, picker) filter this down to a single scope, and
+    // filtering preserves order, so one pass serves every surface.
+    return sortDevicesByActivity([
       ...buildItems(personalRows, personalOnline, 'personal'),
       ...buildItems(workspaceRows, workspaceOnline, 'workspace', hiddenWorkspaceIds),
-    ];
+    ]);
   }),
 
   /**
@@ -1019,6 +1136,9 @@ export const deviceRouter = router({
             message: 'Only the enrolling member or a workspace owner can overwrite this device.',
           });
         }
+        if ((input.visibility ?? 'private') === 'private') {
+          await assertDeviceNotBoundToFixedAgent(model, existing.deviceId);
+        }
       }
 
       // Real enrollment — only after the caller is committed (no pending
@@ -1094,7 +1214,7 @@ export const deviceRouter = router({
    * Publish a private workspace device to the shared pool, or pull a public one
    * back to private. Mirrors the agent/file `setVisibility` contract:
    *   - the enrolling member may toggle their own device both ways;
-   *   - nobody else may touch visibility (LOBE-11760): owners demoting another
+   * - nobody else may touch visibility: owners demoting another
    *     member's public device would appropriate it into that member's private
    *     list, and other members' private devices are invisible to everyone
    *     else by design (the lookup below already fails closed with NOT_FOUND),
@@ -1120,6 +1240,9 @@ export const deviceRouter = router({
           code: 'FORBIDDEN',
           message: 'Only the enrolling member can change this device visibility.',
         });
+      }
+      if (input.visibility === 'private') {
+        await assertDeviceNotBoundToFixedAgent(model, input.deviceId);
       }
       await model.setWorkspaceDeviceVisibility(input.deviceId, input.visibility);
       return { success: true };
@@ -1183,6 +1306,7 @@ export const deviceRouter = router({
           message: 'Only the enrolling member or a workspace owner can remove this device.',
         });
       }
+      await assertDeviceNotBoundToFixedAgent(model, input.deviceId);
       // Tell a live device to drop its workspace connection and stop
       // auto-reconnecting, so removal doesn't leave an online ghost. For most
       // rows this stays best-effort — an offline device simply stops resolving.

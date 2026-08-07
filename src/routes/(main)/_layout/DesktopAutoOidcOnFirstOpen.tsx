@@ -2,7 +2,7 @@
 
 import { memo, useEffect } from 'react';
 
-import { getDesktopOnboardingCompleted } from '@/routes/(desktop)/desktop-onboarding/storage';
+import { getDesktopOnboardingCompleted } from '@/features/DesktopOnboarding/storage';
 import { useElectronStore } from '@/store/electron';
 import {
   getDesktopAutoOidcFirstOpenHandled,

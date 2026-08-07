@@ -56,6 +56,7 @@ export const DEFAULT_CHAT_INPUT_FEATURE = {
 export interface PublicState {
   agentId?: string;
   allowExpand?: boolean;
+  contextSelectionKey?: string;
   contextWindowMessages?: ContextWindowMessage[];
   draftKey?: string;
   expand?: boolean;

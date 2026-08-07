@@ -6,6 +6,7 @@ import { useLocation } from 'react-router';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
+import { useConversationResourceAccess } from '../hooks/useConversationResourceAccess';
 import { useConversationStore } from '../store';
 import { canConsumePendingForward } from './forwardDispatch';
 import { useForwardDispatchStore } from './forwardDispatchStore';
@@ -27,6 +28,10 @@ const ForwardMessageDispatcher = () => {
     s.pendingForward,
     s.clearPendingForward,
   ]);
+  // The target picker doesn't know each candidate's General-access level, so
+  // the dispatcher is the enforcement point: a view-only target drops the
+  // parked forward instead of sending. Wait for the settled value.
+  const { canUseResource, isAccessLoading } = useConversationResourceAccess();
 
   const routeAgentId = useMemo(() => {
     const match = location.pathname?.match(/^\/agent\/([^#/?]+)/);
@@ -48,17 +53,23 @@ const ForwardMessageDispatcher = () => {
       return;
     }
 
+    if (isAccessLoading) return;
+
     if (lastProcessedRef.current === pendingForward!.dispatchId) return;
     lastProcessedRef.current = pendingForward!.dispatchId;
 
     const { content, dispatchId } = pendingForward!;
     clearPendingForward(dispatchId);
 
+    if (!canUseResource) return;
+
     void sendMessage({ message: content });
   }, [
     agentId,
+    canUseResource,
     clearPendingForward,
     context.topicId,
+    isAccessLoading,
     isAgentConfigLoading,
     pendingForward,
     routeAgentId,

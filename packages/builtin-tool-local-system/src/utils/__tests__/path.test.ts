@@ -82,6 +82,24 @@ describe('resolvePathWithScope', () => {
   it('should return absolute glob pattern as-is', () => {
     expect(resolvePathWithScope('/absolute/**/*.ts', '/workspace')).toBe('/absolute/**/*.ts');
   });
+
+  it('should preserve Windows drive-letter absolute path', () => {
+    expect(resolvePathWithScope('D:\\photos', 'C:\\workspace')).toBe('D:\\photos');
+  });
+
+  it('should preserve Windows drive-letter path with forward slashes', () => {
+    expect(resolvePathWithScope('D:/photos', 'C:/workspace')).toBe('D:/photos');
+  });
+
+  it('should preserve UNC path', () => {
+    expect(resolvePathWithScope('\\\\server\\share\\dir', '/workspace')).toBe(
+      '\\\\server\\share\\dir',
+    );
+  });
+
+  it('should preserve Windows root-relative path', () => {
+    expect(resolvePathWithScope('\\logs', 'C:\\workspace')).toBe('\\logs');
+  });
 });
 
 describe('resolveArgsWithScope', () => {

@@ -5,8 +5,9 @@ import {
 } from '@lobechat/builtin-tool-local-system';
 
 import { deviceGateway } from '@/server/services/deviceGateway';
+import { buildDeviceLhEnv } from '@/server/services/toolExecution/preprocessLhCommand';
 
-import { resolveRunWorkspaceId } from './resolveWorkspaceScope';
+import { resolveContentWorkspaceId, resolveRunWorkspaceId } from './resolveWorkspaceScope';
 import { type ServerRuntimeRegistration } from './types';
 
 /**
@@ -58,17 +59,40 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
     let workspaceIdPromise: Promise<string | undefined> | undefined;
     const getDeviceWorkspaceId = () => (workspaceIdPromise ??= resolveRunWorkspaceId(context));
 
+    // Content scope — which workspace's data a command operates on — is a
+    // different question from which gateway pool addresses the device, so it
+    // must NOT reuse `getDeviceWorkspaceId` (that one intentionally returns
+    // undefined for a personal-scope device).
+    let contentWorkspaceIdPromise: Promise<string | undefined> | undefined;
+    const getContentWorkspaceId = () =>
+      (contentWorkspaceIdPromise ??= resolveContentWorkspaceId(context));
+
     const proxy: Record<string, (args: any) => Promise<any>> = {};
 
     for (const api of LocalSystemManifest.api) {
       const workingDirArg = WORKING_DIR_ARG[api.name];
       proxy[api.name] = async (args: any) => {
-        // Inject the device-bound cwd/scope when the model didn't supply one.
-        // `??=` leaves an explicit per-call override possible for the future.
-        const finalArgs =
-          workingDirArg && context.workingDirectory && args?.[workingDirArg] == null
+        // Inject the device-bound cwd/scope when the model didn't supply one
+        // or explicitly passed `.` (a relative reference that resolves to
+        // process.cwd() on the device side — the LobeHub install directory on
+        // packaged desktop instead of the user's actual workspace).
+        const scopeValue: unknown = workingDirArg ? args?.[workingDirArg] : undefined;
+        const needsInjection = scopeValue == null || scopeValue === '.';
+        let finalArgs =
+          workingDirArg && context.workingDirectory && needsInjection
             ? { ...args, [workingDirArg]: context.workingDirectory }
             : args;
+
+        // A device shell has its own `lh`, so nothing is rewritten — but the
+        // CLI would resolve to the device credentials' PERSONAL scope, which is
+        // how a workspace agent ends up unable to find (or edit) itself. Set on
+        // every command, so an `lh` reached indirectly (`bash -lc 'lh …'`, a
+        // script, a Makefile) inherits the scope too. The model's own `env`
+        // wins: it may be deliberately overriding the scope.
+        if (api.name === LocalSystemApiName.runCommand && typeof finalArgs?.command === 'string') {
+          const lhEnv = buildDeviceLhEnv(await getContentWorkspaceId());
+          if (lhEnv) finalArgs = { ...finalArgs, env: { ...lhEnv, ...finalArgs.env } };
+        }
 
         return deviceGateway.executeToolCall(
           {

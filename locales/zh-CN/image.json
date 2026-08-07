@@ -63,6 +63,8 @@
   "notSupportGuide.features.multiProviders.desc": "支持多种 AI 绘画服务商，包括 OpenAI、Google Imagen、FAL.ai 等。提供丰富的模型选择",
   "notSupportGuide.features.multiProviders.title": "多服务商支持",
   "notSupportGuide.title": "当前部署模式不支持 AI 绘画",
+  "notice.modelRemoved": "当前模型已不在 {{name}} 的模型列表中，请先切换可用模型",
+  "notice.providerDisabled": "当前模型所属的服务商 {{name}} 未启用，请先启用或切换可用模型",
   "topic.createNew": "创作新主题",
   "topic.createdBy": "由 {{name}} 创建",
   "topic.deleteConfirm": "删除生成主题",

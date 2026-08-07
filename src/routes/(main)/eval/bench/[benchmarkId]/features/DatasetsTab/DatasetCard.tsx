@@ -1,6 +1,6 @@
 import { ActionIcon, DropdownMenu, Flexbox, Tag } from '@lobehub/ui';
-import { Button, confirmModal } from '@lobehub/ui/base-ui';
-import { App, Card } from 'antd';
+import { Button, confirmModal, toast } from '@lobehub/ui/base-ui';
+import { Card } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ArrowRight, ChevronRight, Database, Ellipsis, Pencil, Play, Trash2 } from 'lucide-react';
 import { memo, useCallback } from 'react';
@@ -171,7 +171,6 @@ const DatasetCard = memo<DatasetCardProps>(
     onRun,
   }) => {
     const { t } = useTranslation('eval');
-    const { message } = App.useApp();
 
     const handleDelete = useCallback(() => {
       confirmModal({
@@ -181,15 +180,15 @@ const DatasetCard = memo<DatasetCardProps>(
         onOk: async () => {
           try {
             await agentEvalService.deleteDataset(dataset.id);
-            message.success(t('dataset.delete.success'));
+            toast.success(t('dataset.delete.success'));
             onRefresh();
           } catch {
-            message.error(t('dataset.delete.error'));
+            toast.error(t('dataset.delete.error'));
           }
         },
         title: t('common.delete'),
       });
-    }, [dataset.id, message, onRefresh, t]);
+    }, [dataset.id, onRefresh, t]);
 
     return (
       <Card className={styles.card}>

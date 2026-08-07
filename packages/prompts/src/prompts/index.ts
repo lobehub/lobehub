@@ -1,3 +1,4 @@
+export * from './agentArtwork';
 export * from './agentBuilder';
 export * from './agentDocuments';
 export * from './agentGroup';
@@ -22,3 +23,4 @@ export * from './systemRole';
 export * from './task';
 export * from './toolDiscovery';
 export * from './userMemory';
+export * from './verify';

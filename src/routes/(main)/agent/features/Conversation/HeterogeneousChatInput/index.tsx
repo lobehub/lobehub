@@ -1,15 +1,12 @@
 'use client';
 
-import {
-  HETEROGENEOUS_TYPE_LABELS,
-  isRemoteHeterogeneousType,
-} from '@lobechat/heterogeneous-agents';
+import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import { type ChatInputActionsProps } from '@lobehub/editor/react';
 import { Alert, Flexbox } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router';
+import { useParams } from 'react-router';
 import urlJoin from 'url-join';
 
 import { useHeteroAgentCloudConfig } from '@/business/client/hooks/useHeteroAgentCloudConfig';
@@ -19,11 +16,13 @@ import HeteroModel from '@/features/ChatInput/ControlBar/HeteroModel';
 import { ChatInput } from '@/features/Conversation';
 import { contextSelectors, useConversationStore } from '@/features/Conversation/store';
 import WideScreenContainer from '@/features/WideScreenContainer';
-import { resolveExecutionTarget } from '@/helpers/executionTarget';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import {
+  isHeterogeneousSandboxExecutionAvailable,
+  resolveExecutionTarget,
+} from '@/helpers/executionTarget';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useRemoteAgentDeviceGuard } from '@/hooks/useRemoteAgentDeviceGuard';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 
 import HeteroControlBar from './HeteroControlBar';
@@ -88,38 +87,43 @@ const HeterogeneousChatInput = memo(() => {
   const agentId = useConversationStore(contextSelectors.agentId);
   const { isConfigured, goToConfig } = useHeteroAgentCloudConfig(agentId);
   const params = useParams<{ aid: string }>();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
 
   // Effective config = shared row + this member's per-agent device override
-  // (LOBE-11689) — the raw shared `agencyConfig` may carry another member's
+  // — the raw shared `agencyConfig` may carry another member's
   // device pick, which would drive the guard/model-selector gates off the
   // wrong machine.
   // While the preference is loading, the merged config may still reflect only
   // the shared row — hold the input closed (below) instead of gating device
   // runs off a value that can flip once the override arrives.
-  const { agencyConfig, isPreferenceLoading } = useEffectiveAgencyConfig(agentId);
+  const { agencyConfig, isPreferenceLoading, workspaceScoped } = useEffectiveAgencyConfig(agentId);
   const providerType = agencyConfig?.heterogeneousProvider?.type;
-  const isWorkspaceAgent = useAgentStore(agentByIdSelectors.isWorkspaceAgentById(agentId));
   const executionTarget = resolveExecutionTarget(agencyConfig, {
     isHetero: !!providerType,
     clientExecutionAvailable: isDesktop,
-    workspaceScoped: isWorkspaceAgent,
+    workspaceScoped,
   });
-  const isRemoteAgent = !!providerType && isRemoteHeterogeneousType(providerType);
-  const ampDeviceSelectionRequired = providerType === 'amp' && executionTarget === 'none';
+  const deviceSelectionRequired =
+    !!providerType &&
+    !isHeterogeneousSandboxExecutionAvailable(providerType) &&
+    executionTarget === 'none';
 
-  // The model + thinking-effort selector only applies to local-CLI providers
-  // (claude-code / codex) and only when this surface actually dispatches the run.
-  // Gating here (rather than letting HeteroModel self-hide) keeps the action bar
-  // from rendering an empty slot. Uses the raw `executionTarget` to mirror the
-  // gate the control bar applied before the selector moved into the input.
-  const isSelectableHeteroProvider = providerType === 'claude-code' || providerType === 'codex';
+  // OpenCode, Pi, and Qoder discover models on a concrete runtime; Claude Code and
+  // Codex show the selector on every execution path (local / sandbox / device)
+  // since dispatch forwards --model/--effort everywhere.
+  const isSelectableHeteroProvider =
+    providerType === 'claude-code' ||
+    providerType === 'codex' ||
+    providerType === 'opencode' ||
+    providerType === 'pi' ||
+    providerType === 'qoder';
   const showHeteroModel =
     isSelectableHeteroProvider &&
     shouldShowHeteroModelSelector({
       boundDeviceId: agencyConfig?.boundDeviceId,
-      executionTarget: agencyConfig?.executionTarget,
+      executionTarget,
       isDesktopClient: isDesktop,
+      providerType,
     });
   // The armed-schedule chip sits immediately after the `+` that armed it, so the
   // state and the control that produced it read as one unit.
@@ -139,13 +143,11 @@ const HeterogeneousChatInput = memo(() => {
     [showHeteroModel],
   );
 
-  // A run goes to an `lh connect` device when the provider is a remote-only type
-  // (openclaw / hermes) OR a local-CLI type (claude-code / codex) resolves to a
-  // bound device (including desktop "local" opened from web). Either way the
+  // A run goes to an `lh connect` device when its execution target resolves to a
+  // bound device (including desktop "local" opened from web). The
   // bound device must be online before we let the user send — guard it here
   // instead of failing at dispatch time.
-  const isDeviceExecution =
-    isRemoteAgent || (executionTarget === 'device' && !!agencyConfig?.boundDeviceId);
+  const isDeviceExecution = executionTarget === 'device' && !!agencyConfig?.boundDeviceId;
 
   const { status, refresh } = useRemoteAgentDeviceGuard({ agentId, enabled: isDeviceExecution });
 
@@ -198,7 +200,7 @@ const HeterogeneousChatInput = memo(() => {
   const renderCloudConfigGuard = () => {
     // Until the override loads, `isDeviceExecution` may be a false negative —
     // don't flash the cloud-config prompt for what turns out to be a device run.
-    if (isPreferenceLoading || ampDeviceSelectionRequired || isDeviceExecution || isConfigured) {
+    if (isPreferenceLoading || deviceSelectionRequired || isDeviceExecution || isConfigured) {
       return null;
     }
 
@@ -215,13 +217,15 @@ const HeterogeneousChatInput = memo(() => {
     );
   };
 
-  const renderAmpDeviceGuard = () => {
-    if (!ampDeviceSelectionRequired) return null;
+  const renderDeviceSelectionGuard = () => {
+    if (!deviceSelectionRequired) return null;
 
     return (
       <GuardBanner
-        hint={t('heteroAgent.executionTarget.ampSandboxUnsupported')}
         title={t('platformAgent.deviceGuard.noDevice.title')}
+        hint={t('heteroAgent.executionTarget.sandboxUnsupported', {
+          name: providerType ? HETEROGENEOUS_TYPE_LABELS[providerType] : undefined,
+        })}
       />
     );
   };
@@ -232,15 +236,15 @@ const HeterogeneousChatInput = memo(() => {
   // known yet, so neither guard can vouch for the run.
   const inputDisabled =
     isPreferenceLoading ||
-    ampDeviceSelectionRequired ||
+    deviceSelectionRequired ||
     (!isConfigured && !isDeviceExecution) ||
     deviceBlocked;
   const hasGuard =
-    ampDeviceSelectionRequired || deviceBlocked || (!isConfigured && !isDeviceExecution);
+    deviceSelectionRequired || deviceBlocked || (!isConfigured && !isDeviceExecution);
 
   return (
     <Flexbox>
-      {renderAmpDeviceGuard()}
+      {renderDeviceSelectionGuard()}
       {renderCloudConfigGuard()}
       {renderDeviceGuard()}
       <ChatInput

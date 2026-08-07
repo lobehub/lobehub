@@ -3,22 +3,17 @@
 import { type SlashOptions } from '@lobehub/editor';
 import { type ChatInputActionsProps } from '@lobehub/editor/react';
 import { Alert, Flexbox, type MenuProps } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router';
 
 import {
   getBusinessChatInputSendAreaPrefix,
   useBusinessChatInputAlerts,
 } from '@/business/client/hooks/useBusinessChatInputSendAreaPrefix';
-import { useBusinessInputCompletionErrorAlert } from '@/business/client/hooks/useBusinessInputCompletionErrorAlert';
 import type { ActionKeys, ChatInputFeature } from '@/features/ChatInput';
 import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
-import { selectors as chatInputSelectors, useChatInputStore } from '@/features/ChatInput/store';
 import {
-  type InputCompletionError,
   type SendButtonHandler,
   type SendButtonProps,
 } from '@/features/ChatInput/store/initialState';
@@ -40,6 +35,7 @@ import {
   useConversationStoreApi,
 } from '../store';
 import TodoProgress from '../TodoProgress';
+import InputCompletionErrorAlert from './InputCompletionErrorAlert';
 import OpStatusTray from './OpStatusTray';
 import QueueTray from './QueueTray';
 import {
@@ -47,58 +43,12 @@ import {
   getConversationChatInputUiState,
   toChatInputMessages,
 } from './utils';
+import GoalArmedChip from './VerifyTray/GoalArmedChip';
+import { useGoalArmStore } from './VerifyTray/goalArmStore';
+import GoalTray from './VerifyTray/GoalTray';
 
 /** Max recent messages to feed into auto-complete context (≈10 conversation turns) */
 const MAX_CONTEXT_MESSAGES = 25;
-
-const InputCompletionErrorAlertContent = memo<{
-  inputCompletionError: InputCompletionError;
-}>(({ inputCompletionError }) => {
-  const { t } = useTranslation('chat');
-  const clearInputCompletionError = useChatInputStore((s) => s.clearInputCompletionError);
-  const businessAlert = useBusinessInputCompletionErrorAlert({
-    error: inputCompletionError,
-    onRetry: clearInputCompletionError,
-  });
-
-  const action = businessAlert.action ?? (
-    <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
-      <Button size={'small'} type={'primary'} onClick={clearInputCompletionError}>
-        {t('input.inputCompletionError.retry')}
-      </Button>
-      <Link to={'/settings/agent'}>
-        <Button size={'small'}>{t('input.inputCompletionError.settings')}</Button>
-      </Link>
-    </Flexbox>
-  );
-
-  return (
-    <>
-      <Flexbox paddingBlock={'0 6px'} paddingInline={12}>
-        <Alert
-          showIcon
-          action={action}
-          description={businessAlert.description ?? t('input.inputCompletionError.desc')}
-          title={t('input.inputCompletionError.title')}
-          type={'warning'}
-        />
-      </Flexbox>
-      {businessAlert.extra}
-    </>
-  );
-});
-
-InputCompletionErrorAlertContent.displayName = 'InputCompletionErrorAlertContent';
-
-const InputCompletionErrorAlert = memo(() => {
-  const inputCompletionError = useChatInputStore(chatInputSelectors.inputCompletionErrorVisible);
-
-  if (!inputCompletionError) return null;
-
-  return <InputCompletionErrorAlertContent inputCompletionError={inputCompletionError} />;
-});
-
-InputCompletionErrorAlert.displayName = 'InputCompletionErrorAlert';
 
 export interface ChatInputProps {
   /**
@@ -234,7 +184,7 @@ const ChatInput = memo<ChatInputProps>(
     const storeApi = useConversationStoreApi();
     const dbMessages = useConversationStore(dataSelectors.dbMessages);
     const context = useConversationStore((s) => s.context);
-    const draftKey = useMemo(() => messageMapKey(context), [context]);
+    const contextKey = useMemo(() => messageMapKey(context), [context]);
     const [agentId, inputMessage, sendMessage, stopGenerating] = useConversationStore((s) => [
       s.context.agentId,
       s.inputMessage,
@@ -305,7 +255,7 @@ const ChatInput = memo<ChatInputProps>(
 
     // File store - for UI state only (disabled button, etc.)
     const fileList = useFileStore(fileChatSelectors.chatUploadFileList);
-    const contextList = useFileStore(fileChatSelectors.chatContextSelections);
+    const contextList = useFileStore(fileChatSelectors.chatContextSelections(contextKey));
     const isUploadingFiles = useFileStore(fileChatSelectors.isUploadingFiles);
 
     // Queue state
@@ -316,6 +266,20 @@ const ChatInput = memo<ChatInputProps>(
     // Detect whether TodoProgress will render (mirrors its own gating) so we
     // can square the top corners of OpStatusTray when it sits flush below.
     const hasTodos = (selectCurrentTurnTodosFromMessages(dbMessages)?.items.length ?? 0) > 0;
+
+    // Detect whether OpStatusTray will render (mirrors its own `!startTime`
+    // gate) so GoalTray — which sits flush below it — can square its top corners
+    // and merge with the status strip instead of showing a seam.
+    const hasOpStatus = useChatStore(
+      (s) => operationSelectors.getVisibleAgentRuntimeStartTimeByContext(context)(s) !== undefined,
+    );
+
+    // Pre-topic "armed goal" state (topic Goal lab). `armedAt` is only ever set
+    // by the lab-gated "+" → Set goal entry, so its presence already implies the
+    // lab is on. While armed the goal chip rides the action bar and the composer
+    // placeholder prompts for the goal (the next message becomes it).
+    const goalArmedAt = useGoalArmStore((s) => (agentId ? s.armedAt[agentId] : undefined));
+    const goalArmed = !!agentId && !context.topicId && goalArmedAt !== undefined;
 
     // Computed state
     const isInputEmpty = !inputMessage.trim() && fileList.length === 0 && contextList.length === 0;
@@ -344,7 +308,7 @@ const ChatInput = memo<ChatInputProps>(
         const fileStore = useFileStore.getState();
         const currentFileList = fileChatSelectors.chatUploadFileList(fileStore);
         const currentIsUploading = fileChatSelectors.isUploadingFiles(fileStore);
-        const currentContextList = fileChatSelectors.chatContextSelections(fileStore);
+        const currentContextList = fileChatSelectors.chatContextSelections(contextKey)(fileStore);
 
         if (currentIsUploading) return;
 
@@ -363,7 +327,7 @@ const ChatInput = memo<ChatInputProps>(
         const clearComposer = () => {
           clearContent();
           fileStore.clearChatUploadFileList();
-          fileStore.clearChatContextSelections();
+          fileStore.clearChatContextSelections(contextKey);
         };
 
         // A deferred send was armed from the composer (see `scheduledSendAt`):
@@ -392,10 +356,13 @@ const ChatInput = memo<ChatInputProps>(
           editorData,
           files: currentFileList,
           message,
+          onPreflightFailure: () => {
+            useFileStore.getState().restoreChatContextSelections(contextKey, currentContextList);
+          },
           pageSelections,
         });
       },
-      [sendMessage, storeApi, disableQueue, disableSend, isInputQueueBlocked],
+      [contextKey, sendMessage, storeApi, disableQueue, disableSend, isInputQueueBlocked],
     );
 
     const sendButtonProps: SendButtonProps = {
@@ -426,7 +393,6 @@ const ChatInput = memo<ChatInputProps>(
               />
             </Flexbox>
           )}
-          <InputCompletionErrorAlert />
           {businessAlerts}
           <Flexbox
             paddingInline={12}
@@ -439,22 +405,34 @@ const ChatInput = memo<ChatInputProps>(
               zIndex: 10,
             }}
           >
+            <InputCompletionErrorAlert />
             {!disableQueue && hasQueuedMessages && <QueueTray />}
             <TodoProgress topAttached={!disableQueue && hasQueuedMessages} />
             <OpStatusTray topAttached={(!disableQueue && hasQueuedMessages) || hasTodos} />
+            <GoalTray
+              topAttached={(!disableQueue && hasQueuedMessages) || hasTodos || hasOpStatus}
+            />
           </Flexbox>
+          {/* Append the armed-goal chip to every composer's action bar. While armed,
+              the next message becomes the goal and the placeholder explains that state. */}
           <DesktopChatInput
             actionBarStyle={actionBarStyle}
             borderRadius={12}
             compact={compact}
             controlBarSlot={controlBarSlot}
-            extraActionItems={extraActionItems}
             hidden={hasPendingInterventions}
             isConfigLoading={isConfigLoading}
             leftContent={leftContent}
             placeholderVariant={placeholderVariant}
             sendAreaPrefix={businessSendAreaPrefix}
             showControlBar={showControlBar}
+            extraActionItems={[
+              ...(extraActionItems ?? []),
+              { children: <GoalArmedChip />, key: 'goal-armed-chip' },
+            ]}
+            placeholder={
+              goalArmed ? t('acceptance.tray.goalArmedPlaceholder', { ns: 'verify' }) : undefined
+            }
           />
         </div>
       </WideScreenContainer>
@@ -464,8 +442,9 @@ const ChatInput = memo<ChatInputProps>(
       <ChatInputProvider
         agentId={agentId}
         allowExpand={allowExpand}
+        contextSelectionKey={contextKey}
         contextWindowMessages={contextWindowMessages}
-        draftKey={draftKey}
+        draftKey={contextKey}
         feature={feature}
         getMessages={getMessages}
         leftActions={leftActions}

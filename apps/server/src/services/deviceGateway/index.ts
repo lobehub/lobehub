@@ -7,9 +7,10 @@ import {
   type DeviceSystemInfo,
   type DeviceToolCallResult,
   GatewayHttpClient,
-  type GatewayMcpStdioParams,
+  type GatewayMcpParams,
 } from '@lobechat/device-gateway-client';
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
+import type { ClaudeCodeQuotaSnapshot } from '@lobechat/heterogeneous-agents/quota';
 import type {
   DeviceGitAddWorktreeResult,
   DeviceGitAheadBehind,
@@ -36,6 +37,7 @@ import type {
   DeviceProjectFileSearchResult,
   DeviceRenameProjectFileResult,
   DeviceWriteProjectFileResult,
+  HeterogeneousAgentModelCatalog,
   ProjectSkillMeta,
   WorkspaceInitResult,
 } from '@lobechat/types';
@@ -115,11 +117,23 @@ export class DeviceGateway {
       return devices.map((d) => ({
         // `channels` may be absent if the gateway worker deploy lags behind the
         // server (separate Cloudflare deploy); tolerate the legacy flat shape.
-        channels: (d.channels ?? []).map((c) => ({
-          channel: c.channel,
-          connectedAt: new Date(c.connectedAt).toISOString(),
-          connectionId: c.connectionId,
-        })),
+        //
+        // Sorted newest-first because every consumer reads `channels[0]` as
+        // "this device's current connection" — the settings row's
+        // "Connected {time}", a ghost row's `lastSeen`, its hostname/platform
+        // fallback — while `sortDevicesByActivity` ranks by the FRESHEST
+        // channel. The gateway promises no order, so leaving it raw lets a
+        // multi-channel device rank by one connection and get labelled with
+        // another. Normalising here (the single entry point both `listDevices`
+        // and `getScopedOnlineDevices` pull channels through) makes
+        // `channels[0]` mean the same thing everywhere.
+        channels: (d.channels ?? [])
+          .map((c) => ({
+            channel: c.channel,
+            connectedAt: new Date(c.connectedAt).toISOString(),
+            connectionId: c.connectionId,
+          }))
+          .sort((a, b) => Date.parse(b.connectedAt) - Date.parse(a.connectedAt)),
         deviceId: d.deviceId,
         hostname: d.hostname,
         lastSeen: new Date(d.connectedAt).toISOString(),
@@ -339,11 +353,12 @@ export class DeviceGateway {
   }
 
   /**
-   * Generic helper for the granular git read RPCs (branch / PR / working-tree /
-   * ahead-behind). Returns `undefined` when the gateway is unconfigured, the
-   * device is offline, or the call fails — callers treat that as "unknown".
+   * Generic helper for granular device read RPCs (git branch / PR /
+   * working-tree / ahead-behind / Claude quota). Returns `undefined` when the
+   * gateway is unconfigured, the device is offline, or the call fails —
+   * callers treat that as "unknown".
    */
-  private async invokeGitRead<T>(
+  private async invokeDeviceRead<T>(
     method: string,
     params: { deviceId: string; timeout?: number; userId: string; workspaceId?: string },
     rpcParams: Record<string, unknown>,
@@ -372,7 +387,9 @@ export class DeviceGateway {
 
   /** Branch name + detached flag for a directory on a remote device. */
   gitBranch(params: { deviceId: string; path: string; userId: string; workspaceId?: string }) {
-    return this.invokeGitRead<DeviceGitBranchInfo>('getGitBranch', params, { path: params.path });
+    return this.invokeDeviceRead<DeviceGitBranchInfo>('getGitBranch', params, {
+      path: params.path,
+    });
   }
 
   /** The GitHub PR linked to a branch in a directory on a remote device. */
@@ -384,7 +401,7 @@ export class DeviceGateway {
     userId: string;
     workspaceId?: string;
   }) {
-    return this.invokeGitRead<DeviceGitLinkedPullRequestResult>('getLinkedPullRequest', params, {
+    return this.invokeDeviceRead<DeviceGitLinkedPullRequestResult>('getLinkedPullRequest', params, {
       branch: params.branch,
       path: params.path,
       pullRequestNumber: params.pullRequestNumber,
@@ -398,15 +415,34 @@ export class DeviceGateway {
     userId: string;
     workspaceId?: string;
   }) {
-    return this.invokeGitRead<DeviceGitWorkingTreeStatus>('getGitWorkingTreeStatus', params, {
+    return this.invokeDeviceRead<DeviceGitWorkingTreeStatus>('getGitWorkingTreeStatus', params, {
       path: params.path,
     });
   }
 
   /** Ahead/behind commit counts for a directory on a remote device. */
   gitAheadBehind(params: { deviceId: string; path: string; userId: string; workspaceId?: string }) {
-    return this.invokeGitRead<DeviceGitAheadBehind>('getGitAheadBehind', params, {
+    return this.invokeDeviceRead<DeviceGitAheadBehind>('getGitAheadBehind', params, {
       path: params.path,
+    });
+  }
+
+  /**
+   * Claude Code subscription quota of the login on a remote device. The device
+   * samples the Anthropic usage API with its local credentials — same sampler
+   * as the desktop IPC path. `undefined` also covers older device clients that
+   * don't know this RPC yet.
+   */
+  claudeCodeQuota(params: {
+    deviceId: string;
+    env?: Record<string, string>;
+    force?: boolean;
+    userId: string;
+    workspaceId?: string;
+  }) {
+    return this.invokeDeviceRead<ClaudeCodeQuotaSnapshot>('getClaudeCodeQuota', params, {
+      env: params.env,
+      force: params.force,
     });
   }
 
@@ -417,9 +453,58 @@ export class DeviceGateway {
     userId: string;
     workspaceId?: string;
   }) {
-    return this.invokeGitRead<DeviceGitWorktreeListItem[]>('listGitWorktrees', params, {
+    return this.invokeDeviceRead<DeviceGitWorktreeListItem[]>('listGitWorktrees', params, {
       path: params.path,
     });
+  }
+
+  /** Query a heterogeneous CLI's model catalog on the device that will execute it. */
+  async listHeterogeneousAgentModels(params: {
+    command?: string;
+    cwd?: string;
+    deviceId: string;
+    env?: Record<string, string>;
+    timeout?: number;
+    type: 'opencode' | 'pi' | 'qoder';
+    userId: string;
+    workspaceId?: string;
+  }): Promise<HeterogeneousAgentModelCatalog> {
+    const { command, cwd, deviceId, env, timeout = 20_000, type, userId, workspaceId } = params;
+    const client = this.getClient();
+    const unavailable = (message: string): HeterogeneousAgentModelCatalog => ({
+      error: { code: 'device_unavailable', message },
+      status: 'error',
+      updatedAt: Date.now(),
+    });
+    if (!client) return unavailable('Device gateway is not configured');
+
+    try {
+      const result = await client.invokeRpc<HeterogeneousAgentModelCatalog>(
+        { deviceId, timeout, userId, workspaceId },
+        {
+          method: 'listHeterogeneousAgentModels',
+          params: { command, cwd, env, type },
+        },
+      );
+
+      if (!result.success || !result.data) {
+        const message = result.error || 'The device did not return a model catalog';
+        const unsupported =
+          message.includes('does not support heterogeneous agent model discovery') ||
+          message.includes('Unknown device RPC method');
+        log('listHeterogeneousAgentModels: failed for deviceId=%s — %s', deviceId, message);
+        return {
+          error: { code: unsupported ? 'unsupported_client' : 'device_unavailable', message },
+          status: 'error',
+          updatedAt: Date.now(),
+        };
+      }
+
+      return result.data;
+    } catch (error) {
+      log('listHeterogeneousAgentModels: error for deviceId=%s — %O', deviceId, error);
+      return unavailable(error instanceof Error ? error.message : 'Device model discovery failed');
+    }
   }
 
   /**
@@ -1246,9 +1331,10 @@ export class DeviceGateway {
   }
 
   /**
-   * Tunnel a stdio MCP tool call to a connected device. The cloud server can't
-   * spawn the user's local MCP binary, so the command/args/env are forwarded
-   * to the device, which spawns the stdio server and runs the call locally.
+   * Tunnel an MCP tool call to a connected device, for MCP servers only the
+   * device can reach: stdio (the cloud can't spawn the user's local binary)
+   * and localhost / LAN HTTP endpoints (the cloud's fetch can't reach them).
+   * The connection params are forwarded so the device runs the call locally.
    */
   async executeMcpCall(
     mcpCall: {
@@ -1256,7 +1342,7 @@ export class DeviceGateway {
       arguments: string;
       deviceId: string;
       identifier: string;
-      params: GatewayMcpStdioParams;
+      params: GatewayMcpParams;
       userId: string;
       workspaceId?: string;
     },

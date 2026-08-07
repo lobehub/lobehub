@@ -5,6 +5,7 @@ import { DiscordInstallationStore } from './discord';
 import { SlackInstallationStore } from './slack';
 import { TelegramInstallationStore } from './telegram';
 import type { MessengerInstallationStore } from './types';
+import { WechatInstallationStore } from './wechat';
 
 /**
  * One InstallationStore singleton per platform — they're stateless apart
@@ -23,6 +24,9 @@ const create = (platform: MessengerPlatform): MessengerInstallationStore | null 
     }
     case 'discord': {
       return new DiscordInstallationStore();
+    }
+    case 'wechat': {
+      return new WechatInstallationStore();
     }
     default: {
       return null;
@@ -109,3 +113,4 @@ export { DISCORD_INSTALLATION_KEY, DiscordInstallationStore } from './discord';
 export { SlackInstallationStore } from './slack';
 export { TELEGRAM_INSTALLATION_KEY, TelegramInstallationStore } from './telegram';
 export type { InstallationCredentials, MessengerInstallationStore } from './types';
+export { wechatInstallationKey, WechatInstallationStore } from './wechat';

@@ -1,3 +1,6 @@
+import { randomUUID } from 'node:crypto';
+
+import { BRANDING_URL } from '@lobechat/business-const';
 import { TRACING_SCENARIOS } from '@lobechat/const';
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
 import {
@@ -15,6 +18,7 @@ import {
   TASK_TOPIC_HANDOFF_SCHEMA_NAME,
 } from '@lobechat/prompts';
 import type {
+  BriefAction,
   BriefArtifacts,
   BriefDecision,
   TaskItem,
@@ -23,7 +27,7 @@ import type {
   TaskSchedulerContext,
   TaskTopicHandoff,
 } from '@lobechat/types';
-import { DEFAULT_BRIEF_ACTIONS } from '@lobechat/types';
+import { ChatErrorType, DEFAULT_BRIEF_ACTIONS } from '@lobechat/types';
 import debug from 'debug';
 
 import { BriefModel } from '@/database/models/brief';
@@ -32,6 +36,7 @@ import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
+import { translation } from '@/libs/i18n/serverTranslation';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { SystemAgentService } from '@/server/services/systemAgent';
 import { TaskResultBridgeService } from '@/server/services/taskResultBridge';
@@ -68,13 +73,27 @@ const isTerminal = (status: string) => TERMINAL_STATUSES.has(status);
 // for now; move to task.config later if it needs to be tunable per-task.
 const AUTOMATION_FAILURE_FUSE = 3;
 
+// Terminal error codes whose fix lives in billing, not in a retry — running the
+// same task again just reproduces the same wall. For these the error brief leads
+// with an "Upgrade" remedy instead of a futile Retry (ux Feedback §4.2).
+// Everything else keeps the default retry + feedback actions.
+const BILLING_ERROR_CODES = new Set<string>([
+  ChatErrorType.InsufficientBudgetForModel,
+  ChatErrorType.FreePlanLimit,
+  ChatErrorType.SubscriptionPlanLimit,
+  ChatErrorType.WorkspaceSubscriptionInactive,
+]);
+
 export interface TopicCompleteParams {
+  /** Structured terminal error type (e.g. `InsufficientBudgetForModel`) from the
+   *  completion lifecycle event, used to pick the error brief's remedy action. */
+  errorCode?: string;
   errorMessage?: string;
   lastAssistantContent?: string;
   operationId: string;
   reason: string; // 'done' | 'error' | 'interrupted' | ...
   // What triggered the run. Manual "run now" failures are ad-hoc and must not
-  // change an automation task's scheduling state (LOBE-11388). Undefined is
+  // change an automation task's scheduling state. Undefined is
   // treated as 'manual' for backward compatibility with older callers.
   runTrigger?: TaskRunTrigger;
   taskId: string;
@@ -114,7 +133,15 @@ export class TaskLifecycleService {
    * Flow: updateHeartbeat → updateTopicStatus → handoff → review → checkpoint
    */
   async onTopicComplete(params: TopicCompleteParams): Promise<void> {
-    const { taskId, taskIdentifier, topicId, reason, lastAssistantContent, errorMessage } = params;
+    const {
+      taskId,
+      taskIdentifier,
+      topicId,
+      reason,
+      lastAssistantContent,
+      errorMessage,
+      errorCode,
+    } = params;
 
     log('onTopicComplete: task=%s topic=%s reason=%s', taskIdentifier, topicId, reason);
 
@@ -166,7 +193,20 @@ export class TaskLifecycleService {
       // 4. Synthesize a programmatic brief for the user (auto mode only).
       //    The agent-driven `createBrief` tool path stays the default until
       //    the GrowthBook flag flips. See for the rollout plan.
-      if (getBriefMode(currentTask) === 'auto' && currentTask && topicId && lastAssistantContent) {
+      //
+      //    Goal-loop rounds are deliberately silent. The outer loop can run many
+      //    rounds before it converges, and a card per round buries the one moment
+      //    that actually needs the user. The settle path owns those moments:
+      //    `driveTaskFromVerify` raises "delivery ready for sign-off" when the
+      //    loop succeeds and the budget-exhausted alert when it stops.
+      const isGoalLoopRound = !!currentTask && !!this.taskModel.getGoalConfig(currentTask);
+      if (
+        !isGoalLoopRound &&
+        getBriefMode(currentTask) === 'auto' &&
+        currentTask &&
+        topicId &&
+        lastAssistantContent
+      ) {
         await this.synthesizeTopicBrief(
           taskId,
           taskIdentifier,
@@ -222,7 +262,7 @@ export class TaskLifecycleService {
           // 'scheduled' state and clears the live error column. Before clearing
           // it, stamp a durable recovery marker + reset the failure fuse so the
           // recovery is auditable and a later query can still tell the task once
-          // failed — the live `error` alone would silently self-heal (LOBE-11390).
+          // failed — the live `error` alone would silently self-heal.
           await this.recordAutomationRecovery(currentTask);
           await this.taskModel.updateStatus(taskId, 'scheduled', { error: null });
         } else if (!verifyBound && this.taskModel.shouldPauseOnTopicComplete(currentTask)) {
@@ -232,19 +272,67 @@ export class TaskLifecycleService {
     } else if (reason === 'error') {
       if (topicId) await this.taskTopicModel.updateStatus(taskId, topicId, 'failed');
 
-      const topicSeq = currentTask?.totalTopics || '?';
-      const topicRef = topicId ? ` #${topicSeq} (${topicId})` : '';
       const errorText = errorMessage || 'Unknown error';
 
+      // A budget / plan failure won't clear on a blind Retry — lead the card with
+      // the fix (Upgrade → plans page) instead. Other causes keep retry + feedback.
+      const isBillingError = errorCode ? BILLING_ERROR_CODES.has(errorCode) : false;
+      const errorActions: BriefAction[] =
+        isBillingError && BRANDING_URL.subscription
+          ? [
+              {
+                key: 'upgrade',
+                label: 'Upgrade plan',
+                type: 'link',
+                url: BRANDING_URL.subscription,
+              },
+              { key: 'feedback', label: '💬 Feedback', type: 'comment' },
+            ]
+          : DEFAULT_BRIEF_ACTIONS['error'];
+
+      // Resolve the user-facing copy in the user's language, at the source (not
+      // by string-munging on the client):
+      //  - title: a plain localized "run failed" — the task identity already sits
+      //    in the card's meta row, so the headline needn't repeat it.
+      //  - summary: map the structured error code to the same human, localized
+      //    message the chat error card shows. The copy for a code lives in exactly
+      //    one of two namespaces — `modelRuntime:<code>` (runtime codes) or
+      //    `error:response.<code>` (HTTP status / Cloud ChatErrorType such as
+      //    `InsufficientBudgetForModel`) — so try both and take whichever resolves
+      //    (the server `t` returns the key unchanged when it has no entry). Fall
+      //    back to the raw runtime message for codes with no friendly copy, or copy
+      //    left with an unresolved `{{…}}` placeholder we can't fill here.
+      const locale = await this.systemAgentService.getUserLocale();
+      const [{ t: tHome }, { t: tRuntime }, { t: tError }] = await Promise.all([
+        translation('home', locale),
+        translation('modelRuntime', locale),
+        translation('error', locale),
+      ]);
+      const resolveErrorSummary = () => {
+        if (!errorCode) return errorText;
+        const runtimeMsg = tRuntime(errorCode);
+        if (runtimeMsg !== errorCode && !runtimeMsg.includes('{{')) return runtimeMsg;
+        const responseKey = `response.${errorCode}`;
+        const responseMsg = tError(responseKey);
+        if (responseMsg !== responseKey && !responseMsg.includes('{{')) return responseMsg;
+        return errorText;
+      };
+      const summary = resolveErrorSummary();
+
       // Always surface an urgent error brief — a failed run is visible to the
-      // user regardless of what happens to the scheduling state below.
+      // user regardless of what happens to the scheduling state below. The topic
+      // id rides the structured `topicId` field (it also powers the card's
+      // "View run" shortcut), never the headline.
       await this.briefModel.create({
-        actions: DEFAULT_BRIEF_ACTIONS['error'],
+        actions: errorActions,
         agentId: currentTask?.assigneeAgentId || undefined,
+        // Persist the structured cause for observability / future remedy mapping.
+        metadata: errorCode ? { error: { code: errorCode } } : undefined,
         priority: 'urgent',
-        summary: `Execution failed: ${errorText}`,
+        summary,
         taskId,
-        title: `${taskIdentifier} topic${topicRef} error`,
+        title: tHome('inbox.error.title'),
+        topicId,
         trigger: 'task',
         type: 'error',
       });
@@ -259,7 +347,7 @@ export class TaskLifecycleService {
         await this.recordAutomationError(currentTask, errorText, runTrigger);
         await this.taskModel.updateStatus(taskId, 'paused', { error: errorText });
       } else if (!isAutomationTick) {
-        // LOBE-11388: a manual "run now" of an automation task failed. This is
+        // a manual "run now" of an automation task failed. This is
         // an ad-hoc debug/backfill run — its failure is NOT a health signal for
         // the automation. Restore the resting 'scheduled' state (the run had
         // flipped it to 'running') so the next scheduled tick still fires, and
@@ -268,7 +356,7 @@ export class TaskLifecycleService {
         await this.recordAutomationError(currentTask, errorText, runTrigger);
         await this.taskModel.updateStatus(taskId, 'scheduled', { error: errorText });
       } else if (currentTask.automationMode === 'schedule') {
-        // LOBE-11389: a scheduled tick failed. A single transient error must not
+        // a scheduled tick failed. A single transient error must not
         // permanently pause a recurring task. Count consecutive failures and
         // only pause once the fuse blows; otherwise keep the task 'scheduled' so
         // the next tick retries. (Heartbeat tasks are handled by
@@ -381,7 +469,7 @@ export class TaskLifecycleService {
     const runCount = await this.taskTopicModel.countByTask(task.id, {
       since: new Date(startedAtIso),
       // Only scheduled ticks consume the quota — manual "run now" invocations
-      // are ad-hoc and must not push the task toward its cap (LOBE-11391).
+      // are ad-hoc and must not push the task toward its cap.
       triggers: ['schedule'],
     });
     return runCount >= maxExecutions;
@@ -391,7 +479,7 @@ export class TaskLifecycleService {
    * Append a failure to the durable lifecycle audit trail
    * (`context.lifecycle`). Unlike the live `tasks.error` column — cleared by
    * the next successful run — this history survives a later success so a missed
-   * fire / prior pause stays diagnosable after the fact (LOBE-11390).
+   * fire / prior pause stays diagnosable after the fact.
    *
    * When `extra.pauseReason` is set, also stamps `lastPausedAt`/`lastPauseReason`
    * (the failure fuse just auto-paused the task). When `extra.consecutiveFailures`
@@ -493,6 +581,7 @@ export class TaskLifecycleService {
 
     try {
       const scheduler = createTaskSchedulerModule();
+      const tickToken = randomUUID();
 
       // Cancel any prior tick (defensive — we usually wouldn't have one
       // pending here, since the prior tick has already fired to bring us
@@ -504,6 +593,7 @@ export class TaskLifecycleService {
       const tickMessageId = await scheduler.scheduleNextTopic({
         delay: task.heartbeatInterval,
         taskId: task.id,
+        tickToken,
         userId: this.userId,
       });
 
@@ -512,6 +602,7 @@ export class TaskLifecycleService {
           consecutiveFailures,
           scheduledAt: new Date().toISOString(),
           tickMessageId,
+          tickToken,
         },
       });
 

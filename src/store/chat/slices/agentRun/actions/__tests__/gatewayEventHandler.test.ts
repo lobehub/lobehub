@@ -35,6 +35,7 @@ vi.mock('@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge', () =
 const getExecutorMock = vi.fn();
 vi.mock('@/store/tool/slices/builtin/executors', () => ({
   getExecutor: (...args: unknown[]) => getExecutorMock(...args),
+  registerBuiltinToolExecutors: vi.fn().mockResolvedValue(undefined),
 }));
 
 // ─── Test Helpers ───
@@ -52,7 +53,6 @@ function createMockStore() {
     internal_dispatchMessage: vi.fn(),
     internal_executeClientTool: vi.fn().mockResolvedValue(undefined),
     internal_toggleToolCallingStreaming: vi.fn(),
-    internal_updateTopicLoading: vi.fn(),
     markTopicUnread: vi.fn(),
     messagesMap: {} as Record<string, any>,
     operations: {
@@ -134,7 +134,7 @@ describe('createGatewayEventHandler', () => {
       // Native gateway ships the assistant seed on stream_start, so the client
       // inserts the message shell locally (createMessage) and must NOT trigger a
       // DB refetch — the refetch is what clobbered the streamed assistantGroup
-      // with a stale placeholder (LOBE-11501).
+      // with a stale placeholder.
       expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'msg-step2', type: 'createMessage' }),
         { operationId: 'op-1' },
@@ -227,6 +227,120 @@ describe('createGatewayEventHandler', () => {
       handler(makeEvent('stream_chunk', { chunkType: 'text', content: ' world' }));
       await flush();
 
+      expect(store.internal_dispatchMessage).toHaveBeenLastCalledWith(
+        {
+          id: 'msg-initial',
+          type: 'updateMessage',
+          value: { content: 'Hello world' },
+        },
+        { operationId: 'op-1' },
+      );
+    });
+
+    it('applies replace snapshots and drops redelivered snapshot seqs', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      // `lh hetero exec` sends full-text snapshots: each carries the WHOLE
+      // message so far and must replace, not append.
+      handler(
+        makeEvent('stream_chunk', {
+          chunkType: 'text',
+          content: 'Hello',
+          snapshotMode: 'replace',
+          snapshotSeq: 1,
+        }),
+      );
+      handler(
+        makeEvent('stream_chunk', {
+          chunkType: 'text',
+          content: 'Hello world',
+          snapshotMode: 'replace',
+          snapshotSeq: 2,
+        }),
+      );
+      // Redelivery of seq 2 (server-side batch retry) — must be dropped, not
+      // appended: appending would render "Hello worldHello world".
+      handler(
+        makeEvent('stream_chunk', {
+          chunkType: 'text',
+          content: 'Hello world',
+          snapshotMode: 'replace',
+          snapshotSeq: 2,
+        }),
+      );
+      await flush();
+
+      expect(store.internal_dispatchMessage).toHaveBeenLastCalledWith(
+        {
+          id: 'msg-initial',
+          type: 'updateMessage',
+          value: { content: 'Hello world' },
+        },
+        { operationId: 'op-1' },
+      );
+      const textDispatches = store.internal_dispatchMessage.mock.calls.filter(
+        ([action]: any[]) => action.type === 'updateMessage' && 'content' in action.value,
+      );
+      expect(textDispatches).toHaveLength(2); // the redelivered snapshot dispatched nothing
+    });
+
+    it('applies reasoning replace snapshots and drops redelivered seqs', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(
+        makeEvent('stream_chunk', {
+          chunkType: 'reasoning',
+          reasoning: 'thinking',
+          snapshotMode: 'replace',
+          snapshotSeq: 1,
+        }),
+      );
+      handler(
+        makeEvent('stream_chunk', {
+          chunkType: 'reasoning',
+          reasoning: 'thinking done',
+          snapshotMode: 'replace',
+          snapshotSeq: 2,
+        }),
+      );
+      // Redelivered seq 2 — appending it would render "thinking donethinking done".
+      handler(
+        makeEvent('stream_chunk', {
+          chunkType: 'reasoning',
+          reasoning: 'thinking done',
+          snapshotMode: 'replace',
+          snapshotSeq: 2,
+        }),
+      );
+      await flush();
+
+      const reasoningDispatches = store.internal_dispatchMessage.mock.calls.filter(
+        ([action]: any[]) => action.type === 'updateMessage' && 'reasoning' in action.value,
+      );
+      expect(reasoningDispatches).toHaveLength(2); // duplicate dropped
+      expect(reasoningDispatches.at(-1)?.[0].value).toEqual({
+        reasoning: { content: 'thinking done' },
+      });
+    });
+
+    it('a snapshot replaces text accumulated from plain deltas', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'Hel' }));
+      handler(
+        makeEvent('stream_chunk', {
+          chunkType: 'text',
+          content: 'Hello world',
+          snapshotMode: 'replace',
+          snapshotSeq: 1,
+        }),
+      );
+      await flush();
+
+      // Replace, not append — appending would render "HelHello world".
       expect(store.internal_dispatchMessage).toHaveBeenLastCalledWith(
         {
           id: 'msg-initial',
@@ -469,7 +583,6 @@ describe('createGatewayEventHandler', () => {
         visibleLoadingDone: true,
       });
       expect(store.completeOperation).not.toHaveBeenCalledWith('op-1');
-      expect(store.internal_updateTopicLoading).not.toHaveBeenCalledWith('topic-1', false);
     });
 
     it('keeps visible loading after stream_end when tool calls need another step', async () => {
@@ -493,7 +606,6 @@ describe('createGatewayEventHandler', () => {
         visibleLoadingDone: true,
       });
       expect(store.completeOperation).not.toHaveBeenCalledWith('op-1');
-      expect(store.internal_updateTopicLoading).not.toHaveBeenCalledWith('topic-1', false);
     });
 
     it('applies finalContent before ending a reasoning-only stream', async () => {
@@ -536,7 +648,7 @@ describe('createGatewayEventHandler', () => {
     it('marks visible loading done without completing the operation or clearing topic loading', async () => {
       const store = createMockStore();
       // The streamed content has landed in the store — the visible_output_end
-      // guard (LOBE-11501) only clears loading once the assistant row is present
+      // guard only clears loading once the assistant row is present
       // with its content, so seed it here to represent that state.
       store.dbMessagesMap['main_agent-1_topic-1'] = [
         { content: 'hello back', id: 'msg-initial', role: 'assistant' },
@@ -555,11 +667,6 @@ describe('createGatewayEventHandler', () => {
         visibleLoadingDone: true,
       });
       expect(store.completeOperation).not.toHaveBeenCalledWith('op-1');
-      // Sidebar "running" spinner is driven off `topic.status === 'running'`
-      // (persisted, reset at the terminal) for gateway/hetero runs — not the
-      // client-only `topicLoadingIds` overlay — so visible_output_end no longer
-      // clears it early.
-      expect(store.internal_updateTopicLoading).not.toHaveBeenCalled();
     });
   });
 

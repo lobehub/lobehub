@@ -1,13 +1,14 @@
 // @vitest-environment node
-import { WORKSPACE_SYSTEM_ROLES } from '@lobechat/const/rbac';
 import { type LobeChatDatabase } from '@lobechat/database';
-import { topics, workspaceAuditLogs, workspaces } from '@lobechat/database/schemas';
+import {
+  topics,
+  workspaceAuditLogs,
+  workspaceMembers,
+  workspaces,
+} from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-import { RbacModel } from '@/database/models/rbac';
-import { seedWorkspaceRoles } from '@/database/utils/seedWorkspaceRoles';
 
 import { topicRouter } from '../../topic';
 import { cleanupTestUser, createTestUser } from './setup';
@@ -58,23 +59,11 @@ describe('Topic Share Router Integration Tests (workspace permission matrix)', (
       .returning();
     workspaceId = workspace.id;
 
-    await seedWorkspaceRoles(serverDB, workspaceId);
-    const rbac = new RbacModel(serverDB, creatorId);
-    await rbac.assignWorkspaceRole({
-      roleName: WORKSPACE_SYSTEM_ROLES.MEMBER,
-      userId: creatorId,
-      workspaceId,
-    });
-    await rbac.assignWorkspaceRole({
-      roleName: WORKSPACE_SYSTEM_ROLES.MEMBER,
-      userId: memberId,
-      workspaceId,
-    });
-    await rbac.assignWorkspaceRole({
-      roleName: WORKSPACE_SYSTEM_ROLES.OWNER,
-      userId: ownerId,
-      workspaceId,
-    });
+    await serverDB.insert(workspaceMembers).values([
+      { role: 'member', userId: creatorId, workspaceId },
+      { role: 'member', userId: memberId, workspaceId },
+      { role: 'owner', userId: ownerId, workspaceId },
+    ]);
 
     const [topic] = await serverDB
       .insert(topics)

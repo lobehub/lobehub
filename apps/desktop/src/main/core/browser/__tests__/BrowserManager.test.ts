@@ -29,6 +29,7 @@ const { MockBrowser, mockAppBrowsers, mockWindowTemplates } = vi.hoisted(() => {
       loadUrl: vi.fn().mockResolvedValue(undefined),
       options,
       show: vi.fn(),
+      waitForFirstFrame: vi.fn().mockResolvedValue(undefined),
       webContents: browserWindow.webContents,
     };
   });
@@ -108,6 +109,9 @@ describe('BrowserManager', () => {
     // Create mock App
     mockApp = {
       getController: vi.fn().mockReturnValue({
+        getDesktopBootstrapIdentity: vi
+          .fn()
+          .mockReturnValue({ isIdentityResolved: true, userId: 'user_1' }),
         isRemoteServerConfigured: vi.fn().mockResolvedValue(true),
       }),
       storeManager: {
@@ -157,6 +161,14 @@ describe('BrowserManager', () => {
 
       expect(appBrowser.browserWindow.restore).toHaveBeenCalled();
     });
+  });
+
+  it('waits for the main window first frame before deferred initialization', async () => {
+    const mainWindow = manager.getMainWindow();
+
+    await manager.waitForMainWindowFirstFrame(2500);
+
+    expect(mainWindow.waitForFirstFrame).toHaveBeenCalledWith(2500);
   });
 
   describe('retrieveByIdentifier', () => {
@@ -274,6 +286,18 @@ describe('BrowserManager', () => {
       expect(manager.browsers.has('settings')).toBe(false);
     });
 
+    it('keeps legacy remote-configured users on the main route when no completion marker exists', async () => {
+      (mockApp.storeManager.get as any).mockImplementation((key: string, defaultValue?: any) => {
+        if (key === 'desktopOnboardingCompleted') return undefined;
+        if (key === 'pendingRestoreRoute') return '';
+        return defaultValue;
+      });
+
+      await manager.initializeBrowsers();
+
+      expect(manager.browsers.get('app')?.options.path).toBe('/');
+    });
+
     it('restores a captured route as the main window initial path', async () => {
       (mockApp.storeManager.get as any).mockImplementation((key: string) => {
         if (key === 'pendingRestoreRoute') return '/agent/abc';
@@ -302,6 +326,9 @@ describe('BrowserManager', () => {
         return '';
       });
       (mockApp.getController as any).mockReturnValue({
+        getDesktopBootstrapIdentity: vi
+          .fn()
+          .mockReturnValue({ isIdentityResolved: true, userId: 'user_1' }),
         isRemoteServerConfigured: vi.fn().mockResolvedValue(false),
       });
 
@@ -309,6 +336,78 @@ describe('BrowserManager', () => {
 
       expect(manager.browsers.get('app')?.options.path).toBe('/desktop-onboarding');
       expect(mockApp.storeManager.set).toHaveBeenCalledWith('pendingRestoreRoute', '');
+    });
+
+    it("boots the main window at the account's remembered workspace slug", async () => {
+      (mockApp.storeManager.get as any).mockImplementation((key: string) => {
+        if (key === 'lastWorkspaceSlugByAccount') return { user_1: 'acme' };
+        return '';
+      });
+
+      await manager.initializeBrowsers();
+
+      expect(manager.browsers.get('app')?.options.path).toBe('/acme');
+    });
+
+    it("never applies another account's remembered slug", async () => {
+      (mockApp.storeManager.get as any).mockImplementation((key: string) => {
+        if (key === 'lastWorkspaceSlugByAccount') return { user_2: 'acme' };
+        return '';
+      });
+
+      await manager.initializeBrowsers();
+
+      expect(manager.browsers.get('app')?.options.path).toBe('/');
+    });
+
+    it('boots at the main route when signed out', async () => {
+      (mockApp.getController as any).mockReturnValue({
+        getDesktopBootstrapIdentity: vi.fn().mockReturnValue({ isIdentityResolved: true }),
+        isRemoteServerConfigured: vi.fn().mockResolvedValue(true),
+      });
+      (mockApp.storeManager.get as any).mockImplementation((key: string) => {
+        if (key === 'lastWorkspaceSlugByAccount') return { user_1: 'acme' };
+        return '';
+      });
+
+      await manager.initializeBrowsers();
+
+      expect(manager.browsers.get('app')?.options.path).toBe('/');
+    });
+
+    it('prefers a captured update-restart route over the remembered workspace slug', async () => {
+      (mockApp.storeManager.get as any).mockImplementation((key: string) => {
+        if (key === 'pendingRestoreRoute') return '/agent/abc';
+        if (key === 'lastWorkspaceSlugByAccount') return { user_1: 'acme' };
+        return '';
+      });
+
+      await manager.initializeBrowsers();
+
+      expect(manager.browsers.get('app')?.options.path).toBe('/agent/abc');
+    });
+
+    it('ignores a malformed remembered workspace slug', async () => {
+      (mockApp.storeManager.get as any).mockImplementation((key: string) => {
+        if (key === 'lastWorkspaceSlugByAccount') return { user_1: '../evil?x=1' };
+        return '';
+      });
+
+      await manager.initializeBrowsers();
+
+      expect(manager.browsers.get('app')?.options.path).toBe('/');
+    });
+
+    it('resumes onboarding when Login completed but later first-run steps did not', async () => {
+      (mockApp.storeManager.get as any).mockImplementation((key: string, defaultValue?: any) => {
+        if (key === 'desktopOnboardingCompleted') return false;
+        if (key === 'pendingRestoreRoute') return '';
+        return defaultValue;
+      });
+
+      await manager.initializeBrowsers();
+
+      expect(manager.browsers.get('app')?.options.path).toBe('/desktop-onboarding');
     });
   });
 

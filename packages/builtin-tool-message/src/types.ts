@@ -67,7 +67,7 @@ export const MessageApiName = {
   // be created via tool calls (OAuth requires browser flow).
   /** List the current user's System Bot installations across workspaces. */
   listMessengers: 'listMessengers',
-  /** Get one install's detail by installationId. */
+  /** Get one System Bot connection's detail by installationId. */
   getMessengerDetail: 'getMessengerDetail',
   /** Revoke a workspace install (cascades to all users in that workspace). */
   uninstallMessenger: 'uninstallMessenger',
@@ -79,6 +79,8 @@ export const MessageApiName = {
   setMessengerActiveAgent: 'setMessengerActiveAgent',
   /** Remove the user's account link for a platform (does not uninstall). */
   unlinkMessenger: 'unlinkMessenger',
+  /** Proactively push a message to the current user's own linked messenger DM. */
+  sendMessengerPush: 'sendMessengerPush',
 } as const;
 
 export type MessageApiNameType = (typeof MessageApiName)[keyof typeof MessageApiName];
@@ -567,7 +569,7 @@ export interface MessengerInfo {
   platform: string;
   /** OAuth scope string granted at install time (Slack-only typically). */
   scope?: string;
-  /** Tenant identifier — Slack workspace, Discord guild, … (empty for Telegram). */
+  /** Tenant identifier — Slack workspace, Discord guild, WeChat user, … (empty for Telegram). */
   tenantId: string;
   /** Optional human-friendly tenant label (workspace / guild name). */
   tenantName?: string;
@@ -583,11 +585,11 @@ export interface MessengerLinkInfo {
   /** When the link was created. */
   createdAt?: string | Date;
   platform: string;
-  /** Platform-side user id (Slack user id, Discord user id, Telegram chat id). */
+  /** Platform-side user id (Slack/Discord user id, Telegram chat id, WeChat user id). */
   platformUserId?: string;
   /** Display name surfaced when verify-im completed. */
   platformUsername?: string;
-  /** Tenant scope for the link — empty for global-bot platforms (Telegram). */
+  /** Tenant scope for the link — empty for single-link platforms (Telegram / WeChat). */
   tenantId?: string;
 }
 
@@ -672,4 +674,63 @@ export interface UnlinkMessengerParams {
 
 export interface UnlinkMessengerState {
   success: boolean;
+}
+
+// --- Proactive Messenger Push ---
+
+/** Platforms the System Bot proactive push supports (mirrors `MESSENGER_PUSH_PLATFORMS`). */
+/**
+ * Upper bound on a proactive push body. Chosen to clear the tightest platform
+ * limit in the set (Discord's 2000-character message cap) so the cap fails the
+ * call up front instead of at delivery, where only one platform would reject.
+ *
+ * Single source for the tool schema, the server runtime guard and the TRPC
+ * route, so the advertised limit and the enforced one cannot drift.
+ */
+export const MESSENGER_PUSH_CONTENT_MAX_LENGTH = 2000;
+
+export const MessengerPushPlatform = {
+  discord: 'discord',
+  slack: 'slack',
+  telegram: 'telegram',
+  wechat: 'wechat',
+} as const;
+
+export type MessengerPushPlatformType =
+  (typeof MessengerPushPlatform)[keyof typeof MessengerPushPlatform];
+
+export interface SendMessengerPushParams {
+  /** Message content to deliver into the user's DM with the LobeHub System Bot. */
+  content: string;
+  platform: MessengerPushPlatformType;
+  /**
+   * Slack-only: target workspace (team id) when the user linked several.
+   * Omit elsewhere — the runtime auto-resolves single-link platforms.
+   */
+  tenantId?: string;
+}
+
+/**
+ * Delivery outcome of a proactive push. Mirrors the server-side
+ * `MessengerPushResult` statuses, plus `needs_workspace_selection` which the
+ * runtime synthesizes when a Slack push is ambiguous across workspaces.
+ */
+export type MessengerPushStatus =
+  'sent' | 'queued' | 'unlinked' | 'unavailable' | 'needs_workspace_selection';
+
+/** Candidate workspace surfaced when a Slack push needs disambiguation. */
+export interface MessengerPushWorkspaceOption {
+  tenantId: string;
+  tenantName?: string;
+}
+
+export interface SendMessengerPushState {
+  platform: MessengerPushPlatformType;
+  /** WeChat-only: sends remaining in the current 24h window (present on `sent`). */
+  remaining?: number;
+  status: MessengerPushStatus;
+  /** The workspace the message was routed to, when one was resolved. */
+  tenantId?: string;
+  /** Present on `needs_workspace_selection` — options to relay to the user. */
+  workspaces?: MessengerPushWorkspaceOption[];
 }

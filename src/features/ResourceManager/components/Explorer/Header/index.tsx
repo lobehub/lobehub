@@ -1,8 +1,7 @@
 'use client';
 
 import { ActionIcon, Flexbox } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { BookMinusIcon, FileBoxIcon, Trash2Icon } from 'lucide-react';
 import { memo } from 'react';
@@ -12,10 +11,10 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { useFileBatchTransferActions } from '@/business/client/hooks/useFileBatchTransferActions';
 import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner';
 import NavHeader from '@/features/NavHeader';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { getExplorerSelectedCount } from '@/features/ResourceManager/store/selectors';
 import { openWorkspaceDeleteAllModal } from '@/features/WorkspaceDeleteAllModal';
 import { usePermission } from '@/hooks/usePermission';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
-import { getExplorerSelectedCount } from '@/routes/(main)/resource/features/store/selectors';
 import { useFileStore } from '@/store/file';
 import { FilesTabs } from '@/types/files';
 
@@ -31,7 +30,7 @@ import SearchInput from './SearchInput';
  */
 const Header = memo(() => {
   const { t } = useTranslation(['components', 'common', 'file', 'knowledgeBase']);
-  const { message } = App.useApp();
+
   const activeWorkspaceId = useActiveWorkspaceId();
 
   // Get state and actions from store
@@ -78,7 +77,7 @@ const Header = memo(() => {
               okText: t('FileManager.actions.removeFromLibrary'),
               onOk: async () => {
                 await onActionClick('removeFromKnowledgeBase');
-                message.success(t('FileManager.actions.removeFromLibrarySuccess'));
+                toast.success(t('FileManager.actions.removeFromLibrarySuccess'));
               },
               title: t('FileManager.actions.removeFromLibrary'),
             });
@@ -131,7 +130,7 @@ const Header = memo(() => {
 
           const handleDelete = async () => {
             await onActionClick('delete');
-            message.success(t('FileManager.actions.deleteSuccess'));
+            toast.success(t('FileManager.actions.deleteSuccess'));
           };
 
           if (isWorkspaceOwnerDeleteAll) {

@@ -107,7 +107,7 @@ export const useReviewPatches = (
   deviceId?: string,
   active = true,
 ) => {
-  const enabled = active && Boolean(dirPath);
+  const enabled = active && isEnabled(deviceId, dirPath);
   const key = enabled ? getGitReviewPatchesKey({ baseRef, deviceId, dirPath, mode }) : null;
 
   return useClientDataSWR<ReviewPatchesData>(

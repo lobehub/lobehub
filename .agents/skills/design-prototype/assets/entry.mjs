@@ -4,6 +4,7 @@
 // single IIFE global. Bundled from THIS repo's node_modules, so versions match
 // production exactly. Missing a component? Add it below and rebuild (~2s):
 //   bash .agents/skills/design-prototype/scripts/build-runtime.sh
+import { Amp, ClaudeCode, Codex, HermesAgent, OpenClaw, OpenCode } from '@lobehub/icons';
 import {
   ActionIcon,
   Alert,
@@ -98,6 +99,7 @@ export default {
     ThemeProvider,
     Tooltip,
   },
+  '@lobehub/icons': { Amp, ClaudeCode, Codex, HermesAgent, OpenClaw, OpenCode },
   '@lobehub/ui/base-ui': baseUI,
   'antd': { App, Badge, Checkbox, Divider, Dropdown, Progress, Radio, Slider, Space, Steps, Table },
   'antd-style': antdStyle,

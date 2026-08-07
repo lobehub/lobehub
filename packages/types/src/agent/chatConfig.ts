@@ -129,6 +129,7 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    */
   imageResolution2?: '512' | '1K' | '2K' | '4K';
   inputTemplate?: string;
+  kimiK3ReasoningEffort?: 'low' | 'high' | 'max';
   /**
    * Effort level for Claude Opus 4.7 and later (adds xhigh tier between high and max)
    */
@@ -265,6 +266,7 @@ export const AgentChatConfigSchema = z
     grok4_3ReasoningEffort: z.enum(['none', 'low', 'medium', 'high']).optional(),
     grok4_5ReasoningEffort: z.enum(['low', 'medium', 'high']).optional(),
     hy3ReasoningEffort: z.enum(['no_think', 'low', 'high']).optional(),
+    kimiK3ReasoningEffort: z.enum(['low', 'high', 'max']).optional(),
     ring2_6ReasoningEffort: z.enum(['high', 'xhigh']).optional(),
     historyCount: z.number().optional(),
     imageAspectRatio: z.string().optional(),

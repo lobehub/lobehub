@@ -1,7 +1,7 @@
 import { type AgentState } from '@lobechat/agent-runtime';
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { dispatchWorkRegistrationIntent } from '@lobechat/builtin-tools/workRegistration';
-import { resolveSubAgentModel } from '@lobechat/const';
+import { getSubAgentChatConfigOverride, resolveSubAgentModel } from '@lobechat/const';
 import { type OperationToolSet } from '@lobechat/context-engine';
 import { type ToolType } from '@lobechat/observability-otel/modules/agent-runtime';
 import {
@@ -205,12 +205,20 @@ export const buildServerVirtualSubAgentRunner = (
   if (!agentId || !topicId) return undefined;
 
   const parentAgentConfig = state.metadata?.agentConfig as LobeAgentConfig | undefined;
+  // The model the parent run ACTUALLY uses. `metadata.agentConfig` alone is not
+  // enough: when a run continues a topic whose model was switched, execAgent
+  // keeps the topic-pinned model only in `modelRuntimeConfig` while the
+  // metadata config retains the agent default.
+  const parentEffectiveModel =
+    state.modelRuntimeConfig ?? state.metadata?.modelRuntimeConfig ?? parentAgentConfig;
 
   return {
     run: async ({ agentId: targetAgentId, description, instruction, timeout }) => {
       // This runner serves two tools, and only one of them may swap the model:
       //   - `callSubAgent` names no agent, so the child is an anonymous clone of
-      //     the parent — it takes the parent's `agencyConfig.subagent` model.
+      //     the parent — it takes the parent's `agencyConfig.subagent` override,
+      //     or follows the parent's effective (topic-pinned) model when none is
+      //     configured.
       //   - `callAgent` names an existing agent, which carries a model the user
       //     configured on it. Overriding that would discard a deliberate choice,
       //     the same way forcing a group member onto the sub-agent default would.
@@ -218,7 +226,12 @@ export const buildServerVirtualSubAgentRunner = (
       // re-derive it from the parent config.
       const subAgentModel = targetAgentId
         ? undefined
-        : resolveSubAgentModel(parentAgentConfig?.agencyConfig?.subagent);
+        : resolveSubAgentModel(parentAgentConfig?.agencyConfig?.subagent, parentEffectiveModel);
+      // Thinking / reasoning-effort overrides configured for the sub-agent
+      // model; same callSubAgent-only carve-out as the model above.
+      const subAgentChatConfig = targetAgentId
+        ? undefined
+        : getSubAgentChatConfigOverride(parentAgentConfig?.agencyConfig?.subagent);
 
       // 1. Create the pending placeholder tool message (mirrors the normal
       //    tool-message shape in call_tool) that anchors the isolation thread
@@ -241,6 +254,7 @@ export const buildServerVirtualSubAgentRunner = (
       //    bridge that backfills this tool message and resumes the parent op.
       const result = (await execVirtualSubAgent({
         agentId: targetAgentId ?? agentId,
+        chatConfig: subAgentChatConfig,
         groupId: state.metadata?.groupId ?? undefined,
         instruction,
         model: subAgentModel?.model,

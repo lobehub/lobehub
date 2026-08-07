@@ -212,6 +212,36 @@ describe('LobeKimiCodingPlanAI', () => {
         expect(payload.thinking!.budget_tokens).toBe(32_767);
       });
 
+      // Regression: context-engine history may carry Claude-signed (or
+      // signature-only) thinking parts inside array content — foreign
+      // signatures must be stripped, empty parts dropped and replaced by the
+      // `' '` placeholder, without stacking a duplicate block.
+      it('should sanitize context-engine thinking parts in assistant array content', async () => {
+        await instance.chat({
+          messages: [
+            { content: 'Hello', role: 'user' },
+            {
+              content: [
+                { signature: 'claude-signature', type: 'thinking' },
+                { text: 'previous answer', type: 'text' },
+              ],
+              reasoning: { signature: 'claude-signature' },
+              role: 'assistant',
+            },
+            { content: 'continue', role: 'user' },
+          ] as any,
+          model: 'kimi-k2.5',
+        });
+
+        const payload = getLastRequestPayload();
+        const assistant = payload.messages.find((m: any) => m.role === 'assistant');
+        expect(assistant.content).toEqual([
+          { thinking: ' ', type: 'thinking' },
+          { text: 'previous answer', type: 'text' },
+        ]);
+        expect(JSON.stringify(payload.messages)).not.toContain('claude-signature');
+      });
+
       it('should not add thinking params for unknown models', async () => {
         await instance.chat({
           messages: [{ content: 'Hello', role: 'user' }],

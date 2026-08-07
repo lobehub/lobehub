@@ -1,7 +1,7 @@
 'use client';
 
-import type { AcceptanceStatus } from '@lobechat/types';
 import {
+  ActionIcon,
   Center,
   DraggablePanel,
   DraggablePanelContainer,
@@ -11,15 +11,14 @@ import {
   Icon,
   Text,
 } from '@lobehub/ui';
+import type { DropdownItem } from '@lobehub/ui/base-ui';
+import { DropdownMenu } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
 import {
-  BadgeCheck,
-  CircleDashed,
-  CircleHelp,
-  CircleX,
-  LoaderCircle,
+  ArrowLeft,
+  Check,
+  ListFilter,
   PanelLeftClose,
   ScrollText,
   Search,
@@ -29,16 +28,29 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router';
 
-import NavItem from '@/features/NavPanel/components/NavItem';
 import { SkeletonList } from '@/features/NavPanel/components/SkeletonList';
+import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
 import { useAcceptanceList } from '../../hooks';
 import type { ReportPanelExpand } from '../../Workspace/useReportPanelExpand';
+import { acceptanceHomePath } from '../routes';
+import {
+  type AcceptanceListFilter,
+  DEFAULT_ACCEPTANCE_LIST_FILTER,
+  filterAcceptanceList,
+  normalizeAcceptanceListFilter,
+} from './acceptanceListFilter';
+import AcceptanceRow from './AcceptanceRow';
 
 const PANEL_MIN = 260;
 const PANEL_MAX = 420;
+const ACCEPTANCE_LIST_FILTER_STORAGE_KEY = 'lobehub-acceptance-list-filter';
+const EMPTY_FILTER_KEYS = {
+  active: 'acceptance.workspace.filters.empty.active',
+  completed: 'acceptance.workspace.filters.empty.completed',
+} as const satisfies Record<Exclude<AcceptanceListFilter, 'all'>, string>;
 
 const styles = createStaticStyles(({ css }) => ({
   panel: css`
@@ -83,8 +95,6 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     height: 32px;
-    margin-block: 8px 4px;
-    margin-inline: 4px;
     padding-inline: 10px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
@@ -112,6 +122,22 @@ const styles = createStaticStyles(({ css }) => ({
       }
     }
   `,
+  searchRow: css`
+    display: flex;
+    gap: 4px;
+    align-items: center;
+
+    margin-block: 8px 4px;
+    margin-inline: 4px;
+
+    > label {
+      flex: 1;
+      min-width: 0;
+    }
+  `,
+  filterButton: css`
+    flex: none;
+  `,
   searchEmpty: css`
     display: flex;
     flex-direction: column;
@@ -127,11 +153,6 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextTertiary};
     word-break: break-word;
   `,
-  queryHl: css`
-    font-weight: 600;
-    color: ${cssVar.colorTextSecondary};
-    word-break: break-all;
-  `,
   list: css`
     display: flex;
     flex-direction: column;
@@ -139,24 +160,6 @@ const styles = createStaticStyles(({ css }) => ({
 
     padding-block: 6px 16px;
     padding-inline: 8px;
-  `,
-  spin: css`
-    animation: acceptance-spin 1.1s linear infinite;
-
-    @keyframes acceptance-spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-  `,
-  itemSub: css`
-    display: flex;
-    gap: 8px;
-
-    margin-block-start: 2px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
   `,
   emptyState: css`
     height: 100%;
@@ -184,47 +187,13 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-type Glyph = 'awaiting' | 'bad' | 'unsure' | 'running' | 'accepted';
-
-const RUNNING_STATUSES = new Set<AcceptanceStatus>([
-  'pending',
-  'planned',
-  'verifying',
-  'repairing',
-]);
-
-const glyphOf = (status: AcceptanceStatus): Glyph => {
-  if (RUNNING_STATUSES.has(status)) return 'running';
-  if (status === 'accepted') return 'accepted';
-  if (status === 'rejected') return 'bad';
-  if (status === 'errored') return 'unsure';
-  return 'awaiting';
-};
-
-// Mirrors the detail header's verdict pill: a delivered-but-undecided
-// aggregate reads as "acceptance in progress", never as a green all-clear
-// the user hasn't given.
-const glyphMeta: Record<Glyph, { color: string; icon: typeof BadgeCheck }> = {
-  accepted: { color: cssVar.colorSuccess, icon: BadgeCheck },
-  awaiting: { color: cssVar.colorInfo, icon: CircleDashed },
-  bad: { color: cssVar.colorError, icon: CircleX },
-  running: { color: cssVar.colorInfo, icon: LoaderCircle },
-  unsure: { color: cssVar.colorWarning, icon: CircleHelp },
-};
-
-const relativeTime = (value?: Date | string | null) => {
-  if (!value) return '';
-  const d = dayjs(value);
-  return dayjs().diff(d, 'day') < 7 ? d.fromNow() : d.format('MMM D');
-};
-
 /**
  * Master list of the caller's acceptance aggregates — the acceptance twin of
  * the verify workspace's ReportListPanel, sharing its visual language and the
  * same persisted panel-width preference so the two surfaces read as one family.
  */
 const AcceptanceListPanel = memo<ReportPanelExpand>(({ expand, isNarrow, setExpand }) => {
-  const { t } = useTranslation('verify');
+  const { t } = useTranslation(['verify', 'common']);
   const navigate = useNavigate();
   const { acceptanceId } = useParams<{ acceptanceId: string }>();
 
@@ -233,12 +202,26 @@ const AcceptanceListPanel = memo<ReportPanelExpand>(({ expand, isNarrow, setExpa
   // Client-side filter: the list endpoint returns the caller's full recent set
   // (bounded, no pagination), so filtering the loaded rows IS filtering the set.
   const [query, setQuery] = useState('');
-  const trimmedQuery = query.trim().toLowerCase();
-  const filtered = trimmedQuery
-    ? (data ?? []).filter((item) =>
-        (item.subject.title || item.subjectId).toLowerCase().includes(trimmedQuery),
-      )
-    : (data ?? []);
+  const [storedFilter, setStoredFilter] = useLocalStorageState<AcceptanceListFilter>(
+    ACCEPTANCE_LIST_FILTER_STORAGE_KEY,
+    DEFAULT_ACCEPTANCE_LIST_FILTER,
+  );
+  const filter = normalizeAcceptanceListFilter(storedFilter);
+  const filtered = filterAcceptanceList(data ?? [], filter, query);
+  const trimmedQuery = query.trim();
+
+  const filterItems: DropdownItem[] = (
+    [
+      ['active', t('acceptance.workspace.filters.active')],
+      ['all', t('acceptance.workspace.filters.all')],
+      ['completed', t('acceptance.workspace.filters.completed')],
+    ] as const
+  ).map(([key, label]) => ({
+    icon: <Icon icon={Check} style={{ opacity: filter === key ? 1 : 0 }} />,
+    key,
+    label,
+    onClick: () => setStoredFilter(key),
+  }));
 
   const [panelWidth, updateSystemStatus] = useGlobalStore((s) => [
     systemStatusSelectors.verifyReportPanelWidth(s),
@@ -268,9 +251,17 @@ const AcceptanceListPanel = memo<ReportPanelExpand>(({ expand, isNarrow, setExpa
       <DraggablePanelContainer style={{ flex: 'none', height: '100%', minWidth: PANEL_MIN }}>
         <div className={styles.head}>
           <div className={styles.titleRow}>
-            <Text strong style={{ fontSize: 15 }}>
-              {t('acceptance.workspace.title')}
-            </Text>
+            <Flexbox horizontal align={'center'} gap={4}>
+              <ActionIcon
+                icon={ArrowLeft}
+                size={'small'}
+                title={t('back', { ns: 'common' })}
+                onClick={() => navigate(acceptanceHomePath())}
+              />
+              <Text strong style={{ fontSize: 15 }}>
+                {t('acceptance.workspace.title')}
+              </Text>
+            </Flexbox>
             <button
               aria-label={t('workspace.collapse')}
               className={styles.collapseBtn}
@@ -281,15 +272,26 @@ const AcceptanceListPanel = memo<ReportPanelExpand>(({ expand, isNarrow, setExpa
               <Icon icon={PanelLeftClose} size={16} />
             </button>
           </div>
-          <label className={styles.search}>
-            <Icon icon={Search} size={13} />
-            <input
-              placeholder={t('workspace.search')}
-              type={'search'}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </label>
+          <div className={styles.searchRow}>
+            <label className={styles.search}>
+              <Icon icon={Search} size={13} />
+              <input
+                placeholder={t('workspace.search')}
+                type={'search'}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </label>
+            <DropdownMenu items={filterItems} placement={'bottomRight'}>
+              <ActionIcon
+                active={filter !== 'all'}
+                className={styles.filterButton}
+                icon={ListFilter}
+                size={'small'}
+                title={t('acceptance.workspace.filters.title')}
+              />
+            </DropdownMenu>
+          </div>
         </div>
 
         <Flexbox flex={1} style={{ minHeight: 0, overflowX: 'hidden', overflowY: 'auto' }}>
@@ -309,17 +311,26 @@ const AcceptanceListPanel = memo<ReportPanelExpand>(({ expand, isNarrow, setExpa
           ) : isLoading ? (
             <SkeletonList rows={6} style={{ paddingBlock: 6, paddingInline: 8 }} />
           ) : filtered.length === 0 ? (
-            trimmedQuery ? (
+            trimmedQuery || filter !== 'all' ? (
               // A zero-result FILTER must read as "no match for this query",
               // never as the first-run empty state.
               <div className={styles.searchEmpty}>
                 <span className={styles.searchEmptyMsg}>
-                  {t('workspace.searchEmptyPrefix')}
-                  <b className={styles.queryHl}>{query.trim()}</b>
-                  {t('workspace.searchEmptySuffix')}
+                  {trimmedQuery
+                    ? t('acceptance.workspace.filters.noSearchResults', { query: trimmedQuery })
+                    : filter === 'all'
+                      ? null
+                      : t(EMPTY_FILTER_KEYS[filter])}
                 </span>
-                <button className={styles.retryBtn} type={'button'} onClick={() => setQuery('')}>
-                  {t('workspace.clearSearch')}
+                <button
+                  className={styles.retryBtn}
+                  type={'button'}
+                  onClick={() => {
+                    setQuery('');
+                    setStoredFilter('all');
+                  }}
+                >
+                  {t('acceptance.workspace.filters.showAll')}
                 </button>
               </div>
             ) : (
@@ -333,35 +344,14 @@ const AcceptanceListPanel = memo<ReportPanelExpand>(({ expand, isNarrow, setExpa
             )
           ) : (
             <div className={styles.list}>
-              {filtered.map((item) => {
-                const glyph = glyphOf(item.status as AcceptanceStatus);
-                const meta = glyphMeta[glyph];
-                const title = item.subject.title || item.subjectId;
-
-                return (
-                  <NavItem
-                    active={item.id === acceptanceId}
-                    key={item.id}
-                    title={title}
-                    titleColor={cssVar.colorText}
-                    description={
-                      <Flexbox horizontal className={styles.itemSub} gap={8}>
-                        <span>{t(`acceptance.status.${item.status}` as any)}</span>
-                        <span>{relativeTime(item.updatedAt ?? item.createdAt)}</span>
-                      </Flexbox>
-                    }
-                    icon={
-                      <Icon
-                        className={glyph === 'running' ? styles.spin : undefined}
-                        icon={meta.icon}
-                        size={16}
-                        style={{ color: meta.color }}
-                      />
-                    }
-                    onClick={() => navigate(`/acceptance/${item.id}`)}
-                  />
-                );
-              })}
+              {filtered.map((item) => (
+                <AcceptanceRow
+                  active={item.id === acceptanceId}
+                  item={item}
+                  key={item.id}
+                  onChanged={mutate}
+                />
+              ))}
             </div>
           )}
         </Flexbox>

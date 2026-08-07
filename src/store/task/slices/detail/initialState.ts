@@ -15,6 +15,12 @@ export interface TaskDetailSliceState {
   isCreatingTask: boolean;
   isDeletingTask: boolean;
   taskDetailMap: Record<string, TaskDetailData>;
+  /**
+   * Increments only when an authoritative source outside the mounted task editor
+   * changes its persisted instruction snapshot. The editor uses this as an
+   * explicit reload signal instead of comparing against live, unsaved content.
+   */
+  taskInstructionRevisionMap: Record<string, number>;
   // Save status is scoped per task id (mirrors `taskDetailMap`). A store-wide
   // field would leak one task's `failed` state across navigation, since
   // `setActiveTaskId` only swaps `activeTaskId` and never clears the status.
@@ -25,5 +31,6 @@ export const initialTaskDetailSliceState: TaskDetailSliceState = {
   isCreatingTask: false,
   isDeletingTask: false,
   taskDetailMap: {},
+  taskInstructionRevisionMap: {},
   taskSaveStatusMap: {},
 };

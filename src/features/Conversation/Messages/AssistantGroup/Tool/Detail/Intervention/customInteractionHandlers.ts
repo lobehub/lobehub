@@ -1,6 +1,9 @@
 import { ClaudeCodeIdentifier } from '@lobechat/builtin-tool-claude-code';
 import { LobeAgentApiName, LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
-import { UserInteractionIdentifier } from '@lobechat/builtin-tool-user-interaction';
+import {
+  UserInteractionApiName,
+  UserInteractionIdentifier,
+} from '@lobechat/builtin-tool-user-interaction';
 import {
   WebOnboardingApiName,
   WebOnboardingIdentifier,
@@ -11,6 +14,8 @@ import { pickString } from '@lobechat/utils';
 
 import { installMarketplaceAgents } from '@/services/installMarketplaceAgents';
 import { topicService } from '@/services/topic';
+
+const QODER_IDENTIFIER = 'qoder';
 
 interface SubmitToolInteractionOptions {
   createUserMessage?: boolean;
@@ -37,6 +42,14 @@ type CustomInteractionSubmitHandler = (
 
 const isAgentMarketplaceCall = (identifier: string, apiName?: string) =>
   identifier === WebOnboardingIdentifier && apiName === WebOnboardingApiName.showAgentMarketplace;
+
+const isLobeAgentAskUserQuestion = (identifier: string, apiName?: string) =>
+  identifier === LobeAgentIdentifier && apiName === LobeAgentApiName.askUserQuestion;
+
+const isAskUserQuestionCall = (identifier: string, apiName?: string) =>
+  (identifier === UserInteractionIdentifier &&
+    apiName === UserInteractionApiName.askUserQuestion) ||
+  isLobeAgentAskUserQuestion(identifier, apiName);
 
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((item) => typeof item === 'string');
@@ -123,6 +136,18 @@ const customInteractionSubmitHandlers: Array<{
   match: (identifier: string, apiName?: string) => boolean;
 }> = [
   {
+    // `createUserMessage: false` — the completed tool card already renders the
+    // answers from `pluginState.askUserAnswers`, so the client runtime must
+    // resume from the tool result instead of synthesizing a `role: 'user'`
+    // message (which duplicated the answer as a user bubble). This also aligns
+    // with the Gateway resume path, which never creates a user turn here.
+    handler: async (payload) => ({
+      options: { createUserMessage: false, pluginState: { askUserAnswers: payload } },
+      payload,
+    }),
+    match: isAskUserQuestionCall,
+  },
+  {
     handler: handleAgentMarketplaceSubmit,
     match: isAgentMarketplaceCall,
   },
@@ -138,7 +163,10 @@ const findCustomInteractionSubmitHandler = (identifier: string, apiName?: string
  * because the answer ships back through IPC, not through a synthetic user
  * turn.
  */
-const HETERO_CUSTOM_INTERACTION_IDENTIFIERS = new Set<string>([ClaudeCodeIdentifier]);
+const HETERO_CUSTOM_INTERACTION_IDENTIFIERS = new Set<string>([
+  ClaudeCodeIdentifier,
+  QODER_IDENTIFIER,
+]);
 
 export const isHeteroInteractionIdentifier = (identifier: string) =>
   HETERO_CUSTOM_INTERACTION_IDENTIFIERS.has(identifier);
@@ -149,9 +177,6 @@ export const isHeteroInteractionIdentifier = (identifier: string) =>
  * has other APIs (createPlan / clearTodos …) that must keep the default
  * approve/reject UI — so only its `askUserQuestion` API is a custom interaction.
  */
-const isLobeAgentAskUserQuestion = (identifier: string, apiName?: string) =>
-  identifier === LobeAgentIdentifier && apiName === LobeAgentApiName.askUserQuestion;
-
 export const isCustomInteractionIdentifier = (identifier: string, apiName?: string) =>
   identifier === UserInteractionIdentifier ||
   isLobeAgentAskUserQuestion(identifier, apiName) ||

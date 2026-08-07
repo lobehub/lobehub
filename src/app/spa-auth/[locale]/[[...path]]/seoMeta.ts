@@ -1,4 +1,4 @@
-import { BRANDING_NAME, ORG_NAME } from '@lobechat/business-const';
+import { APPLE_APP_STORE_ID, BRANDING_NAME, ORG_NAME } from '@lobechat/business-const';
 import { OG_URL } from '@lobechat/const';
 import urlJoin from 'url-join';
 
@@ -47,7 +47,7 @@ export async function buildSeoMeta(locale: string, pathname: string): Promise<st
   const { title, description, canonicalPath } = await buildAuthSeoEntry(lng, pathname);
   const ogUrl = canonicalPath ? urlJoin(OFFICIAL_URL, canonicalPath) : OFFICIAL_URL;
 
-  return [
+  const metas = [
     `<title>${title}</title>`,
     `<meta name="description" content="${description}" />`,
     `<meta property="og:title" content="${title}" />`,
@@ -62,5 +62,11 @@ export async function buildSeoMeta(locale: string, pathname: string): Promise<st
     `<meta name="twitter:description" content="${description}" />`,
     `<meta name="twitter:image" content="${OG_URL}" />`,
     `<meta name="twitter:site" content="${isCustomORG ? `@${ORG_NAME}` : '@lobehub'}" />`,
-  ].join('\n    ');
+  ];
+
+  if (APPLE_APP_STORE_ID) {
+    metas.push(`<meta name="apple-itunes-app" content="app-id=${APPLE_APP_STORE_ID}" />`);
+  }
+
+  return metas.join('\n    ');
 }

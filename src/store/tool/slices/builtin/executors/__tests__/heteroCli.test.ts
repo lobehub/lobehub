@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { claudeCodeExecutor, codexExecutor } from '../heteroCli';
+import {
+  claudeCodeExecutor,
+  codexExecutor,
+  openCodeExecutor,
+  piExecutor,
+  qoderExecutor,
+} from '../heteroCli';
 
 const detectMocks = vi.hoisted(() => ({
   recordGitCommandEffects: vi.fn(),
@@ -29,6 +35,9 @@ describe('heteroCli executors', () => {
   it('registers the CLI adapter identifiers and exposes no invokable APIs', () => {
     expect(claudeCodeExecutor.identifier).toBe('claude-code');
     expect(codexExecutor.identifier).toBe('codex');
+    expect(openCodeExecutor.identifier).toBe('opencode');
+    expect(piExecutor.identifier).toBe('pi');
+    expect(qoderExecutor.identifier).toBe('qoder');
     // Empty apiEnum → never treated as an invokable client tool.
     expect(claudeCodeExecutor.hasApi('Bash')).toBe(false);
     expect(claudeCodeExecutor.getApiNames()).toEqual([]);
@@ -53,6 +62,53 @@ describe('heteroCli executors', () => {
     );
     expect(detectMocks.recordGitCommandEffects).toHaveBeenCalledWith({
       command: ['git', 'worktree', 'add', '/tmp/my wt'],
+      resultContent: '',
+      topicId: 't1',
+    });
+  });
+
+  it('observes OpenCode bash calls for worktree side effects', async () => {
+    await openCodeExecutor.onAfterCall!(
+      call({
+        apiName: 'bash',
+        identifier: 'opencode',
+        params: { command: 'git worktree add /tmp/opencode-wt' },
+      }),
+    );
+
+    expect(detectMocks.recordGitCommandEffects).toHaveBeenCalledWith({
+      command: 'git worktree add /tmp/opencode-wt',
+      resultContent: '',
+      topicId: 't1',
+    });
+  });
+
+  it('observes Pi bash calls for worktree side effects', async () => {
+    await piExecutor.onAfterCall!(
+      call({
+        apiName: 'bash',
+        identifier: 'pi',
+        params: { command: 'git worktree add /tmp/pi-wt' },
+      }),
+    );
+
+    expect(detectMocks.recordGitCommandEffects).toHaveBeenCalledWith({
+      command: 'git worktree add /tmp/pi-wt',
+      resultContent: '',
+      topicId: 't1',
+    });
+  });
+
+  it('observes Qoder Bash calls for worktree side effects', async () => {
+    await qoderExecutor.onAfterCall!(
+      call({
+        identifier: 'qoder',
+        params: { command: 'git worktree add /tmp/qoder-wt' },
+      }),
+    );
+
+    expect(detectMocks.recordGitCommandEffects).toHaveBeenCalledWith({
+      command: 'git worktree add /tmp/qoder-wt',
       resultContent: '',
       topicId: 't1',
     });

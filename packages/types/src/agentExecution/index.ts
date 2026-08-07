@@ -1,3 +1,4 @@
+import type { LobeAgentChatConfig } from '../agent/chatConfig';
 import type { WorkingDirConfig } from '../device';
 import type { TaskDetail, UIChatMessage } from '../message';
 import type { ChatTopic } from '../topic';
@@ -138,6 +139,26 @@ export interface ExecAgentAppContext {
  * Parameters for execAgent - execute a single Agent
  * Either agentId or slug must be provided
  */
+/**
+ * Ids the client already rendered this run's rows under, for the server to
+ * honour verbatim — the gateway counterpart of `sendMessageInServer`'s
+ * `newTopic.id` / `newUserMessage.id` / `newAssistantMessage.id`. Without
+ * them the gateway path mints its own ids and the client's optimistic rows
+ * never converge with the server rows.
+ *
+ * Only meaningful for a fresh send. Resume / regeneration paths must NOT
+ * carry them: replaying an id there would collide with the row the original
+ * send already created.
+ */
+export interface ExecAgentClientIds {
+  /** Id for the assistant placeholder row this run creates. */
+  assistantMessageId?: string;
+  /** Id for the topic when this run creates one (ignored when reusing). */
+  topicId?: string;
+  /** Id for the user message row this run creates. */
+  userMessageId?: string;
+}
+
 export interface ExecAgentParams {
   /** The agent ID to run (either agentId or slug is required) */
   agentId?: string;
@@ -145,6 +166,15 @@ export interface ExecAgentParams {
   appContext?: ExecAgentAppContext;
   /** Whether to auto-start execution after creating operation (default: true) */
   autoStart?: boolean;
+  /** Client-minted ids for the rows this run creates (fresh sends only). */
+  clientIds?: ExecAgentClientIds;
+  /**
+   * Client IP of the originating request, captured server-side for run
+   * attribution. Propagated into the run's `state.metadata` and downstream
+   * LLM-call metadata for auditing and spend attribution. Never client-passable
+   * input — derived from the request context.
+   */
+  clientIp?: string;
   /** Explicit device ID to bind to the topic and activate for this run */
   deviceId?: string;
   /** Optional existing message IDs to include in context */
@@ -159,6 +189,8 @@ export interface ExecAgentParams {
   fileIds?: string[];
   /** Additional system instructions appended after the agent's own system role */
   instructions?: string;
+  /** Current desktop's device ID; used only when the effective target is `local`. */
+  localDeviceId?: string;
   /** Override the agent's default model */
   model?: string;
   /**
@@ -173,6 +205,13 @@ export interface ExecAgentParams {
   provider?: string;
   /** The agent slug to run (either agentId or slug is required) */
   slug?: string;
+  /**
+   * User agent of the originating request, captured server-side for run
+   * attribution. Propagated into the run's `state.metadata` and downstream
+   * LLM-call metadata for auditing and spend attribution. Never client-passable
+   * input — derived from the request context.
+   */
+  userAgent?: string;
 }
 
 /**
@@ -363,15 +402,21 @@ export interface ExecSubAgentParams {
 export interface ExecVirtualSubAgentParams {
   /** The agent ID to execute */
   agentId: string;
+  /**
+   * chatConfig overrides (thinking / reasoning-effort extend params) for the
+   * sub-agent run, from the parent agent's `agencyConfig.subagent.chatConfig`.
+   * Merged over the executing agent's own chatConfig, skipping nulled keys.
+   */
+  chatConfig?: Partial<LobeAgentChatConfig> | null;
   /** The Group ID inherited from the parent operation, when present */
   groupId?: string;
   /** Instruction/prompt for the virtual sub-agent */
   instruction: string;
   /**
    * Model the sub-agent should run on, resolved by the spawn site from the
-   * parent agent's `agencyConfig.subagent`. Passed explicitly so the execution
-   * side never re-reads the parent config. Falls back to the global default
-   * (`DEFAULT_SUB_AGENT_MODEL`) at the spawn site when unset.
+   * parent agent's `agencyConfig.subagent` (explicit override or the parent's
+   * effective model). Passed explicitly so the execution side never re-reads
+   * the parent config.
    */
   model?: string;
   /** The parent placeholder tool message ID */

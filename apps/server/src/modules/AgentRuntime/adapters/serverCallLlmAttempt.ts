@@ -1,10 +1,18 @@
 import type { AgentEvent, BlobStore, LLMAttemptOutput } from '@lobechat/agent-runtime';
 import { ToolNameResolver } from '@lobechat/context-engine';
-import type { ChatStreamPayload, ModelRuntime } from '@lobechat/model-runtime';
+import type {
+  Base64ImageData,
+  ChatStreamPayload,
+  ContentPartData,
+  ModelRuntime,
+  ModelRuntimeDiagnostics,
+  OnFinishData,
+} from '@lobechat/model-runtime';
 import {
   consumeStreamUntilDone,
   isEmptyModelCompletion,
   ModelEmptyError,
+  ModelRefusalError,
 } from '@lobechat/model-runtime';
 import type {
   ChatImageItem,
@@ -12,9 +20,13 @@ import type {
   GroundingSearch,
   MessageToolCall,
   ModelPerformance,
+  ModelReasoning,
   ModelUsage,
 } from '@lobechat/types';
 import { pickString, toRecord } from '@lobechat/utils/object';
+
+import type { ModelCompletionFailureReason } from '@/business/server/recordModelCompletionFailure';
+import { recordModelCompletionFailure } from '@/business/server/recordModelCompletionFailure';
 
 import type { RuntimeExecutorContext } from '../context';
 import { isOperationInterrupted, log, timing } from '../executorHelpers';
@@ -28,6 +40,8 @@ interface CreateServerCallLlmAttemptInput {
   attempt: number;
   blobStore?: BlobStore;
   chatPayload: ChatStreamPayload;
+  /** Client IP of the originating request, forwarded into the LLM-call metadata for auditing and spend attribution. */
+  clientIp?: string;
   ctx: RuntimeExecutorContext;
   events: AgentEvent[];
   maxAttempts: number;
@@ -40,6 +54,8 @@ interface CreateServerCallLlmAttemptInput {
   resolved: ServerCallLlmTooling['resolved'];
   topicId?: string;
   trigger?: unknown;
+  /** User agent of the originating request, forwarded into the LLM-call metadata for auditing and spend attribution. */
+  userAgent?: string;
 }
 
 const createStreamExecutionError = (errorData: unknown) => {
@@ -60,7 +76,10 @@ const createStreamExecutionError = (errorData: unknown) => {
 export class ServerCallLlmAttempt {
   private answerSalvagedFromReasoning = false;
   private readonly attempt: number;
+  private readonly base64ImageEvents: Base64ImageData[] = [];
   private readonly chatPayload: ChatStreamPayload;
+  private completion?: OnFinishData;
+  private readonly contentPartEvents: ContentPartData[] = [];
   private readonly ctx: RuntimeExecutorContext;
   private finishReason?: string;
   private grounding: GroundingSearch | null = null;
@@ -72,7 +91,11 @@ export class ServerCallLlmAttempt {
   private readonly onFirstChunk: () => void;
   private readonly operationLogId: string;
   private readonly provider: string;
+  private reasoning?: ModelReasoning;
+  private readonly reasoningPartEvents: ContentPartData[] = [];
   private readonly resolved: ServerCallLlmTooling['resolved'];
+  private readonly runtimeDiagnostics: ModelRuntimeDiagnostics = {};
+  private readonly runtimeMetadata: Record<string, unknown>;
   private speed?: ModelPerformance;
   private readonly streamSink: ServerCallLlmStreamSink;
   private streamError?: unknown;
@@ -86,6 +109,7 @@ export class ServerCallLlmAttempt {
     attempt,
     blobStore,
     chatPayload,
+    clientIp,
     ctx,
     events,
     maxAttempts,
@@ -98,6 +122,7 @@ export class ServerCallLlmAttempt {
     resolved,
     topicId,
     trigger,
+    userAgent,
   }: CreateServerCallLlmAttemptInput) {
     this.attempt = attempt;
     this.chatPayload = chatPayload;
@@ -110,6 +135,13 @@ export class ServerCallLlmAttempt {
     this.operationLogId = operationLogId;
     this.provider = provider;
     this.resolved = resolved;
+    this.runtimeMetadata = {
+      clientIp,
+      operationId: ctx.operationId,
+      topicId,
+      trigger,
+      userAgent,
+    };
     this.streamSink = createServerCallLlmStreamSink({
       blobStore,
       ctx,
@@ -135,15 +167,19 @@ export class ServerCallLlmAttempt {
       callback: {
         onBase64Image: async ({ image }) => {
           this.onFirstChunk();
+          this.base64ImageEvents.push({ ...image });
           await this.streamSink.appendBase64Image(image);
         },
         onCompletion: async (data) => {
+          this.completion = data;
           if (data.usage) this.usage = data.usage;
           if (data.speed) this.speed = data.speed;
           if (data.finishReason) this.finishReason = data.finishReason;
+          if (data.reasoning) this.reasoning = data.reasoning;
         },
         onContentPart: async (part) => {
           this.onFirstChunk();
+          this.contentPartEvents.push({ ...part });
           await this.streamSink.appendContentPart(part);
         },
         onError: async (errorData) => {
@@ -165,6 +201,7 @@ export class ServerCallLlmAttempt {
         },
         onReasoningPart: async (part) => {
           this.onFirstChunk();
+          this.reasoningPartEvents.push({ ...part });
           await this.streamSink.appendReasoningPart(part);
         },
         onText: async (text) => {
@@ -216,11 +253,8 @@ export class ServerCallLlmAttempt {
           );
         },
       },
-      metadata: {
-        operationId: this.ctx.operationId,
-        topicId: this.topicId,
-        trigger: this.trigger,
-      },
+      diagnostics: this.runtimeDiagnostics,
+      metadata: this.runtimeMetadata,
       user: this.ctx.userId,
     });
 
@@ -252,6 +286,7 @@ export class ServerCallLlmAttempt {
       hasContentImages: this.streamSink.hasContentImages,
       hasReasoningImages: this.streamSink.hasReasoningImages,
       imageList: [...this.imageList],
+      reasoning: this.reasoning,
       reasoningParts: [...this.streamSink.reasoningParts],
       speed: this.speed,
       thinkingContent: this.streamSink.thinkingContent,
@@ -262,33 +297,113 @@ export class ServerCallLlmAttempt {
   }
 
   private async assertNonEmptyCompletion() {
-    if (
-      isEmptyModelCompletion({
-        content: this.streamSink.content,
-        imageCount: this.imageList.length,
-        outputTokens: this.usage?.totalOutputTokens,
-        reasoning: this.streamSink.thinkingContent,
-        toolCallCount: this.toolsCalling.length + this.toolCalls.length,
-      }) &&
-      !(await isOperationInterrupted(this.ctx))
-    ) {
+    const imageCount = this.getOutputImageCount();
+    const isRefusal = this.finishReason?.toLowerCase() === 'refusal';
+    /**
+     * A refusal needs ordinary response output to count as a successful
+     * completion. Provider-internal reasoning alone must not turn a blank
+     * refusal into a successful assistant message.
+     */
+    const visibleReasoning = isRefusal ? '' : this.streamSink.thinkingContent;
+    const isEmpty = isEmptyModelCompletion({
+      content: this.streamSink.content,
+      hasGrounding: !!this.grounding,
+      imageCount,
+      outputTokens: this.usage?.totalOutputTokens,
+      reasoning: visibleReasoning,
+      toolCallCount: this.toolsCalling.length + this.toolCalls.length,
+    });
+
+    if (!isEmpty || (await isOperationInterrupted(this.ctx))) return;
+
+    const diagnostics = {
+      attempt: this.attempt,
+      contentLength: this.streamSink.content.length,
+      cost: this.usage?.cost,
+      finishReason: this.finishReason,
+      imageCount,
+      maxAttempts: this.maxAttempts,
+      model: this.model,
+      outputTokens: this.usage?.totalOutputTokens,
+      provider: this.provider,
+      reasoningLength: this.streamSink.thinkingContent.length,
+      toolCallCount: this.toolsCalling.length + this.toolCalls.length,
+    };
+
+    await this.recordCompletionFailure(isRefusal ? 'refusal' : 'empty_completion');
+
+    if (isRefusal) {
       log(
-        '[%s] Model returned an empty completion (attempt %d/%d) — throwing ModelEmptyError to retry',
+        '[%s] Model explicitly refused an empty completion (attempt %d/%d) — throwing terminal ModelRefusalError',
         this.operationLogId,
         this.attempt,
         this.maxAttempts,
       );
-      throw new ModelEmptyError(undefined, {
+      throw new ModelRefusalError(undefined, diagnostics);
+    }
+
+    log(
+      '[%s] Model returned an empty completion (attempt %d/%d) — throwing terminal ModelEmptyError',
+      this.operationLogId,
+      this.attempt,
+      this.maxAttempts,
+    );
+    throw new ModelEmptyError(undefined, diagnostics);
+  }
+
+  /**
+   * Native multimodal responses store generated images in contentParts rather
+   * than the legacy imageList. Count both paths so image-only completions are
+   * not mistaken for empty provider responses.
+   */
+  private getOutputImageCount() {
+    const contentPartImageCount = this.streamSink.contentParts.filter(
+      (part) => part.type === 'image',
+    ).length;
+
+    return this.imageList.length + contentPartImageCount;
+  }
+
+  private async recordCompletionFailure(reason: ModelCompletionFailureReason) {
+    try {
+      const providerEvidence =
+        this.runtimeDiagnostics.providerRequest || this.runtimeDiagnostics.providerResponse
+          ? this.runtimeDiagnostics
+          : undefined;
+      const routeEvidence = this.runtimeMetadata.routeAttempt;
+      const runtimeEvidence =
+        providerEvidence === undefined && routeEvidence === undefined
+          ? undefined
+          : { provider: providerEvidence, route: routeEvidence };
+
+      await recordModelCompletionFailure({
         attempt: this.attempt,
-        contentLength: this.streamSink.content.length,
-        finishReason: this.finishReason,
-        imageCount: this.imageList.length,
         maxAttempts: this.maxAttempts,
         model: this.model,
-        outputTokens: this.usage?.totalOutputTokens,
+        operationId: this.ctx.operationId,
+        operationLogId: this.operationLogId,
         provider: this.provider,
-        reasoningLength: this.streamSink.thinkingContent.length,
-        toolCallCount: this.toolsCalling.length + this.toolCalls.length,
+        reason,
+        request: this.chatPayload,
+        response: {
+          base64ImageEvents: [...this.base64ImageEvents],
+          completion: this.completion,
+          contentPartEvents: [...this.contentPartEvents],
+          output: this.snapshot(),
+          reasoningPartEvents: [...this.reasoningPartEvents],
+        },
+        ...(runtimeEvidence ? { runtime: runtimeEvidence } : {}),
+        stepIndex: this.ctx.stepIndex,
+        topicId: this.topicId,
+        trigger: this.trigger,
+        userId: this.ctx.userId,
+        workspaceId: this.ctx.workspaceId,
+      });
+    } catch (error) {
+      console.error('[ModelCompletionFailure] Failed to record completion evidence.', {
+        error: error instanceof Error ? error.message : String(error),
+        operationId: this.ctx.operationId,
+        stepIndex: this.ctx.stepIndex,
       });
     }
   }

@@ -10,11 +10,12 @@ import {
 } from '@lobechat/builtin-tool-agent-signal';
 import { BriefManifest } from '@lobechat/builtin-tool-brief';
 import { BrowserManifest } from '@lobechat/builtin-tool-browser';
-import { CalculatorManifest } from '@lobechat/builtin-tool-calculator';
+import { CalculatorManifest } from '@lobechat/builtin-tool-calculator/manifest';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { CredsManifest } from '@lobechat/builtin-tool-creds';
 import { GroupAgentBuilderManifest } from '@lobechat/builtin-tool-group-agent-builder';
 import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management';
+import { ImageGenerationManifest } from '@lobechat/builtin-tool-image-generation';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LobeAgentManifest, resolveLobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { LobeDeliveryCheckerManifest } from '@lobechat/builtin-tool-lobe-delivery-checker';
@@ -61,7 +62,7 @@ export const defaultToolIds = [
  * These are core system tools that the agent needs to function properly.
  *
  * `lobe-agent` is listed first: its built-in capabilities (plan + todo management,
- * sub-agent dispatch, visual-media fallback) should be available on every agent-mode turn,
+ * sub-agent dispatch, multimodal fallback) should be available on every agent-mode turn,
  * not gated behind explicit injection. NOTE: these rules only apply in agent mode — chat
  * mode (`enableAgentMode === false`) drops `alwaysOnToolIds` entirely. In manual
  * skill-activate mode the discovery tools in `manualModeExcludeToolIds` are still removed
@@ -99,17 +100,20 @@ export const manualModeExcludeToolIds = [
  * (`chatConfig.enableAgentMode === false`). Each one still passes through
  * its own runtime gate (e.g. knowledge base requires `hasEnabledKnowledgeBases`,
  * memory requires the global memory setting, web-browsing requires search
- * enabled) — this list is the strict outer whitelist.
+ * enabled, image-generation requires an explicit pin). This list is the
+ * strict outer whitelist.
  *
  * In chat mode, both the server `createServerAgentToolsEngine` and the
  * frontend `createAgentToolsEngine` build their rules from ONLY these
- * identifiers, drop user plugins / `alwaysOnToolIds` entirely, and disable
+ * identifiers, drop user plugins / `alwaysOnToolIds` entirely (except
+ * image-generation, which is re-enabled only when pinned), and disable
  * `allowExplicitActivation` so the activator can't smuggle other tools in.
  */
 export const chatModeAllowedToolIds = [
   KnowledgeBaseManifest.identifier,
   MemoryManifest.identifier,
   WebBrowsingManifest.identifier,
+  ImageGenerationManifest.identifier,
 ];
 
 /**
@@ -278,6 +282,13 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     hidden: true,
     identifier: KnowledgeBaseManifest.identifier,
     manifest: KnowledgeBaseManifest,
+    type: 'builtin',
+  },
+  {
+    // Opt-in image generation: chat mode no longer auto-injects it, so the
+    // Tools popover must expose a pin/disable control.
+    identifier: ImageGenerationManifest.identifier,
+    manifest: ImageGenerationManifest,
     type: 'builtin',
   },
   {

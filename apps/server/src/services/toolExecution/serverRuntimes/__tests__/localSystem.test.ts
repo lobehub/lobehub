@@ -144,7 +144,7 @@ describe('localSystemRuntime', () => {
     });
 
     it('addresses a personal-scope active device via the personal pool even in a workspace run', async () => {
-      // Workspace agent + per-user `local` override (LOBE-11689): the routed
+      // Workspace agent + per-user `local` override: the routed
       // device only has a connection under the personal principal, so the
       // workspace id must NOT be forwarded to the gateway call.
       const context: ToolExecutionContext = {
@@ -232,6 +232,45 @@ describe('localSystemRuntime', () => {
       expect(parseArgs()).toEqual({ pattern: 'TODO', scope: '/Users/me/repo' });
     });
 
+    it('injects scope into globFiles when omitted', async () => {
+      const proxy = buildProxy('/Users/me/repo');
+      await proxy[LocalSystemApiName.globFiles]({ pattern: '**/*.ts' });
+
+      expect(parseArgs()).toEqual({ pattern: '**/*.ts', scope: '/Users/me/repo' });
+    });
+
+    it('replaces scope "." with workingDirectory for globFiles', async () => {
+      const proxy = buildProxy('/Users/me/repo');
+      await proxy[LocalSystemApiName.globFiles]({ pattern: '**/*.ts', scope: '.' });
+
+      expect(parseArgs()).toEqual({ pattern: '**/*.ts', scope: '/Users/me/repo' });
+    });
+
+    it('replaces scope "." with workingDirectory for searchFiles', async () => {
+      const proxy = buildProxy('/Users/me/repo');
+      await proxy[LocalSystemApiName.searchFiles]({ keywords: 'foo', scope: '.' });
+
+      expect(parseArgs()).toEqual({ keywords: 'foo', scope: '/Users/me/repo' });
+    });
+
+    it('replaces scope "." with Windows workingDirectory for search ops', async () => {
+      const proxy = buildProxy('D:\\some-project');
+
+      await proxy[LocalSystemApiName.globFiles]({ pattern: '**/*.ts', scope: '.' });
+      expect(parseArgs()).toEqual({ pattern: '**/*.ts', scope: 'D:\\some-project' });
+
+      mockExecuteToolCall.mockClear();
+      await proxy[LocalSystemApiName.searchFiles]({ keywords: 'foo', scope: '.' });
+      expect(parseArgs()).toEqual({ keywords: 'foo', scope: 'D:\\some-project' });
+    });
+
+    it('does not override an explicit absolute scope on search ops', async () => {
+      const proxy = buildProxy('/Users/me/repo');
+      await proxy[LocalSystemApiName.globFiles]({ pattern: '**/*.ts', scope: '/explicit' });
+
+      expect(parseArgs()).toEqual({ pattern: '**/*.ts', scope: '/explicit' });
+    });
+
     it('does not override an explicit cwd/scope supplied by the model', async () => {
       const proxy = buildProxy('/Users/me/repo');
       await proxy[LocalSystemApiName.runCommand]({ command: 'ls', cwd: '/explicit' });
@@ -275,6 +314,81 @@ describe('localSystemRuntime', () => {
       await proxy[LocalSystemApiName.runCommand]({ command: 'pwd' });
 
       expect(parseArgs()).toEqual({ command: 'pwd' });
+    });
+  });
+
+  // A device shell runs the user's own `lh` against their stored credentials,
+  // which default to PERSONAL scope — so a workspace agent asking the CLI to
+  // edit itself silently read and wrote the wrong tenancy.
+  describe('lh workspace scope on device commands', () => {
+    const parseArgs = () => JSON.parse(mockExecuteToolCall.mock.calls[0][1].arguments);
+
+    const buildProxy = (context: Partial<ToolExecutionContext>) => {
+      mockExecuteToolCall.mockResolvedValue({ content: '', success: true });
+      return localSystemRuntime.factory({
+        activeDeviceId: 'device-1',
+        toolManifestMap: {},
+        userId: 'user-1',
+        ...context,
+      });
+    };
+
+    it('injects the workspace scope into lh commands', async () => {
+      const proxy = buildProxy({ workspaceId: 'ws-42' });
+      await proxy[LocalSystemApiName.runCommand]({ command: 'lh agent edit agt_1 -t x' });
+
+      expect(parseArgs().env).toEqual({ LOBEHUB_WORKSPACE_ID: 'ws-42' });
+    });
+
+    it('never sends the caller JWT to the device', async () => {
+      const proxy = buildProxy({ workspaceId: 'ws-42' });
+      await proxy[LocalSystemApiName.runCommand]({ command: 'lh agent list' });
+
+      expect(parseArgs().env).not.toHaveProperty('LOBEHUB_JWT');
+    });
+
+    it('keeps the scope on a personal-scope device, which is addressed personally but still edits workspace content', async () => {
+      const proxy = buildProxy({ activeDeviceScope: 'personal', workspaceId: 'ws-42' });
+      await proxy[LocalSystemApiName.runCommand]({ command: 'lh agent edit agt_1 -t x' });
+
+      // Gateway addressing drops the workspace (no `workspace:<id>` connection
+      // for this device) — the CONTENT scope must not follow it down.
+      expect(mockExecuteToolCall.mock.calls[0][0].workspaceId).toBeUndefined();
+      expect(parseArgs().env).toEqual({ LOBEHUB_WORKSPACE_ID: 'ws-42' });
+    });
+
+    // Regression: injection used to be gated on detecting `lh` in command
+    // position, so a command that reaches `lh` through a child shell, a script
+    // or a Makefile got no scope and silently used the device credentials'
+    // personal tenancy. The device merges env into the spawned process, so
+    // every descendant inherits it — which is the only way to cover these.
+    it.each([
+      ['child shell', "bash -lc 'lh whoami'"],
+      ['shell script', './sync.sh'],
+      ['makefile target', 'make deploy'],
+      ['npm script', 'npm run sync'],
+    ])('scopes a workspace run invoking lh via a %s', async (_label, command) => {
+      const proxy = buildProxy({ workspaceId: 'ws-42' });
+      await proxy[LocalSystemApiName.runCommand]({ command });
+
+      expect(parseArgs().env).toEqual({ LOBEHUB_WORKSPACE_ID: 'ws-42' });
+    });
+
+    it('does not inject in a personal run', async () => {
+      const proxy = buildProxy({});
+      await proxy[LocalSystemApiName.runCommand]({ command: 'lh agent list' });
+
+      expect(parseArgs()).toEqual({ command: 'lh agent list' });
+    });
+
+    it('lets a model-supplied env win', async () => {
+      const proxy = buildProxy({ workspaceId: 'ws-42' });
+      await proxy[LocalSystemApiName.runCommand]({
+        command: 'lh agent list',
+        env: { LOBEHUB_WORKSPACE_ID: 'ws-explicit' },
+      });
+
+      expect(parseArgs().env).toEqual({ LOBEHUB_WORKSPACE_ID: 'ws-explicit' });
     });
   });
 });

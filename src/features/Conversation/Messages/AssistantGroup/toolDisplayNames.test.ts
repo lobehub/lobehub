@@ -1,13 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { type AssistantContentBlock } from '@/types/index';
+import type { AssistantContentBlock } from '@/types/index';
 
 import {
-  getPostToolAnswerSplitIndex,
   getToolDisplayName,
   getWorkflowStreamingHeadlineState,
   getWorkflowSummaryText,
-  isFoldableStatusLine,
   shapeProseForWorkflowHeadline,
 } from './toolDisplayNames';
 
@@ -116,59 +114,6 @@ describe('shapeProseForWorkflowHeadline', () => {
     expect(out).toContain('Node.js 24');
     expect(out).toContain('release notes');
     expect(out).not.toContain('Then crawl');
-  });
-});
-
-describe('isFoldableStatusLine', () => {
-  it('keeps a single short status line folded', () => {
-    expect(isFoldableStatusLine(blk({ id: '0', content: '先重建 worktree:' }))).toBe(true);
-    expect(isFoldableStatusLine(blk({ id: '1', content: '现在我来搜索资料。' }))).toBe(true);
-  });
-
-  it('keeps a single sentence with a dotted token folded', () => {
-    // "src/a.ts" and "Node.js" must not be counted as extra sentence boundaries.
-    expect(isFoldableStatusLine(blk({ id: '0', content: '已更新 src/a.ts 完成。' }))).toBe(true);
-    expect(isFoldableStatusLine(blk({ id: '1', content: '升级到 Node.js 24。' }))).toBe(true);
-  });
-
-  it('treats multi-sentence, multi-line, markdown or long lines as prose', () => {
-    expect(isFoldableStatusLine(blk({ id: '0', content: '第一句话。第二句话。' }))).toBe(false);
-    expect(isFoldableStatusLine(blk({ id: '1', content: '先总结。\n\n## 下一步' }))).toBe(false);
-    expect(isFoldableStatusLine(blk({ id: '2', content: '- 对比方案 A' }))).toBe(false);
-    expect(isFoldableStatusLine(blk({ id: '3', content: 'x'.repeat(120) }))).toBe(false);
-  });
-
-  it('treats empty / loading content as foldable (nothing to lift out)', () => {
-    expect(isFoldableStatusLine(blk({ id: '0', content: '' }))).toBe(true);
-  });
-});
-
-describe('post-tool answer split', () => {
-  it('returns split index for real prose block after last tool', () => {
-    const long =
-      'Direct summary - Node.js 24 (released May 6, 2025) is a major platform update that upgrades V8 to a newer track, ships notable HTTP and fetch-related changes, and introduces practical migration items for native addons and tooling.\n\n## Checklist\n\n- Rebuild native modules';
-    const blocks = [
-      blk({ id: '0', content: 'intro', tools: [{ apiName: 'search', id: 't1' } as any] }),
-      blk({ id: '1', content: long }),
-    ];
-    const ix = getPostToolAnswerSplitIndex(blocks, 0, true, true);
-    expect(ix).toBe(1);
-  });
-
-  it('splits on a multi-sentence prose block after tools', () => {
-    const blocks = [
-      blk({ id: '0', content: 'x', tools: [{ apiName: 'search', id: 't1' } as any] }),
-      blk({ id: '1', content: '先跑测试。全部通过了。' }),
-    ];
-    expect(getPostToolAnswerSplitIndex(blocks, 0, true, true)).toBe(1);
-  });
-
-  it('does not split a short single-line step after tools', () => {
-    const blocks = [
-      blk({ id: '0', content: 'x', tools: [{ apiName: 'search', id: 't1' } as any] }),
-      blk({ id: '1', content: '现在我来搜索资料。' }),
-    ];
-    expect(getPostToolAnswerSplitIndex(blocks, 0, true, true)).toBeNull();
   });
 });
 

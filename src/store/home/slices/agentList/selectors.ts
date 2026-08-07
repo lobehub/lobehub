@@ -18,6 +18,12 @@ const agentGroups = (s: HomeStore): SidebarGroup[] => s.agentGroups;
 const privateAgentGroups = (s: HomeStore): SidebarGroup[] => s.privateAgentGroups;
 
 /**
+ * Get pinned private agents owned by the current user.
+ * Empty array in personal mode.
+ */
+const privatePinnedAgents = (s: HomeStore): SidebarAgentItem[] => s.privatePinnedAgents;
+
+/**
  * Get all ungrouped agents
  */
 const ungroupedAgents = (s: HomeStore): SidebarAgentItem[] => s.ungroupedAgents;
@@ -32,7 +38,9 @@ const privateUngroupedAgents = (s: HomeStore): SidebarAgentItem[] => s.privateUn
  * Whether the current user has any private content in this workspace.
  */
 const hasPrivateAgents = (s: HomeStore): boolean =>
-  s.privateAgentGroups.length > 0 || s.privateUngroupedAgents.length > 0;
+  s.privateAgentGroups.length > 0 ||
+  s.privatePinnedAgents.length > 0 ||
+  s.privateUngroupedAgents.length > 0;
 
 /**
  * Limit ungrouped agents for sidebar display based on page size
@@ -75,6 +83,7 @@ const allAgents = (s: HomeStore): SidebarAgentItem[] => {
     ...s.pinnedAgents,
     ...groupedAgents,
     ...s.ungroupedAgents,
+    ...s.privatePinnedAgents,
     ...privateGroupedAgents,
     ...s.privateUngroupedAgents,
   ];
@@ -113,6 +122,7 @@ export const homeAgentListSelectors = {
   isAgentListInit,
   pinnedAgents,
   privateAgentGroups,
+  privatePinnedAgents,
   privateUngroupedAgents,
   privateUngroupedAgentsCount,
   privateUngroupedAgentsLimited,

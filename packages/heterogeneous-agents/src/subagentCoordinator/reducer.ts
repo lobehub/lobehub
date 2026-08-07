@@ -387,6 +387,33 @@ export const reduce = (
     if (data.chunkType === 'reasoning' && typeof data.reasoning === 'string' && data.reasoning) {
       return reduceTextChunk(state, subCtx, 'reasoning', data.reasoning, ctx);
     }
+    if (
+      data.chunkType === 'tool_state' &&
+      data.snapshotMode === 'replace' &&
+      typeof data.toolCallId === 'string' &&
+      data.toolCallId.length > 0 &&
+      Number.isInteger(data.snapshotSeq) &&
+      data.snapshotSeq > 0 &&
+      typeof data.pluginState === 'object' &&
+      data.pluginState !== null &&
+      !Array.isArray(data.pluginState)
+    ) {
+      const owner = findRunByInnerToolCallId(state, data.toolCallId);
+      if (!owner) return { intents: [], state };
+
+      return {
+        intents: [
+          {
+            kind: 'updateToolState',
+            pluginState: data.pluginState,
+            snapshotSeq: data.snapshotSeq,
+            threadId: owner.run.threadId,
+            toolCallId: data.toolCallId,
+          },
+        ],
+        state,
+      };
+    }
     if (data.chunkType === 'tools_calling') {
       const tools = (data.toolsCalling as ToolCallPayload[] | undefined) ?? [];
       if (tools.length === 0) return { intents: [], state };

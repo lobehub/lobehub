@@ -1,16 +1,25 @@
 import { isDesktop } from '@lobechat/const';
 import type { DropdownItem } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { cssVar, useResponsive } from 'antd-style';
-import { Clock3Icon, CopyPlus, Download, EyeOffIcon, Link2, Maximize2, Trash2 } from 'lucide-react';
+import {
+  Clock3Icon,
+  CopyPlus,
+  Download,
+  EyeOffIcon,
+  Link2,
+  Maximize2,
+  Trash2,
+  UsersIcon,
+} from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
 import { useDocumentTransferMenuItem } from '@/business/client/hooks/useDocumentTransferMenuItem';
+import { useResourcePermissionMenuItem } from '@/features/ResourcePermission/useResourcePermissionMenuItem';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { usePermission } from '@/hooks/usePermission';
 import { useDocumentStore } from '@/store/document';
@@ -30,7 +39,7 @@ import { usePageEditorStore, useStoreApi } from '../store';
  */
 export const useMenu = (): { menuItems: any[] } => {
   const { i18n, t } = useTranslation(['file', 'common', 'chat']);
-  const { message } = App.useApp();
+
   const storeApi = useStoreApi();
   const { lg = true } = useResponsive();
   const dateLocale = i18n.resolvedLanguage || i18n.language;
@@ -63,10 +72,19 @@ export const useMenu = (): { menuItems: any[] } => {
     transferLabel: t('pageEditor.menu.move'),
   }) as DropdownItem[] | null;
 
+  const publishPageToWorkspace = usePageStore((s) => s.publishPageToWorkspace);
   const setPageVisibility = usePageStore((s) => s.setPageVisibility);
+  const canPublish = Boolean(
+    activeWorkspaceId && isOwnPage && pageDocument?.visibility === 'private' && canEditPage,
+  );
   const canMakePrivate = Boolean(
     activeWorkspaceId && isOwnPage && pageDocument?.visibility === 'public' && canEditPage,
   );
+  const memberPermissionMenuItem = useResourcePermissionMenuItem(
+    'document',
+    activeWorkspaceId && pageDocument?.visibility === 'public' ? documentId : undefined,
+    { showReadOnly: true },
+  ) as DropdownItem | null;
 
   const [togglePageAgentPanel, wideScreen, toggleWideScreen] = useGlobalStore((s) => [
     s.togglePageAgentPanel,
@@ -82,12 +100,31 @@ export const useMenu = (): { menuItems: any[] } => {
     if (!documentId) return;
     try {
       await duplicateDocument(documentId);
-      message.success(t('pageEditor.duplicateSuccess'));
+      toast.success(t('pageEditor.duplicateSuccess'));
     } catch (error) {
       console.error('Failed to duplicate page:', error);
-      message.error(t('pageEditor.duplicateError'));
+      toast.error(t('pageEditor.duplicateError'));
     }
-  }, [canCreatePage, documentId, duplicateDocument, message, t]);
+  }, [canCreatePage, documentId, duplicateDocument, t]);
+
+  const handlePublish = useCallback(() => {
+    if (!canPublish || !documentId) return;
+    confirmModal({
+      cancelText: t('cancel', { ns: 'common' }),
+      content: <VisibilityConfirmContent variant="publish" />,
+      okText: t('continue', { ns: 'common' }),
+      onOk: async () => {
+        try {
+          await publishPageToWorkspace(documentId);
+          toast.success(t('pageList.publishSuccess'));
+        } catch (error) {
+          console.error('Failed to publish page:', error);
+          toast.error(t('pageList.publishError'));
+        }
+      },
+      title: t('pageList.publishConfirm.title'),
+    });
+  }, [canPublish, documentId, publishPageToWorkspace, t]);
 
   const handleMakePrivate = useCallback(() => {
     if (!canMakePrivate || !documentId) return;
@@ -99,15 +136,15 @@ export const useMenu = (): { menuItems: any[] } => {
       onOk: async () => {
         try {
           await setPageVisibility(documentId, 'private');
-          message.success(t('makePrivate.success', { ns: 'common' }));
+          toast.success(t('makePrivate.success', { ns: 'common' }));
         } catch (error) {
           console.error('Failed to make page private:', error);
-          message.error(t('makePrivate.error', { ns: 'common' }));
+          toast.error(t('makePrivate.error', { ns: 'common' }));
         }
       },
       title: t('makePrivate.confirm.title', { ns: 'common' }),
     });
-  }, [canMakePrivate, documentId, setPageVisibility, message, t]);
+  }, [canMakePrivate, documentId, setPageVisibility, t]);
 
   const handleExportMarkdown = useCallback(async () => {
     const state = storeApi.getState();
@@ -135,13 +172,13 @@ export const useMenu = (): { menuItems: any[] } => {
         a.click();
         a.remove();
         URL.revokeObjectURL(url);
-        message.success(t('pageEditor.exportSuccess'));
+        toast.success(t('pageEditor.exportSuccess'));
       }
     } catch (error) {
       console.error('Failed to export markdown:', error);
-      message.error(t('pageEditor.exportError'));
+      toast.error(t('pageEditor.exportError'));
     }
-  }, [storeApi, message, t]);
+  }, [storeApi, t]);
 
   const menuItems = useMemo<DropdownItem[]>(() => {
     const items: DropdownItem[] = [
@@ -160,6 +197,22 @@ export const useMenu = (): { menuItems: any[] } => {
             },
           ]
         : []),
+      ...(memberPermissionMenuItem || canMakePrivate
+        ? [
+            ...(memberPermissionMenuItem ? [memberPermissionMenuItem] : []),
+            ...(canMakePrivate
+              ? [
+                  {
+                    icon: <Icon icon={EyeOffIcon} />,
+                    key: 'make-private',
+                    label: t('makePrivate', { ns: 'common' }),
+                    onClick: handleMakePrivate,
+                  } as DropdownItem,
+                ]
+              : []),
+            { type: 'divider' as const },
+          ]
+        : []),
       {
         disabled: !canCreatePage,
         icon: <Icon icon={CopyPlus} />,
@@ -173,7 +226,7 @@ export const useMenu = (): { menuItems: any[] } => {
         label: t('pageEditor.menu.copyLink'),
         onClick: () => {
           const state = storeApi.getState();
-          state.handleCopyLink(t as any, message);
+          state.handleCopyLink(t as any);
         },
       },
       {
@@ -194,20 +247,20 @@ export const useMenu = (): { menuItems: any[] } => {
         onClick: async () => {
           if (!canEditPage) return;
           const state = storeApi.getState();
-          await state.handleDelete(t as any, message, state.onDelete);
+          await state.handleDelete(t as any, state.onDelete);
         },
       },
       {
         type: 'divider' as const,
       },
       ...((transferMenuItems ?? []) as DropdownItem[]),
-      ...(canMakePrivate
+      ...(canPublish
         ? [
             {
-              icon: <Icon icon={EyeOffIcon} />,
-              key: 'make-private',
-              label: t('makePrivate', { ns: 'common' }),
-              onClick: handleMakePrivate,
+              icon: <Icon icon={UsersIcon} />,
+              key: 'publish-to-workspace',
+              label: t('pageList.publishToWorkspace'),
+              onClick: handlePublish,
             } as DropdownItem,
           ]
         : []),
@@ -259,16 +312,18 @@ export const useMenu = (): { menuItems: any[] } => {
     canMakePrivate,
     storeApi,
     t,
-    message,
     setRightPanelMode,
     wideScreen,
     dateLocale,
     toggleWideScreen,
     togglePageAgentPanel,
     showViewModeSwitch,
+    canPublish,
     handleDuplicate,
     handleMakePrivate,
+    handlePublish,
     handleExportMarkdown,
+    memberPermissionMenuItem,
     transferMenuItems,
   ]);
 

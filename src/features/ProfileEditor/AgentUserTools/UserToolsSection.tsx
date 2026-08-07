@@ -8,11 +8,14 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import SharedAgentTool, { type AgentToolProps } from '@/features/ProfileEditor/AgentTool';
+import type { AgentToolProps } from '@/features/ProfileEditor/AgentTool';
+import SharedAgentTool from '@/features/ProfileEditor/AgentTool';
 import PluginTag from '@/features/ProfileEditor/PluginTag';
+import { getVisibleProfileToolIds } from '@/features/ProfileEditor/profileToolVisibility';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useToolStore } from '@/store/tool';
+import { builtinToolSelectors } from '@/store/tool/selectors';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 
 interface Props extends AgentToolProps {
@@ -44,6 +47,7 @@ const UserToolsSection = memo<Props>(
     const { t } = useTranslation('setting');
     const userConnectors = useToolStore(connectorSelectors.connectorList, isEqual);
     const config = useAgentStore(agentSelectors.getAgentConfigById(agentId), isEqual);
+    const isManualSkillMode = config?.chatConfig?.skillActivateMode === 'manual';
     // Agent-owned/linked connector identifiers are shown in the Agent Tools
     // section above (and excluded from this section's chips in `AgentTool`), so
     // exclude them from the count too — otherwise the header would count a tool
@@ -53,9 +57,20 @@ const UserToolsSection = memo<Props>(
       () => new Set(agentConnectors.map((c) => c.identifier)),
       [agentConnectors],
     );
-    const userToolCount = getActivePluginIds(config?.plugins).filter(
-      (id) => !agentConnectorIdentifiers.has(id),
-    ).length;
+    const nonProfileConfigurableBuiltinToolIds = useToolStore(
+      builtinToolSelectors.nonProfileConfigurableBuiltinToolIds({
+        isManualMode: isManualSkillMode,
+      }),
+      isEqual,
+    );
+    const nonProfileConfigurableBuiltinToolIdentifiers = useMemo(
+      () => new Set(nonProfileConfigurableBuiltinToolIds),
+      [nonProfileConfigurableBuiltinToolIds],
+    );
+    const userToolCount = getVisibleProfileToolIds(getActivePluginIds(config?.plugins), {
+      agentConnectorIdentifiers,
+      nonConfigurableBuiltinToolIdentifiers: nonProfileConfigurableBuiltinToolIdentifiers,
+    }).length;
     // In a workspace, this section's base tools are the WORKSPACE dimension
     // (`connector.list` is workspace-scoped), not the caller's personal tools —
     // label it so the user knows the tools are shared workspace-scoped, not

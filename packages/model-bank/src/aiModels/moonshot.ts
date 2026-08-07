@@ -22,9 +22,9 @@ const moonshotChatModels: AIChatModelCard[] = [
     pricing: {
       currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 20, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 100, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-07-16',
@@ -32,6 +32,7 @@ const moonshotChatModels: AIChatModelCard[] = [
       // K3 fixes sampling params server-side (temperature=1, top_p=0.95, penalties=0)
       // and the API docs advise against sending them
       disabledParams: ['frequency_penalty', 'presence_penalty', 'temperature', 'top_p'],
+      extendParams: ['kimiK3ReasoningEffort'],
     },
     type: 'chat',
   },
@@ -102,7 +103,6 @@ const moonshotChatModels: AIChatModelCard[] = [
     description:
       "Kimi K2.6 is Kimi's latest and most capable model, delivering stronger long-horizon coding, instruction following, and self-correction while supporting text, image, and video inputs plus chat and agent tasks.",
     displayName: 'Kimi K2.6',
-    enabled: true,
     family: 'kimi',
     generation: 'kimi-k2.6',
     id: 'kimi-k2.6',

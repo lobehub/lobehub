@@ -1,13 +1,13 @@
-import { LobeAgentIdentifier, MAX_VISUAL_MEDIA_URLS } from '@lobechat/builtin-tool-lobe-agent';
-import { createVisualFileRef } from '@lobechat/const/visualRef';
+import { LobeAgentIdentifier, MAX_MEDIA_URLS } from '@lobechat/builtin-tool-lobe-agent';
+import { createMediaFileRef } from '@lobechat/const/mediaRef';
 import { RequestTrigger } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ToolExecutionContext } from '../../types';
 
 const mockToolsEnv = vi.hoisted(() => ({
-  VISUAL_UNDERSTANDING_MODEL: undefined as string | undefined,
-  VISUAL_UNDERSTANDING_PROVIDER: undefined as string | undefined,
+  MULTIMODAL_UNDERSTANDING_MODEL: undefined as string | undefined,
+  MULTIMODAL_UNDERSTANDING_PROVIDER: undefined as string | undefined,
 }));
 const mockMessageModelQueryByIds = vi.hoisted(() => vi.fn());
 const mockMessageModelQuery = vi.hoisted(() => vi.fn());
@@ -16,13 +16,18 @@ const mockInitModelRuntimeFromDB = vi.hoisted(() => vi.fn());
 const mockConsumeStreamUntilDone = vi.hoisted(() => vi.fn());
 const mockBuiltinModels = vi.hoisted(() => [
   {
-    abilities: { video: true, vision: true },
+    abilities: { audio: true, video: true, vision: true },
     id: 'vision-model',
     providerId: 'test-provider',
   },
   {
-    abilities: { video: false, vision: true },
+    abilities: { audio: true, video: false, vision: true },
     id: 'image-only-model',
+    providerId: 'test-provider',
+  },
+  {
+    abilities: { audio: false, video: true, vision: true },
+    id: 'no-audio-model',
     providerId: 'test-provider',
   },
 ]);
@@ -60,6 +65,22 @@ vi.mock('model-bank', () => ({
   LOBE_DEFAULT_MODEL_LIST: mockBuiltinModels,
 }));
 
+// Plan documents are the todo runtime's optional mirror; a topic that never ran
+// `createPlan` simply has none. Model that here so the todo tests exercise the
+// message-history path the tool context is supposed to supply.
+const mockFindPlanByTopic = vi.hoisted(() => vi.fn().mockResolvedValue(null));
+const mockUpdatePlanMetadata = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+
+vi.mock('../lobeAgentPlan', () => ({
+  createServerPlanRuntimeService: () => ({
+    createPlan: vi.fn(),
+    findPlanById: vi.fn(),
+    findPlanByTopic: mockFindPlanByTopic,
+    updatePlan: vi.fn(),
+    updatePlanMetadata: mockUpdatePlanMetadata,
+  }),
+}));
+
 const { lobeAgentRuntime } = await import('../lobeAgent');
 
 describe('lobeAgentRuntime', () => {
@@ -73,10 +94,10 @@ describe('lobeAgentRuntime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockMessageModelQuery.mockResolvedValue([]);
-    mockToolsEnv.VISUAL_UNDERSTANDING_MODEL = 'vision-model';
-    mockToolsEnv.VISUAL_UNDERSTANDING_PROVIDER = 'test-provider';
+    mockToolsEnv.MULTIMODAL_UNDERSTANDING_MODEL = 'vision-model';
+    mockToolsEnv.MULTIMODAL_UNDERSTANDING_PROVIDER = 'test-provider';
     mockChat.mockImplementation(async (_payload, options) => {
-      options?.callback?.onText?.('visual answer');
+      options?.callback?.onText?.('media answer');
       options?.callback?.onCompletion?.({ usage: { totalTokens: 12 } });
       return new Response('ok');
     });
@@ -106,35 +127,35 @@ describe('lobeAgentRuntime', () => {
     ).toThrow('messageId is required for LobeAgent execution');
   });
 
-  it('should return a configuration error when visual model env is missing', async () => {
-    mockToolsEnv.VISUAL_UNDERSTANDING_MODEL = undefined;
+  it('should return a configuration error when multimodal model env is missing', async () => {
+    mockToolsEnv.MULTIMODAL_UNDERSTANDING_MODEL = undefined;
     const runtime = lobeAgentRuntime.factory(baseContext);
 
-    const result = await runtime.analyzeVisualMedia({
+    const result = await runtime.analyzeMedia({
       refs: ['image_1'],
       question: 'what is this?',
     });
 
     expect(result.success).toBe(false);
-    expect(result.error.code).toBe('VISUAL_UNDERSTANDING_NOT_CONFIGURED');
+    expect(result.error.code).toBe('MULTIMODAL_UNDERSTANDING_NOT_CONFIGURED');
   });
 
-  it('should return an error when the source message has no visual files', async () => {
+  it('should return an error when the source message has no media files', async () => {
     mockMessageModelQueryByIds.mockResolvedValue([{ id: 'msg-1' }]);
     const runtime = lobeAgentRuntime.factory(baseContext);
 
-    const result = await runtime.analyzeVisualMedia({
+    const result = await runtime.analyzeMedia({
       refs: ['image_1'],
       question: 'what is this?',
     });
 
     expect(result).toMatchObject({
-      error: { code: 'NO_VISUAL_FILES' },
+      error: { code: 'NO_MEDIA_FILES' },
       success: false,
     });
   });
 
-  it('should validate requested visual file refs', async () => {
+  it('should validate requested media file refs', async () => {
     mockMessageModelQueryByIds.mockResolvedValue([
       {
         id: 'msg-1',
@@ -144,12 +165,12 @@ describe('lobeAgentRuntime', () => {
     ]);
     const runtime = lobeAgentRuntime.factory(baseContext);
 
-    const result = await runtime.analyzeVisualMedia({
+    const result = await runtime.analyzeMedia({
       refs: ['image_1'],
       question: 'what is this?',
     });
 
-    const stableImageRef = createVisualFileRef({ index: 0, messageId: 'msg-1', type: 'image' });
+    const stableImageRef = createMediaFileRef({ index: 0, messageId: 'msg-1', type: 'image' });
 
     expect(result.success).toBe(false);
     expect(result.content).toContain(`Available refs: ${stableImageRef}`);
@@ -159,7 +180,7 @@ describe('lobeAgentRuntime', () => {
   it('should require refs or urls', async () => {
     const runtime = lobeAgentRuntime.factory(baseContext);
 
-    const result = await runtime.analyzeVisualMedia({ question: 'what is this?' } as any);
+    const result = await runtime.analyzeMedia({ question: 'what is this?' } as any);
 
     expect(result).toMatchObject({
       error: { code: 'INVALID_ARGUMENTS' },
@@ -172,13 +193,13 @@ describe('lobeAgentRuntime', () => {
   it('should analyze direct media urls without querying message refs', async () => {
     const runtime = lobeAgentRuntime.factory(baseContext);
 
-    const result = await runtime.analyzeVisualMedia({
+    const result = await runtime.analyzeMedia({
       question: 'what is this?',
       urls: ['https://example.com/generated.png'],
     });
 
     expect(result.success).toBe(true);
-    expect(result.content).toBe('visual answer');
+    expect(result.content).toBe('media answer');
     expect(mockMessageModelQueryByIds).not.toHaveBeenCalled();
     expect(result.state).toMatchObject({
       files: [{ name: 'generated.png', ref: 'url_1', type: 'image' }],
@@ -199,16 +220,16 @@ describe('lobeAgentRuntime', () => {
       }),
       expect.objectContaining({
         metadata: expect.objectContaining({
-          trigger: RequestTrigger.VisualAnalysis,
+          trigger: RequestTrigger.MultimodalAnalysis,
         }),
       }),
     );
   });
 
-  it('should pass workspaceId when initializing visual model runtime', async () => {
+  it('should pass workspaceId when initializing multimodal model runtime', async () => {
     const runtime = lobeAgentRuntime.factory({ ...baseContext, workspaceId: 'workspace-1' });
 
-    await runtime.analyzeVisualMedia({
+    await runtime.analyzeMedia({
       question: 'what is this?',
       urls: ['https://example.com/generated.png'],
     });
@@ -221,10 +242,10 @@ describe('lobeAgentRuntime', () => {
     );
   });
 
-  it('should accumulate text content_part chunks from the visual model', async () => {
+  it('should accumulate text content_part chunks from the multimodal model', async () => {
     mockChat.mockImplementationOnce(async (_payload, options) => {
       options?.callback?.onContentPart?.({
-        content: 'visual answer from content part',
+        content: 'media answer from content part',
         mimeType: 'text/plain',
         partType: 'text',
       });
@@ -239,19 +260,19 @@ describe('lobeAgentRuntime', () => {
     });
     const runtime = lobeAgentRuntime.factory(baseContext);
 
-    const result = await runtime.analyzeVisualMedia({
+    const result = await runtime.analyzeMedia({
       question: 'what is this?',
       urls: ['https://example.com/generated.png'],
     });
 
     expect(result.success).toBe(true);
-    expect(result.content).toBe('visual answer from content part');
+    expect(result.content).toBe('media answer from content part');
   });
 
   it('should reject unsupported direct media url protocols', async () => {
     const runtime = lobeAgentRuntime.factory(baseContext);
 
-    const result = await runtime.analyzeVisualMedia({
+    const result = await runtime.analyzeMedia({
       question: 'what is this?',
       urls: [
         'data:text/plain;base64,abcd',
@@ -261,10 +282,12 @@ describe('lobeAgentRuntime', () => {
     });
 
     expect(result).toMatchObject({
-      error: { code: 'UNSUPPORTED_VISUAL_MEDIA_URLS' },
+      error: { code: 'UNSUPPORTED_MEDIA_URLS' },
       success: false,
     });
-    expect(result.content).toContain('Only http:, https:, data:image/* and data:video/* URLs');
+    expect(result.content).toContain(
+      'Only http:, https:, data:audio/*, data:image/* and data:video/* URLs',
+    );
     expect(mockMessageModelQueryByIds).not.toHaveBeenCalled();
     expect(mockChat).not.toHaveBeenCalled();
   });
@@ -272,29 +295,33 @@ describe('lobeAgentRuntime', () => {
   it('should reject too many direct media urls before querying message refs', async () => {
     const runtime = lobeAgentRuntime.factory(baseContext);
 
-    const result = await runtime.analyzeVisualMedia({
+    const result = await runtime.analyzeMedia({
       question: 'what is this?',
       urls: Array.from(
-        { length: MAX_VISUAL_MEDIA_URLS + 1 },
+        { length: MAX_MEDIA_URLS + 1 },
         (_, index) => `https://example.com/${index}.png`,
       ),
     });
 
     expect(result).toMatchObject({
-      error: { code: 'UNSUPPORTED_VISUAL_MEDIA_URLS' },
+      error: { code: 'UNSUPPORTED_MEDIA_URLS' },
       success: false,
     });
-    expect(result.content).toContain(`At most ${MAX_VISUAL_MEDIA_URLS} URLs are supported`);
+    expect(result.content).toContain(`At most ${MAX_MEDIA_URLS} URLs are supported`);
     expect(mockMessageModelQueryByIds).not.toHaveBeenCalled();
     expect(mockChat).not.toHaveBeenCalled();
   });
 
-  it('should allow http and visual data direct media urls', async () => {
+  it('should allow http and multimodal data direct media urls', async () => {
     const runtime = lobeAgentRuntime.factory(baseContext);
 
-    const result = await runtime.analyzeVisualMedia({
+    const result = await runtime.analyzeMedia({
       question: 'what is this?',
-      urls: ['http://example.com/generated.png', 'data:image/png;base64,abcd'],
+      urls: [
+        'http://example.com/generated.png',
+        'data:image/png;base64,abcd',
+        'data:audio/mpeg;base64,abcd',
+      ],
     });
 
     expect(result.success).toBe(true);
@@ -313,6 +340,10 @@ describe('lobeAgentRuntime', () => {
                 image_url: { detail: 'auto', url: 'data:image/png;base64,abcd' },
                 type: 'image_url',
               }),
+              expect.objectContaining({
+                audio_url: { url: 'data:audio/mpeg;base64,abcd' },
+                type: 'audio_url',
+              }),
             ],
           }),
         ],
@@ -322,7 +353,7 @@ describe('lobeAgentRuntime', () => {
   });
 
   it('should resolve stable refs from earlier topic messages', async () => {
-    const previousImageRef = createVisualFileRef({
+    const previousImageRef = createMediaFileRef({
       index: 0,
       messageId: 'msg-previous',
       type: 'image',
@@ -354,7 +385,7 @@ describe('lobeAgentRuntime', () => {
     ]);
     const runtime = lobeAgentRuntime.factory({ ...baseContext, topicId: 'topic-1' });
 
-    const result = await runtime.analyzeVisualMedia({
+    const result = await runtime.analyzeMedia({
       refs: [previousImageRef],
       question: 'what was in the earlier image?',
     });
@@ -386,7 +417,7 @@ describe('lobeAgentRuntime', () => {
   });
 
   it('should use the source thread scope when resolving stable refs', async () => {
-    const previousImageRef = createVisualFileRef({
+    const previousImageRef = createMediaFileRef({
       index: 0,
       messageId: 'msg-previous',
       type: 'image',
@@ -410,7 +441,7 @@ describe('lobeAgentRuntime', () => {
     ]);
     const runtime = lobeAgentRuntime.factory({ ...baseContext, topicId: 'topic-1' });
 
-    const result = await runtime.analyzeVisualMedia({
+    const result = await runtime.analyzeMedia({
       refs: [previousImageRef],
       question: 'what was in the earlier image?',
     });
@@ -422,10 +453,10 @@ describe('lobeAgentRuntime', () => {
     );
   });
 
-  it('should not fall back to scoped visual messages when refs and urls are omitted', async () => {
+  it('should not fall back to scoped media messages when refs and urls are omitted', async () => {
     const runtime = lobeAgentRuntime.factory({ ...baseContext, topicId: 'topic-1' });
 
-    const result = await runtime.analyzeVisualMedia({
+    const result = await runtime.analyzeMedia({
       question: 'Does the person in the first image wear glasses?',
     } as any);
 
@@ -468,8 +499,8 @@ describe('lobeAgentRuntime', () => {
       mockConsumeStreamUntilDone.mockResolvedValue(undefined);
 
       const runtime = lobeAgentRuntime.factory({ ...baseContext, topicId: 'topic-1' });
-      const result = await runtime.analyzeVisualMedia({
-        refs: [createVisualFileRef({ index: 0, messageId: 'msg-previous', type: 'image' })],
+      const result = await runtime.analyzeMedia({
+        refs: [createMediaFileRef({ index: 0, messageId: 'msg-previous', type: 'image' })],
         question: 'what was in the earlier image?',
       });
 
@@ -481,8 +512,74 @@ describe('lobeAgentRuntime', () => {
     }
   });
 
+  it('should resolve audio refs and send audio content to the multimodal model', async () => {
+    mockMessageModelQueryByIds.mockResolvedValue([
+      {
+        audioList: [
+          { alt: 'recording.mp3', id: 'file-audio', url: 'https://example.com/recording.mp3' },
+        ],
+        id: 'msg-1',
+        role: 'user',
+      },
+    ]);
+    const runtime = lobeAgentRuntime.factory(baseContext);
+    const stableAudioRef = createMediaFileRef({ index: 0, messageId: 'msg-1', type: 'audio' });
+
+    const result = await runtime.analyzeMedia({
+      question: 'what is said in the audio?',
+      refs: [stableAudioRef],
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.state).toMatchObject({
+      files: [{ id: 'file-audio', name: 'recording.mp3', ref: stableAudioRef, type: 'audio' }],
+    });
+    expect(mockChat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messages: [
+          expect.objectContaining({
+            content: [
+              expect.objectContaining({ type: 'text' }),
+              expect.objectContaining({
+                audio_url: { url: 'https://example.com/recording.mp3' },
+                type: 'audio_url',
+              }),
+            ],
+          }),
+        ],
+      }),
+      expect.anything(),
+    );
+  });
+
+  it('should reject audio files when the configured model lacks audio support', async () => {
+    mockToolsEnv.MULTIMODAL_UNDERSTANDING_MODEL = 'no-audio-model';
+    mockMessageModelQueryByIds.mockResolvedValue([
+      {
+        audioList: [
+          { alt: 'recording.mp3', id: 'file-audio', url: 'https://example.com/recording.mp3' },
+        ],
+        id: 'msg-1',
+        role: 'user',
+      },
+    ]);
+    const runtime = lobeAgentRuntime.factory(baseContext);
+    const stableAudioRef = createMediaFileRef({ index: 0, messageId: 'msg-1', type: 'audio' });
+
+    const result = await runtime.analyzeMedia({
+      question: 'what is said in the audio?',
+      refs: [stableAudioRef],
+    });
+
+    expect(result).toMatchObject({
+      error: { code: 'MULTIMODAL_MODEL_AUDIO_UNSUPPORTED' },
+      success: false,
+    });
+    expect(mockChat).not.toHaveBeenCalled();
+  });
+
   it('should reject video files when the configured model lacks video support', async () => {
-    mockToolsEnv.VISUAL_UNDERSTANDING_MODEL = 'image-only-model';
+    mockToolsEnv.MULTIMODAL_UNDERSTANDING_MODEL = 'image-only-model';
     mockMessageModelQueryByIds.mockResolvedValue([
       {
         id: 'msg-1',
@@ -491,15 +588,15 @@ describe('lobeAgentRuntime', () => {
       },
     ]);
     const runtime = lobeAgentRuntime.factory(baseContext);
-    const stableVideoRef = createVisualFileRef({ index: 0, messageId: 'msg-1', type: 'video' });
+    const stableVideoRef = createMediaFileRef({ index: 0, messageId: 'msg-1', type: 'video' });
 
-    const result = await runtime.analyzeVisualMedia({
+    const result = await runtime.analyzeMedia({
       refs: [stableVideoRef],
       question: 'what is in the video?',
     });
 
     expect(result).toMatchObject({
-      error: { code: 'VISUAL_MODEL_VIDEO_UNSUPPORTED' },
+      error: { code: 'MULTIMODAL_MODEL_VIDEO_UNSUPPORTED' },
       success: false,
     });
     expect(mockChat).not.toHaveBeenCalled();
@@ -602,6 +699,44 @@ describe('lobeAgentRuntime', () => {
       expect(result.success).toBe(false);
       expect(result).toMatchObject({ error: { code: 'INVALID_ARGUMENTS' } });
       expect(run).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('todos', () => {
+    const todoContext: ToolExecutionContext = {
+      ...baseContext,
+      currentTodos: [
+        { status: 'completed', text: 'env setup' },
+        { status: 'todo', text: 'run case 1' },
+        { status: 'todo', text: 'write report' },
+      ],
+      topicId: 'topic-1',
+    };
+
+    it('applies operations against ctx.currentTodos when no plan document exists', async () => {
+      // Regression: the runtime used to drop `ctx` and resolve todos from the
+      // plan document alone. With no document the list came back empty, every
+      // index went out of bounds, and the agent got "No operations applied."
+      // plus an empty list — which then overwrote the message-history copy.
+      const runtime = lobeAgentRuntime.factory(todoContext);
+
+      const result = await runtime.updateTodos(
+        { operations: [{ index: 1, type: 'processing' }] },
+        todoContext,
+      );
+
+      expect(result.content).not.toContain('No operations applied.');
+      expect(result.state.todos.items).toHaveLength(3);
+      expect(result.state.todos.items[1].status).toBe('processing');
+    });
+
+    it('appends to ctx.currentTodos instead of restarting the list', async () => {
+      const runtime = lobeAgentRuntime.factory(todoContext);
+
+      const result = await runtime.createTodos({ adds: ['publish report'] }, todoContext);
+
+      expect(result.state.todos.items).toHaveLength(4);
+      expect(result.state.todos.items[3].text).toBe('publish report');
     });
   });
 });

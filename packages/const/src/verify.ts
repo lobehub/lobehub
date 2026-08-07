@@ -129,7 +129,7 @@ export const normalizeVerifySurface = (value: string): VerifySurface | null => {
  * is not coupled to task-only workflows: a future run can accept a topic,
  * document, artifact, release, etc. without another schema reshape.
  */
-export const acceptanceSubjectTypes = ['task', 'topic', 'document'] as const;
+export const acceptanceSubjectTypes = ['task', 'topic', 'document', 'standalone'] as const;
 export type AcceptanceSubjectType = (typeof acceptanceSubjectTypes)[number];
 
 /**
@@ -159,17 +159,19 @@ export const acceptanceStatuses = [
   // recommendation either way.
   'delivered',
   'accepted',
+  'closed',
   'rejected',
   'errored',
 ] as const;
 export type AcceptanceStatus = (typeof acceptanceStatuses)[number];
 
 /**
- * The user's per-check verdict on the acceptance union. `accept` is sticky —
- * an accepted check stays settled across later rounds; `reject` binds to the
- * round it was made on and becomes iteration history once a newer round lands.
+ * The user's per-check verdict on the acceptance union. `accept` and `ignore`
+ * are sticky — both settle the check across later rounds; `reject` binds to
+ * the round it was made on and becomes iteration history once a newer round
+ * lands.
  */
-export const acceptanceCheckReviewActions = ['accept', 'reject'] as const;
+export const acceptanceCheckReviewActions = ['accept', 'ignore', 'reject'] as const;
 export type AcceptanceCheckReviewAction = (typeof acceptanceCheckReviewActions)[number];
 
 /** The medium of a captured evidence artifact. */
@@ -178,6 +180,9 @@ export const verifyEvidenceTypes = [
   'gif',
   'video',
   'text',
+  // Prose evidence (root-cause write-ups, structured findings) — rendered as
+  // body markdown instead of the monospace raw-text box `text` gets.
+  'markdown',
   'dom_snapshot',
   'transcript',
 ] as const;

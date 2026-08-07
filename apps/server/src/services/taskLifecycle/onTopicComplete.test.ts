@@ -20,6 +20,17 @@ vi.mock('@/database/models/verifyRun', () => ({
   VerifyRunModel: vi.fn(() => ({ findByOperation: verifyFindByOperation })),
 }));
 
+// Error-brief copy is localized at the source via the server translator; mock it
+// with a tiny table so the error-branch tests can assert both the friendly-copy
+// mapping (a known error code → its human message) and the raw-message fallback
+// (unknown code → the key is returned unchanged, so the code falls back).
+const FAKE_MESSAGES: Record<string, string> = {
+  'response.InsufficientBudgetForModel': 'Not enough credits — top up or upgrade to continue.',
+};
+vi.mock('@/libs/i18n/serverTranslation', () => ({
+  translation: async () => ({ t: (key: string) => FAKE_MESSAGES[key] ?? key }),
+}));
+
 const baseTask = (overrides: Partial<TaskItem> = {}): TaskItem =>
   ({
     automationMode: 'heartbeat',
@@ -73,6 +84,8 @@ describe('TaskLifecycleService.onTopicComplete', () => {
     (service as any).taskTopicModel.updateHandoffContent = vi.fn().mockResolvedValue(undefined);
     (service as any).briefModel.create = createBrief;
     (service as any).briefModel.hasUnresolvedUrgentByTask = vi.fn().mockResolvedValue(false);
+    // The error branch resolves the user's locale for brief copy.
+    (service as any).systemAgentService.getUserLocale = vi.fn().mockResolvedValue('en-US');
   });
 
   afterEach(() => {
@@ -350,7 +363,7 @@ describe('TaskLifecycleService.onTopicComplete', () => {
       expect(updateStatus).toHaveBeenCalledWith('task-1', 'paused', { error: 'boom' });
     });
 
-    it('LOBE-11388: manual run of a schedule task fails → restored to scheduled, NOT paused', async () => {
+    it('manual run of a schedule task fails → restored to scheduled, NOT paused', async () => {
       const task = baseTask({ automationMode: 'schedule', status: 'running' });
       findById.mockResolvedValue(task);
 
@@ -375,7 +388,7 @@ describe('TaskLifecycleService.onTopicComplete', () => {
       );
     });
 
-    it('LOBE-11388: undefined runTrigger defaults to manual (backward compat)', async () => {
+    it('undefined runTrigger defaults to manual (backward compat)', async () => {
       const task = baseTask({ automationMode: 'schedule' });
       findById.mockResolvedValue(task);
 
@@ -392,7 +405,7 @@ describe('TaskLifecycleService.onTopicComplete', () => {
       expect(updateStatus).toHaveBeenCalledWith('task-1', 'scheduled', { error: 'boom' });
     });
 
-    it('LOBE-11389: scheduled run fails below fuse → stays scheduled + increments failures', async () => {
+    it('scheduled run fails below fuse → stays scheduled + increments failures', async () => {
       const task = baseTask({
         automationMode: 'schedule',
         context: { scheduler: { consecutiveFailures: 1 } } as any,
@@ -418,7 +431,7 @@ describe('TaskLifecycleService.onTopicComplete', () => {
       );
     });
 
-    it('LOBE-11389: scheduled run fails AT fuse → pauses for human attention', async () => {
+    it('scheduled run fails AT fuse → pauses for human attention', async () => {
       const task = baseTask({
         automationMode: 'schedule',
         context: { scheduler: { consecutiveFailures: 2 } } as any,
@@ -437,7 +450,7 @@ describe('TaskLifecycleService.onTopicComplete', () => {
 
       // 2 prior + this one = 3 = fuse → pause.
       expect(updateStatus).toHaveBeenCalledWith('task-1', 'paused', { error: 'boom' });
-      // Audit trail records the pause reason durably (LOBE-11390).
+      // Audit trail records the pause reason durably.
       expect(updateContext).toHaveBeenCalledWith(
         'task-1',
         expect.objectContaining({
@@ -447,7 +460,7 @@ describe('TaskLifecycleService.onTopicComplete', () => {
       );
     });
 
-    it('LOBE-11390: every error appends to the durable lifecycle audit trail', async () => {
+    it('every error appends to the durable lifecycle audit trail', async () => {
       const task = baseTask({
         automationMode: 'schedule',
         context: { lifecycle: { errorCount: 4 } } as any,
@@ -493,9 +506,84 @@ describe('TaskLifecycleService.onTopicComplete', () => {
         expect.objectContaining({ priority: 'urgent', type: 'error' }),
       );
     });
+
+    it('error brief keeps internal ids out of the user-facing copy', async () => {
+      const task = baseTask({ automationMode: 'schedule' });
+      findById.mockResolvedValue(task);
+
+      await service.onTopicComplete({
+        errorMessage: 'Workspace budget exceeded',
+        operationId: 'op-1',
+        reason: 'error',
+        runTrigger: 'manual',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      const brief = createBrief.mock.calls.at(-1)?.[0];
+      // Title/summary are human-facing: no raw topic id, no "topic #N", no
+      // "Execution failed:" log framing. The topic id lives on `topicId`.
+      expect(brief.title).not.toContain('topic-1');
+      expect(brief.title).not.toMatch(/topic #/i);
+      expect(brief.summary).not.toMatch(/execution failed/i);
+      expect(brief.summary).toBe('Workspace budget exceeded');
+      expect(brief.topicId).toBe('topic-1');
+    });
+
+    it('a budget error leads with an upgrade remedy instead of a futile retry', async () => {
+      const task = baseTask({ automationMode: 'schedule' });
+      findById.mockResolvedValue(task);
+
+      await service.onTopicComplete({
+        errorCode: 'InsufficientBudgetForModel',
+        errorMessage: 'Workspace budget exceeded',
+        operationId: 'op-1',
+        reason: 'error',
+        runTrigger: 'manual',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      const brief = createBrief.mock.calls.at(-1)?.[0];
+      const keys = brief.actions.map((a: { key: string }) => a.key);
+      // Retrying a budget failure just re-fails — offer the fix, not Retry.
+      expect(keys).toContain('upgrade');
+      expect(keys).not.toContain('retry');
+      const upgrade = brief.actions.find((a: { key: string }) => a.key === 'upgrade');
+      expect(upgrade.type).toBe('link');
+      expect(upgrade.url).toBeTruthy();
+      // Structured cause persisted for observability / future mapping.
+      expect(brief.metadata).toEqual({ error: { code: 'InsufficientBudgetForModel' } });
+      // Summary is the human, localized message mapped from the error code — not
+      // the raw provider string.
+      expect(brief.summary).toBe('Not enough credits — top up or upgrade to continue.');
+    });
+
+    it('a non-billing error keeps the default retry action', async () => {
+      const task = baseTask({ automationMode: 'schedule' });
+      findById.mockResolvedValue(task);
+
+      await service.onTopicComplete({
+        errorCode: 'ProviderBizError',
+        errorMessage: 'upstream 500',
+        operationId: 'op-1',
+        reason: 'error',
+        runTrigger: 'manual',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      const brief = createBrief.mock.calls.at(-1)?.[0];
+      const keys = brief.actions.map((a: { key: string }) => a.key);
+      expect(keys).toContain('retry');
+      expect(keys).not.toContain('upgrade');
+    });
   });
 
-  describe('reason=done recovery audit (LOBE-11390)', () => {
+  describe('reason=done recovery audit ', () => {
     it('successful automation tick after an error stamps lastRecoveredAt + resets fuse', async () => {
       const task = baseTask({
         automationMode: 'schedule',

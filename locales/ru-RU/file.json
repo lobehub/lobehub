@@ -197,6 +197,8 @@
   "pageList.workspaceTitle": "Рабочее пространство",
   "portal.openInPageEditor": "Редактировать в странице",
   "preview.downloadFile": "Скачать файл",
+  "preview.raw": "Исходный",
+  "preview.render": "Предпросмотр",
   "preview.unsupportedFileAndContact": "Этот формат файла пока не поддерживается для онлайн-просмотра. Если у вас есть пожелания, <1>свяжитесь с нами</1>.",
   "resource": "Ресурс",
   "resourceList.batchCopyDescription": "Клонируйте выбранные ресурсы в другую рабочую область.",
@@ -246,6 +248,7 @@
   "uploadDock.body.item.pending": "Подготовка к загрузке...",
   "uploadDock.body.item.processing": "Обработка файла...",
   "uploadDock.body.item.restTime": "Осталось {{time}}",
+  "uploadDock.body.item.retry": "Повторить загрузку",
   "uploadDock.fileQueueInfo": "Загружаются первые {{count}} файлов, {{remaining}} в очереди",
   "uploadDock.header.cancelAll": "Отменить все",
   "uploadDock.totalCount": "Всего {{count}} элементов",
@@ -254,5 +257,13 @@
   "uploadDock.uploadStatus.pending": "Ожидание загрузки",
   "uploadDock.uploadStatus.processing": "Загрузка",
   "uploadDock.uploadStatus.success": "Загрузка завершена",
-  "uploadDock.uploadStatus.uploading": "Загрузка"
+  "uploadDock.uploadStatus.uploading": "Загрузка",
+  "work.empty.desc": "Работы, которые выполняют ваши агенты — задачи, документы, элементы Linear и GitHub — будут собираться здесь.",
+  "work.empty.title": "Пока нет работ",
+  "work.group": "Работы",
+  "work.loadError": "Что-то пошло не так при загрузке работ.",
+  "work.loadErrorTitle": "Не удалось загрузить работы",
+  "work.loadMoreError": "Не удалось загрузить больше работ.",
+  "work.retry": "Повторить",
+  "work.topicGroup.other": "Другое"
 }

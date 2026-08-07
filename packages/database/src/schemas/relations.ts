@@ -20,6 +20,7 @@ import { messageGroups, messages, messagesFiles, messageTranslates } from './mes
 import { chunks, documentChunks, unstructuredChunks } from './rag';
 import { sessionGroups, sessions } from './session';
 import { threads, topicDocuments, topics } from './topic';
+import { topicCommentMentions, topicComments } from './topicComment';
 import { users } from './user';
 import { workspaces } from './workspace';
 
@@ -96,6 +97,38 @@ export const topicRelations = relations(topics, ({ one, many }) => ({
     references: [sessions.id],
   }),
   documents: many(topicDocuments),
+  comments: many(topicComments),
+}));
+
+export const topicCommentsRelations = relations(topicComments, ({ one, many }) => ({
+  topic: one(topics, {
+    fields: [topicComments.topicId],
+    references: [topics.id],
+  }),
+  message: one(messages, {
+    fields: [topicComments.messageId],
+    references: [messages.id],
+  }),
+  author: one(users, {
+    fields: [topicComments.authorUserId],
+    references: [users.id],
+  }),
+  workspace: one(workspaces, {
+    fields: [topicComments.workspaceId],
+    references: [workspaces.id],
+  }),
+  mentions: many(topicCommentMentions),
+}));
+
+export const topicCommentMentionsRelations = relations(topicCommentMentions, ({ one }) => ({
+  comment: one(topicComments, {
+    fields: [topicCommentMentions.commentId],
+    references: [topicComments.id],
+  }),
+  mentionedUser: one(users, {
+    fields: [topicCommentMentions.mentionedUserId],
+    references: [users.id],
+  }),
 }));
 
 export const threadsRelations = relations(threads, ({ one }) => ({

@@ -57,6 +57,58 @@ doesn't leak a stale start onto a later one that reuses the slot.
 - [ ] Known-shape surface not downgraded to a bare block / spinner. _(Natural)_
 - [ ] A long-op elapsed / progress readout derives from a **persisted start timestamp keyed by job id** (survives remount, shows true duration) and clears the key when the job ends — never a local counter that resets to 0 on remount. _(Certainty・Natural)_
 
+### Whole-surface skeletons: match the layout's structure, not just its rows
+
+The rules above size one row against one row. A skeleton that stands in for a **whole
+surface** — a route-level `Suspense` fallback, a sidebar panel, a page shell — is judged by
+something else: its **structural anchors**. Header height, any fixed nav block sitting above
+the scroll area, where the body starts, where the first group title lands. Get every row
+right and the header wrong, and the real content still arrives \~100 px from where the
+skeleton drew it — the exact relayout the skeleton existed to prevent.
+
+**Measure the settled DOM; never derive the numbers from the source.** Reading the JSX and
+adding up paddings is the fast way to be confidently wrong, because the rendered height is
+decided by things the source doesn't show: a conditionally-hidden sibling, a component's own
+default size, a layout primitive's padding shorthand. Three such assumptions were wrong in
+one sidebar — a header read as 44 was really 36, a search box read as 32 was 36, an accordion
+title read as 28 was 26.9 — and each error propagated into every anchor below it. Open the
+real surface, read `getBoundingClientRect()` on each anchor, and build the skeleton from
+those values. (To hold a route's pending state on screen long enough to measure, see the
+agent-testing skill's probe pattern for parking a lazy chunk.)
+
+**Branch the skeleton wherever the real chrome branches.** Platform and feature conditions
+that remove an element change the container's height: on macOS desktop
+`ToggleLeftPanelButton` renders `null`, so the nav header's content box collapses from the
+28 px icon to the 22 px breadcrumb and the header goes 44 → 36. A hard-coded height is
+correct on exactly one platform. Reuse the same condition (import the flag, don't re-derive
+it) so both branches stay in step.
+
+**Many variants of one surface → a shape table, not one generic skeleton.** When a shell
+renders a different panel per route, a single "8 generic rows" placeholder is wrong nearly
+everywhere: some panels open with a fixed nav list, some have accordion groups, and some
+have **no body at all** — for those the generic skeleton invents a list that never appears.
+Model the surface as data (header variant, fixed nav rows, body gap, group title height,
+rows per group) and key it by route, so adding a panel is one row in the table.
+
+**Know which parts can be pixel-exact.** A statically enumerated menu (settings categories,
+a fixed nav list) has a known row count — align it exactly. A data-driven list (topics,
+documents, search results) cannot be predicted, so guarantee alignment only **up to the
+first group title** and treat the rows below as a plausible fill. That boundary is where
+users' eyes settle first anyway; pretending to know the row count buys nothing.
+
+> ✅ `NavSideBarSkeleton` + `NAV_SKELETON_SHAPES` (`src/features/NavPanel/components/SideBarSkeleton.tsx`)
+> — one component driven by a per-navKey shape measured against each settled sidebar; memory
+> and discover render header + nav list and **no body**, matching panels that genuinely have
+> none. ❌ The generic 8-row list it replaced: no header placeholder at all, so every settings
+> row landed \~102 px below where the skeleton had drawn it.
+
+**Checklist**
+
+- [ ] A whole-surface skeleton's **structural anchors** (header height, fixed nav block, body start, first group title) match the settled surface — verified by measuring, not by reading the JSX. _(Certainty)_
+- [ ] Any conditional chrome that changes height (platform flags, feature gates) is branched in the skeleton with the **same** condition, not hard-coded. _(Certainty)_
+- [ ] A shell that renders per-route panels drives its skeleton from a **per-route shape**, and a panel with no body gets a skeleton with no body. _(Certainty・Natural)_
+- [ ] Static menus align exactly; data-driven lists align **to the first group title** and stop claiming to know the row count. _(Certainty)_
+
 ## 4.2 Loading must be able to fail — timeout → error + retry・Certainty・Meaningful
 
 A loading state that can only ever resolve to _success_ is a bug. Any async fetch can hang,
@@ -278,6 +330,7 @@ tail, kept distinct from the genuine end-of-list.
 - [ ] An awaited write that gates navigation resets its in-progress flag in `finally` and offers retry on `catch` — a failed write never permanently disables the advance / Back control. _(Certainty)_
 - [ ] The failed state names the failure and offers a **Reload / Retry** action. _(Meaningful)_
 - [ ] Retry is **gated on retryability**, not shown unconditionally — a `401` / `403` (or `meta.shouldRetry === false`) failure renders the reason but **omits Retry** (a retry there just fails again); derive it from the normalized error status, not per-surface. `401` session-expiry is assumed handled by a **global** redirect to sign-in, so a surface does not add its own redirect layer. _(Certainty・Meaningful)_
+- [ ] A **deterministic-cause** failure whose fix lives elsewhere (budget / quota exceeded → top-up・upgrade; permission denied → request access; config invalid → open settings) leads with the **remedy action**, not a bare **Retry** — retrying the same run reproduces the same failure, so an unqualified Retry is a false promise. Map the known terminal error type to its action; keep Retry only as the secondary for genuinely transient causes. _(Meaningful・Certainty)_
 - [ ] Retry re-runs the same fetch, shows loading while re-running, and stays available on repeat failure. _(Certainty)_
 - [ ] Already-loaded context is preserved on failure — don't wipe the surface. _(Meaningful)_
 - [ ] In an auto-dismissing surface (upload dock / progress toast), auto-dismiss fires on **success only** — a failed item persists with a Retry, never cleared by the countdown. _(Certainty・Meaningful)_
@@ -389,3 +442,44 @@ just moves it onto the button.
 - [ ] The save-state enum can **represent** failure — a `failed` variant exists and the write's `catch` drives it, not a reset to `idle` / neutral. _(Certainty)_
 - [ ] A failed autosave shows an inline error **with retry** and keeps the edited value. _(Meaningful)_
 - [ ] One save-feedback convention across a multi-field surface — ideally baked into the shared form wrapper, not re-invented per tab. _(Certainty)_
+
+## 4.5 Error copy is written for a human, not a log line・Meaningful・Certainty
+
+An error surfaced to the user is **product copy**, held to the same bar as any other string
+in the UI — yet error paths are where raw internals leak, because the text is often
+assembled far from the view (a server lifecycle hook, a `catch` that interpolates the thrown
+message) and never passes an i18n file. Three smells mark a message that escaped that bar:
+
+- **Internal ids in the headline** — a raw `tpc_…` / `msg_…` / uuid, a `#N` sequence, an
+  operation id. The id is for a **log or an inspect link**, never the sentence the user reads;
+  it belongs on a **structured field** (`topicId`, `taskId`) that powers a "View run" affordance,
+  not baked into the title. A human reading "topic #1 (tpc\_5UBuAjUU4z6B)" learns nothing and
+  distrusts the whole card.
+- **Log / stack framing** — `Execution failed: …`, `Error: …`, `[TaskLifecycle]`, a
+  prefixed severity. Framing that reads like a console line signals "this wasn't meant for
+  you". State what happened in a plain clause; drop the engineering prefix.
+- **Redundancy with the surface** — repeating identity the card's meta row already shows
+  (the task ref, the agent name). If the row says `T-1 · 标题灵感`, the body headline restating
+  `T-1 … error` is noise; the body should carry the _new_ information (what failed, why).
+
+And because the copy is human-facing, it must be **localized** — a server-assembled error
+string is English-only and reaches a zh user untranslated. Push the **framing** through
+i18n at the view (`t('…error.title')`), keep the stored string a clean English fallback free
+of the smells above, and localize the _cause_ too where it maps to a known error type
+(don't hand-translate an arbitrary provider message — surface it as honest detail).
+
+> ✅ The HomeInbox error brief headline is localized at the card (`t('inbox.error.title')` →
+> "运行失败"), the cause shows as a clean clause, and the topic id rides the structured
+> `topicId` field that lights up "View run" (`InboxBriefCard.tsx`,
+> `taskLifecycle/index.ts` error brief). ❌ Its prior form baked the lot into the stored
+> string — title `` `${taskIdentifier} topic #${seq} (${topicId}) error` `` → **"T-1 topic #1
+> (tpc\_5UBuAjUU4z6B) error"**, summary `` `Execution failed: ${raw}` `` — internal id in the
+> headline, log framing, task ref duplicated from the meta row, and English-only for every
+> locale.
+
+**Checklist**
+
+- [ ] No internal id (`tpc_…` / uuid / `#N` seq / operation id) in the user-facing headline or body — it rides a **structured field** powering an inspect / "View run" link, never the sentence. _(Meaningful)_
+- [ ] No log / stack framing in the copy — drop `Execution failed:` / `Error:` / `[Module]` prefixes; state what happened as a plain clause. _(Meaningful)_
+- [ ] The message doesn't repeat identity the surface's meta row already shows (task ref, agent name) — the body carries the _new_ info (what failed, why). _(Certainty)_
+- [ ] Error framing is **localized** through i18n at the view; any server-assembled stored string is a clean English fallback (no id / no log prefix), and a known error _cause_ is localized too. _(Meaningful・Certainty)_

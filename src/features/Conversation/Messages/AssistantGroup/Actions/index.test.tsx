@@ -9,24 +9,30 @@ import { GroupActionsBar } from './index';
 
 const storeMock = vi.hoisted(() => ({ isGenerating: false }));
 
-// Flexbox → passthrough so we can read the inner MessageActionBar stub.
-vi.mock('@lobehub/ui', () => ({
-  Flexbox: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-}));
-
 // Stub the action bar to expose the resolved `bar` / `menu` slots verbatim.
 vi.mock('../../components/MessageActionBar', () => ({
-  MessageActionBar: ({ bar, menu }: { bar?: string[]; menu?: string[] }) => (
+  MessageActionBar: ({
+    bar,
+    leading,
+    menu,
+  }: {
+    bar?: string[];
+    leading?: React.ReactNode;
+    menu?: string[];
+  }) => (
     <div
       data-bar={(bar ?? []).join(',')}
+      data-has-leading={!!leading}
       data-menu={(menu ?? []).join(',')}
       data-testid="action-bar"
-    />
+    >
+      {leading}
+    </div>
   ),
 }));
 
 vi.mock('../../../components/Reaction', () => ({
-  ReactionPicker: () => null,
+  ReactionPicker: () => <span data-testid="reaction-picker" />,
 }));
 
 // isAssistantGroupItemGenerating(id) is called through useConversationStore; the
@@ -74,5 +80,7 @@ describe('GroupActionsBar — hetero (assistantGroup) forward/select gating', ()
     expect(menu.split(',')).toContain('select');
     expect(menu.split(',')).toContain('share');
     expect(menu.split(',')).toContain('edit');
+    expect(bar).toHaveAttribute('data-has-leading', 'true');
+    expect(screen.getByTestId('reaction-picker')).toBeInTheDocument();
   });
 });

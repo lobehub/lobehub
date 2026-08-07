@@ -6,9 +6,11 @@ import {
   type ExecutionPlan,
   executionTargetToRuntimeMode,
   isDeviceLockedPlan,
+  isHeterogeneousSandboxExecutionAvailable,
   resolveExecutionPlan,
   resolveExecutionTarget,
   resolveRuntimeMode,
+  resolveWorkspaceScoped,
 } from './executionTarget';
 
 const cfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({ ...over });
@@ -16,8 +18,61 @@ const ampCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfi
   heterogeneousProvider: { command: 'amp', type: 'amp' },
   ...over,
 });
+const openCodeCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({
+  heterogeneousProvider: { command: 'opencode', type: 'opencode' },
+  ...over,
+});
+const piCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({
+  heterogeneousProvider: { command: 'pi', type: 'pi' },
+  ...over,
+});
+const openClawCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({
+  heterogeneousProvider: { type: 'openclaw' },
+  ...over,
+});
+const qoderCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({
+  heterogeneousProvider: { command: 'qodercli', type: 'qoder' },
+  ...over,
+});
+
+describe('isHeterogeneousSandboxExecutionAvailable', () => {
+  it('keeps notify-based platform agents on local or connected devices', () => {
+    expect(isHeterogeneousSandboxExecutionAvailable('openclaw')).toBe(false);
+    expect(isHeterogeneousSandboxExecutionAvailable('hermes')).toBe(false);
+  });
+
+  it('keeps Qoder on local or connected devices', () => {
+    expect(isHeterogeneousSandboxExecutionAvailable('qoder')).toBe(false);
+  });
+});
+
+describe('resolveWorkspaceScoped', () => {
+  it('preserves shared-row coercion until a workspace member explicitly selects a target', () => {
+    expect(resolveWorkspaceScoped(false, undefined)).toBe(false);
+    expect(resolveWorkspaceScoped(true, undefined)).toBe(true);
+    expect(resolveWorkspaceScoped(true, { boundDeviceId: 'member-device' })).toBe(true);
+    expect(resolveWorkspaceScoped(true, { executionTarget: 'local' })).toBe(false);
+    expect(resolveWorkspaceScoped(true, { executionTarget: 'device' })).toBe(false);
+  });
+});
 
 describe('resolveExecutionTarget', () => {
+  it('keeps legacy bound platform agents on their remote device', () => {
+    const legacy = openClawCfg({ boundDeviceId: 'legacy-device' });
+
+    expect(resolveExecutionTarget(legacy, { clientExecutionAvailable: true })).toBe('device');
+    expect(resolveExecutionTarget(legacy, { clientExecutionAvailable: false })).toBe('device');
+  });
+
+  it('lets an explicit platform local target override its fallback binding', () => {
+    expect(
+      resolveExecutionTarget(
+        openClawCfg({ boundDeviceId: 'fallback-device', executionTarget: 'local' }),
+        { clientExecutionAvailable: true },
+      ),
+    ).toBe('local');
+  });
+
   it('returns the stored target verbatim when set', () => {
     expect(
       resolveExecutionTarget(cfg({ executionTarget: 'device' }), {
@@ -51,7 +106,7 @@ describe('resolveExecutionTarget', () => {
   });
 
   it('routes a bound desktop-local selection to the bound device on web when device routing is available (plain and hetero)', () => {
-    // LOBE-11473: a `local` pick pins this desktop's own deviceId as
+    // a `local` pick pins this desktop's own deviceId as
     // `boundDeviceId`; on web that config still runs on the bound device
     // server-side, so surface it honestly as `device` instead of masquerading
     // as `sandbox`. Hetero agents always route here; plain agents need a
@@ -71,7 +126,7 @@ describe('resolveExecutionTarget', () => {
     ).toBe('device');
   });
 
-  it('keeps a bound `local` as `sandbox` when no device routing is available (LOBE-11473 regression)', () => {
+  it('keeps a bound `local` as `sandbox` when no device routing is available ( regression)', () => {
     // A plain agent with a bound `local` target but no device-gateway to route
     // it (self-host without DEVICE_GATEWAY_URL, or any server call that leaves
     // `deviceRoutingAvailable` unset) must fall back to the cloud sandbox — it
@@ -125,9 +180,14 @@ describe('resolveExecutionTarget', () => {
   });
 
   describe('hetero providers without sandbox execution', () => {
-    it('keeps an unconfigured Amp agent pending on web instead of defaulting to sandbox', () => {
+    it.each([
+      ['Amp', ampCfg],
+      ['OpenCode', openCodeCfg],
+      ['Pi', piCfg],
+      ['Qoder', qoderCfg],
+    ] as const)('keeps an unconfigured %s agent pending on web', (_name, providerCfg) => {
       expect(
-        resolveExecutionTarget(ampCfg(), {
+        resolveExecutionTarget(providerCfg(), {
           clientExecutionAvailable: false,
           isHetero: true,
         }),
@@ -135,7 +195,7 @@ describe('resolveExecutionTarget', () => {
 
       // Desktop can still run the CLI in-process, so its default remains local.
       expect(
-        resolveExecutionTarget(ampCfg(), {
+        resolveExecutionTarget(providerCfg(), {
           clientExecutionAvailable: true,
           isHetero: true,
         }),
@@ -146,6 +206,39 @@ describe('resolveExecutionTarget', () => {
       for (const executionTarget of ['sandbox', 'local'] as const) {
         expect(
           resolveExecutionTarget(ampCfg({ executionTarget }), {
+            clientExecutionAvailable: false,
+            isHetero: true,
+          }),
+        ).toBe('none');
+      }
+    });
+
+    it('normalizes unsupported OpenCode sandbox and unbound web-local targets to pending', () => {
+      for (const executionTarget of ['sandbox', 'local'] as const) {
+        expect(
+          resolveExecutionTarget(openCodeCfg({ executionTarget }), {
+            clientExecutionAvailable: false,
+            isHetero: true,
+          }),
+        ).toBe('none');
+      }
+    });
+
+    it('normalizes unsupported Pi sandbox and unbound web-local targets to pending', () => {
+      for (const executionTarget of ['sandbox', 'local'] as const) {
+        expect(
+          resolveExecutionTarget(piCfg({ executionTarget }), {
+            clientExecutionAvailable: false,
+            isHetero: true,
+          }),
+        ).toBe('none');
+      }
+    });
+
+    it('normalizes unsupported Qoder sandbox and unbound web-local targets to pending', () => {
+      for (const executionTarget of ['sandbox', 'local'] as const) {
+        expect(
+          resolveExecutionTarget(qoderCfg({ executionTarget }), {
             clientExecutionAvailable: false,
             isHetero: true,
           }),
@@ -327,14 +420,145 @@ describe('resolveRuntimeMode', () => {
     const boundLocal = cfg({ boundDeviceId: 'device-a', executionTarget: 'local' });
     // with a device-gateway → device → runtimeMode none (routed via the plan)
     expect(resolveRuntimeMode(boundLocal, false, true)).toBe('none');
-    // without one → sandbox → cloud (LOBE-11473 regression guard)
+    // without one → sandbox → cloud ( regression guard)
     expect(resolveRuntimeMode(boundLocal, false)).toBe('cloud');
   });
 });
 
 describe('resolveExecutionPlan', () => {
+  it('uses a desktop hint only for a platform local target', () => {
+    expect(
+      resolveExecutionPlan({
+        agencyConfig: openClawCfg({ executionTarget: 'local' }),
+        clientExecutionAvailable: true,
+        isHetero: true,
+        localDeviceId: 'this-desktop',
+        sandboxExecutionAvailable: false,
+      }),
+    ).toEqual({ deviceId: 'this-desktop', kind: 'device', target: 'local' });
+
+    expect(
+      resolveExecutionPlan({
+        agencyConfig: openClawCfg({
+          boundDeviceId: 'remote-device',
+          executionTarget: 'device',
+        }),
+        clientExecutionAvailable: true,
+        isHetero: true,
+        localDeviceId: 'this-desktop',
+        sandboxExecutionAvailable: false,
+      }),
+    ).toEqual({ deviceId: 'remote-device', kind: 'device', target: 'device' });
+
+    expect(
+      resolveExecutionPlan({
+        agencyConfig: openClawCfg({
+          boundDeviceId: 'stale-remote-device',
+          executionTarget: 'local',
+        }),
+        clientExecutionAvailable: true,
+        isHetero: true,
+        sandboxExecutionAvailable: false,
+      }),
+    ).toEqual({ kind: 'device-unrouted', reason: 'no-bound-device', target: 'local' });
+
+    // Schedules, bots, and other server-only triggers have no "this desktop".
+    // A local platform target must fail closed instead of picking an arbitrary
+    // online device; users must bind an explicit remote device for those runs.
+    expect(
+      resolveExecutionPlan({
+        agencyConfig: openClawCfg({ executionTarget: 'local' }),
+        clientExecutionAvailable: false,
+        isHetero: true,
+        onlineDeviceIds: ['some-online-device'],
+        sandboxExecutionAvailable: false,
+      }),
+    ).toEqual({ kind: 'none', target: 'none' });
+
+    expect(
+      resolveExecutionPlan({
+        agencyConfig: openClawCfg({ boundDeviceId: 'legacy-device' }),
+        clientExecutionAvailable: false,
+        isHetero: true,
+        sandboxExecutionAvailable: false,
+      }),
+    ).toEqual({ deviceId: 'legacy-device', kind: 'device', target: 'device' });
+
+    expect(
+      resolveExecutionPlan({
+        agencyConfig: openClawCfg({
+          boundDeviceId: 'workspace-device',
+          executionTarget: 'device',
+          executionTargetSelectionPolicy: 'fixed',
+        }),
+        clientExecutionAvailable: true,
+        isHetero: true,
+        localDeviceId: 'this-desktop',
+        requestedDeviceId: 'member-device',
+        sandboxExecutionAvailable: false,
+      }),
+    ).toEqual({ deviceId: 'workspace-device', kind: 'device', target: 'device' });
+
+    expect(
+      resolveExecutionPlan({
+        agencyConfig: openClawCfg({
+          boundDeviceId: 'author-desktop',
+          executionTarget: 'local',
+          executionTargetSelectionPolicy: 'fixed',
+        }),
+        clientExecutionAvailable: true,
+        isHetero: true,
+        localDeviceId: 'member-desktop',
+        sandboxExecutionAvailable: false,
+      }),
+    ).toEqual({ deviceId: 'author-desktop', kind: 'device', target: 'local' });
+  });
+
+  it('does not dispatch a stale platform binding for none or unsupported sandbox', () => {
+    for (const executionTarget of ['none', 'sandbox'] as const) {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: openClawCfg({ boundDeviceId: 'stale-device', executionTarget }),
+          clientExecutionAvailable: executionTarget !== 'none',
+          isHetero: true,
+          localDeviceId: 'this-desktop',
+          sandboxExecutionAvailable: false,
+        }),
+      ).toEqual({ kind: 'none', target: 'none' });
+    }
+  });
+
   const ONLINE_A = ['device-a'];
   const ONLINE_AB = ['device-a', 'device-b'];
+
+  it('ignores an explicit request override when the shared execution target is fixed', () => {
+    expect(
+      resolveExecutionPlan({
+        agencyConfig: cfg({
+          boundDeviceId: 'device-a',
+          executionTargetSelectionPolicy: 'fixed',
+          executionTarget: 'device',
+        }),
+        clientExecutionAvailable: false,
+        onlineDeviceIds: ONLINE_AB,
+        requestedDeviceId: 'device-b',
+      }),
+    ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'device' });
+  });
+
+  it('keeps a fixed sandbox target when a request asks for a device', () => {
+    expect(
+      resolveExecutionPlan({
+        agencyConfig: cfg({
+          executionTarget: 'sandbox',
+          executionTargetSelectionPolicy: 'fixed',
+        }),
+        clientExecutionAvailable: false,
+        onlineDeviceIds: ONLINE_AB,
+        requestedDeviceId: 'device-b',
+      }),
+    ).toEqual({ kind: 'sandbox', target: 'sandbox' });
+  });
 
   describe('none — never routes to a device', () => {
     it('stays none even with a bound device and exactly one device online', () => {
@@ -368,7 +592,7 @@ describe('resolveExecutionPlan', () => {
       ).toEqual({ kind: 'sandbox', target: 'sandbox' });
     });
 
-    it('keeps a bound `local` as sandbox on a no-gateway backend (LOBE-11473 regression)', () => {
+    it('keeps a bound `local` as sandbox on a no-gateway backend ( regression)', () => {
       // No device-gateway: `clientExecutionAvailable` is false and the plan
       // never passes `deviceRoutingAvailable`, so a bound `local` target must
       // resolve to the sandbox — not `device`/`device-unrouted`, which would
@@ -836,16 +1060,22 @@ describe('resolveExecutionPlan', () => {
       }
     });
 
-    it('keeps Amp non-device targets pending instead of constructing a sandbox plan', () => {
-      for (const executionTarget of ['local', 'none', 'sandbox', undefined] as const) {
-        const plan: ExecutionPlan = resolveExecutionPlan({
-          agencyConfig: executionTarget ? ampCfg({ executionTarget }) : ampCfg(),
-          clientExecutionAvailable: false,
-          isHetero: true,
-        });
-        expect(plan).toEqual({ kind: 'none', target: 'none' });
-      }
-    });
+    it.each([
+      ['Amp', ampCfg],
+      ['OpenCode', openCodeCfg],
+    ] as const)(
+      'keeps %s non-device targets pending instead of constructing a sandbox plan',
+      (_name, providerCfg) => {
+        for (const executionTarget of ['local', 'none', 'sandbox', undefined] as const) {
+          const plan: ExecutionPlan = resolveExecutionPlan({
+            agencyConfig: executionTarget ? providerCfg({ executionTarget }) : providerCfg(),
+            clientExecutionAvailable: false,
+            isHetero: true,
+          });
+          expect(plan).toEqual({ kind: 'none', target: 'none' });
+        }
+      },
+    );
 
     it('uses an explicit sandbox capability override for legacy model-only Amp agents', () => {
       expect(

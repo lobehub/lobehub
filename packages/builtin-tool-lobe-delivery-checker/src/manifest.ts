@@ -52,8 +52,40 @@ export const LobeDeliveryCheckerManifest: BuiltinToolManifest = {
                   enum: ['manual', 'auto_repair'],
                   type: 'string',
                 },
+                requiredEvidence: {
+                  description:
+                    'Every artifact required to prove this check. Declare type, semantic modality, source scope, and a concrete capture hint. Use [] only when final text alone is sufficient.',
+                  items: {
+                    properties: {
+                      hint: { type: 'string' },
+                      modality: {
+                        enum: ['text', 'image', 'audio', 'video', 'document', 'structured'],
+                        type: 'string',
+                      },
+                      scope: {
+                        enum: ['deliverable', 'run_evidence', 'task_artifacts'],
+                        type: 'string',
+                      },
+                      type: {
+                        enum: [
+                          'screenshot',
+                          'gif',
+                          'video',
+                          'text',
+                          'markdown',
+                          'dom_snapshot',
+                          'transcript',
+                        ],
+                        type: 'string',
+                      },
+                    },
+                    required: ['type', 'modality', 'scope', 'hint'],
+                    type: 'object',
+                  },
+                  type: 'array',
+                },
               },
-              required: ['title', 'description', 'instruction'],
+              required: ['title', 'description', 'instruction', 'requiredEvidence'],
               type: 'object',
             },
             type: 'array',

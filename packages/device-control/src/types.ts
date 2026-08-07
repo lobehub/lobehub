@@ -86,13 +86,27 @@ export interface LocalFilePreviewImage {
   type: 'image';
 }
 
+/**
+ * Binary document (pdf / office) small enough to preview in-app, carried as
+ * base64 so it survives RPC serialization. Oversized documents stay on the
+ * `binary` / `pdf` unsupported variants.
+ */
+export interface LocalFilePreviewDocument {
+  base64: string;
+  contentType: string;
+  type: 'document';
+}
+
 export interface LocalFilePreviewUnsupported {
   contentType: string;
   type: 'binary' | 'pdf' | 'video';
 }
 
 export type LocalFilePreview =
-  LocalFilePreviewImage | LocalFilePreviewText | LocalFilePreviewUnsupported;
+  | LocalFilePreviewDocument
+  | LocalFilePreviewImage
+  | LocalFilePreviewText
+  | LocalFilePreviewUnsupported;
 
 export interface LocalFilePreviewResult {
   error?: string;
@@ -103,6 +117,8 @@ export interface LocalFilePreviewResult {
 // ─── Project file index ───
 
 export interface ProjectFileIndexEntry {
+  /** Whether Git ignore rules match this file or directory. */
+  gitIgnored?: boolean;
   isDirectory: boolean;
   name: string;
   path: string;
@@ -201,6 +217,10 @@ export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps
   getLocalFilePreview: (params: LocalFilePreviewUrlParams) => Promise<LocalFilePreviewResult>;
   /** Build the project file index. */
   getProjectFileIndex: (params: ProjectFileIndexParams) => Promise<ProjectFileIndexResult>;
+  /** Query a heterogeneous CLI's model catalog on this execution host. */
+  listHeterogeneousAgentModels?: (
+    params: ListHeterogeneousAgentModelsParams,
+  ) => Promise<HeterogeneousAgentModelCatalog>;
   /** Search project files without shipping the whole index to the caller. */
   searchProjectFiles: (params: ProjectFileSearchParams) => Promise<ProjectFileSearchResult>;
   /**
@@ -210,6 +230,46 @@ export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps
    */
   unenrollWorkspace?: (params: UnenrollWorkspaceParams) => Promise<{ success: boolean }>;
 }
+
+// ─── Heterogeneous agent model discovery ───
+
+/**
+ * Structural mirrors of the canonical `@lobechat/types` catalog contracts.
+ * Kept local so device-control remains a leaf package with no app/type-layer dependency.
+ */
+export interface ListHeterogeneousAgentModelsParams {
+  command?: string;
+  cwd?: string;
+  env?: Record<string, string>;
+  type: 'opencode' | 'pi' | 'qoder';
+}
+
+export interface HeterogeneousAgentModelCatalogItem {
+  id: string;
+  label?: string;
+  modelId: string;
+  providerId: string;
+}
+
+export type HeterogeneousAgentModelCatalog =
+  | {
+      error: {
+        code:
+          | 'cli_not_found'
+          | 'command_failed'
+          | 'device_unavailable'
+          | 'timeout'
+          | 'unsupported_client';
+        message: string;
+      };
+      status: 'error';
+      updatedAt: number;
+    }
+  | {
+      models: HeterogeneousAgentModelCatalogItem[];
+      status: 'success';
+      updatedAt: number;
+    };
 
 // ─── Workspace enrollment (remote share) ───
 

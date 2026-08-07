@@ -1,6 +1,6 @@
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { App, Upload } from 'antd';
 import { css, cx } from 'antd-style';
 import { Archive, Hash, Import, LucideCheck, Trash } from 'lucide-react';
@@ -37,7 +37,7 @@ export const useTopicActionsDropdownMenu = (
   options: UseTopicActionsDropdownMenuOptions = {},
 ): MenuProps['items'] => {
   const { t } = useTranslation(['topic', 'common']);
-  const { message, modal } = App.useApp();
+  const { modal } = App.useApp();
   const { onUploadClose } = options;
   const activeWorkspaceId = useActiveWorkspaceId();
   const isWorkspaceOwner = useIsWorkspaceOwner();
@@ -93,7 +93,7 @@ export const useTopicActionsDropdownMenu = (
       });
 
       if (mergedTopics.length === 0) {
-        message.info(t('actions.archiveMergedPullRequestsNone'));
+        toast.info(t('actions.archiveMergedPullRequestsNone'));
         return;
       }
 
@@ -101,11 +101,9 @@ export const useTopicActionsDropdownMenu = (
         mergedTopics.map(({ id }) => updateTopicStatus({ status: 'completed', topicId: id })),
       );
       await refreshTopic();
-      message.success(
-        t('actions.archiveMergedPullRequestsSuccess', { count: mergedTopics.length }),
-      );
+      toast.success(t('actions.archiveMergedPullRequestsSuccess', { count: mergedTopics.length }));
     },
-    [activeWorkspaceId, currentUserId, message, refreshTopic, t, topics, updateTopicStatus],
+    [activeWorkspaceId, currentUserId, refreshTopic, t, topics, updateTopicStatus],
   );
 
   const handleImport = useCallback(

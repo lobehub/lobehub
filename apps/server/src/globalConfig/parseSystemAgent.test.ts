@@ -102,6 +102,14 @@ describe('parseSystemAgent', () => {
     expect(result.translation).toEqual({ provider: 'ollama', model: 'deepseek-v3' });
     expect(result.agentMeta).toEqual({ provider: 'ollama', model: 'deepseek-v3' });
     expect(result.historyCompress).toEqual({ provider: 'ollama', model: 'deepseek-v3' });
+    expect(result.onboardingUnderstanding).toEqual({
+      provider: 'ollama',
+      model: 'deepseek-v3',
+    });
+    expect(result.onboardingTaskRecommender).toEqual({
+      provider: 'ollama',
+      model: 'deepseek-v3',
+    });
     expect(result.thread).toEqual({ provider: 'ollama', model: 'deepseek-v3' });
     expect(result.userMemoryEmbedding).toBeUndefined();
     expect(result.memoryAnalysisAgentConfig).toBeUndefined();
@@ -121,6 +129,23 @@ describe('parseSystemAgent', () => {
     expect(result.userMemoryEmbedding).toEqual({
       provider: 'openai',
       model: 'text-embedding-3-large',
+    });
+  });
+
+  /** @example Onboarding generation tasks can select different providers and models. */
+  it('should parse onboarding task model assignments independently', () => {
+    const envValue =
+      'onboardingUnderstanding=lobehub/gpt-5.4-mini,onboardingTaskRecommender=anthropic/claude-sonnet-4-5';
+
+    const result = parseSystemAgent(envValue);
+
+    expect(result.onboardingUnderstanding).toEqual({
+      model: 'gpt-5.4-mini',
+      provider: 'lobehub',
+    });
+    expect(result.onboardingTaskRecommender).toEqual({
+      model: 'claude-sonnet-4-5',
+      provider: 'anthropic',
     });
   });
 

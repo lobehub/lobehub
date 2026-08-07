@@ -9,13 +9,20 @@ const logger = createLogger('controllers:UpdaterCtr');
 
 export default class UpdaterCtr extends ControllerModule {
   static override readonly groupName = 'autoUpdate';
+
+  private getUpdaterManager() {
+    return this.app.updaterManager
+      ? Promise.resolve(this.app.updaterManager)
+      : this.app.getUpdaterManager();
+  }
+
   /**
    * Check for updates
    */
   @IpcMethod()
   async checkForUpdates() {
     logger.info('Check for updates requested');
-    await this.app.updaterManager.checkForUpdates({ manual: true });
+    await (await this.getUpdaterManager()).checkForUpdates({ manual: true });
   }
 
   /**
@@ -24,25 +31,25 @@ export default class UpdaterCtr extends ControllerModule {
   @IpcMethod()
   async downloadUpdate() {
     logger.info('Download update requested');
-    await this.app.updaterManager.downloadUpdate();
+    await (await this.getUpdaterManager()).downloadUpdate();
   }
 
   /**
    * Quit application and install update
    */
   @IpcMethod()
-  quitAndInstallUpdate() {
+  async quitAndInstallUpdate() {
     logger.info('Quit and install update requested');
-    this.app.updaterManager.installNow();
+    (await this.getUpdaterManager()).installNow();
   }
 
   /**
    * Install update on next startup
    */
   @IpcMethod()
-  installLater() {
+  async installLater() {
     logger.info('Install later requested');
-    this.app.updaterManager.installLater();
+    (await this.getUpdaterManager()).installLater();
   }
 
   @IpcMethod()
@@ -70,11 +77,11 @@ export default class UpdaterCtr extends ControllerModule {
 
     logger.info(`Set update channel requested: ${channel}`);
     this.app.storeManager.set('updateChannel', channel);
-    this.app.updaterManager.switchChannel(channel);
+    (await this.getUpdaterManager()).switchChannel(channel);
   }
 
   @IpcMethod()
   async getUpdaterState(): Promise<UpdaterState> {
-    return this.app.updaterManager.getUpdaterState();
+    return (await this.getUpdaterManager()).getUpdaterState();
   }
 }

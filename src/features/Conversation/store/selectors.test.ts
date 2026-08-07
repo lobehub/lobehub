@@ -28,6 +28,7 @@ const createMockState = (overrides: Partial<State> = {}): State => ({
   visibleItems: new Map(),
 
   // Core state
+  composerTarget: { contextKey: 'main_session-1_new', writable: true },
   context: {
     agentId: 'session-1',
     topicId: null,
