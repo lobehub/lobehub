@@ -198,10 +198,10 @@ describe('systemStatusSelectors', () => {
         status: { sidebarItems: stored },
       });
       expect(systemStatusSelectors.sidebarItems(null)(s)).toEqual([
-        'project',
         'private',
         'agent',
         'recents',
+        'project',
         SIDEBAR_SPACER_ID,
         'pages',
         'tasks',
@@ -253,8 +253,8 @@ describe('systemStatusSelectors', () => {
       expect(systemStatusSelectors.sidebarItems(null)(s)).toEqual([
         'tasks',
         'pages',
-        'project',
         'recents',
+        'project',
         'private',
         'agent',
         SIDEBAR_SPACER_ID,
@@ -278,11 +278,12 @@ describe('systemStatusSelectors', () => {
       expect(items).toContain('resource');
       expect(items).toContain('memory');
       // accordion block is flush against the spacer, in stored order
-      expect(items[spacerIdx - 2]).toBe('agent');
-      expect(items[spacerIdx - 1]).toBe('recents');
+      expect(items[spacerIdx - 3]).toBe('agent');
+      expect(items[spacerIdx - 2]).toBe('recents');
+      expect(items[spacerIdx - 1]).toBe('project');
       // missing top-group defaults slot in just before the accordion
-      expect(items.indexOf('tasks')).toBeLessThan(spacerIdx - 2);
-      expect(items.indexOf('resource')).toBeLessThan(spacerIdx - 2);
+      expect(items.indexOf('tasks')).toBeLessThan(spacerIdx - 3);
+      expect(items.indexOf('resource')).toBeLessThan(spacerIdx - 3);
       // missing bottom-group defaults sit after the spacer
       expect(items.indexOf('image')).toBeGreaterThan(spacerIdx);
       expect(items.indexOf('pages')).toBeGreaterThan(spacerIdx);
@@ -296,12 +297,12 @@ describe('systemStatusSelectors', () => {
       // accordion slot uses the user's legacy order; `private` (added after
       // the legacy state was saved) is backfilled at the head of the block.
       expect(items).toEqual([
-        'project',
         'tasks',
         'resource',
         'private',
         'agent',
         'recents',
+        'project',
         SIDEBAR_SPACER_ID,
         'image',
         'community',
@@ -318,11 +319,11 @@ describe('systemStatusSelectors', () => {
       // `private` (new accordion entry not present in legacy state) is
       // backfilled at the head of the block; recents/agent keep legacy order.
       expect(items).toEqual([
-        'project',
         'tasks',
         'resource',
         'private',
         'recents',
+        'project',
         'agent',
         SIDEBAR_SPACER_ID,
         'image',

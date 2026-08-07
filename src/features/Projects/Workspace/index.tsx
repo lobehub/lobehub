@@ -26,16 +26,6 @@ const styles = createStaticStyles(({ css }) => ({
     height: 100%;
     background: ${cssVar.colorBgLayout};
   `,
-  sidebar: css`
-    flex: none;
-
-    width: 260px;
-    padding-block: 12px;
-    padding-inline: 8px;
-    border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    background: ${cssVar.colorBgContainer};
-  `,
 }));
 
 const ProjectWorkspace = memo(() => {
@@ -79,17 +69,7 @@ const ProjectWorkspace = memo(() => {
   ];
 
   return (
-    <Flexbox horizontal className={styles.shell}>
-      <Flexbox className={styles.sidebar} gap={4}>
-        <NavItem
-          active
-          icon={detail.project.avatar || FolderKanbanIcon}
-          title={detail.project.name}
-        />
-        <NavItem icon={CheckSquareIcon} title={t('sections.tasks')} />
-        <NavItem icon={BotIcon} title={t('sections.agents')} />
-        <NavItem icon={BookOpenIcon} title={t('sections.knowledgeBases')} />
-      </Flexbox>
+    <Flexbox className={styles.shell} flex={1}>
       <Flexbox className={styles.content} flex={1} gap={24}>
         <Flexbox gap={6}>
           <Text fontSize={28} weight={650}>

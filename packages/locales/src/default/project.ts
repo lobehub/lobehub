@@ -5,6 +5,7 @@ export default {
   'disabled.action': 'Enable in Labs',
   'disabled.title': 'Project workspaces are an Alpha experiment',
   'overview.noDescription': 'A dedicated workspace for this long-running goal.',
+  'overview.title': 'Overview',
   'overview.openTasks': 'Open task workspace',
   'overview.tasksEmpty': 'No tasks belong to this project yet.',
   'overview.tasksTitle': 'Project tasks',
@@ -12,5 +13,6 @@ export default {
   'sections.knowledgeBases': 'Libraries',
   'sections.tasks': 'Tasks',
   'sidebar.emptyAction': 'Create your first project',
+  'sidebar.librariesEmpty': 'No libraries are connected yet',
   'sidebar.title': 'Projects',
 };

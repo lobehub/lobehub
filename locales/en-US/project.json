@@ -8,9 +8,11 @@
   "overview.openTasks": "Open task workspace",
   "overview.tasksEmpty": "No tasks belong to this project yet.",
   "overview.tasksTitle": "Project tasks",
+  "overview.title": "Overview",
   "sections.agents": "Agents",
   "sections.knowledgeBases": "Libraries",
   "sections.tasks": "Tasks",
   "sidebar.emptyAction": "Create your first project",
+  "sidebar.librariesEmpty": "No libraries are connected yet",
   "sidebar.title": "Projects"
 }

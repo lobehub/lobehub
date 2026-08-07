@@ -8,9 +8,11 @@
   "overview.openTasks": "打开任务工作台",
   "overview.tasksEmpty": "这个项目还没有关联任务。",
   "overview.tasksTitle": "项目任务",
+  "overview.title": "概览",
   "sections.agents": "智能体",
   "sections.knowledgeBases": "资料库",
   "sections.tasks": "任务",
   "sidebar.emptyAction": "创建第一个项目",
+  "sidebar.librariesEmpty": "还没有关联资料库",
   "sidebar.title": "项目"
 }
