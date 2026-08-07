@@ -96,7 +96,7 @@ describe('requiredApiKeyScopeForTrpc', () => {
   });
 
   it('uses a single tier for money-burning namespaces', () => {
-    expect(requiredApiKeyScopeForTrpc('aiChat.sendMessageInServer', 'mutation')).toEqual({
+    expect(requiredApiKeyScopeForTrpc('aiChat.outputJSON', 'mutation')).toEqual({
       scopes: ['model:invoke'],
     });
     expect(requiredApiKeyScopeForTrpc('image.createImage', 'mutation')).toEqual({
@@ -107,6 +107,14 @@ describe('requiredApiKeyScopeForTrpc', () => {
   it('stacks procedure-level extra scopes on the namespace rule', () => {
     expect(requiredApiKeyScopeForTrpc('agentDocument.generateSkillMeta', 'mutation')).toEqual({
       scopes: ['knowledge:write', 'model:invoke'],
+    });
+    // stateful chat procedures need chat:write on top of the model tier
+    expect(requiredApiKeyScopeForTrpc('aiChat.sendMessageInServer', 'mutation')).toEqual({
+      scopes: ['model:invoke', 'chat:write'],
+    });
+    // provider connectivity test sends a real model request
+    expect(requiredApiKeyScopeForTrpc('aiProvider.checkProviderConnectivity', 'mutation')).toEqual({
+      scopes: ['model:write', 'model:invoke'],
     });
     // sibling procedures in the namespace are untouched
     expect(requiredApiKeyScopeForTrpc('agentDocument.createDocument', 'mutation')).toEqual({

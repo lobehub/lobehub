@@ -270,6 +270,12 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
  * invokes a model.
  */
 export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope> = {
+  // persists tool results into the topic's message history
+  'aiChat.archiveToolResult': 'chat:write',
+  // creates user/assistant messages and topics alongside the model call
+  'aiChat.sendMessageInServer': 'chat:write',
+  // connectivity test sends a real (1-token) chat request to the provider
+  'aiProvider.checkProviderConnectivity': 'model:invoke',
   // prefills the convert-to-skill form via an LLM call
   // (`SystemAgentService.generateSkillMeta` → `modelRuntime.generateObject`)
   'agentDocument.generateSkillMeta': 'model:invoke',
