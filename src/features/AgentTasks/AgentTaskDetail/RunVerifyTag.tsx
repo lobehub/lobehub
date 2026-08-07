@@ -7,8 +7,8 @@ import { CircleCheck, CircleDashed, CircleX, Loader2, TriangleAlert } from 'luci
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { acceptanceOverviewPath } from '@/features/Verify/Acceptance/routes';
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useChatStore } from '@/store/chat';
+import { useGlobalStore } from '@/store/global';
 
 /**
  * A run row's verification verdict.
@@ -28,7 +28,7 @@ const VERDICT_META = {
 
 type VerdictKey = keyof typeof VERDICT_META;
 
-const resolveVerdict = (status: string | null): VerdictKey => {
+export const resolveVerdict = (status: string | null): VerdictKey => {
   switch (status) {
     case 'errored': {
       return 'errored';
@@ -57,7 +57,11 @@ interface RunVerifyTagProps {
 
 const RunVerifyTag = memo<RunVerifyTagProps>(({ verify }) => {
   const { t } = useTranslation('chat');
-  const navigate = useWorkspaceAwareNavigate();
+  // Every surface that renders a run row (task detail, and task detail inside
+  // the portal) mounts a portal host, so the verdict opens beside the run
+  // rather than replacing the page the reader is comparing rounds on.
+  const openAcceptance = useChatStore((state) => state.openAcceptance);
+  const showTaskAgentPanel = useGlobalStore((state) => state.toggleTaskAgentPanel);
 
   // Runs with no verification configured keep the row they have today.
   if (!verify) return null;
@@ -85,7 +89,8 @@ const RunVerifyTag = memo<RunVerifyTagProps>(({ verify }) => {
         verify.acceptanceId
           ? (event) => {
               event.stopPropagation();
-              navigate(acceptanceOverviewPath(verify.acceptanceId!));
+              showTaskAgentPanel(true);
+              openAcceptance(verify.acceptanceId!);
             }
           : undefined
       }

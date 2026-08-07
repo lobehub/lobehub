@@ -1108,22 +1108,27 @@ const CheckRow = memo<{
               </Text>
             )}
             {/* An agent judge's argument is its run, not a paragraph — link the
-              trace instead of trying to summarize it inline. */}
-            {check.planItem?.verifierType === 'agent' && check.result?.verifierOperationId && (
-              <Flexbox horizontal>
-                <Button
-                  icon={<Icon icon={Route} />}
-                  size={'small'}
-                  type={'text'}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void onOpenTrace?.(check.result!.verifierOperationId!);
-                  }}
-                >
-                  {t('acceptance.checks.viewTrace')}
-                </Button>
-              </Flexbox>
-            )}
+              trace instead of trying to summarize it inline. `onOpenTrace`
+              gates the render, not just the click: a caller that forgets to
+              pass it would otherwise get a button whose optional call silently
+              does nothing — exactly how this shipped dead in the portal. */}
+            {check.planItem?.verifierType === 'agent' &&
+              check.result?.verifierOperationId &&
+              onOpenTrace && (
+                <Flexbox horizontal>
+                  <Button
+                    icon={<Icon icon={Route} />}
+                    size={'small'}
+                    type={'text'}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void onOpenTrace(check.result!.verifierOperationId!);
+                    }}
+                  >
+                    {t('acceptance.checks.viewTrace')}
+                  </Button>
+                </Flexbox>
+              )}
             {visualization && <VisualizationRenderer manifest={visualization} />}
             <EvidenceList evidence={check.evidence} />
 
