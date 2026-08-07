@@ -53,10 +53,13 @@ describe('project command', () => {
       'create',
       '--name',
       'Apollo',
+      '--identifier',
+      'LOBE',
       '--visibility',
       'private',
     ]);
     expect(mockClient.project.create.mutate).toHaveBeenCalledWith({
+      identifier: 'LOBE',
       name: 'Apollo',
       visibility: 'private',
     });

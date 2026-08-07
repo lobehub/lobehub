@@ -1,3 +1,5 @@
+export const PROJECT_IDENTIFIER_REGEX = /^[A-Z][A-Z0-9]{2,5}$/;
+
 export const PROJECT_STATUSES = [
   'backlog',
   'active',

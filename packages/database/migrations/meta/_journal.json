@@ -952,6 +952,13 @@
       "when": 1786117168564,
       "tag": "0135_api_keys_add_scopes",
       "breakpoints": true
+    },
+    {
+      "idx": 136,
+      "version": "7",
+      "when": 1786138599832,
+      "tag": "0136_projects_add_identifier",
+      "breakpoints": true
     }
   ],
   "version": "6"

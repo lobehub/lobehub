@@ -1914,6 +1914,7 @@ table project_knowledge_bases {
 table projects {
   id text [pk, not null]
   slug varchar(100)
+  identifier varchar(6) [not null]
   name varchar(255) [not null]
   description text
   avatar text
@@ -1932,11 +1933,13 @@ table projects {
   indexes {
     (slug, user_id) [name: 'projects_slug_user_id_unique', unique]
     (workspace_id, slug) [name: 'projects_slug_workspace_id_unique', unique]
+    (identifier, user_id) [name: 'projects_identifier_user_id_unique', unique]
+    (workspace_id, identifier) [name: 'projects_identifier_workspace_id_unique', unique]
     user_id [name: 'projects_user_id_idx']
     workspace_id [name: 'projects_workspace_id_idx']
     (workspace_id, visibility, user_id) [name: 'projects_workspace_visibility_idx']
     (status, updated_at) [name: 'projects_status_updated_at_idx']
-    
+
   }
 }
 
