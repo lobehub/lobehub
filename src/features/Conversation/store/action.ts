@@ -51,14 +51,16 @@ export interface CreateStoreParams {
    * Messages to seed the freshly-created store with, already known by the parent
    * (ConversationArea reads them from ChatStore's `dbMessagesMap`). Seeding at
    * creation — rather than waiting for StoreUpdater's post-mount effect — is what
-   * keeps a store *remount* from painting an empty/skeleton frame first.
+   * keeps a store *mount* from painting an empty/skeleton frame first.
    *
-   * Why this matters: ConversationProvider keys `<Provider>` by `contextKey`, so a
-   * topic switch (e.g. group's first message creates a new topic) recreates the
-   * store from scratch. Without a seed the new store starts `messagesInit: false`
-   * with no messages and only gets populated by a post-paint effect — one blank
-   * frame, i.e. the "message disappears then reappears" flicker. `undefined` means
-   * "not fetched yet" (stay uninitialized); `[]` means "loaded, empty".
+   * The store instance now survives topic switches (the Provider is not keyed by
+   * context — StoreUpdater resets state in place instead), so this only covers
+   * genuine mounts: first navigation to a surface, or hosts that key the whole
+   * provider themselves (e.g. eval bench). Without a seed such a mount starts
+   * `messagesInit: false` and only gets populated by a post-paint effect — one
+   * blank frame, i.e. the "message disappears then reappears" flicker.
+   * `undefined` means "not fetched yet" (stay uninitialized); `[]` means
+   * "loaded, empty".
    */
   initialMessages?: UIChatMessage[];
   skipFetch?: boolean;

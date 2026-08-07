@@ -1,6 +1,14 @@
 import { type AssistantContentBlock, type UIChatMessage } from '@lobechat/types';
 import debug from 'debug';
-import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type RefObject,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { type VListHandle } from 'virtua';
 
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
@@ -418,6 +426,14 @@ const useScrollShrink = ({
 //   `scrollToIndex` once. The old 0/32/96ms timer fan-out is gone.
 // ---------------------------------------------------------------------------
 export interface UseConversationScrollOptions {
+  /**
+   * Conversation identity. The hook instance survives in-place topic switches
+   * (the provider is not keyed by context), so a change here means the whole
+   * dataSource was swapped for another conversation: send-detection and any
+   * live spacer/pin state must reset instead of reading the new list through
+   * the old topic's indices.
+   */
+  contextKey?: string;
   dataSource: string[];
   /**
    * Number of synthetic rows prepended to the VList before the messages
@@ -445,6 +461,7 @@ export interface UseConversationScrollResult {
 }
 
 export const useConversationScroll = ({
+  contextKey,
   dataSource,
   headerOffset = 0,
   isSecondLastMessageFromUser,
@@ -508,6 +525,24 @@ export const useConversationScroll = ({
     mountedRef,
     setScrollReduction,
   });
+
+  // useLayoutEffect: runs before the passive send-detection effect in the
+  // switch commit, so seeding prevLengthRef with the new list's length keeps a
+  // coincidental +2 length delta from being read as "message pair appended" —
+  // and a live spacer row is dropped before the new topic paints.
+  const prevContextKeyRef = useRef(contextKey);
+  useLayoutEffect(() => {
+    if (prevContextKeyRef.current === contextKey) return;
+    prevContextKeyRef.current = contextKey;
+
+    prevLengthRef.current = dataSource.length;
+    clearPin('context switch');
+    setUserMessageIndex(null);
+    setAssistantMessageIndex(null);
+    setMounted(false);
+    setScrollReduction(() => 0);
+    prevScrollOffsetRef.current = null;
+  }, [contextKey]);
 
   // --- send detection: single source of truth ---
   useEffect(() => {

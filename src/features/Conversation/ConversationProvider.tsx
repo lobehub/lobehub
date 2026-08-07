@@ -127,7 +127,6 @@ export const ConversationProvider = memo<ConversationProviderProps>(
 
     return (
       <Provider
-        key={contextKey}
         createStore={() =>
           createStore({
             composerTarget: resolvedComposerTarget,
