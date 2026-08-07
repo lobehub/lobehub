@@ -40,7 +40,7 @@ const styles = createStaticStyles(({ css }) => ({
       positions identical — the title simply never moves. */
     inset-block-start: -8px;
 
-    padding-block: 4px 6px;
+    padding-block: 4px 2px;
 
     background: ${cssVar.colorBgContainer};
   `,
@@ -102,7 +102,7 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorInfoBg};
   `,
   section: css`
-    padding-block: 10px;
+    padding-block: 8px;
 
     & + & {
       border-block-start: 1px solid ${cssVar.colorBorderSecondary};
@@ -318,11 +318,16 @@ const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
                 size={'small'}
                 type={'text'}
                 onClick={() =>
-                  patch({
-                    criteria: [
-                      ...args.criteria,
-                      { onFail: 'auto_repair', required: false, title: '', verifierType: 'agent' },
-                    ],
+                  openCriterionEditModal({
+                    criterion: {
+                      onFail: 'auto_repair',
+                      required: true,
+                      title: '',
+                      verifierType: 'agent',
+                    },
+                    isNew: true,
+                    onSubmit: (value) => patch({ criteria: [...args.criteria, value] }),
+                    seq: args.criteria.length + 1,
                   })
                 }
               >

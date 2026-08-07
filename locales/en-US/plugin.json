@@ -446,6 +446,7 @@
   "builtins.lobe-task.edit.unblocks": "unblocks",
   "builtins.lobe-task.field.description": "Description",
   "builtins.lobe-task.field.instruction": "Instruction",
+  "builtins.lobe-task.goal.add": "Add",
   "builtins.lobe-task.goal.addCriterion": "Add acceptance criterion",
   "builtins.lobe-task.goal.cancel": "Cancel",
   "builtins.lobe-task.goal.costBudget": "Total cost budget",

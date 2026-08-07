@@ -436,6 +436,7 @@ export default {
   'builtins.lobe-task.apiName.updateTaskComment': 'Update comment',
   'builtins.lobe-task.apiName.updateTaskStatus': 'Update status',
   'builtins.lobe-task.apiName.viewTask': 'View task',
+  'builtins.lobe-task.goal.add': 'Add',
   'builtins.lobe-task.goal.addCriterion': 'Add acceptance criterion',
   'builtins.lobe-task.goal.costBudget': 'Total cost budget',
   'builtins.lobe-task.goal.criteria': 'Acceptance criteria',

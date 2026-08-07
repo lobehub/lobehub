@@ -5,6 +5,7 @@ import { cssVar } from 'antd-style';
 import {
   AlertTriangle,
   CheckCheck,
+  CircleDashed,
   CircleSlash,
   CircleX,
   Loader2,
@@ -36,6 +37,11 @@ import { taskDetailSelectors } from '@/store/task/selectors';
  */
 const STATE_META = {
   accepted: { color: cssVar.colorSuccess, icon: CheckCheck, labelKey: 'accepted' },
+  awaitingVerification: {
+    color: cssVar.colorTextTertiary,
+    icon: CircleDashed,
+    labelKey: 'awaitingVerification',
+  },
   awaitingDecision: { color: cssVar.colorError, icon: AlertTriangle, labelKey: 'awaitingDecision' },
   awaitingReview: { color: cssVar.colorWarning, icon: Stamp, labelKey: 'awaitingReview' },
   closed: { color: cssVar.colorTextTertiary, icon: CircleSlash, labelKey: 'closed' },
@@ -61,8 +67,13 @@ const resolveState = (status: string, latestRunStatus?: string | null): StateKey
     case 'errored': {
       return 'errored';
     }
+    // The checklist existing is not the same as it being checked. While the
+    // round is still producing the delivery, nothing is under verification —
+    // saying "verifying" here claims work that hasn't started.
     case 'pending':
-    case 'planned':
+    case 'planned': {
+      return 'awaitingVerification';
+    }
     case 'verifying': {
       return 'verifying';
     }

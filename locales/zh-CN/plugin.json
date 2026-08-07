@@ -446,6 +446,7 @@
   "builtins.lobe-task.edit.unblocks": "移除依赖",
   "builtins.lobe-task.field.description": "描述",
   "builtins.lobe-task.field.instruction": "指令",
+  "builtins.lobe-task.goal.add": "添加",
   "builtins.lobe-task.goal.addCriterion": "添加验收标准",
   "builtins.lobe-task.goal.cancel": "取消",
   "builtins.lobe-task.goal.costBudget": "总成本预算",

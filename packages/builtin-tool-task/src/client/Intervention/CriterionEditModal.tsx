@@ -17,6 +17,8 @@ import type { GoalCriterionDraft } from '../../types';
 
 interface CriterionEditContentProps {
   criterion: GoalCriterionDraft;
+  /** Create flow: the criterion only exists once it is saved. */
+  isNew?: boolean;
   onSubmit: (value: GoalCriterionDraft) => void;
   seq: number;
 }
@@ -26,7 +28,7 @@ interface CriterionEditContentProps {
  * it gets a real editing surface rather than a row that grows a textarea in
  * place — the same modal treatment the acceptance checklist already uses.
  */
-const CriterionEditContent = memo<CriterionEditContentProps>(({ criterion, onSubmit }) => {
+const CriterionEditContent = memo<CriterionEditContentProps>(({ criterion, isNew, onSubmit }) => {
   const { t: tp } = useTranslation('plugin');
   const { close } = useModalContext();
   const [draft, setDraft] = useState<GoalCriterionDraft>(criterion);
@@ -102,7 +104,7 @@ const CriterionEditContent = memo<CriterionEditContentProps>(({ criterion, onSub
       <Flexbox horizontal gap={8} justify={'flex-end'}>
         <Button onClick={close}>{tp('builtins.lobe-task.goal.cancel')}</Button>
         <Button disabled={!draft.title.trim()} type={'primary'} onClick={handleSave}>
-          {tp('builtins.lobe-task.goal.save')}
+          {tp(isNew ? 'builtins.lobe-task.goal.add' : 'builtins.lobe-task.goal.save')}
         </Button>
       </Flexbox>
     </Flexbox>
@@ -116,6 +118,8 @@ export const openCriterionEditModal = (props: CriterionEditContentProps): ModalI
     content: <CriterionEditContent {...props} />,
     footer: null,
     maskClosable: true,
-    title: t('builtins.lobe-task.goal.editCriterion', { ns: 'plugin', seq: props.seq }),
+    title: props.isNew
+      ? t('builtins.lobe-task.goal.addCriterion', { ns: 'plugin' })
+      : t('builtins.lobe-task.goal.editCriterion', { ns: 'plugin', seq: props.seq }),
     width: 'min(90vw, 560px)',
   });

@@ -1264,6 +1264,7 @@ export default {
   'taskDetail.acceptanceState.accepted': 'Accepted',
   'taskDetail.acceptanceState.awaitingDecision': 'Not passed — your call',
   'taskDetail.acceptanceState.awaitingReview': 'Awaiting your review',
+  'taskDetail.acceptanceState.awaitingVerification': 'Awaiting verification',
   'taskDetail.acceptanceState.closed': 'Closed',
   'taskDetail.acceptanceState.errored': 'Verification errored',
   'taskDetail.acceptanceState.hint': 'Delivery acceptance — click to review',

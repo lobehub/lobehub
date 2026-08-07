@@ -1053,6 +1053,7 @@
   "taskDetail.acceptanceState.accepted": "已验收",
   "taskDetail.acceptanceState.awaitingDecision": "未通过 · 待你定夺",
   "taskDetail.acceptanceState.awaitingReview": "待你验收",
+  "taskDetail.acceptanceState.awaitingVerification": "待验证",
   "taskDetail.acceptanceState.closed": "已关闭",
   "taskDetail.acceptanceState.errored": "验证出错",
   "taskDetail.acceptanceState.hint": "交付验收 — 点击进入验收页",
