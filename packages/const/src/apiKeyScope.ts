@@ -185,7 +185,8 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // keys must not mint or manage keys
   apiKey: 'blocked',
   asr: { any: 'model:invoke' },
-  botMessage: rw('chat:read', 'chat:write'),
+  // decrypts stored bot/messenger credentials and calls external channel APIs
+  botMessage: 'blocked',
   brief: rw('chat:read', 'chat:write'),
   changelog: 'open',
   chunk: rw('knowledge:read', 'knowledge:write'),
@@ -300,6 +301,8 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
   // intervention responses write messages and resume model execution
   'aiAgent.processHumanIntervention': AGENT_RUN_SCOPES,
   'aiAgent.submitHeteroIntervention': AGENT_RUN_SCOPES,
+  // lists the caller's whole knowledge-base/file inventory, not agent config
+  'agent.getKnowledgeBasesAndFiles': ['file:read', 'knowledge:read'],
   // notify's user/continue paths call `aiAgentService.execAgent` — another run entry
   'agentNotify.notify': AGENT_RUN_SCOPES,
   // signal triggers enqueue analyze-intent workflows whose judges call
