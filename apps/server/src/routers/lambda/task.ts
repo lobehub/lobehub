@@ -184,6 +184,14 @@ async function resolveSafeParentTaskId(
     });
   }
 
+  const task = await resolveOrThrow(model, taskId);
+  if (task.projectId !== parent.projectId) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'Parent task must belong to the same project',
+    });
+  }
+
   return parent.id;
 }
 
@@ -344,17 +352,14 @@ export const taskRouter = router({
         const model = ctx.taskModel;
         const task = await resolveOrThrow(model, input.taskId);
         const dep = await resolveOrThrow(model, input.dependsOnId);
-        if (task.projectId !== dep.projectId && (task.projectId || dep.projectId)) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'Task dependencies cannot cross project boundaries',
-          });
-        }
         await model.addDependency(task.id, dep.id, input.type);
         return { message: 'Dependency added', success: true };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         console.error('[task:addDependency]', error);
+        if (error instanceof Error && error.message.includes('project boundaries')) {
+          throw new TRPCError({ cause: error, code: 'BAD_REQUEST', message: error.message });
+        }
         throw new TRPCError({
           cause: error,
           code: 'INTERNAL_SERVER_ERROR',

@@ -247,6 +247,7 @@ export interface TaskItem {
   name: string | null;
   parentTaskId: string | null;
   priority: number | null;
+  projectId: string | null;
   schedulePattern: string | null;
   scheduleTimezone: string | null;
   seq: number;
@@ -291,6 +292,7 @@ export interface NewTask {
   name?: string | null;
   parentTaskId?: string | null;
   priority?: number | null;
+  projectId?: string | null;
   schedulePattern?: string | null;
   scheduleTimezone?: string | null;
   seq: number;

@@ -1,5 +1,5 @@
 import type { ProjectStatus, ProjectVisibility } from '@lobechat/types';
-import { and, asc, desc, eq, inArray, max, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, max, sql } from 'drizzle-orm';
 
 import { agents } from '../schemas/agent';
 import { knowledgeBases } from '../schemas/file';
@@ -115,6 +115,9 @@ export class ProjectModel {
     }
     if (project.status === 'completed' && status !== 'archived') {
       throw new Error('A completed project must be reopened before changing status');
+    }
+    if (project.completedReviewId && status !== 'archived') {
+      throw new Error('An archived completed project must be reopened before changing status');
     }
     return this.setStatus(id, status, project.startedAt);
   }
@@ -334,6 +337,40 @@ export class ProjectModel {
       .where(and(eq(tasks.id, taskId), taskScope, eq(tasks.createdByUserId, this.userId)))
       .limit(1);
     if (!root) throw new Error('Task not found');
+    if (root.parentTaskId) {
+      const [parent] = await this.db
+        .select({ projectId: tasks.projectId })
+        .from(tasks)
+        .where(and(eq(tasks.id, root.parentTaskId), taskScope))
+        .limit(1);
+      if (parent?.projectId !== projectId) {
+        throw new Error('Cannot move a task away from its parent project');
+      }
+    }
+
+    // Visibility must not hide private descendants here: moving the visible
+    // parent while leaving an unseen child behind would split one tree across
+    // projects. The creator check below still rejects any row not owned by the
+    // caller before the update runs.
+    const treeScope = this.workspaceId
+      ? eq(tasks.workspaceId, this.workspaceId)
+      : and(eq(tasks.createdByUserId, this.userId), isNull(tasks.workspaceId));
+    const descendants = await this.db.execute<{ created_by_user_id: string }>(sql`
+      WITH RECURSIVE task_tree AS (
+        SELECT ${tasks.id}, ${tasks.createdByUserId}
+        FROM ${tasks}
+        WHERE ${tasks.id} = ${root.id} AND ${treeScope}
+        UNION ALL
+        SELECT ${tasks.id}, ${tasks.createdByUserId}
+        FROM ${tasks}
+        JOIN task_tree parent ON ${tasks.parentTaskId} = parent.id
+        WHERE ${treeScope}
+      )
+      SELECT created_by_user_id FROM task_tree
+    `);
+    if (descendants.rows.some(({ created_by_user_id }) => created_by_user_id !== this.userId)) {
+      throw new Error('Cannot move a task tree containing tasks created by another user');
+    }
 
     const { rows } = await this.db.execute<{ id: string }>(sql`
       WITH RECURSIVE task_tree AS (
@@ -423,7 +460,14 @@ export class ProjectModel {
     const [project] = await this.db
       .update(projects)
       .set({ completedAt: null, completedReviewId: null, status: 'active', updatedAt: new Date() })
-      .where(and(eq(projects.id, id), eq(projects.status, 'completed'), this.manageable()))
+      .where(
+        and(
+          eq(projects.id, id),
+          inArray(projects.status, ['completed', 'archived']),
+          sql`${projects.completedReviewId} IS NOT NULL`,
+          this.manageable(),
+        ),
+      )
       .returning();
     return project ?? null;
   }

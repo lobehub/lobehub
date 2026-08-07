@@ -908,6 +908,14 @@ export class TaskModel {
     });
 
   async addDependency(taskId: string, dependsOnId: string, type: string = 'blocks'): Promise<void> {
+    const dependencyTasks = await this.findByIds([taskId, dependsOnId]);
+    const task = dependencyTasks.find(({ id }) => id === taskId);
+    const dependsOn = dependencyTasks.find(({ id }) => id === dependsOnId);
+    if (!task || !dependsOn) throw new Error('Task not found');
+    if (task.projectId !== dependsOn.projectId && (task.projectId || dependsOn.projectId)) {
+      throw new Error('Task dependencies cannot cross project boundaries');
+    }
+
     const visibility = await this.getTaskVisibility(taskId);
     await this.db
       .insert(taskDependencies)
