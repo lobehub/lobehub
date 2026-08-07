@@ -298,9 +298,16 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
   'aiProvider.checkProviderConnectivity': ['model:invoke'],
   // runs a ComfyUI image-generation workflow, not a config write
   'comfyui.createImage': ['model:invoke'],
+  // extracts follow-up actions via `AiGenerationService.generateObject`
+  'followUpAction.extract': ['model:invoke'],
   // prefills the convert-to-skill form via an LLM call
   // (`SystemAgentService.generateSkillMeta` → `modelRuntime.generateObject`)
   'agentDocument.generateSkillMeta': ['model:invoke'],
+  // onboarding understanding triggers enqueue generation workflows
+  // (persona / task-recommendation `generateObject` steps run async via QStash)
+  'user.retryOnboardingUnderstandingSource': ['model:invoke'],
+  'user.reviseOnboardingUnderstanding': ['model:invoke'],
+  'user.startOnboardingUnderstanding': ['model:invoke'],
 };
 
 export type TrpcScopeDecision = { scopes: ApiKeyScope[] } | { open: true } | { blocked: true };
