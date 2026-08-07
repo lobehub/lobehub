@@ -71,11 +71,22 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
+const getWebSearchHostname = (link: string): string | undefined => {
+  try {
+    const url = new URL(link);
+    return url.protocol === 'http:' || url.protocol === 'https:'
+      ? url.hostname || undefined
+      : undefined;
+  } catch {
+    return;
+  }
+};
+
 const isWebSearchResult = (value: unknown): value is WebSearchResult => {
   if (!value || typeof value !== 'object') return false;
 
   const { link } = value as Partial<WebSearchResult>;
-  return typeof link === 'string' && /^https?:\/\//iu.test(link);
+  return typeof link === 'string' && !!getWebSearchHostname(link);
 };
 
 const WebSearch = memo<BuiltinRenderProps<WebSearchArgs, WebSearchPluginState>>(
@@ -115,14 +126,15 @@ const WebSearch = memo<BuiltinRenderProps<WebSearchArgs, WebSearchPluginState>>(
           </Flexbox>
         )}
         {results.map((result, index) => {
-          const title = result.title || result.hostname || result.link;
+          const hostname = getWebSearchHostname(result.link);
+          const title = result.title || hostname || result.link;
 
           return (
             <Flexbox className={styles.resultItem} gap={3} key={`${result.link}-${index}`}>
               <a href={result.link} rel={'noreferrer'} target={'_blank'}>
                 <span className={styles.title}>{title}</span>
               </a>
-              <Text className={styles.hostname}>{result.hostname || result.link}</Text>
+              <Text className={styles.hostname}>{hostname || result.link}</Text>
               {result.snippet && <Text className={styles.snippet}>{result.snippet}</Text>}
             </Flexbox>
           );

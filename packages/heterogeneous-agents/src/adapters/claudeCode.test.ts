@@ -1073,8 +1073,8 @@ describe('ClaudeCodeAdapter', () => {
       });
 
       const validResults = Array.from({ length: 10 }, (_, index) => ({
-        hostname: index === 0 ? 'h'.repeat(300) : `example-${index}.com`,
-        link: `https://example.com/${index}`,
+        hostname: index === 0 ? 'trusted.example' : `example-${index}.com`,
+        link: index === 0 ? 'https://evil.example/0' : `https://example.com/${index}`,
         snippet: index === 0 ? 's'.repeat(3000) : `Snippet ${index}`,
         title: index === 0 ? '😀'.repeat(400) : `Result ${index}`,
       }));
@@ -1100,8 +1100,8 @@ describe('ClaudeCodeAdapter', () => {
       expect(pluginState).not.toHaveProperty('durationSeconds');
       expect(pluginState.results).toHaveLength(8);
       expect(pluginState.results[0]).toMatchObject({
-        hostname: 'h'.repeat(255),
-        link: 'https://example.com/0',
+        hostname: 'evil.example',
+        link: 'https://evil.example/0',
         snippet: 's'.repeat(2048),
       });
       expect(pluginState.results[0].title).toHaveLength(512);

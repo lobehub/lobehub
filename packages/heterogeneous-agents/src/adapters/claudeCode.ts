@@ -208,7 +208,7 @@ interface ClaudeCodeTaskEntry {
 }
 
 interface SynthesizedWebSearchResult {
-  hostname?: string;
+  hostname: string;
   link: string;
   snippet?: string;
   title?: string;
@@ -474,15 +474,25 @@ const normalizeBoundedString = (value: unknown, maxLength: number): string | und
   return normalized || undefined;
 };
 
-const normalizeWebSearchLink = (value: unknown): string | undefined => {
+const normalizeWebSearchLink = (
+  value: unknown,
+): Pick<SynthesizedWebSearchResult, 'hostname' | 'link'> | undefined => {
   if (typeof value !== 'string') return;
 
   const link = value.trim();
   if (!link || link.length > WEB_SEARCH_MAX_LINK_LENGTH) return;
 
   try {
-    const protocol = new URL(link).protocol;
-    return protocol === 'http:' || protocol === 'https:' ? link : undefined;
+    const url = new URL(link);
+    if (
+      (url.protocol !== 'http:' && url.protocol !== 'https:') ||
+      !url.hostname ||
+      url.hostname.length > WEB_SEARCH_MAX_HOSTNAME_LENGTH
+    ) {
+      return;
+    }
+
+    return { hostname: url.hostname, link };
   } catch {
     return;
   }
@@ -517,17 +527,14 @@ const synthesizeWebSearchPluginState = (
       const result = asRecord(value);
       if (!result) continue;
 
-      const link = normalizeWebSearchLink(result.link);
-      if (!link) continue;
+      const normalizedLink = normalizeWebSearchLink(result.link);
+      if (!normalizedLink) continue;
 
       const title = normalizeBoundedString(result.title, WEB_SEARCH_MAX_TITLE_LENGTH);
       const snippet = normalizeBoundedString(result.snippet, WEB_SEARCH_MAX_SNIPPET_LENGTH);
-      const hostname = normalizeBoundedString(result.hostname, WEB_SEARCH_MAX_HOSTNAME_LENGTH);
-      if (!title && !snippet && !hostname) continue;
 
       results.push({
-        ...(hostname ? { hostname } : {}),
-        link,
+        ...normalizedLink,
         ...(snippet ? { snippet } : {}),
         ...(title ? { title } : {}),
       });
