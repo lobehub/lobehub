@@ -1301,6 +1301,13 @@ export default {
   'taskDetail.commentPlaceholder':
     'Leave feedback to guide the agent — your comments shape the next run...',
   'taskDetail.runCollapse': 'Collapse run',
+  'taskDetail.runVerify.checklist': 'Acceptance checks',
+  'taskDetail.runVerify.errored': 'Verification errored',
+  'taskDetail.runVerify.failed': 'Not passed',
+  'taskDetail.runVerify.passed': 'Passed',
+  'taskDetail.runVerify.pending': 'Awaiting verification',
+  'taskDetail.runVerify.round': 'Round {{index}}',
+  'taskDetail.runVerify.running': 'Verifying',
   'taskDetail.runExpand': 'Expand run',
   'taskDetail.runFollowUp': 'Ask a follow-up',
   'taskDetail.runFollowUpPlaceholder': 'Ask a follow-up about this run...',

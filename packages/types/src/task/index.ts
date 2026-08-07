@@ -442,6 +442,24 @@ export interface TaskDetailActivity {
   trigger?: TaskRunTrigger | null;
   type: TaskActivityType;
   userId?: string | null;
+  /**
+   * Topic-only: the verification bound to this run. Present as soon as a
+   * verify session exists — `status` is null while it is still being planned,
+   * so the row can say "verifying" before there is a verdict.
+   */
+  verify?: TaskRunVerifySummary | null;
+}
+
+export interface TaskRunVerifySummary {
+  /** The aggregate this round is chained onto — the link target. */
+  acceptanceId: string | null;
+  /** Checks that returned a passing verdict in this round. */
+  passed: number;
+  roundIndex: number | null;
+  runId: string;
+  status: string | null;
+  /** Checks this round produced a result for; 0 while the plan is unexecuted. */
+  total: number;
 }
 
 export interface TaskDetailData {

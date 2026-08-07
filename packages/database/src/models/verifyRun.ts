@@ -6,11 +6,11 @@ import type {
   VerifyRunSource,
   VerifyRunStatus,
 } from '@lobechat/types';
-import { and, asc, desc, eq, ilike, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 
 import { agentOperations } from '../schemas/agentOperations';
 import type { NewVerifyRun, VerifyRunItem } from '../schemas/verify';
-import { verifyRuns } from '../schemas/verify';
+import { verifyCheckResults, verifyRuns } from '../schemas/verify';
 import type { LobeChatDatabase } from '../type';
 import { isUuid } from '../utils/uuid';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
@@ -221,6 +221,59 @@ export class VerifyRunModel {
     const nextCursor = hasMore && last ? encodeCursor(last.createdAt, last.id) : null;
 
     return { items, nextCursor };
+  };
+
+  /**
+   * The verification bound to each of several Agent Runs, keyed by operation.
+   * Feeds the task's activity list, where every run row needs to answer "and
+   * did it pass?" without one query per row.
+   */
+  findByOperations = async (
+    operationIds: string[],
+  ): Promise<
+    Map<
+      string,
+      Pick<VerifyRunItem, 'acceptanceId' | 'id' | 'roundIndex' | 'status'> & {
+        passed: number;
+        total: number;
+      }
+    >
+  > => {
+    const ids = [...new Set(operationIds.filter(Boolean))];
+    if (ids.length === 0) return new Map();
+
+    // Counts come from the same statement: a run row alone says pass/fail, but
+    // "4/4" is what makes a verdict inspectable at a glance, and fetching it
+    // per row would be one query per round.
+    const rows = await this.db
+      .select({
+        acceptanceId: verifyRuns.acceptanceId,
+        id: verifyRuns.id,
+        operationId: verifyRuns.operationId,
+        passed: sql<number>`count(*) filter (where ${verifyCheckResults.verdict} = 'passed')`,
+        roundIndex: verifyRuns.roundIndex,
+        status: verifyRuns.status,
+        total: sql<number>`count(${verifyCheckResults.id})`,
+      })
+      .from(verifyRuns)
+      .leftJoin(verifyCheckResults, eq(verifyCheckResults.verifyRunId, verifyRuns.id))
+      .where(and(inArray(verifyRuns.operationId, ids), this.ownership()))
+      .groupBy(
+        verifyRuns.id,
+        verifyRuns.acceptanceId,
+        verifyRuns.operationId,
+        verifyRuns.roundIndex,
+        verifyRuns.status,
+      );
+
+    return new Map(
+      rows
+        .filter((row): row is typeof row & { operationId: string } => Boolean(row.operationId))
+        .map(({ operationId, passed, total, ...run }) => [
+          operationId,
+          { ...run, passed: Number(passed), total: Number(total) },
+        ]),
+    );
   };
 
   /** Every round chained onto an acceptance aggregate, in round order. */

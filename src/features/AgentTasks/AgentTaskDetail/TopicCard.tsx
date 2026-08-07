@@ -27,6 +27,7 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import CollapsibleContent from '@/components/CollapsibleContent';
+import { DEFAULT_AVATAR } from '@/const/meta';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { usePermission } from '@/hooks/usePermission';
@@ -35,6 +36,8 @@ import { taskDetailSelectors } from '@/store/task/selectors';
 
 import { styles } from '../shared/style';
 import RunReplyEditor from './RunReplyEditor';
+import RunVerifyDetail from './RunVerifyDetail';
+import RunVerifyTag from './RunVerifyTag';
 import TopicStatusIcon from './TopicStatusIcon';
 
 const formatDuration = (ms: number): string => {
@@ -87,7 +90,9 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) =>
   // active task.
   const runTaskId = activity.sourceTaskId ?? activeTaskId;
   const canFollowUp = canEditTask && !!runTaskId;
-  const hasBody = Boolean(activity.summary || activity.content || canFollowUp);
+  const hasBody = Boolean(
+    activity.summary || activity.content || canFollowUp || activity.verify?.total,
+  );
 
   const finalDuration =
     !isRunning && activity.time && activity.completedAt
@@ -179,13 +184,17 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) =>
 
   const isAgent = activity.author?.type === 'agent';
 
-  const avatarNode = activity.author?.avatar ? (
-    <Avatar avatar={activity.author.avatar} size={24} />
-  ) : (
-    <div className={styles.activityAvatar}>
-      <CircleDot size={12} />
-    </div>
-  );
+  // An agent that simply never set an avatar is still an agent — it gets the
+  // same default face it wears everywhere else, not a placeholder dot. The dot
+  // stays for rows with no author at all.
+  const avatarNode =
+    activity.author?.avatar || isAgent ? (
+      <Avatar avatar={activity.author?.avatar || DEFAULT_AVATAR} size={24} />
+    ) : (
+      <div className={styles.activityAvatar}>
+        <CircleDot size={12} />
+      </div>
+    );
 
   return (
     <Block
@@ -244,6 +253,7 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) =>
               · {durationText}
             </Text>
           )}
+          <RunVerifyTag verify={activity.verify} />
         </Flexbox>
 
         <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
@@ -281,6 +291,13 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) =>
             </Text>
           )}
           {activity.content && <RunContent content={activity.content} />}
+          {/* The verdict's evidence, next to the delivery it judged — reading
+              one should never require leaving for the acceptance page. */}
+          {activity.verify && (
+            <Flexbox onClick={stopPropagation}>
+              <RunVerifyDetail operationId={activity.operationId} />
+            </Flexbox>
+          )}
           {canFollowUp &&
             (commenting ? (
               <Flexbox onClick={stopPropagation}>

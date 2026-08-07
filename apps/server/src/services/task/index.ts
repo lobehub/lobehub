@@ -20,6 +20,7 @@ import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
+import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { AiAgentService } from '../aiAgent';
@@ -777,6 +778,13 @@ export class TaskService {
 
     const authorMap = await this.resolveAuthors(agentIds, userIds);
 
+    // Every run row answers "and did it pass?" on its own (with counts). Without this the
+    // activity feed lists rounds that all look alike, and the only way to learn
+    // a round's verdict is to leave for the acceptance page.
+    const verifyByOperation = await new VerifyRunModel(this.db, this.userId, this.workspaceId)
+      .findByOperations(topics.map((t) => t.operationId).filter((id): id is string => Boolean(id)))
+      .catch(() => new Map());
+
     const creatorId = task.createdByAgentId ?? task.createdByUserId;
     const createdActivity: TaskDetailActivity | null =
       task.createdAt && creatorId
@@ -792,6 +800,7 @@ export class TaskService {
       ...topics.map((t) => {
         const handoff = t.handoff as TaskTopicHandoff | null;
         const topicAgentId = t.agentId ?? t.sourceTaskAssigneeAgentId ?? task.assigneeAgentId;
+        const verifyRun = t.operationId ? verifyByOperation.get(t.operationId) : undefined;
         return {
           author: topicAgentId ? authorMap.get(topicAgentId) : undefined,
           completedAt: toISO(t.completedAt),
@@ -813,6 +822,16 @@ export class TaskService {
           // the user started from one the goal loop / scheduler opened on its
           // own — they render identically apart from `#seq`.
           trigger: t.trigger ?? null,
+          verify: verifyRun
+            ? {
+                acceptanceId: verifyRun.acceptanceId,
+                passed: verifyRun.passed,
+                roundIndex: verifyRun.roundIndex,
+                runId: verifyRun.id,
+                status: verifyRun.status,
+                total: verifyRun.total,
+              }
+            : null,
           type: 'topic' as const,
         };
       }),

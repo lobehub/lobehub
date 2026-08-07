@@ -25,19 +25,26 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   rail: css`
     display: flex;
+    flex-wrap: wrap;
     gap: 5px;
+    align-items: center;
+
     min-width: 0;
-    height: 11px;
   `,
   round: css`
     position: relative;
-    min-width: 18px;
+    height: 11px;
     border-radius: 4px;
     background: ${cssVar.colorInfoBgHover};
 
     &[data-active='true'] {
       background: ${cssVar.colorInfo};
     }
+  `,
+  total: css`
+    flex: none;
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
   `,
 }));
 
@@ -51,6 +58,23 @@ export const formatGoalDuration = (milliseconds: number) => {
 
 export const shouldShowGoalRoundTimeline = (roundCount: number) => roundCount > 1;
 
+/** Narrowest a round can render and still read as a block rather than a tick. */
+const ROUND_BASE_WIDTH = 28;
+/** Beyond this a long round would push the rail past the panel. */
+const ROUND_MAX_WIDTH = 160;
+
+/**
+ * Round width tracks how long the round actually took, anchored on the first
+ * round's duration. Stretching every round to fill the panel made two rounds
+ * of wildly different lengths look identical — and made two rounds look like a
+ * full bar, as if the budget were spent.
+ */
+export const goalRoundWidth = (durationMs: number, baseMs: number): number => {
+  if (!Number.isFinite(durationMs) || durationMs <= 0 || baseMs <= 0) return ROUND_BASE_WIDTH;
+  const scaled = ROUND_BASE_WIDTH * (durationMs / baseMs);
+  return Math.round(Math.min(ROUND_MAX_WIDTH, Math.max(ROUND_BASE_WIDTH, scaled)));
+};
+
 const GoalRoundTimeline = memo<{ rounds?: GoalRound[] }>(({ rounds = [] }) => {
   const { t } = useTranslation('chat');
   if (!shouldShowGoalRoundTimeline(rounds.length)) return null;
@@ -58,29 +82,37 @@ const GoalRoundTimeline = memo<{ rounds?: GoalRound[] }>(({ rounds = [] }) => {
   const start = new Date(rounds[0].run.createdAt).getTime();
   const elapsed = Math.max(1, Date.now() - start);
 
+  // Each round spans until the next one opens; the last runs up to now.
+  const durations = rounds.map(({ run }, index) => {
+    const from = new Date(run.createdAt).getTime();
+    const to =
+      index + 1 < rounds.length ? new Date(rounds[index + 1].run.createdAt).getTime() : Date.now();
+    return Math.max(1, to - from);
+  });
+  const base = durations[0];
+
   return (
     <Flexbox gap={8}>
-      <Flexbox horizontal align={'center'} justify={'space-between'}>
-        <Text fontSize={12} type={'secondary'}>
-          {t('taskDetail.goalTimeline.title')}
-        </Text>
-        <Text fontSize={12} type={'secondary'}>
-          {t('taskDetail.goalTimeline.rounds', { count: rounds.length })} ·{' '}
-          {formatGoalDuration(elapsed)}
-        </Text>
-      </Flexbox>
+      <Text fontSize={12} type={'secondary'}>
+        {t('taskDetail.goalTimeline.title')}
+      </Text>
       <div className={styles.rail}>
         {rounds.map(({ report, run }, index) => (
           <div
             className={styles.round}
             data-active={run.status === 'running' || index === rounds.length - 1}
             key={`${run.roundIndex ?? index}-${new Date(run.createdAt).getTime()}`}
-            style={{ flex: index + 1 }}
+            style={{ width: goalRoundWidth(durations[index], base) }}
             title={t('taskDetail.goalTimeline.round', { index: run.roundIndex ?? index + 1 })}
           >
             {report?.verdict === 'fail' && <span className={styles.dot} />}
           </div>
         ))}
+        {/* Reads as the rail's own caption, right where the rounds end. */}
+        <span className={styles.total}>
+          {t('taskDetail.goalTimeline.rounds', { count: rounds.length })} ·{' '}
+          {formatGoalDuration(elapsed)}
+        </span>
       </div>
     </Flexbox>
   );
