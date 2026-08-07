@@ -1,1 +1,1 @@
-ALTER TABLE "api_keys" ADD COLUMN IF NOT EXISTS "scopes" text[];
+ALTER TABLE "api_keys" ADD COLUMN IF NOT EXISTS "scopes" jsonb;

@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "e810a895-1fbd-440a-8b36-9bf047f6e69c",
+  "id": "02972d6b-9af1-44fe-8a1f-ef1f3daa6b10",
   "policies": {},
   "prevId": "18e72663-97f4-45a6-8071-545d1d93c72a",
   "roles": {},
@@ -6670,7 +6670,7 @@
         },
         "scopes": {
           "name": "scopes",
-          "type": "text[]",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         },

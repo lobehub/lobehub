@@ -764,7 +764,7 @@ table api_keys {
   key varchar(256) [not null, unique]
   key_hash varchar(128) [unique]
   enabled boolean [default: true]
-  scopes text[]
+  scopes jsonb
   expires_at "timestamp with time zone"
   last_used_at "timestamp with time zone"
   user_id text [not null]
