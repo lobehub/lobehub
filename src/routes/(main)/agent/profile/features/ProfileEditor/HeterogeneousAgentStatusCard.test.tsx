@@ -19,24 +19,24 @@ vi.mock('@lobechat/heterogeneous-agents/client', () => ({
   getHeterogeneousAgentClientConfig: (type: string) =>
     type === 'claude-code'
       ? {
-          command: 'claude',
+          defaultCommand: 'claude',
           icon: () => <span>Claude Code Icon</span>,
           title: 'Claude Code',
         }
       : type === 'opencode'
         ? {
-            command: 'opencode',
+            defaultCommand: 'opencode',
             icon: () => <span>OpenCode Icon</span>,
             title: 'OpenCode',
           }
         : type === 'pi'
           ? {
-              command: 'pi',
+              defaultCommand: 'pi',
               icon: () => <span>Pi Icon</span>,
               title: 'Pi',
             }
           : {
-              command: 'codex',
+              defaultCommand: 'codex',
               icon: () => <span>Codex Icon</span>,
               title: 'Codex',
             },
