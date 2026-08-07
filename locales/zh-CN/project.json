@@ -1,5 +1,9 @@
 {
   "create.action": "创建项目",
+  "create.identifierDescription": "用于任务编号前缀，例如 LOBE-123。",
+  "create.identifierLabel": "项目标识",
+  "create.identifierPlaceholder": "LOBE",
+  "create.nameLabel": "项目名称",
   "create.namePlaceholder": "你正在推进什么事情？",
   "create.title": "新建项目",
   "disabled.action": "前往实验室开启",

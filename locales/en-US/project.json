@@ -1,5 +1,9 @@
 {
   "create.action": "Create project",
+  "create.identifierDescription": "Used as the task prefix, for example LOBE-123.",
+  "create.identifierLabel": "Identifier",
+  "create.identifierPlaceholder": "LOBE",
+  "create.nameLabel": "Project name",
   "create.namePlaceholder": "What are you working on?",
   "create.title": "New project",
   "disabled.action": "Enable in Labs",

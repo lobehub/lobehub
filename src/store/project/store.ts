@@ -16,7 +16,7 @@ const LIST_KEY = 'project/list';
 const detailKey = (id: string) => ['project/detail', id] as const;
 
 interface ProjectStore {
-  createProject: (name: string) => Promise<ProjectListItem>;
+  createProject: (input: { identifier: string; name: string }) => Promise<ProjectListItem>;
   projectDetails: Record<string, ProjectDetail>;
   projectList: ProjectListItem[];
   projectListInit: boolean;
@@ -29,8 +29,8 @@ const devtools = createDevtools('project');
 
 export const useProjectStore = createWithEqualityFn<ProjectStore>()(
   devtools((set, get) => ({
-    createProject: async (name) => {
-      const response = await projectService.create({ name });
+    createProject: async (input) => {
+      const response = await projectService.create(input);
       await get().refreshProjectList();
       return response.data;
     },

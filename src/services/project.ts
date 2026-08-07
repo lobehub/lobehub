@@ -11,6 +11,7 @@ class ProjectService {
   create = async (params: {
     avatar?: string;
     description?: string;
+    identifier: string;
     name: string;
     visibility?: ProjectVisibility;
   }) => lambdaClient.project.create.mutate(params);
