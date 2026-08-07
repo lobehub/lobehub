@@ -290,6 +290,10 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
   'aiAgent.startExecution': AGENT_RUN_SCOPES,
   // notify's user/continue paths call `aiAgentService.execAgent` — another run entry
   'agentNotify.notify': AGENT_RUN_SCOPES,
+  // signal triggers enqueue analyze-intent workflows whose judges call
+  // `generateObject` (and may dispatch self-iteration runs)
+  'agentSignal.emitSourceEvent': ['model:invoke'],
+  'agentSignal.triggerSourceEvent': ['model:invoke'],
   // persists tool results into the topic's message history
   'aiChat.archiveToolResult': ['chat:write'],
   // creates user/assistant messages and topics alongside the model call
@@ -306,11 +310,19 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
   // prefills the convert-to-skill form via an LLM call
   // (`SystemAgentService.generateSkillMeta` → `modelRuntime.generateObject`)
   'agentDocument.generateSkillMeta': ['model:invoke'],
+  // task orchestration starts `execAgent` runs (run/runReadySubtasks) or calls
+  // `generateObject` judges (runReview) — same boundary as `aiAgent.*`
+  'task.run': AGENT_RUN_SCOPES,
+  'task.runReadySubtasks': AGENT_RUN_SCOPES,
+  'task.runReview': ['model:invoke'],
   // onboarding understanding triggers enqueue generation workflows
   // (persona / task-recommendation `generateObject` steps run async via QStash)
   'user.retryOnboardingUnderstandingSource': ['model:invoke'],
   'user.reviseOnboardingUnderstanding': ['model:invoke'],
   'user.startOnboardingUnderstanding': ['model:invoke'],
+  // schedules the full memory-extraction workflow (embeddings + per-layer
+  // `generateObject`), unlike the accepted search/re-embed embedding tradeoff
+  'userMemory.requestMemoryFromChatTopic': ['model:invoke'],
 };
 
 export type TrpcScopeDecision = { scopes: ApiKeyScope[] } | { open: true } | { blocked: true };
