@@ -19,7 +19,7 @@ const Layout: FC = () => {
   return (
     <>
       <AgentSidebar />
-      <Flexbox className={styles.mainContainer} direction="vertical" flex={1} height={'100%'}>
+      <Flexbox className={styles.mainContainer} flex={1} height={'100%'}>
         {/* Keep the sidebar interactive when the routed agent is gone (deleted
             or made private) — only the content area collapses to the 404 card. */}
         <AgentNotFoundGuard>

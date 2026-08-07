@@ -8,18 +8,8 @@ import { describe, expect, it, vi } from 'vitest';
 import Layout from './index';
 
 vi.mock('@lobehub/ui', () => ({
-  Flexbox: ({
-    children,
-    direction,
-    ...props
-  }: {
-    children?: ReactNode;
-    direction?: 'horizontal' | 'vertical';
-    [key: string]: unknown;
-  }) => (
-    <div {...props} style={{ flexDirection: direction === 'vertical' ? 'column' : direction }}>
-      {children}
-    </div>
+  Flexbox: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
+    <div {...props}>{children}</div>
   ),
   ShikiLobeTheme: {},
 }));
@@ -51,14 +41,6 @@ describe('Agent layout', () => {
 
     expect(screen.getByTestId('agent-layout-sidebar')).toBeInTheDocument();
     expect(screen.getByTestId('agent-layout-outlet')).toBeInTheDocument();
-  });
-
-  it('keeps routed content in a vertical layout', () => {
-    render(<Layout />);
-
-    expect(screen.getByTestId('agent-layout-outlet').parentElement).toHaveStyle({
-      flexDirection: 'column',
-    });
   });
 
   it('mounts AgentIdSync in layout', () => {
