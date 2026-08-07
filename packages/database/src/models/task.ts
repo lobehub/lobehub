@@ -492,8 +492,8 @@ export class TaskModel {
 
     const baseConditions = [this.ownership()];
     if (assigneeAgentId) baseConditions.push(eq(tasks.assigneeAgentId, assigneeAgentId));
-    if (hasGoal === true) baseConditions.push(sql`${tasks.config} -> 'goal' IS NOT NULL`);
-    if (hasGoal === false) baseConditions.push(sql`${tasks.config} -> 'goal' IS NULL`);
+    if (hasGoal === true) baseConditions.push(sql`COALESCE(${tasks.config} ->> 'goal', '') <> ''`);
+    if (hasGoal === false) baseConditions.push(sql`COALESCE(${tasks.config} ->> 'goal', '') = ''`);
     if (visibility) baseConditions.push(eq(tasks.visibility, visibility));
     if (parentTaskId === null) {
       baseConditions.push(isNull(tasks.parentTaskId));
@@ -628,8 +628,8 @@ export class TaskModel {
     if (statuses?.length) conditions.push(inArray(tasks.status, statuses));
     if (priorities?.length) conditions.push(inArray(tasks.priority, priorities));
     if (assigneeAgentId) conditions.push(eq(tasks.assigneeAgentId, assigneeAgentId));
-    if (hasGoal === true) conditions.push(sql`${tasks.config} -> 'goal' IS NOT NULL`);
-    if (hasGoal === false) conditions.push(sql`${tasks.config} -> 'goal' IS NULL`);
+    if (hasGoal === true) conditions.push(sql`COALESCE(${tasks.config} ->> 'goal', '') <> ''`);
+    if (hasGoal === false) conditions.push(sql`COALESCE(${tasks.config} ->> 'goal', '') = ''`);
     if (visibility) conditions.push(eq(tasks.visibility, visibility));
 
     if (parentTaskId === null) {
