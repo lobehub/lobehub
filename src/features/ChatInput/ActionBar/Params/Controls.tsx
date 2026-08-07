@@ -676,7 +676,7 @@ const Controls = memo<ControlsProps>(({ setUpdating, updating, variant = 'popove
   const subAgentChatConfig = useMemo(
     () =>
       resolveEffectiveReasoningChatConfig({
-        agentChatConfig: resolveSubAgentChatConfig(config.chatConfig, rawSubAgentChatConfig),
+        agentChatConfig: resolveSubAgentChatConfig(config.chatConfig, rawSubAgentChatConfig) ?? {},
         modelReasoningConfig: subAgentModelReasoningConfig,
         subAgentReasoningOverrides: rawSubAgentChatConfig,
       }),

@@ -96,6 +96,25 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
     expect(hints.resolvedExtendParams).toEqual({ reasoning_effort: 'high' });
   });
 
+  it('should honor reasoning extend params added to a builtin model via DB settings', async () => {
+    // Provider-settings edits store extendParams on the user's own model row;
+    // the client merges them over the bundled card, so the server must too
+    findByIdAndProviderMock.mockResolvedValue({
+      settings: { extendParams: ['reasoningEffort'] },
+    });
+    getModelReasoningConfigMock.mockResolvedValue({ reasoningEffort: 'high' });
+
+    const hints = await resolveServerCallLlmContextHints({
+      ctx: createCtx({ chatConfig: {} }),
+      llmPayload,
+      model: 'gpt-4o-mini',
+      provider: 'openai',
+    });
+
+    expect(getModelReasoningConfigMock).toHaveBeenCalledWith('gpt-4o-mini', 'openai');
+    expect(hints.resolvedExtendParams).toEqual({ reasoning_effort: 'high' });
+  });
+
   it('should skip the reasoning config DB read for models without reasoning extend params', async () => {
     const hints = await resolveServerCallLlmContextHints({
       ctx: createCtx({ chatConfig: {} }),

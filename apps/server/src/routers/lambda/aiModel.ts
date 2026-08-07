@@ -128,9 +128,11 @@ export const aiModelRouter = router({
           throwDuplicateAiModelError(input.id);
         }
 
+        // enabled defaults to true, matching the plain create() path
+        // (CreateAiModelSchema carries no enabled field)
         await ctx.aiModelModel.update(input.id, input.providerId, {
           ...input,
-          enabled: input.enabled ?? true,
+          enabled: true,
           source: 'custom',
         });
         return input.id;
