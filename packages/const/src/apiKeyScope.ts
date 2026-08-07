@@ -291,6 +291,15 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
   'aiAgent.execSubAgentTask': AGENT_RUN_SCOPES,
   'aiAgent.scheduleAgentRun': AGENT_RUN_SCOPES,
   'aiAgent.startExecution': AGENT_RUN_SCOPES,
+  // thread/message state writes without starting a run
+  'aiAgent.createClientGroupAgentTaskThread': ['chat:write'],
+  'aiAgent.createClientTaskThread': ['chat:write'],
+  'aiAgent.interruptTask': ['chat:write'],
+  'aiAgent.stopPendingApproval': ['chat:write'],
+  'aiAgent.updateClientTaskThreadStatus': ['chat:write'],
+  // intervention responses write messages and resume model execution
+  'aiAgent.processHumanIntervention': AGENT_RUN_SCOPES,
+  'aiAgent.submitHeteroIntervention': AGENT_RUN_SCOPES,
   // notify's user/continue paths call `aiAgentService.execAgent` — another run entry
   'agentNotify.notify': AGENT_RUN_SCOPES,
   // signal triggers enqueue analyze-intent workflows whose judges call
