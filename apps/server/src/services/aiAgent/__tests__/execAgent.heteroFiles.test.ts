@@ -745,7 +745,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     it('keeps the conversation workspace separate from a personal platform device scope', async () => {
       heteroAgentConfig.agencyConfig = {
         executionTarget: 'local',
-        heterogeneousProvider: { type: 'openclaw' },
+        heterogeneousProvider: { platformAgentId: 'researcher', type: 'openclaw' },
       } as any;
       (heteroAgentConfig as any).userId = userId;
       (heteroAgentConfig as any).visibility = 'public';
@@ -774,6 +774,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       expect(JSON.parse(toolCall.arguments)).toEqual(
         expect.objectContaining({
           agentType: 'openclaw',
+          platformAgentId: 'researcher',
           workspaceId: 'workspace-a',
         }),
       );

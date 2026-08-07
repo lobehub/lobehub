@@ -591,6 +591,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
             agentType: string;
             cwd?: string;
             operationId: string;
+            platformAgentId?: string;
             prompt: string;
             taskId: string;
             topicId: string;
@@ -831,12 +832,23 @@ export default class GatewayConnectionCtr extends ControllerModule {
     agentType: string;
     cwd?: string;
     operationId: string;
+    platformAgentId?: string;
     prompt: string;
     taskId: string;
     topicId: string;
     workspaceId?: string;
   }): Promise<string> {
-    const { agentId, agentType, cwd, operationId, prompt, taskId, topicId, workspaceId } = args;
+    const {
+      agentId,
+      agentType,
+      cwd,
+      operationId,
+      platformAgentId,
+      prompt,
+      taskId,
+      topicId,
+      workspaceId,
+    } = args;
     const workDir = cwd || process.cwd();
 
     const [serverUrl, accessToken] = await Promise.all([
@@ -862,7 +874,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
       }
       if (commandStatus.resolvedPathEnv) childEnv.PATH = commandStatus.resolvedPathEnv;
       const lhPath = this.resolveLhPath();
-      const openclawAgent = process.env['OPENCLAW_AGENT_ID'] ?? 'main';
+      const openclawAgent = platformAgentId?.trim() || process.env['OPENCLAW_AGENT_ID'] || 'main';
 
       // Always inject the notify protocol so openclaw knows how to report results
       // back to the LobeHub UI — even if the previous turn failed and the session
