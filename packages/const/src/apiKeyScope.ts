@@ -196,7 +196,8 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   connector: 'blocked',
   device: 'blocked',
   document: rw('knowledge:read', 'knowledge:write'),
-  exporter: { any: 'chat:read' },
+  // whole-account backup dump (settings incl. market tokens, providers, agents)
+  exporter: 'blocked',
   file: rw('file:read', 'file:write'),
   followUpAction: rw('chat:read', 'chat:write'),
   generation: { any: 'model:invoke' },
@@ -206,7 +207,9 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   healthcheck: 'open',
   home: rw('chat:read', 'chat:write'),
   image: { any: 'model:invoke' },
-  importer: rw('chat:read', 'chat:write'),
+  // whole-account backup import can overwrite credential-bearing settings,
+  // provider/model config and agents
+  importer: 'blocked',
   klavis: 'blocked',
   knowledge: rw('knowledge:read', 'knowledge:write'),
   knowledgeBase: rw('knowledge:read', 'knowledge:write'),
