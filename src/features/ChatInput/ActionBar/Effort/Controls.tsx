@@ -25,10 +25,20 @@ const styles = createStaticStyles(({ css }) => ({
   option: css`
     cursor: pointer;
 
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+
     width: 100%;
     padding-block: 8px;
     padding-inline: 8px;
+    border: none;
     border-radius: ${cssVar.borderRadius};
+
+    text-align: start;
+
+    background: transparent;
 
     transition: background-color 0.2s;
 
@@ -44,18 +54,18 @@ interface OptionProps {
   onClick: () => void;
 }
 
+// A real <button> so keyboard-only and screen-reader users can focus each
+// level and toggle it with Enter/Space
 const Option = memo<OptionProps>(({ active, label, onClick }) => (
-  <Flexbox
-    horizontal
-    align={'center'}
+  <button
+    aria-pressed={active}
     className={cx(styles.option, active && styles.active)}
-    gap={12}
-    justify={'space-between'}
+    type={'button'}
     onClick={onClick}
   >
     <span className={styles.label}>{label}</span>
     {active && <Icon className={styles.check} icon={CheckIcon} />}
-  </Flexbox>
+  </button>
 ));
 
 interface ControlsProps {

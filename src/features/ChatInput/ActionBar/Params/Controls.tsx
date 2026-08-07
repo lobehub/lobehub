@@ -3,6 +3,7 @@ import {
   resolveSubAgentChatConfig,
   resolveSubAgentModel,
 } from '@lobechat/const';
+import { resolveEffectiveReasoningChatConfig } from '@lobechat/model-runtime/utils/modelExtendParams';
 import { Flexbox, Icon, SliderWithInput, TextArea } from '@lobehub/ui';
 import { Select, Switch } from '@lobehub/ui/base-ui';
 import { Form as AntdForm } from 'antd';
@@ -645,12 +646,41 @@ const Controls = memo<ControlsProps>(({ setUpdating, updating, variant = 'popove
   const subAgentModelValue = config.agencyConfig?.subagent?.model
     ? resolveSubAgentModel(config.agencyConfig.subagent)
     : undefined;
-  // Effective sub-agent chatConfig: the parent's chatConfig with the
-  // `agencyConfig.subagent.chatConfig` overrides merged on top — the exact
-  // config the sub-agent run uses, so the controls below are WYSIWYG.
+  const rawSubAgentChatConfig = config.agencyConfig?.subagent?.chatConfig;
+  const subAgentHasReasoningParams = useAiInfraStore(
+    aiModelSelectors.isModelHasReasoningExtendParams(
+      subAgentModelValue?.model || '',
+      subAgentModelValue?.provider || '',
+    ),
+  );
+  const subAgentModelReasoningConfig = useAiInfraStore(
+    aiModelSelectors.modelReasoningConfig(
+      subAgentModelValue?.model || '',
+      subAgentModelValue?.provider || '',
+    ),
+    isEqual,
+  );
+  // Warm the overridden sub-agent model's saved reasoning defaults —
+  // ReasoningConfigLoader only fetches the main effective model
+  const useFetchAiModelReasoningConfig = useAiInfraStore((s) => s.useFetchAiModelReasoningConfig);
+  useFetchAiModelReasoningConfig(
+    subAgentHasReasoningParams ? subAgentModelValue?.model : undefined,
+    subAgentHasReasoningParams ? subAgentModelValue?.provider : undefined,
+  );
+  // Effective sub-agent chatConfig, built the same way the run does
+  // (resolveModelExtendParams / serverCallLlmContextHints): merged parent
+  // config with the migrated reasoning fields stripped ← model-instance
+  // defaults ← explicit sub-agent overrides. Without the same sanitizing, a
+  // legacy parent `chatConfig.reasoningEffort` would show a value the run
+  // ignores, so the controls below stay WYSIWYG.
   const subAgentChatConfig = useMemo(
-    () => resolveSubAgentChatConfig(config.chatConfig, config.agencyConfig?.subagent?.chatConfig),
-    [config.chatConfig, config.agencyConfig?.subagent?.chatConfig],
+    () =>
+      resolveEffectiveReasoningChatConfig({
+        agentChatConfig: resolveSubAgentChatConfig(config.chatConfig, rawSubAgentChatConfig),
+        modelReasoningConfig: subAgentModelReasoningConfig,
+        subAgentReasoningOverrides: rawSubAgentChatConfig,
+      }),
+    [config.chatConfig, rawSubAgentChatConfig, subAgentModelReasoningConfig],
   );
   const subAgentHasModelConfig = useAiInfraStore(
     aiModelSelectors.isModelHasExtendParams(
