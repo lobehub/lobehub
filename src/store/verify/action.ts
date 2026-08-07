@@ -92,7 +92,6 @@ export class ActionImpl {
             'useFetchAcceptanceBySubject/success',
           );
         },
-        refreshInterval: (data) => (data ? 0 : 2000),
         revalidateOnFocus: true,
         revalidateOnReconnect: true,
       },

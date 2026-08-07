@@ -1434,6 +1434,7 @@ export default {
   'goalList.retry': 'Retry',
   'goalList.roundProgress': 'Round {{current}}/{{total}}',
   'goalList.status.achieved': 'Achieved',
+  'goalList.status.canceled': 'Canceled',
   'goalList.status.error': 'Needs attention',
   'goalList.status.paused': 'Paused',
   'goalList.status.planning': 'Planning',
@@ -1454,7 +1455,7 @@ export default {
   'goalDetail.instruction': 'Goal instruction',
   'goalDetail.latestRuns': 'Recent executions',
   'goalDetail.deleteConfirm.content':
-    'This goal and its execution history will be permanently deleted.',
+    'This goal and its task plan will be permanently deleted. Conversation history is retained.',
   'goalDetail.deleteConfirm.ok': 'Delete goal',
   'goalDetail.deleteConfirm.title': 'Delete this goal?',
   'goalDetail.moreActions': 'More goal actions',
@@ -1481,8 +1482,11 @@ export default {
   'goalPage.activeGoals': 'Open goals',
   'goalPage.description':
     'Track what this agent is pursuing and how close each goal is to acceptance.',
+  'goalPage.create': 'Create goal',
   'goalPage.emptyDescription': 'Goals created for this agent will appear here with their progress.',
   'goalPage.emptyTitle': 'No goals yet',
+  'goalPage.filteredEmptyDescription': 'Switch to All to review completed or canceled goals.',
+  'goalPage.filteredEmptyTitle': 'No open goals',
   'goalPage.goalCount': '{{count}} goals',
   'goalPage.filter.active': 'In progress',
   'goalPage.filter.all': 'All',

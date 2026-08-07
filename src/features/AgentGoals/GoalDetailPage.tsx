@@ -2,6 +2,7 @@
 
 import type { TaskDetailSubtask, TaskStatus } from '@lobechat/types';
 import { Accordion, AccordionItem, Block, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { Progress } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { BadgeCheckIcon, BotIcon, CircleDashedIcon, RotateCcwIcon } from 'lucide-react';
@@ -18,6 +19,7 @@ import TaskDetailTitleInput from '@/features/AgentTasks/AgentTaskDetail/TaskDeta
 import TaskInstruction from '@/features/AgentTasks/AgentTaskDetail/TaskInstruction';
 import TopicCard from '@/features/AgentTasks/AgentTaskDetail/TopicCard';
 import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
+import { useNavigateToTaskDetail } from '@/features/AgentTasks/shared/taskDetailPath';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useActivityTime } from '@/hooks/useActivityTime';
@@ -100,12 +102,20 @@ const statusVisual = (status: string) =>
   TASK_STATUS_VISUALS[status as TaskStatus] ?? TASK_STATUS_VISUALS.backlog;
 
 const TaskTreeItem = memo<{ task: TaskDetailSubtask }>(({ task }) => {
+  const navigateToTaskDetail = useNavigateToTaskDetail();
   const visual = statusVisual(task.status);
   const { text: updatedAt, title: updatedAtTitle } = useActivityTime(task.updatedAt);
 
   return (
     <Flexbox>
-      <Flexbox horizontal align={'center'} className={styles.treeRow} gap={8}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={styles.treeRow}
+        gap={8}
+        style={{ cursor: 'pointer' }}
+        onClick={() => navigateToTaskDetail(task.identifier)}
+      >
         <Icon color={visual.color} icon={visual.icon} size={14} />
         <Text fontSize={12} type={'secondary'}>
           {task.identifier}
@@ -137,6 +147,7 @@ TaskTreeRows.displayName = 'GoalTaskTreeRows';
 
 const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const { t } = useTranslation('chat');
+  const navigateToTaskDetail = useNavigateToTaskDetail();
   const { error, isInitialLoading, isNotFound, onRetry } = useActiveTaskDetail(goalId);
   const task = useTaskStore(taskDetailSelectors.taskDetailById(goalId));
   const useFetchAcceptanceBySubject = useVerifyStore((s) => s.useFetchAcceptanceBySubject);
@@ -271,8 +282,15 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                     }
                   >
                     <Flexbox paddingBlock={8}>
-                      {bundleQuery.error ? (
-                        <Text type={'secondary'}>{t('goalDetail.acceptanceError')}</Text>
+                      {acceptanceQuery.error || bundleQuery.error ? (
+                        <AsyncError
+                          error={acceptanceQuery.error || bundleQuery.error}
+                          variant={'inline'}
+                          onRetry={() => {
+                            void acceptanceQuery.mutate();
+                            if (acceptance?.id) void bundleQuery.mutate();
+                          }}
+                        />
                       ) : acceptanceQuery.isLoading || bundleQuery.isLoading ? (
                         <Text type={'secondary'}>{t('goalPage.loadingProgress')}</Text>
                       ) : presentation.total === 0 ? (
@@ -326,6 +344,13 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                       <Text fontSize={14} weight={600}>
                         {t('goalDetail.executionOverview')}
                       </Text>
+                      <Button
+                        size={'small'}
+                        type={'text'}
+                        onClick={() => navigateToTaskDetail(task.identifier, agentId)}
+                      >
+                        {t('goalDetail.viewPlan')}
+                      </Button>
                     </Flexbox>
                   </Flexbox>
                   <Flexbox gap={4}>

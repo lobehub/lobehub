@@ -30,6 +30,7 @@ import { documents } from '../schemas/file';
 import type { NewTaskComment, TaskCommentItem } from '../schemas/task';
 import { taskComments, taskDependencies, taskDocuments, tasks, taskTopics } from '../schemas/task';
 import { topics } from '../schemas/topic';
+import { acceptances } from '../schemas/verify';
 import { works } from '../schemas/work';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
@@ -434,6 +435,33 @@ export class TaskModel {
     return result.length;
   }
 
+  /** Delete a task and every descendant in one transaction. */
+  async deleteSubtree(rootTaskId: string): Promise<number> {
+    const descendants = await this.findAllDescendants(rootTaskId);
+    const taskIds = [rootTaskId, ...descendants.map(({ id }) => id)];
+
+    return this.db.transaction(async (tx) => {
+      await tx
+        .delete(acceptances)
+        .where(
+          and(
+            eq(acceptances.subjectType, 'task'),
+            inArray(acceptances.subjectId, taskIds),
+            buildWorkspaceWhere(
+              { userId: this.userId, workspaceId: this.workspaceId },
+              { userId: acceptances.userId, workspaceId: acceptances.workspaceId },
+            ),
+          ),
+        );
+      const result = await tx
+        .delete(tasks)
+        .where(and(inArray(tasks.id, taskIds), this.ownership()))
+        .returning({ id: tasks.id });
+
+      return result.length;
+    });
+  }
+
   // ========== Query ==========
 
   async groupList(options: {
@@ -519,20 +547,45 @@ export class TaskModel {
     const runStats =
       taskIds.length === 0
         ? []
-        : await this.db
-            .select({
-              taskId: taskTopics.taskId,
-              totalRunCost: sql<number>`coalesce(sum(${topics.totalCost}), 0)`.mapWith(Number),
-              totalRunDuration:
-                sql<number>`coalesce(sum(extract(epoch from (${topics.completedAt} - ${taskTopics.createdAt})) * 1000) filter (where ${topics.completedAt} is not null), 0)`.mapWith(
-                  Number,
-                ),
-            })
-            .from(taskTopics)
-            .innerJoin(topics, eq(topics.id, taskTopics.topicId))
-            .where(inArray(taskTopics.taskId, taskIds))
-            .groupBy(taskTopics.taskId);
-    const runStatsByTaskId = new Map(runStats.map((stats) => [stats.taskId, stats]));
+        : (
+            await this.db.execute<{
+              root_id: string;
+              total_run_cost: number;
+              total_run_duration: number;
+            }>(sql`
+              WITH RECURSIVE goal_tree AS (
+                SELECT ${tasks.id} AS root_id, ${tasks.id} AS task_id
+                FROM ${tasks}
+                WHERE ${inArray(tasks.id, taskIds)} AND ${this.ownership()}
+                UNION ALL
+                SELECT goal_tree.root_id, child.id
+                FROM ${tasks} child
+                JOIN goal_tree ON child.parent_task_id = goal_tree.task_id
+                WHERE ${this.ownershipSql('child')}
+              )
+              SELECT
+                goal_tree.root_id,
+                coalesce(sum(${topics.totalCost}), 0) AS total_run_cost,
+                coalesce(
+                  sum(extract(epoch from (${topics.completedAt} - ${taskTopics.createdAt})) * 1000)
+                    filter (where ${topics.completedAt} is not null),
+                  0
+                ) AS total_run_duration
+              FROM goal_tree
+              LEFT JOIN ${taskTopics} ON ${taskTopics.taskId} = goal_tree.task_id
+              LEFT JOIN ${topics} ON ${topics.id} = ${taskTopics.topicId}
+              GROUP BY goal_tree.root_id
+            `)
+          ).rows;
+    const runStatsByTaskId = new Map(
+      runStats.map((stats) => [
+        stats.root_id,
+        {
+          totalRunCost: Number(stats.total_run_cost),
+          totalRunDuration: Number(stats.total_run_duration),
+        },
+      ]),
+    );
 
     return results.map((group) => ({
       ...group,
@@ -546,6 +599,7 @@ export class TaskModel {
 
   async list(options?: {
     assigneeAgentId?: string;
+    hasGoal?: boolean;
     limit?: number;
     offset?: number;
     parentTaskId?: string | null;
@@ -563,6 +617,7 @@ export class TaskModel {
       priorities,
       parentTaskId,
       assigneeAgentId,
+      hasGoal,
       visibility,
       limit = 50,
       offset = 0,
@@ -573,6 +628,8 @@ export class TaskModel {
     if (statuses?.length) conditions.push(inArray(tasks.status, statuses));
     if (priorities?.length) conditions.push(inArray(tasks.priority, priorities));
     if (assigneeAgentId) conditions.push(eq(tasks.assigneeAgentId, assigneeAgentId));
+    if (hasGoal === true) conditions.push(sql`${tasks.config} -> 'goal' IS NOT NULL`);
+    if (hasGoal === false) conditions.push(sql`${tasks.config} -> 'goal' IS NULL`);
     if (visibility) conditions.push(eq(tasks.visibility, visibility));
 
     if (parentTaskId === null) {

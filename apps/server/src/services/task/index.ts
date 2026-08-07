@@ -53,6 +53,7 @@ export interface CreateTaskInput {
   assigneeAgentId?: string;
   assigneeUserId?: string;
   automationMode?: 'heartbeat' | 'schedule';
+  config?: Record<string, unknown>;
   // Runtime-state pockets stored on the task row (tasks.context JSONB). Used at
   // creation to record `context.origin` — the creator conversation pointer.
   context?: TaskContext;
@@ -152,7 +153,7 @@ export class TaskService {
     if (input.assigneeAgentId) {
       const agentInfo = await this.agentModel.getAgentSnapshotForTaskCreate(input.assigneeAgentId);
       if (agentInfo) {
-        if (agentInfo.snapshot) createData.config = agentInfo.snapshot;
+        if (agentInfo.snapshot) createData.config = { ...agentInfo.snapshot, ...createData.config };
         agentVisibility = agentInfo.visibility;
       }
     }

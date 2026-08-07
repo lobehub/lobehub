@@ -5,19 +5,44 @@ import type { StoreSetter } from '@/store/types';
 
 import type { GoalListFilter, GoalState, GoalViewMode } from './initialState';
 
-const GOAL_STATUSES = ['backlog', 'running', 'scheduled', 'paused', 'completed', 'failed'];
+const GOAL_STATUSES = [
+  'backlog',
+  'running',
+  'scheduled',
+  'paused',
+  'completed',
+  'failed',
+  'canceled',
+];
 
 export type GoalStore = GoalState & GoalAction;
 type Setter = StoreSetter<GoalStore>;
 
 export class GoalActionImpl {
+  readonly #get: () => GoalStore;
   readonly #set: Setter;
 
-  constructor(set: Setter, _get: () => GoalStore, _api?: unknown) {
-    void _get;
+  constructor(set: Setter, get: () => GoalStore, _api?: unknown) {
     void _api;
+    this.#get = get;
     this.#set = set;
   }
+
+  deleteGoal = async (agentId: string, goalId: string): Promise<void> => {
+    await taskService.deleteGoal(goalId);
+    const current = this.#get().goalListByAgentId[agentId] ?? [];
+    this.#set(
+      ({ goalListByAgentId }) => ({
+        goalListByAgentId: {
+          ...goalListByAgentId,
+          [agentId]: current.filter(({ id, identifier }) => id !== goalId && identifier !== goalId),
+        },
+      }),
+      false,
+      'deleteGoal/success',
+    );
+    await this.refreshGoals(agentId);
+  };
 
   loadMoreGoals = (): void => {
     this.#set(

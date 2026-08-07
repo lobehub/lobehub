@@ -3,7 +3,16 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agents, briefs, documents, tasks, topics, users, workspaces } from '../../schemas';
+import {
+  acceptances,
+  agents,
+  briefs,
+  documents,
+  tasks,
+  topics,
+  users,
+  workspaces,
+} from '../../schemas';
 import { taskTopics } from '../../schemas/task';
 import { works } from '../../schemas/work';
 import type { LobeChatDatabase } from '../../type';
@@ -503,6 +512,59 @@ describe('TaskModel', () => {
 
       expect(measuredTask?.totalRunCost).toBeCloseTo(0.04);
       expect(measuredTask?.totalRunDuration).toBe(240_000);
+    });
+
+    it('should aggregate descendant run metrics into the root goal', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const root = await model.create({ instruction: 'Root goal' });
+      const child = await model.create({ instruction: 'Delegated work', parentTaskId: root.id });
+      const startedAt = new Date('2026-08-06T10:00:00.000Z');
+
+      await serverDB.insert(topics).values({
+        completedAt: new Date('2026-08-06T10:02:00.000Z'),
+        id: 'descendant-goal-run',
+        totalCost: 0.05,
+        userId,
+      });
+      await serverDB.insert(taskTopics).values({
+        createdAt: startedAt,
+        seq: 1,
+        taskId: child.id,
+        topicId: 'descendant-goal-run',
+        userId,
+      });
+
+      const [group] = await model.groupList({
+        groups: [{ key: 'goals', statuses: ['backlog'] }],
+        parentTaskId: null,
+      });
+      const measuredRoot = group.tasks.find(({ id }) => id === root.id);
+
+      expect(measuredRoot?.totalRunCost).toBeCloseTo(0.05);
+      expect(measuredRoot?.totalRunDuration).toBe(120_000);
+    });
+  });
+
+  describe('deleteSubtree', () => {
+    it('should delete the root and all descendants without leaving orphan tasks', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const root = await model.create({ instruction: 'Root goal' });
+      const child = await model.create({ instruction: 'Child', parentTaskId: root.id });
+      const grandchild = await model.create({ instruction: 'Grandchild', parentTaskId: child.id });
+      await serverDB.insert(acceptances).values({
+        subjectId: grandchild.id,
+        subjectType: 'task',
+        userId,
+      });
+
+      await expect(model.deleteSubtree(root.id)).resolves.toBe(3);
+      await expect(model.findAllDescendants(root.id)).resolves.toEqual([]);
+      await expect(model.findById(root.id)).resolves.toBeNull();
+      const remainingAcceptances = await serverDB
+        .select()
+        .from(acceptances)
+        .where(eq(acceptances.subjectId, grandchild.id));
+      expect(remainingAcceptances).toEqual([]);
     });
   });
 

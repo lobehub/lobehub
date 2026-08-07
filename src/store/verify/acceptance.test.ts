@@ -25,6 +25,13 @@ describe('Acceptance store', () => {
     });
   });
 
+  it('does not poll indefinitely when a subject has no acceptance', () => {
+    useVerifyStore.getState().useFetchAcceptanceBySubject('task', 'task-without-acceptance');
+    const options = vi.mocked(useClientDataSWR).mock.calls[0][2];
+
+    expect(options).not.toHaveProperty('refreshInterval');
+  });
+
   it('caches bundles by acceptance id', () => {
     useVerifyStore.getState().useFetchAcceptanceBundle('acceptance-1');
     const options = vi.mocked(useClientDataSWR).mock.calls[0][2] as {

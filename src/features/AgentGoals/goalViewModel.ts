@@ -54,6 +54,9 @@ export const goalStatusToTaskStatus = (statusKey: string) => {
     case 'goalList.status.error': {
       return 'failed';
     }
+    case 'goalList.status.canceled': {
+      return 'canceled';
+    }
     case 'goalList.status.paused':
     case 'goalList.status.review': {
       return 'paused';

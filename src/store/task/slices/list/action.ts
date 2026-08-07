@@ -137,6 +137,7 @@ export class TaskListSliceActionImpl {
         return taskService.groupList({
           assigneeAgentId: allAgents ? undefined : agentId,
           groups: DEFAULT_KANBAN_GROUPS,
+          hasGoal: false,
           visibility: filterToServerVisibility(listVisibility),
         });
       },
@@ -187,6 +188,7 @@ export class TaskListSliceActionImpl {
       async ([, id]: [string, string]) => {
         return this.fetchTaskList({
           ...(allAgents ? {} : { assigneeAgentId: id }),
+          hasGoal: false,
           visibility: filterToServerVisibility(listVisibility),
         });
       },

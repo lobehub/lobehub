@@ -3,10 +3,10 @@ import { confirmModal, type DropdownItem, DropdownMenu, toast } from '@lobehub/u
 import { CopyIcon, LinkIcon, MoreHorizontalIcon, TrashIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
-import { useTaskStore } from '@/store/task';
+import { useGoalStore } from '@/store/goal';
 
 interface GoalDetailActionsProps {
   agentId: string;
@@ -15,9 +15,9 @@ interface GoalDetailActionsProps {
 
 const GoalDetailActions = memo<GoalDetailActionsProps>(({ agentId, goalId }) => {
   const { t } = useTranslation(['chat', 'common']);
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const { allowed: canEditTask } = usePermission('create_content');
-  const deleteTask = useTaskStore((s) => s.deleteTask);
+  const deleteGoal = useGoalStore((s) => s.deleteGoal);
 
   const items = useMemo<DropdownItem[]>(
     () => [
@@ -52,7 +52,7 @@ const GoalDetailActions = memo<GoalDetailActionsProps>(({ agentId, goalId }) => 
             okButtonProps: { danger: true },
             okText: t('goalDetail.deleteConfirm.ok'),
             onOk: async () => {
-              await deleteTask(goalId);
+              await deleteGoal(agentId, goalId);
               navigate(`/agent/${agentId}/goals`);
             },
             title: t('goalDetail.deleteConfirm.title'),
@@ -60,7 +60,7 @@ const GoalDetailActions = memo<GoalDetailActionsProps>(({ agentId, goalId }) => 
         },
       },
     ],
-    [agentId, canEditTask, deleteTask, goalId, navigate, t],
+    [agentId, canEditTask, deleteGoal, goalId, navigate, t],
   );
 
   return (

@@ -58,6 +58,7 @@ const createSchema = z.object({
   // 'schedule', `schedulePattern` (cron) is required for the central
   // schedule-dispatch sweep to pick the task up.
   automationMode: z.enum(['heartbeat', 'schedule']).optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
   createdByAgentId: z.string().optional(),
   description: z.string().optional(),
   editorData: z.unknown().optional(),
@@ -104,6 +105,7 @@ const updateSchema = z.object({
 
 const listSchema = z.object({
   assigneeAgentId: z.string().optional(),
+  hasGoal: z.boolean().optional(),
   limit: z.number().min(1).max(100).default(50),
   offset: z.number().min(0).default(0),
   parentIdentifier: z.string().optional(),
@@ -452,6 +454,27 @@ export const taskRouter = router({
         cause: error,
         code: 'INTERNAL_SERVER_ERROR',
         message: 'Failed to delete task',
+      });
+    }
+  }),
+
+  deleteGoal: taskProcedureWrite.input(idInput).mutation(async ({ input, ctx }) => {
+    try {
+      const model = ctx.taskModel;
+      const task = await resolveOrThrow(model, input.id);
+      if (!(task.config as { goal?: unknown } | null)?.goal) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Task is not a goal root' });
+      }
+      assertWorkspaceRowManageable(ctx, task.createdByUserId, 'task');
+      const count = await model.deleteSubtree(task.id);
+      return { count, data: task, message: 'Goal deleted', success: true };
+    } catch (error) {
+      if (error instanceof TRPCError) throw error;
+      console.error('[task:deleteGoal]', error);
+      throw new TRPCError({
+        cause: error,
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to delete goal',
       });
     }
   }),

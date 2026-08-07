@@ -3,12 +3,13 @@
 import { ActionIcon, Block, Empty, Flexbox, Tag, Text } from '@lobehub/ui';
 import { Button, Segmented } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { LayoutGridIcon, ListIcon, RefreshCwIcon } from 'lucide-react';
+import { LayoutGridIcon, ListIcon, PlusIcon, RefreshCwIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
+import { createTaskModal } from '@/features/AgentTasks/CreateTaskModal';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { goalSelectors, useGoalStore } from '@/store/goal';
@@ -93,10 +94,26 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId }) => {
   }, [acceptanceBundleMap, acceptanceBySubjectMap, filter, goals]);
   const visibleGoalCount = filteredGoals.length;
   const GoalItem = viewMode === 'list' ? GoalListItem : GoalCardItem;
+  const openCreateGoal = () => {
+    createTaskModal({
+      agentId,
+      goal: true,
+      lockAssignee: true,
+      showInlineToggle: false,
+      onCreated: () => void refreshGoals(agentId),
+    });
+  };
 
   return (
     <Flexbox flex={1} height={'100%'}>
-      <NavHeader left={<AgentBreadcrumb agentId={agentId} title={t('goalList.title')} />} />
+      <NavHeader
+        left={<AgentBreadcrumb agentId={agentId} title={t('goalList.title')} />}
+        right={
+          <Button icon={PlusIcon} size={'small'} onClick={openCreateGoal}>
+            {t('goalPage.create')}
+          </Button>
+        }
+      />
       <WideScreenContainer
         flex={1}
         gap={16}
@@ -118,7 +135,11 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId }) => {
           </Flexbox>
         ) : goals.length === 0 ? (
           <Block padding={32} variant={'outlined'}>
-            <Empty description={t('goalPage.emptyDescription')} title={t('goalPage.emptyTitle')} />
+            <Empty description={t('goalPage.emptyDescription')} title={t('goalPage.emptyTitle')}>
+              <Button icon={PlusIcon} onClick={openCreateGoal}>
+                {t('goalPage.create')}
+              </Button>
+            </Empty>
           </Block>
         ) : (
           <>
@@ -201,9 +222,20 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId }) => {
                 </Flexbox>
               </Flexbox>
               <div className={viewMode === 'card' ? styles.list : styles.listRows}>
-                {filteredGoals.slice(0, visibleLimit).map((goal) => (
-                  <GoalItem hideAchieved={filter === 'active'} key={goal.id} task={goal} />
-                ))}
+                {filteredGoals.length === 0 ? (
+                  <Block padding={32} variant={'outlined'}>
+                    <Empty
+                      description={t('goalPage.filteredEmptyDescription')}
+                      title={t('goalPage.filteredEmptyTitle')}
+                    />
+                  </Block>
+                ) : (
+                  filteredGoals
+                    .slice(0, visibleLimit)
+                    .map((goal) => (
+                      <GoalItem hideAchieved={filter === 'active'} key={goal.id} task={goal} />
+                    ))
+                )}
               </div>
               {visibleLimit < filteredGoals.length && (
                 <Flexbox align={'center'} paddingBlock={8}>

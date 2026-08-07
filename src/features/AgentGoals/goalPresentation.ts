@@ -46,6 +46,9 @@ const taskStatusKey = (status: string) => {
     case 'paused': {
       return 'goalList.status.paused';
     }
+    case 'canceled': {
+      return 'goalList.status.canceled';
+    }
     case 'scheduled': {
       return 'goalList.status.waiting';
     }
