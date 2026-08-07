@@ -709,12 +709,14 @@ export const userRouter = router({
 
   updateSettings: userProcedure.input(UserSettingsSchema).mutation(async ({ ctx, input }) => {
     const { keyVaults, ...res } = input as Partial<UserSettings>;
+    // presence, not truthiness: `keyVaults: null` is an explicit credential clear
+    const hasKeyVaultsUpdate = 'keyVaults' in (input as Partial<UserSettings>);
 
     // `keyVaults` are provider/tool credentials consumed by runtime auth — a
     // restricted key needs `model:write` on top of the namespace's
-    // `user:write` to touch them (full-access keys pass through).
+    // `user:write` to touch (or clear) them; full-access keys pass through.
     if (
-      keyVaults &&
+      hasKeyVaultsUpdate &&
       ctx.apiKeyScopes !== undefined &&
       !isFullAccessApiKey(ctx.apiKeyScopes) &&
       !hasApiKeyScope(ctx.apiKeyScopes, 'model:write')
@@ -744,18 +746,23 @@ export const userRouter = router({
       }
     }
 
-    // Encrypt keyVaults
-    let encryptedKeyVaults: string | null = null;
+    // Encrypt keyVaults; only touch the column when the caller sent the field,
+    // so a settings update without `keyVaults` no longer clears stored creds
+    const nextValue: Record<string, unknown> = { ...res };
 
-    if (keyVaults) {
-      // TODO: better to add a validation
-      const data = JSON.stringify(keyVaults);
-      const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+    if (hasKeyVaultsUpdate) {
+      let encryptedKeyVaults: string | null = null;
 
-      encryptedKeyVaults = await gateKeeper.encrypt(data);
+      if (keyVaults) {
+        // TODO: better to add a validation
+        const data = JSON.stringify(keyVaults);
+        const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+
+        encryptedKeyVaults = await gateKeeper.encrypt(data);
+      }
+
+      nextValue.keyVaults = encryptedKeyVaults;
     }
-
-    const nextValue = { ...res, keyVaults: encryptedKeyVaults };
 
     return ctx.userModel.updateSetting(nextValue);
   }),

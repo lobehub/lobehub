@@ -639,6 +639,28 @@ describe('userRouter', () => {
       });
     });
 
+    it('rejects keyVaults clears (null) from restricted keys without model:write', async () => {
+      await expect(
+        namespacedRouter
+          .createCaller({ ...mockCtx, apiKeyScopes: ['user:write'] })
+          .user.updateSettings({ keyVaults: null } as any),
+      ).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: expect.stringContaining('model:write'),
+      });
+    });
+
+    it('does not touch stored keyVaults when the field is omitted', async () => {
+      const updateSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
+      vi.mocked(UserModel).mockImplementation(() => ({ updateSetting }) as any);
+
+      await userRouter.createCaller({ ...mockCtx }).updateSettings({
+        general: { language: 'en-US' },
+      } as any);
+
+      expect(updateSetting.mock.calls[0][0]).not.toHaveProperty('keyVaults');
+    });
+
     it('allows keyVaults updates from restricted keys holding model:write', async () => {
       const mockGateKeeper = { encrypt: vi.fn().mockResolvedValue('encrypted') };
       vi.mocked(KeyVaultsGateKeeper.initWithEnvKey).mockResolvedValue(mockGateKeeper as any);

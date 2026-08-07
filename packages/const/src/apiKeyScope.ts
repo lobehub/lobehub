@@ -304,6 +304,12 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
   'comfyui.createImage': ['model:invoke'],
   // extracts follow-up actions via `AiGenerationService.generateObject`
   'followUpAction.extract': ['model:invoke'],
+  // asset cleanup/organization is file management, not model invocation —
+  // a model-only key must not delete or reorganize generated assets
+  'generation.deleteGeneration': ['file:write'],
+  'generationBatch.deleteGenerationBatch': ['file:write'],
+  'generationTopic.deleteTopic': ['file:write'],
+  'generationTopic.updateTopic': ['file:write'],
   // executes a server-side MCP tool call with caller-supplied endpoint/args —
   // a model-only key must not trigger arbitrary tool side effects
   'mcp.callTool': ['agent:write'],
@@ -323,6 +329,8 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
   // schedules the full memory-extraction workflow (embeddings + per-layer
   // `generateObject`), unlike the accepted search/re-embed embedding tradeoff
   'userMemory.requestMemoryFromChatTopic': ['model:invoke'],
+  // persists crawled pages as `documents` rows — a knowledge write
+  'webBrowsing.upsertCrawledDocument': ['knowledge:write'],
 };
 
 export type TrpcScopeDecision = { scopes: ApiKeyScope[] } | { open: true } | { blocked: true };

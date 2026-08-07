@@ -12,13 +12,15 @@ const ResponsesRoutes = new Hono();
  * POST /api/v1/responses
  * Create a model response (OpenResponses protocol)
  *
- * The only money-burning endpoint on this surface: restricted API keys must
- * hold `model:invoke` to reach it.
+ * Burns model quota AND runs through `AiAgentService.execAgent`, which
+ * persists topic/message state — so restricted keys need the same
+ * `model:invoke` + `chat:write` pair as the tRPC agent-run entries.
  */
 ResponsesRoutes.post(
   '/',
   requireAuth,
   requireApiKeyScope('model:invoke'),
+  requireApiKeyScope('chat:write'),
   zValidator('json', CreateResponseRequestSchema),
   async (c) => {
     const controller = new ResponsesController();
