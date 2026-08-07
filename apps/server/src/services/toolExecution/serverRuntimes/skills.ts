@@ -276,12 +276,18 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     for (const activatedSkill of activatedSkills) {
       if (!activatedSkill.name) continue;
 
-      let skill = await this.skillModel.findByName(activatedSkill.name);
+      // /skill slash-preloaded skills persist the identifier (the stable
+      // canonical key, which may differ from the DB display name). Resolve by
+      // identifier BEFORE name so a skill whose identifier collides with
+      // another skill's display name doesn't resolve to the wrong archive.
+      // The activateSkill path carries no identifier, so it still resolves by
+      // name exactly as before.
+      let skill = activatedSkill.identifier
+        ? await this.skillModel.findByIdentifier(activatedSkill.identifier)
+        : undefined;
 
-      // /skill slash-preloaded skills persist only the identifier (no DB id),
-      // and identifier may differ from name — fall back to findByIdentifier.
-      if (!skill && activatedSkill.identifier) {
-        skill = await this.skillModel.findByIdentifier(activatedSkill.identifier);
+      if (!skill) {
+        skill = await this.skillModel.findByName(activatedSkill.name);
       }
 
       if (!skill) {

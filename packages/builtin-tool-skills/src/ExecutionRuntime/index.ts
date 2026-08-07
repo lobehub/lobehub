@@ -42,7 +42,12 @@ export interface SkillRuntimeService {
   execScript?: (
     command: string,
     options: {
-      activatedSkills?: Array<{ description?: string; id?: string; name: string }>;
+      activatedSkills?: Array<{
+        description?: string;
+        id?: string;
+        identifier?: string;
+        name: string;
+      }>;
       description: string;
     },
   ) => Promise<CommandResult>;

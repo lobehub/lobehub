@@ -530,6 +530,88 @@ describe('extractActivatedSkillsFromMessages', () => {
 
     expect(extractActivatedSkillsFromMessages(messages)).toBeUndefined();
   });
+
+  // Regression: /skill slash-preloaded skills are scoped to the CURRENT
+  // request (SelectedSkillInjector marks them "for this request"). A skill
+  // slash-selected in an earlier request must NOT leak into a later request
+  // that didn't select it — only the latest user message's tags are parsed.
+  it('should not leak slash-preloaded skills from an earlier user message', () => {
+    const messages = [
+      createMessage({
+        content:
+          '<selected_skills>\n  <skill identifier="pdf-tools" name="PDF Tools" />\n</selected_skills>',
+        role: 'user',
+      } as any),
+      createMessage({ content: 'now do something unrelated', role: 'user' } as any),
+    ];
+
+    expect(extractActivatedSkillsFromMessages(messages)).toBeUndefined();
+  });
+
+  it('should parse only the latest user message slash selection', () => {
+    const messages = [
+      createMessage({
+        content:
+          '<selected_skills>\n  <skill identifier="pdf-tools" name="PDF Tools" />\n</selected_skills>',
+        role: 'user',
+      } as any),
+      createMessage({
+        content:
+          '<selected_skills>\n  <skill identifier="xlsx-tools" name="XLSX Tools" />\n</selected_skills>',
+        role: 'user',
+      } as any),
+    ];
+
+    expect(extractActivatedSkillsFromMessages(messages)).toEqual([
+      { identifier: 'xlsx-tools', name: 'xlsx-tools' },
+    ]);
+  });
+
+  // Explicit activateSkill activations accumulate across the whole
+  // conversation, while slash-preloaded ones are request-scoped — a slash
+  // selection in an earlier request drops out, but an activateSkill from that
+  // same earlier request persists into the current one.
+  it('should keep activateSkill activations but drop earlier slash selections', () => {
+    const messages = [
+      createToolMessage({
+        plugin: { apiName: 'activateSkill', identifier: 'lobe-skills' },
+        pluginState: { id: 'skl_1', name: 'pdf' },
+      } as any),
+      createMessage({
+        content:
+          '<selected_skills>\n  <skill identifier="xlsx-tools" name="XLSX Tools" />\n</selected_skills>',
+        role: 'user',
+      } as any),
+      createMessage({ content: 'follow-up request with no selection', role: 'user' } as any),
+    ];
+
+    expect(extractActivatedSkillsFromMessages(messages)).toEqual([
+      { description: undefined, id: 'skl_1', name: 'pdf' },
+    ]);
+  });
+
+  // "Last activation wins the cwd" must hold across BOTH sources: when the
+  // user slash-selects A and the agent then calls activateSkill(B) in the SAME
+  // turn, B is the more recent activation and must win — the slash entry must
+  // NOT be appended after the later tool result.
+  it('should let a same-turn activateSkill win the cwd over the request slash selection', () => {
+    const messages = [
+      createMessage({
+        content:
+          '<selected_skills>\n  <skill identifier="pdf-tools" name="PDF Tools" />\n</selected_skills>',
+        role: 'user',
+      } as any),
+      createToolMessage({
+        plugin: { apiName: 'activateSkill', identifier: 'lobe-skills' },
+        pluginState: { id: 'skl_1', name: 'xlsx' },
+      } as any),
+    ];
+
+    expect(extractActivatedSkillsFromMessages(messages)).toEqual([
+      { identifier: 'pdf-tools', name: 'pdf-tools' },
+      { description: undefined, id: 'skl_1', name: 'xlsx' },
+    ]);
+  });
 });
 
 describe('extractActivatedToolIdsFromMessages', () => {

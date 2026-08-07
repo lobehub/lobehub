@@ -30,13 +30,15 @@ class DesktopSkillRuntimeService {
   private async resolveSkill(params: { id?: string; identifier?: string; name?: string }) {
     const skillById = params.id ? await agentSkillService.getById(params.id) : undefined;
     if (skillById) return skillById;
-    const skillByName = params.name ? await agentSkillService.getByName(params.name) : undefined;
-    if (skillByName) return skillByName;
-    // Fallback for /skill slash-preloaded skills: their persisted tag carries
-    // only the identifier (no DB id), and identifier may differ from name.
-    return params.identifier
-      ? await agentSkillService.getByIdentifier(params.identifier)
-      : undefined;
+    // /skill slash-preloaded skills persist the identifier (the stable canonical
+    // key, which may differ from the DB display name). Resolve by identifier
+    // BEFORE name so a skill whose identifier collides with another skill's
+    // display name doesn't resolve to the wrong package.
+    if (params.identifier) {
+      const skillByIdentifier = await agentSkillService.getByIdentifier(params.identifier);
+      if (skillByIdentifier) return skillByIdentifier;
+    }
+    return params.name ? await agentSkillService.getByName(params.name) : undefined;
   }
 
   async resolveExecutionDirectory(
