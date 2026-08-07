@@ -2,6 +2,7 @@ export const PROJECT_STATUSES = [
   'backlog',
   'active',
   'paused',
+  'reviewing',
   'completed',
   'canceled',
   'archived',

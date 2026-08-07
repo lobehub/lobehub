@@ -66,6 +66,7 @@ const createSchema = z.object({
   name: z.string().optional(),
   parentTaskId: z.string().optional(),
   priority: z.number().min(0).max(4).optional(),
+  projectId: z.string().optional(),
   schedulePattern: z.string().optional(),
   scheduleTimezone: z.string().optional(),
   // When omitted, the server derives visibility from the parent task or the
@@ -343,6 +344,12 @@ export const taskRouter = router({
         const model = ctx.taskModel;
         const task = await resolveOrThrow(model, input.taskId);
         const dep = await resolveOrThrow(model, input.dependsOnId);
+        if (task.projectId !== dep.projectId && (task.projectId || dep.projectId)) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Task dependencies cannot cross project boundaries',
+          });
+        }
         await model.addDependency(task.id, dep.id, input.type);
         return { message: 'Dependency added', success: true };
       } catch (error) {
