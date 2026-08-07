@@ -262,7 +262,20 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   workspaceUserSettings: rw('workspace:read', 'workspace:write'),
 };
 
-export type TrpcScopeDecision = { scope: ApiKeyScope } | { open: true } | { blocked: true };
+/**
+ * Procedure-level extra scope requirements, keyed by the full
+ * `namespace.procedure` path. Applied ON TOP of the namespace rule — the key
+ * must satisfy both. Use this when a procedure has a side effect its namespace
+ * scope does not capture, e.g. a knowledge-write mutation that internally
+ * invokes a model.
+ */
+export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope> = {
+  // prefills the convert-to-skill form via an LLM call
+  // (`SystemAgentService.generateSkillMeta` → `modelRuntime.generateObject`)
+  'agentDocument.generateSkillMeta': 'model:invoke',
+};
+
+export type TrpcScopeDecision = { scopes: ApiKeyScope[] } | { open: true } | { blocked: true };
 
 /**
  * Decide what a restricted API key needs to call `path` (`namespace.proc`).
@@ -276,11 +289,17 @@ export const requiredApiKeyScopeForTrpc = (
   const namespace = path.split('.')[0];
   const rule = TRPC_NAMESPACE_API_KEY_RULES[namespace];
 
-  if (!rule) return { blocked: true };
-  if (rule === 'open') return { open: true };
-  if (rule === 'blocked') return { blocked: true };
-  if ('any' in rule) return { scope: rule.any };
+  if (!rule || rule === 'blocked') return { blocked: true };
 
-  const scope = type === 'query' ? rule.read : rule.write;
-  return scope ? { scope } : { blocked: true };
+  const base =
+    rule === 'open' ? null : 'any' in rule ? rule.any : type === 'query' ? rule.read : rule.write;
+
+  // a namespace half with no scope grants nothing to restricted keys
+  if (rule !== 'open' && !base) return { blocked: true };
+
+  const scopes = [
+    ...new Set([base, TRPC_PROCEDURE_EXTRA_SCOPES[path]].filter(Boolean)),
+  ] as ApiKeyScope[];
+
+  return scopes.length > 0 ? { scopes } : { open: true };
 };

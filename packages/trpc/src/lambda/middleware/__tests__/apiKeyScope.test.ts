@@ -15,6 +15,10 @@ const testRouter = trpc.router({
     createAgent: guarded.mutation(() => 'created'),
     getAgents: guarded.query(() => 'agents'),
   }),
+  agentDocument: trpc.router({
+    // carries a procedure-level extra scope (model:invoke) on top of knowledge:write
+    generateSkillMeta: guarded.mutation(() => 'meta'),
+  }),
   aiChat: trpc.router({
     sendMessage: guarded.mutation(() => 'sent'),
   }),
@@ -98,6 +102,20 @@ describe('apiKeyScopeGuard', () => {
       await expect(caller.unknownNamespace.doThing()).rejects.toMatchObject({
         code: 'FORBIDDEN',
       });
+    });
+
+    it('requires procedure-level extra scopes on top of the namespace scope', async () => {
+      const withoutInvoke = createCaller({ apiKeyScopes: ['knowledge:write'], userId: 'u' } as any);
+      await expect(withoutInvoke.agentDocument.generateSkillMeta()).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: expect.stringContaining('model:invoke'),
+      });
+
+      const withBoth = createCaller({
+        apiKeyScopes: ['knowledge:write', 'model:invoke'],
+        userId: 'u',
+      } as any);
+      await expect(withBoth.agentDocument.generateSkillMeta()).resolves.toBe('meta');
     });
 
     it('keeps bootstrap namespaces open', async () => {

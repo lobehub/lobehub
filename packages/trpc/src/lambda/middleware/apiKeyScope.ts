@@ -37,10 +37,11 @@ export const apiKeyScopeGuard = trpc.middleware(async ({ ctx, path, type, next }
     });
   }
 
-  if (!hasApiKeyScope(scopes, decision.scope)) {
+  const missing = decision.scopes.filter((scope) => !hasApiKeyScope(scopes, scope));
+  if (missing.length > 0) {
     throw new TRPCError({
       code: 'FORBIDDEN',
-      message: `This API key cannot access '${path}': missing required scope '${decision.scope}'.`,
+      message: `This API key cannot access '${path}': missing required scope '${missing.join("', '")}'.`,
     });
   }
 

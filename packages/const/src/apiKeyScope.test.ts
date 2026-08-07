@@ -8,6 +8,7 @@ import {
   requiredApiKeyScopeForPermission,
   requiredApiKeyScopeForTrpc,
   TRPC_NAMESPACE_API_KEY_RULES,
+  TRPC_PROCEDURE_EXTRA_SCOPES,
 } from './apiKeyScope';
 
 describe('isValidApiKeyScope', () => {
@@ -84,20 +85,32 @@ describe('requiredApiKeyScopeForPermission', () => {
 describe('requiredApiKeyScopeForTrpc', () => {
   it('derives read/write from operation type', () => {
     expect(requiredApiKeyScopeForTrpc('agent.getAgents', 'query')).toEqual({
-      scope: 'agent:read',
+      scopes: ['agent:read'],
     });
     expect(requiredApiKeyScopeForTrpc('agent.createAgent', 'mutation')).toEqual({
-      scope: 'agent:write',
+      scopes: ['agent:write'],
     });
-    expect(requiredApiKeyScopeForTrpc('topic.getTopics', 'query')).toEqual({ scope: 'chat:read' });
+    expect(requiredApiKeyScopeForTrpc('topic.getTopics', 'query')).toEqual({
+      scopes: ['chat:read'],
+    });
   });
 
   it('uses a single tier for money-burning namespaces', () => {
     expect(requiredApiKeyScopeForTrpc('aiChat.sendMessageInServer', 'mutation')).toEqual({
-      scope: 'model:invoke',
+      scopes: ['model:invoke'],
     });
     expect(requiredApiKeyScopeForTrpc('image.createImage', 'mutation')).toEqual({
-      scope: 'model:invoke',
+      scopes: ['model:invoke'],
+    });
+  });
+
+  it('stacks procedure-level extra scopes on the namespace rule', () => {
+    expect(requiredApiKeyScopeForTrpc('agentDocument.generateSkillMeta', 'mutation')).toEqual({
+      scopes: ['knowledge:write', 'model:invoke'],
+    });
+    // sibling procedures in the namespace are untouched
+    expect(requiredApiKeyScopeForTrpc('agentDocument.createDocument', 'mutation')).toEqual({
+      scopes: ['knowledge:write'],
     });
   });
 
@@ -115,7 +128,7 @@ describe('requiredApiKeyScopeForTrpc', () => {
 
   it('blocks the write half when only read is granted to the namespace', () => {
     expect(requiredApiKeyScopeForTrpc('workspaceMember.list', 'query')).toEqual({
-      scope: 'workspace:read',
+      scopes: ['workspace:read'],
     });
     expect(requiredApiKeyScopeForTrpc('workspaceMember.remove', 'mutation')).toEqual({
       blocked: true,
@@ -142,6 +155,14 @@ describe('requiredApiKeyScopeForTrpc', () => {
       }
       if (rule.read) expect(isValidApiKeyScope(rule.read)).toBe(true);
       if (rule.write) expect(isValidApiKeyScope(rule.write)).toBe(true);
+    }
+  });
+
+  it('every extra-scope path targets a registered namespace and catalog scope', () => {
+    for (const [path, scope] of Object.entries(TRPC_PROCEDURE_EXTRA_SCOPES)) {
+      const namespace = path.split('.')[0];
+      expect(TRPC_NAMESPACE_API_KEY_RULES[namespace]).toBeDefined();
+      expect(isValidApiKeyScope(scope)).toBe(true);
     }
   });
 });
