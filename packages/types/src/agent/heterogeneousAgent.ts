@@ -70,7 +70,11 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
       docsUrl: 'https://docs.anthropic.com/en/docs/claude-code/setup',
       errorMessage:
         'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
-      patterns: COMMON_AUTH_REQUIRED_PATTERNS,
+      // Current Claude Code builds can emit this as plain process output before
+      // the structured result event reaches the adapter. Keep it in the shared
+      // process classifier so server-side `heteroFinish` can still recover the
+      // dedicated auth-required error card from a flattened payload.
+      patterns: [...COMMON_AUTH_REQUIRED_PATTERNS, 'not logged in'],
       signInCommand: 'claude',
     },
     defaultCommand: 'claude',

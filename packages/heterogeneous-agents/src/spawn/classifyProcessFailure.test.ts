@@ -154,6 +154,15 @@ describe('classifyHeteroProcessFailure', () => {
     ).toBeUndefined();
   });
 
+  it('classifies Claude Code not-logged-in output without relying on the adapter', () => {
+    expect(
+      classifyHeteroProcessFailure({
+        agentType: 'claude-code',
+        detail: 'Not logged in · Please run /login',
+      }),
+    ).toMatchObject({ agentType: 'claude-code', code: 'auth_required' });
+  });
+
   it('does NOT treat an in-run ENOENT (no spawn context) as cli_not_found', () => {
     const result = classifyHeteroProcessFailure({
       agentType: 'claude-code',
