@@ -1,12 +1,16 @@
 /**
  * @vitest-environment happy-dom
  */
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render as rtlRender, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PendingAcceptanceCheckList } from './PendingAcceptanceCheckList';
 import TaskAcceptance from './TaskAcceptance';
+
+// The section links out to the acceptance report, so it needs router context.
+const render = (ui: ReactNode) => rtlRender(<MemoryRouter>{ui}</MemoryRouter>);
 
 const mocks = vi.hoisted(() => ({
   acceptanceSubject: null as null | { id: string },
@@ -25,6 +29,8 @@ const mocks = vi.hoisted(() => ({
   currentPortalView: null as null | string,
   mutateBundle: vi.fn(),
   mutateSubject: vi.fn(),
+  navigate: vi.fn(),
+  openAcceptance: vi.fn(),
   openAcceptanceCheck: vi.fn(),
   subjectArgs: [] as unknown[],
   toggleTaskAgentPanel: vi.fn(),
@@ -55,6 +61,10 @@ vi.mock('@lobehub/ui/base-ui', () => ({
       {children}
     </button>
   ),
+}));
+
+vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
+  useWorkspaceAwareNavigate: () => mocks.navigate,
 }));
 
 vi.mock('antd', () => ({
@@ -120,7 +130,10 @@ vi.mock('@/services/verify', () => ({
 
 vi.mock('@/store/chat', () => ({
   useChatStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ openAcceptanceCheck: mocks.openAcceptanceCheck }),
+    selector({
+      openAcceptance: mocks.openAcceptance,
+      openAcceptanceCheck: mocks.openAcceptanceCheck,
+    }),
 }));
 
 vi.mock('@/store/chat/selectors', () => ({
@@ -225,6 +238,21 @@ describe('TaskAcceptance', () => {
     fireEvent.click(screen.getByText('Create task'));
     expect(mocks.toggleTaskAgentPanel).toHaveBeenCalledWith(true);
     expect(mocks.openAcceptanceCheck).toHaveBeenCalledWith('acceptance-1', 'c1');
+  });
+
+  it('opens the acceptance report in the panel rather than navigating away', () => {
+    mocks.acceptanceSubject = { id: 'acceptance-1' };
+    mocks.bundle = {
+      acceptance: { id: 'acceptance-1', requirement: 'Everything is verifiable.' },
+      checks: [{ category: 'Setup', id: 'c1', seq: 1, title: 'Create task' }],
+      isOwner: true,
+    };
+
+    render(<TaskAcceptance />);
+
+    fireEvent.click(screen.getByText('taskDetail.acceptance.openReport'));
+    expect(mocks.toggleTaskAgentPanel).toHaveBeenCalledWith(true);
+    expect(mocks.openAcceptance).toHaveBeenCalledWith('acceptance-1');
   });
 
   it('groups a checklist with more than 10 checks', () => {

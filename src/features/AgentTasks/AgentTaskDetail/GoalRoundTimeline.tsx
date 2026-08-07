@@ -50,14 +50,19 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorInfoBgHover};
 
-    transition: opacity 0.15s;
+    transition:
+      transform 0.15s,
+      filter 0.15s;
 
     &[data-active='true'] {
       background: ${cssVar.colorInfo};
     }
 
+    /* Grow vertically and brighten — never horizontally: width is what encodes
+      the round's duration, so stretching it on hover would lie about the data. */
     &:hover {
-      opacity: 0.75;
+      transform: scaleY(1.45);
+      filter: brightness(1.25);
     }
   `,
   total: css`

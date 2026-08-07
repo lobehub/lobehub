@@ -181,12 +181,6 @@ const styles = createStaticStyles(({ css }) => ({
       background: ${cssVar.colorFillSecondary};
     }
   `,
-  descClamp: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-  `,
   evidenceImage: css`
     overflow: hidden;
 
@@ -1105,8 +1099,11 @@ const CheckRow = memo<{
             paddingBlock={detailMode ? 0 : '0 14px'}
             paddingInline={detailMode ? 0 : 16}
           >
+            {/* The verifier's account of what it saw. Clamping it to two lines
+              hid the middle of the argument behind an ellipsis with no way to
+              open it — in a detail view there is nothing to preview. */}
             {check.result?.toulmin?.evidence && (
-              <Text className={styles.descClamp} fontSize={12} type={'secondary'}>
+              <Text fontSize={12} style={{ whiteSpace: 'pre-wrap' }} type={'secondary'}>
                 {check.result.toulmin.evidence}
               </Text>
             )}

@@ -3,7 +3,7 @@
 import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CircleCheck, CircleDashed, CircleX } from 'lucide-react';
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useVerifyResults } from '@/features/Verify';
@@ -39,7 +39,11 @@ const verdictIcon = (verdict: string | null) => {
  * expanded — a collapsed feed of many rounds should not pull every round's
  * results just to show a tag.
  */
-const RunVerifyDetail = memo<{ operationId?: string | null }>(({ operationId }) => {
+const RunVerifyDetail = memo<{
+  /** The run's verdict tag, which follows the list once it is open. */
+  extra?: ReactNode;
+  operationId?: string | null;
+}>(({ extra, operationId }) => {
   const { t } = useTranslation('chat');
   const { data: results } = useVerifyResults(operationId ?? null);
 
@@ -47,9 +51,12 @@ const RunVerifyDetail = memo<{ operationId?: string | null }>(({ operationId }) 
 
   return (
     <Flexbox gap={6}>
-      <Text fontSize={12} type={'secondary'}>
-        {t('taskDetail.runVerify.checklist')}
-      </Text>
+      <Flexbox horizontal align={'center'} gap={8}>
+        <Text fontSize={12} type={'secondary'}>
+          {t('taskDetail.runVerify.checklist')}
+        </Text>
+        {extra}
+      </Flexbox>
       <Flexbox className={styles.list}>
         {results.map((result) => {
           const meta = verdictIcon(result.verdict);

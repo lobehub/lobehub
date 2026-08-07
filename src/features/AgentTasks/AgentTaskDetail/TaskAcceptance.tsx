@@ -3,7 +3,13 @@
 import { ActionIcon, Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ChevronRight, ChevronsDownUp, ChevronsUpDown, RotateCcw } from 'lucide-react';
+import {
+  ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  ExternalLink,
+  RotateCcw,
+} from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -126,6 +132,7 @@ CompactCheckRow.displayName = 'TaskAcceptanceCompactCheckRow';
 
 const TaskAcceptance = memo(() => {
   const { t } = useTranslation(['chat', 'verify']);
+  const openAcceptance = useChatStore((state) => state.openAcceptance);
   const openAcceptanceCheck = useChatStore((state) => state.openAcceptanceCheck);
   const showTaskAgentPanel = useGlobalStore((state) => state.toggleTaskAgentPanel);
   const taskDatabaseId = useTaskStore(taskDetailSelectors.activeTaskDatabaseId);
@@ -154,6 +161,18 @@ const TaskAcceptance = memo(() => {
     verify?.requirement,
     bundle?.acceptance.requirement,
   );
+  const openCheck = (acceptanceId: string, checkId: string) => {
+    showTaskAgentPanel(true);
+    openAcceptanceCheck(acceptanceId, checkId);
+  };
+
+  // Same destination as a check, one level up: the report belongs in the panel
+  // beside the task, not on a page that replaces it.
+  const openReport = (acceptanceId: string) => {
+    showTaskAgentPanel(true);
+    openAcceptance(acceptanceId);
+  };
+
   const grouped = shouldGroupChecks(checks.length);
   const groups = useMemo(
     () =>
@@ -172,7 +191,22 @@ const TaskAcceptance = memo(() => {
   const header = (
     <TaskAcceptanceHeader
       count={checks.length}
+      // The section shows the rounds and the checklist; the report is the full
+      // record behind them — reachable from the block it belongs to, instead
+      // of only from the status row at the top of the page.
       isOpen={sectionExpanded}
+      extra={
+        acceptanceSubject && (
+          <Button
+            icon={<Icon icon={ExternalLink} />}
+            size={'small'}
+            type={'text'}
+            onClick={() => openReport(acceptanceSubject.id)}
+          >
+            {t('taskDetail.acceptance.openReport')}
+          </Button>
+        )
+      }
       onToggle={() => setSectionExpanded((expanded) => !expanded)}
     />
   );
@@ -268,10 +302,7 @@ const TaskAcceptance = memo(() => {
                                 <CompactCheckRow
                                   check={check}
                                   key={check.id}
-                                  onOpen={() => {
-                                    showTaskAgentPanel(true);
-                                    openAcceptanceCheck(bundle.acceptance.id, check.id);
-                                  }}
+                                  onOpen={() => openCheck(bundle.acceptance.id, check.id)}
                                 />
                               ))}
                           </Flexbox>
@@ -281,10 +312,7 @@ const TaskAcceptance = memo(() => {
                         <CompactCheckRow
                           check={check}
                           key={check.id}
-                          onOpen={() => {
-                            showTaskAgentPanel(true);
-                            openAcceptanceCheck(bundle.acceptance.id, check.id);
-                          }}
+                          onOpen={() => openCheck(bundle.acceptance.id, check.id)}
                         />
                       ))}
                 </Block>

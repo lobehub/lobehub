@@ -1256,6 +1256,7 @@ export default {
   'taskDetail.acceptance.goal': 'Acceptance goal',
   'taskDetail.acceptance.loadError': 'Could not load delivery acceptance.',
   'taskDetail.acceptance.multimodalLlm': 'Multimodal LLM',
+  'taskDetail.acceptance.openReport': 'Acceptance report',
   'taskDetail.acceptance.retry': 'Retry',
   'taskDetail.acceptance.requiredEvidence': 'Required evidence',
   'taskDetail.acceptance.reviewError': 'Could not save this review.',

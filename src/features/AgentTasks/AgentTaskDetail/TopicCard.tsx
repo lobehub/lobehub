@@ -93,6 +93,9 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) =>
   const hasBody = Boolean(
     activity.summary || activity.content || canFollowUp || activity.verify?.total,
   );
+  // A verdict with no results behind it has nothing to move down to, so it
+  // stays in the header no matter what the body is doing.
+  const verifyDetailOpen = bodyExpanded && Boolean(activity.verify?.total);
 
   const finalDuration =
     !isRunning && activity.time && activity.completedAt
@@ -253,7 +256,9 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) =>
               · {durationText}
             </Text>
           )}
-          <RunVerifyTag verify={activity.verify} />
+          {/* The verdict rides the header only while the run is folded; once
+              open it moves down to sit on the checklist that justifies it. */}
+          {!verifyDetailOpen && <RunVerifyTag verify={activity.verify} />}
         </Flexbox>
 
         <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
@@ -295,7 +300,10 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) =>
               one should never require leaving for the acceptance page. */}
           {activity.verify && (
             <Flexbox onClick={stopPropagation}>
-              <RunVerifyDetail operationId={activity.operationId} />
+              <RunVerifyDetail
+                extra={<RunVerifyTag verify={activity.verify} />}
+                operationId={activity.operationId}
+              />
             </Flexbox>
           )}
           {canFollowUp &&

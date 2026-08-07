@@ -1045,6 +1045,7 @@
   "taskDetail.acceptance.goal": "验收目标",
   "taskDetail.acceptance.loadError": "交付验收加载失败。",
   "taskDetail.acceptance.multimodalLlm": "多模态 LLM",
+  "taskDetail.acceptance.openReport": "验收报告",
   "taskDetail.acceptance.requiredEvidence": "所需证据",
   "taskDetail.acceptance.retry": "重试",
   "taskDetail.acceptance.reviewError": "复核结果保存失败。",
