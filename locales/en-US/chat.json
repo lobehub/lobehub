@@ -368,7 +368,6 @@
   "goalPage.filter.open": "Open goals",
   "goalPage.filteredEmptyDescription": "Switch to All to review completed or canceled goals.",
   "goalPage.filteredEmptyTitle": "No open goals",
-  "goalPage.goalCount": "{{count}} goals",
   "goalPage.listTitle": "Goal list",
   "goalPage.loadMore": "Load more",
   "goalPage.loadingProgress": "Loading acceptance progress…",

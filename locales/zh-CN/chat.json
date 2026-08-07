@@ -368,7 +368,6 @@
   "goalPage.filter.open": "待处理目标",
   "goalPage.filteredEmptyDescription": "切换到“全部”可查看已完成或已取消的目标。",
   "goalPage.filteredEmptyTitle": "没有待处理目标",
-  "goalPage.goalCount": "{{count}} 个目标",
   "goalPage.listTitle": "目标列表",
   "goalPage.loadMore": "加载更多",
   "goalPage.loadingProgress": "正在加载验收进度…",

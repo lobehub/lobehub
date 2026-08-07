@@ -1487,7 +1487,6 @@ export default {
   'goalPage.emptyTitle': 'No goals yet',
   'goalPage.filteredEmptyDescription': 'Switch to All to review completed or canceled goals.',
   'goalPage.filteredEmptyTitle': 'No open goals',
-  'goalPage.goalCount': '{{count}} goals',
   'goalPage.filter.active': 'In progress',
   'goalPage.filter.all': 'All',
   'goalPage.filter.open': 'Open goals',

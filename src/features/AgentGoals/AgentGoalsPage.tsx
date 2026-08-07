@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Block, Empty, Flexbox, Tag, Text } from '@lobehub/ui';
+import { ActionIcon, Block, Empty, Flexbox, Text } from '@lobehub/ui';
 import { Button, Segmented } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { LayoutGridIcon, ListIcon, PlusIcon, RefreshCwIcon } from 'lucide-react';
@@ -21,6 +21,18 @@ import { getGoalPresentation } from './goalPresentation';
 import { shouldShowGoal } from './goalViewModel';
 
 const styles = createStaticStyles(({ css }) => ({
+  countBadge: css`
+    padding-block: 1px;
+    padding-inline: 7px;
+    border-radius: 99px;
+
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    line-height: 18px;
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorFillTertiary};
+  `,
   overview: css`
     padding-block: 6px 18px;
   `,
@@ -185,7 +197,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId }) => {
                   <Text fontSize={16} weight={600}>
                     {t('goalPage.listTitle')}
                   </Text>
-                  <Tag size={'small'}>{t('goalPage.goalCount', { count: visibleGoalCount })}</Tag>
+                  <span className={styles.countBadge}>{visibleGoalCount}</span>
                 </Flexbox>
                 <Flexbox horizontal align={'center'} gap={8}>
                   <Segmented
