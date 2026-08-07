@@ -22,6 +22,7 @@ import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { SessionModel } from '@/database/models/session';
 import { TaskModel } from '@/database/models/task';
+import { TopicModel } from '@/database/models/topic';
 import { TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS } from '@/database/models/topicComment';
 import { UserModel } from '@/database/models/user';
 import type { ResourceAccessLevel } from '@/database/schemas';
@@ -783,6 +784,11 @@ export const agentRouter = router({
   getTransferJobStatus: agentProcedure
     .input(z.object({ agentId: z.string() }))
     .query(async ({ input, ctx }) => {
+      // Scope check: only report migration state for agents visible to the
+      // caller's current personal/workspace scope (agent ids are guessable).
+      const visibility = await ctx.agentModel.getAgentVisibility(input.agentId);
+      if (!visibility) return null;
+
       const job = await AgentTransferJobModel.findPendingJobForAgent(ctx.serverDB, input.agentId);
       if (!job) return null;
       const pendingTopicIds = await AgentTransferJobModel.getPendingTopicIds(ctx.serverDB, job.id);
@@ -802,6 +808,18 @@ export const agentRouter = router({
   prioritizeTransferTopic: agentProcedure
     .input(z.object({ topicId: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      // Scope check: reordering the backfill queue is only allowed for topics
+      // the caller can see (the transfer moves topics to the target scope
+      // synchronously, so a pending topic is visible to its new owner).
+      const topic = await new TopicModel(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      ).findById(input.topicId);
+      if (!topic) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic not found' });
+      }
+
       const flagged = await prioritizeAgentTransferTopic(ctx.serverDB, input.topicId);
       return { pending: flagged };
     }),
