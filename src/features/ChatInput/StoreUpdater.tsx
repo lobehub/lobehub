@@ -18,6 +18,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
   ({
     agentId,
     chatInputEditorRef,
+    contextSelectionKey,
     contextWindowMessages,
     draftKey,
     feature = DEFAULT_CHAT_INPUT_FEATURE,
@@ -38,6 +39,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     const editor = useChatInputEditor();
 
     useStoreUpdater('agentId', agentId);
+    useStoreUpdater('contextSelectionKey', contextSelectionKey);
     useStoreUpdater('contextWindowMessages', contextWindowMessages);
     useStoreUpdater('draftKey', draftKey);
     useStoreUpdater('mobile', mobile!);

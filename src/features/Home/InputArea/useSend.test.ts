@@ -32,7 +32,7 @@ const chatState = vi.hoisted(() => ({
 }));
 
 const fileState = vi.hoisted(() => ({
-  chatContextSelections: [] as any[],
+  chatContextSelectionsByContext: {} as Record<string, any[]>,
   chatUploadFileList: [],
   clearChatContextSelections: clearChatContextSelectionsMock,
   clearChatUploadFileList: clearChatUploadFileListMock,
@@ -155,7 +155,8 @@ vi.mock('@/store/file', () => {
 
   return {
     fileChatSelectors: {
-      chatContextSelections: (state: typeof fileState) => state.chatContextSelections,
+      chatContextSelections: (contextKey: string) => (state: typeof fileState) =>
+        state.chatContextSelectionsByContext[contextKey] ?? [],
       chatUploadFileList: (state: typeof fileState) => state.chatUploadFileList,
     },
     useFileStore,
@@ -188,7 +189,7 @@ describe('Home InputArea useSend', () => {
     homeDailyBriefState.advance.mockReset();
     homeDailyBriefState.currentPair = undefined;
     chatState.inputMessage = 'hello';
-    fileState.chatContextSelections = [];
+    fileState.chatContextSelectionsByContext = {};
     fileState.chatUploadFileList = [];
     homeState.inputActiveMode = null;
     homeState.ungroupedAgents = [];
@@ -451,18 +452,20 @@ describe('Home InputArea useSend', () => {
   it('passes context selections through starter agent mode sends', async () => {
     homeState.inputActiveMode = 'agent';
     activeWorkspaceSlugMock.value = 'team';
-    fileState.chatContextSelections = [
-      {
-        content: 'const selected = true;',
-        filePath: 'src/example.ts',
-        id: 'code-selection',
-        lineRange: { endLine: 12, startLine: 10 },
-        preview: 'src/example.ts:10-12',
-        source: 'code',
-        title: 'src/example.ts:10-12',
-        workingDirectory: '/repo',
-      },
-    ];
+    fileState.chatContextSelectionsByContext = {
+      'home:chat:agt_inbox': [
+        {
+          content: 'const selected = true;',
+          filePath: 'src/example.ts',
+          id: 'code-selection',
+          lineRange: { endLine: 12, startLine: 10 },
+          preview: 'src/example.ts:10-12',
+          source: 'code',
+          title: 'src/example.ts:10-12',
+          workingDirectory: '/repo',
+        },
+      ],
+    };
 
     const { result } = renderHook(() => useSend());
     const params: Parameters<SendButtonHandler>[0] = {
@@ -490,6 +493,6 @@ describe('Home InputArea useSend', () => {
         workspaceSlug: 'team',
       }),
     );
-    expect(clearChatContextSelectionsMock).toHaveBeenCalledTimes(1);
+    expect(clearChatContextSelectionsMock).toHaveBeenCalledWith('home:chat:agt_inbox');
   });
 });

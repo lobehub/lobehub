@@ -184,7 +184,7 @@ const ChatInput = memo<ChatInputProps>(
     const storeApi = useConversationStoreApi();
     const dbMessages = useConversationStore(dataSelectors.dbMessages);
     const context = useConversationStore((s) => s.context);
-    const draftKey = useMemo(() => messageMapKey(context), [context]);
+    const contextKey = useMemo(() => messageMapKey(context), [context]);
     const [agentId, inputMessage, sendMessage, stopGenerating] = useConversationStore((s) => [
       s.context.agentId,
       s.inputMessage,
@@ -255,7 +255,7 @@ const ChatInput = memo<ChatInputProps>(
 
     // File store - for UI state only (disabled button, etc.)
     const fileList = useFileStore(fileChatSelectors.chatUploadFileList);
-    const contextList = useFileStore(fileChatSelectors.chatContextSelections);
+    const contextList = useFileStore(fileChatSelectors.chatContextSelections(contextKey));
     const isUploadingFiles = useFileStore(fileChatSelectors.isUploadingFiles);
 
     // Queue state
@@ -308,7 +308,7 @@ const ChatInput = memo<ChatInputProps>(
         const fileStore = useFileStore.getState();
         const currentFileList = fileChatSelectors.chatUploadFileList(fileStore);
         const currentIsUploading = fileChatSelectors.isUploadingFiles(fileStore);
-        const currentContextList = fileChatSelectors.chatContextSelections(fileStore);
+        const currentContextList = fileChatSelectors.chatContextSelections(contextKey)(fileStore);
 
         if (currentIsUploading) return;
 
@@ -327,7 +327,7 @@ const ChatInput = memo<ChatInputProps>(
         const clearComposer = () => {
           clearContent();
           fileStore.clearChatUploadFileList();
-          fileStore.clearChatContextSelections();
+          fileStore.clearChatContextSelections(contextKey);
         };
 
         // A deferred send was armed from the composer (see `scheduledSendAt`):
@@ -359,7 +359,7 @@ const ChatInput = memo<ChatInputProps>(
           pageSelections,
         });
       },
-      [sendMessage, storeApi, disableQueue, disableSend, isInputQueueBlocked],
+      [contextKey, sendMessage, storeApi, disableQueue, disableSend, isInputQueueBlocked],
     );
 
     const sendButtonProps: SendButtonProps = {
@@ -439,8 +439,9 @@ const ChatInput = memo<ChatInputProps>(
       <ChatInputProvider
         agentId={agentId}
         allowExpand={allowExpand}
+        contextSelectionKey={contextKey}
         contextWindowMessages={contextWindowMessages}
-        draftKey={draftKey}
+        draftKey={contextKey}
         feature={feature}
         getMessages={getMessages}
         leftActions={leftActions}

@@ -11,6 +11,8 @@ import { memo, type MouseEvent, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { gitService } from '@/services/git';
+import { useChatStore } from '@/store/chat';
+import { chatSelectors } from '@/store/chat/selectors';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 
@@ -331,6 +333,7 @@ const FileItemBody = memo<FileItemBodyProps>(
     textDiff,
   }) => {
     const { t } = useTranslation('chat');
+    const contextSelectionKey = useChatStore(chatSelectors.currentChatKey);
     const addChatContextSelection = useFileStore((s) => s.addChatContextSelection);
     const fileName = path.basename(filePath);
     const ext = path.extname(filePath).slice(1).toLowerCase();
@@ -353,16 +356,29 @@ const FileItemBody = memo<FileItemBodyProps>(
           if (!selection) return;
 
           addChatContextSelection({
-            ...selection,
-            id: `code-selection-${nanoid(6)}`,
-            type: 'text',
+            contextKey: contextSelectionKey,
+            selection: {
+              ...selection,
+              id: `code-selection-${nanoid(6)}`,
+              type: 'text',
+            },
           });
           toast.success(t('workingPanel.review.addSelectionToContext.success'));
         },
         overflow: wordWrap ? ('wrap' as const) : ('scroll' as const),
         unsafeCSS: reviewDiffUnsafeCSS,
       }),
-      [addChatContextSelection, filePath, language, patch, t, textDiff, wordWrap, workingDirectory],
+      [
+        addChatContextSelection,
+        contextSelectionKey,
+        filePath,
+        language,
+        patch,
+        t,
+        textDiff,
+        wordWrap,
+        workingDirectory,
+      ],
     );
 
     if (!expanded) return null;

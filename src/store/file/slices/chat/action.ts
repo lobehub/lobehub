@@ -69,15 +69,30 @@ export class FileActionImpl {
     this.#get = get;
   }
 
-  addChatContextSelection = (context: ChatContextContent): void => {
-    const current = this.#get().chatContextSelections;
-    const next = [context, ...current.filter((item) => item.id !== context.id)];
+  addChatContextSelection = ({
+    contextKey,
+    selection,
+  }: {
+    contextKey: string;
+    selection: ChatContextContent;
+  }): void => {
+    const currentMap = this.#get().chatContextSelectionsByContext;
+    const current = currentMap[contextKey] ?? [];
+    const next = [selection, ...current.filter((item) => item.id !== selection.id)];
 
-    this.#set({ chatContextSelections: next }, false, n('addChatContextSelection'));
+    this.#set(
+      { chatContextSelectionsByContext: { ...currentMap, [contextKey]: next } },
+      false,
+      n('addChatContextSelection'),
+    );
   };
 
-  clearChatContextSelections = (): void => {
-    this.#set({ chatContextSelections: [] }, false, n('clearChatContextSelections'));
+  clearChatContextSelections = (contextKey: string): void => {
+    const currentMap = this.#get().chatContextSelectionsByContext;
+    if (!(contextKey in currentMap)) return;
+
+    const { [contextKey]: _removed, ...nextMap } = currentMap;
+    this.#set({ chatContextSelectionsByContext: nextMap }, false, n('clearChatContextSelections'));
   };
 
   clearChatUploadFileList = (): void => {
@@ -91,9 +106,27 @@ export class FileActionImpl {
     this.#set({ chatUploadFileList: nextValue }, false, `dispatchChatFileList/${payload.type}`);
   };
 
-  removeChatContextSelection = (id: string): void => {
-    const next = this.#get().chatContextSelections.filter((item) => item.id !== id);
-    this.#set({ chatContextSelections: next }, false, n('removeChatContextSelection'));
+  removeChatContextSelection = ({ contextKey, id }: { contextKey: string; id: string }): void => {
+    const currentMap = this.#get().chatContextSelectionsByContext;
+    const current = currentMap[contextKey];
+    if (!current) return;
+
+    const next = current.filter((item) => item.id !== id);
+    if (next.length === 0) {
+      const { [contextKey]: _removed, ...nextMap } = currentMap;
+      this.#set(
+        { chatContextSelectionsByContext: nextMap },
+        false,
+        n('removeChatContextSelection'),
+      );
+      return;
+    }
+
+    this.#set(
+      { chatContextSelectionsByContext: { ...currentMap, [contextKey]: next } },
+      false,
+      n('removeChatContextSelection'),
+    );
   };
 
   removeChatUploadFile = async (id: string): Promise<void> => {

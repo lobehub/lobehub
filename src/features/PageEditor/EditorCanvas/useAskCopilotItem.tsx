@@ -10,6 +10,8 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useConversationStore } from '@/features/Conversation/store';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useFileStore } from '@/store/file';
 
 import { usePageAgentPanelControl } from '../RightPanel/OverrideContext';
@@ -28,6 +30,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 export const useAskCopilotItem = (editor: IEditor | undefined): ChatInputActionsProps['items'] => {
   const { t } = useTranslation('common');
+  const contextSelectionKey = useConversationStore((s) => messageMapKey(s.context));
   const addSelectionContext = useFileStore((s) => s.addChatContextSelection);
   const pageId = usePageEditorStore((s) => s.documentId);
   const setRightPanelMode = usePageEditorStore((s) => s.setRightPanelMode);
@@ -66,13 +69,16 @@ export const useAskCopilotItem = (editor: IEditor | undefined): ChatInputActions
 
               // Store action handles deduplication
               addSelectionContext({
-                content,
-                format,
-                id: `selection-${nanoid(6)}`,
-                pageId,
-                preview,
-                title: 'Selection',
-                type: 'text',
+                contextKey: contextSelectionKey,
+                selection: {
+                  content,
+                  format,
+                  id: `selection-${nanoid(6)}`,
+                  pageId,
+                  preview,
+                  title: 'Selection',
+                  type: 'text',
+                },
               });
 
               // Open right panel if not opened
@@ -103,5 +109,13 @@ export const useAskCopilotItem = (editor: IEditor | undefined): ChatInputActions
         onClick: () => {},
       },
     ];
-  }, [addSelectionContext, editor, pageId, setRightPanelMode, t, togglePageAgentPanel]);
+  }, [
+    addSelectionContext,
+    contextSelectionKey,
+    editor,
+    pageId,
+    setRightPanelMode,
+    t,
+    togglePageAgentPanel,
+  ]);
 };

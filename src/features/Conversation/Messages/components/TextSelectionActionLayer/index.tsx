@@ -11,8 +11,10 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
-import { useFileStore } from '@/store/file';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { fileChatSelectors, useFileStore } from '@/store/file';
 
+import { useConversationStore } from '../../../store';
 import {
   createTextSelectionContext,
   getRangeFirstLineRect,
@@ -67,6 +69,7 @@ const TextSelectionActionLayer = memo<TextSelectionActionLayerProps>(({ children
   const toolbarRef = useRef<HTMLDivElement | null>(null);
   const [activeSelection, setActiveSelection] = useState<ActiveSelection | null>(null);
 
+  const contextSelectionKey = useConversationStore((s) => messageMapKey(s.context));
   const addChatContextSelection = useFileStore((s) => s.addChatContextSelection);
 
   const hideToolbar = useCallback(() => {
@@ -146,7 +149,9 @@ const TextSelectionActionLayer = memo<TextSelectionActionLayerProps>(({ children
     const text = activeSelection?.text;
     if (!text) return;
 
-    const currentSelections = useFileStore.getState().chatContextSelections;
+    const currentSelections = fileChatSelectors.chatContextSelections(contextSelectionKey)(
+      useFileStore.getState(),
+    );
     const existing = currentSelections.find((item) => isSameTextSelectionContext(item, text));
     const context =
       existing ??
@@ -156,9 +161,9 @@ const TextSelectionActionLayer = memo<TextSelectionActionLayerProps>(({ children
         title: t('textSelection.title'),
       });
 
-    addChatContextSelection(context);
+    addChatContextSelection({ contextKey: contextSelectionKey, selection: context });
     toast.success(t('textSelection.added'));
-  }, [activeSelection?.text, addChatContextSelection, t]);
+  }, [activeSelection?.text, addChatContextSelection, contextSelectionKey, t]);
 
   const handleAddToConversation = useCallback(() => {
     addSelectionToConversation();

@@ -1,3 +1,4 @@
+import type { ChatContextContent } from '@lobechat/types';
 import { toast } from '@lobehub/ui/base-ui';
 import { act, renderHook } from '@testing-library/react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -69,6 +70,54 @@ beforeEach(() => {
 });
 
 describe('useFileStore:chat', () => {
+  it('isolates context selections by conversation key', () => {
+    const { result } = renderHook(() => useStore());
+    const sharedIdSelectionA: ChatContextContent = {
+      content: 'selection A',
+      id: 'shared-selection',
+      type: 'text',
+    };
+    const sharedIdSelectionB: ChatContextContent = {
+      content: 'selection B',
+      id: 'shared-selection',
+      type: 'text',
+    };
+
+    act(() => {
+      useStore.setState({ chatContextSelectionsByContext: {} });
+      result.current.addChatContextSelection({
+        contextKey: 'topic-a',
+        selection: sharedIdSelectionA,
+      });
+      result.current.addChatContextSelection({
+        contextKey: 'topic-b',
+        selection: sharedIdSelectionB,
+      });
+    });
+
+    expect(result.current.chatContextSelectionsByContext).toEqual({
+      'topic-a': [sharedIdSelectionA],
+      'topic-b': [sharedIdSelectionB],
+    });
+
+    act(() => {
+      result.current.removeChatContextSelection({
+        contextKey: 'topic-a',
+        id: sharedIdSelectionA.id,
+      });
+    });
+
+    expect(result.current.chatContextSelectionsByContext).toEqual({
+      'topic-b': [sharedIdSelectionB],
+    });
+
+    act(() => {
+      result.current.clearChatContextSelections('topic-b');
+    });
+
+    expect(result.current.chatContextSelectionsByContext).toEqual({});
+  });
+
   it('clearChatUploadFileList should clear the inputFilesList', () => {
     const { result } = renderHook(() => useStore());
 

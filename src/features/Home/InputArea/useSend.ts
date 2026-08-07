@@ -73,6 +73,7 @@ export const useSend = (mode: HomeMode = 'chat') => {
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const { agentId: selectedAgentId } = useResolvedHomeAgentId();
   const agentId = selectedAgentId;
+  const contextSelectionKey = `home:${mode}:${selectedAgentId ?? 'unresolved'}`;
   const { allowed: canCreateContent } = usePermission('create_content');
   const agentVisibility = useAgentStore((s) =>
     selectedAgentId ? s.agentMap[selectedAgentId]?.visibility : undefined,
@@ -96,7 +97,9 @@ export const useSend = (mode: HomeMode = 'chat') => {
       // cache catches up and the empty-message guard would bail incorrectly.
       const typed = (getMarkdownContent?.() ?? inputMessage ?? '').trim();
       const fileList = fileChatSelectors.chatUploadFileList(useFileStore.getState());
-      const contextList = fileChatSelectors.chatContextSelections(useFileStore.getState());
+      const contextList = fileChatSelectors.chatContextSelections(contextSelectionKey)(
+        useFileStore.getState(),
+      );
       const { sendAsAgent, sendAsGroup, sendAsWrite, sendAsResearch, inputActiveMode } =
         useHomeStore.getState();
 
@@ -256,7 +259,7 @@ export const useSend = (mode: HomeMode = 'chat') => {
         // editor, files and context are one unit from the user's perspective.
         if (submitted) {
           clearChatUploadFileList();
-          clearChatContextSelections();
+          clearChatContextSelections(contextSelectionKey);
           mainInputEditor?.clearContent();
         }
         setIsSubmitting(false);
@@ -268,6 +271,7 @@ export const useSend = (mode: HomeMode = 'chat') => {
       sendMessage,
       clearChatContextSelections,
       clearChatUploadFileList,
+      contextSelectionKey,
       router,
       currentPair,
       mode,
@@ -284,6 +288,7 @@ export const useSend = (mode: HomeMode = 'chat') => {
 
   return {
     agentId,
+    contextSelectionKey,
     loading: homeInputLoading || isSubmitting,
     send,
   };

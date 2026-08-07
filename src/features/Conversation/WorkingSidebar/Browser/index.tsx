@@ -23,6 +23,7 @@ import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { electronBrowserSidebarService } from '@/services/electron/browserSidebar';
 import { browserWebviewRegistry } from '@/services/electron/browserWebviewRegistry';
 import { useChatStore } from '@/store/chat';
+import { chatSelectors } from '@/store/chat/selectors';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 
@@ -157,6 +158,7 @@ interface BrowserPaneProps {
 
 const BrowserPane = memo<BrowserPaneProps>(({ agentId, onMetadataChange, sessionId }) => {
   const { t } = useTranslation('chat');
+  const contextSelectionKey = useChatStore(chatSelectors.currentChatKey);
   const state = useBrowserSidebarState(sessionId);
   const [address, setAddress] = useState('');
   const [isEditing, setIsEditing] = useState(false);
@@ -266,13 +268,14 @@ const BrowserPane = memo<BrowserPaneProps>(({ agentId, onMetadataChange, session
       }
       if (result.cancelled || !result.element) return;
 
-      useFileStore.getState().addChatContextSelection(
-        createElementContext({
+      useFileStore.getState().addChatContextSelection({
+        contextKey: contextSelectionKey,
+        selection: createElementContext({
           element: result.element,
           elementTitle: t('workingPanel.browser.context.elementTitle'),
           id: `browser-element-${nanoid(6)}`,
         }),
-      );
+      });
       toast.success(t('workingPanel.browser.context.elementAdded'));
       focusChatInput();
     } catch (error) {
