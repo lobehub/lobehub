@@ -269,16 +269,26 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
  * scope does not capture, e.g. a knowledge-write mutation that internally
  * invokes a model.
  */
-export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope> = {
+const AGENT_RUN_SCOPES: ApiKeyScope[] = ['chat:write', 'model:invoke'];
+
+export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
+  // agent-run execution paths schedule model runs and write chat/topic state,
+  // so `agent:write` alone must not start them
+  'aiAgent.execAgent': AGENT_RUN_SCOPES,
+  'aiAgent.execAgents': AGENT_RUN_SCOPES,
+  'aiAgent.execGroupAgent': AGENT_RUN_SCOPES,
+  'aiAgent.execSubAgentTask': AGENT_RUN_SCOPES,
+  'aiAgent.scheduleAgentRun': AGENT_RUN_SCOPES,
+  'aiAgent.startExecution': AGENT_RUN_SCOPES,
   // persists tool results into the topic's message history
-  'aiChat.archiveToolResult': 'chat:write',
+  'aiChat.archiveToolResult': ['chat:write'],
   // creates user/assistant messages and topics alongside the model call
-  'aiChat.sendMessageInServer': 'chat:write',
+  'aiChat.sendMessageInServer': ['chat:write'],
   // connectivity test sends a real (1-token) chat request to the provider
-  'aiProvider.checkProviderConnectivity': 'model:invoke',
+  'aiProvider.checkProviderConnectivity': ['model:invoke'],
   // prefills the convert-to-skill form via an LLM call
   // (`SystemAgentService.generateSkillMeta` → `modelRuntime.generateObject`)
-  'agentDocument.generateSkillMeta': 'model:invoke',
+  'agentDocument.generateSkillMeta': ['model:invoke'],
 };
 
 export type TrpcScopeDecision = { scopes: ApiKeyScope[] } | { open: true } | { blocked: true };
@@ -304,7 +314,7 @@ export const requiredApiKeyScopeForTrpc = (
   if (rule !== 'open' && !base) return { blocked: true };
 
   const scopes = [
-    ...new Set([base, TRPC_PROCEDURE_EXTRA_SCOPES[path]].filter(Boolean)),
+    ...new Set([base, ...(TRPC_PROCEDURE_EXTRA_SCOPES[path] ?? [])].filter(Boolean)),
   ] as ApiKeyScope[];
 
   return scopes.length > 0 ? { scopes } : { open: true };

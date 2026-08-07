@@ -112,6 +112,10 @@ describe('requiredApiKeyScopeForTrpc', () => {
     expect(requiredApiKeyScopeForTrpc('aiChat.sendMessageInServer', 'mutation')).toEqual({
       scopes: ['model:invoke', 'chat:write'],
     });
+    // agent-run execution needs the full chat + model tier on top of agent:write
+    expect(requiredApiKeyScopeForTrpc('aiAgent.execAgent', 'mutation')).toEqual({
+      scopes: ['agent:write', 'chat:write', 'model:invoke'],
+    });
     // provider connectivity test sends a real model request
     expect(requiredApiKeyScopeForTrpc('aiProvider.checkProviderConnectivity', 'mutation')).toEqual({
       scopes: ['model:write', 'model:invoke'],
@@ -166,11 +170,12 @@ describe('requiredApiKeyScopeForTrpc', () => {
     }
   });
 
-  it('every extra-scope path targets a registered namespace and catalog scope', () => {
-    for (const [path, scope] of Object.entries(TRPC_PROCEDURE_EXTRA_SCOPES)) {
+  it('every extra-scope path targets a registered namespace and catalog scopes', () => {
+    for (const [path, scopes] of Object.entries(TRPC_PROCEDURE_EXTRA_SCOPES)) {
       const namespace = path.split('.')[0];
       expect(TRPC_NAMESPACE_API_KEY_RULES[namespace]).toBeDefined();
-      expect(isValidApiKeyScope(scope)).toBe(true);
+      expect(scopes.length).toBeGreaterThan(0);
+      for (const scope of scopes) expect(isValidApiKeyScope(scope)).toBe(true);
     }
   });
 });
