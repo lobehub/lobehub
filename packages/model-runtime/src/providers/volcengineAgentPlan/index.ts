@@ -13,9 +13,9 @@ export const LobeVolcengineAgentPlanAI = createOpenAICompatibleRuntime({
         ...rest,
         ...(thinking?.type === 'enabled' &&
           thinking?.budget_tokens !== 0 && {
-          enable_thinking: true,
-          thinking_budget: thinking?.budget_tokens || undefined,
-        }),
+            enable_thinking: true,
+            thinking_budget: thinking?.budget_tokens || undefined,
+          }),
         model,
         stream: true,
         ...(payload.tools && {
