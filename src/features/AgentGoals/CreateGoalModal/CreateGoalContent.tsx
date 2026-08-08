@@ -68,7 +68,6 @@ const styles = createStaticStyles(({ css }) => ({
   criterion: css`
     cursor: pointer;
     padding-block: 10px;
-    padding-inline: 12px;
 
     & + & {
       border-block-start: 1px solid ${cssVar.colorBorderSecondary};
@@ -76,13 +75,6 @@ const styles = createStaticStyles(({ css }) => ({
 
     &:hover {
       background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  createBlank: css`
-    color: ${cssVar.colorTextTertiary};
-
-    &:hover {
-      color: ${cssVar.colorTextSecondary};
     }
   `,
   criterionIndex: css`
@@ -148,10 +140,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   reviewSection: css`
     padding-block: 16px;
-
-    & + & {
-      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    }
   `,
   sectionHint: css`
     color: ${cssVar.colorTextSecondary};
@@ -618,10 +606,10 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
         <Flexbox horizontal align={'center'} gap={4}>
           {step === 'describe' && (
             <Button
-              className={styles.createBlank}
               disabled={!canCreate || isCreating}
               icon={PencilLine}
               size={'small'}
+              style={{ color: cssVar.colorTextTertiary }}
               title={canCreate ? undefined : reason}
               type={'text'}
               onClick={handleCreateBlank}

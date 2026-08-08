@@ -63,6 +63,8 @@ const styles = createStaticStyles(({ css }) => ({
     text-align: center;
   `,
   heroIcon: css`
+    position: relative;
+
     display: flex;
     align-items: center;
     justify-content: center;
@@ -70,29 +72,28 @@ const styles = createStaticStyles(({ css }) => ({
     width: 104px;
     height: 72px;
 
+    color: ${cssVar.colorTextQuaternary};
+  `,
+  heroIconFlow: css`
+    position: absolute;
     color: ${cssVar.colorPrimary};
+    filter: drop-shadow(0 0 5px ${cssVar.colorPrimary});
 
-    filter: drop-shadow(0 0 8px ${cssVar.colorPrimary});
-
-    animation: goal-icon-flow 3.2s ${cssVar.motionEaseInOut} infinite;
+    path {
+      stroke-dasharray: 12 42;
+      animation: goal-icon-flow 1.8s linear infinite;
+    }
 
     @keyframes goal-icon-flow {
-      0%,
-      100% {
-        transform: scale(0.96);
-        color: ${cssVar.colorPrimary};
-        filter: drop-shadow(0 0 6px ${cssVar.colorPrimary});
-      }
-
-      50% {
-        transform: scale(1.04);
-        color: ${cssVar.colorInfo};
-        filter: drop-shadow(0 0 18px ${cssVar.colorInfo});
+      to {
+        stroke-dashoffset: -54;
       }
     }
 
     @media (prefers-reduced-motion: reduce) {
-      animation: none;
+      path {
+        animation: none;
+      }
     }
   `,
   heroInner: css`
@@ -219,7 +220,13 @@ const GoalEmptyState = memo<GoalEmptyStateProps>(({ onCreate }) => {
       <Flexbox align={'center'} className={styles.hero}>
         <Flexbox align={'center'} className={styles.heroInner} gap={16}>
           <div className={styles.heroIcon}>
-            <Icon icon={InfinityIcon} size={64} />
+            <InfinityIcon aria-hidden size={64} strokeWidth={1.75} />
+            <InfinityIcon
+              aria-hidden
+              className={styles.heroIconFlow}
+              size={64}
+              strokeWidth={1.75}
+            />
           </div>
           <Flexbox align={'center'} gap={8}>
             <Text fontSize={20} weight={600}>
