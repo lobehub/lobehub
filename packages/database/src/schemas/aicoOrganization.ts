@@ -220,6 +220,13 @@ export const memberBudgets = pgTable(
       .$defaultFn(() => idGenerator('memberBudgets'))
       .notNull()
       .primaryKey(),
+    /**
+     * Denormalized tenant key (TENANT-003). Always match with orgMemberId so
+     * budget/key helpers can enforce `WHERE org_id = ? AND org_member_id = ?`.
+     */
+    orgId: text('org_id')
+      .references(() => organizations.id, { onDelete: 'cascade' })
+      .notNull(),
     orgMemberId: text('org_member_id')
       .references(() => organizationMembers.id, { onDelete: 'cascade' })
       .notNull(),
@@ -256,6 +263,7 @@ export const memberBudgets = pgTable(
   },
   (t) => [
     uniqueIndex('member_budgets_org_member_uidx').on(t.orgMemberId),
+    index('member_budgets_org_id_idx').on(t.orgId),
     index('member_budgets_next_renewal_at_idx').on(t.nextRenewalAt),
     index('member_budgets_renewal_status_idx').on(t.renewalStatus),
   ],

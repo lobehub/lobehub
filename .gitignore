@@ -163,3 +163,7 @@ docs/superpowers/
 
 # Amp agent runtime
 .amp/
+
+# Security audit extracted source kits (portable .tar.gz is committed; tree is local)
+security-audit-reports/phase-02-business-logic/tenant-isolation-source/*
+!security-audit-reports/phase-02-business-logic/tenant-isolation-source/README.md

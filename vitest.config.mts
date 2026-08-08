@@ -143,6 +143,7 @@ export default defineConfig({
       '**/apps/cli/**',
       '**/packages/**',
       '**/e2e/**',
+      '**/security-audit-reports/**',
     ],
     globals: true,
     server: {

@@ -380,7 +380,10 @@ export const organizationRouter = router({
 
       // Local access is already revocation_pending. Durable outbox handles OR
       // disable + settlement — OpenRouter downtime must not block removal.
-      const budget = await ctx.organizationModel.getMemberBudget(input.memberId);
+      const budget = await ctx.organizationModel.getMemberBudgetForOrg({
+        orgId: input.orgId,
+        orgMemberId: input.memberId,
+      });
       await ctx.serverDB.insert(aicoKeyOutbox).values({
         action: 'reclaim_member',
         nextAttemptAt: new Date(),
@@ -404,7 +407,10 @@ export const organizationRouter = router({
       await requireMemberInOrg(ctx.organizationModel, input.orgId, input.orgMemberId);
 
       const keyService = new AicoOpenRouterKeyService(ctx.serverDB);
-      const reclaimed = await keyService.reclaimMemberKey(input.orgMemberId);
+      const reclaimed = await keyService.reclaimMemberKey({
+        orgId: input.orgId,
+        orgMemberId: input.orgMemberId,
+      });
       if (!reclaimed) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'No managed key to reclaim' });
       }
@@ -470,6 +476,13 @@ export const organizationRouter = router({
     .query(async ({ ctx, input }) => {
       const invite = await ctx.organizationModel.getInviteByToken(input.token);
       if (!invite) throw new TRPCError({ code: 'NOT_FOUND', message: 'Invite not found' });
+      // TENANT-008: only pending, unexpired invites may disclose org metadata.
+      if (invite.status !== 'pending') {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Invite not found' });
+      }
+      if (invite.expiresAt.getTime() <= Date.now()) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Invite not found' });
+      }
       const org = await ctx.organizationModel.getById(invite.orgId);
       return {
         expiresAt: invite.expiresAt.toISOString(),

@@ -24,7 +24,7 @@ Aico Organization isolation is **mostly enforced correctly** at the org boundary
 
 Existing automated tests cover stranger/`orgId` substitution and member-vs-manager RBAC, but **do not** cover manager-of-A + `orgMemberId`-of-B attacks.
 
-**Verdict:** Cross-tenant access via manager `orgMemberId` swap was **open at audit time** (TENANT-001 / TENANT-002). Fixes landed 2026-08-08 — see `03-tenant-isolation-security-retest.md`. Remaining open items: TENANT-003 (schema defense-in-depth), TENANT-005, TENANT-008.
+**Verdict:** Cross-tenant manager `orgMemberId` gaps (TENANT-001/002) and follow-ups (TENANT-003/005/008) are **Fixed**. See `03-tenant-isolation-security-retest.md`. Remaining accepted risks: TENANT-006 (conversations), TENANT-007 (platform admin).
 
 ---
 
@@ -62,12 +62,12 @@ Evidence sources:
 | Invitations           | `inviteMember`, `revokeInvite`, `acceptInvite`, `getInvitePreview` | Pass for org-scoped list/revoke         | Pass                                                 | Token possession is the capability (TENANT-008)                                 |
 | Wallets               | `getOrgWallet`, `mockOrgTopup`, personal `getMyWallet`             | Pass                                    | Pass                                                 | Personal wallets are user-scoped, not org-scoped                                |
 | Credits               | `allocateMemberCredit`, reclaim paths                              | Pass for allocate                       | Pass (`revokeMemberBudget` gated — TENANT-001 fixed) | Allocate verifies member ∈ org                                                  |
-| Budgets               | `getMemberBudget`, dashboard stats                                 | Pass (TENANT-002 fixed)                 | N/A for read API                                     | Schema still lacks `orgId` on `member_budgets` (TENANT-003)                     |
+| Budgets               | `getMemberBudget`, dashboard stats                                 | Pass (TENANT-002/003 fixed)             | N/A for read API                                     | `member_budgets.org_id` + dual-key queries (TENANT-003)                         |
 | Usage Reports         | `getDashboard`, `getMyUsage`                                       | Pass                                    | N/A                                                  | Dashboard lists only members of `orgId`; `getMyUsage` is caller `userId`        |
 | Model Permissions     | `setTeamModels`, `listTeams`                                       | Pass                                    | Pass                                                 | `setTeamModelAccess` verifies `teamId`+`orgId`                                  |
 | Organization Settings | status via platform admin; no separate org-settings router         | Pass for managers                       | Platform-only suspend/activate                       | No general org settings mutation for non-platform managers beyond teams/credits |
 | Conversations         | Topics/sessions/messages                                           | N/A (not Aico-org-scoped)               | N/A                                                  | User/workspace ownership only (TENANT-006)                                      |
-| OpenRouter Keys       | `keyService.*`, outbox                                             | Pass at manager edge                    | Pass at manager edge                                 | Keys never returned to SPA; internal id-only helpers remain (TENANT-003)        |
+| OpenRouter Keys       | `keyService.*`, outbox                                             | Pass at manager edge                    | Pass — reclaim requires orgId                        | Keys never returned to SPA                                                      |
 | Reports               | Dashboard / usage logs                                             | Pass for intended scopes                | N/A                                                  | No separate org-wide “reports” router beyond dashboard                          |
 
 ---
@@ -224,7 +224,7 @@ Evidence sources:
 
 - **Severity:** Medium
 
-- **Status:** Open
+- **Status:** Fixed
 
 - **Affected Component:** `packages/database/src/schemas/aicoOrganization.ts` (`member_budgets`); `OrganizationModel.getMemberBudget` / `syncMemberBudgetUsage` / `updateMemberOpenRouterKey`; `AicoOpenRouterKeyService` methods keyed solely by `orgMemberId`
 
@@ -245,7 +245,7 @@ Evidence sources:
   2. Change helpers to `getMemberBudget({ orgId, orgMemberId })` and enforce both in SQL.
   3. Treat “id-only” budget/key APIs as internal-only and unsafe at HTTP/tRPC edges.
 
-- **Retest Result:** Partial — API edge mitigated via `getMemberBudgetForOrg`; schema `org_id` column still outstanding.
+- **Retest Result:** Pass — `org_id` on `member_budgets` + migration 0141; reclaim requires `{ orgId, orgMemberId }`.
 
 ---
 
@@ -284,7 +284,7 @@ Evidence sources:
 
 - **Severity:** Medium
 
-- **Status:** Open
+- **Status:** Fixed
 
 - **Affected Component:** `apps/server/src/services/orgAccess/index.ts` (stub); real implementation in `apps/server/src/services/auth/orgRole.ts`
 
@@ -299,7 +299,7 @@ Evidence sources:
 
 - **Recommendation:** Delete the stub or re-export the real `auth/orgRole` helpers; add a lint/test forbidding the stub path.
 
-- **Retest Result:** Not retested.
+- **Retest Result:** Pass — stub replaced with re-export of `auth/orgRole`.
 
 ---
 
@@ -365,7 +365,7 @@ Evidence sources:
 
 - **Severity:** Low
 
-- **Status:** Open
+- **Status:** Fixed
 
 - **Affected Component:** `organization.getInvitePreview` / `acceptInvite`
 
@@ -380,7 +380,7 @@ Evidence sources:
 
 - **Recommendation:** Short TTL (already 3 days), single-use, avoid putting raw tokens in query logs; rate-limit preview; consider binding preview to invited email session when possible.
 
-- **Retest Result:** Not retested.
+- **Retest Result:** Pass — preview rejects non-pending/expired invites.
 
 ---
 
@@ -459,9 +459,9 @@ WHERE org_member_id = ? AND org_id = ?
 
 1. ~~**P0:** Fix TENANT-001~~ Done.
 2. ~~**P0:** Fix TENANT-002~~ Done.
-3. **P1:** Schema/helper hardening TENANT-003 (denormalized `org_id` on `member_budgets`).
-4. ~~**P2:** TENANT-004 WHERE clause hardening~~ Done; remove TENANT-005 stub still open.
-5. **P3:** Product decision on TENANT-006; invite hygiene TENANT-008; platform controls TENANT-007.
+3. ~~**P1:** Schema/helper hardening TENANT-003~~ Done (`0141_aico_member_budgets_org_id`).
+4. ~~**P2:** TENANT-004 / TENANT-005~~ Done.
+5. ~~**P3:** TENANT-008 invite preview hygiene~~ Done. TENANT-006/007 remain Accepted Risk.
 
 Retest document: `03-tenant-isolation-security-retest.md`.
 
