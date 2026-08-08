@@ -597,3 +597,29 @@ ingest, read the command's warnings as failures, not noise: a dropped-field warn
 means the round published incomplete and needs a corrected re-ingest, the same as a
 skipped evidence upload. And when a reviewer reports that something rendered wrong,
 suspect your own metadata shape before the renderer.
+
+---
+
+## M29 — Using a full-page browser screenshot for an Electron window
+
+**Wrong approach**: capturing Electron evidence with `agent-browser screenshot --full` and publishing it because the target UI is technically visible in the
+top-left corner.
+
+**Why it's wrong**: Electron renderers can expose a document or layout canvas much
+larger than the visible `BrowserWindow`. Full-page capture follows that document
+extent instead of the application viewport, producing a giant image dominated by
+empty or black space. Acceptance preserves the source aspect ratio, so the actual
+UI becomes tiny and the evidence is practically unreadable even though the capture
+command succeeded.
+
+**What it breaks**: reviewers cannot judge spacing, hierarchy, icon placement, or
+interaction state without zooming into a small corner; otherwise valid visual
+evidence looks like a product rendering defect.
+
+**Correct approach**: for Electron, capture the visible renderer viewport without
+`--full`, or use the project Electron/CDP window-capture helper (and OS window
+capture when browser capture cannot represent the native surface). Open the saved
+image before publishing and reject it if the application occupies only a small
+fraction of the frame or if unexplained black margins dominate the canvas. Crop by
+capturing the correct window or viewport, not by post-processing evidence to hide
+unverified state.
