@@ -4,6 +4,7 @@
   "actions.retry": "重新登录",
   "codes.ACCOUNT_ALREADY_LINKED_TO_DIFFERENT_USER": "这个账号已绑定到其他用户，请使用其他方式登录",
   "codes.ACCOUNT_NOT_FOUND": "没有找到对应账号，请检查登录方式或注册新账号",
+  "codes.BANNED_USER": "您的账户已被停用。如有疑问请联系支持。",
   "codes.CREDENTIAL_ACCOUNT_NOT_FOUND": "凭证账号不存在，请重新授权或联系支持",
   "codes.DELETED_ACCOUNT_EMAIL": "该邮箱已关联至已删除的账户，无法用于注册",
   "codes.EMAIL_CAN_NOT_BE_UPDATED": "当前邮箱无法修改，如需更换，请联系支持",
@@ -33,7 +34,7 @@
   "codes.USER_ALREADY_EXISTS": "该用户已存在，请直接登录",
   "codes.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL": "这个邮箱已被使用，请换一个邮箱注册",
   "codes.USER_ALREADY_HAS_PASSWORD": "该账号已设置过密码，请直接使用密码登录",
-  "codes.USER_BANNED": "该账号已被封禁，如有疑问，请联系支持",
+  "codes.USER_BANNED": "您的账户已被停用。如有疑问请联系支持。",
   "codes.USER_EMAIL_NOT_FOUND": "没有找到对应邮箱，请检查输入或注册新账号",
   "codes.USER_NOT_FOUND": "没有找到该用户，请检查登录信息或注册新账号",
   "title": "登录遇到问题"

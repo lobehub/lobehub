@@ -21,6 +21,7 @@ import {
   getVerificationOTPEmailTemplate,
 } from '@/libs/better-auth/email-templates';
 import { isValidIranianPhoneNumber, normalizeIranianPhoneNumber } from '@/libs/better-auth/phone';
+import { aicoBanMessage } from '@/libs/better-auth/plugins/aico-ban-message';
 import { emailWhitelist } from '@/libs/better-auth/plugins/email-whitelist';
 import { phoneLoginGate } from '@/libs/better-auth/plugins/phone-login-gate';
 import { initBetterAuthSSOProviders } from '@/libs/better-auth/sso';
@@ -303,7 +304,11 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
       emailWhitelist(),
       phoneLoginGate(),
       expo(),
-      admin(),
+      aicoBanMessage(),
+      admin({
+        bannedUserMessage:
+          'Your account has been deactivated. Please contact support if you believe this is an error.',
+      }),
       // Email OTP plugin for mobile verification
       emailOTP({
         expiresIn: OTP_EXPIRES_IN,

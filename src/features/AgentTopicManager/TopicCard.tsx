@@ -4,7 +4,7 @@ import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import { formatPrice, formatTokenNumber } from '@lobechat/utils/format';
 import { Block, Checkbox, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { CircleDollarSign, FolderIcon, MessageSquare, Star, Zap } from 'lucide-react';
+import { DollarSign, FolderIcon, MessageSquare, Star, Zap } from 'lucide-react';
 import { memo, type MouseEvent, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -185,7 +185,7 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
           )}
           {cost > 0 && (
             <Flexbox horizontal align={'center'} gap={3} title={`$${cost.toFixed(4)}`}>
-              <Icon icon={CircleDollarSign} size={11} />
+              <Icon icon={DollarSign} size={11} />
               {formatPrice(cost, 2)}
             </Flexbox>
           )}

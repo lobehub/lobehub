@@ -6,7 +6,7 @@ import { Button, Select, Tabs, toast } from '@lobehub/ui/base-ui';
 import { DatePicker, Form, Input, InputNumber, Table } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
-import { Building2Icon, CircleDollarSignIcon, UsersIcon, WalletIcon } from 'lucide-react';
+import { Building2Icon, DollarSignIcon, UsersIcon, WalletIcon } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router';
@@ -48,6 +48,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorErrorBg};
   `,
+  suspendedBanner: css`
+    padding-block: 12px;
+    padding-inline: 14px;
+    border: 1px solid ${cssVar.colorWarningBorder};
+    border-radius: ${cssVar.borderRadiusLG};
+
+    background: ${cssVar.colorWarningBg};
+  `,
 }));
 
 type InviteForm = {
@@ -82,7 +90,7 @@ export const OrgAdminMembers = () => {
   const [topupForm] = Form.useForm<FxTopupFormValues>();
   const [topupChargeField, setTopupChargeField] = useState<FxTopupChargeField>('toman');
   const [allocForm] = Form.useForm<{ amountUsd: number; orgMemberId: string }>();
-  const [modelsForm] = Form.useForm<{ modelIds: string; teamId: string }>();
+  const [modelsForm] = Form.useForm<{ modelIds: string[]; teamId: string }>();
   const [upgradeForm] = Form.useForm<{ name: string }>();
   const [deleteConfirmName, setDeleteConfirmName] = useState('');
   const [inviting, setInviting] = useState(false);
@@ -95,6 +103,10 @@ export const OrgAdminMembers = () => {
   } = useClientDataSWR('aico-org-mine', () => lambdaClient.organization.getMine.query());
 
   const manageable = (mine || []).filter((o) => o.myRole === 'owner' || o.myRole === 'admin');
+  const currentOrg = manageable.find((o) => o.id === selectedOrgId);
+  const isOwner = currentOrg?.myRole === 'owner';
+  const isSuspended = currentOrg?.status === 'suspended';
+  const readOnly = isSuspended;
 
   useEffect(() => {
     if (!selectedOrgId && manageable[0]?.id) {
@@ -119,6 +131,19 @@ export const OrgAdminMembers = () => {
   const { data: teams, mutate: mutateTeams } = useClientDataSWR(
     selectedOrgId ? ['aico-org-teams', selectedOrgId] : null,
     () => lambdaClient.organization.listTeams.query({ orgId: selectedOrgId }),
+  );
+
+  const { data: catalogModels } = useClientDataSWR('aico-org-model-catalog', () =>
+    lambdaClient.aiModel.getAiProviderModelList.query({ id: 'openrouter', limit: 200 }),
+  );
+
+  const modelOptions = useMemo(
+    () =>
+      (catalogModels || []).map((model) => ({
+        label: model.displayName ? `${model.displayName} (${model.id})` : model.id,
+        value: model.id,
+      })),
+    [catalogModels],
   );
 
   const { data: dashboard, mutate: mutateDashboard } = useClientDataSWR(
@@ -214,7 +239,7 @@ export const OrgAdminMembers = () => {
   );
 
   const handleInvite = async (values: InviteForm) => {
-    if (!selectedOrgId) return;
+    if (!selectedOrgId || readOnly) return;
     if (values.identifierType === 'phone' && !isValidIranianPhoneNumber(values.identifierValue)) {
       toast.error(t('org.invite.invalidPhone'));
       return;
@@ -319,9 +344,6 @@ export const OrgAdminMembers = () => {
     );
   }
 
-  const currentOrg = manageable.find((o) => o.id === selectedOrgId);
-  const isOwner = currentOrg?.myRole === 'owner';
-
   return (
     <Flexbox className={styles.page} gap={20}>
       <Flexbox gap={8}>
@@ -346,12 +368,19 @@ export const OrgAdminMembers = () => {
                 navigate(`/org/${value}/members`);
               }}
             />
+            {isSuspended ? <Tag color="warning">{t('org.suspendedTag')}</Tag> : null}
             {dashboard?.publicCode || currentOrg?.publicCode ? (
               <Tag>{dashboard?.publicCode || currentOrg?.publicCode}</Tag>
             ) : null}
           </Flexbox>
         </Flexbox>
       </Flexbox>
+
+      {isSuspended ? (
+        <div className={styles.suspendedBanner}>
+          <Text strong>{t('org.suspendedBanner')}</Text>
+        </div>
+      ) : null}
 
       <div className={styles.grid}>
         <StatisticCard
@@ -361,7 +390,7 @@ export const OrgAdminMembers = () => {
         <StatisticCard
           title={t('org.stat.allocated')}
           statistic={{
-            prefix: <CircleDollarSignIcon size={16} />,
+            prefix: <DollarSignIcon size={16} />,
             value: usd(dashboard?.allocatedUsd),
           }}
         />
@@ -485,6 +514,7 @@ export const OrgAdminMembers = () => {
             <Flexbox gap={16}>
               <Text strong>{t('org.invite.title')}</Text>
               <Form
+                disabled={readOnly}
                 form={form}
                 initialValues={{ identifierType: 'email', role: 'member' }}
                 layout="vertical"
@@ -508,22 +538,20 @@ export const OrgAdminMembers = () => {
                     />
                   </Form.Item>
                   <Form.Item
-                    label={
-                      inviteType === 'phone' ? t('org.invite.phone') : t('org.invite.email')
-                    }
                     name="identifierValue"
                     rules={[{ required: true }]}
                     style={{ flex: 1, minWidth: 220 }}
+                    label={inviteType === 'phone' ? t('org.invite.phone') : t('org.invite.email')}
                   >
                     <Input
                       autoComplete={inviteType === 'phone' ? 'tel' : 'email'}
                       inputMode={inviteType === 'phone' ? 'tel' : 'email'}
+                      type={inviteType === 'phone' ? 'tel' : 'email'}
                       placeholder={
                         inviteType === 'phone'
                           ? t('org.invite.phonePlaceholder')
                           : t('org.invite.emailPlaceholder')
                       }
-                      type={inviteType === 'phone' ? 'tel' : 'email'}
                     />
                   </Form.Item>
                   <Form.Item
@@ -540,7 +568,7 @@ export const OrgAdminMembers = () => {
                     />
                   </Form.Item>
                 </Flexbox>
-                <Button htmlType="submit" loading={inviting} type="primary">
+                <Button disabled={readOnly} htmlType="submit" loading={inviting} type="primary">
                   {t('org.invite.submit')}
                 </Button>
               </Form>
@@ -552,6 +580,7 @@ export const OrgAdminMembers = () => {
               <Text strong>{t('org.allocateTitle')}</Text>
               <Text type="secondary">{t('org.allocateHint')}</Text>
               <Form
+                disabled={readOnly}
                 form={allocForm}
                 layout="vertical"
                 onFinish={async (values) => {
@@ -600,7 +629,7 @@ export const OrgAdminMembers = () => {
                     <InputNumber min={0.01} step={0.5} style={{ width: '100%' }} />
                   </Form.Item>
                 </Flexbox>
-                <Button htmlType="submit" loading={busy} type="primary">
+                <Button disabled={readOnly} htmlType="submit" loading={busy} type="primary">
                   {t('org.allocateSubmit')}
                 </Button>
               </Form>
@@ -638,6 +667,7 @@ export const OrgAdminMembers = () => {
                     title: t('org.columns.team'),
                     render: (_, row) => (
                       <Select
+                        disabled={readOnly}
                         placeholder={t('org.assignTeam')}
                         style={{ minWidth: 140 }}
                         options={(teams || []).map((team) => ({
@@ -645,7 +675,7 @@ export const OrgAdminMembers = () => {
                           value: team.id,
                         }))}
                         onChange={async (teamId) => {
-                          if (!selectedOrgId) return;
+                          if (!selectedOrgId || readOnly) return;
                           await lambdaClient.organization.assignMemberToTeam.mutate({
                             orgId: selectedOrgId,
                             orgMemberId: row.id,
@@ -661,7 +691,7 @@ export const OrgAdminMembers = () => {
                     key: 'actions',
                     title: t('org.columns.actions'),
                     render: (_, row) =>
-                      row.role === 'owner' ? null : (
+                      row.role === 'owner' || readOnly ? null : (
                         <Flexbox horizontal gap={4}>
                           <Button
                             size="small"
@@ -750,10 +780,11 @@ export const OrgAdminMembers = () => {
                           {t('org.invite.showLink')}
                         </Button>
                         <Button
+                          disabled={readOnly}
                           size="small"
                           type="text"
                           onClick={async () => {
-                            if (!selectedOrgId) return;
+                            if (!selectedOrgId || readOnly) return;
                             await lambdaClient.organization.revokeInvite.mutate({
                               inviteId: row.id,
                               orgId: selectedOrgId,
@@ -780,6 +811,7 @@ export const OrgAdminMembers = () => {
               <Text strong>{t('org.teamsTitle')}</Text>
               <Text type="secondary">{t('org.teamsHint')}</Text>
               <Form
+                disabled={readOnly}
                 form={teamForm}
                 layout="inline"
                 onFinish={async (values) => {
@@ -802,7 +834,7 @@ export const OrgAdminMembers = () => {
                 <Form.Item name="name" rules={[{ required: true }]}>
                   <Input placeholder={t('org.teamName')} />
                 </Form.Item>
-                <Button htmlType="submit" loading={busy}>
+                <Button disabled={readOnly} htmlType="submit" loading={busy}>
                   {t('org.teamCreate')}
                 </Button>
               </Form>
@@ -820,13 +852,22 @@ export const OrgAdminMembers = () => {
                   {
                     dataIndex: 'modelIds',
                     title: t('org.columns.models'),
-                    render: (ids: string[]) => (ids?.length ? ids.join(', ') : t('org.allModels')),
+                    render: (ids: string[]) =>
+                      ids?.length ? (
+                        <Flexbox horizontal gap={4} wrap="wrap">
+                          {ids.map((id) => (
+                            <Tag key={id}>{id}</Tag>
+                          ))}
+                        </Flexbox>
+                      ) : (
+                        t('org.noModelsGranted')
+                      ),
                   },
                   {
                     key: 'actions',
                     title: t('org.columns.actions'),
                     render: (_, row) =>
-                      row.isDefault ? null : (
+                      row.isDefault || readOnly ? null : (
                         <Button
                           size="small"
                           type="text"
@@ -846,18 +887,15 @@ export const OrgAdminMembers = () => {
                 ]}
               />
               <Form
+                disabled={readOnly}
                 form={modelsForm}
                 layout="vertical"
                 onFinish={async (values) => {
-                  if (!selectedOrgId) return;
-                  const modelIds = values.modelIds
-                    .split(/[,\n]/)
-                    .map((s) => s.trim())
-                    .filter(Boolean);
+                  if (!selectedOrgId || readOnly) return;
                   setBusy(true);
                   try {
                     await lambdaClient.organization.setTeamModels.mutate({
-                      modelIds,
+                      modelIds: values.modelIds || [],
                       orgId: selectedOrgId,
                       teamId: values.teamId,
                     });
@@ -874,15 +912,29 @@ export const OrgAdminMembers = () => {
                   <Select
                     options={(teams || []).map((team) => ({ label: team.name, value: team.id }))}
                     style={{ width: '100%' }}
+                    onChange={(teamId) => {
+                      const team = (teams || []).find((item) => item.id === teamId);
+                      modelsForm.setFieldValue('modelIds', team?.modelIds || []);
+                    }}
                   />
                 </Form.Item>
                 <Form.Item label={t('org.modelIds')} name="modelIds">
-                  <Input.TextArea
-                    placeholder="openai/gpt-4o, anthropic/claude-3.5-sonnet"
-                    rows={2}
+                  <Select
+                    allowClear
+                    showSearch
+                    mode="multiple"
+                    options={modelOptions}
+                    placeholder={t('org.modelIdsPlaceholder')}
+                    style={{ width: '100%' }}
+                    filterOption={(input, option) => {
+                      const q = input.toLowerCase();
+                      const label = String(option?.label ?? '').toLowerCase();
+                      const value = String(option?.value ?? '').toLowerCase();
+                      return label.includes(q) || value.includes(q);
+                    }}
                   />
                 </Form.Item>
-                <Button htmlType="submit" loading={busy}>
+                <Button disabled={readOnly} htmlType="submit" loading={busy}>
                   {t('org.saveModels')}
                 </Button>
               </Form>
@@ -976,13 +1028,14 @@ export const OrgAdminMembers = () => {
             <Text type="secondary">{t('org.danger.warning')}</Text>
             <Text type="secondary">{t('org.danger.confirmLabel')}</Text>
             <Input
+              disabled={readOnly}
               placeholder={t('org.danger.confirmPlaceholder', { name: currentOrg.name })}
               value={deleteConfirmName}
               onChange={(e) => setDeleteConfirmName(e.target.value)}
             />
             <Button
               danger
-              disabled={deleteConfirmName !== currentOrg.name}
+              disabled={readOnly || deleteConfirmName !== currentOrg.name}
               loading={busy}
               onClick={() => void handleDeleteOrganization()}
             >

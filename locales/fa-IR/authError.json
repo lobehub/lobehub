@@ -4,6 +4,7 @@
   "actions.retry": "ورود مجدد",
   "codes.ACCOUNT_ALREADY_LINKED_TO_DIFFERENT_USER": "این حساب قبلاً به کاربر دیگری متصل شده است",
   "codes.ACCOUNT_NOT_FOUND": "حساب کاربری یافت نشد",
+  "codes.BANNED_USER": "حساب شما غیرفعال شده است. در صورت اشتباه با پشتیبانی تماس بگیرید.",
   "codes.CREDENTIAL_ACCOUNT_NOT_FOUND": "حساب کاربری با این اطلاعات وجود ندارد",
   "codes.DELETED_ACCOUNT_EMAIL": "این ایمیل به یک حساب حذف‌شده مرتبط است و نمی‌توان از آن برای ثبت‌نام استفاده کرد",
   "codes.EMAIL_CAN_NOT_BE_UPDATED": "امکان به‌روزرسانی ایمیل برای این حساب وجود ندارد",
@@ -33,7 +34,7 @@
   "codes.USER_ALREADY_EXISTS": "کاربر از قبل وجود دارد",
   "codes.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL": "این ایمیل قبلاً استفاده شده است، لطفاً ایمیل دیگری وارد کنید",
   "codes.USER_ALREADY_HAS_PASSWORD": "این حساب قبلاً دارای رمز عبور است",
-  "codes.USER_BANNED": "این کاربر مسدود شده است",
+  "codes.USER_BANNED": "حساب شما غیرفعال شده است. در صورت اشتباه با پشتیبانی تماس بگیرید.",
   "codes.USER_EMAIL_NOT_FOUND": "ایمیل یافت نشد",
   "codes.USER_NOT_FOUND": "کاربر یافت نشد",
   "title": "خطای احراز هویت"

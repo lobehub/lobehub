@@ -2,7 +2,7 @@ import { type ModelPerformance, type ModelUsage } from '@lobechat/types';
 import { Center, Flexbox, Icon } from '@lobehub/ui';
 import { Popover } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { CircleDollarSignIcon } from 'lucide-react';
+import { CoinsIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -157,7 +157,7 @@ const MessageCostBadge = memo<MessageCostBadgeProps>(({ usage, metadata, perform
       }
     >
       <Center horizontal aria-label={`${label}: ${amount}`} className={styles.chip}>
-        <Icon icon={CircleDollarSignIcon} size={14} />
+        <Icon icon={CoinsIcon} size={14} />
       </Center>
     </Popover>
   );

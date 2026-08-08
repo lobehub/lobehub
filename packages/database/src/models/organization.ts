@@ -1315,14 +1315,38 @@ export class OrganizationModel {
   /** Batch lookup of email + username for admin listings. */
   getUserIdentitiesByIds = async (
     userIds: string[],
-  ): Promise<Map<string, { email: string | null; username: string | null }>> => {
+  ): Promise<
+    Map<
+      string,
+      {
+        banReason: string | null;
+        banned: boolean;
+        email: string | null;
+        username: string | null;
+      }
+    >
+  > => {
     if (userIds.length === 0) return new Map();
     const rows = await this.db
-      .select({ email: users.email, id: users.id, username: users.username })
+      .select({
+        banReason: users.banReason,
+        banned: users.banned,
+        email: users.email,
+        id: users.id,
+        username: users.username,
+      })
       .from(users)
       .where(inArray(users.id, userIds));
     return new Map(
-      rows.map((r) => [r.id, { email: r.email ?? null, username: r.username ?? null }]),
+      rows.map((r) => [
+        r.id,
+        {
+          banReason: r.banReason ?? null,
+          banned: Boolean(r.banned),
+          email: r.email ?? null,
+          username: r.username ?? null,
+        },
+      ]),
     );
   };
 

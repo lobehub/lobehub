@@ -254,6 +254,19 @@ export const useSignIn = () => {
         {
           onError: (ctx) => {
             console.error('Sign in error:', ctx.error);
+            const code = String(ctx.error.code || '').toUpperCase();
+            if (ctx.error.status === 403 && (code === 'BANNED_USER' || code === 'USER_BANNED')) {
+              form.setFields([
+                {
+                  errors: [
+                    ctx.error.message ||
+                      'Your account has been deactivated. Please contact support.',
+                  ],
+                  name: 'password',
+                },
+              ]);
+              return;
+            }
             if (ctx.error.status === 403) {
               navigate(
                 `/verify-email?email=${encodeURIComponent(email)}&callbackUrl=${encodeURIComponent(callbackUrl)}`,
@@ -267,16 +280,20 @@ export const useSignIn = () => {
         },
       );
 
-      if (result.error && result.error.status !== 403) {
-        // Wrong password is the most common sign-in failure. Keep the error
-        // pinned inline on the field (persistent, with retry context) rather
-        // than a toast that vanishes in 3s (ux Read §1.1 / Same-Page Error).
-        form.setFields([
-          {
-            errors: [result.error.message || t('betterAuth.signin.error')],
-            name: 'password',
-          },
-        ]);
+      if (result.error) {
+        const code = String(result.error.code || '').toUpperCase();
+        const isBan = code === 'BANNED_USER' || code === 'USER_BANNED';
+        if (result.error.status !== 403 || isBan) {
+          // Wrong password is the most common sign-in failure. Keep the error
+          // pinned inline on the field (persistent, with retry context) rather
+          // than a toast that vanishes in 3s (ux Read §1.1 / Same-Page Error).
+          form.setFields([
+            {
+              errors: [result.error.message || t('betterAuth.signin.error')],
+              name: 'password',
+            },
+          ]);
+        }
       }
     } catch (error) {
       console.error('Sign in error:', error);
