@@ -1,9 +1,15 @@
 import { getEmailSupportHtml, getEmailSupportText } from '@/libs/email/support';
 
-import { emailBrandName, getEmailBrandCopyrightHtml, getEmailBrandLogoHtml } from './branding';
+import {
+  EMAIL_FONT_STACK,
+  emailBrandName,
+  formatEmailExpirationFa,
+  getEmailBrandCopyrightHtml,
+  getEmailBrandLogoHtml,
+} from './branding';
 
 /**
- * Change email verification template
+ * Change email verification template (Persian)
  * Sent to users when they request to change their email address
  */
 export const getChangeEmailVerificationTemplate = (params: {
@@ -12,24 +18,18 @@ export const getChangeEmailVerificationTemplate = (params: {
   userName?: string | null;
 }) => {
   const { url, userName, expiresInSeconds } = params;
-
-  // Format expiration time in a human-readable way
-  const expiresInHours = expiresInSeconds / 3600;
-  const expirationText =
-    expiresInHours >= 1
-      ? `${expiresInHours} hour${expiresInHours > 1 ? 's' : ''}`
-      : `${expiresInSeconds / 60} minutes`;
+  const expirationText = formatEmailExpirationFa(expiresInSeconds);
 
   return {
     html: `
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fa" dir="rtl">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Confirm your new email</title>
+  <title>تأیید ایمیل جدید</title>
 </head>
-<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f4f4f5; color: #1a1a1a;">
+<body style="margin: 0; padding: 0; font-family: ${EMAIL_FONT_STACK}; background-color: #f4f4f5; color: #1a1a1a; direction: rtl;">
   <!-- Container -->
   <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
 
@@ -42,38 +42,38 @@ export const getChangeEmailVerificationTemplate = (params: {
       <!-- Header -->
       <div style="text-align: center; margin-bottom: 32px;">
         <h1 style="color: #111827; font-size: 24px; font-weight: 700; margin: 0 0 12px 0; letter-spacing: -0.5px;">
-          Confirm your new email address
+          تأیید آدرس ایمیل جدید
         </h1>
         <p style="color: #6b7280; font-size: 16px; margin: 0;">
-          You requested to change your email.
+          درخواست تغییر ایمیل دریافت شد.
         </p>
       </div>
 
       <!-- Content -->
-      <div style="color: #374151; font-size: 16px; line-height: 1.6;">
-        ${userName ? `<p style="margin: 0 0 16px 0;">Hi <strong>${userName}</strong>,</p>` : ''}
+      <div style="color: #374151; font-size: 16px; line-height: 1.8;">
+        ${userName ? `<p style="margin: 0 0 16px 0;">سلام <strong>${userName}</strong>،</p>` : ''}
 
         <p style="margin: 0 0 24px 0;">
-          We received a request to change your ${emailBrandName} account email to this address. Please confirm by clicking the button below.
+          درخواستی برای تغییر ایمیل حساب ${emailBrandName} شما به این آدرس دریافت کردیم. لطفاً با کلیک روی دکمه زیر آن را تأیید کنید.
         </p>
 
         <!-- Button -->
         <div style="text-align: center; margin: 36px 0;">
           <a href="${url}" target="_blank"
              style="display: inline-block; background-color: #000000; color: #ffffff; text-decoration: none; padding: 16px 36px; border-radius: 14px; font-weight: 600; font-size: 16px; transition: transform 0.1s ease; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
-            Confirm New Email
+            تأیید ایمیل جدید
           </a>
         </div>
 
         <!-- Expiration Note -->
         <div style="background-color: #f9fafb; border-radius: 12px; padding: 16px; margin-bottom: 24px; border: 1px solid #f3f4f6;">
           <p style="color: #6b7280; font-size: 14px; margin: 0; text-align: center;">
-            ⏰ This link will expire in <strong>${expirationText}</strong>.
+            ⏰ این لینک تا <strong>${expirationText}</strong> دیگر منقضی می‌شود.
           </p>
         </div>
 
         <p style="color: #6b7280; font-size: 15px; margin: 0 0 8px 0;">
-          If you didn't request this change, you can safely ignore this email. Your current email will remain unchanged.
+          اگر این تغییر را درخواست نکرده‌اید، این ایمیل را نادیده بگیرید. ایمیل فعلی شما بدون تغییر می‌ماند.
         </p>
       </div>
 
@@ -83,9 +83,9 @@ export const getChangeEmailVerificationTemplate = (params: {
       <!-- Fallback Link -->
       <div style="text-align: center;">
         <p style="color: #9ca3af; font-size: 13px; margin: 0 0 8px 0;">
-          Button not working? Copy and paste this link into your browser:
+          دکمه کار نمی‌کند؟ این لینک را در مرورگر کپی کنید:
         </p>
-        <a href="${url}" style="color: #2563eb; font-size: 13px; text-decoration: none; word-break: break-all; display: block; line-height: 1.4;">
+        <a href="${url}" style="color: #2563eb; font-size: 13px; text-decoration: none; word-break: break-all; display: block; line-height: 1.4; direction: ltr;">
           ${url}
         </a>
       </div>
@@ -104,7 +104,7 @@ export const getChangeEmailVerificationTemplate = (params: {
 </body>
 </html>
     `,
-    subject: `Confirm Your New Email - ${emailBrandName}`,
-    text: `You requested to change your ${emailBrandName} account email. Please confirm by clicking this link: ${url}\n\nThis link will expire in ${expirationText}.\n\nIf you didn't request this change, you can safely ignore this email.\n\n${getEmailSupportText()}`,
+    subject: `تأیید ایمیل جدید — ${emailBrandName}`,
+    text: `درخواست تغییر ایمیل حساب ${emailBrandName} شما ثبت شد. لطفاً با کلیک روی این لینک تأیید کنید: ${url}\n\nاین لینک تا ${expirationText} دیگر منقضی می‌شود.\n\nاگر این تغییر را درخواست نکرده‌اید، این ایمیل را نادیده بگیرید.\n\n${getEmailSupportText()}`,
   };
 };

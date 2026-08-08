@@ -2,6 +2,7 @@ import {
   BRANDING_EMAIL,
   BRANDING_EMOJI,
   BRANDING_NAME,
+  BRANDING_NAME_FA,
   SOCIAL_URL,
 } from '@lobechat/business-const';
 import { describe, expect, it } from 'vitest';
@@ -44,11 +45,15 @@ const templates = [
 ];
 
 describe('email templates', () => {
-  it.each(templates)('uses Panachat branding instead of LobeHub', (template) => {
+  it.each(templates)('uses Persian Panachat branding instead of LobeHub', (template) => {
+    expect(template.html).toContain('lang="fa"');
+    expect(template.html).toContain('dir="rtl"');
     expect(template.html).toContain(BRANDING_EMOJI);
+    expect(template.html).toContain(BRANDING_NAME_FA);
     expect(template.html).toContain(BRANDING_NAME);
     expect(template.html).not.toContain('LobeHub');
     expect(template.html).not.toContain('🤯');
+    expect(template.subject).toContain(BRANDING_NAME_FA);
     expect(template.subject).not.toContain('LobeHub');
   });
 
@@ -70,5 +75,17 @@ describe('email templates', () => {
 
     expect(template.html).not.toContain('undefined');
     expect(template.text).not.toContain('undefined');
+  });
+
+  it('renders Persian invite role labels', () => {
+    const template = getWorkspaceInviteEmailTemplate({
+      expiresInDays: 7,
+      role: 'member',
+      url: 'https://example.com/invite',
+      workspaceName: 'تیم نمونه',
+    });
+
+    expect(template.html).toContain('عضو');
+    expect(template.subject).toContain(BRANDING_NAME_FA);
   });
 });
