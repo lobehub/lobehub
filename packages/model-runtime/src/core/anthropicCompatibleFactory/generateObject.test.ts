@@ -1,7 +1,10 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 
-import { createAnthropicGenerateObject } from './generateObject';
+import {
+  buildAnthropicGenerateObjectRequest,
+  createAnthropicGenerateObject,
+} from './generateObject';
 
 describe('Anthropic generateObject', () => {
   it('should throw error when neither tools nor schema is provided', async () => {
@@ -19,6 +22,44 @@ describe('Anthropic generateObject', () => {
     await expect(createAnthropicGenerateObject(mockClient as any, payload as any)).rejects.toThrow(
       'tools or schema is required',
     );
+  });
+
+  it('should strip trailing assistant messages for models without prefill support (LOBE-12572)', async () => {
+    const { requestParams } = await buildAnthropicGenerateObjectRequest({
+      messages: [
+        { content: 'Generate data', role: 'user' as const },
+        { content: '...', role: 'assistant' as const },
+        { content: '...', role: 'assistant' as const },
+      ],
+      model: 'claude-opus-5',
+      schema: {
+        name: 'extractor',
+        schema: { properties: {}, type: 'object' as const },
+      },
+    } as any);
+
+    expect(requestParams.messages).toEqual([{ content: 'Generate data', role: 'user' }]);
+  });
+
+  it('should key the prefill strip on config.requestModel when the logical id is unrecognized', async () => {
+    // A custom logical id the parser doesn't recognize can map to a Claude 5
+    // upstream id — the strip must follow the model actually sent.
+    const { requestParams } = await buildAnthropicGenerateObjectRequest(
+      {
+        messages: [
+          { content: 'Generate data', role: 'user' as const },
+          { content: '...', role: 'assistant' as const },
+        ],
+        model: 'my-custom-router-model',
+        schema: {
+          name: 'extractor',
+          schema: { properties: {}, type: 'object' as const },
+        },
+      } as any,
+      { requestModel: 'claude-opus-5' },
+    );
+
+    expect(requestParams.messages).toEqual([{ content: 'Generate data', role: 'user' }]);
   });
 
   describe('use struct output schema', () => {

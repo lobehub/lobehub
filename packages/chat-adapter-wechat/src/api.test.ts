@@ -6,6 +6,7 @@ import {
   CDN_BASE_URL,
   DEFAULT_BASE_URL,
   fetchQrCode,
+  getWechatTextSendCount,
   pollQrStatus,
   resolveAesKey,
   WechatApiClient,
@@ -125,6 +126,7 @@ describe('WechatApiClient', () => {
       await client.sendMessage('user_1', longText, 'ctx');
 
       // 4500 / 2000 = 3 chunks
+      expect(getWechatTextSendCount(longText)).toBe(3);
       expect(mockFetch).toHaveBeenCalledTimes(3);
     });
 

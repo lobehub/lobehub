@@ -4,11 +4,11 @@ import {
   sanitizeFolderName,
   topologicalSortFolders,
 } from '@lobechat/utils';
+import { toast, type ToastInstance } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 import pMap from 'p-map';
 import { type SWRResponse } from 'swr';
 
-import { message } from '@/components/AntdStaticMethods';
 import { FILE_UPLOAD_BLACKLIST, MAX_UPLOAD_FILE_COUNT } from '@/const/file';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { fileKeys } from '@/libs/swr/keys';
@@ -52,11 +52,30 @@ export class FileManageActionImpl {
     this.#get = get;
   }
 
+  #resolveChunkTargetId = async (id: string): Promise<string> => {
+    // Reuse the selector so local resolution consults every store list
+    // (fileList → resourceMap → resourceMap-by-fileId → resourceList).
+    const localResource = fileManagerSelectors.getFileByChunkTargetId(id)(this.#get());
+    if (localResource?.fileId) return localResource.fileId;
+    if (!id.startsWith('docs_')) return id;
+
+    try {
+      const resource = await fileService.getKnowledgeItem(id);
+      return resource?.fileId ?? id;
+    } catch {
+      return id;
+    }
+  };
+
+  #resolveChunkTargetIds = async (ids: string[]): Promise<string[]> =>
+    Promise.all(ids.map((id) => this.#resolveChunkTargetId(id)));
+
   #buildOptimisticUploadResource = (
     file: File,
     result: { id: string; url: string },
     knowledgeBaseId?: string,
     parentId?: string,
+    visibility?: 'private' | 'public',
   ): ResourceItem => {
     const existing = this.#get().resourceMap.get(result.id);
 
@@ -76,6 +95,10 @@ export class FileManageActionImpl {
       size: file.size,
       updatedAt: new Date(),
       url: result.url,
+      // Server persists the final visibility, but the row can be listed before
+      // the refetch lands. Carry the user's picker choice so the lock badge is
+      // consistent while the request is in flight.
+      ...(visibility !== undefined ? { visibility } : {}),
     };
   };
 
@@ -84,6 +107,7 @@ export class FileManageActionImpl {
     file: File,
     knowledgeBaseId?: string,
     parentId?: string,
+    visibility?: 'private' | 'public',
   ) => {
     this.#get().insertLocalResource(
       {
@@ -94,6 +118,7 @@ export class FileManageActionImpl {
         size: file.size,
         sourceType: 'file',
         url: '',
+        ...(visibility !== undefined ? { visibility } : {}),
       },
       id,
     );
@@ -138,6 +163,51 @@ export class FileManageActionImpl {
     });
   };
 
+  retryDockUpload = async (id: string): Promise<void> => {
+    const { dispatchDockFileList, dockUploadFileList } = this.#get();
+    const item = dockUploadFileList.find((file) => file.id === id);
+    if (!item || item.status !== 'error' || item.errorCode) return;
+
+    const abortController = new AbortController();
+    dispatchDockFileList({
+      id,
+      type: 'updateFile',
+      value: {
+        abortController,
+        error: undefined,
+        errorCode: undefined,
+        status: 'pending',
+        uploadState: undefined,
+      },
+    });
+
+    try {
+      const result = await this.#get().uploadWithProgress({
+        abortController,
+        file: item.file,
+        knowledgeBaseId: item.knowledgeBaseId,
+        onStatusUpdate: dispatchDockFileList,
+        parentId: item.parentId,
+        uploadId: id,
+        visibility: item.visibility,
+      });
+
+      if (!result) return;
+      await this.#get().refreshFileList({ revalidateResources: true });
+
+      if (!isChunkingUnsupported(item.file.type)) {
+        await this.#get().parseFilesToChunks([result.id], { skipExist: false });
+      }
+    } catch (error) {
+      console.error(error);
+      dispatchDockFileList({
+        id,
+        type: 'updateFile',
+        value: { error: t('upload.uploadFailed', { ns: 'error' }), status: 'error' },
+      });
+    }
+  };
+
   dispatchDockFileList = (payload: UploadFileListDispatch): void => {
     const nextValue = uploadFileListReducer(this.#get().dockUploadFileList, payload);
     if (nextValue === this.#get().dockUploadFileList) return;
@@ -146,11 +216,12 @@ export class FileManageActionImpl {
   };
 
   embeddingChunks = async (fileIds: string[]): Promise<void> => {
+    const chunkTargetIds = await this.#resolveChunkTargetIds(fileIds);
     // toggle file ids
-    this.#get().toggleEmbeddingIds(fileIds);
+    this.#get().toggleEmbeddingIds(chunkTargetIds);
 
     // parse files
-    const pools = fileIds.map(async (id) => {
+    const pools = chunkTargetIds.map(async (id) => {
       try {
         await ragService.createEmbeddingChunksTask(id);
       } catch (e) {
@@ -160,7 +231,7 @@ export class FileManageActionImpl {
 
     await Promise.all(pools);
     await this.#get().refreshFileList();
-    this.#get().toggleEmbeddingIds(fileIds, false);
+    this.#get().toggleEmbeddingIds(chunkTargetIds, false);
   };
 
   loadMoreKnowledgeItems = async (): Promise<void> => {
@@ -219,11 +290,12 @@ export class FileManageActionImpl {
   };
 
   parseFilesToChunks = async (ids: string[], params?: { skipExist?: boolean }): Promise<void> => {
+    const chunkTargetIds = await this.#resolveChunkTargetIds(ids);
     // toggle file ids
-    this.#get().toggleParsingIds(ids);
+    this.#get().toggleParsingIds(chunkTargetIds);
 
     // parse files
-    const pools = ids.map(async (id) => {
+    const pools = chunkTargetIds.map(async (id) => {
       try {
         await ragService.createParseFileTask(id, params?.skipExist);
       } catch (e) {
@@ -233,13 +305,14 @@ export class FileManageActionImpl {
 
     await Promise.all(pools);
     await this.#get().refreshFileList();
-    this.#get().toggleParsingIds(ids, false);
+    this.#get().toggleParsingIds(chunkTargetIds, false);
   };
 
   pushDockFileList = async (
     rawFiles: File[],
     knowledgeBaseId?: string,
     parentId?: string,
+    visibility?: 'private' | 'public',
   ): Promise<void> => {
     const { dispatchDockFileList } = this.#get();
     const generateUploadId = createNanoId(12);
@@ -271,12 +344,21 @@ export class FileManageActionImpl {
         abortController,
         file,
         id: `upload_${generateUploadId()}`,
+        knowledgeBaseId,
+        parentId,
         status: 'pending' as const,
+        visibility,
       };
     });
 
     for (const uploadFile of uploadFiles) {
-      this.#insertOptimisticUpload(uploadFile.id, uploadFile.file, knowledgeBaseId, parentId);
+      this.#insertOptimisticUpload(
+        uploadFile.id,
+        uploadFile.file,
+        knowledgeBaseId,
+        parentId,
+        visibility,
+      );
     }
 
     // 3. Add all files to dock
@@ -297,6 +379,7 @@ export class FileManageActionImpl {
           onStatusUpdate: dispatchDockFileList,
           parentId,
           uploadId: uploadFileItem.id,
+          visibility,
         });
 
         if (!result) {
@@ -309,6 +392,7 @@ export class FileManageActionImpl {
               result,
               knowledgeBaseId,
               parentId,
+              visibility,
             ),
           );
         }
@@ -339,31 +423,33 @@ export class FileManageActionImpl {
   };
 
   reEmbeddingChunks = async (id: string): Promise<void> => {
-    if (fileManagerSelectors.isCreatingChunkEmbeddingTask(id)(this.#get())) return;
+    const chunkTargetId = await this.#resolveChunkTargetId(id);
+    if (fileManagerSelectors.isCreatingChunkEmbeddingTask(chunkTargetId)(this.#get())) return;
 
     // toggle file ids
-    this.#get().toggleEmbeddingIds([id]);
+    this.#get().toggleEmbeddingIds([chunkTargetId]);
 
-    await serverFileService.removeFileAsyncTask(id, 'embedding');
-
-    await this.#get().refreshFileList();
-
-    await ragService.createEmbeddingChunksTask(id);
+    await serverFileService.removeFileAsyncTask(chunkTargetId, 'embedding');
 
     await this.#get().refreshFileList();
 
-    this.#get().toggleEmbeddingIds([id], false);
+    await ragService.createEmbeddingChunksTask(chunkTargetId);
+
+    await this.#get().refreshFileList();
+
+    this.#get().toggleEmbeddingIds([chunkTargetId], false);
   };
 
   reParseFile = async (id: string): Promise<void> => {
+    const chunkTargetId = await this.#resolveChunkTargetId(id);
     // toggle file ids
-    this.#get().toggleParsingIds([id]);
+    this.#get().toggleParsingIds([chunkTargetId]);
 
-    await ragService.retryParseFile(id);
+    await ragService.retryParseFile(chunkTargetId);
 
     await this.#get().refreshFileList();
 
-    this.#get().toggleParsingIds([id], false);
+    this.#get().toggleParsingIds([chunkTargetId], false);
   };
 
   #refreshKnowledgeListCaches = async (): Promise<void> => {
@@ -389,8 +475,14 @@ export class FileManageActionImpl {
     await revalidateResources();
   };
 
-  removeAllFiles = async (): Promise<void> => {
-    await fileService.removeAllFiles();
+  publishFileToWorkspace = async (id: string): Promise<void> => {
+    await fileService.publishFileToWorkspace(id);
+    await this.#get().refreshFileList();
+  };
+
+  setFileVisibility = async (id: string, visibility: 'private' | 'public'): Promise<void> => {
+    await fileService.setFileVisibility(id, visibility);
+    await this.#get().refreshFileList();
   };
 
   removeFileItem = async (id: string): Promise<void> => {
@@ -489,12 +581,11 @@ export class FileManageActionImpl {
     const sortedFolderPaths = topologicalSortFolders(folders);
 
     // Show toast notification if there are folders to create
-    const messageKey = 'uploadFolder.creatingFolders';
+    let creatingFoldersToast: ToastInstance | undefined;
     if (sortedFolderPaths.length > 0) {
-      message.loading({
-        content: t('header.actions.uploadFolder.creatingFolders', { ns: 'file' }),
-        duration: 0, // Don't auto-dismiss
-        key: messageKey,
+      creatingFoldersToast = toast.loading({
+        duration: Infinity, // Don't auto-dismiss
+        title: t('header.actions.uploadFolder.creatingFolders', { ns: 'file' }),
       });
     }
 
@@ -549,9 +640,7 @@ export class FileManageActionImpl {
       }
 
       // Dismiss the toast after folders are created
-      if (sortedFolderPaths.length > 0) {
-        message.destroy(messageKey);
-      }
+      creatingFoldersToast?.close();
 
       // Refresh file list to show the new folders
       await this.#get().refreshFileList();
@@ -587,10 +676,12 @@ export class FileManageActionImpl {
       // 7. Add all files to dock
       dispatchDockFileList({
         atStart: true,
-        files: uploadItems.map(({ abortController, file, id }) => ({
+        files: uploadItems.map(({ abortController, file, id, parentId }) => ({
           abortController,
           file,
           id,
+          knowledgeBaseId,
+          parentId,
           status: 'pending' as const,
         })),
         type: 'addFiles',
@@ -653,9 +744,7 @@ export class FileManageActionImpl {
       }
     } catch (error) {
       // Dismiss toast on error
-      if (sortedFolderPaths.length > 0) {
-        message.destroy(messageKey);
-      }
+      creatingFoldersToast?.close();
       throw error;
     }
   };

@@ -5,6 +5,7 @@ import { getErrorCodeSpec } from '@lobechat/model-runtime';
 import type { CreateMessageParams, SendMessageServerResponse } from '@lobechat/types';
 import { AiSendMessageServerSchema, RequestTrigger, StructureOutputSchema } from '@lobechat/types';
 import { createTimingHelpers, createTimingRequestId } from '@lobechat/utils';
+import { pickNonEmptyString, toRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
 import { getStatusKeyFromCode } from '@trpc/server/unstable-core-do-not-import';
 import debug from 'debug';
@@ -19,6 +20,8 @@ import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { markSilentTRPCErrorLog } from '@/libs/trpc/utils/errorLogger';
+import { unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
 import { resolveContext } from '@/server/routers/lambda/_helpers/resolveContext';
 import { AiChatService } from '@/server/services/aiChat';
 import { AiGenerationService } from '@/server/services/aiGeneration';
@@ -26,42 +29,57 @@ import { FileService } from '@/server/services/file';
 import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archiveToolResult';
 
 const log = debug('lobe-lambda-router:ai-chat');
+
+const PG_UNIQUE_VIOLATION = '23505';
+
+/**
+ * Translate a primary-key collision on a client-supplied id into a CONFLICT.
+ *
+ * Only reachable once the client mints its own ids. The realistic trigger is a
+ * retried send replaying the same ids, not a nanoid collision — so it is a
+ * client-correctable condition and must not surface as a 500.
+ *
+ * The message is deliberately generic: echoing which id collided would let a
+ * caller probe for the existence of rows it cannot read.
+ */
+const rethrowIdConflict = (error: unknown): never => {
+  if (unwrapPgError(error)?.code === PG_UNIQUE_VIOLATION) {
+    throw new TRPCError({
+      code: 'CONFLICT',
+      message: 'This message has already been created.',
+    });
+  }
+  throw error;
+};
 const { createPrefixedTimingContext, logTiming, runTimedStage } = createTimingHelpers(
   'lobe-server:chat:lobehub:timing',
 );
-const SILENT_TRPC_ERROR_LOG_KEY = '__lobeSilentTRPCErrorLog';
-
 type TRPCErrorCode = ConstructorParameters<typeof TRPCError>[0]['code'];
 type TRPCStatusCode = Parameters<typeof getStatusKeyFromCode>[0];
 
-const getRuntimeErrorType = (error: unknown): string | undefined => {
+const getRuntimeErrorType = (error: unknown): number | string | undefined => {
   if (!error || typeof error !== 'object') return;
 
   const errorType = (error as { errorType?: unknown }).errorType;
-  return typeof errorType === 'string' ? errorType : undefined;
+  return typeof errorType === 'number' || typeof errorType === 'string' ? errorType : undefined;
 };
 
 const getTRPCErrorCodeFromStatus = (status: number): TRPCErrorCode => {
   const code = getStatusKeyFromCode(status as TRPCStatusCode) as TRPCErrorCode;
-  if (code !== 'INTERNAL_SERVER_ERROR' || status === 500) return code;
+  if (code !== 'INTERNAL_SERVER_ERROR') return code;
 
-  if (status >= 500) return 'INTERNAL_SERVER_ERROR';
-  if (status >= 400) return 'BAD_REQUEST';
-
-  return 'INTERNAL_SERVER_ERROR';
+  return status >= 400 && status < 500 ? 'BAD_REQUEST' : 'INTERNAL_SERVER_ERROR';
 };
 
-const markSilentTRPCErrorLog = (error: unknown) => {
-  if (!error || typeof error !== 'object') return;
+const getRuntimeErrorMessage = (error: unknown): string | undefined => {
+  const errorRecord = toRecord(error);
+  if (!errorRecord) return;
 
-  try {
-    Object.defineProperty(error, SILENT_TRPC_ERROR_LOG_KEY, {
-      configurable: true,
-      value: true,
-    });
-  } catch {
-    // Best-effort logging hint; never let it mask the original runtime error.
-  }
+  return (
+    pickNonEmptyString(errorRecord.message) ??
+    pickNonEmptyString(toRecord(errorRecord.error)?.message) ??
+    pickNonEmptyString(errorRecord.errorMessage)
+  );
 };
 
 const createRuntimeTRPCError = (
@@ -69,14 +87,22 @@ const createRuntimeTRPCError = (
   options?: { silentHandlerLog?: boolean },
 ): TRPCError | undefined => {
   const errorType = getRuntimeErrorType(error);
-  const spec = getErrorCodeSpec(errorType);
-  if (errorType && spec) {
-    if (options?.silentHandlerLog && spec.httpStatus < 500) markSilentTRPCErrorLog(error);
+  const runtimeStatus =
+    typeof errorType === 'number'
+      ? errorType >= 400 && errorType <= 599
+        ? errorType
+        : undefined
+      : getErrorCodeSpec(errorType)?.httpStatus;
+  if (runtimeStatus) {
+    if (options?.silentHandlerLog && runtimeStatus < 500) markSilentTRPCErrorLog(error);
 
     return new TRPCError({
       cause: error,
-      code: getTRPCErrorCodeFromStatus(spec.httpStatus),
-      message: errorType,
+      code: getTRPCErrorCodeFromStatus(runtimeStatus),
+      message:
+        typeof errorType === 'string'
+          ? errorType
+          : (getRuntimeErrorMessage(error) ?? `Request failed (${runtimeStatus})`),
     });
   }
 
@@ -125,8 +151,8 @@ export const aiChatRouter = router({
     log('schema: %O', input.schema);
 
     // Pre-allocate the tracing row id so we can return it to the client even
-    // though the actual `service.record()` call happens in Next's `after()`
-    // (after the response has been sent). Honour the caller-supplied id when
+    // though the actual `service.record()` call happens after the response has
+    // been sent. Honour the caller-supplied id when
     // one was passed via `tracing.tracingId` — the schema already validates
     // it as UUID, so a malformed value never reaches here.
     const tracingId = input.tracing?.tracingId ?? randomUUID();
@@ -214,6 +240,8 @@ export const aiChatRouter = router({
               groupId: input.groupId,
               messages: input.newTopic!.topicMessageIds,
               metadata: input.newTopic!.metadata,
+              model: input.newTopic!.model,
+              provider: input.newTopic!.provider,
               sessionId,
               title: input.newTopic!.title,
               trigger: input.newTopic!.trigger,
@@ -222,15 +250,18 @@ export const aiChatRouter = router({
               timingContext,
               'lambda.aiChat.topic.create',
             );
+            // `newTopic.id` is the id the client already rendered this
+            // conversation under; honour it so the topic never changes id
+            // mid-flight. Absent (older client) → the model mints one.
             return modelTiming
-              ? ctx.topicModel.create(payload, undefined, modelTiming)
-              : ctx.topicModel.create(payload);
+              ? ctx.topicModel.create(payload, input.newTopic!.id, modelTiming)
+              : ctx.topicModel.create(payload, input.newTopic!.id);
           },
           {
             messageCount: input.newTopic.topicMessageIds?.length ?? 0,
             trigger: input.newTopic.trigger,
           },
-        );
+        ).catch(rethrowIdConflict);
         topicId = topicItem.id;
         isCreateNewTopic = true;
         log('new topic created with id: %s', topicId);
@@ -280,6 +311,35 @@ export const aiChatRouter = router({
 
       let parentId = input.newUserMessage.parentId;
 
+      // Server-authoritative parent resolution (concurrent-append race fix).
+      //
+      // The client derives parentId from a local snapshot of the conversation
+      // tail, but that tail can advance server-side without the client knowing
+      // — e.g. another assistant turn is persisted while the user is composing
+      // or right as they hit send. Trusting the client's stale parentId forks
+      // the new user turn off an earlier node instead of the real head, which
+      // splits the conversation.
+      //
+      // For a plain append to an existing topic we re-read the spine head from
+      // the DB so the message attaches after the latest assistant turn. Note we
+      // anchor on the spine head (latest non-tool, non-signal message), NOT the
+      // raw latest row: tool results are inline children of their assistant
+      // turn, so a new user turn parents off the assistant, never a tool result.
+      // A brand-new topic (no prior messages) or a brand-new thread (must anchor
+      // on its explicit branch point / sourceMessageId) keep the client parentId.
+      //
+      // Fall back to the client parentId when the spine head is absent (no spine
+      // message yet), so we never orphan the turn by overwriting it to undefined.
+      if (topicId && !input.newTopic && !input.newThread) {
+        const resolvedParentId = await runTimedStage(
+          timingContext,
+          'lambda.aiChat.resolveParentId',
+          () => ctx.messageModel.getLatestSpineMessageId({ threadId, topicId }),
+          { hasThreadId: !!threadId },
+        );
+        parentId = resolvedParentId ?? parentId;
+      }
+
       if (input.preloadMessages?.length) {
         log('creating %d preload messages before user message', input.preloadMessages.length);
 
@@ -322,11 +382,16 @@ export const aiChatRouter = router({
       // create user message
       log('creating user message with content length: %d', input.newUserMessage.content.length);
 
-      // Build user message metadata with pageSelections if present
+      // Build user message metadata with attached context selections if present.
       const userMessageMetadata =
-        input.newUserMessage.metadata || input.newUserMessage.pageSelections?.length
+        input.newUserMessage.metadata ||
+        input.newUserMessage.contextSelections?.length ||
+        input.newUserMessage.pageSelections?.length
           ? {
               ...input.newUserMessage.metadata,
+              ...(input.newUserMessage.contextSelections?.length
+                ? { contextSelections: input.newUserMessage.contextSelections }
+                : undefined),
               ...(input.newUserMessage.pageSelections?.length
                 ? { pageSelections: input.newUserMessage.pageSelections }
                 : undefined),
@@ -369,6 +434,12 @@ export const aiChatRouter = router({
           return ctx.messageModel.createUserAndAssistantMessages(
             { assistantMessage, userMessage },
             {
+              // Ids the client already rendered the pair under. Omitted by an
+              // older client, in which case the model mints them as before.
+              ids: {
+                assistantMessageId: input.newAssistantMessage.id,
+                userMessageId: input.newUserMessage.id,
+              },
               ...(modelTiming ? { timing: modelTiming } : {}),
             },
           );
@@ -380,10 +451,11 @@ export const aiChatRouter = router({
           provider: input.newAssistantMessage.provider,
         },
       );
-      const { assistantMessage: assistantMessageItem, userMessage: userMessageItem } =
+      const { assistantMessage: assistantMessageItem, userMessage: userMessageItem } = await (
         agentTouchUpdatedAtTask
-          ? (await Promise.all([createMessagePairPromise, agentTouchUpdatedAtTask]))[0]
-          : await createMessagePairPromise;
+          ? Promise.all([createMessagePairPromise, agentTouchUpdatedAtTask]).then(([pair]) => pair)
+          : createMessagePairPromise
+      ).catch(rethrowIdConflict);
 
       const messageId = userMessageItem.id;
       log('user message created with id: %s', messageId);

@@ -9,10 +9,17 @@ import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import { type MarkdownElement, markdownElements } from '../Markdown/plugins';
 
-const rehypePlugins = markdownElements
+// Honor each plugin's declared `scope`: this hook renders assistant / grouped
+// messages, so user-only constructs (skill, tool, action, mention, …) must not
+// be parsed here — otherwise a `<skill … />` the model happens to echo back
+// would render as an interactive chip. Mirrors the `scope !== 'assistant'`
+// filter on the user-message hook.
+const assistantMarkdownElements = markdownElements.filter((s) => s.scope !== 'user');
+
+const rehypePlugins = assistantMarkdownElements
   .map((element: MarkdownElement) => element.rehypePlugin)
   .filter(Boolean);
-const remarkPlugins = markdownElements
+const remarkPlugins = assistantMarkdownElements
   .map((element: MarkdownElement) => element.remarkPlugin)
   .filter(Boolean);
 
@@ -64,19 +71,22 @@ export const useChatMarkdown = ({
         enableStream,
         rehypePlugins,
         remarkPlugins,
-        showFootnotes:
-          !!citations && citations.length > 0 && citations.every((item) => item.title !== item.url),
+        showFootnotes: !citations?.length || citations.every((item) => item.title !== item.url),
       }) satisfies Partial<MarkdownProps>,
     [animated, citations, components, enableStream],
   );
 
-  const drawer = drawerContent ? (
-    <HtmlPreviewDrawer
-      content={drawerContent}
-      open={!!drawerContent}
-      onClose={() => setDrawerContent(null)}
-    />
-  ) : null;
+  const drawer = useMemo(
+    () =>
+      drawerContent ? (
+        <HtmlPreviewDrawer
+          content={drawerContent}
+          open={!!drawerContent}
+          onClose={() => setDrawerContent(null)}
+        />
+      ) : null,
+    [drawerContent],
+  );
 
   return useMemo(() => ({ drawer, markdownProps }), [drawer, markdownProps]);
 };

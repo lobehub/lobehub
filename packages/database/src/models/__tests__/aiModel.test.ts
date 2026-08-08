@@ -1,22 +1,39 @@
 // @vitest-environment node
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import type { AiProviderModelListItem } from 'model-bank';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { CHAT_MODEL_IMAGE_GENERATION_PARAMS } from 'model-bank';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import type { NewAiModelItem } from '../../schemas';
-import { aiModels, users } from '../../schemas';
+import { aiModels, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AiModelModel } from '../aiModel';
+
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  loadModels: vi.fn().mockResolvedValue([
+    { id: 'gpt-4', providerId: 'openai', type: 'chat' },
+    { id: 'dall-e-3', providerId: 'openai', type: 'image' },
+    { id: 'gpt-4o', providerId: 'openai', type: 'chat' },
+  ]),
+}));
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
 const userId = 'ai-model-test-user-id';
+const workspaceId = 'ai-model-test-workspace-id';
 const aiProviderModel = new AiModelModel(serverDB, userId);
+const workspaceAiModelModel = new AiModelModel(serverDB, userId, workspaceId);
 
 beforeEach(async () => {
   await serverDB.delete(users);
   await serverDB.insert(users).values([{ id: userId }, { id: 'user2' }]);
+  await serverDB.insert(workspaces).values({
+    id: workspaceId,
+    name: 'Model Test Workspace',
+    primaryOwnerId: userId,
+    slug: workspaceId,
+  });
 });
 
 afterEach(async () => {
@@ -161,6 +178,23 @@ describe('AiModelModel', () => {
       expect(userGroups[0].id).toBe('aihubmix-2');
       expect(userGroups[1].id).toBe('qvq');
     });
+
+    it('should not include personal models in workspace scope', async () => {
+      await aiProviderModel.create({
+        displayName: 'Personal GPT',
+        id: 'gpt-personal',
+        providerId: 'openai',
+      });
+      await workspaceAiModelModel.create({
+        displayName: 'Workspace GPT',
+        id: 'gpt-workspace',
+        providerId: 'openai',
+      });
+
+      const models = await workspaceAiModelModel.query();
+
+      expect(models.map((item) => item.id)).toEqual(['gpt-workspace']);
+    });
   });
 
   describe('findById', () => {
@@ -204,6 +238,213 @@ describe('AiModelModel', () => {
         contextWindowTokens: 3000,
         userId,
       });
+    });
+
+    it('should merge config instead of replacing it, preserving chatConfig', async () => {
+      const { id } = await aiProviderModel.create({ id: 'gpt-5.6-sol', providerId: 'azure' });
+      await aiProviderModel.updateModelReasoningConfig(id, 'azure', {
+        gpt5_6ReasoningEffort: 'high',
+      });
+
+      // The old model-config modal only knows deploymentName; saving it must not
+      // wipe the sibling chatConfig namespace.
+      await aiProviderModel.update(id, 'azure', { config: { deploymentName: 'my-deploy' } });
+
+      const row = await aiProviderModel.findByIdAndProvider(id, 'azure');
+      expect(row!.config).toEqual({
+        chatConfig: { gpt5_6ReasoningEffort: 'high' },
+        deploymentName: 'my-deploy',
+      });
+    });
+  });
+
+  describe('model reasoning config (personal scope)', () => {
+    it('should create a preference-only row without flipping enabled or source', async () => {
+      await aiProviderModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
+        gpt5_6ReasoningEffort: 'xhigh',
+        reasoningMode: 'pro',
+      });
+
+      const row = await serverDB.query.aiModels.findFirst({
+        where: and(eq(aiModels.id, 'gpt-5.6-sol'), eq(aiModels.userId, userId)),
+      });
+      expect(row!.config).toEqual({
+        chatConfig: { gpt5_6ReasoningEffort: 'xhigh', reasoningMode: 'pro' },
+      });
+      // A row that exists only to hold the preference must not change model
+      // visibility (enabled NULL falls back to builtin defaults) nor claim an
+      // origin that would block later remote-sync updates.
+      expect(row!.enabled).toBeNull();
+      expect(row!.source).toBeNull();
+      expect(row!.workspaceId).toBeNull();
+    });
+
+    it('should merge partial chatConfig writes and preserve sibling config keys', async () => {
+      await aiProviderModel.create({ id: 'gpt-5.6-sol', providerId: 'openai' });
+      await aiProviderModel.update('gpt-5.6-sol', 'openai', {
+        config: { deploymentName: 'keep-me' },
+      });
+
+      await aiProviderModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
+        gpt5_6ReasoningEffort: 'high',
+      });
+      await aiProviderModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
+        reasoningMode: 'pro',
+      });
+
+      const config = await aiProviderModel.getModelReasoningConfig('gpt-5.6-sol', 'openai');
+      expect(config).toEqual({ gpt5_6ReasoningEffort: 'high', reasoningMode: 'pro' });
+
+      const row = await aiProviderModel.findByIdAndProvider('gpt-5.6-sol', 'openai');
+      expect(row!.config).toMatchObject({ deploymentName: 'keep-me' });
+    });
+
+    it('should read/write the personal row even when scoped to a workspace', async () => {
+      await workspaceAiModelModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
+        gpt5_6ReasoningEffort: 'low',
+      });
+
+      // Written to the personal row (workspaceId NULL), not the workspace row
+      const rows = await serverDB.query.aiModels.findMany({
+        where: and(eq(aiModels.id, 'gpt-5.6-sol'), eq(aiModels.userId, userId)),
+      });
+      expect(rows).toHaveLength(1);
+      expect(rows[0].workspaceId).toBeNull();
+
+      // And readable through both scopes — the preference is cross-workspace
+      expect(await workspaceAiModelModel.getModelReasoningConfig('gpt-5.6-sol', 'openai')).toEqual({
+        gpt5_6ReasoningEffort: 'low',
+      });
+      expect(await aiProviderModel.getModelReasoningConfig('gpt-5.6-sol', 'openai')).toEqual({
+        gpt5_6ReasoningEffort: 'low',
+      });
+    });
+
+    it('should isolate configs across providers and users', async () => {
+      await aiProviderModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
+        gpt5_6ReasoningEffort: 'high',
+      });
+
+      expect(await aiProviderModel.getModelReasoningConfig('gpt-5.6-sol', 'azure')).toBeUndefined();
+
+      const otherUserModel = new AiModelModel(serverDB, 'user2');
+      expect(await otherUserModel.getModelReasoningConfig('gpt-5.6-sol', 'openai')).toBeUndefined();
+    });
+
+    it('should survive a remote model list sync', async () => {
+      await aiProviderModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
+        gpt5_6ReasoningEffort: 'high',
+      });
+
+      await aiProviderModel.batchUpdateAiModels('openai', [
+        {
+          contextWindowTokens: 400_000,
+          displayName: 'GPT-5.6 Sol',
+          enabled: true,
+          id: 'gpt-5.6-sol',
+          source: 'remote',
+          type: 'chat',
+        } as AiProviderModelListItem,
+      ]);
+
+      expect(await aiProviderModel.getModelReasoningConfig('gpt-5.6-sol', 'openai')).toEqual({
+        gpt5_6ReasoningEffort: 'high',
+      });
+    });
+
+    it('should survive clearing remote models after a sync', async () => {
+      await aiProviderModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
+        gpt5_6ReasoningEffort: 'high',
+      });
+
+      // Sync claims the preference row as remote too (so its synced metadata
+      // stays clearable); clearRemoteModels demotes chatConfig-holding remote
+      // rows instead of deleting them, so the preference still survives
+      await aiProviderModel.batchUpdateAiModels('openai', [
+        {
+          contextWindowTokens: 400_000,
+          displayName: 'GPT-5.6 Sol',
+          enabled: true,
+          id: 'gpt-5.6-sol',
+          source: 'remote',
+          type: 'chat',
+        },
+        { enabled: true, id: 'some-remote-model', source: 'remote', type: 'chat' },
+      ] as AiProviderModelListItem[]);
+      await aiProviderModel.clearRemoteModels('openai');
+
+      expect(await aiProviderModel.getModelReasoningConfig('gpt-5.6-sol', 'openai')).toEqual({
+        gpt5_6ReasoningEffort: 'high',
+      });
+      // Demoted back to a hidden preference-only shell — the synced metadata
+      // must not linger as a ghost list entry after clearing remote models
+      const row = await aiProviderModel.findByIdAndProvider('gpt-5.6-sol', 'openai');
+      expect(AiModelModel.isPreferenceOnlyRow(row!)).toBe(true);
+      // The plain remote row is still cleared as before
+      expect(await aiProviderModel.findByIdAndProvider('some-remote-model', 'openai')).toBe(
+        undefined,
+      );
+    });
+
+    it('should survive clearing remote models saved in remote-first order', async () => {
+      // Row created by the remote fetch first...
+      await aiProviderModel.batchUpdateAiModels('openai', [
+        {
+          contextWindowTokens: 400_000,
+          displayName: 'GPT-5.6 Sol',
+          enabled: true,
+          id: 'gpt-5.6-sol',
+          source: 'remote',
+          type: 'chat',
+        },
+        { enabled: true, id: 'some-remote-model', source: 'remote', type: 'chat' },
+      ] as AiProviderModelListItem[]);
+      // ...then the user saves a preference onto the remote row
+      await aiProviderModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
+        gpt5_6ReasoningEffort: 'high',
+      });
+
+      await aiProviderModel.clearRemoteModels('openai');
+
+      expect(await aiProviderModel.getModelReasoningConfig('gpt-5.6-sol', 'openai')).toEqual({
+        gpt5_6ReasoningEffort: 'high',
+      });
+      // Demoted to a preference-only row: remote identity and metadata stripped
+      const row = await aiProviderModel.findByIdAndProvider('gpt-5.6-sol', 'openai');
+      expect(row!.source).toBeNull();
+      expect(row!.displayName).toBeNull();
+      expect(row!.contextWindowTokens).toBeNull();
+      expect(row!.enabled).toBeNull();
+      // The plain remote row is still cleared
+      expect(await aiProviderModel.findByIdAndProvider('some-remote-model', 'openai')).toBe(
+        undefined,
+      );
+    });
+
+    it('should identify preference-only shells', async () => {
+      await aiProviderModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
+        gpt5_6ReasoningEffort: 'high',
+      });
+      await aiProviderModel.create({ enabled: true, id: 'real-model', providerId: 'openai' });
+
+      const shell = await aiProviderModel.findByIdAndProvider('gpt-5.6-sol', 'openai');
+      const realModel = await aiProviderModel.findByIdAndProvider('real-model', 'openai');
+
+      expect(AiModelModel.isPreferenceOnlyRow(shell!)).toBe(true);
+      expect(AiModelModel.isPreferenceOnlyRow(realModel!)).toBe(false);
+
+      // Promoting a shell via update (the createAiModel duplicate-bypass path)
+      // keeps the saved preference
+      await aiProviderModel.update('gpt-5.6-sol', 'openai', {
+        displayName: 'Recreated',
+        enabled: true,
+        source: 'custom',
+      });
+      expect(await aiProviderModel.getModelReasoningConfig('gpt-5.6-sol', 'openai')).toEqual({
+        gpt5_6ReasoningEffort: 'high',
+      });
+      const promoted = await aiProviderModel.findByIdAndProvider('gpt-5.6-sol', 'openai');
+      expect(AiModelModel.isPreferenceOnlyRow(promoted!)).toBe(false);
     });
   });
 
@@ -276,11 +517,45 @@ describe('AiModelModel', () => {
       expect(updatedModel?.enabled).toBe(false);
       expect(updatedModel?.type).toBe('image');
     });
+
+    it('should write workspace model toggles without updating personal models', async () => {
+      await aiProviderModel.create({
+        enabled: true,
+        id: 'gpt-4o',
+        providerId: 'openai',
+      });
+
+      await workspaceAiModelModel.toggleModelEnabled({
+        enabled: false,
+        id: 'gpt-4o',
+        providerId: 'openai',
+      });
+
+      const personal = await serverDB.query.aiModels.findFirst({
+        where: and(
+          eq(aiModels.id, 'gpt-4o'),
+          eq(aiModels.providerId, 'openai'),
+          eq(aiModels.userId, userId),
+          isNull(aiModels.workspaceId),
+        ),
+      });
+      const workspace = await serverDB.query.aiModels.findFirst({
+        where: and(
+          eq(aiModels.id, 'gpt-4o'),
+          eq(aiModels.providerId, 'openai'),
+          eq(aiModels.userId, userId),
+          eq(aiModels.workspaceId, workspaceId),
+        ),
+      });
+
+      expect(personal?.enabled).toBe(true);
+      expect(workspace).toMatchObject({ enabled: false, workspaceId });
+    });
   });
 
   describe('batchUpdateAiModels', () => {
-    it('should insert new models and update existing ones', async () => {
-      // Create an initial model
+    it('should insert new models and preserve existing user-editable fields on conflict', async () => {
+      // Create an initial model — displayName set by user
       await aiProviderModel.create({
         id: 'existing-model',
         providerId: 'openai',
@@ -290,10 +565,12 @@ describe('AiModelModel', () => {
       const models = [
         {
           id: 'existing-model',
+          // Provider sends a new displayName, but DB-first COALESCE keeps 'Old Name'
           displayName: 'Updated Name',
         },
         {
           id: 'new-model',
+          // No existing row — incoming value is used
           displayName: 'New Model',
         },
       ] as AiProviderModelListItem[];
@@ -302,8 +579,90 @@ describe('AiModelModel', () => {
 
       const allModels = await aiProviderModel.query();
       expect(allModels).toHaveLength(2);
+      // Existing non-null displayName is preserved (DB-first)
       expect(allModels.find((m) => m.id === 'existing-model')?.displayName).toBe('Old Name');
+      // New model has no previous value → incoming value fills it
       expect(allModels.find((m) => m.id === 'new-model')?.displayName).toBe('New Model');
+    });
+
+    it('should fill NULL user-editable fields from incoming data', async () => {
+      // Create a model with no displayName, contextWindowTokens, abilities, parameters, or type override
+      await serverDB.insert(aiModels).values({
+        id: 'bare-model',
+        providerId: 'openai',
+        userId,
+        // displayName intentionally left NULL
+      });
+
+      const models = [
+        {
+          id: 'bare-model',
+          displayName: 'Filled Name',
+          contextWindowTokens: 8192,
+          type: 'chat',
+        },
+      ] as AiProviderModelListItem[];
+
+      await aiProviderModel.batchUpdateAiModels('openai', models);
+
+      const allModels = await aiProviderModel.query();
+      const model = allModels.find((m) => m.id === 'bare-model');
+      // NULL slots are filled by the incoming provider data
+      expect(model?.displayName).toBe('Filled Name');
+      expect(model?.contextWindowTokens).toBe(8192);
+      expect(model?.type).toBe('chat');
+    });
+
+    it('should not overwrite existing displayName with null/undefined when updating', async () => {
+      // Create an initial model with displayName
+      await aiProviderModel.create({
+        id: 'existing-model',
+        providerId: 'openai',
+        displayName: 'Old Name',
+      });
+
+      const models = [
+        {
+          id: 'existing-model',
+          enabled: false,
+          type: 'chat' as const,
+          // displayName is missing/undefined
+        },
+      ] as AiProviderModelListItem[];
+
+      await aiProviderModel.batchUpdateAiModels('openai', models);
+
+      const allModels = await aiProviderModel.query();
+      const model = allModels.find((m) => m.id === 'existing-model');
+      // displayName is preserved (DB-first) because it was already set
+      expect(model?.displayName).toBe('Old Name');
+    });
+
+    it('should not overwrite existing abilities/parameters with empty defaults when omitted in sparse update', async () => {
+      // Create an initial model with abilities and parameters
+      await aiProviderModel.create({
+        id: 'existing-model',
+        providerId: 'openai',
+        abilities: { functionCall: true },
+        parameters: { temperature: 0.5 },
+      });
+
+      const models = [
+        {
+          id: 'existing-model',
+          enabled: false,
+          type: 'chat' as const,
+          // abilities and parameters are omitted in the payload
+          displayName: 'Updated Name',
+        },
+      ] as AiProviderModelListItem[];
+
+      await aiProviderModel.batchUpdateAiModels('openai', models);
+
+      const allModels = await aiProviderModel.query();
+      const model = allModels.find((m) => m.id === 'existing-model');
+      expect(model?.abilities).toEqual({ functionCall: true });
+      expect(model?.parameters).toEqual({ temperature: 0.5 });
     });
 
     it('should return empty array when models array is empty', async () => {
@@ -313,6 +672,65 @@ describe('AiModelModel', () => {
       // Verify no models were created
       const allModels = await aiProviderModel.query();
       expect(allModels).toHaveLength(0);
+    });
+
+    it('should keep the first model when a batch contains duplicate ids', async () => {
+      const models = [
+        {
+          abilities: { functionCall: true },
+          displayName: 'First Model',
+          enabled: true,
+          id: 'duplicate-model',
+          source: 'remote',
+          type: 'chat',
+        },
+        {
+          abilities: { vision: true },
+          displayName: 'Second Model',
+          enabled: false,
+          id: 'duplicate-model',
+          source: 'remote',
+          type: 'chat',
+        },
+      ] as AiProviderModelListItem[];
+
+      const result = await aiProviderModel.batchUpdateAiModels('openai', models);
+
+      expect(result).toHaveLength(1);
+      expect(await aiProviderModel.findById('duplicate-model')).toMatchObject({
+        abilities: { functionCall: true },
+        displayName: 'First Model',
+      });
+    });
+
+    it('should keep a generated image model when it follows a provider duplicate', async () => {
+      const baseModelId = 'gemini-3.1-flash-image-preview';
+      const generatedImageModelId = `${baseModelId}:image`;
+      const models = [
+        {
+          id: baseModelId,
+          type: 'chat',
+        },
+        {
+          displayName: 'Provider Image Model',
+          id: generatedImageModelId,
+          type: 'image',
+        },
+        {
+          displayName: 'LobeHub Image Model',
+          id: generatedImageModelId,
+          parameters: CHAT_MODEL_IMAGE_GENERATION_PARAMS,
+          type: 'image',
+        },
+      ] as AiProviderModelListItem[];
+
+      const result = await aiProviderModel.batchUpdateAiModels('openai', models);
+
+      expect(result).toHaveLength(2);
+      expect(await aiProviderModel.findById(generatedImageModelId)).toMatchObject({
+        displayName: 'LobeHub Image Model',
+        parameters: CHAT_MODEL_IMAGE_GENERATION_PARAMS,
+      });
     });
 
     it('should normalize ISO releasedAt values before inserting remote models', async () => {
@@ -328,6 +746,391 @@ describe('AiModelModel', () => {
       const [result] = await aiProviderModel.batchUpdateAiModels('openai', models);
 
       expect(result.releasedAt).toBe('2025-01-01');
+    });
+
+    it('should update abilities when remote provides new capabilities for existing model with empty abilities', async () => {
+      // 1. Historical model with empty abilities
+      await serverDB.insert(aiModels).values({
+        id: 'old-model',
+        providerId: 'openai',
+        userId,
+        abilities: {}, // Empty capabilities
+        source: 'remote',
+      });
+
+      // 2. Remote returns same model with new capabilities
+      const models = [
+        {
+          id: 'old-model',
+          enabled: false,
+          type: 'chat' as const,
+          abilities: { functionCall: true, reasoning: true },
+        },
+      ] as AiProviderModelListItem[];
+
+      await aiProviderModel.batchUpdateAiModels('openai', models);
+
+      // 3. Verify abilities are updated
+      const updated = await aiProviderModel.findById('old-model');
+      expect(updated?.abilities).toEqual({
+        functionCall: true,
+        reasoning: true,
+      });
+    });
+
+    it('should update type when remote corrects model type', async () => {
+      // 1. Existing model with wrong type
+      await serverDB.insert(aiModels).values({
+        id: 'image-model',
+        providerId: 'openai',
+        userId,
+        type: 'chat', // Wrong type
+        source: 'remote',
+      });
+
+      // 2. Remote provides correct type
+      const models = [
+        {
+          id: 'image-model',
+          enabled: false,
+          type: 'image' as const, // Correct type
+        },
+      ] as AiProviderModelListItem[];
+
+      await aiProviderModel.batchUpdateAiModels('openai', models);
+
+      // 3. Verify type is updated
+      const updated = await aiProviderModel.findById('image-model');
+      expect(updated?.type).toBe('image');
+    });
+
+    it('should update parameters when remote provides new parameters for existing model', async () => {
+      // 1. Existing model with empty parameters
+      await serverDB.insert(aiModels).values({
+        id: 'param-model',
+        providerId: 'openai',
+        userId,
+        parameters: {}, // Empty parameters
+        source: 'remote',
+      });
+
+      // 2. Remote provides parameters
+      const models = [
+        {
+          id: 'param-model',
+          enabled: false,
+          type: 'chat' as const,
+          parameters: {
+            max_tokens: { default: 4096 },
+            temperature: { default: 0.7, max: 2, min: 0, step: 0.1 },
+          } as any,
+        },
+      ] as AiProviderModelListItem[];
+
+      await aiProviderModel.batchUpdateAiModels('openai', models);
+
+      // 3. Verify parameters are updated
+      const updated = await aiProviderModel.findById('param-model');
+      expect(updated?.parameters).toEqual({
+        max_tokens: { default: 4096 },
+        temperature: { default: 0.7, max: 2, min: 0, step: 0.1 },
+      });
+    });
+
+    it('should update pricing from remote data', async () => {
+      // 1. Existing model with old pricing
+      await serverDB.insert(aiModels).values({
+        id: 'pricing-model',
+        providerId: 'openai',
+        userId,
+        pricing: {
+          currency: 'USD',
+          units: [
+            { name: 'input', rate: 10, strategy: 'fixed', unit: 'token' },
+            { name: 'output', rate: 30, strategy: 'fixed', unit: 'token' },
+          ],
+        } as any,
+        source: 'remote',
+      });
+
+      // 2. Remote provides updated pricing
+      const models = [
+        {
+          id: 'pricing-model',
+          enabled: false,
+          type: 'chat' as const,
+          pricing: {
+            currency: 'USD',
+            units: [
+              { name: 'input', rate: 5, strategy: 'fixed', unit: 'token' },
+              { name: 'output', rate: 15, strategy: 'fixed', unit: 'token' },
+            ],
+          } as any,
+        },
+      ] as any as AiProviderModelListItem[];
+
+      await aiProviderModel.batchUpdateAiModels('openai', models);
+
+      // 3. Verify pricing is updated
+      const updated = await aiProviderModel.findById('pricing-model');
+      expect(updated?.pricing).toEqual({
+        currency: 'USD',
+        units: [
+          { name: 'input', rate: 5, strategy: 'fixed', unit: 'token' },
+          { name: 'output', rate: 15, strategy: 'fixed', unit: 'token' },
+        ],
+      });
+    });
+
+    it('should NOT overwrite existing type when remote payload omits type field', async () => {
+      // 1. Existing remote model with type='image'
+      await serverDB.insert(aiModels).values({
+        id: 'image-model',
+        providerId: 'openai',
+        userId,
+        type: 'image',
+        source: 'remote',
+      });
+
+      // 2. Remote payload omits type (caller does not include type field)
+      // excluded.type will be 'chat' (schema default), but SQL condition filters it out
+      const models = [
+        {
+          id: 'image-model',
+          enabled: false,
+          // type is omitted - no type field at all
+        },
+      ] as AiProviderModelListItem[];
+
+      await aiProviderModel.batchUpdateAiModels('openai', models);
+
+      // 3. Verify type is preserved (not overwritten by default 'chat')
+      const updated = await aiProviderModel.findById('image-model');
+      expect(updated?.type).toBe('image');
+    });
+
+    it('should update type from non-chat to another non-chat when remote provides it', async () => {
+      // 1. Existing remote model with type='image'
+      await serverDB.insert(aiModels).values({
+        id: 'multimodal-model',
+        providerId: 'openai',
+        userId,
+        type: 'image',
+        source: 'remote',
+      });
+
+      // 2. Remote reclassifies it as 'video'
+      const models = [
+        {
+          id: 'multimodal-model',
+          enabled: false,
+          type: 'video' as const,
+        },
+      ] as AiProviderModelListItem[];
+
+      await aiProviderModel.batchUpdateAiModels('openai', models);
+
+      // 3. Verify type is updated
+      const updated = await aiProviderModel.findById('multimodal-model');
+      expect(updated?.type).toBe('video');
+    });
+
+    it('should NOT overwrite existing abilities when remote payload has empty abilities', async () => {
+      // 1. Existing remote model with abilities
+      await serverDB.insert(aiModels).values({
+        id: 'capable-model',
+        providerId: 'openai',
+        userId,
+        abilities: { functionCall: true, reasoning: true },
+        source: 'remote',
+      });
+
+      // 2. Remote payload provides empty abilities object (all fields undefined)
+      const models = [
+        {
+          id: 'capable-model',
+          enabled: false,
+          type: 'chat' as const,
+          abilities: {}, // Empty object - no real capabilities
+        },
+      ] as AiProviderModelListItem[];
+
+      await aiProviderModel.batchUpdateAiModels('openai', models);
+
+      // 3. Verify abilities are preserved
+      const updated = await aiProviderModel.findById('capable-model');
+      expect(updated?.abilities).toEqual({ functionCall: true, reasoning: true });
+    });
+
+    it('should update custom models with remote provider-sourced data while preserving user-editable fields', async () => {
+      // 1. User-created custom model (e.g., user added model ID before provider officially supported it)
+      await serverDB.insert(aiModels).values({
+        id: 'custom-model',
+        providerId: 'openai',
+        userId,
+        displayName: 'My Custom Model',
+        abilities: { functionCall: true },
+        type: 'chat',
+        pricing: {
+          currency: 'USD',
+          units: [
+            { name: 'input', rate: 10, strategy: 'fixed', unit: 'token' },
+            { name: 'output', rate: 20, strategy: 'fixed', unit: 'token' },
+          ],
+        } as any,
+        source: 'custom',
+      });
+
+      // 2. Remote provides different data for same model id (provider now officially supports it)
+      const models = [
+        {
+          id: 'custom-model',
+          enabled: false,
+          displayName: 'Remote Name',
+          abilities: { vision: true },
+          type: 'image' as const,
+          pricing: {
+            currency: 'USD',
+            units: [
+              { name: 'input', rate: 5, strategy: 'fixed', unit: 'token' },
+              { name: 'output', rate: 10, strategy: 'fixed', unit: 'token' },
+            ],
+          } as any,
+        },
+      ] as any as AiProviderModelListItem[];
+
+      await aiProviderModel.batchUpdateAiModels('openai', models);
+
+      // 3. Verify: provider-sourced fields updated, user-editable fields preserved
+      const updated = await aiProviderModel.findById('custom-model');
+      expect(updated?.displayName).toBe('My Custom Model'); // User-editable: preserved
+      expect(updated?.abilities).toEqual({ vision: true }); // Provider-sourced: updated
+      expect(updated?.type).toBe('image'); // Provider-sourced: updated
+      expect(updated?.pricing).toEqual({
+        currency: 'USD',
+        units: [
+          { name: 'input', rate: 5, strategy: 'fixed', unit: 'token' },
+          { name: 'output', rate: 10, strategy: 'fixed', unit: 'token' },
+        ],
+      }); // Provider-sourced: updated
+      expect(updated?.source).toBe('custom'); // Source: preserved
+    });
+
+    it('should update both remote and custom models in same batch', async () => {
+      // 1. Create both remote and custom models
+      await serverDB.insert(aiModels).values([
+        {
+          id: 'remote-model',
+          providerId: 'openai',
+          userId,
+          abilities: {},
+          source: 'remote',
+        },
+        {
+          id: 'custom-model',
+          providerId: 'openai',
+          userId,
+          abilities: { functionCall: true },
+          source: 'custom',
+        },
+      ]);
+
+      // 2. Remote provides updates for both
+      const models = [
+        {
+          id: 'remote-model',
+          enabled: false,
+          type: 'chat' as const,
+          abilities: { vision: true },
+        },
+        {
+          id: 'custom-model',
+          enabled: false,
+          type: 'chat' as const,
+          abilities: { reasoning: true },
+        },
+      ] as AiProviderModelListItem[];
+
+      await aiProviderModel.batchUpdateAiModels('openai', models);
+
+      // 3. Verify: both models updated with remote provider-sourced data
+      const remoteModel = await aiProviderModel.findById('remote-model');
+      const customModel = await aiProviderModel.findById('custom-model');
+
+      expect(remoteModel?.abilities).toEqual({ vision: true });
+      expect(customModel?.abilities).toEqual({ reasoning: true }); // Now updated from remote
+    });
+
+    it('should NOT update builtin models with remote provider-sourced data', async () => {
+      // 1. Builtin model with existing data
+      await serverDB.insert(aiModels).values({
+        id: 'gpt-4',
+        providerId: 'openai',
+        userId,
+        displayName: 'GPT-4',
+        abilities: { functionCall: true, vision: true },
+        type: 'chat',
+        contextWindowTokens: 128000,
+        pricing: {
+          currency: 'USD',
+          units: [
+            { name: 'input', rate: 10, strategy: 'fixed', unit: 'token' },
+            { name: 'output', rate: 30, strategy: 'fixed', unit: 'token' },
+          ],
+        } as any,
+        parameters: { temperature: 1 },
+        releasedAt: '2023-03-14',
+        description: 'Built-in model description',
+        source: 'builtin',
+      });
+
+      // 2. Remote provides different data for same model id
+      const models = [
+        {
+          id: 'gpt-4',
+          enabled: false,
+          displayName: 'Remote GPT-4',
+          abilities: { reasoning: true }, // Different abilities
+          type: 'image' as const, // Different type
+          contextWindowTokens: 8192, // Different context window
+          pricing: {
+            currency: 'USD',
+            units: [
+              { name: 'input', rate: 5, strategy: 'fixed', unit: 'token' },
+              { name: 'output', rate: 15, strategy: 'fixed', unit: 'token' },
+            ],
+          } as any, // Different pricing
+          parameters: { temperature: 0.5 }, // Different parameters
+          releasedAt: '2024-01-01', // Different release date
+          description: 'Remote model description', // Different description
+        },
+      ] as any as AiProviderModelListItem[];
+
+      await aiProviderModel.batchUpdateAiModels('openai', models);
+
+      // 3. Verify: builtin model is protected from remote updates
+      const updated = await aiProviderModel.findById('gpt-4');
+
+      // Provider-sourced fields should NOT be updated
+      expect(updated?.abilities).toEqual({ functionCall: true, vision: true }); // Preserved
+      expect(updated?.type).toBe('chat'); // Preserved
+      expect(updated?.contextWindowTokens).toBe(128000); // Preserved
+      expect(updated?.pricing).toEqual({
+        currency: 'USD',
+        units: [
+          { name: 'input', rate: 10, strategy: 'fixed', unit: 'token' },
+          { name: 'output', rate: 30, strategy: 'fixed', unit: 'token' },
+        ],
+      }); // Preserved
+      expect(updated?.parameters).toEqual({ temperature: 1 }); // Preserved
+      expect(updated?.releasedAt).toBe('2023-03-14'); // Preserved
+      expect(updated?.description).toBe('Built-in model description'); // Preserved
+
+      // User-editable fields still use DB-first COALESCE
+      expect(updated?.displayName).toBe('GPT-4'); // Preserved (user-editable)
+
+      // Source is never overwritten
+      expect(updated?.source).toBe('builtin');
     });
   });
 
@@ -391,6 +1194,41 @@ describe('AiModelModel', () => {
       expect(models.find((m) => m.id === 'gpt-4')?.type).toBe('chat');
       expect(models.find((m) => m.id === 'dall-e-3')?.type).toBe('image');
       expect(models.every((m) => !m.enabled)).toBe(true);
+    });
+
+    it('should batch toggle workspace models without updating personal models', async () => {
+      await aiProviderModel.create({
+        enabled: true,
+        id: 'gpt-4o',
+        providerId: 'openai',
+      });
+      await workspaceAiModelModel.create({
+        enabled: true,
+        id: 'gpt-4o',
+        providerId: 'openai',
+      });
+
+      await workspaceAiModelModel.batchToggleAiModels('openai', ['gpt-4o'], false);
+
+      const personal = await serverDB.query.aiModels.findFirst({
+        where: and(
+          eq(aiModels.id, 'gpt-4o'),
+          eq(aiModels.providerId, 'openai'),
+          eq(aiModels.userId, userId),
+          isNull(aiModels.workspaceId),
+        ),
+      });
+      const workspace = await serverDB.query.aiModels.findFirst({
+        where: and(
+          eq(aiModels.id, 'gpt-4o'),
+          eq(aiModels.providerId, 'openai'),
+          eq(aiModels.userId, userId),
+          eq(aiModels.workspaceId, workspaceId),
+        ),
+      });
+
+      expect(personal?.enabled).toBe(true);
+      expect(workspace?.enabled).toBe(false);
     });
   });
 

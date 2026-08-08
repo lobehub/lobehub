@@ -720,6 +720,192 @@ describe('createCallbacksTransformer', () => {
     expect(onThinking).toHaveBeenNthCalledWith(2, ' about this');
   });
 
+  it('should preserve reasoning signatures in final callback data', async () => {
+    const onCompletion = vi.fn();
+    const transformer = createCallbacksTransformer({ onCompletion });
+
+    const chunks = [
+      'event: reasoning\n',
+      'data: "Thinking..."\n\n',
+      'event: reasoning_signature\n',
+      'data: "encrypted-signature"\n\n',
+    ];
+
+    await processChunks(transformer, chunks);
+
+    expect(onCompletion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reasoning: {
+          content: 'Thinking...',
+          signature: 'encrypted-signature',
+        },
+      }),
+    );
+  });
+
+  it('should aggregate reasoning response items in stream order', async () => {
+    const onCompletion = vi.fn();
+    const transformer = createCallbacksTransformer({ onCompletion });
+
+    const firstItem = {
+      encrypted_content: 'scoped-encrypted-1',
+      id: 'rs_1',
+      summary: [{ text: 'visible summary', type: 'summary_text' }],
+      type: 'reasoning',
+    };
+    const secondItem = {
+      encrypted_content: 'scoped-encrypted-2',
+      id: 'rs_2',
+      summary: [],
+      type: 'reasoning',
+    };
+
+    const chunks = [
+      'event: reasoning\n',
+      'data: "visible summary"\n\n',
+      'event: reasoning_response_item\n',
+      `data: ${JSON.stringify(firstItem)}\n\n`,
+      'event: reasoning_response_item\n',
+      `data: ${JSON.stringify(secondItem)}\n\n`,
+    ];
+
+    await processChunks(transformer, chunks);
+
+    expect(onCompletion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reasoning: {
+          content: 'visible summary',
+          responseItems: [firstItem, secondItem],
+          signature: undefined,
+        },
+      }),
+    );
+  });
+
+  it('should derive thinking content from item summaries when nothing was streamed', async () => {
+    const onCompletion = vi.fn();
+    const transformer = createCallbacksTransformer({ onCompletion });
+
+    const firstItem = {
+      encrypted_content: 'scoped-encrypted-1',
+      id: 'rs_1',
+      summary: [{ text: 'first summary', type: 'summary_text' }],
+      type: 'reasoning',
+    };
+    const secondItem = {
+      encrypted_content: 'scoped-encrypted-2',
+      id: 'rs_2',
+      summary: [{ text: 'second summary', type: 'summary_text' }],
+      type: 'reasoning',
+    };
+
+    // no `reasoning` delta events — mirrors the non-streaming Responses conversion
+    const chunks = [
+      'event: reasoning_response_item\n',
+      `data: ${JSON.stringify(firstItem)}\n\n`,
+      'event: reasoning_response_item\n',
+      `data: ${JSON.stringify(secondItem)}\n\n`,
+    ];
+
+    await processChunks(transformer, chunks);
+
+    expect(onCompletion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reasoning: {
+          content: 'first summary\nsecond summary',
+          responseItems: [firstItem, secondItem],
+          signature: undefined,
+        },
+        thinking: 'first summary\nsecond summary',
+      }),
+    );
+  });
+
+  it('should keep reasoning items whose summary text contains a data: marker', async () => {
+    const onCompletion = vi.fn();
+    const transformer = createCallbacksTransformer({ onCompletion });
+
+    const firstItem = {
+      encrypted_content: 'scoped-encrypted-1',
+      id: 'rs_1',
+      summary: [{ text: 'Inspect data: sources.', type: 'summary_text' }],
+      type: 'reasoning',
+    };
+    const secondItem = {
+      encrypted_content: 'scoped-encrypted-2',
+      id: 'rs_2',
+      summary: [],
+      type: 'reasoning',
+    };
+
+    const chunks = [
+      'event: reasoning_response_item\n',
+      `data: ${JSON.stringify(firstItem)}\n\n`,
+      'event: reasoning_response_item\n',
+      `data: ${JSON.stringify(secondItem)}\n\n`,
+    ];
+
+    await processChunks(transformer, chunks);
+
+    expect(onCompletion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reasoning: expect.objectContaining({
+          responseItems: [firstItem, secondItem],
+        }),
+      }),
+    );
+  });
+
+  it('should keep reasoning with response items but no visible content', async () => {
+    const onCompletion = vi.fn();
+    const transformer = createCallbacksTransformer({ onCompletion });
+
+    const hiddenItem = {
+      encrypted_content: 'scoped-hidden',
+      id: 'rs_hidden',
+      summary: [],
+      type: 'reasoning',
+    };
+
+    const chunks = ['event: reasoning_response_item\n', `data: ${JSON.stringify(hiddenItem)}\n\n`];
+
+    await processChunks(transformer, chunks);
+
+    expect(onCompletion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reasoning: {
+          content: undefined,
+          responseItems: [hiddenItem],
+          signature: undefined,
+        },
+      }),
+    );
+  });
+
+  it('should ignore non-string payloads on the reasoning_signature event', async () => {
+    const onCompletion = vi.fn();
+    const transformer = createCallbacksTransformer({ onCompletion });
+
+    const chunks = [
+      'event: reasoning\n',
+      'data: "Thinking..."\n\n',
+      'event: reasoning_signature\n',
+      `data: ${JSON.stringify({ id: 'rs_1', type: 'reasoning' })}\n\n`,
+    ];
+
+    await processChunks(transformer, chunks);
+
+    expect(onCompletion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reasoning: {
+          content: 'Thinking...',
+          responseItems: undefined,
+          signature: undefined,
+        },
+      }),
+    );
+  });
+
   it('should handle base64_image chunks and call onBase64Image callback', async () => {
     const receivedCalls: Array<{
       image: { id: string; data: string };
@@ -759,6 +945,53 @@ describe('createCallbacksTransformer', () => {
         { id: 'img2', data: 'base64data2' },
       ],
     });
+  });
+
+  // Regression: google/openai image streams serialize the `base64_image` event's
+  // `data` as a raw data-URI string (which itself contains `data:`). The
+  // transformer must strip only the leading field marker (not split on the
+  // embedded one) and wrap the string into an image item, so a real server-side
+  // onBase64Image consumer can upload it instead of crashing on `image.data`.
+  it('should wrap raw data-URI base64_image payloads and call onBase64Image', async () => {
+    const receivedCalls: Array<{
+      image: { data: string; id: string };
+      images: Array<{ data: string; id: string }>;
+    }> = [];
+    const onBase64Image = vi.fn((data) => {
+      receivedCalls.push({
+        image: { ...data.image },
+        images: data.images.map((img: { data: string; id: string }) => ({ ...img })),
+      });
+    });
+    const transformer = createCallbacksTransformer({ onBase64Image });
+
+    const uri1 = 'data:image/png;base64,base64data1';
+    const uri2 = 'data:image/png;base64,base64data2';
+
+    const chunks = [
+      'event: base64_image\n',
+      `data: ${JSON.stringify(uri1)}\n\n`,
+      'event: base64_image\n',
+      `data: ${JSON.stringify(uri2)}\n\n`,
+    ];
+
+    await processChunks(transformer, chunks);
+
+    expect(onBase64Image).toHaveBeenCalledTimes(2);
+    // The raw data-URI is preserved (not corrupted by the embedded `data:`) and
+    // wrapped with a generated id.
+    expect(receivedCalls[0].image).toEqual({
+      data: uri1,
+      id: expect.stringMatching(/^tmp_img_/),
+    });
+    expect(receivedCalls[0].images).toEqual([
+      { data: uri1, id: expect.stringMatching(/^tmp_img_/) },
+    ]);
+    expect(receivedCalls[1].image).toEqual({
+      data: uri2,
+      id: expect.stringMatching(/^tmp_img_/),
+    });
+    expect(receivedCalls[1].images.map((img) => img.data)).toEqual([uri1, uri2]);
   });
 
   it('should handle content_part chunks and call onContentPart callback', async () => {
@@ -892,6 +1125,7 @@ describe('createCallbacksTransformer', () => {
       thinking: 'Thinking...',
       usage: { totalTokens: 10 },
       grounding: undefined,
+      reasoning: { content: 'Thinking...', signature: undefined },
       speed: undefined,
       toolsCalling: undefined,
     };

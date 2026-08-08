@@ -7,6 +7,8 @@ export {
   ClaudeCodeIdentifier,
   type ClaudeCodeTodoItem,
   type ClaudeCodeTodoStatus,
+  type EnterWorktreeArgs,
+  type ExitWorktreeArgs,
   type ScheduleWakeupArgs,
   type SkillArgs,
   type TaskOutputArgs,

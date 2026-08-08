@@ -20,28 +20,7 @@ const Editing = memo<EditingProps>(({ id, title, toggleEditing }) => {
 
   const handleUpdate = useCallback(async () => {
     if (newTitle && title !== newTitle) {
-      try {
-        // Set loading state
-        useChatStore.setState(
-          {
-            topicLoadingIds: [...useChatStore.getState().topicLoadingIds, id],
-          },
-          false,
-          'setTopicUpdating',
-        );
-        await updateTopicTitle(id, newTitle);
-      } finally {
-        // Clear loading state
-        useChatStore.setState(
-          {
-            topicLoadingIds: useChatStore
-              .getState()
-              .topicLoadingIds.filter((loadingId) => loadingId !== id),
-          },
-          false,
-          'clearTopicUpdating',
-        );
-      }
+      await updateTopicTitle(id, newTitle);
     }
     toggleEditing(false);
   }, [newTitle, title, id, updateTopicTitle, toggleEditing]);

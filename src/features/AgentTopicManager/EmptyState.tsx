@@ -1,13 +1,14 @@
 'use client';
 
-import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { AGENT_CHAT_URL } from '@lobechat/const';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { MessagesSquare } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router';
 
-import { SESSION_CHAT_URL } from '@/const/url';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 interface EmptyStateProps {
   agentId: string;
@@ -17,7 +18,7 @@ interface EmptyStateProps {
 
 const EmptyState = memo<EmptyStateProps>(({ agentId, hasFilters, onClearFilters }) => {
   const { t } = useTranslation('topic');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
 
   return (
     <Flexbox align={'center'} flex={1} gap={16} justify={'center'} paddingBlock={64}>
@@ -33,7 +34,7 @@ const EmptyState = memo<EmptyStateProps>(({ agentId, hasFilters, onClearFilters 
       {hasFilters ? (
         <Button onClick={onClearFilters}>{t('management.empty.filtered.action')}</Button>
       ) : (
-        <Button type={'primary'} onClick={() => navigate(SESSION_CHAT_URL(agentId))}>
+        <Button type={'primary'} onClick={() => navigate(AGENT_CHAT_URL(agentId))}>
           {t('management.empty.noTopics.action')}
         </Button>
       )}

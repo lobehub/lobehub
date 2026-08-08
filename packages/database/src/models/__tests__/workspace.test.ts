@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -11,7 +11,7 @@ import {
   workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { WorkspaceModel } from '../workspace';
+import { hasWorkspaceAdminAccess, WorkspaceModel } from '../workspace';
 import { WorkspaceAuditLogModel } from '../workspaceAuditLog';
 import { WorkspaceMemberModel } from '../workspaceMember';
 
@@ -41,7 +41,7 @@ const createWorkspace = async (id = 'workspace-model-ws') => {
   await serverDB.insert(workspaceMembers).values([
     { role: 'owner', userId: ownerId, workspaceId: id },
     { role: 'member', userId: memberId, workspaceId: id },
-    { role: 'owner', userId: secondOwnerId, workspaceId: id },
+    { role: 'admin', userId: secondOwnerId, workspaceId: id },
   ]);
   return id;
 };
@@ -81,6 +81,112 @@ describe('WorkspaceModel', () => {
     });
   });
 
+  it('derives Admin access from membership.role — the single source of truth', async () => {
+    const workspaceId = await createWorkspace();
+
+    await expect(
+      hasWorkspaceAdminAccess(serverDB, { userId: secondOwnerId, workspaceId }),
+    ).resolves.toBe(true);
+    await expect(
+      hasWorkspaceAdminAccess(serverDB, { userId: memberId, workspaceId }),
+    ).resolves.toBe(false);
+
+    // Promoting the column immediately grants access — no RBAC rows involved.
+    await serverDB
+      .update(workspaceMembers)
+      .set({ role: 'admin' })
+      .where(eq(workspaceMembers.userId, memberId));
+    await expect(
+      hasWorkspaceAdminAccess(serverDB, { userId: memberId, workspaceId }),
+    ).resolves.toBe(true);
+
+    // Soft-deleted memberships lose access.
+    await serverDB
+      .update(workspaceMembers)
+      .set({ deletedAt: new Date() })
+      .where(eq(workspaceMembers.userId, memberId));
+    await expect(
+      hasWorkspaceAdminAccess(serverDB, { userId: memberId, workspaceId }),
+    ).resolves.toBe(false);
+  });
+
+  it('denies owner access for a legacy non-primary owner label', async () => {
+    const workspaceId = await createWorkspace();
+    // Move the `owner` label off the primary owner and onto someone else. The
+    // unique active-owner index forbids two owner rows, but it does not require
+    // the surviving one to belong to `primaryOwnerId` — that is precisely the
+    // drift this clamp exists to absorb, so the demotion has to come first.
+    await serverDB
+      .update(workspaceMembers)
+      .set({ role: 'admin' })
+      .where(
+        and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, ownerId)),
+      );
+    await serverDB
+      .update(workspaceMembers)
+      .set({ role: 'owner' })
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.userId, secondOwnerId),
+        ),
+      );
+
+    const { hasWorkspaceOwnerAccess } = await import('../workspace');
+    await expect(
+      hasWorkspaceOwnerAccess(serverDB, { userId: secondOwnerId, workspaceId }),
+    ).resolves.toBe(false);
+    // …but the stray label still counts as Admin.
+    await expect(
+      hasWorkspaceAdminAccess(serverDB, { userId: secondOwnerId, workspaceId }),
+    ).resolves.toBe(true);
+  });
+
+  it('rejects a second active owner at the database level', async () => {
+    const workspaceId = await createWorkspace();
+
+    // Drizzle wraps the driver error, so the constraint name only appears on
+    // the cause — assert it there rather than matching the generic message.
+    const error = await serverDB
+      .update(workspaceMembers)
+      .set({ role: 'owner' })
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.userId, secondOwnerId),
+        ),
+      )
+      .then(() => null)
+      .catch((thrown) => thrown as { cause?: { code?: string; constraint?: string } });
+
+    expect(error?.cause?.constraint).toBe('workspace_members_unique_active_owner_idx');
+    expect(error?.cause?.code).toBe('23505');
+  });
+
+  it('lets a removed owner be replaced', async () => {
+    const workspaceId = await createWorkspace();
+    // The index skips soft-deleted rows, so removing an owner must not wedge
+    // the workspace into a state where no one else can hold the role.
+    await serverDB
+      .update(workspaceMembers)
+      .set({ deletedAt: new Date() })
+      .where(
+        and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, ownerId)),
+      );
+
+    await expect(
+      serverDB
+        .update(workspaceMembers)
+        .set({ role: 'owner' })
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, workspaceId),
+            eq(workspaceMembers.userId, secondOwnerId),
+          ),
+        ),
+    ).resolves.toBeDefined();
+  });
+
   it('lists active memberships with their workspace roles and skips deleted memberships', async () => {
     const workspaceId = await createWorkspace();
     await serverDB
@@ -106,12 +212,12 @@ describe('WorkspaceModel', () => {
     expect(workspace).toBeDefined();
   });
 
-  it('transfers primary ownership only to an active owner member', async () => {
+  it('atomically swaps the unique Owner role with an active Admin', async () => {
     const workspaceId = await createWorkspace();
     const model = new WorkspaceModel(serverDB, ownerId);
 
     await expect(model.transferPrimaryOwnership(workspaceId, memberId)).rejects.toThrow(
-      'Target user must already be an owner',
+      'Target user must already be an admin',
     );
 
     await expect(model.transferPrimaryOwnership(workspaceId, secondOwnerId)).resolves.toEqual({
@@ -124,29 +230,32 @@ describe('WorkspaceModel', () => {
       where: eq(workspaces.id, workspaceId),
     });
     expect(workspace?.primaryOwnerId).toBe(secondOwnerId);
-  });
 
-  it('downgrades to solo by removing non-primary members and clearing grace period', async () => {
-    const workspaceId = await createWorkspace();
-
-    const result = await new WorkspaceModel(serverDB, ownerId).downgradeToSolo(workspaceId);
-
-    expect(result.removedUserIds.sort()).toEqual([memberId, secondOwnerId].sort());
-    expect(result.workspace.settings).toEqual({ keep: true });
-
-    const activeMembers = await serverDB.query.workspaceMembers.findMany({
+    const memberships = await serverDB.query.workspaceMembers.findMany({
       where: eq(workspaceMembers.workspaceId, workspaceId),
     });
-    expect(activeMembers).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ deletedAt: null, userId: ownerId }),
-        expect.objectContaining({ userId: memberId }),
-        expect.objectContaining({ userId: secondOwnerId }),
-      ]),
-    );
+    expect(memberships.find((member) => member.userId === ownerId)?.role).toBe('admin');
+    expect(memberships.find((member) => member.userId === secondOwnerId)?.role).toBe('owner');
+  });
+
+  it('downgrades to Free by clearing the grace period without touching members', async () => {
+    const workspaceId = await createWorkspace();
+
+    const result = await new WorkspaceModel(serverDB, ownerId).downgradeToFree(workspaceId);
+
+    expect(result.workspace.settings).toEqual({ keep: true });
+
+    // Members stay — Free supports multiple members and the billing-inactive
+    // lockout handles the view-only state instead of evicting the team.
+    const allMembers = await serverDB.query.workspaceMembers.findMany({
+      where: eq(workspaceMembers.workspaceId, workspaceId),
+    });
     expect(
-      activeMembers.filter((member) => !member.deletedAt).map((member) => member.userId),
-    ).toEqual([ownerId]);
+      allMembers
+        .filter((member) => !member.deletedAt)
+        .map((member) => member.userId)
+        .sort(),
+    ).toEqual([memberId, ownerId, secondOwnerId].sort());
   });
 
   it('sets and clears grace period without dropping unrelated settings', async () => {
@@ -179,7 +288,7 @@ describe('WorkspaceModel', () => {
     const owned = await new WorkspaceModel(serverDB, ownerId).listOwnedWorkspaceIds();
     expect(owned).toEqual([workspaceId]);
 
-    // secondOwnerId is an owner member but not the primary owner
+    // secondOwnerId is an Admin, not the unique Owner.
     const secondOwned = await new WorkspaceModel(serverDB, secondOwnerId).listOwnedWorkspaceIds();
     expect(secondOwned).toEqual([]);
   });
@@ -249,7 +358,7 @@ describe('WorkspaceModel', () => {
       const workspaceId = await createWorkspace();
       await expect(
         new WorkspaceModel(serverDB, ownerId).transferPrimaryOwnership(workspaceId, ownerId),
-      ).rejects.toThrow('New primary owner must be a different user');
+      ).rejects.toThrow('New owner must be a different user');
     });
 
     it('rejects when the workspace does not exist', async () => {
@@ -262,7 +371,7 @@ describe('WorkspaceModel', () => {
       const workspaceId = await createWorkspace();
       await expect(
         new WorkspaceModel(serverDB, secondOwnerId).transferPrimaryOwnership(workspaceId, ownerId),
-      ).rejects.toThrow('Only the primary owner can transfer primary ownership');
+      ).rejects.toThrow('Only the workspace owner can transfer ownership');
     });
 
     it('rejects when the target is not a member', async () => {
@@ -273,125 +382,18 @@ describe('WorkspaceModel', () => {
     });
   });
 
-  describe('promoteToOwner', () => {
-    it('promotes a member to owner', async () => {
-      const workspaceId = await createWorkspace();
-      const result = await new WorkspaceModel(serverDB, ownerId).promoteToOwner(
-        workspaceId,
-        memberId,
-      );
-
-      expect(result).toMatchObject({ role: 'owner', userId: memberId });
-
-      const membership = await serverDB.query.workspaceMembers.findFirst({
-        where: eq(workspaceMembers.userId, memberId),
-      });
-      expect(membership?.role).toBe('owner');
-    });
-
-    it('is a no-op when the target is already an owner', async () => {
-      const workspaceId = await createWorkspace();
-      const result = await new WorkspaceModel(serverDB, ownerId).promoteToOwner(
-        workspaceId,
-        secondOwnerId,
-      );
-      expect(result).toMatchObject({ role: 'owner', userId: secondOwnerId });
-    });
-
-    it('rejects when the actor is not an owner', async () => {
-      const workspaceId = await createWorkspace();
+  describe('downgradeToFree and setGracePeriod errors', () => {
+    it('rejects downgradeToFree when the workspace does not exist', async () => {
       await expect(
-        new WorkspaceModel(serverDB, memberId).promoteToOwner(workspaceId, memberId),
-      ).rejects.toThrow('Only an owner can promote other members to owner');
-    });
-
-    it('rejects when the target is not a member', async () => {
-      const workspaceId = await createWorkspace();
-      await expect(
-        new WorkspaceModel(serverDB, ownerId).promoteToOwner(workspaceId, outsiderId),
-      ).rejects.toThrow('Target user is not a member of this workspace');
-    });
-  });
-
-  describe('demoteFromOwner', () => {
-    it('demotes an owner to member', async () => {
-      const workspaceId = await createWorkspace();
-      const result = await new WorkspaceModel(serverDB, ownerId).demoteFromOwner(
-        workspaceId,
-        secondOwnerId,
-      );
-
-      expect(result).toMatchObject({ role: 'member', userId: secondOwnerId });
-      const membership = await serverDB.query.workspaceMembers.findFirst({
-        where: eq(workspaceMembers.userId, secondOwnerId),
-      });
-      expect(membership?.role).toBe('member');
-    });
-
-    it('is a no-op when the target is not an owner', async () => {
-      const workspaceId = await createWorkspace();
-      const result = await new WorkspaceModel(serverDB, ownerId).demoteFromOwner(
-        workspaceId,
-        memberId,
-      );
-      expect(result).toMatchObject({ role: 'member', userId: memberId });
-    });
-
-    it('rejects when the workspace does not exist', async () => {
-      await expect(
-        new WorkspaceModel(serverDB, ownerId).demoteFromOwner('missing', secondOwnerId),
+        new WorkspaceModel(serverDB, ownerId).downgradeToFree('missing'),
       ).rejects.toThrow('Workspace not found');
     });
 
-    it('rejects demoting the primary owner', async () => {
+    it('rejects downgradeToFree when actor is not the primary owner', async () => {
       const workspaceId = await createWorkspace();
       await expect(
-        new WorkspaceModel(serverDB, ownerId).demoteFromOwner(workspaceId, ownerId),
-      ).rejects.toThrow('Cannot demote the primary owner');
-    });
-
-    it('rejects when the actor is not an owner', async () => {
-      const workspaceId = await createWorkspace();
-      await expect(
-        new WorkspaceModel(serverDB, memberId).demoteFromOwner(workspaceId, secondOwnerId),
-      ).rejects.toThrow('Only an owner can demote other owners');
-    });
-
-    it('rejects when the target is not a member', async () => {
-      const workspaceId = await createWorkspace();
-      await expect(
-        new WorkspaceModel(serverDB, ownerId).demoteFromOwner(workspaceId, outsiderId),
-      ).rejects.toThrow('Target user is not a member of this workspace');
-    });
-  });
-
-  it('counts other active owners excluding the given user', async () => {
-    const workspaceId = await createWorkspace();
-    const model = new WorkspaceModel(serverDB, ownerId);
-
-    // owners: ownerId, secondOwnerId. Excluding ownerId -> 1 other owner.
-    await expect(model.countOtherOwners(workspaceId, ownerId)).resolves.toBe(1);
-
-    // soft-delete secondOwnerId membership -> 0 other owners.
-    await serverDB
-      .update(workspaceMembers)
-      .set({ deletedAt: new Date() })
-      .where(eq(workspaceMembers.userId, secondOwnerId));
-    await expect(model.countOtherOwners(workspaceId, ownerId)).resolves.toBe(0);
-  });
-
-  describe('downgradeToSolo and setGracePeriod errors', () => {
-    it('rejects downgradeToSolo when the workspace does not exist', async () => {
-      await expect(
-        new WorkspaceModel(serverDB, ownerId).downgradeToSolo('missing'),
-      ).rejects.toThrow('Workspace not found');
-    });
-
-    it('rejects downgradeToSolo when actor is not the primary owner', async () => {
-      const workspaceId = await createWorkspace();
-      await expect(
-        new WorkspaceModel(serverDB, secondOwnerId).downgradeToSolo(workspaceId),
-      ).rejects.toThrow('Only the primary owner can downgrade this workspace');
+        new WorkspaceModel(serverDB, secondOwnerId).downgradeToFree(workspaceId),
+      ).rejects.toThrow('Only the workspace owner can downgrade this workspace');
     });
 
     it('rejects setGracePeriod when the workspace does not exist', async () => {
@@ -481,6 +483,7 @@ describe('WorkspaceAuditLogModel', () => {
         action: 'workspace.created',
         createdAt: new Date('2026-01-01T00:00:00.000Z'),
         resourceId: 'old',
+        resourceType: 'workspace',
         userId: ownerId,
         workspaceId,
       },
@@ -488,6 +491,7 @@ describe('WorkspaceAuditLogModel', () => {
         action: 'workspace.updated',
         createdAt: new Date('2026-01-02T00:00:00.000Z'),
         resourceId: 'middle',
+        resourceType: 'workspace',
         userId: ownerId,
         workspaceId,
       },
@@ -495,6 +499,7 @@ describe('WorkspaceAuditLogModel', () => {
         action: 'workspace.updated',
         createdAt: new Date('2026-01-03T00:00:00.000Z'),
         resourceId: 'new',
+        resourceType: 'invitation',
         userId: ownerId,
         workspaceId,
       },
@@ -516,5 +521,55 @@ describe('WorkspaceAuditLogModel', () => {
       workspaceId,
     });
     expect(next.items.map((item) => item.resourceId)).toEqual(['middle']);
+
+    const invitationResult = await new WorkspaceAuditLogModel(serverDB).list({
+      resourceType: 'invitation',
+      workspaceId,
+    });
+    expect(invitationResult.items.map((item) => item.resourceId)).toEqual(['new']);
+  });
+
+  it('searches logs by audit fields and matched user ids', async () => {
+    const workspaceId = await createWorkspace();
+    await serverDB.insert(workspaceAuditLogs).values([
+      {
+        action: 'billing.payment_method_added',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        ipAddress: '203.0.113.10',
+        resourceId: 'pm_card_visa',
+        resourceType: 'payment_method',
+        userId: ownerId,
+        workspaceId,
+      },
+      {
+        action: 'member.invited',
+        createdAt: new Date('2026-01-02T00:00:00.000Z'),
+        resourceId: 'invitation-1',
+        resourceType: 'invitation',
+        userId: memberId,
+        workspaceId,
+      },
+      {
+        action: 'workspace.updated',
+        createdAt: new Date('2026-01-03T00:00:00.000Z'),
+        resourceId: 'workspace-1',
+        resourceType: 'workspace',
+        userId: secondOwnerId,
+        workspaceId,
+      },
+    ]);
+
+    const auditFieldResult = await new WorkspaceAuditLogModel(serverDB).list({
+      q: 'PAYMENT',
+      workspaceId,
+    });
+    expect(auditFieldResult.items.map((item) => item.resourceId)).toEqual(['pm_card_visa']);
+
+    const userResult = await new WorkspaceAuditLogModel(serverDB).list({
+      q: 'member@example.com',
+      userIds: [memberId],
+      workspaceId,
+    });
+    expect(userResult.items.map((item) => item.resourceId)).toEqual(['invitation-1']);
   });
 });

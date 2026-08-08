@@ -4,7 +4,16 @@ export const OFFICIAL_URL = 'https://app.lobehub.com';
 export const OFFICIAL_SITE = 'https://lobehub.com';
 export const OFFICIAL_DOMAIN = 'lobehub.com';
 
+export const OFFICIAL_DEVICE_GATEWAY_URL = 'https://device-gateway.lobehub.com';
+export const OFFICIAL_AGENT_GATEWAY_URL = 'https://agent-gateway.lobehub.com';
+
 export const OG_URL = '/og/og.webp?v=1';
+
+export const LobeHubPath = {
+  webapi: {
+    modelConfig: '/webapi/lobehub-model-config',
+  },
+} as const;
 
 export const GITHUB = 'https://github.com/lobehub/lobe-chat';
 export const GITHUB_ISSUES = urlJoin(GITHUB, 'issues/new/choose');
@@ -30,6 +39,8 @@ export const TERMS_URL = urlJoin(OFFICIAL_SITE, '/terms');
 
 export const PLUGINS_INDEX_URL = 'https://chat-plugins.lobehub.com';
 
+export const OPS_ASSETS_BASE_URL = 'https://chat-cloud.lobeobjects.space/dc/ops-assets';
+
 export const MORE_MODEL_PROVIDER_REQUEST_URL =
   'https://github.com/lobehub/lobe-chat/discussions/6157';
 
@@ -40,17 +51,17 @@ export const AGENTS_INDEX_GITHUB = 'https://github.com/lobehub/lobe-chat-agents'
 export const AGENTS_INDEX_GITHUB_ISSUE = urlJoin(AGENTS_INDEX_GITHUB, 'issues/new');
 export const AGENTS_OFFICIAL_URL = 'https://lobehub.com/agent';
 
-export const SESSION_CHAT_URL = (agentId: string, mobile?: boolean) => {
+export const AGENT_CHAT_URL = (agentId: string, mobile?: boolean) => {
   if (mobile) return `/agent/${agentId}`;
   return `/agent/${agentId}`;
 };
 
-export const SESSION_CHAT_TOPIC_URL = (agentId: string, topicId: string, mobile?: boolean) => {
+export const AGENT_CHAT_TOPIC_URL = (agentId: string, topicId: string, mobile?: boolean) => {
   if (mobile) return urlJoin('/agent', agentId, topicId);
   return urlJoin('/agent', agentId, topicId);
 };
 
-export const SESSION_CHAT_TOPIC_PAGE_URL = (agentId: string, topicId: string, mobile?: boolean) => {
+export const AGENT_CHAT_TOPIC_PAGE_URL = (agentId: string, topicId: string, mobile?: boolean) => {
   if (mobile) return urlJoin('/agent', agentId, topicId, 'page');
   return urlJoin('/agent', agentId, topicId, 'page');
 };
@@ -58,6 +69,9 @@ export const SESSION_CHAT_TOPIC_PAGE_URL = (agentId: string, topicId: string, mo
 export const AGENT_PROFILE_URL = (agentId: string) => `/agent/${agentId}/profile`;
 
 export const GROUP_CHAT_URL = (groupId: string) => `/group/${groupId}`;
+
+export const GROUP_CHAT_TOPIC_URL = (groupId: string, topicId: string) =>
+  urlJoin('/group', groupId, topicId);
 
 export const LIBRARY_URL = (id: string) => urlJoin('/resource/library', id);
 
@@ -76,5 +90,11 @@ export const CHANGELOG_URL = urlJoin(OFFICIAL_SITE, 'changelog');
 export const DOWNLOAD_URL = {
   android: 'https://play.google.com/store/apps/details?id=com.lobehub.app',
   default: urlJoin(OFFICIAL_SITE, '/downloads'),
+  mobile: urlJoin(OFFICIAL_SITE, '/mobile'),
   ios: 'https://testflight.apple.com/join/2ZbjX4Qp',
 } as const;
+
+export const channelDocUrl = (platform: string) => urlJoin(USAGE_DOCUMENTS, 'channels', platform);
+
+export const discoverUrl = (type: string, identifier: string) =>
+  urlJoin(OFFICIAL_SITE, 'discover', type, identifier);

@@ -11,6 +11,7 @@ import type {
   KnowledgeBaseInfo,
   LobeToolManifest,
   OnboardingContext,
+  PlanTodoConfig,
   SkillMeta,
   ToolDiscoveryConfig,
   TopicReferenceItem,
@@ -132,11 +133,16 @@ export interface ServerMessagesEngineParams {
 
   /** Model ID */
   model: string;
+  /** Human-friendly model name, e.g. `Fable 5`. Omit when unknown. */
+  modelDisplayName?: string;
   /** Model knowledge cutoff date, e.g. `2024-06`. Omit when unknown. */
   modelKnowledgeCutoff?: string;
 
   /** Page content context (optional, for document editing) */
   pageContentContext?: PageContentContext;
+
+  /** Plan document TODO state used when conversation messages contain no TODO state */
+  planTodo?: PlanTodoConfig;
 
   /** Provider ID */
   provider: string;

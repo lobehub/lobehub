@@ -11,6 +11,7 @@ import type {
 import type {
   ActivateSkillParams,
   CommandResult,
+  ExecScriptActivatedSkill,
   ExecScriptParams,
   ExportFileParams,
   ReadReferenceParams,
@@ -41,7 +42,7 @@ export interface SkillRuntimeService {
   execScript?: (
     command: string,
     options: {
-      activatedSkills?: Array<{ description?: string; id: string; name: string }>;
+      activatedSkills?: Array<{ description?: string; id?: string; name: string }>;
       description: string;
     },
   ) => Promise<CommandResult>;
@@ -54,16 +55,17 @@ export interface SkillRuntimeService {
 }
 
 /**
- * A project-level skill discovered on the device filesystem
- * (`.agents/skills` / `.claude/skills`). The runtime only needs the name to
- * match an `activateSkill`/`readReference` call and the absolute SKILL.md path
- * to read its content. The directory tree is enumerated lazily on activation
- * via `DeviceFileAccess.listFiles` — keeping it out of the op param payload.
+ * A project- or device-level skill discovered on the execution device
+ * filesystem. The runtime only needs the name to match an
+ * `activateSkill`/`readReference` call and the absolute SKILL.md path to read
+ * its content. The directory tree is enumerated lazily on activation via
+ * `DeviceFileAccess.listFiles` — keeping it out of the op param payload.
  */
 export interface ProjectSkillRuntimeItem {
   /** Absolute path to the skill's SKILL.md on the device. */
   location: string;
   name: string;
+  source?: 'device' | 'project';
 }
 
 /**
@@ -84,16 +86,28 @@ export interface DeviceFileAccess {
 }
 
 export interface SkillsExecutionRuntimeOptions {
+  /**
+   * Activated skills resolved by the caller from the conversation history.
+   * Fallback for `execScript` when the args carry none: the client executor
+   * injects stepContext.activatedSkills into the args, but the server runtime
+   * registry passes the raw LLM args, so the server factory threads them here
+   * instead.
+   */
+  activatedSkills?: ExecScriptActivatedSkill[];
   builtinSkills?: BuiltinSkill[];
   /** Reads project skill files from the device (local-system over the gateway). */
   deviceFileAccess?: DeviceFileAccess;
-  /** Project skills discovered on the device filesystem. */
+  /** Filesystem skills discovered on the execution device. */
   projectSkills?: ProjectSkillRuntimeItem[];
   service: SkillRuntimeService;
 }
 
-/** Cross-platform dirname for absolute paths (POSIX or Windows separators). */
-const getDirname = (filePath: string): string => {
+/**
+ * Cross-platform dirname for absolute paths (POSIX or Windows separators).
+ * Exported for the server skills runtime, which resolves device paths that may
+ * use either separator — server-side `path.dirname` would mishandle `\`.
+ */
+export const getDirname = (filePath: string): string => {
   const idx = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
   return idx === -1 ? '' : filePath.slice(0, idx);
 };
@@ -122,7 +136,17 @@ const hasHiddenSegment = (rel: string): boolean =>
   rel.split('/').some((seg) => seg.startsWith('.'));
 
 /**
- * Hint appended to activated project-skill content so the model knows how to
+ * Case-insensitive lookup by `name`. The model frequently emits a different
+ * casing than what's registered (e.g. `Agent-Browser` for `agent-browser`,
+ * `lobehub` for `LobeHub`); normalize both sides before comparing.
+ */
+const findByNameCI = <T extends { name: string }>(items: T[], target: string): T | undefined => {
+  const lower = target.toLowerCase();
+  return items.find((s) => s.name.toLowerCase() === lower);
+};
+
+/**
+ * Hint appended to activated filesystem-skill content so the model knows how to
  * discover the rest of the skill's directory. We deliberately don't enumerate
  * the tree here — the model has `local-system.globFiles` available and can
  * call it on demand, which keeps the op-param payload small.
@@ -130,9 +154,10 @@ const hasHiddenSegment = (rel: string): boolean =>
 const buildProjectDirectoryHint = (skillName: string, skillDir: string): string =>
   `## Skill resources
 
-This project skill lives in \`${skillDir}\`. Use \`local-system.globFiles\` with scope="${skillDir}" and pattern="**/*" to discover reference files, then \`readReference\` with skillName="${skillName}" + the relative path to load any of them.`;
+This filesystem skill lives in \`${skillDir}\`. Use \`local-system.globFiles\` with scope="${skillDir}" and pattern="**/*" to discover reference files, then \`readReference\` with skillName="${skillName}" + the relative path to load any of them.`;
 
 export class SkillsExecutionRuntime {
+  private activatedSkills?: ExecScriptActivatedSkill[];
   private builtinSkills: BuiltinSkill[];
   private projectSkills: ProjectSkillRuntimeItem[];
   private deviceFileAccess?: DeviceFileAccess;
@@ -140,13 +165,17 @@ export class SkillsExecutionRuntime {
 
   constructor(options: SkillsExecutionRuntimeOptions) {
     this.service = options.service;
+    this.activatedSkills = options.activatedSkills;
     this.builtinSkills = options.builtinSkills || [];
     this.projectSkills = options.projectSkills || [];
     this.deviceFileAccess = options.deviceFileAccess;
   }
 
   async execScript(args: ExecScriptParams): Promise<BuiltinServerRuntimeOutput> {
-    const { activatedSkills, command, description } = args;
+    const { command, description } = args;
+    // Args win when the caller (client executor) already injected stepContext;
+    // the constructor option covers the server path where args are raw LLM output.
+    const activatedSkills = args.activatedSkills ?? this.activatedSkills;
 
     // Try new execScript method first (with cloud sandbox support)
     if (this.service.execScript) {
@@ -248,13 +277,14 @@ export class SkillsExecutionRuntime {
     const { id, path } = args;
 
     try {
-      // Project skills resolve references relative to the SKILL.md directory,
-      // read through the device file access (local-system over the gateway).
-      const projectSkill = this.projectSkills.find((s) => s.name === id);
+      // Project/device skills resolve references relative to the SKILL.md
+      // directory, read through device file access (local-system over the
+      // gateway).
+      const projectSkill = findByNameCI(this.projectSkills, id);
       if (projectSkill) {
         if (!this.deviceFileAccess) {
           return {
-            content: `Project skill "${id}" cannot be read: no device file access available.`,
+            content: `Filesystem skill "${id}" cannot be read: no device file access available.`,
             success: false,
           };
         }
@@ -281,7 +311,7 @@ export class SkillsExecutionRuntime {
         );
         if (!allowed.has(normalized)) {
           return {
-            content: `Resource not found in project skill "${id}": "${path}"`,
+            content: `Resource not found in filesystem skill "${id}": "${path}"`,
             success: false,
           };
         }
@@ -328,7 +358,7 @@ export class SkillsExecutionRuntime {
 
       // Fall back to builtin skills (includes agent-document skill bundles
       // via the `agent-skills:` identifier prefix).
-      const builtinSkill = this.builtinSkills.find((s) => s.name === id);
+      const builtinSkill = findByNameCI(this.builtinSkills, id);
       if (builtinSkill?.resources) {
         const meta = builtinSkill.resources[path];
         if (meta?.content !== undefined) {
@@ -364,12 +394,12 @@ export class SkillsExecutionRuntime {
   async activateSkill(args: ActivateSkillParams): Promise<BuiltinServerRuntimeOutput> {
     const { name } = args;
 
-    // Project skills (filesystem SKILL.md) take precedence over db/builtin.
-    const projectSkill = this.projectSkills.find((s) => s.name === name);
+    // Filesystem skills (project/device SKILL.md) take precedence over db/builtin.
+    const projectSkill = findByNameCI(this.projectSkills, name);
     if (projectSkill) {
       if (!this.deviceFileAccess) {
         return {
-          content: `Project skill "${name}" cannot be loaded: no device file access available.`,
+          content: `Filesystem skill "${name}" cannot be loaded: no device file access available.`,
           success: false,
         };
       }
@@ -392,13 +422,13 @@ export class SkillsExecutionRuntime {
             hasResources: false,
             location: projectSkill.location,
             name,
-            source: 'project',
+            source: projectSkill.source ?? 'project',
           },
           success: true,
         };
       } catch (e) {
         return {
-          content: `Failed to load project skill "${name}": ${(e as Error).message}`,
+          content: `Failed to load filesystem skill "${name}": ${(e as Error).message}`,
           success: false,
         };
       }
@@ -433,7 +463,7 @@ export class SkillsExecutionRuntime {
 
     // Fall back to builtin skills (includes agent-document skill bundles via
     // the `agent-skills:` identifier prefix).
-    const builtinSkill = this.builtinSkills.find((s) => s.name === name);
+    const builtinSkill = findByNameCI(this.builtinSkills, name);
     if (builtinSkill) {
       let content = builtinSkill.content;
       const hasResources = !!(
@@ -486,13 +516,22 @@ export class SkillsExecutionRuntime {
       stdout: result.output,
       success: result.success,
       exitCode: result.exitCode,
+      // Renders the saved-output paths when the shell truncated the inline
+      // stream — without them the full output is unreachable.
+      outputFiles: result.outputFiles,
+      // Surfaces the still-running message with a pollable handle when the
+      // command outlived the observation window (exitCode undefined).
+      shellId: result.shellId,
     });
 
     return {
       content,
       state: {
         command,
+        ...(result.executionEnv && { executionEnv: result.executionEnv }),
         exitCode: result.exitCode,
+        ...(result.outputFiles && { outputFiles: result.outputFiles }),
+        ...(result.shellId && { shellId: result.shellId }),
         success: result.success,
       },
       success: result.success,

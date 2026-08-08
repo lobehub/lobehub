@@ -3,24 +3,38 @@
 import { formatCost, formatShortenNumber } from '@lobechat/utils';
 import { Flexbox, Tag } from '@lobehub/ui';
 import { Divider, Tooltip } from 'antd';
-import { createStaticStyles, useTheme } from 'antd-style';
+import { createStaticStyles, cssVar, useTheme } from 'antd-style';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
+
+const styles = createStaticStyles(({ css }) => ({
   axisLabel: css`
     pointer-events: none;
     position: absolute;
-    font-size: 11px;
+    font-size: ${cssVar.fontSizeSM};
     color: ${cssVar.colorTextTertiary};
   `,
   dot: css`
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition:
+      transform 0.15s ease,
+      opacity 0.15s ease;
 
     &:hover {
       transform: translate(-50%, 50%) scale(1.5);
       opacity: 1 !important;
+    }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimary};
+      outline-offset: 1px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
     }
   `,
   scatterArea: css`
@@ -42,6 +56,7 @@ interface ScatterPlotProps {
 const ScatterPlot = memo<ScatterPlotProps>(({ results, benchmarkId, runId }) => {
   const { t } = useTranslation('eval');
   const theme = useTheme();
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
 
   const { maxDuration, maxTokens, scatterData } = useMemo(() => {
     if (!results || results.length === 0) return { maxDuration: 0, maxTokens: 0, scatterData: [] };
@@ -84,12 +99,19 @@ const ScatterPlot = memo<ScatterPlotProps>(({ results, benchmarkId, runId }) => 
           width: '100%',
         }}
       >
-        <line stroke={theme.colorBorder} strokeWidth="0.5" x1="0" x2="100" y1="100" y2="100" />
-        <line stroke={theme.colorBorder} strokeWidth="0.5" x1="0" x2="0" y1="0" y2="100" />
+        <line
+          stroke={theme.colorBorderSecondary}
+          strokeWidth="0.5"
+          x1="0"
+          x2="100"
+          y1="100"
+          y2="100"
+        />
+        <line stroke={theme.colorBorderSecondary} strokeWidth="0.5" x1="0" x2="0" y1="0" y2="100" />
         {[1, 2, 3].map((i) => (
           <line
             key={i}
-            stroke={theme.colorBorder}
+            stroke={theme.colorBorderSecondary}
             strokeDasharray="2 2"
             strokeOpacity="0.5"
             strokeWidth="0.5"
@@ -121,14 +143,15 @@ const ScatterPlot = memo<ScatterPlotProps>(({ results, benchmarkId, runId }) => 
         const expectedPreview =
           d.expected.length > 60 ? d.expected.slice(0, 60) + '...' : d.expected;
         const caseUrl = `/eval/bench/${benchmarkId}/runs/${runId}/cases/${d.testCaseId}`;
+        const workspaceAwareCaseUrl = buildWorkspaceAwarePath(caseUrl, activeWorkspaceSlug);
         return (
           <Tooltip
             key={i}
             title={
               <Flexbox gap={4} style={{ fontSize: 12, maxWidth: 320 }}>
                 {/* Row 1: #Number [Tag] ... Duration */}
-                <Flexbox horizontal align="center" gap={6} justify="space-between">
-                  <Flexbox horizontal align="center" gap={6}>
+                <Flexbox horizontal align="center" gap={8} justify="space-between">
+                  <Flexbox horizontal align="center" gap={8}>
                     <span style={{ fontWeight: 600 }}>#{d.sortOrder ?? i + 1}</span>
                     <Tag color={tagColor} size="small">
                       {statusLabel}
@@ -169,6 +192,8 @@ const ScatterPlot = memo<ScatterPlotProps>(({ results, benchmarkId, runId }) => 
           >
             <div
               className={styles.dot}
+              role={'button'}
+              tabIndex={0}
               style={{
                 background: fill,
                 borderRadius: '50%',
@@ -180,7 +205,13 @@ const ScatterPlot = memo<ScatterPlotProps>(({ results, benchmarkId, runId }) => 
                 transform: 'translate(-50%, 50%)',
                 width: 7,
               }}
-              onClick={() => window.open(caseUrl, '_blank')}
+              onClick={() => window.open(workspaceAwareCaseUrl, '_blank')}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  window.open(workspaceAwareCaseUrl, '_blank');
+                }
+              }}
             />
           </Tooltip>
         );

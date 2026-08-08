@@ -1,4 +1,5 @@
-import { Block, Button, Icon, InputPassword, Text } from '@lobehub/ui';
+import { Block, Icon, InputPassword, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { Form } from 'antd';
 import { Lock } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -44,6 +45,7 @@ export const ResetPasswordContent = ({
         ]}
       >
         <InputPassword
+          autoComplete="new-password"
           placeholder={t('betterAuth.resetPassword.newPasswordPlaceholder')}
           size="large"
           prefix={
@@ -70,6 +72,7 @@ export const ResetPasswordContent = ({
         ]}
       >
         <InputPassword
+          autoComplete="new-password"
           placeholder={t('betterAuth.resetPassword.confirmPasswordPlaceholder')}
           size="large"
           prefix={

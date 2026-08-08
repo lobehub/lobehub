@@ -1,10 +1,10 @@
 import { LOBE_CHAT_CLOUD } from '@lobechat/business-const';
 import { inferImageMimeTypeFromBytes } from '@lobechat/utils';
+import { toast } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 import { sha256 } from 'js-sha256';
 
 import { handleFileUploadError } from '@/business/client/handleFileUploadError';
-import { message } from '@/components/AntdStaticMethods';
 import { fileService } from '@/services/file';
 import { uploadService } from '@/services/upload';
 import { type StoreSetter } from '@/store/types';
@@ -44,6 +44,13 @@ interface UploadWithProgressParams {
    */
   source?: string;
   uploadId?: string;
+  /**
+   * Optional workspace visibility override sent to `file.createFile`. Only
+   * meaningful in workspace mode; personal mode ignores it server-side. When
+   * omitted the server picks its default (top-level uploads default to
+   * `'private'`, children inherit their parent document's visibility).
+   */
+  visibility?: 'private' | 'public';
 }
 
 interface UploadWithProgressResult {
@@ -126,6 +133,7 @@ export class FileUploadActionImpl {
     source,
     uploadId,
     abortController,
+    visibility,
   }: UploadWithProgressParams): Promise<UploadWithProgressResult | undefined> => {
     const statusId = uploadId ?? file.name;
 
@@ -157,13 +165,13 @@ export class FileUploadActionImpl {
           abortController,
           onNotSupported: () => {
             onStatusUpdate?.({ id: statusId, type: 'removeFile' });
-            message.info({
-              content: t('upload.fileOnlySupportInServerMode', {
+            toast.info({
+              description: t('upload.fileOnlySupportInServerMode', {
                 cloud: LOBE_CHAT_CLOUD,
                 ext: normalizedFile.name.split('.').pop(),
                 ns: 'error',
               }),
-              duration: 5,
+              duration: 5000,
             });
           },
           onProgress: (status, upload) => {
@@ -211,6 +219,7 @@ export class FileUploadActionImpl {
           size: normalizedFile.size,
           source,
           url: fileUrl,
+          visibility,
         },
         knowledgeBaseId,
       );
@@ -230,7 +239,12 @@ export class FileUploadActionImpl {
     } catch (error) {
       if (
         handleFileUploadError(error, {
-          onUploadBlocked: () => onStatusUpdate?.({ id: statusId, type: 'removeFile' }),
+          onUploadBlocked: ({ code, description }) =>
+            onStatusUpdate?.({
+              id: statusId,
+              type: 'updateFile',
+              value: { error: description, errorCode: code, status: 'error' },
+            }),
         })
       ) {
         return;

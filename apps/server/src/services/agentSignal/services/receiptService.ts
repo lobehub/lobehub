@@ -24,12 +24,28 @@ export interface AgentSignalReceiptMetadata {
   actionStatus?: ActionStatus;
   /** Agent Signal action type for action receipts. */
   actionType?: ActionType;
+  /** Agent document binding id used when reopening or auditing a rolled-back skill refinement. */
+  agentDocumentId?: string;
+  /** Backing document id used by the rollback endpoint. */
+  documentId?: string;
   /** Evidence refs used by the reviewer/planner. */
   evidenceRefs?: EvidenceRef[];
+  /** Current-document timestamp the rollback expects to still be present before restoring history. */
+  expectedCurrentDocumentUpdatedAt?: string;
+  /** Document history id captured immediately before the skill refinement. */
+  historyId?: string;
   /** User-local date for nightly receipts. */
   localDate?: string;
   /** SelfIteration review scope that produced the receipt. */
   reviewScope?: Scope;
+  /** Rollback availability/status for the linked mutation. */
+  rollbackStatus?:
+    | 'available'
+    | 'conflict'
+    | 'failed'
+    | 'not_found'
+    | 'rolled_back'
+    | 'unsupported';
   /** Scoped self-reflection id for non-nightly review receipts. */
   scopeId?: string;
   /** Scoped self-reflection namespace for non-nightly review receipts. */
@@ -140,8 +156,17 @@ export interface AgentSignalReceiptListResult {
 
 /** Storage contract for user-visible Agent Signal receipt history. */
 export interface AgentSignalReceiptStore {
+  /** Persists a new receipt payload into the recent-history store. */
   appendReceipt: (receipt: AgentSignalReceipt, ttlSeconds: number) => Promise<boolean>;
+  /** Reads one persisted receipt payload by id when the store supports direct lookup. */
+  getReceipt?: (receiptId: string) => Promise<AgentSignalReceipt | undefined>;
+  /** Lists recent receipts for one scoped topic surface. */
   listReceipts: (input: AgentSignalReceiptListInput) => Promise<AgentSignalReceiptListResult>;
+  /** Rewrites the persisted metadata envelope for one receipt when the store supports in-place updates. */
+  updateReceiptMetadata?: (
+    receiptId: string,
+    metadata: AgentSignalReceiptMetadata,
+  ) => Promise<AgentSignalReceipt | undefined>;
 }
 
 interface ProjectAgentSignalReceiptsInput {
@@ -614,4 +639,45 @@ export const listAgentSignalReceipts = async (
   options: { store?: AgentSignalReceiptStore } = {},
 ) => {
   return (options.store ?? redisReceiptStore).listReceipts(input);
+};
+
+/**
+ * Reads one persisted Agent Signal receipt by id.
+ *
+ * Use when:
+ * - A server-side flow needs receipt metadata for a follow-up mutation
+ * - A rollback path must validate the original target before restoring history
+ *
+ * Expects:
+ * - The configured receipt store supports direct receipt lookup
+ *
+ * Returns:
+ * - The persisted receipt payload, or `undefined` when unavailable
+ */
+export const getAgentSignalReceipt = async (
+  receiptId: string,
+  options: { store?: AgentSignalReceiptStore } = {},
+) => {
+  return (options.store ?? redisReceiptStore).getReceipt?.(receiptId);
+};
+
+/**
+ * Rewrites one persisted Agent Signal receipt metadata envelope.
+ *
+ * Use when:
+ * - A follow-up operation reaches a terminal state that should survive refresh
+ * - The UI should stop offering stale actions like rollback/undo
+ *
+ * Expects:
+ * - The configured receipt store supports metadata updates
+ *
+ * Returns:
+ * - The updated receipt payload, or `undefined` when the store cannot update it
+ */
+export const updateAgentSignalReceiptMetadata = async (
+  receiptId: string,
+  metadata: AgentSignalReceiptMetadata,
+  options: { store?: AgentSignalReceiptStore } = {},
+) => {
+  return (options.store ?? redisReceiptStore).updateReceiptMetadata?.(receiptId, metadata);
 };

@@ -4,6 +4,7 @@ import {
   type ComposioAppType,
   getLobehubSkillProviderById,
   type LobehubSkillProviderType,
+  OFFICIAL_SITE,
 } from '@lobechat/const';
 import { type DiscoverPluginDetail, type PluginSource } from '@lobechat/types';
 import { Avatar, Block, Flexbox, Icon, Image, Skeleton, Tag, Text } from '@lobehub/ui';
@@ -124,7 +125,7 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
         category: undefined,
         createdAt: '',
         description: lobehubSkill.description,
-        homepage: lobehubSkill.authorUrl || 'https://lobehub.com',
+        homepage: lobehubSkill.authorUrl || OFFICIAL_SITE,
         identifier: lobehubSkill.id,
         manifest: undefined,
         related: [],
@@ -139,18 +140,18 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
     if (builtinTool) {
       return {
         author: 'LobeHub',
-        avatar: builtinTool.manifest.meta.avatar || '',
+        avatar: builtinTool.avatar || '',
         category: undefined,
         createdAt: '',
-        description: builtinTool.manifest.meta.description || '',
-        homepage: 'https://lobehub.com',
+        description: builtinTool.description || '',
+        homepage: OFFICIAL_SITE,
         identifier: builtinTool.identifier,
         manifest: undefined,
         related: [],
         schemaVersion: 1,
         source: 'builtin' as const,
-        tags: builtinTool.manifest.meta.tags || ['builtin-tool'],
-        title: builtinTool.manifest.meta.title,
+        tags: builtinTool.tags || ['builtin-tool'],
+        title: builtinTool.title || builtinTool.identifier,
       };
     }
 

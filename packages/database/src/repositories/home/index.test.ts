@@ -3,11 +3,13 @@ import { DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE, INBOX_SESSION_ID } from '@lo
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import { AgentModel } from '../../models/agent';
 import { agents } from '../../schemas/agent';
 import { chatGroups, chatGroupsAgents } from '../../schemas/chatGroup';
 import { agentsToSessions } from '../../schemas/relations';
 import { sessionGroups, sessions } from '../../schemas/session';
 import { users } from '../../schemas/user';
+import { workspaces } from '../../schemas/workspace';
 import type { LobeChatDatabase } from '../../type';
 import { HomeRepository } from './index';
 
@@ -490,6 +492,65 @@ describe('HomeRepository', () => {
       expect(result.groups[0].name).toBe('Group A');
       expect(result.groups[1].name).toBe('Group B');
       expect(result.groups[2].name).toBe('Group C');
+    });
+
+    it('should fall back to ungrouped when groupId references a folder outside the scope', async () => {
+      const wsId = 'home-test-ws';
+      await serverDB
+        .insert(workspaces)
+        .values({ id: wsId, name: 'WS', slug: wsId, primaryOwnerId: userId });
+
+      // Personal-scope folder left behind by an agent transfer into the workspace
+      await serverDB
+        .insert(sessionGroups)
+        .values({ id: 'sg-personal-stale', name: 'Personal Folder', userId });
+      await serverDB.insert(agents).values({
+        sessionGroupId: 'sg-personal-stale',
+        title: 'Transferred Agent',
+        userId,
+        virtual: false,
+        visibility: 'private',
+        workspaceId: wsId,
+      });
+
+      const wsRepo = new HomeRepository(serverDB, userId, wsId);
+      const result = await wsRepo.getSidebarAgentList();
+
+      // The folder is not visible in the workspace scope, so the agent must
+      // surface in privateUngrouped instead of vanishing from the sidebar.
+      expect(result.privateGroups).toEqual([]);
+      expect(result.privateUngrouped).toHaveLength(1);
+      expect(result.privateUngrouped[0]).toMatchObject({ title: 'Transferred Agent' });
+    });
+
+    it('should show a workspace-private agent after transferring it to personal scope', async () => {
+      const workspaceId = 'private-agent-source-ws';
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Private Agent Source',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      const workspaceAgentModel = new AgentModel(serverDB, userId, workspaceId);
+      const agent = await workspaceAgentModel.create({
+        title: 'Transferred Private Agent',
+        virtual: false,
+        visibility: 'private',
+      });
+
+      await workspaceAgentModel.transferAgent(agent.id, null, userId);
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      expect(result.privateGroups).toEqual([]);
+      expect(result.privateUngrouped).toEqual([]);
+      expect(result.ungrouped).toEqual([
+        expect.objectContaining({
+          id: agent.id,
+          title: 'Transferred Private Agent',
+          visibility: 'public',
+        }),
+      ]);
     });
   });
 

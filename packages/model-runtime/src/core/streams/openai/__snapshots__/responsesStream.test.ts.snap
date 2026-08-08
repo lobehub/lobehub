@@ -88,9 +88,9 @@ exports[`OpenAIResponsesStream > Reasoning > summary 1`] = `
 ",
   "id: rs_684313b9774481908ee856625f82fb8c0b502bf083132d0d
 ",
-  "event: text
+  "event: reasoning_response_item
 ",
-  "data: null
+  "data: {"id":"rs_684313b9774481908ee856625f82fb8c0b502bf083132d0d","type":"reasoning","summary":[{"type":"summary_text","text":"**Answering a numeric comparison**\\n\\nThe user is asking in Chinese which number is larger: 9.1 or 9.92. This is straightforward since 9.92 is clearly larger, as it's greater than 9.1. We can respond with \\"9.92大于9.1\\" without needing to search for more information. It's simple comparison, but I could also add a little explanation, noting that 9.92 is indeed 0.82 more than 9.1. However, keeping it simple with \\"9.92 > 9.1\\" is perfectly fine!"}]}
 
 ",
   "id: resp_684313b89200819087f27686e0c822260b502bf083132d0d

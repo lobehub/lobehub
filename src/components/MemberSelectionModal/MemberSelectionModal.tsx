@@ -1,25 +1,17 @@
 'use client';
 
-import {
-  ActionIcon,
-  Avatar,
-  Button,
-  Checkbox,
-  Flexbox,
-  List,
-  Modal,
-  SearchBar,
-  Text,
-  Tooltip,
-} from '@lobehub/ui';
+import { agentDisplayName } from '@lobechat/types';
+import { ActionIcon, Avatar, Checkbox, Flexbox, List, SearchBar, Text, Tooltip } from '@lobehub/ui';
+import { Button, Switch } from '@lobehub/ui/base-ui';
 import { useHover } from 'ahooks';
-import { List as AntdList, Switch } from 'antd';
+import { List as AntdList } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { X } from 'lucide-react';
 import { type ChangeEvent } from 'react';
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import { DEFAULT_AVATAR } from '@/const/meta';
 import AgentSelectionEmpty from '@/features/AgentSelectionEmpty';
 import ModelSelect from '@/features/ModelSelect';
@@ -40,7 +32,7 @@ const AvailableAgentItem = memo<{
   const isHovering = useHover(ref);
 
   const _agentId = agent.config?.id;
-  const title = agent.meta?.title || t('defaultSession', { ns: 'common' });
+  const title = agentDisplayName(agent.meta, t('defaultSession', { ns: 'common' }));
   const description = agent.meta?.description || '';
   const avatar = agent.meta?.avatar || DEFAULT_AVATAR;
   const avatarBackground = agent.meta?.backgroundColor;
@@ -232,9 +224,9 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
       );
     };
 
-    const handleRemoveAgent = (agentId: string) => {
+    const handleRemoveAgent = useCallback((agentId: string) => {
       setSelectedAgents((prev) => prev.filter((id) => id !== agentId));
-    };
+    }, []);
 
     const handleSearchChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
       setSearchTerm(e.target.value);
@@ -267,7 +259,7 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
       if (!searchTerm.trim()) return availableAgents;
 
       return availableAgents.filter((agent) => {
-        const title = agent.meta?.title || '';
+        const title = agentDisplayName(agent.meta) ?? '';
         const description = agent.meta?.description || '';
         const searchLower = searchTerm.toLowerCase();
 
@@ -284,7 +276,7 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
           const agent = agentSessions.find((session) => session.config.id === agentId);
           if (!agent) return null;
 
-          const title = agent.meta?.title || t('defaultSession', { ns: 'common' });
+          const title = agentDisplayName(agent.meta, t('defaultSession', { ns: 'common' }));
           const avatar = agent.meta?.avatar || DEFAULT_AVATAR;
           const avatarBackground = agent.meta?.backgroundColor;
           const description = agent.meta?.description || '';
@@ -366,7 +358,7 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
     const isConfirmDisabled = totalMemberCount < minMembersRequired || isAdding;
 
     return (
-      <Modal
+      <ImperativeModal
         allowFullscreen
         open={open}
         title={modalTitle}
@@ -483,7 +475,7 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
             </Flexbox>
           </Flexbox>
         </Flexbox>
-      </Modal>
+      </ImperativeModal>
     );
   },
 );

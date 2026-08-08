@@ -18,7 +18,6 @@ import {
   type ListProjectSkillsResult,
   type LocalFileItem,
   type LocalFilePreviewUrlParams,
-  type LocalFilePreviewUrlResult,
   type LocalMoveFilesResultItem,
   type LocalReadFileParams,
   type LocalReadFileResult,
@@ -31,6 +30,8 @@ import {
   type PrepareSkillDirectoryResult,
   type ProjectFileIndexParams,
   type ProjectFileIndexResult,
+  type ProjectFileSearchParams,
+  type ProjectFileSearchResult,
   type RenameLocalFileParams,
   type ResolveSkillResourcePathParams,
   type ResolveSkillResourcePathResult,
@@ -59,6 +60,16 @@ export interface BinaryLocalFilePreview {
   type: 'binary' | 'pdf' | 'video';
 }
 
+/**
+ * Binary document (pdf / office) small enough to preview in-app. Oversized
+ * documents stay on the content-less `binary` / `pdf` variants.
+ */
+export interface DocumentLocalFilePreview {
+  blob: Blob;
+  contentType: string;
+  type: 'document';
+}
+
 export interface ImageLocalFilePreview {
   blob: Blob;
   contentType: string;
@@ -68,13 +79,30 @@ export interface ImageLocalFilePreview {
 export interface TextLocalFilePreview {
   content: string;
   contentType: string;
+  resourceBaseUrl?: string;
   type: 'text';
 }
 
 export type LocalFilePreview =
-  | BinaryLocalFilePreview
-  | ImageLocalFilePreview
-  | TextLocalFilePreview;
+  BinaryLocalFilePreview | DocumentLocalFilePreview | ImageLocalFilePreview | TextLocalFilePreview;
+
+/** Binary documents the in-app portal can preview (or offer to download). */
+const DOCUMENT_PREVIEW_MIME_TYPES = new Set([
+  'application/msword',
+  'application/pdf',
+  'application/vnd.ms-excel',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+]);
+
+/**
+ * Mirrors the device-RPC document cap (`MAX_DOCUMENT_PREVIEW_BYTES` in the
+ * desktop / device-control serializers) so the same file previews — or falls
+ * back — identically on every transport.
+ */
+const MAX_DOCUMENT_PREVIEW_BYTES = 20 * 1024 * 1024;
 
 const normalizeContentType = (contentType: string | null): string =>
   contentType?.split(';')[0].trim().toLowerCase() ?? '';
@@ -85,6 +113,7 @@ const isTextPreviewMimeType = (mimeType: string): boolean =>
 const fetchLocalFilePreview = async (
   url: string,
   accept?: LocalFilePreviewUrlParams['accept'],
+  resourceScope?: LocalFilePreviewUrlParams['resourceScope'],
 ): Promise<LocalFilePreview> => {
   const response = await fetch(url);
 
@@ -103,7 +132,34 @@ const fetchLocalFilePreview = async (
   }
 
   if (isTextPreviewMimeType(contentType)) {
-    return { content: await response.text(), contentType, type: 'text' };
+    return {
+      content: await response.text(),
+      contentType,
+      resourceBaseUrl: resourceScope === 'workspace' ? new URL('.', url).toString() : undefined,
+      type: 'text',
+    };
+  }
+
+  if (DOCUMENT_PREVIEW_MIME_TYPES.has(contentType)) {
+    // Gate on the size headers first so an oversized document is never
+    // materialized in renderer memory just to be discarded. The desktop
+    // protocol short-circuits oversized documents with an empty body and the
+    // real size in `X-Preview-Content-Size`; Content-Length covers hosts that
+    // still serve the body. Fall back to the blob-size check otherwise.
+    const contentLength = Number(
+      response.headers.get('x-preview-content-size') ?? response.headers.get('content-length'),
+    );
+    const oversizedByHeader =
+      Number.isFinite(contentLength) &&
+      contentLength > 0 &&
+      contentLength > MAX_DOCUMENT_PREVIEW_BYTES;
+
+    if (!oversizedByHeader) {
+      const blob = await response.blob();
+      if (blob.size <= MAX_DOCUMENT_PREVIEW_BYTES) {
+        return { blob, contentType, type: 'document' };
+      }
+    }
   }
 
   if (contentType === 'application/pdf') {
@@ -139,6 +195,10 @@ class LocalFileService {
     return ensureElectronIpc().localSystem.getProjectFileIndex(params);
   }
 
+  async searchProjectFiles(params: ProjectFileSearchParams): Promise<ProjectFileSearchResult> {
+    return ensureElectronIpc().localSystem.searchProjectFiles(params);
+  }
+
   async listProjectSkills(params: ListProjectSkillsParams): Promise<ListProjectSkillsResult> {
     // Project-skill scanning lives in the main-process WorkspaceCtr ('workspace'
     // group), split out of LocalFileCtr — hence the namespace differs from the
@@ -170,20 +230,14 @@ class LocalFileService {
     return ensureElectronIpc().localSystem.auditSafePaths(params);
   }
 
-  async getLocalFilePreviewUrl(
-    params: LocalFilePreviewUrlParams,
-  ): Promise<LocalFilePreviewUrlResult> {
-    return ensureElectronIpc().localSystem.getLocalFilePreviewUrl(params);
-  }
-
   async getLocalFilePreview(params: LocalFilePreviewUrlParams): Promise<LocalFilePreview> {
-    const result = await this.getLocalFilePreviewUrl(params);
+    const result = await ensureElectronIpc().localSystem.getLocalFilePreviewUrl(params);
 
     if (!result.success || !result.url) {
       throw new Error(result.error || 'Missing local file preview URL');
     }
 
-    return fetchLocalFilePreview(result.url, params.accept);
+    return fetchLocalFilePreview(result.url, params.accept, params.resourceScope);
   }
 
   async prepareSkillDirectory(

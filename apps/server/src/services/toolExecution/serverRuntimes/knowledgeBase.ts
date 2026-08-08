@@ -4,6 +4,7 @@ import { KnowledgeBaseExecutionRuntime } from '@lobechat/builtin-tool-knowledge-
 import { AgentModel } from '@/database/models/agent';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
+import { ProjectModel } from '@/database/models/project';
 import { KnowledgeRepo } from '@/database/repositories/knowledge';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
@@ -13,24 +14,37 @@ import { type ServerRuntimeRegistration } from './types';
 
 export const knowledgeBaseRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
-    const { userId, serverDB, agentId, workspaceId } = context;
+    const { userId, serverDB, agentId, agentVisibility, taskId, workspaceId } = context;
     if (!userId || !serverDB) {
       throw new Error('userId and serverDB are required for Knowledge Base execution');
     }
 
     const fileModel = new FileModel(serverDB, userId, workspaceId);
     const knowledgeBaseModel = new KnowledgeBaseModel(serverDB, userId, workspaceId);
+    const projectModel = new ProjectModel(serverDB, userId, workspaceId);
     const knowledgeRepo = new KnowledgeRepo(serverDB, userId, workspaceId);
-    const documentService = new DocumentService(serverDB, userId, workspaceId);
+    const documentService = new DocumentService(serverDB, userId, workspaceId, agentVisibility);
     const fileService = new FileService(serverDB, userId, workspaceId);
-    const searchService = new KnowledgeBaseSearchService(serverDB, userId, workspaceId);
+    const searchService = new KnowledgeBaseSearchService(
+      serverDB,
+      userId,
+      workspaceId,
+      agentVisibility,
+    );
     const agentModel = agentId ? new AgentModel(serverDB, userId, workspaceId) : null;
 
     const resolveAgentKnowledgeBaseIds = async (override?: string[]): Promise<string[]> => {
-      if (override && override.length > 0) return override;
-      if (!agentModel || !agentId) return [];
-      const knowledge = await agentModel.getAgentAssignedKnowledge(agentId);
-      return knowledge.knowledgeBases.filter((k) => k.enabled && k.id).map((k) => k.id as string);
+      const agentKnowledgeBaseIds = async () => {
+        if (override && override.length > 0) return override;
+        if (!agentModel || !agentId) return [];
+        const knowledge = await agentModel.getAgentAssignedKnowledge(agentId);
+        return knowledge.knowledgeBases.filter((k) => k.enabled && k.id).map((k) => k.id as string);
+      };
+      const [agentIds, projectIds] = await Promise.all([
+        agentKnowledgeBaseIds(),
+        taskId ? projectModel.getEnabledKnowledgeBaseIdsForTask(taskId) : Promise.resolve([]),
+      ]);
+      return [...new Set([...agentIds, ...projectIds])];
     };
 
     return new KnowledgeBaseExecutionRuntime(
@@ -83,7 +97,13 @@ export const knowledgeBaseRuntime: ServerRuntimeRegistration = {
           };
         },
         getKnowledgeBases: async () => {
-          const items = await knowledgeBaseModel.query();
+          // Defensive: when the calling agent is public, drop the caller's
+          // own private KBs so a public agent can never surface them to
+          // other workspace members. Documents/chunks already get this
+          // treatment via `documentService`/`searchService` above.
+          const items = await knowledgeBaseModel.query({
+            callerAgentVisibility: agentVisibility ?? undefined,
+          });
           return items.map((kb) => ({
             avatar: kb.avatar ?? null,
             description: kb.description,
@@ -127,6 +147,14 @@ export const knowledgeBaseRuntime: ServerRuntimeRegistration = {
             knowledgeBaseId,
             parentId,
             title,
+            // Inherit caller-agent visibility: private-agent output stays in
+            // the owner's private bucket; public-agent output is visible to
+            // the workspace. When null (no agent / cannot resolve), fall
+            // through to `DocumentService.createDocument`'s existing
+            // `sourceType='api'` fallback (→ private in workspace mode).
+            ...(agentVisibility === 'private' || agentVisibility === 'public'
+              ? { visibility: agentVisibility }
+              : {}),
           });
           return { id: doc.id };
         },

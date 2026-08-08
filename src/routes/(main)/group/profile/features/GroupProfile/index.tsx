@@ -1,6 +1,7 @@
 'use client';
 
-import { ActionIcon, Button, DropdownMenu, Flexbox } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu, Flexbox } from '@lobehub/ui';
+import { Button, type ModalInstance } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
 import { useTheme } from 'antd-style';
 import { MoreHorizontalIcon, PlayIcon, Settings2Icon } from 'lucide-react';
@@ -10,8 +11,12 @@ import { useParams } from 'react-router';
 import urlJoin from 'url-join';
 
 import { useAgentGroupTransferMenuItem } from '@/business/client/hooks/useAgentGroupTransferMenuItem';
+import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
 import { EditingIndicator, type EditLockClient, useEditLock } from '@/features/EditLock';
 import { EditorCanvas } from '@/features/EditorCanvas';
+import AccessLevelTag from '@/features/ResourcePermission/AccessLevelTag';
+import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
+import { useResourcePermissionMenuItem } from '@/features/ResourcePermission/useResourcePermissionMenuItem';
 import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { lambdaClient } from '@/libs/trpc/client';
@@ -37,14 +42,51 @@ const groupLockClient: EditLockClient = {
 
 const GroupProfile = memo(() => {
   const { t } = useTranslation(['setting', 'chat']);
-  const { allowed: canEdit } = usePermission('edit_own_content');
+  const { allowed: hasEditPermission } = usePermission('edit_own_content');
   const theme = useTheme();
   const { gid } = useParams<{ gid: string }>();
   const groupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
+  const hasActiveWorkspace = useHasActiveWorkspace();
   const currentGroup = useAgentGroupStore((s) => agentGroupSelectors.getGroupById(gid ?? '')(s));
   const updateGroup = useAgentGroupStore((s) => s.updateGroup);
   const router = useQueryRoute();
   const transferMenuItems = useAgentGroupTransferMenuItem(groupId ?? undefined);
+  // A workspace member whose General access on this group is view/use level
+  // can't edit it (defaults permissive while loading — server enforces).
+  const { canEditResource } = useResourceAccess(
+    'agentGroup',
+    currentGroup?.visibility === 'private' ? undefined : (groupId ?? undefined),
+  );
+  const canEdit = hasEditPermission && canEditResource;
+
+  // Member-permission entry lives inside the "..." menu, matching the agent
+  // profile header (only meaningful for public workspace groups).
+  const memberPermissionMenuItem = useResourcePermissionMenuItem(
+    'agentGroup',
+    hasActiveWorkspace && currentGroup?.visibility !== 'private'
+      ? (groupId ?? undefined)
+      : undefined,
+  );
+  const moreMenuItems = useMemo(
+    () =>
+      [
+        memberPermissionMenuItem,
+        memberPermissionMenuItem && transferMenuItems?.length
+          ? ({ type: 'divider' } as const)
+          : null,
+        ...(transferMenuItems ?? []),
+      ].filter(Boolean),
+    [memberPermissionMenuItem, transferMenuItems],
+  );
+
+  const settingsModalRef = useRef<ModalInstance | null>(null);
+  useEffect(
+    () => () => {
+      settingsModalRef.current?.close();
+      settingsModalRef.current = null;
+    },
+    [],
+  );
 
   // Collaborative edit lock for workspace groups (same model as pages): read-only
   // when another member is editing; acquired implicitly on the first edit.
@@ -126,6 +168,14 @@ const GroupProfile = memo(() => {
             <GroupStatusTag />
             <GroupVersionReviewTag />
             <GroupForkTag />
+            <AccessLevelTag
+              resourceType={'agentGroup'}
+              resourceId={
+                hasActiveWorkspace && currentGroup?.visibility !== 'private'
+                  ? (groupId ?? undefined)
+                  : undefined
+              }
+            />
           </Flexbox>
         </Flexbox>
         {/* Header: Group Avatar + Title */}
@@ -148,8 +198,8 @@ const GroupProfile = memo(() => {
           >
             {t('startConversation')}
           </Button>
-          {!!transferMenuItems?.length && (
-            <DropdownMenu items={transferMenuItems}>
+          {moreMenuItems.length > 0 && (
+            <DropdownMenu items={moreMenuItems}>
               <ActionIcon
                 icon={MoreHorizontalIcon}
                 size={'small'}
@@ -166,7 +216,8 @@ const GroupProfile = memo(() => {
             onClick={() => {
               if (!canEdit) return;
 
-              openGroupAgentSettingsModal();
+              settingsModalRef.current?.close();
+              settingsModalRef.current = openGroupAgentSettingsModal();
             }}
           >
             {t('advancedSettings')}

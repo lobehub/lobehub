@@ -19,6 +19,7 @@ export interface AzureOpenAIKeyVault {
 
 export interface AWSBedrockKeyVault {
   accessKeyId?: string;
+  apiKey?: string;
   region?: string;
   secretAccessKey?: string;
   sessionToken?: string;
@@ -60,6 +61,21 @@ export interface GithubCopilotKeyVault {
    * OAuth access token (e.g., GitHub's ghu_xxx)
    */
   oauthAccessToken?: string;
+}
+
+export interface SuperGrokKeyVault {
+  /**
+   * xAI OAuth access token (JWT, ~1h lifetime)
+   */
+  oauthAccessToken?: string;
+  /**
+   * xAI OAuth refresh token. Rotates on every refresh — single use.
+   */
+  oauthRefreshToken?: string;
+  /**
+   * Access token expiration timestamp (ms)
+   */
+  oauthTokenExpiresAt?: string;
 }
 
 export interface SearchEngineKeyVaults {

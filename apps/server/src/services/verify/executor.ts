@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { TRACING_SCENARIOS } from '@lobechat/const';
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
+import { getModelPropertyWithFallback } from '@lobechat/model-runtime';
 import type {
   ToulminVerdict,
   VerifyCheckItem,
@@ -10,14 +11,18 @@ import type {
 } from '@lobechat/types';
 import debug from 'debug';
 
+import { AiModelModel } from '@/database/models/aiModel';
 import { DocumentModel } from '@/database/models/document';
+import { FileModel } from '@/database/models/file';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyEvidenceModel } from '@/database/models/verifyEvidence';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
+import { FileService } from '@/server/services/file';
 
 import { coverageGaps, readRequiredEvidence } from './evidenceCoverage';
+import { planEvidenceVerification } from './evidencePlanner';
 import { buildJudgePrompt, type JudgeEvidence, VERIFY_JUDGE_PROMPT_VERSION } from './prompts';
 import { planItemToPendingResult } from './resultSnapshot';
 import {
@@ -41,6 +46,8 @@ const log = debug('lobe-server:verify-executor');
 export interface VerifierAgentRunner {
   (args: {
     checkItem: VerifyCheckItem;
+    /** Evidence the builder captured for this item — input to the verifier's judgment. */
+    evidence?: JudgeEvidence[];
     goal: string;
     operationId: string;
   }): Promise<{ verifierOperationId: string } | null>;
@@ -54,12 +61,18 @@ export interface ExecuteVerifyParams {
   goal: string;
   modelConfig: { model: string; provider: string };
   operationId: string;
-  /** Runs `agent`-type checks as verifier sub-agents; agent items skip when absent. */
+  /** Runs agent checks and program checks without a native runner as verifier sub-agents. */
   runVerifierAgent?: VerifierAgentRunner;
 }
 
 const verdictToStatus = (verdict: VerifyVerdict): VerifyCheckResultStatus =>
   verdict === 'passed' ? 'passed' : 'failed';
+const terminalResultStatuses = new Set<VerifyCheckResultStatus>([
+  'passed',
+  'failed',
+  'errored',
+  'skipped',
+]);
 
 /** Group a run's evidence rows by the plan item they back, for judge injection. */
 type EvidenceByItem = Map<string, JudgeEvidence[]>;
@@ -79,6 +92,9 @@ export class VerifyExecutorService {
   private readonly statusService: VerifyStatusService;
   private readonly documentModel: DocumentModel;
   private readonly evidenceModel: VerifyEvidenceModel;
+  private readonly fileModel: FileModel;
+  private readonly fileService: FileService;
+  private readonly aiModelModel: AiModelModel;
 
   constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
@@ -88,6 +104,9 @@ export class VerifyExecutorService {
     this.statusService = new VerifyStatusService(db, userId, workspaceId);
     this.documentModel = new DocumentModel(db, userId, workspaceId);
     this.evidenceModel = new VerifyEvidenceModel(db, userId, workspaceId);
+    this.fileModel = new FileModel(db, userId, workspaceId);
+    this.fileService = new FileService(db, userId, workspaceId);
+    this.aiModelModel = new AiModelModel(db, userId, workspaceId);
   }
 
   /**
@@ -141,16 +160,44 @@ export class VerifyExecutorService {
     const gapIds = await this.runStructuralGate(verifyRunId, items, evidenceByItem);
     const gated = items.filter((i) => !gapIds.has(i.id));
 
-    const llmItems = gated.filter((i) => i.verifierType === 'llm');
-    const agentItems = gated.filter((i) => i.verifierType === 'agent');
+    const declaredLlmItems = gated.filter((i) => i.verifierType === 'llm');
+    const supportsVision = await this.modelSupportsVision(
+      params.modelConfig.model,
+      params.modelConfig.provider,
+    );
+    const evidencePlans = new Map(
+      declaredLlmItems.map((item) => [
+        item.id,
+        planEvidenceVerification({
+          evidence: evidenceByItem.get(item.id) ?? [],
+          item,
+          modelSupportsVision: supportsVision,
+        }),
+      ]),
+    );
+    const llmItems = declaredLlmItems.filter(
+      (item) => evidencePlans.get(item.id)?.route !== 'agent',
+    );
+    const multimodalItemIds = new Set(
+      llmItems
+        .filter((item) => evidencePlans.get(item.id)?.route === 'llm_multimodal')
+        .map((item) => item.id),
+    );
+    const agentItems = [
+      ...gated.filter((i) => i.verifierType === 'agent'),
+      ...declaredLlmItems.filter((item) => evidencePlans.get(item.id)?.route === 'agent'),
+    ];
     const programItems = gated.filter((i) => i.verifierType === 'program');
 
-    // The three verifier kinds are independent — run them concurrently. LLM items
-    // are judged in one batched call; each agent item spawns its own sub-agent.
+    // The verifier kinds are independent — run them concurrently. Program checks
+    // currently use the verifier agent as an evidence-producing fallback until a
+    // sandboxed native program runner is available.
     await Promise.all([
-      this.runProgramItems(verifyRunId, programItems),
-      this.runLlmItems(params, verifyRunId, llmItems, evidenceByItem),
-      ...agentItems.map((item) => this.runAgentItem(params, verifyRunId, item)),
+      this.runProgramItems(params, verifyRunId, programItems, evidenceByItem),
+      this.runLlmItems(params, verifyRunId, llmItems, evidenceByItem, multimodalItemIds),
+      ...agentItems.map((item) =>
+        this.runAgentItem(params, verifyRunId, item, evidenceByItem.get(item.id) ?? []),
+      ),
     ]);
 
     await this.statusService.recompute(params.operationId);
@@ -162,10 +209,43 @@ export class VerifyExecutorService {
     const byItem: EvidenceByItem = new Map();
     for (const row of rows) {
       const list = byItem.get(row.checkItemId) ?? [];
-      list.push({ content: row.content, description: row.description, type: row.type });
+      // Keep `fileId` so the planner can route file-only text to an agent and
+      // agent verifiers can attach the actual artifact.
+      list.push({
+        content: row.content,
+        description: row.description,
+        fileId: row.fileId,
+        type: row.type,
+      });
       byItem.set(row.checkItemId, list);
     }
     return byItem;
+  }
+
+  private async hydrateInlineMedia(evidence: JudgeEvidence[]): Promise<JudgeEvidence[]> {
+    return Promise.all(
+      evidence.map(async (item) => {
+        if (!item.fileId || (item.type !== 'screenshot' && item.type !== 'gif')) return item;
+        const file = await this.fileModel.findById(item.fileId);
+        if (!file) return item;
+        return {
+          ...item,
+          accessUrl: await this.fileService.getFileAccessUrl({ id: file.id, url: file.url }),
+        };
+      }),
+    );
+  }
+
+  private async modelSupportsVision(model: string, provider: string): Promise<boolean> {
+    const custom = await this.aiModelModel.findByIdAndProvider(model, provider);
+    const customAbilities = custom?.abilities as { vision?: boolean } | undefined;
+    if (typeof customAbilities?.vision === 'boolean') return customAbilities.vision;
+    const abilities = await getModelPropertyWithFallback<{ vision?: boolean }>(
+      model,
+      'abilities',
+      provider,
+    );
+    return abilities?.vision === true;
   }
 
   /**
@@ -181,7 +261,12 @@ export class VerifyExecutorService {
   ): Promise<Set<string>> {
     const gapIds = new Set<string>();
     for (const item of items) {
-      const required = readRequiredEvidence(item.verifierConfig);
+      // Deliverable/task-artifact evidence is resolved by the verifier agent
+      // from the operation's associated documents/files. Only run evidence is
+      // expected to have been explicitly captured into verify_evidence rows.
+      const required = readRequiredEvidence(item.verifierConfig)?.filter(
+        (spec) => !spec.scope || spec.scope === 'run_evidence',
+      );
       const gaps = coverageGaps(required, evidenceByItem.get(item.id) ?? []);
       if (gaps.length === 0) continue;
 
@@ -199,13 +284,29 @@ export class VerifyExecutorService {
     return gapIds;
   }
 
-  /** Program verifiers are a v1 placeholder (no shell environment) — mark skipped. */
-  private async runProgramItems(verifyRunId: string, items: VerifyCheckItem[]): Promise<void> {
+  /** Execute program checks through the verifier agent until a native runner exists. */
+  private async runProgramItems(
+    params: ExecuteVerifyParams,
+    verifyRunId: string,
+    items: VerifyCheckItem[],
+    evidenceByItem: EvidenceByItem,
+  ): Promise<void> {
+    if (params.runVerifierAgent) {
+      await Promise.all(
+        items.map((item) =>
+          this.runAgentItem(params, verifyRunId, item, evidenceByItem.get(item.id) ?? []),
+        ),
+      );
+      return;
+    }
+
     for (const item of items) {
       await this.resultModel.updateByCheckItem(verifyRunId, item.id, {
         completedAt: new Date(),
-        status: 'skipped',
-        toulmin: { limitation: 'Program verifier is not executed in v1.' },
+        status: item.required ? 'errored' : 'skipped',
+        toulmin: {
+          limitation: 'Program verifier requires a native runner or verifier-agent fallback.',
+        },
       });
     }
   }
@@ -216,17 +317,27 @@ export class VerifyExecutorService {
     verifyRunId: string,
     items: VerifyCheckItem[],
     evidenceByItem: EvidenceByItem,
+    multimodalItemIds: Set<string>,
   ): Promise<void> {
     if (items.length === 0) return;
     try {
-      if (params.batchLlm ?? true) {
-        await this.judgeBatch(params, verifyRunId, items, evidenceByItem);
+      const textItems = items.filter((item) => !multimodalItemIds.has(item.id));
+      const multimodalItems = items.filter((item) => multimodalItemIds.has(item.id));
+      if ((params.batchLlm ?? true) && textItems.length > 1) {
+        await this.judgeBatch(params, verifyRunId, textItems, evidenceByItem);
       } else {
-        for (const item of items) await this.judgeSingle(params, verifyRunId, item, evidenceByItem);
+        for (const item of textItems)
+          await this.judgeSingle(params, verifyRunId, item, evidenceByItem);
       }
+      for (const item of multimodalItems)
+        await this.judgeSingle(params, verifyRunId, item, evidenceByItem, true);
     } catch (error) {
       log('llm judge failed for op %s: %O', params.operationId, error);
-      // Leave failed-to-judge items pending; rollup will report `verifying`.
+      await this.markUnfinishedErrored(
+        verifyRunId,
+        items,
+        `LLM judge failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -235,11 +346,12 @@ export class VerifyExecutorService {
     params: ExecuteVerifyParams,
     verifyRunId: string,
     item: VerifyCheckItem,
+    evidence: JudgeEvidence[],
   ): Promise<void> {
     if (!params.runVerifierAgent) {
       await this.resultModel.updateByCheckItem(verifyRunId, item.id, {
         completedAt: new Date(),
-        status: 'skipped',
+        status: item.required ? 'errored' : 'skipped',
         toulmin: { limitation: 'Agent verifier requires runtime context; not run here.' },
       });
       return;
@@ -247,21 +359,57 @@ export class VerifyExecutorService {
     try {
       const spawned = await params.runVerifierAgent({
         checkItem: item,
+        evidence,
         goal: params.goal,
         operationId: params.operationId,
       });
+
+      if (!spawned?.verifierOperationId) {
+        // The runner resolved without an operation id — the spawn never
+        // persisted an operation. Log the returned shape at error level (this
+        // path lands in production runtime logs, unlike the debug-only `log`).
+        console.error(
+          '[verify] agent verifier returned no operation id for item %s: %O',
+          item.id,
+          spawned,
+        );
+        await this.resultModel.updateByCheckItem(verifyRunId, item.id, {
+          completedAt: new Date(),
+          // Infra failure, not a delivery verdict: the verifier never started, so
+          // there is nothing to judge. `errored` (no verdict) keeps this out of
+          // the delivery gate and the auto-repair set.
+          status: 'errored',
+          toulmin: { limitation: 'Agent verifier failed to start (no operation id returned).' },
+        });
+        return;
+      }
+
+      const current = (await this.resultModel.listByRun(verifyRunId)).find(
+        (result) => result.checkItemId === item.id,
+      );
+      if (current && terminalResultStatuses.has(current.status)) return;
+
       await this.resultModel.updateByCheckItem(verifyRunId, item.id, {
         startedAt: new Date(),
         status: 'running',
-        verifierOperationId: spawned?.verifierOperationId ?? null,
+        verifierOperationId: spawned.verifierOperationId,
       });
     } catch (error) {
-      log('agent verifier spawn failed for item %s: %O', item.id, error);
+      // Surface the real cause: the spawn throws during agent startup (before
+      // the verifier operation is persisted), and this catch previously only
+      // emitted a debug-level line + a generic limitation — so in production the
+      // actual error was invisible and the check just read "failed to start".
+      // Log at error level (reaches runtime logs) and thread the message into
+      // the verdict limitation so it is queryable from verify_check_results.
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error('[verify] agent verifier spawn failed for item %s: %O', item.id, error);
       await this.resultModel.updateByCheckItem(verifyRunId, item.id, {
         completedAt: new Date(),
-        status: 'failed',
-        toulmin: { limitation: 'Agent verifier failed to start.' },
-        verdict: 'uncertain',
+        // Infra failure (spawn threw before the verifier op was persisted), not a
+        // delivery verdict — mark `errored` so it neither gates delivery nor seeds
+        // a repair round.
+        status: 'errored',
+        toulmin: { limitation: `Agent verifier failed to start: ${detail}` },
       });
     }
   }
@@ -321,17 +469,25 @@ export class VerifyExecutorService {
     const parsed = BatchVerdictSchema.safeParse(raw);
     if (!parsed.success) {
       log('batch judge output invalid: %O', parsed.error.flatten());
+      for (const item of items) await this.judgeSingle(params, verifyRunId, item, evidenceByItem);
       return;
     }
 
     const validIds = new Set(items.map((i) => i.id));
+    const returnedIds = new Set<string>();
     for (const v of parsed.data.verdicts) {
       if (!validIds.has(v.checkItemId)) continue;
+      returnedIds.add(v.checkItemId);
       await this.writeVerdict({
         checkItemId: v.checkItemId,
         verdict: v,
         verifyRunId,
       });
+    }
+    for (const item of items) {
+      if (!returnedIds.has(item.id)) {
+        await this.judgeSingle(params, verifyRunId, item, evidenceByItem);
+      }
     }
   }
 
@@ -340,15 +496,19 @@ export class VerifyExecutorService {
     verifyRunId: string,
     item: VerifyCheckItem,
     evidenceByItem: EvidenceByItem,
+    multimodal = false,
   ): Promise<void> {
     // Per-criterion: each result gets its own tracing row (1:1).
     const tracingId = randomUUID();
+    const hydratedEvidence = multimodal
+      ? await this.hydrateInlineMedia(evidenceByItem.get(item.id) ?? [])
+      : evidenceByItem.get(item.id);
     const { system, user } = buildJudgePrompt({
       deliverable: params.deliverable,
       goal: params.goal,
       items: [
         {
-          evidence: evidenceByItem.get(item.id),
+          evidence: hydratedEvidence,
           id: item.id,
           instruction: await this.resolveInstruction(item),
           title: item.title,
@@ -360,10 +520,26 @@ export class VerifyExecutorService {
     const ai = new AiGenerationService(this.db, this.userId);
     const raw = await ai.generateObject(
       {
-        messages: [
-          { content: system, role: 'system' as const },
-          { content: user, role: 'user' as const },
-        ],
+        messages: multimodal
+          ? [
+              { content: system, role: 'system' as const },
+              {
+                content: [
+                  { text: user, type: 'text' as const },
+                  ...(hydratedEvidence ?? [])
+                    .filter((evidence) => evidence.accessUrl)
+                    .map((evidence) => ({
+                      image_url: { detail: 'high' as const, url: evidence.accessUrl! },
+                      type: 'image_url' as const,
+                    })),
+                ],
+                role: 'user' as const,
+              },
+            ]
+          : [
+              { content: system, role: 'system' as const },
+              { content: user, role: 'user' as const },
+            ],
         model: params.modelConfig.model,
         provider: params.modelConfig.provider,
         schema: SINGLE_VERDICT_JSON_SCHEMA,
@@ -384,6 +560,11 @@ export class VerifyExecutorService {
     const parsed = SingleVerdictSchema.safeParse(raw);
     if (!parsed.success) {
       log('single judge output invalid: %O', parsed.error.flatten());
+      await this.resultModel.updateByCheckItem(verifyRunId, item.id, {
+        completedAt: new Date(),
+        status: 'errored',
+        toulmin: { limitation: 'LLM judge returned an invalid structured verdict.' },
+      });
       return;
     }
     await this.writeVerdict({
@@ -391,6 +572,30 @@ export class VerifyExecutorService {
       verdict: parsed.data,
       verifyRunId,
     });
+  }
+
+  private async markUnfinishedErrored(
+    verifyRunId: string,
+    items: VerifyCheckItem[],
+    limitation: string,
+  ): Promise<void> {
+    const results = await this.resultModel.listByRun(verifyRunId);
+    const terminalIds = new Set(
+      results
+        .filter((result) => terminalResultStatuses.has(result.status))
+        .map((result) => result.checkItemId),
+    );
+    await Promise.all(
+      items
+        .filter((item) => !terminalIds.has(item.id))
+        .map((item) =>
+          this.resultModel.updateByCheckItem(verifyRunId, item.id, {
+            completedAt: new Date(),
+            status: 'errored',
+            toulmin: { limitation },
+          }),
+        ),
+    );
   }
 
   private async writeVerdict(params: {

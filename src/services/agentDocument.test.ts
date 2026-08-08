@@ -64,7 +64,18 @@ describe('AgentDocumentService', () => {
     });
 
     expect(mutate).toHaveBeenCalledWith(['agent:documents', 'agent-1']);
-    expect(mutate).toHaveBeenCalledWith(['agent:documentsList', 'agent-1']);
+    // `documentsList` now revalidates via a prefix matcher so the full list and
+    // the `non-web` variant (and their workspace-scoped keys) refresh together.
+    const listMatcher = vi
+      .mocked(mutate)
+      .mock.calls.map((call) => call[0])
+      .find((key) => typeof key === 'function') as ((key: unknown) => boolean) | undefined;
+    expect(listMatcher).toBeDefined();
+    expect(listMatcher!(['agent:documentsList', 'agent-1'])).toBe(true);
+    expect(listMatcher!(['agent:documentsList', 'agent-1', 'non-web'])).toBe(true);
+    expect(listMatcher!(['agent:documentsList', 'agent-1', 'ws-1'])).toBe(true);
+    expect(listMatcher!(['agent:documentsList', 'other-agent'])).toBe(false);
+    expect(listMatcher!(['agent:documents', 'agent-1'])).toBe(false);
     expect(mutate).toHaveBeenCalledWith(['agent:documentEditor', 'agent-1', 'doc-1']);
     expect(mutate).toHaveBeenCalledWith(['page:meta', 'page-doc-1']);
     expect(mutate).toHaveBeenCalledWith(['page:detail', 'page-doc-1']);

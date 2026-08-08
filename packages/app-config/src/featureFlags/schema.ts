@@ -1,3 +1,4 @@
+import type { IFeatureFlagsState } from '@lobechat/types';
 import { z } from 'zod';
 
 // Define a union type for feature flag values: either boolean or array of user IDs
@@ -32,9 +33,12 @@ export const FeatureFlagsSchema = z.object({
   // internal flag
   agent_self_iteration: FeatureFlagValue.optional(),
   agent_onboarding: FeatureFlagValue.optional(),
+  dev_dock: FeatureFlagValue.optional(),
+  dev_dock_workspaces: z.array(z.string()).optional(),
   // Cloud feature flag. Keep here until cloud owns a separate runtime flag domain.
   auth_captcha: FeatureFlagValue.optional(),
   cloud_promotion: FeatureFlagValue.optional(),
+  onboarding_v2: FeatureFlagValue.optional(),
   storage_overage: FeatureFlagValue.optional(),
   workspace: FeatureFlagValue.optional(),
 
@@ -84,10 +88,12 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
 
   agent_self_iteration: isDev,
   agent_onboarding: isDev,
+  dev_dock: isDev,
   auth_captcha: true,
   cloud_promotion: false,
+  onboarding_v2: isDev,
   storage_overage: true,
-  workspace: false,
+  workspace: isDev,
 
   market: true,
   speech_to_text: true,
@@ -100,7 +106,13 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   commercial_hide_docs: false,
 };
 
-export const mapFeatureFlagsEnvToState = (config: IFeatureFlags, userId?: string) => {
+// The explicit return type pins this mapping to the canonical shared interface:
+// adding a flag here without updating `IFeatureFlagsState` (or vice versa) is a
+// compile error, so the two can never drift apart.
+export const mapFeatureFlagsEnvToState = (
+  config: IFeatureFlags,
+  userId?: string,
+): IFeatureFlagsState => {
   return {
     isAgentEditable: evaluateFeatureFlag(config.edit_agent, userId),
     showProvider: evaluateFeatureFlag(config.provider_settings, userId),
@@ -120,7 +132,9 @@ export const mapFeatureFlagsEnvToState = (config: IFeatureFlags, userId?: string
     enableRAGEval: evaluateFeatureFlag(config.rag_eval, userId),
     enableAgentSelfIteration: evaluateFeatureFlag(config.agent_self_iteration, userId),
     enableAgentOnboarding: evaluateFeatureFlag(config.agent_onboarding, userId),
+    enableDevDock: evaluateFeatureFlag(config.dev_dock, userId),
     enableAuthCaptcha: evaluateFeatureFlag(config.auth_captcha, userId),
+    enableOnboardingV2: evaluateFeatureFlag(config.onboarding_v2, userId),
     enableStorageOverage: evaluateFeatureFlag(config.storage_overage, userId),
 
     showCloudPromotion: evaluateFeatureFlag(config.cloud_promotion, userId),
@@ -134,4 +148,4 @@ export const mapFeatureFlagsEnvToState = (config: IFeatureFlags, userId?: string
   };
 };
 
-export type IFeatureFlagsState = ReturnType<typeof mapFeatureFlagsEnvToState>;
+export type { IFeatureFlagsState };

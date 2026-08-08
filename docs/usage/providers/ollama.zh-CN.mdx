@@ -13,7 +13,7 @@ tags:
 
 <Image alt={'在 LobeHub 中使用 Ollama'} borderless cover src={'/blog/assets17870709/f579b39b-e771-402c-a1d1-620e57a10c75.webp'} />
 
-Ollama 是一款强大的本地运行大型语言模型（LLM）的框架，支持多种语言模型，包括 Llama 2, Mistral 等。现在，LobeHub 已经支持与 Ollama 的集成，这意味着你可以在 LobeHub 中轻松使用 Ollama 提供的语言模型来增强你的应用。
+Ollama 是一款强大的本地运行大型语言模型（LLM）的框架，支持多种语言模型，包括 Llama 3.1, Mistral 等。现在，LobeHub 已经支持与 Ollama 的集成，这意味着你可以在 LobeHub 中轻松使用 Ollama 提供的语言模型来增强你的应用。
 
 本文档将指导你如何在 LobeHub 中使用 Ollama：
 
@@ -143,7 +143,7 @@ Ollama 支持多种模型，你可以在 [Ollama Library](https://ollama.com/lib
 
 ### LobeHub 中安装
 
-在 LobeHub 中，我们默认开启了一些常用的大语言模型，例如 llama3、 Gemma 、 Mistral 等。当你选中模型进行对话时，我们会提示你需要下载该模型。
+在 LobeHub 中，我们默认开启了一些常用的大语言模型，例如 Llama 3.1、 Gemma 2 、 Mistral 等。当你选中模型进行对话时，我们会提示你需要下载该模型。
 
 <Image alt="LobeHub 提示安装 Ollama 模型" height="460" src="/blog/assets28616219/4e81decc-776c-43b8-9a54-dfb43e9f601a.webp" />
 
@@ -151,10 +151,10 @@ Ollama 支持多种模型，你可以在 [Ollama Library](https://ollama.com/lib
 
 ### 用 Ollama 拉取模型到本地
 
-当然，你也可以通过在终端执行以下命令安装模型，以 llama3 为例：
+当然，你也可以通过在终端执行以下命令安装模型，以 llama3.1 为例：
 
 ```bash
-ollama pull llama3
+ollama pull llama3.1
 ```
 
 <Video height={524} src="/blog/assets28616219/95828c11-0ae5-4dfa-84ed-854124e927a6.mp4" />

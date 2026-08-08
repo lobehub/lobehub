@@ -6,9 +6,21 @@ import {
   stripFinalStateInEventData,
 } from '../StreamEventManager';
 
-// Mock Redis client
+// Mock Redis clients. Blocking reads (`XREAD BLOCK`) must run on a dedicated
+// short-lived duplicated connection: ioredis executes commands on one
+// connection strictly in order, so a blocking read on the shared client would
+// stall every concurrent XADD/EXPIRE behind the block timeout. The duplicate
+// is scoped to the read (managers are constructed per request and rarely
+// disconnected, so an instance-held duplicate would leak a socket).
+const mockBlockingRedis = {
+  disconnect: vi.fn(),
+  quit: vi.fn(),
+  xread: vi.fn(),
+};
+
 const mockRedis = {
   del: vi.fn(),
+  duplicate: vi.fn(() => mockBlockingRedis),
   expire: vi.fn(),
   keys: vi.fn(),
   quit: vi.fn(),
@@ -295,6 +307,156 @@ describe('StreamEventManager', () => {
       // reasonDetail derivation runs against the un-stripped in-process
       // finalState passed as a param, so the error message survives.
       expect(parsed.reasonDetail).toBe('boom');
+    });
+  });
+
+  describe('readEventsOnce', () => {
+    it("resolves '$' to the current tail and returns it (not '$') on timeout", async () => {
+      // Stream has a tail entry; xread then times out (no newer events).
+      mockRedis.xrevrange.mockResolvedValue([['7-0', ['type', 'stream_chunk']]]);
+      mockBlockingRedis.xread.mockResolvedValue(null);
+
+      const res = await streamManager.readEventsOnce('op-1', '$', 25_000);
+
+      // '$' was resolved to the concrete tail before blocking…
+      expect(mockRedis.xrevrange).toHaveBeenCalledWith(
+        'agent_runtime_stream:op-1',
+        '+',
+        '-',
+        'COUNT',
+        1,
+      );
+      expect(mockBlockingRedis.xread).toHaveBeenCalledWith(
+        'BLOCK',
+        25_000,
+        'STREAMS',
+        'agent_runtime_stream:op-1',
+        '7-0',
+      );
+      // …so the timeout hands back the concrete id, keeping the next poll gap-free.
+      expect(res).toEqual({ events: [], lastEventId: '7-0' });
+    });
+
+    it("resolves '$' on an empty stream to '0'", async () => {
+      mockRedis.xrevrange.mockResolvedValue([]);
+      mockBlockingRedis.xread.mockResolvedValue(null);
+
+      const res = await streamManager.readEventsOnce('op-1', '$');
+
+      expect(mockBlockingRedis.xread).toHaveBeenCalledWith(
+        'BLOCK',
+        expect.any(Number),
+        'STREAMS',
+        'agent_runtime_stream:op-1',
+        '0',
+      );
+      expect(res).toEqual({ events: [], lastEventId: '0' });
+    });
+
+    it('does not resolve an explicit cursor and blocks from it directly', async () => {
+      mockBlockingRedis.xread.mockResolvedValue(null);
+
+      const res = await streamManager.readEventsOnce('op-1', '5-0');
+
+      expect(mockRedis.xrevrange).not.toHaveBeenCalled();
+      expect(mockBlockingRedis.xread).toHaveBeenCalledWith(
+        'BLOCK',
+        expect.any(Number),
+        'STREAMS',
+        'agent_runtime_stream:op-1',
+        '5-0',
+      );
+      expect(res).toEqual({ events: [], lastEventId: '5-0' });
+    });
+
+    it('parses events and advances the cursor to the last id', async () => {
+      mockBlockingRedis.xread.mockResolvedValue([
+        [
+          'agent_runtime_stream:op-1',
+          [
+            [
+              '8-0',
+              [
+                'type',
+                'agent_intervention_response',
+                'stepIndex',
+                '2',
+                'operationId',
+                'op-1',
+                'data',
+                JSON.stringify({ toolCallId: 't1' }),
+                'timestamp',
+                '123',
+              ],
+            ],
+          ],
+        ],
+      ]);
+
+      const res = await streamManager.readEventsOnce('op-1', '5-0');
+
+      expect(res.lastEventId).toBe('8-0');
+      expect(res.events).toHaveLength(1);
+      expect(res.events[0]).toMatchObject({
+        id: '8-0',
+        type: 'agent_intervention_response',
+        stepIndex: 2,
+        data: { toolCallId: 't1' },
+      });
+    });
+  });
+
+  // Regression: publishes used to share one connection with `XREAD BLOCK`
+  // subscribers, so every XADD/EXPIRE queued behind the 1s block timeout and
+  // streaming degraded to one chunk per second while any SSE client was
+  // attached.
+  describe('blocking reads use a dedicated scoped connection', () => {
+    it('does not open extra connections at construction (managers are per-request)', () => {
+      expect(mockRedis.duplicate).not.toHaveBeenCalled();
+    });
+
+    it('keeps writes on the shared client and blocking reads on a scoped duplicate', async () => {
+      mockRedis.xadd.mockResolvedValue('event-id-1');
+      mockBlockingRedis.xread.mockResolvedValue(null);
+
+      await streamManager.publishStreamChunk('op-1', 0, { chunkType: 'text', content: 'hi' });
+      await streamManager.readEventsOnce('op-1', '5-0');
+
+      expect(mockRedis.xadd).toHaveBeenCalledTimes(1);
+      expect(mockRedis.duplicate).toHaveBeenCalledTimes(1);
+      expect(mockBlockingRedis.xread).toHaveBeenCalledTimes(1);
+      expect(mockRedis.xread).not.toHaveBeenCalled();
+    });
+
+    it('closes the scoped connection after the read completes', async () => {
+      mockBlockingRedis.xread.mockResolvedValue(null);
+
+      await streamManager.readEventsOnce('op-1', '5-0');
+
+      expect(mockBlockingRedis.disconnect).toHaveBeenCalledTimes(1);
+    });
+
+    it('closes the scoped connection when the read throws', async () => {
+      mockBlockingRedis.xread.mockRejectedValue(new Error('boom'));
+
+      await expect(streamManager.readEventsOnce('op-1', '5-0')).rejects.toThrow('boom');
+
+      expect(mockBlockingRedis.disconnect).toHaveBeenCalledTimes(1);
+    });
+
+    it('runs a whole subscription loop on one scoped connection and closes it', async () => {
+      const abort = new AbortController();
+      mockBlockingRedis.xread.mockImplementation(async () => {
+        abort.abort();
+        return null;
+      });
+
+      await streamManager.subscribeStreamEvents('op-1', '0', () => {}, abort.signal);
+
+      expect(mockRedis.duplicate).toHaveBeenCalledTimes(1);
+      expect(mockBlockingRedis.xread).toHaveBeenCalledTimes(1);
+      expect(mockRedis.xread).not.toHaveBeenCalled();
+      expect(mockBlockingRedis.disconnect).toHaveBeenCalledTimes(1);
     });
   });
 

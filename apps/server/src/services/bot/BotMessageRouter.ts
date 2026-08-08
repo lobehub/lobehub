@@ -3,6 +3,7 @@ import { DEFAULT_BOT_DEBOUNCE_MS } from '@lobechat/const';
 import { Chat, ConsoleLogger, type Message, type MessageContext } from 'chat';
 import debug from 'debug';
 
+import { getBotFeatureAccessState } from '@/business/server/bot/featureAccess';
 import { getServerDB } from '@/database/core/db-adaptor';
 import type { DecryptedBotProvider } from '@/database/models/agentBotProvider';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
@@ -61,6 +62,10 @@ import {
 } from './replyTemplate';
 
 const log = debug('lobe-server:bot:message-router');
+const WECHAT_PRO_FEATURE_NOTICE =
+  '提示：由于 WeChat 渠道通信成本过高，LobeHub 微信渠道能力将于近期调整为付费功能。预告期内已有连接可继续使用，但新建或重新连接微信渠道需要升级到个人付费 Plan。';
+const WECHAT_PRO_FEATURE_NOTICE_WORKSPACE =
+  '提示：由于 WeChat 渠道通信成本过高，LobeHub 微信渠道能力将于近期调整为付费功能。预告期内已有连接可继续使用，但新建或重新连接微信渠道需要将所属工作区升级到付费 Plan。';
 
 /**
  * Compact summary of a Chat SDK Message's attachments for debug logging.
@@ -562,6 +567,37 @@ export class BotMessageRouter {
      */
     const watchKeywordEntries = extractWatchKeywordEntries(info.settings);
     const watchKeywords: ReadonlyArray<string> = watchKeywordEntries.map((e) => e.keyword);
+
+    /**
+     * Watch-keyword wakes ride on passive channel monitoring, which is a
+     * gated feature (`messageMonitoring` — see the business featureAccess
+     * slot). Checked lazily, only when a keyword (not a mention / DM /
+     * command) is the sole wake reason, so access changes take effect on
+     * the next message without any cache invalidation. Mentions, DMs,
+     * replies, and commands never hit this gate.
+     */
+    const isMessageMonitoringAllowed = async (
+      caller: string,
+      threadId: string,
+    ): Promise<boolean> => {
+      const access = await getBotFeatureAccessState({
+        action: 'runtime',
+        applicationId,
+        feature: 'messageMonitoring',
+        platform,
+        userId,
+        workspaceId: workspaceId ?? undefined,
+      });
+      if (access.allowed) return true;
+      log(
+        '%s: watch-keyword wake dropped (messageMonitoring not allowed), agent=%s, platform=%s, thread=%s',
+        caller,
+        agentId,
+        platform,
+        threadId,
+      );
+      return false;
+    };
     /**
      * The provider's owner platform user ID. Only consulted under the
      * `pairing` policy, where the gate gives the owner a free pass so they
@@ -803,6 +839,37 @@ export class BotMessageRouter {
       return BotMessageRouter.dispatchTextCommand(sanitized, commands) !== null;
     };
 
+    const notifyFeatureNoticeOnce = async (
+      thread: { post: (t: string) => Promise<unknown> },
+      author: { userId?: string },
+      noticeId: string,
+      caller: string,
+    ): Promise<void> => {
+      if (platform !== 'wechat') return;
+
+      const authorUserId = author.userId?.trim();
+      if (!authorUserId) return;
+
+      const key = `bot-feature-notice:${noticeId}:${authorUserId}`;
+      try {
+        const fresh = await bot.getState().setIfNotExists(key, '1');
+        if (!fresh) return;
+      } catch (error) {
+        log('%s: feature notice dedupe failed, continuing without notice: %O', caller, error);
+        return;
+      }
+
+      try {
+        // Workspace-owned channels upgrade at the workspace, not the owner's
+        // personal plan — keep the notice copy consistent with the channel UI.
+        await thread.post(
+          workspaceId ? WECHAT_PRO_FEATURE_NOTICE_WORKSPACE : WECHAT_PRO_FEATURE_NOTICE,
+        );
+      } catch (error) {
+        log('%s: failed to post feature notice: %O', caller, error);
+      }
+    };
+
     /**
      * Run all three access gates (global `allowFrom`, group policy, DM policy)
      * and post the appropriate rejection notice in the thread on failure.
@@ -820,6 +887,53 @@ export class BotMessageRouter {
       replyLocale: BotReplyLocale,
       caller: string,
     ): Promise<boolean> => {
+      /**
+       * Group-scope rejection notices land in the platform's reply thread
+       * (on Discord, the auto-created thread under the @mention). The
+       * rejected sender is never added to that thread — only the success
+       * path (`AgentBridgeService.executeWithCallback`) calls
+       * `ensureThreadMember` — so they get no notification and perceive
+       * the rejection as the bot silently ignoring them. Pull them into
+       * the thread before posting so the notice is actually seen.
+       * DM threads deliver in place; platforms without the hook no-op.
+       */
+      const ensureRejectionVisible = async (): Promise<void> => {
+        if (thread.isDM === true || !author.userId || !client.ensureThreadMember) return;
+        try {
+          await client.ensureThreadMember(thread.id, author.userId);
+        } catch (error) {
+          log('%s: ensureThreadMember for rejection notice failed: %O', caller, error);
+        }
+      };
+
+      const featureAccess = await getBotFeatureAccessState({
+        action: 'runtime',
+        applicationId,
+        platform,
+        userId,
+        workspaceId: workspaceId ?? undefined,
+      });
+
+      // Plan state must not leak to senders/groups the bot is configured to
+      // ignore: both the enforce-mode denial and the rollout notice are only
+      // posted after every gate below passes — rejected callers get the
+      // regular rejection copy (or silence) instead.
+      const finishFeatureAccess = async (): Promise<boolean> => {
+        if (!featureAccess.allowed) {
+          try {
+            await ensureRejectionVisible();
+            await thread.post(featureAccess.blockedMessage ?? 'This bot channel is unavailable.');
+          } catch (error) {
+            log('%s: failed to post paid-feature notice: %O', caller, error);
+          }
+          return false;
+        }
+        if (featureAccess.notice) {
+          await notifyFeatureNoticeOnce(thread, author, featureAccess.notice.id, caller);
+        }
+        return true;
+      };
+
       // Owner override. The bot's operator (`settings.userId`) sets the
       // policies for *other* users — locking themselves out of their own
       // bot is a footgun. Without this branch:
@@ -834,7 +948,7 @@ export class BotMessageRouter {
       // implicit-merge of `settings.userId` into `extractUserAllowlist`,
       // which already treats the operator as always-allowed.
       if (operatorUserId && author.userId === operatorUserId) {
-        return true;
+        return finishFeatureAccess();
       }
       // Pairing redefines what `allowFrom` means: it's the *post-approval*
       // list (managed by `/approve`), not a hard identity gate. A stranger
@@ -856,6 +970,7 @@ export class BotMessageRouter {
           thread.id,
           author.userName ?? author.userId,
         );
+        await ensureRejectionVisible();
         await handleSenderRejected(thread, replyLocale);
         return false;
       }
@@ -868,11 +983,14 @@ export class BotMessageRouter {
           thread.id,
           groupSettings.policy,
         );
+        await ensureRejectionVisible();
         await notifyGroupRejected(thread, replyLocale);
         return false;
       }
       const dmDecision = passesDmPolicy(thread, { author });
-      if (dmDecision === 'allow') return true;
+      if (dmDecision === 'allow') {
+        return finishFeatureAccess();
+      }
       log(
         '%s: DM gate=%s, agent=%s, platform=%s, thread=%s, author=%s, policy=%s',
         caller,
@@ -1101,6 +1219,7 @@ export class BotMessageRouter {
       }
 
       if (matchesWatchKeyword && !isAddressedToBot && !isCommand) {
+        if (!(await isMessageMonitoringAllowed('onSubscribedMessage', thread.id))) return;
         log(
           'onSubscribedMessage: keyword match wakes bot, agent=%s, platform=%s, author=%s, thread=%s, keywords=%o',
           agentId,
@@ -1282,6 +1401,11 @@ export class BotMessageRouter {
         if (!(isDM && dmCatchAllEnabled) && !matchesWatchKeyword) return;
 
         if (matchesWatchKeyword) {
+          if (
+            !(await isMessageMonitoringAllowed(`onNewMessage (${platform} catch-all)`, thread.id))
+          ) {
+            return;
+          }
           log(
             'onNewMessage (%s catch-all): keyword match wakes bot in channel, agent=%s, author=%s, thread=%s, keywords=%o',
             platform,

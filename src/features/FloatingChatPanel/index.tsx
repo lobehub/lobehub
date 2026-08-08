@@ -15,7 +15,7 @@ import {
   ConversationProvider,
 } from '@/features/Conversation';
 import { useChatFollowUp } from '@/features/Conversation/hooks/useChatFollowUp';
-import { type ConversationContext } from '@/features/Conversation/types';
+import { type ConversationContext, type MessagesChangeMeta } from '@/features/Conversation/types';
 import { mergeConversationHooks } from '@/features/Conversation/utils/mergeConversationHooks';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useActionsBarConfig } from '@/routes/(main)/agent/features/Conversation/useActionsBarConfig';
@@ -28,7 +28,7 @@ import ChatBody from './ChatBody';
 import { useSingleInstanceGuard } from './guard';
 import InputRow from './InputRow';
 
-const SNAP_POINTS = [420, 800] as const;
+const SNAP_POINTS = [320, 800] as const;
 const MID_SNAP_POINT = SNAP_POINTS[0];
 const MAX_SNAP_POINT = SNAP_POINTS.at(-1)!;
 
@@ -56,7 +56,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   sheetSeamless: css`
     border: none;
     border-radius: 0;
-    background: transparent;
     box-shadow: none;
   `,
   titleSpacer: css`
@@ -163,8 +162,8 @@ const FloatingChatPanel = memo<FloatingChatPanelProps>(
     const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
     const replaceMessages = useChatStore((s) => s.replaceMessages);
     const handleMessagesChange = useCallback(
-      (next: UIChatMessage[], ctx: ConversationContext) => {
-        replaceMessages(next, { context: ctx });
+      (next: UIChatMessage[], ctx: ConversationContext, meta?: MessagesChangeMeta) => {
+        replaceMessages(next, { context: ctx, source: meta?.source });
       },
       [replaceMessages],
     );

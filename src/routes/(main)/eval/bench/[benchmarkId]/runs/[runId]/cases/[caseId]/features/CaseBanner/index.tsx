@@ -2,9 +2,8 @@
 
 import type { EvalRunTopicResult } from '@lobechat/types';
 import { formatCost, formatShortenNumber } from '@lobechat/utils';
-import { ActionIcon, Flexbox, Tag } from '@lobehub/ui';
-import { Typography } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { createStaticStyles, cssVar } from 'antd-style';
 import {
   ArrowLeft,
   ChevronLeft,
@@ -17,29 +16,46 @@ import {
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const styles = createStaticStyles(({ css }) => ({
   backLink: css`
     cursor: pointer;
+
+    align-self: flex-start;
+
+    border-radius: ${cssVar.borderRadiusSM};
+
     color: ${cssVar.colorTextTertiary};
+
+    transition: color 0.15s ease;
 
     &:hover {
       color: ${cssVar.colorText};
     }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimary};
+      outline-offset: 2px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
   `,
   header: css`
+    padding-block: 16px;
     padding-inline: 16px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   metricCard: css`
     gap: 8px;
 
-    padding-block: 6px;
+    padding-block: 8px;
     padding-inline: 8px 16px;
     border-radius: ${cssVar.borderRadiusSM};
 
-    font-size: 12px;
+    font-size: ${cssVar.fontSizeSM};
 
-    background: ${cssVar.colorFillQuaternary};
+    background: ${cssVar.colorBgContainer};
   `,
   metricIcon: css`
     display: flex;
@@ -55,13 +71,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorFillTertiary};
   `,
   metricLabel: css`
-    font-size: 11px;
+    font-size: ${cssVar.fontSizeSM};
     line-height: 1;
     color: ${cssVar.colorTextTertiary};
   `,
   metricValue: css`
-    font-family: monospace;
-    font-size: 14px;
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: ${cssVar.fontSize};
     font-weight: 500;
     line-height: 1.4;
     color: ${cssVar.colorText};
@@ -74,13 +90,13 @@ interface CaseHeaderProps {
   onBack: () => void;
   onNext?: () => void;
   onPrev?: () => void;
-  passed?: boolean | null;
   runName: string;
 }
 
 const CaseHeader = memo<CaseHeaderProps>(
-  ({ passed, caseNumber, runName, evalResult, onBack, onPrev, onNext }) => {
+  ({ caseNumber, runName, evalResult, onBack, onPrev, onNext }) => {
     const { t } = useTranslation('eval');
+
     const metrics = [
       {
         icon: Clock,
@@ -105,46 +121,54 @@ const CaseHeader = memo<CaseHeaderProps>(
     ].filter((m) => m.value !== null);
 
     return (
-      <Flexbox
-        horizontal
-        align="center"
-        className={styles.header}
-        gap={16}
-        justify="space-between"
-        padding={12}
-      >
-        <Flexbox gap={2}>
-          <Flexbox horizontal align="center" className={styles.backLink} gap={4} onClick={onBack}>
-            <ArrowLeft size={12} />
-            <span style={{ fontSize: 12 }}>{runName}</span>
+      <Flexbox className={styles.header} gap={16}>
+        {/* Identity row: breadcrumb back + case number + prev/next nav */}
+        <Flexbox horizontal align="center" gap={8} justify="space-between">
+          <Flexbox gap={4}>
+            <Flexbox
+              horizontal
+              align="center"
+              className={styles.backLink}
+              gap={4}
+              role="button"
+              tabIndex={0}
+              onClick={onBack}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onBack();
+                }
+              }}
+            >
+              <ArrowLeft size={12} />
+              <Text fontSize={12}>{runName}</Text>
+            </Flexbox>
+            <Text as="h4" style={{ fontSize: 20, margin: 0 }} weight={600}>
+              #{caseNumber}
+            </Text>
           </Flexbox>
+
           <Flexbox horizontal align="center" gap={8}>
             <ActionIcon disabled={!onPrev} icon={ChevronLeft} size="small" onClick={onPrev} />
-            <Typography.Title level={5} style={{ fontSize: 20, margin: 0 }}>
-              #{caseNumber}
-            </Typography.Title>
             <ActionIcon disabled={!onNext} icon={ChevronRight} size="small" onClick={onNext} />
-            {passed !== undefined && passed !== null && (
-              <Tag color={passed ? 'success' : 'error'}>
-                {passed ? t('table.filter.passed') : t('table.filter.failed')}
-              </Tag>
-            )}
           </Flexbox>
         </Flexbox>
 
-        <Flexbox horizontal align="center" gap={8}>
-          {metrics.map((m) => (
-            <Flexbox horizontal align="center" className={styles.metricCard} key={m.label}>
-              <div className={styles.metricIcon}>
-                <m.icon size={14} />
-              </div>
-              <Flexbox gap={0}>
-                <span className={styles.metricLabel}>{m.label}</span>
-                <span className={styles.metricValue}>{m.value}</span>
+        {metrics.length > 0 && (
+          <Flexbox horizontal align="center" gap={8} wrap="wrap">
+            {metrics.map((m) => (
+              <Flexbox horizontal align="center" className={styles.metricCard} key={m.label}>
+                <div className={styles.metricIcon}>
+                  <m.icon size={14} />
+                </div>
+                <Flexbox gap={0}>
+                  <span className={styles.metricLabel}>{m.label}</span>
+                  <span className={styles.metricValue}>{m.value}</span>
+                </Flexbox>
               </Flexbox>
-            </Flexbox>
-          ))}
-        </Flexbox>
+            ))}
+          </Flexbox>
+        )}
       </Flexbox>
     );
   },

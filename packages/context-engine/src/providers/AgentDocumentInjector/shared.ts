@@ -31,9 +31,22 @@ export interface AgentContextDocument {
   contentCharCount?: number;
   description?: string;
   filename: string;
+  /**
+   * Title of the containing `custom/folder` document, resolved at the
+   * DB→context mapping boundary (folder rows themselves never reach the
+   * injector). Present only when the doc lives in a folder; used by the
+   * progressive index to fold same-folder siblings into one summary row.
+   */
+  folderTitle?: string;
   id?: string;
   loadPosition?: AgentDocumentInjectionPosition;
   loadRules?: AgentDocumentLoadRules;
+  /**
+   * Parent folder's `documentId` (the `documents.id` of the `custom/folder`
+   * row). Doubles as the grouping key for folder folding and the value the
+   * model passes to `listDocuments(parentId=…)` to expand a folded folder.
+   */
+  parentId?: string | null;
   policyId?: string | null;
   policyLoad?: AgentDocumentPolicyLoad;
   policyLoadFormat?: AgentDocumentLoadFormat;
@@ -128,25 +141,19 @@ function formatSize(doc: Pick<AgentContextDocument, 'content' | 'contentCharCoun
 }
 
 /**
- * Render a Date / ISO string as a short relative-time token like "2d ago".
+ * Render a Date / ISO string as an absolute UTC date like "2026-04-27".
+ *
+ * Deliberately NOT a relative time ("15m ago"): the index sits at the very
+ * front of the prompt, so any string that drifts as wall-clock time passes
+ * invalidates the provider-side prompt cache on every request even when no
+ * document changed. An absolute date only changes when the document itself
+ * is updated. See https://github.com/lobehub/lobehub/issues/15624
  */
-function formatRelative(at: Date | string | undefined, now: Date): string {
+function formatUpdatedDate(at: Date | string | undefined): string {
   if (!at) return '—';
   const date = typeof at === 'string' ? new Date(at) : at;
   if (Number.isNaN(date.getTime())) return '—';
-
-  const sec = Math.max(0, Math.floor((now.getTime() - date.getTime()) / 1000));
-  if (sec < 60) return 'now';
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}m ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h ago`;
-  const day = Math.floor(hr / 24);
-  if (day < 30) return `${day}d ago`;
-  const month = Math.floor(day / 30);
-  if (month < 12) return `${month}mo ago`;
-  const year = Math.floor(day / 365);
-  return `${year}y ago`;
+  return date.toISOString().slice(0, 10);
 }
 
 const TITLE_MAX_WIDTH = 60;
@@ -163,18 +170,14 @@ function truncate(s: string, max: number): string {
  * Render a list of progressive docs as a fixed-width table:
  *
  *   TITLE                ID                                    SIZE    UPDATED
- *   daily-brief.txt      2af6eb88-8bdb-468f-887f-620baa394efa  1.4k    2d ago
+ *   daily-brief.txt      2af6eb88-8bdb-468f-887f-620baa394efa  1.4k    2026-04-27
  */
-function buildIndexTable(
-  docs: AgentContextDocument[],
-  context: AgentDocumentFilterContext,
-): string {
-  const now = context.currentTime ?? new Date();
+function buildIndexTable(docs: AgentContextDocument[]): string {
   const rows = docs.map((d) => ({
     id: d.id ?? '',
     size: formatSize(d),
     title: truncate(pickRowTitle(d), TITLE_MAX_WIDTH),
-    updated: formatRelative(d.updatedAt, now),
+    updated: formatUpdatedDate(d.updatedAt),
   }));
 
   const titleWidth = Math.max('TITLE'.length, ...rows.map((r) => r.title.length));
@@ -199,6 +202,104 @@ function buildIndexTable(
   );
 
   return [headerLine, ...dataLines].join('\n');
+}
+
+const FOLDER_ICON = '📁';
+
+interface FolderGroup {
+  docs: AgentContextDocument[];
+  parentId: string;
+  title: string;
+}
+
+/** Newest `updatedAt` among a group of docs as epoch ms (0 when none is set). */
+function newestTime(docs: AgentContextDocument[]): number {
+  return docs.reduce((max, d) => {
+    const t = d.updatedAt ? new Date(d.updatedAt).getTime() : 0;
+    return Number.isNaN(t) ? max : Math.max(max, t);
+  }, 0);
+}
+
+/**
+ * Split progressive docs into folders worth collapsing and the loose docs that
+ * stay flat. A folder is collapsed only when it holds ≥2 docs carrying a
+ * resolved `folderTitle` — a lone doc-in-folder reads better as its own row so
+ * its id stays directly `readDocument`-able. Docs with no known folder (root
+ * docs, or docs whose folder was filtered out upstream) always stay flat.
+ */
+function partitionFolders(docs: AgentContextDocument[]): {
+  flat: AgentContextDocument[];
+  folders: FolderGroup[];
+} {
+  const byParent = new Map<string, AgentContextDocument[]>();
+  const flat: AgentContextDocument[] = [];
+  for (const doc of docs) {
+    if (doc.parentId && doc.folderTitle) {
+      const arr = byParent.get(doc.parentId);
+      if (arr) arr.push(doc);
+      else byParent.set(doc.parentId, [doc]);
+    } else {
+      flat.push(doc);
+    }
+  }
+
+  const folders: FolderGroup[] = [];
+  for (const [parentId, group] of byParent) {
+    if (group.length >= 2) folders.push({ docs: group, parentId, title: group[0].folderTitle! });
+    else flat.push(...group);
+  }
+  return { flat, folders };
+}
+
+/**
+ * "18 docs, 4.3k–20k" — count plus a size range when the folder's docs differ
+ * meaningfully in size; just the count when they're uniform or all empty.
+ */
+function formatFolderSummary(docs: AgentContextDocument[]): string {
+  const count = `${docs.length} docs`;
+  const lens = docs.map((d) => d.contentCharCount ?? d.content?.length ?? 0);
+  const max = Math.max(...lens);
+  if (max === 0) return count;
+  const min = Math.min(...lens.filter((l) => l > 0));
+  const minStr = formatSize({ contentCharCount: min });
+  const maxStr = formatSize({ contentCharCount: max });
+  return minStr === maxStr ? `${count}, ${maxStr}` : `${count}, ${minStr}–${maxStr}`;
+}
+
+/**
+ * Render collapsed folders as a fixed-width table, newest folder first:
+ *
+ *   📁 dailyBrief  2af6…394efa  18 docs, 4.3k–20k  2026-03-29
+ *   📁 周报         6b1c…07d21  9 docs             2026-03-27
+ *
+ * The ID column is the folder's `documentId` — the value the model passes to
+ * `listDocuments(parentId=…)` to expand the folder on demand.
+ */
+function buildFolderTable(folders: FolderGroup[]): string {
+  const rows = folders
+    .map((f) => ({
+      id: f.parentId,
+      summary: formatFolderSummary(f.docs),
+      time: newestTime(f.docs),
+      title: `${FOLDER_ICON} ${truncate(f.title, TITLE_MAX_WIDTH)}`,
+    }))
+    .sort((a, b) => b.time - a.time);
+
+  const titleWidth = Math.max(...rows.map((r) => r.title.length));
+  const idWidth = Math.max(...rows.map((r) => r.id.length));
+  const summaryWidth = Math.max(...rows.map((r) => r.summary.length));
+
+  const sep = '  ';
+  return rows
+    .map((row) =>
+      [
+        row.title.padEnd(titleWidth),
+        row.id.padEnd(idWidth),
+        row.summary.padEnd(summaryWidth),
+        row.time ? formatUpdatedDate(new Date(row.time)) : '—',
+      ].join(sep),
+    )
+    .join('\n');
 }
 
 /**
@@ -244,8 +345,12 @@ export function combineDocuments(
   }
 
   if (progressiveDocs.length > 0) {
-    const userDocs = sortByRecency(progressiveDocs.filter((d) => d.sourceType !== 'web'));
+    const userDocs = progressiveDocs.filter((d) => d.sourceType !== 'web');
     const hiddenWebCount = progressiveDocs.length - userDocs.length;
+
+    // Loose docs render as flat rows; docs sharing a folder (≥2) collapse into
+    // one summary row so archive-heavy agents don't spend tokens on every entry.
+    const { flat, folders } = partitionFolders(userDocs);
 
     const headerLines: string[] = [
       `${userDocs.length} user-created doc${userDocs.length === 1 ? '' : 's'}. Use readDocument(id) for full content.`,
@@ -255,8 +360,16 @@ export function combineDocuments(
         `${hiddenWebCount} web-crawled doc${hiddenWebCount === 1 ? '' : 's'} hidden — call listDocuments(sourceType='web') to see them.`,
       );
     }
+    if (folders.length > 0) {
+      headerLines.push(
+        `${folders.length} folder${folders.length === 1 ? '' : 's'} collapsed (${FOLDER_ICON}) — call listDocuments(parentId=<id>) to list a folder's docs.`,
+      );
+    }
 
-    const tableBlock = userDocs.length > 0 ? `\n\n${buildIndexTable(userDocs, context)}` : '';
+    const bodyBlocks: string[] = [];
+    if (flat.length > 0) bodyBlocks.push(buildIndexTable(sortByRecency(flat)));
+    if (folders.length > 0) bodyBlocks.push(buildFolderTable(folders));
+    const tableBlock = bodyBlocks.length > 0 ? `\n\n${bodyBlocks.join('\n\n')}` : '';
 
     parts.push(
       `<agent_documents_index>\n${headerLines.join('\n')}${tableBlock}\n</agent_documents_index>`,

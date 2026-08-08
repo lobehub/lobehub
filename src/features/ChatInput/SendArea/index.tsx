@@ -4,8 +4,10 @@ import { memo, useMemo } from 'react';
 
 import { type ActionKey } from '../ActionBar/config';
 import { actionMap } from '../ActionBar/config';
+import { useChatInputResourceAccess } from '../hooks/useChatInputResourceAccess';
 import { useChatInputStore } from '../store';
 import ExpandButton from './ExpandButton';
+import { resolveSendAreaActionKeys } from './resolveActionKeys';
 import SendButton from './SendButton';
 
 const mapActionsToItems = (keys: ActionKey[]) =>
@@ -14,21 +16,33 @@ const mapActionsToItems = (keys: ActionKey[]) =>
     return <Render key={actionKey} />;
   });
 
-const SendArea = memo(() => {
+interface SendAreaProps {
+  /**
+   * Strip `contextWindow` from the rendered actions because a ControlBar below
+   * the composer hosts it instead. Composers without a ControlBar must pass
+   * `false` or the token indicator has nowhere to render.
+   */
+  hideContextWindow?: boolean;
+}
+
+const SendArea = memo<SendAreaProps>(({ hideContextWindow = true }) => {
+  const { canShowControls } = useChatInputResourceAccess();
   const allowExpand = useChatInputStore((s) => s.allowExpand);
   const rightActions = useChatInputStore((s) => s.rightActions, isEqual);
 
   const items = useMemo(
     () =>
-      mapActionsToItems(
-        ((rightActions as ActionKey[]) || []).filter((actionKey) => actionKey !== 'contextWindow'),
-      ),
-    [rightActions],
+      canShowControls
+        ? mapActionsToItems(
+            resolveSendAreaActionKeys(rightActions as ActionKey[], hideContextWindow),
+          )
+        : [],
+    [canShowControls, rightActions, hideContextWindow],
   );
 
   return (
     <Flexbox horizontal align={'center'} flex={'none'} gap={12}>
-      {allowExpand && <ExpandButton />}
+      {canShowControls && allowExpand && <ExpandButton />}
       {items}
       <SendButton />
     </Flexbox>

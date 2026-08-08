@@ -45,6 +45,8 @@ const DEFAULT_TITLE_BY_API: Record<string, string> = {
   writeMemory: 'Memory saved',
 };
 
+const ROLLBACK_CAPABLE_APIS = new Set(['replaceSkillContentCAS']);
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -158,13 +160,25 @@ export const buildSelfIterationReceipts = (
 
     const target = isRecord(data.target) ? data.target : undefined;
     const targetId = str(target?.id) ?? str(data.resourceId);
+    const agentDocumentId = kind === 'skill' ? str(target?.agentDocumentId) : undefined;
+    const documentId = kind === 'skill' ? str(target?.documentId) : undefined;
     const memoryId = kind === 'memory' ? str(target?.memoryId) : undefined;
     const memoryLayer =
       kind === 'memory' && isMemoryLayer(target?.memoryLayer) ? target.memoryLayer : undefined;
+    const rollbackAgentDocumentId = str(data.agentDocumentId);
+    const rollbackDocumentId = str(data.documentId);
+    const rollbackExpectedCurrentDocumentUpdatedAt = str(data.expectedCurrentDocumentUpdatedAt);
+    const rollbackHistoryId = str(data.historyId);
     const summaryText = str(data.summary);
     const targetTitle = str(target?.title);
     const title =
       targetTitle ?? summaryText ?? DEFAULT_TITLE_BY_API[apiName] ?? 'Agent Signal action';
+    const rollbackAvailable =
+      rollbackDocumentId &&
+      rollbackExpectedCurrentDocumentUpdatedAt &&
+      rollbackHistoryId &&
+      status === 'applied' &&
+      ROLLBACK_CAPABLE_APIS.has(apiName);
 
     return [
       {
@@ -174,7 +188,14 @@ export const buildSelfIterationReceipts = (
         id: `${sourceId}:${mutation.toolCallId ?? `${apiName}:${index}`}:${kind}`,
         kind,
         metadata: {
+          ...(rollbackAgentDocumentId ? { agentDocumentId: rollbackAgentDocumentId } : {}),
+          ...(rollbackDocumentId ? { documentId: rollbackDocumentId } : {}),
+          ...(rollbackExpectedCurrentDocumentUpdatedAt
+            ? { expectedCurrentDocumentUpdatedAt: rollbackExpectedCurrentDocumentUpdatedAt }
+            : {}),
+          ...(rollbackHistoryId ? { historyId: rollbackHistoryId } : {}),
           ...(marker.localDate ? { localDate: marker.localDate } : {}),
+          ...(rollbackAvailable ? { rollbackStatus: 'available' as const } : {}),
           sourceType,
         },
         status,
@@ -183,6 +204,8 @@ export const buildSelfIterationReceipts = (
           ? {}
           : {
               target: {
+                ...(agentDocumentId ? { agentDocumentId } : {}),
+                ...(documentId ? { documentId } : {}),
                 ...(targetId ? { id: targetId } : {}),
                 ...(memoryId ? { memoryId } : {}),
                 ...(memoryLayer ? { memoryLayer } : {}),

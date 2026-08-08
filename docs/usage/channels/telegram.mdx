@@ -52,8 +52,6 @@ By connecting a Telegram channel to your LobeHub agent, users can interact with 
 
   Paste the bot token you received from BotFather into the **Bot Token** field.
 
-  The **Bot User ID** will be automatically derived from your token — no need to enter it manually.
-
   ### Optional: Set a Webhook Secret
 
   You can optionally enter a **Webhook Secret Token** for additional security. This is used to verify that incoming webhook requests originate from Telegram.
@@ -127,7 +125,6 @@ See the [Channels overview](/docs/usage/channels/overview#direct-message-policy)
 | Field                    | Required | Description                                                                                                    |
 | ------------------------ | -------- | -------------------------------------------------------------------------------------------------------------- |
 | **Bot Token**            | Yes      | API token from BotFather                                                                                       |
-| **Bot User ID**          | Auto     | Automatically derived from the bot token                                                                       |
 | **Webhook Secret Token** | No       | Optional secret for verifying webhook requests                                                                 |
 | **Allowed User IDs**     | No       | Comma- or whitespace-separated Telegram numeric user IDs. Global gate — applies to DMs and group @mentions     |
 | **DM Policy**            | No       | `open` (default), `allowlist`, `pairing`, or `disabled` — who is allowed to DM the bot                         |

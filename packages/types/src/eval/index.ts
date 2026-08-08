@@ -1,5 +1,6 @@
 export * from './agentEval';
 export * from './agentEvalDataset';
+export * from './agentEvalExperiment';
 export * from './agentEvalRun';
 export * from './benchmark';
 export * from './dataset';

@@ -121,7 +121,11 @@ export class ChatGroupCurdAction {
       : undefined;
     if (!group) return;
 
-    const id = group.id;
+    await this.updateGroupMetaById(group.id, meta);
+  };
+
+  updateGroupMetaById = async (id: string, meta: Partial<ChatGroupItem>) => {
+    if (!id) return;
 
     await chatGroupService.updateGroup(id, meta);
     // Keep local store in sync immediately

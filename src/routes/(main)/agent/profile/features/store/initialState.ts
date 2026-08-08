@@ -1,6 +1,8 @@
 import { type IEditor } from '@lobehub/editor';
 import { type EditorState } from '@lobehub/editor/react';
 
+import { type SaveStatus } from '@/types/saveState';
+
 export interface EditLockState {
   holderId: string | null;
   lockedByOther: boolean;
@@ -23,6 +25,10 @@ export interface State extends PublicState {
    * is resolved before the (loading-gated) editor renders.
    */
   lockState: EditLockState;
+  /** Timestamp of the latest successful Prompt autosave. */
+  promptLastUpdatedTime: Date | null;
+  /** Save lifecycle owned only by the Prompt editor. */
+  promptSaveStatus: SaveStatus;
   /**
    * Content being streamed from AI
    */
@@ -38,6 +44,8 @@ export const initialState: State = {
   // Start pending (read-only) so the editor never flashes editable before the
   // lock driver has resolved whether the agent is free.
   lockState: { holderId: null, lockedByOther: false, pending: true },
+  promptLastUpdatedTime: null,
+  promptSaveStatus: 'idle',
   streamingContent: undefined,
   streamingInProgress: false,
 };

@@ -1,23 +1,15 @@
-import { formatLinearMcpShortLabel } from '@lobechat/builtin-tool-claude-code/client/labels';
-import { type ChatToolPayloadWithResult } from '@lobechat/types';
+import {
+  formatBrowserMcpShortLabel,
+  formatLinearMcpShortLabel,
+} from '@lobechat/builtin-tool-claude-code/client/labels';
+import type { ChatToolPayloadWithResult } from '@lobechat/types';
 import { t } from 'i18next';
 
 import { LOADING_FLAT } from '@/const/message';
-import { type AssistantContentBlock } from '@/types/index';
+import type { AssistantContentBlock } from '@/types/index';
 
 import {
   DURATION_SECONDS_PER_MINUTE,
-  POST_TOOL_ANSWER_DOUBLE_NEWLINE_SCORE,
-  POST_TOOL_ANSWER_LENGTH_LONG_MIN_CHARS,
-  POST_TOOL_ANSWER_LENGTH_LONG_SCORE,
-  POST_TOOL_ANSWER_LENGTH_MEDIUM_MIN_CHARS,
-  POST_TOOL_ANSWER_MARKDOWN_STRUCTURE_SCORE,
-  POST_TOOL_ANSWER_MEDIUM_TEXT_SCORE,
-  POST_TOOL_ANSWER_MULTI_LINE_MIN_COUNT,
-  POST_TOOL_ANSWER_MULTI_LINE_SCORE,
-  POST_TOOL_ANSWER_PUNCT_MIN_COUNT,
-  POST_TOOL_ANSWER_PUNCT_SCORE,
-  POST_TOOL_FINAL_ANSWER_SCORE_THRESHOLD,
   TIME_MS_PER_SECOND,
   TOOL_API_DISPLAY_NAMES,
   TOOL_FIRST_DETAIL_MAX_CHARS,
@@ -38,63 +30,6 @@ export const areWorkflowToolsComplete = (tools: ChatToolPayloadWithResult[]): bo
   return collapsible.every((t) => t.result != null && t.result.content !== LOADING_FLAT);
 };
 
-/** Heuristic: visible content already looks like a deliverable, not a one-line status step. */
-export const scoreBlockContentAsAnswerLike = (block: AssistantContentBlock): number => {
-  const raw = (block.content ?? '').trim();
-  if (!raw || raw === LOADING_FLAT) return 0;
-
-  let score = 0;
-  const compact = raw.replaceAll(/\s+/g, ' ');
-  if (compact.length >= POST_TOOL_ANSWER_LENGTH_LONG_MIN_CHARS)
-    score += POST_TOOL_ANSWER_LENGTH_LONG_SCORE;
-  else if (compact.length >= POST_TOOL_ANSWER_LENGTH_MEDIUM_MIN_CHARS)
-    score += POST_TOOL_ANSWER_MEDIUM_TEXT_SCORE;
-
-  if (raw.includes('\n\n')) score += POST_TOOL_ANSWER_DOUBLE_NEWLINE_SCORE;
-  else if (raw.split('\n').filter((l) => l.trim()).length >= POST_TOOL_ANSWER_MULTI_LINE_MIN_COUNT)
-    score += POST_TOOL_ANSWER_MULTI_LINE_SCORE;
-
-  if (
-    new RegExp(`^#{1,${WORKFLOW_MARKDOWN_HEADING_MAX_LEVEL}}\\s`, 'm').test(raw) ||
-    /^\s*[-*]\s+\S/m.test(raw)
-  )
-    score += POST_TOOL_ANSWER_MARKDOWN_STRUCTURE_SCORE;
-
-  const punctCount = (compact.match(/[。！？.!?]/g) ?? []).length;
-  if (punctCount >= POST_TOOL_ANSWER_PUNCT_MIN_COUNT) score += POST_TOOL_ANSWER_PUNCT_SCORE;
-
-  return score;
-};
-
-/** Heuristic: prose-only block after last tool looks like a long deliverable (not a one-line step). */
-export const scorePostToolBlockAsFinalAnswer = (block: AssistantContentBlock): number => {
-  if (block.tools && block.tools.length > 0) return 0;
-
-  return scoreBlockContentAsAnswerLike(block);
-};
-
-/**
- * While generating, first index at or after {@param lastToolIndex} whose prose-only block scores
- * as final-answer-like. Tail from here stays out of the workflow fold. Returns null if tooling
- * reappears or nothing qualifies.
- */
-export const getPostToolAnswerSplitIndex = (
-  blocks: AssistantContentBlock[],
-  lastToolIndex: number,
-  toolsPhaseComplete: boolean,
-  isGenerating: boolean,
-): number | null => {
-  if (!isGenerating || !toolsPhaseComplete || lastToolIndex < 0) return null;
-  if (lastToolIndex >= blocks.length - 1) return null;
-
-  for (let i = lastToolIndex + 1; i < blocks.length; i++) {
-    const b = blocks[i]!;
-    if (b.tools && b.tools.length > 0) return null;
-    if (scorePostToolBlockAsFinalAnswer(b) >= POST_TOOL_FINAL_ANSWER_SCORE_THRESHOLD) return i;
-  }
-  return null;
-};
-
 const toTitleCase = (apiName: string): string => {
   return apiName
     .replaceAll(/([A-Z])/g, ' $1')
@@ -105,6 +40,13 @@ const toTitleCase = (apiName: string): string => {
 export const getToolDisplayName = (apiName: string): string => {
   const linearLabel = formatLinearMcpShortLabel(apiName);
   if (linearLabel) return linearLabel;
+
+  // MCP wire names title-case into gibberish ("Mcp  lobe cc  browser navigate"),
+  // so the browser tools resolve to their own labels before the fallback.
+  const browserLabel = formatBrowserMcpShortLabel(apiName, (key, defaultValue) =>
+    t(key, { defaultValue, ns: 'chat' }),
+  );
+  if (browserLabel) return browserLabel;
 
   const defaultValue = toTitleCase(apiName);
   const key = TOOL_API_DISPLAY_NAMES[apiName];

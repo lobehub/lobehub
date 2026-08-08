@@ -1,5 +1,6 @@
 import { normalizeListTasksParams, TaskIdentifier } from '@lobechat/builtin-tool-task';
 import type { LobeChatDatabase } from '@lobechat/database';
+import type { TaskCreatedItem } from '@lobechat/prompts';
 import {
   formatDependencyAdded,
   formatDependencyRemoved,
@@ -8,6 +9,7 @@ import {
   formatTaskDetail,
   formatTaskEdited,
   formatTaskList,
+  formatTasksCreated,
   priorityLabel,
 } from '@lobechat/prompts';
 import type { TaskAutomationMode, TaskStatus } from '@lobechat/types';
@@ -15,9 +17,12 @@ import { eq } from 'drizzle-orm';
 
 import { AgentModel } from '@/database/models/agent';
 import { TaskModel } from '@/database/models/task';
+import { WorkspaceModel } from '@/database/models/workspace';
 import { tasks } from '@/database/schemas';
+import { appEnv } from '@/envs/app';
 import { taskRouter } from '@/server/routers/lambda/task';
 import { TaskService } from '@/server/services/task';
+import { VerifyPlanGeneratorService } from '@/server/services/verify/planGenerator';
 
 import { type ServerRuntimeRegistration } from './types';
 
@@ -44,28 +49,58 @@ export interface TaskRuntimeDeps {
   // Assistant message that carried the createTask tool call — the tool-call
   // anchor, NOT the source user message. Recorded as `context.origin.messageId`.
   assistantMessageId?: string;
+  db?: LobeChatDatabase;
   // Pointers to the conversation that invoked the createTask tool. Recorded into
   // `tasks.context.origin` so the task's handoff result can later be delivered
-  // back to this session (LOBE-10625). All optional — a task can be created
+  // back to this session. All optional — a task can be created
   // outside an agent turn (e.g. via the API).
   operationId?: string;
+  // Resolves the base URL for task deep-links: app origin + optional `/{slug}`
+  // workspace prefix. Provided by the factory (which owns db / userId / the
+  // resolved workspaceId); when absent (unit tests) links fall back to the bare
+  // app origin.
+  resolveLinkBaseUrl?: () => Promise<string>;
+  // Root runtime operation used to aggregate Works produced during one run.
+  rootOperationId?: string;
   scope?: string | null;
   taskCaller: ReturnType<typeof taskRouter.createCaller>;
   taskId?: string;
   taskModel: TaskModel;
   taskService: TaskService;
+  threadId?: string | null;
   toolCallId?: string;
-  topicId?: string;
+  // Source tool result message id, when the runtime already has one.
+  toolMessageId?: string;
+  topicId?: string | null;
+  userId?: string;
+  workspaceId?: string;
 }
 
 export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
-  const { agentId, assistantMessageId, operationId, scope, taskId, toolCallId, topicId } = deps;
+  const {
+    agentId,
+    assistantMessageId,
+    operationId,
+    rootOperationId,
+    scope,
+    taskId,
+    toolCallId,
+    topicId,
+  } = deps;
   // Models are read through `deps` (not destructured) so callers can swap them
   // in lazily — e.g. after async workspace resolution in the runtime factory.
   const agentModel = () => deps.agentModel;
   const taskModel = () => deps.taskModel;
   const taskService = () => deps.taskService;
   const taskCaller = () => deps.taskCaller;
+
+  // Base URL for task deep-links embedded in tool results. These results can be
+  // pushed to IM / bot channels and mobile, so the link must be ABSOLUTE — and
+  // workspace-scoped tasks live under `/{slug}/task/...`, so the slug has to be
+  // in the path too or the link resolves to the wrong (personal) scope. The
+  // factory supplies the workspace-aware resolver; fall back to the bare origin.
+  const taskLinkBaseUrl = async (): Promise<string> =>
+    (await deps.resolveLinkBaseUrl?.()) ?? appEnv.APP_URL.replace(/\/$/, '');
 
   const resolveAssigneeAgent = async (assigneeAgentId?: string | null) => {
     if (!assigneeAgentId) return { success: true } as const;
@@ -90,7 +125,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
 
   const createTaskImpl = async (
     args: CreateTaskArgs,
-  ): Promise<{ content: string; identifier?: string; success: boolean }> => {
+  ): Promise<{ content: string; identifier?: string; success: boolean; taskId?: string }> => {
     let parentLabel: string | undefined;
 
     // Pre-resolve parent identifier so we can surface a tool-friendly error
@@ -108,12 +143,19 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
     if (!assigneeResult.success) return { content: assigneeResult.content, success: false };
 
     // Capture where this task was spawned from so the lifecycle can later
-    // bridge the handoff result back to the creator conversation (LOBE-10625).
+    // bridge the handoff result back to the creator conversation.
     // Only persist the pocket when we actually have a creator agent + topic;
     // tasks created outside an agent turn (e.g. via API) have no origin.
+    const originOperationId = rootOperationId ?? operationId;
     const origin =
       agentId && topicId
-        ? { agentId, messageId: assistantMessageId, operationId, toolCallId, topicId }
+        ? {
+            agentId,
+            messageId: assistantMessageId,
+            operationId: originOperationId,
+            toolCallId,
+            topicId,
+          }
         : undefined;
 
     const task = await taskService().createTask({
@@ -129,6 +171,10 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
 
     return {
       content: formatTaskCreated({
+        // Absolute, workspace-scoped link: this content can be pushed to IM /
+        // bot channels and mobile, where a relative path has no app origin to
+        // resolve against and the `/{slug}` prefix would otherwise be lost.
+        baseUrl: await taskLinkBaseUrl(),
         identifier: task.identifier,
         instruction: args.instruction,
         name: task.name,
@@ -138,6 +184,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       }),
       identifier: task.identifier,
       success: true,
+      taskId: task.id,
     };
   };
 
@@ -170,12 +217,115 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
     },
 
     createTask: async (args: CreateTaskArgs) => {
-      const { identifier, ...rest } = await createTaskImpl(args);
+      const result = await createTaskImpl(args);
+      const { identifier, taskId: createdTaskId, ...rest } = result;
       // Surface the created task identifier as plugin state (mirrors the client
       // executor's `{ identifier, success }`) so the inline render can link to
-      // the task detail. Without this the tool message persists no state and the
-      // card has nothing to open.
-      return identifier ? { ...rest, state: { identifier, success: rest.success } } : rest;
+      // the task detail, AND so the dispatch-layer Work registration can read the
+      // created task identity from `result.state`. Without this the tool message
+      // persists no state and the card has nothing to open.
+      return identifier
+        ? { ...rest, state: { identifier, success: rest.success, taskId: createdTaskId } }
+        : rest;
+    },
+
+    createGoal: async (args: {
+      criteria: Array<{
+        description?: string;
+        instruction?: string;
+        onFail?: 'auto_repair' | 'manual';
+        required?: boolean;
+        title: string;
+        verifierConfig?: Record<string, unknown>;
+        verifierType?: 'agent' | 'llm' | 'program';
+      }>;
+      instruction: string;
+      maxIterations?: number | null;
+      maxTotalCost?: number | null;
+      name: string;
+    }) => {
+      if (!agentId) return { content: 'A goal needs the current agent.', success: false };
+      if (!deps.db || !deps.userId) {
+        return { content: 'Goal planning is unavailable in this runtime.', success: false };
+      }
+      const drafts = (args.criteria ?? []).filter((item) => item.title?.trim());
+      if (drafts.length === 0) {
+        return { content: 'A goal needs at least one acceptance criterion.', success: false };
+      }
+
+      const created = await createTaskImpl({
+        assigneeAgentId: agentId,
+        instruction: args.instruction,
+        name: args.name,
+      });
+      if (!created.success || !created.identifier || !created.taskId) return created;
+
+      try {
+        const verifyCriteriaIds = await new VerifyPlanGeneratorService(
+          deps.db,
+          deps.userId,
+          deps.workspaceId,
+        ).createCriteriaFromDrafts(
+          drafts.map((item) => ({
+            description: item.description,
+            instruction: item.verifierType === 'program' ? undefined : item.instruction,
+            onFail: item.onFail ?? 'auto_repair',
+            required: item.required ?? true,
+            title: item.title,
+            verifierConfig: item.verifierConfig,
+            verifierType: item.verifierType ?? 'agent',
+          })),
+        );
+        const maxIterations = Math.min(10, Math.max(2, args.maxIterations ?? 3));
+
+        // Both operations merge into tasks.config. Running them concurrently
+        // can lose either the goal marker or verify config to last-write-wins.
+        await taskModel().updateTaskConfig(created.taskId, {
+          goal: {
+            // `null` is the user's explicit "no cap"; `undefined` means they
+            // never chose, which must fall back to the documented default.
+            // Coercing the second into the first made an uncapped loop the
+            // default for every goal that omitted the field.
+            maxIterations: args.maxIterations,
+            maxTotalCost: args.maxTotalCost ?? null,
+            originTopicId: topicId ?? null,
+          },
+        });
+        await taskCaller().updateVerifyConfig({
+          id: created.taskId,
+          verify: {
+            enabled: true,
+            maxIterations,
+            requirement: args.name,
+            verifyCriteriaIds,
+          },
+        });
+
+        const run = await taskCaller().run({ id: created.taskId });
+        const operationId = (run as { operationId?: string }).operationId;
+        const runTopicId = (run as { topicId?: string }).topicId;
+
+        return {
+          content: `Goal task ${created.identifier} created and started with ${drafts.length} acceptance criteria. Execution continues in its separate task topic; do not perform or reproduce the task in this conversation.`,
+          state: {
+            identifier: created.identifier,
+            name: args.name,
+            operationId,
+            startedAt: new Date().toISOString(),
+            success: true,
+            taskId: created.taskId,
+            topicId: runTopicId,
+          },
+          success: true,
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to start goal';
+        return {
+          content: `Goal task ${created.identifier} was created but could not be started: ${message}`,
+          state: { identifier: created.identifier, name: args.name, success: false },
+          success: false,
+        };
+      }
     },
 
     createTasks: async (args: { tasks: CreateTaskArgs[] }) => {
@@ -184,36 +334,34 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
         return { content: 'No tasks provided.', success: false };
       }
 
-      const lines: string[] = [];
-      let succeeded = 0;
-      let failed = 0;
+      const results: TaskCreatedItem[] = [];
 
-      for (const [index, item] of items.entries()) {
+      for (const item of items) {
         try {
           const result = await createTaskImpl(item);
-          if (result.success) {
-            succeeded += 1;
-            lines.push(
-              `${index + 1}. ${result.identifier ?? '(unknown id)'} "${item.name}" — created`,
-            );
-          } else {
-            failed += 1;
-            lines.push(`${index + 1}. "${item.name}" — failed: ${result.content}`);
-          }
+          results.push({
+            error: result.success ? undefined : result.content,
+            identifier: result.identifier,
+            name: item.name,
+            success: result.success,
+          });
         } catch (error) {
-          failed += 1;
           const message = error instanceof Error ? error.message : 'Unknown error';
-          lines.push(`${index + 1}. "${item.name}" — failed: ${message}`);
+          results.push({ error: message, name: item.name, success: false });
         }
       }
 
-      const header =
-        failed === 0
-          ? `Created ${succeeded} task${succeeded === 1 ? '' : 's'}:`
-          : `Created ${succeeded}/${items.length} tasks (${failed} failed):`;
+      const succeeded = results.filter((r) => r.success).length;
+      const failed = results.length - succeeded;
 
       return {
-        content: [header, ...lines].join('\n'),
+        // Absolute, workspace-scoped links so the summary stays clickable when
+        // pushed to IM / mobile.
+        content: formatTasksCreated(results, await taskLinkBaseUrl()),
+        // State parity with the client executor (`{ failed, results, succeeded }`)
+        // so the dispatch-layer Work registration can read per-item identity +
+        // success from `result.state.results` for partial-failure batches.
+        state: { failed, results, succeeded },
         success: failed === 0,
       };
     },
@@ -226,6 +374,10 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
 
       return {
         content: formatTaskDeleted(task.identifier, task.name),
+        // Surface the deleted task's internal id so the dispatch-layer Work
+        // deletion (`work: { action: 'delete' }`) can locate the Work by
+        // `works.resourceId = taskId` after the task row is gone.
+        state: { identifier: task.identifier, success: true, taskId: task.id },
         success: true,
       };
     },
@@ -344,6 +496,10 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
         );
       }
 
+      if (ops.length === 0 && depResults.length === 0) {
+        return { content: 'No fields provided; nothing to update.', success: false };
+      }
+
       const [, depErrors] = await Promise.all([Promise.all(ops), Promise.all(depResults)]);
       const firstDepError = depErrors.find((e) => e);
       if (firstDepError) return { content: firstDepError, success: false };
@@ -457,6 +613,86 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       }
 
       await Promise.all(ops);
+
+      return { content: formatTaskEdited(task.identifier, changes), success: true };
+    },
+
+    setTaskVerify: async (args: {
+      enabled?: boolean | null;
+      identifier: string;
+      maxIterations?: number | null;
+      requirement?: string | null;
+      verifierAgentId?: string | null;
+      verifyCriteriaIds?: string[] | null;
+      verifyRubricId?: string | null;
+    }) => {
+      const task = await taskModel().resolve(args.identifier);
+      if (!task) return { content: `Task not found: ${args.identifier}`, success: false };
+
+      // Mirrors the client executor: only forward keys the caller actually
+      // provided. The TRPC contract (task.updateVerifyConfig) treats `null` as
+      // "clear" and omission as "leave untouched", so an undefined field must
+      // NOT reach the payload.
+      const verify: {
+        enabled?: boolean | null;
+        maxIterations?: number | null;
+        requirement?: string | null;
+        verifierAgentId?: string | null;
+        verifyCriteriaIds?: string[] | null;
+        verifyRubricId?: string | null;
+      } = {};
+      const changes: string[] = [];
+
+      if (args.enabled !== undefined) {
+        verify.enabled = args.enabled;
+        changes.push(
+          args.enabled === null
+            ? 'verify enabled cleared'
+            : `verify ${args.enabled ? 'enabled' : 'disabled'}`,
+        );
+      }
+      if (args.requirement !== undefined) {
+        verify.requirement = args.requirement;
+        changes.push(
+          args.requirement ? 'acceptance requirement set' : 'acceptance requirement cleared',
+        );
+      }
+      if (args.maxIterations !== undefined) {
+        verify.maxIterations = args.maxIterations;
+        changes.push(
+          args.maxIterations === null
+            ? 'max iterations cleared'
+            : `max iterations → ${args.maxIterations}`,
+        );
+      }
+      if (args.verifierAgentId !== undefined) {
+        verify.verifierAgentId = args.verifierAgentId;
+        changes.push(
+          args.verifierAgentId
+            ? `verifier agent → ${args.verifierAgentId}`
+            : 'verifier agent cleared',
+        );
+      }
+      if (args.verifyRubricId !== undefined) {
+        verify.verifyRubricId = args.verifyRubricId;
+        changes.push(
+          args.verifyRubricId ? `verify rubric → ${args.verifyRubricId}` : 'verify rubric cleared',
+        );
+      }
+      if (args.verifyCriteriaIds !== undefined) {
+        verify.verifyCriteriaIds = args.verifyCriteriaIds;
+        changes.push(
+          args.verifyCriteriaIds?.length
+            ? `verify criteria → ${args.verifyCriteriaIds.length} item(s)`
+            : 'verify criteria cleared',
+        );
+      }
+
+      if (Object.keys(verify).length === 0) {
+        return { content: 'No verify fields provided; nothing to update.', success: false };
+      }
+
+      await taskCaller().updateVerifyConfig({ id: task.id, verify });
 
       return { content: formatTaskEdited(task.identifier, changes), success: true };
     },
@@ -604,8 +840,32 @@ export const taskRuntime: ServerRuntimeRegistration = {
 
     const db = context.serverDB;
     const userId = context.userId;
-    const { agentId, assistantMessageId, operationId, taskId, toolCallId, topicId, scope } =
-      context;
+    const {
+      agentId,
+      assistantMessageId,
+      operationId,
+      taskId,
+      threadId,
+      toolCallId,
+      topicId,
+      scope,
+    } = context;
+
+    // Workspace slug for deep-links: resolved once (memoized) from the workspace
+    // owning the created task (`workspaceId` is set by `ensureModels` below),
+    // and only when the task is actually workspace-scoped.
+    let workspaceId: string | undefined;
+    let slugPromise: Promise<string | undefined> | undefined;
+    const resolveLinkBaseUrl = async (): Promise<string> => {
+      const origin = appEnv.APP_URL.replace(/\/$/, '');
+      if (!workspaceId) return origin;
+      slugPromise ??= new WorkspaceModel(db, userId)
+        .findById(workspaceId)
+        .then((workspace) => workspace?.slug ?? undefined)
+        .catch(() => undefined);
+      const slug = await slugPromise;
+      return slug ? `${origin}/${slug}` : origin;
+    };
 
     // Models are wired in lazily after the workspaceId is resolved from the
     // owning task row. `createTaskRuntime` reads them through this shared
@@ -615,10 +875,17 @@ export const taskRuntime: ServerRuntimeRegistration = {
       agentId,
       assistantMessageId,
       operationId,
+      rootOperationId: context.rootOperationId ?? operationId,
+      resolveLinkBaseUrl,
       scope,
       taskId,
+      threadId,
       toolCallId,
+      toolMessageId: context.toolMessageId,
       topicId,
+      db,
+      userId,
+      workspaceId,
       // Initial personal-mode models cover the no-task-context case. Replaced
       // before the first call when `taskId` is set.
       agentModel: new AgentModel(db, userId),
@@ -635,6 +902,8 @@ export const taskRuntime: ServerRuntimeRegistration = {
       // up the owning task row for callers that pre-date the propagation work
       // and still construct `ToolExecutionContext` without `workspaceId`.
       const wsId = context.workspaceId ?? (await resolveWorkspaceId(db, taskId));
+      workspaceId = wsId;
+      deps.workspaceId = wsId;
       deps.agentModel = new AgentModel(db, userId, wsId);
       deps.taskModel = new TaskModel(db, userId, wsId);
       deps.taskService = new TaskService(db, userId, wsId);

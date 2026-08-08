@@ -43,13 +43,18 @@ const TaskDetailAssignee = memo(() => {
           gap={8}
           paddingBlock={4}
           paddingInline={11}
-          style={{ minHeight: 32 }}
+          // `flex: none` keeps the chip at its content width so a narrow column
+          // wraps the row instead of squeezing the name to one character per
+          // line; `maxWidth` + the label's ellipsis then bound a very long name.
+          style={{ flex: 'none', maxWidth: '100%', minHeight: 32 }}
           variant={isDarkMode ? 'filled' : 'outlined'}
         >
           {assigneeAgentId ? (
             <>
               <AssigneeAvatar agentId={assigneeAgentId} size={20} />
-              <Text weight={500}>{assigneeMeta?.title}</Text>
+              <Text ellipsis weight={500}>
+                {assigneeMeta?.title}
+              </Text>
               <HeterogeneousTag type={assigneeHeterogeneousType} />
             </>
           ) : (

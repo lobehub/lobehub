@@ -292,7 +292,33 @@ describe('useOperationState', () => {
 
       expect(useChatStore.getState().operationsByContext[messageMapKey(context)]).toHaveLength(1);
       expect(result.current.isInputLoading).toBe(true);
+      expect(result.current.isInputVisiblyLoading).toBe(true);
       expect(result.current.isAIGenerating).toBe(true);
+    });
+
+    it('should keep input blocked after visible loading ends before terminal bookkeeping', () => {
+      const context = {
+        agentId: 'test-agent-id',
+        topicId: 'test-topic-id',
+        threadId: null,
+      } as const;
+
+      const { result } = renderHook(() => useOperationState(context));
+
+      act(() => {
+        useChatStore.getState().startOperation({
+          context,
+          metadata: { visibleLoadingDone: true },
+          type: 'execAgentRuntime',
+        });
+      });
+
+      // Example: visible_output_end arrived, but agent_runtime_end has not
+      // drained queue/cache/unread side effects yet. UI loading can stop, but
+      // edit-confirm regenerate must still stay blocked.
+      expect(result.current.isInputLoading).toBe(true);
+      expect(result.current.isInputVisiblyLoading).toBe(false);
+      expect(result.current.isAIGenerating).toBe(false);
     });
 
     it('should clear loading after cancelling an operation in a null-topic context', () => {
@@ -332,6 +358,7 @@ describe('useOperationState', () => {
 
       expect(useChatStore.getState().operations[operationId!].status).toBe('cancelled');
       expect(result.current.isInputLoading).toBe(false);
+      expect(result.current.isInputVisiblyLoading).toBe(false);
     });
   });
 });

@@ -22,8 +22,10 @@ const context = createRuntimeProcessorContext({
 
 const createUserMessageSource = (
   input: Partial<{
+    anchorMessageId: string;
     message: string;
     sourceId: string;
+    triggerMessageId: string;
   }> = {},
 ): SourceAgentUserMessage => ({
   chain: {
@@ -32,6 +34,7 @@ const createUserMessageSource = (
   },
   payload: {
     agentId: 'agent_1',
+    anchorMessageId: input.anchorMessageId,
     documentPayload: { section: 'style' },
     intents: ['document', 'memory'],
     memoryPayload: { shouldRemember: true },
@@ -39,6 +42,7 @@ const createUserMessageSource = (
     messageId: `msg:${input.sourceId ?? 'source_1'}`,
     serializedContext: 'topic=repo-review',
     topicId: 'topic_1',
+    triggerMessageId: input.triggerMessageId,
   },
   scopeKey: 'topic:thread_1',
   sourceId: input.sourceId ?? 'source_1',
@@ -97,7 +101,10 @@ describe('classifier processors', () => {
       reason: 'explicit style feedback',
       result: 'not_satisfied',
     });
-    const source = createUserMessageSource();
+    const source = createUserMessageSource({
+      anchorMessageId: 'msg_assistant_1',
+      triggerMessageId: 'msg_trigger_1',
+    });
 
     const result = await classifySatisfaction(source, context, {
       satisfactionClassifier: { classify },
@@ -118,6 +125,7 @@ describe('classifier processors', () => {
         },
         payload: expect.objectContaining({
           agentId: 'agent_1',
+          anchorMessageId: 'msg_assistant_1',
           message: 'Please keep replies tighter.',
           messageId: 'msg:source_1',
           serializedContext: 'topic=repo-review',
@@ -127,6 +135,7 @@ describe('classifier processors', () => {
             memoryPayload: { shouldRemember: true },
           },
           topicId: 'topic_1',
+          triggerMessageId: 'msg_trigger_1',
         }),
         signalId: 'source_1:signal:feedback-satisfaction',
         signalType: 'signal.feedback.satisfaction',
@@ -158,7 +167,10 @@ describe('classifier processors', () => {
         target: 'skill',
       },
     ]);
-    const signal = createSatisfactionSignal();
+    const signal = createSatisfactionSignal({
+      anchorMessageId: 'msg_assistant_1',
+      triggerMessageId: 'msg_trigger_1',
+    });
 
     const result = await classifyDomain(signal, context, {
       domainClassifier: { classify },
@@ -171,10 +183,12 @@ describe('classifier processors', () => {
       value: [
         expect.objectContaining({
           payload: expect.objectContaining({
+            anchorMessageId: 'msg_assistant_1',
             conflictPolicy: { forbiddenWith: ['none'], mode: 'fanout', priority: 100 },
             evidence: signal.payload.evidence,
             satisfactionResult: 'not_satisfied',
             target: 'memory',
+            triggerMessageId: 'msg_trigger_1',
           }),
           signalId: 'source_1:signal:feedback-satisfaction:domain:memory',
           signalType: 'signal.feedback.domain.memory',
@@ -182,10 +196,12 @@ describe('classifier processors', () => {
         }),
         expect.objectContaining({
           payload: expect.objectContaining({
+            anchorMessageId: 'msg_assistant_1',
             conflictPolicy: { forbiddenWith: ['none'], mode: 'fanout', priority: 80 },
             evidence: [{ cue: 'template', excerpt: 'reusable template' }],
             satisfactionResult: 'not_satisfied',
             target: 'skill',
+            triggerMessageId: 'msg_trigger_1',
           }),
           signalId: 'source_1:signal:feedback-satisfaction:domain:skill',
           signalType: 'signal.feedback.domain.skill',

@@ -1,6 +1,6 @@
 import { Icon } from '@lobehub/ui';
 import { type MenuItemType } from 'antd/es/menu/interface';
-import { Activity, Bot, Handshake, LinkIcon, Mic2 } from 'lucide-react';
+import { Activity, Bot, Handshake, LinkIcon } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -37,11 +37,6 @@ export const useCategory = ({ mobile }: UseCategoryOptions = {}) => {
           icon: <Icon icon={Activity} size={iconSize} />,
           key: ChatSettingsTabs.SelfIteration,
           label: t('agentTab.selfIteration'),
-        },
-        {
-          icon: <Icon icon={Mic2} size={iconSize} />,
-          key: ChatSettingsTabs.TTS,
-          label: t('agentTab.tts'),
         },
         {
           icon: <Icon icon={LinkIcon} size={iconSize} />,

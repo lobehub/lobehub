@@ -6,10 +6,25 @@ export type TaskGroupItem = Awaited<ReturnType<typeof taskService.groupList>>['d
 
 export type TaskViewMode = 'kanban' | 'list';
 
+/**
+ * Top-of-list visibility chip selection:
+ *   - 'all'       → don't narrow further, show every visible task
+ *   - 'private'   → only `tasks.visibility = 'private'` (creator-only)
+ *   - 'workspace' → only `tasks.visibility = 'public'` (workspace-shared)
+ *
+ * Personal mode hides the chip and treats every entry as 'all'.
+ */
+export type TaskListVisibilityFilter = 'all' | 'private' | 'workspace';
+
 export interface TaskListSliceState {
   isTaskGroupListInit: boolean;
   isTaskListInit: boolean;
   listAgentId?: string;
+  /** Effective visibility of the task data currently stored in `tasks`. */
+  listQueryVisibility: TaskListVisibilityFilter;
+  /** Defaults to 'all' so the Tasks top entry shows every visible task
+   *  (private + workspace-shared) without narrowing. */
+  listVisibility: TaskListVisibilityFilter;
   taskGroups: TaskGroupItem[];
   tasks: TaskListItem[];
   tasksTotal: number;
@@ -19,6 +34,8 @@ export interface TaskListSliceState {
 export const initialTaskListSliceState: TaskListSliceState = {
   isTaskGroupListInit: false,
   isTaskListInit: false,
+  listQueryVisibility: 'all',
+  listVisibility: 'all',
   taskGroups: [],
   tasks: [],
   tasksTotal: 0,

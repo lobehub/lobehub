@@ -1,3 +1,4 @@
+import { toast } from '@lobehub/ui/base-ui';
 import { Form } from 'antd';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,7 +7,6 @@ import { useNavigate, useSearchParams } from 'react-router';
 import type { CheckUserResponseData } from '@/app/(backend)/api/auth/check-user/route';
 import type { ResolveUsernameResponseData } from '@/app/(backend)/api/auth/resolve-username/route';
 import { useBusinessSignin } from '@/business/client/hooks/useBusinessSignin';
-import { message } from '@/components/AntdStaticMethods';
 import { useAuthServerConfigStore } from '@/features/AuthShell';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 import { requestPasswordReset, signIn } from '@/libs/better-auth/auth-client';
@@ -17,7 +17,14 @@ import { EMAIL_REGEX, USERNAME_REGEX } from './SignInEmailStep';
 
 const LAST_AUTH_PROVIDER_KEY = 'lobehub:auth:last-provider:v1';
 
-type Step = 'email' | 'password';
+type Step = 'email' | 'password' | 'emailSent';
+
+type SentEmailType = 'magicLink' | 'resetPassword';
+
+interface SentEmailInfo {
+  email: string;
+  type: SentEmailType;
+}
 
 interface SignInFormValues {
   email: string;
@@ -33,6 +40,7 @@ export const useSignIn = () => {
   const { t } = useTranslation('auth');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const sessionExpired = searchParams.get('reason') === 'sessionExpired';
   const enableMagicLink = useAuthServerConfigStore((s) => s.serverConfig.enableMagicLink || false);
   const disableEmailPassword = useAuthServerConfigStore(
     (s) => s.serverConfig.disableEmailPassword || false,
@@ -42,9 +50,13 @@ export const useSignIn = () => {
   );
   const [form] = Form.useForm<SignInFormValues>();
   const [loading, setLoading] = useState(false);
+  // Locks the email-dispatch actions (magic link / password reset / resend) so a
+  // slow network can't be double-clicked into multiple emails.
+  const [sending, setSending] = useState(false);
   const [socialLoading, setSocialLoading] = useState<string | null>(null);
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
+  const [sentInfo, setSentInfo] = useState<SentEmailInfo | null>(null);
   const [isSocialOnly, setIsSocialOnly] = useState(false);
   const [lastAuthProvider] = useState(() => {
     try {
@@ -62,7 +74,8 @@ export const useSignIn = () => {
     if (emailParam) form.setFieldValue('email', emailParam);
   }, [searchParams, form]);
 
-  const handleSendMagicLink = async (targetEmail?: string) => {
+  const handleSendMagicLink = async (targetEmail?: string): Promise<boolean> => {
+    if (sending) return false;
     try {
       const emailValue =
         targetEmail ||
@@ -70,8 +83,9 @@ export const useSignIn = () => {
           .validateFields(['email'])
           .then((v) => v.email as string)
           .catch(() => null));
-      if (!emailValue) return;
+      if (!emailValue) return false;
 
+      setSending(true);
       const callbackUrl = searchParams.get('callbackUrl') || '/';
       const { error } = await signIn.magicLink({
         callbackURL: callbackUrl,
@@ -80,15 +94,22 @@ export const useSignIn = () => {
         newUserCallbackURL: buildOnboardingRedirectUrl(callbackUrl),
       });
       if (error) {
-        message.error(error.message || t('betterAuth.signin.magicLinkError'));
-        return;
+        toast.error(error.message || t('betterAuth.signin.magicLinkError'));
+        return false;
       }
-      message.success(t('betterAuth.signin.magicLinkSent'));
+      // Success is a forward step, not a fleeting toast: land on a persistent
+      // "check your inbox" screen (ux Act §3.5).
+      setSentInfo({ email: emailValue, type: 'magicLink' });
+      setStep('emailSent');
+      return true;
     } catch (error) {
       if (!(error as any)?.errorFields) {
         console.error('Magic link error:', error);
-        message.error(t('betterAuth.signin.magicLinkError'));
+        toast.error(t('betterAuth.signin.magicLinkError'));
       }
+      return false;
+    } finally {
+      setSending(false);
     }
   };
 
@@ -103,7 +124,7 @@ export const useSignIn = () => {
       return { email: trimmedIdentifier.toLowerCase(), identifierType: 'email' };
 
     if (!USERNAME_REGEX.test(trimmedIdentifier)) {
-      message.error(t('betterAuth.errors.emailInvalid'));
+      toast.error(t('betterAuth.errors.emailInvalid'));
       return null;
     }
 
@@ -115,13 +136,13 @@ export const useSignIn = () => {
       });
       const data: ResolveUsernameResponseData = await response.json();
       if (!response.ok || !data.exists || !data.email) {
-        message.error(t('betterAuth.errors.usernameNotRegistered'));
+        toast.error(t('betterAuth.errors.usernameNotRegistered'));
         return null;
       }
       return { email: data.email, identifierType: 'username' };
     } catch (error) {
       console.error('Error resolving username:', error);
-      message.error(t('betterAuth.signin.error'));
+      toast.error(t('betterAuth.signin.error'));
       return null;
     }
   };
@@ -144,7 +165,7 @@ export const useSignIn = () => {
 
       if (!data.exists) {
         if (identifierType === 'username') {
-          message.error(t('betterAuth.errors.usernameNotRegistered'));
+          toast.error(t('betterAuth.errors.usernameNotRegistered'));
           return;
         }
         const callbackUrl = searchParams.get('callbackUrl') || '/';
@@ -174,7 +195,7 @@ export const useSignIn = () => {
       setIsSocialOnly(true);
     } catch (error) {
       console.error('Error checking user:', error);
-      message.error(t('betterAuth.signin.error'));
+      toast.error(t('betterAuth.signin.error'));
     } finally {
       setLoading(false);
     }
@@ -205,11 +226,19 @@ export const useSignIn = () => {
       );
 
       if (result.error && result.error.status !== 403) {
-        message.error(result.error.message || t('betterAuth.signin.error'));
+        // Wrong password is the most common sign-in failure. Keep the error
+        // pinned inline on the field (persistent, with retry context) rather
+        // than a toast that vanishes in 3s (ux Read §1.1 / Same-Page Error).
+        form.setFields([
+          {
+            errors: [result.error.message || t('betterAuth.signin.error')],
+            name: 'password',
+          },
+        ]);
       }
     } catch (error) {
       console.error('Sign in error:', error);
-      message.error(t('betterAuth.signin.error'));
+      toast.error(t('betterAuth.signin.error'));
     } finally {
       setLoading(false);
     }
@@ -259,7 +288,7 @@ export const useSignIn = () => {
       if (result && 'error' in result && result.error) throw result.error;
     } catch (error) {
       console.error(`${normalizedProvider} sign in error:`, error);
-      message.error(t('betterAuth.signin.socialError'));
+      toast.error(t('betterAuth.signin.socialError'));
     } finally {
       setSocialLoading(null);
     }
@@ -269,6 +298,10 @@ export const useSignIn = () => {
     setStep('email');
     setEmail('');
     setIsSocialOnly(false);
+    // Drop the previous account's password + any inline error. The form
+    // instance is shared across steps and defaults to preserve, so without this
+    // the next email's password step remounts pre-filled with the stale value.
+    form.resetFields(['password']);
   };
 
   const handleGoToSignup = () => {
@@ -286,16 +319,50 @@ export const useSignIn = () => {
     });
   };
 
-  const handleForgotPassword = async () => {
+  // Fire the password-reset email. Returns true on success. Shared by the
+  // "forgot password" entry and the resend action on the sent screen.
+  const dispatchPasswordReset = async (targetEmail: string): Promise<boolean> => {
+    if (sending) return false;
+    setSending(true);
     try {
-      await requestPasswordReset({
-        email,
-        redirectTo: `/reset-password?email=${encodeURIComponent(email)}`,
+      // The better-auth client resolves with `{ data, error }` instead of
+      // throwing, so a failed send would otherwise land on the "email sent" screen.
+      const { error } = await requestPasswordReset({
+        email: targetEmail,
+        redirectTo: `/reset-password?email=${encodeURIComponent(targetEmail)}`,
       });
-      message.success(t('betterAuth.signin.forgotPasswordSent'));
+      if (error) throw error;
+      return true;
     } catch {
-      message.error(t('betterAuth.signin.forgotPasswordError'));
+      toast.error(t('betterAuth.signin.forgotPasswordError'));
+      return false;
+    } finally {
+      setSending(false);
     }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email || sending) return;
+    const ok = await dispatchPasswordReset(email);
+    if (!ok) return;
+    setSentInfo({ email, type: 'resetPassword' });
+    setStep('emailSent');
+  };
+
+  const handleResendEmail = async () => {
+    if (!sentInfo || sending) return;
+    const ok =
+      sentInfo.type === 'magicLink'
+        ? await handleSendMagicLink(sentInfo.email)
+        : await dispatchPasswordReset(sentInfo.email);
+    if (ok) toast.success(t('betterAuth.signin.emailSent.resent'));
+  };
+
+  // "Use a different email" — always drop back to the email entry so the label
+  // matches the action (returning to the password step would keep the same email).
+  const handleBackFromSent = () => {
+    setSentInfo(null);
+    handleBackToEmail();
   };
 
   const resolvedProviders = enableBusinessFeatures ? ssoProviders : oAuthSSOProviders;
@@ -311,16 +378,21 @@ export const useSignIn = () => {
     disableEmailPassword,
     email,
     form,
+    handleBackFromSent,
     handleBackToEmail,
     handleCheckUser,
     handleForgotPassword,
     handleGoToSignup,
+    handleResendEmail,
     handleSignIn,
     handleSocialSignIn,
     isSocialOnly,
     lastAuthProvider,
     loading,
     oAuthSSOProviders: sortedProviders,
+    sending,
+    sessionExpired,
+    sentInfo,
     serverConfigInit: enableBusinessFeatures ? true : serverConfigInit,
     socialLoading,
     step,

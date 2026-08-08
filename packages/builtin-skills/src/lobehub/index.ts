@@ -38,7 +38,7 @@ export const LobeHubSkill: BuiltinSkill = {
   description:
     "Manage the LobeHub platform via the `lh` CLI — INCLUDING modifying THIS agent's own configuration. ACTIVATE this skill whenever the user asks you to: change your system prompt / instructions / persona, enable or disable tools / plugins / skills, switch model or provider, attach knowledge bases or files, edit the opening message, rename the topic, OR operate on any other platform resource (agents, topics, memory, documents, search, content generation, model/provider/plugin management, bot integrations, evals, usage stats). ALSO ACTIVATE when the user asks to connect, link, or set up a messaging platform bot — including Discord, Telegram, Slack, Feishu (飞书), Lark, QQ, or WeChat (微信) — or uses phrases like '帮我链接 Discord', 'connect my Slack', '接入飞书', '配置 QQ 机器人', 'link WeChat'. Without activation you cannot persist any change — you can only describe what you would do.",
   identifier: LobeHubIdentifier,
-  name: 'LobeHub',
+  name: 'lobehub',
   resources: toResourceMeta({
     'references/agent': agent,
     'references/bot': bot,

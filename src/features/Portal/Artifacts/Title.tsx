@@ -1,10 +1,12 @@
 import { ArtifactType } from '@lobechat/types';
-import { ActionIcon, Flexbox, Icon, Segmented, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { ConfigProvider } from 'antd';
 import { cx } from 'antd-style';
 import { ArrowLeft, CodeIcon, EyeIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import ArtifactDeploymentActions from '@/business/client/features/ArtifactDeploymentActions';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { ArtifactDisplayMode } from '@/store/chat/slices/portal/initialState';
@@ -13,19 +15,30 @@ import { oneLineEllipsis } from '@/styles';
 const Title = () => {
   const { t } = useTranslation('portal');
 
-  const [displayMode, artifactType, artifactTitle, isArtifactTagClosed, closeArtifact] =
-    useChatStore((s) => {
-      const messageId = chatPortalSelectors.artifactMessageId(s) || '';
-      const identifier = chatPortalSelectors.artifactIdentifier(s);
+  const [
+    messageId,
+    artifactIdentifier,
+    topicId,
+    displayMode,
+    artifactType,
+    artifactTitle,
+    isArtifactTagClosed,
+    closeArtifact,
+  ] = useChatStore((s) => {
+    const messageId = chatPortalSelectors.artifactMessageId(s) || '';
+    const identifier = chatPortalSelectors.artifactIdentifier(s);
 
-      return [
-        s.portalArtifactDisplayMode,
-        chatPortalSelectors.artifactType(s),
-        chatPortalSelectors.artifactTitle(s),
-        chatPortalSelectors.isArtifactTagClosed(messageId, identifier)(s),
-        s.closeArtifact,
-      ];
-    });
+    return [
+      messageId,
+      identifier,
+      s.activeTopicId,
+      s.portalArtifactDisplayMode,
+      chatPortalSelectors.artifactType(s),
+      chatPortalSelectors.artifactTitle(s),
+      chatPortalSelectors.isArtifactTagClosed(messageId, identifier)(s),
+      s.closeArtifact,
+    ];
+  });
 
   // show switch only when artifact is closed and the type is not code
   const showSwitch = isArtifactTagClosed && artifactType !== ArtifactType.Code;
@@ -47,27 +60,38 @@ const Title = () => {
           },
         }}
       >
-        {showSwitch && (
-          <Segmented
-            size={'small'}
-            value={displayMode}
-            options={[
-              {
-                icon: <Icon icon={EyeIcon} />,
-                label: t('artifacts.display.preview'),
-                value: ArtifactDisplayMode.Preview,
-              },
-              {
-                icon: <Icon icon={CodeIcon} />,
-                label: t('artifacts.display.code'),
-                value: ArtifactDisplayMode.Code,
-              },
-            ]}
-            onChange={(value) => {
-              useChatStore.setState({ portalArtifactDisplayMode: value as ArtifactDisplayMode });
-            }}
+        <Flexbox horizontal align={'center'} gap={4}>
+          <ArtifactDeploymentActions
+            artifactIdentifier={artifactIdentifier}
+            artifactTitle={artifactTitle}
+            artifactType={artifactType}
+            displayMode={displayMode}
+            isArtifactTagClosed={isArtifactTagClosed}
+            messageId={messageId}
+            topicId={topicId}
           />
-        )}
+          {showSwitch && (
+            <Tabs
+              activeKey={displayMode}
+              size={'small'}
+              items={[
+                {
+                  icon: <Icon icon={EyeIcon} />,
+                  key: ArtifactDisplayMode.Preview,
+                  label: t('artifacts.display.preview'),
+                },
+                {
+                  icon: <Icon icon={CodeIcon} />,
+                  key: ArtifactDisplayMode.Code,
+                  label: t('artifacts.display.code'),
+                },
+              ]}
+              onChange={(key) => {
+                useChatStore.setState({ portalArtifactDisplayMode: key as ArtifactDisplayMode });
+              }}
+            />
+          )}
+        </Flexbox>
       </ConfigProvider>
     </Flexbox>
   );

@@ -12,6 +12,51 @@ export const TaskManifest: BuiltinToolManifest = {
     // ==================== Task CRUD ====================
     {
       description:
+        'Create and immediately start a goal-driven task with an editable acceptance plan. Use this only when the user explicitly starts their request with /goal. The call pauses for confirmation; after approval it creates the task, persists the acceptance criteria, enables bounded automatic repair, and runs the current agent in a separate task topic. Once it succeeds, do not execute or reproduce the work in the current conversation; the live result card is the progress and result entry point.',
+      humanIntervention: 'required',
+      name: TaskApiName.createGoal,
+      parameters: {
+        properties: {
+          criteria: {
+            description:
+              'Concrete acceptance criteria derived from every explicit user requirement.',
+            items: {
+              properties: {
+                description: { type: 'string' },
+                instruction: {
+                  description: 'Detailed judging instruction. Omit for program checks.',
+                  type: 'string',
+                },
+                onFail: { enum: ['auto_repair', 'manual'], type: 'string' },
+                required: { type: 'boolean' },
+                title: { type: 'string' },
+                verifierConfig: { type: 'object' },
+                verifierType: { enum: ['agent', 'llm', 'program'], type: 'string' },
+              },
+              required: ['title'],
+              type: 'object',
+            },
+            type: 'array',
+          },
+          instruction: { description: 'Detailed task direction and constraints.', type: 'string' },
+          maxIterations: {
+            description:
+              'Maximum automatic execution/repair rounds. Default 3, minimum 2. Null means no user-specified cap.',
+            type: ['number', 'null'],
+          },
+          maxTotalCost: {
+            description: 'Optional total USD budget. Null means no user-specified cap.',
+            type: ['number', 'null'],
+          },
+          name: { description: 'Short task title.', type: 'string' },
+        },
+        required: ['name', 'instruction', 'criteria'],
+        type: 'object',
+      },
+      renderDisplayControl: 'expand',
+    },
+    {
+      description:
         'Create a new task. Optionally attach it as a subtask by specifying parentIdentifier.',
       name: TaskApiName.createTask,
       parameters: {
@@ -46,6 +91,10 @@ export const TaskManifest: BuiltinToolManifest = {
         },
         required: ['name', 'instruction'],
         type: 'object',
+      },
+      work: {
+        action: 'create',
+        resourceType: 'task',
       },
     },
     {
@@ -96,6 +145,10 @@ export const TaskManifest: BuiltinToolManifest = {
         },
         required: ['tasks'],
         type: 'object',
+      },
+      work: {
+        action: 'create',
+        resourceType: 'task',
       },
     },
     {
@@ -256,6 +309,10 @@ export const TaskManifest: BuiltinToolManifest = {
         required: ['identifier'],
         type: 'object',
       },
+      work: {
+        action: 'update',
+        resourceType: 'task',
+      },
     },
     {
       description:
@@ -339,6 +396,60 @@ export const TaskManifest: BuiltinToolManifest = {
         required: ['identifier'],
         type: 'object',
       },
+      work: {
+        action: 'update',
+        resourceType: 'task',
+      },
+    },
+    {
+      description:
+        'Configure (or clear) a task\'s delivery-acceptance (verify) gate — the evidence-driven check that runs when the task\'s topic completes, so the assigned agent\'s "done" is verified by a separate reviewer instead of blindly trusted. STRONGLY RECOMMENDED whenever you dispatch an executable task to another agent (assigneeAgentId set): turn the gate on with enabled=true and state a one-sentence `requirement` describing what "done" means; the server synthesizes acceptance criteria from it. Pass verifyRubricId to reuse a saved rubric, or verifyCriteriaIds for explicit criteria. Pass null to any field to clear it; omitted fields are left untouched.',
+      name: TaskApiName.setTaskVerify,
+      parameters: {
+        properties: {
+          enabled: {
+            description:
+              'Whether the verify gate runs when the task completes. Pass true to require verification, false to disable, null to clear.',
+            type: ['boolean', 'null'],
+          },
+          identifier: {
+            description: 'The identifier of the task to configure (e.g. "TASK-1").',
+            type: 'string',
+          },
+          maxIterations: {
+            description:
+              'Cap on verify repair / re-run iterations (1-10). Pass null to clear (uses the default).',
+            type: ['number', 'null'],
+          },
+          requirement: {
+            description:
+              'One-sentence acceptance requirement describing what "done" means for this task (e.g. "All unit tests pass and the new endpoint returns 200"). The server synthesizes acceptance criteria from it when no explicit criteria are given. Pass null to clear.',
+            type: ['string', 'null'],
+          },
+          verifierAgentId: {
+            description:
+              'Agent ID that executes the verify run. Omit to use the built-in verify agent. Pass null to clear an existing value.',
+            type: ['string', 'null'],
+          },
+          verifyCriteriaIds: {
+            description:
+              'Explicit acceptance criteria ids to check against. Pass null to clear; omit when relying on requirement-synthesized criteria.',
+            items: { type: 'string' },
+            type: ['array', 'null'],
+          },
+          verifyRubricId: {
+            description:
+              'Reuse a saved rubric template by id instead of ad-hoc criteria. Pass null to clear.',
+            type: ['string', 'null'],
+          },
+        },
+        required: ['identifier'],
+        type: 'object',
+      },
+      work: {
+        action: 'update',
+        resourceType: 'task',
+      },
     },
     {
       description:
@@ -380,6 +491,10 @@ export const TaskManifest: BuiltinToolManifest = {
         required: ['identifier'],
         type: 'object',
       },
+      work: {
+        action: 'delete',
+        resourceType: 'task',
+      },
     },
   ],
   identifier: TaskIdentifier,
@@ -389,5 +504,6 @@ export const TaskManifest: BuiltinToolManifest = {
     title: 'Task Tools',
   },
   systemRole: systemPrompt,
+
   type: 'builtin',
 };

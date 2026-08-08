@@ -78,6 +78,169 @@ const doubaoChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+      video: true,
+      vision: true,
+      search: true,
+    },
+    config: {
+      deploymentName: 'doubao-seed-evolving',
+    },
+    contextWindowTokens: 256_000,
+    description:
+      'Doubao Seed Evolving adopts a self-evolving mechanism with continuous weekly updates to keep model performance at the cutting edge.',
+    displayName: 'Doubao Seed Evolving',
+    family: 'doubao',
+    generation: 'doubao-evolving',
+    id: 'doubao-seed-evolving',
+    maxOutput: 128_000,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 1.2, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: { prices: { '1h': 0.017 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-06-23',
+    settings: {
+      extendParams: ['gpt5ReasoningEffort'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      video: true,
+      vision: true,
+      search: true,
+    },
+    config: {
+      deploymentName: 'doubao-seed-2-1-pro-260628',
+    },
+    contextWindowTokens: 256_000,
+    description:
+      "Doubao-Seed-2.1-pro is ByteDance's new generation flagship Agent general model, optimized for coding, agentic planning, and long-chain task execution with native multimodal understanding.",
+    displayName: 'Doubao Seed 2.1 Pro',
+    enabled: true,
+    family: 'doubao',
+    generation: 'doubao-2.1',
+    id: 'doubao-seed-2.1-pro',
+    maxOutput: 128_000,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 1.2, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: { prices: { '1h': 0.017 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-06-23',
+    settings: {
+      extendParams: ['gpt5ReasoningEffort'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      video: true,
+      vision: true,
+      search: true,
+    },
+    config: {
+      deploymentName: 'doubao-seed-2-1-turbo-260628',
+    },
+    contextWindowTokens: 256_000,
+    description:
+      'Doubao-Seed-2.1-turbo balances efficiency and performance for high-concurrency production scenarios with strong reasoning and agentic capabilities.',
+    displayName: 'Doubao Seed 2.1 Turbo',
+    enabled: true,
+    family: 'doubao',
+    generation: 'doubao-2.1',
+    id: 'doubao-seed-2.1-turbo',
+    maxOutput: 128_000,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: { prices: { '1h': 0.017 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-06-23',
+    settings: {
+      extendParams: ['gpt5ReasoningEffort'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+    },
+    config: {
+      deploymentName: 'glm-5-2-260617',
+    },
+    contextWindowTokens: 1_048_576,
+    description:
+      'GLM-5.2 is Zhipu AI’s flagship model for long-horizon tasks on Volcano Ark, with major improvements in coding, long-context understanding, planning, and tool collaboration. It supports a 1M-token context window and flexible reasoning effort control for complex development, mobile full-stack work, code migration, and research reproduction.',
+    displayName: 'GLM-5.2',
+    enabled: true,
+    family: 'glm',
+    generation: 'glm-5.2',
+    id: 'glm-5-2',
+    maxOutput: 131_072,
+    organization: 'Zhipu',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 28, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: { prices: { '1h': 0.017 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-06-17',
+    settings: {
+      extendParams: ['deepseekV4ReasoningEffort'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
       search: true,
     },
     config: {
@@ -103,7 +266,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-24',
     settings: {
-      extendParams: ['enableReasoning'],
+      extendParams: ['deepseekV4ReasoningEffort'],
       searchImpl: 'params',
     },
     type: 'chat',
@@ -137,7 +300,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-24',
     settings: {
-      extendParams: ['enableReasoning'],
+      extendParams: ['deepseekV4ReasoningEffort'],
       searchImpl: 'params',
     },
     type: 'chat',
@@ -157,7 +320,6 @@ const doubaoChatModels: AIChatModelCard[] = [
     description:
       "Doubao-Seed-2.0-pro is ByteDance's flagship Agent general model, with all-around leaps in complex task planning and execution capabilities.",
     displayName: 'Doubao Seed 2.0 Pro',
-    enabled: true,
     family: 'doubao',
     generation: 'doubao-2.0',
     id: 'doubao-seed-2.0-pro',
@@ -222,7 +384,6 @@ const doubaoChatModels: AIChatModelCard[] = [
     description:
       'Doubao-Seed-2.0-lite is a new multimodal deep-reasoning model that delivers better value and a strong choice for common tasks, with a context window up to 256k.',
     displayName: 'Doubao Seed 2.0 Lite',
-    enabled: true,
     family: 'doubao',
     generation: 'doubao-2.0',
     id: 'doubao-seed-2.0-lite',

@@ -1,3 +1,5 @@
+// The parse-side unwrap in src/store/tool/slices/builtin/executors/worktreeDetection.ts
+// mirrors this wrapper shape — keep the accepted forms in sync.
 const SHELL_WRAPPER_PATTERN =
   /^(?:\/usr\/bin\/env\s+)?(?:\/\S+\/)?(?:bash|sh|zsh)\s+(?:-lc|-c|-l\s+-c)\s+(\S[\s\S]*)$/;
 
@@ -278,4 +280,141 @@ export const getCodexGrepCommandDisplay = (
   if (!pattern) return;
 
   return { pattern };
+};
+
+/** Program families we give a dedicated label + brand icon instead of the generic terminal chip. */
+export type CodexCommandProgram = 'agent-browser' | 'git' | 'node' | 'python';
+
+export type AgentBrowserAction =
+  | 'click'
+  | 'eval'
+  | 'fill'
+  | 'focus'
+  | 'get'
+  | 'navigate'
+  | 'press'
+  | 'screenshot'
+  | 'snapshot'
+  | 'type'
+  | 'wait';
+
+export interface AgentBrowserCommandDisplay {
+  action: AgentBrowserAction;
+  value?: string;
+}
+
+const AGENT_BROWSER_GLOBAL_OPTIONS_WITH_VALUE = new Set([
+  '--cdp',
+  '--headers',
+  '--profile',
+  '--session',
+]);
+
+const AGENT_BROWSER_ACTIONS = new Set<AgentBrowserAction>([
+  'click',
+  'eval',
+  'fill',
+  'focus',
+  'get',
+  'navigate',
+  'press',
+  'screenshot',
+  'snapshot',
+  'type',
+  'wait',
+]);
+
+/** Reduce agent-browser CLI plumbing to the user-visible browser action. */
+export const getAgentBrowserCommandDisplay = (
+  command?: string,
+): AgentBrowserCommandDisplay | undefined => {
+  const displayCommand = stripShellWrapper(command);
+  if (!displayCommand) return;
+
+  const tokens = tokenizeShellLike(displayCommand);
+  if (!tokens) return;
+
+  let index = 0;
+  while (index < tokens.length && ENV_ASSIGNMENT_PATTERN.test(tokens[index] || '')) index += 1;
+
+  const executable = tokens[index]?.split('/').at(-1);
+  if (executable !== 'agent-browser') return;
+  index += 1;
+
+  while (index < tokens.length) {
+    const token = tokens[index];
+    if (!token) return;
+    if (AGENT_BROWSER_GLOBAL_OPTIONS_WITH_VALUE.has(token)) {
+      index += 2;
+      continue;
+    }
+    if (token.startsWith('-')) {
+      index += 1;
+      continue;
+    }
+    break;
+  }
+
+  const rawAction = tokens[index];
+  const action = rawAction === 'open' || rawAction === 'goto' ? 'navigate' : rawAction;
+  if (!AGENT_BROWSER_ACTIONS.has(action as AgentBrowserAction)) return;
+
+  const args = tokens.slice(index + 1);
+  const firstArgument = args.find((token) => !token.startsWith('-') && token !== '&&');
+  const value = (() => {
+    switch (action) {
+      case 'snapshot': {
+        return;
+      }
+      case 'eval': {
+        // JavaScript is an implementation detail, not a useful user-facing
+        // summary. Keep the semantic action while hiding the executed source.
+        return;
+      }
+      case 'navigate': {
+        return firstArgument?.replace(/^https?:\/\//i, '');
+      }
+      case 'get': {
+        return args[0] === 'url' || args[0] === 'title' ? args[0] : args[1] || args[0];
+      }
+      default: {
+        return firstArgument;
+      }
+    }
+  })();
+
+  return { action: action as AgentBrowserAction, value };
+};
+
+const PROGRAM_BY_BASENAME: Record<string, CodexCommandProgram> = {
+  'agent-browser': 'agent-browser',
+  'git': 'git',
+  'node': 'node',
+  'python': 'python',
+  'python3': 'python',
+};
+
+const ENV_ASSIGNMENT_PATTERN = /^[A-Z_]\w*=/i;
+
+/**
+ * Classify the leading executable of a codex command (e.g. `node app.js` → `node`).
+ * Unwraps `bash -lc "..."`, skips leading `KEY=value` env assignments, and normalizes an
+ * absolute path to its basename (`/usr/bin/python3` → `python3`). Returns undefined for
+ * anything not in {@link PROGRAM_BY_BASENAME}.
+ */
+export const getCodexCommandProgram = (command?: string): CodexCommandProgram | undefined => {
+  const displayCommand = stripShellWrapper(command);
+  if (!displayCommand) return;
+
+  const tokens = tokenizeShellLike(displayCommand);
+  if (!tokens) return;
+
+  let index = 0;
+  while (index < tokens.length && ENV_ASSIGNMENT_PATTERN.test(tokens[index] || '')) index += 1;
+
+  const head = tokens[index];
+  if (!head) return;
+
+  const basename = head.split('/').at(-1) || head;
+  return PROGRAM_BY_BASENAME[basename];
 };

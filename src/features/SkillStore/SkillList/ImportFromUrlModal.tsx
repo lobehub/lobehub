@@ -2,9 +2,10 @@
 
 import { Alert, Flexbox, Icon, Input } from '@lobehub/ui';
 import { Button, createModal, type ModalInstance, useModalContext } from '@lobehub/ui/base-ui';
-import { App, Typography } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
+import { Typography } from 'antd';
 import { ArrowLeftRight, Link, Sparkles } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
@@ -12,13 +13,17 @@ import { useToolStore } from '@/store/tool';
 
 const ImportFromUrlContent = memo(() => {
   const { t } = useTranslation(['setting', 'common']);
-  const { close } = useModalContext();
-  const { message } = App.useApp();
+  const { close, setCanDismissByClickOutside } = useModalContext();
+
   const importAgentSkillFromUrl = useToolStore((s) => s.importAgentSkillFromUrl);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [url, setUrl] = useState('');
   const { allowed: canCreate } = usePermission('create_content');
+
+  useEffect(() => {
+    setCanDismissByClickOutside(!loading);
+  }, [loading, setCanDismissByClickOutside]);
 
   const handleImport = async () => {
     const trimmed = url.trim();
@@ -29,7 +34,7 @@ const ImportFromUrlContent = memo(() => {
 
     try {
       await importAgentSkillFromUrl({ url: trimmed });
-      message.success(t('agentSkillModal.importSuccess'));
+      toast.success(t('agentSkillModal.importSuccess'));
       close();
     } catch (err: any) {
       setError(err?.message || String(err));

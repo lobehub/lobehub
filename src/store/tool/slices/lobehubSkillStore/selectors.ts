@@ -1,3 +1,7 @@
+import urlJoin from 'url-join';
+
+import { OFFICIAL_SITE } from '@/const/url';
+
 import { type ToolStoreState } from '../../initialState';
 import { type LobehubSkillServer } from './types';
 import { LobehubSkillStatus } from './types';
@@ -96,7 +100,7 @@ export const lobehubSkillStoreSelectors = {
           manifest: {
             api: apis,
             author: 'LobeHub Market',
-            homepage: 'https://lobehub.com/market',
+            homepage: urlJoin(OFFICIAL_SITE, 'market'),
             identifier: server.identifier,
             meta: {
               avatar: server.icon || '🔗',

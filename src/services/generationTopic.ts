@@ -8,8 +8,14 @@ export class ServerService {
     return lambdaClient.generationTopic.getAllGenerationTopics.query(type ? { type } : undefined);
   }
 
-  async createTopic(type?: 'image' | 'video'): Promise<string> {
-    return lambdaClient.generationTopic.createTopic.mutate(type ? { type } : undefined);
+  async createTopic(
+    type?: 'image' | 'video',
+    visibility?: 'private' | 'public',
+    title?: string,
+  ): Promise<string> {
+    return lambdaClient.generationTopic.createTopic.mutate(
+      type || visibility || title ? { title, type, visibility } : undefined,
+    );
   }
 
   async updateTopic(id: string, data: UpdateTopicValue): Promise<GenerationTopicItem | undefined> {
@@ -22,6 +28,10 @@ export class ServerService {
 
   async deleteTopic(id: string): Promise<GenerationTopicItem | undefined> {
     return lambdaClient.generationTopic.deleteTopic.mutate({ id });
+  }
+
+  async setTopicVisibility(id: string, visibility: 'private' | 'public'): Promise<void> {
+    await lambdaClient.generationTopic.setTopicVisibility.mutate({ id, visibility });
   }
 }
 

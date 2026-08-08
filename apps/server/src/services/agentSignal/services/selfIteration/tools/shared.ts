@@ -1,5 +1,6 @@
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import { tracer } from '@lobechat/observability-otel/modules/agent-signal';
+import type { LayersEnum } from '@lobechat/types';
 
 import type { SelfReviewProposalBaseSnapshot } from '../review/proposal';
 import type { EvidenceRef } from '../types';
@@ -37,9 +38,11 @@ export interface MemoryWriteRequest {
 /** Result returned after a memory write adapter applies a candidate. */
 export interface MemoryWriteResult {
   /** Durable memory id. */
-  memoryId: string;
+  memoryId?: string;
   /** Optional short persistence summary. */
   summary?: string;
+  /** Snapshot of the memory target returned by the memory writer. */
+  target?: ToolWriteResult['target'];
 }
 
 /** Persistence adapter for memory writes. */
@@ -102,6 +105,8 @@ export interface SkillCreateInput extends SkillBaseInput {
 
 /** Input for refining an existing managed skill. */
 export interface SkillRefineInput extends SkillBaseInput {
+  /** Complete target snapshot captured before replacement for mutation logging. */
+  baseSnapshot?: SelfReviewProposalBaseSnapshot;
   /** Full replacement Markdown body without YAML frontmatter. */
   bodyMarkdown?: string;
   /** Human-readable proposal patch text, not executable replacement content. */
@@ -177,10 +182,20 @@ export interface SkillConsolidateRequest {
 
 /** Result returned by skill adapters. */
 export interface SkillResult {
+  /** Agent document binding id used by skill-refine rollback receipts. */
+  agentDocumentId?: string;
+  /** Backing document id used by skill-refine rollback receipts. */
+  documentId?: string;
+  /** Expected post-refine document timestamp used to keep Undo from overwriting later edits. */
+  expectedCurrentDocumentUpdatedAt?: string;
+  /** Pre-mutation document history id used by skill-refine rollback receipts. */
+  historyId?: string;
   /** Affected writable managed skill document id. */
   skillDocumentId: string;
   /** Optional short persistence summary. */
   summary?: string;
+  /** Snapshot of the managed skill target touched by the adapter. */
+  target?: ToolWriteResult['target'];
 }
 
 /** Persistence adapters for managed skill operations. */
@@ -305,6 +320,14 @@ export type ToolWriteStatus =
 
 /** Public result returned by safe write tools. */
 export interface ToolWriteResult {
+  /** Agent document binding id used by skill-refine rollback receipts. */
+  agentDocumentId?: string;
+  /** Backing document id used by skill-refine rollback receipts. */
+  documentId?: string;
+  /** Post-mutation current-document marker used to reject stale rollback attempts. */
+  expectedCurrentDocumentUpdatedAt?: string;
+  /** Pre-mutation document history id used by skill-refine rollback receipts. */
+  historyId?: string;
   /** Receipt written for the terminal tool outcome. */
   receiptId?: string;
   /** Resource touched or considered by the tool. */
@@ -313,6 +336,25 @@ export interface ToolWriteResult {
   status: ToolWriteStatus;
   /** Bounded human-readable tool result. */
   summary?: string;
+  /** Snapshot of the resource target touched by the write. */
+  target?: {
+    /** Agent-document binding id for managed skill targets. */
+    agentDocumentId?: string;
+    /** Backing document id for document-backed targets. */
+    documentId?: string;
+    /** Stable resource id for receipt projection. */
+    id?: string;
+    /** User memory base id for memory targets. */
+    memoryId?: string;
+    /** User memory layer used for layer-specific navigation. */
+    memoryLayer?: LayersEnum;
+    /** Short persisted summary. */
+    summary?: string;
+    /** Human-readable target title. */
+    title?: string;
+    /** Target resource domain. */
+    type?: 'memory' | 'skill';
+  };
 }
 
 /** Successful preflight result for an existing-resource write targeting an existing resource. */
@@ -444,10 +486,20 @@ export interface CloseSelfReviewProposalInput extends ToolWriteInput {
 
 /** Result returned by mutation adapters before receipt persistence. */
 export interface ToolMutationResult {
+  /** Agent document binding id used by skill-refine rollback receipts. */
+  agentDocumentId?: string;
+  /** Backing document id used by skill-refine rollback receipts. */
+  documentId?: string;
+  /** Post-mutation current-document marker used to reject stale rollback attempts. */
+  expectedCurrentDocumentUpdatedAt?: string;
+  /** Pre-mutation document history id used by skill-refine rollback receipts. */
+  historyId?: string;
   /** Resource created or updated by the adapter. */
   resourceId?: string;
   /** Short adapter summary. */
   summary?: string;
+  /** Snapshot of the resource target touched by the adapter. */
+  target?: ToolWriteResult['target'];
 }
 
 /** Receipt write request emitted after every terminal write outcome. */
@@ -733,9 +785,13 @@ const runWriteTool = async <TInput extends ToolWriteInput>({
 
         if (!reservation.reserved) {
           return {
+            agentDocumentId: reservation.existing.agentDocumentId,
+            documentId: reservation.existing.documentId,
+            historyId: reservation.existing.historyId,
             resourceId: reservation.existing.resourceId,
             status: 'deduped',
             summary: reservation.existing.summary,
+            target: reservation.existing.target,
           };
         }
 
@@ -775,9 +831,14 @@ const runWriteTool = async <TInput extends ToolWriteInput>({
         const mutationResult = await mutate();
 
         return {
+          agentDocumentId: mutationResult.agentDocumentId,
+          documentId: mutationResult.documentId,
+          expectedCurrentDocumentUpdatedAt: mutationResult.expectedCurrentDocumentUpdatedAt,
+          historyId: mutationResult.historyId,
           resourceId: mutationResult.resourceId ?? resourceId,
           status: successStatus,
           summary: mutationResult.summary ?? input.summary,
+          target: mutationResult.target,
         };
       } catch (error) {
         recordConvertedException(error);

@@ -1,8 +1,6 @@
 {
   "authResult.failed.desc": "Пожалуйста, попробуйте снова или выберите другой способ входа",
   "authResult.failed.title": "Ошибка авторизации",
-  "authResult.success.desc": "Нажмите кнопку «Начать» ниже, чтобы продолжить использование LobeHub Desktop",
-  "authResult.success.title": "Авторизация прошла успешно",
   "back": "Назад",
   "navigation.next": "Продолжить",
   "next": "Далее",
@@ -61,6 +59,7 @@
   "screen5.actions.cancel": "Отмена",
   "screen5.actions.connectToServer": "Подключиться к серверу",
   "screen5.actions.connecting": "Подключение...",
+  "screen5.actions.done": "Готово",
   "screen5.actions.signInCloud": "Войти в LobeHub Cloud",
   "screen5.actions.signOut": "Выйти",
   "screen5.actions.signingIn": "Вход...",
@@ -81,6 +80,10 @@
   "screen5.methods.selfhost.name": "Самостоятельный сервер",
   "screen5.navigation.next": "Начать",
   "screen5.selfhost.endpointPlaceholder": "Введите URL вашего сервера (например, https://your-server.com)",
+  "screen5.status.cloud.title": "Подключено к LobeHub Cloud",
+  "screen5.status.description": "Агенты, группы, настройки и контекст синхронизируются на всех ваших устройствах.",
+  "screen5.status.selfhost.description": "Синхронизация агентов, групп, настроек и контекста с {{url}}.",
+  "screen5.status.selfhost.title": "Подключено к вашему собственному серверу",
   "screen5.title": "Войдите, чтобы синхронизировать между устройствами",
   "screen5.title2": "Держите свои данные синхронизированными везде",
   "screen5.title3": "Ваши данные остаются под вашим контролем"

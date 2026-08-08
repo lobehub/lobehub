@@ -1,3 +1,4 @@
+import { withOtelMetricsForUpstashWorkflows } from '@lobechat/observability-otel/modules/upstash-workflow';
 import { serve } from '@upstash/workflow/nextjs';
 import debug from 'debug';
 import { chunk } from 'es-toolkit/compat';
@@ -20,7 +21,7 @@ const log = debug('lobe-server:workflows:paginate-test-cases');
  * Paginate test cases workflow - handles pagination, filtering, and fanout
  */
 export const { POST } = serve<PaginateTestCasesPayload>(
-  async (context) => {
+  withOtelMetricsForUpstashWorkflows(async (context) => {
     const { runId, cursor, testCaseIds: payloadTestCaseIds, userId } = context.requestPayload ?? {};
 
     log(
@@ -164,7 +165,7 @@ export const { POST } = serve<PaginateTestCasesPayload>(
       skippedTestCases: batchTestCaseIds.length - testCaseIds.length,
       success: true,
     };
-  },
+  }),
   {
     flowControl: { key: 'agent-eval-run.paginate-test-cases', parallelism: 200, rate: 5 },
     qstashClient,

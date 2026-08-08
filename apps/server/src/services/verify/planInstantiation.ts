@@ -4,6 +4,7 @@ import { TaskModel } from '@/database/models/task';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 
+import { AcceptanceService } from './acceptanceService';
 import { VerifyPlanGeneratorService } from './planGenerator';
 
 const log = debug('lobe-server:verify-plan-instantiation');
@@ -36,10 +37,18 @@ export const instantiateVerifyPlanOnStart = async (
     const taskModel = new TaskModel(db, userId, workspaceId);
     const verifyConfig = await taskModel.resolveVerifyConfig(params.taskId);
 
-    // Opt-in: a task only verifies when it configured a rubric or ad-hoc criteria
-    // and hasn't disabled the gate.
+    // Opt-in to verify, then pick the plan shape:
+    //  - rubric / ad-hoc criteria  → decomposed multi-item plan (existing path)
+    //  - else explicitly enabled OR a one-sentence acceptance requirement set
+    //    → coarse single holistic agent check
+    //  - no signal at all          → verify stays off
     if (!verifyConfig || verifyConfig.enabled === false) return;
-    if (!verifyConfig.verifyRubricId && !verifyConfig.verifyCriteriaIds?.length) return;
+    const hasCriteria = Boolean(
+      verifyConfig.verifyRubricId || verifyConfig.verifyCriteriaIds?.length,
+    );
+    const holistic =
+      !hasCriteria && (verifyConfig.enabled === true || Boolean(verifyConfig.requirement?.trim()));
+    if (!hasCriteria && !holistic) return;
 
     const runModel = new VerifyRunModel(db, userId, workspaceId);
     const existing = await runModel.findByOperation(params.operationId);
@@ -54,7 +63,10 @@ export const instantiateVerifyPlanOnStart = async (
       // No AI proposal — the task's configured rubric/criteria are the plan.
       enableAiGeneration: false,
       goal,
+      // Fall back to a single agent-type holistic check when nothing decomposed.
+      holisticFallback: holistic,
       operationId: params.operationId,
+      requirement: verifyConfig.requirement,
       verifyCriteriaIds: verifyConfig.verifyCriteriaIds,
       verifyRubricId: verifyConfig.verifyRubricId,
     });
@@ -71,10 +83,27 @@ export const instantiateVerifyPlanOnStart = async (
         await runModel.setMetadata(run.id, { maxRepairRounds: verifyConfig.maxIterations });
       }
       await runModel.confirmPlan(run.id);
+
+      // A task verification round belongs to its business-level Acceptance from
+      // the moment the plan is confirmed. This lets the task surface show live
+      // planned/verifying/repairing progress instead of waiting for an external
+      // ingest command to create the aggregate after verification has finished.
+      const acceptanceService = new AcceptanceService(db, userId, workspaceId);
+      const acceptance = await acceptanceService.ensureForSubject('task', params.taskId, {
+        requirement: verifyConfig.requirement?.trim() || goal,
+      });
+      // Task verify config is the source that produced this plan. Keep the
+      // aggregate goal in lockstep when a later run changes that source.
+      await acceptanceService.acceptanceModel.update(acceptance.id, {
+        requirement: verifyConfig.requirement?.trim() || goal,
+      });
+      await acceptanceService.attachRun(run.id, acceptance.id);
+
       log(
-        'instantiated + confirmed verify plan for op %s (%d items)',
+        'instantiated + confirmed verify plan for op %s (%d items), acceptance %s',
         params.operationId,
         run.plan.length,
+        acceptance.id,
       );
     }
   } catch (error) {

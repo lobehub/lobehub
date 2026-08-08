@@ -73,6 +73,8 @@ describe('aiAgentRouter.heteroIngest / heteroFinish', () => {
       const events = [
         buildEvent('stream_start', 0),
         buildEvent('stream_chunk', 1),
+        buildEvent('stream_end', 2),
+        buildEvent('visible_output_end', 2),
         buildEvent('agent_runtime_end', 2),
       ];
 
@@ -89,6 +91,24 @@ describe('aiAgentRouter.heteroIngest / heteroFinish', () => {
         agentType: 'claude-code',
         events,
         operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+    });
+
+    it('accepts OpenCode event batches from a device CLI', async () => {
+      const events = [buildEvent('stream_start', 0)];
+
+      await createCaller().heteroIngest({
+        agentType: 'opencode',
+        events,
+        operationId: 'op-opencode',
+        topicId: 'topic-1',
+      });
+
+      expect(mockHeteroIngest).toHaveBeenCalledWith({
+        agentType: 'opencode',
+        events,
+        operationId: 'op-opencode',
         topicId: 'topic-1',
       });
     });
@@ -149,6 +169,23 @@ describe('aiAgentRouter.heteroIngest / heteroFinish', () => {
         sessionId: 'cc-session-abc',
         topicId: 'topic-1',
       });
+    });
+
+    it('accepts an OpenCode session id for subsequent device resume', async () => {
+      await createCaller().heteroFinish({
+        agentType: 'opencode',
+        operationId: 'op-opencode',
+        result: 'success',
+        sessionId: 'open-session-1',
+        topicId: 'topic-1',
+      });
+
+      expect(mockHeteroFinish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentType: 'opencode',
+          sessionId: 'open-session-1',
+        }),
+      );
     });
 
     it('passes through error classification', async () => {

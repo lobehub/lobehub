@@ -7,6 +7,9 @@ export const TaskApiName = {
   /** Create a new task, optionally as a subtask of another task */
   createTask: 'createTask',
 
+  /** Confirm and start a goal-driven task with automatic delivery acceptance */
+  createGoal: 'createGoal',
+
   /** Create multiple tasks in a single call (batched) */
   createTasks: 'createTasks',
 
@@ -30,6 +33,9 @@ export const TaskApiName = {
 
   /** Configure (or clear) the recurring schedule of a task */
   setTaskSchedule: 'setTaskSchedule',
+
+  /** Configure (or clear) the delivery-acceptance (verify) gate of a task */
+  setTaskVerify: 'setTaskVerify',
 
   /** Update a task comment */
   updateTaskComment: 'updateTaskComment',
@@ -55,8 +61,48 @@ export interface CreateTaskParams {
 }
 
 export interface CreateTaskState {
+  /** Short human-facing description, when the task has one. */
+  description?: string | null;
   identifier?: string;
+  /** Display name of the created task. */
+  name?: string | null;
+  /** Parent task identifier when created as a subtask. */
+  parentIdentifier?: string;
+  /** Priority level (0 = none … 4 = low). */
+  priority?: number | null;
+  /** Lifecycle status the task was created in (usually `backlog`). */
+  status?: TaskStatus;
   success: boolean;
+}
+
+// ==================== createGoal ====================
+
+export interface GoalCriterionDraft {
+  description?: string;
+  instruction?: string;
+  onFail?: 'auto_repair' | 'manual';
+  required?: boolean;
+  title: string;
+  verifierConfig?: Record<string, unknown>;
+  verifierType?: 'agent' | 'llm' | 'program';
+}
+
+export interface CreateGoalParams {
+  criteria: GoalCriterionDraft[];
+  instruction: string;
+  maxIterations?: number | null;
+  maxTotalCost?: number | null;
+  name: string;
+}
+
+export interface CreateGoalState {
+  identifier?: string;
+  name?: string;
+  operationId?: string;
+  startedAt?: string;
+  success: boolean;
+  taskId?: string;
+  topicId?: string;
 }
 
 // ==================== createTasks (batch) ====================
@@ -214,6 +260,30 @@ export interface SetTaskScheduleParams {
 
 export interface SetTaskScheduleState {
   automationMode?: TaskAutomationMode | null;
+  identifier: string;
+  success: boolean;
+}
+
+// ==================== setTaskVerify ====================
+
+export interface SetTaskVerifyParams {
+  /** Turn the verify gate on/off. Pass null to clear the flag. */
+  enabled?: boolean | null;
+  identifier: string;
+  /** Cap on verify repair / re-run iterations (1-10). Pass null to clear. */
+  maxIterations?: number | null;
+  /** One-sentence acceptance requirement; the source criteria are synthesized from. Pass null to clear. */
+  requirement?: string | null;
+  /** Agent that executes the verify run. Pass null to fall back to the built-in verify agent. */
+  verifierAgentId?: string | null;
+  /** Ad-hoc acceptance criteria ids (references verify_criteria.id). Pass null to clear. */
+  verifyCriteriaIds?: string[] | null;
+  /** Reuse a rubric template (references verify_rubrics.id). Pass null to clear. */
+  verifyRubricId?: string | null;
+}
+
+export interface SetTaskVerifyState {
+  enabled?: boolean | null;
   identifier: string;
   success: boolean;
 }

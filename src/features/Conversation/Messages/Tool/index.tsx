@@ -1,5 +1,6 @@
 import { type UIChatMessage } from '@lobechat/types';
-import { Alert, Button, Flexbox } from '@lobehub/ui';
+import { Alert, Flexbox } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

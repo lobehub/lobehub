@@ -68,20 +68,6 @@ const modelscopeChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'DeepSeek R1 leverages additional compute and post-training algorithmic optimizations to deepen reasoning. It performs strongly across benchmarks in math, programming, and general logic, approaching leaders like o3 and Gemini 2.5 Pro.',
-    displayName: 'DeepSeek R1 0528',
-    family: 'deepseek',
-    generation: 'deepseek-r1',
-    id: 'deepseek-ai/DeepSeek-R1-0528',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
     },
     contextWindowTokens: 131_072,
     description:

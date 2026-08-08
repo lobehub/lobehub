@@ -35,6 +35,11 @@ class DeviceService {
   getAgentProfile(input: Parameters<DeviceClient['getAgentProfile']['query']>[0]) {
     return lambdaClient.device.getAgentProfile.query(input);
   }
+
+  /** Scan a device for every known heterogeneous agent type in one pass. */
+  scanAgents(input: Parameters<DeviceClient['scanAgents']['query']>[0]) {
+    return lambdaClient.device.scanAgents.query(input);
+  }
 }
 
 export const deviceService = new DeviceService();

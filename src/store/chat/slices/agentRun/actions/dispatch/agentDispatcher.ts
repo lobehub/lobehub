@@ -67,6 +67,14 @@ export interface RuntimeSelectionContext {
   /** Result of `chatStore.isGatewayModeEnabled()`. */
   isGatewayMode: boolean;
   /**
+   * The agent is workspace-scoped (`agent.workspaceId` set). Workspace agents
+   * never execute in-process on the current member's own desktop — a
+   * default/stored `local` target coerces to sandbox/device, so the run
+   * routes through the gateway (see `resolveExecutionTarget`'s
+   * `workspaceScoped`).
+   */
+  isWorkspaceAgent?: boolean;
+  /**
    * Explicit override that wins over automatic selection.
    *
    * Used by sub-agent dispatches (`directMentionRoute`, `callAgent`) so child
@@ -96,22 +104,32 @@ export const selectRuntimeType = (
   { isDesktop = defaultIsDesktop }: SelectRuntimeTypeOptions = {},
 ): AgentRuntimeType => {
   if (ctx.parentRuntime) return ctx.parentRuntime;
-  // Remote device agents (openclaw / hermes) always use the gateway path regardless of
-  // desktop/web — they communicate via a device connected with `lh connect`, not via
-  // local desktop IPC. No special desktop handling needed.
+  // Notify-based platform agents (openclaw / hermes) use the gateway transport for both
+  // targets: `local` presets this desktop's personal device ID on the request, while
+  // `device` dispatches to the configured remote device. They do not implement the
+  // JSONL/session protocol consumed by the in-process `hetero` transport.
   if (ctx.heterogeneousProvider && isRemoteHeterogeneousType(ctx.heterogeneousProvider.type)) {
     return 'gateway';
   }
-  // Local CLI hetero (claude-code / codex) — route by the resolved execution
+  // Local CLI hetero (Amp / Claude Code / Codex) — route by the resolved execution
   // target (shared resolution with the server / the device switcher UI):
   // `device` / `sandbox` need server-side dispatch; `local` runs in-process on
-  // the desktop. On web, unbound `local` resolves to sandbox, while a desktop
-  // `local` selection synced with boundDeviceId resolves to device dispatch.
+  // the desktop. On web, unbound `local` resolves to sandbox when supported
+  // (otherwise the pending `none` state), while a desktop `local` selection
+  // synced with boundDeviceId resolves to device dispatch.
   if (ctx.heterogeneousProvider) {
     const target = resolveExecutionTarget(
-      { boundDeviceId: ctx.boundDeviceId, executionTarget: ctx.executionTarget },
+      {
+        boundDeviceId: ctx.boundDeviceId,
+        executionTarget: ctx.executionTarget,
+        heterogeneousProvider: ctx.heterogeneousProvider,
+      },
       // on the client the desktop build IS where local execution is available
-      { isHetero: true, clientExecutionAvailable: isDesktop },
+      {
+        isHetero: true,
+        clientExecutionAvailable: isDesktop,
+        workspaceScoped: ctx.isWorkspaceAgent,
+      },
     );
     return target === 'local' ? 'hetero' : 'gateway';
   }

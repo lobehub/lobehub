@@ -2,6 +2,7 @@ import { getDocumentTemplate } from '@lobechat/agent-templates';
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { CURRENT_ONBOARDING_VERSION } from '@lobechat/const';
 import type { OnboardingUserInfo } from '@lobechat/context-engine';
+import { OnboardingUnderstandingRepository } from '@lobechat/database';
 import type {
   AgentOnboardingStructuredField,
   ChatTopicMetadata,
@@ -12,6 +13,7 @@ import type {
   SaveUserQuestionInput,
   UserAgentOnboarding,
   UserAgentOnboardingContext,
+  UserOnboarding,
 } from '@lobechat/types';
 import {
   MAX_ONBOARDING_STEPS,
@@ -37,6 +39,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { AgentService } from '@/server/services/agent';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import { UnderstandingSourceStore } from '@/server/services/understanding/sourceStore';
 
 const STRUCTURED_FIELD_LABELS: Record<SaveUserQuestionField, string> = {
   agentEmoji: 'agent emoji',
@@ -48,9 +51,10 @@ const STRUCTURED_FIELD_LABELS: Record<SaveUserQuestionField, string> = {
 
 const AGENT_MANAGEMENT_IDENTIFIER = 'lobe-agent-management';
 const GROUP_AGENT_BUILDER_IDENTIFIER = 'lobe-group-agent-builder';
+const AGENT_ONBOARDING_VERSION = 1;
 
 const defaultAgentOnboardingState = (): UserAgentOnboarding => ({
-  version: CURRENT_ONBOARDING_VERSION,
+  version: AGENT_ONBOARDING_VERSION,
 });
 
 const formatNaturalList = (items: string[]) => {
@@ -123,6 +127,7 @@ export class OnboardingService {
   private inboxDocumentsInitialized = false;
   private readonly messageModel: MessageModel;
   private readonly topicModel: TopicModel;
+  private readonly understandingRepository: OnboardingUnderstandingRepository;
   private readonly userId: string;
   private readonly userModel: UserModel;
 
@@ -136,6 +141,7 @@ export class OnboardingService {
     this.agentService = new AgentService(db, userId);
     this.messageModel = new MessageModel(db, userId);
     this.topicModel = new TopicModel(db, userId);
+    this.understandingRepository = new OnboardingUnderstandingRepository(db, userId);
     this.userModel = new UserModel(db, userId);
   }
 
@@ -212,7 +218,7 @@ export class OnboardingService {
   };
 
   private ensureState = (state?: UserAgentOnboarding): UserAgentOnboarding => {
-    if (!state || (state.version ?? 0) < CURRENT_ONBOARDING_VERSION) {
+    if (!state || (state.version ?? 0) < AGENT_ONBOARDING_VERSION) {
       return defaultAgentOnboardingState();
     }
 
@@ -242,7 +248,7 @@ export class OnboardingService {
 
     return {
       ...nextState,
-      version: nextState.version ?? CURRENT_ONBOARDING_VERSION,
+      version: nextState.version ?? AGENT_ONBOARDING_VERSION,
     };
   };
 
@@ -339,7 +345,7 @@ export class OnboardingService {
       phase,
       startedAt: existing?.startedAt ?? now,
       userIdentityCompletedAt: existing?.userIdentityCompletedAt,
-      version: CURRENT_ONBOARDING_VERSION,
+      version: AGENT_ONBOARDING_VERSION,
     };
 
     if (existing?.agentMarketplacePick) {
@@ -519,8 +525,7 @@ export class OnboardingService {
       };
     } else {
       let discoveryContext:
-        | { currentUserMessageCount: number; startUserMessageCount: number }
-        | undefined;
+        { currentUserMessageCount: number; startUserMessageCount: number } | undefined;
 
       if (topicId) {
         const pastPreDiscovery =
@@ -653,8 +658,7 @@ export class OnboardingService {
 
     let currentUserMessageCount: number | undefined;
     let discoveryContext:
-      | { currentUserMessageCount: number; startUserMessageCount: number }
-      | undefined;
+      { currentUserMessageCount: number; startUserMessageCount: number } | undefined;
 
     // Build discovery context if we have a topic and are past agent_identity + user_identity
     if (topicId) {
@@ -884,7 +888,7 @@ export class OnboardingService {
       agentOnboarding: {
         ...state,
         finishedAt,
-        version: CURRENT_ONBOARDING_VERSION,
+        version: AGENT_ONBOARDING_VERSION,
       },
       onboarding: {
         currentStep: MAX_ONBOARDING_STEPS,
@@ -914,7 +918,50 @@ export class OnboardingService {
     };
   };
 
+  private cleanupUnderstandingReset = async (sessionId: string): Promise<void> => {
+    try {
+      await new UnderstandingSourceStore().deleteSession({ sessionId, userId: this.userId });
+    } catch (error) {
+      console.error('[OnboardingService] Failed to delete Understanding session data:', error);
+    }
+  };
+
+  private resetUnderstandingData = async (state?: UserAgentOnboarding): Promise<void> => {
+    const activeTopicId = this.ensureState(state).activeTopicId;
+    if (!activeTopicId) return;
+
+    const understandingCleanup = await this.understandingRepository.removeForReset(activeTopicId);
+    if (understandingCleanup) await this.cleanupUnderstandingReset(understandingCleanup.id);
+  };
+
+  /**
+   * Updates the classic onboarding cursor and invalidates generated data on a fresh run.
+   *
+   * Use when:
+   * - Persisting normal onboarding step navigation
+   * - Restarting at the welcome step or moving to a new onboarding version
+   *
+   * Expects:
+   * - The complete classic onboarding state accepted by the user router
+   *
+   * Returns:
+   * - The underlying user update result
+   */
+  updateOnboarding = async (input: UserOnboarding) => {
+    const previousState = await this.getUserState();
+    const isRestart = input.currentStep === 1;
+    const isVersionChange = previousState.onboarding?.version !== input.version;
+
+    if (isRestart || isVersionChange) {
+      await this.resetUnderstandingData(previousState.agentOnboarding);
+    }
+
+    return this.userModel.updateUser({ onboarding: input });
+  };
+
   reset = async () => {
+    const previousState = await this.getUserState();
+    await this.resetUnderstandingData(previousState.agentOnboarding);
     const state = defaultAgentOnboardingState();
 
     // Preserve users.full_name and users.username on reset.

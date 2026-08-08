@@ -1,7 +1,7 @@
 import type { TaskDetailSubtask } from '@lobechat/types';
-import { ActionIcon, Block, Flexbox, Icon, showContextMenu, Text } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App, ConfigProvider, Tree } from 'antd';
+import { ActionIcon, Block, Flexbox, Icon, Text } from '@lobehub/ui';
+import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { ConfigProvider, Tree } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import { cssVar } from 'antd-style';
 import { ChevronDown, ListTodoIcon, PlayCircle, Plus } from 'lucide-react';
@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
+import { showContextMenu } from '@/libs/contextMenu';
 import { taskService } from '@/services/task';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
@@ -27,6 +28,7 @@ import AccordionArrowIcon from '../shared/AccordionArrowIcon';
 import { styles } from '../shared/style';
 import { taskDetailPath } from '../shared/taskDetailPath';
 import RunSubtasksPreview from './RunSubtasksPreview';
+import TopicStatusIcon from './TopicStatusIcon';
 
 type TaskStatus = 'backlog' | 'canceled' | 'completed' | 'failed' | 'paused' | 'running';
 
@@ -56,6 +58,7 @@ const buildTree = (subtasks: TaskDetailSubtask[]): TaskTreeNode[] =>
 const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
   const status = toTaskStatus(task.status);
   const isRunning = status === 'running';
+  const hasRunningTopic = Boolean(task.runningTopic);
   const hasName = !!task.name;
 
   return (
@@ -76,7 +79,9 @@ const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
         style={{ alignItems: 'center', display: 'inline-flex', flex: 'none' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <TaskStatusTag size={14} status={status} taskIdentifier={task.identifier} />
+        <TaskStatusTag size={14} status={status} taskIdentifier={task.identifier}>
+          {hasRunningTopic ? <TopicStatusIcon size={14} status="running" /> : undefined}
+        </TaskStatusTag>
       </span>
       {hasName && (
         <Text fontSize={13} style={{ flex: 'none' }} type={'secondary'}>
@@ -129,7 +134,7 @@ const toTreeData = (tree: TaskTreeNode[]): DataNode[] => {
 
 const TaskSubtasks = memo(() => {
   const { t } = useTranslation('chat');
-  const { message } = App.useApp();
+
   const navigate = useWorkspaceAwareNavigate();
   const { allowed: canEditTask, reason } = usePermission('create_content');
   const agentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
@@ -213,7 +218,7 @@ const TaskSubtasks = memo(() => {
         plan.blockedByCycle.length > 0 ||
         plan.cycles.length > 0;
       if (plan.totalRunnable === 0 && !hasInformativeState) {
-        message.info(t('taskDetail.runAll.empty'));
+        toast.info(t('taskDetail.runAll.empty'));
         return;
       }
 
@@ -229,7 +234,7 @@ const TaskSubtasks = memo(() => {
           const kicked = res.data.kickedOff.length;
           const failed = res.data.failed?.length ?? 0;
           if (failed > 0) {
-            message.warning(
+            toast.warning(
               t('taskDetail.runAll.partialFailure', {
                 failed,
                 ok: kicked,
@@ -237,18 +242,18 @@ const TaskSubtasks = memo(() => {
               }),
             );
           } else {
-            message.success(t('taskDetail.runAll.kickedOff', { count: kicked }));
+            toast.success(t('taskDetail.runAll.kickedOff', { count: kicked }));
           }
         },
         title: t('taskDetail.runAll.title'),
       });
     } catch (error) {
       console.error('[TaskSubtasks] Failed to plan subtasks:', error);
-      message.error(t('taskDetail.updateFailed'));
+      toast.error(t('taskDetail.updateFailed'));
     } finally {
       setIsPlanning(false);
     }
-  }, [canEditTask, taskId, isPlanning, message, t, runReadySubtasks]);
+  }, [canEditTask, taskId, isPlanning, t, runReadySubtasks]);
 
   if (!taskId) return null;
 

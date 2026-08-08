@@ -1,14 +1,7 @@
 'use client';
 
-import {
-  Accordion,
-  AccordionItem,
-  Block,
-  Button,
-  Flexbox,
-  FluentEmoji,
-  Highlighter,
-} from '@lobehub/ui';
+import { Accordion, AccordionItem, Block, Flexbox, FluentEmoji, Highlighter } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import type { Key } from 'react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

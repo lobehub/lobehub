@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type {
   Agent,
   AgentRuntimeContext,
@@ -6,6 +8,7 @@ import type {
 } from '@lobechat/agent-runtime';
 import {
   AgentRuntime,
+  extractActivatedToolIdsFromMessages,
   findInMessages,
   GeneralChatAgent,
   isParkedStatus,
@@ -29,6 +32,7 @@ import {
 import {
   type ChatToolPayload,
   type ExecSubAgentParams,
+  type ExecSubAgentResult,
   type ExecVirtualSubAgentParams,
   type UIChatMessage,
 } from '@lobechat/types';
@@ -42,6 +46,7 @@ import { appEnv } from '@/envs/app';
 import { type AgentRuntimeCoordinatorOptions } from '@/server/modules/AgentRuntime';
 import { AgentRuntimeCoordinator, createStreamEventManager } from '@/server/modules/AgentRuntime';
 import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorForState';
+import { hasNonPersistedMessage } from '@/server/modules/AgentRuntime/messagePersistence';
 import {
   createRuntimeExecutors,
   type RuntimeExecutorContext,
@@ -58,7 +63,13 @@ import { ToolExecutionService } from '@/server/services/toolExecution';
 import { BuiltinToolsExecutor } from '@/server/services/toolExecution/builtin';
 
 import { isAbortError, throwIfAborted } from './abort';
-import { CompletionLifecycle } from './CompletionLifecycle';
+import {
+  CompletionLifecycle,
+  extractTextFromMessage,
+  findLastAssistantMessage,
+  isSuccessLikeCompletionReason,
+  normalizeCompletionMessages,
+} from './CompletionLifecycle';
 import { hookDispatcher } from './hooks';
 import { HumanInterventionHandler } from './HumanInterventionHandler';
 import { OperationTraceRecorder } from './OperationTraceRecorder';
@@ -81,10 +92,12 @@ import {
   type StepCompletionReason,
   type SubAgentBridgeParams,
 } from './types';
+import { stateHasEntityFileEdits } from './workRegistration';
 
 if (process.env.VERCEL) {
-  // eslint-disable-next-line no-console
-  debug.log = console.log.bind(console);
+  // Route debug output to stdout (`console.info`) instead of stderr, which
+  // Vercel would otherwise surface as error-level logs.
+  debug.log = console.info.bind(console);
 }
 
 const log = debug('lobe-server:agent-runtime-service');
@@ -111,6 +124,9 @@ const ASYNC_TOOL_VERIFY_MAX_ATTEMPTS = 5;
 /** Hard ceiling on a single backoff delay so late attempts don't overshoot. */
 const ASYNC_TOOL_VERIFY_MAX_DELAY_MS = 240_000;
 
+const STEP_LOCK_TTL_SECONDS = 120;
+const STEP_LOCK_HEARTBEAT_MS = 30_000;
+
 /**
  * Exponential backoff delay for the Nth (1-based) watchdog re-check:
  * 15s, 30s, 60s, 120s, 240s, capped at {@link ASYNC_TOOL_VERIFY_MAX_DELAY_MS}.
@@ -121,6 +137,9 @@ const asyncToolVerifyDelayMs = (attempt: number): number =>
     ASYNC_TOOL_VERIFY_MAX_DELAY_MS,
   );
 
+const createStepLockOwner = (operationId: string, stepIndex: number): string =>
+  `${operationId}:${stepIndex}:${process.pid}:${Date.now()}:${randomUUID()}`;
+
 /**
  * Format error for storage in message pluginError metadata.
  * Handles Error objects which don't serialize properly with JSON.stringify.
@@ -130,6 +149,25 @@ const formatErrorForMetadata = (error: unknown): Record<string, any> | undefined
   if (error instanceof Error) return { message: error.message, name: error.name };
   if (typeof error === 'object' && 'message' in error) return error as Record<string, any>;
   return { message: String(error) };
+};
+
+/**
+ * Extract a short, human-readable reason string from a failed operation's
+ * `state.error`, for inlining into the tool-result `content` a parent agent
+ * sees. Without this the supervising agent only gets the opaque generic note
+ * ("Sub-agent did not complete (error).") and cannot tell *why* a `callAgent`
+ * dispatch failed — so it can't retry, switch target, or report the cause; it
+ * silently falls back to answering itself (issue #16257). The full structured
+ * error still rides on `pluginError`; this is just the readable summary.
+ */
+const formatSubAgentErrorReason = (error: unknown): string | undefined => {
+  const message = formatErrorForMetadata(error)?.message;
+  if (typeof message !== 'string') return undefined;
+  const trimmed = message.trim();
+  if (!trimmed) return undefined;
+  // Keep the tool result compact — a runaway provider error body would otherwise
+  // bloat the parent's LLM context.
+  return trimmed.length > 300 ? `${trimmed.slice(0, 300)}…` : trimmed;
 };
 
 const toAgentSignalSnapshotEvents = (
@@ -173,13 +211,13 @@ export interface AgentRuntimeDelegate {
    * (AiAgentService.execSubAgent → execAgent: agent-config resolution, tool
    * engine, context engineering, createOperation).
    */
-  execSubAgent?: (params: ExecSubAgentParams) => Promise<unknown>;
+  execSubAgent?: (params: ExecSubAgentParams) => Promise<ExecSubAgentResult>;
   /**
    * Fork a `lobe-agent.callSubAgent` virtual child run. The child is marked as a
    * sub-agent and owns the completion bridge that backfills the parent tool
    * placeholder before resuming the parked parent operation.
    */
-  execVirtualSubAgent?: (params: ExecVirtualSubAgentParams) => Promise<unknown>;
+  execVirtualSubAgent?: (params: ExecVirtualSubAgentParams) => Promise<ExecSubAgentResult>;
 }
 
 export interface AgentRuntimeServiceOptions {
@@ -318,6 +356,34 @@ export class AgentRuntimeService {
     this.setupLocalExecutionCallback();
   }
 
+  private startStepLockHeartbeat(
+    operationId: string,
+    stepIndex: number,
+    ownerId: string,
+  ): () => void {
+    const timer = setInterval(() => {
+      this.coordinator
+        .refreshStepLock(operationId, stepIndex, STEP_LOCK_TTL_SECONDS, ownerId)
+        .then((refreshed) => {
+          if (!refreshed) {
+            log(
+              '[%s][%d] Step lock heartbeat did not refresh; ownership may have changed',
+              operationId,
+              stepIndex,
+            );
+          }
+        })
+        .catch((error) => {
+          log('[%s][%d] Step lock heartbeat failed: %O', operationId, stepIndex, error);
+        });
+    }, STEP_LOCK_HEARTBEAT_MS);
+
+    const timerWithUnref = timer as { unref?: () => void };
+    timerWithUnref.unref?.();
+
+    return () => clearInterval(timer);
+  }
+
   /**
    * Setup execution callback for LocalQueueServiceImpl
    * This breaks the circular dependency by using callback injection
@@ -373,9 +439,11 @@ export class AgentRuntimeService {
   async createOperation(params: OperationCreationParams): Promise<OperationCreationResult> {
     const {
       activeDeviceId,
+      activeDeviceScope,
       operationId,
       initialContext,
       agentConfig,
+      agentGroup,
       modelRuntimeConfig,
       userId,
       autoStart = true,
@@ -387,6 +455,7 @@ export class AgentRuntimeService {
       userInterventionConfig,
       queueRetries,
       queueRetryDelay,
+      searchDecision,
       botContext,
       botPlatformContext,
       deviceAccessPolicy,
@@ -457,7 +526,21 @@ export class AgentRuntimeService {
       );
 
       // Initialize operation state - create state before saving
+      const activatableToolIds = new Set(operationToolSet.activatableToolIds ?? []);
+      const restoredActivatedToolIds = extractActivatedToolIdsFromMessages(initialMessages)?.filter(
+        (id) => activatableToolIds.has(id),
+      );
+      const activatedStepTools = restoredActivatedToolIds?.length
+        ? restoredActivatedToolIds.map((id) => ({
+            activatedAtStep: initialStepCount,
+            id,
+            manifest: operationToolSet.manifestMap[id],
+            source: 'discovery' as const,
+          }))
+        : undefined;
+
       const initialState = {
+        activatedStepTools,
         createdAt: new Date().toISOString(),
         // Store initialContext for executeSync to use
         initialContext,
@@ -466,7 +549,9 @@ export class AgentRuntimeService {
         messages: initialMessages,
         metadata: {
           activeDeviceId,
+          activeDeviceScope,
           agentConfig,
+          agentGroup,
           botContext,
           botPlatformContext,
           deviceAccessPolicy,
@@ -478,6 +563,7 @@ export class AgentRuntimeService {
           modelRuntimeConfig,
           queueRetries,
           queueRetryDelay,
+          ...(searchDecision && { searchDecision }),
           stream,
           operationSkillSet,
           userId,
@@ -503,9 +589,16 @@ export class AgentRuntimeService {
         userInterventionConfig,
       } as Partial<AgentState>;
 
-      // Use coordinator to create operation, automatically sends initialization event
+      // Use coordinator to create operation, automatically sends initialization event.
+      // For an in-group broadcast/speak member, mirror its Gateway stream events
+      // onto the supervisor op's channel (parentOperationId) so they flow down the
+      // supervisor's existing WebSocket — the client subscribes to one connection,
+      // not one per member (single-connection multiplexing).
+      const mirrorToOperationId =
+        appContext?.orchestrationRole === 'member' ? (parentOperationId ?? undefined) : undefined;
       await this.coordinator.createAgentOperation(operationId, {
         agentConfig,
+        mirrorToOperationId,
         modelRuntimeConfig,
         userId,
         workspaceId: this.workspaceId,
@@ -597,13 +690,34 @@ export class AgentRuntimeService {
    * bootstrap before the topic row has been committed) so callers can skip
    * the `uiMessages` field entirely instead of pushing an empty array.
    */
-  async queryUiMessages(agentState: AgentState): Promise<UIChatMessage[] | undefined> {
+  async queryUiMessages(
+    agentState: AgentState,
+    options?: {
+      /**
+       * Skip the Work-summary assembly for mid-stream (step_start) snapshots —
+       * each step would otherwise re-run the per-type Work queries. Terminal
+       * (agent_runtime_end) snapshots keep works so the settled message list
+       * carries the round's Work chips. The client preserves previously
+       * rendered works when applying a skipped snapshot (`preserveWorks`).
+       */
+      skipWorks?: boolean;
+    },
+  ): Promise<UIChatMessage[] | undefined> {
     const agentId: string | undefined = agentState?.metadata?.agentId;
     const topicId: string | undefined = agentState?.metadata?.topicId;
+    // groupId scopes group conversations. Without it the query falls into the
+    // standard branch (`groupId IS NULL`) and returns ZERO group messages, so
+    // the step_start uiMessages snapshot would be empty and clobber the client.
+    const groupId: string | undefined = agentState?.metadata?.groupId;
     if (!agentId || !topicId) return undefined;
 
     try {
-      return await this.messageService.queryMessages({ agentId, topicId });
+      return await this.messageService.queryMessages({
+        agentId,
+        groupId,
+        skipWorks: options?.skipWorks,
+        topicId,
+      });
     } catch (error) {
       // Stream events must never fail the step. If the DB hiccups, fall back
       // to letting the client refresh as before.
@@ -667,8 +781,42 @@ export class AgentRuntimeService {
     }
 
     // ===== Distributed lock: prevent duplicate execution from QStash retries =====
-    const claimed = await this.coordinator.tryClaimStep(operationId, stepIndex, 35);
+    const stepLockOwner = createStepLockOwner(operationId, stepIndex);
+    const claimed = await this.coordinator.tryClaimStep(
+      operationId,
+      stepIndex,
+      STEP_LOCK_TTL_SECONDS,
+      stepLockOwner,
+    );
     if (!claimed) {
+      let currentState: AgentState | null | undefined = null;
+      try {
+        currentState = await this.coordinator.loadAgentState(operationId);
+      } catch (error) {
+        log(
+          '[%s][%d] Failed to load state while handling step lock conflict: %O',
+          operationId,
+          stepIndex,
+          error,
+        );
+      }
+
+      const currentStepCount = currentState?.stepCount;
+      if (currentState && typeof currentStepCount === 'number' && currentStepCount > stepIndex) {
+        log(
+          '[%s][%d] Step lock conflict is stale (stepCount=%d), skipping',
+          operationId,
+          stepIndex,
+          currentStepCount,
+        );
+        return {
+          nextStepScheduled: false,
+          state: currentState,
+          stepResult: null,
+          success: true,
+        };
+      }
+
       log(
         '[%s][%d] Step lock conflict — another instance is executing this step, returning locked',
         operationId,
@@ -681,6 +829,12 @@ export class AgentRuntimeService {
         success: false,
       };
     }
+
+    const stopStepLockHeartbeat = this.startStepLockHeartbeat(
+      operationId,
+      stepIndex,
+      stepLockOwner,
+    );
 
     // Hoisted so the error-path snapshot finalize can record an
     // approximate startedAt for the failing step. The inner `startAt` at the
@@ -713,7 +867,7 @@ export class AgentRuntimeService {
           throw new Error(`Agent state not found for operation ${operationId}`);
         }
 
-        const stepStartUiMessages = await this.queryUiMessages(agentState);
+        const stepStartUiMessages = await this.queryUiMessages(agentState, { skipWorks: true });
         await this.streamManager.publishStreamEvent(operationId, {
           data: {
             ...(stepStartUiMessages !== undefined && { uiMessages: stepStartUiMessages }),
@@ -727,10 +881,18 @@ export class AgentRuntimeService {
           externalRetryCount,
         };
 
+        // Rehydrate `messages` from the DB at every step entry. Each step is a
+        // separate invocation that loads state fresh from Redis, so this makes
+        // the DB the single source of truth for the conversation on every path
+        // — not just the async-tool / human-intervention resumes that already
+        // refresh below. With this in place the Redis-persisted state no longer
+        // needs to carry the (potentially multi-MB) `messages` array, which is
+        // what trips Upstash's 10MB single-request limit and drops the op.
+        await this.rehydrateStateMessagesFromDB(agentState);
+
         // Enrich invoke_agent span with agent identity now that state is loaded.
         const stateAgentConfig = agentState.metadata?.agentConfig as
-          | { description?: string | null; title?: string | null }
-          | undefined;
+          { description?: string | null; title?: string | null } | undefined;
         const stateModel =
           agentState.modelRuntimeConfig?.model ?? agentState.metadata?.modelRuntimeConfig?.model;
         const stateProvider =
@@ -854,6 +1016,7 @@ export class AgentRuntimeService {
         // Use agentState.metadata which contains the full app context (topicId, agentId, etc.)
         // operationMetadata only contains basic fields (agentConfig, modelRuntimeConfig, userId)
         const { runtime } = await this.createAgentRuntime({
+          agentState,
           metadata: agentState?.metadata,
           operationId,
           stepIndex,
@@ -972,6 +1135,35 @@ export class AgentRuntimeService {
           log('[%s][%d] Operation was interrupted during step execution', operationId, stepIndex);
         }
 
+        // Decide whether to schedule next step (hoisted above the save: it also
+        // gates the pre-snapshot file-Work registration below)
+        const shouldContinue = this.shouldContinueExecution(
+          stepResult.newState,
+          stepResult.nextContext,
+        );
+
+        // Register entity-file Works BEFORE the terminal save: `saveStepResult`
+        // publishes `agent_runtime_end`, whose `uiMessages` snapshot the client
+        // adopts as the settled message list — the Work rows must exist by then
+        // or the file-Work card stays absent until a manual refresh. Perceived
+        // loading is not extended: for runs with entity edits the early
+        // `visible_output_end` is suppressed (see `createAgentRuntime`), so
+        // loading covers this export window by design. Idempotent — the
+        // dispatchHooks backstop below no-ops via the state marker.
+        if (!shouldContinue) {
+          const preSaveReason = this.determineCompletionReason(stepResult.newState);
+          // Success-like reasons ONLY — a `waiting_for_human` park must NOT
+          // register: the approval resume continues the SAME operationId
+          // (`processHumanIntervention` reschedules it), so pre-park edits are
+          // covered by the real terminal completion's scan. Registering at the
+          // park would persist the `_fileWorksRegistered` marker into the park
+          // snapshot (skipping the terminal registration entirely) and freeze
+          // per-(op, file) versions at pre-approval content.
+          if (isSuccessLikeCompletionReason(preSaveReason)) {
+            await this.completionLifecycle.registerFileWorks(operationId, stepResult.newState);
+          }
+        }
+
         // Save state, coordinator will handle event sending automatically
         await this.coordinator.saveStepResult(operationId, {
           ...stepResult,
@@ -979,11 +1171,6 @@ export class AgentRuntimeService {
           stepIndex, // placeholder
         });
 
-        // Decide whether to schedule next step
-        const shouldContinue = this.shouldContinueExecution(
-          stepResult.newState,
-          stepResult.nextContext,
-        );
         let nextStepScheduled = false;
 
         // Publish step complete event
@@ -996,6 +1183,8 @@ export class AgentRuntimeService {
           stepIndex,
           type: 'step_complete',
         });
+
+        await this.publishSubAgentProgress(stepResult.newState, stepIndex);
 
         // Build enhanced step completion log & presentation data
         const { presentation: stepPresentationData, summary: stepSummary } = buildStepPresentation(
@@ -1214,6 +1403,7 @@ export class AgentRuntimeService {
             error: newStateError
               ? {
                   attribution: newStateError.attribution,
+                  body: newStateError.body,
                   category: newStateError.category,
                   countAsFailure: newStateError.countAsFailure,
                   httpStatus: newStateError.httpStatus,
@@ -1324,6 +1514,7 @@ export class AgentRuntimeService {
         completionReason: 'error',
         error: {
           attribution: formattedError.attribution,
+          body: formattedError.body,
           category: formattedError.category,
           countAsFailure: formattedError.countAsFailure,
           httpStatus: formattedError.httpStatus,
@@ -1333,17 +1524,19 @@ export class AgentRuntimeService {
           severity: formattedError.severity,
           type: String(formattedError.type),
         },
-        failedStep: { startedAt: stepStartAt, stepIndex },
+        failedStep: {
+          startedAt: stepStartAt,
+          stepIndex,
+          stepType: formattedError.category === 'provider' ? 'call_llm' : 'call_tool',
+        },
         state: finalStateWithError,
       });
 
       throw error;
     } finally {
       invokeAgentSpan.end();
-      // Release lock so legitimate retries or next operations can proceed.
-      // If Vercel force-kills the process, this won't execute — the lock
-      // auto-expires after TTL (35s), allowing QStash retries to self-heal.
-      await this.coordinator.releaseStepLock(operationId, stepIndex);
+      stopStepLockHeartbeat();
+      await this.coordinator.releaseStepLock(operationId, stepIndex, stepLockOwner);
     }
   }
 
@@ -1733,11 +1926,16 @@ export class AgentRuntimeService {
 
     const state = await this.coordinator.loadAgentState(parentOperationId);
     if (!state) {
-      // State expired (Redis TTL) or never persisted — nothing left to resume.
-      // Surface it: a missing state at completion time is how a parent silently
-      // strands. There is no stepCount/status to arm a verify against.
-      log('[%s] async-tool resume: parent state missing/expired, cannot resume', parentOperationId);
+      // State expired (Redis TTL) or never persisted. A missing state at
+      // completion time is a classic way a parent silently strands — but it is
+      // often transient: a read replica that hasn't seen the park yet, or the
+      // child outrunning the parent's park before its snapshot lands. Arm the
+      // bounded verify so a later re-check can resume once the state is visible,
+      // instead of giving up on the first miss. A genuinely-gone parent just
+      // exhausts the attempt cap (verify_exhausted) rather than stranding here.
+      log('[%s] async-tool resume: parent state missing/expired, arming verify', parentOperationId);
       asyncToolResumeCounter.add(1, { outcome: 'no_state' });
+      await this.maybeScheduleAsyncToolVerify(parentOperationId, null, options);
       return false;
     }
 
@@ -1836,12 +2034,16 @@ export class AgentRuntimeService {
    */
   private async maybeScheduleAsyncToolVerify(
     parentOperationId: string,
-    state: AgentState,
+    state: AgentState | null,
     options?: { scheduleVerifyOnHold?: boolean; verifyAttempt?: number },
   ): Promise<void> {
     if (!options?.scheduleVerifyOnHold || !this.queueService) return;
 
-    const status = state.status as string;
+    // `state` is null when the parked snapshot is missing/expired at completion
+    // time (no_state). We can't read a status to skip a terminal op, but the
+    // bounded attempt cap below keeps a genuinely-gone parent from re-arming
+    // forever, so it's safe to retry instead of stranding on a transient miss.
+    const status = state?.status as string | undefined;
     if (status === 'done' || status === 'error' || status === 'interrupted') return;
 
     const attempt = options.verifyAttempt ?? 1;
@@ -1853,7 +2055,7 @@ export class AgentRuntimeService {
         '[%s] async-tool barrier verify exhausted after %d attempts, giving up (status: %s)',
         parentOperationId,
         ASYNC_TOOL_VERIFY_MAX_ATTEMPTS,
-        status,
+        status ?? 'missing',
       );
       asyncToolResumeCounter.add(1, { outcome: 'verify_exhausted' });
       return;
@@ -1866,7 +2068,7 @@ export class AgentRuntimeService {
       attempt,
       ASYNC_TOOL_VERIFY_MAX_ATTEMPTS,
       delay,
-      status,
+      status ?? 'missing',
     );
 
     try {
@@ -1877,7 +2079,7 @@ export class AgentRuntimeService {
         operationId: parentOperationId,
         payload: { asyncToolVerifyAttempt: attempt, verifyAsyncToolBarrier: true },
         priority: 'high',
-        stepIndex: state.stepCount,
+        stepIndex: state?.stepCount ?? 0,
       });
     } catch (error) {
       log(
@@ -1885,6 +2087,50 @@ export class AgentRuntimeService {
         parentOperationId,
         error,
       );
+    }
+  }
+
+  /**
+   * Stream a `callSubAgent` child's running totals to the client, once per step.
+   *
+   * Addressed to the PARENT's operationId, not the child's: the client opens one
+   * WebSocket per operation and never subscribes to the child's channel. The
+   * parent's channel is still live because parking at `waiting_for_async_tool`
+   * deliberately does not publish a stream-end event (see
+   * `AgentRuntimeCoordinator.STREAM_END_STATUSES`).
+   *
+   * Rides `step_complete` rather than a new event type because `AgentStreamEventType`
+   * is a closed union shared with the out-of-repo gateway worker; `phase` is the
+   * established discriminator and unknown phases are ignored by older clients.
+   *
+   * The three stat fields are read from exactly the same state paths that
+   * `completeSubAgentBridge` uses for its final backfill, so the live numbers
+   * converge on the persisted ones instead of jumping when the run ends.
+   *
+   * Best-effort: a publish failure must not fail the sub-agent's step.
+   */
+  private async publishSubAgentProgress(state: AgentState, stepIndex: number): Promise<void> {
+    const anchor = state?.metadata?.subAgentProgress as
+      { parentOperationId: string; toolMessageId: string } | undefined;
+    if (!anchor?.parentOperationId || !anchor.toolMessageId) return;
+
+    try {
+      await this.streamManager.publishStreamEvent(anchor.parentOperationId, {
+        data: {
+          model: state?.modelRuntimeConfig?.model,
+          phase: 'subagent_progress',
+          toolMessageId: anchor.toolMessageId,
+          totalCost: state?.cost?.total,
+          totalInputTokens: state?.usage?.llm?.tokens?.input,
+          totalOutputTokens: state?.usage?.llm?.tokens?.output,
+          totalTokens: state?.usage?.llm?.tokens?.total,
+          totalToolCalls: state?.usage?.tools?.totalCalls,
+        },
+        stepIndex,
+        type: 'step_complete',
+      });
+    } catch (error) {
+      log('[%s] failed to publish sub-agent progress (non-fatal): %O', state?.operationId, error);
     }
   }
 
@@ -1930,14 +2176,34 @@ export class AgentRuntimeService {
     // `updateToolMessage` swallows transaction errors into `success: false`,
     // so the flag must be checked — an unfulfilled message would hold the
     // parent's barrier forever while the callback acked with 200.
+    //
+    // A state loaded via the fallback above arrives without `messages` (the
+    // persisted Redis blob no longer carries them — see
+    // AgentStateManager.serializeStateForPersist). Resolve the final leaf from
+    // the parsed DB conversation, then recover the original row by id so its
+    // serialized content stays paired with metadata.isMultimodal. An in-process
+    // params.finalState already carries messages and skips this query.
+    let lastAssistant: unknown;
+    if (!failed && finalState && !Array.isArray(finalState.messages)) {
+      try {
+        lastAssistant = await this.resolveLastAssistantMessageFromDB(finalState);
+      } catch (error) {
+        console.error(
+          '[%s] sub-agent bridge: failed to resolve final assistant from DB: %O',
+          operationId,
+          error,
+        );
+      }
+    }
     const messages = Array.isArray(finalState?.messages) ? finalState.messages : [];
-    const lastAssistant = [...messages]
-      .reverse()
-      .find((m: { role?: string }) => m?.role === 'assistant');
+    lastAssistant ??= findLastAssistantMessage(normalizeCompletionMessages(messages));
+    const lastAssistantContent = extractTextFromMessage(lastAssistant);
+    const errorReason = failed ? formatSubAgentErrorReason(finalState?.error) : undefined;
     const content = failed
-      ? `Sub-agent did not complete (${reason}).`
-      : (lastAssistant?.content as string | undefined) ||
-        'Sub-agent completed without a textual answer.';
+      ? errorReason
+        ? `Sub-agent did not complete (${reason}): ${errorReason}`
+        : `Sub-agent did not complete (${reason}).`
+      : lastAssistantContent || 'Sub-agent completed without a textual answer.';
 
     const backfill = await this.messageModel.updateToolMessage(toolMessageId, {
       content,
@@ -1946,6 +2212,14 @@ export class AgentRuntimeService {
         model: finalState?.modelRuntimeConfig?.model,
         status: failed ? 'error' : 'completed',
         threadId,
+        // The child's spend rides on this anchor row so the parent's usage tray can
+        // account for it. The tray sums per-MESSAGE usage, and the child's own
+        // assistant messages live in an isolation thread the parent never loads —
+        // this row is the only place the child's cost surfaces in the parent's own
+        // message list.
+        totalCost: finalState?.cost?.total,
+        totalInputTokens: finalState?.usage?.llm?.tokens?.input,
+        totalOutputTokens: finalState?.usage?.llm?.tokens?.output,
         totalToolCalls: finalState?.usage?.tools?.totalCalls,
         totalTokens: finalState?.usage?.llm?.tokens?.total,
       },
@@ -2097,17 +2371,36 @@ export class AgentRuntimeService {
     );
 
     // 1. Backfill this member's anchor.
+    // The member's textual answer is only read in delegate mode below; a state
+    // loaded via the fallback above arrives without `messages` (dropped from
+    // the persisted Redis blob — see AgentStateManager.serializeStateForPersist),
+    // so resolve the original final leaf from the DB when we actually need it.
+    // Keeping the original row preserves the exact content/metadata pairing
+    // that conversation-flow display grouping intentionally aggregates.
+    let lastAssistant: unknown;
+    if (!failed && mode !== 'in_group' && finalState && !Array.isArray(finalState.messages)) {
+      try {
+        lastAssistant = await this.resolveLastAssistantMessageFromDB(finalState);
+      } catch (error) {
+        console.error(
+          '[%s] group-member bridge: failed to resolve final assistant from DB: %O',
+          operationId,
+          error,
+        );
+      }
+    }
     const messages = Array.isArray(finalState?.messages) ? finalState.messages : [];
-    const lastAssistant = [...messages]
-      .reverse()
-      .find((m: { role?: string }) => m?.role === 'assistant');
+    lastAssistant ??= findLastAssistantMessage(normalizeCompletionMessages(messages));
+    const lastAssistantContent = extractTextFromMessage(lastAssistant);
     const agentLabel = (finalState?.metadata?.agentId as string | undefined) ?? 'member';
+    const memberErrorReason = failed ? formatSubAgentErrorReason(finalState?.error) : undefined;
     const anchorContent = failed
-      ? `Agent member did not complete (${reason}).`
+      ? memberErrorReason
+        ? `Agent member did not complete (${reason}): ${memberErrorReason}`
+        : `Agent member did not complete (${reason}).`
       : mode === 'in_group'
         ? `Agent ${agentLabel} responded in the group.`
-        : (lastAssistant?.content as string | undefined) ||
-          'Agent member completed without a textual answer.';
+        : lastAssistantContent || 'Agent member completed without a textual answer.';
 
     const anchorBackfill = await this.messageModel.updateToolMessage(anchorMessageId, {
       content: anchorContent,
@@ -2116,6 +2409,14 @@ export class AgentRuntimeService {
         model: finalState?.modelRuntimeConfig?.model,
         status: failed ? 'error' : 'completed',
         threadId,
+        // The child's spend rides on this anchor row so the parent's usage tray can
+        // account for it. The tray sums per-MESSAGE usage, and the child's own
+        // assistant messages live in an isolation thread the parent never loads —
+        // this row is the only place the child's cost surfaces in the parent's own
+        // message list.
+        totalCost: finalState?.cost?.total,
+        totalInputTokens: finalState?.usage?.llm?.tokens?.input,
+        totalOutputTokens: finalState?.usage?.llm?.tokens?.output,
         totalToolCalls: finalState?.usage?.tools?.totalCalls,
         totalTokens: finalState?.usage?.llm?.tokens?.total,
       },
@@ -2247,12 +2548,7 @@ export class AgentRuntimeService {
     return { nextStepScheduled: resumed, state: {}, success: true };
   }
 
-  /**
-   * Reload the conversation messages from the database and flatten them for the
-   * runtime. Used when resuming a parked op so the next LLM step sees tool
-   * results written out-of-band (e.g. by a sub-agent completion bridge).
-   */
-  private async refreshMessagesFromDB(state: AgentState): Promise<AgentState['messages']> {
+  private async queryMessagesFromDB(state: AgentState) {
     let postProcessUrl: ((path: string | null) => Promise<string>) | undefined;
     try {
       const fileService = new FileService(this.serverDB, this.userId);
@@ -2261,17 +2557,83 @@ export class AgentRuntimeService {
       postProcessUrl = undefined;
     }
 
-    const dbMessages = await this.messageModel.query(
+    return this.messageModel.query(
       {
         agentId: state.metadata?.agentId,
+        // Group runs must pass groupId, else the query filters `groupId IS NULL`
+        // and returns no group messages — the next LLM step then gets an empty
+        // context and the provider rejects it ("at least one message is required").
+        groupId: state.metadata?.groupId,
         threadId: state.metadata?.threadId,
         topicId: state.metadata?.topicId,
       },
       { postProcessUrl },
     );
+  }
+
+  /**
+   * Reload the conversation messages from the database and flatten them for the
+   * runtime. Used when resuming a parked op so the next LLM step sees tool
+   * results written out-of-band (e.g. by a sub-agent completion bridge).
+   */
+  private async refreshMessagesFromDB(state: AgentState): Promise<AgentState['messages']> {
+    const dbMessages = await this.queryMessagesFromDB(state);
 
     const { flatList } = parse(dbMessages);
     return flatList as AgentState['messages'];
+  }
+
+  /**
+   * Use conversation-flow to select the active final assistant leaf, then
+   * recover that leaf from the original query result. FlatListBuilder moves
+   * child metadata onto its display-only group/first child, so the parsed leaf
+   * alone cannot reliably identify serialized multimodal content.
+   */
+  private async resolveLastAssistantMessageFromDB(state: AgentState): Promise<unknown> {
+    const dbMessages = await this.queryMessagesFromDB(state);
+    const { flatList } = parse(dbMessages);
+    const lastAssistant = findLastAssistantMessage(normalizeCompletionMessages(flatList));
+    const lastAssistantId = typeof lastAssistant?.id === 'string' ? lastAssistant.id : undefined;
+
+    return (
+      (lastAssistantId
+        ? dbMessages.find((message) => message.id === lastAssistantId)
+        : undefined) ?? lastAssistant
+    );
+  }
+
+  /**
+   * Overwrite `state.messages` in place with the canonical DB conversation at
+   * step entry, making the DB the single source of truth for messages.
+   *
+   * Guarded against regressions:
+   * - Ops carrying a non-persisted (ephemeral / suppressed) message — e.g. the
+   *   group-member supervisor instruction, which has no DB row — keep their
+   *   full working set in Redis (see `AgentStateManager.serializeStateForPersist`),
+   *   so leave the loaded array intact instead of clobbering it with a DB-only
+   *   view that would drop the prompt.
+   * - `state.messages` is guaranteed to end up an array, so a missing-identifier
+   *   early return or an empty/failed read never hands `undefined` to downstream
+   *   consumers (e.g. `shouldCompress(state.messages)`).
+   * - A populated working set is never replaced with an empty one or on a DB
+   *   error, so a transient read miss can't blank the conversation mid-op.
+   */
+  private async rehydrateStateMessagesFromDB(state: AgentState): Promise<void> {
+    if (hasNonPersistedMessage(state.messages)) return;
+
+    if (!Array.isArray(state.messages)) state.messages = [];
+
+    if (!state.metadata?.agentId || !state.metadata?.topicId) return;
+
+    try {
+      const refreshed = await this.refreshMessagesFromDB(state);
+      if (refreshed.length > 0) state.messages = refreshed;
+    } catch (error) {
+      console.error(
+        '[rehydrateStateMessagesFromDB] failed, keeping Redis state snapshot: %O',
+        error,
+      );
+    }
   }
 
   private resolveAsyncToolResumeParentMessageId(
@@ -2334,11 +2696,19 @@ export class AgentRuntimeService {
    * Create Agent Runtime instance
    */
   private async createAgentRuntime({
+    agentState,
     metadata,
     operationId,
     stepIndex,
     tracingContextEngine,
   }: {
+    /**
+     * Current runtime state, when the caller has it. Only consulted to decide
+     * whether the early final-answer `visible_output_end` must be suppressed
+     * (entity-file edits ⇒ completion still has to export + register file
+     * Works, so loading should cover that window).
+     */
+    agentState?: any;
     metadata?: any;
     operationId: string;
     stepIndex: number;
@@ -2373,6 +2743,18 @@ export class AgentRuntimeService {
     // Create streaming executor context
     const executorContext: RuntimeExecutorContext = {
       agentConfig: metadata?.agentConfig,
+      // The factory may be a Graph-aware dispatcher that still returns the
+      // default agent for ordinary conversations. Keep the early visible
+      // output end behavior tied to the actual agent, not factory presence.
+      //
+      // Additionally suppressed once the run edited entity-format files:
+      // completion still exports + registers them as `file` Works BEFORE the
+      // terminal snapshot (see `CompletionLifecycle.registerFileWorks`), and
+      // an early hint would end the visible loading seconds before that card
+      // can exist. Deferring to the terminal `visible_output_end` lets loading
+      // cover the export and the card land with `agent_runtime_end`.
+      allowEarlyFinalAnswerVisibleOutputEnd:
+        agent instanceof GeneralChatAgent && !stateHasEntityFileEdits(agentState),
       botContext: metadata?.botContext,
       botPlatformContext: metadata?.botPlatformContext,
       discordContext: metadata?.discordContext,
@@ -2385,6 +2767,7 @@ export class AgentRuntimeService {
       loadAgentState: this.coordinator.loadAgentState.bind(this.coordinator),
       messageModel: this.messageModel,
       operationId,
+      searchDecision: metadata?.searchDecision,
       serverDB: this.serverDB,
       stepIndex,
       stream: metadata?.stream,
@@ -2412,6 +2795,9 @@ export class AgentRuntimeService {
     try {
       const dbMessages = await this.messageModel.query({
         agentId: state.metadata?.agentId,
+        // Group runs need groupId or the query returns no group messages
+        // (standard branch filters `groupId IS NULL`), losing the device context.
+        groupId: state.metadata?.groupId,
         threadId: state.metadata?.threadId,
         topicId: state.metadata?.topicId,
       });
@@ -2425,8 +2811,7 @@ export class AgentRuntimeService {
               activeDeviceId,
               devicePlatform: msg.pluginState?.metadata?.devicePlatform as string | undefined,
               deviceSystemInfo: msg.pluginState?.metadata?.deviceSystemInfo as
-                | Record<string, string>
-                | undefined,
+                Record<string, string> | undefined,
             };
           }
         },

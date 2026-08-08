@@ -1,9 +1,14 @@
 import { isOfficialProvider, OFFICIAL_PROVIDER_DISABLE_ERROR } from '@lobechat/business-const';
+import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
+import { RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
-import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import {
+  requireWorkspaceRoleWhenScoped,
+  wsCompatProcedure,
+} from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AiProviderModel } from '@/database/models/aiProvider';
 import { UserModel } from '@/database/models/user';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
@@ -12,6 +17,7 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerGlobalConfig } from '@/server/globalConfig';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { getUserScopedAiProviderRuntimeState } from '@/server/services/aiProviderAccess';
 import { type AiProviderDetailItem, type AiProviderRuntimeState } from '@/types/aiProvider';
 import {
   CreateAiProviderSchema,
@@ -22,7 +28,6 @@ import { type ProviderConfig } from '@/types/user/settings';
 
 const aiProviderProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
-  const wsId = ctx.workspaceId ?? undefined;
 
   const { aiProvider } = await getServerGlobalConfig();
 
@@ -33,8 +38,9 @@ const aiProviderProcedure = wsCompatProcedure.use(serverDatabase).use(async (opt
         ctx.serverDB,
         ctx.userId,
         aiProvider as Record<string, ProviderConfig>,
+        ctx.workspaceId ?? undefined,
       ),
-      aiProviderModel: new AiProviderModel(ctx.serverDB, ctx.userId),
+      aiProviderModel: new AiProviderModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined),
       gateKeeper,
       userModel: new UserModel(ctx.serverDB, ctx.userId),
     },
@@ -70,12 +76,17 @@ export const aiProviderRouter = router({
           ctx.workspaceId ?? undefined,
         );
 
-        const response = await modelRuntime.chat({
-          messages: [{ content: 'Hi', role: 'user' }],
-          model,
-          stream: false,
-          temperature: 0,
-        });
+        const response = await modelRuntime.chat(
+          {
+            messages: [{ content: 'Hi', role: 'user' }],
+            model,
+            stream: false,
+            temperature: 0,
+          },
+          {
+            metadata: { trigger: RequestTrigger.Api },
+          },
+        );
 
         // If we get a response without error, connectivity is ok
         if (response.ok) {
@@ -86,11 +97,11 @@ export const aiProviderRouter = router({
         return { error: errorBody, model, ok: false, status: response.status };
       } catch (error: any) {
         const errorType = error.errorType || error.type;
-        const msg = errorType
-          ? errorType
-          : typeof error === 'string'
+        const msg =
+          errorType ||
+          (typeof error === 'string'
             ? error
-            : error.message || (typeof error === 'object' ? JSON.stringify(error) : String(error));
+            : error.message || (typeof error === 'object' ? JSON.stringify(error) : String(error)));
         return { error: msg, model, ok: false };
       }
     }),
@@ -118,7 +129,17 @@ export const aiProviderRouter = router({
     .input(z.object({ id: z.string() }))
 
     .query(async ({ input, ctx }): Promise<AiProviderDetailItem | undefined> => {
-      return ctx.aiInfraRepos.getAiProviderDetail(input.id, KeyVaultsGateKeeper.getUserKeyVaults);
+      const detail = await ctx.aiInfraRepos.getAiProviderDetail(
+        input.id,
+        KeyVaultsGateKeeper.getUserKeyVaults,
+      );
+
+      // restricted API keys must not exfiltrate decrypted provider credentials
+      if (detail && ctx.apiKeyScopes !== undefined && !isFullAccessApiKey(ctx.apiKeyScopes)) {
+        return { ...detail, keyVaults: undefined };
+      }
+
+      return detail;
     }),
 
   getAiProviderList: aiProviderProcedure.query(async ({ ctx }) => {
@@ -128,11 +149,32 @@ export const aiProviderRouter = router({
   getAiProviderRuntimeState: aiProviderProcedure
     .input(z.object({ isLogin: z.boolean().optional() }))
     .query(async ({ ctx }): Promise<AiProviderRuntimeState> => {
-      return ctx.aiInfraRepos.getAiProviderRuntimeState(KeyVaultsGateKeeper.getUserKeyVaults);
+      const state = await getUserScopedAiProviderRuntimeState(ctx.userId, () =>
+        ctx.aiInfraRepos.getAiProviderRuntimeState(KeyVaultsGateKeeper.getUserKeyVaults),
+      );
+
+      // restricted API keys must not exfiltrate decrypted provider credentials
+      if (ctx.apiKeyScopes !== undefined && !isFullAccessApiKey(ctx.apiKeyScopes)) {
+        return {
+          ...state,
+          runtimeConfig: Object.fromEntries(
+            Object.entries(state.runtimeConfig).map(([id, config]) => [
+              id,
+              { ...config, keyVaults: {} },
+            ]),
+          ),
+        };
+      }
+
+      return state;
     }),
 
+  // Provider rows carry workspace-shared credentials and the model-layer where is
+  // workspace-wide, so destructive/config writes are Admin-or-higher in workspace mode
+  // (the workspace provider settings UI is likewise admin-only).
   removeAiProvider: aiProviderProcedure
     .use(withScopedPermission('ai_provider:delete'))
+    .use(requireWorkspaceRoleWhenScoped('admin'))
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
       return ctx.aiProviderModel.delete(input.id);
@@ -159,6 +201,7 @@ export const aiProviderRouter = router({
 
   updateAiProvider: aiProviderProcedure
     .use(withScopedPermission('ai_provider:update'))
+    .use(requireWorkspaceRoleWhenScoped('admin'))
     .input(
       z.object({
         id: z.string(),
@@ -171,6 +214,7 @@ export const aiProviderRouter = router({
 
   updateAiProviderConfig: aiProviderProcedure
     .use(withScopedPermission('ai_provider:update'))
+    .use(requireWorkspaceRoleWhenScoped('admin'))
     .input(
       z.object({
         id: z.string(),

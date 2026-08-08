@@ -27,10 +27,18 @@ export default {
   'azureai.token.desc': 'Find the API key from the Azure AI project overview',
   'azureai.token.placeholder': 'Azure Key',
   'azureai.token.title': 'Key',
+  'bedrock.apiKey.desc':
+    'Enter your Amazon Bedrock API key. Short-term API keys are recommended for production workloads.',
+  'bedrock.apiKey.placeholder': 'Amazon Bedrock API Key',
+  'bedrock.apiKey.title': 'API Key',
   'bedrock.accessKeyId.desc': 'Enter AWS Access Key Id',
   'bedrock.accessKeyId.placeholder': 'AWS Access Key Id',
   'bedrock.accessKeyId.title': 'AWS Access Key Id',
-  'bedrock.checker.desc': 'Test if AccessKeyId / SecretAccessKey are filled in correctly',
+  'bedrock.authMode.desc': 'Choose how requests authenticate with Amazon Bedrock',
+  'bedrock.authMode.options.apiKey': 'API Key',
+  'bedrock.authMode.options.awsCredentials': 'AWS Credentials',
+  'bedrock.authMode.title': 'Authentication',
+  'bedrock.checker.desc': 'Test whether the Bedrock authentication details are correct',
   'bedrock.region.desc': 'Enter AWS Region',
   'bedrock.region.placeholder': 'AWS Region',
   'bedrock.region.title': 'AWS Region',
@@ -44,9 +52,9 @@ export default {
   'bedrock.unlock.customRegion': 'Custom Service Region',
   'bedrock.unlock.customSessionToken': 'Custom Session Token',
   'bedrock.unlock.description':
-    'Enter your AWS AccessKeyId / SecretAccessKey to start the session. The app will not store your authentication configuration',
+    'Enter your Amazon Bedrock API key or AWS credentials to start the session. The app will not store your authentication configuration',
   'bedrock.unlock.imageGenerationDescription':
-    'Enter your AWS AccessKeyId / SecretAccessKey to start generating. The application will not store your authentication credentials.',
+    'Enter your Amazon Bedrock API key or AWS credentials to start generating. The application will not store your authentication credentials.',
   'bedrock.unlock.title': 'Use Custom Bedrock Authentication Information',
   'cloudflare.apiKey.desc': 'Please enter Cloudflare API Key',
   'cloudflare.apiKey.placeholder': 'Cloudflare API Key',
@@ -188,6 +196,8 @@ export default {
   'providerModels.config.baseURL.invalid': 'Please enter a valid URL',
   'providerModels.config.baseURL.placeholder': 'https://your-proxy-url.com/v1',
   'providerModels.config.baseURL.title': 'API Proxy URL',
+  'providerModels.config.builtinNotice':
+    'Built-in providers cannot be removed from the list. If you don’t use this provider, just disable it.',
   'providerModels.config.checker.button': 'Check',
   'providerModels.config.checker.desc': 'Test if the API Key and proxy URL are correctly filled',
   'providerModels.config.checker.pass': 'Check passed',
@@ -202,7 +212,7 @@ export default {
     'You have connected to {{name}}. Click to disconnect.',
   'providerModels.config.oauth.cancel': 'Cancel',
   'providerModels.config.oauth.codeExpired': 'Authorization code has expired. Please try again.',
-  'providerModels.config.oauth.connect': 'Connect with {{name}}',
+  'providerModels.config.oauth.connect': 'Connect',
   'providerModels.config.oauth.connectDesc': 'Click to authorize via browser. No API key required.',
   'providerModels.config.oauth.connected': 'Connected',
   'providerModels.config.oauth.connecting': 'Connecting...',
@@ -213,11 +223,10 @@ export default {
   'providerModels.config.oauth.disconnect': 'Disconnect',
   'providerModels.config.oauth.disconnectConfirm':
     'Are you sure you want to disconnect? You will need to re-authorize to use this provider.',
-  'providerModels.config.oauth.enterCode': 'Enter the code on the opened page:',
-  'providerModels.config.oauth.openBrowser': 'Open browser to authorize',
+  'providerModels.config.oauth.enterCode':
+    'Enter the code below on the authorization page. If it did not open automatically, go to:',
   'providerModels.config.oauth.polling': 'Waiting for authorization...',
   'providerModels.config.oauth.retry': 'Retry',
-  'providerModels.config.oauth.serviceNote': 'Service provided by {{name}}',
   'providerModels.config.oauth.title': 'OAuth Authorization',
   'providerModels.config.responsesApi.desc':
     "Uses OpenAI's next-generation request format specification to unlock advanced features like chain-of-thought (supported by OpenAI models only)",
@@ -265,12 +274,16 @@ export default {
     'For GPT-5.2 Pro series; controls reasoning intensity.',
   'providerModels.item.modelConfig.extendParams.options.gpt5_2ReasoningEffort.hint':
     'For GPT-5.2 series; controls reasoning intensity.',
+  'providerModels.item.modelConfig.extendParams.options.gpt5_6ReasoningEffort.hint':
+    'For GPT-5.6 series; controls reasoning intensity from None through Max.',
   'providerModels.item.modelConfig.extendParams.options.glm5_2ReasoningEffort.hint':
     'For GLM-5.2; controls reasoning effort with High and Max levels.',
   'providerModels.item.modelConfig.extendParams.options.grok4_20ReasoningEffort.hint':
     'For Grok 4.20 series; controls reasoning intensity. Low/Medium uses 4 agents, High/XHigh uses 16 agents.',
   'providerModels.item.modelConfig.extendParams.options.grok4_3ReasoningEffort.hint':
     'For Grok 4.3 series; controls reasoning intensity.',
+  'providerModels.item.modelConfig.extendParams.options.grok4_5ReasoningEffort.hint':
+    'For Grok 4.5 series; controls reasoning intensity (low/medium/high, default high).',
   'providerModels.item.modelConfig.extendParams.options.hy3ReasoningEffort.hint':
     'For Hy3 models; controls reasoning intensity. no_think (ultra-fast response), low (quick reasoning), and high (deep reasoning)—to accommodate varying latency and depth requirements, from high-frequency interactions to complex engineering tasks.',
   'providerModels.item.modelConfig.extendParams.options.ring2_6ReasoningEffort.hint':
@@ -297,6 +310,8 @@ export default {
     'For Qwen3 series; controls token budget for reasoning (max 80k).',
   'providerModels.item.modelConfig.extendParams.options.reasoningEffort.hint':
     'For OpenAI and other reasoning-capable models; controls reasoning effort.',
+  'providerModels.item.modelConfig.extendParams.options.reasoningMode.hint':
+    'For GPT-5.6 Responses API; switches between Standard and Pro reasoning modes.',
   'providerModels.item.modelConfig.extendParams.options.step3_5ReasoningEffort.hint':
     'For Step 3.5 series; controls reasoning intensity.',
   'providerModels.item.modelConfig.extendParams.options.textVerbosity.hint':
@@ -388,6 +403,9 @@ export default {
   'providerModels.list.enabledEmpty':
     'No enabled models available. Please enable your preferred models from the list below~',
   'providerModels.list.fetcher.clear': 'Clear fetched models',
+  'providerModels.list.fetcher.duplicatesRemoved': 'Duplicate entries removed ({{count}}): {{ids}}',
+  'providerModels.list.fetcher.duplicatesRemovedWithMore':
+    'Duplicate entries removed ({{count}}): {{ids}} (+{{remainingCount}} more IDs)',
   'providerModels.list.fetcher.error': 'Failed to fetch models: {{message}}',
   'providerModels.list.fetcher.errorFallback': 'Unknown error',
   'providerModels.list.fetcher.fetch': 'Fetch models',
@@ -402,7 +420,6 @@ export default {
   'providerModels.list.search': 'Search Models...',
   'providerModels.list.searchResult': '{{count}} models found',
   'providerModels.list.title': 'Model List',
-  'providerModels.list.total': '{{count}} models available',
   'providerModels.searchNotFound': 'No search results found',
   'providerModels.tabs.all': 'All',
   'providerModels.tabs.asr': 'ASR',

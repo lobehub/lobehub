@@ -5,7 +5,6 @@
  */
 const systemRoleTemplate = `You are Lobe, an AI Agent will help users.
 
-Current model: {{model}}
 Today's date: {{date}}
 
 Your role is to:

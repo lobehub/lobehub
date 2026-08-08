@@ -1,6 +1,7 @@
-import { Alert, Button, Flexbox, FormItem, Input, InputPassword } from '@lobehub/ui';
+import { Alert, Flexbox, FormItem, Input, InputPassword } from '@lobehub/ui';
+import { Button, RadioGroup } from '@lobehub/ui/base-ui';
 import { type FormInstance } from 'antd';
-import { Divider, Form, Radio } from 'antd';
+import { Divider, Form } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -252,7 +253,7 @@ const MCPManifestForm = ({
                 label={t('dev.mcp.auth.label')}
                 name={AUTH_TYPE}
               >
-                <Radio.Group
+                <RadioGroup
                   style={{ width: '100%' }}
                   options={[
                     {
@@ -281,7 +282,10 @@ const MCPManifestForm = ({
                   name={AUTH_TOKEN}
                   rules={[{ message: t('dev.mcp.auth.token.required'), required: true }]}
                 >
-                  <InputPassword placeholder={t('dev.mcp.auth.token.placeholder')} />
+                  <InputPassword
+                    autoComplete="new-password"
+                    placeholder={t('dev.mcp.auth.token.placeholder')}
+                  />
                 </FormItem>
               )}
               {enableOAuth && authType === 'oauth2' && (
@@ -298,7 +302,10 @@ const MCPManifestForm = ({
                     label={t('dev.mcp.auth.oauth.clientSecret.label')}
                     name={AUTH_CLIENT_SECRET}
                   >
-                    <InputPassword placeholder={t('dev.mcp.auth.oauth.clientSecret.placeholder')} />
+                    <InputPassword
+                      autoComplete="new-password"
+                      placeholder={t('dev.mcp.auth.oauth.clientSecret.placeholder')}
+                    />
                   </FormItem>
                   <div
                     style={{

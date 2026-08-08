@@ -31,7 +31,7 @@ describe('loadFile', () => {
     expect(doc.source).toBe(file);
     expect(doc.content).toContain('123');
     expect(doc.pages && doc.pages.length).toBeGreaterThan(0);
-  });
+  }, 15_000);
 
   it('returns error page when fs.stat fails', async () => {
     const doc = await loadFile('/not/exists.xyz');
@@ -57,6 +57,28 @@ describe('loadFile', () => {
       );
     } finally {
       warn.mockRestore();
+      await rm(tempDir, { force: true, recursive: true });
+    }
+  });
+
+  it('surfaces a binary .ipynb rejection at the document level', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'lobe-file-loaders-'));
+
+    try {
+      const file = path.join(tempDir, 'renamed.ipynb');
+      await writeFile(file, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x1a, 0x0a]));
+
+      const doc = await loadFile(file);
+
+      // The document-level error is what `readFile` / callers check; a
+      // page-only error would be read as a successful empty file.
+      expect(doc.metadata.error).toContain('Binary content in .ipynb file');
+      expect(doc.content).toBe('');
+      expect(doc.pages).toHaveLength(1);
+      expect(doc.pages?.[0].metadata.error).toContain('Binary content in .ipynb file');
+    } finally {
+      errorSpy.mockRestore();
       await rm(tempDir, { force: true, recursive: true });
     }
   });

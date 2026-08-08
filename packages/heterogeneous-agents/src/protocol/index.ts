@@ -8,6 +8,13 @@
  * `buildAgentInput`, `spawnAgent`, …) live under `./spawn` instead.
  */
 export { buildHeteroExecStdinPayload, type HeteroExecImageRef } from './execStdinPayload';
+export {
+  buildHeterogeneousPrompt,
+  type HeterogeneousPromptContextProvider,
+  HeterogeneousPromptEngine,
+  type HeterogeneousPromptEngineInput,
+  type HeterogeneousPromptImage,
+} from './promptEngine';
 export type {
   AgentContentBlock,
   AgentImageBlock,

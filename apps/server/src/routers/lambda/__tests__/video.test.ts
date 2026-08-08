@@ -7,12 +7,13 @@ import { AsyncTaskStatus } from '@/types/asyncTask';
 // ---- hoisted mocks (available inside vi.mock factories) ----
 
 const {
-  mockAfter,
   mockCreateVideo,
   mockFindUserById,
+  mockGenerationTopicFindById,
   mockIsLobeHubModelAvailable,
   mockProcessBackgroundVideoPolling,
   mockResolveBusinessModelMapping,
+  mockAfter,
   mockServerDB,
   mockTransaction,
 } = vi.hoisted(() => {
@@ -21,16 +22,18 @@ const {
   const mockCreateVideo = vi.fn();
   const mockAfter = vi.fn((cb: () => void) => cb());
   const mockFindUserById = vi.fn();
+  const mockGenerationTopicFindById = vi.fn();
   const mockIsLobeHubModelAvailable = vi.fn();
   const mockProcessBackgroundVideoPolling = vi.fn().mockResolvedValue(undefined);
   const mockResolveBusinessModelMapping = vi.fn();
   return {
-    mockAfter,
     mockCreateVideo,
     mockFindUserById,
+    mockGenerationTopicFindById,
     mockIsLobeHubModelAvailable,
     mockProcessBackgroundVideoPolling,
     mockResolveBusinessModelMapping,
+    mockAfter,
     mockServerDB,
     mockTransaction,
   };
@@ -39,6 +42,11 @@ const {
 // ---- module-level mocks ----
 
 vi.mock('@/database/models/asyncTask');
+vi.mock('@/database/models/generationTopic', () => ({
+  GenerationTopicModel: vi.fn(() => ({
+    findById: mockGenerationTopicFindById,
+  })),
+}));
 vi.mock('@/server/services/file');
 vi.mock('@/database/models/user', () => ({
   UserModel: {
@@ -78,7 +86,9 @@ vi.mock('@lobechat/business-model-bank/model-config', () => ({
 vi.mock('@/business/server/video-generation/getVideoFreeQuota', () => ({
   getVideoFreeQuota: vi.fn().mockResolvedValue({ remaining: 10 }),
 }));
-vi.mock('next/server', () => ({ after: (cb: () => void) => mockAfter(cb) }));
+vi.mock('@/server/utils/scheduleAfterResponse', () => ({
+  after: (cb: () => void) => mockAfter(cb),
+}));
 vi.mock('@/server/services/generation/videoBackgroundPolling', () => ({
   processBackgroundVideoPolling: mockProcessBackgroundVideoPolling,
 }));
@@ -161,6 +171,7 @@ describe('videoRouter', () => {
       }),
     );
     mockFindUserById.mockResolvedValue({ email: 'user@example.com' });
+    mockGenerationTopicFindById.mockResolvedValue({ id: 'topic-1' });
     mockIsLobeHubModelAvailable.mockResolvedValue(true);
   });
 
@@ -234,6 +245,21 @@ describe('videoRouter', () => {
       expect(mockCreateVideo).not.toHaveBeenCalled();
     });
 
+    it('should reject inaccessible generation topic before charging or creating records', async () => {
+      setupMocks();
+      mockGenerationTopicFindById.mockResolvedValue(undefined);
+
+      const caller = videoRouter.createCaller({ userId: 'test-user', workspaceId: 'workspace-1' });
+
+      await expect(caller.createVideo(defaultInput)).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: 'Invalid generation topic',
+      });
+
+      expect(mockTransaction).not.toHaveBeenCalled();
+      expect(mockCreateVideo).not.toHaveBeenCalled();
+    });
+
     it('should use polling path when response contains only inferenceId', async () => {
       const { mockUpdate } = setupMocks();
       mockCreateVideo.mockResolvedValue({ inferenceId: 'inf-2' });
@@ -246,7 +272,7 @@ describe('videoRouter', () => {
         inferenceId: 'inf-2',
         status: AsyncTaskStatus.Processing,
       });
-      // Polling: should trigger background polling via after()
+      // Polling: should trigger background polling after the response.
       expect(mockAfter).toHaveBeenCalled();
       expect(mockProcessBackgroundVideoPolling).toHaveBeenCalled();
     });

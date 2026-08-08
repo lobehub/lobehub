@@ -1,7 +1,7 @@
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { exportFile } from '@lobechat/utils/client';
-import { Block, Button, Flexbox, Highlighter, HtmlPreview, Segmented } from '@lobehub/ui';
-import { Drawer } from 'antd';
+import { Block, Flexbox, Highlighter, HtmlPreview } from '@lobehub/ui';
+import { Button, Drawer, Tabs } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { Code2, Download, Eye } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
@@ -48,39 +48,33 @@ const HtmlPreviewDrawer = memo<HtmlPreviewDrawerProps>(({ content, open, onClose
     exportFile(content, `${base}.html`);
   }, [content, extractTitle, sanitizeFileName]);
 
-  const Title = (
-    <Flexbox horizontal align={'center'} justify={'space-between'} style={{ width: '100%' }}>
-      {t('HtmlPreview.title')}
-      <Segmented
-        value={mode}
-        options={[
+  const extra = (
+    <Flexbox horizontal align={'center'} gap={8}>
+      <Tabs
+        activeKey={mode}
+        items={[
           {
+            key: 'preview',
             label: (
               <Flexbox horizontal align={'center'} gap={6}>
                 <Eye size={16} />
                 {t('HtmlPreview.mode.preview')}
               </Flexbox>
             ),
-            value: 'preview',
           },
           {
+            key: 'code',
             label: (
               <Flexbox horizontal align={'center'} gap={6}>
                 <Code2 size={16} />
                 {t('HtmlPreview.mode.code')}
               </Flexbox>
             ),
-            value: 'code',
           },
         ]}
-        onChange={(v) => setMode(v as 'preview' | 'code')}
+        onChange={(key) => setMode(key as 'preview' | 'code')}
       />
-      <Button
-        color={'default'}
-        icon={<Download size={16} />}
-        variant={'filled'}
-        onClick={onDownload}
-      >
+      <Button icon={<Download size={16} />} type={'fill'} onClick={onDownload}>
         {t('HtmlPreview.actions.download')}
       </Button>
     </Flexbox>
@@ -88,13 +82,14 @@ const HtmlPreviewDrawer = memo<HtmlPreviewDrawerProps>(({ content, open, onClose
 
   return (
     <Drawer
-      destroyOnHidden
+      containerMaxWidth={'100%'}
+      extra={extra}
       height={isDesktop ? `calc(100vh - ${TITLE_BAR_HEIGHT}px)` : '100vh'}
       open={open}
       placement="bottom"
-      title={Title}
+      title={t('HtmlPreview.title')}
       styles={{
-        body: { height: '100%', padding: 0 },
+        bodyContent: { height: '100%', padding: 0 },
         header: { paddingBlock: 8, paddingInline: 12 },
       }}
       onClose={onClose}

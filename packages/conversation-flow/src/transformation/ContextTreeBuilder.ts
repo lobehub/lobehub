@@ -165,16 +165,17 @@ export class ContextTreeBuilder {
     // Priority 6: Branch — multiple NON-TOOL children (dual-form reader invariant: tool children are inline data, not branch candidates).
     // Tool children are inline data of their assistant (handled by Priority 4),
     // never branch candidates.
-    const nonToolChildren = idNode.children.filter(
-      (child) => this.messageMap.get(child.id)?.role !== 'tool',
+    const metadataBranchIds = new Set(
+      this.branchResolver.getMetadataBranchIds(idNode.children.map((child) => child.id)),
     );
+    const nonToolChildren = idNode.children.filter((child) => metadataBranchIds.has(child.id));
     if (nonToolChildren.length > 1) {
       // Add current message node
       const messageNode = this.createMessageNode(message);
       contextTree.push(messageNode);
 
       // Create branch node
-      const branchNode = this.createBranchNode(message, idNode);
+      const branchNode = this.createBranchNode(message, nonToolChildren);
       contextTree.push(branchNode);
 
       // Don't continue after branch - branch is an end point
@@ -218,7 +219,10 @@ export class ContextTreeBuilder {
     // group head legitimately has a mix of tool + assistant children. (In the
     // old tool-anchored form a tool-using assistant only ever had tool children,
     // so this stays a no-op for legacy data.)
-    return idNode.children.some((child) => this.messageMap.get(child.id)?.role === 'tool');
+    return (
+      idNode.children.some((child) => this.messageMap.get(child.id)?.role === 'tool') ||
+      this.messageCollector.isToolChainHead(message)
+    );
   }
 
   /**
@@ -270,7 +274,8 @@ export class ContextTreeBuilder {
   /**
    * Create BranchNode
    */
-  private createBranchNode(message: Message, idNode: IdNode): BranchNode {
+  private createBranchNode(message: Message, branchChildren: IdNode[]): BranchNode {
+    const idNode = { children: branchChildren, id: message.id };
     const activeBranchId = this.branchResolver.getActiveBranchId(message, idNode);
 
     // For optimistic update (activeBranchId is undefined), use children.length as the index

@@ -1,10 +1,16 @@
-import type { ChatCitationItem, ModelPerformance, ModelUsage } from '@lobechat/types';
+import type {
+  ChatCitationItem,
+  ModelPerformance,
+  ModelReasoningResponseItem,
+  ModelUsage,
+} from '@lobechat/types';
 import type { Pricing } from 'model-bank';
 
 import { parseToolCalls } from '../../helpers';
 import type { ChatStreamCallbacks, OnFinishData, UsageMissingDiagnostics } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { safeParseJSON } from '../../utils/safeParseJSON';
+import type { SignatureScope } from '../../utils/signatureScope';
 import { nanoid } from '../../utils/uuid';
 import type { ComputeChatCostOptions } from '../usageConverters/utils/computeChatCost';
 
@@ -15,6 +21,8 @@ export type ChatPayloadForTransformStream = {
   pricing?: Pricing;
   pricingOptions?: ComputeChatCostOptions;
   provider?: string;
+  reasoningSignatureScope?: SignatureScope;
+  thoughtSignatureScope?: SignatureScope;
 };
 
 /**
@@ -99,7 +107,8 @@ export const setOpenAIChatCompletionUsageMissingDiagnostics = (
 export interface StreamProtocolChunk {
   data: any;
   id?: string;
-  type: // pure text
+  type:
+    // pure text
     | 'text'
     // base64 format image
     | 'base64_image'
@@ -109,6 +118,8 @@ export interface StreamProtocolChunk {
     | 'reasoning'
     // use for reasoning signature, maybe only anthropic
     | 'reasoning_signature'
+    // complete OpenAI Responses reasoning item persisted for stateless replay
+    | 'reasoning_response_item'
     // flagged reasoning signature
     | 'flagged_reasoning_signature'
     // multimodal content part in reasoning
@@ -339,7 +350,7 @@ export const convertIterableToStream = <T>(
 
   // copy from https://github.com/vercel/ai/blob/d3aa5486529e3d1a38b30e3972b4f4c63ea4ae9a/packages/ai/streams/ai-stream.ts#L284
   // and add an error handle
-  const it = iterable[Symbol.asyncIterator]();
+  const it: AsyncIterator<T> = iterable[Symbol.asyncIterator]();
 
   return new ReadableStream<T>({
     async cancel(reason) {
@@ -436,6 +447,8 @@ export function createCallbacksTransformer(
   const textEncoder = new TextEncoder();
   let aggregatedText = '';
   let aggregatedThinking: string | undefined = undefined;
+  let reasoningSignature: string | undefined;
+  const reasoningResponseItems: ModelReasoningResponseItem[] = [];
   let usage: ModelUsage | undefined;
   let speed: ModelPerformance | undefined;
   let grounding: any;
@@ -450,16 +463,35 @@ export function createCallbacksTransformer(
 
   return new TransformStream<string, Uint8Array>({
     async flush(): Promise<void> {
+      /**
+       * Non-streaming Responses conversion emits reasoning items without summary
+       * deltas, so derive visible thinking text from the item summaries whenever
+       * nothing was streamed — otherwise the summary would persist but never render.
+       */
+      const responseItemsThinking = reasoningResponseItems
+        .flatMap(({ summary }) => summary ?? [])
+        .map(({ text }) => text)
+        .filter(Boolean)
+        .join('\n');
+      const reasoningContent = aggregatedThinking || responseItemsThinking || undefined;
+
       const data: OnFinishData = {
         error: streamError,
         finishReason,
         grounding,
         speed,
         text: aggregatedText,
-        thinking: aggregatedThinking,
+        thinking: reasoningContent,
         toolsCalling,
         usage,
       };
+      if (reasoningContent || reasoningSignature || reasoningResponseItems.length > 0) {
+        data.reasoning = {
+          content: reasoningContent,
+          responseItems: reasoningResponseItems.length > 0 ? reasoningResponseItems : undefined,
+          signature: reasoningSignature,
+        };
+      }
       const usageMissingDiagnostics = usage
         ? undefined
         : options?.streamStack?.usageMissingDiagnostics;
@@ -487,7 +519,16 @@ export function createCallbacksTransformer(
       }
       // if the message is a data chunk, handle the callback
       else if (chunk.startsWith('data:')) {
-        const content = chunk.split('data:')[1].trim();
+        // `base64_image` payloads are raw data-URIs (`data:image/png;base64,...`)
+        // and `reasoning_response_item` payloads carry arbitrary model-authored
+        // summary text — both can contain `data:` themselves, which the legacy
+        // `split('data:')[1]` corrupts (it splits on the embedded marker too).
+        // Strip only the leading field marker for those types; every other event
+        // type keeps the original split path unchanged for compatibility.
+        const content =
+          currentType === 'base64_image' || currentType === 'reasoning_response_item'
+            ? chunk.slice('data:'.length).trim()
+            : chunk.split('data:')[1].trim();
 
         const data = safeParseJSON(content) as any;
 
@@ -510,12 +551,29 @@ export function createCallbacksTransformer(
             break;
           }
 
+          case 'reasoning_signature': {
+            if (typeof data === 'string') reasoningSignature = data;
+            break;
+          }
+
+          case 'reasoning_response_item': {
+            reasoningResponseItems.push(data as ModelReasoningResponseItem);
+            break;
+          }
+
           case 'base64_image': {
-            // data format: { image: { id, data }, images: [...] }
-            const imageData = data as { image: { data: string; id: string }; images: any[] };
-            base64Images.push(imageData.image);
+            // Real providers (google/openai image streams) serialize `data` as a
+            // raw data-URI string; wrap it into an image item, mirroring
+            // fetch-sse's client-side parser so both paths share one contract.
+            // Tolerate the legacy `{ image, images }` object shape too, so any
+            // existing consumer keeps working.
+            const image =
+              typeof data === 'string'
+                ? { data, id: `tmp_img_${nanoid()}` }
+                : (data as { image: { data: string; id: string } }).image;
+            base64Images.push(image);
             await callbacks.onBase64Image?.({
-              image: imageData.image,
+              image,
               images: base64Images,
             });
             break;

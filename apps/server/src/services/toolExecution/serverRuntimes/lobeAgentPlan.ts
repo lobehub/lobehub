@@ -16,8 +16,9 @@ export const createServerPlanRuntimeService = (
   serverDB: LobeChatDatabase,
   userId: string,
   workspaceId?: string,
+  callerAgentVisibility?: 'private' | 'public' | null,
 ): PlanRuntimeService => {
-  const documentModel = new DocumentModel(serverDB, userId, workspaceId);
+  const documentModel = new DocumentModel(serverDB, userId, workspaceId, callerAgentVisibility);
   const topicDocumentModel = new TopicDocumentModel(serverDB, userId, workspaceId);
 
   const toPlanDocument = (doc: {
@@ -55,6 +56,13 @@ export const createServerPlanRuntimeService = (
         title: goal,
         totalCharCount: content.length,
         totalLineCount: content.split('\n').length,
+        // Private-agent plans stay in the owner's private Pages; public
+        // agents' plans stay visible to the workspace. When null (no agent
+        // context resolvable), fall through to `DocumentModel.create`'s
+        // existing `sourceType='api'` fallback (→ private in workspace mode).
+        ...(callerAgentVisibility === 'private' || callerAgentVisibility === 'public'
+          ? { visibility: callerAgentVisibility }
+          : {}),
       });
 
       await topicDocumentModel.associate({ documentId: doc.id, topicId });

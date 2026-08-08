@@ -199,25 +199,6 @@ const openrouterChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
-      reasoning: true,
-    },
-    contextWindowTokens: 32_000,
-    description:
-      'GLM-4-32B-0414 is a 32B bilingual (Chinese/English) open-weights model optimized for code generation, function calling, and agent tasks. It is pretrained on 15T high-quality and reasoning-heavy data and further refined with human preference alignment, rejection sampling, and RL. It excels at complex reasoning, artifact generation, and structured output, reaching GPT-4o and DeepSeek-V3-0324-level performance on multiple benchmarks.',
-    displayName: 'GLM 4 32B',
-    family: 'glm',
-    generation: 'glm-4',
-    id: 'thudm/glm-4-32b',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.24, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.24, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
       functionCall: true,
       reasoning: true,
       vision: true,

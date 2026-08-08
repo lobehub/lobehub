@@ -1,5 +1,5 @@
 import { Flexbox } from '@lobehub/ui';
-import { Drawer } from 'antd';
+import { Drawer } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
 
@@ -19,15 +19,15 @@ const ChunkDrawer = memo(() => {
     !!s.chunkDetailId,
     s.closeChunkDrawer,
   ]);
-  const file = useFileStore(fileManagerSelectors.getFileById(fileId));
+  const file = useFileStore(fileManagerSelectors.getFileByChunkTargetId(fileId));
 
   return (
     <Drawer
       open={open}
-      size="large"
       title={file?.name}
+      width={736}
       styles={{
-        body: { padding: 0 },
+        bodyContent: { height: '100%', padding: 0 },
       }}
       onClose={() => {
         closeChunkDrawer();
@@ -36,7 +36,7 @@ const ChunkDrawer = memo(() => {
       <Flexbox horizontal height={'100%'} style={{ overflow: 'hidden' }}>
         {file && (
           <Flexbox flex={2} style={{ overflow: 'scroll' }}>
-            <FileViewer {...file} />
+            <FileViewer {...file} id={file.fileId ?? file.id} />
           </Flexbox>
         )}
         <Flexbox flex={1} style={{ borderInlineStart: `1px solid ${cssVar.colorSplit}` }}>

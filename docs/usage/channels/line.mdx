@@ -1,9 +1,9 @@
 ---
 title: Connect LobeHub to LINE
 description: >-
-  Learn how to connect a LINE Messaging API bot to your LobeHub agent,
-  enabling your AI assistant to chat with users on LINE through direct messages and
-  group conversations.
+  Learn how to connect a LINE Messaging API bot to your LobeHub agent, enabling
+  your AI assistant to chat with users on LINE through direct messages and group
+  conversations.
 tags:
   - LINE
   - Message Channels
@@ -109,12 +109,13 @@ By default the LINE Official Account Manager auto-replies to user messages and s
   >   <summary>Manual alternative (if the button is unavailable)</summary>
   >
   >   ```bash
-  >   curl -H "Authorization: Bearer <YOUR_CHANNEL_ACCESS_TOKEN>" \
+  >   curl -H "Authorization: Bearer <YOUR_CHANNEL_ACCESS_TOKEN" \
   >     https://api.line.me/v2/bot/info
   >   ```
   >
   >   Copy the `userId` field from the response into the **Destination User ID** field.
-  > </details>
+  >
+</details>
 
   ### Save Configuration
 
@@ -183,13 +184,13 @@ LINE's Messaging API has a few specifics that LobeHub maps as follows:
 - **Typing indicator** — the loading animation is shown in 1:1 user chats only. Group and multi-person room threads silently no-op.
 - **Reactions** — LINE bots cannot send message reactions today, so the 👀 / ✏️ status reactions used on Discord and Slack are not surfaced.
 - **Outbound** — LobeHub uses the **push API** (`/v2/bot/message/push`) rather than the reply API, because the reply token expires in \~60s while agent generation can take longer. Push messages count against your channel's monthly quota for paid plans; the free Developer Trial is unlimited.
-- **Attachments** — inbound images, video, audio, and files are downloaded on demand from the LINE data domain and forwarded to the model. Outbound replies are text-only today.
+- **Attachments** — inbound images, video, audio, and files are downloaded on demand from the LINE data domain and forwarded to the model. Outbound: LINE's Messaging API has no inline binary upload, so only images with a public HTTPS URL are sent as native LINE image messages. Video, audio, and file attachments — and any attachment without a public HTTPS URL — are degraded to a text message with a link to the file (or a placeholder note if no URL is available).
 
 ## Troubleshooting
 
 - **"Verify" fails in the LINE Developers Console.** The Channel Secret in LobeHub must match the value shown on the LINE Developers Console **Basic settings** tab exactly. Re-paste it, save, and try again.
 - **`Authentication failed.` on Save / Test Connection.** Your Channel Access Token is invalid or expired. Re-issue the long-lived token in the Messaging API tab and paste the new value into LobeHub.
-- **`Channel access token belongs to bot Uxxx, not Uyyy`.** The Destination User ID does not match the token. Easiest fix: clear the field and click **Fetch from LINE** to re-pull the correct `userId`. The `Uxxx` shown in the error is also the userId the token actually belongs to — you can paste it in directly. (Manual check: `curl -H "Authorization: Bearer <token>" https://api.line.me/v2/bot/info`.)
+- **`Channel access token belongs to bot Uxxx, not Uyyy`.** The Destination User ID does not match the token. Easiest fix: clear the field and click **Fetch from LINE** to re-pull the correct `userId`. The `Uxxx` shown in the error is also the userId the token actually belongs to — you can paste it in directly. (Manual check: `curl -H "Authorization: Bearer <token" https://api.line.me/v2/bot/info`.)
 - **Webhook delivery is rejected with `401 Invalid signature`.** The Channel Secret in LobeHub doesn't match the one shown in the LINE Developers Console. Update LobeHub with the correct Channel Secret.
 - **Bot doesn't respond.** Check that:
   1. **Use webhook** is toggled **ON** in the Messaging API tab.

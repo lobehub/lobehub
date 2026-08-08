@@ -10,9 +10,8 @@ import { useTranslation } from 'react-i18next';
 
 import NavHeader from '@/features/NavHeader';
 import { PageAgentProvider } from '@/features/PageEditor/PageAgentProvider';
-import { lambdaQuery } from '@/libs/trpc/client';
-import FileDetailComponent from '@/routes/(main)/resource/features/FileDetail';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
+import FileDetailComponent from '@/features/ResourceManager/FileDetail';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { fileManagerSelectors, useFileStore } from '@/store/file';
 import { downloadFile } from '@/utils/client/downloadFile';
 
@@ -36,10 +35,8 @@ const FileDetailSkeleton = () => (
 const FileDetailModalContent = memo(() => {
   const currentViewItemId = useResourceManagerStore((s) => s.currentViewItemId);
   const fromStore = useFileStore(fileManagerSelectors.getFileById(currentViewItemId));
-  const { data: fromQuery } = lambdaQuery.file.getFileItemById.useQuery(
-    { id: currentViewItemId ?? '' },
-    { enabled: !fromStore && !!currentViewItemId },
-  );
+  const useFetchKnowledgeItem = useFileStore((s) => s.useFetchKnowledgeItem);
+  const { data: fromQuery } = useFetchKnowledgeItem(!fromStore ? currentViewItemId : undefined);
   const fileDetail = fromStore ?? fromQuery;
   return (
     <Flexbox style={{ minHeight: 260 }}>
@@ -69,7 +66,10 @@ const FileEditorCanvas = memo<FileEditorProps>(({ onBack }) => {
 
   const currentViewItemId = useResourceManagerStore((s) => s.currentViewItemId);
 
-  const fileDetail = useFileStore(fileManagerSelectors.getFileById(currentViewItemId));
+  const fromStore = useFileStore(fileManagerSelectors.getFileById(currentViewItemId));
+  const useFetchKnowledgeItem = useFileStore((s) => s.useFetchKnowledgeItem);
+  const { data: fromFetch } = useFetchKnowledgeItem(!fromStore ? currentViewItemId : undefined);
+  const fileDetail = fromStore ?? fromFetch;
 
   return (
     <Flexbox horizontal height={'100%'} width={'100%'}>

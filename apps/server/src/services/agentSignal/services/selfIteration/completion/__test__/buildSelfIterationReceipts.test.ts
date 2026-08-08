@@ -51,7 +51,11 @@ describe('buildSelfIterationReceipts', () => {
       mutations: [
         {
           apiName: 'writeMemory',
-          data: { kind: 'mutation', resourceId: 'mem_1', summary: 'Saved tone preference' },
+          data: {
+            kind: 'mutation',
+            resourceId: 'mem_1',
+            summary: 'Saved tone preference',
+          },
           kind: 'mutation',
           toolCallId: 'call_1',
         },
@@ -62,6 +66,10 @@ describe('buildSelfIterationReceipts', () => {
     expect(memory.status).toBe('applied');
     expect(memory.id).toBe(`${marker.sourceId}:call_1:memory`);
     expect(memory.title).toBe('Saved tone preference');
+    expect(memory.metadata).toEqual({
+      localDate: '2026-05-30',
+      sourceType: 'agent.execution.completed',
+    });
     expect(memory.target).toEqual({
       id: 'mem_1',
       summary: 'Saved tone preference',
@@ -139,6 +147,115 @@ describe('buildSelfIterationReceipts', () => {
 
     expect(skill.kind).toBe('skill');
     expect(skill.status).toBe('skipped');
+    expect(skill.metadata?.rollbackStatus).toBeUndefined();
+  });
+
+  it('does not mark skill creation rollback available without a mutation id', () => {
+    const [, skill] = buildSelfIterationReceipts({
+      ...baseInput,
+      mutations: [
+        {
+          apiName: 'createSkillIfAbsent',
+          data: {
+            resourceId: 'adoc_created',
+            summary: 'Created support skill',
+            target: {
+              agentDocumentId: 'adoc_created',
+              documentId: 'doc_created',
+              id: 'adoc_created',
+              title: 'Support skill',
+              type: 'skill',
+            },
+          },
+          kind: 'mutation',
+          toolCallId: 'call_create_skill',
+        },
+      ],
+    });
+
+    expect(skill.kind).toBe('skill');
+    expect(skill.status).toBe('applied');
+    expect(skill.metadata).toEqual({
+      localDate: '2026-05-30',
+      sourceType: 'agent.execution.completed',
+    });
+  });
+
+  it('does not mark skill creation rollback available when only resource metadata exists', () => {
+    const [, skill] = buildSelfIterationReceipts({
+      ...baseInput,
+      mutations: [
+        {
+          apiName: 'createSkillIfAbsent',
+          data: {
+            resourceId: 'adoc_created',
+            summary: 'Created support skill',
+            target: {
+              agentDocumentId: 'adoc_created',
+              documentId: 'doc_created',
+              id: 'adoc_created',
+              title: 'Support skill',
+              type: 'skill',
+            },
+          },
+          kind: 'mutation',
+          toolCallId: 'call_create_skill_with_mutation',
+        },
+      ],
+    });
+
+    expect(skill.kind).toBe('skill');
+    expect(skill.metadata).toEqual({
+      localDate: '2026-05-30',
+      sourceType: 'agent.execution.completed',
+    });
+  });
+
+  it('projects a skill rollback history ref and target document refs into an applied skill receipt', () => {
+    const [, skill] = buildSelfIterationReceipts({
+      ...baseInput,
+      mutations: [
+        {
+          apiName: 'replaceSkillContentCAS',
+          data: {
+            agentDocumentId: 'adoc_1',
+            documentId: 'doc_1',
+            expectedCurrentDocumentUpdatedAt: '2026-06-29T00:00:00.000Z',
+            historyId: 'history_1',
+            resourceId: 'adoc_1',
+            summary: 'Refined support skill',
+            target: {
+              agentDocumentId: 'adoc_1',
+              documentId: 'doc_1',
+              id: 'adoc_1',
+              title: 'Support skill',
+              type: 'skill',
+            },
+          },
+          kind: 'mutation',
+          toolCallId: 'call_skill',
+        },
+      ],
+    });
+
+    expect(skill.kind).toBe('skill');
+    expect(skill.metadata).toEqual({
+      agentDocumentId: 'adoc_1',
+      documentId: 'doc_1',
+      expectedCurrentDocumentUpdatedAt: '2026-06-29T00:00:00.000Z',
+      historyId: 'history_1',
+      localDate: '2026-05-30',
+      rollbackStatus: 'available',
+      sourceType: 'agent.execution.completed',
+    });
+    expect(skill.target).toEqual({
+      agentDocumentId: 'adoc_1',
+      documentId: 'doc_1',
+      id: 'adoc_1',
+      summary: 'Refined support skill',
+      title: 'Support skill',
+      type: 'skill',
+    });
   });
 
   it('is idempotent: re-projecting the same run yields the same receipt ids', () => {

@@ -1,5 +1,5 @@
 name: Claude Auto Testing Coverage
-description: Automatically add unit tests to improve code coverage
+# Automatically add unit tests to improve code coverage
 
 on:
   schedule:

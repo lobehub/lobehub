@@ -21,6 +21,18 @@ const mockMessageFindById = vi.fn();
 const mockMessageUpdate = vi.fn();
 const mockMessageCreate = vi.fn();
 const mockExecAgent = vi.fn();
+const mockOpFindById = vi.fn();
+const mockInstantiateVerifyPlan = vi.fn();
+
+vi.mock('@/database/models/agentOperation', () => ({
+  AgentOperationModel: vi.fn(() => ({ findById: mockOpFindById })),
+}));
+// Partial mock: keep the real runVerifyOnCompletion (CompletionLifecycle's gate
+// imports it from this barrel) and only stub the start-side plan instantiation.
+vi.mock('@/server/services/verify', async (orig) => ({
+  ...(await (orig as () => Promise<Record<string, unknown>>)()),
+  instantiateVerifyPlanOnStart: mockInstantiateVerifyPlan,
+}));
 
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn(() => ({
@@ -89,6 +101,10 @@ describe('agentNotifyRouter.notify — remote hetero terminal signal', () => {
     // by earlier `lh notify` calls).
     mockMessageFindById.mockResolvedValue({ content: 'the final reply', topicId: TOPIC });
     mockTopicUpdateMetadata.mockResolvedValue(undefined);
+    // Default: a non-task op so the plan-instantiation guard no-ops unless a
+    // test opts into a task-bound op.
+    mockOpFindById.mockResolvedValue({ parentOperationId: null, taskId: null });
+    mockInstantiateVerifyPlan.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -121,6 +137,45 @@ describe('agentNotifyRouter.notify — remote hetero terminal signal', () => {
     await vi.waitFor(() =>
       expect(mockTopicUpdateMetadata).toHaveBeenCalledWith(TOPIC, { runningOperation: null }),
     );
+  });
+
+  it('durably ensures the verify plan for a task-bound run before the gate', async () => {
+    // The start-side plan instantiation (execAgent) is fire-and-forget on a
+    // SEPARATE CompletionLifecycle instance, so the completion-side gate here
+    // can't await it — a fast remote task could reach the gate before the plan
+    // persists and silently skip verify. This path must re-run the idempotent
+    // instantiation for a top-level task op so the gate has a plan to read.
+    const { onComplete } = registerHooks();
+    mockOpFindById.mockResolvedValue({ parentOperationId: null, taskId: 'task-9' });
+
+    await createCaller().notify({ content: '', done: true, role: 'assistant', topicId: TOPIC });
+
+    await vi.waitFor(() => expect(mockInstantiateVerifyPlan).toHaveBeenCalledTimes(1));
+    // Ensured with the run's own operationId + taskId (3rd arg is the params object).
+    expect(mockInstantiateVerifyPlan.mock.calls[0][2]).toMatchObject({
+      operationId: OP,
+      taskId: 'task-9',
+    });
+    // Ordered before the gate: the ensure resolves before completeOperation fires
+    // onComplete (→ runVerifyOnCompletion).
+    await vi.waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
+    expect(mockInstantiateVerifyPlan.mock.invocationCallOrder[0]).toBeLessThan(
+      onComplete.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('skips verify-plan instantiation for a repair / non-task run', async () => {
+    registerHooks();
+    // A repair op carries a parentOperationId — its plan comes from the repair
+    // path, not the start-side instantiation.
+    mockOpFindById.mockResolvedValue({ parentOperationId: 'parent-op', taskId: 'task-9' });
+
+    await createCaller().notify({ content: '', done: true, role: 'assistant', topicId: TOPIC });
+
+    await vi.waitFor(() =>
+      expect(mockTopicUpdateMetadata).toHaveBeenCalledWith(TOPIC, { runningOperation: null }),
+    );
+    expect(mockInstantiateVerifyPlan).not.toHaveBeenCalled();
   });
 
   it('error signal finalizes the run as failed and fires onError', async () => {

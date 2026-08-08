@@ -9,6 +9,8 @@ const isTaskListInit = (s: TaskStoreState) => s.isTaskListInit;
 
 const viewMode = (s: TaskStoreState) => s.viewMode;
 
+const listVisibility = (s: TaskStoreState) => s.listVisibility;
+
 const statusDisplayMap: Record<string, string> = {
   backlog: 'Backlog',
   canceled: 'Canceled',
@@ -47,6 +49,7 @@ export const taskListSelectors = {
   isListEmpty,
   isTaskGroupListInit,
   isTaskListInit,
+  listVisibility,
   needsInputTasks,
   runningTasks,
   taskGroupByKey,

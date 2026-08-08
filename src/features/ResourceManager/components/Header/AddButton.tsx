@@ -7,17 +7,18 @@ import {
 } from '@lobechat/const';
 import { Notion } from '@lobehub/icons';
 import { type DropdownItem } from '@lobehub/ui';
-import { Button, DropdownMenu, Icon, Tooltip } from '@lobehub/ui';
+import { DropdownMenu, Icon, Tooltip } from '@lobehub/ui';
+import { Button, toast } from '@lobehub/ui/base-ui';
 import { Upload } from 'antd';
 import { FilePenLine, FileUp, FolderIcon, FolderUp, Link, Plus } from 'lucide-react';
 import { type ChangeEvent } from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { message } from '@/components/AntdStaticMethods';
+import { useCurrentFolderId } from '@/features/ResourceManager/hooks/useCurrentFolderId';
+import { useTopLevelFileUpload } from '@/features/ResourceManager/hooks/useTopLevelFileUpload';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { usePermission } from '@/hooks/usePermission';
-import { useCurrentFolderId } from '@/routes/(main)/resource/features/hooks/useCurrentFolderId';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { useFileStore } from '@/store/file';
 import { FilesTabs } from '@/types/files';
 
@@ -46,12 +47,12 @@ const getAcceptedFileTypes = (category: FilesTabs): string | undefined => {
 
 const AddButton = () => {
   const { t } = useTranslation('file');
-  const pushDockFileList = useFileStore((s) => s.pushDockFileList);
   const uploadFolderWithStructure = useFileStore((s) => s.uploadFolderWithStructure);
   const createResourceAndSync = useFileStore((s) => s.createResourceAndSync);
   const [menuOpen, setMenuOpen] = useState(false);
   const currentFolderId = useCurrentFolderId();
   const { allowed: canCreate, reason } = usePermission('create_content');
+  const uploadTopLevel = useTopLevelFileUpload();
 
   // TODO: Migrate Notion import to use createResource
   // Keep old functions temporarily for components not yet migrated
@@ -141,7 +142,7 @@ const AddButton = () => {
       // Trigger auto-rename with the real ID (after sync completes)
       setPendingRenameItemId(realId);
     } catch (error) {
-      message.error(t('header.actions.createFolderError'));
+      toast.error(t('header.actions.createFolderError'));
       console.error('Failed to create folder:', error);
     }
   }, [
@@ -207,8 +208,7 @@ const AddButton = () => {
             showUploadList={false}
             beforeUpload={async (file) => {
               setMenuOpen(false);
-              await pushDockFileList([file], libraryId, currentFolderId ?? undefined);
-
+              await uploadTopLevel([file]);
               return false;
             }}
           >
@@ -242,12 +242,11 @@ const AddButton = () => {
     ],
     [
       category,
-      currentFolderId,
       handleCreateFolder,
       handleOpenPageEditor,
       handleOpenNotionGuide,
       libraryId,
-      pushDockFileList,
+      uploadTopLevel,
       t,
     ],
   );

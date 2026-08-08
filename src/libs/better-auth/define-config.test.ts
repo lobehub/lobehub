@@ -1,7 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   betterAuth: vi.fn((options) => options),
+  clearMismatchedOIDCSession: vi.fn(),
+  EnvHttpProxyAgent: vi.fn((options) => ({ options })),
+  serverDB: {},
+  setGlobalDispatcher: vi.fn(),
 }));
 
 vi.mock('@better-auth/expo', () => ({
@@ -15,7 +19,7 @@ vi.mock('@better-auth/passkey', () => ({
 vi.mock('@lobechat/database', () => ({
   createNanoId: vi.fn(() => vi.fn(() => 'generated-id')),
   idGenerator: vi.fn(() => 'generated-user-id'),
-  serverDB: {},
+  serverDB: mocks.serverDB,
 }));
 
 vi.mock('@lobechat/database/schemas', () => ({}));
@@ -46,8 +50,8 @@ vi.mock('better-auth/plugins', () => ({
 }));
 
 vi.mock('undici', () => ({
-  ProxyAgent: vi.fn(),
-  setGlobalDispatcher: vi.fn(),
+  EnvHttpProxyAgent: mocks.EnvHttpProxyAgent,
+  setGlobalDispatcher: mocks.setGlobalDispatcher,
 }));
 
 vi.mock('@/envs/app', () => ({
@@ -94,6 +98,10 @@ vi.mock('@/libs/better-auth/utils/server', () => ({
   parseSSOProviders: vi.fn(() => []),
 }));
 
+vi.mock('@/libs/oidc-provider/session-cleanup', () => ({
+  clearMismatchedOIDCSession: mocks.clearMismatchedOIDCSession,
+}));
+
 vi.mock('@/server/services/email', () => ({
   EmailService: vi.fn(),
 }));
@@ -103,6 +111,25 @@ vi.mock('@/server/services/user', () => ({
 }));
 
 describe('defineConfig', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.resetModules();
+    process.env = { ...originalEnv, NODE_ENV: 'test' };
+    delete process.env.HTTP_PROXY;
+    delete process.env.http_proxy;
+    delete process.env.HTTPS_PROXY;
+    delete process.env.https_proxy;
+    delete process.env.NO_PROXY;
+    delete process.env.no_proxy;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    process.env = originalEnv;
+  });
+
   it('should revoke existing sessions after password reset by default', async () => {
     const { defineConfig } = await import('./define-config');
 
@@ -115,5 +142,69 @@ describe('defineConfig', () => {
         }),
       }),
     );
+  });
+
+  it('should clear a mismatched OIDC session before creating a Better Auth session', async () => {
+    const { defineConfig } = await import('./define-config');
+    const context = { getCookie: vi.fn(), setCookie: vi.fn() };
+
+    defineConfig({ plugins: [] });
+    const [options] = mocks.betterAuth.mock.lastCall!;
+    await options.databaseHooks.session.create.before({ userId: 'user-b' }, context);
+
+    expect(mocks.clearMismatchedOIDCSession).toHaveBeenCalledWith(
+      mocks.serverDB,
+      'user-b',
+      context,
+    );
+  });
+
+  it('should continue creating the Better Auth session when OIDC cleanup fails', async () => {
+    const cleanupError = new Error('OIDC database unavailable');
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mocks.clearMismatchedOIDCSession.mockRejectedValueOnce(cleanupError);
+    const { defineConfig } = await import('./define-config');
+
+    defineConfig({ plugins: [] });
+    const [options] = mocks.betterAuth.mock.lastCall!;
+
+    await expect(
+      options.databaseHooks.session.create.before({ userId: 'user-b' }, null),
+    ).resolves.toBeUndefined();
+    expect(consoleError).toHaveBeenCalledWith(
+      '[Better Auth] Failed to clear a stale OIDC session:',
+      cleanupError,
+    );
+  });
+
+  it('should respect NO_PROXY when configuring the development proxy dispatcher', async () => {
+    process.env = {
+      ...process.env,
+      HTTP_PROXY: 'http://127.0.0.1:7890',
+      HTTPS_PROXY: 'http://127.0.0.1:7890',
+      NODE_ENV: 'development',
+      NO_PROXY: 'example.com,localhost',
+    };
+
+    await import('./define-config');
+
+    expect(mocks.EnvHttpProxyAgent).toHaveBeenCalledWith({
+      httpProxy: 'http://127.0.0.1:7890',
+      httpsProxy: 'http://127.0.0.1:7890',
+      noProxy: 'example.com,localhost,127.0.0.1,[::1]',
+    });
+    expect(mocks.setGlobalDispatcher).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.objectContaining({
+          noProxy: 'example.com,localhost,127.0.0.1,[::1]',
+        }),
+      }),
+    );
+  });
+
+  it('should preserve NO_PROXY wildcard semantics', async () => {
+    const { mergeLocalNoProxy } = await import('./define-config');
+
+    expect(mergeLocalNoProxy('*')).toBe('*');
   });
 });

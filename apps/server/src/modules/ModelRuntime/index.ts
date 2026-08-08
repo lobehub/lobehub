@@ -12,17 +12,21 @@ import {
   type CloudflareKeyVault,
   type ComfyUIKeyVault,
   type GithubCopilotKeyVault,
+  type OAuthDeviceFlowKeyVault,
   type OpenAICompatibleKeyVault,
+  type SuperGrokKeyVault,
   type VertexAIKeyVault,
 } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
 import { ModelProvider } from 'model-bank';
+import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 
 import { getBusinessModelRuntimeHooks } from '@/business/server/model-runtime';
 import { AiProviderModel } from '@/database/models/aiProvider';
 import { type LobeChatDatabase } from '@/database/type';
 import { getLLMConfig } from '@/envs/llm';
 import { createLLMGenerationTracingHook } from '@/server/services/llmGenerationTracing/hook';
+import { ensureFreshOAuthToken } from '@/server/services/oauthDeviceFlow/refresh';
 
 import { KeyVaultsGateKeeper } from '../KeyVaultsEncrypt';
 import apiKeyManager from './apiKeyManager';
@@ -38,6 +42,8 @@ type ProviderKeyVaults = OpenAICompatibleKeyVault &
   CloudflareKeyVault &
   ComfyUIKeyVault &
   GithubCopilotKeyVault &
+  OAuthDeviceFlowKeyVault &
+  SuperGrokKeyVault &
   VertexAIKeyVault;
 
 /**
@@ -81,8 +87,7 @@ export const buildPayloadFromKeyVaults = (
   // This handles both builtin providers and custom providers with sdkType
   switch (runtimeProvider) {
     case ModelProvider.Bedrock: {
-      const { accessKeyId, region, secretAccessKey, sessionToken } = keyVaults;
-      const apiKey = (secretAccessKey || '') + (accessKeyId || '');
+      const { accessKeyId, apiKey, region, secretAccessKey, sessionToken } = keyVaults;
 
       return {
         apiKey,
@@ -144,6 +149,24 @@ export const buildPayloadFromKeyVaults = (
           ? Number(keyVaults.bearerTokenExpiresAt)
           : undefined,
         oauthAccessToken: keyVaults.oauthAccessToken,
+        runtimeProvider,
+      };
+    }
+
+    case ModelProvider.SuperGrok: {
+      // OAuth-only provider: the (already refreshed) access token IS the
+      // bearer credential for api.x.ai — expose it as apiKey so the runtime
+      // stays a stateless OpenAI-compatible client.
+      return {
+        apiKey: keyVaults.oauthAccessToken,
+        runtimeProvider,
+      };
+    }
+
+    case ModelProvider.ChatGPT: {
+      return {
+        apiKey: keyVaults.oauthAccessToken,
+        chatgptAccountId: keyVaults.oauthAccountId,
         runtimeProvider,
       };
     }
@@ -213,17 +236,28 @@ const getParamsFromPayload = (provider: string, payload: ClientSecretPayload) =>
 
     case ModelProvider.Bedrock: {
       const { AWS_SECRET_ACCESS_KEY, AWS_ACCESS_KEY_ID, AWS_REGION, AWS_SESSION_TOKEN } = llmConfig;
-      let accessKeyId: string | undefined = AWS_ACCESS_KEY_ID;
-      let accessKeySecret: string | undefined = AWS_SECRET_ACCESS_KEY;
-      let region = AWS_REGION;
-      let sessionToken: string | undefined = AWS_SESSION_TOKEN;
-      // if the payload has the api key, use user
-      if (payload.apiKey) {
-        accessKeyId = payload?.awsAccessKeyId;
-        accessKeySecret = payload?.awsSecretAccessKey;
-        sessionToken = payload?.awsSessionToken;
-        region = payload?.awsRegion;
+
+      const hasUserBedrockAuth = !!(
+        payload.apiKey ||
+        payload.awsAccessKeyId ||
+        payload.awsSecretAccessKey
+      );
+
+      if (hasUserBedrockAuth) {
+        return {
+          accessKeyId: payload.awsAccessKeyId,
+          accessKeySecret: payload.awsSecretAccessKey,
+          apiKey: apiKeyManager.pick(payload.apiKey),
+          region: payload.awsRegion || AWS_REGION,
+          sessionToken: payload.awsSessionToken,
+        };
       }
+
+      const accessKeyId: string | undefined = AWS_ACCESS_KEY_ID;
+      const accessKeySecret: string | undefined = AWS_SECRET_ACCESS_KEY;
+      const region = payload.awsRegion || AWS_REGION;
+      const sessionToken: string | undefined = payload.awsSessionToken || AWS_SESSION_TOKEN;
+
       return { accessKeyId, accessKeySecret, region, sessionToken };
     }
 
@@ -246,6 +280,18 @@ const getParamsFromPayload = (provider: string, payload: ClientSecretPayload) =>
         bearerToken: payload.bearerToken,
         bearerTokenExpiresAt: payload.bearerTokenExpiresAt,
         oauthAccessToken: payload.oauthAccessToken,
+      };
+    }
+
+    case ModelProvider.SuperGrok: {
+      // OAuth-only: never fall back to env API keys
+      return { apiKey: payload.apiKey };
+    }
+
+    case ModelProvider.ChatGPT: {
+      return {
+        apiKey: payload.apiKey,
+        chatgptAccountId: payload.chatgptAccountId,
       };
     }
 
@@ -407,9 +453,7 @@ export const initModelRuntimeFromDB = async (
   workspaceId?: string,
 ): Promise<ModelRuntime> => {
   // 1. Get user's provider configuration from database
-  // NOTE: workspace-scoped ai_infra is deferred until the ai_infra surrogate-`_id`
-  // PK migration lands; AiProviderModel stays personal-scoped for now.
-  const aiProviderModel = new AiProviderModel(db, userId);
+  const aiProviderModel = new AiProviderModel(db, userId, workspaceId);
 
   // Use getAiProviderById with KeyVaultsGateKeeper.getUserKeyVaults as decryptor
   const providerConfig = await aiProviderModel.getAiProviderById(
@@ -424,7 +468,27 @@ export const initModelRuntimeFromDB = async (
 
   // 3. Build ClientSecretPayload from keyVaults based on runtimeProvider
   // This ensures provider-specific fields (e.g., cloudflareBaseURLOrAccountID) are included
-  const keyVaults = (providerConfig?.keyVaults || {}) as ProviderKeyVaults;
+  let keyVaults = (providerConfig?.keyVaults || {}) as ProviderKeyVaults;
+
+  // 3.5. OAuth device-flow providers with rotating refresh tokens (e.g.
+  // SuperGrok): proactively refresh + persist the token pair before building
+  // the payload. Mounted here because every server-side LLM call path (webapi
+  // chat, agent runtime transport, async image/video, lambda routers)
+  // converges on this function.
+  const oauthDeviceFlowConfig = DEFAULT_MODEL_PROVIDER_LIST.find((p) => p.id === provider)?.settings
+    ?.oauthDeviceFlow;
+  if (oauthDeviceFlowConfig?.refreshTokenGrant) {
+    const freshKeyVaults = await ensureFreshOAuthToken({
+      config: oauthDeviceFlowConfig,
+      db,
+      keyVaults,
+      providerId: provider,
+      userId,
+      workspaceId,
+    });
+    keyVaults = { ...keyVaults, ...freshKeyVaults } as ProviderKeyVaults;
+  }
+
   const payload = buildPayloadFromKeyVaults(keyVaults, runtimeProvider);
 
   // 4. Get business hooks (billing in cloud, undefined in OSS)

@@ -1,8 +1,42 @@
 import { ClipboardCheckIcon } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
-import { type DynamicRouteMeta, routeMeta } from '@/spa/router/routeMeta';
+import { usePublishDynamicRouteMeta } from '@/features/RouteMeta/usePublishDynamicRouteMeta';
+import type { DynamicRouteMetaProps } from '@/spa/router/routeMeta';
+import { routeMeta } from '@/spa/router/routeMeta';
 
-import { useVerifyReportBundle } from './hooks';
+import { useAcceptanceBundle, useVerifyReportBundle } from './hooks';
+
+const AcceptanceDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
+  const { t } = useTranslation('verify');
+  const { data } = useAcceptanceBundle(params.acceptanceId ?? null);
+
+  usePublishDynamicRouteMeta(
+    { title: data?.subject.title || t('acceptance.titleFallback') },
+    onResolve,
+  );
+
+  return null;
+};
+
+export const acceptanceRouteMeta = routeMeta({
+  DynamicMeta: AcceptanceDynamicMeta,
+  icon: ClipboardCheckIcon,
+});
+
+const VerifyDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
+  const { t } = useTranslation('verify');
+  const { data } = useVerifyReportBundle(params.runId ?? null);
+
+  usePublishDynamicRouteMeta(
+    {
+      title: data?.run.title || t('report.titleFallback'),
+    },
+    onResolve,
+  );
+
+  return null;
+};
 
 /**
  * Standalone verification-report route (`/verify/:runId`). Drives the browser
@@ -10,12 +44,11 @@ import { useVerifyReportBundle } from './hooks';
  * so we don't hand-roll `document.title`.
  */
 export const verifyRouteMeta = routeMeta({
+  DynamicMeta: VerifyDynamicMeta,
   icon: ClipboardCheckIcon,
-  useDynamicMeta: (params): DynamicRouteMeta => {
-    const { data } = useVerifyReportBundle(params.runId ?? null);
+});
 
-    return {
-      title: data?.run.title || 'Verification report',
-    };
-  },
+export const verifyReportsRouteMeta = routeMeta({
+  icon: ClipboardCheckIcon,
+  titleKey: 'navigation.verifyReports',
 });

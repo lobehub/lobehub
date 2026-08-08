@@ -1,6 +1,12 @@
 export const SCROLL_SNAPSHOT_KEY_PREFIX = 'LOBEHUB_SCROLL';
 export const SCROLL_SNAPSHOT_MAX_ENTRIES = 500;
-export const SCROLL_SNAPSHOT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+// A scroll snapshot is only meant to survive a quick back-and-forth between
+// topics. Beyond this window we intentionally drop it so revisiting a topic
+// (e.g. the next day) lands at the bottom on the latest messages instead of
+// restoring a stale reading position. Because both `loadScrollSnapshot` (read
+// time) and `pruneScrollSnapshots` (mount time) evict entries past this age,
+// the short TTL also keeps the localStorage key count tiny.
+export const SCROLL_SNAPSHOT_MAX_AGE_MS = 5 * 60 * 1000;
 
 export interface ScrollSnapshot {
   atBottom: boolean;

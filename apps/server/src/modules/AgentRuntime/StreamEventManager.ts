@@ -148,6 +148,30 @@ export class StreamEventManager {
   }
 
   /**
+   * Run blocking reads on a short-lived duplicated connection. ioredis
+   * executes commands on one connection strictly in order, so an
+   * `XREAD BLOCK` issued on the shared client parks the connection for up to
+   * the block timeout and every concurrent command (XADD / EXPIRE, plus any
+   * other module sharing the client) queues behind it — with an SSE
+   * subscriber attached, each publish paid up to ~1s, serializing streaming
+   * into a chunk-per-second drip.
+   *
+   * The connection is scoped to the read rather than the instance: managers
+   * are constructed per request (`createStreamEventManager()`) and most
+   * callers never `disconnect()`, so an instance-held duplicate would leak a
+   * socket per request. Scoping also lets concurrent blocking readers block
+   * independently instead of queueing on one shared blocking connection.
+   */
+  private async withBlockingConnection<T>(fn: (conn: Redis) => Promise<T>): Promise<T> {
+    const conn = this.redis.duplicate();
+    try {
+      return await fn(conn);
+    } finally {
+      conn.disconnect();
+    }
+  }
+
+  /**
    * Publish stream event to Redis Stream
    */
   async publishStreamEvent(
@@ -283,80 +307,144 @@ export class StreamEventManager {
 
     log('Starting subscription for operation %s from %s', operationId, lastEventId);
 
-    while (!signal?.aborted) {
-      try {
-        const xreadStart = Date.now();
-        const results = await this.redis.xread(
-          'BLOCK',
-          1000, // 1 second timeout
-          'STREAMS',
-          streamKey,
-          currentLastId,
-        );
-        const xreadEnd = Date.now();
+    // One dedicated connection for the whole subscription loop.
+    await this.withBlockingConnection(async (conn) => {
+      while (!signal?.aborted) {
+        try {
+          const xreadStart = Date.now();
+          const results = await conn.xread(
+            'BLOCK',
+            1000, // 1 second timeout
+            'STREAMS',
+            streamKey,
+            currentLastId,
+          );
+          const xreadEnd = Date.now();
 
-        if (results && results.length > 0) {
-          const [, messages] = results[0];
-          const events: StreamEvent[] = [];
+          if (results && results.length > 0) {
+            const [, messages] = results[0];
+            const events: StreamEvent[] = [];
 
-          for (const [id, fields] of messages) {
-            const eventData: any = {};
+            for (const [id, fields] of messages) {
+              const eventData: any = {};
 
-            // Parse Redis Stream fields
-            for (let i = 0; i < fields.length; i += 2) {
-              const key = fields[i];
-              const value = fields[i + 1];
+              // Parse Redis Stream fields
+              for (let i = 0; i < fields.length; i += 2) {
+                const key = fields[i];
+                const value = fields[i + 1];
 
-              if (key === 'data') {
-                eventData[key] = JSON.parse(value);
-              } else if (key === 'stepIndex' || key === 'timestamp') {
-                eventData[key] = parseInt(value);
-              } else {
-                eventData[key] = value;
+                if (key === 'data') {
+                  eventData[key] = JSON.parse(value);
+                } else if (key === 'stepIndex' || key === 'timestamp') {
+                  eventData[key] = parseInt(value);
+                } else {
+                  eventData[key] = value;
+                }
               }
+
+              events.push({
+                ...eventData,
+                id, // Redis Stream event ID
+              } as StreamEvent);
+
+              currentLastId = id;
             }
 
-            events.push({
-              ...eventData,
-              id, // Redis Stream event ID
-            } as StreamEvent);
-
-            currentLastId = id;
-          }
-
-          if (events.length > 0) {
-            const now = Date.now();
-            // Calculate latency from event publication to read
-            for (const event of events) {
-              const latency = now - event.timestamp;
-              timing(
-                '[%s:%d] XREAD %s, published at %d, read at %d, latency %dms, xread took %dms',
-                operationId,
-                event.stepIndex,
-                event.type,
-                event.timestamp,
-                now,
-                latency,
-                xreadEnd - xreadStart,
-              );
+            if (events.length > 0) {
+              const now = Date.now();
+              // Calculate latency from event publication to read
+              for (const event of events) {
+                const latency = now - event.timestamp;
+                timing(
+                  '[%s:%d] XREAD %s, published at %d, read at %d, latency %dms, xread took %dms',
+                  operationId,
+                  event.stepIndex,
+                  event.type,
+                  event.timestamp,
+                  now,
+                  latency,
+                  xreadEnd - xreadStart,
+                );
+              }
+              onEvents(events);
             }
-            onEvents(events);
           }
-        }
-      } catch (error) {
-        if (signal?.aborted) {
-          break;
-        }
+        } catch (error) {
+          if (signal?.aborted) {
+            break;
+          }
 
-        console.error('[StreamEventManager] Stream subscription error:', error);
-        // Retry after brief delay
-        await new Promise((resolve) => {
-          setTimeout(resolve, 1000);
-        });
+          console.error('[StreamEventManager] Stream subscription error:', error);
+          // Retry after brief delay
+          await new Promise((resolve) => {
+            setTimeout(resolve, 1000);
+          });
+        }
       }
-    }
+    });
 
     log('Subscription ended for operation %s', operationId);
+  }
+
+  /**
+   * Single bounded read — the long-poll primitive (see `IStreamEventManager`).
+   * One `XREAD BLOCK`, no loop: returns events after `lastEventId` (blocking up
+   * to `blockMs` for the first), or an empty list on timeout. The returned
+   * `lastEventId` is always a CONCRETE stream id, never the `'$'` sentinel — the
+   * caller threads it into its next call to stay gap-free.
+   *
+   * `lastEventId` defaults to `'$'` (only events published after this call
+   * lands) so a fresh poll doesn't replay history. We resolve `'$'` to the
+   * stream's current tail id BEFORE blocking, because Redis re-evaluates `'$'`
+   * as "the tail at read time" on every `XREAD`: returning `'$'` unchanged on a
+   * timeout would re-anchor the next poll to whatever the tail is by then,
+   * silently skipping any event published in the gap between this call resolving
+   * and the next one being issued. Pinning a concrete id (the last entry now, or
+   * `'0'` on an empty/absent stream) closes that gap.
+   */
+  async readEventsOnce(
+    operationId: string,
+    lastEventId: string = '$',
+    blockMs: number = 25_000,
+  ): Promise<{ events: StreamEvent[]; lastEventId: string }> {
+    const streamKey = `${this.STREAM_PREFIX}:${operationId}`;
+
+    // Resolve the '$' sentinel to a concrete tail id up front (see doc above).
+    // A timeout on a blocking XREAD means nothing was appended after this id, so
+    // it is still the true tail — safe to hand back for the next poll.
+    let fromId = lastEventId;
+    if (fromId === '$') {
+      const tail = await this.redis.xrevrange(streamKey, '+', '-', 'COUNT', 1);
+      fromId = tail.length > 0 ? tail[0][0] : '0';
+    }
+
+    const results = await this.withBlockingConnection((conn) =>
+      conn.xread('BLOCK', blockMs, 'STREAMS', streamKey, fromId),
+    );
+    if (!results || results.length === 0) return { events: [], lastEventId: fromId };
+
+    const [, messages] = results[0];
+    const events: StreamEvent[] = [];
+    let currentLastId = fromId;
+
+    for (const [id, fields] of messages) {
+      const eventData: any = {};
+      for (let i = 0; i < fields.length; i += 2) {
+        const key = fields[i];
+        const value = fields[i + 1];
+        if (key === 'data') {
+          eventData[key] = JSON.parse(value);
+        } else if (key === 'stepIndex' || key === 'timestamp') {
+          eventData[key] = parseInt(value);
+        } else {
+          eventData[key] = value;
+        }
+      }
+      events.push({ ...eventData, id } as StreamEvent);
+      currentLastId = id;
+    }
+
+    return { events, lastEventId: currentLastId };
   }
 
   /**

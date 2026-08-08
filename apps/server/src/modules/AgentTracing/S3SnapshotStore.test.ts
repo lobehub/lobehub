@@ -67,14 +67,30 @@ describe('S3SnapshotStore.save', () => {
     expect(roundtripped).toEqual(snap);
   });
 
-  it('falls back to "unknown" when agentId or topicId is missing', async () => {
+  it('recovers agentId/topicId from the operationId when the snapshot omits them', async () => {
     const store = new S3SnapshotStore();
+    // agentId/topicId missing on the snapshot, but encoded in the operationId —
+    // the key must match what readers rebuild from the operationId, not "unknown".
     await store.save(sampleSnapshot({ agentId: undefined, topicId: undefined }));
 
     const [key] = uploadBuffer.mock.calls[0];
     expect(key).toBe(
-      'agent-traces/unknown/unknown/op_1777000000000_agt_abc_tpc_xyz_QwErTy.json.zst',
+      'agent-traces/agt_abc/tpc_xyz/op_1777000000000_agt_abc_tpc_xyz_QwErTy.json.zst',
     );
+  });
+
+  it('falls back to "unknown" only when the operationId carries no agt_/tpc_ segments', async () => {
+    const store = new S3SnapshotStore();
+    await store.save(
+      sampleSnapshot({
+        agentId: undefined,
+        operationId: 'op_legacy_no_segments',
+        topicId: undefined,
+      }),
+    );
+
+    const [key] = uploadBuffer.mock.calls[0];
+    expect(key).toBe('agent-traces/unknown/unknown/op_legacy_no_segments.json.zst');
   });
 });
 

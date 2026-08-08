@@ -1,3 +1,6 @@
-export const OFFICIAL_AGENT_GATEWAY_URL = 'https://agent-gateway.lobehub.com';
-export const OFFICIAL_SERVER_URL = 'https://app.lobehub.com';
-export const OFFICIAL_GATEWAY_URL = 'https://device-gateway.lobehub.com';
+import { OFFICIAL_DEVICE_GATEWAY_URL, OFFICIAL_URL } from '@lobechat/const';
+
+export { OFFICIAL_AGENT_GATEWAY_URL } from '@lobechat/const';
+
+export const OFFICIAL_SERVER_URL = OFFICIAL_URL;
+export const OFFICIAL_GATEWAY_URL = OFFICIAL_DEVICE_GATEWAY_URL;

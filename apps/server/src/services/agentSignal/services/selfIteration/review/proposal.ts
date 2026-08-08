@@ -1,5 +1,4 @@
 import type { BriefAction } from '@lobechat/types';
-import { isTrimmedNonEmptyString } from '@lobechat/utils';
 import { z } from 'zod';
 
 import type {
@@ -161,8 +160,7 @@ export type NonMergeableSelfReviewProposalActionPlan = ActionPlan & {
  * Snapshot-aware action accepted by proposal metadata projection.
  */
 export type SelfReviewProposalActionPlan =
-  | MergeableSelfReviewProposalActionPlan
-  | NonMergeableSelfReviewProposalActionPlan;
+  MergeableSelfReviewProposalActionPlan | NonMergeableSelfReviewProposalActionPlan;
 
 /**
  * Snapshot-aware self-iteration plan accepted by proposal metadata projection.
@@ -322,16 +320,16 @@ const hasCompleteMergeableSnapshot = (
 
   if (actionType === 'refine_skill') {
     return (
-      isTrimmedNonEmptyString(snapshot.agentDocumentId) &&
-      isTrimmedNonEmptyString(snapshot.documentId) &&
-      isTrimmedNonEmptyString(snapshot.contentHash) &&
+      !!snapshot.agentDocumentId?.trim() &&
+      !!snapshot.documentId?.trim() &&
+      !!snapshot.contentHash?.trim() &&
       snapshot.managed === true &&
       snapshot.writable === true
     );
   }
 
   if (actionType === 'create_skill') {
-    return snapshot.absent === true && isTrimmedNonEmptyString(snapshot.skillName);
+    return snapshot.absent === true && !!snapshot.skillName?.trim();
   }
 
   return false;

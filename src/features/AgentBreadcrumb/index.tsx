@@ -1,0 +1,112 @@
+'use client';
+
+import { agentDisplayName } from '@lobechat/types';
+import { Icon, Text } from '@lobehub/ui';
+import { Breadcrumb as AntBreadcrumb } from 'antd';
+import { createStaticStyles } from 'antd-style';
+import { ChevronRight } from 'lucide-react';
+import { memo, type ReactNode, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Link, useLocation } from 'react-router';
+import urlJoin from 'url-join';
+
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import {
+  buildPrefixedAgentRoutePath,
+  parseAgentPathname,
+} from '@/features/AgentSidebar/utils/agentPathname';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
+import { useAgentStore } from '@/store/agent';
+import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
+
+const styles = createStaticStyles(({ css }) => ({
+  breadcrumb: css`
+    ol {
+      align-items: center;
+    }
+
+    li,
+    .ant-breadcrumb-link,
+    .ant-breadcrumb-link > a {
+      display: flex;
+      align-items: center;
+    }
+  `,
+}));
+
+interface AgentBreadcrumbProps {
+  agentId: string;
+  /** Additional breadcrumb items appended after the current section. */
+  extraItems?: ReactNode[];
+  /**
+   * The current section under the agent, e.g. 话题 / 助理档案 / 用量与成本.
+   * Omit it where the page already names its own section — the profile group
+   * carries a Segmented switcher, so repeating the active tab here would render
+   * the same word twice in one 44px bar.
+   */
+  title?: ReactNode;
+}
+
+/**
+ * Breadcrumb for pages that live under an agent: `<AgentName> › <Section>`.
+ * The agent name links back to the agent home; the section is the current page.
+ */
+const AgentBreadcrumb = memo<AgentBreadcrumbProps>(({ agentId, extraItems, title }) => {
+  const { t } = useTranslation(['chat', 'common']);
+  const { pathname } = useLocation();
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
+  const agentTitle = useAgentStore((s) =>
+    agentDisplayName(agentSelectors.getAgentMetaById(agentId)(s)),
+  );
+  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+  const isInbox = !!inboxAgentId && agentId === inboxAgentId;
+  const displayTitle = isInbox
+    ? agentTitle || t('inbox.title', { ns: 'chat' })
+    : agentTitle || t('defaultSession', { ns: 'common' });
+  const agentRoute = useMemo(() => parseAgentPathname(pathname), [pathname]);
+  const agentHomePath = useMemo(() => {
+    const targetPath = buildWorkspaceAwarePath(urlJoin('/agent', agentId), activeWorkspaceSlug);
+    return buildPrefixedAgentRoutePath(targetPath, agentRoute, activeWorkspaceSlug);
+  }, [activeWorkspaceSlug, agentId, agentRoute]);
+
+  return (
+    <AntBreadcrumb
+      className={styles.breadcrumb}
+      separator={<Icon icon={ChevronRight} size={14} />}
+      items={[
+        {
+          title: (
+            <Link to={agentHomePath}>
+              <Text ellipsis as={'span'} color={'inherit'} style={{ maxWidth: 200 }} weight={500}>
+                {displayTitle}
+              </Text>
+            </Link>
+          ),
+        },
+        ...(title === undefined || title === null
+          ? []
+          : [
+              {
+                title: (
+                  <Text as={'span'} color={'inherit'} weight={500}>
+                    {title}
+                  </Text>
+                ),
+              },
+            ]),
+        ...(extraItems ?? []).map((item, index) => ({
+          key: `extra-${index}`,
+          title: (
+            <Text as={'span'} color={'inherit'} weight={500}>
+              {item}
+            </Text>
+          ),
+        })),
+      ]}
+    />
+  );
+});
+
+AgentBreadcrumb.displayName = 'AgentBreadcrumb';
+
+export default AgentBreadcrumb;

@@ -1,6 +1,12 @@
+import { formatCommandOutputFileSize } from './formatCommandOutput';
+
 export interface FormatCommandResultParams {
   error?: string;
   exitCode?: number;
+  outputFiles?: {
+    stderr?: { path: string; size?: number; truncated?: boolean };
+    stdout?: { path: string; size?: number; truncated?: boolean };
+  };
   shellId?: string;
   stderr?: string;
   stdout?: string;
@@ -13,6 +19,7 @@ export const formatCommandResult = ({
   error,
   stdout,
   stderr,
+  outputFiles,
   exitCode,
 }: FormatCommandResultParams): string => {
   const parts: string[] = [];
@@ -34,7 +41,23 @@ export const formatCommandResult = ({
     parts.push('Command completed successfully.');
   }
 
-  if (stdout) parts.push(`Output:\n${stdout}`);
+  if (outputFiles?.stdout?.path) {
+    const size = formatCommandOutputFileSize(outputFiles.stdout.size);
+    parts.push(
+      outputFiles.stdout.truncated
+        ? `Stdout too large (${size}). Full stdout saved to: ${outputFiles.stdout.path}`
+        : `Full stdout saved to: ${outputFiles.stdout.path} (${size})`,
+    );
+  }
+  if (outputFiles?.stderr?.path) {
+    const size = formatCommandOutputFileSize(outputFiles.stderr.size);
+    parts.push(
+      outputFiles.stderr.truncated
+        ? `Stderr too large (${size}). Full stderr saved to: ${outputFiles.stderr.path}`
+        : `Full stderr saved to: ${outputFiles.stderr.path} (${size})`,
+    );
+  }
+  if (stdout) parts.push(`Stdout:\n${stdout}`);
   if (stderr) parts.push(`Stderr:\n${stderr}`);
 
   return parts.join('\n\n');

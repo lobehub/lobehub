@@ -5,33 +5,41 @@ import type {
   CodexReasoningEffort,
   HeterogeneousAgentDefaultSelection,
   HeterogeneousProviderConfig,
+  HeterogeneousSpeedMode,
 } from '@lobechat/types';
 import {
   CLAUDE_CODE_REASONING_EFFORT_LEVELS,
   CODEX_REASONING_EFFORT_CONFIG_KEY,
-  CODEX_REASONING_EFFORT_LEVELS,
+  CODEX_SERVICE_TIER_CONFIG_KEY,
+  codexModelSupportsFastSpeed,
+  codexModelSupportsReasoningEffort,
+  getCodexReasoningEffortLevels,
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
   resolveClaudeCodeModel,
   resolveClaudeCodeReasoningEffort,
   resolveCodexModel,
   resolveCodexReasoningEffort,
+  resolveCodexSpeedMode,
 } from '@lobechat/types';
 import { Icon } from '@lobehub/ui';
 import {
   DropdownMenuItem,
+  DropdownMenuItemContent,
+  DropdownMenuItemExtra,
+  DropdownMenuItemLabel,
   DropdownMenuPopup,
   DropdownMenuPortal,
   DropdownMenuPositioner,
   DropdownMenuRoot,
-  DropdownMenuSeparator,
+  DropdownMenuSubmenuArrow,
   DropdownMenuSubmenuRoot,
   DropdownMenuSubmenuTrigger,
   DropdownMenuTrigger,
-  Tooltip,
 } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { CheckIcon, ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
+import { CheckIcon, ChevronDownIcon, ChevronRightIcon, ZapIcon } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -40,33 +48,40 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
 import { useAgentId } from '../hooks/useAgentId';
+import { useChatInputResourceAccess } from '../hooks/useChatInputResourceAccess';
+import { HeterogeneousAgentModelSelector } from './HeterogeneousAgentModelSelector';
 
 type HeteroReasoningEffort =
-  | ClaudeCodeReasoningEffort
-  | CodexReasoningEffort
-  | HeterogeneousAgentDefaultSelection;
+  ClaudeCodeReasoningEffort | CodexReasoningEffort | HeterogeneousAgentDefaultSelection;
 
-type SelectableHeteroProviderType = 'claude-code' | 'codex';
+type SelectableHeteroProviderType = 'claude-code' | 'codex' | 'opencode' | 'pi' | 'qoder';
 
 const CLAUDE_CODE_MODEL_OPTIONS = [
+  { label: 'Fable 5', value: 'fable' },
   { label: 'Opus 4.8', value: 'opus' },
   { label: 'Sonnet 4.6', value: 'sonnet' },
   { label: 'Haiku 4.5', value: 'haiku' },
 ] as const;
 
 const CODEX_MODEL_OPTIONS = [
+  { label: 'GPT-5.6 Sol', value: 'gpt-5.6-sol' },
+  { label: 'GPT-5.6 Terra', value: 'gpt-5.6-terra' },
+  { label: 'GPT-5.6 Luna', value: 'gpt-5.6-luna' },
   { label: 'GPT-5.5', value: 'gpt-5.5' },
   { label: 'GPT-5.4', value: 'gpt-5.4' },
   { label: 'GPT-5.4 Mini', value: 'gpt-5.4-mini' },
   { label: 'GPT-5.3 Codex Spark', value: 'gpt-5.3-codex-spark' },
 ] as const;
 
-const MODEL_LABELS: Record<string, string> = Object.fromEntries(
-  [...CLAUDE_CODE_MODEL_OPTIONS, ...CODEX_MODEL_OPTIONS].map((option) => [
-    option.value,
-    option.label,
-  ]),
-);
+const MODEL_LABELS: Record<string, string> = {
+  'gpt-5.6': 'GPT-5.6',
+  ...Object.fromEntries(
+    [...CLAUDE_CODE_MODEL_OPTIONS, ...CODEX_MODEL_OPTIONS].map((option) => [
+      option.value,
+      option.label,
+    ]),
+  ),
+};
 
 const EFFORT_LABEL_KEYS = {
   [HETEROGENEOUS_AGENT_DEFAULT_SELECTION]: 'heteroAgent.modelSelector.default',
@@ -74,18 +89,23 @@ const EFFORT_LABEL_KEYS = {
   low: 'heteroAgent.modelSelector.reasoning.low',
   max: 'heteroAgent.modelSelector.reasoning.max',
   medium: 'heteroAgent.modelSelector.reasoning.medium',
+  ultra: 'heteroAgent.modelSelector.reasoning.ultra',
   xhigh: 'heteroAgent.modelSelector.reasoning.xhigh',
+} as const satisfies Record<HeteroReasoningEffort, string>;
+
+/**
+ * Codex renames the `low` effort to "Light" in its official app UI while the
+ * CLI value stays `low`; Claude Code keeps the plain "Low" wording.
+ */
+const CODEX_EFFORT_LABEL_KEYS = {
+  ...EFFORT_LABEL_KEYS,
+  low: 'heteroAgent.modelSelector.reasoning.light',
 } as const satisfies Record<HeteroReasoningEffort, string>;
 
 const styles = createStaticStyles(({ css }) => ({
   check: css`
     flex: none;
     color: ${cssVar.colorTextSecondary};
-  `,
-  divider: css`
-    height: 1px;
-    margin-block: 6px;
-    background: ${cssVar.colorSplit};
   `,
   label: css`
     overflow: hidden;
@@ -115,6 +135,28 @@ const styles = createStaticStyles(({ css }) => ({
       background: ${cssVar.colorFillTertiary};
     }
   `,
+  optionBody: css`
+    overflow: hidden;
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 3px;
+
+    min-width: 0;
+    padding-block: 7px;
+  `,
+  optionDesc: css`
+    overflow: hidden;
+
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  optionIcon: css`
+    flex: none;
+    color: ${cssVar.colorTextSecondary};
+  `,
   optionLabel: css`
     overflow: hidden;
     flex: 1;
@@ -122,6 +164,12 @@ const styles = createStaticStyles(({ css }) => ({
     min-width: 0;
 
     text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  optionTitle: css`
+    display: flex;
+    gap: 6px;
+    align-items: center;
     white-space: nowrap;
   `,
   popup: css`
@@ -148,30 +196,28 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextQuaternary};
   `,
   submenuTrigger: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    justify-content: space-between;
-
-    min-height: 34px;
+    min-height: 36px;
     padding-inline: 10px;
-    border-radius: 8px;
-
-    font-size: 14px;
-    color: ${cssVar.colorText};
   `,
   submenuMeta: css`
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  submenuTrail: css`
     display: inline-flex;
     flex: none;
+    gap: 4px;
     align-items: center;
-    justify-content: center;
 
+    min-width: 0;
+    max-width: 150px;
+    padding-inline-start: 16px;
+
+    font-family: inherit;
+    font-size: 14px;
     color: ${cssVar.colorTextSecondary};
+  `,
+  submenuMetaLabel: css`
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
   trigger: css`
     cursor: pointer;
@@ -196,16 +242,46 @@ const styles = createStaticStyles(({ css }) => ({
       background: ${cssVar.colorFillSecondary};
     }
   `,
-  triggerDisabled: css`
-    cursor: not-allowed;
-    opacity: 0.5;
-
-    &:hover {
-      color: ${cssVar.colorTextSecondary};
-      background: transparent;
-    }
-  `,
 }));
+
+interface SelectorSubmenuProps {
+  children: ReactNode;
+  currentValue: string;
+  icon?: typeof ZapIcon;
+  label: string;
+  popupWidth?: number;
+}
+
+const SelectorSubmenu = ({
+  children,
+  currentValue,
+  icon,
+  label,
+  popupWidth = 220,
+}: SelectorSubmenuProps) => (
+  <DropdownMenuSubmenuRoot>
+    <DropdownMenuSubmenuTrigger className={styles.submenuTrigger} label={label} openOnHover={false}>
+      <DropdownMenuItemContent>
+        <DropdownMenuItemLabel>{label}</DropdownMenuItemLabel>
+        <DropdownMenuItemExtra className={styles.submenuMeta}>
+          {icon && <Icon className={styles.optionIcon} icon={icon} size={12} />}
+          <span className={styles.submenuMetaLabel}>{currentValue}</span>
+        </DropdownMenuItemExtra>
+        <DropdownMenuSubmenuArrow>
+          <Icon icon={ChevronRightIcon} size={12} />
+        </DropdownMenuSubmenuArrow>
+      </DropdownMenuItemContent>
+    </DropdownMenuSubmenuTrigger>
+    <DropdownMenuPortal>
+      <DropdownMenuPositioner alignOffset={-4} anchor={null} placement="right" sideOffset={8}>
+        <DropdownMenuPopup className={styles.popup} style={{ minWidth: popupWidth }}>
+          <div className={styles.sectionTitle}>{label}</div>
+          <div className={styles.scroll}>{children}</div>
+        </DropdownMenuPopup>
+      </DropdownMenuPositioner>
+    </DropdownMenuPortal>
+  </DropdownMenuSubmenuRoot>
+);
 
 const stripCliFlags = (
   args: string[] | undefined,
@@ -265,7 +341,12 @@ const stripCodexConfigKey = (args: string[] | undefined, key: string): string[] 
 
 const isSelectableProviderType = (
   type: HeterogeneousProviderConfig['type'] | undefined,
-): type is SelectableHeteroProviderType => type === 'claude-code' || type === 'codex';
+): type is SelectableHeteroProviderType =>
+  type === 'claude-code' ||
+  type === 'codex' ||
+  type === 'opencode' ||
+  type === 'pi' ||
+  type === 'qoder';
 
 const getModelLabel = (model: string, defaultLabel: string) => {
   if (model === HETEROGENEOUS_AGENT_DEFAULT_SELECTION) return defaultLabel;
@@ -301,10 +382,10 @@ const getTriggerText = ({
   const isDefaultEffort = effort === HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
 
   if (isDefaultModel && isDefaultEffort) return defaultConfigLabel;
-  if (isDefaultModel) return `${defaultModelLabel} · ${effortLabel}`;
-  if (isDefaultEffort) return `${modelLabel} · ${defaultReasoningLabel}`;
+  const resolvedModelLabel = isDefaultModel ? defaultModelLabel : modelLabel;
+  const resolvedEffortLabel = isDefaultEffort ? defaultReasoningLabel : effortLabel;
 
-  return `${modelLabel} · ${effortLabel}`;
+  return `${resolvedModelLabel} ${resolvedEffortLabel}`;
 };
 
 const HeteroModel = memo(() => {
@@ -316,12 +397,15 @@ const HeteroModel = memo(() => {
   );
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   const { allowed: canCreateContent, reason } = usePermission('create_content');
+  // Model/effort picks write the shared heterogeneous-provider config. Hide
+  // the selector when this caller cannot configure that shared resource.
+  const { canConfigureResource } = useChatInputResourceAccess();
+  const enabled = canCreateContent && canConfigureResource;
   const [open, setOpen] = useState(false);
-  const [modelOpen, setModelOpen] = useState(false);
 
   const patchProvider = useCallback(
-    async (patch: Partial<Pick<HeterogeneousProviderConfig, 'effort' | 'model'>>) => {
-      if (!canCreateContent || !agentId) return;
+    async (patch: Partial<Pick<HeterogeneousProviderConfig, 'effort' | 'model' | 'speed'>>) => {
+      if (!enabled || !agentId) return;
 
       const nextPatch: Partial<HeterogeneousProviderConfig> = { ...patch };
       const providerType = provider?.type;
@@ -334,6 +418,17 @@ const HeteroModel = memo(() => {
         if ('effort' in patch) {
           const sourceArgs = nextPatch.args ?? provider?.args;
           nextPatch.args = stripCodexConfigKey(sourceArgs, CODEX_REASONING_EFFORT_CONFIG_KEY);
+        }
+        if ('speed' in patch) {
+          const sourceArgs = nextPatch.args ?? provider?.args;
+          nextPatch.args = stripCodexConfigKey(sourceArgs, CODEX_SERVICE_TIER_CONFIG_KEY);
+        }
+      } else if (providerType === 'opencode' || providerType === 'pi' || providerType === 'qoder') {
+        if ('model' in patch) {
+          nextPatch.args = stripCliFlags(
+            provider?.args,
+            providerType === 'pi' ? ['--model', '--provider'] : ['--model', '-m'],
+          );
         }
       } else {
         if ('model' in patch) {
@@ -349,22 +444,34 @@ const HeteroModel = memo(() => {
         agencyConfig: { heterogeneousProvider: nextPatch },
       });
     },
-    [agentId, canCreateContent, provider?.args, provider?.type, updateAgentConfigById],
+    [agentId, enabled, provider?.args, provider?.type, updateAgentConfigById],
   );
   const closeMenu = useCallback(() => {
     setOpen(false);
-    setModelOpen(false);
-  }, []);
-  const handleOpenChange = useCallback((value: boolean) => {
-    setOpen(value);
-    if (!value) setModelOpen(false);
   }, []);
   const selectModel = useCallback(
     (value: string) => {
       closeMenu();
-      void patchProvider({ model: value });
+      // Fast speed only applies to supported Codex models — reset it when the
+      // user switches away so the selector never claims a speed the run ignores.
+      const resetSpeed =
+        provider?.type === 'codex' &&
+        resolveCodexSpeedMode(provider) === 'fast' &&
+        !codexModelSupportsFastSpeed(value);
+      const currentEffort =
+        provider?.type === 'codex' ? resolveCodexReasoningEffort(provider) : undefined;
+      const resetEffort =
+        currentEffort !== undefined &&
+        currentEffort !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+        !codexModelSupportsReasoningEffort(value, currentEffort);
+
+      void patchProvider({
+        ...(resetEffort ? { effort: HETEROGENEOUS_AGENT_DEFAULT_SELECTION } : {}),
+        model: value,
+        ...(resetSpeed ? { speed: HETEROGENEOUS_AGENT_DEFAULT_SELECTION } : {}),
+      });
     },
-    [closeMenu, patchProvider],
+    [closeMenu, patchProvider, provider],
   );
   const selectReasoningEffort = useCallback(
     (value: HeteroReasoningEffort) => {
@@ -373,8 +480,34 @@ const HeteroModel = memo(() => {
     },
     [closeMenu, patchProvider],
   );
+  const selectSpeedMode = useCallback(
+    (value: HeterogeneousSpeedMode) => {
+      closeMenu();
+      void patchProvider({ speed: value });
+    },
+    [closeMenu, patchProvider],
+  );
 
   if (!isSelectableProviderType(provider?.type)) return null;
+  if (!enabled) return null;
+
+  if (provider.type === 'opencode' || provider.type === 'pi' || provider.type === 'qoder') {
+    const model =
+      provider.model && provider.model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION
+        ? provider.model
+        : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+
+    return (
+      <HeterogeneousAgentModelSelector
+        agentId={agentId}
+        disabled={false}
+        model={model}
+        permissionReason={reason}
+        type={provider.type}
+        onSelect={(value) => void patchProvider({ model: value })}
+      />
+    );
+  }
 
   const providerType = provider.type;
   const model =
@@ -383,17 +516,29 @@ const HeteroModel = memo(() => {
     providerType === 'codex'
       ? resolveCodexReasoningEffort(provider)
       : resolveClaudeCodeReasoningEffort(provider);
+  // Fast speed is a per-model capability: hide the whole Speed UI (submenu +
+  // lightning icons) for models without the Fast tier. A stale persisted
+  // `fast` on an unsupported model is ignored by the Codex CLI and cleared by
+  // the selector on the next model switch.
+  const supportsFastSpeed = providerType === 'codex' && codexModelSupportsFastSpeed(model);
+  const speed = supportsFastSpeed
+    ? resolveCodexSpeedMode(provider)
+    : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+  const isFastSpeed = speed === 'fast';
   const defaultLabel = t('heteroAgent.modelSelector.default');
   const modelLabel = getModelLabel(model, defaultLabel);
-  const effortLabel = t(EFFORT_LABEL_KEYS[effort]);
+  const effortLabelKeys = providerType === 'codex' ? CODEX_EFFORT_LABEL_KEYS : EFFORT_LABEL_KEYS;
+  const effortLabel = t(effortLabelKeys[effort]);
   const reasoningLevels =
-    providerType === 'codex' ? CODEX_REASONING_EFFORT_LEVELS : CLAUDE_CODE_REASONING_EFFORT_LEVELS;
+    providerType === 'codex'
+      ? getCodexReasoningEffortLevels(model)
+      : CLAUDE_CODE_REASONING_EFFORT_LEVELS;
   const providerModelOptions =
     providerType === 'codex' ? CODEX_MODEL_OPTIONS : CLAUDE_CODE_MODEL_OPTIONS;
   const effortOptions: { label: string; value: HeteroReasoningEffort }[] = [
     { label: defaultLabel, value: HETEROGENEOUS_AGENT_DEFAULT_SELECTION },
     ...reasoningLevels.map((level) => ({
-      label: t(EFFORT_LABEL_KEYS[level]),
+      label: t(effortLabelKeys[level]),
       value: level,
     })),
   ];
@@ -404,6 +549,28 @@ const HeteroModel = memo(() => {
   const modelOptions = baseModelOptions.some((option) => option.value === model)
     ? baseModelOptions
     : [{ label: model, value: model }, ...baseModelOptions];
+  const speedOptions: {
+    description: string;
+    icon?: typeof ZapIcon;
+    label: string;
+    value: HeterogeneousSpeedMode;
+  }[] = [
+    {
+      description: t('heteroAgent.modelSelector.speed.standardDesc'),
+      label: t('heteroAgent.modelSelector.speed.standard'),
+      value: HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
+    },
+    {
+      description: t('heteroAgent.modelSelector.speed.fastDesc'),
+      icon: ZapIcon,
+      label: t('heteroAgent.modelSelector.speed.fast'),
+      value: 'fast',
+    },
+  ];
+  const speedLabel =
+    speed === 'fast'
+      ? t('heteroAgent.modelSelector.speed.fast')
+      : t('heteroAgent.modelSelector.speed.standard');
   const triggerText = getTriggerText({
     defaultConfigLabel: t('heteroAgent.modelSelector.defaultConfig'),
     defaultModelLabel: t('heteroAgent.modelSelector.defaultModel'),
@@ -416,27 +583,21 @@ const HeteroModel = memo(() => {
 
   const trigger = (
     <div
-      className={cx(styles.trigger, !canCreateContent && styles.triggerDisabled)}
+      className={styles.trigger}
       aria-label={t('heteroAgent.modelSelector.ariaLabel', {
         model: modelLabel,
         reasoning: effortLabel,
       })}
     >
+      {isFastSpeed && <Icon icon={ZapIcon} size={12} />}
       <span className={styles.label}>{triggerText}</span>
       <Icon icon={ChevronDownIcon} size={12} />
     </div>
   );
 
-  if (!canCreateContent)
-    return (
-      <Tooltip title={reason}>
-        <div>{trigger}</div>
-      </Tooltip>
-    );
-
   const renderOption = <T extends string>(
     title: string,
-    options: readonly { label: string; value: T }[],
+    options: readonly { description?: string; icon?: typeof ZapIcon; label: string; value: T }[],
     current: T,
     onSelect: (value: T) => void,
   ) =>
@@ -447,54 +608,50 @@ const HeteroModel = memo(() => {
         key={`${title}-${option.value}`}
         onClick={() => void onSelect(option.value)}
       >
-        <span className={styles.optionLabel}>{option.label}</span>
+        {option.description ? (
+          <div className={styles.optionBody}>
+            <span className={styles.optionTitle}>
+              {option.icon && <Icon className={styles.optionIcon} icon={option.icon} size={14} />}
+              {option.label}
+            </span>
+            <span className={styles.optionDesc}>{option.description}</span>
+          </div>
+        ) : (
+          <span className={styles.optionLabel}>{option.label}</span>
+        )}
         {current === option.value && <Icon className={styles.check} icon={CheckIcon} size={16} />}
       </DropdownMenuItem>
     ));
 
   return (
-    <DropdownMenuRoot open={open} onOpenChange={handleOpenChange}>
+    <DropdownMenuRoot open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger nativeButton={false}>{trigger}</DropdownMenuTrigger>
       <DropdownMenuPortal>
-        <DropdownMenuPositioner placement="topRight" sideOffset={8}>
-          <DropdownMenuPopup className={styles.popup} style={{ width: 208 }}>
-            <div className={styles.sectionTitle}>{t('heteroAgent.modelSelector.reasoning')}</div>
-            <div className={styles.scroll}>
+        <DropdownMenuPositioner placement="topLeft" sideOffset={8}>
+          <DropdownMenuPopup className={styles.popup} style={{ width: 240 }}>
+            <SelectorSubmenu
+              currentValue={modelLabel}
+              label={t('heteroAgent.modelSelector.model')}
+              popupWidth={240}
+            >
+              {renderOption('model', modelOptions, model, selectModel)}
+            </SelectorSubmenu>
+            <SelectorSubmenu
+              currentValue={effortLabel}
+              label={t('heteroAgent.modelSelector.reasoning')}
+            >
               {renderOption('reasoning', effortOptions, effort, selectReasoningEffort)}
-            </div>
-            <DropdownMenuSeparator className={styles.divider} />
-            <DropdownMenuSubmenuRoot open={modelOpen} onOpenChange={setModelOpen}>
-              <DropdownMenuSubmenuTrigger
-                className={styles.submenuTrigger}
-                onMouseEnter={() => setModelOpen(true)}
-                onClick={(event) => {
-                  event.preventDefault();
-                  setModelOpen(true);
-                }}
+            </SelectorSubmenu>
+            {supportsFastSpeed && (
+              <SelectorSubmenu
+                currentValue={speedLabel}
+                icon={isFastSpeed ? ZapIcon : undefined}
+                label={t('heteroAgent.modelSelector.speed')}
+                popupWidth={240}
               >
-                <span className={styles.submenuMeta}>{modelLabel}</span>
-                <span className={styles.submenuTrail}>
-                  <Icon icon={ChevronRightIcon} size={16} />
-                </span>
-              </DropdownMenuSubmenuTrigger>
-              <DropdownMenuPortal>
-                <DropdownMenuPositioner
-                  alignOffset={-4}
-                  anchor={null}
-                  placement="right"
-                  sideOffset={8}
-                >
-                  <DropdownMenuPopup className={styles.popup} style={{ minWidth: 200 }}>
-                    <div className={styles.sectionTitle}>
-                      {t('heteroAgent.modelSelector.model')}
-                    </div>
-                    <div className={styles.scroll}>
-                      {renderOption('model', modelOptions, model, selectModel)}
-                    </div>
-                  </DropdownMenuPopup>
-                </DropdownMenuPositioner>
-              </DropdownMenuPortal>
-            </DropdownMenuSubmenuRoot>
+                {renderOption('speed', speedOptions, speed, selectSpeedMode)}
+              </SelectorSubmenu>
+            )}
           </DropdownMenuPopup>
         </DropdownMenuPositioner>
       </DropdownMenuPortal>

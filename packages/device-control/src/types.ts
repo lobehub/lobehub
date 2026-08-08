@@ -8,6 +8,9 @@
 
 // ─── Workspace scan ───
 
+export type ProjectSkillScope = 'device' | 'project';
+export type ProjectSkillSource = '.agents/skills' | '.claude/skills';
+
 export interface ProjectSkillItem {
   description?: string;
   /** Total number of regular files under `skillDir` (recursive, including `SKILL.md`). */
@@ -17,10 +20,14 @@ export interface ProjectSkillItem {
   name: string;
   /** Absolute path to the SKILL.md file. */
   path: string;
+  /** Approved root used by the host preview protocol for this skill. */
+  previewRoot: string;
+  /** Skill filesystem scope: project cwd or execution-device home. */
+  scope: ProjectSkillScope;
   /** Directory containing the SKILL.md. */
   skillDir: string;
   /** Source directory the skill was discovered in. */
-  source: '.agents/skills' | '.claude/skills';
+  source: ProjectSkillSource;
 }
 
 export interface InitWorkspaceParams {
@@ -47,8 +54,8 @@ export interface ListProjectSkillsParams {
 export interface ListProjectSkillsResult {
   root: string;
   skills: ProjectSkillItem[];
-  /** Source directory actually scanned (after fallback resolution). */
-  source: ProjectSkillItem['source'] | null;
+  /** Legacy source hint. Per-skill `scope` / `source` fields are authoritative. */
+  source: ProjectSkillSource | null;
 }
 
 export interface StatPathResult {
@@ -79,12 +86,24 @@ export interface LocalFilePreviewImage {
   type: 'image';
 }
 
+/**
+ * Binary document (pdf / office) small enough to preview in-app, carried as
+ * base64 so it survives RPC serialization. Oversized documents stay on the
+ * `binary` / `pdf` unsupported variants.
+ */
+export interface LocalFilePreviewDocument {
+  base64: string;
+  contentType: string;
+  type: 'document';
+}
+
 export interface LocalFilePreviewUnsupported {
   contentType: string;
   type: 'binary' | 'pdf' | 'video';
 }
 
 export type LocalFilePreview =
+  | LocalFilePreviewDocument
   | LocalFilePreviewImage
   | LocalFilePreviewText
   | LocalFilePreviewUnsupported;
@@ -98,6 +117,8 @@ export interface LocalFilePreviewResult {
 // ─── Project file index ───
 
 export interface ProjectFileIndexEntry {
+  /** Whether Git ignore rules match this file or directory. */
+  gitIgnored?: boolean;
   isDirectory: boolean;
   name: string;
   path: string;
@@ -114,7 +135,48 @@ export interface ProjectFileIndexResult {
   indexedAt: string;
   root: string;
   source: 'git' | 'glob';
-  totalCount: number;
+}
+
+export interface ProjectFileSearchParams extends ProjectFileIndexParams {
+  limit?: number;
+  query: string;
+}
+
+export interface ProjectFileSearchResult {
+  entries: ProjectFileIndexEntry[];
+  root: string;
+  searchedAt: string;
+  source: 'git' | 'glob';
+}
+
+// ─── Skill directory ───
+
+export interface PrepareSkillDirectoryParams {
+  forceRefresh?: boolean;
+  /** Presigned download URL of the skill zip archive. */
+  url: string;
+  /** Content hash of the archive — the idempotency key for the local cache. */
+  zipHash: string;
+}
+
+export interface PrepareSkillDirectoryResult {
+  error?: string;
+  /** Device-local directory the archive was extracted into. */
+  extractedDir: string;
+  success: boolean;
+  zipPath: string;
+}
+
+/**
+ * Host hooks for the skill-archive cache. Both are optional: the CLI daemon
+ * runs on the portable defaults; the desktop injects both so the gateway RPC
+ * path shares the cache (and proxy-aware fetch) with its renderer-IPC path.
+ */
+export interface SkillDirectoryDeps {
+  /** Fetch used to download skill archives. Desktop injects Electron's `net` fetch (proxy-aware); defaults to global `fetch`. */
+  fetchSkillArchive?: (url: string) => Promise<Response>;
+  /** Skill zip cache root. Desktop: `<appStoragePath>/file-storage/skills`; defaults to `~/.lobehub/skills`. */
+  skillCacheRoot?: string;
 }
 
 /**
@@ -140,9 +202,97 @@ export interface WorkspaceScanDeps {
  * - The CLI uses the portable defaults exported from this package
  *   (`defaultGetLocalFilePreview`, `defaultGetProjectFileIndex`).
  */
-export interface DeviceControlDeps extends WorkspaceScanDeps {
+export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps {
+  /**
+   * Enroll this machine into a workspace pool: derive the workspace-scoped
+   * deviceId and open a second gateway connection authenticated with `token`
+   * (a short-lived workspace-device connect token minted server-side), then
+   * return the derived identity so the server can register the workspace row.
+   * Optional — hosts that manage a single fixed connection (e.g. a CLI daemon
+   * already running in workspace mode) may omit it; the dispatcher then fails
+   * the RPC with a clear reason.
+   */
+  enrollWorkspace?: (params: EnrollWorkspaceParams) => Promise<EnrollWorkspaceResult>;
   /** Read a local file preview (host-gated on desktop; disk read on CLI). */
   getLocalFilePreview: (params: LocalFilePreviewUrlParams) => Promise<LocalFilePreviewResult>;
   /** Build the project file index. */
   getProjectFileIndex: (params: ProjectFileIndexParams) => Promise<ProjectFileIndexResult>;
+  /** Query a heterogeneous CLI's model catalog on this execution host. */
+  listHeterogeneousAgentModels?: (
+    params: ListHeterogeneousAgentModelsParams,
+  ) => Promise<HeterogeneousAgentModelCatalog>;
+  /** Search project files without shipping the whole index to the caller. */
+  searchProjectFiles: (params: ProjectFileSearchParams) => Promise<ProjectFileSearchResult>;
+  /**
+   * Drop this machine's enrollment in a workspace pool: close the
+   * workspace-principal connection and clear any persisted auto-reconnect
+   * state. Optional, mirroring {@link DeviceControlDeps.enrollWorkspace}.
+   */
+  unenrollWorkspace?: (params: UnenrollWorkspaceParams) => Promise<{ success: boolean }>;
+}
+
+// ─── Heterogeneous agent model discovery ───
+
+/**
+ * Structural mirrors of the canonical `@lobechat/types` catalog contracts.
+ * Kept local so device-control remains a leaf package with no app/type-layer dependency.
+ */
+export interface ListHeterogeneousAgentModelsParams {
+  command?: string;
+  cwd?: string;
+  env?: Record<string, string>;
+  type: 'opencode' | 'pi' | 'qoder';
+}
+
+export interface HeterogeneousAgentModelCatalogItem {
+  id: string;
+  label?: string;
+  modelId: string;
+  providerId: string;
+}
+
+export type HeterogeneousAgentModelCatalog =
+  | {
+      error: {
+        code:
+          | 'cli_not_found'
+          | 'command_failed'
+          | 'device_unavailable'
+          | 'timeout'
+          | 'unsupported_client';
+        message: string;
+      };
+      status: 'error';
+      updatedAt: number;
+    }
+  | {
+      models: HeterogeneousAgentModelCatalogItem[];
+      status: 'success';
+      updatedAt: number;
+    };
+
+// ─── Workspace enrollment (remote share) ───
+
+export interface EnrollWorkspaceParams {
+  /**
+   * Only derive and return the workspace identity — do NOT open a share
+   * connection or persist enrollment state. Lets the server check for an
+   * existing enrollment (and ask the user to confirm an overwrite) before the
+   * device mutates anything. Older clients ignore this flag and enroll on the
+   * probe, which degrades to the pre-flag behaviour.
+   */
+  identityOnly?: boolean;
+  /** Short-lived workspace-device connect token (carries the workspace claim). */
+  token: string;
+  workspaceId: string;
+}
+
+export interface EnrollWorkspaceResult {
+  /** The workspace-scoped deviceId this machine derived for the pool. */
+  deviceId: string;
+  identitySource: 'fallback' | 'machine-id';
+}
+
+export interface UnenrollWorkspaceParams {
+  workspaceId: string;
 }

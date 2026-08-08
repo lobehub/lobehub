@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   LobeDeepSeekAI,
@@ -8,6 +8,10 @@ import {
   openAIParams,
 } from '../index';
 import { anthropicBaseURL, defaultOpenAIBaseURL } from './testUtils';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('LobeDeepSeekAI', () => {
   const createRuntime = ({
@@ -128,6 +132,36 @@ describe('LobeDeepSeekAI', () => {
         'Unsupported DeepSeek sdkType: invalid',
       );
     });
+
+    it.each([
+      ['the default Anthropic runtime', undefined, undefined, 'https://api.deepseek.com/v1/models'],
+      ['an Anthropic baseURL', anthropicBaseURL, undefined, 'https://api.deepseek.com/v1/models'],
+      [
+        'an explicit Anthropic sdkType',
+        'https://aihubmix.com/v1/messages',
+        'anthropic',
+        'https://aihubmix.com/v1/models',
+      ],
+    ])(
+      'should use OpenAI-compatible model discovery for %s',
+      async (_, baseURL, sdkType, expectedURL) => {
+        const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+          new Response(JSON.stringify({ data: [{ id: 'deepseek-chat' }], object: 'list' }), {
+            headers: { 'Content-Type': 'application/json' },
+            status: 200,
+          }),
+        );
+        const runtime = createRuntime({ baseURL, sdkType });
+
+        const models = await runtime.models();
+        const [request] = fetchSpy.mock.calls[0]!;
+        const requestURL = request instanceof Request ? request.url : String(request);
+
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+        expect(requestURL).toBe(expectedURL);
+        expect(models).toContainEqual(expect.objectContaining({ id: 'deepseek-chat' }));
+      },
+    );
   });
 });
 

@@ -10,7 +10,7 @@ import {
   stopPropagation,
   Text,
 } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import {
   Activity,
   Award,
@@ -93,7 +93,7 @@ const BenchmarkHead = memo<{ id: string }>(({ id }) => {
       key: b.id,
       label: b.name,
       onClick: () => handleBenchmarkSwitch(b.id),
-      style: b.id === id ? { backgroundColor: 'var(--ant-control-item-bg-active)' } : {},
+      style: b.id === id ? { backgroundColor: cssVar.controlItemBgActive } : {},
     }));
   }, [benchmarkList, handleBenchmarkSwitch, id, styles.menuIcon]);
 

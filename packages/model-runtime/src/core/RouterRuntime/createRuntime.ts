@@ -39,6 +39,7 @@ import { isNonRetryableRequestError } from '../../utils/isNonRetryableRequestErr
 import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
 import { postProcessModelList } from '../../utils/postProcessModelList';
 import { safeParseJSON } from '../../utils/safeParseJSON';
+import { setRuntimeSignatureScopeSource } from '../../utils/signatureScope';
 import type { LobeRuntimeAI } from '../BaseAI';
 import type {
   CreateImageOptions,
@@ -126,6 +127,25 @@ interface RouteAttemptMetadata {
   totalOptions: number;
 }
 
+interface RouteAttemptContext {
+  metadata?: Record<string, unknown>;
+  toolsCount?: number;
+  user?: string;
+}
+
+interface RouteAttemptContextValidationParams extends RouteAttemptContext {
+  apiType: string;
+  channelId?: string;
+  model: string;
+  routerId?: string;
+}
+
+export interface SortRouterOptionsParams {
+  model: string;
+  options: RouterOptionItem[];
+  routerId?: string;
+}
+
 export interface CreateRouterRuntimeOptions<T extends Record<string, any> = any> {
   apiKey?: string;
   chatCompletion?: {
@@ -176,7 +196,7 @@ export interface CreateRouterRuntimeOptions<T extends Record<string, any> = any>
   ) => Promise<HandleCreateVideoWebhookResult>;
   id: string;
   models?:
-    | ((params: { client: OpenAI }) => Promise<ChatModelCard[]>)
+    | ((params: { client: OpenAI; options?: ConstructorOptions<T> }) => Promise<ChatModelCard[]>)
     | {
         transformModel?: (model: OpenAI.Model) => ChatModelCard;
       };
@@ -194,6 +214,15 @@ export interface CreateRouterRuntimeOptions<T extends Record<string, any> = any>
     model: string;
     optionIndex: number;
   }) => boolean | Promise<boolean>;
+  /**
+   * Reorder fallback options before each request (e.g. demote temporarily
+   * unhealthy channels). Must return a permutation of the input options;
+   * any other result (wrong length, foreign items, thrown error) is ignored
+   * so a misbehaving hook can never reduce availability.
+   */
+  sortRouterOptions?: (
+    params: SortRouterOptionsParams,
+  ) => RouterOptionItem[] | Promise<RouterOptionItem[]>;
 }
 
 export const createRouterRuntime = ({
@@ -216,6 +245,45 @@ export const createRouterRuntime = ({
       if (!metadata || this._id !== 'lobehub') return;
 
       metadata.routeAttempt = routeAttempt;
+    }
+
+    private validateRouteAttemptContext({
+      apiType,
+      channelId,
+      metadata,
+      model,
+      routerId,
+      toolsCount,
+      user,
+    }: RouteAttemptContextValidationParams) {
+      const runtimeUserId =
+        typeof this._options.userId === 'string' ? this._options.userId : undefined;
+      const effectiveUserId = runtimeUserId || user;
+      const trigger = metadata?.trigger;
+      const traceId = typeof metadata?.traceId === 'string' ? metadata.traceId : undefined;
+
+      if (this._id !== 'lobehub' || (effectiveUserId && trigger)) return effectiveUserId;
+      if (process.env.NODE_ENV !== 'development') return effectiveUserId;
+
+      const diagnostic = {
+        apiType,
+        channelId,
+        metadataKeys: Object.keys(metadata ?? {}),
+        missingTrigger: !trigger,
+        missingUser: !effectiveUserId,
+        model,
+        optionUserPresent: Boolean(user),
+        providerId: this._id,
+        routerId,
+        runtimeUserIdPresent: Boolean(runtimeUserId),
+        stack: new Error('RouteAttemptMissingContext').stack?.split('\n').slice(0, 20),
+        toolsCount: toolsCount ?? 0,
+        traceId,
+        trigger,
+      };
+
+      // Example bug: modelRuntime.chat(payload) without metadata would record trigger=null.
+      throw new Error(`[RouteAttemptMissingContext] ${JSON.stringify(diagnostic)}`);
     }
 
     constructor(options: LobeClientOptions & Record<string, any> = {}) {
@@ -356,6 +424,60 @@ export const createRouterRuntime = ({
       return routerOptions;
     }
 
+    private async applySortRouterOptions(
+      router: RouterInstance,
+      model: string,
+      routerOptions: RouterOptionItem[],
+    ): Promise<RouterOptionItem[]> {
+      if (!params.sortRouterOptions || routerOptions.length <= 1) return routerOptions;
+
+      const startedAt = Date.now();
+      try {
+        // Hand the hook a copy: hooks may sort in place (`options.sort(...)`), and the
+        // input can be the shared `router.options` array reused across concurrent
+        // requests. Keeping the original untouched also keeps it a trustworthy
+        // baseline — validating a same-reference return would always pass, even
+        // after mutations like `options.pop()`.
+        const sorted = await params.sortRouterOptions({
+          model,
+          options: [...routerOptions],
+          routerId: router.id,
+        });
+        const isPermutation =
+          Array.isArray(sorted) &&
+          sorted.length === routerOptions.length &&
+          routerOptions.every((optionItem) => sorted.includes(optionItem));
+
+        if (this._id === 'lobehub') {
+          timing(
+            'sortRouterOptions done model=%s routerId=%s durationMs=%d applied=%s',
+            model,
+            router.id,
+            getDurationMs(startedAt),
+            isPermutation,
+          );
+        }
+
+        // Copy again so a hook retaining its returned array cannot mutate the
+        // list while runWithFallback awaits provider calls between attempts.
+        if (isPermutation) return [...sorted];
+
+        log('sortRouterOptions returned a non-permutation result, ignoring');
+        return routerOptions;
+      } catch (error) {
+        if (this._id === 'lobehub') {
+          timing(
+            'sortRouterOptions error model=%s routerId=%s durationMs=%d',
+            model,
+            router.id,
+            getDurationMs(startedAt),
+          );
+        }
+        log('sortRouterOptions callback error: %O', error);
+        return routerOptions;
+      }
+    }
+
     /**
      * Build a runtime instance for a specific option item.
      * Option items can override apiType to switch providers for fallback.
@@ -376,6 +498,12 @@ export const createRouterRuntime = ({
         ...this._params,
         ...this._options,
         ...optionOverrides,
+      };
+      const signatureScopeSource = {
+        apiType: resolvedApiType,
+        channelId,
+        provider: this._id,
+        routerId: router.id ?? this._id,
       };
 
       /**
@@ -409,11 +537,14 @@ export const createRouterRuntime = ({
           );
         }
 
+        const runtime = LobeVertexAI.initFromVertexAI(vertexOptions);
+        setRuntimeSignatureScopeSource(runtime, signatureScopeSource);
+
         return {
           channelId,
           id: resolvedApiType,
           remark,
-          runtime: LobeVertexAI.initFromVertexAI(vertexOptions),
+          runtime,
         };
       }
 
@@ -423,6 +554,7 @@ export const createRouterRuntime = ({
           ? (router.runtime ?? baseRuntimeMap[resolvedApiType] ?? LobeOpenAI)
           : (baseRuntimeMap[resolvedApiType] ?? LobeOpenAI);
       const runtime: LobeRuntimeAI = new providerAI({ ...finalOptions, id: this._id });
+      setRuntimeSignatureScopeSource(runtime, signatureScopeSource);
 
       if (this._id === 'lobehub') {
         timing(
@@ -445,11 +577,16 @@ export const createRouterRuntime = ({
     private async runWithFallback<T>(
       model: string,
       requestHandler: (runtime: LobeRuntimeAI) => Promise<T>,
-      metadata?: Record<string, unknown>,
+      routeContext: RouteAttemptContext = {},
     ): Promise<T> {
       const totalStartedAt = Date.now();
+      const { metadata, toolsCount, user } = routeContext;
       const matchedRouter = await this.resolveMatchedRouter(model);
-      const routerOptions = this.normalizeRouterOptions(matchedRouter);
+      const routerOptions = await this.applySortRouterOptions(
+        matchedRouter,
+        model,
+        this.normalizeRouterOptions(matchedRouter),
+      );
       const totalOptions = routerOptions.length;
 
       if (this._id === 'lobehub') {
@@ -481,6 +618,15 @@ export const createRouterRuntime = ({
           remark,
           runtime,
         } = await this.createRuntimeFromOption(matchedRouter, optionItem);
+        const routeAttemptUserId = this.validateRouteAttemptContext({
+          apiType: resolvedApiType,
+          channelId,
+          metadata,
+          model,
+          routerId: matchedRouter.id,
+          toolsCount,
+          user,
+        });
 
         try {
           if (this._id === 'lobehub') {
@@ -543,7 +689,7 @@ export const createRouterRuntime = ({
               remark,
               routerId: matchedRouter.id,
               success: true,
-              userId: this._options.userId,
+              userId: routeAttemptUserId,
             })
             .catch((e) => {
               log('onRouteAttempt callback error: %O', e);
@@ -591,7 +737,7 @@ export const createRouterRuntime = ({
               remark,
               routerId: matchedRouter.id,
               success: false,
-              userId: this._options.userId,
+              userId: routeAttemptUserId,
             })
             .catch((e) => {
               log('onRouteAttempt callback error: %O', e);
@@ -686,7 +832,10 @@ export const createRouterRuntime = ({
         typeof modelsOption === 'function' && // Use the same baseURL-matched runtime as chat routing for provider model discovery.
         'client' in runtime
       ) {
-        const modelList = await modelsOption({ client: (runtime as any).client });
+        const modelList = await modelsOption({
+          client: (runtime as any).client,
+          options: this._options,
+        });
         return await postProcessModelList(modelList);
       }
 
@@ -702,7 +851,11 @@ export const createRouterRuntime = ({
         return await this.runWithFallback(
           payload.model,
           (runtime) => runtime.chat!(payload, options),
-          options?.metadata,
+          {
+            metadata: options?.metadata,
+            toolsCount: payload.tools?.length ?? 0,
+            user: options?.user,
+          },
         );
       } catch (e) {
         if (params.chatCompletion?.handleError) {
@@ -721,7 +874,7 @@ export const createRouterRuntime = ({
       return this.runWithFallback(
         payload.model,
         (runtime) => runtime.createImage!(payload, options),
-        options?.metadata,
+        { metadata: options?.metadata },
       );
     }
 
@@ -729,7 +882,7 @@ export const createRouterRuntime = ({
       return this.runWithFallback(
         payload.model,
         (runtime) => runtime.createVideo!(payload, options),
-        options?.metadata,
+        { metadata: options?.metadata },
       );
     }
 
@@ -761,7 +914,11 @@ export const createRouterRuntime = ({
       return this.runWithFallback(
         payload.model,
         (runtime) => runtime.generateObject!(payload, options),
-        options?.metadata,
+        {
+          metadata: options?.metadata,
+          toolsCount: payload.tools?.length ?? 0,
+          user: options?.user,
+        },
       );
     }
 
@@ -769,19 +926,26 @@ export const createRouterRuntime = ({
       return this.runWithFallback(
         payload.model,
         (runtime) => runtime.embeddings!(payload, options),
-        options?.metadata,
+        { metadata: options?.metadata, user: options?.user },
       );
     }
 
     async textToSpeech(payload: TextToSpeechPayload, options?: EmbeddingsOptions) {
-      return this.runWithFallback(payload.model, (runtime) =>
-        runtime.textToSpeech!(payload, options),
+      return this.runWithFallback(
+        payload.model,
+        (runtime) => runtime.textToSpeech!(payload, options),
+        {
+          metadata: options?.metadata,
+          user: options?.user,
+        },
       );
     }
 
     async transcribe(payload: ASRPayload, options?: ASROptions) {
-      return this.runWithFallback(payload.model, (runtime) =>
-        runtime.transcribe!(payload, options),
+      return this.runWithFallback(
+        payload.model,
+        (runtime) => runtime.transcribe!(payload, options),
+        { user: options?.user },
       );
     }
   };

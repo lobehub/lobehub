@@ -105,7 +105,7 @@ lh bot connect <botId>
 
 ## Notes
 
-- **WebSocket mode** (长连接) skips the need for a public URL and is the fastest to set up
+- **WebSocket mode** skips the need for a public URL and is the fastest to set up
 - Every change to permissions, events, or app info requires creating a new version and re-publishing
 - \`im.message.receive_v1\` is the key event — without it the bot receives no messages
 - Feishu does not render Markdown — use plain text or Feishu's card format for rich messages

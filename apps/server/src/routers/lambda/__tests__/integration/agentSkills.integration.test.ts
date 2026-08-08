@@ -86,8 +86,16 @@ vi.mock('@/server/services/market', () => ({
   MarketService: vi.fn().mockImplementation(() => mockMarketServiceInstance),
 }));
 
-// Mock global fetch for URL imports
-const mockFetch = vi.fn();
+// User-supplied URLs (importFromUrl / importFromMarket download) must be fetched through
+// ssrfSafeFetch (SSRF guard), never raw global fetch. Configure responses on mockSsrfSafeFetch;
+// the raw global fetch is stubbed to throw so any regression back to raw fetch fails loudly
+// (GHSA-53h9-fmjf-frwr / #16536).
+const { mockSsrfSafeFetch } = vi.hoisted(() => ({ mockSsrfSafeFetch: vi.fn() }));
+vi.mock('@lobechat/ssrf-safe-fetch', () => ({ ssrfSafeFetch: mockSsrfSafeFetch }));
+
+const mockFetch = vi.fn(() => {
+  throw new Error('raw global fetch must not be used for user-supplied URLs; use ssrfSafeFetch');
+});
 vi.stubGlobal('fetch', mockFetch);
 
 describe('Skill Router Integration Tests', () => {
@@ -943,11 +951,11 @@ describe('Skill Router Integration Tests', () => {
 
   describe('importFromUrl', () => {
     beforeEach(() => {
-      mockFetch.mockReset();
+      mockSsrfSafeFetch.mockReset();
     });
 
     it('should import skill from URL', async () => {
-      mockFetch.mockResolvedValue({
+      mockSsrfSafeFetch.mockResolvedValue({
         ok: true,
         status: 200,
         text: async () => `---
@@ -980,7 +988,7 @@ description: A skill from URL
     });
 
     it('should update existing skill when re-importing from same URL', async () => {
-      mockFetch.mockResolvedValue({
+      mockSsrfSafeFetch.mockResolvedValue({
         ok: true,
         status: 200,
         text: async () => 'content',
@@ -1020,7 +1028,7 @@ description: A skill from URL
 
   describe('importFromMarket', () => {
     beforeEach(() => {
-      mockFetch.mockReset();
+      mockSsrfSafeFetch.mockReset();
       mockMarketServiceInstance.getSkillDownloadUrl.mockReset();
     });
 
@@ -1031,7 +1039,7 @@ description: A skill from URL
           'https://market.lobehub.com/api/v1/skills/github.owner.repo/download?version=1.0.0',
         );
 
-      mockFetch.mockResolvedValue({
+      mockSsrfSafeFetch.mockResolvedValue({
         arrayBuffer: async () => new ArrayBuffer(8),
         headers: {
           get: (key: string) => (key === 'content-type' ? 'application/zip' : null),
@@ -1104,8 +1112,10 @@ description: A skill from URL
       const otherUserId = await createTestUser(serverDB);
       const caller2 = agentSkillsRouter.createCaller(createTestContext(otherUserId));
 
-      // Try to update (should not affect the skill due to userId filter)
-      await caller2.update({ id: created!.id, manifest: { name: 'Hacked' } });
+      // Another user cannot see the skill, so the update is rejected outright.
+      await expect(
+        caller2.update({ id: created!.id, manifest: { name: 'Hacked' } }),
+      ).rejects.toThrow('Skill not found');
 
       // Original skill should be unchanged
       const unchanged = await caller1.getById({ id: created!.id });

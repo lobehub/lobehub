@@ -23,6 +23,19 @@ const modelBSchema: VideoModelParamsSchema = {
   duration: { default: 3, min: 1, max: 10 },
 };
 
+const seedanceSchema: VideoModelParamsSchema = {
+  prompt: { default: '' },
+  imageUrls: { default: [], maxCount: 9 },
+  endImageUrl: { default: null },
+};
+
+const minimaxH3Schema: VideoModelParamsSchema = {
+  prompt: { default: '' },
+  imageUrl: { default: null },
+  imageUrls: { default: [], maxCount: 7 },
+  endImageUrl: { default: null },
+};
+
 const testVideoModels: AIVideoModelCard[] = [
   {
     id: 'video-model-a',
@@ -38,18 +51,32 @@ const testVideoModels: AIVideoModelCard[] = [
     parameters: modelBSchema,
     releasedAt: '2025-01-02',
   },
+  {
+    id: 'seedance-2-0',
+    displayName: 'Seedance 2.0',
+    type: 'video',
+    parameters: seedanceSchema,
+    releasedAt: '2026-01-01',
+  },
+  {
+    id: 'minimax-h3',
+    displayName: 'MiniMax H3',
+    type: 'video',
+    parameters: minimaxH3Schema,
+    releasedAt: '2026-07-31',
+  },
 ];
 
 const mockProviders = [
   {
     id: 'provider-a',
     name: 'Provider A',
-    children: [testVideoModels[0]],
+    children: [testVideoModels[0], testVideoModels[2]],
   },
   {
     id: 'provider-b',
     name: 'Provider B',
-    children: [testVideoModels[1]],
+    children: [testVideoModels[1], testVideoModels[3]],
   },
 ];
 
@@ -105,6 +132,33 @@ describe('video generationConfig actions', () => {
       endImageUrl: 'end-custom.png',
     });
     expect(result.current.parameters?.duration).toBe(modelBDefaultValues.duration);
+  });
+
+  it('should clamp preserved reference images to the next model limit', () => {
+    const imageUrls = Array.from({ length: 9 }, (_, index) => `reference-${index}.png`);
+    useVideoStore.setState({
+      model: 'seedance-2-0',
+      parameters: {
+        endImageUrl: 'end-frame.png',
+        imageUrls,
+        prompt: 'preserve references',
+      } as RuntimeVideoGenParams,
+      parametersSchema: seedanceSchema,
+      provider: 'provider-a',
+    });
+
+    const { result } = renderHook(() => useVideoStore());
+
+    act(() => {
+      result.current.setModelAndProviderOnSelect('minimax-h3', 'provider-b');
+    });
+
+    expect(result.current.parameters).toEqual({
+      endImageUrl: 'end-frame.png',
+      imageUrl: null,
+      imageUrls: imageUrls.slice(0, 7),
+      prompt: 'preserve references',
+    });
   });
 });
 

@@ -30,11 +30,12 @@ LobeHub supports the configuration of external authentication services using Bet
 
 To enable Better Auth in LobeHub, set the following environment variables:
 
-| Environment Variable   | Type     | Description                                                                                                                                                               |
-| ---------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `AUTH_SECRET`          | Required | Key used to encrypt session tokens. Generate using: `openssl rand -base64 32`                                                                                             |
-| `NEXT_PUBLIC_AUTH_URL` | Required | The browser-accessible base URL for Better Auth (e.g., `http://localhost:3010`, `https://LobeHub.com`). Optional for Vercel deployments (auto-detected from `VERCEL_URL`) |
-| `AUTH_SSO_PROVIDERS`   | Optional | Comma-separated list of enabled SSO providers, e.g., `google,github,microsoft`                                                                                            |
+| Environment Variable   | Type       | Description                                                                                                                                                                                                                                                                                               |
+| ---------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AUTH_SECRET`          | Required   | Key used to encrypt session tokens. Generate using: `openssl rand -base64 32`                                                                                                                                                                                                                             |
+| `APP_URL`              | Required   | Public base URL of this LobeHub instance (e.g. `https://lobe.example.com`). Better Auth uses it as `baseURL` for OAuth callbacks and trusted origins. On Vercel it can fall back to `VERCEL_*` URLs when unset; elsewhere omitting it defaults to `http://localhost:<PORT>` and breaks public-domain SSO. |
+| `NEXT_PUBLIC_AUTH_URL` | Deprecated | Removed NextAuth/browser auth URL. Setting this variable will cause the deployment to fail — use `APP_URL` instead.                                                                                                                                                                                       |
+| `AUTH_SSO_PROVIDERS`   | Optional   | Comma-separated list of enabled SSO providers, e.g., `google,github,microsoft`                                                                                                                                                                                                                            |
 
 ## Supported SSO Providers
 

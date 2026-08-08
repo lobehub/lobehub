@@ -27,11 +27,9 @@ export const createActions = (
 ): TodoListStore => {
   // Save implementation (used by both debounced and immediate save)
   const performSave = async () => {
-    console.info('[performSave] called, onSave:', !!internals.onSave);
     if (!internals.onSave) return;
 
     const { items, isDirty } = get();
-    console.info('[performSave] isDirty:', isDirty, 'items:', items.length);
     if (!isDirty) return;
 
     set({ saveStatus: 'saving' });
@@ -39,9 +37,7 @@ export const createActions = (
     try {
       // Convert TodoListItem[] to TodoItem[] (remove id)
       const todoItems: TodoItem[] = items.map(({ status, text }) => ({ status, text }));
-      console.info('[performSave] calling onSave with', todoItems.length, 'items');
       await internals.onSave(todoItems);
-      console.info('[performSave] onSave completed');
       set({ isDirty: false, saveStatus: 'saved' });
 
       // Match saveNow: ease the indicator back to `idle` so the UI doesn't
@@ -68,7 +64,13 @@ export const createActions = (
 
   return {
     ...initialState,
-    items: defaultItems.map((item) => ({ ...item, id: generateId() })),
+    // Defensive: `defaultItems` ultimately derives from untrusted model tool-call
+    // args, so fall back to an empty list rather than throwing during store init
+    // (which would crash the whole Conversation render tree).
+    items: (Array.isArray(defaultItems) ? defaultItems : []).map((item) => ({
+      ...item,
+      id: generateId(),
+    })),
 
     addItem: () => {
       const { items, newItemText } = get();
@@ -104,9 +106,7 @@ export const createActions = (
 
       try {
         const todoItems: TodoItem[] = items.map(({ status, text }) => ({ status, text }));
-        console.info('[saveNow] force saving', todoItems.length, 'items');
         await internals.onSave(todoItems);
-        console.info('[saveNow] save completed');
         set({ isDirty: false, saveStatus: 'saved' });
 
         setTimeout(() => {

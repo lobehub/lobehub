@@ -1,15 +1,13 @@
-import { isDesktop } from '@lobechat/const';
 import { type ChatToolPayload } from '@lobechat/types';
 import debug from 'debug';
-import i18n from 'i18next';
 
 import { type StreamEvent } from '@/services/agentRuntime';
 import { agentRuntimeService } from '@/services/agentRuntime';
-import { getAgentStoreState } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
 import { type ChatStore } from '@/store/chat/store';
-import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
-import { topicMapKey } from '@/store/chat/utils/topicMapKey';
+import {
+  notifyDesktopAgentCompleted,
+  notifyDesktopHumanApprovalRequired,
+} from '@/store/chat/utils/desktopNotification';
 import { type StoreSetter } from '@/store/types';
 
 const log = debug('store:chat:ai-agent:runAgent');
@@ -245,37 +243,14 @@ export class AgentActionImpl {
         // Stop loading state
         log(`Stopping loading for ${assistantId}`);
 
-        // Show desktop notification
-        if (isDesktop) {
-          try {
-            const { desktopNotificationService } =
-              await import('@/services/electron/desktopNotification');
-
-            // Use topic title or agent title as notification title
-            let notificationTitle = i18n.t('desktopNotification.aiReplyCompleted.title', {
-              ns: 'chat',
-            });
-            const opCtx = operation.context;
-            if (opCtx.topicId && opCtx.agentId) {
-              const key = topicMapKey({ agentId: opCtx.agentId, groupId: opCtx.groupId });
-              const topicData = this.#get().topicDataMap[key];
-              const topic = topicData?.items?.find((item) => item.id === opCtx.topicId);
-              if (topic?.title) notificationTitle = topic.title;
-            } else if (opCtx.agentId) {
-              const agentMeta = agentSelectors.getAgentMetaById(opCtx.agentId)(
-                getAgentStoreState(),
-              );
-              if (agentMeta?.title) notificationTitle = agentMeta.title;
-            }
-
-            await desktopNotificationService.showNotification({
-              body: i18n.t('desktopNotification.aiReplyCompleted.body', { ns: 'chat' }),
-              title: notificationTitle,
-            });
-          } catch (error) {
-            console.error('Desktop notification error:', error);
-          }
-        }
+        // Show desktop notification — unified completion notification: title =
+        // topic/agent name, body = the actual reply, click deep-links to the
+        // conversation. The helper no-ops off-desktop and resolves title/body
+        // from the operation context + final content.
+        await notifyDesktopAgentCompleted(this.#get, {
+          content: finalContent,
+          context: operation.context,
+        });
 
         // Mark unread completion for background agents
         const op = this.#get().operations[operationId];
@@ -284,6 +259,19 @@ export class AgentActionImpl {
             agentId: op.context.agentId,
             groupId: op.context.groupId,
             topicId: op.context.topicId,
+          });
+        }
+        break;
+      }
+
+      case 'visible_output_end': {
+        // Example: no-tool answers can finish visible text several seconds
+        // before agent_runtime_end reconciles cache, queue, unread, and
+        // notification side effects. Retire only visible loading here.
+        this.#get().updateOperationMetadata(operationId, { visibleLoadingDone: true });
+        if (operation.parentOperationId) {
+          this.#get().updateOperationMetadata(operation.parentOperationId, {
+            visibleLoadingDone: true,
           });
         }
         break;
@@ -313,6 +301,20 @@ export class AgentActionImpl {
           });
 
           await notifyDesktopHumanApprovalRequired(this.#get, operation.context);
+          if (operation.context.topicId) {
+            const statusWrite = this.#get().updateTopicStatus?.({
+              agentId: operation.context.agentId,
+              groupId: operation.context.groupId,
+              ...(operation.context.scope === 'group' || operation.context.scope === 'group_agent'
+                ? { scope: operation.context.scope }
+                : {}),
+              status: 'waitingForHuman',
+              topicId: operation.context.topicId,
+            });
+            void statusWrite?.catch((error) => {
+              console.error('[runAgent] updateTopicStatus failed:', error);
+            });
+          }
 
           // Stop loading state, waiting for human intervention
           log(`Stopping loading for human approval: ${assistantId}`);

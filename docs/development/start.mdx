@@ -38,29 +38,34 @@ The top-level directory structure is as follows:
 
 ```bash
 lobehub/
-├── apps/desktop/          # Electron desktop app
+├── apps/
+│   ├── cli/               # LobeHub CLI
+│   ├── desktop/           # Electron desktop app
+│   └── server/            # Standalone server (tRPC routers, services, modules)
 ├── packages/              # Shared packages (@lobechat/*)
 │   ├── database/          # Database schemas, models, repositories
 │   ├── agent-runtime/     # Agent runtime
 │   ├── model-runtime/     # Model runtime
+│   ├── app-config/        # App configuration, client and server env vars
+│   ├── env/               # Env var definitions and validation (analytics, auth, LLM, etc.)
+│   ├── locales/           # Internationalization default language files
+│   ├── builtin-tools/     # Built-in tools registry (inspectors, interventions, etc.)
 │   └── ...                # More shared packages
 ├── src/                   # Main application source code
-│   ├── app/               # Next.js App Router with route groups and API routes
+│   ├── app/               # Next.js App Router: backend API routes + SPA/auth HTML shell serving
 │   ├── components/        # Reusable UI components
-│   ├── config/            # App configuration, client and server env vars
 │   ├── const/             # Application constants and enums
-│   ├── envs/              # Env var definitions and validation (analytics, auth, LLM, etc.)
 │   ├── features/          # Business feature modules (Agent settings, plugin dev, etc.)
 │   ├── helpers/           # Utility helper functions
 │   ├── hooks/             # Reusable custom Hooks
 │   ├── layout/            # Layout components (AuthProvider, GlobalProvider, etc.)
 │   ├── libs/              # Third-party integrations (better-auth, OIDC, tRPC, etc.)
-│   ├── locales/           # Internationalization language files
-│   ├── server/            # Server-side modules, routers, and services
+│   ├── routes/            # SPA page segments, grouped by platform ((main)/(mobile)/(desktop)/(popup))
+│   ├── server/            # Remaining server-side modules not yet moved to apps/server
 │   ├── services/          # Client-side service interfaces
+│   ├── spa/               # SPA entry points and React Router config
 │   ├── store/             # Zustand state management
 │   ├── styles/            # Global styles and CSS-in-JS configurations
-│   ├── tools/             # Built-in tools (artifacts, inspectors, interventions, etc.)
 │   ├── types/             # TypeScript type definitions
 │   └── utils/             # General utility functions
 ├── locales/               # i18n translation files (zh-CN, en-US, etc.)
@@ -93,10 +98,10 @@ For detailed code style and contribution guidelines, please refer to [Code Style
 LobeHub uses `react-i18next` for multilingual support,
 ensuring a global user experience.
 
-Default language files are located in `src/locales/default/`
+Default language files are located in `packages/locales/src/default/`
 (English). Translation files are in the `locales/` directory.
 During development, you only need to edit keys in
-`src/locales/default/` — CI automatically generates
+`packages/locales/src/default/` — CI automatically generates
 translation files for other languages.
 
 If you want to add a new language, follow specific steps detailed in [New Language Addition Guide](/docs/development/internationalization/add-new-locale). We encourage you to participate in our internationalization efforts to provide better services to global users.

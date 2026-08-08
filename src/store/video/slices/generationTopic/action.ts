@@ -16,6 +16,7 @@ import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 
 import type { VideoStore } from '../../store';
+import type { GenerationTopicVisibility } from './initialState';
 import { type GenerationTopicDispatch, generationTopicReducer } from './reducer';
 import { generationTopicSelectors } from './selectors';
 
@@ -52,15 +53,19 @@ export class GenerationTopicActionImpl {
 
   internal_createGenerationTopic = async (): Promise<string> => {
     const tmpId = Date.now().toString();
+    const { newGenerationTopicVisibility } = this.#get();
 
     this.#get().internal_dispatchGenerationTopic(
-      { type: 'addTopic', value: { id: tmpId, title: '' } },
+      {
+        type: 'addTopic',
+        value: { id: tmpId, title: '', visibility: newGenerationTopicVisibility },
+      },
       'internal_createGenerationTopic',
     );
 
     this.#get().internal_updateGenerationTopicLoading(tmpId, true);
 
-    const topicId = await generationTopicService.createTopic('video');
+    const topicId = await generationTopicService.createTopic('video', newGenerationTopicVisibility);
     this.#get().internal_updateGenerationTopicLoading(tmpId, false);
 
     this.#get().internal_updateGenerationTopicLoading(topicId, true);
@@ -68,6 +73,14 @@ export class GenerationTopicActionImpl {
     this.#get().internal_updateGenerationTopicLoading(topicId, false);
 
     return topicId;
+  };
+
+  setNewGenerationTopicVisibility = (visibility: GenerationTopicVisibility): void => {
+    this.#set(
+      { newGenerationTopicVisibility: visibility },
+      false,
+      n('setNewGenerationTopicVisibility'),
+    );
   };
 
   internal_dispatchGenerationTopic = (payload: GenerationTopicDispatch, action?: any): void => {

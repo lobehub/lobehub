@@ -1692,6 +1692,192 @@ describe('FileModel', () => {
     });
   });
 
+  describe('hasFilesByTopicIds', () => {
+    const sessionId = 'has-topic-files-session';
+    const topicId = 'has-topic-files-topic';
+
+    beforeEach(async () => {
+      await serverDB.insert(sessions).values({ id: sessionId, userId });
+      await serverDB.insert(topics).values({ id: topicId, sessionId, userId });
+      await serverDB
+        .insert(messages)
+        .values({ id: 'has-topic-files-message', role: 'user', topicId, userId });
+    });
+
+    it('returns false when no topic ids are provided', async () => {
+      await expect(fileModel.hasFilesByTopicIds([])).resolves.toBe(false);
+    });
+
+    it('returns false when the topics have no message files', async () => {
+      await expect(fileModel.hasFilesByTopicIds([topicId])).resolves.toBe(false);
+    });
+
+    it('returns true when any selected topic has a message file', async () => {
+      await serverDB.insert(files).values({
+        fileType: 'image/png',
+        id: 'has-topic-files-image',
+        name: 'image.png',
+        size: 1,
+        url: 'has-topic-files-image-key',
+        userId,
+      });
+      await serverDB.insert(messagesFiles).values({
+        fileId: 'has-topic-files-image',
+        messageId: 'has-topic-files-message',
+        userId,
+      });
+
+      await expect(fileModel.hasFilesByTopicIds(['topic-without-files', topicId])).resolves.toBe(
+        true,
+      );
+    });
+
+    it("does not expose another user's topic files", async () => {
+      await serverDB
+        .insert(sessions)
+        .values({ id: 'has-topic-files-other-session', userId: 'user2' });
+      await serverDB.insert(topics).values({
+        id: 'has-topic-files-other-topic',
+        sessionId: 'has-topic-files-other-session',
+        userId: 'user2',
+      });
+      await serverDB.insert(messages).values({
+        id: 'has-topic-files-other-message',
+        role: 'user',
+        topicId: 'has-topic-files-other-topic',
+        userId: 'user2',
+      });
+      await serverDB.insert(files).values({
+        fileType: 'image/png',
+        id: 'has-topic-files-other-image',
+        name: 'other.png',
+        size: 1,
+        url: 'has-topic-files-other-image-key',
+        userId: 'user2',
+      });
+      await serverDB.insert(messagesFiles).values({
+        fileId: 'has-topic-files-other-image',
+        messageId: 'has-topic-files-other-message',
+        userId: 'user2',
+      });
+
+      await expect(fileModel.hasFilesByTopicIds(['has-topic-files-other-topic'])).resolves.toBe(
+        false,
+      );
+    });
+  });
+
+  describe('findDeletableFilesByTopicId', () => {
+    const sessionId = 'topic-files-session-1';
+    const topicId = 'topic-files-topic-1';
+
+    beforeEach(async () => {
+      await serverDB.insert(sessions).values({ id: sessionId, userId });
+      await serverDB.insert(topics).values([
+        { id: topicId, sessionId, userId },
+        { id: 'topic-files-topic-2', sessionId, userId },
+      ]);
+      await serverDB.insert(messages).values([
+        { id: 'tf-msg-1', role: 'user', topicId, userId },
+        { id: 'tf-msg-1b', role: 'user', topicId, userId },
+        { id: 'tf-msg-2', role: 'user', topicId: 'topic-files-topic-2', userId },
+      ]);
+      await serverDB.insert(files).values([
+        { fileType: 'text/csv', id: 'tf-msg', name: 'msg.csv', size: 1, url: 'k-msg', userId },
+        {
+          fileType: 'application/pdf',
+          id: 'tf-shared',
+          name: 'shared.pdf',
+          size: 2,
+          url: 'k-shared',
+          userId,
+        },
+        { fileType: 'text/plain', id: 'tf-sess', name: 's.txt', size: 3, url: 'k-sess', userId },
+        { fileType: 'text/plain', id: 'tf-other', name: 'o.txt', size: 4, url: 'k-other', userId },
+      ]);
+    });
+
+    it('returns only files attached exclusively inside the topic, de-duped', async () => {
+      await serverDB.insert(messagesFiles).values([
+        { fileId: 'tf-msg', messageId: 'tf-msg-1', userId },
+        // same file attached to another message in the topic → must be de-duped
+        { fileId: 'tf-msg', messageId: 'tf-msg-1b', userId },
+        // attached only to a different topic → not a candidate
+        { fileId: 'tf-other', messageId: 'tf-msg-2', userId },
+      ]);
+
+      const result = await fileModel.findDeletableFilesByTopicId(topicId);
+
+      expect(result).toEqual(['tf-msg']);
+    });
+
+    it('preserves a file still attached to a message in another topic', async () => {
+      await serverDB.insert(messagesFiles).values([
+        { fileId: 'tf-msg', messageId: 'tf-msg-1', userId },
+        // tf-shared lives in both the deleted topic and another topic
+        { fileId: 'tf-shared', messageId: 'tf-msg-1', userId },
+        { fileId: 'tf-shared', messageId: 'tf-msg-2', userId },
+      ]);
+
+      const result = await fileModel.findDeletableFilesByTopicId(topicId);
+
+      expect(result).toEqual(['tf-msg']);
+    });
+
+    it('preserves a file still attached to a message with no topic', async () => {
+      await serverDB.insert(messages).values({ id: 'tf-msg-inbox', role: 'user', userId });
+      await serverDB.insert(messagesFiles).values([
+        { fileId: 'tf-shared', messageId: 'tf-msg-1', userId },
+        // also attached to an inbox message (topicId = null) → must be preserved
+        { fileId: 'tf-shared', messageId: 'tf-msg-inbox', userId },
+      ]);
+
+      const result = await fileModel.findDeletableFilesByTopicId(topicId);
+
+      expect(result).toEqual([]);
+    });
+
+    it('preserves a file still attached at the session level', async () => {
+      await serverDB
+        .insert(messagesFiles)
+        .values({ fileId: 'tf-sess', messageId: 'tf-msg-1', userId });
+      // also bound to the session → survives a single-topic deletion
+      await serverDB.insert(filesToSessions).values({ fileId: 'tf-sess', sessionId, userId });
+
+      const result = await fileModel.findDeletableFilesByTopicId(topicId);
+
+      expect(result).toEqual([]);
+    });
+
+    it('returns an empty array when the topic has no message files', async () => {
+      const result = await fileModel.findDeletableFilesByTopicId(topicId);
+      expect(result).toEqual([]);
+    });
+
+    it('does not return files belonging to another user', async () => {
+      await serverDB.insert(messages).values({
+        id: 'tf-msg-other',
+        role: 'user',
+        topicId,
+        userId: 'user2',
+      });
+      await serverDB.insert(files).values({
+        fileType: 'text/plain',
+        id: 'tf-user2',
+        name: 'u2.txt',
+        size: 5,
+        url: 'k-u2',
+        userId: 'user2',
+      });
+      await serverDB
+        .insert(messagesFiles)
+        .values({ fileId: 'tf-user2', messageId: 'tf-msg-other', userId: 'user2' });
+
+      const result = await fileModel.findDeletableFilesByTopicId(topicId);
+      expect(result).toEqual([]);
+    });
+  });
+
   describe('updateGlobalFile', () => {
     it('should update url and metadata of a global file by hashId', async () => {
       await fileModel.createGlobalFile({
@@ -1893,6 +2079,162 @@ describe('FileModel', () => {
       await expect(
         fileModel.copyToWorkspace('non-existent-file', targetWorkspaceId, 'user2'),
       ).rejects.toThrow('File not found');
+    });
+  });
+
+  describe('publishToWorkspace', () => {
+    const wsId = 'publish-ws';
+    const wsFileModel = new FileModel(serverDB, userId, wsId);
+
+    beforeEach(async () => {
+      await serverDB.insert(workspaces).values({
+        id: wsId,
+        name: 'Publish WS',
+        slug: 'publish-ws',
+        primaryOwnerId: userId,
+      });
+    });
+
+    it('should flip the creator’s own private file to public', async () => {
+      await serverDB.insert(files).values({
+        id: 'priv-file-1',
+        name: 'priv.txt',
+        fileType: 'text/plain',
+        size: 10,
+        url: 'k-priv',
+        userId,
+        workspaceId: wsId,
+        visibility: 'private',
+      });
+
+      await wsFileModel.publishToWorkspace('priv-file-1');
+
+      const file = await serverDB.query.files.findFirst({
+        where: eq(files.id, 'priv-file-1'),
+      });
+      expect(file?.visibility).toBe('public');
+    });
+
+    it('should leave already-public files untouched (no-op when the row is not private)', async () => {
+      await serverDB.insert(files).values({
+        id: 'pub-file-1',
+        name: 'pub.txt',
+        fileType: 'text/plain',
+        size: 10,
+        url: 'k-pub',
+        userId,
+        workspaceId: wsId,
+        visibility: 'public',
+      });
+      const before = await serverDB.query.files.findFirst({
+        where: eq(files.id, 'pub-file-1'),
+      });
+
+      await wsFileModel.publishToWorkspace('pub-file-1');
+
+      const after = await serverDB.query.files.findFirst({
+        where: eq(files.id, 'pub-file-1'),
+      });
+      expect(after?.visibility).toBe('public');
+      expect(after?.updatedAt).toEqual(before?.updatedAt);
+    });
+
+    it('should refuse to publish another member’s private file', async () => {
+      await serverDB.insert(files).values({
+        id: 'others-priv-file',
+        name: 'others.txt',
+        fileType: 'text/plain',
+        size: 10,
+        url: 'k-others',
+        userId: 'user2',
+        workspaceId: wsId,
+        visibility: 'private',
+      });
+
+      await wsFileModel.publishToWorkspace('others-priv-file');
+
+      const file = await serverDB.query.files.findFirst({
+        where: eq(files.id, 'others-priv-file'),
+      });
+      expect(file?.visibility).toBe('private');
+    });
+  });
+
+  describe('setVisibility', () => {
+    const wsId = 'visibility-ws';
+    const wsFileModel = new FileModel(serverDB, userId, wsId);
+
+    beforeEach(async () => {
+      await serverDB.insert(workspaces).values({
+        id: wsId,
+        name: 'Visibility WS',
+        slug: 'visibility-ws',
+        primaryOwnerId: userId,
+      });
+    });
+
+    it('should flip the creator’s own public file back to private', async () => {
+      await serverDB.insert(files).values({
+        id: 'to-privatize',
+        name: 'x.txt',
+        fileType: 'text/plain',
+        size: 10,
+        url: 'k-x',
+        userId,
+        workspaceId: wsId,
+        visibility: 'public',
+      });
+
+      await wsFileModel.setVisibility('to-privatize', 'private');
+
+      const file = await serverDB.query.files.findFirst({
+        where: eq(files.id, 'to-privatize'),
+      });
+      expect(file?.visibility).toBe('private');
+    });
+
+    it('should be a no-op when the file already sits at the target visibility', async () => {
+      await serverDB.insert(files).values({
+        id: 'already-private',
+        name: 'p.txt',
+        fileType: 'text/plain',
+        size: 10,
+        url: 'k-p',
+        userId,
+        workspaceId: wsId,
+        visibility: 'private',
+      });
+      const before = await serverDB.query.files.findFirst({
+        where: eq(files.id, 'already-private'),
+      });
+
+      await wsFileModel.setVisibility('already-private', 'private');
+
+      const after = await serverDB.query.files.findFirst({
+        where: eq(files.id, 'already-private'),
+      });
+      expect(after?.visibility).toBe('private');
+      expect(after?.updatedAt).toEqual(before?.updatedAt);
+    });
+
+    it('should refuse to flip another member’s file', async () => {
+      await serverDB.insert(files).values({
+        id: 'others-public-file',
+        name: 'o.txt',
+        fileType: 'text/plain',
+        size: 10,
+        url: 'k-o',
+        userId: 'user2',
+        workspaceId: wsId,
+        visibility: 'public',
+      });
+
+      await wsFileModel.setVisibility('others-public-file', 'private');
+
+      const file = await serverDB.query.files.findFirst({
+        where: eq(files.id, 'others-public-file'),
+      });
+      expect(file?.visibility).toBe('public');
     });
   });
 });

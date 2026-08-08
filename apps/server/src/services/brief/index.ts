@@ -5,11 +5,14 @@ import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
 import type { BriefItem } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { TaskRunnerService } from '@/server/services/taskRunner';
 
 export interface AgentAvatarInfo {
   avatar: string | null;
   backgroundColor: string | null;
   id: string;
+  /** Personal name; renderers resolve the label with `agentDisplayName(agent, fallback)`. */
+  name?: string | null;
   title: string | null;
 }
 
@@ -18,6 +21,9 @@ export type BriefWithAgent = BriefItem & {
   agent: AgentAvatarInfo | null;
   /** Agents related to this brief, ordered with the direct producing agent before task-tree agents. */
   agents: AgentAvatarInfo[];
+  /** Parent task's workspace-scoped ref (`T-12`) — lets an inbox row name the task it belongs to. */
+  taskIdentifier?: string | null;
+  taskName?: string | null;
   /** Parent task's runtime status — `scheduled` marks a task parked between automated runs. */
   taskStatus: TaskStatus | null;
 };
@@ -156,22 +162,53 @@ export class BriefService {
    */
   async listUnresolved(): Promise<BriefWithAgent[]> {
     const rows = await this.briefModel.listUnresolvedEnriched();
-    return rows.map(
-      ({ brief, agentRowId, agentAvatar, agentBackgroundColor, agentTitle, taskStatus }) => ({
-        ...brief,
-        agent: agentRowId
-          ? {
-              avatar: agentAvatar,
-              backgroundColor: agentBackgroundColor,
-              id: agentRowId,
-              title: agentTitle,
-            }
-          : null,
-        agents: [],
-        taskStatus: (taskStatus as TaskStatus) ?? null,
-      }),
-    );
+    return rows.map((row) => this.mapEnrichedRow(row));
   }
+
+  /**
+   * Day-scoped "news" digest for the home inbox. Unlike {@link listUnresolved}
+   * this keeps resolved briefs — a day's digest is a record, not a queue — and
+   * reports whether any older news exists so the client's day pager knows when
+   * to stop.
+   */
+  async listNewsByDay(range: {
+    endAt: Date;
+    startAt: Date;
+  }): Promise<{ data: BriefWithAgent[]; hasEarlier: boolean }> {
+    const [rows, hasEarlier] = await Promise.all([
+      this.briefModel.listNewsEnriched(range),
+      this.briefModel.hasNewsBefore(range.startAt),
+    ]);
+
+    return { data: rows.map((row) => this.mapEnrichedRow(row)), hasEarlier };
+  }
+
+  private mapEnrichedRow = ({
+    brief,
+    agentRowId,
+    agentAvatar,
+    agentBackgroundColor,
+    agentName,
+    agentTitle,
+    taskIdentifier,
+    taskName,
+    taskStatus,
+  }: Awaited<ReturnType<BriefModel['listUnresolvedEnriched']>>[number]): BriefWithAgent => ({
+    ...brief,
+    agent: agentRowId
+      ? {
+          avatar: agentAvatar,
+          backgroundColor: agentBackgroundColor,
+          id: agentRowId,
+          name: agentName,
+          title: agentTitle,
+        }
+      : null,
+    agents: [],
+    taskIdentifier,
+    taskName,
+    taskStatus: (taskStatus as TaskStatus) ?? null,
+  });
 
   /**
    * Resolve a brief and propagate accept signals to the task lifecycle.
@@ -209,7 +246,6 @@ export class BriefService {
         // triggers them — defeating the point of the dependency edge.
         // Lazy-loaded to avoid pulling ModelRuntime into BriefService's
         // import graph (TaskRunner → TaskLifecycle → ModelRuntime).
-        const { TaskRunnerService } = await import('@/server/services/taskRunner');
         const runner = new TaskRunnerService(this.db, this.userId, this.workspaceId);
         await runner.cascadeOnCompletion(brief.taskId);
       }

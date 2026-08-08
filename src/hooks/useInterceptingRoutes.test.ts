@@ -32,7 +32,7 @@ describe('useOpenChatSettings', () => {
     useAgentStore.setState({ activeAgentId: undefined });
   });
 
-  it('navigates to mobile chat settings with session info', () => {
+  it('navigates to mobile agent settings route for the active agent', () => {
     useAgentStore.setState({ activeAgentId: '123' });
     vi.mocked(useIsMobile).mockReturnValue(true);
     const { result } = renderHook(() => useOpenChatSettings(ChatSettingsTabs.Opening));
@@ -41,9 +41,7 @@ describe('useOpenChatSettings', () => {
       result.current();
     });
 
-    expect(mockNavigate).toHaveBeenCalledWith(
-      `/chat/settings?session=123&showMobileWorkspace=true`,
-    );
+    expect(mockNavigate).toHaveBeenCalledWith(`/agent/123/settings?showMobileWorkspace=true`);
   });
 
   it('opens desktop agent settings overlay when not on mobile', () => {

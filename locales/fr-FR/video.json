@@ -5,6 +5,7 @@
   "config.endImageUrl.label": "Image de fin",
   "config.generateAudio.label": "Générer l'audio",
   "config.header.title": "Vidéo",
+  "config.imageUpload.maxCountReached": "Vous pouvez ajouter jusqu'à {{count}} images de référence",
   "config.imageUrl.label": "Image de début",
   "config.prompt.placeholder": "Décrivez la vidéo que vous souhaitez générer",
   "config.prompt.placeholderWithRef": "Décrivez la scène que vous souhaitez générer avec l'image",
@@ -25,9 +26,15 @@
   "generation.status.failed": "Échec de la génération",
   "generation.status.generating": "Génération en cours...",
   "generation.validation.endFrameRequiresStartFrame": "L'image de fin ne peut pas être utilisée sans image de début. Veuillez d'abord définir une image de début.",
+  "notice.modelRemoved": "Le modèle actuel n'est plus disponible chez {{name}}. Veuillez passer à un modèle disponible.",
+  "notice.providerDisabled": "Le fournisseur {{name}} du modèle actuel est désactivé. Veuillez l'activer ou passer à un modèle disponible.",
   "topic.createNew": "Créer un nouveau sujet",
+  "topic.createdBy": "Créé par {{name}}",
   "topic.deleteConfirm": "Supprimer le sujet vidéo",
   "topic.deleteConfirmDesc": "Vous êtes sur le point de supprimer ce sujet vidéo. Cette action est irréversible.",
+  "topic.privateTitle": "Privé",
   "topic.title": "Sujets vidéo",
-  "topic.untitled": "Sujet par défaut"
+  "topic.untitled": "Sujet par défaut",
+  "topic.visibility.existingLocked": "La visibilité est fixée pour le sujet actuel. Créez un nouveau sujet pour choisir un espace différent.",
+  "topic.workspaceTitle": "Espace de travail"
 }

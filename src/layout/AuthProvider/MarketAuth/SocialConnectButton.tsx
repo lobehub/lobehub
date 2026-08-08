@@ -2,7 +2,8 @@
 
 import { SiGithub, SiX } from '@icons-pack/react-simple-icons';
 import { ActionIcon, Flexbox, Text, Tooltip } from '@lobehub/ui';
-import { Button, Spin } from 'antd';
+import { Button } from '@lobehub/ui/base-ui';
+import { Spin } from 'antd';
 import { cssVar } from 'antd-style';
 import { ArrowRight, Link2Off, Loader2 } from 'lucide-react';
 import { memo } from 'react';

@@ -2596,59 +2596,6 @@ const higressChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
-    },
-    contextWindowTokens: 200_000,
-    description:
-      'Claude 3.5 Haiku is Anthropic’s fastest next-gen model. Compared to Claude 3 Haiku, it improves across skills and surpasses the prior largest model Claude 3 Opus on many intelligence benchmarks.',
-    displayName: 'Claude 3.5 Haiku',
-    enabled: true,
-    family: 'claude-haiku',
-    generation: 'claude-3.5',
-    id: 'claude-3-5-haiku-20241022',
-    knowledgeCutoff: '2024-07',
-    maxOutput: 8192,
-    pricing: {
-      units: [
-        { name: 'textInput_cacheRead', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
-        {
-          lookup: { prices: { '5m': 1.25 }, pricingParams: ['ttl'] },
-          name: 'textInput_cacheWrite',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-      ],
-    },
-    releasedAt: '2024-11-05',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 200_000,
-    description:
-      'Claude 3 Haiku is Anthropic’s fastest and most compact model, designed for near-instant responses with fast, accurate performance.',
-    displayName: 'Claude 3 Haiku',
-    family: 'claude-haiku',
-    generation: 'claude-3',
-    id: 'claude-3-haiku-20240307',
-    knowledgeCutoff: '2023-08',
-    maxOutput: 4096,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 1.25, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2024-03-07',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
       vision: true,
     },
     contextWindowTokens: 200_000,

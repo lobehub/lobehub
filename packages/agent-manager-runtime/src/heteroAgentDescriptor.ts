@@ -5,8 +5,8 @@
  * whether a target agent is fit for a job — typically "can this agent fix a bug
  * in a real codebase?". For a normal model-backed agent the answer lives in
  * `model` / `provider` / `plugins`. For a **heterogeneous** agent (an external
- * CLI/runtime such as Claude Code or Codex) those fields are misleading: the
- * agent brings its own toolset and ignores the plugin list, so we must instead
+ * CLI/runtime such as Claude Code, Codex, OpenCode, Pi, or Qoder) those fields are misleading:
+ * the agent brings its own toolset and ignores the plugin list, so we must instead
  * describe what the external runtime is and what it can do.
  *
  * This module maps a `LobeAgentAgencyConfig` into a compact, LLM-facing runtime
@@ -81,6 +81,20 @@ const HETERO_PROFILES: Record<HeteroType, HeteroTypeProfile> = {
       'OpenClaw — a remote autonomous agent platform. It runs on a connected device with full filesystem and shell access to its workspace.',
     displayName: 'OpenClaw',
     kind: 'remote',
+  },
+  'pi': {
+    capabilities: CODING_CAPABILITIES,
+    description:
+      'Pi — a minimal, extensible terminal coding agent with filesystem and shell access that completes software-engineering tasks autonomously.',
+    displayName: 'Pi',
+    kind: 'cli',
+  },
+  'qoder': {
+    capabilities: CODING_CAPABILITIES,
+    description:
+      'Qoder — an autonomous terminal coding agent with filesystem and shell access that completes software-engineering tasks autonomously.',
+    displayName: 'Qoder',
+    kind: 'cli',
   },
 };
 

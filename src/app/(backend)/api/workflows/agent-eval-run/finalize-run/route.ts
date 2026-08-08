@@ -1,3 +1,4 @@
+import { withOtelMetricsForUpstashWorkflows } from '@lobechat/observability-otel/modules/upstash-workflow';
 import { serve } from '@upstash/workflow/nextjs';
 import debug from 'debug';
 
@@ -22,7 +23,7 @@ const log = debug('lobe-server:workflows:finalize-run');
  * 4. Update run status to 'completed'
  */
 export const { POST } = serve<FinalizeRunPayload>(
-  async (context) => {
+  withOtelMetricsForUpstashWorkflows(async (context) => {
     const { runId, userId } = context.requestPayload ?? {};
 
     log('Starting: runId=%s', runId);
@@ -95,7 +96,7 @@ export const { POST } = serve<FinalizeRunPayload>(
       runId,
       success: true,
     };
-  },
+  }),
   {
     flowControl: { key: 'agent-eval-run.finalize-run', parallelism: 10, rate: 1 },
     qstashClient,

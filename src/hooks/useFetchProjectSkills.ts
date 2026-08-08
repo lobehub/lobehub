@@ -4,8 +4,7 @@ import { useClientDataSWR } from '@/libs/swr';
 import { projectSkillService } from '@/services/projectSkill';
 
 /**
- * Shared SWR fetch for filesystem-backed project skills under `.agents/skills/`
- * / `.claude/skills/` in a working directory.
+ * Shared SWR fetch for filesystem-backed project and device skills.
  *
  * `deviceId` picks the transport: a bound device scans over the
  * `device.listProjectSkills` RPC, the local desktop reads over Electron IPC. The

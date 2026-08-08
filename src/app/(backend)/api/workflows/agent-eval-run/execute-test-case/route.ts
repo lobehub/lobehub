@@ -1,3 +1,4 @@
+import { withOtelMetricsForUpstashWorkflows } from '@lobechat/observability-otel/modules/upstash-workflow';
 import { serve } from '@upstash/workflow/nextjs';
 import debug from 'debug';
 
@@ -16,7 +17,7 @@ const log = debug('lobe-server:workflows:execute-test-case');
  * 3. Each trajectory executes the agent once and stores results
  */
 export const { POST } = serve<ExecuteTestCasePayload>(
-  async (context) => {
+  withOtelMetricsForUpstashWorkflows(async (context) => {
     const { runId, testCaseId, userId } = context.requestPayload ?? {};
 
     log('Starting: runId=%s testCaseId=%s', runId, testCaseId);
@@ -57,7 +58,7 @@ export const { POST } = serve<ExecuteTestCasePayload>(
     log('Completed: runId=%s testCaseId=%s k=%d', runId, testCaseId, k);
 
     return { k, success: true, testCaseId };
-  },
+  }),
   {
     flowControl: {
       key: 'agent-eval-run.execute-test-case',

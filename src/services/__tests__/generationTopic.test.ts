@@ -35,6 +35,15 @@ describe('GenerationTopic ServerService', () => {
     expect(lambdaClient.generationTopic.createTopic.mutate).toBeCalledWith(undefined);
   });
 
+  it('createTopic should pass type, visibility, and title to lambdaClient', async () => {
+    await service.createTopic('image', 'public', 'A mountain lake at sunrise');
+    expect(lambdaClient.generationTopic.createTopic.mutate).toBeCalledWith({
+      title: 'A mountain lake at sunrise',
+      type: 'image',
+      visibility: 'public',
+    });
+  });
+
   it('updateTopic should call lambdaClient with correct params', async () => {
     const id = 'test-topic-id';
     const data: UpdateTopicValue = {

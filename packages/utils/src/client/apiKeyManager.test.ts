@@ -1,8 +1,25 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ClientApiKeyManager } from './apiKeyManager';
 
+const mockCryptoValues = (...values: number[]) => {
+  const getRandomValues = vi.fn((array: Uint32Array) => {
+    array[0] = values.shift() ?? 0;
+
+    return array;
+  });
+
+  vi.stubGlobal('crypto', { getRandomValues });
+
+  return getRandomValues;
+};
+
 describe('ClientApiKeyManager', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
   it('should return empty string for empty input', () => {
     const manager = new ClientApiKeyManager();
     expect(manager.pick('')).toBeUndefined();
@@ -18,42 +35,34 @@ describe('ClientApiKeyManager', () => {
   it('should pick random keys from comma-separated list', () => {
     const manager = new ClientApiKeyManager();
     const apiKeys = 'sk-key1,sk-key2,sk-key3';
-
-    // Mock Math.random to return specific values
     const mockRandom = vi.spyOn(Math, 'random');
 
+    mockCryptoValues(0, 1, 2);
+
     // Test first key (index 0)
-    mockRandom.mockReturnValueOnce(0);
     expect(manager.pick(apiKeys)).toBe('sk-key1');
 
     // Test second key (index 1)
-    mockRandom.mockReturnValueOnce(0.4);
     expect(manager.pick(apiKeys)).toBe('sk-key2');
 
     // Test third key (index 2)
-    mockRandom.mockReturnValueOnce(0.8);
     expect(manager.pick(apiKeys)).toBe('sk-key3');
 
-    mockRandom.mockRestore();
+    expect(mockRandom).not.toHaveBeenCalled();
   });
 
   it('should handle keys with spaces and filter empty keys', () => {
     const manager = new ClientApiKeyManager();
     const apiKeys = ' sk-key1 , sk-key2 , , sk-key3 ';
 
-    const mockRandom = vi.spyOn(Math, 'random');
+    mockCryptoValues(0, 1, 2);
 
     // Should only have 3 valid keys
-    mockRandom.mockReturnValueOnce(0);
     expect(manager.pick(apiKeys)).toBe('sk-key1');
 
-    mockRandom.mockReturnValueOnce(0.4);
     expect(manager.pick(apiKeys)).toBe('sk-key2');
 
-    mockRandom.mockReturnValueOnce(0.8);
     expect(manager.pick(apiKeys)).toBe('sk-key3');
-
-    mockRandom.mockRestore();
   });
 
   it('should cache key stores for the same input', () => {

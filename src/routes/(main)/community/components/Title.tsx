@@ -1,7 +1,8 @@
 'use client';
 
 import { type FlexboxProps } from '@lobehub/ui';
-import { Button, Flexbox, Icon, Tag } from '@lobehub/ui';
+import { Flexbox, Icon, Tag } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, responsive, useResponsive } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
 import { type ReactNode } from 'react';

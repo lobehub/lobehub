@@ -1,35 +1,21 @@
-import { execFileSync, execSync, spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { type DeviceControlDeps, executeDeviceRpc as runDeviceRpc } from '@lobechat/device-control';
-import type {
-  AgentRunRequestMessage,
-  GatewayMcpStdioParams,
-} from '@lobechat/device-gateway-client';
-import type {
-  EditLocalFileParams,
-  GatewayConnectionStatus,
-  GetCommandOutputParams,
-  GlobFilesParams,
-  GrepContentParams,
-  KillCommandParams,
-  ListLocalFileParams,
-  LocalReadFileParams,
-  LocalReadFilesParams,
-  LocalSearchFilesParams,
-  MoveLocalFilesParams,
-  RenameLocalFileParams,
-  RunCommandParams,
-  WriteLocalFileParams,
-} from '@lobechat/electron-client-ipc';
+import type { DeviceControlDeps } from '@lobechat/device-control';
+import type { AgentRunRequestMessage, GatewayMcpParams } from '@lobechat/device-gateway-client';
+import type { GatewayConnectionStatus } from '@lobechat/electron-client-ipc';
+import { resolveRemotePlatformCommand } from '@lobechat/heterogeneous-agents/scanHost';
 import { type ILocalSystemService, LocalSystemExecutionRuntime } from '@lobechat/tool-runtime';
+import { execa } from 'execa';
 
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import ImessageBridgeService from '@/services/imessageBridgeSrv';
 import { createLogger } from '@/utils/logger';
+import { setDesktopUserAgentHeader } from '@/utils/user-agent';
 
+import BrowserControlCtr from './BrowserControlCtr';
 import HeterogeneousAgentCtr from './HeterogeneousAgentCtr';
 import { ControllerModule, IpcMethod } from './index';
 import LocalFileCtr from './LocalFileCtr';
@@ -38,6 +24,20 @@ import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 import ShellCommandCtr from './ShellCommandCtr';
 
 const logger = createLogger('controllers:GatewayConnectionCtr');
+
+// Mirror of `BrowserManifest.identifier` from `@lobechat/builtin-tool-browser`.
+// Hardcoded (not imported) so the desktop main process keeps zero builtin-tool
+// package deps — importing one risks the @lobechat/types stub runtime leak.
+const BrowserIdentifier = 'lobe-browser';
+
+function parseHermesSessionId(stderr: string): string | undefined {
+  for (const line of stderr.split(/\r?\n/).reverse()) {
+    const match = line.match(/^session_id:\s*(\S+)\s*$/);
+    if (match) return match[1];
+  }
+
+  return undefined;
+}
 
 /**
  * Inject the lh-notify protocol into the first turn of a new hetero-agent session.
@@ -98,22 +98,6 @@ interface BuiltinServerRuntimeOutput {
 }
 
 /**
- * Legacy API name aliases used by older gateway versions. Normalized to the
- * current `LocalSystemApiEnum` names before dispatch. `renameLocalFile` is
- * intentionally absent — it has no equivalent on the new surface and is
- * handled by a dedicated branch below.
- */
-const LEGACY_API_ALIASES: Record<string, string> = {
-  editLocalFile: 'editFile',
-  globLocalFiles: 'globFiles',
-  listLocalFiles: 'listFiles',
-  moveLocalFiles: 'moveFiles',
-  readLocalFile: 'readFile',
-  searchLocalFiles: 'searchFiles',
-  writeLocalFile: 'writeFile',
-};
-
-/**
  * Parse a JSON string, returning `undefined` on failure. Used to surface the
  * structured shape of platform-agent tool results (which return pre-stringified
  * JSON) as `state` for the renderer, without crashing on malformed input.
@@ -127,22 +111,6 @@ const safeJsonParse = (input: string): unknown => {
 };
 
 /**
- * Resolve a relative path against a scope (CWD). Mirrors the renderer-side
- * `resolveArgsWithScope` helper in `@lobechat/builtin-tool-local-system` — kept
- * here as a small inline copy to avoid pulling the renderer-side `./client`
- * subpath (which transitively requires React + antd) into the main process.
- */
-const resolveArgsWithScope = <T extends { scope?: string }>(args: T, pathField: string): T => {
-  const scope = args.scope;
-  const bag = args as Record<PropertyKey, unknown>;
-  const currentPath = typeof bag[pathField] === 'string' ? (bag[pathField] as string) : undefined;
-  if (!scope) return args;
-  if (!currentPath) return { ...args, [pathField]: scope };
-  if (path.isAbsolute(currentPath)) return args;
-  return { ...args, [pathField]: path.join(scope, currentPath) };
-};
-
-/**
  * GatewayConnectionCtr
  *
  * Thin IPC layer that delegates to GatewayConnectionService.
@@ -152,6 +120,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
   /** In-memory registry for running platform agent tasks (openclaw / hermes). */
   private readonly platformTasks = new Map<string, PlatformTaskEntry>();
+  private readonly platformTaskKillTimers = new Map<number, NodeJS.Timeout>();
 
   /** Maps topicId → hermes session_id for multi-turn conversation continuity. */
   private readonly hermesSessionMap = new Map<string, string>();
@@ -190,7 +159,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
   // ─── Lifecycle ───
 
-  afterAppReady() {
+  afterFirstFrame() {
     const srv = this.service;
 
     srv.loadOrCreateDeviceId();
@@ -200,7 +169,9 @@ export default class GatewayConnectionCtr extends ControllerModule {
     srv.setTokenRefresher(() => this.remoteServerConfigCtr.refreshAccessToken());
 
     // Wire up tool call handler
-    srv.setToolCallHandler((apiName, args) => this.executeToolCall(apiName, args));
+    srv.setToolCallHandler((identifier, apiName, args) =>
+      this.executeToolCall(identifier, apiName, args),
+    );
 
     // Wire up MCP call handler (tunneled stdio MCP calls from the cloud server)
     srv.setMcpCallHandler((mcpCall) => this.executeMcpCall(mcpCall));
@@ -219,6 +190,14 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
     // Wire up device registrar (persists this device to the server registry)
     srv.setDeviceRegistrar((info) => this.registerDevice(info));
+
+    // Wire up the workspace-share hooks: connect-token minting (startup restore
+    // + token expiry) and the "row still registered?" probe that keeps a share
+    // revoked while offline from resurrecting as a ghost device.
+    srv.setWorkspaceTokenProvider((workspaceId) => this.mintWorkspaceConnectToken(workspaceId));
+    srv.setWorkspaceDeviceChecker((workspaceId, deviceId) =>
+      this.checkWorkspaceDeviceRegistered(workspaceId, deviceId),
+    );
 
     // Auto-connect if already logged in
     this.tryAutoConnect();
@@ -292,15 +271,30 @@ export default class GatewayConnectionCtr extends ControllerModule {
         return { reason: 'Remote server URL not configured', status: 'rejected' };
       }
 
-      // Fire-and-forget: lh hetero exec handles spawn -> adapt ->
-      // BatchIngester -> heteroIngest/heteroFinish -> server -> Gateway -> clients.
-      // Same command as spawnHeteroSandbox() on the server side.
-      this.heterogeneousAgentCtr.spawnLhHeteroExec({
+      // Reuse this device's own logged-in session as the run identity. The
+      // access token is a full user OIDC token (7-day TTL, longer than any run),
+      // which heteroIngest/heteroFinish now accept (ownership-gated), AND which
+      // gives the spawned Claude Code's nested `lh` calls a real login state —
+      // unlike the narrow `hetero-operation` token, which only works for the
+      // ingest endpoints. We deliberately do NOT pass the refresh token to the
+      // CLI: the device stays the single refresher (refresh tokens rotate), and
+      // the 7-day access token outlives the run so no mid-run refresh is needed.
+      //
+      // Fall back to the dispatched `request.jwt` when the device has no access
+      // token (e.g. not logged in), preserving the prior behavior gracefully.
+      const accessToken = await this.remoteServerConfigCtr.getAccessToken();
+      const jwt = accessToken || request.jwt;
+
+      // The embedded CLI handles spawn -> adapt -> BatchIngester ->
+      // heteroIngest/heteroFinish -> server -> Gateway -> clients. Wait until
+      // the process has actually spawned (or emitted an early error) before
+      // acknowledging the server request.
+      return await this.heterogeneousAgentCtr.spawnLhHeteroExec({
         agentType: request.agentType,
         args: request.args,
         cwd: request.cwd,
         imageList: request.imageList,
-        jwt: request.jwt,
+        jwt,
         operationId: request.operationId,
         prompt: request.prompt,
         resumeSessionId: request.resumeSessionId,
@@ -308,8 +302,6 @@ export default class GatewayConnectionCtr extends ControllerModule {
         systemContext: request.systemContext,
         topicId: request.topicId,
       });
-
-      return { status: 'accepted' };
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       return { reason, status: 'rejected' };
@@ -366,8 +358,17 @@ export default class GatewayConnectionCtr extends ControllerModule {
           logger.error(`Failed to approve project preview root ${root}:`, error);
         }
       },
+      // Workspace share (server-driven enroll/unenroll RPCs): the service owns
+      // the gateway connections, so both handlers route straight to it.
+      enrollWorkspace: (params) => this.service.enrollWorkspace(params),
       getLocalFilePreview: (params) => this.localFileCtr.getLocalFilePreview(params),
       getProjectFileIndex: (params) => this.localFileCtr.getProjectFileIndex(params),
+      listHeterogeneousAgentModels: (params) => this.heterogeneousAgentCtr.listModels(params),
+      searchProjectFiles: (params) => this.localFileCtr.searchProjectFiles(params),
+      unenrollWorkspace: (params) => this.service.unenrollWorkspace(params),
+      // Skill-archive cache (`prepareSkillDirectory` RPC): reuse LocalFileCtr's
+      // deps so gateway-prepared skills share one cache with the renderer-IPC path.
+      ...this.localFileCtr.getSkillDirectoryDeps(),
     };
   }
 
@@ -377,132 +378,43 @@ export default class GatewayConnectionCtr extends ControllerModule {
    * desktop main process and the CLI daemon share one device RPC surface.
    */
   private async executeDeviceRpc(method: string, params: unknown): Promise<unknown> {
+    const { executeDeviceRpc: runDeviceRpc } = await import('@lobechat/device-control');
     return runDeviceRpc(method, params, this.deviceControlDeps);
   }
 
   private async executeToolCall(
+    identifier: string | undefined,
     apiName: string,
     args: unknown,
   ): Promise<BuiltinServerRuntimeOutput> {
-    const runtime = this.getLocalSystemRuntime();
-    const normalized = LEGACY_API_ALIASES[apiName] ?? apiName;
+    // Browser is a renderer-resident tool: forward to the client executor via
+    // BrowserControlCtr instead of the local-system apiName switch below.
+    if (identifier === BrowserIdentifier) {
+      const result = await this.app
+        .getController(BrowserControlCtr)
+        .runGatewayToolCall(apiName, (args ?? {}) as Record<string, unknown>);
+      return {
+        content: result.content ?? '',
+        error: result.error,
+        state: result.state,
+        success: result.success,
+      };
+    }
 
-    // Each case narrows `args` to its IPC param type — the manifest guarantees
-    // the gateway sends params matching the apiName. The `as never` casts on
-    // runtime calls are legitimate widenings: the runtime's typed signatures
-    // (e.g. `ListFilesParams`) are narrower than what the IPC layer accepts
-    // (`limit`, `run_in_background`, etc.), and the same casts exist in the
-    // renderer-side `LocalSystemExecutor`.
-    switch (normalized) {
-      case 'listFiles': {
-        const p = args as ListLocalFileParams;
-        return runtime.listFiles({
-          directoryPath: p.path,
-          limit: p.limit,
-          sortBy: p.sortBy,
-          sortOrder: p.sortOrder,
-        } as never);
-      }
+    // Local-system tools: one dispatch through the shared runtime entry, which
+    // owns legacy alias normalization and IPC field mapping. The server runtime
+    // already stripped any model-supplied `cwd` and injected the device-bound
+    // `cwd`/`scope` into `args` (see its `WORKING_DIR_ARG` map), so the values
+    // here are server-controlled — `trustArgsCwd` lets them ride through to the
+    // IPC layer instead of being dropped like the previous per-tool switch did.
+    const localSystemOutput = await this.getLocalSystemRuntime().executeToolCall(
+      apiName,
+      (args ?? {}) as Record<string, unknown>,
+      { trustArgsCwd: true },
+    );
+    if (localSystemOutput) return localSystemOutput;
 
-      case 'readFile': {
-        const p = args as LocalReadFileParams;
-        return runtime.readFile({
-          endLine: p.loc?.[1],
-          path: p.path,
-          startLine: p.loc?.[0],
-        });
-      }
-
-      case 'readFiles': {
-        return runtime.readFiles(args as LocalReadFilesParams);
-      }
-
-      case 'searchFiles': {
-        const resolved = resolveArgsWithScope(args as LocalSearchFilesParams, 'directory');
-        return runtime.searchFiles({
-          ...resolved,
-          directory: resolved.directory || '',
-        });
-      }
-
-      case 'moveFiles': {
-        const p = args as MoveLocalFilesParams;
-        return runtime.moveFiles({
-          operations: p.items?.map((item) => ({
-            destination: item.newPath,
-            source: item.oldPath,
-          })),
-        });
-      }
-
-      case 'writeFile': {
-        return runtime.writeFile(args as WriteLocalFileParams);
-      }
-
-      case 'editFile': {
-        const p = args as EditLocalFileParams;
-        return runtime.editFile({
-          all: p.replace_all,
-          path: p.file_path,
-          replace: p.new_string,
-          search: p.old_string,
-        });
-      }
-
-      case 'runCommand': {
-        // ComputerRuntime's RunCommandState reads `args.background`; the manifest
-        // exposes `run_in_background`. Without this normalize the state would
-        // always show foreground even for background commands.
-        const p = args as RunCommandParams;
-        return runtime.runCommand({
-          ...p,
-          background: p.run_in_background,
-        } as never);
-      }
-
-      case 'getCommandOutput': {
-        const p = args as GetCommandOutputParams;
-        return runtime.getCommandOutput({
-          commandId: p.shell_id,
-          filter: p.filter,
-        } as never);
-      }
-
-      case 'killCommand': {
-        const p = args as KillCommandParams;
-        return runtime.killCommand({
-          commandId: p.shell_id,
-        });
-      }
-
-      case 'grepContent': {
-        const resolved = resolveArgsWithScope(args as GrepContentParams, 'path');
-        return runtime.grepContent(resolved as never);
-      }
-
-      case 'globFiles': {
-        const p = args as GlobFilesParams;
-        return runtime.globFiles({
-          directory: p.scope,
-          pattern: p.pattern,
-        });
-      }
-
-      case 'renameLocalFile': {
-        // ComputerRuntime has no public rename method — new surface uses
-        // `moveFiles`. Legacy gateway versions may still emit this name, so we
-        // call the IPC handler directly and wrap the raw result into the
-        // BuiltinServerRuntimeOutput shape so `state` still flows downstream.
-        const raw = await this.localFileCtr.handleRenameFile(args as RenameLocalFileParams);
-        return {
-          content: raw.success
-            ? `Renamed to ${raw.newPath}`
-            : `Rename failed: ${raw.error ?? 'unknown error'}`,
-          state: raw,
-          success: raw.success,
-        };
-      }
-
+    switch (apiName) {
       // ─── Platform agent tools (openclaw / hermes) ───
       // These don't go through LocalSystemExecutionRuntime — they return raw
       // domain payloads that we envelope into BuiltinServerRuntimeOutput here.
@@ -519,6 +431,14 @@ export default class GatewayConnectionCtr extends ControllerModule {
         return { content: JSON.stringify(result), state: result, success: true };
       }
 
+      case 'scanHeterogeneousAgents': {
+        const { scanHeterogeneousAgentsOnHost } =
+          await import('@lobechat/heterogeneous-agents/scanHost');
+        const agents = await scanHeterogeneousAgentsOnHost();
+        const result = { agents };
+        return { content: JSON.stringify(result), state: result, success: true };
+      }
+
       case 'runHeteroTask': {
         // runHeteroTask returns a pre-stringified JSON payload — pass it through
         // as `content` and surface the parsed shape as `state`.
@@ -528,6 +448,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
             agentType: string;
             cwd?: string;
             operationId: string;
+            platformAgentId?: string;
             prompt: string;
             taskId: string;
             topicId: string;
@@ -551,26 +472,35 @@ export default class GatewayConnectionCtr extends ControllerModule {
   }
 
   /**
-   * Execute a stdio MCP tool call tunneled from the cloud server. The server
-   * can't spawn the user's local MCP binary, so it forwards the connection
-   * params (command/args/env); we run the call through the local MCP client,
-   * which spawns the stdio server on this machine.
+   * Execute an MCP tool call tunneled from the cloud server, for MCP servers
+   * only this machine can reach: stdio (the server can't spawn the user's
+   * local binary) and localhost / LAN HTTP endpoints (the server's fetch
+   * can't reach them). The connection params ride along; we run the call
+   * through the local MCP client.
    */
   private async executeMcpCall(mcpCall: {
     apiName: string;
     arguments: string;
     identifier: string;
-    params: GatewayMcpStdioParams;
+    params: GatewayMcpParams;
   }): Promise<BuiltinServerRuntimeOutput> {
-    const { apiName, arguments: args, params: stdioParams } = mcpCall;
+    const { apiName, arguments: args, params } = mcpCall;
+
+    if (params.type === 'http') {
+      return this.mcpCtr.runHttpMcpTool(
+        { auth: params.auth, headers: params.headers, name: params.name, url: params.url },
+        apiName,
+        args,
+      );
+    }
 
     return this.mcpCtr.runStdioMcpTool({
       args,
-      env: stdioParams.env,
+      env: params.env,
       params: {
-        args: stdioParams.args,
-        command: stdioParams.command,
-        name: stdioParams.name,
+        args: params.args,
+        command: params.command,
+        name: params.name,
       },
       toolName: apiName,
     });
@@ -597,33 +527,22 @@ export default class GatewayConnectionCtr extends ControllerModule {
   }): Promise<{ available: boolean; reason?: string; version?: string }> {
     const { platform } = args;
 
-    const binaryMap: Record<string, string> = {
+    const platformMap: Record<string, 'hermes' | 'openclaw'> = {
       hermes: 'hermes',
       openclaw: 'openclaw',
     };
 
-    const binary = binaryMap[platform];
-    if (!binary) {
+    const platformType = platformMap[platform];
+    if (!platformType) {
       return { available: false, reason: `Unknown platform: ${platform}` };
     }
 
-    const whichCmd = process.platform === 'win32' ? `where ${binary}` : `which ${binary}`;
-
-    try {
-      execSync(whichCmd, { stdio: 'pipe' });
-    } catch {
+    const status = await resolveRemotePlatformCommand(platformType);
+    if (!status.available) {
       return { available: false, reason: `${platform} is not installed on this device` };
     }
 
-    try {
-      const raw = execSync(`${binary} --version`, {
-        encoding: 'utf8',
-        stdio: 'pipe',
-      }).trim();
-      return { available: true, version: raw };
-    } catch {
-      return { available: true };
-    }
+    return status.version ? { available: true, version: status.version } : { available: true };
   }
 
   private async getAgentProfile(args: { agentId?: string; platform: string }): Promise<{
@@ -770,12 +689,23 @@ export default class GatewayConnectionCtr extends ControllerModule {
     agentType: string;
     cwd?: string;
     operationId: string;
+    platformAgentId?: string;
     prompt: string;
     taskId: string;
     topicId: string;
     workspaceId?: string;
   }): Promise<string> {
-    const { agentId, agentType, cwd, operationId, prompt, taskId, topicId, workspaceId } = args;
+    const {
+      agentId,
+      agentType,
+      cwd,
+      operationId,
+      platformAgentId,
+      prompt,
+      taskId,
+      topicId,
+      workspaceId,
+    } = args;
     const workDir = cwd || process.cwd();
 
     const [serverUrl, accessToken] = await Promise.all([
@@ -795,8 +725,13 @@ export default class GatewayConnectionCtr extends ControllerModule {
     };
 
     if (agentType === 'openclaw') {
+      const commandStatus = await resolveRemotePlatformCommand('openclaw');
+      if (!commandStatus.available || !commandStatus.path) {
+        throw new Error('OpenClaw executable not found');
+      }
+      if (commandStatus.resolvedPathEnv) childEnv.PATH = commandStatus.resolvedPathEnv;
       const lhPath = this.resolveLhPath();
-      const openclawAgent = process.env['OPENCLAW_AGENT_ID'] ?? 'main';
+      const openclawAgent = platformAgentId?.trim() || process.env['OPENCLAW_AGENT_ID'] || 'main';
 
       // Always inject the notify protocol so openclaw knows how to report results
       // back to the LobeHub UI — even if the previous turn failed and the session
@@ -808,29 +743,36 @@ export default class GatewayConnectionCtr extends ControllerModule {
       // lock will cause the new one to exit with code 1.
       for (const [existingTaskId, entry] of this.platformTasks) {
         if (entry.topicId === topicId && entry.agentType === 'openclaw') {
-          try {
-            process.kill(entry.pid, 'SIGTERM');
-          } catch {
-            // Already exited — nothing to do.
-          }
+          this.killPlatformProcessTree(entry.pid, 'SIGTERM');
           this.platformTasks.delete(existingTaskId);
         }
       }
 
-      const child = spawn(
-        'openclaw',
-        [
-          'agent',
-          '--agent',
-          openclawAgent,
-          '--session-id',
-          topicId,
-          '--message',
-          enrichedPrompt,
-          '--local',
-        ],
-        { cwd: workDir, detached: true, env: childEnv, stdio: 'ignore' },
-      );
+      const openclawArgs = [
+        'agent',
+        '--agent',
+        openclawAgent,
+        '--session-id',
+        topicId,
+        '--message',
+        enrichedPrompt,
+        '--local',
+      ];
+      const child =
+        process.platform === 'win32'
+          ? execa(commandStatus.path, openclawArgs, {
+              cwd: workDir,
+              detached: true,
+              env: childEnv,
+              reject: false,
+              stdio: 'ignore',
+            })
+          : spawn(commandStatus.path, openclawArgs, {
+              cwd: workDir,
+              detached: true,
+              env: childEnv,
+              stdio: 'ignore',
+            });
 
       const pid = child.pid;
       if (pid === undefined) throw new Error('Failed to get PID for openclaw process');
@@ -846,6 +788,11 @@ export default class GatewayConnectionCtr extends ControllerModule {
       });
 
       child.on('close', (code, signal) => {
+        // Do not clear the process-group kill timer here: the group leader can
+        // exit while detached tool children keep running. Escalation only stops
+        // once the whole group is confirmed gone (see killPlatformProcessTree).
+        if (this.platformTasks.get(taskId)?.pid !== pid) return;
+
         this.platformTasks.delete(taskId);
         if (code !== 0 || signal !== null) {
           const text = signal
@@ -883,14 +830,15 @@ export default class GatewayConnectionCtr extends ControllerModule {
     }
 
     if (agentType === 'hermes') {
+      const commandStatus = await resolveRemotePlatformCommand('hermes');
+      if (!commandStatus.available || !commandStatus.path) {
+        throw new Error('Hermes executable not found');
+      }
+      if (commandStatus.resolvedPathEnv) childEnv.PATH = commandStatus.resolvedPathEnv;
       // Kill any existing hermes process for this topicId before spawning a new one.
       for (const [existingTaskId, entry] of this.platformTasks) {
         if (entry.topicId === topicId && entry.agentType === 'hermes') {
-          try {
-            process.kill(entry.pid, 'SIGTERM');
-          } catch {
-            // Already exited — nothing to do.
-          }
+          this.killPlatformProcessTree(entry.pid, 'SIGTERM');
           this.platformTasks.delete(existingTaskId);
         }
       }
@@ -902,13 +850,25 @@ export default class GatewayConnectionCtr extends ControllerModule {
         hermesArgs.push('--resume', existingSessionId);
       }
 
-      // Hermes prints "session_id: <id>\n<response>" to stdout in --quiet mode.
-      const child = spawn('hermes', hermesArgs, {
-        cwd: workDir,
-        detached: true,
-        env: childEnv,
-        stdio: ['ignore', 'pipe', 'ignore'],
-      });
+      // Hermes keeps stdout response-only in --quiet mode and prints the final
+      // session_id to stderr so callers can resume the session on the next turn.
+      const child =
+        process.platform === 'win32'
+          ? execa(commandStatus.path, hermesArgs, {
+              cwd: workDir,
+              detached: true,
+              env: childEnv,
+              reject: false,
+              stderr: 'pipe',
+              stdin: 'ignore',
+              stdout: 'pipe',
+            })
+          : spawn(commandStatus.path, hermesArgs, {
+              cwd: workDir,
+              detached: true,
+              env: childEnv,
+              stdio: ['ignore', 'pipe', 'pipe'],
+            });
 
       const pid = child.pid;
       if (pid === undefined) throw new Error('Failed to get PID for hermes process');
@@ -923,12 +883,19 @@ export default class GatewayConnectionCtr extends ControllerModule {
         workspaceId,
       });
 
+      let stderr = '';
       let stdout = '';
       child.stdout.on('data', (chunk: Buffer) => {
         stdout += chunk.toString();
       });
+      child.stderr.on('data', (chunk: Buffer) => {
+        stderr += chunk.toString();
+      });
 
       child.on('close', (code, signal) => {
+        // Keep any pending process-group escalation; see openclaw close handler.
+        if (this.platformTasks.get(taskId)?.pid !== pid) return;
+
         this.platformTasks.delete(taskId);
 
         if (code !== 0 || signal !== null) {
@@ -954,10 +921,10 @@ export default class GatewayConnectionCtr extends ControllerModule {
           return;
         }
 
-        // Parse "session_id: <id>" from the first line, response from the rest.
-        const sessionIdMatch = stdout.match(/^session_id:\s*(\S+)/m);
-        const sessionId = sessionIdMatch?.[1];
-        const response = stdout.replace(/^session_id:[^\n]*\n?/, '').trim();
+        // Diagnostics may precede the final ID, and context compaction can rotate
+        // it, so persist the last complete session_id line emitted this turn.
+        const sessionId = parseHermesSessionId(stderr);
+        const response = stdout.trim();
 
         if (sessionId) this.hermesSessionMap.set(topicId, sessionId);
 
@@ -996,6 +963,68 @@ export default class GatewayConnectionCtr extends ControllerModule {
     throw new Error(`Unsupported agentType: ${agentType}`);
   }
 
+  /** Kill the complete detached platform-agent process tree. */
+  private killPlatformProcessTree(pid: number, signal: NodeJS.Signals): void {
+    if (process.platform === 'win32') {
+      try {
+        spawn('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' });
+      } catch {
+        // The wrapper already exited.
+      }
+      return;
+    }
+
+    let signalled = false;
+    try {
+      process.kill(-pid, signal);
+      signalled = true;
+    } catch {
+      try {
+        process.kill(pid, signal);
+        signalled = true;
+      } catch {
+        // The process tree already exited.
+      }
+    }
+
+    if (signalled && signal !== 'SIGKILL') {
+      this.clearPlatformTaskKillTimer(pid);
+      const timer = setTimeout(() => {
+        this.platformTaskKillTimers.delete(pid);
+        // The group leader's `close` can fire while detached tool children are
+        // still alive; only stop escalating once the whole group is gone.
+        if (!this.isPlatformProcessGroupAlive(pid)) return;
+        logger.warn('Platform task did not exit after signal, escalating to SIGKILL:', pid);
+        this.killPlatformProcessTree(pid, 'SIGKILL');
+      }, 2000);
+      timer.unref();
+      this.platformTaskKillTimers.set(pid, timer);
+    }
+  }
+
+  /** Whether the detached platform process group (or its leader) is still alive. */
+  private isPlatformProcessGroupAlive(pid: number): boolean {
+    try {
+      process.kill(-pid, 0);
+      return true;
+    } catch {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+  }
+
+  private clearPlatformTaskKillTimer(pid: number): void {
+    const timer = this.platformTaskKillTimers.get(pid);
+    if (!timer) return;
+
+    clearTimeout(timer);
+    this.platformTaskKillTimers.delete(pid);
+  }
+
   private async cancelHeteroTask(args: { signal?: string; taskId: string }): Promise<string> {
     const { signal = 'SIGINT', taskId } = args;
     const entry = this.platformTasks.get(taskId);
@@ -1004,19 +1033,8 @@ export default class GatewayConnectionCtr extends ControllerModule {
       return JSON.stringify({ message: `No task found with taskId: ${taskId}`, success: false });
     }
 
-    // Both openclaw and hermes: kill by PID; the close handler sends the done signal.
-    try {
-      process.kill(entry.pid, signal);
-    } catch {
-      this.platformTasks.delete(taskId);
-      await this.sendNotify({
-        agentId: entry.agentId,
-        content: 'Task already completed or cancelled',
-        role: 'assistant',
-        topicId: entry.topicId,
-        workspaceId: entry.workspaceId,
-      });
-    }
+    // The close handler sends the terminal notify after the whole tree exits.
+    this.killPlatformProcessTree(entry.pid, signal as NodeJS.Signals);
 
     return JSON.stringify({ pid: entry.pid, signal, taskId });
   }
@@ -1052,6 +1070,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
         'Oidc-Auth': token,
       };
       if (workspaceId) headers['X-Workspace-Id'] = workspaceId;
+      setDesktopUserAgentHeader(headers);
 
       await fetch(`${serverUrl}/trpc/lambda/agentNotify.notify`, {
         body: JSON.stringify({ json: body }),
@@ -1081,14 +1100,96 @@ export default class GatewayConnectionCtr extends ControllerModule {
     ]);
     if (!serverUrl || !token) return;
 
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Oidc-Auth': token,
+    };
+    setDesktopUserAgentHeader(headers);
+
     await fetch(`${serverUrl}/trpc/lambda/device.register`, {
       body: JSON.stringify({ json: info }),
-      headers: {
-        'Content-Type': 'application/json',
-        'Oidc-Auth': token,
-      },
+      headers,
       method: 'POST',
     });
+  }
+
+  /**
+   * Build the auth headers for a workspace-scoped server call. The
+   * `X-Workspace-Id` header is what routes the request through the workspace
+   * (member+) procedures — same convention as `sendNotify` above.
+   */
+  private async buildWorkspaceHeaders(
+    workspaceId: string,
+  ): Promise<{ headers: Record<string, string>; serverUrl: string } | null> {
+    const [serverUrl, token] = await Promise.all([
+      this.remoteServerConfigCtr.getRemoteServerUrl(),
+      this.remoteServerConfigCtr.getAccessToken(),
+    ]);
+    if (!serverUrl || !token) return null;
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Oidc-Auth': token,
+      'X-Workspace-Id': workspaceId,
+    };
+    setDesktopUserAgentHeader(headers);
+    return { headers, serverUrl };
+  }
+
+  /**
+   * Mint a workspace-device connect token via `device.mintWorkspaceConnectToken`.
+   * Used by the gateway service when restoring persisted share connections and
+   * when a workspace connection's token expires. Returns null when the desktop
+   * has no usable auth (logged out) — the service treats that as "skip".
+   */
+  private async mintWorkspaceConnectToken(workspaceId: string): Promise<string | null> {
+    const auth = await this.buildWorkspaceHeaders(workspaceId);
+    if (!auth) return null;
+
+    const res = await fetch(`${auth.serverUrl}/trpc/lambda/device.mintWorkspaceConnectToken`, {
+      // The mutation takes no input; `{json: null}` is the superjson-encoded
+      // empty payload the tRPC HTTP handler expects.
+      body: JSON.stringify({ json: null }),
+      headers: auth.headers,
+      method: 'POST',
+    });
+    if (!res.ok) throw new Error(`mintWorkspaceConnectToken failed: HTTP ${res.status}`);
+
+    const payload = (await res.json()) as { result?: { data?: { json?: { token?: unknown } } } };
+    const minted = payload?.result?.data?.json?.token;
+    return typeof minted === 'string' ? minted : null;
+  }
+
+  /**
+   * Probe whether the workspace-scoped deviceId still has a registered row via
+   * `device.listDevices`. Returns `false` only on a definitive "row gone"
+   * answer; `undefined` on any failure — the service must not clear persisted
+   * enrollments off an inconclusive check.
+   */
+  private async checkWorkspaceDeviceRegistered(
+    workspaceId: string,
+    deviceId: string,
+  ): Promise<boolean | undefined> {
+    try {
+      const auth = await this.buildWorkspaceHeaders(workspaceId);
+      if (!auth) return undefined;
+
+      const res = await fetch(`${auth.serverUrl}/trpc/lambda/device.listDevices`, {
+        headers: auth.headers,
+      });
+      if (!res.ok) return undefined;
+
+      const payload = (await res.json()) as { result?: { data?: { json?: unknown } } };
+      const devices = payload?.result?.data?.json;
+      if (!Array.isArray(devices)) return undefined;
+
+      return devices.some(
+        (d: { deviceId?: unknown; registered?: unknown }) =>
+          d?.deviceId === deviceId && d?.registered === true,
+      );
+    } catch {
+      return undefined;
+    }
   }
 
   // ─── Platform Agent Helpers ───

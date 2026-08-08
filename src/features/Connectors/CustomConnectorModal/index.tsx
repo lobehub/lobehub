@@ -97,6 +97,7 @@ const cleanRecord = (record?: Record<string, string>): Record<string, string> | 
 const CustomConnectorModal = memo<CustomConnectorModalProps>(
   ({ open, onClose, connectorId, legacyPlugin, onEditSuccess }) => {
     const createConnector = useToolStore((s) => s.createConnector);
+    const deleteConnector = useToolStore((s) => s.deleteConnector);
     const updateConnector = useToolStore((s) => s.updateConnector);
     const getConnectorForEdit = useToolStore((s) => s.getConnectorForEdit);
     const startConnectorOAuth = useToolStore((s) => s.startConnectorOAuth);
@@ -168,6 +169,16 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
             ? 'header'
             : 'none';
 
+      // Custom headers now live in metadata; older rows stored them as a
+      // 'header'-type credential. Read metadata first, fall back to the legacy
+      // credential so existing connectors still pre-fill their headers — and do
+      // so regardless of the auth radio (headers can coexist with bearer auth).
+      const customHeaders =
+        (connector.metadata?.customHeaders as Record<string, string> | undefined) ??
+        (credentials?.type === 'header'
+          ? (credentials as { headers: Record<string, string> }).headers
+          : undefined);
+
       return {
         customParams: {
           description: connector.metadata?.description as string | undefined,
@@ -180,10 +191,7 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
             },
             command: mcpStdioConfig?.command,
             env: mcpStdioConfig?.env,
-            headers:
-              authType === 'header'
-                ? (credentials as { headers: Record<string, string> })?.headers
-                : undefined,
+            headers: customHeaders,
             type: (connector.mcpConnectionType ?? 'http') as 'http' | 'stdio',
             url: connector.mcpServerUrl ?? undefined,
           },
@@ -193,7 +201,10 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
       };
     }, [isEditMode, isMigrationMode, legacyPlugin, connector, editFetchedData]);
 
-    const handleSave = async (value: LobeToolCustomPlugin, ctx?: { oauthPopup?: Window | null }) => {
+    const handleSave = async (
+      value: LobeToolCustomPlugin,
+      ctx?: { oauthPopup?: Window | null },
+    ) => {
       // ── Migration mode ────────────────────────────────────────────────────
       // Promote a legacy `user_installed_plugins.type='customPlugin'` row into
       // a `user_connectors` row. Server `connector.create` is idempotent on
@@ -211,7 +222,14 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         // `legacyPlugin` via `editValue`, so anything the user edited (or left
         // alone) is already inside `value`. Hand it to the orchestrator.
         const result = await executeLegacyMigrationSave(legacyPlugin, value, {
-          createConnector,
+          // The migration orchestrator predates the server-reported `isNew`
+          // and still keys its rollback on `hasExistingConnector` below.
+          createConnector: async (payload) => (await createConnector(payload)).id,
+          deleteConnector,
+          // Read fresh so the rollback only deletes a connector this migration
+          // created, never one the idempotent upsert merely updated.
+          hasExistingConnector: (id) =>
+            Boolean(connectorSelectors.connectorByIdentifier(id)(useToolStore.getState())),
           syncConnectorTools,
           uninstallCustomPlugin,
         });
@@ -250,21 +268,33 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
 
         if (newUrl !== undefined) patch.mcpServerUrl = newUrl;
 
+        // Custom headers live in metadata (independent of the auth credential and
+        // of the server URL), so always re-sync them from the form. Merge into the
+        // existing metadata — a jsonb update replaces the whole column, so other
+        // keys (e.g. description) must be carried over. Also migrates legacy rows
+        // that stored headers as a 'header' credential (cleared below).
+        //
+        // Guard on `connector`: only rewrite metadata once the connector record is
+        // loaded, so we never overwrite a populated column with `{}` (which would
+        // drop sibling keys like description). In practice the form can't be
+        // submitted before `connector` resolves, but this keeps it safe.
+        const headers = cleanRecord(mcp.headers);
+        if (connector) {
+          const nextMetadata: Record<string, unknown> = { ...connector.metadata };
+          if (headers) nextMetadata.customHeaders = headers;
+          else delete nextMetadata.customHeaders;
+          patch.metadata = nextMetadata;
+        }
+
         if (urlChanged) {
-          // Clear stale credentials whenever the server URL changes.
+          // Clear stale auth credentials whenever the server URL changes.
           patch.credentials = null;
         } else if (authType === 'bearer' && mcp.auth?.token?.trim()) {
           patch.credentials = { token: mcp.auth.token.trim(), type: 'bearer' as const };
         } else if (authType !== 'oauth2') {
-          // Auth radio 'none' covers both "no auth" and "header auth" (headers live in
-          // the Advanced section, not the auth radio). Mirror the create-mode logic:
-          // any filled headers → header credentials; empty → clear credentials.
-          const headers = cleanRecord(mcp.headers);
-          if (headers) {
-            patch.credentials = { headers, type: 'header' as const };
-          } else {
-            patch.credentials = null;
-          }
+          // 'none' / header-only auth: no separate auth credential — custom headers
+          // are persisted via metadata above, so clear the credentials column.
+          patch.credentials = null;
         }
 
         if (authType === 'oauth2') {
@@ -306,7 +336,11 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         mcpServerUrl: isHttp ? mcp.url?.trim() : undefined,
         mcpStdioConfig: isHttp
           ? undefined
-          : { args: mcp.args ?? [], command: (mcp.command ?? '').trim(), env: cleanRecord(mcp.env) },
+          : {
+              args: mcp.args ?? [],
+              command: (mcp.command ?? '').trim(),
+              env: cleanRecord(mcp.env),
+            },
         name: identifier,
         sourceType: ConnectorSourceType.custom,
       };
@@ -319,7 +353,7 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
 
         const clientId = mcp.auth?.clientId?.trim();
         try {
-          const newConnectorId = await createConnector({
+          const { id: newConnectorId } = await createConnector({
             ...base,
             oidcConfig: {
               clientId: clientId || undefined,
@@ -345,17 +379,37 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         return;
       }
 
-      // None / bearer / custom headers: store credentials and sync the tool list.
+      // The auth credential (bearer token) and custom headers are stored
+      // separately: the credential goes in the encrypted single-kind
+      // `credentials` column, while custom headers live in
+      // `metadata.customHeaders` so they can coexist with no-auth OR bearer
+      // (the credentials column can only hold one credential kind at a time).
       const credentials =
         authType === 'bearer' && mcp.auth?.token?.trim()
           ? ({ token: mcp.auth.token.trim(), type: 'bearer' } as const)
-          : (() => {
-              const headers = cleanRecord(mcp.headers);
-              return headers ? ({ headers, type: 'header' } as const) : undefined;
-            })();
+          : undefined;
+      const headers = cleanRecord(mcp.headers);
 
-      const newConnectorId = await createConnector({ ...base, credentials });
-      await syncConnectorTools(newConnectorId);
+      // `connector.create` is an idempotent upsert on (user, identifier);
+      // `isNew` is the server's verdict on whether this row was freshly
+      // created. A client-cache lookup is NOT a safe substitute: before
+      // `fetchConnectors` completes it reports "absent" for a connector the
+      // server already has, and the rollback below must never delete a
+      // connector the user already had.
+      const { id: newConnectorId, isNew } = await createConnector({
+        ...base,
+        credentials,
+        metadata: headers ? { customHeaders: headers } : undefined,
+      });
+      try {
+        await syncConnectorTools(newConnectorId);
+      } catch (e) {
+        // Tool sync failed (MCP server unreachable, bad command, …): roll the
+        // freshly created row back so the user isn't left with an "installed"
+        // connector that has 0 tools and an empty permissions page (#16533).
+        if (isNew) await deleteConnector(newConnectorId);
+        throw e;
+      }
     };
 
     // In migration mode the Delete button must actually uninstall the legacy

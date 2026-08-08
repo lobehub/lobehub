@@ -6,6 +6,8 @@ import {
 import type { ModelRuntimeHooks } from '@lobechat/model-runtime';
 import debug from 'debug';
 
+import { after } from '@/server/utils/scheduleAfterResponse';
+
 import { getLLMGenerationTracingService } from './index';
 
 const log = debug('lobe-server:llm-generation-tracing:hook');
@@ -44,24 +46,6 @@ const extractSystemPrompt = (messages: unknown): string => {
   const first = messages[0] as { content?: unknown; role?: unknown } | undefined;
   if (first?.role === 'system' && typeof first.content === 'string') return first.content;
   return '';
-};
-
-const tryScheduleAfter = (work: () => Promise<void> | void): void => {
-  let scheduled = false;
-  try {
-    const nextServer = require('next/server') as { after?: (fn: () => unknown) => void };
-    if (typeof nextServer.after === 'function') {
-      nextServer.after(work);
-      scheduled = true;
-    }
-  } catch {
-    // next/server not available — fall through to fire-and-forget
-  }
-  if (!scheduled) {
-    Promise.resolve()
-      .then(work)
-      .catch((err) => log('Deferred tracing work threw: %O', err));
-  }
 };
 
 /**
@@ -111,7 +95,7 @@ export const createLLMGenerationTracingHook = (
           ? (rawTracing.onPersisted as (tracingId: string | null) => void | Promise<void>)
           : undefined;
 
-      tryScheduleAfter(async () => {
+      after(async () => {
         let persistedTracingId: string | null = null;
         try {
           const result = await service.record({

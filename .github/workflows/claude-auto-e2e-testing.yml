@@ -1,5 +1,5 @@
 name: Claude Auto E2E Testing
-description: Automatically add E2E tests to improve user journey coverage
+# Automatically add E2E tests to improve user journey coverage
 
 on:
   schedule:

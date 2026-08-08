@@ -2,7 +2,7 @@
 
 import type { EvalRunMetrics } from '@lobechat/types';
 import { formatCost, formatShortenNumber } from '@lobechat/utils';
-import { Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CheckCircle2, Clock, DollarSign, Hash } from 'lucide-react';
 import { memo } from 'react';
@@ -10,16 +10,30 @@ import { useTranslation } from 'react-i18next';
 
 import { formatDuration } from '../../../../../../utils';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const styles = createStaticStyles(({ css }) => ({
   card: css`
     padding: 16px;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: 8px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadius};
   `,
   grid: css`
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  `,
+  // Pass rate hero — the run's headline outcome, given the most visual weight.
+  hero: css`
+    padding: 20px;
+    border-radius: ${cssVar.borderRadiusLG};
+
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  heroValue: css`
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: ${cssVar.fontSizeHeading1};
+    font-weight: 600;
+    line-height: 1;
+    color: ${cssVar.colorText};
   `,
   iconBox: css`
     display: flex;
@@ -29,27 +43,46 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     width: 36px;
     height: 36px;
-    border-radius: 8px;
+    border-radius: ${cssVar.borderRadius};
   `,
   label: css`
-    font-size: 13px;
+    font-size: ${cssVar.fontSizeSM};
     color: ${cssVar.colorTextTertiary};
   `,
+  progressFill: css`
+    height: 100%;
+    border-radius: 999px;
+
+    background: ${cssVar.colorSuccess};
+
+    transition: width 0.3s ease;
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
+  `,
+  progressTrack: css`
+    overflow: hidden;
+
+    width: 100%;
+    height: 8px;
+    border-radius: 999px;
+
+    background: ${cssVar.colorFillSecondary};
+  `,
   subtitle: css`
-    font-size: 14px;
+    font-size: ${cssVar.fontSize};
     color: ${cssVar.colorTextSecondary};
   `,
   subtitleUnit: css`
-    font-size: 12px;
+    font-size: ${cssVar.fontSizeSM};
     color: ${cssVar.colorTextTertiary};
   `,
   value: css`
-    font-size: 24px;
-    font-weight: bold;
-  `,
-  valueSuffix: css`
-    font-size: 16px;
-    color: ${cssVar.colorTextTertiary};
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: ${cssVar.fontSizeHeading3};
+    font-weight: 600;
+    color: ${cssVar.colorText};
   `,
 }));
 
@@ -62,23 +95,10 @@ const StatsCards = memo<StatsCardsProps>(({ metrics }) => {
 
   const passedCount = metrics?.passedCases ?? 0;
   const totalCases = metrics?.totalCases ?? 0;
+  const hasPassRate = metrics?.passRate !== undefined;
+  const passPct = hasPassRate ? Math.round((metrics?.passRate ?? 0) * 100) : 0;
 
   const cards = [
-    {
-      bgColor: cssVar.colorSuccessBg,
-      color: cssVar.colorSuccess,
-      icon: CheckCircle2,
-      label: t('run.metrics.passRate'),
-      subtitle:
-        totalCases > 0 ? (
-          <>
-            {passedCount}/{totalCases}{' '}
-            <span className={styles.subtitleUnit}>{t('table.filter.passed')}</span>
-          </>
-        ) : undefined,
-      value: metrics?.passRate !== undefined ? `${Math.round(metrics.passRate * 100)}%` : '-',
-      valueSuffix: undefined,
-    },
     {
       bgColor: cssVar.colorWarningBg,
       color: cssVar.colorWarning,
@@ -124,23 +144,49 @@ const StatsCards = memo<StatsCardsProps>(({ metrics }) => {
   ];
 
   return (
-    <div className={styles.grid}>
-      {cards.map((card) => (
-        <Flexbox horizontal align="center" className={styles.card} gap={12} key={card.label}>
-          <div className={styles.iconBox} style={{ background: card.bgColor }}>
-            <Icon icon={card.icon} size={16} style={{ color: card.color }} />
-          </div>
-          <Flexbox gap={2}>
-            <span className={styles.label}>{card.label}</span>
-            <span className={styles.value}>
-              {card.value}
-              {card.valueSuffix && <span className={styles.valueSuffix}>{card.valueSuffix}</span>}
-            </span>
-            {card.subtitle && <span className={styles.subtitle}>{card.subtitle}</span>}
+    <Flexbox gap={16}>
+      {/* Pass rate hero */}
+      <Flexbox className={styles.hero} gap={16}>
+        <Flexbox horizontal align={'flex-end'} gap={16} justify={'space-between'}>
+          <Flexbox gap={6}>
+            <Flexbox horizontal align={'center'} gap={8}>
+              <div className={styles.iconBox} style={{ background: cssVar.colorSuccessBg }}>
+                <Icon icon={CheckCircle2} size={16} style={{ color: cssVar.colorSuccess }} />
+              </div>
+              <span className={styles.label}>{t('run.metrics.passRate')}</span>
+            </Flexbox>
+            <span className={styles.heroValue}>{hasPassRate ? `${passPct}%` : '-'}</span>
           </Flexbox>
+          {totalCases > 0 && (
+            <Text className={styles.subtitle}>
+              {passedCount}/{totalCases}{' '}
+              <span className={styles.subtitleUnit}>{t('table.filter.passed')}</span>
+            </Text>
+          )}
         </Flexbox>
-      ))}
-    </div>
+        {hasPassRate && totalCases > 0 && (
+          <div className={styles.progressTrack}>
+            <div className={styles.progressFill} style={{ width: `${passPct}%` }} />
+          </div>
+        )}
+      </Flexbox>
+
+      {/* Secondary metrics */}
+      <div className={styles.grid}>
+        {cards.map((card) => (
+          <Flexbox horizontal align={'center'} className={styles.card} gap={12} key={card.label}>
+            <div className={styles.iconBox} style={{ background: card.bgColor }}>
+              <Icon icon={card.icon} size={16} style={{ color: card.color }} />
+            </div>
+            <Flexbox gap={2}>
+              <span className={styles.label}>{card.label}</span>
+              <span className={styles.value}>{card.value}</span>
+              {card.subtitle && <span className={styles.subtitle}>{card.subtitle}</span>}
+            </Flexbox>
+          </Flexbox>
+        ))}
+      </div>
+    </Flexbox>
   );
 });
 

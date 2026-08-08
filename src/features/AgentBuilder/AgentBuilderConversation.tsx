@@ -9,6 +9,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
 import AgentBuilderWelcome from './AgentBuilderWelcome';
+import { useResolveFeedbackOnSend } from './SuggestionChips/useResolveFeedbackOnSend';
 import TopicSelector from './TopicSelector';
 
 interface AgentBuilderConversationProps {
@@ -27,6 +28,10 @@ const AgentBuilderConversation = memo<AgentBuilderConversationProps>(({ agentId 
   const provider = useAgentStore((s) => agentByIdSelectors.getAgentModelProviderById(agentId)(s));
   const { handleUploadFiles } = useUploadFiles({ agentId, model, provider });
   const { allowed: canCreate } = usePermission('create_content');
+
+  // Resolve usage_in_followup / manual_edit feedback when a suggestion-seeded
+  // message is sent (no-op for normal sends).
+  useResolveFeedbackOnSend();
 
   return (
     <DragUploadZone

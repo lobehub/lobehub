@@ -1,7 +1,7 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { type ClaudeAuthStatus, type ToolStatus } from '@lobechat/electron-client-ipc';
+import { type BinaryStatus, type ClaudeAuthStatus } from '@lobechat/electron-client-ipc';
 import {
   getHeterogeneousAgentClientConfig,
   isRemoteHeterogeneousType,
@@ -16,7 +16,7 @@ import { useTranslation } from 'react-i18next';
 import HeterogeneousAgentStatusGuide from '@/features/Electron/HeterogeneousAgent/StatusGuide';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
-import { toolDetectorService } from '@/services/electron/toolDetector';
+import { binaryService } from '@/services/electron/binary';
 
 const COMMAND_LINE_HEIGHT = 28;
 
@@ -219,10 +219,10 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     const navigate = useWorkspaceAwareNavigate();
     const { allowed: canEdit } = usePermission('edit_own_content');
     const providerConfig = getHeterogeneousAgentClientConfig(provider.type);
-    const defaultCommand = providerConfig?.command || '';
+    const defaultCommand = providerConfig?.defaultCommand || '';
     const resolvedCommand = provider.command?.trim() || defaultCommand;
     const isUsingCustomCommand = resolvedCommand !== defaultCommand;
-    const [status, setStatus] = useState<ToolStatus | undefined>();
+    const [status, setStatus] = useState<BinaryStatus | undefined>();
     const [auth, setAuth] = useState<ClaudeAuthStatus | null>(null);
     const [commandInput, setCommandInput] = useState(resolvedCommand);
     const [detecting, setDetecting] = useState(true);
@@ -233,7 +233,12 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     const displayName = providerConfig?.title || provider.type;
     const AgentIcon = providerConfig?.icon;
     const showCliInstallGuide =
-      (provider.type === 'claude-code' || provider.type === 'codex') &&
+      (provider.type === 'amp' ||
+        provider.type === 'claude-code' ||
+        provider.type === 'codex' ||
+        provider.type === 'opencode' ||
+        provider.type === 'pi' ||
+        provider.type === 'qoder') &&
       !detecting &&
       !status?.available &&
       !isUsingCustomCommand;
@@ -245,7 +250,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
       }
 
       try {
-        const result = await toolDetectorService.getClaudeAuthStatus(resolvedCommand);
+        const result = await binaryService.getClaudeAuthStatus(resolvedCommand);
         setAuth(result);
       } catch (error) {
         console.warn('[HeterogeneousAgentStatusCard] Failed to get Claude auth status:', error);
@@ -254,7 +259,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     }, [provider.type, resolvedCommand]);
 
     const detect = useCallback(async () => {
-      // Remote platform agents (openclaw, hermes, amp, opencode, …) have no local CLI to detect.
+      // Remote platform agents (openclaw, hermes, …) have no local CLI to detect.
       if (isRemoteHeterogeneousType(provider.type) || !isDesktop || !resolvedCommand) {
         setDetecting(false);
         return;
@@ -262,7 +267,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
 
       setDetecting(true);
       try {
-        const result = await toolDetectorService.detectHeterogeneousAgentCommand({
+        const result = await binaryService.detectHeterogeneousAgentCommand({
           agentType: provider.type,
           command: resolvedCommand,
         });

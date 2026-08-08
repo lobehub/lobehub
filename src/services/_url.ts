@@ -10,11 +10,10 @@ export const API_ENDPOINTS = {
   // models
   models: (provider: string) => `/webapi/models/${provider}`,
   modelPull: (provider: string) => `/webapi/models/${provider}/pull`,
+  pricing: (provider: string) => `/webapi/models/${provider}/pricing`,
 
   // TTS
   tts: (provider: string) => `/webapi/tts/${provider}`,
-  edge: '/webapi/tts/edge',
-  microsoft: '/webapi/tts/microsoft',
 };
 
 export const MARKET_OIDC_ENDPOINTS = {

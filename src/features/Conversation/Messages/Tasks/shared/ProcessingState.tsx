@@ -79,6 +79,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: linear-gradient(90deg, transparent, ${cssVar.colorPrimaryBgHover}, transparent);
 
     animation: ${shimmer} 2s infinite;
+
+    @media (prefers-reduced-motion: reduce) {
+      display: none;
+    }
   `,
   separator: css`
     width: 3px;

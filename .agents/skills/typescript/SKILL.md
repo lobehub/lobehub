@@ -22,8 +22,8 @@ user-invocable: false
 ## Async Patterns
 
 - Prefer `async`/`await` over callbacks or `.then()` chains
-- Prefer async APIs over sync ones (avoid `*Sync`)
-- Use promise-based variants: `import { readFile } from 'fs/promises'`
+- **Async-first for IO**: new IO code (fs, child\_process, etc.) must use async APIs at its boundaries — use promise-based variants like `import { readFile } from 'fs/promises'`, never `*Sync` by default. Function coloring is asymmetric: async→sync migration is never needed, while sync→async (when IO gets slower, gains concurrency, or grows a subprocess/network call) forces rewriting every caller up the chain — sync-first debt that compounds. Micro-costs of async (thread-pool dispatch, cache races) are not valid reasons: races are solved by caching the promise instead of the result
+- `*Sync` is acceptable in exactly one place: call sites locked inside a synchronous contract you don't control — an existing sync signature chain (don't virally refactor a legacy sync chain in a bugfix, but new standalone modules must not extend such chains), or sync-only callbacks like `process.on('exit')`. Module-load-time and CLI startup init are NOT exceptions — use top-level `await` (ESM) there
 - Use `Promise.all`, `Promise.race` for concurrent operations where safe
 
 ## Imports
@@ -47,7 +47,7 @@ user-invocable: false
 - Use consistent, descriptive naming; avoid obscure abbreviations
 - Replace magic numbers/strings with well-named constants
 - Defer formatting to tooling
-- Prefer **named exports** over `export default` — keeps refactor renames and IDE auto-import in sync, and avoids the `default` re-naming drift you get with `import Foo from './foo'`. Reserve `export default` for files where the framework requires it (Next.js page/route/layout, React.lazy targets, config files like `vitest.config.ts`)
+- Prefer **named exports** over `export default` — keeps refactor renames and IDE auto-import in sync, and avoids the `default` re-naming drift you get with `import Foo from './foo'`. Reserve `export default` for files where the framework requires it (Next.js page/route/layout, React.lazy targets, config files like `vitest.config.ts`). The codebase still has many `export default` occurrences — that's historical debt, not a pattern to copy; do not model new code on existing `export default` usage outside the framework-required cases above
 - Before adding local helpers for common guards/parsing/normalization (record checks, string extraction, empty-string handling, timing helpers, JSON-safe utilities, etc.), search `packages/utils` first. If the helper already exists or clearly belongs there, import it from `@lobechat/utils` (or the relevant `@lobechat/utils/*` subpath) instead of duplicating tiny helpers across feature files.
 
 ## UI and Theming
@@ -58,11 +58,12 @@ user-invocable: false
 
 ## Performance
 
-- Reuse existing utils in `packages/utils` or installed npm packages
 - Query only required columns from database
 
-## Time Consistency
+## Reusability
 
+- Reuse existing utils in `packages/utils` or installed npm packages
+- Do not hand-roll reusable record/object-map guards such as `typeof value === 'object' && value !== null`; import helpers like `isRecord`, `isPlainRecord`, `isObjectLike`, `toRecord`, `pickString`, `UnknownRecord`, etc. from `@lobechat/utils/object`.
 - Assign `Date.now()` to a constant once and reuse for consistency
 
 ## Logging

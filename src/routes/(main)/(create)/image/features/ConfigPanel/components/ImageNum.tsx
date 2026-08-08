@@ -1,6 +1,7 @@
 'use client';
 
-import { ActionIcon, Flexbox, InputNumber, Segmented } from '@lobehub/ui';
+import { ActionIcon, Flexbox, InputNumber } from '@lobehub/ui';
+import { Tabs, type TabsItem } from '@lobehub/ui/base-ui';
 import { Check, Plus, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -32,39 +33,37 @@ const ImageNum = memo<ImageNumSelectorProps>(
 
     const isCustomValue = !presetCounts.includes(imageNum);
 
-    const options = useMemo(() => {
-      const items = presetCounts.map((count) => ({
+    const options = useMemo<TabsItem[]>(() => {
+      const items: TabsItem[] = presetCounts.map((count) => ({
+        key: String(count),
         label: String(count),
-        value: count,
       }));
 
-      // Add custom option or show current custom value
       if (isCustomValue) {
         items.push({
+          key: String(imageNum),
           label: String(imageNum),
-          value: imageNum,
         });
       } else {
         items.push({
+          key: CUSTOM_VALUE,
           label: <Plus size={16} style={{ verticalAlign: 'middle' }} />,
-          value: CUSTOM_VALUE,
-        } as any);
+        });
       }
 
       return items;
     }, [presetCounts, isCustomValue, imageNum]);
 
     const handleChange = useCallback(
-      (value: number | string) => {
+      (key: string) => {
         if (disabled) return;
 
-        if (value === CUSTOM_VALUE || (isCustomValue && value === imageNum)) {
-          // Enter edit mode
+        if (key === CUSTOM_VALUE || (isCustomValue && Number(key) === imageNum)) {
           setCustomCount(imageNum);
           customCountRef.current = imageNum;
           setIsEditing(true);
         } else {
-          setImageNum(value as number);
+          setImageNum(Number(key));
         }
       },
       [disabled, isCustomValue, imageNum, setImageNum],
@@ -155,13 +154,14 @@ const ImageNum = memo<ImageNumSelectorProps>(
     }
 
     return (
-      <Segmented
-        block
-        disabled={disabled}
-        options={options}
+      <Tabs
+        activeKey={String(imageNum)}
+        items={options.map((item) => ({ ...item, disabled }))}
         style={{ width: '100%' }}
-        value={isCustomValue ? imageNum : imageNum}
-        variant="filled"
+        styles={{
+          list: { display: 'flex', width: '100%' },
+          tab: { flex: 1 },
+        }}
         onChange={handleChange}
       />
     );

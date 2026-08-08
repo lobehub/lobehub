@@ -1,16 +1,16 @@
 'use client';
 
+import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import type { GroupedTopic } from '@lobechat/types';
 import { ActionIcon, Checkbox, DropdownMenu, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { FolderIcon, MoreHorizontal, Star } from 'lucide-react';
 import { Fragment, memo, type MouseEvent, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router';
 
-import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
+import { useTopicItemDropdownMenu } from '@/features/AgentSidebar/Topic/List/Item/useDropdownMenu';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActivityTime } from '@/hooks/useActivityTime';
-import { useTopicItemDropdownMenu } from '@/routes/(main)/agent/_layout/Sidebar/Topic/List/Item/useDropdownMenu';
 import type { ChatTopic } from '@/types/topic';
 
 import StatusDot from './StatusDot';
@@ -138,7 +138,7 @@ interface RowProps {
 
 const Row = memo<RowProps>(({ topic, agentId }) => {
   const { t } = useTranslation('topic');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
 
   const selectMode = useTopicsViewStore((s) => s.selectMode);
   const selected = useTopicsViewStore((s) => s.selectedIds.includes(topic.id));
@@ -159,7 +159,7 @@ const Row = memo<RowProps>(({ topic, agentId }) => {
         toggleSelected(topic.id);
         return;
       }
-      navigate(SESSION_CHAT_TOPIC_URL(agentId, topic.id));
+      navigate(AGENT_CHAT_TOPIC_URL(agentId, topic.id));
     },
     [selectMode, topic.id, agentId, toggleSelected, navigate],
   );

@@ -1,9 +1,13 @@
 // @vitest-environment node
+import { GroupAgentBuilderManifest } from '@lobechat/builtin-tool-group-agent-builder';
+import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management';
+import { ImageGenerationManifest } from '@lobechat/builtin-tool-image-generation';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
-import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
+import { LobeAgentApiName, LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
+import { SkillsApiName, SkillsManifest } from '@lobechat/builtin-tool-skills';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { builtinTools } from '@lobechat/builtin-tools';
 import { ToolsEngine } from '@lobechat/context-engine';
@@ -180,6 +184,37 @@ describe('createServerToolsEngine', () => {
     // Non-device plugins survive.
     expect(availablePlugins).toContain('test-plugin');
   });
+
+  it('drops manifests without an api array instead of crashing the tools build (LOBE-12528)', () => {
+    // A DB plugin row whose manifest jsonb lacks `api` used to crash
+    // ToolsEngine.convertManifestsToTools (`manifest.api.map`) and with it
+    // every execAgent call of the affected user.
+    const brokenPlugin: InstalledPlugin = {
+      identifier: 'broken-plugin',
+      type: 'plugin',
+      runtimeType: 'mcp',
+      manifest: { identifier: 'broken-plugin', meta: { title: 'Broken' } } as any,
+    };
+    const brokenAdditional = { identifier: 'broken-additional', meta: { title: 'Broken' } } as any;
+
+    const context = createMockContext({
+      installedPlugins: [...mockInstalledPlugins, brokenPlugin],
+    });
+    const engine = createServerToolsEngine(context, {
+      additionalManifests: [brokenAdditional],
+    });
+
+    const result = engine.generateTools({
+      toolIds: ['broken-plugin', 'broken-additional', 'test-plugin'],
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    // Valid plugin still produces its tool; broken sources are dropped.
+    expect(result).toHaveLength(1);
+    expect(engine.getAvailablePlugins()).not.toContain('broken-plugin');
+    expect(engine.getAvailablePlugins()).not.toContain('broken-additional');
+  });
 });
 
 describe('createServerAgentToolsEngine', () => {
@@ -252,7 +287,152 @@ describe('createServerAgentToolsEngine', () => {
     expect(result.enabledToolIds).not.toContain(WebBrowsingManifest.identifier);
   });
 
-  it('should enable VisualUnderstanding when injected into runtime plugins', () => {
+  it('should follow the resolved search route instead of re-deriving it from search mode', () => {
+    const context = createMockContext();
+    const engine = createServerAgentToolsEngine(context, {
+      agentConfig: {
+        plugins: [WebBrowsingManifest.identifier],
+        chatConfig: { searchMode: 'on' },
+      },
+      model: 'grok-4.3',
+      provider: 'supergrok',
+      useApplicationBuiltinSearchTool: false,
+    });
+
+    const result = engine.generateToolsDetailed({
+      toolIds: [WebBrowsingManifest.identifier],
+      model: 'grok-4.3',
+      provider: 'supergrok',
+    });
+
+    expect(result.enabledToolIds).not.toContain(WebBrowsingManifest.identifier);
+  });
+
+  it('should not auto-enable ImageGeneration in chat mode', () => {
+    const context = createMockContext();
+    const engine = createServerAgentToolsEngine(context, {
+      agentConfig: {
+        chatConfig: { enableAgentMode: false },
+        plugins: [],
+      },
+      model: 'claude-sonnet',
+      modelAbilities: { functionCall: true, imageOutput: false },
+      provider: 'anthropic',
+    });
+
+    const result = engine.generateToolsDetailed({
+      model: 'claude-sonnet',
+      provider: 'anthropic',
+      toolIds: [],
+    });
+
+    expect(result.enabledToolIds).not.toContain(ImageGenerationManifest.identifier);
+  });
+
+  it('should enable ImageGeneration in chat mode when the tool is pinned', () => {
+    const context = createMockContext();
+    const engine = createServerAgentToolsEngine(context, {
+      agentConfig: {
+        chatConfig: { enableAgentMode: false },
+        plugins: [ImageGenerationManifest.identifier],
+      },
+      model: 'claude-sonnet',
+      modelAbilities: { functionCall: true, imageOutput: false },
+      provider: 'anthropic',
+    });
+
+    const result = engine.generateToolsDetailed({
+      model: 'claude-sonnet',
+      provider: 'anthropic',
+      toolIds: [ImageGenerationManifest.identifier],
+    });
+
+    expect(result.enabledToolIds).toContain(ImageGenerationManifest.identifier);
+  });
+
+  it('should not enable ImageGeneration in chat mode when model has native image output', () => {
+    const context = createMockContext();
+    const engine = createServerAgentToolsEngine(context, {
+      agentConfig: {
+        chatConfig: { enableAgentMode: false },
+        plugins: [ImageGenerationManifest.identifier],
+      },
+      model: 'gpt-image-chat',
+      modelAbilities: { functionCall: true, imageOutput: true },
+      provider: 'openai',
+    });
+
+    const result = engine.generateToolsDetailed({
+      model: 'gpt-image-chat',
+      provider: 'openai',
+      toolIds: [ImageGenerationManifest.identifier],
+    });
+
+    expect(result.enabledToolIds).not.toContain(ImageGenerationManifest.identifier);
+  });
+
+  it('should not enable ImageGeneration in chat mode when model cannot call tools', () => {
+    const context = createMockContext({
+      isModelSupportToolUse: () => false,
+    });
+    const engine = createServerAgentToolsEngine(context, {
+      agentConfig: {
+        chatConfig: { enableAgentMode: false },
+        plugins: [ImageGenerationManifest.identifier],
+      },
+      model: 'plain-text-model',
+      modelAbilities: { functionCall: false, imageOutput: false },
+      provider: 'test',
+    });
+
+    const result = engine.generateToolsDetailed({
+      model: 'plain-text-model',
+      provider: 'test',
+      toolIds: [ImageGenerationManifest.identifier],
+    });
+
+    expect(result.enabledToolIds).not.toContain(ImageGenerationManifest.identifier);
+  });
+
+  it('should not enable ImageGeneration by default in agent mode', () => {
+    const context = createMockContext();
+    const engine = createServerAgentToolsEngine(context, {
+      agentConfig: { plugins: [] },
+      model: 'gpt-4',
+      modelAbilities: { functionCall: true, imageOutput: false },
+      provider: 'openai',
+    });
+
+    const result = engine.generateToolsDetailed({
+      model: 'gpt-4',
+      provider: 'openai',
+      toolIds: [],
+    });
+
+    expect(result.enabledToolIds).not.toContain(ImageGenerationManifest.identifier);
+  });
+
+  it('should allow ImageGeneration explicit activation in agent mode', () => {
+    const context = createMockContext();
+    const engine = createServerAgentToolsEngine(context, {
+      agentConfig: { plugins: [] },
+      model: 'gpt-4',
+      modelAbilities: { functionCall: true, imageOutput: true },
+      provider: 'openai',
+    });
+
+    const result = engine.generateToolsDetailed({
+      context: { isExplicitActivation: true },
+      model: 'gpt-4',
+      provider: 'openai',
+      skipDefaultTools: true,
+      toolIds: [ImageGenerationManifest.identifier],
+    });
+
+    expect(result.enabledToolIds).toContain(ImageGenerationManifest.identifier);
+  });
+
+  it('should enable MultimodalUnderstanding when injected into runtime plugins', () => {
     const context = createMockContext();
     const engine = createServerAgentToolsEngine(context, {
       agentConfig: { plugins: [LobeAgentManifest.identifier] },
@@ -285,6 +465,106 @@ describe('createServerAgentToolsEngine', () => {
 
     // lobe-agent is in alwaysOnToolIds, so its core capabilities are on for every agent-mode turn.
     expect(result.enabledToolIds).toContain(LobeAgentManifest.identifier);
+
+    // Without a manifest context, the full static manifest is used — callSubAgent stays.
+    const lobeAgent = result.enabledManifests.find(
+      (m) => m.identifier === LobeAgentManifest.identifier,
+    );
+    expect(lobeAgent?.api.map((a) => a.name)).toContain(LobeAgentApiName.callSubAgent);
+  });
+
+  it('should honor an explicit disabled policy for an always-on builtin tool', () => {
+    const context = createMockContext();
+    const engine = createServerAgentToolsEngine(context, {
+      agentConfig: { plugins: [] },
+      disabledPluginIds: [LobeAgentManifest.identifier],
+      model: 'deepseek-chat',
+      provider: 'deepseek',
+    });
+
+    const result = engine.generateToolsDetailed({
+      model: 'deepseek-chat',
+      provider: 'deepseek',
+      toolIds: [],
+    });
+
+    expect(result.enabledToolIds).not.toContain(LobeAgentManifest.identifier);
+    expect(result.enabledManifests).not.toContainEqual(
+      expect.objectContaining({ identifier: LobeAgentManifest.identifier }),
+    );
+  });
+
+  it('hides lobe-agent callSubAgent when manifestContext.isSubAgent is true', () => {
+    const context = createMockContext();
+    const engine = createServerAgentToolsEngine(context, {
+      agentConfig: { plugins: [] },
+      manifestContext: { isSubAgent: true },
+      model: 'deepseek-chat',
+      provider: 'deepseek',
+    });
+
+    const result = engine.generateToolsDetailed({
+      model: 'deepseek-chat',
+      provider: 'deepseek',
+      toolIds: [],
+    });
+
+    // lobe-agent's other capabilities (plan / todo / visual-media) stay on...
+    expect(result.enabledToolIds).toContain(LobeAgentManifest.identifier);
+    const lobeAgent = result.enabledManifests.find(
+      (m) => m.identifier === LobeAgentManifest.identifier,
+    );
+    // ...but callSubAgent is stripped so a nested sub-agent cannot recurse.
+    expect(lobeAgent?.api.map((a) => a.name)).not.toContain(LobeAgentApiName.callSubAgent);
+  });
+
+  it('rewrites lobe-skills exec descriptions when manifestContext.executionEnv is device-unrouted', () => {
+    const context = createMockContext();
+    const engine = createServerAgentToolsEngine(context, {
+      agentConfig: { plugins: [] },
+      manifestContext: {
+        executionEnv: 'device-unrouted',
+        executionEnvUnroutedReason: 'bound-device-offline',
+      },
+      model: 'deepseek-chat',
+      provider: 'deepseek',
+    });
+
+    const result = engine.generateToolsDetailed({
+      model: 'deepseek-chat',
+      provider: 'deepseek',
+      toolIds: [],
+    });
+
+    // lobe-skills is always-on, so the resolved manifest is what the model sees.
+    const skills = result.enabledManifests.find((m) => m.identifier === SkillsManifest.identifier);
+    const runCommand = skills?.api.find((a) => a.name === SkillsApiName.runCommand);
+    expect(runCommand?.description).toContain('local device but it is offline');
+    // without a manifest context the static description has no offline warning
+    expect(
+      SkillsManifest.api.find((a) => a.name === SkillsApiName.runCommand)?.description,
+    ).not.toContain('offline');
+  });
+
+  it('hides lobe-agent callSubAgent inside a group run (scope=group)', () => {
+    const context = createMockContext();
+    const engine = createServerAgentToolsEngine(context, {
+      agentConfig: { plugins: [] },
+      manifestContext: { scope: 'group' },
+      model: 'deepseek-chat',
+      provider: 'deepseek',
+    });
+
+    const result = engine.generateToolsDetailed({
+      model: 'deepseek-chat',
+      provider: 'deepseek',
+      toolIds: [],
+    });
+
+    const lobeAgent = result.enabledManifests.find(
+      (m) => m.identifier === LobeAgentManifest.identifier,
+    );
+    expect(lobeAgent?.api.map((a) => a.name)).not.toContain(LobeAgentApiName.callSubAgent);
   });
 
   it('should enable KnowledgeBase when hasEnabledKnowledgeBases is true', () => {
@@ -321,6 +601,48 @@ describe('createServerAgentToolsEngine', () => {
     });
 
     expect(result.enabledToolIds).not.toContain(KnowledgeBaseManifest.identifier);
+  });
+
+  it('should auto-enable group orchestration tools when isGroupSupervisor is true', () => {
+    const context = createMockContext();
+    const engine = createServerAgentToolsEngine(context, {
+      // Supervisor agent does not declare the group tools itself — they ship
+      // only with the builtin group-supervisor, so the engine must inject them.
+      agentConfig: { plugins: [] },
+      isGroupSupervisor: true,
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    const result = engine.generateToolsDetailed({
+      toolIds: [],
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    expect(result.enabledToolIds).toContain(GroupManagementManifest.identifier);
+    // group-agent-builder has no server runtime, so it is deliberately NOT
+    // advertised on a server-side supervisor run (it would throw if called).
+    expect(result.enabledToolIds).not.toContain(GroupAgentBuilderManifest.identifier);
+  });
+
+  it('should not enable group orchestration tools for a non-supervisor run', () => {
+    const context = createMockContext();
+    const engine = createServerAgentToolsEngine(context, {
+      agentConfig: { plugins: [] },
+      isGroupSupervisor: false,
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    const result = engine.generateToolsDetailed({
+      toolIds: [],
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    expect(result.enabledToolIds).not.toContain(GroupManagementManifest.identifier);
+    expect(result.enabledToolIds).not.toContain(GroupAgentBuilderManifest.identifier);
   });
 
   it('should include default tools (WebBrowsing, KnowledgeBase)', () => {
@@ -869,6 +1191,126 @@ describe('createServerAgentToolsEngine', () => {
 
       expect(result.enabledToolIds).not.toContain(LocalSystemManifest.identifier);
       expect(result.enabledToolIds).not.toContain(RemoteDeviceManifest.identifier);
+    });
+  });
+
+  describe('device-locked physical wall', () => {
+    // When the run is locked to ONE device (routed, or explicitly bound but
+    // offline), the remote-device picker manifest must be PHYSICALLY absent
+    // from manifestSchemas — the rule gate alone is bypassed by the
+    // activator's `isExplicitActivation`.
+    it('explicit activation cannot resolve RemoteDevice when the plan is routed to a device', () => {
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { plugins: [RemoteDeviceManifest.identifier] },
+        canUseDevice: true,
+        deviceContext: { gatewayConfigured: true, deviceOnline: true, autoActivated: true },
+        executionPlan: { deviceId: 'device-001', kind: 'device', target: 'device' },
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        context: { isExplicitActivation: true },
+        toolIds: [RemoteDeviceManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).not.toContain(RemoteDeviceManifest.identifier);
+      expect(result.filteredTools).toContainEqual({
+        id: RemoteDeviceManifest.identifier,
+        reason: 'not_found',
+      });
+    });
+
+    it('explicit activation cannot resolve RemoteDevice when the bound device is offline', () => {
+      // `bound-device-offline` keeps the run locked to the user's selection —
+      // the model must never hop to another machine while it waits.
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { plugins: [RemoteDeviceManifest.identifier] },
+        canUseDevice: true,
+        deviceContext: { boundDeviceId: 'device-001', gatewayConfigured: true },
+        executionPlan: {
+          kind: 'device-unrouted',
+          reason: 'bound-device-offline',
+          target: 'device',
+        },
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        context: { isExplicitActivation: true },
+        toolIds: [RemoteDeviceManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).not.toContain(RemoteDeviceManifest.identifier);
+    });
+
+    it('explicit activation cannot resolve RemoteDevice via deviceContext fallback (no plan)', () => {
+      // Callers without a resolved plan fall back to the raw device context —
+      // an auto-activated device must close the activator bypass the same way.
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { plugins: [RemoteDeviceManifest.identifier] },
+        canUseDevice: true,
+        deviceContext: { gatewayConfigured: true, deviceOnline: true, autoActivated: true },
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        context: { isExplicitActivation: true },
+        toolIds: [RemoteDeviceManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).not.toContain(RemoteDeviceManifest.identifier);
+    });
+
+    it('keeps LocalSystem resolvable on a locked (routed) run — only the picker is stripped', () => {
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { plugins: [LocalSystemManifest.identifier] },
+        canUseDevice: true,
+        deviceContext: { gatewayConfigured: true, deviceOnline: true, autoActivated: true },
+        executionPlan: { deviceId: 'device-001', kind: 'device', target: 'local' },
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [LocalSystemManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).toContain(LocalSystemManifest.identifier);
+    });
+
+    it('keeps RemoteDevice enabled for an unbound unrouted run — a selection is still needed', () => {
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { plugins: [RemoteDeviceManifest.identifier] },
+        canUseDevice: true,
+        deviceContext: { gatewayConfigured: true },
+        executionPlan: { kind: 'device-unrouted', reason: 'no-bound-device', target: 'local' },
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [RemoteDeviceManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).toContain(RemoteDeviceManifest.identifier);
     });
   });
 });

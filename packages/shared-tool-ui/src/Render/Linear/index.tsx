@@ -1,14 +1,18 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
+import { fromNow } from '@lobechat/utils/time';
 import { Block, Flexbox, Highlighter, Icon, Markdown, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { ExternalLink, Link2 } from 'lucide-react';
+import { ExternalLink, Inbox, Link2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import {
   buildLinearRenderModel,
+  formatIsoDate,
+  isUuidLike,
   type LinearEntity,
   type LinearField,
   type LinearLink,
@@ -30,43 +34,69 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     background: ${cssVar.colorFillQuaternary};
   `,
+  empty: css`
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    justify-content: center;
+
+    padding-block: 16px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: 6px;
+
+    font-size: 13px;
+    color: ${cssVar.colorTextTertiary};
+
+    background: ${cssVar.colorFillQuaternary};
+  `,
   entityHeader: css`
     display: flex;
-    gap: 8px;
-    align-items: flex-start;
+    gap: 12px;
+    align-items: center;
     justify-content: space-between;
 
     min-width: 0;
   `,
-  fieldGrid: css`
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  headLeft: css`
+    display: flex;
     gap: 6px;
-  `,
-  fieldItem: css`
-    overflow: hidden;
-
+    align-items: center;
     min-width: 0;
-    padding-block: 6px;
-    padding-inline: 8px;
-    border-radius: 6px;
-
-    background: ${cssVar.colorFillQuaternary};
   `,
-  fieldLabel: css`
-    display: block;
-    margin-block-end: 2px;
-    font-size: 11px;
+  timeItem: css`
+    flex-shrink: 0;
+    font-size: 12px;
     color: ${cssVar.colorTextTertiary};
+    white-space: nowrap;
   `,
-  fieldValue: css`
-    overflow: hidden;
-    display: block;
+  metaItem: css`
+    display: inline-flex;
+    gap: 4px;
+    align-items: baseline;
 
     min-width: 0;
 
     font-size: 12px;
-    color: ${cssVar.colorText};
+    line-height: 1.5;
+  `,
+  metaLabel: css`
+    flex-shrink: 0;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  metaRow: css`
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    align-items: baseline;
+
+    min-width: 0;
+  `,
+  metaValue: css`
+    overflow: hidden;
+
+    min-width: 0;
+
+    color: ${cssVar.colorTextSecondary};
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
@@ -133,23 +163,23 @@ const Section = memo<{ children: ReactNode; title: string }>(({ children, title 
 ));
 Section.displayName = 'LinearRenderSection';
 
-const FieldGrid = memo<{ fields: LinearField[] }>(({ fields }) => {
+const MetaRow = memo<{ fields: LinearField[] }>(({ fields }) => {
   if (!hasItems(fields)) return null;
 
   return (
-    <div className={styles.fieldGrid}>
+    <div className={styles.metaRow}>
       {fields.map((field) => (
-        <div className={styles.fieldItem} key={`${field.key}:${field.value}`}>
-          <span className={styles.fieldLabel}>{field.label}</span>
-          <span className={styles.fieldValue} title={field.value}>
+        <span className={styles.metaItem} key={`${field.key}:${field.value}`}>
+          <span className={styles.metaLabel}>{field.label}</span>
+          <span className={styles.metaValue} title={field.value}>
             {field.value}
           </span>
-        </div>
+        </span>
       ))}
     </div>
   );
 });
-FieldGrid.displayName = 'LinearRenderFieldGrid';
+MetaRow.displayName = 'LinearRenderMetaRow';
 
 const LinkList = memo<{ links: LinearLink[] }>(({ links }) => {
   if (!hasItems(links)) return null;
@@ -177,47 +207,53 @@ const LinkList = memo<{ links: LinearLink[] }>(({ links }) => {
 LinkList.displayName = 'LinearRenderLinkList';
 
 const EntityCard = memo<{ entity: LinearEntity }>(({ entity }) => {
-  // Comments / attachments have no human-readable title — only a UUID `id`.
-  // Never promote that UUID into the card title; keep the id as a secondary tag
-  // (linked when a url exists) and let the description carry the card.
-  const { title, id, url } = entity;
+  const { t } = useTranslation('plugin');
+  const { title, id, url, state, updatedAt } = entity;
+
+  // A bare UUID id only earns a slot when there's no title to carry the card
+  // (e.g. comments / attachments, where it's also the link target). Human ids
+  // like `LIN-123` always stay.
+  const showId = Boolean(id) && (!title || !isUuidLike(id!));
 
   return (
-    <Block gap={10} padding={10} variant={'outlined'} width={'100%'}>
+    <Block gap={8} padding={10} variant={'outlined'} width={'100%'}>
       <div className={styles.entityHeader}>
-        <Flexbox gap={4} style={{ minWidth: 0 }}>
+        <div className={styles.headLeft}>
           {title &&
             (url ? (
               <a className={styles.titleLink} href={url} rel={'noreferrer'} target={'_blank'}>
-                <Text ellipsis={{ rows: 2 }} weight={600}>
+                <Text ellipsis weight={600}>
                   {title}
                 </Text>
                 <Icon icon={ExternalLink} size={12} />
               </a>
             ) : (
-              <Text ellipsis={{ rows: 2 }} weight={600}>
+              <Text ellipsis weight={600}>
                 {title}
               </Text>
             ))}
-          <Flexbox horizontal gap={4} wrap={'wrap'}>
-            {id &&
-              (url && !title ? (
-                <a className={styles.titleLink} href={url} rel={'noreferrer'} target={'_blank'}>
-                  <Tag size={'small'}>{id}</Tag>
-                  <Icon icon={ExternalLink} size={12} />
-                </a>
-              ) : (
+          {showId &&
+            (url && !title ? (
+              <a className={styles.titleLink} href={url} rel={'noreferrer'} target={'_blank'}>
                 <Tag size={'small'}>{id}</Tag>
-              ))}
-            {entity.state && (
-              <Tag size={'small'} variant={'outlined'}>
-                {entity.state}
-              </Tag>
-            )}
-          </Flexbox>
-        </Flexbox>
+                <Icon icon={ExternalLink} size={12} />
+              </a>
+            ) : (
+              <Tag size={'small'}>{id}</Tag>
+            ))}
+          {state && (
+            <Tag size={'small'} variant={'outlined'}>
+              {state}
+            </Tag>
+          )}
+        </div>
+        {updatedAt && (
+          <span className={styles.timeItem} title={formatIsoDate(updatedAt)}>
+            {t('builtins.linear.render.updatedAt', { time: fromNow(updatedAt) })}
+          </span>
+        )}
       </div>
-      <FieldGrid fields={entity.fields} />
+      <MetaRow fields={entity.fields} />
       {entity.description && (
         <div className={styles.description}>
           <Markdown fontSize={13} variant={'chat'}>
@@ -233,12 +269,16 @@ EntityCard.displayName = 'LinearRenderEntityCard';
 
 const LinearRender = memo<BuiltinRenderProps<Record<string, unknown>, unknown, unknown>>(
   ({ apiName, args, content, pluginError }) => {
+    const { t } = useTranslation('plugin');
     const model = useMemo(
       () => buildLinearRenderModel({ apiName, args, content, pluginError }),
       [apiName, args, content, pluginError],
     );
     const hasResult =
-      hasItems(model.resultEntities) || Boolean(model.resultText) || Boolean(model.rawResultJson);
+      hasItems(model.resultEntities) ||
+      Boolean(model.resultText) ||
+      Boolean(model.rawResultJson) ||
+      Boolean(model.emptyCollectionKey);
 
     // Request args are intentionally not rendered here — the Inspector already
     // surfaces the tool inputs, so duplicating them in the render is redundant.
@@ -255,6 +295,14 @@ const LinearRender = memo<BuiltinRenderProps<Record<string, unknown>, unknown, u
               />
             ))}
           </Flexbox>
+        )}
+        {model.emptyCollectionKey && (
+          <div className={styles.empty}>
+            <Icon icon={Inbox} size={14} />
+            <span>
+              {t('builtins.linear.render.empty', { collection: model.emptyCollectionKey })}
+            </span>
+          </div>
         )}
         {model.resultText && (
           <Highlighter

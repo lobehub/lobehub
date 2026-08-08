@@ -1,23 +1,25 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import type { DeviceListItem } from '@lobechat/types';
-import { ActionIcon, Button, Flexbox, Icon, Input, SortableList, Tag, Text } from '@lobehub/ui';
+import type { DeviceListItem, DeviceWorkspaceShare } from '@lobechat/types';
+import { ActionIcon, Avatar, Flexbox, Icon, Input, SortableList, Tag, Text } from '@lobehub/ui';
+import { Button, confirmModal, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
-import { FolderOpenIcon, FolderPlusIcon, XIcon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { FolderOpenIcon, FolderPlusIcon, LockIcon, XIcon } from 'lucide-react';
+import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import DirIcon from '@/features/ChatInput/ControlBar/DirIcon';
 import { openAddWorkingDirModal } from '@/features/WorkingDirectory';
-import { lambdaQuery } from '@/libs/trpc/client';
+import { createWorkspaceLambdaClient, lambdaQuery } from '@/libs/trpc/client';
 import { deviceService } from '@/services/device';
 import { electronSystemService } from '@/services/electron/system';
 import { nextWorkingDirs } from '@/store/device';
 
 import { refreshDeviceList } from './const';
 import { getDeviceIcon } from './getDeviceIcon';
+import { useCanEditDevice } from './useCanEditDevice';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
@@ -25,17 +27,28 @@ const styles = createStaticStyles(({ css }) => ({
     padding-inline: 20px;
   `,
   dot: css`
-    width: 6px;
-    height: 6px;
+    flex: none;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
   `,
   header: css`
     padding-block-end: 16px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
-  label: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
+  iconTile: css`
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+
+    width: 32px;
+    height: 32px;
+    border-radius: ${cssVar.borderRadius};
+
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorFillTertiary};
   `,
   path: css`
     overflow: hidden;
@@ -44,16 +57,26 @@ const styles = createStaticStyles(({ css }) => ({
     min-width: 0;
 
     font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
+    font-size: ${cssVar.fontSizeSM};
     color: ${cssVar.colorTextSecondary};
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
   recentItem: css`
-    padding-block: 6px;
+    padding-block: 8px;
     padding-inline: 8px;
   `,
 }));
+
+// Section label — one consistent treatment for every field heading in the panel.
+const FieldLabel = memo<{ children: ReactNode; extra?: ReactNode }>(({ children, extra }) => (
+  <Flexbox horizontal align={'center'} distribution={'space-between'}>
+    <Text fontSize={12} type={'secondary'} weight={500}>
+      {children}
+    </Text>
+    {extra}
+  </Flexbox>
+));
 
 interface DeviceDetailPanelProps {
   device: DeviceListItem;
@@ -63,12 +86,14 @@ interface DeviceDetailPanelProps {
 
 const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onClose }) => {
   const { t } = useTranslation(['setting', 'device']);
+  const canEdit = useCanEditDevice()(device);
 
   const [name, setName] = useState(device.friendlyName ?? '');
   const [cwd, setCwd] = useState(device.defaultCwd ?? '');
 
-  // Workspace devices commit via the owner-gated, workspace-scoped mutation;
-  // personal devices stay userId-scoped. Route by the device's own scope.
+  // Workspace devices commit via the self-or-owner-gated, workspace-scoped
+  // mutation; personal devices stay userId-scoped. Route by the device's own
+  // scope.
   const onUpdateSuccess = () => refreshDeviceList();
   const updatePersonal = lambdaQuery.device.updateDevice.useMutation({
     onSuccess: onUpdateSuccess,
@@ -84,6 +109,7 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
   // Render the device's live connections straight from `device.channels` — one
   // row per connection; an empty array means offline.
   const channels = device.channels ?? [];
+  const online = channels.length > 0;
 
   // Every edit persists immediately — there is no Save button. Name and the
   // default cwd commit on blur; recent-dir add / remove / reorder commit on the
@@ -162,6 +188,31 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
     });
   };
 
+  // Revoke one workspace share of a personal device. The share
+  // entry's `deviceId` is the workspace-scoped twin, removed via the
+  // workspace-scoped mutation under an explicitly pinned workspace client —
+  // the personal settings page has no active workspace context to inherit.
+  const handleRevokeShare = (share: DeviceWorkspaceShare) =>
+    confirmModal({
+      content: t('devices.share.revokeConfirmDesc'),
+      okButtonProps: { danger: true },
+      okText: t('devices.share.revoke'),
+      onOk: async () => {
+        try {
+          await createWorkspaceLambdaClient(share.workspaceId).device.removeWorkspaceDevice.mutate({
+            deviceId: share.deviceId,
+          });
+          refreshDeviceList();
+        } catch (error) {
+          toast.error((error as Error).message);
+          throw error;
+        }
+      },
+      title: t('devices.share.revokeConfirmTitle', {
+        name: share.workspaceName ?? share.workspaceId,
+      }),
+    });
+
   const handleReorderRecent = (items: { id: string }[]) => {
     // SortableList items are keyed by path; map ids back to their entries so the
     // detected repoType survives a reorder.
@@ -175,38 +226,92 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
   return (
     <Flexbox className={styles.container} gap={20}>
       {/* ─── Header ─── */}
-      <Flexbox horizontal align={'center'} className={styles.header} gap={8}>
-        {getDeviceIcon(device.platform)}
-        <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={600}>
-          {device.friendlyName || device.hostname || device.deviceId}
-        </Text>
-        {isCurrent && <Tag>{t('devices.currentBadge')}</Tag>}
+      <Flexbox horizontal align={'center'} className={styles.header} gap={12}>
+        <span className={styles.iconTile}>{getDeviceIcon(device.platform, 18)}</span>
+        <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
+          <Text ellipsis weight={600}>
+            {device.friendlyName || device.hostname || device.deviceId}
+          </Text>
+          <Flexbox horizontal align={'center'} gap={8}>
+            <Tag color={online ? 'success' : 'default'} size={'small'}>
+              {online ? t('devices.status.online') : t('devices.status.offline')}
+            </Tag>
+            {isCurrent && <Tag size={'small'}>{t('devices.currentBadge')}</Tag>}
+          </Flexbox>
+        </Flexbox>
         <ActionIcon icon={XIcon} size={'small'} onClick={onClose} />
       </Flexbox>
 
+      {/* Visible hint when the caller can't mutate the row — explains why the
+          fields below are read-only without the user needing to try and hit a
+          403. Only renders for workspace devices that aren't the caller's own
+          enrollment (personal scope is always editable). */}
+      {!canEdit && (
+        <Flexbox horizontal align={'center'} gap={8}>
+          <Icon icon={LockIcon} size={14} style={{ color: cssVar.colorTextTertiary }} />
+          <Text fontSize={12} type={'secondary'}>
+            {t('workspaceSetting.devices.readonlyHint')}
+          </Text>
+        </Flexbox>
+      )}
+
+      {/* ─── Enrolled by (workspace only) ─── */}
+      {device.scope === 'workspace' && device.enroller && (
+        <Flexbox gap={8}>
+          <FieldLabel>{t('workspaceSetting.devices.enrolledByLabel')}</FieldLabel>
+          <Flexbox horizontal align={'center'} gap={8}>
+            <Avatar avatar={device.enroller.avatar ?? undefined} size={24} />
+            <Text>
+              {device.enroller.fullName ||
+                device.enroller.username ||
+                t('workspaceSetting.devices.unknownEnroller')}
+            </Text>
+          </Flexbox>
+        </Flexbox>
+      )}
+
+      {/* ─── Shared to workspaces (personal only) ─── */}
+      {device.scope === 'personal' && !!device.sharedWorkspaces?.length && (
+        <Flexbox gap={8}>
+          <FieldLabel>{t('devices.share.detailLabel')}</FieldLabel>
+          {device.sharedWorkspaces.map((share) => (
+            <Flexbox horizontal align={'center'} gap={8} key={share.workspaceId}>
+              <Text ellipsis style={{ flex: 1, minWidth: 0 }}>
+                {share.workspaceName ?? share.workspaceId}
+              </Text>
+              <Tag size={'small'}>
+                {share.visibility === 'private'
+                  ? t('devices.share.visibilityTag.private')
+                  : t('devices.share.visibilityTag.public')}
+              </Tag>
+              <ActionIcon
+                icon={XIcon}
+                size={'small'}
+                title={t('devices.share.revoke')}
+                onClick={() => handleRevokeShare(share)}
+              />
+            </Flexbox>
+          ))}
+        </Flexbox>
+      )}
+
       {/* ─── Connections ─── */}
       <Flexbox gap={8}>
-        <span className={styles.label}>{t('devices.detail.connections')}</span>
+        <FieldLabel>{t('devices.detail.connections')}</FieldLabel>
         {channels.length > 0 ? (
           channels.map((channel, index) => (
             <Flexbox horizontal align={'center'} gap={8} key={`${channel.connectedAt}-${index}`}>
-              <span
-                className={styles.dot}
-                style={{ background: cssVar.colorSuccess, flex: 'none' }}
-              />
+              <span className={styles.dot} style={{ background: cssVar.colorSuccess }} />
               {channel.channel && <Tag size={'small'}>{channel.channel}</Tag>}
-              <Text style={{ fontSize: 12 }} type={'secondary'}>
+              <Text fontSize={12} type={'secondary'}>
                 {t('devices.channel.connected', { time: dayjs(channel.connectedAt).fromNow() })}
               </Text>
             </Flexbox>
           ))
         ) : (
           <Flexbox horizontal align={'center'} gap={8}>
-            <span
-              className={styles.dot}
-              style={{ background: cssVar.colorTextQuaternary, flex: 'none' }}
-            />
-            <Text style={{ fontSize: 12 }} type={'secondary'}>
+            <span className={styles.dot} style={{ background: cssVar.colorTextQuaternary }} />
+            <Text fontSize={12} type={'secondary'}>
               {t('devices.status.offline')} ·{' '}
               {t('devices.lastSeen', { time: dayjs(device.lastSeen).fromNow() })}
             </Text>
@@ -215,52 +320,73 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
       </Flexbox>
 
       {/* ─── Name ─── */}
-      <Flexbox gap={6}>
-        <span className={styles.label}>{t('devices.edit.friendlyName')}</span>
-        <Input
-          placeholder={t('devices.edit.friendlyNamePlaceholder')}
-          value={name}
-          onBlur={commitName}
-          onChange={(e) => setName(e.target.value)}
-          onPressEnter={commitName}
-        />
+      <Flexbox gap={8}>
+        <FieldLabel>{t('devices.edit.friendlyName')}</FieldLabel>
+        {canEdit ? (
+          <Input
+            placeholder={t('devices.edit.friendlyNamePlaceholder')}
+            value={name}
+            onBlur={commitName}
+            onChange={(e) => setName(e.target.value)}
+            onPressEnter={commitName}
+          />
+        ) : device.friendlyName ? (
+          // Read-only: render the canonical value (not the local draft), so a
+          // value the caller can't actually commit never bleeds through.
+          <Text>{device.friendlyName}</Text>
+        ) : (
+          <Text type={'secondary'}>—</Text>
+        )}
       </Flexbox>
 
       {/* ─── Default working directory ─── */}
-      <Flexbox gap={6}>
-        <span className={styles.label}>{t('devices.edit.defaultCwd')}</span>
-        <Flexbox horizontal gap={8}>
-          <Input
-            placeholder={t('devices.edit.defaultCwdPlaceholder')}
-            value={cwd}
-            onBlur={handleCwdBlur}
-            onChange={(e) => setCwd(e.target.value)}
-            onPressEnter={handleCwdBlur}
-          />
-          {canBrowse && (
-            <Button icon={<Icon icon={FolderOpenIcon} />} onClick={handleBrowse}>
-              {t('devices.edit.browse')}
-            </Button>
-          )}
-        </Flexbox>
+      <Flexbox gap={8}>
+        <FieldLabel>{t('devices.edit.defaultCwd')}</FieldLabel>
+        {canEdit ? (
+          <Flexbox horizontal gap={8}>
+            <Input
+              placeholder={t('devices.edit.defaultCwdPlaceholder')}
+              value={cwd}
+              onBlur={handleCwdBlur}
+              onChange={(e) => setCwd(e.target.value)}
+              onPressEnter={handleCwdBlur}
+            />
+            {canBrowse && (
+              <Button icon={<Icon icon={FolderOpenIcon} />} onClick={handleBrowse}>
+                {t('devices.edit.browse')}
+              </Button>
+            )}
+          </Flexbox>
+        ) : device.defaultCwd ? (
+          // Code font only when there's an actual path to read; empty falls back
+          // to the same dash style as Name so the two fields look consistent.
+          <Text className={styles.path}>{device.defaultCwd}</Text>
+        ) : (
+          <Text type={'secondary'}>—</Text>
+        )}
       </Flexbox>
 
       {/* ─── Recent directories ─── */}
-      <Flexbox gap={6}>
-        <Flexbox horizontal align={'center'} distribution={'space-between'}>
-          <span className={styles.label}>{t('devices.detail.recentDirs')}</span>
-          <ActionIcon
-            icon={FolderPlusIcon}
-            size={'small'}
-            title={t('devices.detail.addDir')}
-            onClick={handleAddRecent}
-          />
-        </Flexbox>
+      <Flexbox gap={8}>
+        <FieldLabel
+          extra={
+            canEdit && (
+              <ActionIcon
+                icon={FolderPlusIcon}
+                size={'small'}
+                title={t('devices.detail.addDir')}
+                onClick={handleAddRecent}
+              />
+            )
+          }
+        >
+          {t('devices.detail.recentDirs')}
+        </FieldLabel>
         {device.workingDirs.length === 0 ? (
-          <Text style={{ fontSize: 12 }} type={'secondary'}>
+          <Text fontSize={12} type={'secondary'}>
             {t('devices.detail.noRecent')}
           </Text>
-        ) : (
+        ) : canEdit ? (
           <SortableList
             items={device.workingDirs.map((d) => ({ id: d.path, repoType: d.repoType }))}
             renderItem={(item: { id: string; repoType?: 'git' | 'github' }) => (
@@ -279,6 +405,17 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
             )}
             onChange={handleReorderRecent}
           />
+        ) : (
+          // Read-only listing: same row layout minus the drag handle and the
+          // remove button. Keeps the path + repo type icon visible for context.
+          device.workingDirs.map((d) => (
+            <Flexbox horizontal align={'center'} className={styles.recentItem} gap={8} key={d.path}>
+              <DirIcon repoType={d.repoType} />
+              <Text className={styles.path} title={d.path}>
+                {d.path}
+              </Text>
+            </Flexbox>
+          ))
         )}
       </Flexbox>
     </Flexbox>

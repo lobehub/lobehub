@@ -1,0 +1,44 @@
+---
+title: Cleaner Conversations & Drag-In Images
+description: >-
+  Long agent runs fold their finished turns into a tidy summary, you can drag
+  reference images straight into chat, and human approvals now gather in one
+  place.
+tags:
+  - Agents
+  - Chat
+  - Images
+  - Mobile
+---
+
+# Cleaner Conversations & Drag-In Images
+
+## Features
+
+- **Finished turns fold away.** Long agent runs collapse completed turns into a compact summary and keep only the latest one open, so a busy conversation stays easy to follow.
+- **Drag and drop reference images.** Drag an image straight into the composer to attach it as a reference, with no upload dialog.
+- **Approve actions in one place.** A global approval notice gathers human-approval requests as they arrive, and you can now pick "Don't ask again" to stop repeat prompts for the same action.
+- **Desktop completion notifications.** When an agent finishes, the desktop app sends a single notification that links straight to the result, and clicking it brings back a minimized window.
+- **Smarter builder suggestions.** The Agent and Group Builder offer suggestions based on what you are working on and adjust as you give feedback.
+- **Skills and plugins on mobile.** You can now reach agent skills and plugins from the mobile app.
+
+## Improvements
+
+- New Doubao-Seed-2.1 models are available.
+- Amazon Bedrock now supports API key authentication.
+- AIHubMix supports a custom or backup base URL.
+- Kimi models handle preserved thinking more reliably.
+- On desktop, a Claude Code run that hits an overloaded error now retries on its own and replaces the result in place.
+- A finished task hands its result back to the conversation that created it, links its identifiers to the task detail page, and opens task callbacks in a side panel instead of navigating away.
+- Streaming text skips its animation when a tool call follows right after, so replies feel quicker.
+
+## Fixes
+
+- GLM-5.2 parameters and model descriptions are handled correctly.
+- A chat now shows a clear notice when a model is unavailable.
+- DeepSeek V4 keeps its thinking out of the reasoning channel.
+- Chat scroll position is only restored within a five-minute window, so reopening an old topic starts at the bottom.
+- A failed cross-agent call now explains the real reason instead of failing silently.
+- Opening a task whose assigned agent was removed no longer hangs.
+- You can disconnect an OAuth connector again from settings.
+- Built-in tool cards show real task and agent data.

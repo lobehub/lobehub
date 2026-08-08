@@ -55,6 +55,21 @@ const toolsEvent = (tools: any[]) => ({
   type: 'stream_chunk',
 });
 
+const toolStateEvent = (
+  toolCallId: string,
+  snapshotSeq: number,
+  pluginState: Record<string, unknown>,
+) => ({
+  data: {
+    chunkType: 'tool_state',
+    pluginState,
+    snapshotMode: 'replace',
+    snapshotSeq,
+    toolCallId,
+  },
+  type: 'stream_chunk',
+});
+
 const toolResultEvent = (toolCallId: string, content: string, extra: Record<string, any> = {}) => ({
   data: { content, toolCallId, ...extra },
   type: 'tool_result',
@@ -108,6 +123,40 @@ describe('main agent reducer', () => {
     expect(state.accContent).toBe('Hello world');
   });
 
+  it('emits a replace-only tool-state intent without mutating reducer state', () => {
+    const pluginState = { todos: { items: [{ status: 'processing', text: 'Implement' }] } };
+    const initial = createMainAgentRunState('A0');
+    const result = reduceMainAgent(initial, toolStateEvent('todo-1', 2, pluginState), makeCtx());
+
+    expect(result.intents).toEqual([
+      {
+        kind: 'updateToolState',
+        pluginState,
+        snapshotSeq: 2,
+        toolCallId: 'todo-1',
+      },
+    ]);
+    expect(result.state).toBe(initial);
+  });
+
+  it('ignores malformed tool-state chunks', () => {
+    const { steps } = run([
+      toolStateEvent('todo-1', 0, { todos: {} }),
+      {
+        data: {
+          chunkType: 'tool_state',
+          pluginState: [],
+          snapshotMode: 'replace',
+          snapshotSeq: 1,
+          toolCallId: 'todo-1',
+        },
+        type: 'stream_chunk',
+      },
+    ]);
+
+    expect(steps).toEqual([[], []]);
+  });
+
   it('replace-mode text snapshots replace, and stale sequences are dropped', () => {
     const { steps, state } = run([
       textEvent('v2', { snapshotMode: 'replace', snapshotSeq: 2 }),
@@ -119,6 +168,31 @@ describe('main agent reducer', () => {
     expect(steps[2]).toEqual([{ content: 'v3', kind: 'streamContent', messageId: 'A0' }]);
     expect(state.accContent).toBe('v3');
     expect(state.lastTextSnapshotSeq).toBe(3);
+  });
+
+  it('replaces reasoning snapshots and drops stale or redelivered seqs', () => {
+    const snapshot = (reasoning: string, snapshotSeq: number) => ({
+      data: { chunkType: 'reasoning', reasoning, snapshotMode: 'replace', snapshotSeq },
+      type: 'stream_chunk',
+    });
+    const { state, steps } = run([
+      snapshot('thinking', 1),
+      snapshot('thinking done', 2),
+      // Redelivered seq 2 (batch retry on a cold replica) — must be a no-op,
+      // not an append: appending would duplicate the reasoning durably.
+      snapshot('thinking done', 2),
+      // Stale out-of-order snapshot — dropped.
+      snapshot('thinking', 1),
+    ]);
+
+    expect(steps[1]).toEqual([
+      { kind: 'streamContent', messageId: 'A0', reasoning: 'thinking done' },
+    ]);
+    expect(steps[2]).toEqual([]);
+    expect(steps[3]).toEqual([]);
+    expect(state.accReasoning).toBe('thinking done');
+    expect(state.lastReasoningSnapshotSeq).toBe(2);
+    expect(state.turnMetadata.heteroReasoningSnapshotSeq).toBe(2);
   });
 
   it('accumulates reasoning separately', () => {
@@ -200,6 +274,66 @@ describe('main agent reducer', () => {
     // signal anchor forward.
     expect(state.lastSpineMessageId).toBe('msg_4');
     expect(state.lastToolMsgIdEver).toBe('msg_5');
+  });
+
+  // ─── A signal turn that EMITS a tool_use is back on the main chain ───
+  // Regression for the "trace 和回复对不上 + 中间截断" render bug (tpc_aGIggi9N8DpK):
+  // CC re-invoked the LLM off a long-running Bash `Wait for … agent` (a
+  // tool-stdout / task-completion signal), and that turn then kept calling
+  // tools. Tagged `signal`, it mounted on the source tool and did NOT advance
+  // the spine, so the NEXT normal turn re-mounted on the PRE-signal assistant —
+  // forking the wire. The read side picks the earliest continuation at the fork
+  // (the signal branch) and drops everything after it (the real conclusions).
+  it('promotes a tools-bearing signal turn onto the spine so the next turn chains off it', () => {
+    const { steps, state } = run([
+      textEvent('waiting on agent'),
+      toolsEvent([tool('t1')]), // long-running Bash Wait → msg_1
+      newStepEvent(stdoutSignal(1)), // signal turn re-invoked by the tool → msg_2 (parent msg_1)
+      textEvent('明白了。两点都定了'), // the signal turn carries REAL content …
+      toolsEvent([tool('t2')]), // … AND emits a tool_use → back on the main chain → msg_3
+      newStepEvent(), // the next normal turn → msg_4
+    ]);
+
+    const created = steps
+      .flatMap((s) => ofKind(s, 'createAssistant'))
+      .map((c) => ({ messageId: c.messageId, parentId: c.parentId, signalType: c.signal?.type }));
+
+    expect(created).toEqual([
+      // The signal turn still MOUNTS on the source tool (its persisted anchor).
+      { messageId: 'msg_2', parentId: 'msg_1', signalType: 'tool-stdout' },
+      // …but because it emitted a tool_use, the spine advanced onto it, so the
+      // next normal turn chains off msg_2 — NOT the pre-signal spine A0. That
+      // linear chain is what keeps the read side from dropping the tail.
+      { messageId: 'msg_4', parentId: 'msg_2', signalType: undefined },
+    ]);
+    expect(state.lastSpineMessageId).toBe('msg_4');
+  });
+
+  // ─── The promotion must survive a cold / non-sticky serverless replica ───
+  // `refreshMainStateFromDb` rehydrates `currentAssistantId` + `lastSpineMessageId`
+  // but NOT any per-turn "opened as signal" bookkeeping. A replica that resumes
+  // mid-signal-turn (SIG open, still toolless in the DB so the recovered spine is
+  // the PRE-signal assistant) then receives SIG's `tools_calling` + the next
+  // `newStep` in one batch. Promotion must still fire, or the same-batch normal
+  // turn forks off the stale spine again — recreating the tail-drop for
+  // non-sticky ingestion. Deriving the promotion from `currentAssistantId`
+  // (not an in-memory flag) is what makes this hold.
+  it('promotes on a rehydrated cold replica with no in-memory signal flag', () => {
+    // State as projected by refreshMainStateFromDb: SIG is the open turn, the
+    // recovered spine is the pre-signal assistant (they differ).
+    const rehydrated: MainAgentRunState = {
+      ...createMainAgentRunState('SEED'),
+      currentAssistantId: 'SIG',
+      lastSpineMessageId: 'SPINE0',
+      lastToolMsgIdEver: 'toolPre',
+    };
+    const ctx = makeCtx();
+
+    let r = reduceMainAgent(rehydrated, toolsEvent([tool('t1')]), ctx); // SIG's tool_use
+    expect(r.state.lastSpineMessageId).toBe('SIG'); // promoted despite no flag
+
+    r = reduceMainAgent(r.state, newStepEvent(), ctx); // the next normal turn
+    expect(ofKind(r.intents, 'createAssistant')[0]).toMatchObject({ parentId: 'SIG' });
   });
 
   it('falls back to the current assistant only before any tool exists', () => {

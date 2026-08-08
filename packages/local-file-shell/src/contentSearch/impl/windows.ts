@@ -4,6 +4,7 @@ import { createLogger } from '../../logger';
 import type { ToolDetector } from '../../toolDetector';
 import type { GrepContentParams, GrepContentResult } from '../../types';
 import { BaseContentSearch } from '../base';
+import { toAbsoluteMatchLine } from '../gitIgnore';
 
 const logger = createLogger('contentSearch:windows');
 
@@ -129,13 +130,21 @@ export class WindowsContentSearchImpl extends BaseContentSearch {
       const { stdout, stderr, exitCode } = await execa('rg', args, {
         cwd: searchPath,
         reject: false,
+        stdin: 'ignore',
       });
 
       if (exitCode !== 0 && exitCode !== 1 && stderr) {
         logger.warn(`${logPrefix} rg exited with code ${exitCode}: ${stderr}`);
       }
 
-      const lines = stdout.trim().split('\n').filter(Boolean);
+      // Same normalisation as the unix impl: rg runs with `cwd = searchPath`
+      // and searches `.`, so its output is relative — make it absolute so the
+      // engine no longer decides the path shape callers receive.
+      const lines = stdout
+        .trim()
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => toAbsoluteMatchLine(searchPath, line));
       let matches: string[] = [];
       let totalMatches = 0;
 
@@ -200,6 +209,7 @@ export class WindowsContentSearchImpl extends BaseContentSearch {
       const { stdout } = await execa('rg', args, {
         cwd: this.resolveSearchPath(params),
         reject: false,
+        stdin: 'ignore',
       });
 
       let total = 0;
@@ -242,6 +252,7 @@ export class WindowsContentSearchImpl extends BaseContentSearch {
       const { stdout, exitCode } = await execa('cmd', ['/c', `findstr ${args.join(' ')}`], {
         cwd: searchPath,
         reject: false,
+        stdin: 'ignore',
       });
 
       if (exitCode !== 0 && exitCode !== 1) {

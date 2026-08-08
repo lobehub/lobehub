@@ -34,6 +34,17 @@ export class SkillStoreExecutionRuntime {
     this.service = options.service;
   }
 
+  /**
+   * Notify the host that a skill was imported so it can refresh client state
+   * (e.g. the agent skills list). Invoked from the executor's `onAfterCall`
+   * lifecycle hook, which fires on `tool_end` regardless of whether the import
+   * actually ran client- or server-side — covering the server-runtime path the
+   * inline service callback can't reach.
+   */
+  notifyImported(): Promise<void> {
+    return this.service.onSkillImported?.() ?? Promise.resolve();
+  }
+
   async importSkill(args: ImportSkillParams): Promise<BuiltinServerRuntimeOutput> {
     const { url, type } = args;
 
@@ -57,7 +68,10 @@ export class SkillStoreExecutionRuntime {
         result = await this.service.importFromUrl(url);
       }
 
-      // Refresh skills list so the new skill becomes available
+      // Refresh the skills list for the direct/local client invoke path
+      // (`invokeBuiltinTool`), which never dispatches the executor's
+      // `onAfterCall`. The gateway path covers itself via `onAfterCall` and
+      // routes import through the server runtime, so this never double-fires.
       await this.service.onSkillImported?.();
 
       return {
@@ -133,7 +147,7 @@ export class SkillStoreExecutionRuntime {
     try {
       const result = await this.service.importFromMarket(identifier);
 
-      // Refresh skills list so the new skill becomes available
+      // See importSkill: refresh for the direct/local client invoke path.
       await this.service.onSkillImported?.();
 
       return {

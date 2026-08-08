@@ -28,7 +28,7 @@ export const isBuiltinSkillAvailableInCurrentEnv = (
   }
 
   return shouldEnableBuiltinSkill(id, {
-    isDesktop: context.isDesktop ?? isDesktop,
+    canExecuteOnDevice: context.isDesktop ?? isDesktop,
   });
 };
 

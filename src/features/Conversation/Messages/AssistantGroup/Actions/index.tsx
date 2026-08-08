@@ -1,8 +1,8 @@
 import { type AssistantContentBlock, type UIChatMessage } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 
 import { ReactionPicker } from '../../../components/Reaction';
+import { messageStateSelectors, useConversationStore } from '../../../store';
 import type { MessageActionsConfig } from '../../../types';
 import {
   MessageActionBar,
@@ -15,15 +15,33 @@ const DEFAULT_BAR: MessageActionSlot[] = ['edit', 'copy'];
 const DEFAULT_MENU: MessageActionSlot[] = [
   'edit',
   'copy',
+  'copyOperationId',
+  'comments',
   'branching',
   'collapse',
   'divider',
   'share',
+  'select',
   'divider',
   'regenerate',
   'del',
 ];
 const IN_PROGRESS_BAR: MessageActionSlot[] = ['del'];
+// Finished turn whose last child block is a tool call (typical for heterogeneous
+// CC/Codex turns, which end on a Bash/Read/Edit/Task block with no trailing text).
+// There's no text block to edit/copy, but the turn IS complete — it can still be
+// shared and multi-selected/forwarded as one aggregated assistant reply. The
+// forward serializer keeps child text while excluding child tool payloads.
+const NO_TEXT_BLOCK_BAR: MessageActionSlot[] = ['delAndRegenerate'];
+const NO_TEXT_BLOCK_MENU: MessageActionSlot[] = [
+  'comments',
+  'share',
+  'select',
+  'divider',
+  'del',
+  'divider',
+  'copyOperationId',
+];
 
 interface GroupActionsProps {
   actionsConfig?: MessageActionsConfig;
@@ -40,23 +58,30 @@ export const GroupActionsBar = memo<GroupActionsProps>(
       [contentBlock, data, id],
     );
 
-    // No finalized text block yet (group is either empty or last child is a
-    // still-running tool call). Only delete is meaningful here.
+    const isGenerating = useConversationStore(
+      messageStateSelectors.isAssistantGroupItemGenerating(id),
+    );
+
+    // No finalized text block (group is empty, or its last child is a tool call).
     if (!contentId) {
-      return <MessageActionBar bar={IN_PROGRESS_BAR} ctx={ctx} />;
+      // Still streaming → only delete is meaningful.
+      if (isGenerating) {
+        return <MessageActionBar bar={IN_PROGRESS_BAR} ctx={ctx} />;
+      }
+      // Finished, but the turn ends on a tool-call block — no text to edit/copy,
+      // yet it's a complete reply that can still be shared and selected.
+      return <MessageActionBar bar={NO_TEXT_BLOCK_BAR} ctx={ctx} menu={NO_TEXT_BLOCK_MENU} />;
     }
 
     const defaultBar = data.tools ? DEFAULT_BAR_WITH_TOOLS : DEFAULT_BAR;
 
     return (
-      <Flexbox horizontal align={'center'} gap={8}>
-        <ReactionPicker messageId={id} />
-        <MessageActionBar
-          bar={actionsConfig?.bar ?? defaultBar}
-          ctx={ctx}
-          menu={actionsConfig?.menu ?? DEFAULT_MENU}
-        />
-      </Flexbox>
+      <MessageActionBar
+        bar={actionsConfig?.bar ?? defaultBar}
+        ctx={ctx}
+        leading={<ReactionPicker messageId={id} />}
+        menu={actionsConfig?.menu ?? DEFAULT_MENU}
+      />
     );
   },
 );

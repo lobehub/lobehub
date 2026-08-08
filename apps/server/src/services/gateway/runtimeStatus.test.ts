@@ -55,6 +55,33 @@ describe('runtimeStatus', () => {
     );
   });
 
+  it('persists a stable error code alongside the diagnostic message', async () => {
+    mockRedis.set.mockResolvedValue('OK');
+
+    await updateBotRuntimeStatus(
+      {
+        applicationId: 'app-1',
+        errorCode: 'invalid_credentials',
+        errorMessage: 'QQ auth rejected: code=100016',
+        platform: 'qq',
+        status: BOT_RUNTIME_STATUSES.failed,
+      },
+      { now: 123 },
+    );
+
+    expect(mockRedis.set).toHaveBeenCalledWith(
+      'bot:runtime-status:qq:app-1',
+      JSON.stringify({
+        applicationId: 'app-1',
+        errorCode: 'invalid_credentials',
+        errorMessage: 'QQ auth rejected: code=100016',
+        platform: 'qq',
+        status: BOT_RUNTIME_STATUSES.failed,
+        updatedAt: 123,
+      }),
+    );
+  });
+
   it('cleans malformed runtime status payloads', async () => {
     mockRedis.get.mockResolvedValue('{bad-json');
     mockRedis.del.mockResolvedValue(1);

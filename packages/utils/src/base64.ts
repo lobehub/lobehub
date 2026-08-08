@@ -12,8 +12,11 @@ import { Buffer } from 'buffer.js';
  */
 export const encodeToBase64 = (input: string): string => {
   if (typeof btoa === 'function') {
-    // Browser environment
-    return btoa(input);
+    // Browser environment: `btoa` only accepts Latin1 and throws on any code
+    // point > U+00FF, so UTF-8-encode first and map each byte to a Latin1 char.
+    const bytes = new TextEncoder().encode(input);
+    const binary = Array.from(bytes, (byte) => String.fromCodePoint(byte)).join('');
+    return btoa(binary);
   } else {
     // Node.js environment
     return Buffer.from(input, 'utf8').toString('base64');
@@ -27,8 +30,11 @@ export const encodeToBase64 = (input: string): string => {
  */
 export const decodeFromBase64 = (input: string): string => {
   if (typeof atob === 'function') {
-    // Browser environment
-    return atob(input);
+    // Browser environment: `atob` yields a Latin1 binary string, so read the
+    // bytes back out and decode them as UTF-8.
+    const binary = atob(input);
+    const bytes = Uint8Array.from(binary, (char) => char.codePointAt(0) ?? 0);
+    return new TextDecoder().decode(bytes);
   } else {
     // Node.js environment
     return Buffer.from(input, 'base64').toString('utf8');

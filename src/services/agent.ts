@@ -11,6 +11,8 @@ export interface AvailableAgentItem {
   backgroundColor: string | null;
   description: string | null;
   id: string;
+  /** Personal name; resolve the label with `agentDisplayName(item, fallback)`. */
+  name: string | null;
   title: string | null;
 }
 
@@ -28,7 +30,7 @@ type MarketAgentModel =
 type AgentMetaUpdate = Partial<
   Pick<
     AgentItem,
-    'avatar' | 'backgroundColor' | 'description' | 'marketIdentifier' | 'tags' | 'title'
+    'avatar' | 'backgroundColor' | 'description' | 'marketIdentifier' | 'name' | 'tags' | 'title'
   >
 >;
 
@@ -62,6 +64,14 @@ const normalizeMarketAgentModel = (config?: PartialDeep<AgentItem>): PartialDeep
 export interface CreateAgentParams {
   config?: PartialDeep<AgentItem>;
   groupId?: string;
+  /**
+   * `private` keeps the agent visible only to its creator within the active
+   * workspace; `public` (default) makes it visible to every member. The
+   * router enforces this — sidebar "Create in Private" forwards `'private'`
+   * verbatim, all other creators (templates, marketplace import, etc.)
+   * default to `'public'`.
+   */
+  visibility?: 'private' | 'public';
 }
 
 export interface CreateAgentResult {
@@ -111,7 +121,27 @@ class AgentService {
     return lambdaClient.agent.createAgent.mutate({
       config: normalizedConfig as any,
       groupId: params.groupId,
+      visibility: params.visibility,
     });
+  };
+
+  /**
+   * Publish a private agent to the workspace. Caller should refresh the
+   * sidebar list afterwards so the agent moves from the Private bucket to
+   * the shared list. The inverse (public → private) goes through
+   * {@link setAgentVisibility}.
+   */
+  publishAgentToWorkspace = async (id: string): Promise<void> => {
+    await lambdaClient.agent.publishAgentToWorkspace.mutate({ id });
+  };
+
+  /**
+   * Bidirectional visibility switch. The server only allows the
+   * agent's creator or a workspace owner to pull a published agent back to
+   * private, and rejects builtin agents (LobeAI etc.) outright.
+   */
+  setAgentVisibility = async (id: string, visibility: 'private' | 'public'): Promise<void> => {
+    await lambdaClient.agent.setAgentVisibility.mutate({ id, visibility });
   };
 
   /**
@@ -167,8 +197,10 @@ class AgentService {
     });
   };
 
-  getFilesAndKnowledgeBases = async (agentId: string) => {
-    return lambdaClient.agent.getKnowledgeBasesAndFiles.query({ agentId });
+  getFilesAndKnowledgeBases = async (agentId: string, visibility?: 'private' | 'public') => {
+    return lambdaClient.agent.getKnowledgeBasesAndFiles.query(
+      visibility ? { agentId, visibility } : { agentId },
+    );
   };
 
   getAgentConfigById = async (agentId: string) => {
@@ -212,6 +244,20 @@ class AgentService {
   };
 
   /**
+   * Resolve a url slug to its agent id. Returns `null` for an unknown slug and
+   * for one the caller can't see — the two are deliberately indistinguishable.
+   */
+  resolveAgentIdBySlug = async (slug: string): Promise<string | null> => {
+    const { agentId } = await lambdaClient.agent.resolveAgentIdBySlug.query({ slug });
+    return agentId;
+  };
+
+  /** Rename an agent's url slug (validated server-side; see `updateAgentSlug`). */
+  updateAgentSlug = async (agentId: string, slug: string) => {
+    return lambdaClient.agent.updateAgentSlug.mutate({ agentId, slug });
+  };
+
+  /**
    * Remove an agent and its associated session
    */
   removeAgent = async (agentId: string) => {
@@ -231,9 +277,15 @@ class AgentService {
   };
 
   /**
-   * Count non-virtual agents with optional keyword filter, matching queryAgents conditions.
+   * Count non-virtual agents with optional keyword and date filters,
+   * matching queryAgents conditions.
    */
-  countAgents = async (params?: { keyword?: string }) => {
+  countAgents = async (params?: {
+    endDate?: string;
+    keyword?: string;
+    range?: [string, string];
+    startDate?: string;
+  }) => {
     return lambdaClient.agent.countAgents.query(params);
   };
 
@@ -262,11 +314,57 @@ class AgentService {
     return lambdaClient.agent.rankAgents.query(limit);
   };
 
+  /**
+   * Async history-backfill progress for a transferred agent (null when no
+   * backfill is running), including the topic ids still awaiting migration.
+   */
+  getTransferJobStatus = async (
+    agentId: string,
+    topicIds: string[],
+  ): Promise<{
+    completedTopics: number;
+    jobId: string;
+    pendingTopicIds: string[];
+    totalTopics: number;
+    type: string;
+  } | null> => {
+    return lambdaClient.agent.getTransferJobStatus.query({ agentId, topicIds });
+  };
+
+  /**
+   * The user opened a topic whose history is still migrating — jump it to the
+   * front of the backfill queue. `pending: false` means it already migrated.
+   */
+  prioritizeTransferTopic = async (topicId: string): Promise<{ pending: boolean }> => {
+    return lambdaClient.agent.prioritizeTransferTopic.mutate({ topicId });
+  };
+
   transferAgent = async (
     agentId: string,
     targetWorkspaceId: string | null,
-  ): Promise<{ agentId: string; slug: string | null }> => {
-    return lambdaClient.agent.transferAgent.mutate({ agentId, targetWorkspaceId });
+    targetVisibility?: 'private' | 'public',
+  ): Promise<{ agentId: string; slug: string | null; transferJobId: string | null }> => {
+    return lambdaClient.agent.transferAgent.mutate({
+      agentId,
+      targetVisibility,
+      targetWorkspaceId,
+    });
+  };
+
+  /**
+   * Batch transfer: moves all agents in one request / one DB transaction
+   * instead of a serial per-agent call chain.
+   */
+  transferAgents = async (
+    agentIds: string[],
+    targetWorkspaceId: string | null,
+    targetVisibility?: 'private' | 'public',
+  ): Promise<{ agentId: string; slug: string | null; transferJobId: string | null }[]> => {
+    return lambdaClient.agent.transferAgents.mutate({
+      agentIds,
+      targetVisibility,
+      targetWorkspaceId,
+    });
   };
 }
 

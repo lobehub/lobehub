@@ -5,6 +5,7 @@
   "config.endImageUrl.label": "Quadro Final",
   "config.generateAudio.label": "Gerar Áudio",
   "config.header.title": "Vídeo",
+  "config.imageUpload.maxCountReached": "Você pode adicionar até {{count}} imagens de referência",
   "config.imageUrl.label": "Quadro Inicial",
   "config.prompt.placeholder": "Descreva o vídeo que você deseja gerar",
   "config.prompt.placeholderWithRef": "Descreva a cena que você deseja gerar com a imagem",
@@ -25,9 +26,15 @@
   "generation.status.failed": "Falha na Geração",
   "generation.status.generating": "Gerando...",
   "generation.validation.endFrameRequiresStartFrame": "O quadro final não pode ser usado sem um quadro inicial. Por favor, defina primeiro um quadro inicial.",
+  "notice.modelRemoved": "O modelo atual não está mais disponível em {{name}}. Por favor, mude para um modelo disponível.",
+  "notice.providerDisabled": "O provedor {{name}} do modelo atual está desativado. Por favor, ative-o ou mude para um modelo disponível.",
   "topic.createNew": "Criar Novo Tópico",
+  "topic.createdBy": "Criado por {{name}}",
   "topic.deleteConfirm": "Excluir Tópico de Vídeo",
   "topic.deleteConfirmDesc": "Você está prestes a excluir este tópico de vídeo. Esta ação não poderá ser desfeita.",
+  "topic.privateTitle": "Privado",
   "topic.title": "Tópicos de Vídeo",
-  "topic.untitled": "Tópico Padrão"
+  "topic.untitled": "Tópico Padrão",
+  "topic.visibility.existingLocked": "A visibilidade está fixa para o tópico atual. Crie um novo tópico para escolher um espaço diferente.",
+  "topic.workspaceTitle": "Espaço de Trabalho"
 }

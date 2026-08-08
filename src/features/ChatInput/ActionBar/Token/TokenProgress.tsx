@@ -1,7 +1,7 @@
+import { formatUsageValue } from '@lobechat/utils';
 import { Flexbox } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
-import numeral from 'numeral';
 import { memo } from 'react';
 
 interface TokenProgressItem {
@@ -16,12 +16,6 @@ interface TokenProgressProps {
   showIcon?: boolean;
   showTotal?: string;
 }
-
-export const formatToken = (number: number) => {
-  if (number >= 1_000_000) return numeral(number / 1_000_000).format('0.[0]') + 'M';
-  if (number >= 1_000) return numeral(number / 1_000).format('0.[0]') + 'K';
-  return numeral(number).format('0,0');
-};
 
 const TokenProgress = memo<TokenProgressProps>(({ data, showIcon, showTotal }) => {
   const total = data.reduce((acc, item) => acc + item.value, 0);
@@ -63,7 +57,7 @@ const TokenProgress = memo<TokenProgressProps>(({ data, showIcon, showTotal }) =
               )}
               <div style={{ color: cssVar.colorTextSecondary }}>{item.title}</div>
             </Flexbox>
-            <div style={{ fontWeight: 500 }}>{formatToken(item.value)}</div>
+            <div style={{ fontWeight: 500 }}>{formatUsageValue(item.value)}</div>
           </Flexbox>
         ))}
         {showTotal && (
@@ -71,7 +65,7 @@ const TokenProgress = memo<TokenProgressProps>(({ data, showIcon, showTotal }) =
             <Divider style={{ marginBlock: 8 }} />
             <Flexbox horizontal align={'center'} gap={4} justify={'space-between'}>
               <div style={{ color: cssVar.colorTextSecondary }}>{showTotal}</div>
-              <div style={{ fontWeight: 500 }}>{formatToken(total)}</div>
+              <div style={{ fontWeight: 500 }}>{formatUsageValue(total)}</div>
             </Flexbox>
           </>
         )}

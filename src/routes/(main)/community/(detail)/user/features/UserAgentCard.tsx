@@ -13,7 +13,7 @@ import {
   Tooltip,
   TooltipGroup,
 } from '@lobehub/ui';
-import { App } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import {
   AlertTriangle,
@@ -29,6 +29,7 @@ import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import PublishedTime from '@/components/PublishedTime';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
@@ -135,10 +136,11 @@ const UserAgentCard = memo<UserAgentCardProps>(
   }) => {
     const { t } = useTranslation(['discover', 'setting']);
     const navigate = useWorkspaceAwareNavigate();
-    const { message } = App.useApp();
+
     const { isOwner, onStatusChange } = useUserDetailContext();
     const { allowed: canCreate } = usePermission('create_content');
     const { allowed: canEdit } = usePermission('edit_own_content');
+    const activeWorkspaceId = useActiveWorkspaceId();
 
     const [, setIsEditLoading] = useState(false);
     const createAgent = useAgentStore((s) => s.createAgent);
@@ -177,11 +179,13 @@ const UserAgentCard = memo<UserAgentCardProps>(
           });
 
           if (!marketAgent) {
-            message.error(t('setting:myAgents.errors.fetchFailed'));
+            toast.error(t('setting:myAgents.errors.fetchFailed'));
             return;
           }
 
-          // Create local agent with market data
+          // Create local agent with market data. In workspace mode default
+          // the install to the user's Private bucket so a community card
+          // they're just trying out doesn't immediately surface to teammates.
           const result = await createAgent({
             config: {
               ...marketAgent.config,
@@ -193,6 +197,7 @@ const UserAgentCard = memo<UserAgentCardProps>(
               tags: marketAgent.tags,
               title: marketAgent.title,
             },
+            ...(activeWorkspaceId ? { visibility: 'private' as const } : {}),
           });
 
           await refreshAgentList();
@@ -203,11 +208,11 @@ const UserAgentCard = memo<UserAgentCardProps>(
         }
       } catch (error) {
         console.error('[UserAgentCard] handleEdit error:', error);
-        message.error(t('setting:myAgents.errors.editFailed'));
+        toast.error(t('setting:myAgents.errors.editFailed'));
       } finally {
         setIsEditLoading(false);
       }
-    }, [canCreate, canEdit, identifier, navigate, createAgent, refreshAgentList, message, t]);
+    }, [canCreate, canEdit, identifier, navigate, createAgent, refreshAgentList, t]);
 
     const handleStatusAction = useCallback(
       (action: 'deprecate') => {

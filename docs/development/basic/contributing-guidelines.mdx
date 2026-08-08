@@ -21,13 +21,13 @@ In LobeHub, we use the [@lobehub/lint](https://github.com/lobehub/lobe-lint) pac
 
 ### ESLint
 
-We use ESLint to check for issues in our JavaScript code. You can find the `.eslintrc.js` file in the project's root directory, which contains our extensions and custom rules for the ESLint configuration of `@lobehub/lint`.
+We use ESLint to check for issues in our JavaScript code. You can find the `eslint.config.mjs` flat config file in the project's root directory, which contains our extensions and custom rules for the ESLint configuration of `@lobehub/lint`.
 
 To ensure your code aligns with the project's standards, run ESLint before committing your code.
 
 ### Prettier
 
-Prettier is responsible for code formatting to maintain consistency. Our Prettier configuration can be found in `.prettierrc.js`, imported from `@lobehub/lint`.
+Prettier is responsible for code formatting to maintain consistency. Our Prettier configuration can be found in `prettier.config.mjs`, imported from `@lobehub/lint`.
 
 It's recommended to configure your editor to run Prettier automatically when saving files.
 
@@ -72,7 +72,7 @@ We use semantic release to automate version control and release processes. When 
 
 ### Commitlint
 
-To ensure consistency in commit messages, we use `commitlint` to check the format of commit messages. You can find the relevant rules in the `.commitlintrc.js` configuration file.
+To ensure consistency in commit messages, we use `commitlint` to check the format of commit messages. You can find the relevant rules in the `commitlint.config.mjs` configuration file.
 
 Before committing your code, ensure that your commit messages adhere to our standards.
 

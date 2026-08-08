@@ -18,6 +18,8 @@ vi.mock('@/libs/trusted-client', () => ({
 vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn().mockImplementation(() => ({
     create: mockMessageCreate,
+    getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
+    getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
     query: vi.fn().mockResolvedValue([]),
     update: vi.fn().mockResolvedValue({}),
   })),
@@ -78,6 +80,16 @@ vi.mock('@/database/models/thread', () => ({
     create: vi.fn(),
     findById: vi.fn(),
     update: vi.fn(),
+  })),
+}));
+
+// Mock ChatGroupModel — execAgent resolves the operation's group context when
+// appContext.groupId is set (SubAgent task scenario). An empty roster makes
+// buildGroupAgentContext return undefined, so the run proceeds without a group.
+vi.mock('@/database/models/chatGroup', () => ({
+  ChatGroupModel: vi.fn().mockImplementation(() => ({
+    findById: vi.fn().mockResolvedValue(undefined),
+    getGroupAgentsWithMeta: vi.fn().mockResolvedValue([]),
   })),
 }));
 

@@ -20,7 +20,7 @@ vi.mock('@/components/Menu', () => ({
     <div>
       Mocked Menu
       {items.map((item: any) => (
-        <button key={item.key} type={'button'} onClick={onClick}>
+        <button key={item.key} type={'button'} onClick={() => onClick({ key: item.key })}>
           {item.label}
         </button>
       ))}
@@ -52,6 +52,10 @@ vi.mock('../UserLoginOrSignup', () => ({
       Mocked SignInBlock
     </button>
   )),
+}));
+
+vi.mock('../UserPanel/LangButton', () => ({
+  default: () => <div>Language chooser</div>,
 }));
 
 vi.mock('../DataStatistics', () => ({
@@ -103,14 +107,15 @@ describe('PanelContent', () => {
       expect(screen.queryByText('Mocked UserInfo')).not.toBeInTheDocument();
     });
 
-    it('should render logout items when user is signed in', () => {
+    it('should render profile actions in a single menu when user is signed in', () => {
       act(() => {
         useUserStore.setState({ isSignedIn: true });
       });
 
       renderWithRouter(<PanelContent closePopover={closePopover} />);
 
-      expect(screen.getAllByText('Mocked Menu').length).toBe(2);
+      expect(screen.getAllByText('Mocked Menu')).toHaveLength(1);
+      expect(screen.getByText('Logout')).toBeInTheDocument();
     });
 
     it('should render SignInBlock when user is not signed in', () => {
@@ -128,5 +133,6 @@ describe('PanelContent', () => {
     renderWithRouter(<PanelContent closePopover={closePopover} />);
 
     expect(screen.getAllByText('Mocked Menu').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Language chooser')).not.toBeInTheDocument();
   });
 });

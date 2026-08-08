@@ -8,11 +8,13 @@ import {
   llmGenerationTracing,
   users,
   verifyCheckResults,
+  verifyEvidence,
   verifyRuns,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentOperationModel } from '../agentOperation';
 import { VerifyCheckResultModel } from '../verifyCheckResult';
+import { VerifyEvidenceModel } from '../verifyEvidence';
 import { VerifyRunModel } from '../verifyRun';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -43,6 +45,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  await serverDB.delete(verifyEvidence);
   await serverDB.delete(verifyCheckResults);
   await serverDB.delete(llmGenerationTracing);
   await serverDB.delete(verifyRuns);
@@ -104,6 +107,32 @@ describe('VerifyCheckResultModel', () => {
 
     const row = await model.findById(created.id);
     expect(row).toMatchObject({ status: 'failed', verdict: 'failed' });
+  });
+
+  it('delete removes a row by id and cascades its evidence, scoped to the user', async () => {
+    const model = new VerifyCheckResultModel(serverDB, userId);
+    const created = await model.create({
+      checkItemId: 'a',
+      checkItemIndex: 0,
+      verifierType: 'llm',
+      verifyRunId,
+    });
+    const evidenceModel = new VerifyEvidenceModel(serverDB, userId);
+    const evidence = await evidenceModel.create({
+      checkResultId: created.id,
+      content: 'observed',
+      type: 'text',
+    });
+
+    // a different user must not be able to delete the row
+    await new VerifyCheckResultModel(serverDB, 'someone-else').delete(created.id);
+    expect(await model.findById(created.id)).toBeDefined();
+
+    await model.delete(created.id);
+
+    expect(await model.findById(created.id)).toBeUndefined();
+    // evidence cascades via the check_result_id FK
+    expect(await evidenceModel.findById(evidence.id)).toBeUndefined();
   });
 
   it('backfillTracingId fills NULL tracing ids for the named items only and is idempotent', async () => {
@@ -171,6 +200,47 @@ describe('VerifyCheckResultModel', () => {
     expect(second.id).toBe(first.id);
     expect(second.verdict).toBe('passed');
     expect(await model.listByRun(verifyRunId)).toHaveLength(1);
+  });
+
+  it('upsertByCheckItem clears an optional field on null but keeps it on undefined', async () => {
+    const model = new VerifyCheckResultModel(serverDB, userId);
+
+    const first = await model.upsertByCheckItem({
+      checkItemId: 'c1',
+      status: 'failed',
+      suggestion: 'fix the padding',
+      toulmin: { evidence: 'padding was 4px' },
+      verdict: 'failed',
+      verifierType: 'agent',
+      verifyRunId,
+    });
+    expect(first.suggestion).toBe('fix the padding');
+
+    // undefined → the conflict UPDATE skips the column, prior value survives
+    await model.upsertByCheckItem({
+      checkItemId: 'c1',
+      status: 'passed',
+      verdict: 'passed',
+      verifierType: 'agent',
+      verifyRunId,
+    });
+    let row = await model.findById(first.id);
+    expect(row?.suggestion).toBe('fix the padding');
+    expect(row?.toulmin).toEqual({ evidence: 'padding was 4px' });
+
+    // explicit null → the column is set to NULL (the full-replace path)
+    await model.upsertByCheckItem({
+      checkItemId: 'c1',
+      status: 'passed',
+      suggestion: null,
+      toulmin: null,
+      verdict: 'passed',
+      verifierType: 'agent',
+      verifyRunId,
+    });
+    row = await model.findById(first.id);
+    expect(row?.suggestion).toBeNull();
+    expect(row?.toulmin).toBeNull();
   });
 
   it('rejects upserting a colliding check item into another user run', async () => {

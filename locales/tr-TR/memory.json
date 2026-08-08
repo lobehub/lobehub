@@ -34,6 +34,8 @@
   "context.description": "Açıklama",
   "context.empty": "Kayıtlı bağlamsal hafıza yok",
   "context.source": "Kaynak",
+  "detail.notFound.desc": "Bu anı silinmiş olabilir veya artık mevcut değil.",
+  "detail.notFound.title": "Anı bulunamadı",
   "empty.description": "Hafıza geri çağırma aşamalı bir süreçtir. Hatırlanabilir içeriği zenginleştirmek için daha fazla sohbet edin. Değerli bilgileri daha iyi yakalamak ve saklamak için temsilciyle daha derin etkileşimler kurmayı deneyin.",
   "empty.search": "Eşleşen hafıza bulunamadı",
   "empty.title": "Henüz Hafıza Yok",

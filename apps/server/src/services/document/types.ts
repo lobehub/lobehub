@@ -74,6 +74,7 @@ export interface UpdateDocumentResult {
 }
 
 export interface SaveDocumentHistoryResult {
+  historyId: string;
   savedAt: Date;
 }
 

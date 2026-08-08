@@ -6,6 +6,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
+import { GITHUB } from '@/const/url';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { type DiscoverProviderItem } from '@/types/discover';
@@ -89,7 +90,7 @@ const ProviderItem = memo<DiscoverProviderItem>(
               <ActionIcon color={cssVar.colorTextDescription} icon={GlobeIcon} />
             </a>
             <a
-              href={`https://github.com/lobehub/lobe-chat/blob/main/src/config/modelProviders/${identifier}.ts`}
+              href={urlJoin(GITHUB, 'blob/main/src/config/modelProviders', `${identifier}.ts`)}
               rel="noopener noreferrer"
               target={'_blank'}
               onClick={stopPropagation}

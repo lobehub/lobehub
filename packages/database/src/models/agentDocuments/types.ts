@@ -123,10 +123,13 @@ export interface AgentDocumentContextPayload {
   content: string;
   contentCharCount?: number;
   description: string | null;
+  documentId: string;
   filename: string;
+  fileType: string;
   id: string;
   isFolder: boolean;
   loadRules: DocumentLoadRules;
+  parentId: string | null;
   policy: AgentDocumentPolicy | null;
   policyLoad: PolicyLoad;
   policyLoadFormat: DocumentLoadFormat;

@@ -331,7 +331,7 @@ describe('generate command', () => {
   });
 
   describe('tts', () => {
-    it('should call TTS endpoint and save file', async () => {
+    it('should call OpenAI TTS endpoint and save file', async () => {
       const audioBuffer = new ArrayBuffer(100);
       vi.stubGlobal(
         'fetch',
@@ -358,22 +358,6 @@ describe('generate command', () => {
       );
       expect(mockWriteFileSync).toHaveBeenCalledWith('/tmp/test.mp3', expect.any(Buffer));
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Audio saved'));
-    });
-
-    it('should reject invalid backend', async () => {
-      const program = createProgram();
-      await program.parseAsync([
-        'node',
-        'test',
-        'generate',
-        'tts',
-        'Hello',
-        '--backend',
-        'invalid',
-      ]);
-
-      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Invalid backend'));
-      expect(exitSpy).toHaveBeenCalledWith(1);
     });
   });
 

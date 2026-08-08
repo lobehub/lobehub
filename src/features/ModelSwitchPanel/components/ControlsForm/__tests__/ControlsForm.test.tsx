@@ -31,7 +31,10 @@ vi.mock('@lobehub/ui', () => {
   const MockForm = () => <div data-testid="controls-form" />;
   MockForm.useForm = () => [{ setFieldsValue: testState.setFieldsValue }];
 
-  return { Form: MockForm };
+  return {
+    Flexbox: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+    Form: MockForm,
+  };
 });
 
 vi.mock('antd', () => {
@@ -117,5 +120,33 @@ describe('ControlsForm', () => {
       thinking: 'enabled',
     });
     expect(testState.updateAgentChatConfig).not.toHaveBeenCalled();
+  });
+
+  it('should show model adaptive thinking default without persisting it', () => {
+    testState.aiState.extendParams = ['enableAdaptiveThinking'];
+
+    render(<ControlsForm model="claude-sonnet-5" provider="lobehub" />);
+
+    expect(testState.setFieldsValue).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        enableAdaptiveThinking: true,
+      }),
+    );
+    expect(testState.updateAgentChatConfig).not.toHaveBeenCalled();
+  });
+
+  it('should preserve explicit adaptive thinking override', () => {
+    testState.agentState.config = {
+      enableAdaptiveThinking: false,
+    };
+    testState.aiState.extendParams = ['enableAdaptiveThinking'];
+
+    render(<ControlsForm model="claude-sonnet-5" provider="lobehub" />);
+
+    expect(testState.setFieldsValue).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        enableAdaptiveThinking: false,
+      }),
+    );
   });
 });

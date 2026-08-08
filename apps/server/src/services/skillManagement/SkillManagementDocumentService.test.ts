@@ -10,6 +10,7 @@ import {
 } from '@/database/models/agentDocuments';
 
 import type { AgentDocumentEditorSnapshot } from '../agentDocuments/headlessEditor';
+import type { DocumentService } from '../document';
 import {
   AGENT_SKILL_TEMPLATE_ID,
   SKILL_BUNDLE_FILE_TYPE,
@@ -23,6 +24,7 @@ import { SkillManagementDocumentService } from './SkillManagementDocumentService
 import type { SkillAgentDocument } from './types';
 
 const now = new Date('2026-05-02T00:00:00.000Z');
+const backingDocumentUpdatedAt = new Date('2026-05-03T00:00:00.000Z');
 
 const createSnapshot = vi.fn(
   async (content: string): Promise<AgentDocumentEditorSnapshot> => ({
@@ -264,7 +266,11 @@ const createAgentDocument = (
 const createService = () => {
   const agentDocumentModel = new InMemoryAgentDocumentModel();
   const documentService = {
-    trySaveCurrentDocumentHistory: vi.fn(async () => ({ savedAt: now })),
+    getDocumentById: vi.fn(async () => ({ updatedAt: backingDocumentUpdatedAt })),
+    trySaveCurrentDocumentHistory: vi.fn(async () => ({
+      historyId: 'history-exact-1',
+      savedAt: now,
+    })),
   };
   const service = new SkillManagementDocumentService(
     {
@@ -276,7 +282,10 @@ const createService = () => {
     {
       agentDocumentModel,
       createMarkdownEditorSnapshot: createSnapshot,
-      documentService,
+      documentService: documentService as unknown as Pick<
+        DocumentService,
+        'getDocumentById' | 'trySaveCurrentDocumentHistory'
+      >,
     },
   );
 
@@ -477,6 +486,9 @@ describe('SkillManagementDocumentService', () => {
       created.index.documentId,
       'llm_call',
     );
+    expect(detail?.preMutationHistoryId).toBe('history-exact-1');
+    expect(detail?.expectedCurrentDocumentUpdatedAt).toBe(backingDocumentUpdatedAt.toISOString());
+    expect(detail?.expectedCurrentDocumentUpdatedAt).not.toBe(now.toISOString());
     expect(detail?.content).toBe(skillContent('researcher', 'Researches docs better', '# Better'));
     expect(detail?.frontmatter).toEqual({
       description: 'Researches docs better',

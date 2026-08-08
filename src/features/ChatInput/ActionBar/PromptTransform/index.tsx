@@ -5,6 +5,7 @@ import { memo, useCallback } from 'react';
 import PromptTransformAction from '@/features/PromptTransform/PromptTransformAction';
 
 import { useChatInputStore } from '../../store';
+import { ChatInputAction } from '../components/ChatInputAction';
 
 const PromptTransform = memo(() => {
   const [editor, markdownContent] = useChatInputStore((s) => [s.editor, s.markdownContent]);
@@ -21,6 +22,7 @@ const PromptTransform = memo(() => {
   // Image mode expands vague inputs; text mode forbids expansion.
   return (
     <PromptTransformAction
+      ActionComponent={ChatInputAction}
       mode={'image'}
       prompt={markdownContent}
       onPromptChange={onPromptChange}

@@ -3,7 +3,6 @@ import { type NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { authEnv } from '@/envs/auth';
-import { defaultClients } from '@/libs/oidc-provider/config';
 import { OIDCService } from '@/server/services/oidc';
 import type { OidcInteractionDetailsResponse, OidcInteractionErrorResponse } from '@/types/oidc';
 
@@ -38,15 +37,11 @@ export async function GET(request: NextRequest, props: { params: Promise<{ uid: 
     const clientId = (details.params.client_id as string) || 'unknown';
     const scopes = (details.params.scope as string)?.split(' ') || [];
 
-    const clientDetail = await oidcService.getClientMetadata(clientId);
+    const clientMetadata = await oidcService.getConsentClientMetadata(clientId);
 
     return NextResponse.json<OidcInteractionDetailsResponse>({
       clientId,
-      clientMetadata: {
-        clientName: clientDetail?.client_name,
-        isFirstParty: defaultClients.map((c) => c.client_id).includes(clientId),
-        logo: clientDetail?.logo_uri,
-      },
+      clientMetadata,
       prompt: details.prompt.name,
       redirectUri: details.params.redirect_uri as string,
       scopes,

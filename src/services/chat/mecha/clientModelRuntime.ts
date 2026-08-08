@@ -1,5 +1,3 @@
-import { ModelRuntime } from '@lobechat/model-runtime';
-
 import { createPayloadWithKeyVaults } from '../../_auth';
 
 export interface InitializeWithClientStoreOptions {
@@ -17,11 +15,13 @@ export interface InitializeWithClientStoreOptions {
  *
  * **Note**: if you try to fetch directly, use `fetchOnClient` instead.
  */
-export const initializeWithClientStore = ({
+export const initializeWithClientStore = async ({
   provider,
   runtimeProvider,
   payload,
 }: InitializeWithClientStoreOptions) => {
+  const { ModelRuntime } = await import('@lobechat/model-runtime');
+
   /**
    * Since #5267, we map parameters for client-fetch in function `getProviderAuthPayload`
    * which called by `createPayloadWithKeyVaults` below.
@@ -41,5 +41,6 @@ export const initializeWithClientStore = ({
     ...commonOptions,
     ...providerAuthPayload,
     ...payload,
+    providerId: provider,
   });
 };

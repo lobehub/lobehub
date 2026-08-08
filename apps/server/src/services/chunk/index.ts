@@ -45,8 +45,10 @@ export class ChunkService {
 
     await this.fileModel.update(fileId, { embeddingTaskId: asyncTaskId });
 
-    // Async router will read keyVaults from DB, no need to pass jwtPayload
-    // Dynamic import to avoid circular dependency
+    // Async router will read keyVaults from DB, no need to pass jwtPayload.
+    // Kept dynamic on purpose: the async router imports this chunk service, so a
+    // static import here would form a real module cycle that `lint:circular`
+    // (madge) rejects. Call-time import breaks the static edge.
     const { createAsyncCaller } = await import('@/server/routers/async');
     const asyncCaller = await createAsyncCaller({ userId: this.userId });
 
@@ -91,8 +93,10 @@ export class ChunkService {
 
     await this.fileModel.update(fileId, { chunkTaskId: asyncTaskId });
 
-    // Async router will read keyVaults from DB, no need to pass jwtPayload
-    // Dynamic import to avoid circular dependency
+    // Async router will read keyVaults from DB, no need to pass jwtPayload.
+    // Kept dynamic on purpose: the async router imports this chunk service, so a
+    // static import here would form a real module cycle that `lint:circular`
+    // (madge) rejects. Call-time import breaks the static edge.
     const { createAsyncCaller } = await import('@/server/routers/async');
     const asyncCaller = await createAsyncCaller({ userId: this.userId });
 

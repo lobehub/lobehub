@@ -3,6 +3,7 @@ import type {
   LocalMoveFilesResultItem,
   MoveLocalFileParams,
   ProjectFileIndexResult,
+  ProjectFileSearchResult,
   RenameLocalFileResult,
 } from '@lobechat/electron-client-ipc';
 import type { DeviceLocalFilePreview } from '@lobechat/types';
@@ -23,6 +24,14 @@ const base64ToBlob = (base64: string, contentType: string): Blob => {
 
 const deserializeLocalFilePreview = (preview: DeviceLocalFilePreview): LocalFilePreview => {
   switch (preview.type) {
+    case 'document': {
+      return {
+        blob: base64ToBlob(preview.base64, preview.contentType),
+        contentType: preview.contentType,
+        type: 'document',
+      };
+    }
+
     case 'image': {
       return {
         blob: base64ToBlob(preview.base64, preview.contentType),
@@ -59,6 +68,24 @@ class ProjectFileService {
     return deviceId
       ? ((await lambdaClient.device.getProjectFileIndex.query({ deviceId, scope })) ?? undefined)
       : localFileService.getProjectFileIndex({ scope });
+  }
+
+  /** Search files within a project working directory. Matching runs on the file host. */
+  async searchProjectFiles({
+    deviceId,
+    limit,
+    query,
+    scope,
+  }: {
+    deviceId?: string;
+    limit?: number;
+    query: string;
+    scope: string;
+  }): Promise<ProjectFileSearchResult | undefined> {
+    return deviceId
+      ? ((await lambdaClient.device.searchProjectFiles.query({ deviceId, limit, query, scope })) ??
+          undefined)
+      : localFileService.searchProjectFiles({ limit, query, scope });
   }
 
   /** File preview payload for a file in a project working directory. */

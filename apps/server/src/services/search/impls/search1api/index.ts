@@ -25,7 +25,6 @@ interface Search1APIQueryParams {
   language?: string;
   max_results: number;
   query: string;
-  search_service?: string;
   time_range?: string;
 }
 
@@ -36,6 +35,8 @@ const log = debug('lobe-search:search1api');
  * Primarily used for web crawling
  */
 export class Search1APIImpl implements SearchServiceImpl {
+  readonly useAutoSearchEngineSelection = true;
+
   private get apiKey(): string | undefined {
     return process.env.SEARCH1API_SEARCH_API_KEY || process.env.SEARCH1API_API_KEY;
   }
@@ -49,8 +50,6 @@ export class Search1APIImpl implements SearchServiceImpl {
     log('Starting Search1API query with query: "%s", params: %o', query, params);
     const endpoint = urlJoin(this.baseUrl, '/search');
 
-    const { searchEngines } = params;
-
     const defaultQueryParams: Search1APIQueryParams = {
       crawl_results: 0, // Default is no crawling
       image: false,
@@ -58,7 +57,7 @@ export class Search1APIImpl implements SearchServiceImpl {
       query,
     };
 
-    let body: Search1APIQueryParams[] = [
+    const body: Search1APIQueryParams[] = [
       {
         ...defaultQueryParams,
         time_range:
@@ -68,22 +67,10 @@ export class Search1APIImpl implements SearchServiceImpl {
       },
     ];
 
-    if (searchEngines && searchEngines.length > 0) {
-      body = searchEngines.map((searchEngine) => ({
-        ...defaultQueryParams,
-
-        max_results: parseInt((20 / searchEngines.length).toFixed(0)),
-        search_service: searchEngine,
-        time_range:
-          params?.searchTimeRange && params.searchTimeRange !== 'anytime'
-            ? timeRangeMapping[params.searchTimeRange]
-            : undefined,
-      }));
-    }
-
-    // Note: Other SearchParams like searchCategories, searchEngines (beyond the first one)
-    // and Search1API specific params like include_sites, exclude_sites, language
-    // are not currently mapped.
+    // Search1API's auto mode chooses the search service per query. Forwarding
+    // searchEngines expands one query into multiple service calls.
+    // Note: Other SearchParams like searchCategories and Search1API specific
+    // params like include_sites, exclude_sites, language are not currently mapped.
 
     log('Constructed request body: %o', body);
 
@@ -132,17 +119,19 @@ export class Search1APIImpl implements SearchServiceImpl {
       const mappedResults = (rawResponse.results || []).flatMap((item) => {
         if (!item.success || !item.data) return [];
         const { results = [], searchParameters } = item.data;
-        return results.map(
-          (result): UniformSearchResult => ({
+        return results.map((result): UniformSearchResult => {
+          const searchService = searchParameters?.search_service;
+
+          return {
             category: 'general',
             content: result.content || result.snippet || '',
-            engines: [searchParameters?.search_service || ''],
+            engines: searchService ? [searchService] : [],
             parsedUrl: result.link ? new URL(result.link).hostname : '',
             score: 1,
             title: result.title || '',
             url: result.link,
-          }),
-        );
+          };
+        });
       });
 
       log('Mapped %d results to SearchResult format', mappedResults.length);

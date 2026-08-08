@@ -27,11 +27,11 @@
     "test:coverage": "vitest --coverage --silent='passed-only'"
   },
   "dependencies": {
-    "papaparse": "^5.5.2",
+    "papaparse": "^5.5.4",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
-    "@types/papaparse": "^5.3.15",
+    "@types/papaparse": "^5.5.2",
     "typescript": "^6.0.3"
   },
   "peerDependencies": {

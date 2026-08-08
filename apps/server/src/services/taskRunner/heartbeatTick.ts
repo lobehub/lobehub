@@ -15,8 +15,7 @@ const TERMINAL_STATUSES = new Set(['canceled', 'completed', 'failed']);
 const isTerminal = (status: string) => TERMINAL_STATUSES.has(status);
 
 export type HeartbeatTickOutcome =
-  | { ran: true; taskIdentifier: string }
-  | { ran: false; reason: HeartbeatTickSkipReason };
+  { ran: true; taskIdentifier: string } | { ran: false; reason: HeartbeatTickSkipReason };
 
 export type HeartbeatTickSkipReason =
   | 'human-waiting'
@@ -24,6 +23,7 @@ export type HeartbeatTickSkipReason =
   | 'mode-changed'
   | 'no-interval'
   | 'not-found'
+  | 'stale-tick'
   | 'terminal';
 
 /**
@@ -37,6 +37,7 @@ export type HeartbeatTickSkipReason =
 export async function runHeartbeatTick(
   taskId: string,
   userId: string,
+  tickToken?: string,
 ): Promise<HeartbeatTickOutcome> {
   const db = await getServerDB();
 
@@ -50,6 +51,12 @@ export async function runHeartbeatTick(
   if (!task) {
     log('skip task=%s reason=not-found', taskId);
     return { ran: false, reason: 'not-found' };
+  }
+  const activeTickToken = (task.context as { scheduler?: { tickToken?: string } } | null)?.scheduler
+    ?.tickToken;
+  if (activeTickToken && activeTickToken !== tickToken) {
+    log('skip task=%s reason=stale-tick', taskId);
+    return { ran: false, reason: 'stale-tick' };
   }
   if (task.automationMode !== 'heartbeat') {
     log('skip task=%s reason=mode-changed (mode=%s)', taskId, task.automationMode);
@@ -66,14 +73,14 @@ export async function runHeartbeatTick(
 
   const wsId = task.workspaceId ?? undefined;
   const briefModel = new BriefModel(db, userId, wsId);
-  if (await briefModel.hasUnresolvedUrgentByTask(taskId)) {
+  if (await briefModel.hasUnresolvedUrgentByTask(taskId, { excludeTypes: ['error'] })) {
     log('skip task=%s reason=human-waiting', taskId);
     return { ran: false, reason: 'human-waiting' };
   }
 
   const runner = new TaskRunnerService(db, userId, wsId);
   try {
-    await runner.runTask({ taskId });
+    await runner.runTask({ taskId, trigger: 'heartbeat' });
   } catch (e) {
     // Concurrent tick / manual run already running this task — treat as a
     // graceful skip. runTask's own rollback only fires when *it* set running,
@@ -92,6 +99,6 @@ export async function runHeartbeatTick(
 // callback. Importing this module from anywhere in the server bundle (the
 // heartbeat-tick handler is the natural place) ensures local-mode heartbeat
 // loops actually fire.
-setTaskSchedulerExecutionCallback(async (taskId, userId) => {
-  await runHeartbeatTick(taskId, userId);
+setTaskSchedulerExecutionCallback(async (taskId, userId, tickToken) => {
+  await runHeartbeatTick(taskId, userId, tickToken);
 });

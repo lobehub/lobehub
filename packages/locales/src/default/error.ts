@@ -1,4 +1,9 @@
 export default {
+  'asyncState.desc': 'Something went wrong while loading. Please try again.',
+  'asyncState.metricLabel': 'Failed to load',
+  'asyncState.title': 'Failed to load',
+  'saveState.retry': 'Retry',
+  'saveState.saveFailed': 'Failed to save your changes. Please try again.',
   'error.backHome': 'Back to Home',
   'error.desc': 'Give it a try later, or go back to the known world.',
   'error.stack': 'Error Stack',
@@ -13,6 +18,10 @@ export default {
   'import.incompatible.title': 'Current application does not support importing this file',
   'loginRequired.desc': 'You will be redirected to the sign-in page shortly',
   'loginRequired.title': 'Please sign in to use this feature',
+  'forbidden.backHome': 'Back to Home',
+  'forbidden.desc':
+    "You don't have permission to view this page. Please contact a workspace owner if you need access.",
+  'forbidden.title': 'Access denied',
   'notFound.backHome': 'Back to Home',
   'notFound.check': 'Please check if your URL is correct.',
   'notFound.desc': "We couldn't find the page you were looking for.",
@@ -161,6 +170,20 @@ export default {
     'Repeated content policy rejections detected. Please revise your prompt before retrying.',
   'response.ProviderImageContentModerationWarning':
     'Repeated image safety rejections detected. Similar prompts may temporarily pause image generation.',
+  'response.DeviceGatewayNotConfigured':
+    "Couldn't reach a run device for this agent. Connect a device, or configure the device gateway on the server, then try again.",
+  'response.RemoteServerOffline':
+    'You appear to be offline. This is a problem with your local network, not the app — please check your internet connection and try again.',
+  'response.RemoteServerTimeout':
+    'The connection to the server timed out. This usually indicates a local network problem — please check your network quality, proxy, or VPN settings and try again.',
+  'response.RemoteServerDNSFailed':
+    'The server address could not be resolved. This usually indicates a local network or DNS problem — please check your network, DNS, or VPN settings and try again.',
+  'response.RemoteServerConnectionRefused':
+    'The connection to the server was refused or reset. This usually indicates a local network problem — please check your firewall, proxy, or VPN settings and try again.',
+  'response.RemoteServerCertInvalid':
+    'A secure connection to the server could not be established due to a certificate problem. Please check your system clock, or whether a proxy/firewall is intercepting the connection.',
+  'response.RemoteServerUnreachable':
+    'The server could not be reached. This usually indicates a local network problem — please check your internet connection, proxy, or VPN settings and try again.',
   'response.ServerAgentRuntimeError':
     'Sorry, the Agent service is currently unavailable. Please try again later or contact us via email for support.',
   'response.SubscriptionKeyMismatch':
@@ -181,6 +204,13 @@ export default {
     'This workspace is frozen by an admin and cannot run requests. Please contact the workspace owner to resolve the issue.',
   'response.WorkspaceFrozenByRiskControl':
     'This workspace was auto-frozen by risk control and cannot run requests. Please contact support to review the status.',
+  'workspaceBillingInactive.bannerHint': 'Click for details',
+  'workspaceBillingInactive.bannerTitle': 'Workspace subscription inactive',
+  'workspaceBillingInactive.confirm': 'Got it',
+  'workspaceBillingInactive.renew': 'Go to billing',
+  'workspaceBillingInactive.description':
+    "This workspace's paid subscription has lapsed. Sending messages and other paid actions are paused until the subscription is restored — you can still browse shared content in the meantime.",
+  'workspaceBillingInactive.title': 'Workspace subscription inactive',
   'workspaceFrozenByAdmin.bannerDescription': 'Contact support to review the reason and unfreeze.',
   'workspaceFrozenByAdmin.bannerHint': 'Click for details',
   'workspaceFrozenByAdmin.bannerTitle': 'Workspace frozen by admin',
@@ -209,6 +239,10 @@ export default {
   'transfer.ownerOnly': 'Only workspace owners can transfer resources created by other members.',
   'transfer.resourceNotFound':
     'This resource no longer exists or you no longer have access. Refresh and try again.',
+  'transfer.copyInProgress':
+    'A previous copy of this agent is still duplicating its history. Try again once it finishes.',
+  'transfer.transferInProgress':
+    'A previous move of this resource is still migrating its history. Try again once it finishes.',
   'transfer.sameWorkspace':
     'This resource is already in the selected workspace. Choose another target.',
   'transfer.targetNoWriteAccess':
@@ -241,6 +275,7 @@ export default {
     "Please check your network connection and ensure that the file storage service's cross-origin configuration is correct.",
   'upload.storageBlock.billingUnavailable':
     'Your subscription billing status cannot be verified. Please try again later or update your billing details.',
+  'upload.storageBlock.cleanupFiles': 'Free up space',
   'upload.storageBlock.monthlyCapReached': 'Your monthly storage spending cap has been reached.',
   'upload.storageBlock.noPaymentMethod': 'Please add a payment method to continue uploading.',
   'upload.storageBlock.viewUsage': 'View storage usage',

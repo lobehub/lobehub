@@ -242,7 +242,7 @@ export const AgentManagementManifest: BuiltinToolManifest = {
     // ==================== Search ====================
     {
       description:
-        "Search for agents in your workspace or the marketplace. Use 'user' source to find your own agents, 'market' for marketplace agents, or 'all' for both. Results are paginated: the response reports the real total, and you can page through workspace agents with 'offset'.",
+        "Search for agents in your workspace or the marketplace. Use 'user' source to find your own agents, 'market' for marketplace agents, or 'all' for both. Results are paginated: the response reports the real total, and you can page through workspace agents with 'offset'. Each result carries an `origin` (workspace/market) and, for heterogeneous agents, a `heteroType` (e.g. claude-code, codex) — those are backed by an external CLI/device runtime and can execute coding/agentic tasks directly, so you can hand a task to them without further setup.",
       name: AgentManagementApiName.searchAgent,
       parameters: {
         properties: {

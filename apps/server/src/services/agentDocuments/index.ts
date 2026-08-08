@@ -25,6 +25,7 @@ import {
   extractMarkdownH1Title,
 } from '@/database/models/agentDocuments';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
+import { isUuid } from '@/database/utils/uuid';
 
 import { AgentDocumentVfsError } from '../agentDocumentVfs/errors';
 import { isManagedSkillDocument } from '../agentDocumentVfs/mounts/skills/providers/providerSkillsAgentDocumentUtils';
@@ -118,10 +119,13 @@ const toAgentDocumentContextPayload = (
   content: doc.content,
   contentCharCount: doc.contentCharCount,
   description: doc.description,
+  documentId: doc.documentId,
   filename: doc.filename,
+  fileType: doc.fileType,
   id: doc.id,
   isFolder: doc.isFolder,
   loadRules: doc.loadRules,
+  parentId: doc.parentId,
   policy: doc.policy,
   policyLoad: doc.policyLoad,
   policyLoadFormat: doc.policyLoadFormat,
@@ -141,9 +145,17 @@ export class AgentDocumentsService {
   private documentService: DocumentService;
   private topicDocumentModel: TopicDocumentModel;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    callerAgentVisibility?: 'private' | 'public' | null,
+  ) {
     this.agentDocumentModel = new AgentDocumentModel(db, userId, workspaceId);
-    this.documentService = new DocumentService(db, userId, workspaceId);
+    // Public-agent gate flows through DocumentService → DocumentModel so
+    // agentDocuments list / attach / read cannot see the caller's own
+    // private documents when the invoking agent itself is workspace-public.
+    this.documentService = new DocumentService(db, userId, workspaceId, callerAgentVisibility);
     this.topicDocumentModel = new TopicDocumentModel(db, userId, workspaceId);
   }
 
@@ -396,7 +408,10 @@ export class AgentDocumentsService {
   }
 
   async getDocumentById(id: string, expectedAgentId?: string) {
-    return this.getDocumentByIdInAgent(id, expectedAgentId);
+    const doc = await this.findReadableDocumentById(id, expectedAgentId);
+    if (!doc) return undefined;
+
+    return this.projectDocumentContent(doc);
   }
 
   /**
@@ -409,11 +424,16 @@ export class AgentDocumentsService {
     return this.agentDocumentModel.findByDocumentId(agentId, documentId);
   }
 
-  async getDocumentSnapshotById(id: string, expectedAgentId?: string) {
-    const doc = await this.agentDocumentModel.findById(id);
+  /** Read-only page projection addressed by the public `(agentId, documentId)` route. */
+  async getReaderDocument(agentId: string, documentId: string) {
+    const doc = await this.agentDocumentModel.findByDocumentId(agentId, documentId);
 
+    return this.projectDocumentContent(doc);
+  }
+
+  async getDocumentSnapshotById(id: string, expectedAgentId?: string) {
+    const doc = await this.findReadableDocumentById(id, expectedAgentId);
     if (!doc) return undefined;
-    if (expectedAgentId && doc.agentId !== expectedAgentId) return undefined;
 
     return this.attachLiteXML(doc);
   }
@@ -423,6 +443,25 @@ export class AgentDocumentsService {
     if (!doc) return undefined;
 
     return this.attachLiteXML(doc);
+  }
+
+  /**
+   * Resolve either the agent-document binding id exposed as `id` or the backing
+   * `documents.id` exposed as `documentId`. Both identifiers appear in document
+   * discovery results, and older callers may pass the latter back to read APIs.
+   * Branch before querying the UUID column so a backing id cannot trigger a
+   * PostgreSQL 22P02 error.
+   */
+  private async findReadableDocumentById(id: string, expectedAgentId?: string) {
+    const doc = isUuid(id)
+      ? await this.agentDocumentModel.findById(id)
+      : expectedAgentId
+        ? await this.agentDocumentModel.findByDocumentId(expectedAgentId, id)
+        : undefined;
+    if (!doc) return undefined;
+    if (expectedAgentId && doc.agentId !== expectedAgentId) return undefined;
+
+    return doc;
   }
 
   private async getDocumentByIdInAgent(documentId: string, expectedAgentId?: string) {
@@ -629,11 +668,13 @@ export class AgentDocumentsService {
   async listDocuments(
     agentId: string,
     sourceType?: AgentDocumentListSourceType,
-    options?: { includeArchivedToolResults?: boolean },
+    options?: { excludeWeb?: boolean; includeArchivedToolResults?: boolean; parentId?: string },
   ) {
-    const docs = sourceType
-      ? await this.agentDocumentModel.listByAgent(agentId, { sourceType })
-      : await this.agentDocumentModel.listByAgent(agentId);
+    const docs = await this.agentDocumentModel.listByAgent(agentId, {
+      excludeWeb: options?.excludeWeb,
+      parentId: options?.parentId,
+      sourceType,
+    });
 
     return options?.includeArchivedToolResults ? docs : excludeArchivedToolResults(docs);
   }

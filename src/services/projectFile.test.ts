@@ -3,11 +3,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const mockDeviceClient = vi.hoisted(() => ({
   getLocalFilePreview: { query: vi.fn() },
   getProjectFileIndex: { query: vi.fn() },
+  searchProjectFiles: { query: vi.fn() },
 }));
 
 const mockLocalFileService = vi.hoisted(() => ({
   getLocalFilePreview: vi.fn(),
   getProjectFileIndex: vi.fn(),
+  searchProjectFiles: vi.fn(),
 }));
 
 vi.mock('@lobechat/const', async (importOriginal) => ({
@@ -137,5 +139,53 @@ describe('projectFileService', () => {
       contentType: 'text/html',
       type: 'text',
     });
+  });
+
+  it('searches remote project files through device RPC', async () => {
+    const { projectFileService } = await import('./projectFile');
+    mockDeviceClient.searchProjectFiles.query.mockResolvedValue({
+      entries: [],
+      root: '/repo',
+      searchedAt: '2026-07-01T00:00:00.000Z',
+      source: 'git',
+    });
+
+    await projectFileService.searchProjectFiles({
+      deviceId: 'device-1',
+      limit: 20,
+      query: 'button',
+      scope: '/repo',
+    });
+
+    expect(mockDeviceClient.searchProjectFiles.query).toHaveBeenCalledWith({
+      deviceId: 'device-1',
+      limit: 20,
+      query: 'button',
+      scope: '/repo',
+    });
+    expect(mockLocalFileService.searchProjectFiles).not.toHaveBeenCalled();
+  });
+
+  it('searches local project files through localFileService', async () => {
+    const { projectFileService } = await import('./projectFile');
+    mockLocalFileService.searchProjectFiles.mockResolvedValue({
+      entries: [],
+      root: '/repo',
+      searchedAt: '2026-07-01T00:00:00.000Z',
+      source: 'git',
+    });
+
+    await projectFileService.searchProjectFiles({
+      limit: 20,
+      query: 'button',
+      scope: '/repo',
+    });
+
+    expect(mockLocalFileService.searchProjectFiles).toHaveBeenCalledWith({
+      limit: 20,
+      query: 'button',
+      scope: '/repo',
+    });
+    expect(mockDeviceClient.searchProjectFiles.query).not.toHaveBeenCalled();
   });
 });

@@ -9,13 +9,17 @@ packages:
   - '../../packages/file-loaders'
   - '../../packages/desktop-bridge'
   - '../../packages/device-control'
+  - '../../packages/device-sandbox'
   - '../../packages/device-gateway-client'
   - '../../packages/device-identity'
   - '../../packages/local-file-shell'
   - '../../packages/tool-runtime'
   - '../../packages/prompts'
+  - '../../packages/ssrf-safe-fetch'
   - './stubs/business-const'
-  - './stubs/types'
+  - '../../packages/types'
+  - '../../packages/model-bank'
+  - '../../packages/utils'
   - '.'
 allowBuilds:
   electron: set this to true or false

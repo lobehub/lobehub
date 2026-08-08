@@ -218,11 +218,42 @@ describe('AgentDocumentInjector', () => {
         2 user-created docs. Use readDocument(id) for full content.
 
         TITLE                     ID                                    SIZE  UPDATED
-        Daily Brief 提取框架          2af6eb88-8bdb-468f-887f-620baa394efa  35    2d ago
-        cfg-constrained-decoding  32e12975-7db2-4818-8415-9b5c3d383f05  6.0k  19d ago
+        Daily Brief 提取框架          2af6eb88-8bdb-468f-887f-620baa394efa  35    2026-04-27
+        cfg-constrained-decoding  32e12975-7db2-4818-8415-9b5c3d383f05  6.0k  2026-04-10
         </agent_documents_index>"
       `);
       expect(result.messages[0].content).not.toContain('Full content that should NOT appear');
+    });
+
+    // https://github.com/lobehub/lobehub/issues/15624 — relative times ("15m ago")
+    // in the index changed the prompt prefix every minute and broke provider-side
+    // prompt caching. The index must stay byte-identical as wall-clock time passes.
+    it('should render a time-stable index so the prompt cache prefix survives', async () => {
+      const documents = [
+        {
+          content: 'note',
+          filename: 'note.md',
+          id: 'doc-1',
+          loadPosition: 'before-first-user' as const,
+          loadRules: { rule: 'always' as const },
+          policyLoad: 'progressive' as const,
+          sourceType: 'file' as const,
+          title: 'Note',
+          updatedAt: new Date('2026-04-28T23:59:00.000Z'),
+        },
+      ];
+      const renderAt = async (currentTime: Date) => {
+        const provider = new AgentDocumentContextInjector({ currentTime, documents });
+        const context = createContext([{ content: 'Hello', id: 'user-1', role: 'user' }]);
+        const result = await provider.process(context);
+        return result.messages[0].content;
+      };
+
+      const first = await renderAt(new Date('2026-04-29T00:00:00.000Z'));
+      const later = await renderAt(new Date('2026-04-29T00:15:00.000Z'));
+
+      expect(first).toBe(later);
+      expect(first).not.toContain('ago');
     });
 
     it('should render progressive index sizes from contentCharCount when content is omitted', async () => {
@@ -299,11 +330,117 @@ describe('AgentDocumentInjector', () => {
         2 web-crawled docs hidden — call listDocuments(sourceType='web') to see them.
 
         TITLE        ID                                    SIZE  UPDATED
-        Daily Brief  2af6eb88-8bdb-468f-887f-620baa394efa  9     2d ago
+        Daily Brief  2af6eb88-8bdb-468f-887f-620baa394efa  9     2026-04-27
         </agent_documents_index>"
       `);
       expect(result.messages[0].content).not.toContain('Gold price');
       expect(result.messages[0].content).not.toContain('Gold news');
+    });
+
+    it('should collapse same-folder docs into a summary row and keep root docs flat', async () => {
+      const provider = new AgentDocumentContextInjector({
+        currentTime: new Date('2026-04-29T00:00:00.000Z'),
+        documents: [
+          {
+            content: 'root note',
+            filename: 'root.md',
+            id: 'root-1',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            policyLoad: 'progressive',
+            sourceType: 'file',
+            title: 'Root note',
+            updatedAt: new Date('2026-04-28T00:00:00.000Z'),
+          },
+          {
+            content: 'a'.repeat(4300),
+            filename: 'brief-1.md',
+            folderTitle: 'dailyBrief',
+            id: 'daily-1',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            parentId: 'folder-daily',
+            policyLoad: 'progressive',
+            sourceType: 'file',
+            title: 'Brief 1',
+            updatedAt: new Date('2026-04-27T00:00:00.000Z'),
+          },
+          {
+            content: 'a'.repeat(20_000),
+            filename: 'brief-2.md',
+            folderTitle: 'dailyBrief',
+            id: 'daily-2',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            parentId: 'folder-daily',
+            policyLoad: 'progressive',
+            sourceType: 'file',
+            title: 'Brief 2',
+            updatedAt: new Date('2026-04-25T00:00:00.000Z'),
+          },
+          {
+            content: 'a'.repeat(12_000),
+            filename: 'brief-3.md',
+            folderTitle: 'dailyBrief',
+            id: 'daily-3',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            parentId: 'folder-daily',
+            policyLoad: 'progressive',
+            sourceType: 'file',
+            title: 'Brief 3',
+            updatedAt: new Date('2026-04-26T00:00:00.000Z'),
+          },
+        ],
+      });
+
+      const context = createContext([{ content: 'Hello', id: 'user-1', role: 'user' }]);
+      const result = await provider.process(context);
+
+      expect(result.messages[0].content).toMatchInlineSnapshot(`
+        "<agent_documents_index>
+        4 user-created docs. Use readDocument(id) for full content.
+        1 folder collapsed (📁) — call listDocuments(parentId=<id>) to list a folder's docs.
+
+        TITLE      ID      SIZE  UPDATED
+        Root note  root-1  9     2026-04-28
+
+        📁 dailyBrief  folder-daily  3 docs, 4.3k–20k  2026-04-27
+        </agent_documents_index>"
+      `);
+      // Individual folded doc ids are hidden — the model expands via listDocuments.
+      expect(result.messages[0].content).not.toContain('daily-1');
+      expect(result.messages[0].content).not.toContain('daily-2');
+    });
+
+    it('should keep a lone doc-in-folder flat instead of collapsing it', async () => {
+      const provider = new AgentDocumentContextInjector({
+        currentTime: new Date('2026-04-29T00:00:00.000Z'),
+        documents: [
+          {
+            content: 'solo note',
+            filename: 'solo.md',
+            folderTitle: 'Archive',
+            id: 'solo-1',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            parentId: 'folder-archive',
+            policyLoad: 'progressive',
+            sourceType: 'file',
+            title: 'Solo',
+            updatedAt: new Date('2026-04-27T00:00:00.000Z'),
+          },
+        ],
+      });
+
+      const context = createContext([{ content: 'Hello', id: 'user-1', role: 'user' }]);
+      const result = await provider.process(context);
+
+      const injected = result.messages[0].content;
+      // Rendered as a normal flat row (id readable), not a 📁 fold.
+      expect(injected).toContain('solo-1');
+      expect(injected).not.toContain('📁');
+      expect(injected).not.toContain('folder collapsed');
     });
 
     it('should render empty docs with size=empty so the LLM does not retry', async () => {
@@ -332,7 +469,7 @@ describe('AgentDocumentInjector', () => {
         1 user-created doc. Use readDocument(id) for full content.
 
         TITLE      ID                                    SIZE   UPDATED
-        周报与平台对话分析  d14dca54-7b38-44d5-9bdb-f3fed8c5f947  empty  13d ago
+        周报与平台对话分析  d14dca54-7b38-44d5-9bdb-f3fed8c5f947  empty  2026-04-16
         </agent_documents_index>"
       `);
     });

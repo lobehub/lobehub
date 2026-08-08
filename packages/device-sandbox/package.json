@@ -1,0 +1,21 @@
+{
+  "name": "@lobechat/device-sandbox",
+  "version": "1.0.0",
+  "private": true,
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "test": "bunx vitest run --silent='passed-only'",
+    "test:coverage": "bunx vitest run --coverage"
+  },
+  "dependencies": {
+    "@anthropic-ai/sandbox-runtime": "0.0.66"
+  },
+  "devDependencies": {
+    "vitest": "3.2.6"
+  }
+}

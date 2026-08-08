@@ -61,7 +61,7 @@ export const buildSegment = async <T>(
 };
 
 /**
- * Tries to preserve sentence/element boundaries by removing older punctuation-delimited chunks first.
+ * Preserves sentence/element boundaries by finding the longest punctuation-delimited suffix that fits.
  */
 export const truncateByPunctuation = async (text: string, tokenLimit: number) => {
   const segments = text
@@ -71,13 +71,19 @@ export const truncateByPunctuation = async (text: string, tokenLimit: number) =>
 
   if (segments.length <= 1) return '';
 
-  for (let i = segments.length; i >= 1; i -= 1) {
-    const candidate = segments.slice(-i).join(' ');
-    const tokenCount = await encodeAsync(candidate);
-    if (tokenCount <= tokenLimit) return candidate;
+  // tokenx assigns no tokens to the spaces inserted by join(' '), so suffix cost is additive.
+  let start = segments.length;
+  let tokenCount = 0;
+
+  while (start > 0) {
+    const nextTokenCount = tokenCount + (await encodeAsync(segments[start - 1]));
+    if (nextTokenCount > tokenLimit) break;
+
+    tokenCount = nextTokenCount;
+    start -= 1;
   }
 
-  return '';
+  return segments.slice(start).join(' ');
 };
 
 /**

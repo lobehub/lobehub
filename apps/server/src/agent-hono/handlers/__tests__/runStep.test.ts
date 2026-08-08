@@ -1,0 +1,335 @@
+// @vitest-environment node
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { AiAgentService } from '@/server/services/aiAgent';
+
+import { runStep, runStepHealth } from '../runStep';
+
+const mockGetOperationMetadata = vi.fn();
+const mockExecuteStep = vi.fn();
+const mockGetServerDB = vi.hoisted(() => vi.fn());
+
+vi.mock('@/server/modules/AgentRuntime', () => ({
+  AgentRuntimeCoordinator: vi.fn().mockImplementation(() => ({
+    getOperationMetadata: mockGetOperationMetadata,
+  })),
+}));
+
+vi.mock('@/server/services/aiAgent', () => ({
+  AiAgentService: vi.fn().mockImplementation(() => ({
+    executeStep: mockExecuteStep,
+  })),
+}));
+
+vi.mock('@/database/core/db-adaptor', () => ({
+  getServerDB: mockGetServerDB,
+}));
+
+function buildOperationDiagnosticDB(row?: any) {
+  return {
+    select: vi.fn(() => ({
+      from: vi.fn(() => ({
+        where: vi.fn(() => ({
+          limit: vi.fn().mockResolvedValue(row ? [row] : []),
+        })),
+      })),
+    })),
+  };
+}
+
+function buildContext(opts: {
+  body?: unknown;
+  jsonThrows?: boolean;
+  messageId?: string;
+  retried?: string;
+}) {
+  const captures: Array<{ body: any; status: number; headers?: Record<string, string> }> = [];
+  const ctx = {
+    json: (b: any, status = 200, headers?: Record<string, string>) => {
+      captures.push({ body: b, status, headers });
+      return Response.json(b, { status, headers });
+    },
+    req: {
+      header: (name: string) => {
+        const normalized = name.toLowerCase();
+        if (normalized === 'upstash-retried') return opts.retried;
+        if (normalized === 'upstash-message-id') return opts.messageId;
+        return undefined;
+      },
+      json: opts.jsonThrows
+        ? async () => {
+            throw new Error('bad json');
+          }
+        : async () => opts.body,
+    },
+  } as any;
+  return { ctx, getCaptures: () => captures };
+}
+
+const validBody = {
+  context: { foo: 'bar' },
+  operationId: 'op-1',
+  stepIndex: 2,
+};
+
+describe('runStep handler', () => {
+  beforeEach(() => {
+    mockGetOperationMetadata.mockReset();
+    mockExecuteStep.mockReset();
+    mockGetServerDB.mockResolvedValue({} as any);
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns 400 when JSON parsing throws', async () => {
+    const { ctx, getCaptures } = buildContext({ jsonThrows: true });
+    const res = await runStep(ctx);
+    expect(res.status).toBe(400);
+    expect(getCaptures()[0].body).toEqual({ error: 'Invalid JSON body' });
+    expect(mockGetOperationMetadata).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when operationId is missing', async () => {
+    const { ctx } = buildContext({ body: { stepIndex: 0 } });
+    const res = await runStep(ctx);
+    expect(res.status).toBe(400);
+    expect(mockGetOperationMetadata).not.toHaveBeenCalled();
+  });
+
+  it('returns 401 when operation metadata has no userId', async () => {
+    mockGetOperationMetadata.mockResolvedValue(null);
+    mockGetServerDB.mockResolvedValue(
+      buildOperationDiagnosticDB({
+        completedAt: null,
+        startedAt: new Date('2026-07-07T03:23:44.015Z'),
+        status: 'running',
+        stepCount: null,
+        traceS3Key: null,
+      }),
+    );
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { ctx, getCaptures } = buildContext({ body: validBody });
+
+    const res = await runStep(ctx);
+
+    expect(res.status).toBe(401);
+    expect(getCaptures()[0].body).toEqual({ error: 'Invalid operation or unauthorized' });
+    expect(mockExecuteStep).not.toHaveBeenCalled();
+    expect(JSON.parse(warnSpy.mock.calls[0][0])).toMatchObject({
+      dbRow: {
+        exists: true,
+        startedAt: '2026-07-07T03:23:44.015Z',
+        status: 'running',
+        stepCount: null,
+        traceS3KeyPresent: false,
+      },
+      event: 'agent.run_step.missing_operation_metadata',
+      metadataPresent: false,
+      operationId: 'op-1',
+      stepIndex: 2,
+      upstashRetried: null,
+    });
+    warnSpy.mockRestore();
+  });
+
+  it('includes QStash retry and message IDs in missing metadata diagnostics', async () => {
+    mockGetOperationMetadata.mockResolvedValue({});
+    mockGetServerDB.mockResolvedValue(buildOperationDiagnosticDB());
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { ctx } = buildContext({
+      body: validBody,
+      messageId: 'msg-123',
+      retried: '3',
+    });
+
+    await runStep(ctx);
+
+    expect(JSON.parse(warnSpy.mock.calls[0][0])).toMatchObject({
+      dbRow: {
+        exists: false,
+        status: null,
+      },
+      metadataHasUserId: false,
+      metadataPresent: true,
+      operationId: 'op-1',
+      qstashMessageId: 'msg-123',
+      stepIndex: 2,
+      upstashRetried: '3',
+    });
+    warnSpy.mockRestore();
+  });
+
+  it('steps through AiAgentService scoped to the operation workspace', async () => {
+    // Regression (two invariants in one path):
+    // 1. workspaceId — a workspace-scoped binding (e.g. Discord bot active agent)
+    //    runs its steps through this QStash worker. Dropping it makes the runtime
+    //    personal-scoped, so the parent-message lookup misses the workspace-scoped
+    //    row → ConversationParentMissing.
+    // 2. sub-agent forking — stepping MUST go through AiAgentService (not a bare
+    //    AgentRuntimeService), because only AiAgentService's runtime carries the
+    //    in-process `execSubAgent` fork callback. A bare runtime here makes
+    //    `lobe-agent.callSubAgent` fail with SUB_AGENT_UNAVAILABLE.
+    mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1', workspaceId: 'ws-1' });
+    mockExecuteStep.mockResolvedValue({
+      nextStepScheduled: false,
+      state: { cost: { total: 0 }, status: 'done', stepCount: 1 },
+      success: true,
+    });
+
+    const { ctx } = buildContext({ body: validBody });
+    await runStep(ctx);
+
+    expect(AiAgentService).toHaveBeenCalledWith(
+      expect.anything(),
+      'user-1',
+      expect.objectContaining({ workspaceId: 'ws-1' }),
+    );
+    expect(mockExecuteStep).toHaveBeenCalledWith(
+      expect.objectContaining({ operationId: 'op-1', stepIndex: 2 }),
+    );
+  });
+
+  it('returns 429 with Retry-After header when the step is locked', async () => {
+    mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1' });
+    mockExecuteStep.mockResolvedValue({
+      locked: true,
+      nextStepScheduled: false,
+      state: {},
+      success: false,
+    });
+
+    const { ctx, getCaptures } = buildContext({ body: validBody });
+    const res = await runStep(ctx);
+
+    expect(res.status).toBe(429);
+    const captured = getCaptures()[0];
+    expect(captured.body).toMatchObject({
+      error: 'Step is currently being executed, retry later',
+      operationId: 'op-1',
+      stepIndex: 2,
+    });
+    expect(captured.headers).toEqual({ 'Retry-After': '37' });
+  });
+
+  it('forwards the upstash-retried header to executeStep as externalRetryCount', async () => {
+    mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1' });
+    mockExecuteStep.mockResolvedValue({
+      nextStepScheduled: false,
+      state: { status: 'done', cost: { total: 0 }, stepCount: 1 },
+      success: true,
+    });
+
+    const { ctx } = buildContext({ body: validBody, retried: '3' });
+    await runStep(ctx);
+
+    expect(mockExecuteStep).toHaveBeenCalledWith(
+      expect.objectContaining({ externalRetryCount: 3, operationId: 'op-1', stepIndex: 2 }),
+    );
+  });
+
+  it('unwraps QStash `body.payload` resume/intervention fields into executeStep', async () => {
+    mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1' });
+    mockExecuteStep.mockResolvedValue({
+      nextStepScheduled: false,
+      state: { cost: { total: 0 }, status: 'running', stepCount: 2 },
+      success: true,
+    });
+
+    // QStash nests these under `body.payload`, not the top level.
+    const { ctx } = buildContext({
+      body: {
+        context: { foo: 'bar' },
+        operationId: 'op-1',
+        payload: {
+          approvedToolCall: { id: 'tc1' },
+          resumeAsyncTool: true,
+          toolMessageId: 'msg-1',
+        },
+        stepIndex: 2,
+      },
+    });
+    await runStep(ctx);
+
+    expect(mockExecuteStep).toHaveBeenCalledWith(
+      expect.objectContaining({
+        approvedToolCall: { id: 'tc1' },
+        operationId: 'op-1',
+        resumeAsyncTool: true,
+        stepIndex: 2,
+        toolMessageId: 'msg-1',
+      }),
+    );
+  });
+
+  it('shapes the success response with status, totals and pending fields', async () => {
+    mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1' });
+    mockExecuteStep.mockResolvedValue({
+      nextStepScheduled: true,
+      state: {
+        cost: { total: 0.42 },
+        pendingHumanPrompt: { id: 'p1' },
+        pendingHumanSelect: undefined,
+        pendingToolsCalling: ['t1'],
+        status: 'waiting_for_human',
+        stepCount: 5,
+      },
+      success: true,
+    });
+
+    const { ctx, getCaptures } = buildContext({ body: validBody });
+    const res = await runStep(ctx);
+
+    expect(res.status).toBe(200);
+    expect(getCaptures()[0].body).toMatchObject({
+      completed: false,
+      nextStepIndex: 3,
+      nextStepScheduled: true,
+      operationId: 'op-1',
+      pendingApproval: ['t1'],
+      pendingPrompt: { id: 'p1' },
+      status: 'waiting_for_human',
+      stepIndex: 2,
+      success: true,
+      totalCost: 0.42,
+      totalSteps: 5,
+      waitingForHuman: true,
+    });
+  });
+
+  it('returns 500 on unexpected service errors and echoes operationId', async () => {
+    mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1' });
+    mockExecuteStep.mockRejectedValue(new Error('boom'));
+
+    const { ctx, getCaptures } = buildContext({ body: validBody });
+    const res = await runStep(ctx);
+
+    expect(res.status).toBe(500);
+    expect(getCaptures()[0].body).toMatchObject({
+      error: 'boom',
+      operationId: 'op-1',
+      stepIndex: 2,
+    });
+  });
+});
+
+describe('runStepHealth handler', () => {
+  it('returns a healthy payload', () => {
+    const captures: any[] = [];
+    const ctx = {
+      json: (b: any, status = 200) => {
+        captures.push({ body: b, status });
+        return Response.json(b, { status });
+      },
+    } as any;
+
+    const res = runStepHealth(ctx);
+
+    expect(res.status).toBe(200);
+    expect(captures[0].body).toMatchObject({
+      healthy: true,
+      message: 'Agent execution service is running',
+    });
+  });
+});

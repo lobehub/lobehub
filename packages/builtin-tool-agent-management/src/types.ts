@@ -1,5 +1,5 @@
 import type { HeteroAgentRuntimeDescriptor } from '@lobechat/agent-manager-runtime';
-import type { LobeAgentConfig, MetaData } from '@lobechat/types';
+import type { HeterogeneousProviderConfig, LobeAgentConfig, MetaData } from '@lobechat/types';
 import type { PartialDeep } from 'type-fest';
 
 /**
@@ -103,10 +103,6 @@ export interface CreateAgentState {
    * Error message if creation failed
    */
   error?: string;
-  /**
-   * The associated session ID
-   */
-  sessionId?: string;
   /**
    * Whether the creation was successful
    */
@@ -217,6 +213,12 @@ export interface AgentSearchItem {
    * Agent description
    */
   description?: string;
+  /**
+   * Heterogeneous agent runtime type (e.g. `claude-code`, `codex`), set only when
+   * the agent delegates execution to an external CLI/device runtime. Absent for
+   * normal model-runtime agents.
+   */
+  heteroType?: HeterogeneousProviderConfig['type'];
   /**
    * Agent ID (for user agents) or identifier (for market agents)
    */

@@ -16,7 +16,7 @@ export const useOpenChatSettings = (tab: ChatSettingsTabs = ChatSettingsTabs.Ope
 
   return useMemo(() => {
     if (isMobile)
-      return () => navigate(`/chat/settings?session=${activeAgentId}&showMobileWorkspace=true`);
+      return () => navigate(`/agent/${activeAgentId}/settings?showMobileWorkspace=true`);
 
     return () => {
       openAgentSettingsModal();

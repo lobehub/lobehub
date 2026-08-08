@@ -4,10 +4,17 @@ import { z } from 'zod';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { DocumentModel } from '@/database/models/document';
+import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { NotebookRuntimeService } from '@/server/services/notebook';
+import {
+  assertCanEditResource,
+  assertCanPerformResourceAction,
+} from '@/server/services/resourcePermission';
+
+import { isWorkspaceNonOwner } from './_helpers/assertWorkspaceRowManageable';
 
 const notebookProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -71,7 +78,33 @@ export const notebookRouter = router({
     .use(withScopedPermission('document:delete'))
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await ctx.notebookService.deleteDocument(input.id);
+      const existing = await ctx.documentModel.findById(input.id);
+      if (!existing) return { success: true };
+      // Same guard as documentRouter.deleteDocument — the two routers delete
+      // from the same `documents` table and must not diverge in semantics.
+      if (ctx.workspaceId) {
+        await assertCanPerformResourceAction({
+          action: 'delete',
+          db: ctx.serverDB,
+          resourceId: input.id,
+          resourceType: 'document',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+      }
+
+      // Same cascade rule as documentRouter.deleteDocument: a non-owner's
+      // folder delete must not take teammates' descendants with it.
+      await ctx.notebookService.deleteDocument(input.id, {
+        restrictToCreator: isWorkspaceNonOwner(ctx),
+      });
+
+      if (ctx.workspaceId) {
+        await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).removeAll(
+          'document',
+          input.id,
+        );
+      }
 
       return { success: true };
     }),
@@ -125,6 +158,15 @@ export const notebookRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      // General-access write guard, mirroring `document.updateDocument`.
+      await assertCanEditResource({
+        db: ctx.serverDB,
+        resourceId: input.id,
+        resourceType: 'document',
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+
       let contentToUpdate = input.content;
 
       // Handle append mode

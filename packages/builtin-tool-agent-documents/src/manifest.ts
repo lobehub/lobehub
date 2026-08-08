@@ -3,6 +3,9 @@ import type { BuiltinToolManifest } from '@lobechat/types';
 import { systemPrompt } from './systemRole';
 import { AgentDocumentsApiName, AgentDocumentsIdentifier } from './types';
 
+const AGENT_DOCUMENT_ID_DESCRIPTION =
+  'Target agent document ID. Use the "id" field returned by listDocuments, not "documentId".';
+
 export const AgentDocumentsManifest: BuiltinToolManifest = {
   api: [
     {
@@ -36,6 +39,10 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
         required: ['title', 'content'],
         type: 'object',
       },
+      work: {
+        action: 'create',
+        resourceType: 'document',
+      },
     },
     {
       description:
@@ -51,7 +58,7 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
             type: 'string',
           },
           id: {
-            description: 'Target document ID.',
+            description: AGENT_DOCUMENT_ID_DESCRIPTION,
             type: 'string',
           },
         },
@@ -70,12 +77,16 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
             type: 'string',
           },
           id: {
-            description: 'Target document ID.',
+            description: AGENT_DOCUMENT_ID_DESCRIPTION,
             type: 'string',
           },
         },
         required: ['id', 'content'],
         type: 'object',
+      },
+      work: {
+        action: 'update',
+        resourceType: 'document',
       },
     },
     {
@@ -85,7 +96,7 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
       parameters: {
         properties: {
           id: {
-            description: 'Target document ID.',
+            description: AGENT_DOCUMENT_ID_DESCRIPTION,
             type: 'string',
           },
           operations: {
@@ -140,6 +151,10 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
         required: ['id', 'operations'],
         type: 'object',
       },
+      work: {
+        action: 'update',
+        resourceType: 'document',
+      },
     },
     {
       description: 'Remove an existing agent document by ID (similar intent to rm/delete).',
@@ -147,12 +162,16 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
       parameters: {
         properties: {
           id: {
-            description: 'Target document ID.',
+            description: AGENT_DOCUMENT_ID_DESCRIPTION,
             type: 'string',
           },
         },
         required: ['id'],
         type: 'object',
+      },
+      work: {
+        action: 'delete',
+        resourceType: 'document',
       },
     },
     {
@@ -162,7 +181,7 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
       parameters: {
         properties: {
           id: {
-            description: 'Target document ID.',
+            description: AGENT_DOCUMENT_ID_DESCRIPTION,
             type: 'string',
           },
           newTitle: {
@@ -172,6 +191,10 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
         },
         required: ['id', 'newTitle'],
         type: 'object',
+      },
+      work: {
+        action: 'update',
+        resourceType: 'document',
       },
     },
     {
@@ -191,13 +214,22 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
         required: ['id'],
         type: 'object',
       },
+      work: {
+        action: 'create',
+        resourceType: 'document',
+      },
     },
     {
       description:
-        'List agent documents. Use this to discover documents that are not auto-injected (e.g. web-crawled pages) or to resolve a title to a document ID.',
+        'List agent documents. Use this to discover documents that are not auto-injected (e.g. web-crawled pages), to expand a folder collapsed in the agent_documents_index, or to resolve a title to a document ID.',
       name: AgentDocumentsApiName.listDocuments,
       parameters: {
         properties: {
+          parentId: {
+            description:
+              'Restrict the listing to the direct children of this folder. Pass the folder id shown on a collapsed 📁 row in the agent_documents_index to expand that folder.',
+            type: 'string',
+          },
           scope: {
             default: 'agent',
             description:
@@ -224,7 +256,7 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
       parameters: {
         properties: {
           id: {
-            description: 'Target document ID.',
+            description: AGENT_DOCUMENT_ID_DESCRIPTION,
             type: 'string',
           },
           rule: {

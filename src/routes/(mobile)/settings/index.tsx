@@ -2,10 +2,10 @@
 
 import MobileContentLayout from '@/components/server/MobileNavLayout';
 import Footer from '@/features/Setting/Footer';
+import SettingsContent from '@/features/Settings/features/SettingsContent';
 import { parseAsString, useQueryState } from '@/hooks/useQueryParam';
 import { SettingsTabs } from '@/store/global/initialState';
 
-import SettingsContent from '../../(main)/settings/features/SettingsContent';
 import Header from './_layout/Header';
 
 const Layout = () => {

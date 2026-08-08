@@ -118,6 +118,14 @@ export const uploadCardStyles = createStaticStyles(({ css }) => ({
     border-radius: 3px;
 
     background: ${cssVar.colorBgMask};
+
+    /* antd resets the Spin's own color to colorText (near-black in the light
+       theme) and the percent ring's stroke is \`currentcolor\`, so it smears into
+       the dark mask. The mask is a dark scrim in both themes — override the Spin
+       color to white for contrast. */
+    .ant-spin {
+      color: ${cssVar.colorWhite};
+    }
   `,
 }));
 

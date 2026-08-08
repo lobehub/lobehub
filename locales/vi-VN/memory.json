@@ -34,6 +34,8 @@
   "context.description": "Mô tả",
   "context.empty": "Không có ký ức ngữ cảnh nào",
   "context.source": "Nguồn",
+  "detail.notFound.desc": "Ký ức này có thể đã bị xóa hoặc không còn khả dụng.",
+  "detail.notFound.title": "Không tìm thấy ký ức",
   "empty.description": "Việc truy xuất ký ức là một quá trình dần dần. Hãy trò chuyện nhiều hơn để làm phong phú nội dung có thể ghi nhớ. Thử tương tác sâu sắc hơn với tác nhân để ghi lại và lưu trữ thông tin giá trị tốt hơn.",
   "empty.search": "Không tìm thấy ký ức phù hợp",
   "empty.title": "Chưa có Ký ức",

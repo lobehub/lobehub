@@ -17,6 +17,8 @@ import { openFeedbackModal } from '@/components/FeedbackModal';
 import { getNavigableRoutes, getRouteById } from '@/config/routes';
 import { FEEDBACK } from '@/const/url';
 import { usePermission } from '@/hooks/usePermission';
+import { useChatStore } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/selectors';
 
 import { useCommandMenuContext } from './CommandMenuContext';
 import { CommandItem } from './components';
@@ -27,6 +29,10 @@ const MainMenu = memo(() => {
   const { pathname, menuContext, setPages, pages, onClose } = useCommandMenuContext();
   const { t } = useTranslation('common');
   const { allowed: canCreate } = usePermission('create_content');
+  // While the first send from the new-topic view is still creating the real
+  // topic, openNewTopicOrSaveTopic is a no-op — disable the command instead of
+  // letting it close the palette as a false success (same as the sidebar entry).
+  const isNewTopicSendInFlight = useChatStore(topicSelectors.isNewTopicSendInFlight);
 
   const {
     handleCreateSession,
@@ -65,7 +71,7 @@ const MainMenu = memo(() => {
 
         {menuContext === 'agent' && (
           <CommandItem
-            disabled={!canCreate}
+            disabled={!canCreate || isNewTopicSendInFlight}
             icon={<MessageSquarePlusIcon />}
             unpinned={menuContext !== 'agent'}
             value="create new topic"

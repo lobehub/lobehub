@@ -56,8 +56,7 @@ export class MessageCollector {
   constructor(
     private messageMap: Map<string, Message>,
     private childrenMap: Map<string | null, string[]>,
-    // BranchResolver is stateless; default keeps existing 2-arg call sites working.
-    private branchResolver: BranchResolver = new BranchResolver(),
+    private branchResolver: BranchResolver = new BranchResolver(messageMap),
   ) {}
 
   /**
@@ -108,26 +107,23 @@ export class MessageCollector {
   }
 
   /**
-   * True when a TOOLLESS assistant is the head of a turn whose very next step
-   * calls tools — the narration the LLM streams in reply to the user
-   * immediately before its first tool call, with the tool-using step as its
-   * direct child. `collectAssistantChain` already walks correctly from such a
-   * head, but the flat-list dispatcher only opens an AssistantGroup when the
-   * message itself carries tools — so without this check the toolless head is
-   * emitted as its own standalone bubble and visually splits off from the group
-   * that starts at the first tool step (looks like a broken chain).
+   * True when a TOOLLESS assistant is the head of a turn that eventually reaches
+   * a tool-using step — the narration the LLM streams in reply to the user
+   * before its first tool call. `collectAssistantChain` already walks correctly
+   * from such a head, but the flat-list dispatcher only opens an AssistantGroup
+   * when the message itself carries tools — so without this check the toolless
+   * head is emitted as its own standalone bubble and visually splits off from the
+   * group that starts at the first tool step (looks like a broken chain).
    *
    * Deliberately narrow:
-   * - Only a turn head (parent is a `user` message). A toolless step after a
-   *   tool result is a mid-chain answer handled elsewhere; folding those would
-   *   change unrelated grouping (and the contextTree path).
-   * - The immediate continuation must ALREADY carry tools. We intentionally do
-   *   not walk through intermediate toolless prose steps: `collectAssistantChain`
-   *   stops at the first toolless continuation (it only recurses through
-   *   tool-using steps), so classifying a multi-prose head would yield a
-   *   tools-less AssistantGroup and still leave the tool step split off. Such a
-   *   multi-prose prelude therefore falls back to standalone bubbles rather than
-   *   a malformed group.
+   * - Only a turn head (parent is a `user` message). A toolless step wedged
+   *   mid-chain (between two tool steps) is bridged by `collectAssistantChain`
+   *   itself so the chain stays in one group — see the toolless-continuation
+   *   branch there; it must NOT also be opened as a head here or the same run
+   *   would split.
+   * - The continuation path must eventually carry tools. Consecutive toolless
+   *   prose steps are still part of the same hetero-agent run, so walk through
+   *   them instead of splitting the visible chain into standalone bubbles.
    * - A fork (>1 same-agent non-signal continuation) returns false so branch
    *   handling stays untouched.
    */
@@ -138,19 +134,19 @@ export class MessageCollector {
     const parent = assistant.parentId ? this.messageMap.get(assistant.parentId) : undefined;
     if (parent?.role !== 'user') return false;
 
-    // A toolless step owns no tool results, so its only continuation candidates
-    // are its own non-signal, same-agent assistant children (mirrors
-    // findFlatChainContinuation for that case).
     const groupAgentId = assistant.agentId;
-    const candidates = (this.childrenMap.get(assistant.id) ?? [])
-      .map((id) => this.messageMap.get(id))
-      .filter(
-        (m): m is Message =>
-          !!m && m.role === 'assistant' && m.agentId === groupAgentId && !getMessageSignal(m),
-      );
-    if (candidates.length !== 1) return false; // no continuation, or a fork → defer to branch logic
-    const next = candidates[0];
-    return !!(next.tools && next.tools.length > 0); // only when the very next step calls tools
+    const allMessages = [...this.messageMap.values()];
+    const visited = new Set<string>([assistant.id]);
+    let current: Message = assistant;
+
+    while (true) {
+      const next = this.findFlatChainContinuation(current, [], allMessages, visited, groupAgentId);
+      if (!next) return false;
+      if (next.tools && next.tools.length > 0) return true;
+
+      visited.add(next.id);
+      current = next;
+    }
   }
 
   /**
@@ -202,9 +198,38 @@ export class MessageCollector {
         allToolMessages,
         processedIds,
       );
-    } else {
-      // Final assistant without tools — caller marks the whole chain processed
-      assistantChain.push(continuation);
+      return;
+    }
+
+    // Toolless continuations are still part of the same hetero-agent run. The
+    // model can emit several prose-only progress updates before the next tool
+    // call, so keep walking until the chain either ends in a toolless final
+    // answer or reaches the next tool-using assistant.
+    let toollessContinuation: Message | undefined = continuation;
+    while (
+      toollessContinuation &&
+      (!toollessContinuation.tools || toollessContinuation.tools.length === 0)
+    ) {
+      assistantChain.push(toollessContinuation);
+      processedIds.add(toollessContinuation.id);
+
+      toollessContinuation = this.findFlatChainContinuation(
+        toollessContinuation,
+        [], // a toolless step owns no tool results
+        allMessages,
+        processedIds,
+        groupAgentId,
+      );
+    }
+
+    if (toollessContinuation) {
+      this.collectAssistantChain(
+        toollessContinuation,
+        allMessages,
+        assistantChain,
+        allToolMessages,
+        processedIds,
+      );
     }
   }
 
@@ -223,9 +248,10 @@ export class MessageCollector {
    *   (a post-task summary whose `parentId === currentAssistant.id`). Those are
    *   emitted by the council/tasks flow AFTER the group, so the assistant seed
    *   is dropped and the chain ends here.
-   * - **Branch resolution**: when >1 non-tool same-agent continuations share a
-   *   parent (e.g. a regenerated continuation), pick the active one via
-   *   `activeBranchIndex` instead of blindly taking the earliest.
+   * - **Branch resolution**: when >1 non-tool same-agent continuations compete,
+   *   first resolve the active direct child of this assistant (including
+   *   continuations under different tool results), then resolve regenerated
+   *   siblings under that child.
    */
   private findFlatChainContinuation(
     currentAssistant: Message,
@@ -255,30 +281,94 @@ export class MessageCollector {
       .filter((m) => m.role === 'assistant' && m.agentId === groupAgentId && !getMessageSignal(m))
       .sort((a, b) => a.createdAt - b.createdAt);
 
-    const activeId = this.resolveActiveContinuationId(candidates);
-    return activeId ? candidates.find((m) => m.id === activeId) : undefined;
+    const activeId = this.resolveActiveContinuationId(candidates, currentAssistant);
+    if (!activeId) {
+      this.markUnselectedContinuations(undefined, candidates, processedIds);
+      return;
+    }
+
+    const activeContinuation = candidates.find((message) => message.id === activeId);
+    if (!activeContinuation) {
+      this.markUnselectedContinuations(undefined, candidates, processedIds);
+      return;
+    }
+
+    this.markUnselectedContinuations(activeContinuation.id, candidates, processedIds);
+    return activeContinuation;
+  }
+
+  /**
+   * Multiple assistant continuations can share one parent or compete across
+   * parallel tool-result parents. Once BranchResolver selects the continuation
+   * for the current chain, every other same-step candidate must be consumed;
+   * otherwise FlatListBuilder's post-group continuation drain emits them later
+   * as standalone messages and leaks an inactive assistant branch into the next
+   * model request.
+   */
+  private markUnselectedContinuations(
+    activeContinuationId: string | undefined,
+    candidates: Message[],
+    processedIds: Set<string>,
+  ): void {
+    for (const candidate of candidates) {
+      if (candidate.id !== activeContinuationId) {
+        processedIds.add(candidate.id);
+      }
+    }
   }
 
   /**
    * Pick the active continuation among same-step candidates (sorted by
-   * createdAt). One candidate ⇒ a linear continuation. >1 non-tool siblings
-   * under a single parent ⇒ a branch (e.g. a regenerated continuation), so
-   * consult the parent's `activeBranchIndex` via BranchResolver instead of
-   * blindly taking the earliest — otherwise the inactive branch is silently
-   * chosen and the active one dropped. Returns undefined when there is no
-   * continuation, or the active branch is an optimistic not-yet-created one.
+   * createdAt). Parallel tool results can each own a continuation, so resolve
+   * the active direct child of the assistant before handling regenerated
+   * siblings under one parent. Without the first step, an earlier stale tool
+   * continuation wins before BranchResolver can see the latest user descendant.
    */
-  private resolveActiveContinuationId(sortedCandidates: Message[]): string | undefined {
+  private resolveActiveContinuationId(
+    sortedCandidates: Message[],
+    branchOwner?: Message,
+  ): string | undefined {
     if (sortedCandidates.length === 0) return undefined;
-    const earliest = sortedCandidates[0];
+
+    let candidates = sortedCandidates;
+    if (branchOwner && candidates.length > 1) {
+      const directChildIds = this.childrenMap.get(branchOwner.id) ?? [];
+      const directChildIdSet = new Set(directChildIds);
+      const candidateBranchIds = new Set(
+        candidates
+          .map((candidate) =>
+            candidate.parentId === branchOwner.id ? candidate.id : candidate.parentId,
+          )
+          .filter((id): id is string => Boolean(id && directChildIdSet.has(id))),
+      );
+
+      if (candidateBranchIds.size > 1) {
+        const orderedCandidateBranchIds = directChildIds.filter((id) => candidateBranchIds.has(id));
+        const activeBranchId = this.branchResolver.getActiveBranchIdFromMetadata(
+          branchOwner,
+          orderedCandidateBranchIds,
+          this.childrenMap,
+          this.branchResolver.getMetadataBranchIds(directChildIds),
+        );
+        if (!activeBranchId) return undefined;
+
+        candidates = candidates.filter(
+          (candidate) => candidate.id === activeBranchId || candidate.parentId === activeBranchId,
+        );
+        if (candidates.length === 0) return undefined;
+      }
+    }
+
+    const earliest = candidates[0];
     const parentId = earliest.parentId;
     if (parentId == null) return earliest.id;
 
     // Branch siblings share one parent; only those under the earliest
     // candidate's parent participate in this branch decision. Use childrenMap
     // (creation) order so it lines up with how activeBranchIndex is assigned.
-    const eligibleIds = new Set(sortedCandidates.map((m) => m.id));
-    const siblingIds = (this.childrenMap.get(parentId) ?? []).filter((id) => eligibleIds.has(id));
+    const eligibleIds = new Set(candidates.map((m) => m.id));
+    const directSiblingIds = this.childrenMap.get(parentId) ?? [];
+    const siblingIds = directSiblingIds.filter((id) => eligibleIds.has(id));
     if (siblingIds.length <= 1) return earliest.id;
 
     const parentMsg = this.messageMap.get(parentId);
@@ -288,6 +378,7 @@ export class MessageCollector {
       parentMsg,
       siblingIds,
       this.childrenMap,
+      this.branchResolver.getMetadataBranchIds(directSiblingIds),
     );
   }
 
@@ -453,7 +544,10 @@ export class MessageCollector {
       )
       .sort((a, b) => a.msg!.createdAt - b.msg!.createdAt);
 
-    const activeId = this.resolveActiveContinuationId(eligible.map((c) => c.msg!));
+    const activeId = this.resolveActiveContinuationId(
+      eligible.map((c) => c.msg!),
+      this.messageMap.get(idNode.id),
+    );
     return activeId ? eligible.find((c) => c.node.id === activeId)?.node : undefined;
   }
 
@@ -592,56 +686,60 @@ export class MessageCollector {
    * Find next message after tools in an assistant group
    */
   findNextAfterTools(assistantMsg: Message, idNode: IdNode): IdNode | null {
-    // Recursively find the last message in the assistant group (same agentId only)
-    const lastNode = this.findLastNodeInAssistantGroup(idNode, assistantMsg.agentId);
-    if (!lastNode) return null;
+    const lastAssistantNode = this.findLastAssistantNodeInGroup(idNode, assistantMsg.agentId);
+    const nextNode = this.resolveAssistantGroupTailChild(lastAssistantNode);
+    if (!nextNode) return null;
 
-    // Check if lastNode is a tool with agentCouncil mode
+    const nextMessage = this.messageMap.get(nextNode.id);
+    if (nextMessage?.role !== 'tool') return nextNode;
+
+    // Check if the selected tool has agentCouncil mode
     // In this case, return the tool node itself so ContextTreeBuilder can process it
-    const lastMsg = this.messageMap.get(lastNode.id);
-    if (lastMsg?.role === 'tool' && (lastMsg.metadata as any)?.agentCouncil === true) {
-      return lastNode;
+    if ((nextMessage.metadata as any)?.agentCouncil === true) {
+      return nextNode;
     }
 
-    // Check if lastNode is a tool with ANY task children
+    // Check if the selected tool has ANY task children
     // In this case, return the tool node itself so ContextTreeBuilder can process tasks
-    if (lastMsg?.role === 'tool') {
-      const taskChildren = lastNode.children.filter((child) => {
-        const childMsg = this.messageMap.get(child.id);
-        return childMsg?.role === 'task';
-      });
-      if (taskChildren.length > 0) {
-        return lastNode;
-      }
+    const taskChildren = nextNode.children.filter((child) => {
+      const childMessage = this.messageMap.get(child.id);
+      return childMessage?.role === 'task';
+    });
+    if (taskChildren.length > 0) {
+      return nextNode;
     }
 
-    // Otherwise, return the first child of the last node
-    if (lastNode.children.length > 0) {
-      return lastNode.children[0];
-    }
-    return null;
+    return nextNode.children[0] ?? null;
   }
 
   /**
-   * Find the last node in an AssistantGroup sequence
-   * Only follows messages from the SAME agent (matching agentId)
+   * Return the final same-agent assistant that belongs inside this group. The
+   * child selected after that assistant can be either a tool-hosted legacy
+   * continuation or a direct non-tool continuation in the current storage form.
    */
-  findLastNodeInAssistantGroup(idNode: IdNode, groupAgentId?: string): IdNode | null {
-    // Walk the chain to its next step (dual-form aware, see findChainContinuationNode)
+  private findLastAssistantNodeInGroup(idNode: IdNode, groupAgentId?: string): IdNode {
     const nextNode = this.findChainContinuationNode(idNode, groupAgentId);
-    if (nextNode) {
-      return this.findLastNodeInAssistantGroup(nextNode, groupAgentId);
-    }
+    return nextNode ? this.findLastAssistantNodeInGroup(nextNode, groupAgentId) : idNode;
+  }
 
-    // No further same-agent assistant. If this step still owns tool results
-    // (e.g. the last tool hosts an AgentCouncil / tasks), return the last tool
-    // node so findNextAfterTools can inspect it; otherwise this node is the tail.
-    const toolChildren = idNode.children.filter(
-      (child) => this.messageMap.get(child.id)?.role === 'tool',
+  /**
+   * Resolve the first node after an AssistantGroup without applying
+   * `activeBranchIndex` to tool children. Persisted branch indexes count only
+   * non-tool direct children; latest-user inference may still select a legacy
+   * continuation hosted below a tool result when no explicit branch is active.
+   */
+  private resolveAssistantGroupTailChild(idNode: IdNode): IdNode | undefined {
+    const message = this.messageMap.get(idNode.id);
+    if (!message) return idNode.children.at(-1);
+
+    const childIds = idNode.children.map((child) => child.id);
+    const activeBranchId = this.branchResolver.getActiveBranchIdFromMetadata(
+      message,
+      childIds,
+      this.childrenMap,
+      this.branchResolver.getMetadataBranchIds(childIds),
     );
-    if (toolChildren.length === 0) {
-      return idNode;
-    }
-    return toolChildren.at(-1) ?? null;
+
+    return idNode.children.find((child) => child.id === activeBranchId);
   }
 }

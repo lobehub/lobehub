@@ -29,9 +29,16 @@ export const buildConnectorMcpParams = (
   }
   if (!connector.mcpServerUrl) throw new Error('Connector has no MCP server URL configured');
   const { auth, headers } = buildHttpAuthFromCredentials(connector.credentials);
+  // Custom headers live in `metadata.customHeaders` (plaintext, independent of
+  // the single-kind `credentials` column) so they can coexist with any auth
+  // type. Merge them on top of any header-type credential headers (older rows
+  // stored custom headers as a 'header' credential before this split).
+  const customHeaders = connector.metadata?.customHeaders as Record<string, string> | undefined;
+  const mergedHeaders =
+    headers || customHeaders ? { ...headers, ...customHeaders } : undefined;
   return {
     auth,
-    headers,
+    headers: mergedHeaders,
     name: connector.name,
     type: 'http',
     url: connector.mcpServerUrl,

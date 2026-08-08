@@ -1,8 +1,9 @@
 'use client';
 
 import { ModelIcon } from '@lobehub/icons';
-import { ActionIcon, Flexbox, InputNumber, Segmented, SliderWithInput, Text } from '@lobehub/ui';
-import { Divider, Switch } from 'antd';
+import { ActionIcon, Flexbox, InputNumber, SliderWithInput, Text } from '@lobehub/ui';
+import { Switch, Tabs } from '@lobehub/ui/base-ui';
+import { Divider } from 'antd';
 import { Clock3, Dices } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,8 +20,11 @@ import { useQueryState } from '@/hooks/useQueryParam';
 import {
   ConfigAction,
   GenerationMediaModeSegment,
+  GenerationModelNotice,
   GenerationPromptInput,
+  GenerationVisibilitySelector,
   InlineVideoFrames,
+  useVideoGenerationModelNotice,
 } from '@/routes/(main)/(create)/features/GenerationInput';
 import { AspectRatioSelect } from '@/routes/(main)/(create)/image/features/ConfigPanel';
 import Select from '@/routes/(main)/(create)/image/features/ConfigPanel/components/Select';
@@ -29,7 +33,11 @@ import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 import { useVideoStore } from '@/store/video';
-import { createVideoSelectors, videoGenerationConfigSelectors } from '@/store/video/selectors';
+import {
+  createVideoSelectors,
+  videoGenerationConfigSelectors,
+  videoGenerationTopicSelectors,
+} from '@/store/video/selectors';
 import { useVideoGenerationConfigParam } from '@/store/video/slices/generationConfig/hooks';
 import { generateUniqueSeeds } from '@/utils/number';
 
@@ -98,24 +106,25 @@ const ResolutionItem = memo(() => {
   const { allowed: canCreate } = usePermission('create_content');
   const { value, setValue, enumValues } = useVideoGenerationConfigParam('resolution');
   const options = useMemo(
-    () => (enumValues ?? []).map((v) => ({ label: v, value: v })),
-    [enumValues],
+    () => (enumValues ?? []).map((v) => ({ disabled: !canCreate, key: v, label: v })),
+    [enumValues, canCreate],
   );
 
   if (options.length === 0) return null;
 
   return (
-    <Segmented
-      block
-      disabled={!canCreate}
-      options={options}
+    <Tabs
+      activeKey={value}
+      items={options}
       style={{ width: '100%' }}
-      value={value}
-      variant="filled"
-      onChange={(v) => {
+      styles={{
+        list: { display: 'flex', width: '100%' },
+        tab: { flex: 1 },
+      }}
+      onChange={(key) => {
         if (!canCreate) return;
 
-        setValue(String(v) as any);
+        setValue(key as any);
       }}
     />
   );
@@ -129,26 +138,28 @@ const DurationItem = memo(() => {
     () =>
       enumValues && enumValues.length > 0
         ? enumValues.map((v) => ({
+            disabled: !canCreate,
+            key: String(v),
             label: String(v),
-            value: v,
           }))
         : [],
-    [enumValues],
+    [enumValues, canCreate],
   );
 
   if (options.length > 0) {
     return (
-      <Segmented
-        block
-        disabled={!canCreate}
-        options={options}
+      <Tabs
+        activeKey={String(value ?? min)}
+        items={options}
         style={{ width: '100%' }}
-        value={value ?? min}
-        variant="filled"
-        onChange={(v) => {
+        styles={{
+          list: { display: 'flex', width: '100%' },
+          tab: { flex: 1 },
+        }}
+        onChange={(key) => {
           if (!canCreate) return;
 
-          setValue(Number(v) as any);
+          setValue(Number(key) as any);
         }}
       />
     );
@@ -236,23 +247,25 @@ const PromptExtendItem = memo(() => {
   const { allowed: canCreate } = usePermission('create_content');
   const { value, setValue, enumValues } = useVideoGenerationConfigParam('promptExtend');
 
-  const options = enumValues?.map((item) => ({ label: item, value: item })) ?? [];
+  const options =
+    enumValues?.map((item) => ({ disabled: !canCreate, key: item, label: item })) ?? [];
 
   if (options.length > 0) {
     return (
       <Flexbox gap={6}>
         <Text weight={500}>{t('config.promptExtend.label')}</Text>
-        <Segmented
-          block
-          disabled={!canCreate}
-          options={options}
+        <Tabs
+          activeKey={value as string}
+          items={options}
           style={{ width: '100%' }}
-          value={value as string}
-          variant="filled"
-          onChange={(next) => {
+          styles={{
+            list: { display: 'flex', width: '100%' },
+            tab: { flex: 1 },
+          }}
+          onChange={(key) => {
             if (!canCreate) return;
 
-            setValue(String(next) as any);
+            setValue(key as any);
           }}
         />
       </Flexbox>
@@ -293,9 +306,25 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isCreating = useVideoStore(createVideoSelectors.isCreating);
   const createVideo = useVideoStore((s) => s.createVideo);
   const setModelAndProviderOnSelect = useVideoStore((s) => s.setModelAndProviderOnSelect);
+  const activeGenerationTopicId = useVideoStore(
+    videoGenerationTopicSelectors.activeGenerationTopicId,
+  );
+  const activeGenerationTopic = useVideoStore((s) =>
+    activeGenerationTopicId
+      ? videoGenerationTopicSelectors.getGenerationTopicById(activeGenerationTopicId)(s)
+      : undefined,
+  );
+  const newGenerationTopicVisibility = useVideoStore(
+    videoGenerationTopicSelectors.newGenerationTopicVisibility,
+  );
+  const setNewGenerationTopicVisibility = useVideoStore((s) => s.setNewGenerationTopicVisibility);
   const currentModel = useVideoStore(videoGenerationConfigSelectors.model);
   const currentProvider = useVideoStore(videoGenerationConfigSelectors.provider);
   const enabledVideoModelList = useAiInfraStore(aiProviderSelectors.enabledVideoModelList);
+  const isModelConfigReady = useAiInfraStore((s) =>
+    aiProviderSelectors.isInitAiProviderRuntimeState(s),
+  );
+  const { notice: modelNotice, isModelUnavailable } = useVideoGenerationModelNotice();
   const isInit = useVideoStore((s) => s.isInit);
   const isSupportImageUrl = useVideoStore(isSupportedParamSelector('imageUrl'));
   const isSupportImageUrls = useVideoStore(isSupportedParamSelector('imageUrls'));
@@ -325,7 +354,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
     if (!canCreate) return;
 
     if (!isLogin) {
-      loginRequired.redirect({ timeout: 2000 });
+      loginRequired.redirect();
       return;
     }
 
@@ -352,6 +381,22 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   // Auto-fill and auto-send when prompt query parameter is present
   useEffect(() => {
     if (promptParam && !hasProcessedPrompt.current && isLogin && canCreate) {
+      // Bail WITHOUT consuming the param while the model deep-link is still settling
+      // or the provider runtime config isn't ready — otherwise a valid deep link
+      // permanently skips auto-generate (see lobehub/lobehub#17400):
+      // 1. `?model=` still present: the model effect hasn't applied it yet, so
+      //    `isModelUnavailable` in this closure is stale (from the pre-model render).
+      //    Consuming now would set `hasProcessedPrompt` / clear the param before the
+      //    model resolves. Instead we wait; once the model effect clears `modelParam`
+      //    this effect re-runs with a fresh `isModelUnavailable` for the applied model.
+      // 2. Config not ready: the resolver returns undefined (so `isModelUnavailable`
+      //    is `false`) while the aiProvider runtime state is still loading, which would
+      //    auto-fire against a possibly-disabled provider. Wait until it settles.
+      // 3. Generation config not initialized: before `initializeVideoConfig` finishes,
+      //    the selection is still the hard-coded default, so availability would be
+      //    evaluated against a model the init step is about to replace.
+      if (modelParam || !isModelConfigReady || !isInit) return;
+
       const decodedPrompt = decodeURIComponent(promptParam);
 
       setValue(decodedPrompt);
@@ -359,6 +404,11 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
       hasProcessedPrompt.current = true;
 
       setPromptParam(null);
+
+      // Config is ready and the selected model is genuinely unavailable — this path
+      // bypasses the generate button, so without the guard it would fire a request
+      // against a disabled provider (see lobehub/lobehub#17400).
+      if (isModelUnavailable) return;
 
       const timeoutId = window.setTimeout(async () => {
         await createVideo();
@@ -368,7 +418,18 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
         window.clearTimeout(timeoutId);
       };
     }
-  }, [promptParam, isLogin, canCreate, setValue, setPromptParam, createVideo]);
+  }, [
+    promptParam,
+    modelParam,
+    isLogin,
+    canCreate,
+    isModelConfigReady,
+    isInit,
+    isModelUnavailable,
+    setValue,
+    setPromptParam,
+    createVideo,
+  ]);
 
   const showInlineFrames = isSupportImageUrl || isSupportImageUrls || isSupportEndImageUrl;
   const framePreviewUrls = useMemo(
@@ -376,6 +437,14 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
     [imageUrl, imageUrls],
   );
   const hasRefImages = framePreviewUrls.length > 0 || Boolean(endImageUrl);
+  const displayVisibility = activeGenerationTopic
+    ? activeGenerationTopic.visibility === 'private'
+      ? 'private'
+      : 'public'
+    : newGenerationTopicVisibility;
+  const visibilityLockedReason = activeGenerationTopicId
+    ? t('topic.visibility.existingLocked')
+    : undefined;
   const maxCount = useMemo(() => {
     let count = 0;
     if (isSupportImageUrl) count += 1;
@@ -442,9 +511,10 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   return (
     <Flexbox gap={32} width={'100%'}>
       {showTitle && <PromptTitle />}
+      <GenerationModelNotice notice={modelNotice} ns={'video'} />
       <Flexbox gap={8}>
         <GenerationPromptInput
-          disableGenerate={!isInit}
+          disableGenerate={!isInit || isModelUnavailable}
           disabled={!canCreate}
           generateLabel={t('generation.actions.generate')}
           generatingLabel={t('generation.status.generating')}
@@ -577,15 +647,22 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
             hasRefImages ? t('config.prompt.placeholderWithRef') : t('config.prompt.placeholder')
           }
           rightActions={
-            <PromptTransformAction
-              mode={'video'}
-              prompt={value}
-              onPromptChange={(next) => {
-                if (!canCreate) return;
+            <>
+              <PromptTransformAction
+                mode={'video'}
+                prompt={value}
+                onPromptChange={(next) => {
+                  if (!canCreate) return;
 
-                setValue(next as any);
-              }}
-            />
+                  setValue(next as any);
+                }}
+              />
+              <GenerationVisibilitySelector
+                disabledReason={visibilityLockedReason}
+                visibility={displayVisibility}
+                onChange={setNewGenerationTopicVisibility}
+              />
+            </>
           }
           onGenerate={handleGenerate}
           onValueChange={setValue}

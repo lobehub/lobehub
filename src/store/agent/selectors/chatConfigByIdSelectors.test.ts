@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { type AgentStoreState } from '@/store/agent/initialState';
 import { initialAgentSliceState } from '@/store/agent/slices/agent/initialState';
+import { initialAgentArtworkSliceState } from '@/store/agent/slices/artwork/initialState';
 import { initialBuiltinAgentSliceState } from '@/store/agent/slices/builtin/initialState';
 
 import { chatConfigByIdSelectors } from './chatConfigByIdSelectors';
@@ -16,6 +17,7 @@ vi.mock('@lobechat/model-runtime', () => ({
 // isDesktop defaults to false in test environment (no __ELECTRON__)
 
 const createState = (overrides: Partial<AgentStoreState> = {}): AgentStoreState => ({
+  ...initialAgentArtworkSliceState,
   ...initialAgentSliceState,
   ...initialBuiltinAgentSliceState,
   ...overrides,
@@ -508,18 +510,6 @@ describe('chatConfigByIdSelectors', () => {
       });
 
       expect(chatConfigByIdSelectors.getRuntimeModeById('agent-1')(state)).toBe('cloud');
-    });
-
-    it('should gate a desktop-local bound device to "none" on web (device tools route separately)', () => {
-      const state = createState({
-        agentMap: {
-          'agent-1': {
-            agencyConfig: { boundDeviceId: 'device-a', executionTarget: 'local' },
-          },
-        },
-      });
-
-      expect(chatConfigByIdSelectors.getRuntimeModeById('agent-1')(state)).toBe('none');
     });
 
     it('should gate device target to "none" (device tools are routed separately)', () => {

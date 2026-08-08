@@ -1,33 +1,50 @@
 import { cleanup, render, waitFor } from '@testing-library/react';
 import { MessageSquare } from 'lucide-react';
-import { type RouteObject } from 'react-router';
+import type * as ReactModule from 'react';
+import { useState } from 'react';
+import type { RouteObject } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { type DynamicRouteMeta, type RouteMeta } from '@/spa/router/routeMeta';
+import { usePublishDynamicRouteMeta } from '@/features/RouteMeta/usePublishDynamicRouteMeta';
+import {
+  type DynamicRouteMeta,
+  type DynamicRouteMetaProps,
+  type RouteMeta,
+} from '@/spa/router/routeMeta';
 
-import { resolveTabScope } from './scope';
 import TabCacheBridges from './TabCacheBridges';
-import { type TabItem } from './types';
+import type { TabItem } from './types';
 
 const mocks = vi.hoisted(() => {
+  const listeners = new Set<() => void>();
+  const routes = { current: [] as RouteObject[] };
   const tabs: { current: TabItem[] } = { current: [] };
+  const emit = () => {
+    for (const listener of listeners) listener();
+  };
 
   return {
     getTabs: () => tabs.current,
-    routes: { current: [] as RouteObject[] },
+    routes,
     setRoutes: (next: RouteObject[]) => {
       tabs.current = [];
-      mocks.routes.current = next;
+      routes.current = next;
+      emit();
     },
     setTabs: (next: TabItem[]) => {
       tabs.current = next;
+      emit();
+    },
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
     },
     updateTabCache: vi.fn<(id: string, cached: DynamicRouteMeta) => void>(),
   };
 });
 
 vi.mock('@/spa/router/desktopRouter.config', () => ({
-  get desktopRoutes() {
+  get mainAreaMetaRoutes() {
     return mocks.routes.current;
   },
 }));
@@ -37,10 +54,17 @@ interface ElectronState {
   updateTabCache: typeof mocks.updateTabCache;
 }
 
-vi.mock('@/store/electron', () => ({
-  useElectronStore: (selector: (state: ElectronState) => unknown) =>
-    selector({ tabs: mocks.getTabs(), updateTabCache: mocks.updateTabCache }),
-}));
+vi.mock('@/store/electron', async () => {
+  const React = await vi.importActual<typeof ReactModule>('react');
+
+  return {
+    useElectronStore: (selector: (state: ElectronState) => unknown) => {
+      const tabs = React.useSyncExternalStore(mocks.subscribe, mocks.getTabs, mocks.getTabs);
+
+      return selector({ tabs, updateTabCache: mocks.updateTabCache });
+    },
+  };
+});
 
 const dynamicSource: Record<string, DynamicRouteMeta> = {};
 const resolveTopicMeta = (params: Record<string, string | undefined>): DynamicRouteMeta => {
@@ -48,10 +72,16 @@ const resolveTopicMeta = (params: Record<string, string | undefined>): DynamicRo
   return dynamicSource[key] ?? {};
 };
 
+const TopicDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
+  usePublishDynamicRouteMeta(resolveTopicMeta(params), onResolve);
+
+  return null;
+};
+
 const agentMeta: RouteMeta = {
+  DynamicMeta: TopicDynamicMeta,
   icon: MessageSquare,
   titleKey: 'navigation.chat',
-  useDynamicMeta: resolveTopicMeta,
 };
 
 const staticMeta: RouteMeta = {
@@ -69,10 +99,9 @@ const buildRoutes = (): RouteObject[] => [
   },
 ];
 
-const tab = (url: string): TabItem => ({
-  id: url,
+const tab = (url: string, id = url): TabItem => ({
+  id,
   lastVisited: 1,
-  scope: resolveTabScope(url),
   url,
 });
 
@@ -135,7 +164,7 @@ describe('TabCacheBridges', () => {
     });
   });
 
-  it('skips tabs whose route has no useDynamicMeta', async () => {
+  it('skips tabs whose route has no DynamicMeta', async () => {
     mocks.routes.current = buildRoutes();
     mocks.setTabs([tab('/settings')]);
 
@@ -144,5 +173,69 @@ describe('TabCacheBridges', () => {
     await waitFor(() => {
       expect(mocks.updateTabCache).not.toHaveBeenCalled();
     });
+  });
+
+  it('keeps hook order stable when the same tab changes dynamic meta component', async () => {
+    const ShorterHookDynamicMeta = ({ onResolve }: DynamicRouteMetaProps) => {
+      const [title] = useState('Workspace');
+
+      usePublishDynamicRouteMeta({ title }, onResolve);
+
+      return null;
+    };
+    const LongerHookDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
+      const [agentTitle] = useState(`Agent ${params.aid}`);
+      const [topicTitle] = useState('Topic');
+
+      usePublishDynamicRouteMeta({ title: `${agentTitle} · ${topicTitle}` }, onResolve);
+
+      return null;
+    };
+    const shorterHookMeta: RouteMeta = {
+      DynamicMeta: ShorterHookDynamicMeta,
+    };
+    const longerHookMeta: RouteMeta = {
+      DynamicMeta: LongerHookDynamicMeta,
+    };
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      mocks.routes.current = [
+        {
+          children: [
+            { handle: { meta: shorterHookMeta }, path: 'workspace' },
+            { handle: { meta: longerHookMeta }, path: 'agent/:aid' },
+          ],
+          path: '/',
+        },
+      ];
+      mocks.setTabs([tab('/workspace', 'tab-1')]);
+
+      const { rerender } = render(<TabCacheBridges />);
+
+      await waitFor(() => {
+        expect(mocks.updateTabCache).toHaveBeenLastCalledWith(
+          'tab-1',
+          expect.objectContaining({ title: 'Workspace' }),
+        );
+      });
+
+      mocks.updateTabCache.mockClear();
+      mocks.setTabs([tab('/agent/a1', 'tab-1')]);
+      rerender(<TabCacheBridges />);
+
+      await waitFor(() => {
+        expect(mocks.updateTabCache).toHaveBeenLastCalledWith(
+          'tab-1',
+          expect.objectContaining({ title: 'Agent a1 · Topic' }),
+        );
+      });
+
+      expect(consoleError.mock.calls.flat().join('\n')).not.toMatch(
+        /change in the order of Hooks|Rendered more hooks/,
+      );
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 });

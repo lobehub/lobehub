@@ -1,6 +1,14 @@
 import { type AssistantContentBlock, type UIChatMessage } from '@lobechat/types';
 import debug from 'debug';
-import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type RefObject,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { type VListHandle } from 'virtua';
 
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
@@ -11,6 +19,9 @@ export const CONVERSATION_SPACER_ID = '__conversation_spacer__';
 export const CONVERSATION_SPACER_TRANSITION_MS = 200;
 
 const SCROLL_SHRINK_END_DELAY_MS = 150;
+
+/** The one `scrollToPinned` reason that is allowed to animate — see `scrollToPinned`. */
+const SEND_SCROLL_REASON = 'send';
 
 // -------- pure helpers --------
 
@@ -284,7 +295,13 @@ const useSpacerHeight = ({
 // ---------------------------------------------------------------------------
 type PinState = { index: number; seenActive: boolean } | null;
 
-const usePinController = ({ virtuaRef }: { virtuaRef: RefObject<VListHandle | null> }) => {
+const usePinController = ({
+  headerOffset,
+  virtuaRef,
+}: {
+  headerOffset: number;
+  virtuaRef: RefObject<VListHandle | null>;
+}) => {
   const pinRef = useRef<PinState>(null);
 
   const scrollToPinned = useCallback(
@@ -298,10 +315,17 @@ const usePinController = ({ virtuaRef }: { virtuaRef: RefObject<VListHandle | nu
         return;
       }
 
-      log('scrollToPinned (%s) index=%d', reason, pin.index);
-      scrollToIndex(pin.index, { align: 'start', smooth: true });
+      // Only the initial send scroll animates. Settle re-pins fire while the
+      // content height is still changing (e.g. the workflow collapse at turn
+      // completion); a smooth scroll there is itself a visible slide, so the
+      // correction must land in the same frame to stay imperceptible.
+      const smooth = reason === SEND_SCROLL_REASON;
+
+      log('scrollToPinned (%s) index=%d smooth=%s', reason, pin.index, smooth);
+      // pin.index is a message index; the header slot row shifts virtua rows.
+      scrollToIndex(pin.index + headerOffset, { align: 'start', smooth });
     },
-    [virtuaRef],
+    [headerOffset, virtuaRef],
   );
 
   const clearPin = useCallback((reason: string) => {
@@ -402,7 +426,21 @@ const useScrollShrink = ({
 //   `scrollToIndex` once. The old 0/32/96ms timer fan-out is gone.
 // ---------------------------------------------------------------------------
 export interface UseConversationScrollOptions {
+  /**
+   * Conversation identity. The hook instance survives in-place topic switches
+   * (the provider is not keyed by context), so a change here means the whole
+   * dataSource was swapped for another conversation: send-detection and any
+   * live spacer/pin state must reset instead of reading the new list through
+   * the old topic's indices.
+   */
+  contextKey?: string;
   dataSource: string[];
+  /**
+   * Number of synthetic rows prepended to the VList before the messages
+   * (e.g. the headerSlot spacer). The pin targets message indices, so virtua
+   * calls translate by this offset.
+   */
+  headerOffset?: number;
   isSecondLastMessageFromUser: boolean;
   virtuaRef: RefObject<VListHandle | null>;
 }
@@ -423,7 +461,9 @@ export interface UseConversationScrollResult {
 }
 
 export const useConversationScroll = ({
+  contextKey,
   dataSource,
+  headerOffset = 0,
   isSecondLastMessageFromUser,
   virtuaRef,
 }: UseConversationScrollOptions): UseConversationScrollResult => {
@@ -475,7 +515,7 @@ export const useConversationScroll = ({
     userMessageIndex,
   });
 
-  const { clearPin, pinRef, scrollToPinned } = usePinController({ virtuaRef });
+  const { clearPin, pinRef, scrollToPinned } = usePinController({ headerOffset, virtuaRef });
 
   const { onScrollOffset, prevScrollOffsetRef } = useScrollShrink({
     clearPin,
@@ -485,6 +525,24 @@ export const useConversationScroll = ({
     mountedRef,
     setScrollReduction,
   });
+
+  // useLayoutEffect: runs before the passive send-detection effect in the
+  // switch commit, so seeding prevLengthRef with the new list's length keeps a
+  // coincidental +2 length delta from being read as "message pair appended" —
+  // and a live spacer row is dropped before the new topic paints.
+  const prevContextKeyRef = useRef(contextKey);
+  useLayoutEffect(() => {
+    if (prevContextKeyRef.current === contextKey) return;
+    prevContextKeyRef.current = contextKey;
+
+    prevLengthRef.current = dataSource.length;
+    clearPin('context switch');
+    setUserMessageIndex(null);
+    setAssistantMessageIndex(null);
+    setMounted(false);
+    setScrollReduction(() => 0);
+    prevScrollOffsetRef.current = null;
+  }, [contextKey]);
 
   // --- send detection: single source of truth ---
   useEffect(() => {
@@ -510,7 +568,7 @@ export const useConversationScroll = ({
 
     // Scroll immediately. If virtuaRef isn't ready yet, the spacerLayoutVersion
     // bumps that follow mount+measurement will retry.
-    scrollToPinned('send');
+    scrollToPinned(SEND_SCROLL_REASON);
 
     requestAnimationFrame(() => {
       updateSpacerHeight();

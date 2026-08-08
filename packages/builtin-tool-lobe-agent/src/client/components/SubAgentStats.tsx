@@ -26,8 +26,8 @@ const formatTokens = (n: number): string => {
 
 /**
  * Compact one-line sub-agent run stats: tool count · model · token count.
- * Renders nothing when no stat is available (e.g. while the run is still in
- * flight, before the tool result state is persisted).
+ * Fed live during the run (streamed totals) and by the persisted state after it,
+ * so the same row serves both. Renders nothing until the first stat arrives.
  */
 export const SubAgentStats = memo<SubAgentRunStats>(({ model, totalToolCalls, totalTokens }) => {
   const { t } = useTranslation('plugin');

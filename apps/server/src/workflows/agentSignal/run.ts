@@ -470,7 +470,7 @@ export const runAgentSignalWorkflow = async (
   // opening the top-level workflow span, otherwise each workflow run starts a fresh trace.
   // Source/context:
   // - `src/app/(backend)/middleware/auth/index.ts` performs extract/inject for normal backend APIs
-  // - `src/server/workflows-hono/agent-signal/index.ts` wires `serve(...)` directly to
+  // - `apps/server/src/workflows-hono/agent-signal/index.ts` wires `serve(...)` directly to
   //   `runAgentSignalWorkflow(...)`
   // Removal condition:
   // - Safe to remove only if the workflow entry stack gains a shared request middleware that

@@ -1,4 +1,5 @@
 import { type FilesStoreState } from '@/store/file/initialState';
+import { type FileListItem } from '@/types/files';
 import { type FileUploadStatus } from '@/types/files/upload';
 
 const uploadStatusArray = new Set(['uploading', 'pending', 'processing']);
@@ -11,6 +12,28 @@ const getFileById = (id?: string | null) => (s: FilesStoreState) => {
   return s.fileList.find((item) => item.id === id);
 };
 
+const getFileByChunkTargetId = (id?: string | null) => (s: FilesStoreState) => {
+  if (!id) return;
+
+  return (
+    getFileById(id)(s) ??
+    (s.resourceMap.get(id) as FileListItem | undefined) ??
+    ([...s.resourceMap.values()].find((item) => item.fileId === id) as FileListItem | undefined) ??
+    (s.resourceList.find((item) => item.id === id || item.fileId === id) as
+      FileListItem | undefined)
+  );
+};
+
+/**
+ * Resolve the id to pass into chunk/embedding/search APIs.
+ *
+ * File-backed knowledge resources can expose a coalesced `docs_*` id while chunk
+ * operations expect the underlying `file_*` id, so prefer `fileId` when present.
+ * @see https://github.com/lobehub/lobehub/issues/16267
+ */
+export const getChunkTargetId = (item: { fileId?: string | null; id: string }): string =>
+  item.fileId ?? item.id;
+
 const isUploadingFiles = (s: FilesStoreState) =>
   s.dockUploadFileList.some((file) => uploadStatusArray.has(file.status));
 
@@ -19,6 +42,8 @@ const overviewUploadingStatus = (s: FilesStoreState): FileUploadStatus => {
   if (s.dockUploadFileList.some((file) => uploadStatusArray.has(file.status))) {
     return 'uploading';
   }
+
+  if (s.dockUploadFileList.some((file) => file.status === 'error')) return 'error';
 
   return 'success';
 };
@@ -51,6 +76,7 @@ export const fileManagerSelectors = {
   dockFileList,
   dockRawFileList,
   fileListHasMore,
+  getFileByChunkTargetId,
   getFileById,
   isCreatingChunkEmbeddingTask,
   isCreatingFileParseTask,

@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { BUILTIN_AGENTS } from '@lobechat/builtin-agents';
 import { DEFAULT_AGENT_CONFIG, DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE } from '@lobechat/const';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -513,6 +514,73 @@ describe('AgentService', () => {
       expect(result?.provider).toBe('anthropic');
     });
 
+    // Builtin agent rows are provisioned without avatar; the client replaces its
+    // cached entry with this snapshot, so the snapshot must carry the builtin
+    // avatar or the UI degrades to the default robot avatar (LOBE-12876)
+    it('should fall back to the builtin avatar when a builtin agent row has none', async () => {
+      const mockAgent = {
+        avatar: null,
+        id: 'agent-task',
+        slug: 'task-agent',
+        title: '任务助手',
+      };
+
+      const mockAgentModel = {
+        getAgentConfigById: vi.fn().mockResolvedValue(mockAgent),
+      };
+
+      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (parseAgentConfig as any).mockReturnValue({});
+
+      const newService = new AgentService(mockDb, mockUserId);
+      const result = await newService.getAgentConfigById('agent-task');
+
+      expect(result?.avatar).toBe(BUILTIN_AGENTS['task-agent']?.avatar);
+      expect(result?.title).toBe('任务助手');
+    });
+
+    it('should fall back inbox avatar and title when the inbox row has none', async () => {
+      const mockAgent = {
+        avatar: null,
+        id: 'agent-inbox',
+        slug: 'inbox',
+        title: null,
+      };
+
+      const mockAgentModel = {
+        getAgentConfigById: vi.fn().mockResolvedValue(mockAgent),
+      };
+
+      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (parseAgentConfig as any).mockReturnValue({});
+
+      const newService = new AgentService(mockDb, mockUserId);
+      const result = await newService.getAgentConfigById('agent-inbox');
+
+      expect(result?.avatar).toBe(DEFAULT_INBOX_AVATAR);
+      expect(result?.title).toBe(DEFAULT_INBOX_TITLE);
+    });
+
+    it('should keep a custom avatar over the builtin fallback', async () => {
+      const mockAgent = {
+        avatar: 'https://example.com/custom.png',
+        id: 'agent-task',
+        slug: 'task-agent',
+      };
+
+      const mockAgentModel = {
+        getAgentConfigById: vi.fn().mockResolvedValue(mockAgent),
+      };
+
+      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (parseAgentConfig as any).mockReturnValue({});
+
+      const newService = new AgentService(mockDb, mockUserId);
+      const result = await newService.getAgentConfigById('agent-task');
+
+      expect(result?.avatar).toBe('https://example.com/custom.png');
+    });
+
     describe('Redis welcome data integration', () => {
       const mockRedisGet = vi.fn();
       const mockRedisClient = { get: mockRedisGet };
@@ -648,6 +716,27 @@ describe('AgentService', () => {
         // Should return normal config without error
         expect(result?.id).toBe('agent-1');
         expect(result?.openingMessage).toBeUndefined();
+      });
+    });
+  });
+
+  describe('updateAgentConfig', () => {
+    it('should throw when the updated agent cannot be read back', async () => {
+      const mockAgentModel = {
+        getAgentConfigById: vi.fn().mockResolvedValue(null),
+        updateConfig: vi.fn().mockResolvedValue(undefined),
+      };
+
+      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (parseAgentConfig as any).mockReturnValue({});
+
+      const newService = new AgentService(mockDb, mockUserId);
+
+      await expect(
+        newService.updateAgentConfig('missing-agent', { systemRole: 'new prompt' }),
+      ).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+        message: 'Agent not found',
       });
     });
   });

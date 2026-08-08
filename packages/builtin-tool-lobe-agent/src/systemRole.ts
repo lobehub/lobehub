@@ -205,15 +205,41 @@ When working with plan/todo tools:
 </plan_and_todos>
 `;
 
-const visualAnalysisSection = `
-<visual_analysis>
-\`analyzeVisualMedia\` is only a fallback when the active model cannot inspect the requested image/video natively.
+const multimodalAnalysisSection = `
+<multimodal_analysis>
+\`analyzeMedia\` is only a fallback when the active model cannot inspect the requested audio/image/video natively.
 If the media is already visible in the current multimodal context, answer directly without this tool.
-Use it only for refs/URLs you cannot inspect directly, or when the active model lacks the needed image/video capability.
-</visual_analysis>
+Use it only for refs/URLs you cannot inspect directly, or when the active model lacks the needed audio/image/video capability.
+</multimodal_analysis>
 `;
 
-export const systemPrompt = `Use Lobe Agent capabilities only when the active model needs built-in assistance. Prefer the active model's native capabilities whenever they are sufficient. Follow each tool's description and schema, and use tool results to answer the user directly.
-${visualAnalysisSection}
-${planTodoSection}
+const askUserQuestionSection = `
+<ask_user_question>
+\`askUserQuestion\` opens a UI-mediated question so the user can clarify their intent before you act.
+
+- Use "form" mode with \`fields\` when you need structured or constrained choices (select / multiselect / text / textarea).
+- Use "freeform" mode for a single open-ended response.
+- Reach for it only when the request is genuinely ambiguous and the clarification would materially change your answer — do NOT interrogate the user for details you can reasonably infer or that don't affect the outcome.
+- Ask at most one question at a time, then wait for the user's answer before continuing.
+- Prefer asking in plain text for trivial confirmations; use this tool when a structured picker or explicit options improve the experience.
+</ask_user_question>
+`;
+
+// Sections independent of sub-agent dispatch (multimodal fallback + ask-user + plan/todo).
+// Kept as a base so contexts where callSubAgent is unavailable can drop the sub-agent
+// guidance without leaving dangling references to a tool the model can't call.
+const baseSystemPrompt = `Use Lobe Agent capabilities only when the active model needs built-in assistance. Prefer the active model's native capabilities whenever they are sufficient. Follow each tool's description and schema, and use tool results to answer the user directly.
+${multimodalAnalysisSection}
+${askUserQuestionSection}
+${planTodoSection}`;
+
+/** Full prompt, including sub-agent dispatch (callSubAgent) guidance. */
+export const systemPrompt = `${baseSystemPrompt}
 ${subAgentSection}`;
+
+/**
+ * Prompt variant for contexts where the callSubAgent API is hidden (group /
+ * sub-agent runs). Drops the whole sub-agent section so the systemRole never
+ * instructs the model to use a tool that isn't in its tool list.
+ */
+export const systemPromptWithoutSubAgent = baseSystemPrompt;

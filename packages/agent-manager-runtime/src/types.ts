@@ -1,4 +1,4 @@
-import type { LobeAgentConfig, MetaData } from '@lobechat/types';
+import type { HeterogeneousProviderConfig, LobeAgentConfig, MetaData } from '@lobechat/types';
 import type { PartialDeep } from 'type-fest';
 
 // ==================== Service Interfaces ====================
@@ -11,7 +11,6 @@ export interface IAgentService {
   countAgents: (params?: { keyword?: string }) => Promise<number>;
   createAgent: (params: { config: Record<string, unknown> }) => Promise<{
     agentId?: string;
-    sessionId?: string;
   }>;
   duplicateAgent: (agentId: string, newTitle?: string) => Promise<{ agentId: string } | null>;
   getAgentConfigById: (agentId: string) => Promise<LobeAgentConfig | null>;
@@ -143,6 +142,12 @@ export interface AgentSearchItem {
   avatar?: string;
   backgroundColor?: string;
   description?: string;
+  /**
+   * Heterogeneous agent runtime type (e.g. `claude-code`, `codex`), set only when
+   * the agent delegates execution to an external CLI/device runtime. Absent for
+   * normal model-runtime agents.
+   */
+  heteroType?: HeterogeneousProviderConfig['type'];
   id: string;
   isMarket?: boolean;
   title?: string;

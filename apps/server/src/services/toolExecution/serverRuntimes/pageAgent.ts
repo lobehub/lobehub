@@ -204,7 +204,7 @@ const withEditor = async (
   // workspace members and rejected (CONFLICT) when someone else is actively
   // editing, instead of silently clobbering their work. Read-only invocations
   // (persist: false) never write, so they skip the lock.
-  const run = async (): Promise<HandlerOutput> => {
+  const run = async (lockOwnerId?: string): Promise<HandlerOutput> => {
     const snapshot = await loadSnapshot(documentModel, documentId);
     const env = buildEnv(snapshot, documentId);
 
@@ -254,6 +254,7 @@ const withEditor = async (
         await documentService.updateDocument(documentId, {
           content: patch.content,
           editorData: patch.editorData,
+          ...(lockOwnerId ? { lockOwnerId } : {}),
           saveSource: 'llm_call',
           title: patch.title,
         });

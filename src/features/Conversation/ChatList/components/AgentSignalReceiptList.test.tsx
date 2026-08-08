@@ -1,12 +1,15 @@
 import { LayersEnum } from '@lobechat/types';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { agentSignalService } from '@/services/agentSignal';
 
 import AgentSignalReceiptList from './AgentSignalReceiptList';
 
 const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   openDocument: vi.fn(),
+  rollbackReceipt: vi.fn(),
 }));
 
 vi.mock('@/hooks/useStableNavigate', () => ({
@@ -18,10 +21,17 @@ vi.mock('@/store/chat', () => ({
     selector({ openDocument: mocks.openDocument }),
 }));
 
+vi.mock('@/services/agentSignal', () => ({
+  agentSignalService: {
+    rollbackReceipt: mocks.rollbackReceipt,
+  },
+}));
+
 describe('AgentSignalReceiptList', () => {
   afterEach(() => {
     mocks.navigate.mockReset();
     mocks.openDocument.mockReset();
+    mocks.rollbackReceipt.mockReset();
   });
 
   it('renders visible memory and skill receipts', () => {
@@ -329,5 +339,307 @@ describe('AgentSignalReceiptList', () => {
     fireEvent.click(screen.getByText('Open'));
 
     expect(mocks.navigate).toHaveBeenCalledWith('/memory/preferences?preferenceId=preference-1');
+  });
+
+  it('shows undo only when skill rollback history metadata exists', () => {
+    render(
+      <AgentSignalReceiptList
+        receipts={[
+          {
+            agentId: 'agent-1',
+            createdAt: 1,
+            detail: 'Improved how this assistant handles similar requests',
+            id: 'receipt-1',
+            kind: 'skill',
+            metadata: {
+              agentDocumentId: 'agent-document-1',
+              documentId: 'document-1',
+              historyId: 'history-1',
+              rollbackStatus: 'available',
+            },
+            sourceId: 'source-1',
+            sourceType: 'client.gateway.runtime_end',
+            status: 'updated',
+            target: {
+              id: 'document-1',
+              title: 'GitHub PR review workflow',
+              type: 'skill',
+            },
+            title: 'Skill updated',
+            topicId: 'topic-1',
+            userId: 'user-1',
+          },
+          {
+            agentId: 'agent-1',
+            createdAt: 2,
+            detail: 'Saved this for future replies',
+            id: 'receipt-2',
+            kind: 'memory',
+            metadata: {
+              documentId: 'memory-document-1',
+              historyId: 'history-2',
+            },
+            sourceId: 'source-2',
+            sourceType: 'client.gateway.runtime_end',
+            status: 'applied',
+            target: {
+              title: 'Future reply preference',
+              type: 'memory',
+            },
+            title: 'Memory saved',
+            topicId: 'topic-1',
+            userId: 'user-1',
+          },
+          {
+            agentId: 'agent-1',
+            createdAt: 3,
+            detail: 'Improved how this assistant handles similar requests',
+            id: 'receipt-3',
+            kind: 'skill',
+            metadata: {
+              rollbackStatus: 'available',
+            },
+            sourceId: 'source-3',
+            sourceType: 'client.gateway.runtime_end',
+            status: 'updated',
+            target: {
+              id: 'document-3',
+              title: 'Issue triage workflow',
+              type: 'skill',
+            },
+            title: 'Skill updated',
+            topicId: 'topic-1',
+            userId: 'user-1',
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getAllByText('Undo')).toHaveLength(1);
+  });
+
+  it('calls rollback service and updates visible status after undo', async () => {
+    mocks.rollbackReceipt.mockResolvedValueOnce({
+      agentDocumentId: 'agent-document-1',
+      documentId: 'document-1',
+      historyId: 'history-1',
+      status: 'rolled_back',
+    });
+
+    render(
+      <AgentSignalReceiptList
+        receipts={[
+          {
+            agentId: 'agent-1',
+            createdAt: 1,
+            detail: 'Improved how this assistant handles similar requests',
+            id: 'receipt-1',
+            kind: 'skill',
+            metadata: {
+              agentDocumentId: 'agent-document-1',
+              documentId: 'document-1',
+              historyId: 'history-1',
+              rollbackStatus: 'available',
+            },
+            sourceId: 'source-1',
+            sourceType: 'client.gateway.runtime_end',
+            status: 'updated',
+            target: {
+              id: 'document-1',
+              title: 'GitHub PR review workflow',
+              type: 'skill',
+            },
+            title: 'Skill updated',
+            topicId: 'topic-1',
+            userId: 'user-1',
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+
+    await waitFor(() => {
+      expect(agentSignalService.rollbackReceipt).toHaveBeenCalledWith({
+        agentDocumentId: 'agent-document-1',
+        documentId: 'document-1',
+        historyId: 'history-1',
+        receiptId: 'receipt-1',
+      });
+    });
+    expect(mocks.openDocument).not.toHaveBeenCalled();
+    expect(await screen.findByText('Rolled back')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
+  });
+
+  it('ignores duplicate undo clicks while rollback is pending', async () => {
+    let resolveRollback!: (value: {
+      agentDocumentId: string;
+      documentId: string;
+      historyId: string;
+      status: string;
+    }) => void;
+    mocks.rollbackReceipt.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveRollback = resolve;
+      }),
+    );
+
+    render(
+      <AgentSignalReceiptList
+        receipts={[
+          {
+            agentId: 'agent-1',
+            createdAt: 1,
+            detail: 'Improved how this assistant handles similar requests',
+            id: 'receipt-1',
+            kind: 'skill',
+            metadata: {
+              agentDocumentId: 'agent-document-1',
+              documentId: 'document-1',
+              historyId: 'history-1',
+              rollbackStatus: 'available',
+            },
+            sourceId: 'source-1',
+            sourceType: 'client.gateway.runtime_end',
+            status: 'updated',
+            target: {
+              id: 'document-1',
+              title: 'GitHub PR review workflow',
+              type: 'skill',
+            },
+            title: 'Skill updated',
+            topicId: 'topic-1',
+            userId: 'user-1',
+          },
+        ]}
+      />,
+    );
+
+    const undo = screen.getByRole('button', { name: 'Undo' });
+    fireEvent.click(undo);
+    fireEvent.click(undo);
+
+    expect(screen.getByText('Rolling back')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(agentSignalService.rollbackReceipt).toHaveBeenCalledTimes(1);
+    });
+    expect(mocks.openDocument).not.toHaveBeenCalled();
+
+    resolveRollback({
+      agentDocumentId: 'agent-document-1',
+      documentId: 'document-1',
+      historyId: 'history-1',
+      status: 'rolled_back',
+    });
+
+    expect(await screen.findByText('Rolled back')).toBeInTheDocument();
+  });
+
+  it('uses the server receipt metadata on remount so refreshed receipts no longer show undo', () => {
+    const availableReceipt = {
+      agentId: 'agent-1',
+      createdAt: 1,
+      detail: 'Improved how this assistant handles similar requests',
+      id: 'receipt-1',
+      kind: 'skill' as const,
+      metadata: {
+        agentDocumentId: 'agent-document-1',
+        documentId: 'document-1',
+        historyId: 'history-1',
+        rollbackStatus: 'available' as const,
+      },
+      sourceId: 'source-1',
+      sourceType: 'client.gateway.runtime_end',
+      status: 'updated' as const,
+      target: {
+        id: 'document-1',
+        title: 'GitHub PR review workflow',
+        type: 'skill' as const,
+      },
+      title: 'Skill updated',
+      topicId: 'topic-1',
+      userId: 'user-1',
+    };
+    const rolledBackReceipt = {
+      ...availableReceipt,
+      metadata: {
+        ...availableReceipt.metadata,
+        rollbackStatus: 'rolled_back' as const,
+      },
+    };
+
+    const { rerender } = render(<AgentSignalReceiptList receipts={[availableReceipt]} />);
+
+    expect(screen.getByText('Undo')).toBeInTheDocument();
+
+    rerender(<AgentSignalReceiptList receipts={[rolledBackReceipt]} />);
+
+    expect(screen.queryByText('Undo')).not.toBeInTheDocument();
+    expect(screen.getByText('Rolled back')).toBeInTheDocument();
+  });
+
+  it('shows the not found rollback label from the server status', () => {
+    render(
+      <AgentSignalReceiptList
+        receipts={[
+          {
+            agentId: 'agent-1',
+            createdAt: 1,
+            detail: 'Improved how this assistant handles similar requests',
+            id: 'receipt-1',
+            kind: 'skill',
+            metadata: {
+              documentId: 'document-1',
+              historyId: 'history-1',
+              rollbackStatus: 'not_found',
+            },
+            sourceId: 'source-1',
+            sourceType: 'client.gateway.runtime_end',
+            status: 'updated',
+            target: {
+              id: 'document-1',
+              title: 'GitHub PR review workflow',
+              type: 'skill',
+            },
+            title: 'Skill updated',
+            topicId: 'topic-1',
+            userId: 'user-1',
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('Not found')).toBeInTheDocument();
+    expect(screen.queryByText('Undo')).not.toBeInTheDocument();
+  });
+
+  it('does not show undo for missing rollback metadata', () => {
+    render(
+      <AgentSignalReceiptList
+        receipts={[
+          {
+            agentId: 'agent-1',
+            createdAt: 1,
+            detail: 'Improved how this assistant handles similar requests',
+            id: 'receipt-1',
+            kind: 'skill',
+            sourceId: 'source-1',
+            sourceType: 'client.gateway.runtime_end',
+            status: 'updated',
+            target: {
+              id: 'document-1',
+              title: 'GitHub PR review workflow',
+              type: 'skill',
+            },
+            title: 'Skill updated',
+            topicId: 'topic-1',
+            userId: 'user-1',
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
   });
 });

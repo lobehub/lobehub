@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildLinearRenderModel } from './utils';
+import { buildLinearRenderModel, isUuidLike } from './utils';
+
+describe('isUuidLike', () => {
+  it('matches bare UUIDs but not human Linear ids', () => {
+    expect(isUuidLike('55a0597c-be21-4e73-a1ff-1a45aedf0184')).toBe(true);
+    expect(isUuidLike('LIN-123')).toBe(false);
+    expect(isUuidLike('TEST-456')).toBe(false);
+    expect(isUuidLike('Engineering')).toBe(false);
+  });
+});
 
 describe('buildLinearRenderModel', () => {
   it('summarizes Linear update issue input and result without exposing raw JSON first', () => {
@@ -94,12 +103,11 @@ describe('buildLinearRenderModel', () => {
     });
     // `status` is surfaced via the state tag, so it should not duplicate as a field.
     expect(entity.fields.find((field) => field.key === 'status')).toBeUndefined();
-    // ISO timestamps render as a concrete date + time.
-    expect(entity.fields).toContainEqual({
-      key: 'createdAt',
-      label: 'Created At',
-      value: '2024-01-02 03:04:05',
-    });
+    // updatedAt is pulled out of the field grid and kept as raw ISO for the
+    // header's relative-time rendering; createdAt is dropped entirely.
+    expect(entity.updatedAt).toBe('2024-01-02T03:04:05.000Z');
+    expect(entity.fields.find((field) => field.key === 'createdAt')).toBeUndefined();
+    expect(entity.fields.find((field) => field.key === 'updatedAt')).toBeUndefined();
     expect(entity.fields).toContainEqual({ key: 'priority', label: 'Priority', value: 'Medium' });
   });
 
@@ -118,14 +126,11 @@ describe('buildLinearRenderModel', () => {
     expect(model.resultEntities).toHaveLength(1);
     const [entity] = model.resultEntities;
     // No human title — the render must not promote the UUID id to the title.
+    // The titleless UUID id is retained (it's the card's only handle / link target).
     expect(entity.title).toBeUndefined();
     expect(entity.id).toBe('ff0dabda-eb1f-4dfe-b525-09114c0d6bd0');
     expect(entity.description).toBe('## Mock comment body');
-    expect(entity.fields).toContainEqual({
-      key: 'createdAt',
-      label: 'Created At',
-      value: '2024-01-02 03:04:05',
-    });
+    expect(entity.updatedAt).toBe('2024-01-02T03:04:05.038Z');
   });
 
   it('still unwraps list_* payloads from their nested collection', () => {
@@ -189,5 +194,29 @@ describe('buildLinearRenderModel', () => {
     });
 
     expect(model.resultText).toBe('No matching Linear issues found.');
+  });
+
+  it('flags an empty list wrapper instead of dumping raw JSON', () => {
+    const model = buildLinearRenderModel({
+      apiName: 'mcp__claude_ai_Linear__list_comments',
+      args: { issueId: 'TEST-123' },
+      content: JSON.stringify({ comments: [], hasNextPage: false }),
+    });
+
+    expect(model.emptyCollectionKey).toBe('comments');
+    expect(model.resultEntities).toHaveLength(0);
+    // The whole point: no raw `{ "comments": [] }` block for an empty list.
+    expect(model.rawResultJson).toBeUndefined();
+  });
+
+  it('does not flag a get_* entity that merely embeds an empty sub-collection', () => {
+    const model = buildLinearRenderModel({
+      apiName: 'mcp__claude_ai_Linear__get_issue',
+      args: { id: 'TEST-456' },
+      content: JSON.stringify({ comments: [], id: 'TEST-456', title: 'Mock issue title' }),
+    });
+
+    expect(model.emptyCollectionKey).toBeUndefined();
+    expect(model.resultEntities).toHaveLength(1);
   });
 });

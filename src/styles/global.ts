@@ -5,8 +5,7 @@ import { css } from 'antd-style';
 // fix ios input keyboard
 // overflow: hidden;
 // ref: https://zhuanlan.zhihu.com/p/113855026
-// eslint-disable-next-line unicorn/no-anonymous-default-export
-export default ({ token }: { prefixCls: string; token: Theme }) => css`
+const genGlobalStyle = ({ token }: { prefixCls: string; token: Theme }) => css`
   html,
   body,
   #__next {
@@ -24,9 +23,12 @@ export default ({ token }: { prefixCls: string; token: Theme }) => css`
   }
 
   body {
-    /* Increase compositing layer, force hardware acceleration, otherwise render black edges will appear */
+    /* Own stacking context, otherwise render black edges will appear. Must NOT
+       be a transform-based hack: a transform on body rebases every position:
+       fixed descendant onto body, and a drawer panel mid slide-in then overflows
+       body horizontally — focusing it scrolls the whole page sideways. */
     will-change: opacity;
-    transform: translateZ(0);
+    isolation: isolate;
   }
 
   * {
@@ -75,3 +77,5 @@ export default ({ token }: { prefixCls: string; token: Theme }) => css`
     opacity: 1;
   }
 `;
+
+export default genGlobalStyle;

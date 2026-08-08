@@ -17,6 +17,8 @@ import {
 
 const logger = createLogger('core:WindowThemeManager');
 
+const MACOS_VIBRANCY = 'sidebar';
+
 interface WindowsThemeConfig {
   backgroundColor: string;
   icon?: string;
@@ -102,7 +104,7 @@ export class WindowThemeManager {
 
       return {
         trafficLightPosition: { x: 12, y: trafficLightY },
-        vibrancy: 'sidebar',
+        vibrancy: MACOS_VIBRANCY,
         visualEffectState: 'active',
       };
     }
@@ -156,6 +158,23 @@ export class WindowThemeManager {
     setTimeout(() => {
       this.applyVisualEffects();
     }, THEME_CHANGE_DELAY);
+  }
+
+  /**
+   * Disable macOS vibrancy while fullscreen so the window remains opaque.
+   */
+  handleFullscreenChange(isFullScreen: boolean): void {
+    if (!isMac || !this.browserWindow || this.browserWindow.isDestroyed()) return;
+
+    logger.debug(
+      `[${this.identifier}] Updating macOS vibrancy for fullscreen state: ${isFullScreen}`,
+    );
+
+    try {
+      this.browserWindow.setVibrancy(isFullScreen ? null : MACOS_VIBRANCY);
+    } catch (error) {
+      logger.error(`[${this.identifier}] Failed to update macOS fullscreen vibrancy:`, error);
+    }
   }
 
   // ==================== Visual Effects ====================

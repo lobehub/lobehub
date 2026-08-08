@@ -49,14 +49,17 @@ import type {
 } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 import { type FlowControl } from '@upstash/qstash';
-import { Client } from '@upstash/workflow';
+import type { Client } from '@upstash/workflow';
 import debug from 'debug';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { join } from 'pathe';
 import { z } from 'zod';
 
 import { getBusinessModelRuntimeHooks } from '@/business/server/model-runtime';
-import { AsyncTaskModel } from '@/database/models/asyncTask';
+import {
+  AsyncTaskModel,
+  initHourlyUserMemoryExtractionMetadata,
+} from '@/database/models/asyncTask';
 import { type ListTopicsForMemoryExtractorCursor } from '@/database/models/topic';
 import { TopicModel } from '@/database/models/topic';
 import { type ListUsersForMemoryExtractorCursor } from '@/database/models/user';
@@ -65,19 +68,23 @@ import type { UserMemoryHybridSearchAggregatedResult } from '@/database/models/u
 import { UserMemoryModel } from '@/database/models/userMemory';
 import { UserMemorySourceBenchmarkLoCoMoModel } from '@/database/models/userMemory/sources/benchmarkLoCoMo';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
+import { asyncTasks } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
+import { OtelWorkflowClient } from '@/libs/qstash';
 import { getServerGlobalConfig } from '@/server/globalConfig';
 import { type MemoryAgentConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { S3 } from '@/server/modules/S3';
+import { getUserScopedAiProviderRuntimeState } from '@/server/services/aiProviderAccess';
 import {
   AsyncTaskError,
   type AsyncTaskErrorBody,
   AsyncTaskErrorType,
   AsyncTaskStatus,
   type AsyncTaskStructuredErrorItem,
+  AsyncTaskType,
 } from '@/types/asyncTask';
 import { type GlobalMemoryLayer } from '@/types/serverConfig';
 import { type ProviderConfig } from '@/types/user/settings';
@@ -122,14 +129,17 @@ export interface MemoryExtractionHourlyWorkflowPayload {
   baseUrl?: string;
   cursor?: MemoryExtractionWorkflowCursor;
   dryRun?: boolean;
+  hourlyTaskId?: string;
 }
 
 export interface MemoryExtractionNormalizedPayload {
   asyncTaskId?: string;
   baseUrl: string;
+  dryRun: boolean;
   forceAll: boolean;
   forceTopics: boolean;
   from?: Date;
+  hourlyTaskId?: string;
   identityCursor: number;
   layers: LayersEnum[];
   /**
@@ -141,6 +151,7 @@ export interface MemoryExtractionNormalizedPayload {
   sources: MemorySourceType[];
   to?: Date;
   topicCursor?: TopicWorkflowCursor;
+  topicFanoutCount: number;
   topicIds: string[];
   userCursor?: MemoryExtractionWorkflowCursor;
   userId?: string;
@@ -152,9 +163,11 @@ export interface MemoryExtractionNormalizedPayload {
 export const memoryExtractionPayloadSchema = z.object({
   asyncTaskId: z.string().uuid().optional(),
   baseUrl: z.string().url().optional(),
+  dryRun: z.boolean().optional(),
   forceAll: z.boolean().optional(),
   forceTopics: z.boolean().optional(),
   fromDate: z.coerce.date().optional(),
+  hourlyTaskId: z.string().uuid().optional(),
   identityCursor: z.coerce.number().int().nonnegative().optional(),
   layers: z.array(z.nativeEnum(LayersEnum)).optional(),
   mode: z.enum(['workflow', 'direct']).optional(),
@@ -168,6 +181,9 @@ export const memoryExtractionPayloadSchema = z.object({
       userId: z.string(),
     })
     .optional(),
+  // Running count of topics already fanned out for this user in the current pagination chain.
+  // Used by process-user-topics to enforce a hard per-user, per-run fan-out ceiling.
+  topicFanoutCount: z.coerce.number().int().nonnegative().optional(),
   topicIds: z.array(z.string()).optional(),
   userCursor: z
     .object({
@@ -214,9 +230,11 @@ export const normalizeMemoryExtractionPayload = (
   return {
     asyncTaskId: parsed.asyncTaskId,
     baseUrl,
+    dryRun: parsed.dryRun ?? false,
     forceAll: parsed.forceAll ?? false,
     forceTopics: parsed.forceTopics ?? false,
     from: parsed.fromDate,
+    hourlyTaskId: parsed.hourlyTaskId,
     identityCursor: parsed.identityCursor ?? 0,
     layers: normalizeLayers(parsed.layers),
     mode: parsed.mode ?? 'workflow',
@@ -224,6 +242,7 @@ export const normalizeMemoryExtractionPayload = (
     sources: normalizeSources(parsed.sources),
     to: parsed.toDate,
     topicCursor: parsed.topicCursor,
+    topicFanoutCount: parsed.topicFanoutCount ?? 0,
     topicIds: Array.from(new Set(parsed.topicIds || [])).filter(Boolean),
     userCursor: parsed.userCursor,
     userId: parsed.userId ?? parsed.userIds?.[0],
@@ -252,9 +271,11 @@ export const buildWorkflowPayloadInput = (
 ): MemoryExtractionPayloadInput => ({
   asyncTaskId: payload.asyncTaskId,
   baseUrl: payload.baseUrl,
+  dryRun: payload.dryRun,
   forceAll: payload.forceAll,
   forceTopics: payload.forceTopics,
   fromDate: payload.from,
+  hourlyTaskId: payload.hourlyTaskId,
   identityCursor: payload.identityCursor,
   layers: payload.layers,
   mode: payload.mode,
@@ -262,6 +283,7 @@ export const buildWorkflowPayloadInput = (
   sources: payload.sources,
   toDate: payload.to,
   topicCursor: payload.topicCursor,
+  topicFanoutCount: payload.topicFanoutCount,
   topicIds: payload.topicIds,
   userCursor: payload.userCursor,
   userId: payload.userId ?? payload.userIds[0],
@@ -2353,9 +2375,13 @@ export class MemoryExtractionExecutor {
     workspaceId?: string,
   ): Promise<AiProviderRuntimeState> {
     const db = await this.db;
-    const aiInfraRepos = new AiInfraRepos(db, userId, this.aiProviderConfig);
+    const aiInfraRepos = new AiInfraRepos(db, userId, this.aiProviderConfig, workspaceId);
 
-    return aiInfraRepos.getAiProviderRuntimeState(KeyVaultsGateKeeper.getUserKeyVaults);
+    return getUserScopedAiProviderRuntimeState(
+      userId,
+      () => aiInfraRepos.getAiProviderRuntimeState(KeyVaultsGateKeeper.getUserKeyVaults),
+      { throwOnUnresolvedAccess: true },
+    );
   }
 
   private async resolveRuntimeKeyVaults(
@@ -2707,10 +2733,32 @@ export class MemoryExtractionExecutor {
 const WORKFLOW_PATHS = {
   hourly: '/api/workflows/memory-user-memory/call-cron-hourly-analysis',
   personaUpdate: '/api/workflows/memory-user-memory/pipelines/persona/update-writing',
+  topic: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-topic',
   topicBatch: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-topics',
   userTopics: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-user-topics',
   users: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-users',
 } as const;
+
+const PROCESS_USERS_FLOW_CONTROL = {
+  key: 'memory-user-memory.pipelines.chat-topic.process-users',
+  parallelism: 1,
+  ratePerSecond: 1,
+} satisfies FlowControl;
+
+const getProcessUserTopicsFlowControl = (): FlowControl => {
+  const { workflow } = parseMemoryExtractionConfig();
+
+  return {
+    key: 'memory-user-memory.pipelines.chat-topic.process-user-topics',
+    // NOTICE: Trigger-side flow control is required for initial workflow delivery.
+    // A serve() flowControl setting alone is applied after the run starts, so it cannot prevent
+    // many process-user-topics runs from entering execution at the same time.
+    parallelism: workflow?.processUserTopicsParallelism ?? 25,
+  };
+};
+
+const buildHourlyChildWorkflowRunId = (entryWorkflowRunId: string) =>
+  `memory-user-memory-hourly-${entryWorkflowRunId.replaceAll(/[^\w-]/g, '_')}`;
 
 const getWorkflowUrl = (path: string, baseUrl: string) => {
   const url = new URL(path, baseUrl);
@@ -2728,7 +2776,7 @@ const getWorkflowClient = () => {
     (config as Record<string, unknown>).url = process.env.QSTASH_URL;
   }
 
-  return new Client(config);
+  return new OtelWorkflowClient(config);
 };
 
 export class MemoryExtractionWorkflowService {
@@ -2751,19 +2799,129 @@ export class MemoryExtractionWorkflowService {
     }
 
     const url = getWorkflowUrl(WORKFLOW_PATHS.users, payload.baseUrl);
-    return this.getClient().trigger({ body: payload, headers: options?.extraHeaders, url });
+    return this.getClient().trigger({
+      body: payload,
+      flowControl: PROCESS_USERS_FLOW_CONTROL,
+      headers: options?.extraHeaders,
+      url,
+    });
   }
 
   static triggerHourly(
     payload: MemoryExtractionHourlyWorkflowPayload,
-    options?: { extraHeaders?: Record<string, string> },
+    options?: { extraHeaders?: Record<string, string>; workflowRunId?: string },
   ) {
     if (!payload.baseUrl) {
       throw new Error('Missing baseUrl for workflow trigger');
     }
 
     const url = getWorkflowUrl(WORKFLOW_PATHS.hourly, payload.baseUrl);
-    return this.getClient().trigger({ body: payload, headers: options?.extraHeaders, url });
+    return this.getClient().trigger({
+      body: payload,
+      headers: options?.extraHeaders,
+      url,
+      workflowRunId: options?.workflowRunId,
+    });
+  }
+
+  /**
+   * Creates a batch-level async task and triggers hourly memory extraction.
+   *
+   * Use when:
+   * - Starting the hourly user-memory extraction workflow from cron or an operator action
+   * - Tracking the root workflow run id for later cooperative cancellation
+   *
+   * Expects:
+   * - `payload.baseUrl` is present for workflow URL construction
+   * - `MEMORY_EXTRACTION_HOURLY_TASK_USER_ID` identifies the service-account task owner
+   *
+   * Returns:
+   * - The created async task id and root Upstash workflow run id
+   */
+  static async triggerHourlyTracked(
+    payload: MemoryExtractionHourlyWorkflowPayload,
+    options?: { entryWorkflowRunId?: string; extraHeaders?: Record<string, string> },
+  ) {
+    if (!payload.baseUrl) {
+      throw new Error('Missing baseUrl for workflow trigger');
+    }
+
+    const userId = process.env.MEMORY_EXTRACTION_HOURLY_TASK_USER_ID;
+    if (!userId) {
+      throw new Error(
+        'MEMORY_EXTRACTION_HOURLY_TASK_USER_ID is required for tracked hourly extraction',
+      );
+    }
+
+    const db = await getServerDB();
+    const startedAt = new Date().toISOString();
+    const childWorkflowRunId = options?.entryWorkflowRunId
+      ? buildHourlyChildWorkflowRunId(options.entryWorkflowRunId)
+      : undefined;
+    const existingTask = options?.entryWorkflowRunId
+      ? await db.query.asyncTasks.findFirst({
+          where: and(
+            eq(asyncTasks.type, AsyncTaskType.UserMemoryExtractionHourly),
+            eq(asyncTasks.userId, userId),
+            sql`${asyncTasks.metadata} #>> '{control,upstash,entryWorkflowRunId}' = ${options.entryWorkflowRunId}`,
+          ),
+        })
+      : undefined;
+    const asyncTaskModel = new AsyncTaskModel(db, userId);
+    const taskId =
+      existingTask?.id ??
+      (await asyncTaskModel.create({
+        metadata: initHourlyUserMemoryExtractionMetadata({
+          control: options?.entryWorkflowRunId
+            ? {
+                upstash: {
+                  entryWorkflowRunId: options.entryWorkflowRunId,
+                  workflowRunIds: [
+                    options.entryWorkflowRunId,
+                    ...(childWorkflowRunId ? [childWorkflowRunId] : []),
+                  ],
+                },
+              }
+            : undefined,
+          cursor: payload.cursor,
+          startedAt,
+        }),
+        status: AsyncTaskStatus.Pending,
+        type: AsyncTaskType.UserMemoryExtractionHourly,
+      }));
+    let workflowRunId: string;
+    try {
+      ({ workflowRunId } = await this.triggerHourly(
+        { ...payload, hourlyTaskId: taskId },
+        { extraHeaders: options?.extraHeaders, workflowRunId: childWorkflowRunId },
+      ));
+    } catch (error) {
+      const statusCode =
+        (error as { status?: number; statusCode?: number }).status ??
+        (error as { statusCode?: number }).statusCode;
+      const message = error instanceof Error ? error.message.toLowerCase() : '';
+      if (
+        existingTask &&
+        childWorkflowRunId &&
+        (statusCode === 409 || message.includes('already'))
+      ) {
+        await asyncTaskModel.appendUserMemoryWorkflowRunIds(taskId, [childWorkflowRunId]);
+        return { taskId, workflowRunId: childWorkflowRunId };
+      }
+
+      await asyncTaskModel.update(taskId, {
+        error: new AsyncTaskError(
+          AsyncTaskErrorType.TaskTriggerError,
+          'Failed to schedule hourly memory extraction workflow',
+        ),
+        status: AsyncTaskStatus.Error,
+      });
+      throw error;
+    }
+
+    await asyncTaskModel.appendUserMemoryWorkflowRunIds(taskId, [workflowRunId]);
+
+    return { taskId, workflowRunId };
   }
 
   static triggerProcessUserTopics(
@@ -2777,6 +2935,7 @@ export class MemoryExtractionWorkflowService {
     const url = getWorkflowUrl(WORKFLOW_PATHS.userTopics, payload.baseUrl);
     return this.getClient().trigger({
       body: payload,
+      flowControl: getProcessUserTopicsFlowControl(),
       headers: options?.extraHeaders,
       url,
     });
@@ -2796,14 +2955,37 @@ export class MemoryExtractionWorkflowService {
       body: payload,
       flowControl: {
         key: `memory-user-memory.pipelines.chat-topic.process-topics.user.${userId}`,
-        // NOTICE: if modified the parallelism of
-        // src/server/workflows-hono/memory-user-memory/workflows/processTopics.ts
-        // or added new memory layer, make sure to update the number below.
-        //
-        // Currently, CEPA (context, experience, preference, activity) + identity = 5 layers.
-        // and since identity requires sequential processing, we set parallelism to 5.
-        parallelism: 5,
+        // NOTICE: Each process-topics workflow currently invokes topic workflows sequentially.
+        // Parallelism 20 therefore bounds each user's active topic extraction workflows to 20.
+        // If process-topics changes back to parallel per-topic invoke, divide this number by
+        // the per-batch topic concurrency to preserve the same per-user topic budget.
+        parallelism: 20,
       },
+      headers: options?.extraHeaders,
+      url,
+    });
+  }
+
+  static triggerProcessTopic(
+    userId: string,
+    payload: MemoryExtractionPayloadInput,
+    options?: { extraHeaders?: Record<string, string> },
+  ) {
+    if (!payload.baseUrl) {
+      throw new Error('Missing baseUrl for workflow trigger');
+    }
+
+    const url = getWorkflowUrl(WORKFLOW_PATHS.topic, payload.baseUrl);
+    return this.getClient().trigger({
+      body: payload,
+      // NOTICE: fire-and-forget fan-out (replaces the old context.invoke). The per-user key bounds
+      // how many process-topic runs a single user can start concurrently, so one heavy user can't
+      // monopolize extraction. Serve-side flow control (processTopicWorkflowOptions) additionally
+      // keeps this workflow's own step-continuation messages out of the shared "$" (unbound) bucket.
+      flowControl: {
+        key: `memory-user-memory.pipelines.chat-topic.process-topic.user.${userId}`,
+        parallelism: 5,
+      } satisfies FlowControl,
       headers: options?.extraHeaders,
       url,
     });
@@ -2812,7 +2994,7 @@ export class MemoryExtractionWorkflowService {
   static triggerPersonaUpdate(
     userId: string,
     baseUrl: string,
-    options?: { extraHeaders?: Record<string, string> },
+    options?: { extraHeaders?: Record<string, string>; hourlyTaskId?: string },
   ) {
     if (!baseUrl) {
       throw new Error('Missing baseUrl for workflow trigger');
@@ -2820,7 +3002,7 @@ export class MemoryExtractionWorkflowService {
 
     const url = getWorkflowUrl(WORKFLOW_PATHS.personaUpdate, baseUrl);
     return this.getClient().trigger({
-      body: { userIds: [userId] },
+      body: { hourlyTaskId: options?.hourlyTaskId, userIds: [userId] },
       flowControl: {
         key: `memory-user-memory.pipelines.persona.update-write.${userId}`,
         parallelism: 1,

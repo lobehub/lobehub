@@ -1,5 +1,5 @@
+import { DEFAULT_MAX_REPAIR_ROUNDS } from '@lobechat/const/verify';
 import type { VerifyCheckItem, VerifyRunMetadata } from '@lobechat/types';
-import { DEFAULT_MAX_REPAIR_ROUNDS } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -9,7 +9,9 @@ import { VerifyRubricModel } from '@/database/models/verifyRubric';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { VerifyCheckResultItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
+import { AiAgentService } from '@/server/services/aiAgent';
 
+import { AcceptanceService } from './acceptanceService';
 import { VerifyStatusService } from './statusService';
 
 const log = debug('lobe-server:verify-repair');
@@ -85,11 +87,13 @@ export const createRepairRunner = (params: {
   maxRepairRounds: number;
   model?: string | null;
   provider?: string | null;
+  taskId?: string | null;
   topicId?: string | null;
   userId: string;
   workspaceId?: string;
 }): RepairSpawner | undefined => {
-  const { agentId, db, maxRepairRounds, model, provider, topicId, userId, workspaceId } = params;
+  const { agentId, db, maxRepairRounds, model, provider, taskId, topicId, userId, workspaceId } =
+    params;
   if (!agentId || !topicId) return undefined;
 
   return async ({ instruction, operationId, verifyMessageId }) => {
@@ -106,7 +110,6 @@ export const createRepairRunner = (params: {
     // off history instead of injecting a user turn; `instruction` is passed only
     // for the operation title / logs. `verifyMessageId` parents the new turn under
     // the verify card it responds to.
-    const { AiAgentService } = await import('@/server/services/aiAgent');
     const result = await new AiAgentService(db, userId, { workspaceId }).execAgent({
       agentId,
       appContext: { topicId },
@@ -117,6 +120,7 @@ export const createRepairRunner = (params: {
       prompt: instruction,
       ...(provider ? { provider } : {}),
       suppressUserMessage: true,
+      ...(taskId ? { taskId } : {}),
       userInterventionConfig: { approvalMode: 'headless' },
     });
     const repairOperationId = result.operationId;
@@ -134,6 +138,16 @@ export const createRepairRunner = (params: {
       // instead of falling back to the rubric/default.
       if (sourceRun?.metadata) await runModel.setMetadata(repairRun.id, sourceRun.metadata);
       await runModel.confirmPlan(repairRun.id);
+
+      // A repair is the next immutable round of the same business acceptance,
+      // not an unrelated verification session. Attach it before it settles so
+      // the aggregate immediately advances from "repairing" to the live round.
+      if (sourceRun?.acceptanceId) {
+        await new AcceptanceService(db, userId, workspaceId).attachRun(
+          repairRun.id,
+          sourceRun.acceptanceId,
+        );
+      }
     }
 
     log('repair op %s → %s (round %d)', operationId, repairOperationId, round + 1);
@@ -173,6 +187,12 @@ export const maybeAutoRepair = async (
   if (stillPending) return;
 
   const op = await operationModel.findById(operationId);
+  let taskOperation = op;
+  let taskDepth = 0;
+  while (!taskOperation?.taskId && taskOperation?.parentOperationId && taskDepth < 10) {
+    taskOperation = await operationModel.findById(taskOperation.parentOperationId);
+    taskDepth += 1;
+  }
   const spawner = createRepairRunner({
     agentId: op?.agentId,
     db,
@@ -185,6 +205,7 @@ export const maybeAutoRepair = async (
     ),
     model: op?.model,
     provider: op?.provider,
+    taskId: taskOperation?.taskId,
     topicId: op?.topicId,
     userId,
     workspaceId,
@@ -192,8 +213,12 @@ export const maybeAutoRepair = async (
   await new VerifyRepairService(db, userId, workspaceId).triggerAutoRepair(operationId, spawner);
 };
 
+// `errored` = the verifier couldn't run (infra), so there's no delivery fault to
+// repair — exclude it even though it carries no verdict.
 const isFailed = (r: VerifyCheckResultItem | undefined): boolean =>
-  !!r && (r.status === 'failed' || r.verdict === 'failed' || r.verdict === 'uncertain');
+  !!r &&
+  r.status !== 'errored' &&
+  (r.status === 'failed' || r.verdict === 'failed' || r.verdict === 'uncertain');
 
 const buildInstruction = (
   failures: { item: VerifyCheckItem; result: VerifyCheckResultItem | undefined }[],

@@ -141,26 +141,143 @@ export function registerMessageCommand(program: Command) {
 
   message
     .command('count')
-    .description('Count messages')
+    .description('Count messages, optionally grouped by topic')
+    .option('--topic-id <id>', 'Filter by topic ID')
+    .option('--agent-id <id>', 'Filter by agent ID')
+    .option('--role <role>', 'Filter by role (user, assistant, system)')
+    .option('--start <date>', 'Start date (ISO format)')
+    .option('--end <date>', 'End date (ISO format)')
+    .option('--group-by <field>', 'Group counts by field (topic)')
+    .option('--json', 'Output JSON')
+    .action(
+      async (options: {
+        agentId?: string;
+        end?: string;
+        groupBy?: string;
+        json?: boolean;
+        role?: string;
+        start?: string;
+        topicId?: string;
+      }) => {
+        const client = await getTrpcClient();
+
+        const input: Record<string, any> = {};
+        if (options.topicId) input.topicId = options.topicId;
+        if (options.agentId) input.agentId = options.agentId;
+        if (options.role) input.role = options.role;
+        if (options.start) input.startDate = options.start;
+        if (options.end) input.endDate = options.end;
+
+        if (options.groupBy && options.groupBy !== 'topic') {
+          log.error(`Unsupported --group-by "${options.groupBy}". Only "topic" is supported.`);
+          process.exit(1);
+        }
+
+        if (options.groupBy === 'topic') {
+          const rows = (await client.message.countByTopic.query(input as any)) as {
+            count: number;
+            topicId: string;
+          }[];
+
+          if (options.json) {
+            console.log(JSON.stringify(rows));
+            return;
+          }
+
+          if (rows.length === 0) {
+            console.log('No messages.');
+            return;
+          }
+
+          printTable(
+            rows.map((r) => [r.topicId, String(r.count)]),
+            ['TOPIC', 'COUNT'],
+          );
+          return;
+        }
+
+        const count = await client.message.count.query(input as any);
+
+        if (options.json) {
+          console.log(JSON.stringify({ count }));
+          return;
+        }
+
+        console.log(`Messages: ${pc.bold(String(count))}`);
+      },
+    );
+
+  // ── stats ─────────────────────────────────────────────
+
+  message
+    .command('stats')
+    .description('Distribution of message counts per topic (mean/median/p90/p99/one-shot)')
+    .option('--agent-id <id>', 'Filter by agent ID')
+    .option('--role <role>', 'Filter by role (default: user)')
+    .option('--all-roles', 'Include every role instead of only user messages')
     .option('--start <date>', 'Start date (ISO format)')
     .option('--end <date>', 'End date (ISO format)')
     .option('--json', 'Output JSON')
-    .action(async (options: { end?: string; json?: boolean; start?: string }) => {
-      const client = await getTrpcClient();
+    .action(
+      async (options: {
+        agentId?: string;
+        allRoles?: boolean;
+        end?: string;
+        json?: boolean;
+        role?: string;
+        start?: string;
+      }) => {
+        const client = await getTrpcClient();
 
-      const input: Record<string, any> = {};
-      if (options.start) input.startDate = options.start;
-      if (options.end) input.endDate = options.end;
+        const input: Record<string, any> = {};
+        if (options.agentId) input.agentId = options.agentId;
+        // Default to user messages — the common "how many turns per topic" question.
+        if (!options.allRoles) input.role = options.role || 'user';
+        else if (options.role) input.role = options.role;
+        if (options.start) input.startDate = options.start;
+        if (options.end) input.endDate = options.end;
 
-      const count = await client.message.count.query(input as any);
+        const stats = (await client.message.topicStats.query(input as any)) as {
+          histogram: { topics: number; userCount: number }[];
+          max: number;
+          mean: number;
+          median: number;
+          min: number;
+          oneshot: number;
+          oneshotRatio: number;
+          p90: number;
+          p99: number;
+          topics: number;
+          totalMessages: number;
+        };
 
-      if (options.json) {
-        console.log(JSON.stringify({ count }));
-        return;
-      }
+        if (options.json) {
+          console.log(JSON.stringify(stats, null, 2));
+          return;
+        }
 
-      console.log(`Messages: ${pc.bold(String(count))}`);
-    });
+        if (stats.topics === 0) {
+          console.log('No topics match the given filters.');
+          return;
+        }
+
+        const round = (n: number) => Math.round(n * 100) / 100;
+        printTable(
+          [
+            ['Topics', String(stats.topics)],
+            ['Total messages', String(stats.totalMessages)],
+            ['Mean', String(round(stats.mean))],
+            ['Median', String(round(stats.median))],
+            ['P90', String(round(stats.p90))],
+            ['P99', String(round(stats.p99))],
+            ['Min', String(stats.min)],
+            ['Max', String(stats.max)],
+            ['One-shot', `${stats.oneshot} (${(stats.oneshotRatio * 100).toFixed(1)}%)`],
+          ],
+          ['METRIC', 'VALUE'],
+        );
+      },
+    );
 
   // ── create ────────────────────────────────────────────
 

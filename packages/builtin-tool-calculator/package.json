@@ -5,14 +5,16 @@
   "exports": {
     ".": "./src/index.ts",
     "./client": "./src/client/index.ts",
-    "./executor": "./src/executor/index.ts"
+    "./executionRuntime": "./src/ExecutionRuntime/index.ts",
+    "./executor": "./src/executor/index.ts",
+    "./manifest": "./src/manifest.ts"
   },
   "main": "./src/index.ts",
   "dependencies": {
     "@lobechat/prompts": "workspace:*",
-    "@thi.ng/base-n": "^2.7.58",
-    "mathjs": "^15.1.0",
-    "nerdamer-prime": "^1.3.1"
+    "@thi.ng/base-n": "^2.7.71",
+    "mathjs": "^15.2.0",
+    "nerdamer-prime": "^1.4.0"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"

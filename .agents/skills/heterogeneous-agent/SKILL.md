@@ -33,8 +33,8 @@ Use this skill when the bug or feature lives in the external CLI agent pipeline,
 - `apps/desktop/src/main/modules/heterogeneousAgent/drivers/codex.ts`
 - `packages/heterogeneous-agents/src/adapters/claudeCode.ts`
 - `packages/heterogeneous-agents/src/adapters/codex.ts`
-- `src/store/chat/slices/aiChat/actions/heterogeneousAgentExecutor.ts`
-- `src/store/chat/slices/aiChat/actions/__tests__/heterogeneousAgentExecutor.test.ts`
+- `src/store/chat/slices/agentRun/actions/transports/hetero/heterogeneousAgentExecutor.ts`
+- `src/store/chat/slices/agentRun/actions/__tests__/heterogeneousAgentExecutor.test.ts`
 
 ## Default Debug Order
 

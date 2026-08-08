@@ -15,7 +15,7 @@ export class MessageTransformer {
    * Convert a Message to AssistantContentBlock
    */
   messageToContentBlock(message: Message): AssistantContentBlock {
-    const { usage, performance } = this.splitMetadata(message.metadata);
+    const { usage, performance } = this.splitMetadata(message.metadata, message.usage);
 
     return {
       content: message.content || '',
@@ -39,16 +39,20 @@ export class MessageTransformer {
    * - **Flat** (legacy): `metadata.totalTokens`, `metadata.ttft`, etc — older write paths
    *   that splatted token fields directly onto metadata.
    *
-   * Nested takes priority; flat fields fill in any missing keys (transition state).
+   * Top-level usage takes priority. Nested and flat metadata fields only fill in
+   * missing keys for legacy rows during the migration period.
    */
-  splitMetadata(metadata?: any): {
+  splitMetadata(
+    metadata?: any,
+    topLevelUsage?: ModelUsage,
+  ): {
     performance?: ModelPerformance;
     usage?: ModelUsage;
   } {
-    if (!metadata) return {};
+    if (!metadata && !topLevelUsage) return {};
 
-    const usage: ModelUsage = { ...metadata.usage };
-    const performance: ModelPerformance = { ...metadata.performance };
+    const usage: ModelUsage = { ...metadata?.usage, ...topLevelUsage };
+    const performance: ModelPerformance = { ...metadata?.performance };
     let hasUsage = Object.keys(usage).length > 0;
     let hasPerformance = Object.keys(performance).length > 0;
 
@@ -75,7 +79,7 @@ export class MessageTransformer {
     ] as const;
 
     usageFields.forEach((field) => {
-      if (metadata[field] !== undefined && (usage as any)[field] === undefined) {
+      if (metadata?.[field] !== undefined && (usage as any)[field] === undefined) {
         (usage as any)[field] = metadata[field];
         hasUsage = true;
       }
@@ -83,7 +87,7 @@ export class MessageTransformer {
 
     const performanceFields = ['duration', 'latency', 'tps', 'ttft'] as const;
     performanceFields.forEach((field) => {
-      if (metadata[field] !== undefined && (performance as any)[field] === undefined) {
+      if (metadata?.[field] !== undefined && (performance as any)[field] === undefined) {
         (performance as any)[field] = metadata[field];
         hasPerformance = true;
       }

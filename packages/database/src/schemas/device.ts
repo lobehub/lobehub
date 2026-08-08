@@ -27,12 +27,35 @@ export const devices = pgTable(
     //   - NULL          → a PERSONAL device, identified by (userId, deviceId).
     //   - <workspaceId> → a device ENROLLED into that workspace (shared infra),
     //     identified by (workspaceId, deviceId). `userId` then only records the
-    //     enrolling admin — it is NOT part of the identity, so two admins
+    //     first enroller — it is NOT part of the identity, so two members
     //     enrolling the same machine resolve to ONE row (see the partial unique
-    //     below). The same physical machine produces a distinct `deviceId` per
-    //     principal (the hash mixes in userId / `workspace:<id>`), so personal
-    //     and workspace rows never collide.
+    //     below) and the original enroller is preserved. The router uses this
+    //     `userId` to gate writes to "self-or-owner" (see
+    //     `canEditWorkspaceDevice`). The same physical machine produces a
+    //     distinct `deviceId` per principal (the hash mixes in userId /
+    //     `workspace:<id>`), so personal and workspace rows never collide.
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+
+    // Visibility WITHIN a workspace (same contract as agents/documents/files):
+    //   - 'public'  → every workspace member sees and can use the device.
+    //   - 'private' → only the enrolling member (`userId`) sees it; other
+    //     members' device lists / pickers / agent runs never surface it.
+    // Defaults to 'private' — exposing a machine to the whole workspace is an
+    // explicit opt-in (rows that predate the column were backfilled 'public'
+    // to preserve their then-current everyone-visible behaviour). Ignored for
+    // personal rows (`workspace_id IS NULL` — implicitly private to their
+    // owner). Filtered via `buildWorkspaceWhere`.
+    visibility: text('visibility', { enum: ['private', 'public'] })
+      .default('private')
+      .notNull(),
+
+    // Workspace rows enrolled remotely from the owner's personal device list
+    // ("share this device to a workspace") record the PERSONAL deviceId they
+    // were shared from. deviceIds are one-way hashes of (machine, principal),
+    // so without this link the server cannot correlate a personal row with its
+    // workspace twins. NULL for personal rows and for devices enrolled directly
+    // on the machine (`lh connect --workspace`).
+    sharedFromDeviceId: varchar('shared_from_device_id', { length: 64 }),
 
     /** Machine-derived id (sha256 truncated to 32 chars; 64 leaves room for fallback randomUUID) */
     deviceId: varchar('device_id', { length: 64 }).notNull(),
@@ -67,7 +90,7 @@ export const devices = pgTable(
       .where(sql`${t.workspaceId} IS NULL`),
     /**
      * One row per (workspace, machine) for enrolled devices, regardless of which
-     * admin ran the enrollment. registerWorkspaceDevice() upserts on this target
+     * member ran the enrollment. registerWorkspaceDevice() upserts on this target
      * (partial → ON CONFLICT must repeat the `WHERE workspace_id IS NOT NULL`
      * predicate).
      */
@@ -76,6 +99,7 @@ export const devices = pgTable(
       .where(sql`${t.workspaceId} IS NOT NULL`),
     index('devices_user_id_idx').on(t.userId),
     index('devices_workspace_id_idx').on(t.workspaceId),
+    index('devices_workspace_visibility_idx').on(t.workspaceId, t.visibility, t.userId),
   ],
 );
 

@@ -33,8 +33,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   tabsWrapper: css`
     scrollbar-width: none;
+
     overflow-x: auto;
+
+    /* A swipe past the tabs' edge must not fire the browser back gesture. */
+    overscroll-behavior-x: none;
     flex: 1;
+
     min-width: 0;
 
     &::-webkit-scrollbar {

@@ -23,6 +23,7 @@ describe('shareRouter', () => {
         agentId: 'agent-1',
         agentMarketIdentifier: 'market-id',
         agentSlug: 'agent-slug',
+        agentName: null,
         agentTitle: 'Test Agent',
         groupAvatar: null,
         groupBackgroundColor: null,
@@ -37,6 +38,7 @@ describe('shareRouter', () => {
         title: 'Test Topic',
         topicId: 'topic-1',
         visibility: 'link',
+        workspaceId: null,
       };
 
       vi.mocked(TopicShareModel.findByShareIdWithAccessCheck).mockResolvedValue(mockShare);
@@ -74,6 +76,7 @@ describe('shareRouter', () => {
         agentId: 'agent-1',
         agentMarketIdentifier: 'market-agent',
         agentSlug: 'test-agent',
+        agentName: null,
         agentTitle: 'Test Agent Title',
         groupAvatar: null,
         groupBackgroundColor: null,
@@ -88,6 +91,7 @@ describe('shareRouter', () => {
         title: 'Topic with Agent',
         topicId: 'topic-1',
         visibility: 'link',
+        workspaceId: null,
       };
 
       vi.mocked(TopicShareModel.findByShareIdWithAccessCheck).mockResolvedValue(mockShare);
@@ -117,6 +121,7 @@ describe('shareRouter', () => {
         agentId: null,
         agentMarketIdentifier: null,
         agentSlug: null,
+        agentName: null,
         agentTitle: null,
         groupAvatar: 'group-avatar.png',
         groupBackgroundColor: '#000000',
@@ -134,6 +139,7 @@ describe('shareRouter', () => {
         title: 'Group Topic',
         topicId: 'topic-2',
         visibility: 'link',
+        workspaceId: null,
       };
 
       vi.mocked(TopicShareModel.findByShareIdWithAccessCheck).mockResolvedValue(mockShare);
@@ -202,6 +208,7 @@ describe('shareRouter', () => {
         agentId: null,
         agentMarketIdentifier: null,
         agentSlug: null,
+        agentName: null,
         agentTitle: null,
         groupAvatar: null,
         groupBackgroundColor: null,
@@ -216,6 +223,7 @@ describe('shareRouter', () => {
         title: 'Private Topic',
         topicId: 'topic-private',
         visibility: 'private',
+        workspaceId: null,
       };
 
       vi.mocked(TopicShareModel.findByShareIdWithAccessCheck).mockResolvedValue(mockShare);

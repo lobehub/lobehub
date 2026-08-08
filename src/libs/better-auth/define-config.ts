@@ -9,7 +9,7 @@ import { type BetterAuthOptions } from 'better-auth/minimal';
 import { betterAuth } from 'better-auth/minimal';
 import { admin, emailOTP, genericOAuth, magicLink } from 'better-auth/plugins';
 import { type BetterAuthPlugin } from 'better-auth/types';
-import { ProxyAgent, setGlobalDispatcher } from 'undici';
+import { EnvHttpProxyAgent, setGlobalDispatcher } from 'undici';
 
 import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
@@ -24,21 +24,43 @@ import { emailWhitelist } from '@/libs/better-auth/plugins/email-whitelist';
 import { initBetterAuthSSOProviders } from '@/libs/better-auth/sso';
 import { createSecondaryStorage, getTrustedOrigins } from '@/libs/better-auth/utils/config';
 import { parseSSOProviders } from '@/libs/better-auth/utils/server';
+import { clearMismatchedOIDCSession } from '@/libs/oidc-provider/session-cleanup';
 import { EmailService } from '@/server/services/email';
 import { UserService } from '@/server/services/user';
 
-// Configure HTTP proxy for OAuth provider requests in development (e.g., Google token exchange)
-// Node.js native fetch doesn't respect system proxy settings
+const LOCAL_NO_PROXY_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
+
+export const mergeLocalNoProxy = (noProxy?: string): string => {
+  const entries = new Set(
+    (noProxy || '')
+      .split(/[,\s]+/)
+      .map((entry) => entry.trim())
+      .filter(Boolean),
+  );
+
+  if (entries.has('*')) return '*';
+
+  for (const host of LOCAL_NO_PROXY_HOSTS) {
+    entries.add(host);
+  }
+
+  return [...entries].join(',');
+};
+
+// Configure HTTP proxy for OAuth provider requests in development (e.g., Google token exchange).
+// Node.js native fetch doesn't respect system proxy settings. Keep localhost direct so Next can
+// fetch local Vite templates such as /index.auth.html without depending on the system proxy.
 // Ref: https://github.com/better-auth/better-auth/issues/7396
 if (process.env.NODE_ENV === 'development') {
-  const proxyUrl =
-    process.env.HTTPS_PROXY ||
-    process.env.https_proxy ||
-    process.env.HTTP_PROXY ||
-    process.env.http_proxy;
+  const httpProxy = process.env.HTTP_PROXY || process.env.http_proxy;
+  const httpsProxy = process.env.HTTPS_PROXY || process.env.https_proxy || httpProxy;
 
-  if (proxyUrl) {
-    const proxyAgent = new ProxyAgent(proxyUrl);
+  if (httpProxy || httpsProxy) {
+    const proxyAgent = new EnvHttpProxyAgent({
+      ...(httpProxy && { httpProxy }),
+      ...(httpsProxy && { httpsProxy }),
+      noProxy: mergeLocalNoProxy(process.env.NO_PROXY || process.env.no_proxy),
+    });
     setGlobalDispatcher(proxyAgent);
   }
 }
@@ -194,6 +216,21 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
      * Ref: https://www.better-auth.com/docs/reference/options#databasehooks
      */
     databaseHooks: {
+      session: {
+        create: {
+          before: async (session, context) => {
+            try {
+              await clearMismatchedOIDCSession(serverDB, session.userId, context);
+            } catch (error) {
+              /**
+               * OIDC cleanup is a provider-specific recovery guard. Its failure must not prevent
+               * Better Auth from creating the primary application session.
+               */
+              console.error('[Better Auth] Failed to clear a stale OIDC session:', error);
+            }
+          },
+        },
+      },
       user: {
         create: {
           after: async (user) => {

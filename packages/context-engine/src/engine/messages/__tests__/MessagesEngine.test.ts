@@ -72,6 +72,141 @@ describe('MessagesEngine', () => {
   });
 
   describe('process', () => {
+    describe('TODO context priority', () => {
+      const messageTodos = {
+        items: [{ status: 'processing' as const, text: 'Message task' }],
+        updatedAt: 'message-time',
+      };
+      const metadataTodos = {
+        items: [{ status: 'todo' as const, text: 'Metadata task' }],
+        updatedAt: 'metadata-time',
+      };
+
+      it('injects stepContext.todos without a plan configuration', async () => {
+        const result = await new MessagesEngine(
+          createBasicParams({ stepContext: { todos: messageTodos } }),
+        ).process();
+
+        expect(result.messages[0].content).toContain('<todo_context>');
+        expect(result.messages[0].content).toContain('Message task');
+      });
+
+      it('prefers message state over plan metadata', async () => {
+        const result = await new MessagesEngine(
+          createBasicParams({
+            planTodo: { enabled: true, todos: metadataTodos },
+            stepContext: { todos: messageTodos },
+          }),
+        ).process();
+
+        expect(result.messages[0].content).toContain('Message task');
+        expect(result.messages[0].content).not.toContain('Metadata task');
+      });
+
+      it('uses an empty message tombstone to suppress non-empty metadata', async () => {
+        const result = await new MessagesEngine(
+          createBasicParams({
+            planTodo: { enabled: true, todos: metadataTodos },
+            stepContext: { todos: { items: [], updatedAt: 'cleared' } },
+          }),
+        ).process();
+
+        expect(result.messages[0].content).not.toContain('<todo_context>');
+        expect(result.messages[0].content).not.toContain('Metadata task');
+      });
+
+      it('falls back to enabled plan metadata when message state is undefined', async () => {
+        const result = await new MessagesEngine(
+          createBasicParams({ planTodo: { enabled: true, todos: metadataTodos } }),
+        ).process();
+
+        expect(result.messages[0].content).toContain('Metadata task');
+      });
+    });
+
+    it('should drop placeholder residue hidden inside tasks containers', async () => {
+      // TasksFlattenProcessor emits children as role='task' and
+      // TaskMessageProcessor converts them to assistant AFTER the flatten —
+      // the post-flatten placeholder pass must run after that conversion, or
+      // a "..." task child re-enters the payload as a trailing assistant.
+      const result = await new MessagesEngine(
+        createBasicParams({
+          messages: [
+            {
+              content: 'Hello',
+              createdAt: Date.now(),
+              id: 'msg-1',
+              role: 'user',
+              updatedAt: Date.now(),
+            } as UIChatMessage,
+            {
+              content: '',
+              createdAt: Date.now(),
+              id: 'tasks-1',
+              role: 'tasks',
+              tasks: [{ content: '...', id: 'task-child-1' }],
+              updatedAt: Date.now(),
+            } as unknown as UIChatMessage,
+          ],
+        }),
+      ).process();
+
+      expect(result.messages).toHaveLength(1);
+      expect(result.messages[0].role).toBe('user');
+    });
+
+    it('should not let placeholder-only containers consume history slots', async () => {
+      // History truncation counts each container as one group; a placeholder-
+      // only container must be dropped BEFORE truncation or it eats a slot and
+      // then vanishes at the flatten phase, losing a real history turn.
+      const now = Date.now();
+      const result = await new MessagesEngine(
+        createBasicParams({
+          enableHistoryCount: true,
+          historyCount: 3,
+          messages: [
+            {
+              content: 'real question',
+              createdAt: now,
+              id: 'u1',
+              role: 'user',
+              updatedAt: now,
+            } as UIChatMessage,
+            {
+              content: 'real answer',
+              createdAt: now,
+              id: 'a1',
+              role: 'assistant',
+              updatedAt: now,
+            } as UIChatMessage,
+            {
+              content: '',
+              createdAt: now,
+              id: 'tasks-1',
+              role: 'tasks',
+              tasks: [{ content: '...', id: 'task-child-1' }],
+              updatedAt: now,
+            } as unknown as UIChatMessage,
+            {
+              content: 'follow-up',
+              createdAt: now,
+              id: 'u2',
+              role: 'user',
+              updatedAt: now,
+            } as UIChatMessage,
+          ],
+        }),
+      ).process();
+
+      // Without the pre-truncation prune, the container occupies one of the 3
+      // slots and 'real question' falls out of the window.
+      expect(result.messages.map((m) => m.content)).toEqual([
+        'real question',
+        'real answer',
+        'follow-up',
+      ]);
+    });
+
     it('should process messages and return result with stats', async () => {
       const params = createBasicParams();
       const engine = new MessagesEngine(params);
@@ -127,7 +262,7 @@ describe('MessagesEngine', () => {
         content: 'You are a helpful assistant\n\nModel knowledge cutoff: 2024-06',
         role: 'system',
       });
-      expect(result.metadata.modelKnowledgeCutoffInjected).toBe(true);
+      expect(result.metadata.modelInfoInjected).toBe(true);
     });
 
     it('should skip model knowledge cutoff injection when unknown', async () => {
@@ -140,7 +275,26 @@ describe('MessagesEngine', () => {
         content: 'You are a helpful assistant',
         role: 'system',
       });
-      expect(result.metadata.modelKnowledgeCutoffInjected).toBeUndefined();
+      expect(result.metadata.modelInfoInjected).toBeUndefined();
+    });
+
+    it('should inject model name and id when displayName is provided', async () => {
+      const params = createBasicParams({
+        model: 'claude-fable-5',
+        modelDisplayName: 'Fable 5',
+        modelKnowledgeCutoff: '2026-01',
+        systemRole: 'You are a helpful assistant',
+      });
+      const engine = new MessagesEngine(params);
+
+      const result = await engine.process();
+
+      expect(result.messages[0]).toEqual({
+        content:
+          'You are a helpful assistant\n\nCurrent model: Fable 5 (claude-fable-5)\nModel knowledge cutoff: 2026-01',
+        role: 'system',
+      });
+      expect(result.metadata.modelInfoInjected).toBe(true);
     });
 
     it('should inject history summary when provided', async () => {
@@ -296,6 +450,47 @@ describe('MessagesEngine', () => {
       await engine.process();
 
       expect(isCanUseVision).toHaveBeenCalled();
+    });
+
+    it('should make visual fallback requirements explicit for non-vision models', async () => {
+      const messages: UIChatMessage[] = [
+        {
+          content: 'Which models are shown in this image?',
+          createdAt: Date.now(),
+          id: 'msg-vision',
+          imageList: [
+            {
+              alt: 'models.png',
+              id: 'image-1',
+              url: 'https://example.com/models.png',
+            },
+          ],
+          role: 'user',
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+      ];
+      const params = createBasicParams({
+        capabilities: {
+          isCanUseVideo: () => false,
+          isCanUseVision: () => false,
+        },
+        messages,
+        model: 'deepseek-v4-flash',
+        modelDisplayName: 'DeepSeek V4 Flash',
+        provider: 'deepseek',
+      });
+      const engine = new MessagesEngine(params);
+
+      const result = await engine.process();
+
+      const systemContent = String(result.messages.find(({ role }) => role === 'system')?.content);
+      const userContent = JSON.stringify(
+        result.messages.find(({ role }) => role === 'user')?.content,
+      );
+      expect(systemContent).toContain('Native media input capabilities: vision=false, video=false');
+      expect(userContent).toContain('Do not infer or describe the image');
+      expect(userContent).toContain('use an available visual-analysis tool before answering');
+      expect(userContent).toMatch(/ref=\\"msg_[^"]+\.image_1\\"/);
     });
 
     it('should default to true for isCanUseFC when not provided', async () => {
@@ -628,6 +823,11 @@ Document content here.
           activeTopicDocument: {
             agentDocumentId: 'agd_123',
             documentId: 'docs_123',
+            snapshot: {
+              markdown: '# Topic Plan\n\nDraft body',
+              metadata: { charCount: 24, lineCount: 3, title: 'Topic Plan' },
+              xml: '<doc><heading id="h1">Topic Plan</heading></doc>',
+            },
             title: 'Topic Plan',
           },
         },
@@ -641,8 +841,12 @@ Document content here.
       expect(userMessage?.content).toContain('<active_topic_document>');
       expect(userMessage?.content).toContain('document_id="docs_123"');
       expect(userMessage?.content).toContain('agent_document_id="agd_123"');
+      expect(userMessage?.content).toContain('<current_document_snapshot>');
+      expect(userMessage?.content).toContain('<markdown chars="24" lines="3">');
+      expect(userMessage?.content).toContain('<doc_xml_structure>');
       expect(userMessage?.content).toContain('scope="currentTopic"');
       expect(userMessage?.content).toContain('Do not use PageAgent editor tools');
+      expect(userMessage?.content).toContain('Call readDocument with format="xml" only when');
       expect(result.metadata.activeTopicDocumentContextInjected).toBe(true);
     });
 
@@ -1053,7 +1257,42 @@ Document content here.
       ]);
     });
 
-    it('should not inject selections when page editor is not enabled', async () => {
+    it('should inject generic text selections when page editor is not enabled', async () => {
+      const messages: UIChatMessage[] = [
+        {
+          content: '我是说，这是啥?',
+          createdAt: Date.now(),
+          id: 'msg-1',
+          metadata: {
+            contextSelections: [
+              {
+                content: '脚踢自学习',
+                id: 'text-selection-1',
+                source: 'text',
+                title: '脚踢自学习',
+              },
+            ],
+          },
+          role: 'user',
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+      ];
+
+      const params = createBasicParams({ messages });
+      const engine = new MessagesEngine(params);
+
+      const result = await engine.process();
+
+      expect(result.messages[0].content).toContain('我是说，这是啥?');
+      expect(result.messages[0].content).toContain('<user_context_selections count="1">');
+      expect(result.messages[0].content).toContain('source="text"');
+      expect(result.messages[0].content).toContain('脚踢自学习');
+      expect(result.messages[0].content).toContain(
+        '<!-- SYSTEM CONTEXT (NOT PART OF USER QUERY) -->',
+      );
+    });
+
+    it('should not inject legacy page selections when page editor is not enabled', async () => {
       const messages: UIChatMessage[] = [
         {
           content: 'Question',

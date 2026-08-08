@@ -1,17 +1,18 @@
 import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
+import { toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 import { type PartialDeep } from 'type-fest';
 
-import { message } from '@/components/AntdStaticMethods';
 import { DEFAULT_AGENT_LOBE_SESSION, INBOX_SESSION_ID } from '@/const/session';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { sessionKeys } from '@/libs/swr/keys';
 import { chatGroupService } from '@/services/chatGroup';
 import { sessionService } from '@/services/session';
 import { getChatGroupStoreState } from '@/store/agentGroup';
+import { evictMessageCache } from '@/store/chat/utils/evictMessageCache';
 import { type SessionStore } from '@/store/session';
 import { type StoreSetter } from '@/store/types';
 import { getUserStoreState, useUserStore } from '@/store/user';
@@ -47,11 +48,6 @@ export class SessionActionImpl {
     this.#set = set;
     this.#get = get;
   }
-
-  clearSessions = async (): Promise<void> => {
-    await sessionService.removeAllSessions();
-    await this.#get().refreshSessions();
-  };
 
   closeAllAgentsDrawer = (): void => {
     this.#set({ allAgentsDrawerOpen: false }, false, n('closeAllAgentsDrawer'));
@@ -107,26 +103,20 @@ export class SessionActionImpl {
 
     const newTitle = t('duplicateSession.title', { ns: 'chat', title });
 
-    const messageLoadingKey = 'duplicateSession.loading';
-
-    message.loading({
-      content: t('duplicateSession.loading', { ns: 'chat' }),
-      duration: 0,
-      key: messageLoadingKey,
-    });
+    const loadingToast = toast.loading(t('duplicateSession.loading', { ns: 'chat' }));
 
     const newId = await sessionService.cloneSession(id, newTitle);
 
     // duplicate Session Error
     if (!newId) {
-      message.destroy(messageLoadingKey);
-      message.error(t('copyFail', { ns: 'common' }));
+      loadingToast.close();
+      toast.error(t('copyFail', { ns: 'common' }));
       return;
     }
 
     await refreshSessions();
-    message.destroy(messageLoadingKey);
-    message.success(t('duplicateSession.success', { ns: 'chat' }));
+    loadingToast.close();
+    toast.success(t('duplicateSession.success', { ns: 'chat' }));
 
     switchSession(newId);
   };
@@ -139,9 +129,21 @@ export class SessionActionImpl {
     await this.#get().internal_updateSession(id, { pinned });
   };
 
+  /**
+   * @deprecated Legacy session-store delete path, kept only for the mobile
+   * session list (`(mobile)/.../SessionListContent/List/Item/Actions.tsx`).
+   * Desktop already deletes via `HomeStore.removeAgent`. New call sites must use
+   * `HomeStore.removeAgent` (agents) / `HomeStore.removeAgentGroup` (groups) —
+   * all three evict the message cache, so behaviour is equivalent apart from this
+   * path also switching to the inbox when the active session is removed. Remove
+   * once the mobile session list migrates to the agent store.
+   */
   removeSession = async (sessionId: string): Promise<void> => {
     await sessionService.removeSession(sessionId);
     await this.#get().refreshSessions();
+    // deleting an agent cascade-deletes its topics + messages on the server; drop
+    // their message cache too so it doesn't orphan in IndexedDB (never expires)
+    void evictMessageCache((ctx) => ctx.agentId === sessionId);
 
     // If the active session deleted, switch to the inbox session
     if (sessionId === this.#get().activeId) {
@@ -249,6 +251,7 @@ export class SessionActionImpl {
               title: session.meta?.title || 'Untitled Group',
               updatedAt: session.updatedAt,
               userId: '', // Use updatedAt as accessedAt fallback
+              visibility: 'public' as const,
               workspaceId: null,
             }));
 

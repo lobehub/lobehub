@@ -5,19 +5,25 @@ import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import { type LobeToolManifest } from '@lobechat/context-engine';
 import {
   type ChatCompletionTool,
+  getActivePluginIds,
   type LobeAgentChatConfig,
   type LobeAgentConfig,
   type MessageMapScope,
+  resolveAgentModelConfig,
 } from '@lobechat/types';
 import debug from 'debug';
 import { produce } from 'immer';
 
 import { getAgentStoreState } from '@/store/agent';
-import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
+import {
+  agentByIdSelectors,
+  agentSelectors,
+  chatConfigByIdSelectors,
+} from '@/store/agent/selectors';
 import { getChatGroupStoreState } from '@/store/agentGroup';
 import { agentGroupByIdSelectors, agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useUserStore } from '@/store/user';
-import { userGeneralSettingsSelectors } from '@/store/user/selectors';
+import { userGeneralSettingsSelectors, userProfileSelectors } from '@/store/user/selectors';
 import { isDev } from '@/utils/env';
 
 const log = debug('mecha:agentConfigResolver');
@@ -129,6 +135,13 @@ export interface ResolvedAgentConfig {
   plugins: string[];
   /** The agent's slug (if builtin) */
   slug?: string;
+  /**
+   * The raw sub-agent chatConfig override (`agencyConfig.subagent.chatConfig`).
+   * `chatConfig` above already has it merged in for non-migrated fields; this
+   * copy lets the model-params resolver re-apply the user's explicit sub-agent
+   * reasoning choices on top of the model-instance defaults.
+   */
+  subAgentChatConfigOverride?: Partial<LobeAgentChatConfig>;
   /** Pre-generated tools array (populated by internal_createAgentState, undefined means tools disabled) */
   tools?: ChatCompletionTool[];
 }
@@ -157,8 +170,13 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
 
   // Helper to apply plugin filters:
   // 1. If disableTools is true, return empty array (for broadcast scenarios)
-  // 2. If isSubAgent is true, filter out lobe-agent (which owns the sub-agent
-  //    dispatch APIs) to prevent nested sub-agent creation.
+  // 2. Drop page-agent outside page scope.
+  //
+  // lobe-agent's context trimming (hide `callSubAgent` in group / sub-agent runs)
+  // now lives in its manifest resolver (resolveLobeAgentManifest), applied at
+  // tools-engine build time. That keeps lobe-agent's plan / todo / media-analysis
+  // available to sub-agents — only the nested dispatch API is removed — instead of
+  // dropping the whole tool here.
   const applyPluginFilters = (pluginIds: string[]) => {
     if (disableTools) {
       log('disableTools is true, returning empty plugins');
@@ -171,17 +189,44 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
       nextPluginIds = nextPluginIds.filter((id) => id !== PageAgentIdentifier);
     }
 
-    return isSubAgent ? nextPluginIds.filter((id) => id !== 'lobe-agent') : nextPluginIds;
+    return nextPluginIds;
   };
 
   const agentStoreState = getAgentStoreState();
 
   // Get base config from store
-  const agentConfig = agentSelectors.getAgentConfigById(agentId)(agentStoreState);
-  const chatConfig = chatConfigByIdSelectors.getChatConfigById(agentId)(agentStoreState);
+  const sharedAgentConfig = agentSelectors.getAgentConfigById(agentId)(agentStoreState);
+  const agent = agentByIdSelectors.getAgentById(agentId)(agentStoreState);
+  const currentUserId = userProfileSelectors.userId(useUserStore.getState());
+  const isAuthor = !!currentUserId && agent?.userId === currentUserId;
+  const usesWorkspaceMemberSelection =
+    !!agent?.workspaceId && agent.visibility !== 'private' && !isAuthor;
+  const memberModelOverride = usesWorkspaceMemberSelection
+    ? useUserStore.getState().workspaceUserPreference.agentModelOverrides?.[agentId]
+    : undefined;
+  const memberModeOverride = usesWorkspaceMemberSelection
+    ? useUserStore.getState().workspaceUserPreference.agentModeOverrides?.[agentId]
+    : undefined;
+  const agentConfig = {
+    ...sharedAgentConfig,
+    ...resolveAgentModelConfig(
+      {
+        ...sharedAgentConfig,
+        canManage: isAuthor,
+        visibility: agent?.visibility,
+        workspaceId: agent?.workspaceId,
+      },
+      memberModelOverride,
+    ),
+  };
+  const sharedChatConfig = chatConfigByIdSelectors.getChatConfigById(agentId)(agentStoreState);
+  const chatConfig =
+    memberModeOverride === undefined
+      ? sharedChatConfig
+      : { ...sharedChatConfig, enableAgentMode: memberModeOverride };
 
-  // Base plugins from agent config
-  const basePlugins = agentConfig?.plugins ?? [];
+  // Base plugins from agent config (pinned identifiers only — disabled entries excluded)
+  const basePlugins = getActivePluginIds(agentConfig?.plugins);
 
   // Check if this is a builtin agent
   // Priority: supervisor check (when in group scope) > agent store slug

@@ -69,6 +69,27 @@ describe('upsertWorkspaceScan', () => {
     ]);
   });
 
+  it('updates a source entry with a worktree in place when upserted on its source path', () => {
+    // Guards the worktree-scan fix: the caller resolves the MATCHED entry's
+    // source path (not the bound worktree path), so a source entry keyed by
+    // `/repo` with an active worktree is updated in place — no duplicate bare
+    // worktree recent, and its git/worktree metadata survives.
+    const dirs: WorkingDirEntry[] = [
+      { git: { activeWorktree: '/repo-wt', isWorktree: true }, path: '/repo', repoType: 'git' },
+    ];
+
+    const result = upsertWorkspaceScan(dirs, '/repo', workspace, scannedAt);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toEqual({
+      git: { activeWorktree: '/repo-wt', isWorktree: true },
+      path: '/repo',
+      repoType: 'git',
+      workspace,
+      workspaceScannedAt: scannedAt,
+    });
+  });
+
   it('prepends a new most-recent-first entry when the cwd is unrecorded', () => {
     const dirs: WorkingDirEntry[] = [{ path: '/a' }];
 

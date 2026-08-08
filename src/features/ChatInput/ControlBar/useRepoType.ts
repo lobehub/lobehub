@@ -1,4 +1,5 @@
 import { isDesktop } from '@lobechat/const';
+import { getWorkingDirEffectivePath } from '@lobechat/types';
 import { useEffect, useMemo } from 'react';
 import useSWR from 'swr';
 
@@ -31,7 +32,7 @@ export const useRepoType = (path?: string, deviceId?: string): RepoType => {
     path
       ? deviceSelectors
           .getDeviceWorkingDirs(deviceId)(s)
-          .find((d) => d.path === path)?.repoType
+          .find((d) => d.path === path || getWorkingDirEffectivePath(d) === path)?.repoType
       : undefined,
   );
 

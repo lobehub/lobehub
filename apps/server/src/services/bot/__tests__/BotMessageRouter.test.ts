@@ -14,6 +14,7 @@ const mockDeletePairingRequest = vi.hoisted(() => vi.fn());
 const mockReleasePairingClaim = vi.hoisted(() => vi.fn());
 const mockCreateOrGetPairingRequest = vi.hoisted(() => vi.fn());
 const mockGetAgentRuntimeRedisClient = vi.hoisted(() => vi.fn().mockReturnValue(null));
+const mockGetBotFeatureAccessState = vi.hoisted(() => vi.fn());
 
 vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: mockGetServerDB,
@@ -49,6 +50,10 @@ vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
 
 vi.mock('@/server/modules/AgentRuntime/redis', () => ({
   getAgentRuntimeRedisClient: mockGetAgentRuntimeRedisClient,
+}));
+
+vi.mock('@/business/server/bot/featureAccess', () => ({
+  getBotFeatureAccessState: mockGetBotFeatureAccessState,
 }));
 
 // Stub appEnv so accessing `appEnv.APP_URL` in vitest doesn't trip
@@ -107,6 +112,10 @@ const mockAgentBridgeServiceCtor = vi.hoisted(() => vi.fn());
 // keep their pre-behaviour. Individual tests can replace this via
 // `.mockResolvedValueOnce(...)` to simulate Discord's auto-thread upgrade.
 const mockOpenThreadForChannelWake = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+// Mirrors Discord's `ensureThreadMember`: pulls a platform user into the
+// reply thread so they get notified. Optional on the PlatformClient
+// contract — tests that care assert on it; others ignore the extra call.
+const mockEnsureThreadMember = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 
 vi.mock('../AgentBridgeService', () => ({
   AgentBridgeService: mockAgentBridgeServiceCtor,
@@ -166,6 +175,7 @@ const mockGetPlatform = vi.hoisted(() =>
             const parts = threadId.split(':');
             return parts.length === 4 && parts[2] ? [parts[2]] : [];
           },
+          ensureThreadMember: mockEnsureThreadMember,
           getMessenger: () => ({
             createMessage: vi.fn(),
             editMessage: vi.fn(),
@@ -453,6 +463,7 @@ describe('BotMessageRouter', () => {
     mockProviderFindById.mockResolvedValue(undefined);
     mockProviderUpdate.mockResolvedValue(undefined);
     mockGetAgentRuntimeRedisClient.mockReturnValue(null);
+    mockGetBotFeatureAccessState.mockResolvedValue({ allowed: true });
   });
 
   describe('getWebhookHandler', () => {
@@ -765,6 +776,50 @@ describe('BotMessageRouter', () => {
         isMention: false,
         text: 'hey team, I think we have a bug in checkout',
       });
+
+      await handler(thread, message);
+
+      expect(mockHandleSubscribedMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('should drop a keyword wake when messageMonitoring access is not allowed', async () => {
+      mockGetBotFeatureAccessState.mockImplementation(async (params: any) =>
+        params?.feature === 'messageMonitoring'
+          ? { allowed: false, requiredPlan: 'paid' }
+          : { allowed: true },
+      );
+      const handler = await loadSubscribedHandler({
+        dmPolicy: 'open',
+        watchKeywords: [{ keyword: 'bug' }],
+      });
+      const thread = makeThread({ isDM: false });
+      const message = makeMessage({
+        isMention: false,
+        text: 'hey team, I think we have a bug in checkout',
+      });
+
+      await handler(thread, message);
+
+      expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
+      expect(mockGetBotFeatureAccessState).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'runtime', feature: 'messageMonitoring' }),
+      );
+    });
+
+    it('should keep handling mentions when messageMonitoring access is not allowed', async () => {
+      // The gate only covers passive keyword wakes — explicit @mentions in
+      // the same thread must keep flowing for every plan.
+      mockGetBotFeatureAccessState.mockImplementation(async (params: any) =>
+        params?.feature === 'messageMonitoring'
+          ? { allowed: false, requiredPlan: 'paid' }
+          : { allowed: true },
+      );
+      const handler = await loadSubscribedHandler({
+        dmPolicy: 'open',
+        watchKeywords: [{ keyword: 'bug' }],
+      });
+      const thread = makeThread({ isDM: false });
+      const message = makeMessage({ isMention: true, text: 'there is a bug, please look' });
 
       await handler(thread, message);
 
@@ -1099,7 +1154,10 @@ describe('BotMessageRouter', () => {
   });
 
   describe('onNewMessage DM catch-all', () => {
-    async function loadDmCatchAllHandler(settings?: Record<string, unknown>) {
+    async function loadDmCatchAllHandler(
+      settings?: Record<string, unknown>,
+      platform = 'telegram',
+    ) {
       mockFindEnabledByPlatform.mockResolvedValue([
         makeProvider({
           applicationId: 'app-1',
@@ -1107,7 +1165,7 @@ describe('BotMessageRouter', () => {
         }),
       ]);
       const router = new BotMessageRouter();
-      const webhookHandler = router.getWebhookHandler('telegram', 'app-1');
+      const webhookHandler = router.getWebhookHandler(platform, 'app-1');
       const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
       await webhookHandler(req);
 
@@ -1166,6 +1224,131 @@ describe('BotMessageRouter', () => {
       await handler(thread, message);
 
       expect(mockHandleMention).toHaveBeenCalledTimes(1);
+    });
+
+    it('posts a one-time WeChat paid-feature notice and continues handling the DM', async () => {
+      mockGetBotFeatureAccessState.mockResolvedValue({
+        allowed: true,
+        notice: { id: 'wechat-pro-required-v1' },
+        requiredPlan: 'paid',
+        rolloutMode: 'notice',
+      });
+      const handler = await loadDmCatchAllHandler({ dmPolicy: 'open' }, 'wechat');
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'wechat:dm-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'wechat-user-1', userName: 'alice' },
+        text: 'hi in WeChat',
+      };
+
+      await handler(thread, message);
+
+      expect(mockStateSetIfNotExists).toHaveBeenCalledWith(
+        'bot-feature-notice:wechat-pro-required-v1:wechat-user-1',
+        '1',
+      );
+      expect(thread.post).toHaveBeenCalledWith(
+        '提示：由于 WeChat 渠道通信成本过高，LobeHub 微信渠道能力将于近期调整为付费功能。预告期内已有连接可继续使用，但新建或重新连接微信渠道需要升级到个人付费 Plan。',
+      );
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not repeat the WeChat paid-feature notice after dedupe hits', async () => {
+      mockGetBotFeatureAccessState.mockResolvedValue({
+        allowed: true,
+        notice: { id: 'wechat-pro-required-v1' },
+        requiredPlan: 'paid',
+        rolloutMode: 'notice',
+      });
+      mockStateSetIfNotExists.mockResolvedValue(false);
+      const handler = await loadDmCatchAllHandler({ dmPolicy: 'open' }, 'wechat');
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'wechat:dm-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'wechat-user-1', userName: 'alice' },
+        text: 'hi again',
+      };
+
+      await handler(thread, message);
+
+      expect(thread.post).not.toHaveBeenCalled();
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not post the paid-feature notice to senders rejected by the access gates', async () => {
+      mockGetBotFeatureAccessState.mockResolvedValue({
+        allowed: true,
+        notice: { id: 'wechat-pro-required-v1' },
+        requiredPlan: 'paid',
+        rolloutMode: 'notice',
+      });
+      const handler = await loadDmCatchAllHandler(
+        { allowFrom: 'bob-id', dmPolicy: 'allowlist' },
+        'wechat',
+      );
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'wechat:dm-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'wechat-stranger', userName: 'stranger' },
+        text: 'hi in WeChat',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleMention).not.toHaveBeenCalled();
+      // Only the rejection is posted — no plan notice leaks to blocked senders.
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post.mock.calls[0][0]).not.toContain('付费');
+    });
+
+    it('posts the enforce-mode denial only to senders that pass the access gates', async () => {
+      mockGetBotFeatureAccessState.mockResolvedValue({
+        allowed: false,
+        blockedMessage: '微信渠道现已升级为付费功能。',
+        requiredPlan: 'paid',
+        rolloutMode: 'enforce',
+      });
+      const handler = await loadDmCatchAllHandler(
+        { allowFrom: 'bob-id', dmPolicy: 'allowlist' },
+        'wechat',
+      );
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'wechat:dm-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+
+      // A stranger blocked by the allowlist gets the regular rejection, not
+      // the paid-block copy — plan state must not leak past the gates.
+      await handler(thread, {
+        author: { isBot: false, userId: 'wechat-stranger', userName: 'stranger' },
+        text: 'hi in WeChat',
+      });
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post.mock.calls[0][0]).not.toContain('付费');
+
+      // An allowlisted sender passes the gates and then receives the denial.
+      thread.post.mockClear();
+      await handler(thread, {
+        author: { isBot: false, userId: 'bob-id', userName: 'bob' },
+        text: 'hi again',
+      });
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post.mock.calls[0][0]).toContain('付费');
+      expect(mockHandleMention).not.toHaveBeenCalled();
     });
 
     it('should block DM messages blocked by the allowlist and notify the sender', async () => {
@@ -1354,6 +1537,58 @@ describe('BotMessageRouter', () => {
       expect(merged.text).toBe(
         'Scan the recent thread for a bug report.\n\nlooks like a bug in checkout',
       );
+    });
+
+    it('drops a channel keyword wake via catch-all when messageMonitoring is not allowed', async () => {
+      mockGetBotFeatureAccessState.mockImplementation(async (params: any) =>
+        params?.feature === 'messageMonitoring'
+          ? { allowed: false, requiredPlan: 'paid' }
+          : { allowed: true },
+      );
+      const handler = await loadDmCatchAllHandler({
+        dmPolicy: 'open',
+        watchKeywords: [{ keyword: 'bug' }],
+      });
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'discord:guild-1:channel-1',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+        text: 'looks like a bug in checkout',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleMention).not.toHaveBeenCalled();
+    });
+
+    it('keeps DM catch-all handling when messageMonitoring is not allowed', async () => {
+      mockGetBotFeatureAccessState.mockImplementation(async (params: any) =>
+        params?.feature === 'messageMonitoring'
+          ? { allowed: false, requiredPlan: 'paid' }
+          : { allowed: true },
+      );
+      const handler = await loadDmCatchAllHandler({
+        dmPolicy: 'open',
+        watchKeywords: [{ keyword: 'bug' }],
+      });
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'discord:dm-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+        text: 'hi bot, found a bug',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
     });
 
     it('still ignores non-DM channel traffic that does NOT match any watch keyword', async () => {
@@ -1727,6 +1962,113 @@ describe('BotMessageRouter', () => {
       });
 
       expect(mockHandleSubscribedMessage).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('rejection notice visibility (ensureThreadMember)', () => {
+    /**
+     * on Discord a channel @mention auto-creates a reply
+     * thread and rejection notices are posted there — but the rejected
+     * sender was never added to the thread, so they got no notification
+     * and perceived the bot as silently ignoring them. Every group-scope
+     * rejection must pull the sender into the thread before posting.
+     */
+    async function loadMention(settings: Record<string, unknown>) {
+      mockFindEnabledByPlatform.mockResolvedValue([
+        makeProvider({ applicationId: 'app-1', settings }),
+      ]);
+      const router = new BotMessageRouter();
+      const webhookHandler = router.getWebhookHandler('discord', 'app-1');
+      const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
+      await webhookHandler(req);
+      const mention = mockOnNewMention.mock.calls.at(-1);
+      if (!mention) throw new Error('mention handler not registered');
+      return mention[0] as (thread: any, message: any, ctx?: any) => Promise<void>;
+    }
+
+    const groupThread = () => ({
+      channelId: 'channel-1',
+      id: 'discord:guild-1:channel-1:thread-1',
+      isDM: false,
+      post: vi.fn().mockResolvedValue(undefined),
+    });
+    const strangerMessage = {
+      author: { isBot: false, userId: 'lin-id', userName: 'lin' },
+      isMention: true,
+      text: '@bot hello',
+    };
+
+    it('pulls an allowFrom-rejected sender into the reply thread before posting the notice', async () => {
+      const mention = await loadMention({
+        allowFrom: 'alice-id',
+        dmPolicy: 'open',
+        groupPolicy: 'open',
+      });
+      const thread = groupThread();
+
+      await mention(thread, strangerMessage);
+
+      expect(mockEnsureThreadMember).toHaveBeenCalledWith(
+        'discord:guild-1:channel-1:thread-1',
+        'lin-id',
+      );
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post.mock.calls[0][0]).toContain("aren't authorized");
+      // Membership must be granted before the notice lands so the post
+      // generates a notification for the sender.
+      expect(mockEnsureThreadMember.mock.invocationCallOrder[0]).toBeLessThan(
+        thread.post.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('pulls a group-policy-rejected sender into the reply thread', async () => {
+      const mention = await loadMention({
+        dmPolicy: 'open',
+        groupAllowFrom: 'some-other-channel',
+        groupPolicy: 'allowlist',
+      });
+      const thread = groupThread();
+
+      await mention(thread, strangerMessage);
+
+      expect(mockEnsureThreadMember).toHaveBeenCalledWith(
+        'discord:guild-1:channel-1:thread-1',
+        'lin-id',
+      );
+      expect(thread.post).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not touch thread membership for DM rejections', async () => {
+      const mention = await loadMention({
+        allowFrom: 'alice-id',
+        dmPolicy: 'open',
+        groupPolicy: 'open',
+      });
+      const thread = {
+        id: 'discord:@me:dm-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+
+      await mention(thread, strangerMessage);
+
+      expect(mockEnsureThreadMember).not.toHaveBeenCalled();
+      expect(thread.post).toHaveBeenCalledTimes(1);
+    });
+
+    it('still posts the rejection notice when ensureThreadMember fails', async () => {
+      mockEnsureThreadMember.mockRejectedValueOnce(new Error('missing permission'));
+      const mention = await loadMention({
+        allowFrom: 'alice-id',
+        dmPolicy: 'open',
+        groupPolicy: 'open',
+      });
+      const thread = groupThread();
+
+      await mention(thread, strangerMessage);
+
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post.mock.calls[0][0]).toContain("aren't authorized");
     });
   });
 

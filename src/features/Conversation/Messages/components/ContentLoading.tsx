@@ -7,7 +7,7 @@ import BubblesLoading from '@/components/BubblesLoading';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
-import { type OperationType } from '@/store/chat/slices/operation/types';
+import { type OperationType, type StreamRetryMetadata } from '@/store/chat/slices/operation/types';
 import { elapsedTimeStyles, shinyTextStyles } from '@/styles/loading';
 
 import { resolveOperationActivity } from '../../utils/operationActivity';
@@ -28,13 +28,24 @@ const DEDICATED_OPERATION_LABELS = new Set<OperationType>([
 
 interface ContentLoadingProps {
   id: string;
+  /**
+   * Anchor the elapsed-time counter to this timestamp instead of the operation's
+   * startTime. The operation's startTime marks the whole run's beginning (the run-
+   * start assistant message), so a tail indicator sitting after several completed
+   * steps would count the entire run. Passing the last message's `createdAt` here
+   * makes the counter reflect "time since the last step" instead.
+   */
+  startTime?: number;
 }
 
-const ContentLoading = memo<ContentLoadingProps>(({ id }) => {
+const ContentLoading = memo<ContentLoadingProps>(({ id, startTime: startTimeOverride }) => {
   const { t } = useTranslation('chat');
   const runningOp = useChatStore(operationSelectors.getDeepestRunningOperationByMessage(id));
 
-  const startTime = runningOp?.metadata?.startTime;
+  const startTime =
+    startTimeOverride !== undefined && Number.isFinite(startTimeOverride)
+      ? startTimeOverride
+      : runningOp?.metadata?.startTime;
   const operationType = runningOp?.type as OperationType | undefined;
 
   const [elapsedSeconds, setElapsedSeconds] = useState(() =>
@@ -59,15 +70,50 @@ const ContentLoading = memo<ContentLoadingProps>(({ id }) => {
 
   // Heterogeneous agents interpolate their display name (e.g. "Claude Code is running")
   // so the user can tell which external agent is working.
+  const getHeterogeneousAgentName = () => {
+    const heterogeneousType = runningOp?.metadata?.heterogeneousType as string | undefined;
+    return heterogeneousType
+      ? (HETEROGENEOUS_TYPE_LABELS[heterogeneousType] ?? heterogeneousType)
+      : t('operation.heterogeneousAgentFallback');
+  };
+
+  const getRetryStatusText = (retry: StreamRetryMetadata) => {
+    const parts = [
+      typeof retry.errorStatus === 'number' ? String(retry.errorStatus) : undefined,
+      retry.error,
+    ].filter(Boolean);
+    return parts.join(' ') || t('operation.streamRetry.unknownStatus');
+  };
+
+  const getStreamRetryLabel = () => {
+    const retry = runningOp?.metadata?.streamRetry;
+    if (!retry) return undefined;
+
+    const name = getHeterogeneousAgentName();
+    const status = getRetryStatusText(retry);
+
+    if (
+      typeof retry.attempt === 'number' &&
+      Number.isFinite(retry.attempt) &&
+      typeof retry.maxAttempts === 'number' &&
+      Number.isFinite(retry.maxAttempts)
+    ) {
+      return t('operation.streamRetry.withAttempt', {
+        attempt: retry.attempt,
+        maxAttempts: retry.maxAttempts,
+        name,
+        status,
+      });
+    }
+
+    return t('operation.streamRetry', { name, status });
+  };
+
   const getOperationLabel = () => {
     if (!operationType) return undefined;
 
     if (operationType === 'execHeterogeneousAgent') {
-      const heterogeneousType = runningOp?.metadata?.heterogeneousType as string | undefined;
-      const name = heterogeneousType
-        ? (HETEROGENEOUS_TYPE_LABELS[heterogeneousType] ?? heterogeneousType)
-        : t('operation.heterogeneousAgentFallback');
-      return t('operation.execHeterogeneousAgent', { name });
+      return t('operation.execHeterogeneousAgent', { name: getHeterogeneousAgentName() });
     }
 
     if (DEDICATED_OPERATION_LABELS.has(operationType)) {
@@ -83,7 +129,11 @@ const ContentLoading = memo<ContentLoadingProps>(({ id }) => {
 
     return undefined;
   };
-  const operationLabel = getOperationLabel();
+  const streamRetryLabel = getStreamRetryLabel();
+  const operationLabel = streamRetryLabel ?? getOperationLabel();
+  const operationLabelClassName = streamRetryLabel
+    ? shinyTextStyles.errorText
+    : shinyTextStyles.shinyText;
 
   const showElapsedTime = elapsedSeconds >= ELAPSED_TIME_THRESHOLD / 1000;
 
@@ -103,7 +153,7 @@ const ContentLoading = memo<ContentLoadingProps>(({ id }) => {
   if (operationLabel) {
     return (
       <Flexbox horizontal align={'center'} gap={4}>
-        <span className={shinyTextStyles.shinyText}>{operationLabel}...</span>
+        <span className={operationLabelClassName}>{operationLabel}...</span>
         {showElapsedTime && (
           <span className={elapsedTimeStyles.elapsedTime}>({elapsedSeconds}s)</span>
         )}

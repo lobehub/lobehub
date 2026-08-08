@@ -34,6 +34,8 @@
   "context.description": "Descrizione",
   "context.empty": "Nessuna memoria contestuale disponibile",
   "context.source": "Fonte",
+  "detail.notFound.desc": "Questa memoria potrebbe essere stata eliminata o non essere più disponibile.",
+  "detail.notFound.title": "Memoria non trovata",
   "empty.description": "Il recupero della memoria è un processo graduale. Ti invitiamo a conversare di più per arricchire i contenuti disponibili per il richiamo. Prova a interagire più profondamente con l'agente per catturare e memorizzare informazioni preziose.",
   "empty.search": "Nessuna memoria corrispondente trovata",
   "empty.title": "Nessuna Memoria Ancora",

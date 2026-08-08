@@ -1,10 +1,6 @@
-import {
-  CLAUDE_CODE_CLI_INSTALL_COMMANDS,
-  CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
-  CODEX_CLI_INSTALL_COMMANDS,
-  CODEX_CLI_INSTALL_DOCS_URL,
-} from '@lobechat/electron-client-ipc';
-import { ClaudeCode, Codex } from '@lobehub/icons';
+import type { LocalHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
+import { HETEROGENEOUS_AGENT_CONFIGS } from '@lobechat/heterogeneous-agents';
+import { Amp, ClaudeCode, Codex, OpenCode, Pi, Qoder } from '@lobehub/icons';
 
 import {
   type HeterogeneousAgentGuideConfig,
@@ -12,24 +8,53 @@ import {
   type SupportedHeterogeneousAgentType,
 } from './types';
 
-export const HETEROGENEOUS_AGENT_GUIDE_CONFIG = {
+const GUIDE_PRESENTATION_CONFIG = {
+  'amp': {
+    icon: Amp,
+    translationPrefix: 'ampInstallGuide',
+  },
   'claude-code': {
-    docsUrl: CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
     icon: ClaudeCode,
-    installCommands: CLAUDE_CODE_CLI_INSTALL_COMMANDS,
-    signInCommand: 'claude',
-    title: 'Claude Code',
     translationPrefix: 'claudeCodeInstallGuide',
   },
   'codex': {
-    docsUrl: CODEX_CLI_INSTALL_DOCS_URL,
     icon: Codex,
-    installCommands: CODEX_CLI_INSTALL_COMMANDS,
-    signInCommand: 'codex',
-    title: 'Codex',
     translationPrefix: 'codexInstallGuide',
   },
-} as const satisfies Record<SupportedHeterogeneousAgentType, HeterogeneousAgentGuideConfig>;
+  'opencode': {
+    icon: OpenCode,
+    translationPrefix: 'opencodeInstallGuide',
+  },
+  'pi': {
+    icon: Pi,
+    translationPrefix: 'piInstallGuide',
+  },
+  'qoder': {
+    icon: Qoder,
+    translationPrefix: 'qoderInstallGuide',
+  },
+} as const satisfies Record<
+  LocalHeterogeneousAgentType,
+  Pick<HeterogeneousAgentGuideConfig, 'icon' | 'translationPrefix'>
+>;
+
+const createGuideConfig = () => {
+  const configs = {} as Record<SupportedHeterogeneousAgentType, HeterogeneousAgentGuideConfig>;
+
+  for (const descriptor of HETEROGENEOUS_AGENT_CONFIGS) {
+    configs[descriptor.type] = {
+      docsUrl: descriptor.install.docsUrl,
+      installCommands: descriptor.install.commands,
+      signInCommand: descriptor.auth.signInCommand,
+      title: descriptor.title,
+      ...GUIDE_PRESENTATION_CONFIG[descriptor.type],
+    };
+  }
+
+  return configs;
+};
+
+export const HETEROGENEOUS_AGENT_GUIDE_CONFIG = createGuideConfig();
 
 export const isSupportedHeterogeneousAgentType = (
   value?: string,

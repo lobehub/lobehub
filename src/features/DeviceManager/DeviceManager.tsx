@@ -1,8 +1,9 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import type { DeviceScope } from '@lobechat/types';
-import { Button, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
+import type { DeviceScope, DeviceVisibility } from '@lobechat/types';
+import { ActionIcon, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   ChevronRightIcon,
@@ -10,49 +11,53 @@ import {
   type LucideIcon,
   MonitorDownIcon,
   MonitorUpIcon,
+  RefreshCwIcon,
   ServerIcon,
-  ShieldCheckIcon,
   TerminalIcon,
+  ZapIcon,
 } from 'lucide-react';
-import { memo, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useClientDataSWR } from '@/libs/swr';
-import { deviceService } from '@/services/device';
+import AsyncBoundary from '@/components/AsyncBoundary';
+import SharedListSkeleton from '@/components/ListSkeleton';
 import { useElectronStore } from '@/store/electron';
-import { useUserStore } from '@/store/user';
-import { authSelectors } from '@/store/user/selectors';
 
-import { DEVICE_LIST_SWR_KEY } from './const';
 import DeviceDetailPanel from './DeviceDetailPanel';
 import DeviceItem from './DeviceItem';
+import { useDeviceList } from './useDeviceList';
 
 const styles = createStaticStyles(({ css }) => ({
+  // ─── Onboarding empty state ───
   badge: css`
     padding-block: 1px;
     padding-inline: 8px;
     border-radius: 999px;
 
-    font-size: 11px;
+    font-size: ${cssVar.fontSizeSM};
     font-weight: 500;
     color: ${cssVar.colorPrimary};
 
     background: ${cssVar.colorPrimaryBg};
   `,
-  detailPlaceholder: css`
-    min-height: 320px;
-    padding: 32px;
-  `,
-  detailCol: css`
-    overflow: hidden;
-    align-self: stretch;
-
-    min-width: 0;
-    min-height: 360px;
+  capabilityCard: css`
+    padding: 16px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
-
     background: ${cssVar.colorBgContainer};
+  `,
+  capabilityIcon: css`
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 36px;
+    height: 36px;
+    border-radius: ${cssVar.borderRadius};
+
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorFillTertiary};
   `,
   emptyCard: css`
     overflow: hidden;
@@ -63,53 +68,8 @@ const styles = createStaticStyles(({ css }) => ({
   emptyHero: css`
     padding-block: 40px;
     padding-inline: 32px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
     text-align: center;
-
     background: ${cssVar.colorFillQuaternary};
-  `,
-  managerGrid: css`
-    display: grid;
-    grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
-    gap: 16px;
-    align-items: start;
-
-    @media (width <= 920px) {
-      grid-template-columns: 1fr;
-    }
-  `,
-  overviewCard: css`
-    padding-block: 14px;
-    padding-inline: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  overviewGrid: css`
-    display: grid;
-    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-    gap: 16px;
-    align-items: start;
-
-    @media (width <= 860px) {
-      grid-template-columns: 1fr;
-    }
-  `,
-  overviewIcon: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 32px;
-    height: 32px;
-    border-radius: ${cssVar.borderRadius};
-
-    color: ${cssVar.colorPrimary};
-
-    background: ${cssVar.colorPrimaryBg};
   `,
   heroIcon: css`
     display: flex;
@@ -120,63 +80,37 @@ const styles = createStaticStyles(({ css }) => ({
     height: 56px;
     border-radius: ${cssVar.borderRadiusLG};
 
-    color: ${cssVar.colorPrimary};
+    color: ${cssVar.colorText};
 
-    background: ${cssVar.colorPrimaryBg};
-  `,
-  listCol: css`
-    min-width: 0;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgContainer};
-  `,
-  listHeader: css`
-    padding-block: 6px 8px;
-    padding-inline: 8px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+    background: ${cssVar.colorFillSecondary};
   `,
   option: css`
     cursor: pointer;
     padding: 20px;
     background: ${cssVar.colorBgContainer};
-    transition: background 0.2s;
+    transition: background 0.15s ease;
 
     &:hover {
-      background: ${cssVar.colorFillQuaternary};
+      background: ${cssVar.colorFillTertiary};
+    }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimary};
+      outline-offset: -2px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
     }
   `,
   optionGrid: css`
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 1px;
+
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+
     background: ${cssVar.colorBorderSecondary};
-  `,
-  placeholderIcon: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 52px;
-    height: 52px;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  placeholderItemIcon: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 24px;
-    height: 24px;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
   `,
   optionIcon: css`
     display: flex;
@@ -190,20 +124,39 @@ const styles = createStaticStyles(({ css }) => ({
 
     color: ${cssVar.colorTextSecondary};
 
-    background: ${cssVar.colorFillSecondary};
+    background: ${cssVar.colorFillTertiary};
   `,
-  subtitle: css`
-    font-size: 13px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  securityList: css`
-    margin: 0;
-    padding-inline-start: 18px;
-    color: ${cssVar.colorTextSecondary};
+  // ─── Master-detail surfaces ───
+  detailCol: css`
+    align-self: stretch;
 
-    li + li {
-      margin-block-start: 6px;
-    }
+    min-width: 0;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+
+    background: ${cssVar.colorBgContainer};
+  `,
+  listCol: css`
+    overflow: hidden;
+
+    min-width: 0;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+
+    background: ${cssVar.colorBgContainer};
+  `,
+  listHeader: css`
+    min-height: 44px;
+    padding-block: 8px;
+    padding-inline: 12px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+  `,
+  listScroll: css`
+    overflow-y: auto;
+
+    /* Cap the list so long fleets (servers / CLI agents) stay scrollable instead
+       of pushing the page — pairs with the detail panel sitting beside it. */
+    max-height: 480px;
   `,
 }));
 
@@ -216,16 +169,30 @@ interface ConnectOptionProps {
 }
 
 const ConnectOption = memo<ConnectOptionProps>(({ icon, title, desc, badge, onClick }) => (
-  <Flexbox horizontal align={'flex-start'} className={styles.option} gap={14} onClick={onClick}>
+  <Flexbox
+    horizontal
+    align={'flex-start'}
+    className={styles.option}
+    gap={16}
+    role={'button'}
+    tabIndex={0}
+    onClick={onClick}
+    onKeyDown={(e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onClick();
+      }
+    }}
+  >
     <span className={styles.optionIcon}>
       <Icon icon={icon} size={20} />
     </span>
-    <Flexbox flex={1} gap={2}>
+    <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
       <Flexbox horizontal align={'center'} gap={8}>
-        <Text style={{ fontSize: 14, fontWeight: 500 }}>{title}</Text>
+        <Text weight={500}>{title}</Text>
         {badge && <span className={styles.badge}>{badge}</span>}
       </Flexbox>
-      <Text className={styles.subtitle} style={{ fontSize: 12 }}>
+      <Text color={cssVar.colorTextTertiary} fontSize={12}>
         {desc}
       </Text>
     </Flexbox>
@@ -233,115 +200,42 @@ const ConnectOption = memo<ConnectOptionProps>(({ icon, title, desc, badge, onCl
   </Flexbox>
 ));
 
-interface DeviceOverviewProps {
-  scope: DeviceScope;
-}
-
-const DeviceOverview = memo<DeviceOverviewProps>(({ scope }) => {
+const Capabilities = memo(() => {
   const { t } = useTranslation('setting');
-  const isWorkspace = scope === 'workspace';
-  const securityItems = isWorkspace
-    ? [
-        t('devices.security.workspace.members'),
-        t('devices.security.workspace.onlineOnly'),
-        t('devices.security.workspace.scope'),
-      ]
-    : [
-        t('devices.security.personal.metadata'),
-        t('devices.security.personal.onlineOnly'),
-        t('devices.security.personal.stop'),
-      ];
-
+  const items: { desc: string; icon: LucideIcon; title: string }[] = [
+    {
+      desc: t('devices.capabilities.files.desc'),
+      icon: FolderCogIcon,
+      title: t('devices.capabilities.files.title'),
+    },
+    {
+      desc: t('devices.capabilities.commands.desc'),
+      icon: TerminalIcon,
+      title: t('devices.capabilities.commands.title'),
+    },
+    {
+      desc: t('devices.capabilities.tools.desc'),
+      icon: ZapIcon,
+      title: t('devices.capabilities.tools.title'),
+    },
+  ];
   return (
-    <div className={styles.overviewCard}>
-      <div className={styles.overviewGrid}>
-        <Flexbox horizontal align={'flex-start'} gap={12}>
-          <span className={styles.overviewIcon}>
-            <Icon icon={isWorkspace ? ServerIcon : MonitorDownIcon} size={18} />
-          </span>
-          <Flexbox gap={4}>
-            <Text style={{ fontSize: 14, fontWeight: 600 }}>
-              {t(
-                isWorkspace
-                  ? 'devices.overview.workspace.title'
-                  : 'devices.overview.personal.title',
-              )}
-            </Text>
-            <Text className={styles.subtitle} style={{ lineHeight: 1.6 }}>
-              {t(
-                isWorkspace ? 'devices.overview.workspace.desc' : 'devices.overview.personal.desc',
-              )}
-            </Text>
-          </Flexbox>
-        </Flexbox>
-
-        <Flexbox horizontal align={'flex-start'} gap={12}>
-          <span className={styles.overviewIcon}>
-            <Icon icon={ShieldCheckIcon} size={18} />
-          </span>
-          <Flexbox gap={6}>
-            <Text style={{ fontSize: 14, fontWeight: 600 }}>{t('devices.security.title')}</Text>
-            <ul className={styles.securityList}>
-              {securityItems.map((item) => (
-                <li key={item}>
-                  <Text style={{ fontSize: 12, lineHeight: 1.6 }} type={'secondary'}>
-                    {item}
-                  </Text>
-                </li>
-              ))}
-            </ul>
-          </Flexbox>
-        </Flexbox>
-      </div>
-    </div>
-  );
-});
-
-DeviceOverview.displayName = 'DeviceManager.DeviceOverview';
-
-interface DetailPlaceholderProps {
-  scope: DeviceScope;
-}
-
-const DetailPlaceholder = memo<DetailPlaceholderProps>(({ scope }) => {
-  const { t } = useTranslation('setting');
-  const isWorkspace = scope === 'workspace';
-  const items: { icon: LucideIcon; text: string }[] = isWorkspace
-    ? [
-        { icon: TerminalIcon, text: t('devices.placeholder.workspace.connection') },
-        { icon: FolderCogIcon, text: t('devices.placeholder.workspace.cwd') },
-        { icon: ShieldCheckIcon, text: t('devices.placeholder.workspace.security') },
-      ]
-    : [
-        { icon: TerminalIcon, text: t('devices.placeholder.connection') },
-        { icon: FolderCogIcon, text: t('devices.placeholder.cwd') },
-        { icon: ShieldCheckIcon, text: t('devices.placeholder.security') },
-      ];
-
-  return (
-    <Flexbox align={'center'} className={styles.detailPlaceholder} gap={18} justify={'center'}>
-      <span className={styles.placeholderIcon}>
-        <Icon icon={isWorkspace ? ServerIcon : MonitorDownIcon} size={26} />
-      </span>
-      <Flexbox align={'center'} gap={6}>
-        <Text style={{ fontSize: 16, fontWeight: 600 }}>{t('devices.placeholder.title')}</Text>
-        <Text
-          align={'center'}
-          className={styles.subtitle}
-          style={{ maxWidth: 360, lineHeight: 1.6 }}
-        >
-          {t('devices.placeholder.desc')}
-        </Text>
-      </Flexbox>
-      <Flexbox gap={8} style={{ maxWidth: 360, width: '100%' }}>
-        {items.map((item) => (
-          <Flexbox horizontal align={'center'} gap={10} key={item.text}>
-            <span className={styles.placeholderItemIcon}>
-              <Icon icon={item.icon} size={14} />
+    <Flexbox gap={16}>
+      <Text fontSize={12} type={'secondary'} weight={500}>
+        {t('devices.capabilities.title')}
+      </Text>
+      <Flexbox horizontal gap={16}>
+        {items.map((cap) => (
+          <Flexbox className={styles.capabilityCard} flex={1} gap={12} key={cap.title}>
+            <span className={styles.capabilityIcon}>
+              <Icon icon={cap.icon} size={18} />
             </span>
-            <Text style={{ fontSize: 12 }} type={'secondary'}>
-              {item.text}
-            </Text>
+            <Flexbox gap={4}>
+              <Text weight={500}>{cap.title}</Text>
+              <Text color={cssVar.colorTextTertiary} fontSize={12}>
+                {cap.desc}
+              </Text>
+            </Flexbox>
           </Flexbox>
         ))}
       </Flexbox>
@@ -349,39 +243,57 @@ const DetailPlaceholder = memo<DetailPlaceholderProps>(({ scope }) => {
   );
 });
 
-DetailPlaceholder.displayName = 'DeviceManager.DetailPlaceholder';
+// Loading placeholder that reuses the list-card chrome and only skeletonises the
+// row text — loading → loaded is a content swap, not a relayout (ux §4.1).
+// `withHeader` mirrors the personal page's count/connect header row; the
+// workspace page has no list header (its actions live in the page's tab row).
+const ListSkeleton = memo<{ withHeader?: boolean }>(({ withHeader }) => (
+  <Flexbox className={styles.listCol} flex={1}>
+    {withHeader && (
+      <Flexbox horizontal align={'center'} className={styles.listHeader}>
+        <Skeleton.Button active size={'small'} style={{ height: 16, minWidth: 80, width: 80 }} />
+      </Flexbox>
+    )}
+    <Flexbox padding={4}>
+      <SharedListSkeleton />
+    </Flexbox>
+  </Flexbox>
+));
 
 interface DeviceManagerProps {
-  /** Open the enrollment wizard (the modal is owned by the route, by the header button). */
+  /** Open the enrollment wizard (the modal is owned by the route). */
   onConnect: (tab?: 'cli' | 'desktop') => void;
   /** Which device pool this surface manages. */
   scope: DeviceScope;
+  /**
+   * Workspace scope only: narrow the list to one visibility tab — 'public'
+   * (shared pool) or 'private' (the caller's own private enrollments). Omitted
+   * → no visibility filtering (personal page).
+   */
+  visibility?: DeviceVisibility;
 }
 
 /**
  * Master-detail device manager shared by the personal (`/settings/devices`) and
  * workspace (`/:slug/settings/devices`) pages — list + detail panel + onboarding
- * empty state, filtered to the given `scope`.
+ * empty state, filtered to the given `scope` (and, for workspace, the active
+ * visibility tab).
  */
-const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope }) => {
+const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope, visibility }) => {
   const { t } = useTranslation('setting');
   const isWorkspace = scope === 'workspace';
 
-  // Fetch via SWR so the cache key carries the active workspace id (see
-  // `DEVICE_LIST_SWR_KEY`). The raw TRPC React Query key had no workspace
-  // dimension, so a fetch primed while the workspace was still resolving (empty
-  // `X-Workspace-Id` header → personal pool) stuck for the whole session and the
-  // workspace list rendered empty until a hard refresh.
-  // Devices come from an authed lambda procedure, so only query once signed in
-  // (desktop always queries — it lists the local device's registered cwd).
-  const isLogin = useUserStore(authSelectors.isLogin);
-  const { data, isLoading } = useClientDataSWR(
-    isLogin || isDesktop ? [DEVICE_LIST_SWR_KEY] : null,
-    () => deviceService.listDevices(),
-  );
+  // Workspace-keyed SWR fetch — the shared hook every device-listing surface
+  // uses (see `useDeviceList` for why the raw TRPC React Query path is wrong).
+  const { data, isLoading, error, mutate, isValidating } = useDeviceList();
   // `listDevices` is workspace-aware and returns both pools — keep each surface
-  // to its own scope.
-  const devices = useMemo(() => (data ?? []).filter((d) => d.scope === scope), [data, scope]);
+  // to its own scope (and visibility tab). Ghost rows (`visibility: null`,
+  // online but unregistered) belong to the shared pool: the server already
+  // strips other members' private devices, so an unclaimed live connection can
+  // only be a public-pool machine.
+  const devices = (data ?? []).filter(
+    (d) => d.scope === scope && (!visibility || (d.visibility ?? 'public') === visibility),
+  );
 
   // The machine the user is on right now (desktop only) — personal pool only;
   // a workspace device is never "this machine" in the personal sense.
@@ -391,54 +303,43 @@ const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope }) => {
   const currentDeviceId = !isWorkspace && isDesktop ? gatewayDeviceInfo?.deviceId : undefined;
 
   const [selectedId, setSelectedId] = useState<string>();
-  const hasAutoSelectedRef = useRef(false);
 
-  useLayoutEffect(() => {
-    if (devices.length === 0) {
-      if (selectedId) setSelectedId(undefined);
-      hasAutoSelectedRef.current = false;
-      return;
-    }
-
-    if (selectedId && !devices.some((device) => device.deviceId === selectedId)) {
-      setSelectedId(undefined);
-      hasAutoSelectedRef.current = false;
-      return;
-    }
-
-    if (selectedId || hasAutoSelectedRef.current) return;
-
-    const currentDevice = currentDeviceId
-      ? devices.find((device) => device.deviceId === currentDeviceId)
-      : undefined;
-    const autoSelectedDevice = currentDevice ?? (devices.length === 1 ? devices[0] : undefined);
-
-    if (autoSelectedDevice) {
-      setSelectedId(autoSelectedDevice.deviceId);
-      hasAutoSelectedRef.current = true;
-    }
-  }, [currentDeviceId, devices, selectedId]);
-
-  if (isLoading) return <Skeleton active paragraph={{ rows: 4 }} title={false} />;
-
-  // ─── Empty state: onboarding hero + connect options ───
-  if (devices.length === 0) {
-    return (
+  // ─── Empty state: onboarding hero + connect options + capabilities ───
+  // Now gated by AsyncBoundary so a *failed* device fetch renders a failure +
+  // Retry instead of this "connect your first device" onboarding (which falsely
+  // told the user they own no devices — ux Read §1.1 error-as-empty trap).
+  // Workspace machines are headless (CLI-only enrollment), so that scope gets
+  // a single primary button instead of the personal page's connect-method
+  // cards + capabilities. The copy is pool-agnostic; only the hero icon forks
+  // between the shared (server) and private (own machine) pools.
+  const isPrivatePool = isWorkspace && visibility === 'private';
+  const emptyState = (
+    <Flexbox gap={32}>
       <Flexbox className={styles.emptyCard}>
         <Flexbox align={'center'} className={styles.emptyHero} gap={12}>
           <span className={styles.heroIcon}>
-            <Icon icon={isWorkspace ? ServerIcon : MonitorDownIcon} size={28} />
+            <Icon icon={isWorkspace && !isPrivatePool ? ServerIcon : MonitorDownIcon} size={28} />
           </span>
-          <Text style={{ fontSize: 18, fontWeight: 600 }}>
+          <Text fontSize={18} weight={600}>
             {t(isWorkspace ? 'workspaceSetting.devices.heroTitle' : 'devices.empty.title')}
           </Text>
-          <Text className={styles.subtitle} style={{ maxWidth: 440 }}>
+          <Text style={{ maxWidth: 440 }} type={'secondary'}>
             {t(isWorkspace ? 'workspaceSetting.devices.heroDesc' : 'devices.empty.desc')}
           </Text>
+          {isWorkspace && (
+            <Button
+              icon={<Icon icon={TerminalIcon} />}
+              style={{ marginBlockStart: 8 }}
+              type={'primary'}
+              onClick={() => onConnect('cli')}
+            >
+              {t('devices.empty.methodCli.title')}
+            </Button>
+          )}
         </Flexbox>
 
-        <div className={isWorkspace ? undefined : styles.optionGrid}>
-          {!isWorkspace && (
+        {!isWorkspace && (
+          <div className={styles.optionGrid}>
             <ConnectOption
               badge={t('devices.empty.methodDesktop.badge')}
               desc={t('devices.empty.methodDesktop.desc')}
@@ -446,73 +347,93 @@ const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope }) => {
               title={t('devices.empty.methodDesktop.title')}
               onClick={() => onConnect('desktop')}
             />
-          )}
-          <ConnectOption
-            desc={t('devices.empty.methodCli.desc')}
-            icon={TerminalIcon}
-            title={t('devices.empty.methodCli.title')}
-            onClick={() => onConnect('cli')}
-          />
-        </div>
+            <ConnectOption
+              desc={t('devices.empty.methodCli.desc')}
+              icon={TerminalIcon}
+              title={t('devices.empty.methodCli.title')}
+              onClick={() => onConnect('cli')}
+            />
+          </div>
+        )}
       </Flexbox>
-    );
-  }
+
+      {!isWorkspace && <Capabilities />}
+    </Flexbox>
+  );
 
   const selected = selectedId ? devices.find((d) => d.deviceId === selectedId) : undefined;
   const isCurrent = (id: string) => !!currentDeviceId && id === currentDeviceId;
 
   return (
-    <Flexbox gap={20}>
-      <DeviceOverview scope={scope} />
-
-      <div className={styles.managerGrid}>
-        <Flexbox className={styles.listCol} padding={4}>
-          <Flexbox
-            horizontal
-            align={'center'}
-            className={styles.listHeader}
-            distribution={'space-between'}
-            gap={12}
-          >
-            <Text style={{ fontSize: 12, fontWeight: 500 }} type={'secondary'}>
-              {t('tab.devices')} · {devices.length}
-            </Text>
-            <Button
-              icon={<Icon icon={MonitorUpIcon} />}
-              size={'small'}
-              type={'text'}
-              onClick={() => onConnect()}
+    <AsyncBoundary
+      data={data}
+      empty={emptyState}
+      error={error}
+      errorVariant={'block'}
+      isEmpty={devices.length === 0}
+      isLoading={isLoading}
+      loading={<ListSkeleton withHeader={!isWorkspace} />}
+      onRetry={() => mutate()}
+    >
+      <Flexbox horizontal align={'flex-start'} gap={16}>
+        <Flexbox className={styles.listCol} flex={1}>
+          {/* Workspace scope has no list header — its connect + refresh actions
+              live in the page's tab row (beside the visibility tabs). */}
+          {!isWorkspace && (
+            <Flexbox
+              horizontal
+              align={'center'}
+              className={styles.listHeader}
+              justify={'space-between'}
             >
-              {t('devices.actions.connectAnother')}
-            </Button>
+              <Text fontSize={12} type={'secondary'} weight={500}>
+                {t('devices.selection.total', { count: devices.length })}
+              </Text>
+              <Flexbox horizontal align={'center'} gap={8}>
+                <Button
+                  icon={<Icon icon={MonitorUpIcon} />}
+                  size={'small'}
+                  onClick={() => onConnect()}
+                >
+                  {t('devices.connectWizard.button')}
+                </Button>
+                <ActionIcon
+                  icon={RefreshCwIcon}
+                  loading={isValidating}
+                  size={'small'}
+                  title={t('devices.actions.refresh')}
+                  onClick={() => mutate()}
+                />
+              </Flexbox>
+            </Flexbox>
+          )}
+          <Flexbox className={styles.listScroll} gap={2} padding={4}>
+            {devices.map((device) => (
+              <DeviceItem
+                device={device}
+                isCurrent={isCurrent(device.deviceId)}
+                key={device.deviceId}
+                selected={device.deviceId === selectedId}
+                onSelect={() =>
+                  setSelectedId((prev) => (prev === device.deviceId ? undefined : device.deviceId))
+                }
+              />
+            ))}
           </Flexbox>
-          {devices.map((device) => (
-            <DeviceItem
-              device={device}
-              isCurrent={isCurrent(device.deviceId)}
-              key={device.deviceId}
-              selected={device.deviceId === selectedId}
-              onSelect={() =>
-                setSelectedId((prev) => (prev === device.deviceId ? undefined : device.deviceId))
-              }
-            />
-          ))}
         </Flexbox>
-        <Flexbox className={styles.detailCol}>
-          {selected ? (
-            /* keyed on deviceId so the form state resets when the selection changes */
+        {selected && (
+          <Flexbox className={styles.detailCol} flex={1}>
+            {/* keyed on deviceId so the form state resets when the selection changes */}
             <DeviceDetailPanel
               device={selected}
               isCurrent={isCurrent(selected.deviceId)}
               key={selected.deviceId}
               onClose={() => setSelectedId(undefined)}
             />
-          ) : (
-            <DetailPlaceholder scope={scope} />
-          )}
-        </Flexbox>
-      </div>
-    </Flexbox>
+          </Flexbox>
+        )}
+      </Flexbox>
+    </AsyncBoundary>
   );
 });
 

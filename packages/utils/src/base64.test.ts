@@ -114,4 +114,27 @@ describe('base64 utilities', () => {
       });
     });
   });
+
+  describe('non-ASCII in the browser environment (native btoa/atob)', () => {
+    it('should round-trip UTF-8 text that native btoa would reject as raw input', () => {
+      const originalBtoa = global.btoa;
+      const originalAtob = global.atob;
+      // Faithful to real browsers: btoa throws on any code point > U+00FF,
+      // and atob returns a Latin1 binary string (not a UTF-8-decoded string).
+      global.btoa = (s: string) => {
+        if (/[^\u0000-\u00FF]/.test(s)) throw new Error('InvalidCharacterError');
+        return Buffer.from(s, 'latin1').toString('base64');
+      };
+      global.atob = (b: string) => Buffer.from(b, 'base64').toString('latin1');
+
+      try {
+        const input = '中文测试 😀 café';
+        // Before the fix this threw InvalidCharacterError on encode.
+        expect(decodeFromBase64(encodeToBase64(input))).toBe(input);
+      } finally {
+        global.btoa = originalBtoa;
+        global.atob = originalAtob;
+      }
+    });
+  });
 });

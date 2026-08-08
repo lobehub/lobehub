@@ -3,10 +3,10 @@ import type {
   ShowDesktopNotificationParams,
 } from '@lobechat/electron-client-ipc';
 import { app, Notification } from 'electron';
-import * as electronIs from 'electron-is';
 
 import { getIpcContext } from '@/utils/ipc';
 import { createLogger } from '@/utils/logger';
+import * as electronIs from '@/utils/platform';
 
 import { ControllerModule, IpcMethod } from './index';
 
@@ -152,11 +152,13 @@ export default class NotificationCtr extends ControllerModule {
 
       notification.on('click', () => {
         logger.debug('User clicked notification, showing main window');
-        const mainWindow = this.app.browserManager.getMainWindow();
-        mainWindow.show();
-        mainWindow.browserWindow.focus();
+        // Reuse the shared show path so a *minimized* window is restored first.
+        // A bare `Browser.show()` cannot un-minimize on macOS, which made the
+        // notification intermittently fail to surface the app (worked only when
+        // the window was hidden, not when minimized to the Dock).
+        this.app.browserManager.showMainWindow();
         if (params.navigate?.path) {
-          mainWindow.broadcast('navigate', params.navigate);
+          this.app.browserManager.getMainWindow().broadcast('navigate', params.navigate);
         }
       });
 

@@ -1,9 +1,9 @@
 import type { CreateThreadParams } from '@lobechat/types';
-import { ThreadStatus } from '@lobechat/types';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { RequestTrigger, ThreadStatus } from '@lobechat/types';
+import { and, desc, eq, notExists, sql } from 'drizzle-orm';
 
 import type { ThreadItem } from '../schemas';
-import { messages, threads } from '../schemas';
+import { agentOperations, messages, threads } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
@@ -79,6 +79,14 @@ export class ThreadModel {
   private ownership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, threads);
 
+  /**
+   * In workspace mode `ownership()` matches every member's threads, so a bulk
+   * "clear all" would wipe teammates' rows. Destructive sweeps must
+   * additionally pin `user_id` to the caller (personal mode is unchanged —
+   * ownership already scopes to the user there).
+   */
+  private mine = () => and(this.ownership(), eq(threads.userId, this.userId));
+
   create = async (params: CreateThreadParams) => {
     // @ts-ignore
     const [result] = await this.db
@@ -100,7 +108,7 @@ export class ThreadModel {
   };
 
   deleteAll = async () => {
-    return this.db.delete(threads).where(this.ownership());
+    return this.db.delete(threads).where(this.mine());
   };
 
   query = async () => {
@@ -121,7 +129,28 @@ export class ThreadModel {
       .select({ ...queryColumns, ...subagentMetricColumns })
       .from(threads)
       .leftJoin(messages, eq(messages.threadId, threads.id))
-      .where(and(eq(threads.topicId, topicId), this.ownership()))
+      .where(
+        and(
+          eq(threads.topicId, topicId),
+          this.ownership(),
+          sql`COALESCE(${threads.metadata} ->> 'onboardingUnderstanding', '') = ''`,
+          // NOTICE:
+          // Internal Agent Signal and onboarding Understanding runs create
+          // isolation threads that must stay out of the user-facing sub-agent
+          // attachment list. Ordinary onboarding threads remain visible.
+          notExists(
+            this.db
+              .select({ id: agentOperations.id })
+              .from(agentOperations)
+              .where(
+                and(
+                  eq(agentOperations.threadId, threads.id),
+                  eq(agentOperations.trigger, RequestTrigger.AgentSignal),
+                ),
+              ),
+          ),
+        ),
+      )
       .groupBy(threads.id)
       .orderBy(desc(threads.updatedAt));
 

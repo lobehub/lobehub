@@ -14,10 +14,10 @@ import { useTranslation } from 'react-i18next';
 
 import { useBusinessAgentModeSync } from '@/business/client/hooks/useBusinessAgentMode';
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
+import { useChatInputResourceAccess } from '@/features/ChatInput/hooks/useChatInputResourceAccess';
+import { useEffectiveAgentMode } from '@/features/ChatInput/hooks/useEffectiveAgentMode';
 import { useToggleAgentMode } from '@/features/ChatInput/hooks/useToggleAgentMode';
 import { usePermission } from '@/hooks/usePermission';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
 
 const styles = createStaticStyles(({ css }) => ({
   activeOption: css`
@@ -89,6 +89,14 @@ const styles = createStaticStyles(({ css }) => ({
       background: ${cssVar.colorFillSecondary};
     }
   `,
+  optionDisabled: css`
+    cursor: not-allowed;
+    opacity: 0.55;
+
+    &:hover {
+      background: transparent;
+    }
+  `,
   optionDesc: css`
     font-size: 12px;
     line-height: 1.4;
@@ -131,29 +139,34 @@ const AgentMode = memo(() => {
   useBusinessAgentModeSync(agentId);
   const [open, setOpen] = useState(false);
   const { allowed: canCreateContent, reason } = usePermission('create_content');
+  const { canUseResource, isAccessLoading, isGroupContext } = useChatInputResourceAccess();
 
-  const enableAgentMode = useAgentStore(agentByIdSelectors.getAgentEnableModeById(agentId));
-
-  const currentMode = enableAgentMode ? 'agent' : 'chat';
-  const CurrentIcon = enableAgentMode ? InfinityIcon : MessageCircleIcon;
+  const { canSelectAgentMode, currentMode, isAgentModeUnavailable, isPreferenceLoading } =
+    useEffectiveAgentMode(agentId);
+  const disabled = !canCreateContent || !canUseResource;
+  const disabledReason = !canCreateContent
+    ? reason
+    : t(isGroupContext ? 'input.viewOnlyGroup' : 'input.viewOnlyAgent');
+  const CurrentIcon = currentMode === 'agent' ? InfinityIcon : MessageCircleIcon;
 
   const handleSelect = useCallback(
     async (mode: 'chat' | 'agent') => {
-      if (!canCreateContent) return;
+      if (disabled) return;
+      if (mode === 'agent' && !canSelectAgentMode) return;
 
       setOpen(false);
       await toggleAgentMode(mode === 'agent');
     },
-    [canCreateContent, toggleAgentMode],
+    [canSelectAgentMode, disabled, toggleAgentMode],
   );
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
-      if (!canCreateContent) return;
+      if (disabled) return;
 
       setOpen(nextOpen);
     },
-    [canCreateContent],
+    [disabled],
   );
 
   const agentTooltip = (
@@ -169,14 +182,24 @@ const AgentMode = memo(() => {
   );
 
   const chatTooltip = t('chatMode.chatDesc');
+  const buttonTooltip = isAgentModeUnavailable
+    ? t('chatMode.agentUnsupported')
+    : currentMode === 'agent'
+      ? agentTooltip
+      : chatTooltip;
+  const agentDesc = canSelectAgentMode ? t('chatMode.agentDesc') : t('chatMode.agentUnsupported');
 
   const popoverContent = (
     <Flexbox gap={4} style={{ maxWidth: 320, minWidth: 280 }}>
       <Flexbox
         horizontal
         align="center"
-        className={cx(styles.option, currentMode === 'agent' && styles.activeOption)}
         gap={12}
+        className={cx(
+          styles.option,
+          currentMode === 'agent' && styles.activeOption,
+          !canSelectAgentMode && styles.optionDisabled,
+        )}
         onClick={() => handleSelect('agent')}
       >
         <Flexbox
@@ -190,7 +213,7 @@ const AgentMode = memo(() => {
         </Flexbox>
         <Flexbox flex={1}>
           <div className={styles.optionTitle}>{t('chatMode.agent')}</div>
-          <div className={styles.optionDesc}>{t('chatMode.agentDesc')}</div>
+          <div className={styles.optionDesc}>{agentDesc}</div>
         </Flexbox>
       </Flexbox>
 
@@ -219,16 +242,18 @@ const AgentMode = memo(() => {
   );
 
   const button = (
-    <div className={cx(styles.button, !canCreateContent && styles.buttonDisabled)}>
+    <div className={cx(styles.button, disabled && styles.buttonDisabled)}>
       <Icon icon={CurrentIcon} size={14} />
       <span>{t(`chatMode.${currentMode}`)}</span>
       <Icon icon={ChevronDownIcon} size={12} />
     </div>
   );
 
-  if (!canCreateContent)
+  if (isAccessLoading || isPreferenceLoading) return null;
+
+  if (disabled)
     return (
-      <Tooltip title={reason}>
+      <Tooltip title={disabledReason}>
         <div>{button}</div>
       </Tooltip>
     );
@@ -237,7 +262,7 @@ const AgentMode = memo(() => {
     <Popover
       className={styles.popoverPopup}
       content={popoverContent}
-      open={canCreateContent && open}
+      open={!disabled && open}
       placement="bottomLeft"
       trigger="click"
       styles={{
@@ -251,13 +276,7 @@ const AgentMode = memo(() => {
       }}
       onOpenChange={handleOpenChange}
     >
-      <div>
-        {open ? (
-          button
-        ) : (
-          <Tooltip title={enableAgentMode ? agentTooltip : chatTooltip}>{button}</Tooltip>
-        )}
-      </div>
+      <div>{open ? button : <Tooltip title={buttonTooltip}>{button}</Tooltip>}</div>
     </Popover>
   );
 });

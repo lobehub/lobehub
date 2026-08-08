@@ -5,11 +5,12 @@ import {
 } from '@lobechat/types';
 import debug from 'debug';
 
+import { resolveEffectiveWorkingDirectory } from '@/helpers/effectiveWorkingDirectory';
 import { type MCPToolCallResult } from '@/libs/mcp';
 import { mcpService } from '@/services/mcp';
 import { messageService } from '@/services/message';
 import { archiveToolResultViaServer } from '@/services/toolResultArchive';
-import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation';
+import { operationSelectors } from '@/store/chat/slices/operation';
 import { type ChatStore } from '@/store/chat/store';
 import { useToolStore } from '@/store/tool';
 import { composioStoreSelectors, lobehubSkillStoreSelectors } from '@/store/tool/selectors';
@@ -65,7 +66,10 @@ export class PluginTypesActionImpl {
     }
 
     if (effectiveSource === 'composio') {
-      return await this.#get().invokeComposioTypePlugin(id, { ...payload, source: effectiveSource });
+      return await this.#get().invokeComposioTypePlugin(id, {
+        ...payload,
+        source: effectiveSource,
+      });
     }
 
     if (effectiveSource === 'lobehubSkill') {
@@ -79,7 +83,7 @@ export class PluginTypesActionImpl {
     if (!params) return { error: 'Invalid arguments', success: false };
 
     // Check if there's a registered executor in Tool Store (new architecture)
-    if (hasExecutor(payload.identifier, payload.apiName)) {
+    if (await hasExecutor(payload.identifier, payload.apiName)) {
       const { optimisticUpdateToolMessage, registerAfterCompletionCallback } = this.#get();
 
       // Get operation context
@@ -87,21 +91,11 @@ export class PluginTypesActionImpl {
       const operation = operationId ? this.#get().operations[operationId] : undefined;
       const context = operationId ? { operationId } : undefined;
 
-      let rootRuntimeOperationId: string | undefined;
-      let rootRuntimeOperationContext = operation?.context;
-      if (operationId) {
-        let currentOp = operation;
-        while (currentOp) {
-          if (AI_RUNTIME_OPERATION_TYPES.includes(currentOp.type)) {
-            rootRuntimeOperationId = currentOp.id;
-            rootRuntimeOperationContext = currentOp.context;
-            break;
-          }
-          // Move up to parent operation
-          const parentId = currentOp.parentOperationId;
-          currentOp = parentId ? this.#get().operations[parentId] : undefined;
-        }
-      }
+      const rootRuntimeOperation = operationId
+        ? operationSelectors.findRootRuntimeOperation(operationId)(this.#get())
+        : undefined;
+      const rootRuntimeOperationId = rootRuntimeOperation?.id;
+      const rootRuntimeOperationContext = rootRuntimeOperation?.context ?? operation?.context;
 
       // Get agent ID, group ID, topic ID, and page scope from operation context.
       // Prefer the concrete tool operation; fall back to the runtime root for
@@ -113,6 +107,9 @@ export class PluginTypesActionImpl {
       const viewedTask = operation?.context?.viewedTask ?? rootRuntimeOperationContext?.viewedTask;
       const taskId = viewedTask?.type === 'detail' ? viewedTask.taskId : undefined;
       const topicId = operation?.context?.topicId ?? rootRuntimeOperationContext?.topicId;
+      const threadId = operation?.context?.threadId ?? rootRuntimeOperationContext?.threadId;
+      const toolMessage = dbMessageSelectors.getDbMessageById(id)(this.#get());
+      const anchorMessageId = toolMessage?.parentId ?? rootRuntimeOperationContext?.messageId;
       const isSubAgent =
         operation?.context?.isSubAgent ?? rootRuntimeOperationContext?.isSubAgent ?? false;
 
@@ -191,6 +188,7 @@ export class PluginTypesActionImpl {
         isSubAgent,
         scope,
         taskId,
+        threadId,
         topicId,
       });
 
@@ -198,6 +196,7 @@ export class PluginTypesActionImpl {
         .getState()
         .invokeBuiltinTool(payload.identifier, payload.apiName, params, {
           agentId,
+          anchorMessageId,
           documentId,
           groupId,
           groupOrchestration,
@@ -205,6 +204,7 @@ export class PluginTypesActionImpl {
           messageId: id,
           operationId,
           registerAfterCompletion,
+          rootOperationId: rootRuntimeOperationId ?? operationId,
           scope,
           signal: operation?.abortController?.signal,
           sourceMessageId:
@@ -214,8 +214,15 @@ export class PluginTypesActionImpl {
           stepContext,
           subAgent,
           taskId,
+          threadId,
           toolCallId: payload.id,
+          toolMessageId: id,
           topicId,
+          workingDirectory: resolveEffectiveWorkingDirectory(
+            this.#get(),
+            topicId ?? rootRuntimeOperationContext?.topicId,
+            agentId ?? rootRuntimeOperationContext?.agentId,
+          ),
         });
 
       log('[BuiltinToolCall] invoke:end', {
@@ -409,7 +416,10 @@ export class PluginTypesActionImpl {
     try {
       // Pass topicId from message context, not global active state
       // This ensures tool calls use the correct topic even if user switches topics
-      data = await executor(payload, { topicId: message?.topicId });
+      data = await executor(payload, {
+        sourceToolCallId: payload.id,
+        topicId: message?.topicId,
+      });
     } catch (error) {
       console.error(`[${logPrefix}] Error:`, error);
 

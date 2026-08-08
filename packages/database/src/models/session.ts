@@ -312,7 +312,12 @@ export class SessionModel {
     if (item) return;
 
     return await this.create({
-      config: merge(DEFAULT_AGENT_CONFIG, defaultAgentConfig),
+      // `merge` returns the `@lobechat/types` LobeAgentConfig shape
+      // (plugins: AgentPluginEntry[]); `create`'s `config` is the DB-layer
+      // NewAgent, whose `plugins` column type is intentionally left as
+      // `string[]` (only the domain types are widened for the tri-state
+      // rollout, not the JSONB column's compile-time annotation).
+      config: merge(DEFAULT_AGENT_CONFIG, defaultAgentConfig) as Partial<NewAgent>,
       slug: INBOX_SESSION_ID,
       type: 'agent',
     });
@@ -337,8 +342,7 @@ export class SessionModel {
 
     if (!result) return;
 
-    // eslint-disable-next-line unused-imports/no-unused-vars
-    const { agent, clientId, ...session } = result;
+    const { agent, clientId: _clientId, ...session } = result;
     const sessionId = this.genId();
 
     const { id: _, slug: __, ...config } = agent;
@@ -378,9 +382,9 @@ export class SessionModel {
       const result = await trx.delete(sessions).where(and(eq(sessions.id, id), this.ownership()));
 
       // Delete orphaned agents
-      await this.clearOrphanAgent(agentIds, trx);
+      const orphanedAgentIds = await this.clearOrphanAgent(agentIds, trx);
 
-      return result;
+      return { orphanedAgentIds, result };
     });
   };
 
@@ -388,7 +392,7 @@ export class SessionModel {
    * Batch delete sessions and their associated agent data if no longer referenced.
    */
   batchDelete = async (ids: string[]) => {
-    if (ids.length === 0) return { count: 0 };
+    if (ids.length === 0) return { orphanedAgentIds: [] as string[], result: { count: 0 } };
 
     return this.db.transaction(async (trx) => {
       // Get agent IDs associated with these sessions
@@ -410,9 +414,9 @@ export class SessionModel {
         .where(and(inArray(sessions.id, ids), this.ownership()));
 
       // Delete orphaned agents
-      await this.clearOrphanAgent(agentIds, trx);
+      const orphanedAgentIds = await this.clearOrphanAgent(agentIds, trx);
 
-      return result;
+      return { orphanedAgentIds, result };
     });
   };
 
@@ -427,8 +431,8 @@ export class SessionModel {
     });
   };
 
-  clearOrphanAgent = async (agentIds: string[], trx: any) => {
-    if (agentIds.length === 0) return;
+  clearOrphanAgent = async (agentIds: string[], trx: any): Promise<string[]> => {
+    if (agentIds.length === 0) return [];
 
     // Batch query to find which agents still have sessions
     const remainingLinks = (await trx
@@ -448,6 +452,8 @@ export class SessionModel {
         .delete(agents)
         .where(and(inArray(agents.id, orphanedAgentIds), this.agentsOwnership()));
     }
+
+    return orphanedAgentIds;
   };
 
   // **************** Update *************** //
@@ -533,8 +539,7 @@ export class SessionModel {
     type,
     ...res
   }: SessionItem & { agentsToSessions?: { agent: AgentItem }[] }):
-    | LobeAgentSession
-    | LobeGroupSession => {
+    LobeAgentSession | LobeGroupSession => {
     const meta = {
       avatar: avatar ?? undefined,
       backgroundColor: backgroundColor ?? undefined,

@@ -30,6 +30,7 @@ const documentItemToLobeDocument = (document: DocumentItem): LobeDocument => ({
   totalLineCount: 0,
   updatedAt: document.updatedAt ? new Date(document.updatedAt) : new Date(),
   userId: document.userId,
+  visibility: document.visibility ?? null,
   workspaceId: document.workspaceId ?? null,
 });
 
@@ -136,6 +137,32 @@ export class ListActionImpl {
 
   refreshDocuments = async (): Promise<void> => {
     await this.#get().fetchDocuments();
+  };
+
+  /**
+   * Publish a private page (and its whole subtree) to the workspace, then
+   * refetch the sidebar so the item hops from the "Private" accordion into
+   * "Workspace" immediately. Errors bubble up so the caller can surface a
+   * localized toast without swallowing the reason.
+   */
+  publishPageToWorkspace = async (pageId: string): Promise<{ documentIds: string[] }> => {
+    const result = await documentService.publishDocumentToWorkspace(pageId);
+    await this.#get().refreshDocuments();
+    return result;
+  };
+
+  /**
+   * Flip a page (and its whole subtree)'s workspace visibility. Bidirectional
+   * companion to `publishPageToWorkspace`. Refreshes the sidebar so the row
+   * hops between the "Private" and "Workspace" accordions.
+   */
+  setPageVisibility = async (
+    pageId: string,
+    visibility: 'private' | 'public',
+  ): Promise<{ documentIds: string[] }> => {
+    const result = await documentService.setDocumentVisibility(pageId, visibility);
+    await this.#get().refreshDocuments();
+    return result;
   };
 
   setSearchKeywords = (keywords: string): void => {

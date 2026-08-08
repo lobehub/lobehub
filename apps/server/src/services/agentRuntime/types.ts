@@ -1,5 +1,6 @@
 import { type AgentRuntimeContext, type AgentState } from '@lobechat/agent-runtime';
 import type {
+  AgentGroupConfig,
   BotPlatformContext,
   LobeToolManifest,
   OperationSkillSet,
@@ -7,6 +8,7 @@ import type {
   ToolSource,
 } from '@lobechat/context-engine';
 import type { ChatTopicBotContext, UserInterventionConfig } from '@lobechat/types';
+import type { SearchDecision } from 'model-bank';
 
 import type { ExecutionPlan } from '@/helpers/executionTarget';
 import { type ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
@@ -18,6 +20,8 @@ import { type AgentHook } from './hooks/types';
 // ==================== Operation Tool Set ====================
 
 export interface OperationToolSet {
+  /** Tool IDs that may be restored from historical explicit activations for this run. */
+  activatableToolIds?: string[];
   enabledToolIds?: string[];
   executorMap?: Record<string, ToolExecutor>;
   manifestMap: Record<string, LobeToolManifest>;
@@ -180,7 +184,8 @@ export interface AgentExecutionParams {
 export interface AgentExecutionResult {
   /**
    * When true, the step was already being executed by another instance (lock conflict).
-   * The caller should return 429 to force QStash to retry later.
+   * Stale duplicates are handled before returning this; callers should keep
+   * this response retryable so fresh deliveries can run after the lock clears.
    */
   locked?: boolean;
   nextStepScheduled: boolean;
@@ -289,6 +294,14 @@ export interface ExecGroupMemberParams {
   onComplete: GroupActionOnComplete;
   /** Parent (supervisor) operation id. */
   parentOperationId: string;
+  /**
+   * Supervisor ASSISTANT message id that owns the group-management tool call.
+   * In-group council members parent their response to THIS message — so the
+   * member assistants are siblings of the council tool under the supervisor
+   * turn and the renderer groups them into one council — while the per-member
+   * anchors stay under `groupToolMessageId` for the K=N barrier.
+   */
+  supervisorMessageId?: string;
   /** Per-member timeout (ms), isolated mode. */
   timeout?: number;
   /** Group topic id. */
@@ -307,7 +320,21 @@ export interface ExecGroupMemberResult {
 
 export interface OperationCreationParams {
   activeDeviceId?: string;
+  /**
+   * Principal pool the routed `activeDeviceId` lives in. `personal` when a
+   * workspace run was routed to the caller's own device via a per-user
+   * `local` override — device runtimes must then address it through the
+   * personal `(userId, deviceId)` pool instead of the `workspace:<id>` pool.
+   */
+  activeDeviceScope?: 'personal' | 'workspace';
   agentConfig?: any;
+  /**
+   * Multi-agent group (or bot-conversation fallback) context, resolved once at
+   * op creation and forwarded into `state.metadata.agentGroup`. The per-step
+   * context engine reads it back to inject the participant roster (with real
+   * `agt_*` IDs) — no per-step DB lookup, mirroring `botContext`.
+   */
+  agentGroup?: AgentGroupConfig;
   appContext: {
     agentId?: string;
     /**
@@ -316,17 +343,49 @@ export interface OperationCreationParams {
      * read on the completion path to project receipts.
      */
     agentSignal?: AgentSignalOperationMarker;
+    /**
+     * Client IP of the originating request. Spread onto `state.metadata.clientIp`
+     * so downstream LLM-call metadata can carry it for auditing and spend
+     * attribution.
+     */
+    clientIp?: string;
     defaultTaskAssigneeAgentId?: string;
     documentId?: string | null;
     groupId?: string | null;
     isSubAgent?: boolean;
+    /**
+     * Group orchestration role, spread onto `state.metadata.orchestrationRole`.
+     * Lets the inactivity-watchdog abandon path tell an isolated group member
+     * (`'member'`, resumed via the group K=N bridge) apart from a genuine
+     * callSubAgent child (which shares `isSubAgent: true`).
+     */
+    orchestrationRole?: 'supervisor' | 'member';
     scope?: string | null;
     /** Source user message ID used for same-turn Agent Signal procedure suppression. */
     sourceMessageId?: string;
+    /**
+     * Live-progress anchor for a `callSubAgent` child, spread onto
+     * `state.metadata.subAgentProgress`.
+     *
+     * The child runs on its own operationId, but the client only ever subscribes
+     * to the PARENT's gateway channel — which stays open across the sub-agent run
+     * because `waiting_for_async_tool` is excluded from `STREAM_END_STATUSES`.
+     * So the child's step loop publishes its running totals onto the parent's
+     * channel, addressed at the placeholder tool message by `toolMessageId`.
+     * Without this the client sees nothing until `completeSubAgentBridge`
+     * backfills `pluginState` at the very end.
+     */
+    subAgentProgress?: { parentOperationId: string; toolMessageId: string };
     taskId?: string;
     threadId?: string | null;
     topicId?: string | null;
     trigger?: string;
+    /**
+     * User agent of the originating request. Spread onto
+     * `state.metadata.userAgent` so downstream LLM-call metadata can carry it for
+     * auditing and spend attribution.
+     */
+    userAgent?: string;
   };
   autoStart?: boolean;
   /**
@@ -379,6 +438,8 @@ export interface OperationCreationParams {
   parentOperationId?: string;
   queueRetries?: number;
   queueRetryDelay?: string;
+  /** Search route resolved once before the operation starts. */
+  searchDecision?: SearchDecision;
   /** Abort startup before the first step is scheduled */
   signal?: AbortSignal;
   /**

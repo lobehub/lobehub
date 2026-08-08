@@ -1,8 +1,8 @@
 import { useCallback, useEffect } from 'react';
 
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { type ViewMode } from '@/features/ResourceManager/store/initialState';
 import { parseAsStringEnum, useQueryState } from '@/hooks/useQueryParam';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
-import { type ViewMode } from '@/routes/(main)/resource/features/store/initialState';
 
 /**
  * Hook to manage view mode with URL query sync

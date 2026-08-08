@@ -1,18 +1,20 @@
 'use client';
 
 import { ActionIcon, Flexbox } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { BookMinusIcon, FileBoxIcon, Trash2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useFileBatchTransferActions } from '@/business/client/hooks/useFileBatchTransferActions';
+import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner';
 import NavHeader from '@/features/NavHeader';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { getExplorerSelectedCount } from '@/features/ResourceManager/store/selectors';
+import { openWorkspaceDeleteAllModal } from '@/features/WorkspaceDeleteAllModal';
 import { usePermission } from '@/hooks/usePermission';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
-import { getExplorerSelectedCount } from '@/routes/(main)/resource/features/store/selectors';
 import { useFileStore } from '@/store/file';
 import { FilesTabs } from '@/types/files';
 
@@ -28,25 +30,30 @@ import SearchInput from './SearchInput';
  */
 const Header = memo(() => {
   const { t } = useTranslation(['components', 'common', 'file', 'knowledgeBase']);
-  const { message } = App.useApp();
+
+  const activeWorkspaceId = useActiveWorkspaceId();
 
   // Get state and actions from store
-  const [libraryId, category, onActionClick, selectAllState, selectFileIds] =
+  const [libraryId, category, onActionClick, selectAllState, selectFileIds, selectionTotal] =
     useResourceManagerStore((s) => [
       s.libraryId,
       s.category,
       s.onActionClick,
       s.selectAllState,
       s.selectedFileIds,
+      s.selectionTotal,
     ]);
+  const isWorkspaceOwner = useIsWorkspaceOwner();
   const { allowed: canEditResources, reason } = usePermission('edit_own_content');
   const total = useFileStore((s) => s.total);
   const selectCount = getExplorerSelectedCount({
     selectAllState,
     selectedIds: selectFileIds,
-    total,
+    total: selectionTotal ?? total,
   });
   const hasSelected = selectAllState === 'all' || selectCount > 0;
+  const isWorkspaceDeleteAll = !!activeWorkspaceId && selectAllState === 'all';
+  const isWorkspaceOwnerDeleteAll = isWorkspaceDeleteAll && isWorkspaceOwner;
   const batchTransferActions = useFileBatchTransferActions(selectCount);
 
   // If no libraryId, show category name or "Resource" for All
@@ -70,7 +77,7 @@ const Header = memo(() => {
               okText: t('FileManager.actions.removeFromLibrary'),
               onOk: async () => {
                 await onActionClick('removeFromKnowledgeBase');
-                message.success(t('FileManager.actions.removeFromLibrarySuccess'));
+                toast.success(t('FileManager.actions.removeFromLibrarySuccess'));
               },
               title: t('FileManager.actions.removeFromLibrary'),
             });
@@ -104,14 +111,47 @@ const Header = memo(() => {
       <ActionIcon
         disabled={!canEditResources}
         icon={Trash2Icon}
-        title={canEditResources ? t('delete', { ns: 'common' }) : reason}
+        title={
+          canEditResources
+            ? t(
+                isWorkspaceOwnerDeleteAll
+                  ? 'FileManager.actions.deleteAll'
+                  : isWorkspaceDeleteAll
+                    ? 'FileManager.actions.deleteAllOwn'
+                    : 'delete',
+                {
+                  ns: isWorkspaceDeleteAll ? 'components' : 'common',
+                },
+              )
+            : reason
+        }
         onClick={() => {
           if (!canEditResources) return;
+
+          const handleDelete = async () => {
+            await onActionClick('delete');
+            toast.success(t('FileManager.actions.deleteSuccess'));
+          };
+
+          if (isWorkspaceOwnerDeleteAll) {
+            openWorkspaceDeleteAllModal({
+              acknowledgeText: t('FileManager.actions.confirmDeleteAllWorkspaceAcknowledge'),
+              cancelText: t('cancel', { ns: 'common' }),
+              confirmText: t('FileManager.actions.deleteAll'),
+              description: t('FileManager.actions.confirmDeleteAllWorkspaceFiles'),
+              onConfirm: handleDelete,
+              title: t('FileManager.actions.deleteAll'),
+            });
+            return;
+          }
+
           confirmModal({
             cancelText: t('cancel', { ns: 'common' }),
             content: t(
               selectAllState === 'all'
-                ? 'FileManager.actions.confirmDeleteAllFiles'
+                ? isWorkspaceDeleteAll
+                  ? 'FileManager.actions.confirmDeleteAllOwnFiles'
+                  : 'FileManager.actions.confirmDeleteAllFiles'
                 : 'FileManager.actions.confirmDeleteMultiFiles',
               { count: selectCount },
             ),
@@ -120,8 +160,7 @@ const Header = memo(() => {
             },
             okText: t('delete', { ns: 'common' }),
             onOk: async () => {
-              await onActionClick('delete');
-              message.success(t('FileManager.actions.deleteSuccess'));
+              await handleDelete();
             },
             title: t('delete', { ns: 'common' }),
           });

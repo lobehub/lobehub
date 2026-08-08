@@ -162,7 +162,6 @@ export class AgentSkillsActionImpl {
         return data;
       },
       {
-        fallbackData: [],
         onSuccess: (data) => {
           this.#set({ agentSkills: data }, false, n('useFetchAgentSkills'));
         },

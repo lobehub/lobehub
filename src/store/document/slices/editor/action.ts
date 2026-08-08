@@ -2,7 +2,9 @@
 
 import type { IEditor } from '@lobehub/editor';
 import type { EditorState as LobehubEditorState } from '@lobehub/editor/react';
+import { toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
+import { t } from 'i18next';
 
 import { EMPTY_EDITOR_STATE } from '@/libs/editor/constants';
 import { isValidEditorData } from '@/libs/editor/isValidEditorData';
@@ -355,7 +357,13 @@ export class EditorActionImpl {
       // actively editing (CONFLICT). Surface it as a lock block so the editor can
       // flip to read-only at once instead of silently dropping the edit, and keep
       // `isDirty` so the unsaved content stays visible to copy out.
-      const lockBlocked = (error as { data?: { code?: string } })?.data?.code === 'CONFLICT';
+      const errorCode = (error as { data?: { code?: string } })?.data?.code;
+      const lockBlocked = errorCode === 'CONFLICT';
+      // A view-level workspace member has no edit right on this document
+      // (FORBIDDEN). Tell the user instead of silently dropping the edit.
+      if (errorCode === 'FORBIDDEN') {
+        toast.error(t('permission.saveNoEditPermission', { ns: 'setting' }));
+      }
       if (!lockBlocked) console.error('[DocumentStore] Failed to save:', error);
       internal_dispatchDocument({
         id,

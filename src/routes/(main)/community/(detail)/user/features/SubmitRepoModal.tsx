@@ -1,10 +1,12 @@
 'use client';
 
-import { Flexbox, Modal, Text } from '@lobehub/ui';
-import { App, Form, Input } from 'antd';
+import { Flexbox, Text } from '@lobehub/ui';
+import { toast } from '@lobehub/ui/base-ui';
+import { Form, Input } from 'antd';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import { lambdaClient } from '@/libs/trpc/client';
 
 interface SubmitRepoModalProps {
@@ -19,7 +21,7 @@ const GITHUB_URL_REGEX = /^https?:\/\/github\.com\/[\w-]+\/[\w.-]+\/?$/;
 export const SubmitRepoModal = memo<SubmitRepoModalProps>(
   ({ open, onClose, onSuccess, beforeSubmit }) => {
     const { t } = useTranslation('discover');
-    const { message } = App.useApp();
+
     const [form] = Form.useForm();
 
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -43,17 +45,17 @@ export const SubmitRepoModal = memo<SubmitRepoModalProps>(
           type: 'skill',
         });
 
-        message.success(t('user.submitRepoSuccess'));
+        toast.success(t('user.submitRepoSuccess'));
         onSuccess?.();
         onClose();
         form.resetFields();
       } catch (error) {
         console.error('[SubmitRepoModal] Failed to submit:', error);
-        message.error(error instanceof Error ? error.message : t('user.submitRepoError'));
+        toast.error(error instanceof Error ? error.message : t('user.submitRepoError'));
       } finally {
         setIsSubmitting(false);
       }
-    }, [beforeSubmit, form, message, t, onSuccess, onClose]);
+    }, [beforeSubmit, form, t, onSuccess, onClose]);
 
     const handleCancel = useCallback(() => {
       form.resetFields();
@@ -61,7 +63,7 @@ export const SubmitRepoModal = memo<SubmitRepoModalProps>(
     }, [form, onClose]);
 
     return (
-      <Modal
+      <ImperativeModal
         centered
         cancelText={t('user.cancel')}
         confirmLoading={isSubmitting}
@@ -100,7 +102,7 @@ export const SubmitRepoModal = memo<SubmitRepoModalProps>(
             {t('user.submitRepoHint')}
           </Text>
         </Flexbox>
-      </Modal>
+      </ImperativeModal>
     );
   },
 );

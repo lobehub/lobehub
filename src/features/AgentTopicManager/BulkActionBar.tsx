@@ -1,12 +1,12 @@
 'use client';
 
 import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Archive, Star, Trash2, X } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
 import { useChatStore } from '@/store/chat';
 
 import MoveToAgentButton from './MoveToAgentButton';
@@ -68,19 +68,19 @@ const BulkActionBar = memo(() => {
   }, [selectedIds, updateTopicStatus, exitSelectMode]);
 
   const handleBatchDelete = useCallback(() => {
-    confirmModal({
+    void confirmRemoveTopic({
       content: t('management.bulk.deleteConfirm', { count: selectedIds.length }),
-      okButtonProps: { danger: true },
       okText: t('management.bulk.delete'),
-      onOk: async () => {
+      onConfirm: async (removeFiles) => {
         // Serial removal so each call's optimistic update + refetch resolves
         // cleanly; parallel removeTopic causes cascading refetches.
         for (const id of selectedIds) {
-          await removeTopic(id);
+          await removeTopic(id, removeFiles);
         }
         exitSelectMode();
       },
       title: t('management.bulk.deleteTitle'),
+      topicIds: selectedIds,
     });
   }, [selectedIds, t, removeTopic, exitSelectMode]);
 

@@ -1,13 +1,19 @@
 import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { Trash } from 'lucide-react';
+import { RotateCw, Trash } from 'lucide-react';
 import { memo } from 'react';
 
+import { FileUploadErrorActions } from '@/business/client/features/FileUploadErrorActions';
 import FileIcon from '@/components/FileIcon';
 import UploadDetail from '@/features/ChatInput/components/UploadDetail';
 import { type UploadFileItem } from '@/types/files';
 
 const styles = createStaticStyles(({ css }) => ({
+  actions: css`
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-end: 0;
+  `,
   container: css`
     cursor: pointer;
 
@@ -25,12 +31,7 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorFillTertiary};
   `,
   deleteButton: css`
-    position: absolute;
-    inset-block-start: 0;
-    inset-inline-end: 0;
-
     color: #fff;
-
     background: ${cssVar.colorBgMask};
 
     &:hover {
@@ -41,27 +42,52 @@ const styles = createStaticStyles(({ css }) => ({
 
 interface FileItemProps extends UploadFileItem {
   onRemove?: () => void;
+  onRetry?: () => void;
 }
 
-const FileItem = memo<FileItemProps>(({ id, onRemove, file, status, uploadState, tasks }) => {
-  return (
-    <Flexbox horizontal align={'center'} className={styles.container} gap={12} key={id}>
-      <FileIcon fileName={file.name} fileType={file.type} />
-      <Flexbox style={{ overflow: 'hidden' }}>
-        <Text ellipsis>{file.name}</Text>
-        <UploadDetail size={file.size} status={status} tasks={tasks} uploadState={uploadState} />
+const FileItem = memo<FileItemProps>(
+  ({ error, errorCode, id, onRemove, onRetry, file, status, uploadState, tasks }) => {
+    return (
+      <Flexbox horizontal align={'center'} className={styles.container} gap={12} key={id}>
+        <FileIcon fileName={file.name} fileType={file.type} />
+        <Flexbox style={{ overflow: 'hidden' }}>
+          <Text ellipsis>{file.name}</Text>
+          <UploadDetail
+            error={error}
+            size={file.size}
+            status={status}
+            tasks={tasks}
+            uploadState={uploadState}
+          />
+        </Flexbox>
+        <Flexbox horizontal className={styles.actions}>
+          {status === 'error' && errorCode ? (
+            <FileUploadErrorActions compact code={errorCode} />
+          ) : status === 'error' ? (
+            <ActionIcon
+              glass
+              className={styles.deleteButton}
+              icon={RotateCw}
+              size={'small'}
+              onClick={(e) => {
+                e.stopPropagation();
+                onRetry?.();
+              }}
+            />
+          ) : null}
+          <ActionIcon
+            glass
+            className={styles.deleteButton}
+            icon={Trash}
+            size={'small'}
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemove?.();
+            }}
+          />
+        </Flexbox>
       </Flexbox>
-      <ActionIcon
-        glass
-        className={styles.deleteButton}
-        icon={Trash}
-        size={'small'}
-        onClick={(e) => {
-          e.stopPropagation();
-          onRemove?.();
-        }}
-      />
-    </Flexbox>
-  );
-});
+    );
+  },
+);
 export default FileItem;

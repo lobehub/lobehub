@@ -1,23 +1,81 @@
+import { builtinTools } from '@lobechat/builtin-tools';
 import { type LobeChatDatabase } from '@lobechat/database';
-import { type ChatToolPayload } from '@lobechat/types';
+import {
+  type ChatToolPayload,
+  isWorkSkillProvider,
+  type WorkRegistrationIntent,
+} from '@lobechat/types';
 import { detectTruncatedJSON, safeParseJSON } from '@lobechat/utils';
 import debug from 'debug';
 
+import { UserModel } from '@/database/models/user';
 import { ComposioService } from '@/server/services/composio';
 import { MarketService } from '@/server/services/market';
 
 import { getServerRuntime, hasServerRuntime } from './serverRuntimes';
 import { type IToolExecutor, type ToolExecutionContext, type ToolExecutionResult } from './types';
+import { resolveBuiltinToolWorkIntent } from './workRegistration';
 
 const log = debug('lobe-server:builtin-tools-executor');
 
+/**
+ * Declared API names for a builtin tool, read from its manifest — the
+ * authoritative source. Runtime instances declare their APIs as prototype
+ * methods (`async sendMessage() {}`), which `Object.keys` cannot see, so the
+ * manifest, not the instance, is the correct source for a recovery hint.
+ */
+const getManifestApiNames = (identifier: string): string[] =>
+  (builtinTools.find((tool) => tool.identifier === identifier)?.manifest?.api ?? []).map(
+    (api) => api.name,
+  );
+
+/**
+ * Fallback when a manifest isn't available (e.g. a runtime registered without a
+ * matching manifest entry): collect callable names across the whole prototype
+ * chain — both own arrow-field methods and class prototype methods — which
+ * `Object.keys` alone would miss.
+ */
+const collectRuntimeApiNames = (runtime: Record<string, any>): string[] => {
+  const names = new Set<string>();
+  for (
+    let cur: object | null = runtime;
+    cur && cur !== Object.prototype;
+    cur = Object.getPrototypeOf(cur)
+  ) {
+    for (const key of Object.getOwnPropertyNames(cur)) {
+      if (key !== 'constructor' && typeof runtime[key] === 'function') names.add(key);
+    }
+  }
+  return [...names];
+};
+
 export class BuiltinToolsExecutor implements IToolExecutor {
-  private marketService: MarketService;
-  private composioService: ComposioService;
+  private db: LobeChatDatabase;
+  private userId: string;
+  private _marketService?: MarketService;
 
   constructor(db: LobeChatDatabase, userId: string) {
-    this.marketService = new MarketService({ userInfo: { userId } });
-    this.composioService = new ComposioService({ db, userId });
+    this.db = db;
+    this.userId = userId;
+  }
+
+  private async getMarketService(): Promise<MarketService> {
+    if (this._marketService) return this._marketService;
+
+    let accessToken: string | undefined;
+    try {
+      const userModel = new UserModel(this.db, this.userId);
+      const settings = await userModel.getUserSettings();
+      accessToken = (settings?.market as any)?.accessToken;
+    } catch {
+      // non-fatal — MarketService will fall back to trustedClientToken
+    }
+
+    this._marketService = new MarketService({
+      accessToken,
+      userInfo: { userId: this.userId },
+    });
+    return this._marketService;
   }
 
   async execute(
@@ -68,19 +126,51 @@ export class BuiltinToolsExecutor implements IToolExecutor {
 
     // Route LobeHub Skills to MarketService
     if (source === 'lobehubSkill') {
-      return this.marketService.executeLobehubSkill({
+      const marketService = await this.getMarketService();
+      const result = await marketService.executeLobehubSkill({
         args,
         context: {
           topicId: context.topicId,
         },
         provider: identifier,
+        timeoutMs: context.executionTimeoutMs,
         toolName: apiName,
       });
+
+      if (result.success && isWorkSkillProvider(identifier)) {
+        // Defer Work registration to the agent runtime so the version is written
+        // ONCE with its cumulative cost (known only after execution). Carry the
+        // UNTRUNCATED payload here: the runtime only sees the truncated
+        // `content`, but skill identity (issue/PR url, number, …) lives
+        // exclusively in the raw result.
+        return {
+          ...result,
+          workRegistration: {
+            args,
+            data: safeParseJSON(result.content) ?? result.content,
+            provider: identifier,
+            toolName: apiName,
+            type: 'skill',
+          },
+        };
+      }
+
+      return result;
     }
 
-    // Route Composio tools to ComposioService
+    // Route Composio tools to ComposioService. Build it request-scoped: agentId
+    // and workspaceId live on the per-call context (not known at construction),
+    // so a workspace run resolves workspace connectors and a
+    // service-account agent runs off its own Composio account
+    // (Agent > Workspace/Personal).
     if (source === 'composio') {
-      return this.composioService.executeComposioTool({
+      const composioService = new ComposioService({
+        db: this.db,
+        userId: this.userId,
+        workspaceId: context.workspaceId,
+      });
+      return composioService.executeComposioTool({
+        agentId: context.agentId,
         args,
         identifier,
         toolSlug: apiName,
@@ -95,12 +185,69 @@ export class BuiltinToolsExecutor implements IToolExecutor {
     // Await runtime in case factory is async
     const runtime = await getServerRuntime(identifier, context);
 
-    if (!runtime[apiName]) {
-      throw new Error(`Builtin tool ${identifier}'s ${apiName} is not implemented`);
+    if (typeof runtime[apiName] !== 'function') {
+      // An unknown apiName is almost always a model hallucination (calling an
+      // API that the tool never declared in its manifest). Return a structured,
+      // recoverable error listing the tool's real APIs instead of throwing a
+      // hard error the model cannot act on. The throw here also sits outside
+      // the try/catch below, so it would otherwise surface as an uncaught
+      // failure rather than a tool result.
+      //
+      // Prefer the manifest's declared API names; most runtimes declare their
+      // APIs as prototype methods that `Object.keys(runtime)` cannot see, which
+      // would collapse the hint to an empty list. Fall back to a prototype-chain
+      // walk only when no manifest is available.
+      const manifestApis = getManifestApiNames(identifier);
+      const availableApis =
+        manifestApis.length > 0 ? manifestApis : collectRuntimeApiNames(runtime);
+      const message =
+        `Builtin tool "${identifier}" has no API named "${apiName}". ` +
+        `Available APIs: ${availableApis.join(', ')}. ` +
+        `Do not call APIs that are not listed above.`;
+      log('Unknown apiName for %s: %s (available: %o)', identifier, apiName, availableApis);
+      return {
+        content: message,
+        error: { code: 'UNKNOWN_API', message },
+        success: false,
+      };
     }
 
     try {
-      return await runtime[apiName](args, context);
+      // Install a sink for runtimes whose Work registration is a side-effect
+      // decoupled from the returned result (the agentDocuments runtime emits its
+      // intent here instead of writing the version directly).
+      let collectedWorkIntent: WorkRegistrationIntent | undefined;
+      context.onWorkRegistration = (intent) => {
+        collectedWorkIntent = intent;
+      };
+
+      const result = await runtime[apiName](args, context);
+
+      // Manifest-driven Work registration: resolve the intent from the API's
+      // declarative `work` config + result/args and hand it to the agent
+      // runtime, which persists the Work version ONCE with its cumulative cost.
+      // Falls back to the intent a runtime emitted via `onWorkRegistration`
+      // (documents). No-op unless the API declares a `work` config or emits one.
+      //
+      // Best-effort: Work-intent resolution is post-hoc bookkeeping over an
+      // already-successful tool call, so a bug in the resolver must not turn a
+      // succeeded mutation into a reported tool failure. Isolate it from the
+      // execution try/catch below and swallow-and-log instead.
+      let workRegistration: WorkRegistrationIntent | undefined;
+      try {
+        workRegistration =
+          resolveBuiltinToolWorkIntent(identifier, apiName, { args, result }) ??
+          collectedWorkIntent;
+      } catch (workError) {
+        log(
+          'Work registration intent resolution failed for %s:%s: %O',
+          identifier,
+          apiName,
+          workError,
+        );
+      }
+
+      return workRegistration ? { ...result, workRegistration } : result;
     } catch (e) {
       const error = e as Error;
       console.error('Error executing builtin tool %s:%s: %O', identifier, apiName, error);

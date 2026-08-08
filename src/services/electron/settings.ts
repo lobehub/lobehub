@@ -1,6 +1,7 @@
 import {
   type NetworkProxySettings,
   type ShortcutUpdateResult,
+  type WindowsShellMode,
 } from '@lobechat/electron-client-ipc';
 
 import { ensureElectronIpc } from '@/utils/electron/ipc';
@@ -18,6 +19,20 @@ class DesktopSettingsService {
    */
   getProxySettings = async () => {
     return ensureElectronIpc().networkProxy.getDesktopSettings();
+  };
+
+  /**
+   * Get shell settings for agent command execution (Windows shell selection)
+   */
+  getShellSettings = async () => {
+    return ensureElectronIpc().shellCommand.getShellSettings();
+  };
+
+  /**
+   * Set the Windows shell mode for agent command execution
+   */
+  setShellMode = async (mode: WindowsShellMode) => {
+    return ensureElectronIpc().shellCommand.setShellMode({ mode });
   };
 
   /**

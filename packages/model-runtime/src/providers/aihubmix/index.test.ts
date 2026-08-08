@@ -73,6 +73,36 @@ describe('LobeAiHubMixAI', () => {
 
       expect(deepseekRouter?.models).toContain('deepseek-v4-flash-free');
     });
+
+    it('should thread a custom baseURL through all routes, defaulting to aihubmix.com', () => {
+      const custom = (params.routers as any)(
+        { apiKey: 'test', baseURL: 'https://my-aihubmix-mirror.com' },
+        {},
+      );
+      const baseOf = (apiType: string) =>
+        custom.find((r: any) => r.apiType === apiType).options.baseURL;
+      expect(baseOf('anthropic')).toBe('https://my-aihubmix-mirror.com');
+      expect(baseOf('google')).toBe('https://my-aihubmix-mirror.com/gemini');
+      expect(baseOf('openai')).toBe('https://my-aihubmix-mirror.com/v1');
+
+      // A custom endpoint that already includes the API version is normalized,
+      // so the route suffixes are not doubled (…/v1/v1, …/v1/gemini).
+      const versioned = (params.routers as any)(
+        { apiKey: 'test', baseURL: 'https://my-aihubmix-mirror.com/v1' },
+        {},
+      );
+      const vBaseOf = (apiType: string) =>
+        versioned.find((r: any) => r.apiType === apiType).options.baseURL;
+      expect(vBaseOf('anthropic')).toBe('https://my-aihubmix-mirror.com');
+      expect(vBaseOf('google')).toBe('https://my-aihubmix-mirror.com/gemini');
+      expect(vBaseOf('openai')).toBe('https://my-aihubmix-mirror.com/v1');
+
+      // Falls back to the default gateway when no custom baseURL is set
+      const def = (params.routers as any)({ apiKey: 'test' }, {});
+      expect(def.find((r: any) => r.apiType === 'anthropic').options.baseURL).toBe(
+        'https://aihubmix.com',
+      );
+    });
   });
 
   describe('chat', () => {
@@ -105,6 +135,30 @@ describe('LobeAiHubMixAI', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         'https://aihubmix.com/api/v1/models',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'Authorization': 'Bearer test_api_key',
+            'APP-Code': 'LobeHub',
+          }),
+        }),
+      );
+    });
+
+    it('should fetch the model list from a custom base URL when configured', async () => {
+      const customInstance = new LobeAiHubMixAI({
+        apiKey: 'test_api_key',
+        baseURL: 'https://my-aihubmix-mirror.com',
+      });
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: mockModels }), { status: 200 }),
+      );
+
+      await customInstance.models();
+
+      // The /api/v1/models catalog endpoint follows the configured gateway,
+      // derived from the client baseURL (trailing /v1 stripped), not the default.
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://my-aihubmix-mirror.com/api/v1/models',
         expect.objectContaining({
           headers: expect.objectContaining({
             'Authorization': 'Bearer test_api_key',

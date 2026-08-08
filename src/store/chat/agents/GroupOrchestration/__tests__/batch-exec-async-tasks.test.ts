@@ -155,7 +155,7 @@ describe('createGroupOrchestrationExecutors', () => {
       expect((result.result?.payload as any).results[0].error).toBe('No valid context available');
     });
 
-    it('should create task messages for all tasks in parallel', async () => {
+    it('should reuse the source tool message for all tasks', async () => {
       const mockStore = createMockStore();
 
       // Mock execSubAgentTask to return success
@@ -197,44 +197,46 @@ describe('createGroupOrchestrationExecutors', () => {
         createInitialState(),
       );
 
-      // Should create 2 task messages
-      expect(mockStore.optimisticCreateMessage).toHaveBeenCalledTimes(2);
+      expect(mockStore.optimisticCreateMessage).not.toHaveBeenCalled();
+      expect(aiAgentService.execSubAgentTask).toHaveBeenCalledTimes(2);
 
-      // Verify first task message creation
-      expect(mockStore.optimisticCreateMessage).toHaveBeenCalledWith(
+      expect(aiAgentService.execSubAgentTask).toHaveBeenCalledWith(
         expect.objectContaining({
           agentId: TEST_IDS.AGENT_1_ID,
           groupId: TEST_IDS.GROUP_ID,
-          metadata: { instruction: 'Task 1', taskTitle: 'Task 1 Title' },
-          parentId: TEST_IDS.TOOL_MESSAGE_ID,
-          role: 'task',
+          instruction: 'Task 1',
+          parentMessageId: TEST_IDS.TOOL_MESSAGE_ID,
+          title: 'Task 1 Title',
           topicId: TEST_IDS.TOPIC_ID,
         }),
-        expect.objectContaining({ operationId: TEST_IDS.OPERATION_ID }),
       );
 
-      // Verify second task message creation
-      expect(mockStore.optimisticCreateMessage).toHaveBeenCalledWith(
+      expect(aiAgentService.execSubAgentTask).toHaveBeenCalledWith(
         expect.objectContaining({
           agentId: TEST_IDS.AGENT_2_ID,
           groupId: TEST_IDS.GROUP_ID,
-          metadata: { instruction: 'Task 2', taskTitle: 'Task 2 Title' },
-          parentId: TEST_IDS.TOOL_MESSAGE_ID,
-          role: 'task',
+          instruction: 'Task 2',
+          parentMessageId: TEST_IDS.TOOL_MESSAGE_ID,
+          title: 'Task 2 Title',
           topicId: TEST_IDS.TOPIC_ID,
         }),
+      );
+
+      const updateContent = vi
+        .mocked(mockStore.optimisticUpdateMessageContent)
+        .mock.calls.at(-1)?.[1];
+      expect(updateContent).toContain('1. Task 1 Title\nTask completed');
+      expect(updateContent).toContain('2. Task 2 Title\nTask completed');
+      expect(mockStore.optimisticUpdateMessageContent).toHaveBeenCalledWith(
+        TEST_IDS.TOOL_MESSAGE_ID,
+        expect.any(String),
+        undefined,
         expect.objectContaining({ operationId: TEST_IDS.OPERATION_ID }),
       );
     });
 
     it('should call execSubAgentTask for each task', async () => {
       const mockStore = createMockStore();
-      let messageIdCounter = 0;
-
-      vi.mocked(mockStore.optimisticCreateMessage).mockImplementation(async () => ({
-        id: `msg_${++messageIdCounter}`,
-        messages: [],
-      }));
 
       vi.mocked(aiAgentService.execSubAgentTask).mockResolvedValue(
         createMockExecResult({ threadId: 'thread-1' }),
@@ -281,6 +283,7 @@ describe('createGroupOrchestrationExecutors', () => {
           agentId: TEST_IDS.AGENT_1_ID,
           groupId: TEST_IDS.GROUP_ID,
           instruction: 'Task 1',
+          parentMessageId: TEST_IDS.TOOL_MESSAGE_ID,
           title: 'Task 1 Title',
           topicId: TEST_IDS.TOPIC_ID,
         }),
@@ -291,6 +294,7 @@ describe('createGroupOrchestrationExecutors', () => {
           agentId: TEST_IDS.AGENT_2_ID,
           groupId: TEST_IDS.GROUP_ID,
           instruction: 'Task 2',
+          parentMessageId: TEST_IDS.TOOL_MESSAGE_ID,
           title: 'Task 2 Title',
           topicId: TEST_IDS.TOPIC_ID,
         }),
@@ -347,65 +351,6 @@ describe('createGroupOrchestrationExecutors', () => {
       expect((result.result?.payload as any).results[1]).toMatchObject({
         agentId: TEST_IDS.AGENT_2_ID,
         result: 'Task completed successfully',
-        success: true,
-      });
-    });
-
-    it('should handle task creation failure', async () => {
-      const mockStore = createMockStore();
-
-      // First task message creation fails
-      vi.mocked(mockStore.optimisticCreateMessage)
-        .mockResolvedValueOnce(undefined) // First task fails
-        .mockResolvedValueOnce({ id: 'msg_2', messages: [] }); // Second task succeeds
-
-      vi.mocked(aiAgentService.execSubAgentTask).mockResolvedValue(
-        createMockExecResult({ threadId: 'thread-2' }),
-      );
-
-      vi.mocked(aiAgentService.getSubAgentTaskStatus).mockResolvedValue({
-        result: 'Task completed',
-        status: 'completed',
-      });
-
-      const executors = createGroupOrchestrationExecutors({
-        get: () => mockStore,
-        messageContext: {
-          agentId: TEST_IDS.GROUP_ID,
-          groupId: TEST_IDS.GROUP_ID,
-          scope: 'group',
-          topicId: TEST_IDS.TOPIC_ID,
-        },
-        orchestrationOperationId: TEST_IDS.ORCHESTRATION_OPERATION_ID,
-        supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
-      });
-
-      const batchExecTasksExecutor = executors.batch_exec_async_tasks!;
-
-      const result = await batchExecTasksExecutor(
-        {
-          payload: {
-            tasks: [
-              { agentId: TEST_IDS.AGENT_1_ID, instruction: 'Task 1', title: 'Task 1 Title' },
-              { agentId: TEST_IDS.AGENT_2_ID, instruction: 'Task 2', title: 'Task 2 Title' },
-            ],
-            toolMessageId: TEST_IDS.TOOL_MESSAGE_ID,
-          },
-          type: 'batch_exec_async_tasks',
-        },
-        createInitialState(),
-      );
-
-      expect(result.result?.type).toBe('tasks_completed');
-      // First task should fail due to message creation failure
-      expect((result.result?.payload as any).results[0]).toMatchObject({
-        agentId: TEST_IDS.AGENT_1_ID,
-        error: 'Failed to create task message',
-        success: false,
-      });
-      // Second task should succeed
-      expect((result.result?.payload as any).results[1]).toMatchObject({
-        agentId: TEST_IDS.AGENT_2_ID,
         success: true,
       });
     });
@@ -564,12 +509,6 @@ describe('createGroupOrchestrationExecutors', () => {
 
     it('should dispatch taskDetail update when task status includes taskDetail', async () => {
       const mockStore = createMockStore();
-      const messageId = 'msg_1';
-
-      vi.mocked(mockStore.optimisticCreateMessage).mockResolvedValue({
-        id: messageId,
-        messages: [],
-      });
 
       vi.mocked(aiAgentService.execSubAgentTask).mockResolvedValue(
         createMockExecResult({ threadId: 'thread-1' }),
@@ -615,7 +554,7 @@ describe('createGroupOrchestrationExecutors', () => {
       // Should dispatch message update with taskDetail
       expect(mockStore.internal_dispatchMessage).toHaveBeenCalledWith(
         expect.objectContaining({
-          id: messageId,
+          id: TEST_IDS.TOOL_MESSAGE_ID,
           type: 'updateMessage',
           value: { taskDetail },
         }),

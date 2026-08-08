@@ -8,7 +8,7 @@ export const useTabRunning = (tab: TabItem): boolean =>
   useChatStore((s) => {
     const ctx = parseAgentTabContext(tab.url);
     if (!ctx) return false;
-    return operationSelectors.isAgentRuntimeRunningByContext({
+    return operationSelectors.isAgentRuntimeVisiblyRunningByContext({
       agentId: ctx.agentId,
       topicId: ctx.topicId,
     })(s);

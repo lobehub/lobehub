@@ -7,6 +7,7 @@ import { useClientDataSWR } from '@/libs/swr';
 import { toolKeys } from '@/libs/swr/keys';
 import { pluginService } from '@/services/plugin';
 import { type StoreSetter } from '@/store/types';
+import { type PluginInstallError } from '@/types/tool/plugin';
 import { merge } from '@/utils/merge';
 
 import { type ToolStore } from '../../store';
@@ -42,16 +43,19 @@ export class PluginActionImpl {
     this.#set({ installedPlugins: data }, false, 'refreshPlugins');
   };
 
-  removeAllPlugins = async (): Promise<void> => {
-    await pluginService.removeAllPlugins();
-    await this.#get().refreshPlugins();
-  };
-
   updateInstallLoadingState = (id: string, loading: boolean | undefined): void => {
     this.#set(
       { pluginInstallLoading: { ...this.#get().pluginInstallLoading, [id]: loading } },
       false,
       'updateInstallLoadingState',
+    );
+  };
+
+  updateInstallError = (id: string, error: PluginInstallError | undefined): void => {
+    this.#set(
+      { pluginInstallErrors: { ...this.#get().pluginInstallErrors, [id]: error } },
+      false,
+      'updateInstallError',
     );
   };
 

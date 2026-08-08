@@ -1,4 +1,4 @@
-import { App } from 'antd';
+import { toast } from '@lobehub/ui/base-ui';
 import { Split } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,14 +11,14 @@ export const branchingAction = defineAction({
   key: 'branching',
   useBuild: (ctx) => {
     const { t } = useTranslation('common');
-    const { message } = App.useApp();
+
     const [topic, openThreadCreator] = useChatStore((s) => [s.activeTopicId, s.openThreadCreator]);
 
     return useMemo(
       () => ({
         handleClick: () => {
           if (!topic) {
-            message.warning(t('branchingRequiresSavedTopic'));
+            toast.warning(t('branchingRequiresSavedTopic'));
             return;
           }
           openThreadCreator(ctx.id);
@@ -27,7 +27,7 @@ export const branchingAction = defineAction({
         key: 'branching',
         label: t('branching'),
       }),
-      [t, ctx.id, topic, openThreadCreator, message],
+      [t, ctx.id, topic, openThreadCreator],
     );
   },
 });

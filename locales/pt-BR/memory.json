@@ -34,6 +34,8 @@
   "context.description": "Descrição",
   "context.empty": "Nenhuma memória contextual disponível",
   "context.source": "Fonte",
+  "detail.notFound.desc": "Essa memória pode ter sido excluída ou não está mais disponível.",
+  "detail.notFound.title": "Memória não encontrada",
   "empty.description": "A recuperação de memórias é um processo gradual. Participe de mais conversas para enriquecer o conteúdo disponível para recordação. Tente interações mais profundas com o agente para capturar e armazenar informações valiosas.",
   "empty.search": "Nenhuma memória correspondente encontrada",
   "empty.title": "Nenhuma Memória Ainda",

@@ -29,7 +29,7 @@ describe('SkillsExecutionRuntime', () => {
         const result = await runtime.execScript(args);
 
         expect(result.success).toBe(true);
-        expect(result.content).toBe('hello');
+        expect(result.content).toBe('Command completed successfully.\n\nStdout:\nhello');
         expect(result.state).toEqual({ command: 'echo hello', exitCode: 0, success: true });
       });
 
@@ -37,8 +37,7 @@ describe('SkillsExecutionRuntime', () => {
         const service = createMockService({
           execScript: vi.fn().mockResolvedValue({
             exitCode: 1,
-            output: '',
-            stderr: 'command not found',
+            output: 'command not found',
             success: false,
           } satisfies CommandResult),
         });
@@ -47,7 +46,9 @@ describe('SkillsExecutionRuntime', () => {
         const result = await runtime.execScript(args);
 
         expect(result.success).toBe(false);
-        expect(result.content).toBe('command not found');
+        expect(result.content).toBe(
+          'Command failed with exit code 1\n\nStdout:\ncommand not found',
+        );
         expect(result.state).toEqual({ command: 'echo hello', exitCode: 1, success: false });
       });
 
@@ -64,7 +65,9 @@ describe('SkillsExecutionRuntime', () => {
 
         const result = await runtime.execScript(args);
 
-        expect(result.content).toBe('stdout line\nstderr line');
+        expect(result.content).toBe(
+          'Command completed successfully.\n\nStdout:\nstdout line\n\nStderr:\nstderr line',
+        );
       });
 
       it('should return "(no output)" when output is empty', async () => {
@@ -79,7 +82,7 @@ describe('SkillsExecutionRuntime', () => {
 
         const result = await runtime.execScript(args);
 
-        expect(result.content).toBe('(no output)');
+        expect(result.content).toBe('Command completed successfully.');
       });
 
       it('should return success: false when execScript throws', async () => {
@@ -92,6 +95,46 @@ describe('SkillsExecutionRuntime', () => {
 
         expect(result.success).toBe(false);
         expect(result.content).toBe('Failed to execute command: sandbox timeout');
+      });
+
+      it('should fall back to constructor activatedSkills when args carry none', async () => {
+        const execScript = vi.fn().mockResolvedValue({
+          exitCode: 0,
+          output: 'ok',
+          success: true,
+        } satisfies CommandResult);
+        const contextSkills = [{ description: 'PDF tools', id: 'skl_1', name: 'pdf' }];
+        const runtime = new SkillsExecutionRuntime({
+          activatedSkills: contextSkills,
+          service: createMockService({ execScript }),
+        });
+
+        await runtime.execScript(args);
+
+        expect(execScript).toHaveBeenCalledWith('echo hello', {
+          activatedSkills: contextSkills,
+          description: 'test command',
+        });
+      });
+
+      it('should prefer args activatedSkills over the constructor fallback', async () => {
+        const execScript = vi.fn().mockResolvedValue({
+          exitCode: 0,
+          output: 'ok',
+          success: true,
+        } satisfies CommandResult);
+        const argsSkills = [{ id: 'skl_2', name: 'xlsx' }];
+        const runtime = new SkillsExecutionRuntime({
+          activatedSkills: [{ id: 'skl_1', name: 'pdf' }],
+          service: createMockService({ execScript }),
+        });
+
+        await runtime.execScript({ ...args, activatedSkills: argsSkills });
+
+        expect(execScript).toHaveBeenCalledWith('echo hello', {
+          activatedSkills: argsSkills,
+          description: 'test command',
+        });
       });
     });
 
@@ -109,15 +152,14 @@ describe('SkillsExecutionRuntime', () => {
         const result = await runtime.execScript(args);
 
         expect(result.success).toBe(true);
-        expect(result.content).toBe('ok');
+        expect(result.content).toBe('Command completed successfully.\n\nStdout:\nok');
       });
 
       it('should return success: false when command fails with non-zero exit code', async () => {
         const service = createMockService({
           runCommand: vi.fn().mockResolvedValue({
             exitCode: 127,
-            output: '',
-            stderr: 'not found',
+            output: 'not found',
             success: false,
           } satisfies CommandResult),
         });
@@ -126,7 +168,7 @@ describe('SkillsExecutionRuntime', () => {
         const result = await runtime.execScript(args);
 
         expect(result.success).toBe(false);
-        expect(result.content).toBe('not found');
+        expect(result.content).toBe('Command failed with exit code 127\n\nStdout:\nnot found');
         expect(result.state).toEqual({ command: 'echo hello', exitCode: 127, success: false });
       });
 
@@ -210,6 +252,28 @@ describe('SkillsExecutionRuntime', () => {
       expect(result.state).toMatchObject({ name: 'deploy', source: 'project' });
     });
 
+    it('activateSkill preserves device source for execution-device skills', async () => {
+      const readFile = vi.fn().mockResolvedValue('# Device Writer\nWrite across projects.');
+      const listFiles = vi.fn().mockResolvedValue([]);
+      const runtime = new SkillsExecutionRuntime({
+        deviceFileAccess: { listFiles, readFile },
+        projectSkills: [
+          {
+            location: '/home/.agents/skills/device-writer/SKILL.md',
+            name: 'device-writer',
+            source: 'device',
+          },
+        ],
+        service: createMockService(),
+      });
+
+      const result = await runtime.activateSkill({ name: 'device-writer' });
+
+      expect(readFile).toHaveBeenCalledWith('/home/.agents/skills/device-writer/SKILL.md');
+      expect(result.success).toBe(true);
+      expect(result.state).toMatchObject({ name: 'device-writer', source: 'device' });
+    });
+
     it('activateSkill takes precedence over a same-named DB skill', async () => {
       const readFile = vi.fn().mockResolvedValue('project content');
       const listFiles = vi.fn().mockResolvedValue([]);
@@ -271,7 +335,7 @@ describe('SkillsExecutionRuntime', () => {
       expect(listFiles).toHaveBeenCalledWith('/repo/.agents/skills/deploy');
       expect(readFile).not.toHaveBeenCalled();
       expect(result.success).toBe(false);
-      expect(result.content).toContain('Resource not found in project skill');
+      expect(result.content).toContain('Resource not found in filesystem skill');
     });
 
     it('readReference rejects hidden segments before consulting the device', async () => {
@@ -341,6 +405,63 @@ describe('SkillsExecutionRuntime', () => {
       expect(result.success).toBe(true);
       expect(result.content).toContain('builtin only');
       expect(result.state).toMatchObject({ name: 'artifacts', source: 'builtin' });
+    });
+  });
+
+  describe('case-insensitive name matching', () => {
+    it('activateSkill matches a builtin regardless of casing', async () => {
+      const runtime = new SkillsExecutionRuntime({
+        builtinSkills: [
+          {
+            content: 'browser content',
+            description: 'browser',
+            identifier: 'lobe-agent-browser',
+            name: 'agent-browser',
+            source: 'builtin',
+          },
+        ],
+        service: createMockService(),
+      });
+
+      for (const name of ['agent-browser', 'Agent-Browser', 'AGENT-BROWSER']) {
+        const result = await runtime.activateSkill({ name });
+        expect(result.success).toBe(true);
+        expect(result.content).toContain('browser content');
+      }
+    });
+
+    it('activateSkill matches a project skill regardless of casing', async () => {
+      const readFile = vi.fn().mockResolvedValue('# project skill body');
+      const runtime = new SkillsExecutionRuntime({
+        deviceFileAccess: { listFiles: vi.fn(), readFile },
+        projectSkills: [{ location: '/work/.agents/skills/my-skill/SKILL.md', name: 'my-skill' }],
+        service: createMockService(),
+      });
+
+      const result = await runtime.activateSkill({ name: 'My-Skill' });
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('# project skill body');
+      expect(result.state).toMatchObject({ source: 'project' });
+    });
+
+    it('readReference matches a builtin regardless of casing', async () => {
+      const runtime = new SkillsExecutionRuntime({
+        builtinSkills: [
+          {
+            content: 'main',
+            description: '',
+            identifier: 'lobehub',
+            name: 'lobehub',
+            resources: { 'references/kb': { content: 'kb body', fileHash: 'h', size: 7 } },
+            source: 'builtin',
+          },
+        ],
+        service: createMockService(),
+      });
+
+      const result = await runtime.readReference({ id: 'LobeHub', path: 'references/kb' });
+      expect(result.success).toBe(true);
+      expect(result.content).toBe('kb body');
     });
   });
 });

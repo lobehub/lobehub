@@ -9,17 +9,21 @@ export interface TreeItem {
   slug?: string | null;
   sourceType?: string;
   url: string;
+  userId?: string | null;
+  visibility?: 'private' | 'public' | null;
 }
 
 export interface TreeDataState {
   children: Record<string, TreeItem[]>;
-  status: Record<string, 'idle' | 'loading' | 'revalidating'>;
+  status: Record<string, 'idle' | 'loading' | 'revalidating' | 'error'>;
 }
 
 export type TreeStoreHandle = StoreHandle<TreeDataState>;
 
 export interface TreeState extends TreeDataState {
   epoch: number;
+  /** Last load error per folderId, so a failed fetch renders a failure state (with Retry) instead of a false "empty folder". */
+  errors: Record<string, unknown>;
   expandAncestors: (folderIds: string[]) => Promise<void>;
   expanded: Record<string, boolean>;
 

@@ -26,7 +26,7 @@ export interface TaskGroupMeta {
   key: string;
   label: string;
   priority?: number;
-  status?: 'backlog' | 'canceled' | 'completed' | 'failed' | 'paused' | 'running';
+  status?: 'backlog' | 'canceled' | 'completed' | 'failed' | 'paused' | 'running' | 'scheduled';
 }
 
 export const DEFAULT_TASK_LIST_VIEW_OPTIONS: TaskListViewOptions = {
@@ -92,9 +92,10 @@ const STATUS_GROUP_RANK_MAP: Record<NonNullable<TaskGroupMeta['status']>, number
   paused: 0,
   failed: 1,
   running: 2,
-  backlog: 3,
-  completed: 4,
-  canceled: 5,
+  scheduled: 3,
+  backlog: 4,
+  completed: 5,
+  canceled: 6,
 };
 
 const TASK_STATUS_TO_GROUP_MAP: Record<string, NonNullable<TaskGroupMeta['status']>> = {
@@ -104,7 +105,10 @@ const TASK_STATUS_TO_GROUP_MAP: Record<string, NonNullable<TaskGroupMeta['status
   failed: 'failed',
   paused: 'paused',
   running: 'running',
-  scheduled: 'running',
+  // Scheduled tasks are idle-until-next-run, not executing — keep them in their
+  // own group instead of folding into "running" ("In progress"), whose label
+  // would otherwise assert a state the task isn't in.
+  scheduled: 'scheduled',
 };
 
 const getPriorityValue = (task: TaskListItem) => task.priority ?? 0;
@@ -230,6 +234,7 @@ export const getTaskGroupMeta = (task: TaskListItem, groupBy: TaskGroupBy): Task
         failed: 'taskDetail.status.failed',
         paused: 'taskDetail.status.paused',
         running: 'taskDetail.status.running',
+        scheduled: 'taskDetail.status.scheduled',
       };
       return {
         groupBy: 'status',

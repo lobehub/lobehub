@@ -1,4 +1,4 @@
-import type { VerifyUserDecision, VerifyVerdict } from '@lobechat/types';
+import type { VerifyCheckDecisionDetail, VerifyUserDecision, VerifyVerdict } from '@lobechat/types';
 
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import type { LobeChatDatabase } from '@/database/type';
@@ -27,8 +27,16 @@ export class VerifyFeedbackService {
     this.resultModel = new VerifyCheckResultModel(db, userId, workspaceId);
   }
 
-  /** Record a user's decision on a result and precompute its FP/FN flags. */
-  async submitDecision(resultId: string, decision: VerifyUserDecision): Promise<boolean> {
+  /**
+   * Record a user's decision on a result and precompute its FP/FN flags. The
+   * optional detail (note, circled evidence regions, who/when) rides along on
+   * `user_decision_detail`; omitting it leaves any existing detail untouched.
+   */
+  async submitDecision(
+    resultId: string,
+    decision: VerifyUserDecision,
+    detail?: VerifyCheckDecisionDetail,
+  ): Promise<boolean> {
     const result = await this.resultModel.findById(resultId);
     if (!result) return false;
 
@@ -38,6 +46,7 @@ export class VerifyFeedbackService {
       isFalseNegative,
       isFalsePositive,
       userDecision: decision,
+      ...(detail ? { userDecisionDetail: detail } : {}),
     });
     return true;
   }

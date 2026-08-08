@@ -1,5 +1,6 @@
 import type { GroundingSearch } from '../../search';
 import type { ThreadStatus } from '../../topic/thread';
+import type { WorkSummaryItem } from '../../work';
 import type {
   ChatImageItem,
   ChatMessageError,
@@ -32,12 +33,20 @@ export type UIMessageRoleType =
   | 'agentCouncil'
   | 'compressedGroup'
   | 'compareGroup'
-  | 'verify';
+  | 'verify'
+  | 'taskCallback';
 
 export interface ChatFileItem {
   content?: string;
   fileType: string;
   id: string;
+  /**
+   * The viewer lost access to the referenced file (e.g. its owner switched a
+   * workspace-shared file back to private after it was used in a shared
+   * conversation). The server tombstones the row — id only, no name/url — and
+   * the UI renders a no-access placeholder card instead of the file card.
+   */
+  inaccessible?: boolean;
   name: string;
   size: number;
   url: string;
@@ -86,6 +95,13 @@ export interface TaskBlock {
 
 export interface AssistantContentBlock {
   content: string;
+  /**
+   * Multi-agent broadcast members rendered inline as a single AgentCouncil block
+   * (parallel columns) within the supervisor's assistant group — instead of a
+   * separate top-level `agentCouncil` message. Set on a dedicated council block
+   * that carries no own content/tools.
+   */
+  council?: UIChatMessage[];
   error?: ChatMessageError | null;
   fileList?: ChatFileItem[];
   id: string;
@@ -171,6 +187,13 @@ export interface TaskDetail {
   totalToolCalls?: number;
 }
 
+export interface MessageSender {
+  avatar?: string | null;
+  fullName?: string | null;
+  id: string;
+  username?: string | null;
+}
+
 export interface UIChatMessage {
   // Group chat fields (alphabetically before other fields)
   agentId?: string | 'supervisor';
@@ -254,6 +277,17 @@ export interface UIChatMessage {
    */
   role: UIMessageRoleType;
   search?: GroundingSearch | null;
+  /**
+   * The workspace member who authored this message. Populated by the server
+   * query via a users LEFT JOIN. `null` for messages whose author account was
+   * deleted (rare — `messages.user_id` cascades on delete, so this is mainly
+   * a safety fallback) or for messages returned by paths that don't hydrate
+   * this field yet (streaming/optimistic client messages).
+   *
+   * Used by the User bubble to render the actual sender's avatar in
+   * workspace-shared topics instead of hard-coding the viewer's own avatar.
+   */
+  sender?: MessageSender | null;
   sessionId?: string;
   /**
    * External-signal callback blocks (). Set on virtual
@@ -312,4 +346,12 @@ export interface UIChatMessage {
    */
   usage?: ModelUsage;
   videoList?: ChatVideoItem[];
+  /**
+   * Work summaries produced by this message's root operation, resolved
+   * server-side and attached by `metadata.work.rootOperationId`. Rides the
+   * message-list payload so the in-message Works chips and the sidebar's
+   * summary view read from one source instead of a separate work-summary
+   * fetch. Empty/omitted when the message produced no Work.
+   */
+  works?: WorkSummaryItem[];
 }

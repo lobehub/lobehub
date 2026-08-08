@@ -5,17 +5,17 @@ import { cssVar, useTheme } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { TOPIC_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import RingLoadingIcon from '@/components/RingLoading';
 
+// Dot colors come from the shared execution-status visuals so the management
+// table reads the same as the sidebar topic lists; `idle` is a synthetic
+// fallback for topics that dropped out of the running set.
 const STATUS_COLOR: Record<string, string> = {
-  active: cssVar.colorSuccess,
-  archived: cssVar.colorWarning,
-  completed: cssVar.colorTextQuaternary,
-  failed: cssVar.colorError,
+  ...Object.fromEntries(
+    Object.entries(TOPIC_STATUS_VISUALS).map(([status, visual]) => [status, visual.color]),
+  ),
   idle: cssVar.colorTextQuaternary,
-  paused: cssVar.colorInfo,
-  running: cssVar.colorWarning,
-  waitingForHuman: cssVar.colorInfo,
 };
 
 interface StatusDotProps {

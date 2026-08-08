@@ -69,6 +69,18 @@ export const nanoBananaProParameters: ModelParamsSchema = {
   },
 };
 
+// Nano Banana 2 Lite has no resolution control (fixed 1K output)
+export const nanoBanana2LiteParameters: ModelParamsSchema = {
+  aspectRatio: {
+    default: 'auto',
+    enum: NANO_BANANA_2_ASPECT_RATIOS,
+  },
+  imageUrls: {
+    default: [],
+  },
+  prompt: { default: '' },
+};
+
 export const nanoBanana2Parameters: ModelParamsSchema = {
   aspectRatio: {
     default: 'auto',
