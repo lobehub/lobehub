@@ -1,8 +1,14 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
+import { cssVar } from 'antd-style';
 import { memo, Suspense, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
+import {
+  TopicMigrationPlaceholder,
+  useTopicMigrationPending,
+} from '@/features/AgentTransferMigration';
 import {
   ChatInput,
   ChatList,
@@ -14,6 +20,7 @@ import SkeletonList from '@/features/Conversation/components/SkeletonList';
 import { useChatFollowUp } from '@/features/Conversation/hooks/useChatFollowUp';
 import { useGatewayReconnect } from '@/hooks/useGatewayReconnect';
 import { useOperationState } from '@/hooks/useOperationState';
+import HeterogeneousChatInput from '@/routes/(main)/agent/features/Conversation/HeterogeneousChatInput';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -30,6 +37,7 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
  * load and stream independently and each can reply on its own.
  */
 const TopicChat = memo(() => {
+  const { t } = useTranslation('chat');
   const [activeAgentId, portalTopicId] = useChatStore((s) => [
     s.activeAgentId,
     chatPortalSelectors.portalTopicId(s),
@@ -69,6 +77,14 @@ const TopicChat = memo(() => {
     topicId: portalTopicId ?? undefined,
   });
 
+  // Same gate as the main conversation: a topic still awaiting its transfer
+  // backfill shows a placeholder instead of an empty history and blocks
+  // sending — the server could not assemble the missing context anyway.
+  const { job: migrationJob, topicPending } = useTopicMigrationPending(
+    activeAgentId,
+    portalTopicId,
+  );
+
   if (!portalTopicId) return null;
 
   return (
@@ -98,12 +114,30 @@ const TopicChat = memo(() => {
             position: 'relative',
           }}
         >
-          <ChatList
-            defaultWorkflowExpandLevel={isHeterogeneousAgent ? { streaming: 'full' } : undefined}
-          />
+          {topicPending ? (
+            <TopicMigrationPlaceholder agentId={activeAgentId} topicId={portalTopicId} />
+          ) : (
+            <ChatList
+              defaultWorkflowExpandLevel={isHeterogeneousAgent ? { streaming: 'full' } : undefined}
+            />
+          )}
         </Flexbox>
       </Suspense>
-      <ChatInput leftActions={['typo']} rightActions={['contextWindow']} />
+      {topicPending ? (
+        <Flexbox horizontal align={'center'} justify={'center'} paddingBlock={6} paddingInline={16}>
+          <span style={{ color: cssVar.colorTextDescription, fontSize: 12, textAlign: 'center' }}>
+            {t(
+              migrationJob?.type === 'copy'
+                ? 'transferMigration.inputDisabledHintCopy'
+                : 'transferMigration.inputDisabledHint',
+            )}
+          </span>
+        </Flexbox>
+      ) : isHeterogeneousAgent ? (
+        <HeterogeneousChatInput />
+      ) : (
+        <ChatInput leftActions={['typo']} rightActions={['contextWindow']} />
+      )}
     </ConversationProvider>
   );
 });

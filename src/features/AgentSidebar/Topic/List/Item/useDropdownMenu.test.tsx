@@ -119,6 +119,8 @@ describe('useTopicItemDropdownMenu', () => {
     const items = result.current.dropdownMenu();
 
     expect(items.map((item) => (item && 'key' in item ? item.key : 'divider'))).toEqual([
+      'openOnRight',
+      'divider',
       'markCompleted',
       'favorite',
       'divider',

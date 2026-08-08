@@ -20,6 +20,7 @@ interface UseConversationPanelDropResult {
   onDragLeave: (event: React.DragEvent) => void;
   onDragOver: (event: React.DragEvent) => void;
   onDrop: (event: React.DragEvent) => void;
+  onDropCapture: (event: React.DragEvent) => void;
 }
 
 /**
@@ -58,11 +59,18 @@ export const useConversationPanelDrop = (): UseConversationPanelDropResult => {
     if (depthRef.current === 0) setDragKind(null);
   }, []);
 
+  // Capture-phase reset: a drop on the nested composer is consumed there
+  // (useTopicDrop stops propagation to insert a topic reference), so the
+  // bubble-phase handler below never runs for it. Capture always fires first,
+  // guaranteeing the overlay clears no matter which descendant owns the drop.
+  const onDropCapture = useCallback((_event: React.DragEvent) => {
+    depthRef.current = 0;
+    setDragKind(null);
+  }, []);
+
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       const kind = resolveDragKind(event.dataTransfer.types);
-      depthRef.current = 0;
-      setDragKind(null);
       if (!kind) return;
 
       event.preventDefault();
@@ -80,5 +88,5 @@ export const useConversationPanelDrop = (): UseConversationPanelDropResult => {
     [openTopicInPortal, openThreadInPortal],
   );
 
-  return { dragKind, onDragEnter, onDragLeave, onDragOver, onDrop };
+  return { dragKind, onDragEnter, onDragLeave, onDragOver, onDrop, onDropCapture };
 };

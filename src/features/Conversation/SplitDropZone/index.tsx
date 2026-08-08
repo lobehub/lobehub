@@ -36,7 +36,8 @@ const styles = createStaticStyles(({ css }) => ({
  */
 const SplitDropZone = memo<{ children: ReactNode }>(({ children }) => {
   const { t } = useTranslation('common');
-  const { dragKind, onDragEnter, onDragLeave, onDragOver, onDrop } = useConversationPanelDrop();
+  const { dragKind, onDragEnter, onDragLeave, onDragOver, onDrop, onDropCapture } =
+    useConversationPanelDrop();
 
   return (
     <Flexbox
@@ -45,6 +46,7 @@ const SplitDropZone = memo<{ children: ReactNode }>(({ children }) => {
       onDragLeave={onDragLeave}
       onDragOver={onDragOver}
       onDrop={onDrop}
+      onDropCapture={onDropCapture}
     >
       {children}
       {dragKind && (

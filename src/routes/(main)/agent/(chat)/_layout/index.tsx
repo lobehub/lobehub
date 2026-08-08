@@ -7,9 +7,9 @@ import { memo, useRef } from 'react';
 import { Outlet } from 'react-router';
 
 import ChatTerminalPanel from '@/features/ChatTerminal';
+import SplitDropZone from '@/features/Conversation/SplitDropZone';
 import AgentWorkingSidebar from '@/features/Conversation/WorkingSidebar';
 import ChatHeader from '@/routes/(main)/agent/features/Conversation/Header';
-import SplitDropZone from '@/routes/(main)/agent/features/Conversation/SplitDropZone';
 import Portal from '@/routes/(main)/agent/features/Portal';
 
 import HeaderSlot from './HeaderSlot';
