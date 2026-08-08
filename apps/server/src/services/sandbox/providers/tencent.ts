@@ -11,12 +11,24 @@ import type {
   SandboxProviderFileExportResult,
   SandboxServiceOptions,
 } from '../types';
+import {
+  buildScriptCommand,
+  editFileScript,
+  globFilesScript,
+  grepContentScript,
+  listFilesScript,
+  moveFilesScript,
+  prepareWriteFileScript,
+  readFileScript,
+  searchFilesScript,
+} from './fileScripts';
 
 const log = debug('lobe-server:sandbox:tencent');
 
 const DEFAULT_API_BASE = 'https://pages-api.cloud.tencent.com/v1/sandbox';
 const DEFAULT_REGION = 'ap-beijing';
 const DEFAULT_TIMEOUT_SEC = 300;
+const DEFAULT_COMMAND_TIMEOUT_MS = 120_000;
 const ENVD_PORT = '49983';
 const ENVD_FALLBACK_VERSION = '0.2.4';
 /** Renew a persistent instance once it is within this window of expiring. */
@@ -32,11 +44,12 @@ interface AcquiredInstance {
 }
 
 /**
- * Instances are keyed by session so that `persistent` mode reuses the same
- * container across tool calls. Kept at module scope because a provider
- * instance is constructed per request.
+ * Instances are keyed by session. A provider is constructed per request, but a
+ * single tool call can fan out into several `callTool` invocations — file
+ * bootstrapping runs a command before the requested tool — so the instance has
+ * to outlive the provider for those to land in the same container.
  */
-const persistentInstances = new Map<string, AcquiredInstance>();
+const instances = new Map<string, AcquiredInstance>();
 
 export class TencentSandboxProvider implements SandboxProvider {
   readonly capabilities = {
@@ -44,9 +57,12 @@ export class TencentSandboxProvider implements SandboxProvider {
     exportFile: true,
     files: true,
     languages: ['python', 'javascript', 'typescript'],
+    // On-demand instances are never renewed, so state only survives until the
+    // requested timeout elapses.
     persistentSession: sandboxEnv.TENCENT_SANDBOX_MODE !== 'on-demand',
     shell: true,
-    skillScripts: true,
+    // Skill archives are not downloaded into the sandbox yet; see `execScript`.
+    skillScripts: false,
   } satisfies SandboxProviderCapabilities;
 
   readonly kind = 'tencent';
@@ -65,11 +81,10 @@ export class TencentSandboxProvider implements SandboxProvider {
     if (configError) return configError;
 
     try {
-      return await this.withSandbox(async (sandbox) => {
-        const result = await this.dispatch(sandbox, toolName, params);
+      const sandbox = await this.connect();
+      const result = await this.dispatch(sandbox, toolName, params);
 
-        return { result, sessionExpiredAndRecreated: false, success: true };
-      });
+      return { result, sessionExpiredAndRecreated: false, success: true };
     } catch (error) {
       log('Tencent sandbox tool %s failed: %O', toolName, error);
 
@@ -91,22 +106,15 @@ export class TencentSandboxProvider implements SandboxProvider {
     if (configError) return { error: configError.error, success: false };
 
     try {
-      return await this.withSandbox(async (sandbox) => {
-        const content = await sandbox.files.read(path, { format: 'bytes' });
-        const body = new Uint8Array(content);
+      const sandbox = await this.connect();
+      const content = await sandbox.files.read(path, { format: 'bytes' });
+      const body = new Uint8Array(content);
 
-        const response = await fetch(uploadUrl, {
-          body,
-          headers: uploadHeaders,
-          method: 'PUT',
-        });
+      const response = await fetch(uploadUrl, { body, headers: uploadHeaders, method: 'PUT' });
 
-        if (!response.ok) {
-          throw new Error(`Upload failed with status ${response.status}`);
-        }
+      if (!response.ok) throw new Error(`Upload failed with status ${response.status}`);
 
-        return { size: body.byteLength, success: true };
-      });
+      return { size: body.byteLength, success: true };
     } catch (error) {
       log('Tencent sandbox export failed: %O', error);
 
@@ -126,15 +134,9 @@ export class TencentSandboxProvider implements SandboxProvider {
     toolName: string,
     params: Record<string, unknown>,
   ): Promise<unknown> {
-    const str = (key: string): string => {
-      const value = params[key];
-      if (typeof value !== 'string') throw new Error(`Missing required parameter: ${key}`);
-      return value;
-    };
-
     switch (toolName) {
       case 'executeCode': {
-        const execution = await sandbox.runCode(str('code'), {
+        const execution = await sandbox.runCode(String(params.code ?? ''), {
           language: (params.language as string) ?? 'python',
         });
 
@@ -143,103 +145,75 @@ export class TencentSandboxProvider implements SandboxProvider {
           results: execution.results,
           stderr: execution.logs.stderr.join(''),
           stdout: execution.logs.stdout.join(''),
+          success: !execution.error,
         };
       }
 
-      case 'execScript':
       case 'runCommand': {
-        const background = params.background === true;
-        const handle = await sandbox.commands.run(str('command'), {
-          background,
-          cwd: params.cwd as string | undefined,
-        });
-
-        if (background) return { pid: handle.pid, running: true };
-
-        return {
-          exitCode: handle.exitCode,
-          stderr: handle.stderr,
-          stdout: handle.stdout,
-        };
+        return this.runCommand(sandbox, params);
       }
 
       case 'getCommandOutput': {
-        const handle = await sandbox.commands.connect(Number(params.pid));
+        const handle = await sandbox.commands.connect(this.commandId(params));
         const result = await handle.wait();
 
-        return { exitCode: result.exitCode, stderr: result.stderr, stdout: result.stdout };
+        return {
+          exitCode: result.exitCode,
+          output: result.stdout,
+          stderr: result.stderr,
+          stdout: result.stdout,
+          success: result.exitCode === 0,
+        };
       }
 
       case 'killCommand': {
-        return { killed: await sandbox.commands.kill(Number(params.pid)) };
-      }
-
-      case 'listFiles':
-      case 'listLocalFiles': {
-        const entries = await sandbox.files.list(str('path'));
-
-        return { files: entries.map((entry) => ({ name: entry.name, type: entry.type })) };
-      }
-
-      case 'readFile':
-      case 'readLocalFile': {
-        return { content: await sandbox.files.read(str('path')) };
+        return { success: await sandbox.commands.kill(this.commandId(params)) };
       }
 
       case 'writeFile':
       case 'writeLocalFile': {
-        const path = str('path');
-        await sandbox.files.write(path, str('content'));
+        return this.writeFile(sandbox, params);
+      }
 
-        return { path, written: true };
+      case 'listFiles':
+      case 'listLocalFiles': {
+        return this.runScript(sandbox, listFilesScript, params);
+      }
+
+      case 'readFile':
+      case 'readLocalFile': {
+        return this.runScript(sandbox, readFileScript, params);
       }
 
       case 'editFile':
       case 'editLocalFile': {
-        const path = str('path');
-        const original = await sandbox.files.read(path);
-        const oldString = str('oldString');
+        return this.runScript(sandbox, editFileScript, params);
+      }
 
-        if (!original.includes(oldString)) {
-          throw new Error(`The string to replace was not found in ${path}`);
-        }
-
-        const updated = original.replace(oldString, str('newString'));
-        await sandbox.files.write(path, updated);
-
-        return { edited: true, path };
+      case 'searchFiles':
+      case 'searchLocalFiles': {
+        return this.runScript(sandbox, searchFilesScript, params);
       }
 
       case 'moveFiles':
       case 'moveLocalFiles': {
-        const source = str('source');
-        const destination = str('destination');
-        await this.runShell(sandbox, `mv -- ${quote(source)} ${quote(destination)}`);
-
-        return { destination, moved: true, source };
+        return this.runScript(sandbox, moveFilesScript, params);
       }
 
-      case 'globLocalFiles':
-      case 'searchFiles':
-      case 'searchLocalFiles': {
-        const path = (params.path as string) ?? '.';
-        const pattern = str('pattern');
-        const stdout = await this.runShell(
-          sandbox,
-          `find ${quote(path)} -name ${quote(pattern)} -type f`,
-        );
-
-        return { files: splitLines(stdout) };
+      case 'globFiles':
+      case 'globLocalFiles': {
+        return this.runScript(sandbox, globFilesScript, params);
       }
 
       case 'grepContent': {
-        const path = (params.path as string) ?? '.';
-        const stdout = await this.runShell(
-          sandbox,
-          `grep -rn -- ${quote(str('pattern'))} ${quote(path)} || true`,
-        );
+        return this.runScript(sandbox, grepContentScript, params);
+      }
 
-        return { matches: splitLines(stdout) };
+      case 'execScript': {
+        throw new Error(
+          'execScript is not supported by the Tencent sandbox provider yet; ' +
+            'skill archives are not downloaded into the sandbox.',
+        );
       }
 
       default: {
@@ -248,14 +222,89 @@ export class TencentSandboxProvider implements SandboxProvider {
     }
   }
 
-  private async runShell(sandbox: Sandbox, command: string): Promise<string> {
-    const result = await sandbox.commands.run(command);
+  private async runCommand(sandbox: Sandbox, params: Record<string, unknown>) {
+    const command = String(params.command ?? '');
+    if (!command.trim()) throw new Error('command is required');
 
-    if (result.exitCode !== 0) {
-      throw new Error(result.stderr || `Command exited with code ${result.exitCode}`);
+    if (params.background === true) {
+      const handle = await sandbox.commands.run(command, {
+        background: true,
+        cwd: params.cwd as string | undefined,
+        timeoutMs: this.timeoutMs(params),
+      });
+
+      // The shared runtime reads `commandId` (or the legacy `shell_id`) and
+      // passes it back to getCommandOutput/killCommand.
+      return { commandId: String(handle.pid), shell_id: String(handle.pid) };
     }
 
-    return result.stdout;
+    const result = await sandbox.commands.run(command, {
+      cwd: params.cwd as string | undefined,
+      timeoutMs: this.timeoutMs(params),
+    });
+
+    return {
+      exitCode: result.exitCode,
+      output: result.stdout,
+      stderr: result.stderr,
+      stdout: result.stdout,
+      // Without this the runtime falls back to the outer envelope and reports a
+      // failed command as successful.
+      success: result.exitCode === 0,
+    };
+  }
+
+  private async writeFile(sandbox: Sandbox, params: Record<string, unknown>) {
+    const path = String(params.path ?? '');
+    if (!path) throw new Error('path is required');
+
+    // Reuse the shared script so `createDirectories` behaves identically across
+    // providers, then stream the body through the sandbox filesystem API.
+    await this.runScript(sandbox, prepareWriteFileScript, params);
+    await sandbox.files.write(path, String(params.content ?? ''));
+
+    return { path, success: true };
+  }
+
+  /**
+   * Runs one of the shared Python helpers and returns its parsed JSON payload,
+   * mirroring how the Onlyboxes provider executes the same scripts.
+   */
+  private async runScript(
+    sandbox: Sandbox,
+    script: string,
+    params: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const result = await sandbox.commands.run(buildScriptCommand(script, params), {
+      timeoutMs: this.timeoutMs(params),
+    });
+
+    if (result.exitCode !== 0) {
+      throw new Error(result.stderr || result.stdout || 'Sandbox script failed');
+    }
+
+    const parsed = JSON.parse(result.stdout || '{}') as Record<string, unknown>;
+
+    if (parsed.success === false) {
+      throw new Error(String(parsed.error || 'Sandbox script failed'));
+    }
+
+    return parsed;
+  }
+
+  private commandId(params: Record<string, unknown>): number {
+    const raw = params.commandId ?? params.shell_id ?? params.pid;
+    const id = Number(raw);
+
+    if (!Number.isFinite(id)) throw new Error('commandId is required');
+
+    return id;
+  }
+
+  private timeoutMs(params: Record<string, unknown>): number {
+    const value = params.timeout ?? params.timeout_ms;
+
+    return typeof value === 'number' && Number.isFinite(value) ? value : DEFAULT_COMMAND_TIMEOUT_MS;
   }
 
   // ---------------------------------------------------------------------------
@@ -263,42 +312,52 @@ export class TencentSandboxProvider implements SandboxProvider {
   // ---------------------------------------------------------------------------
 
   /**
-   * Runs `fn` against a connected sandbox.
+   * Returns a client for this session's instance, acquiring or renewing one as
+   * needed.
    *
-   * In `persistent` mode the instance is cached per session and renewed before
-   * it expires. In `on-demand` mode a fresh instance is acquired for the call
-   * and released afterwards, which trades cold-start latency for cost.
+   * `persistent` renews before expiry so a topic keeps its container.
+   * `on-demand` lets the instance lapse at `TENCENT_SANDBOX_TIMEOUT_SEC` and
+   * acquires a fresh one afterwards, which bounds cost without breaking
+   * multi-call flows such as file bootstrapping or background commands.
    */
-  private async withSandbox<T>(fn: (sandbox: Sandbox) => Promise<T>): Promise<T> {
-    const onDemand = sandboxEnv.TENCENT_SANDBOX_MODE === 'on-demand';
-    const instance = onDemand ? await this.acquire() : await this.acquirePersistent();
-
-    try {
-      return await fn(connect(instance));
-    } finally {
-      if (onDemand) await this.release(instance.instanceId);
-    }
+  private async connect(): Promise<Sandbox> {
+    return connect(await this.acquireForSession());
   }
 
-  private async acquirePersistent(): Promise<AcquiredInstance> {
-    const key = this.sessionKey();
-    const cached = persistentInstances.get(key);
+  private async acquireForSession(): Promise<AcquiredInstance> {
+    this.evictExpired();
 
-    if (cached && cached.expiresAt - Date.now() > RENEW_THRESHOLD_MS) return cached;
+    const key = this.sessionKey();
+    const cached = instances.get(key);
 
     if (cached) {
-      // Still valid but close to expiry — extend rather than pay a cold start.
-      const renewed = await this.renew(cached);
-      if (renewed) {
-        persistentInstances.set(key, renewed);
-        return renewed;
+      if (cached.expiresAt - Date.now() > RENEW_THRESHOLD_MS) return cached;
+
+      if (sandboxEnv.TENCENT_SANDBOX_MODE !== 'on-demand') {
+        const renewed = await this.renew(cached);
+        if (renewed) {
+          instances.set(key, renewed);
+          return renewed;
+        }
       }
+
+      instances.delete(key);
+      await this.release(cached.instanceId);
     }
 
     const instance = await this.acquire();
-    persistentInstances.set(key, instance);
+    instances.set(key, instance);
 
     return instance;
+  }
+
+  /** Keeps the module-level map from growing with abandoned sessions. */
+  private evictExpired(): void {
+    const now = Date.now();
+
+    for (const [key, instance] of instances) {
+      if (instance.expiresAt <= now) instances.delete(key);
+    }
   }
 
   private async renew(instance: AcquiredInstance): Promise<AcquiredInstance | undefined> {
@@ -361,9 +420,7 @@ export class TencentSandboxProvider implements SandboxProvider {
       method: 'POST',
     });
 
-    if (!response.ok) {
-      throw new Error(`Sandbox ${action} failed with status ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`Sandbox ${action} failed with status ${response.status}`);
 
     const body = (await response.json()) as {
       Code?: number;
@@ -422,10 +479,5 @@ const connect = (instance: AcquiredInstance): Sandbox =>
     trafficAccessToken: instance.trafficToken,
   });
 
-const quote = (value: string): string => `'${value.replaceAll("'", String.raw`'\''`)}'`;
-
-const splitLines = (value: string): string[] =>
-  value
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean);
+/** Exposed for tests; instance reuse is otherwise process-wide. */
+export const __clearSandboxInstances = () => instances.clear();

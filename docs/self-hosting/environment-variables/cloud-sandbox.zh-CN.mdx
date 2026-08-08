@@ -98,7 +98,7 @@ tags:
 ### `TENCENT_SANDBOX_MODE`
 
 - 类型：可选
-- 描述：控制实例的生命周期。`persistent` 为每个话题保留一个容器并在到期前续期，变量、文件等状态可以跨工具调用保留；`on-demand` 为每次工具调用申请并随即释放容器，降低闲置成本，代价是每次调用都有冷启动。
+- 描述：控制实例的生命周期。`persistent` 为每个话题保留一个容器并在到期前续期，只要话题还活跃，变量和文件等状态就一直保留；`on-demand` 不续期，容器在 `TENCENT_SANDBOX_TIMEOUT_SEC` 后自然失效，以此约束闲置成本，代价是空闲一段时间后会有冷启动。两种模式下，构成同一次工具调用的多个请求都复用同一个容器。
 - 默认值：`persistent`
 - 示例：`on-demand`
 
@@ -192,12 +192,17 @@ TENCENT_SANDBOX_PROJECT_ID=makers-xxxxxxxx
 通过 `TENCENT_SANDBOX_MODE` 选择实例的生命周期：
 
 ```bash
-# 每个话题复用一个容器（默认）。同一会话内变量和文件跨工具调用保留。
+# 只要话题还活跃就持续续期同一个容器（默认），变量和文件跨调用保留。
 TENCENT_SANDBOX_MODE=persistent
 
-# 每次工具调用创建并释放容器，不保留任何状态。
+# 不续期，容器在 TENCENT_SANDBOX_TIMEOUT_SEC 后失效，下次调用重新创建。
 TENCENT_SANDBOX_MODE=on-demand
 ```
+
+<Callout type={'warn'}>
+  该提供方尚未实现技能脚本（`execScript`），因此 `capabilities.skillScripts` 报告为
+  `false`。代码执行、Shell 命令、文件操作与文件导出均已支持。
+</Callout>
 
 <Callout type={'info'}>
   使用这些沙箱**不需要**把 LobeHub 部署到 EdgeOne 上。实例通过公开的控制面 API 申请，
