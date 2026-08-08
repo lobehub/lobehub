@@ -41,6 +41,7 @@ export const AICO_ERROR_CODES = [
   'DEFAULT_TEAM_MISSING',
   // Keys / ops
   'MANAGED_KEY_UNAVAILABLE',
+  'DIRECT_PROVIDER_NOT_ALLOWED',
   'PERSONAL_FUNDS_UNAVAILABLE',
   'PERSONAL_WALLET_INACTIVE',
   'MEMBER_BUDGET_UNFUNDED',
@@ -66,11 +67,14 @@ export const AICO_ERROR_ALIASES: Partial<Record<AicoErrorCode, AicoErrorCode>> =
  */
 export const AICO_ERROR_MESSAGES_FA: Record<AicoErrorCode, string> = {
   ALREADY_HAS_ORGANIZATION: 'شما از قبل یک سازمان دارید.',
-  USER_ALREADY_IN_ORGANIZATION: 'شما از قبل عضو سازمان دیگری هستید و نمی‌توانید به این سازمان بپیوندید.',
+  USER_ALREADY_IN_ORGANIZATION:
+    'شما از قبل عضو سازمان دیگری هستید و نمی‌توانید به این سازمان بپیوندید.',
   BUDGET_EXCEEDED: 'سهمیه‌ی شما تمام شده است.',
   BUDGET_NOT_FOUND: 'سهمیه یافت نشد.',
   CANNOT_DELETE_DEFAULT_TEAM: 'تیم پیش‌فرض را نمی‌توان حذف کرد.',
   DEFAULT_TEAM_MISSING: 'تیم پیش‌فرض سازمان یافت نشد.',
+  DIRECT_PROVIDER_NOT_ALLOWED:
+    'ارائه‌دهنده مستقیم مجاز نیست. فقط مدل‌های کیف‌پولی (مدیریت‌شده) قابل استفاده هستند.',
   INSUFFICIENT_ORG_BALANCE: 'موجودی کیف پول سازمان کافی نیست.',
   INVITE_EXPIRED: 'این دعوت‌نامه منقضی شده است.',
   INVITE_IDENTIFIER_MISMATCH: 'این دعوت‌نامه برای حساب دیگری صادر شده است.',

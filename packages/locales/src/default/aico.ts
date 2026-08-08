@@ -17,6 +17,8 @@ export default {
   'errors.INVITE_NOT_FOUND': 'Invitation not found.',
   'errors.INVITE_NOT_PENDING': 'This invitation can no longer be accepted.',
   'errors.MANAGED_KEY_UNAVAILABLE': 'Managed key is unavailable. Please try again later.',
+  'errors.DIRECT_PROVIDER_NOT_ALLOWED':
+    'Direct providers are not available. Use a {{brandName}} model — we create an OpenRouter key from your wallet.',
   'errors.managedKey.description':
     'Top up your wallet or use organization credit so a managed key can be provisioned. You do not need to enter a provider API key.',
   'errors.managedKey.title': '{{brandName}} uses managed API keys',

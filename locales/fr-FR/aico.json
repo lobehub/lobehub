@@ -16,6 +16,7 @@
   "errors.BUDGET_NOT_FOUND": "Budget introuvable.",
   "errors.CANNOT_DELETE_DEFAULT_TEAM": "L'équipe par défaut ne peut pas être supprimée.",
   "errors.DEFAULT_TEAM_MISSING": "L'équipe par défaut de l'organisation est manquante.",
+  "errors.DIRECT_PROVIDER_NOT_ALLOWED": "Les fournisseurs directs ne sont pas disponibles. Utilisez un modèle {{brandName}} — nous créons une clé OpenRouter depuis votre portefeuille.",
   "errors.INSUFFICIENT_ORG_BALANCE": "Le solde du portefeuille de l'organisation est insuffisant.",
   "errors.INVITE_EXPIRED": "Cette invitation a expiré.",
   "errors.INVITE_IDENTIFIER_MISMATCH": "Cette invitation a été émise pour un autre compte.",

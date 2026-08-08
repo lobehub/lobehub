@@ -5,6 +5,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
+import { isAicoManagedRuntimeProvider } from '@/features/AicoBilling/isManagedRuntimeProvider';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useProviderName } from '@/hooks/useProviderName';
 import { useClientDataSWR } from '@/libs/swr';
@@ -15,9 +16,6 @@ import { useConversationStore } from '../store';
 import BaseErrorForm from './BaseErrorForm';
 import { isAicoManagedProviderMode } from './isAicoManagedProviderMode';
 import ManagedKeyError from './ManagedKeyError';
-
-const isManagedRuntimeProvider = (provider?: string) =>
-  provider === 'aico' || provider === 'openrouter';
 
 interface ChatInvalidAPIKeyProps {
   id: string;
@@ -35,7 +33,7 @@ const ChatInvalidAPIKey = memo<ChatInvalidAPIKeyProps>(({ id, provider }) => {
   if (isAicoManagedProviderMode(managedStatus?.managed)) {
     // Native openai/google/… selections do not use the wallet key — prompt a
     // model switch instead of the misleading “top up wallet” card.
-    const reason = provider && !isManagedRuntimeProvider(provider) ? 'wrongProvider' : 'funds';
+    const reason = provider && !isAicoManagedRuntimeProvider(provider) ? 'wrongProvider' : 'funds';
     return <ManagedKeyError reason={reason} onNavigate={() => deleteMessage(id)} />;
   }
 

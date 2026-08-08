@@ -82,26 +82,30 @@ export const POST = checkAuth(async (req: Request, { params, userId, serverDB })
   const provider = (await params)!.provider!;
 
   try {
+    // Aico product: wallet → provisioned OpenRouter keys only. Never accept
+    // direct openai/google/deepseek (BYOK) chat routes.
+    if (!AicoManagedPolicy.isManagedProvider(provider)) {
+      throw new AicoManagedPolicyError('DIRECT_PROVIDER_NOT_ALLOWED', ChatErrorType.BadRequest);
+    }
+
     const workspaceId = await resolveValidWorkspaceIdFromRequest({ req, serverDB, userId });
     const data = (await req.json()) as ChatStreamPayload & { aicoBilling?: unknown };
 
-    let billingContext: AicoBillingContext | undefined;
-    if (AicoManagedPolicy.isManagedProvider(provider)) {
-      try {
-        billingContext = resolveBillingContext(req, data);
-      } catch (error) {
-        const code =
-          error instanceof Error && error.message.startsWith('BILLING_CONTEXT_')
-            ? error.message
-            : 'BILLING_CONTEXT_INVALID';
-        throw new AicoManagedPolicyError(code);
-      }
+    let billingContext: AicoBillingContext;
+    try {
+      billingContext = resolveBillingContext(req, data);
+    } catch (error) {
+      const code =
+        error instanceof Error && error.message.startsWith('BILLING_CONTEXT_')
+          ? error.message
+          : 'BILLING_CONTEXT_INVALID';
+      throw new AicoManagedPolicyError(code);
     }
 
     // ============  1. init chat model   ============ //
-    // For managed providers this is the single policy boundary: `AicoManagedPolicy`
-    // resolves the funded wallet/budget, runs the model allow-list check
-    // (assertModelAllowed), and injects the managed key — no env/BYOK fallback.
+    // Single policy boundary: `AicoManagedPolicy` resolves the funded
+    // wallet/budget, runs the model allow-list check (assertModelAllowed),
+    // and injects the managed key — no env/BYOK fallback.
     const modelRuntime = await initModelRuntimeFromDB(serverDB, userId, provider, workspaceId, {
       billingContext,
       modelId: data.model,
@@ -123,7 +127,7 @@ export const POST = checkAuth(async (req: Request, { params, userId, serverDB })
       signal: req.signal,
     });
 
-    if (AicoManagedPolicy.isManagedProvider(provider) && billingContext) {
+    if (billingContext) {
       // Best-effort and non-blocking: cost stays 0/`pending` until OpenRouter
       // settlement, which is the source of truth for spend.
       void recordManagedUsage({

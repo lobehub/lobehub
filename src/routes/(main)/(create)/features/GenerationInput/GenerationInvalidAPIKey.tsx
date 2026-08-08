@@ -7,6 +7,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
+import { isAicoManagedRuntimeProvider } from '@/features/AicoBilling/isManagedRuntimeProvider';
 import BaseErrorForm from '@/features/Conversation/Error/BaseErrorForm';
 import { isAicoManagedProviderMode } from '@/features/Conversation/Error/isAicoManagedProviderMode';
 import ManagedKeyError from '@/features/Conversation/Error/ManagedKeyError';
@@ -30,8 +31,7 @@ const GenerationInvalidAPIKey = memo<GenerationInvalidAPIKeyProps>(({ provider, 
     lambdaClient.aicoBilling.getManagedProviderStatus.query(),
   );
   if (isAicoManagedProviderMode(managedStatus?.managed)) {
-    const reason =
-      provider && provider !== 'aico' && provider !== 'openrouter' ? 'wrongProvider' : 'funds';
+    const reason = provider && !isAicoManagedRuntimeProvider(provider) ? 'wrongProvider' : 'funds';
     return <ManagedKeyError reason={reason} onNavigate={onNavigate} />;
   }
 

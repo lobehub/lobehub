@@ -16,6 +16,7 @@
   "errors.BUDGET_NOT_FOUND": "未找到预算。",
   "errors.CANNOT_DELETE_DEFAULT_TEAM": "无法删除默认团队。",
   "errors.DEFAULT_TEAM_MISSING": "缺少组织默认团队。",
+  "errors.DIRECT_PROVIDER_NOT_ALLOWED": "不支持直连供应商。请使用 {{brandName}} 模型——我们会用钱包余额为你创建 OpenRouter 密钥。",
   "errors.INSUFFICIENT_ORG_BALANCE": "组织钱包余额不足。",
   "errors.INVITE_EXPIRED": "该邀请已过期。",
   "errors.INVITE_IDENTIFIER_MISMATCH": "该邀请属于其他账号。",
