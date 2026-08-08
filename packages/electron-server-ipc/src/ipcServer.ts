@@ -5,7 +5,7 @@ import path from 'node:path';
 
 import debug from 'debug';
 
-import { SOCK_FILE, SOCK_INFO_FILE, WINDOW_PIPE_FILE } from './const';
+import { MAX_IPC_MESSAGE_BUFFER_BYTES, SOCK_FILE, SOCK_INFO_FILE, WINDOW_PIPE_FILE } from './const';
 import type { ElectronIPCEventHandler } from './types';
 
 const log = debug('electron-server-ipc:server');
@@ -15,20 +15,19 @@ export class ElectronIPCServer {
   private socketPath: string;
   private appId: string;
   private eventHandler: ElectronIPCEventHandler;
+  private isWindows: boolean;
 
   constructor(appId: string, eventHandler: ElectronIPCEventHandler) {
     this.appId = appId;
     const isWindows = process.platform === 'win32';
+    this.isWindows = isWindows;
     // Create unique socket path to avoid conflicts
     this.socketPath = isWindows
       ? WINDOW_PIPE_FILE(appId)
       : path.join(os.tmpdir(), SOCK_FILE(appId));
 
     // For Unix sockets, ensure the file does not exist
-    if (!isWindows && fs.existsSync(this.socketPath)) {
-      log('Removing existing socket file at: %s', this.socketPath);
-      fs.unlinkSync(this.socketPath);
-    }
+    if (!isWindows) this.removeUnixSocketFile(this.socketPath);
 
     // Create server
     log('Creating IPC server');
@@ -48,12 +47,19 @@ export class ElectronIPCServer {
 
       this.server.listen(this.socketPath, () => {
         log('Electron IPC server listening on %s', this.socketPath);
+        if (!this.isWindows) fs.chmodSync(this.socketPath, 0o600);
 
         // Write socket path to temporary file for Next.js server to read
         const tempDir = os.tmpdir();
         const socketInfoPath = path.join(tempDir, SOCK_INFO_FILE(this.appId));
         log('Writing socket info to: %s', socketInfoPath);
-        fs.writeFileSync(socketInfoPath, JSON.stringify({ socketPath: this.socketPath }), 'utf8');
+        fs.writeFileSync(socketInfoPath, JSON.stringify({ socketPath: this.socketPath }), {
+          encoding: 'utf8',
+          mode: 0o600,
+        });
+        // writeFileSync's mode only applies when the file is created. Reapply it
+        // so socket-info files left by an older version cannot stay permissive.
+        fs.chmodSync(socketInfoPath, 0o600);
 
         resolve();
       });
@@ -69,6 +75,13 @@ export class ElectronIPCServer {
       const chunk = data.toString();
       log('Received data chunk, size: %d bytes', chunk.length);
       dataBuffer += chunk;
+
+      if (Buffer.byteLength(dataBuffer, 'utf8') > MAX_IPC_MESSAGE_BUFFER_BYTES) {
+        console.error('IPC message buffer exceeded maximum size; closing connection');
+        dataBuffer = '';
+        socket.destroy();
+        return;
+      }
 
       // Split messages by \n\n
       const messages = dataBuffer.split('\n');
@@ -148,13 +161,19 @@ export class ElectronIPCServer {
         log('Electron IPC server closed');
 
         // Delete socket file (Unix platforms)
-        if (process.platform !== 'win32' && fs.existsSync(this.socketPath)) {
-          log('Removing socket file: %s', this.socketPath);
-          fs.unlinkSync(this.socketPath);
-        }
+        if (process.platform !== 'win32') this.removeUnixSocketFile(this.socketPath);
 
         resolve();
       });
     });
+  }
+
+  private removeUnixSocketFile(socketPath: string): void {
+    try {
+      log('Removing socket file: %s', socketPath);
+      fs.unlinkSync(socketPath);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+    }
   }
 }

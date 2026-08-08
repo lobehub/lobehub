@@ -1,8 +1,7 @@
 ---
 title: Environment Setup Guide
 description: >-
-  Step-by-step guide to set up LobeHub development environment locally or
-  online.
+  Step-by-step guide to set up LobeHub development environment locally or online.
 tags:
   - LobeHub
   - Development Setup
@@ -99,7 +98,7 @@ This will start the following services:
 You can check all Docker services are running by running:
 
 ```bash
-docker compose -f docker-compose/dev/docker-compose.yml ps
+docker compose --env-file docker-compose/dev/.env -f docker-compose/dev/docker-compose.yml ps
 ```
 
 #### 5. Run Database Migrations
@@ -169,11 +168,11 @@ If ports are already in use:
 
 ```bash
 # Check what's using the ports
-lsof -i :5432  # PostgreSQL
-lsof -i :6379  # Redis
-lsof -i :9000  # RustFS API
-lsof -i :9001  # RustFS Console
-lsof -i :8180  # SearXNG
+lsof -i :5432 # PostgreSQL
+lsof -i :6379 # Redis
+lsof -i :9000 # RustFS API
+lsof -i :9001 # RustFS Console
+lsof -i :8180 # SearXNG
 ```
 
 ### Database Migrations

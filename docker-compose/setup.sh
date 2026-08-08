@@ -695,6 +695,35 @@ section_regenerate_secrets() {
             echo $(show_message "security_secrect_regenerate_failed") "AUTH_SECRET in \`.env\`"
         fi
     fi
+
+    # Generate SEARXNG_SECRET (hex encoded 32 bytes)
+    SEARXNG_SECRET=$(openssl rand -hex 32)
+    if [ $? -ne 0 ]; then
+        echo $(show_message "security_secrect_regenerate_failed") "SEARXNG_SECRET"
+    else
+        sed "${SED_INPLACE_ARGS[@]}" "s#^SEARXNG_SECRET=.*#SEARXNG_SECRET=${SEARXNG_SECRET}#" .env
+        if [ $? -ne 0 ]; then
+            echo $(show_message "security_secrect_regenerate_failed") "SEARXNG_SECRET in \`.env\`"
+        fi
+    fi
+}
+
+ensure_searxng_secret() {
+    if grep -Eq '^SEARXNG_SECRET=.+$' .env; then
+        return 0
+    fi
+
+    SEARXNG_SECRET=$(openssl rand -hex 32)
+    if [ $? -ne 0 ] || [ -z "$SEARXNG_SECRET" ]; then
+        echo $(show_message "security_secrect_regenerate_failed") "SEARXNG_SECRET"
+        exit 1
+    fi
+
+    if grep -q '^SEARXNG_SECRET=' .env; then
+        sed "${SED_INPLACE_ARGS[@]}" "s#^SEARXNG_SECRET=.*#SEARXNG_SECRET=${SEARXNG_SECRET}#" .env
+    else
+        echo "SEARXNG_SECRET=${SEARXNG_SECRET}" >> .env
+    fi
 }
 
 show_message "ask_regenerate_secrets"
@@ -702,6 +731,10 @@ ask "(y/n)" "y"
 if [[ "$ask_result" == "y" ]]; then
     section_regenerate_secrets
 fi
+
+# Compose now requires this value, so ensure it exists even when optional
+# regeneration of the other deployment secrets was declined.
+ensure_searxng_secret
 
 section_init_database() {
     if ! command -v docker &> /dev/null ; then
