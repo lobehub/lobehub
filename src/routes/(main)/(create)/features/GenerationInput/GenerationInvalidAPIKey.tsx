@@ -30,7 +30,9 @@ const GenerationInvalidAPIKey = memo<GenerationInvalidAPIKeyProps>(({ provider, 
     lambdaClient.aicoBilling.getManagedProviderStatus.query(),
   );
   if (isAicoManagedProviderMode(managedStatus?.managed)) {
-    return <ManagedKeyError onNavigate={onNavigate} />;
+    const reason =
+      provider && provider !== 'aico' && provider !== 'openrouter' ? 'wrongProvider' : 'funds';
+    return <ManagedKeyError reason={reason} onNavigate={onNavigate} />;
   }
 
   return (

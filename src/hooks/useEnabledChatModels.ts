@@ -11,12 +11,21 @@ const isManagedProvider = (providerId: string) =>
   providerId === 'aico' || providerId === 'openrouter';
 
 /**
- * Enabled chat models, filtered by org team grants when the active billing
- * source is an organization wallet.
+ * Enabled chat models for the model switcher.
+ *
+ * - In Aico managed mode: only `aico` / `openrouter` (wallet-backed keys).
+ * - When the active billing source is an organization: also filter managed
+ *   models by the member's team allow-list.
  */
 export const useEnabledChatModels = (): EnabledProviderWithModels[] => {
   const enabledChatModelList = useAiInfraStore((s) => s.enabledChatModelList, isEqual);
   const billingContext = useAicoBillingStore((s) => s.context);
+
+  const { data: managedStatus } = useClientDataSWR('aico-provider-status', () =>
+    lambdaClient.aicoBilling.getManagedProviderStatus.query(),
+  );
+  // Fail-closed: hide BYOK providers until the API says unmanaged.
+  const aicoManaged = managedStatus?.managed ?? true;
 
   const orgId =
     billingContext?.source === 'organization' ? billingContext.organizationId : undefined;
@@ -27,14 +36,16 @@ export const useEnabledChatModels = (): EnabledProviderWithModels[] => {
 
   return useMemo(() => {
     const list = enabledChatModelList || [];
-    if (!orgId) return list;
+    const scoped = aicoManaged ? list.filter((provider) => isManagedProvider(provider.id)) : list;
+
+    if (!orgId) return scoped;
     // Fail closed while the allow-list loads: hide managed models until known.
     if (!allowed) {
-      return list.filter((provider) => !isManagedProvider(provider.id));
+      return scoped.filter((provider) => !isManagedProvider(provider.id));
     }
 
     const allowSet = new Set(allowed.modelIds);
-    return list
+    return scoped
       .map((provider) => {
         if (!isManagedProvider(provider.id)) return provider;
         const children = (provider.children || []).filter((model) => allowSet.has(model.id));
@@ -43,5 +54,5 @@ export const useEnabledChatModels = (): EnabledProviderWithModels[] => {
       .filter(
         (provider) => !isManagedProvider(provider.id) || (provider.children?.length ?? 0) > 0,
       );
-  }, [allowed, enabledChatModelList, orgId]);
+  }, [aicoManaged, allowed, enabledChatModelList, orgId]);
 };
