@@ -117,8 +117,8 @@ describe('TencentSandboxProvider', () => {
     expect(result.result).toMatchObject({ exitCode: 1, success: false });
   });
 
-  it('returns the identifier the runtime uses for background commands', async () => {
-    mocks.sandbox.commands.run.mockResolvedValue({ pid: 4321 });
+  it('detaches background commands and returns a pollable identifier', async () => {
+    mocks.sandbox.commands.run.mockResolvedValue(okCommand());
 
     const result = await (
       await load()
@@ -127,7 +127,28 @@ describe('TencentSandboxProvider', () => {
       command: 'sleep 60',
     });
 
-    expect(result.result).toMatchObject({ commandId: '4321', shell_id: '4321' });
+    const { commandId, shell_id } = result.result as Record<string, string>;
+    expect(commandId).toBeTruthy();
+    expect(shell_id).toBe(commandId);
+
+    // Output has to be captured on disk, otherwise later polls have nothing to
+    // read without waiting for the process to finish.
+    const [launch] = mocks.sandbox.commands.run.mock.calls[0];
+    expect(launch).toContain(`${commandId}.log`);
+    expect(launch).toContain(`${commandId}.pid`);
+  });
+
+  // The tool contract polls for new output while the process keeps running, so
+  // this must never block on completion.
+  it('reports background progress without waiting for the process to exit', async () => {
+    mocks.sandbox.commands.run.mockResolvedValue(
+      okCommand(JSON.stringify({ newOutput: 'tick\n', running: true, success: true })),
+    );
+
+    const result = await (await load()).callTool('getCommandOutput', { commandId: 'abc' });
+
+    expect(result.result).toMatchObject({ newOutput: 'tick\n', running: true });
+    expect(mocks.sandbox.commands.connect).not.toHaveBeenCalled();
   });
 
   it('forwards the requested command timeout', async () => {
@@ -141,14 +162,13 @@ describe('TencentSandboxProvider', () => {
     );
   });
 
-  it('looks up background commands by commandId', async () => {
-    const wait = vi.fn().mockResolvedValue({ exitCode: 0, stderr: '', stdout: 'done' });
-    mocks.sandbox.commands.connect.mockResolvedValue({ wait });
+  it('kills a background command by its identifier', async () => {
+    mocks.sandbox.commands.run.mockResolvedValue(okCommand(JSON.stringify({ success: true })));
 
-    const result = await (await load()).callTool('getCommandOutput', { commandId: '4321' });
+    const result = await (await load()).callTool('killCommand', { commandId: 'abc' });
 
-    expect(mocks.sandbox.commands.connect).toHaveBeenCalledWith(4321);
-    expect(result.result).toMatchObject({ stdout: 'done', success: true });
+    expect(result.success).toBe(true);
+    expect(scriptArgs(mocks.sandbox.commands.run.mock.calls[0][0])).toEqual({ commandId: 'abc' });
   });
 
   // The shared tool contract uses `directoryPath`, not `path`.
@@ -210,7 +230,9 @@ describe('TencentSandboxProvider', () => {
     expect(calls.acquire).toBe(1);
   });
 
-  it('lets an on-demand instance lapse instead of renewing it', async () => {
+  // Dropping a still-valid instance early would strand uploaded files and
+  // background processes mid-session.
+  it('keeps an on-demand instance until it actually expires', async () => {
     mocks.env.TENCENT_SANDBOX_MODE = 'on-demand';
     expiresInSec = 10;
     mocks.sandbox.commands.run.mockResolvedValue(okCommand());
@@ -220,8 +242,20 @@ describe('TencentSandboxProvider', () => {
     await provider.callTool('runCommand', { command: 'echo 2' });
 
     expect(calls.update).toBe(0);
-    expect(calls.release).toBe(1);
-    expect(calls.acquire).toBe(2);
+    expect(calls.release).toBe(0);
+    expect(calls.acquire).toBe(1);
+  });
+
+  it('shares one instance between concurrent calls for the same session', async () => {
+    mocks.sandbox.commands.run.mockResolvedValue(okCommand());
+
+    const provider = await load();
+    await Promise.all([
+      provider.callTool('runCommand', { command: 'echo 1' }),
+      provider.callTool('runCommand', { command: 'echo 2' }),
+    ]);
+
+    expect(calls.acquire).toBe(1);
   });
 
   it('reports unsupported tools as a failed call', async () => {

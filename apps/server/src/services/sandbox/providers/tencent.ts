@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { Sandbox } from '@e2b/code-interpreter';
 import type { SandboxCallToolResult } from '@lobechat/builtin-tool-cloud-sandbox';
 import debug from 'debug';
@@ -20,6 +22,7 @@ import {
   moveFilesScript,
   prepareWriteFileScript,
   readFileScript,
+  scriptPrelude,
   searchFilesScript,
 } from './fileScripts';
 
@@ -33,6 +36,74 @@ const ENVD_PORT = '49983';
 const ENVD_FALLBACK_VERSION = '0.2.4';
 /** Renew a persistent instance once it is within this window of expiring. */
 const RENEW_THRESHOLD_MS = 60_000;
+const BACKGROUND_DIR = '/tmp/lobe-background';
+
+/**
+ * Reads whatever a background command has produced since the previous check.
+ *
+ * The tool contract is a polling one — callers ask repeatedly for *new* output
+ * while the process keeps running — so this must never block on completion.
+ * Progress is tracked with an offset file next to the log.
+ */
+const backgroundStatusScript = `${scriptPrelude}
+def main(encoded):
+    args = load_args(encoded)
+    base = Path('${BACKGROUND_DIR}') / str(args.get('commandId') or '')
+    log, pid_file = base.with_suffix('.log'), base.with_suffix('.pid')
+    exit_file, off_file = base.with_suffix('.exit'), base.with_suffix('.off')
+
+    if not log.exists() and not pid_file.exists():
+        emit({'success': False, 'error': 'unknown commandId'})
+        return
+
+    offset = int(off_file.read_text()) if off_file.exists() else 0
+    chunk = b''
+    if log.exists():
+        with log.open('rb') as handle:
+            handle.seek(offset)
+            chunk = handle.read()
+            off_file.write_text(str(handle.tell()))
+
+    exit_code = None
+    if exit_file.exists():
+        text = exit_file.read_text().strip()
+        exit_code = int(text) if text else None
+
+    running = False
+    if exit_code is None and pid_file.exists():
+        try:
+            os.kill(int(pid_file.read_text().strip()), 0)
+            running = True
+        except (OSError, ValueError):
+            running = False
+
+    output = chunk.decode(errors='replace')
+    emit({
+        'exitCode': exit_code,
+        'newOutput': output,
+        'output': output,
+        'running': running,
+        'stderr': '',
+        'success': running or exit_code == 0,
+    })
+`;
+
+const killBackgroundScript = `${scriptPrelude}
+import signal
+
+def main(encoded):
+    args = load_args(encoded)
+    pid_file = (Path('${BACKGROUND_DIR}') / str(args.get('commandId') or '')).with_suffix('.pid')
+    if not pid_file.exists():
+        emit({'success': False, 'error': 'unknown commandId'})
+        return
+    try:
+        os.kill(int(pid_file.read_text().strip()), signal.SIGTERM)
+    except (OSError, ValueError) as error:
+        emit({'success': False, 'error': str(error)})
+        return
+    emit({'success': True})
+`;
 
 interface AcquiredInstance {
   domain: string;
@@ -50,6 +121,11 @@ interface AcquiredInstance {
  * to outlive the provider for those to land in the same container.
  */
 const instances = new Map<string, AcquiredInstance>();
+/**
+ * In-flight acquisitions, so two concurrent tool calls for one session share a
+ * container instead of racing and leaking the loser.
+ */
+const pending = new Map<string, Promise<AcquiredInstance>>();
 
 export class TencentSandboxProvider implements SandboxProvider {
   readonly capabilities = {
@@ -154,20 +230,15 @@ export class TencentSandboxProvider implements SandboxProvider {
       }
 
       case 'getCommandOutput': {
-        const handle = await sandbox.commands.connect(this.commandId(params));
-        const result = await handle.wait();
-
-        return {
-          exitCode: result.exitCode,
-          output: result.stdout,
-          stderr: result.stderr,
-          stdout: result.stdout,
-          success: result.exitCode === 0,
-        };
+        return this.runScript(sandbox, backgroundStatusScript, {
+          commandId: this.commandId(params),
+        });
       }
 
       case 'killCommand': {
-        return { success: await sandbox.commands.kill(this.commandId(params)) };
+        return this.runScript(sandbox, killBackgroundScript, {
+          commandId: this.commandId(params),
+        });
       }
 
       case 'writeFile':
@@ -227,15 +298,28 @@ export class TencentSandboxProvider implements SandboxProvider {
     if (!command.trim()) throw new Error('command is required');
 
     if (params.background === true) {
-      const handle = await sandbox.commands.run(command, {
-        background: true,
+      const id = randomUUID();
+      const base = `${BACKGROUND_DIR}/${id}`;
+      // Detach through the shell so the caller is not tied to the process, and
+      // persist stdout, the pid, and the exit code so later polls can report
+      // progress without waiting for completion.
+      const launch =
+        `mkdir -p ${BACKGROUND_DIR}; ` +
+        `( { ${command} ; } > ${base}.log 2>&1 ; echo $? > ${base}.exit ) & ` +
+        `echo $! > ${base}.pid`;
+
+      const result = await sandbox.commands.run(launch, {
         cwd: params.cwd as string | undefined,
         timeoutMs: this.timeoutMs(params),
       });
 
+      if (result.exitCode !== 0) {
+        throw new Error(result.stderr || 'Failed to start background command');
+      }
+
       // The shared runtime reads `commandId` (or the legacy `shell_id`) and
       // passes it back to getCommandOutput/killCommand.
-      return { commandId: String(handle.pid), shell_id: String(handle.pid) };
+      return { commandId: id, shell_id: id };
     }
 
     const result = await sandbox.commands.run(command, {
@@ -292,11 +376,10 @@ export class TencentSandboxProvider implements SandboxProvider {
     return parsed;
   }
 
-  private commandId(params: Record<string, unknown>): number {
-    const raw = params.commandId ?? params.shell_id ?? params.pid;
-    const id = Number(raw);
+  private commandId(params: Record<string, unknown>): string {
+    const id = String(params.commandId ?? params.shell_id ?? '').trim();
 
-    if (!Number.isFinite(id)) throw new Error('commandId is required');
+    if (!id) throw new Error('commandId is required');
 
     return id;
   }
@@ -325,20 +408,35 @@ export class TencentSandboxProvider implements SandboxProvider {
   }
 
   private async acquireForSession(): Promise<AcquiredInstance> {
+    const key = this.sessionKey();
+    const inFlight = pending.get(key);
+
+    if (inFlight) return inFlight;
+
+    const promise = this.resolveInstance(key).finally(() => pending.delete(key));
+    pending.set(key, promise);
+
+    return promise;
+  }
+
+  private async resolveInstance(key: string): Promise<AcquiredInstance> {
     this.evictExpired();
 
-    const key = this.sessionKey();
     const cached = instances.get(key);
 
     if (cached) {
+      // On-demand instances are not renewed, so they stay usable right up to
+      // their real expiry — dropping them early would strand files and
+      // background processes mid-session.
+      if (sandboxEnv.TENCENT_SANDBOX_MODE === 'on-demand') return cached;
+
       if (cached.expiresAt - Date.now() > RENEW_THRESHOLD_MS) return cached;
 
-      if (sandboxEnv.TENCENT_SANDBOX_MODE !== 'on-demand') {
-        const renewed = await this.renew(cached);
-        if (renewed) {
-          instances.set(key, renewed);
-          return renewed;
-        }
+      const renewed = await this.renew(cached);
+      if (renewed) {
+        instances.set(key, renewed);
+
+        return renewed;
       }
 
       instances.delete(key);
@@ -480,4 +578,7 @@ const connect = (instance: AcquiredInstance): Sandbox =>
   });
 
 /** Exposed for tests; instance reuse is otherwise process-wide. */
-export const __clearSandboxInstances = () => instances.clear();
+export const __clearSandboxInstances = () => {
+  instances.clear();
+  pending.clear();
+};
