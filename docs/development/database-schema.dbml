@@ -346,6 +346,17 @@ table agent_history_job_agents {
   }
 }
 
+table agent_history_job_groups {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  job_id text [not null]
+  group_id text [not null]
+
+  indexes {
+    (job_id, group_id) [name: 'agent_history_job_groups_job_id_group_id_unique', unique]
+    group_id [name: 'agent_history_job_groups_group_id_idx']
+  }
+}
+
 table agent_history_job_topics {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   job_id text [not null]

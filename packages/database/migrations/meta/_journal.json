@@ -966,6 +966,13 @@
       "when": 1786151567302,
       "tag": "0137_agent_history_jobs_payload",
       "breakpoints": true
+    },
+    {
+      "idx": 138,
+      "version": "7",
+      "when": 1786166809665,
+      "tag": "0138_agent_history_job_groups",
+      "breakpoints": true
     }
   ],
   "version": "6"
