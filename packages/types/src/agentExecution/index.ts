@@ -92,6 +92,16 @@ export interface ExecAgentAppContext {
     workingDirectoryConfig?: WorkingDirConfig;
   };
   /**
+   * Whether this operation runs inside an isolation thread spawned by another
+   * operation on the same topic (callAgent / callSubAgent / group member).
+   *
+   * Such a run is a guest on its parent's topic: it must not claim or clear the
+   * topic's `runningOperation` mark, which is the parent run's gateway reconnect
+   * anchor. Broader than `isSubAgent` on purpose — the `execSubAgent` (callAgent)
+   * path passes `isSubAgent: false` yet is just as much a guest.
+   */
+  isolationThread?: boolean;
+  /**
    * Whether this operation is an isolated sub-agent execution. Used to disable
    * recursive sub-agent dispatch.
    */

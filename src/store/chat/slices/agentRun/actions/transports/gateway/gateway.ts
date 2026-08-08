@@ -842,6 +842,14 @@ export class GatewayActionImpl {
    * and establishes a new WebSocket connection with event replay.
    */
   reconnectToGatewayOperation = async (params: {
+    /**
+     * Agent that owns the rendered conversation. Callers outside the agent route
+     * (task detail / home run drawer) MUST pass it: `activeAgentId` is whatever
+     * the last agent page left behind — `undefined` on the home surface — and the
+     * streamed messages would land in a `main_undefined_<topicId>` bucket nobody
+     * renders, leaving a connected-but-frozen panel.
+     */
+    agentId?: string;
     assistantMessageId: string;
     operationId: string;
     scope?: string;
@@ -896,7 +904,7 @@ export class GatewayActionImpl {
       ?.runningOperation?.operationId;
     if (topicOpIdAfterRefresh && topicOpIdAfterRefresh !== operationId) return;
 
-    const agentId = this.#get().activeAgentId;
+    const agentId = params.agentId ?? this.#get().activeAgentId;
     const context = {
       agentId,
       scope: (scope ?? 'main') as ConversationContext['scope'],

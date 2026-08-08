@@ -217,6 +217,8 @@ describe('AiAgentService.execSubAgent', () => {
         agentId: 'agent-1',
         appContext: {
           groupId: 'group-1',
+          // Guest on the parent's topic — must not claim its running mark.
+          isolationThread: true,
           isSubAgent: false,
           threadId: 'thread-123',
           topicId: 'topic-1',
@@ -260,6 +262,7 @@ describe('AiAgentService.execSubAgent', () => {
       expect(execAgentSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           appContext: expect.objectContaining({
+            isolationThread: true,
             isSubAgent: true,
             threadId: 'thread-123',
             topicId: 'topic-1',

@@ -1678,6 +1678,42 @@ describe('GatewayActionImpl', () => {
       );
     });
 
+    // Surfaces that mount the run drawer off the agent route (task detail, home
+    // inbox) own an agent the chat store knows nothing about — `activeAgentId` is
+    // whatever the last agent page left behind, or undefined on home. Binding the
+    // run to it streams every event into a bucket no one renders, so the panel
+    // stays frozen even though the WebSocket is live.
+    it('binds the run to the caller-provided agent', async () => {
+      const { action, startOperation } = createReconnectTestAction({ createdAt: 1, id: 'ast-1' });
+
+      await action.reconnectToGatewayOperation({
+        agentId: 'agent-drawer',
+        assistantMessageId: 'ast-1',
+        operationId: 'server-op-1',
+        topicId: 'topic-1',
+      });
+
+      expect(startOperation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: expect.objectContaining({ agentId: 'agent-drawer', topicId: 'topic-1' }),
+        }),
+      );
+    });
+
+    it('falls back to the active agent when the caller passes none', async () => {
+      const { action, startOperation } = createReconnectTestAction({ createdAt: 1, id: 'ast-1' });
+
+      await action.reconnectToGatewayOperation({
+        assistantMessageId: 'ast-1',
+        operationId: 'server-op-1',
+        topicId: 'topic-1',
+      });
+
+      expect(startOperation).toHaveBeenCalledWith(
+        expect.objectContaining({ context: expect.objectContaining({ agentId: 'agent-1' }) }),
+      );
+    });
+
     // Captures the onSessionComplete handed to connectToGateway so we can drive
     // both close paths directly. Provides the methods that callback reaches.
     function createOnSessionCompleteHarness() {

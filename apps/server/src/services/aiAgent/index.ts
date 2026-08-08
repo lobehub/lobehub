@@ -4424,15 +4424,26 @@ export class AiAgentService {
 
       log('execAgent: created operation %s (autoStarted: %s)', operationId, result.autoStarted);
 
-      // Persist running operation to topic metadata for reconnect after page reload
-      await this.topicModel.updateMetadata(topicId, {
-        runningOperation: {
-          assistantMessageId: assistantMessageRecord.id,
-          operationId,
-          scope: appContext?.scope ?? undefined,
-          threadId: appContext?.threadId ?? undefined,
-        },
-      });
+      // Persist running operation to topic metadata for reconnect after page reload.
+      //
+      // Skipped for isolation-thread children (callAgent / callSubAgent / group
+      // members): they run on the SPAWNER's topic and finish long before it does,
+      // so claiming the mark would first point every client reconnect at the
+      // child's thread stream, and then — once the child finished and cleared it —
+      // leave the still-running parent with no mark at all, i.e. no gateway
+      // WebSocket for the rest of the run. The parent's mark stays authoritative;
+      // a child's live progress already rides down the parent channel via
+      // `appContext.subAgentProgress`.
+      if (!appContext?.isolationThread) {
+        await this.topicModel.updateMetadata(topicId, {
+          runningOperation: {
+            assistantMessageId: assistantMessageRecord.id,
+            operationId,
+            scope: appContext?.scope ?? undefined,
+            threadId: appContext?.threadId ?? undefined,
+          },
+        });
+      }
 
       // Generate a short-lived JWT for Gateway WebSocket authentication
       let gatewayToken: string | undefined;
@@ -4928,6 +4939,10 @@ export class AiAgentService {
 
     const appContext: NonNullable<InternalExecAgentParams['appContext']> = {
       groupId,
+      // Every run spawned here executes in an isolation thread on the SPAWNER's
+      // topic, so it must not touch that topic's `runningOperation` mark — that
+      // mark is the main run's reconnect anchor (see execAgent).
+      isolationThread: true,
       isSubAgent: options.isSubAgent,
       orchestrationRole: options.orchestrationRole,
       subAgentProgress,
