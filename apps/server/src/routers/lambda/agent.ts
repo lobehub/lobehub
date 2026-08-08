@@ -728,6 +728,15 @@ export const agentRouter = router({
             message: 'A previous copy of this agent is still duplicating its history',
           });
         }
+        // A backfill still maps this agent's message rows — deleting it now
+        // would strand the job on a dangling `messages.agent_id`.
+        if (error instanceof Error && error.message === AGENT_TRANSFER_IN_PROGRESS) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.TransferInProgress } },
+            code: 'CONFLICT',
+            message: "A previous transfer of this agent's history is still migrating",
+          });
+        }
         throw error;
       }
       if (ctx.workspaceId) {

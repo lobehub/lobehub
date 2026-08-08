@@ -951,6 +951,16 @@ export class AgentModel {
         .where(and(eq(agents.id, agentId), this.ownership()))
         .for('update');
 
+      // The junction records every agent an unfinished job still maps, a
+      // copy's TARGET included — and a group copy's drain writes those ids into
+      // `messages.agent_id`. Deleting one leaves the queue rows behind, so the
+      // drain hits a missing-agent FK and retries forever, stranding the copied
+      // conversations as pending. Distinct from the source guard below: a copy
+      // registers only its target here.
+      if (await AgentTransferJobModel.hasPendingJobForAgents(trx, [agentId])) {
+        throw new Error(AGENT_TRANSFER_IN_PROGRESS);
+      }
+
       // A pending copy job still reads this agent's topics — deleting it would
       // cascade them away and the copy would silently complete with empty
       // conversations. Surface the in-progress state instead.
