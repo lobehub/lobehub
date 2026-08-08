@@ -12,6 +12,7 @@ import {
   useBusinessChatInputAlerts,
   useBusinessChatInputSendDisabled,
 } from '@/business/client/hooks/useBusinessChatInputSendAreaPrefix';
+import { useFundsBlockedComposerCue } from '@/features/AicoBilling';
 import type { ActionKeys, ChatInputFeature } from '@/features/ChatInput';
 import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
 import {
@@ -210,6 +211,11 @@ const ChatInput = memo<ChatInputProps>(
       [chatInputMessages],
     );
     const updateInputMessage = useConversationStore((s) => s.updateInputMessage);
+    const { onMarkdownContentChange: withFundsBlockedCue } = useFundsBlockedComposerCue();
+    const handleMarkdownContentChange = useMemo(
+      () => withFundsBlockedCue(updateInputMessage),
+      [updateInputMessage, withFundsBlockedCue],
+    );
     const setEditor = useConversationStore((s) => s.setEditor);
     const setChatInputOverlayHeight = useConversationStore((s) => s.setChatInputOverlayHeight);
 
@@ -461,7 +467,7 @@ const ChatInput = memo<ChatInputProps>(
             onEditorReady?.(instance);
           }
         }}
-        onMarkdownContentChange={updateInputMessage}
+        onMarkdownContentChange={handleMarkdownContentChange}
         onSend={handleSend}
       >
         {children ?? defaultContent}

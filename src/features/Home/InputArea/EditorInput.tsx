@@ -6,6 +6,7 @@ import {
   getBusinessChatInputSendAreaPrefix,
   useBusinessChatInputSendDisabled,
 } from '@/business/client/hooks/useBusinessChatInputSendAreaPrefix';
+import { useFundsBlockedComposerCue } from '@/features/AicoBilling';
 import {
   type ActionKeys,
   ChatInputProvider,
@@ -51,6 +52,11 @@ const HomeEditorInput = memo<HomeEditorInputProps>(
     send,
   }) => {
     const billingSendDisabled = useBusinessChatInputSendDisabled();
+    const { onMarkdownContentChange: withFundsBlockedCue } = useFundsBlockedComposerCue();
+    const handleMarkdownContentChange = useMemo(
+      () => withFundsBlockedCue(onValueChange),
+      [onValueChange, withFundsBlockedCue],
+    );
     const inputContainerProps = useMemo(
       () => ({
         minHeight: HOME_INPUT_BODY_HEIGHT,
@@ -88,7 +94,7 @@ const HomeEditorInput = memo<HomeEditorInputProps>(
           onStop: () => {},
           shape: 'round',
         }}
-        onMarkdownContentChange={onValueChange}
+        onMarkdownContentChange={handleMarkdownContentChange}
         onSend={send}
       >
         <DesktopChatInput
