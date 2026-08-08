@@ -266,17 +266,60 @@ describe('LocalSystemExecutionRuntime.executeToolCall — working directory anch
     );
   });
 
-  it('keeps a server-injected absolute cwd (gateway path, no workingDirectory option)', async () => {
+  it('keeps a server-injected absolute cwd (gateway path, trustArgsCwd)', async () => {
     const service = createService({
       runCommand: vi.fn().mockResolvedValue({ exit_code: 0, success: true }),
     });
     const runtime = new LocalSystemExecutionRuntime(service);
 
-    await runtime.executeToolCall('runCommand', { command: 'ls', cwd: '/from/server' });
+    await runtime.executeToolCall(
+      'runCommand',
+      { command: 'ls', cwd: '/from/server' },
+      { trustArgsCwd: true },
+    );
 
     expect(service.runCommand).toHaveBeenCalledWith(
       expect.objectContaining({ command: 'ls', cwd: '/from/server' }),
     );
+  });
+
+  // Security: an agent with no configured working directory leaves BOTH
+  // `workingDirectory` and `trustArgsCwd` unset on the renderer path, which is
+  // exactly the shape a gateway call has. Inferring trust from the missing
+  // working directory would hand this call the model's own `cwd`, so the
+  // contract has to be explicit.
+  it.each([
+    ['runCommand', { command: 'cat passwd', cwd: '/etc' }, 'runCommand'],
+    ['readFile', { cwd: '/etc', path: 'passwd' }, 'readLocalFile'],
+  ] as const)(
+    'drops a model-supplied cwd for %s when the caller did not vouch for it',
+    async (api, args, serviceMethod) => {
+      const service = createService({
+        [serviceMethod]: vi.fn().mockResolvedValue({ success: true }),
+      });
+      const runtime = new LocalSystemExecutionRuntime(service);
+
+      await runtime.executeToolCall(api, { ...args });
+
+      expect(service[serviceMethod]).toHaveBeenCalledWith(
+        expect.objectContaining({ cwd: undefined }),
+      );
+    },
+  );
+
+  it('drops a model-supplied cwd from grepContent when the caller did not vouch for it', async () => {
+    const service = createService({
+      grepContent: vi.fn().mockResolvedValue({ matches: [], success: true, total_matches: 0 }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    await runtime.executeToolCall('grepContent', { cwd: '/etc', pattern: 'root', scope: '.' });
+
+    // `cwd` outranks `path` as the search root downstream, so the model's value
+    // must not survive — the audited relative scope is what remains.
+    const forwarded = service.grepContent.mock.calls[0][0];
+    expect(forwarded.cwd).not.toBe('/etc');
+    expect(forwarded.path).not.toBe('/etc');
   });
 
   // Security: the out-of-scope intervention audit inspects path/scope fields

@@ -59,6 +59,10 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
     ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     try {
+      // `trustArgsCwd` stays off: `params` came straight from the model, and
+      // `ctx.workingDirectory` is undefined whenever the agent has none
+      // configured — so an off-contract `cwd` must be dropped here rather than
+      // mistaken for a server-injected one.
       const output = await this.runtime.executeToolCall(apiName, params, {
         workingDirectory: ctx?.workingDirectory,
       });

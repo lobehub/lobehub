@@ -394,13 +394,14 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
     // Local-system tools: one dispatch through the shared runtime entry, which
     // owns legacy alias normalization and IPC field mapping. The server runtime
-    // already injected the device-bound `cwd`/`scope` into `args` (see its
-    // `WORKING_DIR_ARG` map), so no workingDirectory option is passed here —
-    // the runtime forwards those fields to the IPC layer instead of dropping
-    // them like the previous per-tool switch did.
+    // already stripped any model-supplied `cwd` and injected the device-bound
+    // `cwd`/`scope` into `args` (see its `WORKING_DIR_ARG` map), so the values
+    // here are server-controlled — `trustArgsCwd` lets them ride through to the
+    // IPC layer instead of being dropped like the previous per-tool switch did.
     const localSystemOutput = await this.getLocalSystemRuntime().executeToolCall(
       apiName,
       (args ?? {}) as Record<string, unknown>,
+      { trustArgsCwd: true },
     );
     if (localSystemOutput) return localSystemOutput;
 

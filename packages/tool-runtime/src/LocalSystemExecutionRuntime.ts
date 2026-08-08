@@ -69,6 +69,23 @@ const normalizeLimit = (limit?: number) =>
 
 export interface ExecuteLocalToolOptions {
   /**
+   * Whether `args.cwd` may be trusted as a search/spawn root.
+   *
+   * `cwd` is not a manifest field for any api, so a model can never legitimately
+   * set one — but the gateway and CLI paths receive args that the server runtime
+   * already sanitized (it strips every inbound `cwd` and re-injects the
+   * device-bound value; see `serverRuntimes/localSystem.ts`), and that injected
+   * value has to survive.
+   *
+   * Callers must state which side of that boundary they are on rather than
+   * letting the runtime infer it: a renderer call for an agent with no
+   * configured working directory is indistinguishable from a gateway call if the
+   * runtime only looks at whether `workingDirectory` is set.
+   *
+   * @default false
+   */
+  trustArgsCwd?: boolean;
+  /**
    * The agent's effective working directory (absolute). Sourced from the same
    * place as the `{{workingDirectory}}` prompt placeholder, so what tools
    * operate on matches what the prompt promises.
@@ -128,12 +145,14 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
     // not inspect it (it reads `path`/`file_path`/`directory`/`scope`). Left
     // trusted, `readFile({ path: 'passwd', cwd: '/etc' })` would look
     // workspace-relative to the audit and then execute against `/etc`.
-    // - Caller supplied a `workingDirectory` (renderer executor, where the
-    //   audit runs): it always wins; `args.cwd` is discarded.
-    // - No `workingDirectory` (gateway / CLI): `args.cwd` is server-controlled
-    //   — the server runtime overwrites/strips any off-contract `cwd` before
-    //   dispatch (see `serverRuntimes/localSystem.ts`), so it is trusted here.
-    const cwd = workingDirectory ?? args.cwd;
+    //
+    // Which side of the boundary a call is on comes from the caller's explicit
+    // `trustArgsCwd`, never from whether `workingDirectory` happens to be set:
+    // a renderer call for an agent with no configured working directory leaves
+    // both undefined, and inferring "no workingDirectory ⇒ server-sanitized"
+    // would hand that call the model's own `cwd`.
+    const trustedArgsCwd = options?.trustArgsCwd ? args.cwd : undefined;
+    const cwd = workingDirectory ?? trustedArgsCwd;
 
     switch (name) {
       case 'listFiles': {
@@ -220,10 +239,10 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
         // model-supplied one on the audited path (see trust boundary above).
         return this.grepContent({
           ...resolveArgsWithScope(args, 'path', workingDirectory),
-          // `cwd` outranks the resolved `path` downstream, so a trusted caller's
-          // resolved root must not be shadowed by an untrusted value; keep it
-          // only on the trusted (gateway / CLI) path.
-          cwd: workingDirectory ? undefined : args.cwd,
+          // `cwd` outranks the resolved `path` downstream, so the resolved root
+          // must not be shadowed by an untrusted value; keep it only when the
+          // caller vouched for it (gateway / CLI, post-sanitization).
+          cwd: workingDirectory ? undefined : trustedArgsCwd,
           pattern: args.pattern,
         });
       }

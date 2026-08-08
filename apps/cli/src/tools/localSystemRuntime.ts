@@ -84,5 +84,8 @@ export async function runLocalSystemTool(
   apiName: string,
   args: Record<string, any>,
 ): Promise<LocalSystemToolOutput | null> {
-  return runtime.executeToolCall(apiName, args);
+  // `trustArgsCwd` — args reach the CLI only after the server runtime has
+  // stripped any inbound `cwd` and re-injected the device-bound one, so the
+  // `cwd` in `args` here is server-controlled rather than model-chosen.
+  return runtime.executeToolCall(apiName, args, { trustArgsCwd: true });
 }
