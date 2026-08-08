@@ -17,9 +17,15 @@ export default {
   'errors.INVITE_NOT_FOUND': 'Invitation not found.',
   'errors.INVITE_NOT_PENDING': 'This invitation can no longer be accepted.',
   'errors.MANAGED_KEY_UNAVAILABLE': 'Managed key is unavailable. Please try again later.',
+  'errors.DIRECT_PROVIDER_NOT_ALLOWED':
+    'Direct providers are not available. Use a {{brandName}} model — we create an OpenRouter key from your wallet.',
   'errors.managedKey.description':
     'Top up your wallet or use organization credit so a managed key can be provisioned. You do not need to enter a provider API key.',
   'errors.managedKey.title': '{{brandName}} uses managed API keys',
+  'errors.managedKey.wrongProviderAction': 'Got it',
+  'errors.managedKey.wrongProviderDescription':
+    'This chat is using a direct provider (for example Google or OpenAI) that needs its own API key. Switch the model to {{brandName}} Auto or another {{brandName}} model — your wallet balance already covers those.',
+  'errors.managedKey.wrongProviderTitle': 'Switch to a {{brandName}} model',
   'errors.MEMBER_BUDGET_INACTIVE': 'Your organization member budget is inactive.',
   'errors.MEMBER_BUDGET_RENEWAL_BLOCKED':
     'Organization budget renewal is pending or failed — chat is blocked until it completes.',

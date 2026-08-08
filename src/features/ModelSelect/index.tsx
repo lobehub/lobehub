@@ -8,6 +8,10 @@ import { useTranslation } from 'react-i18next';
 
 import { BrandedModelIcon } from '@/components/Branding/BrandedModelIcon';
 import { ModelItemRender, ProviderItemRender, TAG_CLASSNAME } from '@/components/ModelSelect';
+import { filterAicoManagedProviders } from '@/features/AicoBilling/isManagedRuntimeProvider';
+import { isAicoManagedProviderMode } from '@/features/Conversation/Error/isAicoManagedProviderMode';
+import { useClientDataSWR } from '@/libs/swr';
+import { lambdaClient } from '@/libs/trpc/client';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
@@ -108,11 +112,19 @@ const ModelSelect = memo<ModelSelectProps>(
   }) => {
     const { t } = useTranslation('components');
     const [enabling, setEnabling] = useState(false);
-    const enabledList = useAiInfraStore((s) =>
+    const rawEnabledList = useAiInfraStore((s) =>
       modelType === 'embedding'
         ? aiProviderSelectors.enabledEmbeddingModelList(s)
         : s.enabledChatModelList || [],
     );
+    const { data: managedStatus } = useClientDataSWR('aico-provider-status', () =>
+      lambdaClient.aicoBilling.getManagedProviderStatus.query(),
+    );
+    const enabledList = useMemo(() => {
+      if (!isAicoManagedProviderMode(managedStatus?.managed)) return rawEnabledList;
+      // Wallet-only product: chat and embeddings both go through managed OpenRouter.
+      return filterAicoManagedProviders(rawEnabledList);
+    }, [managedStatus?.managed, rawEnabledList]);
     const builtinAiModelList = useAiInfraStore((s) => s.builtinAiModelList);
     const modelRedirects = useAiInfraStore((s) => s.modelRedirects);
     const enabledAiProviders = useAiInfraStore((s) => s.enabledAiProviders);

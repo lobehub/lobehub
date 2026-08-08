@@ -14,9 +14,15 @@ import BaseErrorForm from './BaseErrorForm';
 
 interface ManagedKeyErrorProps {
   onNavigate?: () => void;
+  /**
+   * `funds` — wallet / managed-key provisioning (default).
+   * `wrongProvider` — agent is on a BYOK provider (openai/google/…) while Aico
+   * is in managed OpenRouter mode.
+   */
+  reason?: 'funds' | 'wrongProvider';
 }
 
-const ManagedKeyError = memo<ManagedKeyErrorProps>(({ onNavigate }) => {
+const ManagedKeyError = memo<ManagedKeyErrorProps>(({ onNavigate, reason = 'funds' }) => {
   const { t } = useTranslation('aico');
   const navigate = useWorkspaceAwareNavigate();
   const { blockReason, showTrialCta } = useAicoBillingChatGate();
@@ -25,6 +31,21 @@ const ManagedKeyError = memo<ManagedKeyErrorProps>(({ onNavigate }) => {
     navigate('/wallet');
     onNavigate?.();
   };
+
+  if (reason === 'wrongProvider') {
+    return (
+      <BaseErrorForm
+        avatar={<ProductLogo size={40} type={'flat'} />}
+        desc={t('errors.managedKey.wrongProviderDescription', { brandName: BRANDING_NAME })}
+        title={t('errors.managedKey.wrongProviderTitle', { brandName: BRANDING_NAME })}
+        action={
+          <Button type={'primary'} onClick={() => onNavigate?.()}>
+            {t('errors.managedKey.wrongProviderAction')}
+          </Button>
+        }
+      />
+    );
+  }
 
   const description =
     blockReason === 'PERSONAL_FUNDS_UNAVAILABLE' && showTrialCta

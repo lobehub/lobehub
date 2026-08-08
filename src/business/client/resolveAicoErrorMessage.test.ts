@@ -41,6 +41,11 @@ describe('Aico error catalog', () => {
     expect(AICO_ERROR_MESSAGES_FA.USER_ALREADY_IN_ORGANIZATION).toContain('سازمان دیگری');
   });
 
+  it('includes DIRECT_PROVIDER_NOT_ALLOWED with Persian default', () => {
+    expect(isAicoErrorCode('DIRECT_PROVIDER_NOT_ALLOWED')).toBe(true);
+    expect(AICO_ERROR_MESSAGES_FA.DIRECT_PROVIDER_NOT_ALLOWED).toContain('ارائه‌دهنده مستقیم');
+  });
+
   it('includes personal funds codes with Persian defaults', () => {
     expect(AICO_ERROR_MESSAGES_FA.PERSONAL_FUNDS_UNAVAILABLE).toBe(
       'موجودی کیف پول شخصی کافی نیست. لطفاً شارژ کنید یا دوره آزمایشی را فعال کنید.',

@@ -26,13 +26,18 @@ vi.mock('@/auth', () => ({
   },
 }));
 
+const billing = { source: 'personal' as const };
+
+const makeRequest = (body: Record<string, unknown>) =>
+  new Request(new URL('https://test.com'), {
+    method: 'POST',
+    body: JSON.stringify({ aicoBilling: billing, ...body }),
+  });
+
 // 模拟请求和响应
 let request: Request;
 beforeEach(() => {
-  request = new Request(new URL('https://test.com'), {
-    method: 'POST',
-    body: JSON.stringify({ model: 'test-model' }),
-  });
+  request = makeRequest({ model: 'test-model' });
 
   // Default: valid session
   vi.mocked(auth.api.getSession).mockResolvedValue({
@@ -48,7 +53,7 @@ afterEach(() => {
 describe('POST handler', () => {
   describe('init chat model', () => {
     it('should initialize ModelRuntime correctly with valid session', async () => {
-      const mockParams = Promise.resolve({ provider: 'test-provider' });
+      const mockParams = Promise.resolve({ provider: 'openrouter' });
 
       const mockChatResponse = new Response(JSON.stringify({ success: true }), {
         headers: { 'Content-Type': 'application/json' },
@@ -65,16 +70,28 @@ describe('POST handler', () => {
       expect(initModelRuntimeFromDB).toHaveBeenCalledWith(
         expect.anything(),
         'test-user-id',
-        'test-provider',
+        'openrouter',
         undefined,
-        { billingContext: undefined, modelId: 'test-model' },
+        { billingContext: billing, modelId: 'test-model' },
       );
+    });
+
+    it('rejects direct (BYOK) providers', async () => {
+      const mockParams = Promise.resolve({ provider: 'openai' });
+
+      const response = await POST(request, { params: mockParams });
+
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({
+        body: { error: 'DIRECT_PROVIDER_NOT_ALLOWED', provider: 'openai' },
+      });
+      expect(initModelRuntimeFromDB).not.toHaveBeenCalled();
     });
 
     it('should return Unauthorized error when no session exists', async () => {
       vi.mocked(auth.api.getSession).mockResolvedValue(null);
 
-      const mockParams = Promise.resolve({ provider: 'test-provider' });
+      const mockParams = Promise.resolve({ provider: 'openrouter' });
 
       const response = await POST(request, { params: mockParams });
 
@@ -84,12 +101,9 @@ describe('POST handler', () => {
 
   describe('chat', () => {
     it('should correctly handle chat completion with valid payload', async () => {
-      const mockParams = Promise.resolve({ provider: 'test-provider' });
+      const mockParams = Promise.resolve({ provider: 'openrouter' });
       const mockChatPayload = { message: 'Hello, world!' };
-      request = new Request(new URL('https://test.com'), {
-        method: 'POST',
-        body: JSON.stringify(mockChatPayload),
-      });
+      request = makeRequest(mockChatPayload);
 
       const mockChatResponse: any = { success: true, message: 'Reply from agent' };
       const mockRuntime: LobeRuntimeAI = {
@@ -102,19 +116,19 @@ describe('POST handler', () => {
       const response = await POST(request as unknown as Request, { params: mockParams });
 
       expect(response).toEqual(mockChatResponse);
-      expect(mockRuntime.chat).toHaveBeenCalledWith(mockChatPayload, {
-        user: 'test-user-id',
-        signal: expect.anything(),
-      });
+      expect(mockRuntime.chat).toHaveBeenCalledWith(
+        { aicoBilling: billing, ...mockChatPayload },
+        {
+          user: 'test-user-id',
+          signal: expect.anything(),
+        },
+      );
     });
 
     it('should return an error response when chat completion fails', async () => {
-      const mockParams = Promise.resolve({ provider: 'test-provider' });
+      const mockParams = Promise.resolve({ provider: 'openrouter' });
       const mockChatPayload = { message: 'Hello, world!' };
-      request = new Request(new URL('https://test.com'), {
-        method: 'POST',
-        body: JSON.stringify(mockChatPayload),
-      });
+      request = makeRequest(mockChatPayload);
 
       const mockErrorResponse = {
         errorType: ChatErrorType.InternalServerError,
@@ -139,7 +153,7 @@ describe('POST handler', () => {
             errorMessage: 'Something went wrong',
             errorType: 500,
           },
-          provider: 'test-provider',
+          provider: 'openrouter',
         },
         errorType: 500,
       });
