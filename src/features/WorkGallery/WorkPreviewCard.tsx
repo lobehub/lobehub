@@ -217,7 +217,7 @@ const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen }) => {
           )}
         </Flexbox>
         <div className={styles.title}>{title}</div>
-        <Flexbox horizontal align={'center'} className={styles.footer} gap={7}>
+        <Flexbox horizontal align={'flex-start'} className={styles.footer} gap={7}>
           {agent && (
             <>
               <Avatar
