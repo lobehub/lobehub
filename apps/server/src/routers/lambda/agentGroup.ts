@@ -790,9 +790,15 @@ export const agentGroupRouter = router({
         throw error;
       }
 
+      // Nothing moved: the group was not in this scope, or a racing transfer
+      // took it before we got the row lock. Return before the permission writes
+      // below — they would wipe the source ACL and grant access in the target
+      // for a group this call did not transfer.
+      if (!result) return result;
+
       // Heavy history goes through an async backfill — kick the driver now
       // that the transfer transaction has committed.
-      if (result?.transferJobId) startAgentTransferJob(ctx.serverDB, result.transferJobId);
+      if (result.transferJobId) startAgentTransferJob(ctx.serverDB, result.transferJobId);
 
       if (ctx.workspaceId) {
         await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).removeAll(
