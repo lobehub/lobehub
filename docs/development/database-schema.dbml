@@ -609,6 +609,78 @@ table agent_skills {
   }
 }
 
+table aico_account_tombs {
+  id text [pk, not null]
+  user_id text [not null]
+  anonymized_email_fingerprint text
+  anonymized_phone_fingerprint text
+  frozen_personal_micro_usd bigint [not null, default: 0]
+  deleted_at "timestamp with time zone" [not null]
+  deleted_by_user_id text
+  metadata jsonb [default: `{}`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    user_id [name: 'aico_account_tombs_user_id_uidx', unique]
+    deleted_at [name: 'aico_account_tombs_deleted_at_idx']
+  }
+}
+
+table aico_key_outbox {
+  id text [pk, not null]
+  action text [not null]
+  org_id text
+  org_member_id text
+  user_id text
+  openrouter_key_id text
+  status text [not null, default: 'pending']
+  attempts integer [not null, default: 0]
+  next_attempt_at "timestamp with time zone" [not null]
+  last_error text
+  alerted_at "timestamp with time zone"
+  payload jsonb [default: `{}`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (status, next_attempt_at) [name: 'aico_key_outbox_status_next_attempt_idx']
+    org_member_id [name: 'aico_key_outbox_org_member_id_idx']
+  }
+}
+
+table aico_master_monitor_state {
+  id text [pk, not null, default: 'default']
+  status text [not null, default: 'unknown']
+  available_credit_micro_usd bigint
+  observed_burn_micro_usd_per_day bigint
+  low_credit_threshold_micro_usd bigint [not null, default: 100000000]
+  projected_exhaustion_at "timestamp with time zone"
+  last_successful_check_at "timestamp with time zone"
+  last_error text
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+}
+
+table aico_renewal_batches {
+  id text [pk, not null]
+  org_id text [not null]
+  batch_key text [not null]
+  status text [not null, default: 'pending']
+  gross_required_micro_usd bigint [not null, default: 0]
+  refunded_micro_usd bigint [not null, default: 0]
+  shortfall_micro_usd bigint [not null, default: 0]
+  member_budget_ids jsonb [not null, default: `[]`]
+  error text
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    batch_key [name: 'aico_renewal_batches_batch_key_uidx', unique]
+    org_id [name: 'aico_renewal_batches_org_id_idx']
+    status [name: 'aico_renewal_batches_status_idx']
+  }
+}
+
 table aico_user_public_ids {
   id text [pk, not null]
   user_id text [not null]
@@ -625,18 +697,31 @@ table aico_user_public_ids {
 table member_budgets {
   id text [pk, not null]
   org_member_id text [not null]
-  limit_usd "numeric(10, 6)" [not null]
+  period_amount_micro_usd bigint [not null]
   period text [not null, default: 'total']
-  used_usd "numeric(10, 6)" [not null, default: 0]
+  openrouter_limit_reset text
+  current_period_start "timestamp with time zone"
+  current_period_end "timestamp with time zone"
+  next_renewal_at "timestamp with time zone"
+  renewal_status text [not null, default: 'active']
+  reserved_micro_usd bigint [not null, default: 0]
+  settled_usage_micro_usd bigint [not null, default: 0]
+  refunded_micro_usd bigint [not null, default: 0]
+  pending_period text
+  pending_period_amount_micro_usd bigint
   openrouter_key_id text
-  openrouter_key_hash text
+  openrouter_key_ciphertext text
   is_active boolean [not null, default: true]
   last_synced_at "timestamp with time zone"
+  last_sync_status text [not null, default: 'never']
+  last_sync_error text
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
     org_member_id [name: 'member_budgets_org_member_uidx', unique]
+    next_renewal_at [name: 'member_budgets_next_renewal_at_idx']
+    renewal_status [name: 'member_budgets_renewal_status_idx']
   }
 }
 
@@ -674,6 +759,22 @@ table openrouter_model_catalog {
 
   indexes {
     enabled [name: 'openrouter_model_catalog_enabled_idx']
+  }
+}
+
+table openrouter_model_sync_runs {
+  id text [pk, not null]
+  status text [not null]
+  triggered_by text
+  model_count integer [not null, default: 0]
+  added_model_ids jsonb [not null, default: `[]`]
+  removed_model_ids jsonb [not null, default: `[]`]
+  error text
+  synced_at "timestamp with time zone" [not null]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    synced_at [name: 'openrouter_model_sync_runs_synced_at_idx']
   }
 }
 
@@ -715,6 +816,7 @@ table organization_members {
   status text [not null, default: 'invited']
   invited_by_user_id text
   joined_at "timestamp with time zone"
+  left_at "timestamp with time zone"
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
@@ -723,6 +825,7 @@ table organization_members {
     user_id [name: 'organization_members_user_id_idx']
     org_id [name: 'organization_members_org_id_idx']
     org_id [name: 'organization_members_unique_active_owner_idx', unique]
+    user_id [name: 'organization_members_unique_active_user_idx', unique]
   }
 }
 
@@ -762,7 +865,7 @@ table organizations {
   public_code text [not null]
   owner_user_id text [not null]
   wallet_balance_toman bigint [not null, default: 0]
-  wallet_balance_usd "numeric(14, 6)" [not null, default: 0]
+  wallet_balance_micro_usd bigint [not null, default: 0]
   status text [not null, default: 'active']
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -787,11 +890,11 @@ table platform_admins {
 
 table platform_trial_config {
   id text [pk, not null, default: 'default']
-  enabled boolean [not null, default: true]
+  enabled boolean [not null, default: false]
   duration_days integer [not null, default: 3]
   allowed_model_ids text [not null, default: '[]']
   max_requests integer
-  trial_budget_usd "numeric(10, 6)" [not null, default: 1]
+  trial_budget_micro_usd bigint [not null, default: 1000000]
   updated_by_user_id text
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -814,11 +917,13 @@ table usage_logs {
   org_id text
   org_member_id text
   user_id text [not null]
+  billing_source text [not null, default: 'personal']
   model_id text [not null]
   prompt_tokens integer [not null, default: 0]
   completion_tokens integer [not null, default: 0]
   total_tokens integer [not null, default: 0]
-  cost_usd "numeric(10, 6)" [not null]
+  cost_micro_usd bigint [not null, default: 0]
+  settlement_status text [not null, default: 'pending']
   created_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
@@ -842,7 +947,7 @@ table user_trials {
 
   indexes {
     user_id [name: 'user_trials_user_id_uidx', unique]
-    phone_fingerprint [name: 'user_trials_phone_fingerprint_idx']
+    phone_fingerprint [name: 'user_trials_phone_fingerprint_uidx', unique]
     status [name: 'user_trials_status_idx']
   }
 }
@@ -851,10 +956,13 @@ table user_wallets {
   id text [pk, not null]
   user_id text [not null]
   balance_toman bigint [not null, default: 0]
-  balance_usd "numeric(14, 6)" [not null, default: 0]
+  balance_micro_usd bigint [not null, default: 0]
+  preferred_billing_source text [not null, default: 'personal']
+  preferred_organization_id text
   openrouter_key_id text
-  openrouter_key_hash text
+  openrouter_key_ciphertext text
   is_active boolean [not null, default: true]
+  frozen_micro_usd bigint [not null, default: 0]
   last_synced_at "timestamp with time zone"
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -868,12 +976,15 @@ table wallet_transactions {
   id text [pk, not null]
   org_id text
   user_id text
+  org_member_id text
   type text [not null]
-  amount_toman bigint [not null]
-  amount_usd "numeric(14, 6)"
-  fx_rate "numeric(14, 4)"
+  amount_toman bigint [not null, default: 0]
+  amount_micro_usd bigint [not null, default: 0]
+  fx_rate_toman_per_usd bigint
+  renewal_batch_id text
   gateway_ref_id text
   description text
+  metadata jsonb [default: `{}`]
   created_by_user_id text
   created_at "timestamp with time zone" [not null, default: `now()`]
 
@@ -881,6 +992,7 @@ table wallet_transactions {
     org_id [name: 'wallet_transactions_org_id_idx']
     user_id [name: 'wallet_transactions_user_id_idx']
     created_at [name: 'wallet_transactions_created_at_idx']
+    renewal_batch_id [name: 'wallet_transactions_renewal_batch_id_idx']
   }
 }
 

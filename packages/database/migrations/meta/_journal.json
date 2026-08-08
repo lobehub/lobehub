@@ -959,6 +959,13 @@
       "when": 1785740000000,
       "tag": "0136_aico_final_remediation",
       "breakpoints": true
+    },
+    {
+      "idx": 137,
+      "version": "7",
+      "when": 1786169920581,
+      "tag": "0137_aico_openrouter_model_sync_runs",
+      "breakpoints": true
     }
   ],
   "version": "6"

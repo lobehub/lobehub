@@ -1,14 +1,12 @@
-import { aicoEnv } from '@/envs/aico';
+import { ChatErrorType, type ErrorType } from '@lobechat/types';
+
 import { AicoBillingModel } from '@/database/models/aicoBilling';
 import { OrganizationModel } from '@/database/models/organization';
 import type { LobeChatDatabase } from '@/database/type';
 import { microUsdToDecimalString } from '@/database/utils/aicoMoney';
-import { ChatErrorType, type ErrorType } from '@lobechat/types';
+import { aicoEnv } from '@/envs/aico';
 
-import {
-  type AicoBillingContext,
-  parseAicoBillingContext,
-} from './billingContext';
+import { type AicoBillingContext, parseAicoBillingContext } from './billingContext';
 
 export class AicoManagedPolicyError extends Error {
   errorType: ErrorType;
@@ -23,14 +21,14 @@ export class AicoManagedPolicyError extends Error {
 }
 
 export interface ManagedExecutionContext {
-  billing: AicoBillingContext;
-  userId: string;
-  modelId?: string;
   /** Decrypted OpenRouter key — never log. */
   apiKey: string;
+  billing: AicoBillingContext;
+  budgetId?: string;
+  modelId?: string;
   orgId?: string;
   orgMemberId?: string;
-  budgetId?: string;
+  userId: string;
 }
 
 /**
@@ -107,13 +105,22 @@ export class AicoManagedPolicy {
       if (!wallet.openrouterKeyCiphertext || !wallet.openrouterKeyId) {
         throw new AicoManagedPolicyError('MANAGED_KEY_UNAVAILABLE', ChatErrorType.InvalidUserKey);
       }
-      if ((wallet.balanceMicroUsd ?? 0) <= 0 && !(await this.billingModel.isTrialActive(params.userId))) {
-        throw new AicoManagedPolicyError('PERSONAL_FUNDS_UNAVAILABLE', ChatErrorType.InvalidUserKey);
+      if (
+        (wallet.balanceMicroUsd ?? 0) <= 0 &&
+        !(await this.billingModel.isTrialActive(params.userId))
+      ) {
+        throw new AicoManagedPolicyError(
+          'PERSONAL_FUNDS_UNAVAILABLE',
+          ChatErrorType.InvalidUserKey,
+        );
       }
 
       const apiKey = await this.decryptKey(wallet.openrouterKeyCiphertext);
       if (!apiKey) {
-        throw new AicoManagedPolicyError('MANAGED_KEY_DECRYPT_FAILED', ChatErrorType.InvalidUserKey);
+        throw new AicoManagedPolicyError(
+          'MANAGED_KEY_DECRYPT_FAILED',
+          ChatErrorType.InvalidUserKey,
+        );
       }
 
       return {
@@ -145,7 +152,10 @@ export class AicoManagedPolicy {
       throw new AicoManagedPolicyError('MEMBER_BUDGET_INACTIVE', ChatErrorType.InvalidUserKey);
     }
     if (budget.renewalStatus === 'renewal_pending' || budget.renewalStatus === 'renewal_failed') {
-      throw new AicoManagedPolicyError('MEMBER_BUDGET_RENEWAL_BLOCKED', ChatErrorType.InvalidUserKey);
+      throw new AicoManagedPolicyError(
+        'MEMBER_BUDGET_RENEWAL_BLOCKED',
+        ChatErrorType.InvalidUserKey,
+      );
     }
     if ((budget.reservedMicroUsd ?? 0) <= 0) {
       throw new AicoManagedPolicyError('MEMBER_BUDGET_UNFUNDED', ChatErrorType.InvalidUserKey);
@@ -182,7 +192,7 @@ export class AicoManagedPolicy {
         throw new AicoManagedPolicyError('ORG_MEMBERSHIP_REQUIRED', ChatErrorType.Forbidden);
       }
       const allowed = await this.orgModel.getAllowedModelsForMember(me.id);
-      if (allowed && !allowed.includes(modelId)) {
+      if (!allowed || allowed.length === 0 || !allowed.includes(modelId)) {
         throw new AicoManagedPolicyError(`MODEL_NOT_ALLOWED:${modelId}`, ChatErrorType.BadRequest);
       }
       return;

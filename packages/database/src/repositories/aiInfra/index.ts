@@ -433,6 +433,40 @@ export class AiInfraRepos {
         if ((await catalog.count()) > 0) {
           return catalog.listAsProviderModels();
         }
+
+        // First setup: one-shot live sync before falling back to static model-bank.
+        try {
+          const { fetchOpenRouterModels } = await import('@lobechat/model-runtime');
+          const live = await fetchOpenRouterModels();
+          await catalog.replaceCatalog({
+            models: live.map((model) => ({
+              abilities: {
+                ...(model.files ? { files: true } : {}),
+                ...(model.functionCall ? { functionCall: true } : {}),
+                ...(model.imageOutput ? { imageOutput: true } : {}),
+                ...(model.reasoning ? { reasoning: true } : {}),
+                ...(model.search ? { search: true } : {}),
+                ...(model.video ? { video: true } : {}),
+                ...(model.vision ? { vision: true } : {}),
+              },
+              contextWindowTokens: model.contextWindowTokens,
+              description: model.description,
+              displayName: model.displayName,
+              id: model.id,
+              parameters: model.parameters,
+              pricing: model.pricing,
+              releasedAt: model.releasedAt,
+              settings: model.settings,
+              type: model.type ?? 'chat',
+            })),
+            triggeredBy: 'bootstrap',
+          });
+          if ((await catalog.count()) > 0) {
+            return catalog.listAsProviderModels();
+          }
+        } catch (error) {
+          console.warn('[ai-infra] OpenRouter catalog bootstrap sync failed', error);
+        }
       }
 
       // use the serverModelLists as the defined server model list
