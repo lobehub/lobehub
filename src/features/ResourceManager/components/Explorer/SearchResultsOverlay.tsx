@@ -11,10 +11,10 @@ import { Virtuoso } from 'react-virtuoso';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import AsyncError from '@/components/AsyncError';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { getResourceQueryVisibility } from '@/features/ResourceManager/store/selectors';
 import { useClientDataSWR } from '@/libs/swr';
 import { resourceKeys } from '@/libs/swr/keys';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
-import { getResourceQueryVisibility } from '@/routes/(main)/resource/features/store/selectors';
 import { resourceService } from '@/services/resource';
 import { useGlobalStore } from '@/store/global';
 import {

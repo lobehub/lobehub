@@ -37,13 +37,13 @@ export {
   formatSelectedToolsContext,
   SelectedToolInjector,
 } from './SelectedToolInjector';
-export { SkillContextProvider } from './SkillContextProvider';
+export { selectActivatedSkills, SkillContextProvider } from './SkillContextProvider';
 export { SystemDateProvider } from './SystemDateProvider';
 export { SystemRoleInjector } from './SystemRoleInjector';
 export { TaskManagerContextInjector } from './TaskManagerContextInjector';
 export { TodoInjector } from './TodoInjector';
 export { ToolDiscoveryProvider } from './ToolDiscoveryProvider';
-export { ToolSystemRoleProvider } from './ToolSystemRole';
+export { selectToolPromptManifests, ToolSystemRoleProvider } from './ToolSystemRole';
 export { TopicReferenceContextInjector } from './TopicReferenceContextInjector';
 export { UserMemoryInjector } from './UserMemoryInjector';
 

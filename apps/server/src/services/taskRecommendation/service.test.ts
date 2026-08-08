@@ -183,6 +183,54 @@ describe('TaskRecommendationService', () => {
     });
   });
 
+  /** @example A provider response with three grounded drafts exposes only its first two slots. */
+  it('hard-caps one provider result at two recommendations', async () => {
+    const sources = [
+      { type: 'github' as const, url: 'https://github.com/lobehub/lobe-chat/pull/1' },
+      { type: 'github' as const, url: 'https://github.com/lobehub/lobe-chat/issues/2' },
+      { type: 'github' as const, url: 'https://github.com/lobehub/lobe-chat/issues/3' },
+    ];
+    const service = new TaskRecommendationService({
+      configurator: new TaskRecommendationConfigurator(),
+      connectorData: {},
+      onboarding: {},
+      providers: new Map([
+        [
+          'github',
+          {
+            collect: vi.fn(async () => ({
+              context: JSON.stringify({ sources }),
+              diagnostics: { errors: [], evidenceCount: 3, failedCount: 0, succeededCount: 3 },
+              signalCount: 3,
+              sources,
+            })),
+            id: 'github',
+          },
+        ],
+      ]),
+      task: {},
+      topic: {},
+      userId: 'user-1',
+      writer: {
+        generate: vi.fn(async () =>
+          sources.map(({ url }, index) => ({
+            instruction: `Inspect recommendation ${index + 1}.`,
+            reason: `It has evidence ${index + 1}.`,
+            sourceUrls: [url],
+            title: `Recommendation ${index + 1}`,
+          })),
+        ),
+      },
+    } as never);
+
+    const result = await service.generateProvider('github', 2, 'en-US');
+
+    expect(result.recommendations.map(({ title }) => title)).toEqual([
+      'Recommendation 1',
+      'Recommendation 2',
+    ]);
+  });
+
   /** @example Repeating the same create request reuses the persisted task mapping. */
   it('does not create duplicate tasks when materialization is retried', async () => {
     let persisted = structuredClone(session);

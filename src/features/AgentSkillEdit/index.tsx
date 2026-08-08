@@ -3,8 +3,8 @@
 import { isDesktop } from '@lobechat/const';
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { type SkillResourceTreeNode } from '@lobechat/types';
-import { Drawer, Flexbox } from '@lobehub/ui';
-import { Button, toast } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button, Drawer, toast } from '@lobehub/ui/base-ui';
 import { Alert, Form as AForm, Popconfirm, Skeleton } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { memo, useMemo, useState } from 'react';
@@ -146,7 +146,6 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
 
   return (
     <Drawer
-      destroyOnHidden
       containerMaxWidth={'auto'}
       footer={footer}
       height={isDesktop ? `calc(100vh - ${TITLE_BAR_HEIGHT}px)` : '100vh'}
@@ -155,13 +154,9 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
       push={false}
       title={t('agentSkillEdit.title')}
       styles={{
-        body: { padding: 0 },
-        bodyContent: { height: '100%' },
+        bodyContent: { height: '100%', padding: 0 },
       }}
-      onClose={(e) => {
-        e.stopPropagation();
-        onClose();
-      }}
+      onClose={onClose}
     >
       {isLoading ? (
         <Skeleton active paragraph={{ rows: 8 }} style={{ padding: 16 }} />

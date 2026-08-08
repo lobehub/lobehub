@@ -35,6 +35,7 @@ const extractClientIp = (request: NextRequest): string | undefined => {
 };
 
 interface ValidatedApiKey {
+  scopes: string[] | null;
   userId: string;
   workspaceId: string | null;
 }
@@ -60,7 +61,11 @@ const validateApiKey = async (apiKey: string): Promise<ValidatedApiKey | null> =
       console.error('Failed to update API key last used timestamp:', error);
     });
 
-    return { userId: apiKeyRecord.userId, workspaceId: apiKeyRecord.workspaceId ?? null };
+    return {
+      scopes: apiKeyRecord.scopes ?? null,
+      userId: apiKeyRecord.userId,
+      workspaceId: apiKeyRecord.workspaceId ?? null,
+    };
   } catch (error) {
     log('API key authentication failed: %O', error);
     console.error('API key authentication failed, trying other methods:', error);
@@ -78,6 +83,12 @@ export interface OIDCAuth {
 }
 
 export interface AuthContext {
+  /**
+   * Set only when the request authenticated via an API key: the key's
+   * capability scopes (`null` = full-access key). `undefined` means the
+   * request used another auth method and scope enforcement does not apply.
+   */
+  apiKeyScopes?: string[] | null;
   clientIp?: string | null;
   clientMetadata?: ClientMetadata;
   jwtPayload?: ClientSecretPayload | null;
@@ -97,6 +108,7 @@ export interface AuthContext {
  * This is useful for testing when we don't want to mock Next.js' request/response
  */
 export const createContextInner = async (params?: {
+  apiKeyScopes?: string[] | null;
   clientMetadata?: ClientMetadata;
   clientIp?: string | null;
   marketAccessToken?: string;
@@ -111,6 +123,7 @@ export const createContextInner = async (params?: {
   const responseHeaders = new Headers();
 
   return {
+    apiKeyScopes: params?.apiKeyScopes,
     clientMetadata: params?.clientMetadata || { type: 'unknown' },
     clientIp: params?.clientIp,
     marketAccessToken: params?.marketAccessToken,
@@ -249,6 +262,7 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
 
     return createContextInner({
       ...commonContext,
+      apiKeyScopes: apiKeyAuth.scopes,
       traceContext,
       userId: apiKeyAuth.userId,
       workspaceId: apiKeyAuth.workspaceId ?? undefined,

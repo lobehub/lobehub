@@ -104,9 +104,10 @@ export const selectRuntimeType = (
   { isDesktop = defaultIsDesktop }: SelectRuntimeTypeOptions = {},
 ): AgentRuntimeType => {
   if (ctx.parentRuntime) return ctx.parentRuntime;
-  // Remote device agents (openclaw / hermes) always use the gateway path regardless of
-  // desktop/web — they communicate via a device connected with `lh connect`, not via
-  // local desktop IPC. No special desktop handling needed.
+  // Notify-based platform agents (openclaw / hermes) use the gateway transport for both
+  // targets: `local` presets this desktop's personal device ID on the request, while
+  // `device` dispatches to the configured remote device. They do not implement the
+  // JSONL/session protocol consumed by the in-process `hetero` transport.
   if (ctx.heterogeneousProvider && isRemoteHeterogeneousType(ctx.heterogeneousProvider.type)) {
     return 'gateway';
   }

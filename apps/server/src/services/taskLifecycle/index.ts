@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { BRANDING_URL } from '@lobechat/business-const';
 import { TRACING_SCENARIOS } from '@lobechat/const';
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
@@ -191,7 +193,20 @@ export class TaskLifecycleService {
       // 4. Synthesize a programmatic brief for the user (auto mode only).
       //    The agent-driven `createBrief` tool path stays the default until
       //    the GrowthBook flag flips. See for the rollout plan.
-      if (getBriefMode(currentTask) === 'auto' && currentTask && topicId && lastAssistantContent) {
+      //
+      //    Goal-loop rounds are deliberately silent. The outer loop can run many
+      //    rounds before it converges, and a card per round buries the one moment
+      //    that actually needs the user. The settle path owns those moments:
+      //    `driveTaskFromVerify` raises "delivery ready for sign-off" when the
+      //    loop succeeds and the budget-exhausted alert when it stops.
+      const isGoalLoopRound = !!currentTask && !!this.taskModel.getGoalConfig(currentTask);
+      if (
+        !isGoalLoopRound &&
+        getBriefMode(currentTask) === 'auto' &&
+        currentTask &&
+        topicId &&
+        lastAssistantContent
+      ) {
         await this.synthesizeTopicBrief(
           taskId,
           taskIdentifier,
@@ -566,6 +581,7 @@ export class TaskLifecycleService {
 
     try {
       const scheduler = createTaskSchedulerModule();
+      const tickToken = randomUUID();
 
       // Cancel any prior tick (defensive — we usually wouldn't have one
       // pending here, since the prior tick has already fired to bring us
@@ -577,6 +593,7 @@ export class TaskLifecycleService {
       const tickMessageId = await scheduler.scheduleNextTopic({
         delay: task.heartbeatInterval,
         taskId: task.id,
+        tickToken,
         userId: this.userId,
       });
 
@@ -585,6 +602,7 @@ export class TaskLifecycleService {
           consecutiveFailures,
           scheduledAt: new Date().toISOString(),
           tickMessageId,
+          tickToken,
         },
       });
 

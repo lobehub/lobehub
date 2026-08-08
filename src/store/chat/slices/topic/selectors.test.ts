@@ -213,6 +213,25 @@ describe('topicSelectors', () => {
       const topic = topicSelectors.getTopicById('topic1')(state);
       expect(topic).toEqual(topicItems[0]);
     });
+
+    it('should find a topic loaded under another agent for split desktop panes', () => {
+      const backgroundTopic = { id: 'background-topic', name: 'Background topic' };
+      const state = merge(initialStore, {
+        activeAgentId: 'focused-agent',
+        topicDataMap: {
+          ...createTopicDataMap('focused-agent'),
+          [topicMapKey({ agentId: 'background-agent' })]: {
+            currentPage: 0,
+            hasMore: false,
+            items: [backgroundTopic],
+            pageSize: 20,
+            total: 1,
+          },
+        },
+      });
+
+      expect(topicSelectors.getTopicById('background-topic')(state)).toEqual(backgroundTopic);
+    });
   });
 
   describe('getTopicWorkingDirectory', () => {
@@ -245,7 +264,10 @@ describe('topicSelectors', () => {
 
     it('falls back to the active topic when no id is given', () => {
       expect(topicSelectors.getTopicWorkingDirectory()(wdState)).toBe('/project-a');
-      expect(topicSelectors.getTopicWorkingDirectory(null)(wdState)).toBe('/project-a');
+    });
+
+    it('treats an explicit null as a new-topic route without a directory', () => {
+      expect(topicSelectors.getTopicWorkingDirectory(null)(wdState)).toBeUndefined();
     });
 
     it('returns undefined for an unknown topic id', () => {

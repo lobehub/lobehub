@@ -18,7 +18,6 @@ const permissionMock = vi.hoisted(() => ({
   create_content: true,
   edit_own_content: true,
 }));
-
 vi.mock('@/features/ResourcePermission/useResourceAccess', () => ({
   useResourceAccess: () => ({ canEditResource: true, isAccessResolved: true }),
 }));
@@ -36,8 +35,8 @@ vi.mock('@lobehub/ui/icons', () => ({
 vi.mock('lucide-react', () => ({
   MessageSquarePlusIcon: () => null,
   MessagesSquareIcon: () => null,
-  RadioTowerIcon: () => null,
   SearchIcon: () => null,
+  TargetIcon: () => null,
 }));
 
 vi.mock('react-i18next', () => ({
@@ -97,14 +96,11 @@ vi.mock('@/hooks/usePermission', () => ({
   }),
 }));
 
+// Nav no longer reads the agent store, but its transitive imports pull it in —
+// and the real module drags `lucide-react` icon internals through this file's
+// icon mock. Keep the stub so the module graph stays inert here.
 vi.mock('@/store/agent', () => ({
-  useAgentStore: (selector: (state: unknown) => unknown) => selector({}),
-}));
-
-vi.mock('@/store/agent/selectors', () => ({
-  agentSelectors: {
-    currentAgentHeterogeneousProviderType: () => undefined,
-  },
+  useAgentStore: (selector: (state: Record<string, unknown>) => unknown) => selector({}),
 }));
 
 vi.mock('@/store/chat', () => ({
@@ -131,6 +127,18 @@ vi.mock('@/store/serverConfig', () => ({
   useServerConfigStore: (
     selector: (state: { featureFlags: { isAgentEditable: boolean } }) => unknown,
   ) => selector({ featureFlags: { isAgentEditable: true } }),
+}));
+
+vi.mock('@/store/user', () => ({
+  useUserStore: (selector: (state: unknown) => unknown) =>
+    selector({ preference: { lab: { enableTopicAcceptance: true } } }),
+}));
+
+vi.mock('@/store/user/selectors', () => ({
+  labPreferSelectors: {
+    enableTopicAcceptance: (state: { preference: { lab?: { enableTopicAcceptance?: boolean } } }) =>
+      state.preference.lab?.enableTopicAcceptance ?? false,
+  },
 }));
 
 describe('Agent sidebar header nav', () => {
@@ -185,5 +193,49 @@ describe('Agent sidebar header nav', () => {
 
     expect(pushMock).not.toHaveBeenCalled();
     expect(mutateMock).not.toHaveBeenCalled();
+  });
+
+  it('no longer offers a standalone message channels entry', () => {
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+
+    expect(screen.queryByRole('button', { name: 'tab.integration' })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['/agent/agt_eH4zL98zBx5u/profile'],
+    ['/agent/agt_eH4zL98zBx5u/channel'],
+    ['/agent/agt_eH4zL98zBx5u/channel/slack'],
+    ['/agent/agt_eH4zL98zBx5u/statistics'],
+  ])('keeps the profile entry active on %s', (pathname) => {
+    usePathnameMock.mockReturnValue(pathname);
+
+    render(<Nav />);
+
+    expect(screen.getByRole('button', { name: 'tab.profile' })).toHaveAttribute(
+      'data-active',
+      'true',
+    );
+  });
+
+  it('navigates to the agent goals page', () => {
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+    fireEvent.click(screen.getByRole('button', { name: 'goalList.title' }));
+
+    expect(switchTopicMock).toHaveBeenCalledWith(null, { skipRefreshMessage: true });
+    expect(pushMock).toHaveBeenCalledWith('/agent/agt_eH4zL98zBx5u/goals');
+  });
+
+  it('places topics above profile and goals in the agent navigation', () => {
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+
+    const labels = screen.getAllByRole('button').map((button) => button.textContent);
+    expect(labels.indexOf('management.sidebarEntry')).toBeLessThan(labels.indexOf('tab.profile'));
+    expect(labels.indexOf('tab.profile')).toBeLessThan(labels.indexOf('goalList.title'));
   });
 });

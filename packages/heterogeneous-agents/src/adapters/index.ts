@@ -2,3 +2,5 @@ export { AmpAdapter } from './amp';
 export { ClaudeCodeAdapter, ClaudeCodeSdkAdapter } from './claudeCode';
 export { CodexAdapter } from './codex';
 export { OpenCodeAdapter } from './opencode';
+export { PiAdapter } from './pi';
+export { QoderAdapter } from './qoder';

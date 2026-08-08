@@ -4,6 +4,7 @@ import { Paperclip } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import CollapsibleContent from '@/components/CollapsibleContent';
 import { EditingIndicator, type EditLockClient, useEditLock } from '@/features/EditLock';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import { seedAttachments } from '@/features/EditorCanvas/attachmentRegistry';
@@ -24,6 +25,10 @@ const taskLockClient: EditLockClient = {
   },
 };
 
+// Roomier than the chat-bubble default: the instruction is the primary content
+// of the page, so the preview should carry a paragraph or two before it clamps.
+const INSTRUCTION_MAX_HEIGHT = 320;
+
 const TaskInstruction = memo(() => {
   const { t } = useTranslation('chat');
   const { allowed: canEditTask } = usePermission('create_content');
@@ -39,10 +44,16 @@ const TaskInstruction = memo(() => {
   // Collaborative edit lock for workspace tasks (same model as pages): read-only
   // when another member is editing; acquired implicitly on the first edit.
   const [edited, setEdited] = useState(false);
+  // A long instruction opens clamped so the properties, subtasks and activity
+  // below it stay reachable; a short one never collapses and stays directly
+  // editable. Both reset per task — the next task gets its own first read.
+  const [expanded, setExpanded] = useState(false);
+  const [overflowing, setOverflowing] = useState(false);
   const taskIdRef = useRef(taskId);
   if (taskIdRef.current !== taskId) {
     taskIdRef.current = taskId;
     setEdited(false);
+    setExpanded(false);
   }
   const lock = useEditLock({
     client: taskLockClient,
@@ -84,6 +95,25 @@ const TaskInstruction = memo(() => {
     pickAndInsertAttachments(editor);
   }, [editor]);
 
+  // Clicking into the clamped text focuses the editor, so expanding on focus
+  // makes one click both open the instruction and land the caret where it was
+  // aimed — no "expand, then click again to type".
+  const handleFocus = useCallback(() => setExpanded(true), []);
+
+  const handleCollapsedChange = useCallback(
+    (collapsed: boolean) => {
+      // Collapsing while the editor still holds the caret would let Lexical
+      // restore focus and immediately re-expand.
+      if (collapsed) editor?.blur();
+      setExpanded(!collapsed);
+    },
+    [editor],
+  );
+
+  // Attaching a file only makes sense once the whole instruction is in view;
+  // while clamped, the collapse toggle is the single affordance below the text.
+  const showAttach = !overflowing || expanded;
+
   return (
     <Flexbox gap={4}>
       <EditingIndicator
@@ -92,23 +122,35 @@ const TaskInstruction = memo(() => {
       />
       {/* editTask can update this mounted editor. The store revision changes only for external
           snapshots, so local autosave echoes and unchanged polling snapshots do not reload live
-          input. */}
-      <EditorCanvas
-        contentRevision={instructionRevision}
-        disabled={!canEditTask}
-        editable={!lock.lockedByOther && !lock.pending}
-        editor={editor}
-        editorData={editorData}
-        entityId={taskId}
-        placeholder={t('taskDetail.instructionPlaceholder')}
-        onContentChange={handleContentChange}
-      />
-      <ActionIcon
-        icon={Paperclip}
-        size={'small'}
-        title={t('upload.action.tooltip')}
-        onClick={handleAttach}
-      />
+          input. Collapsing is pure CSS around the same mounted editor — never a remount, which
+          would drop unsaved input. */}
+      <CollapsibleContent
+        collapsed={!expanded}
+        maxHeight={INSTRUCTION_MAX_HEIGHT}
+        onCollapsedChange={handleCollapsedChange}
+        onOverflowChange={setOverflowing}
+      >
+        <div onFocus={handleFocus}>
+          <EditorCanvas
+            contentRevision={instructionRevision}
+            disabled={!canEditTask}
+            editable={!lock.lockedByOther && !lock.pending}
+            editor={editor}
+            editorData={editorData}
+            entityId={taskId}
+            placeholder={t('taskDetail.instructionPlaceholder')}
+            onContentChange={handleContentChange}
+          />
+        </div>
+      </CollapsibleContent>
+      {showAttach && (
+        <ActionIcon
+          icon={Paperclip}
+          size={'small'}
+          title={t('upload.action.tooltip')}
+          onClick={handleAttach}
+        />
+      )}
     </Flexbox>
   );
 });

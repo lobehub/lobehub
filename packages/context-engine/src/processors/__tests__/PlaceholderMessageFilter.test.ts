@@ -20,7 +20,7 @@ describe('PlaceholderMessageFilterProcessor', () => {
   it('should remove failed assistant placeholders that carry an error', async () => {
     // Regression: persisted "..." rows from failed generations poisoned the
     // topic — replayed at the payload tail they trigger the Claude 4.6+
-    // assistant-prefill 400 on every subsequent send (LOBE-12572).
+    // assistant-prefill 400 on every subsequent send.
     const context = createContext([
       { content: 'hi', id: 'u1', role: 'user' },
       { content: '...', error: { type: 'CapabilityNotSupported' }, id: 'a1', role: 'assistant' },

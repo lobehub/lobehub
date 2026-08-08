@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
 
-import { useCurrentFolderId } from '@/routes/(main)/resource/features/hooks/useCurrentFolderId';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
-import { sortFileList } from '@/routes/(main)/resource/features/store/selectors';
+import { useCurrentFolderId } from '@/features/ResourceManager/hooks/useCurrentFolderId';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { sortFileList } from '@/features/ResourceManager/store/selectors';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import {

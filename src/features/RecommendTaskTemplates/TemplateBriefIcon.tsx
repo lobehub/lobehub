@@ -3,7 +3,7 @@ import { cssVar } from 'antd-style';
 import type { LucideIcon } from 'lucide-react';
 import { memo } from 'react';
 
-import { INTEREST_AREAS } from '@/routes/onboarding/config';
+import { INTEREST_AREAS } from '@/features/Onboarding/config';
 
 import type { TemplateIconSpec } from './resolveTemplateIcon';
 

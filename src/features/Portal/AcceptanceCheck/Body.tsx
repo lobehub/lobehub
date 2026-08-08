@@ -17,6 +17,7 @@ import {
 import { verifyService } from '@/services/verify';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
+import { useTaskStore } from '@/store/task';
 
 const styles = createStaticStyles(({ css }) => ({
   body: css`
@@ -32,12 +33,27 @@ const styles = createStaticStyles(({ css }) => ({
 
 const Body = memo(() => {
   const { t } = useTranslation(['chat', 'verify']);
+  // Task detail (and Home) mount the drawer this opens into.
+  const openTopicDrawer = useTaskStore((s) => s.openTopicDrawer);
 
   const portal = useChatStore(chatPortalSelectors.acceptanceCheckPortal);
   const openAcceptance = useChatStore((state) => state.openAcceptance);
   const { data, error, isLoading, mutate } = useAcceptanceBundle(portal?.acceptanceId ?? null);
   const [reviewPending, setReviewPending] = useState(false);
   const check = data?.checks.find((item) => item.id === portal?.checkId);
+
+  /**
+   * An agent judge's argument IS its run, so the trace is the reviewable form
+   * of its verdict. The button was already rendered here but received no
+   * handler, which made it a dead click.
+   */
+  const openVerifierTrace = async (verifierOperationId: string) => {
+    const resolved = await verifyService.getVerifierThread(verifierOperationId);
+    if (!resolved?.topicId) return;
+    openTopicDrawer(resolved.topicId, {
+      title: t('acceptance.checks.viewTrace', { ns: 'verify' }),
+    });
+  };
 
   const handleReview = async (input: CheckReviewInput): Promise<boolean> => {
     if (!data) return false;
@@ -117,6 +133,7 @@ const Body = memo(() => {
         canReview={data.isOwner}
         check={check}
         reviewPending={reviewPending}
+        onOpenTrace={openVerifierTrace}
         onReview={handleReview}
         onRound={() => openAcceptance(data.acceptance.id)}
       />

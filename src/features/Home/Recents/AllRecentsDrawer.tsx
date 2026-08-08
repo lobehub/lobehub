@@ -12,7 +12,7 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useClientDataSWR } from '@/libs/swr';
 import { recentKeys } from '@/libs/swr/keys';
 import { useCacheScope } from '@/libs/swr/useCacheScope';
-import { recentService } from '@/services/recent';
+import { RECENT_SIDEBAR_TYPES, recentService } from '@/services/recent';
 
 import RecentListItem from './Item';
 
@@ -28,7 +28,7 @@ const AllRecentsDrawer = memo<AllRecentsDrawerProps>(({ open, onClose }) => {
 
   const { data: recents, isLoading } = useClientDataSWR(
     open ? recentKeys.allDrawer(open, scope) : null,
-    () => recentService.getAll(50),
+    () => recentService.getAll(50, RECENT_SIDEBAR_TYPES),
   );
 
   const filteredRecents = useMemo(() => {

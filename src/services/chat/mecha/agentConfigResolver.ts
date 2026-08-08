@@ -135,6 +135,13 @@ export interface ResolvedAgentConfig {
   plugins: string[];
   /** The agent's slug (if builtin) */
   slug?: string;
+  /**
+   * The raw sub-agent chatConfig override (`agencyConfig.subagent.chatConfig`).
+   * `chatConfig` above already has it merged in for non-migrated fields; this
+   * copy lets the model-params resolver re-apply the user's explicit sub-agent
+   * reasoning choices on top of the model-instance defaults.
+   */
+  subAgentChatConfigOverride?: Partial<LobeAgentChatConfig>;
   /** Pre-generated tools array (populated by internal_createAgentState, undefined means tools disabled) */
   tools?: ChatCompletionTool[];
 }
@@ -167,7 +174,7 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
   //
   // lobe-agent's context trimming (hide `callSubAgent` in group / sub-agent runs)
   // now lives in its manifest resolver (resolveLobeAgentManifest), applied at
-  // tools-engine build time. That keeps lobe-agent's plan / todo / visual-media
+  // tools-engine build time. That keeps lobe-agent's plan / todo / media-analysis
   // available to sub-agents — only the nested dispatch API is removed — instead of
   // dropping the whole tool here.
   const applyPluginFilters = (pluginIds: string[]) => {

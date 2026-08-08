@@ -1,3 +1,5 @@
+import { NEWS_BRIEF_TYPES } from '@lobechat/types';
+
 import { type BriefItem } from '@/features/DailyBrief/types';
 
 /**
@@ -23,8 +25,7 @@ export interface SplitBriefs {
  * into the to-do pile), so results are news unconditionally — accepting a
  * one-off delivery stays available from the task page.
  */
-const isNewsBrief = (brief: BriefItem): boolean =>
-  brief.type === 'insight' || brief.type === 'result';
+const isNewsBrief = (brief: BriefItem): boolean => NEWS_BRIEF_TYPES.includes(brief.type);
 
 /**
  * Splits the unresolved brief feed by whether the user has to *do* something.

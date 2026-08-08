@@ -12,6 +12,9 @@ export const labPreferSelectors = {
   enableArtifactDeployment: (s: UserState): boolean =>
     s.preference.lab?.enableArtifactDeployment ?? false,
   enableClaudeCodeSdk: (s: UserState): boolean => s.preference.lab?.enableClaudeCodeSdk ?? false,
+  enableCodexAppServer: (s: UserState): boolean => s.preference.lab?.enableCodexAppServer ?? false,
+  enableDesktopSplitView: (s: UserState): boolean =>
+    s.preference.lab?.enableDesktopSplitView ?? false,
   enableHeteroSessionImport: (s: UserState): boolean =>
     s.preference.lab?.enableHeteroSessionImport ?? false,
   enableImessage: (s: UserState): boolean => s.preference.lab?.enableImessage ?? false,
@@ -23,7 +26,6 @@ export const labPreferSelectors = {
     DEFAULT_PREFERENCE.lab?.enableMessageTextSelectionActions ??
     false,
   enableOAuthApps: (s: UserState): boolean => s.preference.lab?.enableOAuthApps ?? false,
-  enablePlatformAgent: (s: UserState): boolean => s.preference.lab?.enablePlatformAgent ?? false,
   enableTaskVerify: (s: UserState): boolean => s.preference.lab?.enableTaskVerify ?? false,
   enableTopicAcceptance: (s: UserState): boolean =>
     s.preference.lab?.enableTopicAcceptance ?? false,

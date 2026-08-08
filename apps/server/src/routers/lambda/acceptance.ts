@@ -12,6 +12,7 @@ import {
   requireWorkspaceRoleWhenScoped,
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { TaskModel } from '@/database/models/task';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
@@ -122,12 +123,14 @@ export const acceptanceRouter = router({
         requirement: z.string().max(2000).optional(),
         subjectId: z.string(),
         subjectType: subjectTypeSchema,
+        title: z.string().trim().min(1).max(500).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       try {
         return await ctx.acceptanceService.ensureForSubject(input.subjectType, input.subjectId, {
           requirement: input.requirement,
+          title: input.title,
         });
       } catch (error) {
         throw new TRPCError({
@@ -145,7 +148,19 @@ export const acceptanceRouter = router({
         input.subjectType,
         input.subjectId,
       );
-      return acceptance ?? null;
+      if (!acceptance) return null;
+
+      // `delivered` alone is ambiguous for the subject's status surface: a
+      // converged delivery waiting for sign-off and a failed one waiting for a
+      // decision both land there. The latest round's verdict is what tells
+      // them apart, so ship it with the aggregate instead of forcing callers
+      // to load the whole bundle for one field.
+      const latest = await ctx.acceptanceService.latestRound(acceptance.id);
+      return {
+        ...acceptance,
+        latestRunStatus: latest?.status ?? null,
+        latestRunUserDecision: latest?.userDecision ?? null,
+      };
     }),
 
   /**
@@ -338,6 +353,18 @@ export const acceptanceRouter = router({
       };
 
       const reportsByRun = new Map(reports.map((r) => [r.verifyRunId!, r]));
+      // What each round actually spent. Owner-only: cost is the author's
+      // operating detail, not something a shared link should expose.
+      // `isOwner` already implies a signed-in viewer; the explicit id check is
+      // what narrows it for the model, which is owner-scoped by construction.
+      const usageByOperation =
+        isOwner && ctx.userId
+          ? await new AgentOperationModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined)
+              .findUsageByOperations(
+                runs.flatMap((run) => (run.operationId ? [run.operationId] : [])),
+              )
+              .catch(() => new Map<string, { cost: number; tokens: number }>())
+          : new Map<string, { cost: number; tokens: number }>();
       const rounds = runs.map((run) => {
         // `origin` points at the author's private topic/agent — never hand it
         // to a visitor holding nothing but the shared link.
@@ -360,7 +387,11 @@ export const acceptanceRouter = router({
             },
           };
         }
-        return { report: reportsByRun.get(run.id) ?? null, run: publicRun };
+        return {
+          report: reportsByRun.get(run.id) ?? null,
+          run: publicRun,
+          usage: (run.operationId ? usageByOperation.get(run.operationId) : undefined) ?? null,
+        };
       });
       const latestReport = [...rounds].reverse().find((r) => r.report)?.report ?? null;
 

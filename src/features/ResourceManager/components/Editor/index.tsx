@@ -10,8 +10,8 @@ import { useTranslation } from 'react-i18next';
 
 import NavHeader from '@/features/NavHeader';
 import { PageAgentProvider } from '@/features/PageEditor/PageAgentProvider';
-import FileDetailComponent from '@/routes/(main)/resource/features/FileDetail';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
+import FileDetailComponent from '@/features/ResourceManager/FileDetail';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { fileManagerSelectors, useFileStore } from '@/store/file';
 import { downloadFile } from '@/utils/client/downloadFile';
 

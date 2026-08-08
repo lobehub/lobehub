@@ -25,8 +25,21 @@ const ACCEPTANCE_BUNDLE_SWR_CONFIG = {
   revalidateOnReconnect: true,
 } as const;
 
-export const getAcceptanceBySubjectRefreshInterval = (acceptance: unknown) =>
-  acceptance ? 0 : 2000;
+/**
+ * Poll until the aggregate exists AND stops moving.
+ *
+ * Discovery was the only case handled before, so a task page left open during
+ * a goal loop kept rendering whatever state it first saw — "awaiting
+ * verification" straight through verifying, delivery and acceptance — until a
+ * focus or remount happened to refetch.
+ */
+const TERMINAL_ACCEPTANCE_STATUSES = new Set(['accepted', 'closed']);
+
+export const getAcceptanceBySubjectRefreshInterval = (acceptance: unknown) => {
+  if (!acceptance) return 2000;
+  const status = (acceptance as { status?: string }).status;
+  return status && TERMINAL_ACCEPTANCE_STATUSES.has(status) ? 0 : 5000;
+};
 
 /** Plan + rollup status for one Agent Run. Pass null operationId to skip. */
 export const useVerifyState = (operationId: string | null) =>

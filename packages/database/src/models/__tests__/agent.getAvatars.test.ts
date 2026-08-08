@@ -34,6 +34,7 @@ describe('AgentModel.getAgentAvatarsByIds', () => {
         avatar: '🤖',
         backgroundColor: '#ff0000',
         id: 'agent-av-1',
+        name: 'Alice',
         slug: 'agent-av-1',
         title: 'Agent One',
         userId,
@@ -53,10 +54,13 @@ describe('AgentModel.getAgentAvatarsByIds', () => {
 
     expect(result).toHaveLength(2);
     const agent1 = result.find((a) => a.id === 'agent-av-1');
+    // `name` (personal name) and `title` (role) both come back — collapsing them
+    // into one label is the caller's job, via `agentDisplayName`.
     expect(agent1).toEqual({
       avatar: '🤖',
       backgroundColor: '#ff0000',
       id: 'agent-av-1',
+      name: 'Alice',
       title: 'Agent One',
     });
   });
@@ -92,6 +96,7 @@ describe('AgentModel.getAgentAvatarsByIds', () => {
       avatar: DEFAULT_INBOX_AVATAR,
       backgroundColor: null,
       id: 'agent-inbox',
+      name: null,
       title: DEFAULT_INBOX_TITLE,
     });
   });
@@ -114,6 +119,7 @@ describe('AgentModel.getAgentAvatarsByIds', () => {
       avatar: '🤖',
       backgroundColor: '#123456',
       id: 'agent-inbox-custom',
+      name: null,
       title: 'Custom Inbox',
     });
   });
@@ -133,6 +139,12 @@ describe('AgentModel.getAgentAvatarsByIds', () => {
     const result = await model.getAgentAvatarsByIds(['agent-fields']);
 
     expect(result).toHaveLength(1);
-    expect(Object.keys(result[0]).sort()).toEqual(['avatar', 'backgroundColor', 'id', 'title']);
+    expect(Object.keys(result[0]).sort()).toEqual([
+      'avatar',
+      'backgroundColor',
+      'id',
+      'name',
+      'title',
+    ]);
   });
 });

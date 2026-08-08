@@ -1,3 +1,4 @@
+import { agentDisplayName } from '@lobechat/types';
 import { Avatar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -24,19 +25,17 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       margin-inline-start: -6px;
     }
   `,
-  // Inside a rail card the shell is already drawn; only the hover bleed remains.
-  bareHead: css`
-    padding-block: 7px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius};
-  `,
   bareRoot: css`
+    margin-block: -6px;
     margin-inline: -8px;
   `,
   body: css`
     padding-block: 4px 8px;
     padding-inline: 8px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+  `,
+  bareBody: css`
+    padding-inline: 0;
   `,
   card: css`
     overflow: hidden;
@@ -63,6 +62,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       background: ${cssVar.colorFillQuaternary};
     }
   `,
+  // Inside a rail card the shell is already drawn; only the hover bleed remains.
+  bareHead: css`
+    padding-block: 7px;
+    padding-inline: 8px;
+    border-radius: ${cssVar.borderRadius};
+  `,
   overflowCount: css`
     flex: none;
     margin-inline-start: 4px;
@@ -88,7 +93,7 @@ const StackedAgentAvatar = memo<{ agentId: string }>(({ agentId }) => {
       className={styles.stackedAvatar}
       shape={'circle'}
       size={AVATAR_SIZE}
-      title={agent.title}
+      title={agentDisplayName(agent)}
     />
   );
 });
@@ -162,7 +167,7 @@ const RunningTasksCard = memo<RunningTasksCardProps>(({ action, bare, running, s
       </Flexbox>
 
       {open && (
-        <Flexbox className={styles.body}>
+        <Flexbox className={cx(styles.body, bare && styles.bareBody)}>
           {running.map((topic) => (
             <TopicRow
               key={topic.id}

@@ -39,7 +39,11 @@ const getGreetingKey = (hour: number): 'afternoon' | 'evening' | 'morning' => {
   return 'evening';
 };
 
-const HomeHeader = memo(() => {
+interface HomeHeaderProps {
+  centered?: boolean;
+}
+
+const HomeHeader = memo<HomeHeaderProps>(({ centered }) => {
   const { t } = useTranslation('home');
   const displayName = useUserStore(userProfileSelectors.displayUserName);
   const isLogin = useUserStore(authSelectors.isLogin);
@@ -50,10 +54,18 @@ const HomeHeader = memo(() => {
     : t(`dashboard.greeting.${greetingKey}Guest`);
 
   return (
-    <Flexbox gap={16} justify={'center'}>
-      <Flexbox horizontal align={'center'} className={styles.toolbar} gap={16}>
+    // Minimal mode keeps the full layout's stacking order — the switcher names
+    // who speaks, the greeting answers below — but drops the toolbar chrome and
+    // its 48px lane, so the pair reads as one compact block flush with the
+    // composer. The layout's lift math (MINIMAL_LIFT) counts on these heights.
+    <Flexbox gap={centered ? 8 : 16} justify={'center'}>
+      {centered ? (
         <AgentSelect />
-      </Flexbox>
+      ) : (
+        <Flexbox horizontal align={'center'} className={styles.toolbar} gap={16}>
+          <AgentSelect />
+        </Flexbox>
+      )}
       <Text as={'h1'} className={styles.greeting} weight={600}>
         {greeting}
       </Text>

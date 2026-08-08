@@ -1,5 +1,6 @@
 'use client';
 
+import { agentDisplayName } from '@lobechat/types';
 import { Avatar, Text } from '@lobehub/ui';
 import { Button, Popover } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
@@ -67,8 +68,10 @@ const AgentSelect = memo(() => {
   const agentMapMeta = useAgentStore(agentSelectors.getAgentMetaById(displayAgentId));
   const showInboxFallback = isInbox || !resolvedAgentId;
   const displayMeta = showInboxFallback ? inboxMeta : (sidebarItem ?? agentMapMeta);
-  const displayTitle =
-    displayMeta?.title || (showInboxFallback ? 'Lobe AI' : t('defaultSession', { ns: 'common' }));
+  const displayTitle = agentDisplayName(
+    displayMeta,
+    showInboxFallback ? 'Lobe AI' : t('defaultSession', { ns: 'common' }),
+  );
   const displayAvatar =
     (typeof displayMeta?.avatar === 'string' ? displayMeta.avatar : undefined) ||
     (showInboxFallback ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR);

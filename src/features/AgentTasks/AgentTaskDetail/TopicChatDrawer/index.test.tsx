@@ -119,7 +119,7 @@ vi.mock('@lobehub/ui/base-ui', () => ({
     open?: boolean;
     placement?: string;
     resizable?: boolean;
-    styles?: { body?: CSSProperties; title?: CSSProperties };
+    styles?: { body?: CSSProperties; panel?: CSSProperties; title?: CSSProperties };
     title?: ReactNode;
     width?: unknown;
   }) =>
@@ -128,10 +128,12 @@ vi.mock('@lobehub/ui/base-ui', () => ({
         data-height={serializeSize(height)}
         data-min-height={serializeSize(minHeight)}
         data-min-width={serializeSize(minWidth)}
+        data-panel-background={serializeSize(styles?.panel?.background)}
         data-placement={placement}
         data-resizable={String(resizable)}
         data-testid="topic-panel"
         data-width={serializeSize(width)}
+        style={styles?.panel}
       >
         <div data-testid="panel-title-slot" style={styles?.title}>
           {title}
@@ -218,8 +220,10 @@ vi.mock('@/store/chat/utils/messageMapKey', () => ({
   messageMapKey: () => 'topic-chat-key',
 }));
 
-vi.mock('../TopicStatusIcon', () => ({
-  default: () => <span data-testid="topic-status-icon" />,
+vi.mock('../../features/AssigneeAvatar', () => ({
+  default: ({ agentId, size }: { agentId?: string; size?: number }) => (
+    <span data-agent-id={agentId} data-size={size} data-testid="assignee-avatar" />
+  ),
 }));
 
 vi.mock('./FeedbackInput', () => ({
@@ -282,6 +286,22 @@ describe('TopicChatDrawer', () => {
       maxWidth: '100%',
       overflow: 'hidden',
     });
+  });
+
+  it('shows the assignee avatar in the topic header', () => {
+    const { getByTestId } = render(<TopicChatDrawer />);
+
+    expect(getByTestId('assignee-avatar')).toHaveAttribute('data-agent-id', 'agt_assignee');
+    expect(getByTestId('assignee-avatar')).toHaveAttribute('data-size', '20');
+  });
+
+  it('uses the container background for the conversation panel', () => {
+    const { getByTestId } = render(<TopicChatDrawer />);
+
+    expect(getByTestId('topic-panel')).toHaveAttribute(
+      'data-panel-background',
+      'var(--ant-color-bg-container)',
+    );
   });
 
   it('renders the share button in the floating panel actions slot', () => {

@@ -1,11 +1,19 @@
 'use client';
 
 import type { ProjectFileIndexEntry } from '@lobechat/electron-client-ipc';
-import { Center, copyToClipboard, Empty, Flexbox, SearchBar, stopPropagation } from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
+import {
+  ActionIcon,
+  Center,
+  copyToClipboard,
+  Empty,
+  Flexbox,
+  Icon,
+  stopPropagation,
+} from '@lobehub/ui';
+import { Input, toast } from '@lobehub/ui/base-ui';
 import type { GitStatusEntry } from '@pierre/trees';
 import { createStaticStyles } from 'antd-style';
-import { FileIcon } from 'lucide-react';
+import { FileIcon, SearchIcon, XIcon } from 'lucide-react';
 import type { DragEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -125,6 +133,41 @@ const getAncestorIds = (filePath: string): string[] => {
   return ancestors;
 };
 
+interface FilesSearchBarProps {
+  onDebouncedChange: (query: string) => void;
+}
+
+// Keystrokes stay local to this component: only the debounced query reaches
+// the tree host, so typing never re-renders the ExplorerTree subtree.
+const FilesSearchBar = memo<FilesSearchBarProps>(({ onDebouncedChange }) => {
+  const { t } = useTranslation('chat');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => onDebouncedChange(searchQuery), FILE_SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [onDebouncedChange, searchQuery]);
+
+  return (
+    <Input
+      placeholder={t('workingPanel.files.searchPlaceholder')}
+      prefix={<Icon icon={SearchIcon} size={13} />}
+      size={'small'}
+      style={{ width: '100%' }}
+      value={searchQuery}
+      suffix={
+        searchQuery ? (
+          <ActionIcon icon={XIcon} size={12} onClick={() => setSearchQuery('')} />
+        ) : undefined
+      }
+      onChange={(e) => setSearchQuery(e.target.value)}
+      onKeyDown={stopPropagation}
+    />
+  );
+});
+
+FilesSearchBar.displayName = 'FilesSearchBar';
+
 const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
   const { t } = useTranslation('chat');
   const isRemote = !!deviceId;
@@ -137,7 +180,6 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
   const projectRoot = data?.root ?? workingDirectory;
 
   const entries = useMemo(() => data?.entries ?? [], [data]);
-  const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [searchEntries, setSearchEntries] = useState<ProjectFileIndexEntry[] | undefined>();
   const [isSearching, setIsSearching] = useState(false);
@@ -175,11 +217,6 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
   );
 
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedQuery(searchQuery), FILE_SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
 
   useEffect(() => {
     if (!normalizedDebouncedQuery) {
@@ -369,16 +406,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
   return (
     <Flexbox height={'100%'} style={{ overflow: 'hidden' }} width={'100%'}>
       <div className={styles.subheader}>
-        <SearchBar
-          allowClear
-          placeholder={t('workingPanel.files.searchPlaceholder')}
-          size={'small'}
-          style={{ width: '100%' }}
-          styles={{ input: { width: '100%' } }}
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          onKeyDown={stopPropagation}
-        />
+        <FilesSearchBar onDebouncedChange={setDebouncedQuery} />
       </div>
       {isEmpty && isFiltering && isSearching ? (
         <Center flex={1}>
@@ -389,9 +417,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
           <Empty
             icon={FileIcon}
             description={t(
-              isFiltering && debouncedQuery === searchQuery
-                ? 'workingPanel.files.noSearchResults'
-                : 'workingPanel.files.empty',
+              isFiltering ? 'workingPanel.files.noSearchResults' : 'workingPanel.files.empty',
             )}
           />
         </Center>

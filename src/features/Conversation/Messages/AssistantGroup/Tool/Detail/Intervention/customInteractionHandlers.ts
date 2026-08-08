@@ -15,6 +15,8 @@ import { pickString } from '@lobechat/utils';
 import { installMarketplaceAgents } from '@/services/installMarketplaceAgents';
 import { topicService } from '@/services/topic';
 
+const QODER_IDENTIFIER = 'qoder';
+
 interface SubmitToolInteractionOptions {
   createUserMessage?: boolean;
   pluginState?: Record<string, unknown>;
@@ -134,8 +136,13 @@ const customInteractionSubmitHandlers: Array<{
   match: (identifier: string, apiName?: string) => boolean;
 }> = [
   {
+    // `createUserMessage: false` — the completed tool card already renders the
+    // answers from `pluginState.askUserAnswers`, so the client runtime must
+    // resume from the tool result instead of synthesizing a `role: 'user'`
+    // message (which duplicated the answer as a user bubble). This also aligns
+    // with the Gateway resume path, which never creates a user turn here.
     handler: async (payload) => ({
-      options: { pluginState: { askUserAnswers: payload } },
+      options: { createUserMessage: false, pluginState: { askUserAnswers: payload } },
       payload,
     }),
     match: isAskUserQuestionCall,
@@ -156,7 +163,10 @@ const findCustomInteractionSubmitHandler = (identifier: string, apiName?: string
  * because the answer ships back through IPC, not through a synthetic user
  * turn.
  */
-const HETERO_CUSTOM_INTERACTION_IDENTIFIERS = new Set<string>([ClaudeCodeIdentifier]);
+const HETERO_CUSTOM_INTERACTION_IDENTIFIERS = new Set<string>([
+  ClaudeCodeIdentifier,
+  QODER_IDENTIFIER,
+]);
 
 export const isHeteroInteractionIdentifier = (identifier: string) =>
   HETERO_CUSTOM_INTERACTION_IDENTIFIERS.has(identifier);

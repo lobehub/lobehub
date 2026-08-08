@@ -1,3 +1,4 @@
+import { getHeterogeneousAgentConfigOrThrow } from '../config';
 import type {
   AgentEventAdapter,
   HeterogeneousAgentEvent,
@@ -10,7 +11,8 @@ import type {
 } from '../types';
 
 const OPENCODE_IDENTIFIER = 'opencode';
-const OPENCODE_CLI_INSTALL_DOCS_URL = 'https://opencode.ai/docs';
+const OPENCODE_CLI_INSTALL_DOCS_URL =
+  getHeterogeneousAgentConfigOrThrow(OPENCODE_IDENTIFIER).auth.docsUrl;
 const AUTH_REQUIRED_PATTERNS = [
   /authentication/i,
   /not authenticated/i,
@@ -111,7 +113,11 @@ export class OpenCodeAdapter implements AgentEventAdapter {
       this.started = true;
     }
     this.streamOpen = true;
-    const data: StreamStartData = { provider: OPENCODE_IDENTIFIER, sessionId: this.sessionId };
+    const data: StreamStartData & { newStep?: boolean } = {
+      provider: OPENCODE_IDENTIFIER,
+      sessionId: this.sessionId,
+      ...(this.stepIndex > 0 ? { newStep: true } : {}),
+    };
     events.push(this.makeEvent('stream_start', data));
     return events;
   }

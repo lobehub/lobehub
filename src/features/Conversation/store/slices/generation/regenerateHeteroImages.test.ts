@@ -84,7 +84,6 @@ vi.mock('@/store/chat', () => ({
       associateMessageWithOperation: noop,
       completeOperation: noop,
       failOperation: noop,
-      internal_updateTopicLoading: noop,
       isGatewayModeEnabled: () => false,
       refreshMessages: vi.fn(async () => {}),
       startOperation: vi.fn(() => ({ operationId: 'hetero-op-id' })),

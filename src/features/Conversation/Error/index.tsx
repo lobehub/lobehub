@@ -1,3 +1,4 @@
+import { isDesktop } from '@lobechat/const';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import { type ILobeAgentRuntimeErrorType } from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType, getErrorCodeSpec } from '@lobechat/model-runtime';
@@ -341,6 +342,7 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
     const activeTopicScheduled = useChatStore(
       (s) => topicSelectors.currentActiveTopic(s)?.status === 'scheduled',
     );
+    const activeAgentId = useChatStore((s) => s.activeAgentId);
     const scheduledResetsAt = useChatStore((s) => {
       const scheduledRun = topicSelectors.currentActiveTopic(s)?.metadata?.scheduledRun;
       return scheduledRun?.kind === 'resume_after_rate_limit'
@@ -381,8 +383,16 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
           error={sessionErrorBody}
           schedule={schedule}
           onDismiss={() => void updateMessageError(data.id, null)}
-          onOpenSystemTools={() => navigate('/settings/system-tools')}
           onRetry={handleManualRetry}
+          onOpenSystemTools={() =>
+            navigate(
+              isDesktop
+                ? '/settings/system-tools'
+                : activeAgentId
+                  ? `/agent/${activeAgentId}/profile`
+                  : '/settings/credential',
+            )
+          }
         />
       );
     }

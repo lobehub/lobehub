@@ -87,6 +87,58 @@ describe('OpenCodeAdapter', () => {
     expect(adapter.adapt(raw)).toEqual([]);
   });
 
+  it('opens a new step for the final answer after a completed tool turn', () => {
+    const adapter = new OpenCodeAdapter();
+    const firstStart = adapter.adapt({
+      part: { id: 'step-1', type: 'step-start' },
+      sessionID: 'ses-post-tool',
+      type: 'step_start',
+    });
+
+    adapter.adapt({
+      part: {
+        callID: 'call-1',
+        id: 'tool-1',
+        state: { input: { command: 'pwd' }, output: '/workspace', status: 'completed' },
+        tool: 'bash',
+        type: 'tool',
+      },
+      sessionID: 'ses-post-tool',
+      type: 'tool_use',
+    });
+
+    const secondStart = adapter.adapt({
+      part: { id: 'step-2', type: 'step-start' },
+      sessionID: 'ses-post-tool',
+      type: 'step_start',
+    });
+    const finalText = adapter.adapt({
+      part: { id: 'text-1', text: 'Final answer.', type: 'text' },
+      sessionID: 'ses-post-tool',
+      type: 'text',
+    });
+
+    expect(firstStart[0]).toMatchObject({
+      data: { provider: 'opencode', sessionId: 'ses-post-tool' },
+      stepIndex: 0,
+      type: 'stream_start',
+    });
+    expect(firstStart[0].data.newStep).toBeUndefined();
+    expect(secondStart).toEqual([
+      expect.objectContaining({ data: {}, stepIndex: 0, type: 'stream_end' }),
+      expect.objectContaining({
+        data: { newStep: true, provider: 'opencode', sessionId: 'ses-post-tool' },
+        stepIndex: 1,
+        type: 'stream_start',
+      }),
+    ]);
+    expect(finalText[0]).toMatchObject({
+      data: { chunkType: 'text', content: 'Final answer.' },
+      stepIndex: 1,
+      type: 'stream_chunk',
+    });
+  });
+
   it('suppresses duplicate completed part ids', () => {
     const adapter = new OpenCodeAdapter();
     const raw = {

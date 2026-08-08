@@ -1578,7 +1578,7 @@ describe('AgentGroupRepository', () => {
       const wsRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
       const result = await wsRepo.transferToWorkspace('transfer-group', targetWorkspaceId, userId);
 
-      expect(result).toEqual({ groupId: 'transfer-group' });
+      expect(result).toEqual({ groupId: 'transfer-group', transferJobId: null });
 
       const group = await serverDB.query.chatGroups.findFirst({
         where: (cg, { eq }) => eq(cg.id, 'transfer-group'),
@@ -1965,6 +1965,117 @@ describe('AgentGroupRepository', () => {
       });
       expect(copiedPlugin?.toolCallId).not.toBe('toolu_old');
       expect(copiedPlugin?.workspaceId).toBe(targetWorkspaceId);
+    });
+
+    it('copies a conversation history larger than one insert batch and backfills cross-batch parent references', async () => {
+      // Regression: an unchunked INSERT of a large history overflows PostgreSQL's
+      // 65,535 bind-parameter cap per statement; chunked inserts must also keep
+      // self-referential FKs valid when a reference points into a later batch.
+      const targetWorkspaceId = 'agent-group-copy-large-target-ws';
+      await serverDB.insert(workspaces).values({
+        id: targetWorkspaceId,
+        name: 'Copy Large Target Workspace',
+        primaryOwnerId: userId,
+        slug: 'agent-group-copy-large-target-ws',
+      });
+
+      await serverDB.insert(chatGroups).values({
+        id: 'copy-large-group',
+        title: 'Copy Large Group',
+        userId,
+        workspaceId,
+      });
+      await serverDB.insert(agents).values({
+        id: 'copy-large-member',
+        title: 'Member',
+        userId,
+        virtual: false,
+        workspaceId,
+      });
+      await serverDB.insert(chatGroupsAgents).values({
+        agentId: 'copy-large-member',
+        chatGroupId: 'copy-large-group',
+        order: 0,
+        role: 'participant',
+        userId,
+        workspaceId,
+      });
+      await serverDB.insert(topics).values({
+        groupId: 'copy-large-group',
+        id: 'copy-large-topic',
+        title: 'Large topic',
+        userId,
+        workspaceId,
+      });
+
+      // 2401 rows × 31 `messages` columns ≈ 74k bind parameters — above the
+      // 65,535 cap, so the pre-fix unbatched INSERT provably fails here.
+      const messageCount = 2401;
+      const base = Date.parse('2026-01-01T00:00:00Z');
+      const sourceRows = Array.from({ length: messageCount }, (_, i) => ({
+        content: `msg ${i}`,
+        createdAt: new Date(base + i * 1000),
+        groupId: 'copy-large-group',
+        id: `copy-large-msg-${String(i).padStart(4, '0')}`,
+        // odd rows reply to the previous row; row 0 gets a forward reference
+        // (backfilled below) to a row that lands in a LATER insert batch when
+        // copying with 500-row batches (index 700 → batch 2)
+        parentId: i % 2 === 1 ? `copy-large-msg-${String(i - 1).padStart(4, '0')}` : null,
+        role: i % 2 === 0 ? 'user' : 'assistant',
+        topicId: 'copy-large-topic',
+        // explicit historical stamps so the cross-batch fixup UPDATE would
+        // visibly restamp them if it forgot to restate `updatedAt`
+        updatedAt: new Date(base + i * 1000),
+        userId,
+        workspaceId,
+      }));
+      for (let i = 0; i < sourceRows.length; i += 400) {
+        await serverDB.insert(messages).values(sourceRows.slice(i, i + 400));
+      }
+      await serverDB
+        .update(messages)
+        // restate updatedAt: this seeding backfill would otherwise restamp the
+        // source row via $onUpdate before the copy even runs
+        .set({ parentId: 'copy-large-msg-0700', updatedAt: new Date(base) })
+        .where(eq(messages.id, 'copy-large-msg-0000'));
+
+      const wsRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
+      const result = await wsRepo.copyToWorkspace('copy-large-group', targetWorkspaceId, userId, {
+        includeConversationHistory: true,
+      });
+
+      expect(result).not.toBeNull();
+
+      const copiedMessages = await serverDB.query.messages.findMany({
+        where: (message, { eq }) => eq(message.groupId, result!.groupId),
+      });
+      expect(copiedMessages).toHaveLength(messageCount);
+      expect(copiedMessages.every((message) => message.workspaceId === targetWorkspaceId)).toBe(
+        true,
+      );
+      expect(copiedMessages.some((message) => message.id.startsWith('copy-large-msg-'))).toBe(
+        false,
+      );
+
+      const copiedByContent = new Map(copiedMessages.map((message) => [message.content, message]));
+      const copiedIds = new Set(copiedMessages.map((message) => message.id));
+
+      // the deferred fixup UPDATE restated `updatedAt` instead of letting
+      // `$onUpdate` restamp the cross-batch row to "now"
+      expect(copiedByContent.get('msg 0')?.updatedAt).toEqual(new Date(base));
+
+      // every in-order reply chain survived the chunked insert
+      for (let i = 1; i < messageCount; i += 2) {
+        expect(copiedByContent.get(`msg ${i}`)?.parentId).toBe(
+          copiedByContent.get(`msg ${i - 1}`)?.id,
+        );
+      }
+      // the forward reference into a later batch was backfilled after insert
+      expect(copiedByContent.get('msg 0')?.parentId).toBe(copiedByContent.get('msg 700')?.id);
+      // no copied parentId points outside the copied set
+      for (const message of copiedMessages) {
+        if (message.parentId) expect(copiedIds.has(message.parentId)).toBe(true);
+      }
     });
 
     it('removes workspace virtual agents created by another member', async () => {

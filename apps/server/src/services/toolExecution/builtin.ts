@@ -8,6 +8,7 @@ import {
 import { detectTruncatedJSON, safeParseJSON } from '@lobechat/utils';
 import debug from 'debug';
 
+import { UserModel } from '@/database/models/user';
 import { ComposioService } from '@/server/services/composio';
 import { MarketService } from '@/server/services/market';
 
@@ -49,14 +50,32 @@ const collectRuntimeApiNames = (runtime: Record<string, any>): string[] => {
 };
 
 export class BuiltinToolsExecutor implements IToolExecutor {
-  private marketService: MarketService;
   private db: LobeChatDatabase;
   private userId: string;
+  private _marketService?: MarketService;
 
   constructor(db: LobeChatDatabase, userId: string) {
     this.db = db;
     this.userId = userId;
-    this.marketService = new MarketService({ userInfo: { userId } });
+  }
+
+  private async getMarketService(): Promise<MarketService> {
+    if (this._marketService) return this._marketService;
+
+    let accessToken: string | undefined;
+    try {
+      const userModel = new UserModel(this.db, this.userId);
+      const settings = await userModel.getUserSettings();
+      accessToken = (settings?.market as any)?.accessToken;
+    } catch {
+      // non-fatal — MarketService will fall back to trustedClientToken
+    }
+
+    this._marketService = new MarketService({
+      accessToken,
+      userInfo: { userId: this.userId },
+    });
+    return this._marketService;
   }
 
   async execute(
@@ -107,7 +126,8 @@ export class BuiltinToolsExecutor implements IToolExecutor {
 
     // Route LobeHub Skills to MarketService
     if (source === 'lobehubSkill') {
-      const result = await this.marketService.executeLobehubSkill({
+      const marketService = await this.getMarketService();
+      const result = await marketService.executeLobehubSkill({
         args,
         context: {
           topicId: context.topicId,

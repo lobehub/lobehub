@@ -1,4 +1,4 @@
-import { boolean, index, pgTable, text, varchar } from 'drizzle-orm/pg-core';
+import { boolean, index, jsonb, pgTable, text, varchar } from 'drizzle-orm/pg-core';
 import { createInsertSchema } from 'drizzle-zod';
 
 import { createNanoId } from '../utils/idGenerator';
@@ -17,6 +17,10 @@ export const apiKeys = pgTable(
     key: varchar('key', { length: 256 }).notNull().unique(), // encrypted API key
     keyHash: varchar('key_hash', { length: 128 }).unique(), // hash of api key for authentication lookup
     enabled: boolean('enabled').default(true), // whether the API key is enabled
+    // capability scopes; NULL = full access (legacy keys), ['*'] = explicit full access.
+    // jsonb (not text[]) so the shape can evolve beyond a flat list later
+    // (e.g. per-scope status/metadata) without another column migration.
+    scopes: jsonb('scopes').$type<string[]>(),
     expiresAt: timestamptz('expires_at'), // expires time
     lastUsedAt: timestamptz('last_used_at'), // last used time
     userId: text('user_id')

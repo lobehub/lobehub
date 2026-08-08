@@ -4,6 +4,7 @@ import {
   GROUP_CHAT_TOPIC_URL,
   GROUP_CHAT_URL,
 } from '@lobechat/const';
+import { agentDisplayName } from '@lobechat/types';
 import { Avatar, Flexbox } from '@lobehub/ui';
 import { Command } from 'cmdk';
 import dayjs from 'dayjs';
@@ -35,6 +36,7 @@ import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { CommandItem } from './components';
 import { styles } from './styles';
+import { shouldShowMarketplaceFallback } from './utils/marketplaceFallback';
 import { type ValidSearchType } from './utils/queryParser';
 
 interface SearchResultsProps {
@@ -270,7 +272,9 @@ const SearchResults = memo<SearchResultsProps>(
               background={result.agent.backgroundColor || undefined}
               size={14}
             />
-            <span style={{ flex: 'none' }}>{result.agent.title || t('defaultAgent')}</span>
+            <span style={{ flex: 'none' }}>
+              {agentDisplayName(result.agent, t('defaultAgent'))}
+            </span>
             <span style={{ flex: 'none' }}>·</span>
             <span style={{ flex: 'none' }}>{formattedDate}</span>
             {description && (
@@ -605,10 +609,14 @@ const SearchResults = memo<SearchResultsProps>(
           </Command.Group>
         )}
 
-        {/* The aggregate search is DB-only, so marketplace hits never appear
-            above; keep permanent typed-search entries as the visible route into
-            marketplace discovery. */}
-        {!typeFilter && (
+        {/* Marketplace typed-search entries as the no-result fallback; see
+            shouldShowMarketplaceFallback for the rationale. */}
+        {shouldShowMarketplaceFallback({
+          hasLocalTopicResults,
+          hasResults,
+          isLoading,
+          typeFilter,
+        }) && (
           <Command.Group forceMount>
             {renderSearchMore('mcp', mcpResults.length)}
             {renderSearchMore('plugin', pluginResults.length)}

@@ -16,6 +16,10 @@ export interface ApiKeyItem {
   keyDecryptionFailed?: boolean;
   lastUsedAt?: Date | null;
   name: string;
+  // Capability scopes. `null`/absent = full access (legacy keys), `['*']` =
+  // explicit full access, otherwise a restricted scope list. Immutable after
+  // creation — re-issue the key to change its powers.
+  scopes?: string[] | null;
   updatedAt: Date;
   userId: string;
 }
@@ -23,6 +27,7 @@ export interface ApiKeyItem {
 export interface CreateApiKeyParams {
   expiresAt?: Date | null;
   name: string;
+  scopes?: string[] | null;
 }
 
 export interface UpdateApiKeyParams {

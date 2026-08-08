@@ -2,6 +2,7 @@ import { type AgentState } from '@lobechat/agent-runtime';
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { ToolNameResolver } from '@lobechat/context-engine';
 import { consumeStreamUntilDone, ModelEmptyError } from '@lobechat/model-runtime';
+import type * as ModelBank from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as ContextEngineering from '@/server/modules/Mecha/ContextEngineering';
@@ -78,10 +79,16 @@ vi.mock('@lobechat/model-runtime', async () => {
   // retry path and these tests share a single class identity for instanceof.
   const { isEmptyModelCompletion, ModelEmptyError } =
     await import('../../../../../../packages/model-runtime/src/errors/modelEmptyCompletion');
+  // Same treatment: the reasoning-config merge is pure, and the replay gate
+  // reads its output (e.g. the DeepSeek V4 thinking opt-out), so use the real
+  // implementation instead of a drifting stub.
+  const { resolveEffectiveReasoningChatConfig } =
+    await import('../../../../../../packages/model-runtime/src/utils/modelExtendParams');
   return {
     // The executor resolves extend params via this helper; an empty result keeps
     // the runtime payload unchanged, matching this suite's pre-existing behavior.
     applyModelExtendParams: vi.fn(() => ({})),
+    resolveEffectiveReasoningChatConfig,
     consumeStreamUntilDone: vi.fn().mockResolvedValue(undefined),
     // `llmErrorClassification.ts` reads these at module-load time; an empty
     // spec map is fine here because this suite never exercises the runtime
@@ -107,7 +114,11 @@ vi.mock('@/business/client/model-bank/loadModels', () => ({
 }));
 
 // model-bank is a TypeScript source file that cannot be dynamically imported in vitest
-vi.mock('model-bank', () => ({
+vi.mock('model-bank', async (importOriginal) => ({
+  // serverCallLlmContextHints gates the model-instance reasoning-config DB
+  // read on the real MODEL_REASONING_EXTEND_PARAMS list
+  MODEL_REASONING_EXTEND_PARAMS: (await importOriginal<typeof ModelBank>())
+    .MODEL_REASONING_EXTEND_PARAMS,
   LOBE_DEFAULT_MODEL_LIST: mockBuiltinModels,
   ModelProvider: {
     LobeHub: 'lobehub',
@@ -2218,31 +2229,31 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         expect(mockFindPlanDocuments).not.toHaveBeenCalled();
       });
 
-      it.each([
-        { items: [], updatedAt: 'canonical-clear' },
-        [],
-      ])('treats canonical and legacy empty message states as clear tombstones', async (todos) => {
-        mockFindPlanDocuments.mockResolvedValue([
-          {
-            metadata: {
-              todos: { items: [{ status: 'todo', text: 'Stale metadata task' }] },
+      it.each([{ items: [], updatedAt: 'canonical-clear' }, []])(
+        'treats canonical and legacy empty message states as clear tombstones',
+        async (todos) => {
+          mockFindPlanDocuments.mockResolvedValue([
+            {
+              metadata: {
+                todos: { items: [{ status: 'todo', text: 'Stale metadata task' }] },
+              },
+              updatedAt: new Date(),
             },
-            updatedAt: new Date(),
-          },
-        ]);
+          ]);
 
-        const content = await callWithMessages(
-          [
-            { content: 'cleared', pluginState: { todos }, role: 'tool' },
-            { content: 'Continue', role: 'user' },
-          ],
-          stateWithLobeAgent(),
-        );
+          const content = await callWithMessages(
+            [
+              { content: 'cleared', pluginState: { todos }, role: 'tool' },
+              { content: 'Continue', role: 'user' },
+            ],
+            stateWithLobeAgent(),
+          );
 
-        expect(content).not.toContain('<todo_context>');
-        expect(content).not.toContain('Stale metadata task');
-        expect(mockFindPlanDocuments).not.toHaveBeenCalled();
-      });
+          expect(content).not.toContain('<todo_context>');
+          expect(content).not.toContain('Stale metadata task');
+          expect(mockFindPlanDocuments).not.toHaveBeenCalled();
+        },
+      );
 
       it.each([
         {
@@ -4149,7 +4160,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       expect(result.newState.messages[2].id).toBe('tool-msg-1');
     });
 
-    it('should return last tool message ID as parentMessageId in nextContext', async () => {
+    it('anchors the next turn on the calling assistant, not the last tool message', async () => {
       let callCount = 0;
       mockMessageModel.create.mockImplementation(() => {
         callCount++;
@@ -4184,9 +4195,12 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
       const result = await executors.call_tools_batch!(instruction, state);
 
-      // parentMessageId should be the last created tool message ID
+      // A step is one LLM call, and the batch's tool rows are inline data of
+      // that call — so the continuation anchors on the assistant that emitted
+      // the batch. Anchoring on a tool row made the spine depend on which tool
+      // `Promise.all` settled last.
       const payload = result.nextContext!.payload as { parentMessageId?: string };
-      expect(payload.parentMessageId).toBe('created-tool-msg-2');
+      expect(payload.parentMessageId).toBe('assistant-msg-123');
       expect(result.nextContext!.phase).toBe('tools_batch_result');
     });
 

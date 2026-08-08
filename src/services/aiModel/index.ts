@@ -1,4 +1,5 @@
 import {
+  type AiModelReasoningConfig,
   type AiModelSortMap,
   type AiModelType,
   type AiProviderModelListItem,
@@ -40,6 +41,21 @@ export class AiModelService {
 
   updateAiModel = async (id: string, providerId: string, value: UpdateAiModelParams) => {
     return lambdaClient.aiModel.updateAiModel.mutate({ id, providerId, value });
+  };
+
+  getAiModelReasoningConfig = async (
+    id: string,
+    providerId: string,
+  ): Promise<AiModelReasoningConfig | undefined> => {
+    return lambdaClient.aiModel.getAiModelReasoningConfig.query({ id, providerId });
+  };
+
+  updateAiModelReasoningConfig = async (
+    id: string,
+    providerId: string,
+    value: AiModelReasoningConfig,
+  ) => {
+    return lambdaClient.aiModel.updateAiModelReasoningConfig.mutate({ id, providerId, value });
   };
 
   batchUpdateAiModels = async (id: string, models: AiProviderModelListItem[]) => {

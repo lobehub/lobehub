@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { AmpAdapter, ClaudeCodeAdapter, CodexAdapter, OpenCodeAdapter } from './adapters';
-import { createAdapter, listAgentTypes } from './registry';
+import {
+  AmpAdapter,
+  ClaudeCodeAdapter,
+  CodexAdapter,
+  OpenCodeAdapter,
+  PiAdapter,
+  QoderAdapter,
+} from './adapters';
+import { HETEROGENEOUS_AGENT_CONFIGS } from './config';
+import { createAdapter, listAgentTypes, listLocalAgentTypes } from './registry';
 
 describe('registry', () => {
   describe('createAdapter', () => {
@@ -24,18 +32,25 @@ describe('registry', () => {
       expect(createAdapter('opencode')).toBeInstanceOf(OpenCodeAdapter);
     });
 
+    it('creates a PiAdapter for "pi"', () => {
+      expect(createAdapter('pi')).toBeInstanceOf(PiAdapter);
+    });
+
+    it('creates a QoderAdapter for "qoder"', () => {
+      expect(createAdapter('qoder')).toBeInstanceOf(QoderAdapter);
+    });
+
     it('throws for unknown agent type', () => {
       expect(() => createAdapter('unknown-agent')).toThrow('Unknown agent type: "unknown-agent"');
     });
   });
 
   describe('listAgentTypes', () => {
-    it('includes every local CLI adapter', () => {
-      const types = listAgentTypes();
-      expect(types).toContain('amp');
-      expect(types).toContain('claude-code');
-      expect(types).toContain('codex');
-      expect(types).toContain('opencode');
+    it('registers exactly one local adapter for every descriptor', () => {
+      expect(listLocalAgentTypes().toSorted()).toEqual(
+        HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type).toSorted(),
+      );
+      expect(listAgentTypes()).toContain('claude-code-sdk');
     });
   });
 });

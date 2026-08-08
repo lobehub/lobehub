@@ -3,8 +3,11 @@ import { homedir, platform } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
+import type { LocalHeterogeneousAgentType } from '../config';
+import { HETEROGENEOUS_AGENT_CONFIGS } from '../config';
+
 /**
- * Shared resolver for external CLI-agent binaries (Amp / Claude Code / Codex / OpenCode).
+ * Shared resolver for external CLI-agent binaries (Amp / Claude Code / Codex / OpenCode / Pi / Qoder).
  *
  * This is the single source of truth for "given a command name, where is the
  * runnable binary?". It's consumed by BOTH spawn sites:
@@ -20,7 +23,7 @@ import { promisify } from 'node:util';
 const execFilePromise = promisify(execFile);
 const execPromise = promisify(exec);
 
-export type HeterogeneousCliAgentType = 'amp' | 'claude-code' | 'codex' | 'opencode';
+export type HeterogeneousCliAgentType = LocalHeterogeneousAgentType;
 
 /**
  * Resolution result. A structural subset of the desktop `BinaryManager`'s
@@ -260,17 +263,22 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
     // `--version`, without a product-name prefix.
     validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
   },
+  'pi': {
+    // Pi prints a bare semantic version for `--version`.
+    validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
+  },
+  'qoder': {
+    // Qoder prints a bare semantic version for `--version`.
+    validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
+  },
 } as const satisfies Record<HeterogeneousCliAgentType, ValidateOptions>;
 
 // The default (bare) command each agent type is shipped to run. The well-known
 // fallback locations below hold *this* binary, so they may only be probed when
 // the requested command is the default — never for a custom command.
-export const DEFAULT_HETERO_COMMAND: Record<HeterogeneousCliAgentType, string> = {
-  'amp': 'amp',
-  'claude-code': 'claude',
-  'codex': 'codex',
-  'opencode': 'opencode',
-};
+export const DEFAULT_HETERO_COMMAND = Object.fromEntries(
+  HETEROGENEOUS_AGENT_CONFIGS.map(({ defaultCommand, type }) => [type, defaultCommand]),
+) as Record<HeterogeneousCliAgentType, string>;
 
 // Well-known absolute install locations probed when a bare command isn't on
 // PATH. This covers GUI-launched apps with a lean launchd PATH: Claude's
@@ -322,6 +330,25 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
         path.join(homedir(), '.bun', 'bin', 'opencode'),
         path.join(homedir(), '.npm-global', 'bin', 'opencode'),
         path.join(homedir(), 'Library', 'pnpm', 'opencode'),
+      ];
+    }
+    case 'pi': {
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+
+      return [
+        path.join(homedir(), '.local', 'bin', 'pi'),
+        path.join(homedir(), '.npm-global', 'bin', 'pi'),
+        path.join(homedir(), 'Library', 'pnpm', 'pi'),
+      ];
+    }
+    case 'qoder': {
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+
+      return [
+        path.join(homedir(), '.local', 'bin', 'qodercli'),
+        path.join(homedir(), '.bun', 'bin', 'qodercli'),
+        path.join(homedir(), '.npm-global', 'bin', 'qodercli'),
+        path.join(homedir(), 'Library', 'pnpm', 'qodercli'),
       ];
     }
     default: {

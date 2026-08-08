@@ -4,6 +4,7 @@ import type { OpenAIChatMessage } from '@/types/index';
 
 import { ContextEngine } from '../../pipeline';
 import {
+  ActivationResultTrimProcessor,
   AgentCouncilFlattenProcessor,
   CompressedGroupRoleTransformProcessor,
   DisabledToolCallFilter,
@@ -51,7 +52,9 @@ import {
   PageEditorContextInjector,
   PageSelectionsInjector,
   PlanInjector,
+  selectActivatedSkills,
   SelectedSkillInjector,
+  selectToolPromptManifests,
   SkillContextProvider,
   SystemDateProvider,
   SystemRoleInjector,
@@ -222,6 +225,21 @@ export class MessagesEngine {
       .find((m) => m.role === 'user' && typeof m.content === 'string')?.content as
       string | undefined;
 
+    // Mirror the injection gates of SkillContextProvider / ToolSystemRoleProvider
+    // (enable flags + FC support + the shared select predicates) so
+    // ActivationResultTrimProcessor only trims activation tool results whose full
+    // documentation is confirmed to be injected into the system prompt for this
+    // request — see LOBE-5684.
+    const canUseFC = capabilities?.isCanUseFC || (() => true);
+    const injectedActivatedSkills =
+      isAgentMode && (skillsConfig?.enabledSkills?.length ?? 0) > 0
+        ? selectActivatedSkills(skillsConfig?.enabledSkills)
+        : [];
+    const injectedToolManifests =
+      (toolsConfig?.manifests?.length ?? 0) > 0 && !!canUseFC(model, provider)
+        ? selectToolPromptManifests(toolsConfig?.manifests)
+        : [];
+
     // Shared config for all agent document injectors
     const agentDocConfig = {
       currentUserMessage,
@@ -270,6 +288,7 @@ export class MessagesEngine {
         knowledgeCutoff: modelKnowledgeCutoff,
         modelId: model,
         nativeMediaCapabilities: {
+          audio: capabilities?.isCanUseAudio?.(model, provider),
           video: capabilities?.isCanUseVideo?.(model, provider),
           vision: capabilities?.isCanUseVision?.(model, provider),
         },
@@ -474,6 +493,17 @@ export class MessagesEngine {
             }),
           ]
         : []),
+      // Dynamic-activation result trimming — replaces activateTools /
+      // activateSkill tool-result documents that are ALSO injected into the
+      // system prompt (by ToolSystemRoleProvider / SkillContextProvider above)
+      // with a short confirmation, so each activated document reaches the LLM
+      // payload exactly once. MUST run AFTER the flatten steps (grouped /
+      // compressed tool rows are only hoisted back to `role: 'tool'` with
+      // plugin/pluginState there) and BEFORE ToolCallProcessor.
+      new ActivationResultTrimProcessor({
+        injectedManifests: injectedToolManifests,
+        injectedSkills: injectedActivatedSkills,
+      }),
       // Placeholder variables processing — MUST run AFTER all flatten / role
       // transform steps. AssistantGroup / Supervisor messages keep their real
       // content (including any `{{...}}` placeholders inside tool results)

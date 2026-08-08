@@ -14,7 +14,14 @@ import { memoryExecutor } from '@lobechat/builtin-tool-memory/executor';
 import { taskExecutor } from '@lobechat/builtin-tool-task/client/executor';
 
 import type { IBuiltinToolExecutor } from '../types';
-import { ampExecutor, claudeCodeExecutor, codexExecutor, openCodeExecutor } from './heteroCli';
+import {
+  ampExecutor,
+  claudeCodeExecutor,
+  codexExecutor,
+  openCodeExecutor,
+  piExecutor,
+  qoderExecutor,
+} from './heteroCli';
 import { activatorExecutor } from './lobe-activator';
 import { agentDocumentsExecutor } from './lobe-agent-documents';
 import { messageExecutor } from './lobe-message';
@@ -34,6 +41,8 @@ export const builtinToolExecutors = [
   claudeCodeExecutor,
   codexExecutor,
   openCodeExecutor,
+  piExecutor,
+  qoderExecutor,
   agentBuilderExecutor,
   agentDocumentsExecutor,
   agentManagementExecutor,

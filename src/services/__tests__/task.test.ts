@@ -17,6 +17,7 @@ vi.mock('@/libs/trpc/client', () => ({
       clearAll: { mutate: vi.fn() },
       create: { mutate: vi.fn() },
       delete: { mutate: vi.fn() },
+      deleteGoal: { mutate: vi.fn() },
       deleteComment: { mutate: vi.fn() },
       deleteTopic: { mutate: vi.fn() },
       detail: { query: vi.fn() },
@@ -100,6 +101,11 @@ describe('TaskService', () => {
     it('delete should call task.delete.mutate', async () => {
       await taskService.delete('T-1');
       expect(lambdaClient.task.delete.mutate).toHaveBeenCalledWith({ id: 'T-1' });
+    });
+
+    it('deleteGoal should call the subtree deletion endpoint', async () => {
+      await taskService.deleteGoal('GOAL-1');
+      expect(lambdaClient.task.deleteGoal.mutate).toHaveBeenCalledWith({ id: 'GOAL-1' });
     });
 
     it('updateStatus should pass status directly', async () => {

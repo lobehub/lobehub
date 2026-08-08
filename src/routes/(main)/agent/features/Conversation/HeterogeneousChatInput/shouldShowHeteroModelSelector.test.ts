@@ -72,6 +72,59 @@ describe('shouldShowHeteroModelSelector', () => {
     ).toBe(true);
   });
 
+  it('shows Pi models for desktop-local execution and an explicit bound device', () => {
+    expect(
+      shouldShowHeteroModelSelector({
+        executionTarget: 'local',
+        isDesktopClient: true,
+        providerType: 'pi',
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowHeteroModelSelector({
+        boundDeviceId: 'remote-device',
+        executionTarget: 'device',
+        isDesktopClient: false,
+        providerType: 'pi',
+      }),
+    ).toBe(true);
+  });
+
+  it('hides Pi models without a concrete supported target', () => {
+    expect(
+      shouldShowHeteroModelSelector({
+        executionTarget: 'auto',
+        isDesktopClient: false,
+        providerType: 'pi',
+      }),
+    ).toBe(false);
+  });
+
+  it('shows Qoder models only when a concrete catalog target is available', () => {
+    expect(
+      shouldShowHeteroModelSelector({
+        executionTarget: 'local',
+        isDesktopClient: true,
+        providerType: 'qoder',
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowHeteroModelSelector({
+        boundDeviceId: 'remote-device',
+        executionTarget: 'device',
+        isDesktopClient: false,
+        providerType: 'qoder',
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowHeteroModelSelector({
+        executionTarget: 'auto',
+        isDesktopClient: false,
+        providerType: 'qoder',
+      }),
+    ).toBe(false);
+  });
+
   it.each([
     ['device', undefined],
     ['auto', 'remote-device'],

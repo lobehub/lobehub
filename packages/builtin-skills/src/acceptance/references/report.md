@@ -11,22 +11,38 @@ its evidence inline — **images render as figures, before/after pairs render
 under tinted comparison bands**. A chat-only summary or a bare markdown report
 never gets that rendering; the structured round does.
 
+## Contents
+
+- [No operation ID needed](#no-operation-id-needed)
+- [Immutable rounds](#rounds-are-immutable)
+- [Directory layout](#directory-layout)
+- [Workflow](#workflow)
+- [result.json schema](#resultjson-schema)
+- [Rules](#rules)
+
 Rule of thumb: **plan exists → per-criterion submit; you author the checks →
 structured round ingest.** Never mix both for the same delivery round.
 
 ## No operation id needed
 
-`--operation` is optional on every command in this skill. Without one you have
-two ways to own a round, and both are first-class (the server records them as
-`standalone`):
+`--operation` is optional on every command in this skill. Without one, author
+the checks and use one of these first-class paths:
 
 ```bash
-# A. one directory, one command — preferred when you have assets on disk
-lh acceptance run ingest topic:tpc_xxx --json < report-dir > --subject
+REPORT_DIR=./acceptance-report
 
-# B. create the round first, then submit into it with --run
+# A. first external-project round — creates a standalone acceptance automatically
+lh acceptance run ingest "$REPORT_DIR" --json
+
+# Re-verification — append a new immutable round to the same acceptance
+lh acceptance run ingest "$REPORT_DIR" --acceptance "$ACCEPTANCE_ID" --json
+
+# Existing LobeHub subject — group by a Task, Topic, or Document
+lh acceptance run ingest "$REPORT_DIR" --subject topic:tpc_xxx --json
+
+# B. atomic fallback — create the round first, then submit into it with --run
 RUN=$(lh acceptance run create --title "…" --goal "…" --json | jq -r .id)
-lh acceptance run result submit --run "$RUN" --item < checkItemId > …
+lh acceptance run result submit --run "$RUN" --item "$CHECK_ITEM_ID" …
 ```
 
 Prefer **A**: per-criterion submits without a plan produce checks with no
@@ -39,7 +55,8 @@ re-submit into the previous round to make it look green — publish the
 re-verification as the next round. The acceptance
 (`/acceptance/<acceptanceId>`) aggregates the rounds in order, so the repair
 history is the point, not something to hide. Reuse the same `--subject` across
-rounds; that is what groups them.
+rounds for a LobeHub object, or pass `--acceptance <acceptanceId>` after an
+external project's first standalone round.
 
 ## Directory layout
 
@@ -76,15 +93,17 @@ Any directory works — no repo convention required:
 6. **Publish:**
 
    ```bash
-   lh acceptance run ingest topic:tpc_xxx --source agent-testing --json < report-dir > --subject
+   lh acceptance run ingest "$REPORT_DIR" --source agent-testing --json
    ```
 
-   Inside a LobeHub topic `--subject` may be omitted (defaults to the current
-   topic); outside one it is mandatory (`task:` | `topic:` | `document:`). The
-   command creates a new immutable round, uploads cases + evidence + report
-   body, and prints `/verify/<verifyRunId>` and `/acceptance/<acceptanceId>` —
-   include the full URLs in your final reply. Never update a prior round after
-   a fix; publish the re-verification as the next round.
+   Inside a LobeHub topic, the command groups the round under the current topic.
+   Outside one, it creates a standalone acceptance automatically; no Task ID is
+   required. To publish a repair into that same history, add
+   `--acceptance <acceptanceId>` using the ID printed by the first ingest. The
+   command uploads cases + evidence + report body and prints
+   `/verify/<verifyRunId>` and `/acceptance/<acceptanceId>` — include the full
+   URLs in your final reply. Never update a prior round after a fix; publish the
+   re-verification as the next round.
 
 ## result.json schema
 
@@ -147,18 +166,28 @@ free prose; they render under the check next to the outcome.
 ### Before/after comparison pairs
 
 The page renders a complete pair under tinted bands (red `before`, green
-`after`). Both halves need the same string `id`; set `layout`
-(`horizontal` default; `vertical` for wide, short strips) and a `label` stating
-the measured delta on each side:
+`after`). Both halves need the same string `id`; use `layout: "horizontal"` for
+a left/right comparison and `layout: "vertical"` for a top/bottom comparison.
+When omitted, `layout` defaults to `horizontal`. Add a `label` stating the
+measured delta on each side:
 
 ```json
 "evidence": [
   { "path": "assets/before.png",
-    "comparison": { "id": "topic-row", "role": "before", "layout": "vertical", "label": "before: 11px" } },
+    "comparison": { "id": "topic-row", "role": "before", "layout": "horizontal", "label": "before: 11px" } },
   { "path": "assets/after.png",
-    "comparison": { "id": "topic-row", "role": "after", "layout": "vertical", "label": "after: 12px" } }
+    "comparison": { "id": "topic-row", "role": "after", "layout": "horizontal", "label": "after: 12px" } }
 ]
 ```
+
+Choose the layout by comparison intent, not by the source image dimensions:
+
+- `horizontal` — before on the left, after on the right. Use it when the reader
+  should compare the same region across two versions at a glance. This is the
+  normal choice for full-page or full-window before/after screenshots.
+- `vertical` — before on top, after below. Use it when preserving each image's
+  full width matters more than simultaneous scanning, such as a very wide,
+  shallow toolbar or timeline strip.
 
 A comparison pair means the same view in two states — sequential steps of a
 flow are ordinary ordered evidence with captions, not a pair.

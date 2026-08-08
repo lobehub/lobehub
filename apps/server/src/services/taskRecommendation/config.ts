@@ -62,9 +62,9 @@ export interface TaskRecommendationConfig {
 /** Default recommendation policy kept in one injectable configuration object. */
 export const defaultTaskRecommendationConfig: TaskRecommendationConfig = {
   allocation: {
-    maxPerProvider: 6,
+    maxPerProvider: 2,
     minPerProvider: 2,
-    targetTotal: 9,
+    targetTotal: 4,
   },
   providers: {
     github: {

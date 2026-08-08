@@ -16,6 +16,12 @@ export default {
   'features.claudeCodeSdk.desc':
     'Run Claude Code sessions through the Claude Agent SDK instead of spawning the CLI. Enables richer streaming and session control.',
   'features.claudeCodeSdk.title': 'Claude Code SDK Runtime',
+  'features.codexAppServer.desc':
+    'Run Codex sessions through the local app-server instead of one-shot CLI processes. Enables token streaming and native turn control.',
+  'features.codexAppServer.title': 'Codex App Server Runtime',
+  'features.desktopSplitView.desc':
+    'Show two desktop tabs side by side, with independent navigation and a resizable divider.',
+  'features.desktopSplitView.title': 'Split Tab View',
   'features.heteroSessionImport.desc':
     'Add an "Import Local Agent Sessions" entry to the topic list menu: scan local Claude Code / Codex CLI transcripts and import them as topics, with incremental sync on re-import.',
   'features.heteroSessionImport.title': 'Local Agent Session Import',
@@ -36,9 +42,6 @@ export default {
   'features.oauthApps.desc':
     'Show OAuth app management in personal and workspace settings. This feature is hidden by default.',
   'features.oauthApps.title': 'OAuth Apps',
-  'features.platformAgent.desc':
-    'Show the "Connect Agent" entry in the create menu. Connected agents (e.g. OpenClaw, Hermes) run on your own devices and communicate back via lh connect.',
-  'features.platformAgent.title': 'Connect Agent',
   'features.taskVerify.desc':
     'Add a delivery-acceptance section to the task detail: describe acceptance in one sentence and let AI generate editable verify criteria.',
   'features.taskVerify.title': 'Task Delivery Acceptance',
@@ -47,5 +50,11 @@ export default {
   'features.topicAcceptance.title': 'Topic Acceptance',
   'group.desktop': 'Desktop',
   'group.general': 'General',
+  'stage.alpha.desc':
+    'Internal testing only. Not recommended for daily use yet — it may change or break at any time.',
+  'stage.alpha.label': 'Alpha',
+  'stage.beta.desc':
+    'Relatively usable. The core flow works, while details are still being polished.',
+  'stage.beta.label': 'Beta',
   'title': 'Labs',
 };

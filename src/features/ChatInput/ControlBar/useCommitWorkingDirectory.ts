@@ -69,7 +69,7 @@ const toAgentWorkingDirConfig = (entry: WorkingDirEntry): WorkingDirConfig => ({
  * per-cwd), so warn before the reset and clear the stale session id as part of
  * the same metadata write — same as the legacy pickers.
  */
-export const useCommitWorkingDirectory = (agentId: string) => {
+export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string | null) => {
   const { t } = useTranslation(['plugin', 'chat']);
 
   // The RAW shared config — every write below spreads it back into
@@ -93,9 +93,10 @@ export const useCommitWorkingDirectory = (agentId: string) => {
     (s) => s.localAgentWorkingDirectoryMap[agentId],
   );
 
-  const activeTopicId = useChatStore((s) => s.activeTopicId);
+  const globalActiveTopicId = useChatStore((s) => s.activeTopicId);
+  const activeTopicId = routeTopicId === undefined ? globalActiveTopicId : routeTopicId;
   const activeTopic = useChatStore((s) =>
-    s.activeTopicId ? topicSelectors.getTopicById(s.activeTopicId)(s) : undefined,
+    activeTopicId ? topicSelectors.getTopicById(activeTopicId)(s) : undefined,
   );
   const updateTopicMetadata = useChatStore((s) => s.updateTopicMetadata);
 

@@ -5,12 +5,12 @@ import useSWR from 'swr';
 
 import { isDesktop } from '@/const/version';
 import { type SearchResult } from '@/database/repositories/search';
+import { useCreateMenuItems } from '@/features/HomeSidebar/hooks';
 import { useCreateNewModal } from '@/features/LibraryModal';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { useGroupWizard } from '@/layout/GlobalProvider/GroupWizardProvider';
 import { lambdaClient } from '@/libs/trpc/client';
-import { useCreateMenuItems } from '@/routes/(main)/home/_layout/hooks';
 import { electronSystemService } from '@/services/electron/system';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors/builtinAgentSelectors';

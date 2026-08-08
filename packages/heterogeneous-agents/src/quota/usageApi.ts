@@ -22,9 +22,13 @@ export interface ClaudeUsageWindow {
 }
 
 export interface ClaudeUsagePayload {
+  /** Pre-`limits[]` spellings of the model-scoped weekly window. */
+  fable_seven_day?: ClaudeUsageWindow | null;
+  fable_weekly?: ClaudeUsageWindow | null;
   five_hour?: ClaudeUsageWindow | null;
   limits?: ClaudeUsageLimit[];
   seven_day?: ClaudeUsageWindow | null;
+  seven_day_fable?: ClaudeUsageWindow | null;
 }
 
 /** < 1e12 → epoch seconds; otherwise already epoch ms. */
@@ -95,5 +99,18 @@ export const mapClaudeUsageToReadings = (
       utilization: utilOf(payload.seven_day),
     });
   }
+
+  // The model-scoped weekly had a top-level codename before `limits[]` existed.
+  const fable = payload.fable_weekly ?? payload.fable_seven_day ?? payload.seven_day_fable;
+  if (fable) {
+    readings.push({
+      capturedAt,
+      limitType: 'weekly_scoped',
+      resetsAt: parseResetsAt(fable.resets_at),
+      scopeKey: 'Fable',
+      utilization: utilOf(fable),
+    });
+  }
+
   return readings;
 };

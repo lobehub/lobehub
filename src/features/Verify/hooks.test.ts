@@ -72,10 +72,15 @@ describe('Verify data hooks', () => {
     expect(getAcceptanceBySubject).toHaveBeenCalledWith('task', 'T-231');
   });
 
-  it('polls while a task has no acceptance and stops after one is created', () => {
+  it('polls fastest before an acceptance exists, then keeps it live until it settles', () => {
     expect(getAcceptanceBySubjectRefreshInterval(undefined)).toBe(2000);
     expect(getAcceptanceBySubjectRefreshInterval(null)).toBe(2000);
-    expect(getAcceptanceBySubjectRefreshInterval({ id: 'acceptance-1' })).toBe(0);
+    // A task page left open through a goal loop would otherwise keep rendering
+    // whatever state it first saw, all the way through delivery.
+    expect(getAcceptanceBySubjectRefreshInterval({ id: 'a1', status: 'verifying' })).toBe(5000);
+    expect(getAcceptanceBySubjectRefreshInterval({ id: 'a1', status: 'delivered' })).toBe(5000);
+    expect(getAcceptanceBySubjectRefreshInterval({ id: 'a1', status: 'accepted' })).toBe(0);
+    expect(getAcceptanceBySubjectRefreshInterval({ id: 'a1', status: 'closed' })).toBe(0);
   });
 
   it('does not request rubrics while rubric authoring is inactive', async () => {

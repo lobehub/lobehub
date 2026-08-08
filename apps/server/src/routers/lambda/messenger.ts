@@ -1,3 +1,4 @@
+import { MESSENGER_PUSH_CONTENT_MAX_LENGTH } from '@lobechat/builtin-tool-message';
 import { fetchQrCode, pollQrStatus } from '@lobechat/chat-adapter-wechat';
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
@@ -842,7 +843,7 @@ export const messengerRouter = router({
   sendMessengerPush: messengerProcedure
     .input(
       z.object({
-        content: z.string().trim().min(1).max(2000),
+        content: z.string().trim().min(1).max(MESSENGER_PUSH_CONTENT_MAX_LENGTH),
         platform: z.enum(MESSENGER_PUSH_PLATFORMS),
         tenantId: z.string().optional(),
       }),
@@ -970,6 +971,15 @@ export const messengerRouter = router({
         })),
     );
 
+    // Telegram is deliberately absent here even though the account link makes it
+    // reachable. This list doubles as send-target discovery for the client tool
+    // adapter, which resolves a per-agent `botId` from `platform` and ignores
+    // `messengerInstallationId` (see LOBE-12706). Surfacing the synthetic
+    // singleton would turn a clean "I can't reach Telegram" into a confusing
+    // `No enabled bot found for platform "telegram"` for anyone who linked the
+    // System Bot but has no per-agent Telegram provider. Reaching the user
+    // themselves does not need this list at all — that is `sendMessengerPush`,
+    // which routes through the account link directly.
     return [...installationViews, ...wechatViews];
   }),
 

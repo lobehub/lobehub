@@ -5,6 +5,10 @@ import { useChatStore } from '@/store/chat';
 import { isLocalOnlyMessage } from '../../../../utils/localMessages';
 import { type Store as ConversationStore } from '../../../action';
 
+interface ConversationSendMessageParams extends SendMessageParams {
+  onPreflightFailure?: () => void;
+}
+
 /**
  * Send a message in this conversation
  *
@@ -19,15 +23,22 @@ export const sendMessage = (
   set: (partial: Partial<ConversationStore>) => void,
   get: () => ConversationStore,
 ) => {
-  return async (params: SendMessageParams) => {
+  return async (params: ConversationSendMessageParams) => {
     const state = get();
     const { context, editor, hooks, displayMessages } = state;
 
     // ===== Hook: onBeforeSendMessage =====
     if (hooks.onBeforeSendMessage) {
-      const result = await hooks.onBeforeSendMessage(params);
+      let result: boolean | void;
+      try {
+        result = await hooks.onBeforeSendMessage(params);
+      } catch (error) {
+        params.onPreflightFailure?.();
+        throw error;
+      }
       if (result === false) {
         console.info('[ConversationStore] sendMessage blocked by onBeforeSendMessage hook');
+        params.onPreflightFailure?.();
         return;
       }
     }

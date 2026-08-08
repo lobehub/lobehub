@@ -15,10 +15,10 @@ import { type ChangeEvent } from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useCurrentFolderId } from '@/features/ResourceManager/hooks/useCurrentFolderId';
 import { useTopLevelFileUpload } from '@/features/ResourceManager/hooks/useTopLevelFileUpload';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { usePermission } from '@/hooks/usePermission';
-import { useCurrentFolderId } from '@/routes/(main)/resource/features/hooks/useCurrentFolderId';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { useFileStore } from '@/store/file';
 import { FilesTabs } from '@/types/files';
 

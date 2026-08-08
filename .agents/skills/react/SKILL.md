@@ -37,6 +37,7 @@ If unsure about available components, search existing code or check `node_module
 | `Switch`                                   | `import { Switch } from '@lobehub/ui/base-ui';`                                                         |
 | `Toast`                                    | `import { Toast } from '@lobehub/ui/base-ui';`                                                          |
 | `FloatingSheet`                            | `import { FloatingSheet } from '@lobehub/ui/base-ui';`                                                  |
+| `Drawer`                                   | `import { Drawer } from '@lobehub/ui/base-ui';`                                                         |
 
 For Modal specifically, see the dedicated **modal** skill — use the imperative `createModal({ content: … })` pattern over the legacy `<Modal open … />` declarative pattern. base-ui has its own `ModalHost` already mounted in `SPAGlobalProvider`.
 
@@ -49,7 +50,7 @@ For Modal specifically, see the dedicated **modal** skill — use the imperative
 | General      | ActionIcon, ActionIconGroup, Block, Button, Icon                                      |
 | Data Display | Avatar, Collapse, Empty, Highlighter, Markdown, Tag, Tooltip                          |
 | Data Entry   | CodeEditor, CopyButton, EditableText, Form, Input, InputPassword, SearchBar, TextArea |
-| Feedback     | Alert, Drawer                                                                         |
+| Feedback     | Alert                                                                                 |
 | Layout       | Center, DraggablePanel, Flexbox, Grid, Header, MaskShadow                             |
 | Navigation   | Burger, Menu, SideNav, Tabs                                                           |
 

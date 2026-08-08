@@ -314,6 +314,26 @@ describe('LobeOpenAI', () => {
       expect(createCall.model).toBe('gpt-5.6-sol');
     });
 
+    it('should prune sampling parameters for Codex-prefixed GPT-5.6 models', async () => {
+      const payload = {
+        frequency_penalty: 0.5,
+        messages: [{ content: 'Hello', role: 'user' as const }],
+        model: 'codex/gpt-5.6-luna',
+        presence_penalty: 0.3,
+        temperature: 0.7,
+        top_p: 0.9,
+      };
+
+      await instance.chat(payload);
+
+      expect(instance['client'].responses.create).toHaveBeenCalled();
+      const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
+      expect(createCall.frequency_penalty).toBeUndefined();
+      expect(createCall.presence_penalty).toBeUndefined();
+      expect(createCall.temperature).toBeUndefined();
+      expect(createCall.top_p).toBeUndefined();
+    });
+
     it('should use responses API when enabledSearch is true', async () => {
       const payload = {
         enabledSearch: true,

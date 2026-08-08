@@ -176,6 +176,78 @@ describe('tabPages actions', () => {
     });
   });
 
+  describe('split view', () => {
+    const seed = () => {
+      const { result } = renderHook(() => useElectronStore());
+      const tabs = [buildTab('/left'), buildTab('/right'), buildTab('/third')];
+
+      act(() => {
+        useElectronStore.setState({ activeTabId: '/left', splitView: null, tabs });
+      });
+      return result;
+    };
+
+    it('opens another tab in the secondary pane and focuses it', () => {
+      const result = seed();
+
+      act(() => {
+        result.current.openTabInSplitView('/right');
+      });
+
+      expect(result.current.activeTabId).toBe('/right');
+      expect(result.current.splitView).toEqual({
+        primaryTabId: '/left',
+        ratio: 0.5,
+        secondaryTabId: '/right',
+      });
+    });
+
+    it('duplicates the active tab so each pane owns an independent router', () => {
+      const result = seed();
+      let secondaryTabId: string | null = null;
+
+      act(() => {
+        secondaryTabId = result.current.openTabInSplitView('/left');
+      });
+
+      expect(secondaryTabId).not.toBe('/left');
+      expect(result.current.tabs).toHaveLength(4);
+      expect(result.current.tabs.at(-1)?.url).toBe('/left');
+      expect(result.current.splitView?.secondaryTabId).toBe(secondaryTabId);
+    });
+
+    it('replaces the focused pane when a third tab is activated', () => {
+      const result = seed();
+      act(() => result.current.openTabInSplitView('/right'));
+      act(() => result.current.focusTabPane('/left'));
+      act(() => result.current.activateTab('/third'));
+
+      expect(result.current.splitView).toMatchObject({
+        primaryTabId: '/third',
+        secondaryTabId: '/right',
+      });
+      expect(result.current.activeTabId).toBe('/third');
+    });
+
+    it('collapses to the remaining pane when one visible tab closes', () => {
+      const result = seed();
+      act(() => result.current.openTabInSplitView('/right'));
+      act(() => result.current.removeTab('/right'));
+
+      expect(result.current.splitView).toBeNull();
+      expect(result.current.activeTabId).toBe('/left');
+    });
+
+    it('clamps the divider ratio to usable pane widths', () => {
+      const result = seed();
+      act(() => result.current.openTabInSplitView('/right'));
+      act(() => result.current.setSplitRatio(0.9));
+      expect(result.current.splitView?.ratio).toBe(0.75);
+      act(() => result.current.setSplitRatio(0.1));
+      expect(result.current.splitView?.ratio).toBe(0.25);
+    });
+  });
+
   describe('updateTab', () => {
     it('drops cached data when the tab navigates to a different page but keeps the id stable', () => {
       const { result } = renderHook(() => useElectronStore());

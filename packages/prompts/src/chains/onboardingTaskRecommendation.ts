@@ -98,6 +98,7 @@ export const DEFAULT_ONBOARDING_TASK_RECOMMENDATION_PROMPT_CONFIG = {
   writing: {
     instructionPrinciples: [
       'Write two to four sentences addressed directly to an autonomous agent. State the background work it can perform, the concrete private deliverable it must return, and the completion criteria.',
+      'Select only the highest-value recommendations for this provider. Rank evidence by urgency, recurrence, user impact, and leverage; when the limit is two, return the two strongest distinct candidates in that order. Skip low-signal, generic, duplicated, or merely convenient work.',
       'Include enough project, person, or subject context for the Inbox agent to execute the task without guessing which similarly named work item is intended.',
       'Preserve uncertainty from the evidence and state any user approval boundary explicitly.',
       'Prefer tasks that can finish asynchronously without interrupting the user: gather evidence, analyze activity, summarize, compare, prioritize, or prepare a draft, checklist, report, or patch plan.',

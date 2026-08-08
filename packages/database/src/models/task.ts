@@ -1,6 +1,7 @@
 import type {
   CheckpointConfig,
   NewTask,
+  TaskGoalConfig,
   TaskItem,
   TaskVerifyConfig,
   WorkspaceData,
@@ -28,6 +29,8 @@ import { merge } from '@/utils/merge';
 import { documents } from '../schemas/file';
 import type { NewTaskComment, TaskCommentItem } from '../schemas/task';
 import { taskComments, taskDependencies, taskDocuments, tasks, taskTopics } from '../schemas/task';
+import { topics } from '../schemas/topic';
+import { acceptances } from '../schemas/verify';
 import { works } from '../schemas/work';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
@@ -432,6 +435,33 @@ export class TaskModel {
     return result.length;
   }
 
+  /** Delete a task and every descendant in one transaction. */
+  async deleteSubtree(rootTaskId: string): Promise<number> {
+    const descendants = await this.findAllDescendants(rootTaskId);
+    const taskIds = [rootTaskId, ...descendants.map(({ id }) => id)];
+
+    return this.db.transaction(async (tx) => {
+      await tx
+        .delete(acceptances)
+        .where(
+          and(
+            eq(acceptances.subjectType, 'task'),
+            inArray(acceptances.subjectId, taskIds),
+            buildWorkspaceWhere(
+              { userId: this.userId, workspaceId: this.workspaceId },
+              { userId: acceptances.userId, workspaceId: acceptances.workspaceId },
+            ),
+          ),
+        );
+      const result = await tx
+        .delete(tasks)
+        .where(and(inArray(tasks.id, taskIds), this.ownership()))
+        .returning({ id: tasks.id });
+
+      return result.length;
+    });
+  }
+
   // ========== Query ==========
 
   async groupList(options: {
@@ -443,6 +473,8 @@ export class TaskModel {
       statuses: string[];
     }>;
     parentTaskId?: string | null;
+    /** Only return tasks carrying the goal-controller marker in `config.goal`. */
+    hasGoal?: boolean;
     /** Same semantics as `list({ visibility })` — UI narrowing on top of the
      *  already ownership-filtered set. */
     visibility?: 'private' | 'public';
@@ -456,10 +488,12 @@ export class TaskModel {
       total: number;
     }>
   > {
-    const { groups, assigneeAgentId, parentTaskId, visibility } = options;
+    const { groups, assigneeAgentId, hasGoal, parentTaskId, visibility } = options;
 
     const baseConditions = [this.ownership()];
     if (assigneeAgentId) baseConditions.push(eq(tasks.assigneeAgentId, assigneeAgentId));
+    if (hasGoal === true) baseConditions.push(sql`COALESCE(${tasks.config} ->> 'goal', '') <> ''`);
+    if (hasGoal === false) baseConditions.push(sql`COALESCE(${tasks.config} ->> 'goal', '') = ''`);
     if (visibility) baseConditions.push(eq(tasks.visibility, visibility));
     if (parentTaskId === null) {
       baseConditions.push(isNull(tasks.parentTaskId));
@@ -507,11 +541,65 @@ export class TaskModel {
       }),
     );
 
-    return results;
+    const taskIds = Array.from(
+      new Set(results.flatMap((group) => group.tasks.map(({ id }) => id))),
+    );
+    const runStats =
+      taskIds.length === 0
+        ? []
+        : (
+            await this.db.execute<{
+              root_id: string;
+              total_run_cost: number;
+              total_run_duration: number;
+            }>(sql`
+              WITH RECURSIVE goal_tree AS (
+                SELECT ${tasks.id} AS root_id, ${tasks.id} AS task_id
+                FROM ${tasks}
+                WHERE ${inArray(tasks.id, taskIds)} AND ${this.ownership()}
+                UNION ALL
+                SELECT goal_tree.root_id, child.id
+                FROM ${tasks} child
+                JOIN goal_tree ON child.parent_task_id = goal_tree.task_id
+                WHERE ${this.ownershipSql('child')}
+              )
+              SELECT
+                goal_tree.root_id,
+                coalesce(sum(${topics.totalCost}), 0) AS total_run_cost,
+                coalesce(
+                  sum(extract(epoch from (${topics.completedAt} - ${taskTopics.createdAt})) * 1000)
+                    filter (where ${topics.completedAt} is not null),
+                  0
+                ) AS total_run_duration
+              FROM goal_tree
+              LEFT JOIN ${taskTopics} ON ${taskTopics.taskId} = goal_tree.task_id
+              LEFT JOIN ${topics} ON ${topics.id} = ${taskTopics.topicId}
+              GROUP BY goal_tree.root_id
+            `)
+          ).rows;
+    const runStatsByTaskId = new Map(
+      runStats.map((stats) => [
+        stats.root_id,
+        {
+          totalRunCost: Number(stats.total_run_cost),
+          totalRunDuration: Number(stats.total_run_duration),
+        },
+      ]),
+    );
+
+    return results.map((group) => ({
+      ...group,
+      tasks: group.tasks.map((task) => ({
+        ...task,
+        totalRunCost: runStatsByTaskId.get(task.id)?.totalRunCost ?? 0,
+        totalRunDuration: runStatsByTaskId.get(task.id)?.totalRunDuration ?? 0,
+      })),
+    }));
   }
 
   async list(options?: {
     assigneeAgentId?: string;
+    hasGoal?: boolean;
     limit?: number;
     offset?: number;
     parentTaskId?: string | null;
@@ -529,6 +617,7 @@ export class TaskModel {
       priorities,
       parentTaskId,
       assigneeAgentId,
+      hasGoal,
       visibility,
       limit = 50,
       offset = 0,
@@ -539,6 +628,8 @@ export class TaskModel {
     if (statuses?.length) conditions.push(inArray(tasks.status, statuses));
     if (priorities?.length) conditions.push(inArray(tasks.priority, priorities));
     if (assigneeAgentId) conditions.push(eq(tasks.assigneeAgentId, assigneeAgentId));
+    if (hasGoal === true) conditions.push(sql`COALESCE(${tasks.config} ->> 'goal', '') <> ''`);
+    if (hasGoal === false) conditions.push(sql`COALESCE(${tasks.config} ->> 'goal', '') = ''`);
     if (visibility) conditions.push(eq(tasks.visibility, visibility));
 
     if (parentTaskId === null) {
@@ -755,6 +846,19 @@ export class TaskModel {
     return this.updateTaskConfig(id, { review });
   }
 
+  // ========== Goal Config ==========
+
+  /**
+   * Read this task's goal-loop config from `config.goal`. Presence marks a
+   * goal-driven task (created via the `createGoal` builtin tool) and enables
+   * the outer verify-driven round loop. No inheritance — a goal belongs to the
+   * exact task it was created on.
+   */
+  getGoalConfig(task: TaskItem): TaskGoalConfig | undefined {
+    const config = task.config as Record<string, any> | undefined;
+    return config?.goal ? (config.goal as TaskGoalConfig) : undefined;
+  }
+
   // ========== Verify Config ==========
 
   /**
@@ -908,6 +1012,14 @@ export class TaskModel {
     });
 
   async addDependency(taskId: string, dependsOnId: string, type: string = 'blocks'): Promise<void> {
+    const dependencyTasks = await this.findByIds([taskId, dependsOnId]);
+    const task = dependencyTasks.find(({ id }) => id === taskId);
+    const dependsOn = dependencyTasks.find(({ id }) => id === dependsOnId);
+    if (!task || !dependsOn) throw new Error('Task not found');
+    if (task.projectId !== dependsOn.projectId && (task.projectId || dependsOn.projectId)) {
+      throw new Error('Task dependencies cannot cross project boundaries');
+    }
+
     const visibility = await this.getTaskVisibility(taskId);
     await this.db
       .insert(taskDependencies)

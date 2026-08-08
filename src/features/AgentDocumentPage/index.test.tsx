@@ -5,6 +5,8 @@ import { render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+
 import AgentDocumentPage from './index';
 
 vi.mock('react-router', () => ({
@@ -17,12 +19,19 @@ vi.mock('@lobehub/ui', () => ({
   ),
 }));
 
+const pageEditorProps = vi.hoisted(() => ({
+  current: undefined as undefined | Record<string, unknown>,
+}));
+
 vi.mock('@/features/PageEditor', () => ({
-  PageEditor: ({ pageId, header }: { header?: ReactNode; pageId?: string }) => (
-    <div data-page-id={pageId} data-testid="page-editor">
-      {header}
-    </div>
-  ),
+  PageEditor: (props: { header?: ReactNode; pageId?: string }) => {
+    pageEditorProps.current = props;
+    return (
+      <div data-page-id={props.pageId} data-testid="page-editor">
+        {props.header}
+      </div>
+    );
+  },
 }));
 
 vi.mock('@/features/WideScreenContainer', () => ({
@@ -109,6 +118,7 @@ describe('AgentDocumentPage', () => {
     };
     headerProps.current = undefined;
     panelProps.current = undefined;
+    pageEditorProps.current = undefined;
     docChatTopicCalls.current = [];
     navigateMock.mockClear();
   });
@@ -156,6 +166,16 @@ describe('AgentDocumentPage', () => {
       agentId: 'agent-from-url',
       documentId: 'docs_abc',
       topicId: 'doc-topic-1',
+    });
+    expect(pageEditorProps.current?.askCopilotTarget).toEqual({
+      contextKey: messageMapKey({
+        agentId: 'agent-from-url',
+        documentId: 'docs_abc',
+        scope: 'main',
+        threadId: null,
+        topicId: 'doc-topic-1',
+      }),
+      writable: true,
     });
   });
 

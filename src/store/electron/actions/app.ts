@@ -6,8 +6,6 @@ import { useOnlyFetchOnceSWR } from '@/libs/swr';
 // Import for type usage
 import { electronSystemService } from '@/services/electron/system';
 import { type StoreSetter } from '@/store/types';
-import { type LocaleMode } from '@/types/locale';
-import { switchLang } from '@/utils/client/switchLang';
 import { merge } from '@/utils/merge';
 
 import { type ElectronStore } from '../store';
@@ -19,6 +17,33 @@ import { type ElectronStore } from '../store';
 type Setter = StoreSetter<ElectronStore>;
 export const createElectronAppSlice = (set: Setter, get: () => ElectronStore, _api?: unknown) =>
   new ElectronAppActionImpl(set, get, _api);
+
+/**
+ * Mirror app state into the global agent context so prompt placeholders
+ * ({{defaultShell}}, {{homePath}}, ...) always describe the real desktop
+ * environment. Every app-state write path (initial fetch and later
+ * `appStateUpdated` broadcasts) must go through this — a prompt that
+ * disagrees with the actual runCommand shell makes the model emit commands
+ * for the wrong shell (e.g. PowerShell syntax into Git Bash).
+ */
+const syncAppStateToAgentContext = (state: ElectronAppState): void => {
+  globalAgentContextManager.updateContext({
+    ...(state.arch ? { arch: state.arch } : {}),
+    ...(state.defaultShell ? { defaultShell: state.defaultShell } : {}),
+    ...(state.userPath
+      ? {
+          desktopPath: state.userPath.desktop,
+          documentsPath: state.userPath.documents,
+          downloadsPath: state.userPath.downloads,
+          homePath: state.userPath.home,
+          musicPath: state.userPath.music,
+          picturesPath: state.userPath.pictures,
+          userDataPath: state.userPath.userData,
+          videosPath: state.userPath.videos,
+        }
+      : {}),
+  });
+};
 
 export class ElectronAppActionImpl {
   readonly #get: () => ElectronStore;
@@ -37,6 +62,7 @@ export class ElectronAppActionImpl {
   updateElectronAppState = (state: ElectronAppState): void => {
     const prevState = this.#get().appState;
     this.#set({ appState: merge(prevState, state) });
+    syncAppStateToAgentContext(state);
   };
 
   useInitElectronAppState = (): SWRResponse<ElectronAppState> => {
@@ -47,23 +73,10 @@ export class ElectronAppActionImpl {
         onSuccess: (result) => {
           this.#set({ appState: result, isAppStateInit: true }, false, 'initElectronAppState');
 
-          // Update the global agent context manager with relevant paths
-          // We typically only need paths in the agent context for now.
-          globalAgentContextManager.updateContext({
-            defaultShell: result.defaultShell,
-            desktopPath: result.userPath!.desktop,
-            documentsPath: result.userPath!.documents,
-            downloadsPath: result.userPath!.downloads,
-            homePath: result.userPath!.home,
-            musicPath: result.userPath!.music,
-            picturesPath: result.userPath!.pictures,
-            userDataPath: result.userPath!.userData,
-            videosPath: result.userPath!.videos,
-          });
-
-          // Initialize i18n with the stored locale, falling back to auto detection.
-          const locale = (result.locale ?? 'auto') as LocaleMode;
-          switchLang(locale);
+          // Locale is intentionally NOT applied here anymore: the SPA boot flow
+          // (SPAGlobalProvider's Locale) owns UI language now, and a second
+          // switchLang from this once-dead init path would race it.
+          syncAppStateToAgentContext(result);
         },
       },
     );

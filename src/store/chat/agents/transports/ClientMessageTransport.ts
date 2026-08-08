@@ -102,6 +102,16 @@ export class ClientMessageTransport implements MessageTransport {
     await this.persist([{ id, type: 'updateToolMessage', value: { pluginState: state } }]);
   }
 
+  async updateToolIntervention(id: string, intervention: Record<string, any>): Promise<void> {
+    // `optimisticUpdateMessagePlugin` also mirrors the change onto the calling
+    // assistant's `tools[]` entry, which is what the intervention card reads
+    // once the conversation has been folded — updating only the tool row would
+    // clear the state in the store while the card kept rendering.
+    await this.get().optimisticUpdateMessagePlugin(id, { intervention } as any, {
+      operationId: this.operationId,
+    });
+  }
+
   async updateToolMessage(id: string, params: UpdateToolMessageInput): Promise<void> {
     const store = this.get();
     const optimisticContext = { operationId: this.operationId };

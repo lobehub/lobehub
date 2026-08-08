@@ -1,7 +1,9 @@
 import { type MenuProps } from '@lobehub/ui';
 import { render } from '@testing-library/react';
-import { type PropsWithChildren, useEffect, useRef } from 'react';
+import { type PropsWithChildren, useEffect } from 'react';
 import { describe, expect, it, vi } from 'vitest';
+
+import { useSingleton } from '@/hooks/useSingleton';
 
 import { createStore, Provider, useChatInputStore } from './store';
 import StoreUpdater from './StoreUpdater';
@@ -26,9 +28,9 @@ const Probe = ({
 };
 
 const TestHarness = ({ children }: PropsWithChildren) => {
-  const storeRef = useRef(createStore());
+  const store = useSingleton(createStore);
 
-  return <Provider createStore={() => storeRef.current}>{children}</Provider>;
+  return <Provider createStore={() => store}>{children}</Provider>;
 };
 
 describe('ChatInput StoreUpdater', () => {

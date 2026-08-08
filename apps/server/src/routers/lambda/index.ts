@@ -26,6 +26,7 @@ import { agentDocumentRouter } from './agentDocument';
 import { agentEvalRouter } from './agentEval';
 import { agentEvalExternalRouter } from './agentEvalExternal';
 import { agentGroupRouter } from './agentGroup';
+import { agentLabelRouter } from './agentLabel';
 import { agentNotifyRouter } from './agentNotify';
 import { agentQuotaRouter } from './agentQuota';
 import { agentSignalRouter } from './agentSignal';
@@ -67,6 +68,7 @@ import { notificationRouter } from './notification';
 import { oauthAppRouter } from './oauthApp';
 import { oauthDeviceFlowRouter } from './oauthDeviceFlow';
 import { pluginRouter } from './plugin';
+import { projectRouter } from './project';
 import { pushTokenRouter } from './pushToken';
 import { ragEvalRouter } from './ragEval';
 import { recentRouter } from './recent';
@@ -99,6 +101,7 @@ export const lambdaRouter = router({
   agentDocument: agentDocumentRouter,
   agentEval: agentEvalRouter,
   agentEvalExternal: agentEvalExternalRouter,
+  agentLabel: agentLabelRouter,
   agentSkills: agentSkillsRouter,
   agentSignal: agentSignalRouter,
   task: taskRouter,
@@ -142,6 +145,7 @@ export const lambdaRouter = router({
   oauthApp: oauthAppRouter,
   oauthDeviceFlow: oauthDeviceFlowRouter,
   plugin: pluginRouter,
+  project: projectRouter,
   pushToken: pushTokenRouter,
   ragEval: ragEvalRouter,
   recent: recentRouter,

@@ -24,6 +24,7 @@ import {
   XIcon,
 } from 'lucide-react';
 import {
+  Activity,
   lazy,
   memo,
   type ReactNode,
@@ -41,11 +42,14 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { isDesktop } from '@/const/version';
 import { useRepoType } from '@/features/ChatInput/ControlBar/useRepoType';
+import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { getPortalViewWidth } from '@/features/Portal/portalWidth';
 import TopicCommentsSidebar from '@/features/Portal/TopicComments/Sidebar';
 import RightPanel from '@/features/RightPanel';
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
+import { useDeferredMount } from '@/hooks/useDeferredMount';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
@@ -53,15 +57,18 @@ import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
-import { chatPortalSelectors } from '@/store/chat/selectors';
+import { chatPortalSelectors, portalThreadSelectors } from '@/store/chat/selectors';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
+import { type ComposerTarget, createComposerTarget, resolveThreadComposerTarget } from '../types';
 import Files from './Files';
+import { sidebarWidthBudget } from './fitsBesidePortal';
 import Overview from './Overview';
 import ResourcesSection from './ResourcesSection';
 import Review from './Review';
@@ -134,6 +141,7 @@ const styles = createStaticStyles(({ css }) => ({
 const REVIEW_TREE_STORAGE_KEY = 'lobechat-review-tree';
 const OPEN_TABS_STORAGE_KEY = 'lobechat-working-sidebar-open-tabs-v1';
 const PINNED_TABS_STORAGE_KEY = 'lobechat-working-sidebar-pinned-tabs-v1';
+const MIN_PANEL_WIDTH = 300;
 const MAX_PANEL_WIDTH = 1200;
 // Two-pane Review (diff list + file-tree rail) is cramped below this.
 const TWO_PANE_MIN_WIDTH = 560;
@@ -155,10 +163,23 @@ const BROWSER_TAB_KEY = 'browser';
 const BROWSER_TAB_PREFIX = 'browser:';
 const isBrowserTab = (tab: string) => tab === BROWSER_TAB_KEY || tab.startsWith(BROWSER_TAB_PREFIX);
 
-const AgentWorkingSidebar = memo(() => {
+interface AgentWorkingSidebarProps {
+  /**
+   * Measured width of the row this sidebar shares with the conversation and the
+   * portal. Undefined until the layout has measured it.
+   */
+  availableWidth?: number;
+}
+
+const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) => {
   const { t } = useTranslation(['chat', 'setting']);
+  // Keep the panel frame + tabs on the navigation commit; the pane contents
+  // mount in a deferred follow-up pass behind a skeleton.
+  const contentReady = useDeferredMount();
   const [
     storedWidth,
+    legacyPortalWidth,
+    portalWidths,
     updateSystemStatus,
     toggleRightPanel,
     toggleTerminalPanel,
@@ -168,6 +189,8 @@ const AgentWorkingSidebar = memo(() => {
     tabRequest,
   ] = useGlobalStore((s) => [
     systemStatusSelectors.workingSidebarWidth(s),
+    systemStatusSelectors.portalWidth(s),
+    systemStatusSelectors.portalWidths(s),
     s.updateSystemStatus,
     s.toggleRightPanel,
     s.toggleTerminalPanel,
@@ -181,11 +204,62 @@ const AgentWorkingSidebar = memo(() => {
   ]);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const workspaceId = useActiveWorkspaceId();
-  const [topicId, currentPortalView, openTopicComments] = useChatStore((s) => [
+  const [
+    topicId,
+    currentPortalView,
+    portalOpen,
+    openTopicComments,
+    portalThread,
+    chatAgentId,
+    chatGroupId,
+    chatThreadId,
+  ] = useChatStore((s) => [
     s.activeTopicId,
     chatPortalSelectors.currentView(s),
+    chatPortalSelectors.showStandalonePortal(s),
     s.openTopicComments,
+    portalThreadSelectors.portalCurrentThread(s),
+    s.activeAgentId,
+    s.activeGroupId,
+    s.activeThreadId,
   ]);
+  const composerTarget = useMemo<ComposerTarget>(() => {
+    if (!portalOpen || currentPortalView?.type !== PortalViewType.Thread) {
+      return createComposerTarget(
+        messageMapKey({
+          agentId: chatAgentId,
+          groupId: chatGroupId,
+          threadId: chatThreadId,
+          topicId,
+        }),
+      );
+    }
+
+    return resolveThreadComposerTarget({
+      contextKey: messageMapKey({
+        agentId: chatAgentId,
+        isNew: !currentPortalView.threadId,
+        scope: 'thread',
+        threadId: currentPortalView.threadId,
+        topicId,
+      }),
+      metadataResolved: !currentPortalView.threadId || !!portalThread,
+      sourceToolCallId: portalThread?.metadata?.sourceToolCallId,
+    });
+  }, [
+    chatAgentId,
+    chatGroupId,
+    chatThreadId,
+    currentPortalView,
+    portalOpen,
+    portalThread,
+    topicId,
+  ]);
+  const portalWidth = getPortalViewWidth({
+    legacyWidth: legacyPortalWidth,
+    viewType: currentPortalView?.type,
+    widths: portalWidths,
+  });
   const isChatMode = useAgentStore((s) =>
     activeAgentId ? chatConfigByIdSelectors.isChatModeById(activeAgentId)(s) : false,
   );
@@ -640,6 +714,23 @@ const AgentWorkingSidebar = memo(() => {
   );
   const reviewTwoPane = activeTab === 'review' && reviewAvailable && showReviewTree;
   const displayWidth = reviewTwoPane ? Math.max(storedWidth, TWO_PANE_MIN_WIDTH) : storedWidth;
+  // Yield the row to conversation + portal when the three no longer fit. A
+  // stored width that merely outgrew the current row (the user dragged the
+  // panel out, or resized the window down) renders clamped instead of
+  // unmounting the whole panel — the sidebar disappears only when even its
+  // minimum width leaves no room for the conversation. Either way this only
+  // overrides the rendered state — `showRightPanel` keeps the user's own
+  // choice, so the sidebar comes back by itself once there is room again.
+  const minDisplayWidth = reviewTwoPane ? TWO_PANE_MIN_WIDTH : MIN_PANEL_WIDTH;
+  const widthBudget = sidebarWidthBudget({
+    availableWidth,
+    portalWidth: portalOpen ? portalWidth : 0,
+  });
+  const fits = widthBudget >= minDisplayWidth;
+  const renderWidth = Math.min(displayWidth, Math.max(widthBudget, minDisplayWidth));
+  // Also cap the drag range so releasing a drag can never persist a width that
+  // immediately fails the fit check and hides the panel.
+  const maxPanelWidth = Math.min(MAX_PANEL_WIDTH, Math.max(widthBudget, minDisplayWidth));
   const openMenuItems = useCallback((): DropdownItem[] => {
     const itemOf = (key: string): DropdownItem | undefined => {
       const tab = availableTabs.get(key);
@@ -727,10 +818,11 @@ const AgentWorkingSidebar = memo(() => {
     <RightPanel
       stableLayout
       collapseThreshold={320}
-      defaultWidth={displayWidth}
-      maxWidth={MAX_PANEL_WIDTH}
-      minWidth={300}
-      width={displayWidth}
+      defaultWidth={renderWidth}
+      expand={Boolean(showRightPanel) && fits}
+      maxWidth={maxPanelWidth}
+      minWidth={MIN_PANEL_WIDTH}
+      width={renderWidth}
       onSizeChange={(size) => {
         if (!size?.width) return;
         // DraggablePanel emits width as a `"420px"` string on drag-stop; parse it so
@@ -803,109 +895,125 @@ const AgentWorkingSidebar = memo(() => {
           />
         </Flexbox>
         <Flexbox className={styles.body} width={'100%'}>
-          <Flexbox className={activeTab === 'overview' ? styles.pane : styles.paneHidden}>
-            <Overview
-              active={Boolean(showRightPanel) && activeTab === 'overview'}
-              deviceId={remoteDeviceId}
-              environmentAvailable={filesystemEnvironmentAvailable}
-              repoType={environmentRepoType}
-              workingDirectory={environmentWorkingDirectory}
-              onOpenTab={openTab}
-            />
-          </Flexbox>
-          {commentsAvailable && (
-            <Flexbox
-              className={activeTab === 'comments' ? styles.pane : styles.paneHidden}
-              style={{ overflow: 'hidden' }}
-            >
-              <TopicCommentsSidebar />
-            </Flexbox>
-          )}
-          {paramsAvailable && activeTab === 'params' && (
-            <Flexbox className={styles.pane}>
-              <Suspense
-                fallback={
-                  <Skeleton
-                    active
-                    className={styles.paramsLoading}
-                    paragraph={{ rows: 6 }}
-                    title={false}
-                  />
-                }
-              >
-                <ParamsSection />
-              </Suspense>
-            </Flexbox>
-          )}
-          {reviewAvailable && (
-            <Flexbox className={activeTab === 'review' ? styles.pane : styles.paneHidden}>
-              <Review
-                active={activeTab === 'review'}
-                deviceId={remoteDeviceId}
-                showTree={showReviewTree}
-                workingDirectory={workingDirectory}
-                onToggleTree={() => setShowReviewTree((v) => !v)}
-              />
-            </Flexbox>
-          )}
-          {filesAvailable && (
-            <Flexbox className={activeTab === 'files' ? styles.pane : styles.paneHidden}>
-              <Files deviceId={remoteDeviceId} workingDirectory={workingDirectory} />
-            </Flexbox>
-          )}
-          {browserAvailable &&
-            openedTabs.filter(isBrowserTab).map((tab) => {
-              const sessionId =
-                tab === BROWSER_TAB_KEY
-                  ? browserSessionId
-                  : `${browserSessionId}:tab:${tab.slice(BROWSER_TAB_PREFIX.length)}`;
-
-              return (
+          {!contentReady && <SkeletonList paddingBlock={8} paddingInline={8} rows={6} />}
+          {contentReady && (
+            <>
+              <Flexbox className={activeTab === 'overview' ? styles.pane : styles.paneHidden}>
+                <Overview
+                  active={Boolean(showRightPanel) && activeTab === 'overview'}
+                  deviceId={remoteDeviceId}
+                  environmentAvailable={filesystemEnvironmentAvailable}
+                  repoType={environmentRepoType}
+                  workingDirectory={environmentWorkingDirectory}
+                  onOpenTab={openTab}
+                />
+              </Flexbox>
+              {commentsAvailable && (
                 <Flexbox
-                  className={activeTab === tab ? styles.pane : styles.paneHidden}
-                  key={sessionId}
+                  className={activeTab === 'comments' ? styles.pane : styles.paneHidden}
+                  style={{ overflow: 'hidden' }}
                 >
-                  <BrowserPane
-                    agentId={activeAgentId}
-                    sessionId={sessionId}
-                    onMetadataChange={(metadata) => {
-                      const metadataKey = `${openTabsContextKey}:${tab}`;
-                      setBrowserTabMetadata((current) =>
-                        current[metadataKey]?.faviconUrl === metadata.faviconUrl &&
-                        current[metadataKey]?.title === metadata.title &&
-                        current[metadataKey]?.url === metadata.url
-                          ? current
-                          : { ...current, [metadataKey]: metadata },
-                      );
-                    }}
+                  <TopicCommentsSidebar />
+                </Flexbox>
+              )}
+              {paramsAvailable && activeTab === 'params' && (
+                <Flexbox className={styles.pane}>
+                  <Suspense
+                    fallback={
+                      <Skeleton
+                        active
+                        className={styles.paramsLoading}
+                        paragraph={{ rows: 6 }}
+                        title={false}
+                      />
+                    }
+                  >
+                    <ParamsSection />
+                  </Suspense>
+                </Flexbox>
+              )}
+              {reviewAvailable && (
+                <Flexbox className={activeTab === 'review' ? styles.pane : styles.paneHidden}>
+                  <Review
+                    active={activeTab === 'review'}
+                    composerTarget={composerTarget}
+                    deviceId={remoteDeviceId}
+                    showTree={showReviewTree}
+                    workingDirectory={workingDirectory}
+                    onToggleTree={() => setShowReviewTree((v) => !v)}
                   />
                 </Flexbox>
-              );
-            })}
-          {businessTabs.map((tab) => (
-            <Flexbox
-              className={activeTab === tab.key ? styles.pane : styles.paneHidden}
-              key={tab.key}
-            >
-              {tab.pane}
-            </Flexbox>
-          ))}
-          {['skills', ...(isHetero ? [] : ['documents', 'web'])].map((resourceTab) => (
-            <Flexbox
-              className={activeTab === resourceTab ? styles.pane : styles.paneHidden}
-              key={resourceTab}
-              width={'100%'}
-            >
-              <ResourcesSection
-                deviceId={remoteDeviceId}
-                enabled={showRightPanel && activeTab === resourceTab}
-                filter={resourceTab as 'skills' | 'documents' | 'web'}
-              />
-            </Flexbox>
-          ))}
-          <Flexbox className={activeTab === 'works' ? styles.pane : styles.paneHidden}>
-            <WorksSection active={showRightPanel && activeTab === 'works'} />
-          </Flexbox>
+              )}
+              {filesAvailable && (
+                <Activity mode={showRightPanel && activeTab === 'files' ? 'visible' : 'hidden'}>
+                  <Flexbox className={styles.pane}>
+                    <Files deviceId={remoteDeviceId} workingDirectory={workingDirectory} />
+                  </Flexbox>
+                </Activity>
+              )}
+              {browserAvailable &&
+                openedTabs.filter(isBrowserTab).map((tab) => {
+                  const sessionId =
+                    tab === BROWSER_TAB_KEY
+                      ? browserSessionId
+                      : `${browserSessionId}:tab:${tab.slice(BROWSER_TAB_PREFIX.length)}`;
+
+                  return (
+                    <Flexbox
+                      className={activeTab === tab ? styles.pane : styles.paneHidden}
+                      key={sessionId}
+                    >
+                      <BrowserPane
+                        agentId={activeAgentId}
+                        composerTarget={composerTarget}
+                        sessionId={sessionId}
+                        onMetadataChange={(metadata) => {
+                          const metadataKey = `${openTabsContextKey}:${tab}`;
+                          setBrowserTabMetadata((current) =>
+                            current[metadataKey]?.faviconUrl === metadata.faviconUrl &&
+                            current[metadataKey]?.title === metadata.title &&
+                            current[metadataKey]?.url === metadata.url
+                              ? current
+                              : { ...current, [metadataKey]: metadata },
+                          );
+                        }}
+                      />
+                    </Flexbox>
+                  );
+                })}
+              {businessTabs.map((tab) => (
+                <Flexbox
+                  className={activeTab === tab.key ? styles.pane : styles.paneHidden}
+                  key={tab.key}
+                >
+                  {tab.pane}
+                </Flexbox>
+              ))}
+              {/* Resource/works panes stay mounted to keep their state, but hidden ones
+           go through Activity so their updates render at background priority
+           instead of blocking visible commits (BrowserPane must NOT move here —
+           hiding it would unmount the effects keeping its session alive). */}
+              {['skills', ...(isHetero ? [] : ['documents', 'web'])].map((resourceTab) => (
+                <Activity
+                  key={resourceTab}
+                  mode={showRightPanel && activeTab === resourceTab ? 'visible' : 'hidden'}
+                >
+                  <Flexbox className={styles.pane} width={'100%'}>
+                    <ResourcesSection
+                      deviceId={remoteDeviceId}
+                      enabled={showRightPanel && activeTab === resourceTab}
+                      filter={resourceTab as 'skills' | 'documents' | 'web'}
+                    />
+                  </Flexbox>
+                </Activity>
+              ))}
+              <Activity mode={showRightPanel && activeTab === 'works' ? 'visible' : 'hidden'}>
+                <Flexbox className={styles.pane}>
+                  <WorksSection active={showRightPanel && activeTab === 'works'} />
+                </Flexbox>
+              </Activity>
+            </>
+          )}
         </Flexbox>
       </Flexbox>
     </RightPanel>

@@ -8,6 +8,7 @@ import type {
 } from '@lobechat/heterogeneous-agents';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import type { DeviceListItem } from '@lobechat/types';
+import { agentDisplayName } from '@lobechat/types';
 import { Alert, CopyButton, Flexbox, Icon, Input, Text, TextArea, Tooltip } from '@lobehub/ui';
 import { Button, createModal, type ModalInstance, useModalContext } from '@lobehub/ui/base-ui';
 import { Checkbox, Typography } from 'antd';
@@ -32,10 +33,13 @@ import { useDeviceList } from '@/features/DeviceManager/useDeviceList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { deviceService } from '@/services/device';
 import { useAgentStore } from '@/store/agent';
+import { useElectronStore } from '@/store/electron';
 import { useHomeStore } from '@/store/home';
 
-import { CONNECTABLE_PROVIDERS, type ConnectableProvider } from './providers';
-import { type ScanTarget, useAgentScan } from './useAgentScan';
+import type { ConnectableProvider, ConnectAgentProfile } from './providers';
+import { buildConnectAgentConfig, CONNECTABLE_PROVIDERS } from './providers';
+import type { ScanTarget } from './useAgentScan';
+import { useAgentScan } from './useAgentScan';
 
 const styles = createStaticStyles(({ css }) => ({
   cmd: css`
@@ -237,12 +241,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-interface AgentProfile {
-  avatar?: string;
-  description?: string;
-  title?: string;
-}
-
 interface CreatedAgent {
   agentId: string;
   locationLabel: string;
@@ -353,6 +351,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
     const { close, setCanDismissByClickOutside } = useModalContext();
     const navigate = useWorkspaceAwareNavigate();
     const storeCreateAgent = useAgentStore((s) => s.createAgent);
+    const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
     const refreshAgentList = useHomeStore((s) => s.refreshAgentList);
 
     // Workspace agents must bind workspace devices: a workspace agent on a
@@ -364,7 +363,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
     const [target, setTarget] = useState<ScanTarget | null>(null);
     const [selectedTypes, setSelectedTypes] = useState<HeterogeneousAgentType[]>([]);
     const [profiles, setProfiles] = useState<
-      Partial<Record<RemoteHeterogeneousAgentType, AgentProfile>>
+      Partial<Record<RemoteHeterogeneousAgentType, ConnectAgentProfile>>
     >({});
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
@@ -399,24 +398,13 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
     const targetLabel =
       target?.kind === 'device' ? deviceLabel(target.device) : t('connectAgent.create.localDevice');
 
-    // Providers listed for the current target: local targets only run CLI
-    // subprocess agents. Device targets expose every remotely scannable agent.
-    const visibleProviders = useMemo(
-      () =>
-        CONNECTABLE_PROVIDERS.filter((provider) => {
-          if (target?.kind === 'local' && provider.kind === 'platform') return false;
-          return true;
-        }),
-      [target?.kind],
-    );
-
     const inventory = useMemo(() => {
       if (scanState.status !== 'success' || !scanState.agents) return [];
       const rank = (available?: boolean) => (available ? 0 : 1);
-      return [...visibleProviders]
+      return [...CONNECTABLE_PROVIDERS]
         .map((provider) => ({ provider, status: scanState.agents?.[provider.type] }))
         .sort((a, b) => rank(a.status?.available) - rank(b.status?.available));
-    }, [scanState, visibleProviders]);
+    }, [scanState]);
 
     const detectedCount = inventory.filter((entry) => entry.status?.available).length;
 
@@ -456,18 +444,19 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
         // title / description / avatar without an extra wait.
         if (
           provider.kind === 'platform' &&
-          target?.kind === 'device' &&
           isRemoteHeterogeneousType(provider.type) &&
           !profiles[provider.type]
         ) {
+          const deviceId = target?.kind === 'device' ? target.device.deviceId : currentDeviceId;
+          if (!deviceId) return;
           const platform = provider.type;
           void deviceService
-            .getAgentProfile({ deviceId: target.device.deviceId, platform })
+            .getAgentProfile({ deviceId, platform })
             .then((profile) => setProfiles((prev) => ({ ...prev, [platform]: profile })))
             .catch(() => {});
         }
       },
-      [profiles, target],
+      [currentDeviceId, profiles, target],
     );
 
     const goConfirm = useCallback(() => {
@@ -480,57 +469,16 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
 
     const buildCreateParams = useCallback(
       (provider: ConnectableProvider, overrides?: { description?: string; name?: string }) => {
-        const title = overrides?.name?.trim() || provider.title;
-
-        if (target?.kind === 'device' && provider.kind === 'platform') {
-          const profile = isRemoteHeterogeneousType(provider.type)
-            ? profiles[provider.type]
-            : undefined;
-          return {
-            config: {
-              agencyConfig: {
-                boundDeviceId: target.device.deviceId,
-                heterogeneousProvider: { type: provider.type },
-              },
-              avatar: profile?.avatar || undefined,
-              description: (overrides?.description ?? profile?.description)?.trim() || undefined,
-              title: overrides?.name?.trim() || profile?.title || provider.title,
-            },
-            groupId,
-            visibility,
-          };
-        }
-
-        const base = {
-          avatar: provider.avatar,
-          description: overrides?.description?.trim() || undefined,
-          provider: provider.type,
-          systemRole: '',
-          title,
-        };
-
-        if (target?.kind === 'device') {
-          return {
-            config: {
-              ...base,
-              agencyConfig: {
-                boundDeviceId: target.device.deviceId,
-                executionTarget: 'device' as const,
-                heterogeneousProvider: { command: provider.command, type: provider.type },
-              },
-            },
-            groupId,
-            visibility,
-          };
-        }
-
         return {
-          config: {
-            ...base,
-            agencyConfig: {
-              heterogeneousProvider: { command: provider.command, type: provider.type },
-            },
-          },
+          config: buildConnectAgentConfig({
+            overrides,
+            profile: isRemoteHeterogeneousType(provider.type) ? profiles[provider.type] : undefined,
+            provider,
+            target:
+              target?.kind === 'device'
+                ? { deviceId: target.device.deviceId, kind: 'device' }
+                : { kind: 'local' },
+          }),
           groupId,
           visibility,
         };
@@ -555,7 +503,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
                 agentId: result.agentId,
                 locationLabel: targetLabel,
                 provider,
-                title: params.config.title ?? provider.title,
+                title: agentDisplayName(params.config, provider.title) ?? provider.title,
                 version: scanState.agents?.[provider.type]?.version,
               } satisfies CreatedAgent;
             }),
@@ -606,7 +554,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
                 <agent.provider.brand.Avatar size={32} />
                 <Flexbox flex={1} gap={1} style={{ minWidth: 0 }}>
                   <Text strong fontSize={13}>
-                    {agent.title}
+                    {agentDisplayName(agent)}
                   </Text>
                   <Text ellipsis fontSize={12} type={'secondary'}>
                     {agent.provider.title}
@@ -796,9 +744,11 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
             <Flexbox gap={6}>
               <SectionLabel>{t('connectAgent.create.scanning')}</SectionLabel>
               <div className={styles.groupList}>
-                {[90, 70, 110, 80, 100, 75].slice(0, visibleProviders.length).map((width, i) => (
-                  <SkeletonRow key={i} width={width} />
-                ))}
+                {[90, 70, 110, 80, 100, 75, 95]
+                  .slice(0, CONNECTABLE_PROVIDERS.length)
+                  .map((width, i) => (
+                    <SkeletonRow key={i} width={width} />
+                  ))}
               </div>
             </Flexbox>
           )}
@@ -824,7 +774,6 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
               <Text style={{ textAlign: 'center' }} type={'secondary'}>
                 {t('connectAgent.create.noneDetectedHint')}
               </Text>
-              <span className={styles.cmd}>npm install -g @anthropic-ai/claude-code</span>
               <Button
                 icon={<Icon icon={RefreshCw} size={13} />}
                 size={'small'}

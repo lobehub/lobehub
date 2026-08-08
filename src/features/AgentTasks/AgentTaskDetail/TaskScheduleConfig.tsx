@@ -200,11 +200,9 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
 
   const enabled = !!automationMode;
   const [isStartingSchedule, setIsStartingSchedule] = useState(false);
-  // Heartbeat tasks are re-armed only by maybeRearmHeartbeat after a topic
-  // completes; there is no dispatcher that picks up `scheduled` heartbeat tasks,
-  // so flipping one to `scheduled` from here would leave it dormant.
   const canStartSchedule =
-    automationMode === 'schedule' &&
+    ((automationMode === 'schedule' && !!schedulePattern) ||
+      (automationMode === 'heartbeat' && finalCurrentInterval > 0)) &&
     !!finalTaskId &&
     status !== 'scheduled' &&
     status !== 'running';
@@ -228,17 +226,13 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
     return null;
   }, [automationMode, finalCurrentInterval, schedulePattern, scheduleTimezone, t, i18n.language]);
 
-  const [nowTick, setNowTick] = useState(0);
-  useEffect(() => {
-    if (!enabled) return;
-    const id = setInterval(() => setNowTick((n) => n + 1), 60_000);
-    return () => clearInterval(id);
-  }, [enabled]);
-
   const nextRun = useMemo(() => {
     if (!enabled) return null;
     if (automationMode === 'heartbeat') {
-      return nextHeartbeatFiring(detail?.heartbeat?.lastAt, finalCurrentInterval);
+      return nextHeartbeatFiring(
+        detail?.heartbeat?.scheduledAt ?? detail?.heartbeat?.lastAt,
+        finalCurrentInterval,
+      );
     }
     if (automationMode === 'schedule' && schedulePattern) {
       return nextScheduleFiring(schedulePattern, scheduleTimezone);
@@ -247,11 +241,11 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
   }, [
     automationMode,
     detail?.heartbeat?.lastAt,
+    detail?.heartbeat?.scheduledAt,
     enabled,
     finalCurrentInterval,
     schedulePattern,
     scheduleTimezone,
-    nowTick,
   ]);
 
   const nextRunText = useMemo(() => {

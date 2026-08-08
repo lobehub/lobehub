@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { readFile, realpath, stat } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import path from 'node:path';
 
-import { resolveMimeType } from '@lobechat/utils/mimeType';
+import { getMimeType, resolveMimeType } from '@lobechat/utils/mimeType';
 import { app, protocol } from 'electron';
 
 import { LOCAL_FILE_PROTOCOL_HOST, LOCAL_FILE_PROTOCOL_SCHEME } from '@/const/protocol';
@@ -23,8 +24,40 @@ const PREVIEW_TOKEN_TTL_MS = 5 * 60 * 1000;
 const EXTERNAL_PREVIEW_APPROVAL_TTL_MS = 10 * 60 * 1000;
 const PREVIEW_SESSION_HOST_PREFIX = 'preview-';
 
+/**
+ * Mirrors the renderer/device document cap (`MAX_DOCUMENT_PREVIEW_BYTES`): an
+ * oversized document can only ever produce the content-less fallback, so the
+ * protocol handler must not read it into main-process memory at all. The real
+ * size travels in `X-Preview-Content-Size` (an empty body computes its own
+ * `Content-Length`), which the renderer's oversize gate reads first.
+ */
+const DOCUMENT_PREVIEW_MIME_TYPES = new Set([
+  'application/msword',
+  'application/pdf',
+  'application/vnd.ms-excel',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+]);
+const MAX_DOCUMENT_PREVIEW_BYTES = 20 * 1024 * 1024;
+export const PREVIEW_CONTENT_SIZE_HEADER = 'X-Preview-Content-Size';
+
+// Edited-file records can carry `~`-prefixed paths (the file tools expand the
+// home directory at write time) — expand them here so previews resolve the
+// file that was actually written instead of rejecting a non-absolute path.
+const expandHomePath = (filePath: string): string => {
+  if (filePath === '~') return homedir();
+  // Slice off the full `~/` / `~\` prefix (mirroring local-file-shell's
+  // `expandTilde`) so the separator never survives as a literal character.
+  if (filePath.startsWith('~/') || filePath.startsWith('~\\')) {
+    return path.join(homedir(), filePath.slice(2));
+  }
+  return filePath;
+};
+
 const normalizeAbsolutePath = (filePath: string): string | null => {
-  const normalized = path.normalize(filePath);
+  const normalized = path.normalize(expandHomePath(filePath));
   return path.isAbsolute(normalized) ? normalized : null;
 };
 
@@ -73,6 +106,12 @@ interface PreviewRootTokenRecord {
 export interface PreviewFileReadResult {
   buffer: Buffer;
   contentType: string;
+  /**
+   * Set when the file is a document above `MAX_DOCUMENT_PREVIEW_BYTES`: the
+   * read was short-circuited and `buffer` is empty. Consumers must serialize
+   * the content-less fallback instead of treating `buffer` as the file body.
+   */
+  oversized?: boolean;
   realPath: string;
 }
 
@@ -160,6 +199,18 @@ export class LocalFileProtocolManager {
           const fileStat = await stat(realResolvedPath);
           if (!fileStat.isFile()) {
             return new Response('Not a file', { status: 404 });
+          }
+
+          if (fileStat.size > MAX_DOCUMENT_PREVIEW_BYTES) {
+            const extensionType = getMimeType(realResolvedPath).split(';')[0].trim();
+            if (DOCUMENT_PREVIEW_MIME_TYPES.has(extensionType)) {
+              const headers = new Headers();
+              headers.set('Content-Type', extensionType);
+              headers.set(PREVIEW_CONTENT_SIZE_HEADER, String(fileStat.size));
+              headers.set('Cross-Origin-Resource-Policy', 'cross-origin');
+              headers.set('X-Content-Type-Options', 'nosniff');
+              return new Response(new Uint8Array(0), { headers, status: 200 });
+            }
           }
 
           const buffer = await readFile(realResolvedPath);
@@ -341,6 +392,28 @@ export class LocalFileProtocolManager {
 
     const fileStat = await stat(realFilePath);
     if (!fileStat.isFile()) return null;
+
+    // Oversized documents can only ever produce the content-less fallback —
+    // detect them by extension so the main process never reads a 100 MB report
+    // into memory just to discard it. Mirrors the protocol handler above and
+    // the device daemon's `defaultGetLocalFilePreview` (@lobechat/device-control).
+    if (fileStat.size > MAX_DOCUMENT_PREVIEW_BYTES) {
+      const extensionType = getMimeType(realFilePath).split(';')[0].trim();
+      if (DOCUMENT_PREVIEW_MIME_TYPES.has(extensionType)) {
+        if (!isAcceptedPreviewContentType(extensionType, accept)) return null;
+
+        if (allowExternalFile) {
+          this.grantExternalPreviewApproval(realFilePath);
+        }
+
+        return {
+          buffer: Buffer.alloc(0),
+          contentType: extensionType,
+          oversized: true,
+          realPath: realFilePath,
+        };
+      }
+    }
 
     const buffer = await readFile(realFilePath);
     const contentType = await resolveMimeType(realFilePath, buffer);

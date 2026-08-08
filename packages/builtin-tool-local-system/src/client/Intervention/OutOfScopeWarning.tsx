@@ -1,3 +1,4 @@
+import { isPathWithinScope } from '@lobechat/tool-runtime';
 import { Alert, Flexbox } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -7,8 +8,6 @@ import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useElectronStore } from '@/store/electron';
-
-import { isPathWithinScope } from '../../utils/path';
 
 interface OutOfScopeWarningProps {
   /**

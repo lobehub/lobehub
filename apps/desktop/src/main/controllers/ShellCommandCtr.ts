@@ -65,7 +65,16 @@ export default class ShellCommandCtr extends ControllerModule {
     setWindowsShellPreference(mode);
     logger.info('Windows shell mode updated:', mode);
 
-    return this.getShellSettings();
+    const settings = await this.getShellSettings();
+
+    // Push the new shell to every renderer so the `{{defaultShell}}` prompt
+    // placeholder flips immediately — otherwise the model keeps emitting
+    // commands for the previous shell until the app restarts.
+    this.app.browserManager.broadcastToAllWindows('appStateUpdated', {
+      defaultShell: settings.currentShell.displayName,
+    });
+
+    return settings;
   }
 
   @IpcMethod()

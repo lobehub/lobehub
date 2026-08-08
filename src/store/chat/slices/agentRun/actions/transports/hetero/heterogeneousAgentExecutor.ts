@@ -3,21 +3,19 @@ import type {
   AgentInterventionResponseData,
   AgentStreamEvent,
 } from '@lobechat/agent-gateway-client';
+import type { HeterogeneousAgentSessionError } from '@lobechat/electron-client-ipc';
+import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import {
-  AMP_CLI_INSTALL_DOCS_URL,
-  CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
-  CODEX_CLI_INSTALL_DOCS_URL,
-  type HeterogeneousAgentSessionError,
-  HeterogeneousAgentSessionErrorCode,
-  OPENCODE_CLI_INSTALL_DOCS_URL,
-} from '@lobechat/electron-client-ipc';
-import {
+  buildHeterogeneousAgentAuthRequiredError,
   createMainAgentRunState,
+  isHeterogeneousAgentAuthRequired,
+  isLocalHeterogeneousType,
   type MainAgentIntent,
   type MainAgentReduceCtx,
   type MainAgentRunState,
   reduceMainAgent,
   rehydrateSubagentRunsState,
+  resolveHeterogeneousAgentCommand,
   type SubagentIntent,
   type SubagentRunSnapshot,
 } from '@lobechat/heterogeneous-agents';
@@ -39,6 +37,7 @@ import type {
 import {
   AgentRuntimeErrorType,
   buildHeteroSpawnArgs,
+  normalizeHeterogeneousProviderConfig,
   ThreadStatus,
   ThreadType,
 } from '@lobechat/types';
@@ -87,78 +86,13 @@ const markSkipMessageFetch = (event: AgentStreamEvent): void => {
   event.data = { ...event.data, skipMessageFetch: true };
 };
 
-const CLI_AUTH_REQUIRED_PATTERNS = [
-  /failed to authenticate/i,
-  /invalid authentication credentials/i,
-  /authentication[_ ]error/i,
-  /not authenticated/i,
-  /\bunauthorized\b/i,
-  /\b401\b/,
-] as const;
-const AMP_AUTH_REQUIRED_PATTERNS = [/please (?:log|sign) in/i, /amp_api_key/i] as const;
-
-const buildCliAuthRequiredSessionError = (
-  agentType: 'amp' | 'claude-code' | 'codex' | 'opencode',
-  rawMessage: string,
-): HeterogeneousAgentSessionError => {
-  switch (agentType) {
-    case 'amp': {
-      return {
-        agentType,
-        code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-        docsUrl: AMP_CLI_INSTALL_DOCS_URL,
-        message:
-          'Amp could not authenticate. Run `amp login` or configure AMP_API_KEY, then retry.',
-        stderr: rawMessage,
-      };
-    }
-    case 'claude-code': {
-      return {
-        agentType,
-        code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-        docsUrl: CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
-        message:
-          'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
-        stderr: rawMessage,
-      };
-    }
-    case 'codex': {
-      return {
-        agentType,
-        code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-        docsUrl: CODEX_CLI_INSTALL_DOCS_URL,
-        message:
-          'Codex could not authenticate. Sign in again or refresh its credentials, then retry.',
-        stderr: rawMessage,
-      };
-    }
-    case 'opencode': {
-      return {
-        agentType,
-        code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-        docsUrl: OPENCODE_CLI_INSTALL_DOCS_URL,
-        message:
-          'OpenCode could not authenticate. Sign in again or refresh its credentials, then retry.',
-        stderr: rawMessage,
-      };
-    }
-  }
-};
-
 const normalizeErrorText = (value?: string) => value?.replaceAll(/\s+/g, ' ').trim();
 
 const maybeClassifyCliAuthRequiredError = (
   error: unknown,
   agentType?: string,
 ): HeterogeneousAgentSessionError | undefined => {
-  if (
-    agentType !== 'amp' &&
-    agentType !== 'claude-code' &&
-    agentType !== 'codex' &&
-    agentType !== 'opencode'
-  ) {
-    return;
-  }
+  if (!agentType || !isLocalHeterogeneousType(agentType)) return;
 
   const message =
     error instanceof Error
@@ -173,13 +107,9 @@ const maybeClassifyCliAuthRequiredError = (
           : undefined;
 
   if (!message) return;
-  const patterns =
-    agentType === 'amp'
-      ? [...CLI_AUTH_REQUIRED_PATTERNS, ...AMP_AUTH_REQUIRED_PATTERNS]
-      : CLI_AUTH_REQUIRED_PATTERNS;
-  if (!patterns.some((pattern) => pattern.test(message))) return;
+  if (!isHeterogeneousAgentAuthRequired(agentType, message)) return;
 
-  return buildCliAuthRequiredSessionError(agentType, message);
+  return buildHeterogeneousAgentAuthRequiredError({ agentType, stderr: message });
 };
 
 const shouldSuppressTerminalErrorEcho = (content: string, error: ChatMessageError): boolean => {
@@ -198,23 +128,6 @@ const shouldSuppressTerminalErrorEcho = (content: string, error: ChatMessageErro
   );
 
   return !!normalizedContent && !!normalizedRawError && normalizedContent === normalizedRawError;
-};
-
-const getDefaultHeterogeneousCommand = (agentType: string): string => {
-  switch (agentType) {
-    case 'amp': {
-      return 'amp';
-    }
-    case 'codex': {
-      return 'codex';
-    }
-    case 'opencode': {
-      return 'opencode';
-    }
-    default: {
-      return 'claude';
-    }
-  }
 };
 
 const toHeterogeneousAgentMessageError = (error: unknown, agentType?: string): ChatMessageError => {
@@ -354,23 +267,6 @@ const getTopicMetadataById = (
     const topic = topicData?.items?.find((item) => item.id === topicId);
     if (topic) return topic.metadata;
   }
-};
-
-/**
- * Map heterogeneousProvider.command to adapter type key.
- */
-const resolveAdapterType = (config: HeterogeneousProviderConfig): string => {
-  if (config.type) return config.type;
-  // Explicit adapterType in config takes priority
-  if ((config as any).adapterType) return (config as any).adapterType;
-
-  // Infer from command name
-  const cmd = config.command || 'claude';
-  if (cmd.includes('claude')) return 'claude-code';
-  if (cmd.includes('codex')) return 'codex';
-  if (cmd.includes('kimi')) return 'kimi-cli';
-
-  return 'claude-code'; // default
 };
 
 const asRecord = (value: unknown): Record<string, unknown> =>
@@ -563,7 +459,7 @@ export const executeHeterogeneousAgent = async (
   params: HeterogeneousAgentExecutorParams,
 ): Promise<void> => {
   const {
-    heterogeneousProvider,
+    heterogeneousProvider: persistedHeterogeneousProvider,
     contextSelections,
     assistantMessageId,
     context,
@@ -576,7 +472,10 @@ export const executeHeterogeneousAgent = async (
     workingDirectoryConfig,
   } = params;
 
-  const adapterType = resolveAdapterType(heterogeneousProvider);
+  const heterogeneousProvider = normalizeHeterogeneousProviderConfig(
+    persistedHeterogeneousProvider,
+  );
+  const adapterType = heterogeneousProvider.type;
 
   // Which real provider account this run consumes, resolved once after spawn
   // from the FINAL env (so an agent-env override is attributed correctly, not
@@ -1928,11 +1827,12 @@ export const executeHeterogeneousAgent = async (
     const result = await heterogeneousAgentService.startSession({
       agentType: adapterType,
       args: buildHeteroSpawnArgs(heterogeneousProvider),
-      command: heterogeneousProvider.command || getDefaultHeterogeneousCommand(adapterType),
+      command: resolveHeterogeneousAgentCommand(adapterType, heterogeneousProvider.command),
       cwd: workingDirectory,
       env: sessionEnv,
       resumeSessionId,
       useClaudeCodeSdk: labPreferSelectors.enableClaudeCodeSdk(useUserStore.getState()),
+      useCodexAppServer: labPreferSelectors.enableCodexAppServer(useUserStore.getState()),
     });
 
     // Attribute the run to the login the FINAL env actually resolves to (an
@@ -2204,6 +2104,16 @@ export const executeHeterogeneousAgent = async (
           }
 
           const isErrorTerminal = deferredTerminalEvent?.type === 'error';
+          // A run can also end WITHOUT failing and without completing: a stop
+          // terminates as `agent_runtime_end { reason: 'interrupted' }` (see
+          // the CC adapter). Everything gated on "not an error" must gate on
+          // this instead, or a stopped run would drain the queue and fire a
+          // "run finished" notification.
+          const isCleanCompletion =
+            !isErrorTerminal &&
+            isCompletedRuntimeEnd(
+              (deferredTerminalEvent?.data as { reason?: string } | undefined)?.reason,
+            );
 
           // Reset the sidebar "running" status BEFORE awaiting the persist queue.
           // Topic status is independent of message persistence, so a stalled queue
@@ -2212,10 +2122,9 @@ export const executeHeterogeneousAgent = async (
           // this guards against. Content persistence + the terminal forward still
           // wait for queued reducer state so terminal never flushes stale content.
           {
-            const reason = (deferredTerminalEvent?.data as { reason?: string } | undefined)?.reason;
             if (isErrorTerminal) {
               writeTopicStatus('failed');
-            } else if (!isAborted() && isCompletedRuntimeEnd(reason)) {
+            } else if (!isAborted() && isCleanCompletion) {
               // Clean completion: the viewer sees 'active'; a background topic gets
               // the unread badge (markTopicUnread self-guards on activeTopicId).
               if (get().activeTopicId === context.topicId) writeTopicStatus('active');
@@ -2324,8 +2233,10 @@ export const executeHeterogeneousAgent = async (
           // showNotification + setBadgeCount fan-out for non-client runtimes. We pass
           // the in-memory accumulated content (the store snapshot isn't durable yet);
           // the shared helper strips markdown + caps length + resolves the title.
-          // Skip for aborted runs and for error terminations.
-          if (!isAborted() && !isErrorTerminal) {
+          // Skip for aborted runs and for error terminations — including a run
+          // the CLI itself reported as stopped (`interrupted`), which is not a
+          // finished run and must not announce itself as one.
+          if (!isAborted() && isCleanCompletion) {
             await runLifecycle.afterRunComplete({
               context,
               notification: { content: finalContent },
@@ -2394,7 +2305,9 @@ export const executeHeterogeneousAgent = async (
       agentSystemContext: heterogeneousProvider.systemContext,
       contextSelections,
       pageSelections,
-      workingDirectory,
+      // The native CLI session already retains its workspace context. Reinjecting this note on
+      // every resumed turn makes it accumulate in persistent Codex/Claude conversations.
+      workingDirectory: resumeSessionId ? undefined : workingDirectory,
     });
 
     // When resuming, hand main the prior turns so it can rebuild a Claude Code
@@ -2459,7 +2372,14 @@ export const executeHeterogeneousAgent = async (
     // Cast: TS narrows the closure-mutated `deferredTerminalEvent` back to
     // `null` in linear flow (it can't see writes from the async IPC handler).
     const terminalEvent = deferredTerminalEvent as AgentStreamEvent | null;
-    if (!isAborted() && terminalEvent?.type !== 'error') {
+    // A stop reported by the CLI itself terminates as `agent_runtime_end
+    // { reason: 'interrupted' }` rather than an error, so testing for "not an
+    // error" is no longer enough — that would drain the queue on a stop the
+    // user made, which is exactly what this guard exists to prevent.
+    const drainableTerminal =
+      terminalEvent?.type !== 'error' &&
+      isCompletedRuntimeEnd((terminalEvent?.data as { reason?: string } | undefined)?.reason);
+    if (!isAborted() && drainableTerminal) {
       const contextKey = messageMapKey(context);
       const remainingQueued = get().drainQueuedMessages?.(contextKey) ?? [];
       if (remainingQueued.length > 0) {

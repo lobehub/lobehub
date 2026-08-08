@@ -1,5 +1,6 @@
 import AgentMode from './AgentMode';
 import Clear from './Clear';
+import Effort from './Effort';
 import History from './History';
 import Memory from './Memory';
 import Mention from './Mention';
@@ -18,6 +19,7 @@ export const actionMap = {
   agentMode: AgentMode,
   clear: Clear,
   contextWindow: ContextWindow,
+  effort: Effort,
   fileUpload: Upload,
   plus: Plus,
   history: History,

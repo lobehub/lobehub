@@ -105,19 +105,18 @@ export class ActivatorExecutionRuntime {
       const parts: string[] = [];
 
       if (activatedTools.length > 0) {
-        parts.push('Successfully activated tools:');
-        for (const manifest of manifests) {
-          parts.push(`\n## ${manifest.name} (${manifest.identifier})`);
-          if (manifest.systemRole) {
-            parts.push(manifest.systemRole);
-          }
-          if (manifest.apiDescriptions.length > 0) {
-            parts.push('\nAvailable APIs:');
-            for (const api of manifest.apiDescriptions) {
-              parts.push(`- **${api.name}**: ${api.description}`);
-            }
-          }
-        }
+        // Activation state flows through `state.activatedTools` and gets the
+        // manifest (systemRole + API schemas) injected into the system prompt
+        // from the next LLM call onwards, so the result only needs to list the
+        // newly callable APIs — returning the full docs here would double-carry
+        // them in every subsequent payload (LOBE-5684).
+        const apiNames = manifests.flatMap((manifest) =>
+          manifest.apiDescriptions.length > 0
+            ? manifest.apiDescriptions.map((api) => `${manifest.identifier}.${api.name}`)
+            : [manifest.identifier],
+        );
+        parts.push(`Successfully activated tools: ${apiNames.join(', ')}.`);
+        parts.push('Usage instructions for the activated items are in the system prompt.');
       }
 
       if (activatedSkillResults.length > 0) {

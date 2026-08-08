@@ -1,8 +1,10 @@
-import type { VerifyRubricConfig } from '@lobechat/types';
+import type { AcceptanceSubjectType, VerifyRubricConfig } from '@lobechat/types';
 import { debounce } from 'es-toolkit/compat';
 import { type StateCreator } from 'zustand';
 
 import { EDITOR_DEBOUNCE_TIME, EDITOR_MAX_WAIT } from '@/const/index';
+import { mutate, useClientDataSWR } from '@/libs/swr';
+import { verifyKeys } from '@/libs/swr/keys';
 import { documentService } from '@/services/document';
 import { verifyService } from '@/services/verify';
 import { type StoreSetter } from '@/store/types';
@@ -42,6 +44,58 @@ export class ActionImpl {
       trailing: true,
     });
   }
+
+  refreshAcceptanceBundle = async (acceptanceId: string): Promise<void> => {
+    await mutate(verifyKeys.acceptanceBundle(acceptanceId));
+  };
+
+  refreshAcceptanceBySubject = async (
+    subjectType: AcceptanceSubjectType,
+    subjectId: string,
+  ): Promise<void> => {
+    await mutate(verifyKeys.acceptanceBySubject(subjectType, subjectId));
+  };
+
+  useFetchAcceptanceBundle = (acceptanceId?: string | null) =>
+    useClientDataSWR(
+      acceptanceId ? verifyKeys.acceptanceBundle(acceptanceId) : null,
+      () => verifyService.getAcceptanceBundle(acceptanceId!),
+      {
+        onSuccess: (data) => {
+          this.#set(
+            ({ acceptanceBundleMap }) => ({
+              acceptanceBundleMap: { ...acceptanceBundleMap, [acceptanceId!]: data },
+            }),
+            false,
+            'useFetchAcceptanceBundle/success',
+          );
+        },
+        revalidateOnFocus: true,
+        revalidateOnReconnect: true,
+      },
+    );
+
+  useFetchAcceptanceBySubject = (subjectType: AcceptanceSubjectType, subjectId?: string | null) =>
+    useClientDataSWR(
+      subjectId ? verifyKeys.acceptanceBySubject(subjectType, subjectId) : null,
+      () => verifyService.getAcceptanceBySubject(subjectType, subjectId!),
+      {
+        onSuccess: (data) => {
+          const key = `${subjectType}:${subjectId}`;
+          const { acceptanceBySubjectMap } = this.#get();
+          if (Object.hasOwn(acceptanceBySubjectMap, key) && acceptanceBySubjectMap[key] === data)
+            return;
+
+          this.#set(
+            { acceptanceBySubjectMap: { ...acceptanceBySubjectMap, [key]: data } },
+            false,
+            'useFetchAcceptanceBySubject/success',
+          );
+        },
+        revalidateOnFocus: true,
+        revalidateOnReconnect: true,
+      },
+    );
 
   #persist = async (): Promise<void> => {
     const criteria = [...this.#pendingCriteria.entries()];

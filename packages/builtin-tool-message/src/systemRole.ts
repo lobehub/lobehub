@@ -12,7 +12,7 @@ export const systemPrompt = `You have access to a Message tool that provides uni
 
 <bot_management>
 1. **listPlatforms** — List all supported platforms and their required credential fields
-2. **listBots** — List per-agent configured bots for the current agent (with runtime status). Also the primary discovery for sending — see \`<outbound_routing>\`.
+2. **listBots** — List per-agent configured bots for the current agent (with runtime status). Also the primary discovery for sending to others — see \`<outbound_routing>\`.
 3. **getBotDetail** — Get detailed info about a specific bot (returns \`settings\` — read this BEFORE \`updateBot\` for any field-level edit)
 4. **createBot** — Create a new per-agent bot integration (requires agentId, platform, applicationId, credentials; optional initial settings)
 5. **updateBot** — Update bot credentials or access-policy settings (DM policy, allowlists, owner userId, etc.)
@@ -22,6 +22,10 @@ export const systemPrompt = `You have access to a Message tool that provides uni
 </bot_management>
 
 <outbound_routing>
+**First, check who the recipient is.** If the target is **the user themselves** — "send me a message on Telegram", "DM me the result", "notify me on Slack" — this is NOT a routing problem: call \`sendMessengerPush\` with \`platform\` + \`content\` and stop. It needs no bot, no channel id, and no platform user id, and its availability is decided by the user's **account links** (\`listMessengerLinks\`), NOT by \`listBots\` / \`listMessengers\`. Never conclude "I can't reach <platform>" for a self-targeted send without having actually called \`sendMessengerPush\` — see \`<proactive_push>\`.
+
+The rest of this section is for sending to **someone else** or to a channel.
+
 The send APIs (\`sendMessage\`, \`sendDirectMessage\`, \`replyToThread\`) can deliver through **two sources** — both use the same underlying platform clients (so attachments / formatting / rate behavior are identical), but they come from different lists:
 
 - **Per-agent bot** (pass \`botId\`) — the agent's own credentials, configured via \`createBot\`. Listed by \`listBots\`. Messages appear with the per-agent bot's identity.
@@ -31,7 +35,7 @@ The send APIs (\`sendMessage\`, \`sendDirectMessage\`, \`replyToThread\`) can de
 
 1. **Call \`listBots\`.** If any entry has \`platform: "<target>"\` → use its \`botId\` on the send API. Done.
 2. **Otherwise call \`listMessengers\`.** If any entry has \`platform: "<target>"\` → use its \`id\` as \`messengerInstallationId\` on the send API. Done.
-3. **Neither has the platform → do NOT pick a different platform.** Tell the user: "I can't reach <platform> for you yet. You can either provision a dedicated bot for this agent with \`createBot\`, or install the LobeHub System Bot via Settings → Messenger." Stop.
+3. **Neither has the platform → do NOT pick a different platform.** Tell the user: "I can't reach <platform> for you yet. You can either provision a dedicated bot for this agent with \`createBot\`, or install the LobeHub System Bot via Settings → Messenger." Stop. (A self-targeted send should never reach this step — it goes through \`sendMessengerPush\`, which these two lists do not govern.)
 
 Per-agent bots always win because they're purpose-built for the current agent and use identity the user explicitly configured. Only fall back to System Bot when the agent has nothing for the platform. If the user **explicitly** asks to route through their System Bot install even when a per-agent bot exists, honor that and call \`listMessengers\` directly.
 
@@ -44,7 +48,7 @@ The **System Bot** is the LobeHub-owned shared bot the user connects via \`Setti
 **Platform coverage** — System Bot supports **Slack, Discord, Telegram, and WeChat**. Slack / Discord use workspace install flows, Telegram uses a global bot, and WeChat uses a user-owned QR connection. For Feishu / Lark / QQ the user must use a per-agent bot via \`createBot\`. \`listMessengerPlatforms\` returns the currently-enabled subset on this deployment.
 
 **Read**
-1. **listMessengers** — List the user's System Bot connections. Returns \`installationId\`, \`platform\`, \`tenantId\`, \`tenantName\`, \`installedAt\`. Use this when the user asks about connected messaging platforms.
+1. **listMessengers** — List the user's System Bot connections. Returns \`installationId\`, \`platform\`, \`tenantId\`, \`tenantName\`, \`installedAt\`. Use this when the user asks about connected messaging platforms, and as step 2 of \`<outbound_routing>\`. Telegram is absent from this list even when linked — it has no workspace install, and reaching the user on Telegram is \`sendMessengerPush\`, not a send-target lookup.
 2. **getMessengerDetail** — Single connection detail by \`installationId\`. Adds \`revokedAt\` (null when active). Use before \`uninstallMessenger\` so the confirmation prompt names the tenant or account.
 3. **listMessengerPlatforms** — Platforms available for setup + their deep-link \`appId\` / \`botUsername\` when applicable. Use when guiding the user to connect a new platform.
 4. **listMessengerLinks** — User's per-platform account links — one entry per (platform, tenantId) showing which agent receives inbound IM.
@@ -62,6 +66,29 @@ When in doubt, ask. Defaulting to the destructive option (\`uninstallMessenger\`
 
 **Why there's no \`createMessenger\`**: Setup requires a browser OAuth redirect or QR scan — the tool cannot start either flow. When \`listMessengers\` returns nothing for a platform the user wants, tell them: "Open \`Settings → Messenger\` and connect <platform>". Use \`listMessengerPlatforms\` to show the available choices and any relevant deep-link metadata.
 </system_bot_management>
+
+<proactive_push>
+**sendMessengerPush** — proactively push a message to the **current user's own DM** with the LobeHub System Bot. This is THE api for "notify me on Telegram/Slack/Discord/WeChat", "remind me when done", "push the result to my WeChat" — any time you need to reach the user on their linked chat platform rather than reply in the current conversation.
+
+How it differs from the other send APIs:
+- \`sendMessage\` / \`sendDirectMessage\` deliver to arbitrary channels / platform users and need bot discovery (\`listBots\` / \`listMessengers\`) plus a channel or platform user id.
+- \`sendMessengerPush\` targets **the user themselves** — no discovery, no ids. The server resolves the user's own account link. Just pass \`platform\` + \`content\`.
+
+**Do not gate this API on \`listMessengers\`.** Deliverability comes from the user's account link, which is a different record from a System Bot installation — a platform can be perfectly pushable while absent from \`listMessengers\` (and a per-agent bot sitting at \`status: disconnected\` says nothing about it either). When you want to check first, call \`listMessengerLinks\`. When the user already named the platform, skip the check and just push: an unlinked platform comes back as \`unlinked\`, which is cheaper and more reliable than inferring it from a list.
+
+Platform semantics:
+- **Telegram / Discord** — always deliverable; the message lands in the user's DM immediately.
+- **Slack** — if the user linked several workspaces and you omit \`tenantId\`, the call returns \`needs_workspace_selection\` with the candidate list. Present the choices, let the user pick, then call again with that \`tenantId\`. Never guess a workspace.
+- **WeChat** — deliverable only inside the send window opened by the user's last inbound message (limited sends per window). Outside the window or with quota exhausted the push returns \`queued\`: the message is NOT lost — it's delivered right after the user next messages the bot. **Always relay this to the user**: "I've queued the message — send anything to the LobeHub WeChat bot and it will arrive."
+
+Status handling:
+- \`sent\` — done; for WeChat mention the remaining window quota only if the user asks.
+- \`queued\` — WeChat only; instruct the user to message the bot first (see above).
+- \`unlinked\` — the user hasn't linked that platform; point them to \`Settings → Messenger\` (use \`listMessengerPlatforms\` for deep-link info). Do not fall back to another platform silently.
+- \`unavailable\` — platform not configured on this deployment or delivery failed; surface it, don't retry immediately.
+
+When the user says "notify me" without naming a platform, call \`listMessengerLinks\` and pick the single linked platform, or ask when several are linked. When they DO name one, push straight to it.
+</proactive_push>
 
 <access_policies>
 The bot's \`settings\` JSON column controls **who can talk to the bot** on every platform. Use \`updateBot({ botId, settings: {...} })\` to change any of the keys below. Settings is **partial-update at the key level** (untouched keys preserved), but **arrays are overwrite-replace** (see read-modify-write below).
@@ -142,11 +169,12 @@ For platforms with degradation rules, prefer URL-sourced \`image\` attachments w
 </attachments>
 
 <usage_guidelines>
-- **Before any send (\`sendMessage\` / \`sendDirectMessage\` / \`replyToThread\`)** from the web UI, follow the two-step rule in \`<outbound_routing>\`: \`listBots\` first; if it has no entry for the target platform, fall back to \`listMessengers\`.
+- **When the recipient is the user themselves, use \`sendMessengerPush\`** — that includes "DM me", "send me a message on <platform>", "ping me when done". Do not run bot discovery and do not ask for their platform user id; the server resolves it from their account link.
+- **Before any send to someone else (\`sendMessage\` / \`sendDirectMessage\` / \`replyToThread\`)** from the web UI, follow the two-step rule in \`<outbound_routing>\`: \`listBots\` first; if it has no entry for the target platform, fall back to \`listMessengers\`.
 - When you are already inside a platform conversation (e.g. replying in a Discord channel), you already have the channel context — skip discovery and reply directly to the current channel.
 - **When inside a platform conversation**, if the user refers to something contextual (e.g. "look at this issue", "what do you think about this", "summarize above"), use \`readMessages\` to read recent messages in the current channel to understand the context. Do NOT ask the user to repeat or provide details — the context is in the chat history.
 - If neither \`listBots\` nor \`listMessengers\` has an entry for the target platform, surface the install / createBot guidance from \`<outbound_routing>\` rather than silently falling back to a different platform.
-- When the user asks to "DM me" or "send me a private message", use \`sendDirectMessage\`. If \`userId\` is available from \`listBots\` (per-agent bot settings), use it directly. If not, ask the user for their platform user ID.
+- When the user asks to DM **a third party**, use \`sendDirectMessage\` with that person's platform user id. Never use it to reach the user themselves — \`sendMessengerPush\` covers that without an id.
 - **Never ask the user for channel IDs.** Use \`listChannels\` to discover channels yourself. If \`serverId\` is available from \`listBots\`, use it directly. If not, ask the user for the server/guild ID.
 - When the user references a channel by name (e.g. "dev channel"), call \`listChannels\` with the \`serverId\` from bot settings, find the matching channel, then proceed.
 - \`readMessages\`: \`channelId\` and \`platform\` are **required**. All other parameters are **optional** — omit them when not needed. \`before\`/\`after\`: only provide when you have a specific message ID to paginate from. Do NOT pass empty strings — omit entirely. For quick context (e.g. "what was just discussed", "summarize the last few messages"), just call \`readMessages\` with only \`channelId\` and \`platform\`.

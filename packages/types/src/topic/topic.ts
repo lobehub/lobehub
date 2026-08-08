@@ -21,7 +21,7 @@ export type TopicSortBy = 'createdAt' | 'updatedAt';
  * Server-side ordering for the topic list query.
  * - `updatedAt` (default): favorites first, then most-recently-updated.
  * - `status`: favorites first, then by status priority
- *   (waitingForHuman → running → active → paused → failed → completed →
+ *   (waitingForHuman → running → active → failed → completed →
  *   archived), then most-recently-updated within each status. Backs the
  *   sidebar "group by status" mode so the highest-priority topics stay on the
  *   first page regardless of pagination.
@@ -111,6 +111,13 @@ export interface OnboardingSessionSnapshot {
 }
 
 export interface ChatTopicMetadata {
+  /** Watermark written by the background topic-summary workflow. */
+  autoSummary?: {
+    lastMessageId: string;
+    lastMessageUpdatedAt: string;
+    summarizedAt: string;
+    version: number;
+  };
   bot?: ChatTopicBotContext;
   boundDeviceId?: string;
   cronJobId?: string;
@@ -185,6 +192,14 @@ export interface ChatTopicMetadata {
    */
   runningOperation?: {
     assistantMessageId: string;
+    /** Device selected for a notify-based platform task. */
+    deviceId?: string;
+    /** Personal-device owner used to route dispatch and cancellation through the same principal. */
+    deviceUserId?: string;
+    /** Workspace principal used for a workspace-enrolled device. */
+    deviceWorkspaceId?: string;
+    /** Notify-based platform type used to select the cancellation protocol. */
+    heteroType?: string;
     /**
      * Serialized lifecycle hooks (onComplete / onError) registered for this run.
      *
@@ -428,6 +443,10 @@ export const chatTopicMetadataUpdateSchema = z.object({
   runningOperation: z
     .object({
       assistantMessageId: z.string(),
+      deviceId: z.string().optional(),
+      deviceUserId: z.string().optional(),
+      deviceWorkspaceId: z.string().optional(),
+      heteroType: z.string().optional(),
       hooks: z.array(serializedAgentHookSchema).optional(),
       operationId: z.string(),
       scope: z.string().optional(),
@@ -458,7 +477,6 @@ export interface ChatTopicSummary {
 export const TOPIC_STATUSES = [
   'active',
   'running',
-  'paused',
   'waitingForHuman',
   'scheduled',
   'failed',
@@ -624,6 +642,8 @@ export interface SharedTopicData {
     avatar?: string | null;
     backgroundColor?: string | null;
     marketIdentifier?: string | null;
+    /** Personal name; renderers resolve the label with `agentDisplayName`. */
+    name?: string | null;
     slug?: string | null;
     title?: string | null;
   };
@@ -636,6 +656,8 @@ export interface SharedTopicData {
       avatar: string | null;
       backgroundColor: string | null;
       id: string;
+      /** Personal name; renderers resolve the label with `agentDisplayName`. */
+      name?: string | null;
       title: string | null;
     }[];
     title?: string | null;

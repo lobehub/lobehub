@@ -4,6 +4,7 @@ import { asc, desc, eq } from 'drizzle-orm';
 
 import { messages } from '@/database/schemas';
 import { type LobeChatDatabase } from '@/database/type';
+import { notCopiedTranscript } from '@/database/utils/copiedTranscript';
 import { genRangeWhere, genWhere } from '@/database/utils/genWhere';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { type MessageMetadata, type ModelUsage } from '@/types/message';
@@ -60,6 +61,7 @@ export class UsageRecordService {
             { userId: messages.userId, workspaceId: messages.workspaceId },
           ),
           eq(messages.role, 'assistant'),
+          notCopiedTranscript(),
           agentId ? eq(messages.agentId, agentId) : undefined,
           genRangeWhere([startAt, endAt], messages.createdAt, (date) => date.toDate()),
         ]),
@@ -241,6 +243,7 @@ export class UsageRecordService {
             { userId: messages.userId, workspaceId: messages.workspaceId },
           ),
           eq(messages.role, 'assistant'),
+          notCopiedTranscript(),
           eq(messages.agentId, agentId),
           genRangeWhere([startAt, endAt], messages.createdAt, (date) => date.toDate()),
         ]),

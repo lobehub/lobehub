@@ -6,11 +6,11 @@ import type {
   VerifyRunSource,
   VerifyRunStatus,
 } from '@lobechat/types';
-import { and, asc, desc, eq, ilike, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 
 import { agentOperations } from '../schemas/agentOperations';
 import type { NewVerifyRun, VerifyRunItem } from '../schemas/verify';
-import { verifyRuns } from '../schemas/verify';
+import { verifyCheckResults, verifyRuns } from '../schemas/verify';
 import type { LobeChatDatabase } from '../type';
 import { isUuid } from '../utils/uuid';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
@@ -223,6 +223,59 @@ export class VerifyRunModel {
     return { items, nextCursor };
   };
 
+  /**
+   * The verification bound to each of several Agent Runs, keyed by operation.
+   * Feeds the task's activity list, where every run row needs to answer "and
+   * did it pass?" without one query per row.
+   */
+  findByOperations = async (
+    operationIds: string[],
+  ): Promise<
+    Map<
+      string,
+      Pick<VerifyRunItem, 'acceptanceId' | 'id' | 'roundIndex' | 'status'> & {
+        passed: number;
+        total: number;
+      }
+    >
+  > => {
+    const ids = [...new Set(operationIds.filter(Boolean))];
+    if (ids.length === 0) return new Map();
+
+    // Counts come from the same statement: a run row alone says pass/fail, but
+    // "4/4" is what makes a verdict inspectable at a glance, and fetching it
+    // per row would be one query per round.
+    const rows = await this.db
+      .select({
+        acceptanceId: verifyRuns.acceptanceId,
+        id: verifyRuns.id,
+        operationId: verifyRuns.operationId,
+        passed: sql<number>`count(*) filter (where ${verifyCheckResults.verdict} = 'passed')`,
+        roundIndex: verifyRuns.roundIndex,
+        status: verifyRuns.status,
+        total: sql<number>`count(${verifyCheckResults.id})`,
+      })
+      .from(verifyRuns)
+      .leftJoin(verifyCheckResults, eq(verifyCheckResults.verifyRunId, verifyRuns.id))
+      .where(and(inArray(verifyRuns.operationId, ids), this.ownership()))
+      .groupBy(
+        verifyRuns.id,
+        verifyRuns.acceptanceId,
+        verifyRuns.operationId,
+        verifyRuns.roundIndex,
+        verifyRuns.status,
+      );
+
+    return new Map(
+      rows
+        .filter((row): row is typeof row & { operationId: string } => Boolean(row.operationId))
+        .map(({ operationId, passed, total, ...run }) => [
+          operationId,
+          { ...run, passed: Number(passed), total: Number(total) },
+        ]),
+    );
+  };
+
   /** Every round chained onto an acceptance aggregate, in round order. */
   listByAcceptance = async (acceptanceId: string): Promise<VerifyRunItem[]> => {
     return this.db.query.verifyRuns.findMany({
@@ -401,6 +454,39 @@ export class VerifyRunModel {
    * stamp per-run knobs like the task's `maxRepairRounds` override, and to carry
    * them onto a repair round's run so it derives the same cap.
    */
+  /**
+   * Claim the right to drive the task from this run, exactly once.
+   *
+   * The settle path reads `taskDrivenAt`, decides, and only then writes it —
+   * so two verifier callbacks landing together can both pass the read and both
+   * act (spawning two rounds, or one spawning while the other pauses the task
+   * it just started). The claim moves that decision into a single conditional
+   * UPDATE: the row is only stamped if nobody stamped it, and the loser learns
+   * it lost from the empty result.
+   *
+   * @returns true when this caller owns the drive, false when it was taken.
+   */
+  claimTaskDrive = async (runId: string): Promise<boolean> => {
+    const claimed = await this.db
+      .update(verifyRuns)
+      .set({
+        metadata: sql`coalesce(${verifyRuns.metadata}, '{}'::jsonb) || jsonb_build_object('taskDrivenAt', ${new Date().toISOString()}::text)`,
+      })
+      .where(
+        and(
+          eq(verifyRuns.id, runId),
+          // Null-testing a jsonb arrow expression in a WHERE clause takes the
+          // production engine down (XX000), so compare an extracted value
+          // against a sentinel instead — see the jsonbNullTest guard.
+          sql`coalesce(${verifyRuns.metadata} ->> 'taskDrivenAt', '') = ''`,
+          this.ownership(),
+        ),
+      )
+      .returning({ id: verifyRuns.id });
+
+    return claimed.length > 0;
+  };
+
   setMetadata = async (runId: string, metadata: Record<string, unknown>): Promise<void> => {
     await this.db
       .update(verifyRuns)

@@ -16,6 +16,7 @@ import {
   MonitorSmartphoneIcon,
   ScrollText,
   Sparkles,
+  TagIcon,
   Users,
 } from 'lucide-react';
 import { useMemo } from 'react';
@@ -144,6 +145,13 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               icon: SkillsIcon,
               key: WorkspaceSettingsTabs.Skill,
               label: t('workspaceSetting.tab.skill'),
+            },
+            // Label registry is readable by everyone; the page itself keeps
+            // management actions behind the admin gate (disabled, not hidden).
+            {
+              icon: TagIcon,
+              key: WorkspaceSettingsTabs.Labels,
+              label: t('workspaceSetting.tab.labels'),
             },
             {
               icon: Blocks,

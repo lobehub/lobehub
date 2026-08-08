@@ -181,6 +181,49 @@ describe('spawnAgent', () => {
     expect(args[resumeIdx + 1]).toBe('cc-prev-123');
   });
 
+  it('spawns Qoder with its stream-json protocol, permission mode, and resume id', async () => {
+    const fake = createFakeProc({ stdoutChunks: [ccInit] });
+    nextFakeProc = fake.proc;
+
+    const { spawnAgent } = await import('./spawnAgent');
+    const handle = await spawnAgent({
+      agentType: 'qoder',
+      operationId: 'op-qoder',
+      prompt: 'continue with Qoder',
+      resumeSessionId: 'qoder-prev-123',
+    });
+    fake.start();
+
+    for await (const _event of handle.events) {
+      // Drain the stream so the adapter captures the session id.
+    }
+    await handle.exit;
+
+    expect(spawnCalls[0]).toMatchObject({
+      command: 'qodercli',
+    });
+    expect(spawnCalls[0].args).toEqual([
+      '-p',
+      '--input-format',
+      'stream-json',
+      '--output-format',
+      'stream-json',
+      '--include-partial-messages',
+      '--permission-mode',
+      'bypass_permissions',
+      '--resume',
+      'qoder-prev-123',
+    ]);
+    expect(JSON.parse(fake.stdinWrites[0].trim())).toEqual({
+      message: {
+        content: [{ text: 'continue with Qoder', type: 'text' }],
+        role: 'user',
+      },
+      parent_tool_use_id: null,
+      type: 'user',
+    });
+  });
+
   it('spawns AMP with its private headless stream-json protocol', async () => {
     nextFakeProc = createFakeProc().proc;
     const { spawnAgent } = await import('./spawnAgent');
@@ -334,6 +377,37 @@ describe('spawnAgent', () => {
       '--model',
       'openai/gpt-5',
     ]);
+  });
+
+  it('spawns Pi in JSON mode, resumes its native session, and sends images as @path args', async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'lobe-pi-spawn-'));
+    tempDirs.push(dir);
+    const imagePath = path.join(dir, 'input.png');
+    await writeFile(imagePath, 'image');
+    nextFakeProc = createFakeProc().proc;
+    const { spawnAgent } = await import('./spawnAgent');
+    await spawnAgent({
+      agentType: 'pi',
+      extraArgs: ['--provider', 'anthropic'],
+      operationId: 'op-pi',
+      prompt: [
+        { text: 'continue', type: 'text' },
+        { source: { path: imagePath, type: 'path' }, type: 'image' },
+      ],
+      resumeSessionId: 'pi-session-previous',
+    });
+
+    expect(spawnCalls[0]).toMatchObject({ command: 'pi' });
+    expect(spawnCalls[0].args).toEqual([
+      '--mode',
+      'json',
+      '--session-id',
+      'pi-session-previous',
+      `@${imagePath}`,
+      '--provider',
+      'anthropic',
+    ]);
+    expect((nextFakeProc as any).stdin.write.mock.calls[0][0]).toBe('continue');
   });
 
   it('seeds a real Codex resumed stream with the previous cumulative usage from the session file', async () => {
@@ -491,7 +565,7 @@ describe('spawnAgent', () => {
     const { spawnAgent } = await import('./spawnAgent');
     await expect(
       spawnAgent({ agentType: 'kimi-cli', operationId: 'op-1', prompt: 'hi' }),
-    ).rejects.toThrow(/unsupported agent type/);
+    ).rejects.toThrow('Unknown local heterogeneous agent type: "kimi-cli"');
   });
 
   it('events iterator drains all pipeline events including the trailing flush', async () => {

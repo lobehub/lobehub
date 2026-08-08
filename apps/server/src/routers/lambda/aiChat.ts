@@ -21,6 +21,7 @@ import { TopicModel } from '@/database/models/topic';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { markSilentTRPCErrorLog } from '@/libs/trpc/utils/errorLogger';
+import { unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
 import { resolveContext } from '@/server/routers/lambda/_helpers/resolveContext';
 import { AiChatService } from '@/server/services/aiChat';
 import { AiGenerationService } from '@/server/services/aiGeneration';
@@ -28,6 +29,28 @@ import { FileService } from '@/server/services/file';
 import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archiveToolResult';
 
 const log = debug('lobe-lambda-router:ai-chat');
+
+const PG_UNIQUE_VIOLATION = '23505';
+
+/**
+ * Translate a primary-key collision on a client-supplied id into a CONFLICT.
+ *
+ * Only reachable once the client mints its own ids. The realistic trigger is a
+ * retried send replaying the same ids, not a nanoid collision — so it is a
+ * client-correctable condition and must not surface as a 500.
+ *
+ * The message is deliberately generic: echoing which id collided would let a
+ * caller probe for the existence of rows it cannot read.
+ */
+const rethrowIdConflict = (error: unknown): never => {
+  if (unwrapPgError(error)?.code === PG_UNIQUE_VIOLATION) {
+    throw new TRPCError({
+      code: 'CONFLICT',
+      message: 'This message has already been created.',
+    });
+  }
+  throw error;
+};
 const { createPrefixedTimingContext, logTiming, runTimedStage } = createTimingHelpers(
   'lobe-server:chat:lobehub:timing',
 );
@@ -227,15 +250,18 @@ export const aiChatRouter = router({
               timingContext,
               'lambda.aiChat.topic.create',
             );
+            // `newTopic.id` is the id the client already rendered this
+            // conversation under; honour it so the topic never changes id
+            // mid-flight. Absent (older client) → the model mints one.
             return modelTiming
-              ? ctx.topicModel.create(payload, undefined, modelTiming)
-              : ctx.topicModel.create(payload);
+              ? ctx.topicModel.create(payload, input.newTopic!.id, modelTiming)
+              : ctx.topicModel.create(payload, input.newTopic!.id);
           },
           {
             messageCount: input.newTopic.topicMessageIds?.length ?? 0,
             trigger: input.newTopic.trigger,
           },
-        );
+        ).catch(rethrowIdConflict);
         topicId = topicItem.id;
         isCreateNewTopic = true;
         log('new topic created with id: %s', topicId);
@@ -408,6 +434,12 @@ export const aiChatRouter = router({
           return ctx.messageModel.createUserAndAssistantMessages(
             { assistantMessage, userMessage },
             {
+              // Ids the client already rendered the pair under. Omitted by an
+              // older client, in which case the model mints them as before.
+              ids: {
+                assistantMessageId: input.newAssistantMessage.id,
+                userMessageId: input.newUserMessage.id,
+              },
               ...(modelTiming ? { timing: modelTiming } : {}),
             },
           );
@@ -419,10 +451,11 @@ export const aiChatRouter = router({
           provider: input.newAssistantMessage.provider,
         },
       );
-      const { assistantMessage: assistantMessageItem, userMessage: userMessageItem } =
+      const { assistantMessage: assistantMessageItem, userMessage: userMessageItem } = await (
         agentTouchUpdatedAtTask
-          ? (await Promise.all([createMessagePairPromise, agentTouchUpdatedAtTask]))[0]
-          : await createMessagePairPromise;
+          ? Promise.all([createMessagePairPromise, agentTouchUpdatedAtTask]).then(([pair]) => pair)
+          : createMessagePairPromise
+      ).catch(rethrowIdConflict);
 
       const messageId = userMessageItem.id;
       log('user message created with id: %s', messageId);

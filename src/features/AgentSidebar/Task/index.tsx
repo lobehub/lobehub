@@ -35,13 +35,13 @@ const TaskList = memo<TaskListProps>(({ itemKey }) => {
   const { data, isLoading } = useClientDataSWR<{ data: TaskGroupItem[]; success: boolean }>(
     enabled ? taskKeys.sidebarGroups(agentId) : null,
     async ([, id]: [string, string]) =>
-      taskService.groupList({ assigneeAgentId: id, groups: SIDEBAR_GROUPS }),
+      taskService.groupList({ assigneeAgentId: id, groups: SIDEBAR_GROUPS, hasGoal: false }),
     {
       fallbackData: { data: [], success: true },
       revalidateOnFocus: false,
     },
   );
-  const taskGroups = data?.data ?? [];
+  const taskGroups = useMemo(() => data?.data ?? [], [data?.data]);
 
   const orderedGroups = useMemo(() => {
     const map = new Map(taskGroups.map((g) => [g.key, g]));

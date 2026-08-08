@@ -1,6 +1,11 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { type ISnapshotStore, parseOperationId } from '@lobechat/agent-tracing';
 import type { LobeChatDatabase } from '@lobechat/database';
+import {
+  classifyHeteroProcessFailure,
+  isHeteroStatusGuideErrorData,
+  type LocalHeterogeneousAgentType,
+} from '@lobechat/heterogeneous-agents';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -22,7 +27,7 @@ import { HeteroTraceRecorder } from './HeteroTraceRecorder';
 
 const log = debug('lobe-server:hetero-agent-service');
 
-export type HeterogeneousAgentType = 'amp' | 'claude-code' | 'codex' | 'opencode';
+export type HeterogeneousAgentType = LocalHeterogeneousAgentType;
 
 export type HeterogeneousFinishResult = 'success' | 'error' | 'cancelled';
 
@@ -56,6 +61,39 @@ export interface HeterogeneousFinishParams {
   topicId: string;
 }
 
+type HeterogeneousFinishError = NonNullable<HeterogeneousFinishParams['error']>;
+
+/**
+ * Older or partially upgraded `lh hetero exec` producers can flatten an
+ * adapter-classified terminal error before calling `heteroFinish`. Reclassify
+ * the final payload at the server boundary so a recognizable authentication
+ * failure always reaches the message row as the structured status-guide shape
+ * (`body.agentType + body.code`) the web client renders.
+ */
+export const normalizeHeterogeneousFinishError = (
+  agentType: HeterogeneousAgentType,
+  error: HeterogeneousFinishError | undefined,
+): HeterogeneousFinishError | undefined => {
+  if (!error || isHeteroStatusGuideErrorData(error.body)) return error;
+
+  const body = error.body;
+  const bodyDetails = body
+    ? [body.message, body.error, body.stderr]
+        .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+        .join('\n')
+    : '';
+  const detail = [error.message, bodyDetails].filter(Boolean).join('\n');
+  const classified = classifyHeteroProcessFailure({ agentType, detail });
+
+  if (!classified) return error;
+
+  return {
+    body: { ...classified },
+    message: classified.message,
+    type: 'AgentRuntimeError',
+  };
+};
+
 export interface HeterogeneousAgentServiceOptions {
   /** Inject a pre-built persistence handler (used by tests). */
   persistenceHandler?: HeterogeneousPersistenceHandler;
@@ -74,7 +112,7 @@ export interface HeterogeneousAgentServiceOptions {
 
 /**
  * Server-side ingest handler for heterogeneous agent CLIs (`lh hetero exec`
- * for Amp / Claude Code / Codex / OpenCode). Receives `AgentStreamEvent` batches from the
+ * for Amp / Claude Code / Codex / OpenCode / Pi / Qoder). Receives `AgentStreamEvent` batches from the
  * producer and republishes them through the existing `StreamEventManager`
  * fanout, so renderer-side gateway WS subscribers see the same wire shape
  * regardless of whether the run came from the agent gateway or a CLI process.
@@ -190,7 +228,8 @@ export class HeterogeneousAgentService {
   }
 
   async heteroFinish(params: HeterogeneousFinishParams): Promise<void> {
-    const { agentType, error, operationId, result, sessionId, topicId } = params;
+    const { agentType, operationId, result, sessionId, topicId } = params;
+    const error = normalizeHeterogeneousFinishError(agentType, params.error);
 
     log(
       'heteroFinish: user=%s topic=%s op=%s type=%s result=%s sessionId=%s',
@@ -201,6 +240,17 @@ export class HeterogeneousAgentService {
       result,
       sessionId ?? '<none>',
     );
+
+    if (error?.body?.code === 'auth_required') {
+      log(
+        'heteroFinish: authentication required user=%s topic=%s op=%s type=%s detail=%s',
+        this.userId,
+        topicId,
+        operationId,
+        agentType,
+        error.body.stderr ?? error.message,
+      );
+    }
 
     // Drain any pending state in the persistence handler — flushes trailing
     // accumulated content / reasoning that the in-stream `agent_runtime_end`

@@ -7,6 +7,7 @@ import type { CSSProperties, FC, ReactNode, UIEvent } from 'react';
 import { memo, useCallback, useEffect, useRef } from 'react';
 
 import { CONVERSATION_MIN_WIDTH } from '@/const/layoutTokens';
+import type { ComposerTarget } from '@/features/Conversation/types';
 import DiffAllToolbar from '@/features/EditorCanvas/DiffAllToolbar';
 import PageMetaBar from '@/features/PageEditor/PageMetaBar';
 import WideScreenContainer from '@/features/WideScreenContainer';
@@ -99,6 +100,8 @@ const overrideStyles = createStaticStyles(({ css }) => ({
 }));
 
 interface PageEditorProps {
+  /** Composer that receives selections created by the Ask Copilot toolbar item. */
+  askCopilotTarget?: ComposerTarget;
   emoji?: string;
   /**
    * When true, the header spans the full editor width above the body and the
@@ -138,12 +141,14 @@ interface PageEditorProps {
 }
 
 interface PageEditorCanvasProps {
+  askCopilotTarget?: ComposerTarget;
   fullWidthHeader?: boolean;
   header?: PageEditorHeader;
   rightPanel?: boolean;
 }
 
-const PageEditorCanvas = memo<PageEditorCanvasProps>(({ header, fullWidthHeader, rightPanel }) => {
+const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
+  const { askCopilotTarget, header, fullWidthHeader, rightPanel } = props;
   const showRightPanel = rightPanel !== false;
   const editable = usePageEditable();
   const editor = usePageEditorStore((s) => s.editor);
@@ -309,7 +314,7 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>(({ header, fullWidthHeader,
             {/* Prominent in-body notice when another member holds the lock; the
                 compact status badge lives in the Header (EditingIndicator). */}
             <LockedAlert />
-            <EditorCanvas />
+            <EditorCanvas askCopilotTarget={askCopilotTarget} />
           </Flexbox>
         </WideScreenContainer>
       </Flexbox>
@@ -348,6 +353,7 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>(({ header, fullWidthHeader,
  * A reusable component. Should NOT depend on context.
  */
 export const PageEditor: FC<PageEditorProps> = ({
+  askCopilotTarget,
   pageId,
   header,
   fullWidthHeader,
@@ -399,6 +405,7 @@ export const PageEditor: FC<PageEditorProps> = ({
           }}
         >
           <PageEditorCanvas
+            askCopilotTarget={askCopilotTarget}
             fullWidthHeader={fullWidthHeader}
             header={header}
             rightPanel={rightPanel}

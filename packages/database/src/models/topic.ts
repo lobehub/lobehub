@@ -44,6 +44,8 @@ import {
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { sanitizeBm25Query } from '../utils/bm25';
+import { COPIED_TOPIC_USAGE_RESET } from '../utils/copiedTranscript';
+import { markCopiedMessageMetadata } from '../utils/copyMessagesInDatabase';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
@@ -186,9 +188,8 @@ const STATUS_SORT_RANK = sql`CASE ${topics.status}
   WHEN 'running' THEN 3
   WHEN 'scheduled' THEN 4
   WHEN 'active' THEN 5
-  WHEN 'paused' THEN 6
-  WHEN 'completed' THEN 7
-  WHEN 'archived' THEN 8
+  WHEN 'completed' THEN 6
+  WHEN 'archived' THEN 7
   ELSE 5 END`;
 
 // Favorites always float to the top; the rest are ordered by the requested
@@ -384,7 +385,7 @@ export class TopicModel {
                 // display `updatedAt` above matches the client-side sort key to the server
                 // order (otherwise the two disagree and the list visibly jumps) while a
                 // rename/favorite edit still shows its real edit time. See rankTopics for
-                // the same activity-time pattern. 
+                // the same activity-time pattern.
                 sortUpdatedAt: topicActivityAt,
                 // Workspace sidebars filter maintenance actions client-side by
                 // ownership (own vs workspace scope) — the filter needs the row
@@ -460,7 +461,7 @@ export class TopicModel {
                 // display `updatedAt` above matches the client-side sort key to the server
                 // order (otherwise the two disagree and the list visibly jumps) while a
                 // rename/favorite edit still shows its real edit time. See rankTopics for
-                // the same activity-time pattern. 
+                // the same activity-time pattern.
                 sortUpdatedAt: topicActivityAt,
                 // Workspace sidebars filter maintenance actions client-side by
                 // ownership (own vs workspace scope) — the filter needs the row
@@ -532,7 +533,7 @@ export class TopicModel {
               // display `updatedAt` above matches the client-side sort key to the server
               // order (otherwise the two disagree and the list visibly jumps) while a
               // rename/favorite edit still shows its real edit time. See rankTopics for
-              // the same activity-time pattern. 
+              // the same activity-time pattern.
               sortUpdatedAt: topicActivityAt,
               // Workspace sidebars filter maintenance actions client-side by
               // ownership (own vs workspace scope) — the filter needs the row
@@ -1030,6 +1031,7 @@ export class TopicModel {
             { userId: this.userId, workspaceId: this.workspaceId },
             {
               ...originalTopic,
+              ...COPIED_TOPIC_USAGE_RESET,
               clientId: null,
               id: this.genId(),
               title: newTitle || originalTopic?.title,
@@ -1091,6 +1093,10 @@ export class TopicModel {
             ...message,
             clientId: null,
             id: newId,
+            // A duplicate consumed no tokens: mark it so usage reports do not
+            // count the source's generation twice (the figures themselves stay
+            // — they are what the transcript records).
+            metadata: markCopiedMessageMetadata(message.metadata),
             parentId: newParentId,
             tools: newTools,
             topicId: duplicatedTopic.id,

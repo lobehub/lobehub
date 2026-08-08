@@ -14,8 +14,11 @@ import { createStore, Provider } from './store';
 import StoreUpdater from './StoreUpdater';
 import {
   type ActionsBarConfig,
+  type ComposerTarget,
   type ConversationContext,
   type ConversationHooks,
+  createComposerTarget,
+  type MessagesChangeMeta,
   type OperationState,
 } from './types';
 
@@ -40,6 +43,11 @@ export interface ConversationProviderProps {
   actionsBar?: ActionsBarConfig;
   children: ReactNode;
   /**
+   * Explicit composer capability for this surface. Defaults to this
+   * conversation's own context key.
+   */
+  composerTarget?: ComposerTarget;
+  /**
    * Conversation context (data coordinates)
    */
   context: ConversationContext;
@@ -63,8 +71,15 @@ export interface ConversationProviderProps {
    *
    * @param messages - The updated messages array
    * @param context - The context that this data belongs to (prevents race conditions)
+   * @param meta - Set when the messages are a fetched server snapshot; forward
+   *   it as `source` to ChatStore.replaceMessages so the SWR write-through can
+   *   skip fetch echoes (see MessagesChangeMeta)
    */
-  onMessagesChange?: (messages: UIChatMessage[], context: ConversationContext) => void;
+  onMessagesChange?: (
+    messages: UIChatMessage[],
+    context: ConversationContext,
+    meta?: MessagesChangeMeta,
+  ) => void;
   /**
    * External operation state (from ChatStore)
    *
@@ -87,6 +102,7 @@ export const ConversationProvider = memo<ConversationProviderProps>(
   ({
     actionsBar,
     children,
+    composerTarget,
     context,
     hooks = {},
     hasInitMessages,
@@ -96,6 +112,10 @@ export const ConversationProvider = memo<ConversationProviderProps>(
     skipFetch,
   }) => {
     const contextKey = useMemo(() => messageMapKey(context), [context]);
+    const resolvedComposerTarget = useMemo(
+      () => composerTarget ?? createComposerTarget(contextKey),
+      [composerTarget, contextKey],
+    );
 
     log(
       '[Provider] render | contextKey=%s | messagesCount=%d | hasInitMessages=%s | skipFetch=%s',
@@ -107,11 +127,19 @@ export const ConversationProvider = memo<ConversationProviderProps>(
 
     return (
       <Provider
-        createStore={() => createStore({ context, hooks, initialMessages: messages, skipFetch })}
-        key={contextKey}
+        createStore={() =>
+          createStore({
+            composerTarget: resolvedComposerTarget,
+            context,
+            hooks,
+            initialMessages: messages,
+            skipFetch,
+          })
+        }
       >
         <StoreUpdater
           actionsBar={actionsBar}
+          composerTarget={resolvedComposerTarget}
           context={context}
           hasInitMessages={hasInitMessages}
           hooks={hooks}

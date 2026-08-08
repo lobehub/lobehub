@@ -18,17 +18,21 @@ import AuthRequiredModal from '@/features/Electron/AuthRequiredModal';
 import OverlayCaptureUploader from '@/features/Electron/ScreenCapture/OverlayCaptureUploader';
 import OverlayMessageDispatcher from '@/features/Electron/ScreenCapture/OverlayMessageDispatcher';
 import OverlaySnapshotPublisher from '@/features/Electron/ScreenCapture/OverlaySnapshotPublisher';
-import { useDesktopDocumentTitle, useWindowUrlMirror } from '@/features/Electron/shell';
+import {
+  useDesktopDocumentTitle,
+  useLastWorkspaceSlugSync,
+  useWindowUrlMirror,
+} from '@/features/Electron/shell';
 import ZoomHUD from '@/features/Electron/system/ZoomHUD';
 import { TabHost, useSeedTabsOnBoot } from '@/features/Electron/TabHost';
 import TabCacheBridges from '@/features/Electron/titlebar/TabBar/TabCacheBridges';
 import TitleBar from '@/features/Electron/titlebar/TitleBar';
 import HotkeyHelperPanel from '@/features/HotkeyHelperPanel';
 import NavPanelShell from '@/features/NavPanel/Shell';
+import { DndContextWrapper } from '@/features/ResourceManager/DndContextWrapper';
 import { usePlatform } from '@/hooks/usePlatform';
 import CmdkLazy from '@/layout/GlobalProvider/CmdkLazy';
 import dynamic from '@/libs/next/dynamic';
-import { DndContextWrapper } from '@/routes/(main)/resource/features/DndContextWrapper';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import DesktopAutoOidcOnFirstOpen from './DesktopAutoOidcOnFirstOpen';
@@ -46,6 +50,7 @@ const Layout: FC = () => {
 
   useSeedTabsOnBoot();
   useWindowUrlMirror();
+  useLastWorkspaceSlugSync();
   useDesktopDocumentTitle();
 
   return (

@@ -5,6 +5,11 @@ import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
+import {
+  HETEROGENEOUS_AGENT_CONFIGS,
+  isLocalHeterogeneousType,
+  LOCAL_HETEROGENEOUS_AGENT_TYPES,
+} from '@lobechat/heterogeneous-agents';
 import type { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import { LobeBuiltinMcpServer } from '@lobechat/heterogeneous-agents/builtinMcp';
 import { resolveHeteroSpawnCommand } from '@lobechat/heterogeneous-agents/resolveCliCommand';
@@ -28,7 +33,8 @@ import { CoalescingBatchIngester } from '../utils/CoalescingBatchIngester';
 import { log } from '../utils/logger';
 import { TrpcIngestSink } from '../utils/TrpcIngestSink';
 
-const SUPPORTED_AGENT_TYPES = new Set(['amp', 'claude-code', 'codex', 'opencode']);
+export const SUPPORTED_AGENT_TYPES = new Set<string>(LOCAL_HETEROGENEOUS_AGENT_TYPES);
+const SUPPORTED_AGENT_TITLES = HETEROGENEOUS_AGENT_CONFIGS.map(({ title }) => title).join(' / ');
 const CODEX_REASONING_EFFORT_CONFIG_KEY = 'model_reasoning_effort';
 const CODEX_SERVICE_TIER_CONFIG_KEY = 'service_tier';
 
@@ -128,7 +134,13 @@ const buildExtraArgs = (
               ...(options.model ? ['--model', options.model] : []),
               ...(options.effort ? ['--effort', options.effort] : []),
             ]
-          : [...(options.model ? ['--model', options.model] : [])];
+          : options.type === 'opencode'
+            ? [...(options.model ? ['--model', options.model] : [])]
+            : options.type === 'pi'
+              ? [...(options.model ? ['--model', options.model] : [])]
+              : options.type === 'qoder'
+                ? [...(options.model ? ['--model', options.model] : [])]
+                : [];
   const extraArgs = [...(options.agentArg ?? []), ...selectorArgs];
 
   return extraArgs.length > 0 ? extraArgs : undefined;
@@ -327,7 +339,7 @@ class RawStreamDump {
 }
 
 const exec = async (options: ExecOptions): Promise<void> => {
-  if (!SUPPORTED_AGENT_TYPES.has(options.type)) {
+  if (!isLocalHeterogeneousType(options.type)) {
     log.error(
       `Unsupported --type "${options.type}". Supported: ${[...SUPPORTED_AGENT_TYPES].join(', ')}`,
     );
@@ -379,7 +391,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
   // Build the ingest sink — no-op for standalone mode, real tRPC sink for
   // server-ingest mode.  The tRPC client reads LOBEHUB_JWT (operation-scoped
   // JWT injected by the server) for authentication.
-  const agentType = options.type as 'amp' | 'claude-code' | 'codex' | 'opencode';
+  const agentType = options.type;
   let sink: TrpcIngestSink | undefined;
   let serverIngester: CoalescingBatchIngester | undefined;
   // Uploader for tool_result images (CC `Read` on an image file). Reuses the
@@ -410,7 +422,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     });
   }
 
-  // ─── AskUserQuestion MCP — remote Human-in-the-loop (claude-code only) ──────
+  // ─── AskUserQuestion MCP — remote Human-in-the-loop ────────────────────────
   //
   // Mount the same `lobe_cc` MCP server the desktop app uses, but resolve the
   // bridge over the server's Redis stream instead of Electron IPC:
@@ -426,7 +438,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
   let askBridge: AskUserBridge | undefined;
   let askMcpConfigPath: string | undefined;
   const askPollAbort = new AbortController();
-  if (serverIngest && agentType === 'claude-code' && serverIngester) {
+  if (serverIngest && (agentType === 'claude-code' || agentType === 'qoder') && serverIngester) {
     askServer = new LobeBuiltinMcpServer();
     await askServer.start();
     askBridge = askServer.registerOperation(operationId);
@@ -519,7 +531,12 @@ const exec = async (options: ExecOptions): Promise<void> => {
     type: string,
     errnoCode?: string,
   ): { body?: Record<string, unknown>; message: string; type: string } => {
-    const classified = classifyHeteroProcessFailure({ agentType, detail: message, errnoCode });
+    const classified = classifyHeteroProcessFailure({
+      agentType,
+      command: options.command,
+      detail: message,
+      errnoCode,
+    });
     if (!classified) return { message, type };
     return { body: { ...classified }, message: classified.message, type: 'AgentRuntimeError' };
   };
@@ -741,11 +758,11 @@ const exec = async (options: ExecOptions): Promise<void> => {
   const interceptResume = !!options.resume;
   const extraArgs = [
     ...(buildExtraArgs(options) ?? []),
-    // Point CC at the lobe_cc AskUserQuestion MCP server we just mounted.
+    // Point the supported CLI at the lobe_cc AskUserQuestion MCP server we just mounted.
     ...(askMcpConfigPath ? ['--mcp-config', askMcpConfigPath] : []),
   ];
   // Resolve the CLI binary once, up front, and reuse it for both the initial
-  // run and the resume-retry. For the default bare command (`amp`/`codex`/`claude`)
+  // run and the resume-retry. For each provider's default bare command
   // this finds the validated binary — including an app-bundled Codex CLI when
   // a broken `codex` shim shadows PATH — so sandbox/terminal runs no longer
   // ENOENT on a stale global install. Custom commands are used verbatim.
@@ -883,7 +900,7 @@ export function registerHeteroCommand(program: Command) {
   const hetero = program
     .command('hetero')
     .description(
-      'Run heterogeneous agent CLIs (Amp / Claude Code / Codex / OpenCode) and stream their output',
+      `Run heterogeneous agent CLIs (${SUPPORTED_AGENT_TITLES}) and stream their output`,
     );
 
   hetero
@@ -917,7 +934,7 @@ export function registerHeteroCommand(program: Command) {
     )
     .option(
       '-c, --command <bin>',
-      'Override the agent CLI binary name (default: `amp`, `claude`, `codex`, or `opencode`)',
+      'Override the agent CLI binary name (default: `amp`, `claude`, `codex`, `opencode`, `pi`, or `qodercli`)',
     )
     .option(
       '--operation-id <id>',

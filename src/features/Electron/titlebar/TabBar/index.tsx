@@ -16,7 +16,9 @@ import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { type DropdownItem, DropdownMenu } from '@lobehub/ui/base-ui';
 import { cx } from 'antd-style';
 import { ChevronDown, Plus } from 'lucide-react';
-import { useCallback, useMemo } from 'react';
+import { useMotionValue, useSpring } from 'motion/react';
+import * as m from 'motion/react-m';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
@@ -25,24 +27,28 @@ import { useRegisterDesktopTabHotkeys } from '@/hooks/useHotkeys/desktopTabScope
 import { usePermission } from '@/hooks/usePermission';
 import { electronSystemService } from '@/services/electron/system';
 import { useElectronStore } from '@/store/electron';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 import { electronStylish } from '@/styles/electron';
 
 import { useResolvedTabs } from './hooks/useResolvedTabs';
 import { useStripWidth } from './hooks/useStripWidth';
+import { TAB_SPRING } from './motion';
 import { resolveTabScope } from './scope';
 import { useStyles } from './styles';
 import TabItem from './TabItem';
 import {
   allocateTabWidths,
   OVERFLOW_CONTROL_WIDTH,
+  PINNED_DIVIDER_WIDTH,
   PINNED_TAB_WIDTH,
+  resolvePlacements,
   resolveTabTier,
   TAB_GAP,
 } from './tabLayout';
 
 const NEW_TAB_URL = '/';
 const NEW_TAB_BUTTON_WIDTH = 26 + TAB_GAP;
-const PINNED_DIVIDER_WIDTH = 13;
 
 // Tabs only reorder along the horizontal axis, so lock the drag transform to X.
 const restrictToHorizontalAxis: Modifier = ({ transform }) => ({ ...transform, y: 0 });
@@ -55,6 +61,8 @@ const TabBar = () => {
   const { allowed: canCreate, reason } = usePermission('create_content');
   const [stripWidth, stripRef] = useStripWidth();
   const { tabs, activeTabId } = useResolvedTabs();
+  const splitView = useElectronStore((s) => s.splitView);
+  const splitViewEnabled = useUserStore(labPreferSelectors.enableDesktopSplitView);
   const activateTab = useElectronStore((s) => s.activateTab);
   const addNewTab = useElectronStore((s) => s.addNewTab);
   const removeTab = useElectronStore((s) => s.removeTab);
@@ -64,6 +72,8 @@ const TabBar = () => {
   const reorderTabs = useElectronStore((s) => s.reorderTabs);
   const pinTab = useElectronStore((s) => s.pinTab);
   const unpinTab = useElectronStore((s) => s.unpinTab);
+  const closeSplitView = useElectronStore((s) => s.closeSplitView);
+  const openTabInSplitView = useElectronStore((s) => s.openTabInSplitView);
 
   const sensors = useSensors(
     // Require a small drag distance so a plain click still activates the tab.
@@ -86,6 +96,34 @@ const TabBar = () => {
       usableWidth: Math.max(0, stripWidth - pinnedWidth - NEW_TAB_BUTTON_WIDTH),
     });
   }, [flowTabs, pinnedTabs.length, activeTabId, stripWidth]);
+
+  const { dividerX, placements, total } = useMemo(
+    () =>
+      resolvePlacements({
+        flowIds: flowTabs.map((tab) => tab.tab.id),
+        pinnedIds: pinnedTabs.map((tab) => tab.tab.id),
+        visibleIndices: layout.visibleIndices,
+        widths: layout.widths,
+      }),
+    [flowTabs, pinnedTabs, layout],
+  );
+
+  const tabsById = useMemo(() => new Map(tabs.map((tab) => [tab.tab.id, tab])), [tabs]);
+
+  const targetTotal = useMotionValue(0);
+  const springTotal = useSpring(targetTotal, TAB_SPRING);
+  const targetDividerX = useMotionValue(dividerX);
+  const springDividerX = useSpring(targetDividerX, TAB_SPRING);
+
+  // Read during render, so it still holds the width the strip had on the previous commit
+  // — which is exactly where a tab appended this commit should enter from.
+  const previousTotal = useRef(0);
+
+  useEffect(() => {
+    targetTotal.set(total);
+    targetDividerX.set(dividerX);
+    previousTotal.current = total;
+  }, [total, dividerX, targetTotal, targetDividerX]);
 
   const newTabUrl = useMemo(() => {
     const scope = resolveTabScope(location.pathname + location.search);
@@ -188,25 +226,6 @@ const TabBar = () => {
 
   if (tabs.length === 0) return null;
 
-  const renderTab = (tab: (typeof tabs)[number], width: number) => (
-    <TabItem
-      index={tabIds.indexOf(tab.tab.id)}
-      isActive={tab.tab.id === activeTabId}
-      item={tab}
-      key={tab.tab.id}
-      pinnedCount={pinnedTabs.length}
-      tier={resolveTabTier(width)}
-      totalCount={tabs.length}
-      width={width}
-      onActivate={handleActivate}
-      onClose={handleClose}
-      onCloseLeft={handleCloseLeft}
-      onCloseOthers={handleCloseOthers}
-      onCloseRight={handleCloseRight}
-      onTogglePin={handleTogglePin}
-    />
-  );
-
   return (
     <Flexbox horizontal align={'center'} className={styles.container} gap={TAB_GAP} ref={stripRef}>
       <DndContext
@@ -216,11 +235,48 @@ const TabBar = () => {
         onDragEnd={handleDragEnd}
       >
         <SortableContext items={tabIds} strategy={horizontalListSortingStrategy}>
-          {pinnedTabs.map((tab) => renderTab(tab, PINNED_TAB_WIDTH))}
-          {pinnedTabs.length > 0 && <span className={styles.pinnedDivider} />}
-          {layout.visibleIndices.map((tabIndex, position) =>
-            renderTab(flowTabs[tabIndex], layout.widths[position]),
-          )}
+          {/* One keyed list for pinned and flowing tabs alike. Rendering them as two
+              sibling arrays scoped their keys separately, so pinning unmounted the tab
+              from one and mounted a fresh one in the other — losing its springs, which
+              is why the tab used to pop rather than travel. */}
+          <m.div className={styles.strip} style={{ width: springTotal }}>
+            {placements.map((placement) => {
+              const tab = tabsById.get(placement.id);
+              if (!tab) return null;
+
+              return (
+                <TabItem
+                  enterX={previousTotal.current}
+                  index={tabIds.indexOf(placement.id)}
+                  isActive={placement.id === activeTabId}
+                  item={tab}
+                  key={placement.id}
+                  pinnedCount={pinnedTabs.length}
+                  splitViewEnabled={splitViewEnabled}
+                  tier={resolveTabTier(placement.width)}
+                  totalCount={tabs.length}
+                  width={placement.width}
+                  x={placement.x}
+                  isSplitVisible={
+                    splitView?.primaryTabId === placement.id ||
+                    splitView?.secondaryTabId === placement.id
+                  }
+                  onActivate={handleActivate}
+                  onClose={handleClose}
+                  onCloseLeft={handleCloseLeft}
+                  onCloseOthers={handleCloseOthers}
+                  onCloseRight={handleCloseRight}
+                  onCloseSplitView={closeSplitView}
+                  onOpenInSplitView={openTabInSplitView}
+                  onTogglePin={handleTogglePin}
+                />
+              );
+            })}
+            <m.span
+              className={styles.pinnedDivider}
+              style={{ opacity: pinnedTabs.length > 0 ? 1 : 0, x: springDividerX }}
+            />
+          </m.div>
         </SortableContext>
       </DndContext>
       <ActionIcon

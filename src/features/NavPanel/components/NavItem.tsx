@@ -244,4 +244,6 @@ const NavItem = memo<NavItemProps>(
   },
 );
 
+NavItem.displayName = 'NavItem';
+
 export default NavItem;

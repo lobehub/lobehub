@@ -3,6 +3,8 @@ import type { ActionKey, ActionKeys } from './config';
 const CHAT_ONLY_ACTIONS = new Set<ActionKey>([
   'agentMode',
   'clear',
+  // personal per-model reasoning preference, not resource configuration
+  'effort',
   'fileUpload',
   'history',
   'mention',

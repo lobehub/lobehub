@@ -24,7 +24,14 @@ const generateTabId = (): string => `tab_${nanoid(8)}`;
 export interface TabPagesState {
   activeTabId: string | null;
   activeTabScope: TabScope;
+  splitView: SplitViewState | null;
   tabs: TabItem[];
+}
+
+export interface SplitViewState {
+  primaryTabId: string;
+  ratio: number;
+  secondaryTabId: string;
 }
 
 // ======== Initial State ======== //
@@ -32,6 +39,7 @@ export interface TabPagesState {
 export const tabPagesInitialState: TabPagesState = {
   activeTabScope: PERSONAL_TAB_SCOPE,
   activeTabId: null,
+  splitView: null,
   tabs: [],
 };
 
@@ -52,10 +60,18 @@ export class TabPagesActionImpl {
   }
 
   activateTab = (id: string): void => {
-    const { tabs } = this.#get();
+    const { activeTabId, splitView, tabs } = this.#get();
     if (!tabs.some((t) => t.id === id)) return;
 
-    this.#set({ activeTabId: id, tabs: this.#touch(tabs, id) }, false, 'activateTab');
+    this.#set(
+      {
+        activeTabId: id,
+        splitView: this.#replaceFocusedPane(splitView, activeTabId, id),
+        tabs: this.#touch(tabs, id),
+      },
+      false,
+      'activateTab',
+    );
     this.#persist();
   };
 
@@ -66,12 +82,7 @@ export class TabPagesActionImpl {
 
     if (existing) {
       if (activate) {
-        this.#set(
-          { activeTabId: existing.id, tabs: this.#touch(tabs, existing.id) },
-          false,
-          'activateExistingTab',
-        );
-        this.#persist();
+        this.activateTab(existing.id);
       }
       return existing.id;
     }
@@ -88,6 +99,72 @@ export class TabPagesActionImpl {
     const { activeTabId, tabs } = this.#get();
     if (!activeTabId) return null;
     return tabs.find((t) => t.id === activeTabId) ?? null;
+  };
+
+  closeSplitView = (): void => {
+    if (!this.#get().splitView) return;
+    this.#set({ splitView: null }, false, 'closeSplitView');
+  };
+
+  focusTabPane = (id: string): void => {
+    const { splitView, tabs } = this.#get();
+    if (!splitView) return;
+    if (id !== splitView.primaryTabId && id !== splitView.secondaryTabId) return;
+
+    this.#set({ activeTabId: id, tabs: this.#touch(tabs, id) }, false, 'focusTabPane');
+    this.#persist();
+  };
+
+  openTabInSplitView = (id: string): string | null => {
+    const { activeTabId, splitView, tabs } = this.#get();
+    const target = tabs.find((tab) => tab.id === id);
+    if (!target || !activeTabId) return null;
+
+    const primaryTabId = splitView?.primaryTabId ?? activeTabId;
+    if (splitView?.secondaryTabId === id) {
+      this.focusTabPane(id);
+      return id;
+    }
+
+    const now = Date.now();
+    const shouldDuplicate = id === primaryTabId;
+    const secondaryTabId = shouldDuplicate ? generateTabId() : id;
+    const nextTabs = shouldDuplicate
+      ? [
+          ...tabs,
+          {
+            ...target,
+            id: secondaryTabId,
+            lastVisited: now,
+            pinned: false,
+          },
+        ]
+      : this.#touch(tabs, id);
+
+    this.#set(
+      {
+        activeTabId: secondaryTabId,
+        splitView: {
+          primaryTabId,
+          ratio: splitView?.ratio ?? 0.5,
+          secondaryTabId,
+        },
+        tabs: nextTabs,
+      },
+      false,
+      'openTabInSplitView',
+    );
+    this.#persist();
+    return secondaryTabId;
+  };
+
+  setSplitRatio = (ratio: number): void => {
+    const { splitView } = this.#get();
+    if (!splitView) return;
+
+    const nextRatio = Math.min(0.75, Math.max(0.25, ratio));
+    if (nextRatio === splitView.ratio) return;
+    this.#set({ splitView: { ...splitView, ratio: nextRatio } }, false, 'setSplitRatio');
   };
 
   loadTabs = (url = '/'): void => {
@@ -112,8 +189,15 @@ export class TabPagesActionImpl {
       }
     }
 
+    const reconciled = this.#reconcileSplitView(newTabs, newActiveId);
+    newActiveId = reconciled.activeTabId;
+
     this.#set(
-      { activeTabId: newActiveId, tabs: this.#touch(newTabs, newActiveId) },
+      {
+        activeTabId: newActiveId,
+        splitView: reconciled.splitView,
+        tabs: this.#touch(newTabs, newActiveId),
+      },
       false,
       'removeTab',
     );
@@ -252,9 +336,17 @@ export class TabPagesActionImpl {
     const newTabs = tabs.filter((tab, index) => tab.pinned || keep(tab, index));
     if (newTabs.length === tabs.length) return;
 
-    const newActiveId = newTabs.some((t) => t.id === activeTabId) ? activeTabId : targetId;
+    const preferredActiveId = newTabs.some((t) => t.id === activeTabId) ? activeTabId : targetId;
+    const { activeTabId: newActiveId, splitView } = this.#reconcileSplitView(
+      newTabs,
+      preferredActiveId,
+    );
 
-    this.#set({ activeTabId: newActiveId, tabs: this.#touch(newTabs, newActiveId) }, false, action);
+    this.#set(
+      { activeTabId: newActiveId, splitView, tabs: this.#touch(newTabs, newActiveId) },
+      false,
+      action,
+    );
     this.#persist();
   };
 
@@ -293,8 +385,43 @@ export class TabPagesActionImpl {
     return newTabs;
   };
 
+  #replaceFocusedPane = (
+    splitView: SplitViewState | null,
+    activeTabId: string | null,
+    nextTabId: string,
+  ): SplitViewState | null => {
+    if (!splitView) return null;
+    if (nextTabId === splitView.primaryTabId || nextTabId === splitView.secondaryTabId) {
+      return splitView;
+    }
+
+    return activeTabId === splitView.secondaryTabId
+      ? { ...splitView, secondaryTabId: nextTabId }
+      : { ...splitView, primaryTabId: nextTabId };
+  };
+
+  #reconcileSplitView = (
+    tabs: TabItem[],
+    preferredActiveId: string | null,
+  ): Pick<TabPagesState, 'activeTabId' | 'splitView'> => {
+    const { splitView } = this.#get();
+    if (!splitView) return { activeTabId: preferredActiveId, splitView: null };
+
+    const tabIds = new Set(tabs.map((tab) => tab.id));
+    const hasPrimary = tabIds.has(splitView.primaryTabId);
+    const hasSecondary = tabIds.has(splitView.secondaryTabId);
+    if (hasPrimary && hasSecondary) return { activeTabId: preferredActiveId, splitView };
+
+    const remainingPaneId = hasPrimary
+      ? splitView.primaryTabId
+      : hasSecondary
+        ? splitView.secondaryTabId
+        : null;
+    return { activeTabId: remainingPaneId ?? preferredActiveId, splitView: null };
+  };
+
   #createTab = (url: string, cached: DynamicRouteMeta | undefined, activate: boolean): string => {
-    const { tabs, activeTabId } = this.#get();
+    const { tabs, activeTabId, splitView } = this.#get();
     const id = generateTabId();
     const newTab: TabItem = {
       cached,
@@ -304,7 +431,11 @@ export class TabPagesActionImpl {
     };
 
     this.#set(
-      { activeTabId: activate ? id : activeTabId, tabs: [...tabs, newTab] },
+      {
+        activeTabId: activate ? id : activeTabId,
+        splitView: activate ? this.#replaceFocusedPane(splitView, activeTabId, id) : splitView,
+        tabs: [...tabs, newTab],
+      },
       false,
       'addTab',
     );
@@ -341,7 +472,7 @@ export class TabPagesActionImpl {
     if (!force && tabScopeKey(activeTabScope) === tabScopeKey(scope)) return;
 
     const { tabs, activeTabId } = getTabPages(scope);
-    this.#set({ activeTabId, activeTabScope: scope, tabs }, false, 'loadTabs');
+    this.#set({ activeTabId, activeTabScope: scope, splitView: null, tabs }, false, 'loadTabs');
   };
 }
 

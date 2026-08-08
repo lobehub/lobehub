@@ -15,17 +15,14 @@ import type {
   HeterogeneousAgentSessionError,
   HeterogeneousCliAgentType,
 } from '@lobechat/electron-client-ipc';
+import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc/types/heterogeneous-agent';
 import {
-  AMP_CLI_INSTALL_COMMANDS,
-  AMP_CLI_INSTALL_DOCS_URL,
-  CLAUDE_CODE_CLI_INSTALL_COMMANDS,
-  CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
-  CODEX_CLI_INSTALL_COMMANDS,
-  CODEX_CLI_INSTALL_DOCS_URL,
-  HeterogeneousAgentSessionErrorCode,
-  OPENCODE_CLI_INSTALL_COMMANDS,
-  OPENCODE_CLI_INSTALL_DOCS_URL,
-} from '@lobechat/electron-client-ipc/types/heterogeneous-agent';
+  buildHeterogeneousAgentAuthRequiredError,
+  buildHeterogeneousAgentCliNotFoundError,
+  getHeterogeneousAgentConfigOrThrow,
+  isHeterogeneousAgentAuthRequired,
+  resolveHeterogeneousAgentCommand,
+} from '@lobechat/heterogeneous-agents';
 import type { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import type {
   LobeBuiltinMcpServer,
@@ -48,9 +45,13 @@ import type { AgentStreamEvent, UsageData } from '@lobechat/heterogeneous-agents
 import {
   AgentStreamPipeline,
   buildAgentInput,
+  buildCodexAppServerArgs,
+  buildCodexAppServerInput,
   ClaudeAgentSdkSession,
+  CodexAppServerSession,
   createFileStoreImageUploader,
   ensureClaudeCodeResumeTranscript,
+  getCodexAppServerUnsupportedArgs,
   readCodexSessionModel,
   resolveCliSpawnPlan,
   resolveCodexInitialModel,
@@ -119,15 +120,6 @@ const CODEX_RESUME_THREAD_NOT_FOUND_PATTERNS = [
   /conversation .*not found/i,
   /resume.*not found/i,
 ] as const;
-const CLI_AUTH_REQUIRED_PATTERNS = [
-  /failed to authenticate/i,
-  /invalid authentication credentials/i,
-  /authentication[_ ]error/i,
-  /not authenticated/i,
-  /\bunauthorized\b/i,
-  /\b401\b/,
-] as const;
-const AMP_AUTH_REQUIRED_PATTERNS = [/please (?:log|sign) in/i, /amp_api_key/i] as const;
 const CODEX_RESUME_CWD_MISMATCH_PATTERNS = [
   /working directory/i,
   /\bcwd\b/i,
@@ -143,7 +135,7 @@ const CODEX_WARN_LOG_PATTERN = /^\d{4}-\d{2}-\d{2}T\S+\s+WARN\s+/;
 const CODEX_LOG_PATTERN = /^\d{4}-\d{2}-\d{2}T\S+\s+(?:DEBUG|ERROR|INFO|TRACE|WARN)\s+/;
 const CLI_ERROR_LINE_PATTERN = /^(?:error:|Error:|Usage:)/;
 const HETERO_SESSION_COMPLETE_GRACE_MS = 1_000;
-const CLAUDE_CODE_SDK_LAB_ENABLED_VALUES = new Set(['1', 'true', 'yes', 'on']);
+const HETERO_RUNTIME_LAB_ENABLED_VALUES = new Set(['1', 'true', 'yes', 'on']);
 
 const waitForHeteroSessionCompleteGrace = () =>
   new Promise<void>((resolve) => setTimeout(resolve, HETERO_SESSION_COMPLETE_GRACE_MS));
@@ -165,6 +157,8 @@ interface StartSessionParams {
   resumeSessionId?: string;
   /** Run claude-code prompts through the Claude Agent SDK instead of CLI spawn (lab preference) */
   useClaudeCodeSdk?: boolean;
+  /** Run Codex prompts through codex app-server instead of one-shot codex exec (lab preference) */
+  useCodexAppServer?: boolean;
 }
 
 export interface StartSessionResult {
@@ -265,6 +259,7 @@ export interface SessionInfo {
 interface AgentSession {
   agentSessionId?: string;
   agentType: HeterogeneousCliAgentType;
+  appServerSession?: CodexAppServerSession;
   args: string[];
   /**
    * True when *we* initiated the kill (cancelSession / stopSession / before-quit).
@@ -301,6 +296,7 @@ interface AgentSession {
   sdkSession?: ClaudeAgentSdkSession;
   sessionId: string;
   useClaudeCodeSdk?: boolean;
+  useCodexAppServer?: boolean;
   verifiedModel?: string;
   verifiedModelContextWindow?: number;
   verifiedModelProvider?: string;
@@ -398,152 +394,25 @@ export default class HeterogeneousAgentCtr {
   );
 
   private resolveSessionCommand(session: AgentSession): string {
-    const resolvedCommand = session.command.trim();
-    if (resolvedCommand) return resolvedCommand;
-
-    switch (session.agentType) {
-      case 'amp': {
-        return 'amp';
-      }
-      case 'codex': {
-        return 'codex';
-      }
-      case 'opencode': {
-        return 'opencode';
-      }
-      default: {
-        return 'claude';
-      }
-    }
+    return resolveHeterogeneousAgentCommand(session.agentType, session.command);
   }
 
-  private buildAmpCliMissingError(session: AgentSession): HeterogeneousAgentSessionError {
-    const command = this.resolveSessionCommand(session);
-
-    return {
-      agentType: 'amp',
-      code: HeterogeneousAgentSessionErrorCode.CliNotFound,
-      command,
-      docsUrl: AMP_CLI_INSTALL_DOCS_URL,
-      installCommands: AMP_CLI_INSTALL_COMMANDS,
-      message: `Amp CLI was not found. Install it and make sure \`${command}\` can be executed.`,
-    };
-  }
-
-  private buildCodexCliMissingError(session: AgentSession): HeterogeneousAgentSessionError {
-    const command = this.resolveSessionCommand(session);
-
-    return {
-      agentType: 'codex',
-      code: HeterogeneousAgentSessionErrorCode.CliNotFound,
-      command,
-      docsUrl: CODEX_CLI_INSTALL_DOCS_URL,
-      installCommands: CODEX_CLI_INSTALL_COMMANDS,
-      message: `Codex CLI was not found. Install it and make sure \`${command}\` can be executed.`,
-    };
-  }
-
-  private buildClaudeCodeCliMissingError(session: AgentSession): HeterogeneousAgentSessionError {
-    const command = this.resolveSessionCommand(session);
-
-    return {
-      agentType: 'claude-code',
-      code: HeterogeneousAgentSessionErrorCode.CliNotFound,
-      command,
-      docsUrl: CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
-      installCommands: CLAUDE_CODE_CLI_INSTALL_COMMANDS,
-      message: `Claude Code CLI was not found. Install it and make sure \`${command}\` can be executed.`,
-    };
-  }
-
-  private buildOpenCodeCliMissingError(session: AgentSession): HeterogeneousAgentSessionError {
-    const command = this.resolveSessionCommand(session);
-
-    return {
-      agentType: 'opencode',
-      code: HeterogeneousAgentSessionErrorCode.CliNotFound,
-      command,
-      docsUrl: OPENCODE_CLI_INSTALL_DOCS_URL,
-      installCommands: OPENCODE_CLI_INSTALL_COMMANDS,
-      message: `OpenCode CLI was not found. Install it and make sure \`${command}\` can be executed.`,
-    };
-  }
-
-  private buildCliMissingError(session: AgentSession): HeterogeneousAgentSessionError | undefined {
-    switch (session.agentType) {
-      case 'amp': {
-        return this.buildAmpCliMissingError(session);
-      }
-      case 'claude-code': {
-        return this.buildClaudeCodeCliMissingError(session);
-      }
-      case 'codex': {
-        return this.buildCodexCliMissingError(session);
-      }
-      case 'opencode': {
-        return this.buildOpenCodeCliMissingError(session);
-      }
-      default: {
-        return;
-      }
-    }
+  private buildCliMissingError(session: AgentSession): HeterogeneousAgentSessionError {
+    return buildHeterogeneousAgentCliNotFoundError({
+      agentType: session.agentType,
+      command: session.command,
+    });
   }
 
   private buildCliAuthRequiredError(
     session: AgentSession,
     stderr: string,
-  ): HeterogeneousAgentSessionError | undefined {
-    const command = this.resolveSessionCommand(session);
-
-    switch (session.agentType) {
-      case 'amp': {
-        return {
-          agentType: 'amp',
-          code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-          command,
-          docsUrl: AMP_CLI_INSTALL_DOCS_URL,
-          message:
-            'Amp could not authenticate. Run `amp login` or configure AMP_API_KEY, then retry.',
-          stderr,
-        };
-      }
-      case 'claude-code': {
-        return {
-          agentType: 'claude-code',
-          code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-          command,
-          docsUrl: CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
-          message:
-            'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
-          stderr,
-        };
-      }
-      case 'codex': {
-        return {
-          agentType: 'codex',
-          code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-          command,
-          docsUrl: CODEX_CLI_INSTALL_DOCS_URL,
-          message:
-            'Codex could not authenticate. Sign in again or refresh its credentials, then retry.',
-          stderr,
-        };
-      }
-      case 'opencode': {
-        return {
-          agentType: 'opencode',
-          code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-          command,
-          docsUrl: OPENCODE_CLI_INSTALL_DOCS_URL,
-          message:
-            'OpenCode could not authenticate. Sign in again or refresh its credentials, then retry.',
-          stderr,
-        };
-      }
-      default: {
-        return;
-      }
-    }
+  ): HeterogeneousAgentSessionError {
+    return buildHeterogeneousAgentAuthRequiredError({
+      agentType: session.agentType,
+      command: session.command,
+      stderr,
+    });
   }
 
   private getErrorMessage(error: unknown): string | undefined {
@@ -616,11 +485,7 @@ export default class HeterogeneousAgentCtr {
     const message = this.getErrorMessage(error);
 
     if (!message) return;
-    const patterns =
-      session.agentType === 'amp'
-        ? [...CLI_AUTH_REQUIRED_PATTERNS, ...AMP_AUTH_REQUIRED_PATTERNS]
-        : CLI_AUTH_REQUIRED_PATTERNS;
-    if (!patterns.some((pattern) => pattern.test(message))) return;
+    if (!isHeterogeneousAgentAuthRequired(session.agentType, message)) return;
 
     return this.buildCliAuthRequiredError(session, message);
   }
@@ -686,17 +551,7 @@ export default class HeterogeneousAgentCtr {
   private async getSpawnPreflightError(
     session: AgentSession,
   ): Promise<HeterogeneousAgentSessionError | undefined> {
-    const defaultCommand =
-      session.agentType === 'amp'
-        ? 'amp'
-        : session.agentType === 'claude-code'
-          ? 'claude'
-          : session.agentType === 'codex'
-            ? 'codex'
-            : session.agentType === 'opencode'
-              ? 'opencode'
-              : undefined;
-    if (!defaultCommand) return;
+    const defaultCommand = getHeterogeneousAgentConfigOrThrow(session.agentType).defaultCommand;
 
     const command = this.resolveSessionCommand(session);
     const status =
@@ -724,8 +579,15 @@ export default class HeterogeneousAgentCtr {
    * per-user Labs toggle arrives per session as `session.useClaudeCodeSdk`.
    */
   private get isClaudeCodeSdkLabEnabled(): boolean {
-    return CLAUDE_CODE_SDK_LAB_ENABLED_VALUES.has(
+    return HETERO_RUNTIME_LAB_ENABLED_VALUES.has(
       String(process.env.LOBE_CLAUDE_CODE_SDK ?? '').toLowerCase(),
+    );
+  }
+
+  /** Environment override for development and automated app-server verification. */
+  private get isCodexAppServerLabEnabled(): boolean {
+    return HETERO_RUNTIME_LAB_ENABLED_VALUES.has(
+      String(process.env.LOBE_CODEX_APP_SERVER ?? '').toLowerCase(),
     );
   }
 
@@ -1123,6 +985,7 @@ export default class HeterogeneousAgentCtr {
       sessionId,
       resumeSessionId: params.resumeSessionId,
       useClaudeCodeSdk: params.useClaudeCodeSdk,
+      useCodexAppServer: params.useCodexAppServer,
     });
 
     logger.info('Session created:', { agentType, sessionId });
@@ -1139,6 +1002,7 @@ export default class HeterogeneousAgentCtr {
   async sendPrompt(params: SendPromptParams): Promise<void> {
     const session = this.sessions.get(params.sessionId);
     if (!session) throw new Error(`Session not found: ${params.sessionId}`);
+    session.cancelledByUs = false;
 
     const preflightError = await this.getSpawnPreflightError(session);
     if (preflightError) {
@@ -1186,11 +1050,27 @@ export default class HeterogeneousAgentCtr {
       return this.sendPromptWithClaudeSdk(params, session);
     }
 
-    // Stand up the AskUserQuestion MCP bridge for claude-code prompts BEFORE
+    if (
+      session.agentType === 'codex' &&
+      (session.useCodexAppServer || this.isCodexAppServerLabEnabled)
+    ) {
+      const unsupportedArgs = getCodexAppServerUnsupportedArgs(session.args, {
+        resume: !!session.agentSessionId,
+      });
+      if (unsupportedArgs.length === 0) {
+        return this.sendPromptWithCodexAppServer(params, session);
+      }
+      logger.warn('Falling back to codex exec because app-server cannot preserve CLI args:', {
+        sessionId: session.sessionId,
+        unsupportedArgs,
+      });
+    }
+
+    // Stand up the AskUserQuestion MCP bridge for supported prompts BEFORE
     // building the spawn plan so the driver can wire the temp config path
-    // into `--mcp-config`. Codex / future agents skip this entirely.
+    // into `--mcp-config`. Other agents skip this entirely.
     const intervention =
-      session.agentType === 'claude-code'
+      session.agentType === 'claude-code' || session.agentType === 'qoder'
         ? await this.setupInterventionForOp(params.operationId, {
             agentId: params.agentId,
             topicId: params.topicId,
@@ -1411,6 +1291,125 @@ export default class HeterogeneousAgentCtr {
       throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
         cause: error,
       });
+    }
+  }
+
+  private async sendPromptWithCodexAppServer(
+    params: SendPromptParams,
+    session: AgentSession,
+  ): Promise<void> {
+    const cwd = session.cwd || electronApp.getPath('desktop');
+    const spawnEnv = this.buildSessionSpawnEnv(session);
+    const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
+    const promptInput = buildHeterogeneousPrompt({
+      imageList: params.imageList,
+      prompt: params.prompt,
+      systemContext: params.systemContext,
+    });
+    let inputPlan;
+    try {
+      inputPlan = await buildAgentInput('codex', promptInput, { cacheDir: this.fileCacheDir });
+    } catch (error) {
+      logger.error('Failed to prepare Codex app-server input:', error);
+      throw new Error(
+        `Failed to attach image(s) to Codex app-server: ${this.getErrorMessage(error) || 'Unknown error'}`,
+        { cause: error },
+      );
+    }
+
+    const input = buildCodexAppServerInput(inputPlan);
+    const appServerArgs = buildCodexAppServerArgs(session.args);
+    const initialModel = await resolveCodexInitialModel({ args: session.args, env: spawnEnv });
+    if (initialModel?.model) {
+      session.model = initialModel.model;
+      session.modelSource = initialModel.source;
+    }
+    const initialCumulativeUsage = session.agentSessionId
+      ? (await readCodexSessionModel(session.agentSessionId, { env: spawnEnv }))?.cumulativeUsage
+      : undefined;
+    const inputPayload = `${JSON.stringify(input)}\n`;
+    const traceSession = await this.createCliTraceSession({
+      cliArgs: appServerArgs,
+      cwd,
+      imageList: params.imageList ?? [],
+      session,
+      stdinPayload: inputPayload,
+    });
+    void this.writeCliTraceFile(traceSession, 'stdin.txt', inputPayload);
+
+    const appServerSession = new CodexAppServerSession({
+      args: session.args,
+      clientVersion: electronApp.getVersion(),
+      commandPath,
+      cwd,
+      env: spawnEnv,
+      initialCumulativeUsage,
+      initialModel: session.model,
+      input,
+      onEvents: async (events) => {
+        for (const event of events) {
+          this.broadcast('heteroAgentEvent', {
+            event,
+            sessionId: session.sessionId,
+          });
+        }
+      },
+      onModel: (model) => {
+        session.model = model;
+        session.modelSource = 'codex-app-server';
+      },
+      onRawMessage: (line) => this.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
+      onRuntimeStatus: (status) => {
+        this.broadcast('heteroAgentRuntimeStatus', status);
+      },
+      onSessionId: (agentSessionId) => {
+        if (agentSessionId !== session.agentSessionId) session.agentSessionId = agentSessionId;
+      },
+      onStderr: (data) => this.appendCliTraceFile(traceSession, 'stderr.log', data),
+      operationId: params.operationId,
+      resumeSessionId: session.agentSessionId,
+      sessionId: session.sessionId,
+    });
+    session.appServerSession = appServerSession;
+
+    logger.info('Starting Codex app-server session:', {
+      commandPath,
+      cwd,
+      sessionId: session.sessionId,
+    });
+
+    try {
+      await appServerSession.run();
+      void this.writeCliTraceJson(traceSession, 'exit.json', {
+        finishedAt: new Date().toISOString(),
+        transport: 'codex-app-server',
+      });
+      await this.flushCliTrace(traceSession);
+      this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+    } catch (error) {
+      logger.error('Codex app-server session error:', error);
+      void this.writeCliTraceJson(traceSession, 'process-error.json', {
+        message: error instanceof Error ? error.message : String(error),
+        name: error instanceof Error ? error.name : 'Error',
+        transport: 'codex-app-server',
+      });
+      await this.flushCliTrace(traceSession);
+
+      if (session.cancelledByUs) {
+        this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+        return;
+      }
+
+      const sessionError = this.getSessionErrorPayload(error, session);
+      this.broadcast('heteroAgentSessionError', {
+        error: sessionError,
+        sessionId: session.sessionId,
+      });
+      throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
+        cause: error,
+      });
+    } finally {
+      if (session.appServerSession === appServerSession) session.appServerSession = undefined;
     }
   }
 
@@ -1692,7 +1691,7 @@ export default class HeterogeneousAgentCtr {
     return { agentSessionId: session?.agentSessionId };
   }
 
-  /** Query OpenCode's model catalog using the same cwd/env rules as a real local session. */
+  /** Query a heterogeneous CLI's model catalog using the same rules as a real local session. */
   async listModels(
     params: ListHeterogeneousAgentModelsParams,
   ): Promise<HeterogeneousAgentModelCatalog> {
@@ -1841,6 +1840,15 @@ export default class HeterogeneousAgentCtr {
     if (!session) return;
 
     session.cancelledByUs = true;
+    if (session.appServerSession) {
+      try {
+        await session.appServerSession.interrupt();
+      } catch (error) {
+        logger.warn('Codex app-server interrupt failed; closing session:', error);
+        session.appServerSession.close();
+      }
+      return;
+    }
     if (session.sdkSession) {
       session.sdkSession.close();
       return;
@@ -1864,6 +1872,11 @@ export default class HeterogeneousAgentCtr {
   async stopSession(params: StopSessionParams): Promise<void> {
     const session = this.sessions.get(params.sessionId);
     if (!session) return;
+
+    if (session.appServerSession) {
+      session.cancelledByUs = true;
+      session.appServerSession.close();
+    }
 
     if (session.sdkSession) {
       session.cancelledByUs = true;
@@ -1937,6 +1950,10 @@ export default class HeterogeneousAgentCtr {
     electronApp.on('before-quit', () => {
       this.unlinkPendingInterventionConfigsSync();
       for (const [, session] of this.sessions) {
+        if (session.appServerSession) {
+          session.cancelledByUs = true;
+          session.appServerSession.close();
+        }
         if (session.sdkSession) {
           session.cancelledByUs = true;
           session.sdkSession.close();

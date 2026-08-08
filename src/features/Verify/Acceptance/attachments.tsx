@@ -239,7 +239,17 @@ export const AttachmentThumbs = memo<AttachmentThumbsProps>(({ attachments }) =>
   const usable = (attachments ?? []).filter((attachment) => attachment.url);
   if (usable.length === 0) return null;
   return (
-    <Flexbox horizontal gap={6} wrap={'wrap'}>
+    // Every host row is itself clickable (jump to the check), and that jump closes the
+    // drawer this list often lives in — which would unmount the zoom viewer in the same
+    // tick it opened. Zooming a thumbnail is its own action, so it stops here.
+    <Flexbox
+      horizontal
+      gap={6}
+      wrap={'wrap'}
+      onClick={(event) => {
+        event.stopPropagation();
+      }}
+    >
       {usable.map((attachment) => (
         <div className={styles.thumb} key={attachment.id}>
           <Image alt={attachment.name ?? ''} src={attachment.url!} />

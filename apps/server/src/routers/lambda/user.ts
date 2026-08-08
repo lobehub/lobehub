@@ -3,6 +3,7 @@ import {
   formatWebOnboardingStateMessage,
 } from '@lobechat/builtin-tool-web-onboarding/utils';
 import { isDesktop } from '@lobechat/const';
+import { hasApiKeyScope, isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { applyMarkdownPatch, formatMarkdownPatchError } from '@lobechat/markdown-patch';
 import type {
   ConfirmOnboardingUnderstandingInput,
@@ -191,6 +192,7 @@ const userProcedure = authedProcedure.use(serverDatabase).use(async ({ ctx, next
       // only feed `getUserState`'s user-lifetime onboarding gates (hasConversation /
       // canEnablePWAGuide / canEnableTrace), which are per-user, not per-workspace.
       messageModel: new MessageModel(ctx.serverDB, ctx.userId),
+      createOnboardingService: () => new OnboardingService(ctx.serverDB, ctx.userId),
       sessionModel: new SessionModel(ctx.serverDB, ctx.userId),
       userModel: new UserModel(ctx.serverDB, ctx.userId),
     },
@@ -352,7 +354,12 @@ export const userRouter = router({
       lastName: state.lastName,
       onboarding: state.onboarding,
       preference: state.preference as UserPreference,
-      settings: state.settings,
+      // restricted API keys must not read decrypted provider/tool credentials
+      // or Marketplace OAuth tokens
+      settings:
+        ctx.apiKeyScopes !== undefined && !isFullAccessApiKey(ctx.apiKeyScopes)
+          ? { ...state.settings, keyVaults: undefined, market: undefined }
+          : state.settings,
       userId: ctx.userId,
       username: state.username,
 
@@ -688,9 +695,7 @@ export const userRouter = router({
     }),
 
   resetAgentOnboarding: userProcedure.mutation(async ({ ctx }) => {
-    const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
-
-    return onboardingService.reset();
+    return ctx.createOnboardingService().reset();
   }),
 
   updateAgentOnboarding: userProcedure
@@ -700,7 +705,7 @@ export const userRouter = router({
     }),
 
   updateOnboarding: userProcedure.input(UserOnboardingSchema).mutation(async ({ ctx, input }) => {
-    return ctx.userModel.updateUser({ onboarding: input });
+    return ctx.createOnboardingService().updateOnboarding(input);
   }),
 
   updatePreference: userProcedure.input(UserPreferenceSchema).mutation(async ({ ctx, input }) => {
@@ -709,6 +714,27 @@ export const userRouter = router({
 
   updateSettings: userProcedure.input(UserSettingsSchema).mutation(async ({ ctx, input }) => {
     const { keyVaults, ...res } = input as Partial<UserSettings>;
+    // presence, not truthiness: `keyVaults: null` is an explicit credential clear
+    const hasKeyVaultsUpdate = 'keyVaults' in (input as Partial<UserSettings>);
+
+    // credential-bearing settings: `keyVaults` holds provider/tool credentials,
+    // `market` holds Marketplace OAuth access/refresh tokens. A restricted key
+    // needs `model:write` on top of the namespace's `user:write` to touch (or
+    // clear) either; full-access keys pass through.
+    const touchedCredentialFields = ['keyVaults', 'market'].filter(
+      (field) => field in (input as Partial<UserSettings>),
+    );
+    if (
+      touchedCredentialFields.length > 0 &&
+      ctx.apiKeyScopes !== undefined &&
+      !isFullAccessApiKey(ctx.apiKeyScopes) &&
+      !hasApiKeyScope(ctx.apiKeyScopes, 'model:write')
+    ) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: `This API key cannot update credential settings ('${touchedCredentialFields.join("', '")}'): missing required scope 'model:write'.`,
+      });
+    }
 
     if (ctx.workspaceId && (hasOwnerSettingChange(res) || hasMemberSettingChange(res))) {
       const rbac = new RbacModel(ctx.serverDB, ctx.userId);
@@ -728,18 +754,23 @@ export const userRouter = router({
       }
     }
 
-    // Encrypt keyVaults
-    let encryptedKeyVaults: string | null = null;
+    // Encrypt keyVaults; only touch the column when the caller sent the field,
+    // so a settings update without `keyVaults` no longer clears stored creds
+    const nextValue: Record<string, unknown> = { ...res };
 
-    if (keyVaults) {
-      // TODO: better to add a validation
-      const data = JSON.stringify(keyVaults);
-      const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+    if (hasKeyVaultsUpdate) {
+      let encryptedKeyVaults: string | null = null;
 
-      encryptedKeyVaults = await gateKeeper.encrypt(data);
+      if (keyVaults) {
+        // TODO: better to add a validation
+        const data = JSON.stringify(keyVaults);
+        const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+
+        encryptedKeyVaults = await gateKeeper.encrypt(data);
+      }
+
+      nextValue.keyVaults = encryptedKeyVaults;
     }
-
-    const nextValue = { ...res, keyVaults: encryptedKeyVaults };
 
     return ctx.userModel.updateSetting(nextValue);
   }),

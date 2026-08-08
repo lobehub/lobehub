@@ -2,18 +2,17 @@
 
 import { createStaticStyles } from 'antd-style';
 import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
-import type { CSSProperties, MouseEvent, ReactNode } from 'react';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+import { memo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useNaturalHeight } from './useNaturalHeight';
+import { useCollapsible } from './useCollapsible';
 
 const DEFAULT_MAX_HEIGHT = 280;
 const DEFAULT_FADE_HEIGHT = 48;
 // The fade must stay under one line-height, or the last visible line is a ghost
 // and a short preview has nothing legible left in it.
 const FADE_RATIO = 0.2;
-const VIEWPORT_RATIO = 0.35;
 // Only collapse when the overflow is meaningful; avoids hiding a button for a
 // handful of extra pixels.
 const OVERFLOW_THRESHOLD = 32;
@@ -66,15 +65,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const computeThreshold = (limit: number) => {
-  if (typeof window === 'undefined') return limit;
-  return Math.min(limit, Math.round(window.innerHeight * VIEWPORT_RATIO));
-};
-
 interface CollapsibleContentProps {
   children: ReactNode;
+  /** Controlled collapsed state. Omit to let the component own it. Pass it when something outside the toggle expands the content — an editor gaining focus, for instance. */
+  collapsed?: boolean;
   /** Upper bound for the collapsed height; the effective clamp also honours the viewport. */
   maxHeight?: number;
+  /** Fires on toggle with the next collapsed state. Required for the controlled mode; also useful as a plain notification in the uncontrolled one. */
+  onCollapsedChange?: (collapsed: boolean) => void;
+  /** Fires when the content crosses the overflow threshold, so the host can drop affordances that only make sense once nothing is hidden. */
+  onOverflowChange?: (overflowing: boolean) => void;
   /** How far content must overflow before collapsing is worth a toggle. Lower it for short previews, where a couple of hidden lines already matter. */
   overflowThreshold?: number;
 }
@@ -88,40 +88,37 @@ interface CollapsibleContentProps {
  *
  * The clamp is capped by the viewport, not just `maxHeight`: on a short window a
  * 280px preview is most of the screen.
+ *
+ * Collapsing is self-managed by default. Pass `collapsed` + `onCollapsedChange`
+ * to drive it from outside — the task instruction expands on editor focus, so
+ * one click both opens the preview and puts the caret where it was aimed.
  */
 const CollapsibleContent = memo<CollapsibleContentProps>(
   ({
     children,
+    collapsed: collapsedProp,
     maxHeight: maxHeightLimit = DEFAULT_MAX_HEIGHT,
+    onCollapsedChange,
+    onOverflowChange,
     overflowThreshold = OVERFLOW_THRESHOLD,
   }) => {
     const { t } = useTranslation('chat');
     const contentRef = useRef<HTMLDivElement | null>(null);
 
-    const [maxHeight, setMaxHeight] = useState(() => computeThreshold(maxHeightLimit));
-    const [collapsed, setCollapsed] = useState(true);
-
-    const naturalHeight = useNaturalHeight(contentRef);
-
-    useEffect(() => {
-      if (typeof window === 'undefined') return;
-
-      const handleResize = () => setMaxHeight(computeThreshold(maxHeightLimit));
-      handleResize();
-
-      window.addEventListener('resize', handleResize);
-      return () => window.removeEventListener('resize', handleResize);
-    }, [maxHeightLimit]);
-
-    const shouldCollapse = naturalHeight > maxHeight + overflowThreshold;
-    const isCollapsed = shouldCollapse && collapsed;
-
-    // Previews live inside clickable cards (a task run opens its drawer) — the
-    // toggle must not also trigger the card.
-    const handleToggle = useCallback((e: MouseEvent) => {
-      e.stopPropagation();
-      setCollapsed((prev) => !prev);
-    }, []);
+    const {
+      isCollapsed,
+      maxHeight,
+      shouldCollapse,
+      showAsCollapsed: collapsed,
+      toggle,
+    } = useCollapsible({
+      collapsed: collapsedProp,
+      contentRef,
+      maxHeightLimit,
+      onCollapsedChange,
+      onOverflowChange,
+      overflowThreshold,
+    });
 
     return (
       <div className={styles.container}>
@@ -145,7 +142,7 @@ const CollapsibleContent = memo<CollapsibleContentProps>(
               aria-expanded={!collapsed}
               className={styles.toggleButton}
               type="button"
-              onClick={handleToggle}
+              onClick={toggle}
             >
               {collapsed ? <ChevronDownIcon size={14} /> : <ChevronUpIcon size={14} />}
               {collapsed ? t('messageLongCollapse.expand') : t('messageLongCollapse.collapse')}
