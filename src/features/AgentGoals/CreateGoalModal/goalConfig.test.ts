@@ -58,6 +58,15 @@ describe('buildGoalTaskConfig', () => {
     expect(config.verify.enabled).toBe(true);
   });
 
+  it('associates user-reviewed acceptance criteria with the goal', () => {
+    const config = buildGoalTaskConfig({
+      instruction: 'clear the P0 backlog',
+      verifyCriteriaIds: ['criterion-1', 'criterion-2'],
+    });
+
+    expect(config.verify.verifyCriteriaIds).toEqual(['criterion-1', 'criterion-2']);
+  });
+
   it('falls back to the instruction so the goal stays judgeable', () => {
     // An empty requirement would leave `planInstantiation` with no source for the
     // holistic check, i.e. a goal that can never be accepted.

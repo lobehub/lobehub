@@ -27,6 +27,8 @@ export interface BuildGoalTaskConfigParams {
   requirement?: string;
   /** Outer-loop budget: how many rounds (task topics) the goal may spawn. */
   roundBudget?: number | null;
+  /** User-reviewed acceptance criteria generated before the goal is created. */
+  verifyCriteriaIds?: string[];
 }
 
 /**
@@ -48,6 +50,7 @@ export const buildGoalTaskConfig = ({
   instruction,
   requirement,
   roundBudget,
+  verifyCriteriaIds,
 }: BuildGoalTaskConfigParams): GoalTaskConfig => {
   const acceptance = requirement?.trim() || instruction.trim();
 
@@ -71,6 +74,7 @@ export const buildGoalTaskConfig = ({
       // Drives criteria generation on the first run (`planInstantiation`'s
       // holistic fallback), so an empty one would leave the goal unjudgeable.
       requirement: acceptance,
+      verifyCriteriaIds,
     },
   };
 };

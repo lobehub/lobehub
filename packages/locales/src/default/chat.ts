@@ -1419,8 +1419,18 @@ export default {
   'createGoal.costBudgetLabel': 'Cost budget',
   'createGoal.costBudgetPlaceholder': 'No cap',
   'createGoal.createFailed': 'Failed to create goal',
+  'createGoal.back': 'Back',
+  'createGoal.contextLabel': 'Context for the Agent',
+  'createGoal.criteriaHint': 'Review and edit these before the goal starts',
+  'createGoal.criteriaTitle': 'What counts as done',
+  'createGoal.describeHint':
+    'Describe the outcome in one sentence. AI will draft a checklist you can review next.',
+  'createGoal.generateFailed': 'Could not draft acceptance criteria. Try again.',
   'createGoal.instructionPlaceholder':
     'Add any context the agent needs — scope, constraints, where to look…',
+  'createGoal.next': 'Draft acceptance criteria',
+  'createGoal.regenerate': 'Draft again',
+  'createGoal.removeCriterion': 'Remove criterion',
   'createGoal.requirementHint': 'Judged at the end of every round',
   'createGoal.requirementLabel': 'What counts as done',
   'createGoal.requirementPlaceholder':
@@ -1486,7 +1496,7 @@ export default {
   'goalEmpty.step3.desc':
     'Every check is judged one by one. All passed means achieved; anything needing your call stops at pending acceptance.',
   'goalEmpty.step3.title': 'Acceptance runs every round',
-  'goalEmpty.title': 'Let the agent chase one outcome until it lands',
+  'goalEmpty.title': 'Let the agent drive the goal forward',
   'goalList.acceptanceProgress': '{{passed}}/{{total}} passed',
   'goalList.agentRuns': '{{count}} runs',
   'goalList.empty': 'No goals yet',

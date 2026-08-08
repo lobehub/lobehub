@@ -2,12 +2,12 @@
 
 import { DEFAULT_GOAL_MAX_ROUNDS } from '@lobechat/const/verify';
 import { useEditor } from '@lobehub/editor/react';
-import { ActionIcon, Flexbox, Text, TextArea } from '@lobehub/ui';
+import { ActionIcon, Block, Flexbox, Text, TextArea } from '@lobehub/ui';
 import { Button, Select, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { InputNumber } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { Paperclip, X } from 'lucide-react';
-import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
+import { ArrowLeft, Paperclip, Sparkles, Trash2, X } from 'lucide-react';
+import { type KeyboardEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
@@ -19,6 +19,9 @@ import { useAgentVisibility } from '@/features/AgentTasks/shared/useAgentVisibil
 import { EditorCanvas } from '@/features/EditorCanvas';
 import { pickAndInsertAttachments } from '@/features/EditorCanvas/editorAttachments';
 import { usePermission } from '@/hooks/usePermission';
+import { type VerifyCriterionDraft, verifyService } from '@/services/verify';
+import { useAgentStore } from '@/store/agent';
+import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
 
 import { buildGoalTaskConfig } from './goalConfig';
@@ -29,8 +32,27 @@ const styles = createStaticStyles(({ css }) => ({
     width: 68px;
     white-space: nowrap;
   `,
+  budgetHint: css`
+    min-width: 0;
+  `,
+  budgetRow: css`
+    min-width: 0;
+  `,
+  body: css`
+    overflow-y: auto;
+    min-height: 0;
+    padding-block-end: 16px;
+  `,
   field: css`
     padding-inline: 24px;
+  `,
+  criteriaList: css`
+    overflow-y: auto;
+    max-height: 280px;
+  `,
+  criterion: css`
+    padding-block: 10px;
+    padding-inline: 12px;
   `,
   footer: css`
     padding-block: 8px;
@@ -59,6 +81,13 @@ const styles = createStaticStyles(({ css }) => ({
 
 /** Offered round budgets; `null` is the explicit "no cap" the loop honors. */
 const ROUND_BUDGETS: Array<number | null> = [2, 3, 5, 10, null];
+
+const criterionRequirement = (drafts: VerifyCriterionDraft[]) =>
+  drafts
+    .map((draft) => draft.title.trim())
+    .filter(Boolean)
+    .map((title) => `- ${title}`)
+    .join('\n');
 
 export interface CreateGoalContentProps {
   /** The agent that owns the goal. Goals are always agent-scoped. */
@@ -89,8 +118,17 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
   const isCreating = useTaskStore((s) => s.isCreatingTask);
   const activeWorkspaceId = useActiveWorkspaceId();
 
+  const model = useAgentStore((s) =>
+    agentId ? agentByIdSelectors.getAgentModelById(agentId)(s) : '',
+  );
+  const provider = useAgentStore((s) =>
+    agentId ? agentByIdSelectors.getAgentModelProviderById(agentId)(s) : '',
+  );
+
   const [title, setTitle] = useState(initialTitle ?? '');
-  const [requirement, setRequirement] = useState(initialRequirement ?? '');
+  const [step, setStep] = useState<'describe' | 'review'>('describe');
+  const [criteria, setCriteria] = useState<VerifyCriterionDraft[]>([]);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [roundBudget, setRoundBudget] = useState<string>(
     String(initialRoundBudget ?? DEFAULT_GOAL_MAX_ROUNDS),
   );
@@ -109,6 +147,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
   const editor = useEditor();
   const instructionRef = useRef('');
   const assigneeMeta = useAgentDisplayMeta(agentId);
+  const requirement = useMemo(() => criterionRequirement(criteria), [criteria]);
 
   const handleContentChange = useCallback(() => {
     if (!canCreate || !editor) return;
@@ -119,12 +158,53 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     pickAndInsertAttachments(editor);
   }, [editor]);
 
+  const handleGenerate = useCallback(async () => {
+    const goal = title.trim();
+    if (!canCreate || !goal || !model || !provider || isGenerating) return;
+
+    setIsGenerating(true);
+    try {
+      const generated = await verifyService.generateCriteria({
+        context: initialRequirement?.trim() || undefined,
+        goal,
+        maxCriteria: 5,
+        modelConfig: { model, provider },
+      });
+      if (generated.length === 0) throw new Error('No acceptance criteria were generated.');
+      setCriteria(generated);
+      setStep('review');
+    } catch (error) {
+      console.error('[CreateGoalContent] criteria generation failed:', error);
+      toast.error(t('createGoal.generateFailed'));
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [canCreate, initialRequirement, isGenerating, model, provider, t, title]);
+
+  const updateCriterion = useCallback((index: number, value: string) => {
+    setCriteria((current) =>
+      current.map((criterion, criterionIndex) =>
+        criterionIndex === index ? { ...criterion, title: value } : criterion,
+      ),
+    );
+  }, []);
+
+  const removeCriterion = useCallback((index: number) => {
+    setCriteria((current) => current.filter((_, criterionIndex) => criterionIndex !== index));
+  }, []);
+
   const handleSubmit = useCallback(async () => {
     if (!canCreate) return;
     const instruction = instructionRef.current.trim() || title.trim();
-    if (!instruction) return;
+    const editorData = instructionRef.current.trim()
+      ? (editor?.getDocument?.('json') as unknown)
+      : undefined;
+    const reviewedCriteria = criteria.filter((criterion) => criterion.title.trim());
+    if (!instruction || reviewedCriteria.length === 0) return;
 
+    let verifyCriteriaIds: string[] = [];
     try {
+      verifyCriteriaIds = await verifyService.createCriteria(reviewedCriteria);
       const result = await createTask({
         assigneeAgentId: agentId,
         config: buildGoalTaskConfig({
@@ -132,21 +212,24 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
           instruction,
           requirement,
           roundBudget: roundBudget === 'uncapped' ? null : Number(roundBudget),
+          verifyCriteriaIds,
         }),
-        editorData: editor?.getDocument?.('json') as unknown,
+        editorData,
         instruction,
         name: title.trim() || undefined,
         visibility: activeWorkspaceId ? visibility : undefined,
       });
 
-      if (result) {
-        close();
-        onCreated?.({
-          agentId: result.assigneeAgentId ?? undefined,
-          identifier: result.identifier,
-        });
-      }
-    } catch {
+      if (!result) throw new Error('The goal was not created.');
+
+      close();
+      onCreated?.({
+        agentId: result.assigneeAgentId ?? undefined,
+        identifier: result.identifier,
+      });
+    } catch (error) {
+      console.error('[CreateGoalContent] create failed:', error);
+      await Promise.allSettled(verifyCriteriaIds.map((id) => verifyService.deleteCriterion(id)));
       toast.error(t('createGoal.createFailed'));
     }
   }, [
@@ -155,6 +238,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     canCreate,
     close,
     costBudget,
+    criteria,
     createTask,
     editor,
     onCreated,
@@ -165,10 +249,11 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     visibility,
   ]);
 
-  const handleSubmitRef = useRef(handleSubmit);
+  const handlePrimaryAction = step === 'describe' ? handleGenerate : handleSubmit;
+  const handleSubmitRef = useRef(handlePrimaryAction);
   useEffect(() => {
-    handleSubmitRef.current = handleSubmit;
-  }, [handleSubmit]);
+    handleSubmitRef.current = handlePrimaryAction;
+  }, [handlePrimaryAction]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -179,9 +264,19 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
   }, []);
 
   return (
-    <Flexbox gap={16} onKeyDown={handleKeyDown}>
+    <Flexbox height={step === 'review' ? 'min(80vh, 720px)' : undefined} onKeyDown={handleKeyDown}>
       <Flexbox horizontal className={styles.head}>
-        <Flexbox flex={1} style={{ minHeight: 140 }}>
+        <Flexbox flex={1} gap={6}>
+          {step === 'review' && (
+            <Button
+              icon={ArrowLeft}
+              size={'small'}
+              type={'text'}
+              onClick={() => setStep('describe')}
+            >
+              {t('createGoal.back')}
+            </Button>
+          )}
           <input
             autoFocus={canCreate}
             className={styles.title}
@@ -190,82 +285,114 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
-          <EditorCanvas
-            disabled={!canCreate}
-            editor={editor}
-            floatingToolbar={false}
-            placeholder={t('createGoal.instructionPlaceholder')}
-            style={{ fontSize: 14, paddingBottom: 12 }}
-            onContentChange={handleContentChange}
-          />
+          {step === 'describe' && <Text type={'secondary'}>{t('createGoal.describeHint')}</Text>}
         </Flexbox>
         <ActionIcon icon={X} style={{ flexShrink: 0 }} onClick={close} />
       </Flexbox>
 
-      <Flexbox className={styles.field} gap={6}>
-        <Flexbox horizontal align={'center'} gap={8}>
-          <Text fontSize={13} weight={500}>
-            {t('createGoal.requirementLabel')}
-          </Text>
-          <Text fontSize={12} type={'secondary'}>
-            {t('createGoal.requirementHint')}
-          </Text>
-        </Flexbox>
-        <TextArea
-          disabled={!canCreate}
-          placeholder={t('createGoal.requirementPlaceholder')}
-          rows={3}
-          value={requirement}
-          onChange={(e) => setRequirement(e.target.value)}
-        />
-      </Flexbox>
+      {step === 'review' && (
+        <Flexbox className={styles.body} flex={1} gap={16}>
+          <Flexbox className={styles.field} gap={8}>
+            <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
+              <Flexbox gap={2}>
+                <Text fontSize={13} weight={500}>
+                  {t('createGoal.criteriaTitle')}
+                </Text>
+                <Text fontSize={12} type={'secondary'}>
+                  {t('createGoal.criteriaHint')}
+                </Text>
+              </Flexbox>
+              <Button
+                icon={Sparkles}
+                loading={isGenerating}
+                size={'small'}
+                onClick={handleGenerate}
+              >
+                {t('createGoal.regenerate')}
+              </Button>
+            </Flexbox>
+            <Flexbox className={styles.criteriaList} gap={8}>
+              {criteria.map((criterion, index) => (
+                <Block className={styles.criterion} key={index} variant={'outlined'}>
+                  <Flexbox horizontal align={'flex-start'} gap={8}>
+                    <TextArea
+                      autoSize={{ maxRows: 3, minRows: 1 }}
+                      disabled={!canCreate}
+                      value={criterion.title}
+                      onChange={(e) => updateCriterion(index, e.target.value)}
+                    />
+                    <ActionIcon
+                      icon={Trash2}
+                      title={t('createGoal.removeCriterion')}
+                      onClick={() => removeCriterion(index)}
+                    />
+                  </Flexbox>
+                </Block>
+              ))}
+            </Flexbox>
+          </Flexbox>
 
-      <Flexbox className={styles.field} gap={12}>
-        <Flexbox horizontal align={'center'} gap={12} wrap={'wrap'}>
-          <Text className={styles.budgetLabel} fontSize={13} weight={500}>
-            {t('createGoal.roundBudgetLabel')}
-          </Text>
-          <Select
-            disabled={!canCreate}
-            size={'small'}
-            value={roundBudget}
-            options={ROUND_BUDGETS.map((rounds) => ({
-              label:
-                rounds === null
-                  ? t('createGoal.roundBudget.uncapped')
-                  : t('createGoal.roundBudget.rounds', { count: rounds }),
-              value: rounds === null ? 'uncapped' : String(rounds),
-            }))}
-            onChange={setRoundBudget}
-          />
-          <Text fontSize={12} type={'secondary'}>
-            {roundBudget === 'uncapped'
-              ? t('createGoal.roundBudgetUncappedHint')
-              : t('createGoal.roundBudgetHint')}
-          </Text>
-        </Flexbox>
+          <Flexbox className={styles.field} gap={6}>
+            <Text fontSize={13} weight={500}>
+              {t('createGoal.contextLabel')}
+            </Text>
+            <EditorCanvas
+              disabled={!canCreate}
+              editor={editor}
+              floatingToolbar={false}
+              placeholder={t('createGoal.instructionPlaceholder')}
+              style={{ fontSize: 14, minHeight: 72 }}
+              onContentChange={handleContentChange}
+            />
+          </Flexbox>
+          <Flexbox className={styles.field} gap={12}>
+            <Flexbox horizontal align={'center'} className={styles.budgetRow} gap={12}>
+              <Text className={styles.budgetLabel} fontSize={13} weight={500}>
+                {t('createGoal.roundBudgetLabel')}
+              </Text>
+              <Select
+                disabled={!canCreate}
+                size={'small'}
+                value={roundBudget}
+                options={ROUND_BUDGETS.map((rounds) => ({
+                  label:
+                    rounds === null
+                      ? t('createGoal.roundBudget.uncapped')
+                      : t('createGoal.roundBudget.rounds', { count: rounds }),
+                  value: rounds === null ? 'uncapped' : String(rounds),
+                }))}
+                onChange={setRoundBudget}
+              />
+              <Text ellipsis className={styles.budgetHint} fontSize={12} type={'secondary'}>
+                {roundBudget === 'uncapped'
+                  ? t('createGoal.roundBudgetUncappedHint')
+                  : t('createGoal.roundBudgetHint')}
+              </Text>
+            </Flexbox>
 
-        <Flexbox horizontal align={'center'} gap={12} wrap={'wrap'}>
-          <Text className={styles.budgetLabel} fontSize={13} weight={500}>
-            {t('createGoal.costBudgetLabel')}
-          </Text>
-          <InputNumber
-            controls={false}
-            disabled={!canCreate}
-            min={0}
-            placeholder={t('createGoal.costBudgetPlaceholder')}
-            prefix={'$'}
-            size={'small'}
-            style={{ width: 120 }}
-            value={costBudget}
-            variant={'filled'}
-            onChange={(value) => setCostBudget(typeof value === 'number' ? value : null)}
-          />
-          <Text fontSize={12} type={'secondary'}>
-            {t('createGoal.costBudgetHint')}
-          </Text>
+            <Flexbox horizontal align={'center'} className={styles.budgetRow} gap={12}>
+              <Text className={styles.budgetLabel} fontSize={13} weight={500}>
+                {t('createGoal.costBudgetLabel')}
+              </Text>
+              <InputNumber
+                controls={false}
+                disabled={!canCreate}
+                min={0}
+                placeholder={t('createGoal.costBudgetPlaceholder')}
+                prefix={'$'}
+                size={'small'}
+                style={{ width: 120 }}
+                value={costBudget}
+                variant={'filled'}
+                onChange={(value) => setCostBudget(typeof value === 'number' ? value : null)}
+              />
+              <Text ellipsis className={styles.budgetHint} fontSize={12} type={'secondary'}>
+                {t('createGoal.costBudgetHint')}
+              </Text>
+            </Flexbox>
+          </Flexbox>
         </Flexbox>
-      </Flexbox>
+      )}
 
       <Flexbox horizontal align={'center'} className={styles.footer} justify={'space-between'}>
         <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
@@ -284,19 +411,31 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
               <TaskVisibilityChipLabel visibility={visibility} />
             </TaskVisibilityTag>
           )}
-          <ActionIcon icon={Paperclip} title={t('upload.action.tooltip')} onClick={handleAttach} />
+          {step === 'review' && (
+            <ActionIcon
+              icon={Paperclip}
+              title={t('upload.action.tooltip')}
+              onClick={handleAttach}
+            />
+          )}
         </Flexbox>
 
         <Button
-          disabled={!canCreate || isCreating}
-          loading={isCreating}
+          loading={step === 'describe' ? isGenerating : isCreating}
           shape={'round'}
           size={'small'}
           title={canCreate ? undefined : reason}
           type={'primary'}
-          onClick={handleSubmit}
+          disabled={
+            !canCreate ||
+            isCreating ||
+            isGenerating ||
+            !title.trim() ||
+            (step === 'review' && criteria.every((criterion) => !criterion.title.trim()))
+          }
+          onClick={step === 'describe' ? handleGenerate : handleSubmit}
         >
-          {t('createGoal.submit')}
+          {step === 'describe' ? t('createGoal.next') : t('createGoal.submit')}
         </Button>
       </Flexbox>
     </Flexbox>

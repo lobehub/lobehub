@@ -10,7 +10,7 @@ export const createGoalModal = (props?: CreateGoalContentProps): ModalInstance =
   createModal({
     content: <CreateGoalContent {...props} />,
     footer: null,
-    maskClosable: true,
+    maskClosable: false,
     styles: {
       content: {
         overflow: 'hidden',
