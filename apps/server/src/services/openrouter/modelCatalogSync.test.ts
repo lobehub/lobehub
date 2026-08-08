@@ -24,6 +24,14 @@ describe('OpenRouterModelCatalogSyncService', () => {
   it('writes catalog rows on successful fetch', async () => {
     fetchOpenRouterModels.mockResolvedValue([
       {
+        displayName: 'GPT-4o',
+        functionCall: true,
+        id: 'openai/gpt-4o',
+        releasedAt: '2025-01-01',
+        type: 'chat',
+        vision: true,
+      },
+      {
         displayName: 'Auto',
         functionCall: true,
         id: 'openrouter/auto',
@@ -45,7 +53,7 @@ describe('OpenRouterModelCatalogSyncService', () => {
     expect(status).toMatchObject({
       lastStatus: 'success',
       lastTriggeredBy: 'manual:admin-1',
-      modelCount: 2,
+      modelCount: 3,
     });
 
     const catalog = new OpenRouterModelCatalogModel(db);
@@ -54,13 +62,20 @@ describe('OpenRouterModelCatalogSyncService', () => {
       expect.arrayContaining([
         expect.objectContaining({
           abilities: expect.objectContaining({ functionCall: true, vision: true }),
-          displayName: 'Auto',
+          displayName: 'GPT-4o',
           enabled: true,
+          id: 'openai/gpt-4o',
+          type: 'chat',
+        }),
+        expect.objectContaining({
+          displayName: 'Auto',
+          enabled: false,
           id: 'openrouter/auto',
           type: 'chat',
         }),
         expect.objectContaining({
           displayName: 'Nano Banana 2',
+          enabled: false,
           id: 'google/gemini-3.1-flash-image-preview:image',
           parameters: { prompt: { default: '' } },
           type: 'image',

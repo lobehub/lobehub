@@ -963,8 +963,15 @@
     {
       "idx": 137,
       "version": "7",
+      "when": 1786060000000,
+      "tag": "0137_aico_openrouter_default_enabled",
+      "breakpoints": true
+    },
+    {
+      "idx": 138,
+      "version": "7",
       "when": 1786169920581,
-      "tag": "0137_aico_openrouter_model_sync_runs",
+      "tag": "0138_aico_openrouter_model_sync_runs",
       "breakpoints": true
     }
   ],

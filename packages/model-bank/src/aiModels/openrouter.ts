@@ -490,6 +490,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'ChatGPT-4o is a dynamic model updated in real time. It combines strong language understanding and generation for large-scale use cases like customer support, education, and technical assistance.',
     displayName: 'GPT-4o',
+    enabled: true,
     family: 'gpt',
     generation: 'gpt-4o',
     id: 'openai/gpt-4o',
