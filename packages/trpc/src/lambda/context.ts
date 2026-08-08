@@ -315,8 +315,10 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
   // If OIDC is not enabled or validation fails, try Better Auth authentication
   log('Attempting Better Auth authentication');
   try {
+    // AUTH-002: skip cookie cache so logout / password-reset revoke is honored immediately
     const session = await auth.api.getSession({
       headers: request.headers,
+      query: { disableCookieCache: true },
     });
 
     if (session && session?.user?.id) {

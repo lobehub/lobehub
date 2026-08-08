@@ -265,8 +265,10 @@ export function defineConfig() {
     if (!isProtected) return response;
 
     // Get full session with user data (Next.js 15.2.0+ feature)
+    // AUTH-002: skip cookie cache so logout / password-reset revoke is honored immediately
     const session = await auth.api.getSession({
       headers: req.headers,
+      query: { disableCookieCache: true },
     });
 
     const isLoggedIn = !!session?.user;

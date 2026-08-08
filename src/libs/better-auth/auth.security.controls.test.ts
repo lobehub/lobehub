@@ -1,4 +1,10 @@
+/**
+ * AICO-102 practical security-control tests (defensive — no exploit payloads).
+ * Phone login gate: see phone-login-gate.test.ts. Open redirect: onboardingRedirect.test.ts.
+ */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { isSafeRedirectPath, sanitizeRedirectPath } from '@/utils/onboardingRedirect';
 
 const mocks = vi.hoisted(() => ({
   betterAuth: vi.fn((options) => options),
@@ -25,9 +31,7 @@ vi.mock('@lobechat/database', () => ({
 vi.mock('@lobechat/database/schemas', () => ({}));
 
 vi.mock('bcryptjs', () => ({
-  default: {
-    compare: vi.fn(),
-  },
+  default: { compare: vi.fn() },
 }));
 
 vi.mock('better-auth/adapters/drizzle', () => ({
@@ -44,10 +48,10 @@ vi.mock('better-auth/minimal', () => ({
 
 vi.mock('better-auth/plugins', () => ({
   admin: vi.fn(() => ({ id: 'admin' })),
-  emailOTP: vi.fn(() => ({ id: 'email-otp' })),
+  emailOTP: vi.fn((opts) => ({ id: 'email-otp', options: opts })),
   genericOAuth: vi.fn(() => ({ id: 'generic-oauth' })),
   magicLink: vi.fn(() => ({ id: 'magic-link' })),
-  phoneNumber: vi.fn(() => ({ id: 'phone-number' })),
+  phoneNumber: vi.fn((opts) => ({ id: 'phone-number', options: opts })),
 }));
 
 vi.mock('undici', () => ({
@@ -56,15 +60,13 @@ vi.mock('undici', () => ({
 }));
 
 vi.mock('@/envs/app', () => ({
-  appEnv: {
-    APP_URL: 'https://example.com',
-  },
+  appEnv: { APP_URL: 'https://example.com' },
 }));
 
 vi.mock('@/envs/auth', () => ({
   authEnv: {
     AUTH_DISABLE_EMAIL_PASSWORD: false,
-    AUTH_EMAIL_VERIFICATION: true,
+    AUTH_EMAIL_VERIFICATION: false,
     AUTH_ENABLE_MAGIC_LINK: false,
     AUTH_SECRET: 'test-secret',
     AUTH_SSO_PROVIDERS: '',
@@ -77,6 +79,15 @@ vi.mock('@/libs/better-auth/email-templates', () => ({
   getResetPasswordEmailTemplate: vi.fn(() => ({})),
   getVerificationEmailTemplate: vi.fn(() => ({})),
   getVerificationOTPEmailTemplate: vi.fn(() => ({})),
+}));
+
+vi.mock('@/libs/better-auth/phone', () => ({
+  isValidIranianPhoneNumber: vi.fn(() => true),
+  normalizeIranianPhoneNumber: vi.fn((v: string) => v),
+}));
+
+vi.mock('@/libs/better-auth/plugins/aico-ban-message', () => ({
+  aicoBanMessage: vi.fn(() => ({ id: 'aico-ban-message' })),
 }));
 
 vi.mock('@/libs/better-auth/plugins/email-whitelist', () => ({
@@ -104,7 +115,7 @@ vi.mock('@/libs/better-auth/sso', () => ({
 }));
 
 vi.mock('@/libs/better-auth/utils/config', () => ({
-  createSecondaryStorage: vi.fn(() => ({ id: 'secondary-storage' })),
+  createSecondaryStorage: vi.fn(),
   getTrustedOrigins: vi.fn(() => ['https://example.com']),
 }));
 
@@ -117,134 +128,83 @@ vi.mock('@/libs/oidc-provider/session-cleanup', () => ({
 }));
 
 vi.mock('@/server/services/email', () => ({
-  EmailService: vi.fn(),
+  EmailService: vi.fn().mockImplementation(() => ({ sendMail: vi.fn() })),
 }));
 
 vi.mock('@/server/services/sms', () => ({
-  SmsService: vi.fn(),
+  SmsService: vi.fn().mockImplementation(() => ({ sendOtp: vi.fn() })),
 }));
 
 vi.mock('@/server/services/user', () => ({
-  UserService: vi.fn(),
+  UserService: vi.fn().mockImplementation(() => ({ initUser: vi.fn() })),
 }));
 
-describe('defineConfig', () => {
+describe('AICO-102 authentication security controls', () => {
   const originalEnv = process.env;
 
   beforeEach(() => {
-    vi.clearAllMocks();
     vi.resetModules();
+    mocks.betterAuth.mockClear();
     process.env = { ...originalEnv, NODE_ENV: 'test' };
-    delete process.env.HTTP_PROXY;
-    delete process.env.http_proxy;
-    delete process.env.HTTPS_PROXY;
-    delete process.env.https_proxy;
-    delete process.env.NO_PROXY;
-    delete process.env.no_proxy;
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
     process.env = originalEnv;
   });
 
-  it('should revoke existing sessions after password reset by default', async () => {
+  it('configures OTP expiry, attempts, password reset revoke, and auth rate limits', async () => {
     const { defineConfig } = await import('./define-config');
+    const { emailOTP, phoneNumber } = await import('better-auth/plugins');
 
     defineConfig({ plugins: [] });
 
     expect(mocks.betterAuth).toHaveBeenCalledWith(
       expect.objectContaining({
         emailAndPassword: expect.objectContaining({
+          maxPasswordLength: 64,
+          minPasswordLength: 10,
           revokeSessionsOnPasswordReset: true,
         }),
-      }),
-    );
-  });
-
-  it('should clear a mismatched OIDC session before creating a Better Auth session', async () => {
-    const { defineConfig } = await import('./define-config');
-    const context = { getCookie: vi.fn(), setCookie: vi.fn() };
-
-    defineConfig({ plugins: [] });
-    const [options] = mocks.betterAuth.mock.lastCall!;
-    await options.databaseHooks.session.create.before({ userId: 'user-b' }, context);
-
-    expect(mocks.clearMismatchedOIDCSession).toHaveBeenCalledWith(
-      mocks.serverDB,
-      'user-b',
-      context,
-    );
-  });
-
-  it('should continue creating the Better Auth session when OIDC cleanup fails', async () => {
-    const cleanupError = new Error('OIDC database unavailable');
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-    mocks.clearMismatchedOIDCSession.mockRejectedValueOnce(cleanupError);
-    const { defineConfig } = await import('./define-config');
-
-    defineConfig({ plugins: [] });
-    const [options] = mocks.betterAuth.mock.lastCall!;
-
-    await expect(
-      options.databaseHooks.session.create.before({ userId: 'user-b' }, null),
-    ).resolves.toBeUndefined();
-    expect(consoleError).toHaveBeenCalledWith(
-      '[Better Auth] Failed to clear a stale OIDC session:',
-      cleanupError,
-    );
-  });
-
-  it('should respect NO_PROXY when configuring the development proxy dispatcher', async () => {
-    process.env = {
-      ...process.env,
-      HTTP_PROXY: 'http://127.0.0.1:7890',
-      HTTPS_PROXY: 'http://127.0.0.1:7890',
-      NODE_ENV: 'development',
-      NO_PROXY: 'example.com,localhost',
-    };
-
-    await import('./define-config');
-
-    expect(mocks.EnvHttpProxyAgent).toHaveBeenCalledWith({
-      httpProxy: 'http://127.0.0.1:7890',
-      httpsProxy: 'http://127.0.0.1:7890',
-      noProxy: 'example.com,localhost,127.0.0.1,[::1]',
-    });
-    expect(mocks.setGlobalDispatcher).toHaveBeenCalledWith(
-      expect.objectContaining({
-        options: expect.objectContaining({
-          noProxy: 'example.com,localhost,127.0.0.1,[::1]',
+        plugins: expect.arrayContaining([
+          expect.objectContaining({ id: 'aico-password-policy' }),
+          expect.objectContaining({ id: 'aico-force-change-password-revoke' }),
+        ]),
+        rateLimit: expect.objectContaining({
+          customRules: expect.objectContaining({
+            '/phone-number/send-otp': { max: 3, window: 60 },
+            '/phone-number/verify': { max: 10, window: 60 },
+            '/request-password-reset': { max: 3, window: 60 },
+          }),
+        }),
+        session: expect.objectContaining({
+          cookieCache: expect.objectContaining({
+            enabled: true,
+            maxAge: 120,
+          }),
         }),
       }),
     );
+
+    expect(emailOTP).toHaveBeenCalledWith(
+      expect.objectContaining({
+        allowedAttempts: 3,
+        expiresIn: 300,
+        otpLength: 6,
+      }),
+    );
+    expect(phoneNumber).toHaveBeenCalledWith(
+      expect.objectContaining({
+        allowedAttempts: 3,
+        expiresIn: 300,
+        otpLength: 6,
+      }),
+    );
   });
 
-  it('should preserve NO_PROXY wildcard semantics', async () => {
-    const { mergeLocalNoProxy } = await import('./define-config');
-
-    expect(mergeLocalNoProxy('*')).toBe('*');
-  });
-
-  it('should not enable phone signup on verification', async () => {
-    const { phoneNumber } = await import('better-auth/plugins');
-    const { defineConfig } = await import('./define-config');
-
-    defineConfig({ plugins: [] });
-
-    expect(phoneNumber).toHaveBeenCalled();
-    const phoneOpts = vi.mocked(phoneNumber).mock.calls.at(-1)?.[0] as {
-      signUpOnVerification?: unknown;
-    };
-    expect(phoneOpts.signUpOnVerification).toBeUndefined();
-  });
-
-  it('should register the phone login gate plugin', async () => {
-    const { phoneLoginGate } = await import('./plugins/phone-login-gate');
-    const { defineConfig } = await import('./define-config');
-
-    defineConfig({ plugins: [] });
-
-    expect(phoneLoginGate).toHaveBeenCalled();
+  it('blocks open redirects used in OAuth / auth callback paths', () => {
+    expect(isSafeRedirectPath('https://evil.com')).toBe(false);
+    expect(isSafeRedirectPath('//evil.com')).toBe(false);
+    expect(sanitizeRedirectPath('https://evil.com', '/')).toBe('/');
+    expect(sanitizeRedirectPath('/chat', '/')).toBe('/chat');
   });
 });

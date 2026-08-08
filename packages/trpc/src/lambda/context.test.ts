@@ -403,6 +403,10 @@ describe('createLambdaContext', () => {
 
     expect(context.userId).toBe('session-user');
     expect(mockGetSession).toHaveBeenCalledOnce();
+    expect(mockGetSession).toHaveBeenCalledWith({
+      headers: request.headers,
+      query: { disableCookieCache: true },
+    });
   });
 
   it('should authenticate with active OIDC auth and skip session fallback', async () => {

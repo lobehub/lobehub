@@ -176,7 +176,7 @@ describe('useSignIn', () => {
 
     it('should go to password step when user exists with password', async () => {
       mockFetch.mockResolvedValueOnce({
-        json: async () => ({ exists: true, hasPassword: true }),
+        json: async () => ({ exists: true }),
         ok: true,
       });
 
@@ -199,7 +199,7 @@ describe('useSignIn', () => {
         })
         // Second call: check-user
         .mockResolvedValueOnce({
-          json: async () => ({ exists: true, hasPassword: true }),
+          json: async () => ({ exists: true }),
           ok: true,
         });
 
@@ -250,7 +250,7 @@ describe('useSignIn', () => {
       });
 
       mockFetch.mockResolvedValueOnce({
-        json: async () => ({ exists: true, hasPassword: true }),
+        json: async () => ({ exists: true }),
         ok: true,
       });
 
@@ -286,7 +286,7 @@ describe('useSignIn', () => {
           return { error: null };
         });
         mockFetch.mockResolvedValueOnce({
-          json: async () => ({ exists: true, hasPassword: true }),
+          json: async () => ({ exists: true }),
           ok: true,
         });
 
@@ -310,7 +310,7 @@ describe('useSignIn', () => {
       });
 
       mockFetch.mockResolvedValueOnce({
-        json: async () => ({ exists: true, hasPassword: true }),
+        json: async () => ({ exists: true }),
         ok: true,
       });
 
@@ -338,7 +338,7 @@ describe('useSignIn', () => {
       });
 
       mockFetch.mockResolvedValueOnce({
-        json: async () => ({ exists: true, hasPassword: true }),
+        json: async () => ({ exists: true }),
         ok: true,
       });
 
@@ -458,7 +458,7 @@ describe('useSignIn', () => {
   describe('handleBackToEmail', () => {
     it('should reset to email step', async () => {
       mockFetch.mockResolvedValueOnce({
-        json: async () => ({ exists: true, hasPassword: true }),
+        json: async () => ({ exists: true }),
         ok: true,
       });
 
@@ -488,7 +488,7 @@ describe('useSignIn', () => {
       mockRequestPasswordReset.mockResolvedValue(undefined);
 
       mockFetch.mockResolvedValueOnce({
-        json: async () => ({ exists: true, hasPassword: true }),
+        json: async () => ({ exists: true }),
         ok: true,
       });
 
@@ -528,7 +528,7 @@ describe('useSignIn', () => {
       mockRequestPasswordReset.mockRejectedValue(new Error('fail'));
 
       mockFetch.mockResolvedValueOnce({
-        json: async () => ({ exists: true, hasPassword: true }),
+        json: async () => ({ exists: true }),
         ok: true,
       });
 
@@ -548,11 +548,11 @@ describe('useSignIn', () => {
   });
 
   describe('magic link', () => {
-    it('should land on email-sent state when a passwordless user triggers magic link', async () => {
+    it('does not auto-send magic link from check-user (AUTH-001: no auth-method oracle)', async () => {
       mockEnableMagicLink = true;
       mockSignInMagicLink.mockResolvedValue({ error: null });
       mockFetch.mockResolvedValueOnce({
-        json: async () => ({ exists: true, hasPassword: false }),
+        json: async () => ({ exists: true }),
         ok: true,
       });
 
@@ -562,11 +562,9 @@ describe('useSignIn', () => {
         await result.current.handleCheckUser({ email: 'user@example.com' });
       });
 
-      expect(mockSignInMagicLink).toHaveBeenCalledTimes(1);
-      expect(result.current.step).toBe('emailSent');
-      expect(result.current.sentInfo).toEqual(
-        expect.objectContaining({ email: 'user@example.com', type: 'magicLink' }),
-      );
+      expect(mockSignInMagicLink).not.toHaveBeenCalled();
+      expect(result.current.step).toBe('password');
+      expect(result.current.isSocialOnly).toBe(false);
     });
   });
 
@@ -574,7 +572,7 @@ describe('useSignIn', () => {
     it('should resend the password reset email and confirm', async () => {
       mockRequestPasswordReset.mockResolvedValue(undefined);
       mockFetch.mockResolvedValueOnce({
-        json: async () => ({ exists: true, hasPassword: true }),
+        json: async () => ({ exists: true }),
         ok: true,
       });
 
@@ -603,7 +601,7 @@ describe('useSignIn', () => {
     it('should return to the email entry (not the password step) after a reset email', async () => {
       mockRequestPasswordReset.mockResolvedValue(undefined);
       mockFetch.mockResolvedValueOnce({
-        json: async () => ({ exists: true, hasPassword: true }),
+        json: async () => ({ exists: true }),
         ok: true,
       });
 
