@@ -25,14 +25,40 @@ export const getEmailSupportHtml = ({
   contactSupport = DEFAULT_SUPPORT_COPY.contactSupport,
   joinDiscord = DEFAULT_SUPPORT_COPY.joinDiscord,
 }: EmailSupportCopy = {}) => {
-  const supportEmail = escapeHtml(EMAIL_SUPPORT_ADDRESS);
-  const discordUrl = escapeHtml(SOCIAL_URL.discord);
+  const supportEmail = EMAIL_SUPPORT_ADDRESS?.trim();
+  const discordUrl = SOCIAL_URL.discord?.trim();
+  const parts: string[] = [];
 
-  return `<a href="mailto:${supportEmail}" style="color: #6b7280; text-decoration: underline;">${escapeHtml(contactSupport)}</a><span style="color: #a1a1aa;"> · </span><a href="${discordUrl}" target="_blank" rel="noopener noreferrer" style="color: #6b7280; text-decoration: underline;">${escapeHtml(joinDiscord)}</a>`;
+  if (supportEmail) {
+    parts.push(
+      `<a href="mailto:${escapeHtml(supportEmail)}" style="color: #6b7280; text-decoration: underline;">${escapeHtml(contactSupport)}</a>`,
+    );
+  }
+
+  if (discordUrl) {
+    parts.push(
+      `<a href="${escapeHtml(discordUrl)}" target="_blank" rel="noopener noreferrer" style="color: #6b7280; text-decoration: underline;">${escapeHtml(joinDiscord)}</a>`,
+    );
+  }
+
+  return parts.join('<span style="color: #a1a1aa;"> · </span>');
 };
 
 export const getEmailSupportText = ({
   contactSupport = DEFAULT_SUPPORT_COPY.contactSupport,
   joinDiscord = DEFAULT_SUPPORT_COPY.joinDiscord,
-}: EmailSupportCopy = {}) =>
-  `${contactSupport}: ${EMAIL_SUPPORT_ADDRESS} | ${joinDiscord}: ${SOCIAL_URL.discord}`;
+}: EmailSupportCopy = {}) => {
+  const supportEmail = EMAIL_SUPPORT_ADDRESS?.trim();
+  const discordUrl = SOCIAL_URL.discord?.trim();
+  const parts: string[] = [];
+
+  if (supportEmail) {
+    parts.push(`${contactSupport}: ${supportEmail}`);
+  }
+
+  if (discordUrl) {
+    parts.push(`${joinDiscord}: ${discordUrl}`);
+  }
+
+  return parts.join(' | ');
+};
