@@ -1,5 +1,6 @@
 import { type DropdownMenuCheckboxItem, type DropdownMenuProps } from '@lobehub/ui';
-import { Button, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
+import { DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { ChevronRight, GlobeIcon } from 'lucide-react';
 import { memo, type ReactNode, useMemo } from 'react';
@@ -10,18 +11,22 @@ import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 import { electronStylish } from '@/styles/electron';
 
-const LangButton = memo<{ placement?: DropdownMenuProps['placement']; size?: number }>(
-  ({ placement, size }) => {
-    const [language, switchLocale] = useGlobalStore((s) => [
+import { getLanguageDisplayLabel } from './getLanguageDisplayLabel';
+
+const LangButton = memo<{ compact?: boolean; placement?: DropdownMenuProps['placement'] }>(
+  ({ compact, placement }) => {
+    const [language, currentLanguage, switchLocale] = useGlobalStore((s) => [
       globalGeneralSelectors.language(s),
+      globalGeneralSelectors.currentLanguage(s),
       s.switchLocale,
     ]);
 
     const { t } = useTranslation(['setting', 'common']);
-    const currentLabel =
-      language === 'auto'
-        ? t('settingCommon.lang.autoMode')
-        : localeOptions.find((item) => item.value === language)?.label || 'English';
+    const currentLabel = getLanguageDisplayLabel(
+      language,
+      currentLanguage,
+      t('settingCommon.lang.autoMode'),
+    );
 
     const items = useMemo<DropdownMenuCheckboxItem[]>(() => {
       const autoItem: DropdownMenuCheckboxItem = {
@@ -69,7 +74,7 @@ const LangButton = memo<{ placement?: DropdownMenuProps['placement']; size?: num
 
     let trigger: ReactNode;
 
-    if (size) {
+    if (compact) {
       trigger = (
         <Button
           icon={GlobeIcon}

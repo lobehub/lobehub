@@ -1,12 +1,12 @@
 'use client';
 
 import {
-  Button,
   DropdownMenu,
   type DropdownMenuCheckboxItem,
   Flexbox,
   Text,
 } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { GlobeIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,7 +19,7 @@ const setCookieSimple = (key: string, value: string, days: number) => {
   document.cookie = `${key}=${value};expires=${expires};path=/;`;
 };
 
-const AuthLangButton = memo<{ size?: number }>(() => {
+const AuthLangButton = memo(() => {
   const { i18n } = useTranslation();
   const browserLanguage = typeof navigator !== 'undefined' ? navigator.language : 'en-US';
   const current = normalizeLocale(i18n.resolvedLanguage || i18n.language || browserLanguage);
