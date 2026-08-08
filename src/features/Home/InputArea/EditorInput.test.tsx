@@ -11,6 +11,13 @@ vi.mock('@/business/client/hooks/useBusinessChatInputSendAreaPrefix', () => ({
   useBusinessChatInputSendDisabled: () => false,
 }));
 
+vi.mock('@/features/AicoBilling', () => ({
+  useFundsBlockedComposerCue: () => ({
+    blocked: false,
+    onMarkdownContentChange: (onChange: (content: string) => void) => onChange,
+  }),
+}));
+
 vi.mock('@/features/ChatInput/ActionBar', () => ({
   default: () => <div data-testid="action-bar" />,
 }));

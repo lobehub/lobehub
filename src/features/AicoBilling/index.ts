@@ -1,4 +1,5 @@
 export { default as BillingSourceSwitcher } from './BillingSourceSwitcher';
+export { FUNDS_BLOCKED_SOUND_URL, playFundsBlockedSound } from './playFundsBlockedSound';
 export {
   assertAicoBillingAllowsChat,
   resolveAicoBillingForRequest,
@@ -21,3 +22,4 @@ export {
 } from './types';
 export { useAicoBillingChatGate } from './useAicoBillingChatGate';
 export { AICO_BILLING_SOURCES_SWR_KEY, useAicoBillingSources } from './useAicoBillingSources';
+export { useFundsBlockedComposerCue } from './useFundsBlockedComposerCue';
