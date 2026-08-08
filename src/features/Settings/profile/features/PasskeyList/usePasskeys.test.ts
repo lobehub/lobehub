@@ -6,8 +6,8 @@ import { usePasskeys } from './usePasskeys';
 const mocks = vi.hoisted(() => ({
   addPasskey: vi.fn(),
   deletePasskey: vi.fn(),
-  messageError: vi.fn(),
-  messageSuccess: vi.fn(),
+  toastError: vi.fn(),
+  toastSuccess: vi.fn(),
   refetch: vi.fn(),
   useListPasskeys: vi.fn(),
 }));
@@ -16,8 +16,8 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  message: { error: mocks.messageError, success: mocks.messageSuccess },
+vi.mock('@lobehub/ui/base-ui', () => ({
+  toast: { error: mocks.toastError, success: mocks.toastSuccess },
 }));
 
 vi.mock('@/libs/better-auth/auth-client', () => ({
@@ -56,7 +56,7 @@ describe('usePasskeys', () => {
       await result.current.addPasskey();
     });
 
-    expect(mocks.messageSuccess).toHaveBeenCalled();
+    expect(mocks.toastSuccess).toHaveBeenCalled();
     expect(mocks.refetch).toHaveBeenCalled();
   });
 
@@ -72,7 +72,7 @@ describe('usePasskeys', () => {
     });
 
     expect(returned).toBe(false);
-    expect(mocks.messageError).toHaveBeenCalledWith('boom');
+    expect(mocks.toastError).toHaveBeenCalledWith('boom');
     expect(mocks.refetch).not.toHaveBeenCalled();
   });
 
@@ -90,8 +90,8 @@ describe('usePasskeys', () => {
     });
 
     expect(returned).toBe(false);
-    expect(mocks.messageError).not.toHaveBeenCalled();
-    expect(mocks.messageSuccess).not.toHaveBeenCalled();
+    expect(mocks.toastError).not.toHaveBeenCalled();
+    expect(mocks.toastSuccess).not.toHaveBeenCalled();
   });
 
   it('still reports unexpected registration failures', async () => {
@@ -102,7 +102,7 @@ describe('usePasskeys', () => {
       await result.current.addPasskey();
     });
 
-    expect(mocks.messageError).toHaveBeenCalled();
+    expect(mocks.toastError).toHaveBeenCalled();
   });
 
   it('refreshes the list after a passkey is removed', async () => {
@@ -114,7 +114,7 @@ describe('usePasskeys', () => {
     });
 
     expect(mocks.deletePasskey).toHaveBeenCalledWith({ id: 'a' });
-    expect(mocks.messageSuccess).toHaveBeenCalled();
+    expect(mocks.toastSuccess).toHaveBeenCalled();
     expect(mocks.refetch).toHaveBeenCalled();
   });
 
@@ -128,7 +128,7 @@ describe('usePasskeys', () => {
     });
 
     expect(returned).toBe(false);
-    expect(mocks.messageError).toHaveBeenCalledWith('nope');
+    expect(mocks.toastError).toHaveBeenCalledWith('nope');
     expect(mocks.refetch).not.toHaveBeenCalled();
   });
 });

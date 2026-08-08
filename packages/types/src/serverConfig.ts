@@ -110,6 +110,7 @@ export interface GlobalServerConfig {
   enableMagicLink?: boolean;
   enableMarketTrustedClient?: boolean;
   enableMultimodalUnderstanding?: boolean;
+  enablePasskey?: boolean;
   enableUploadFileToServer?: boolean;
   image?: PartialDeep<UserImageConfig>;
   memory?: GlobalMemoryConfig;

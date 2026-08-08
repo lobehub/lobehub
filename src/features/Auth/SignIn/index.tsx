@@ -8,6 +8,7 @@ import { useSignIn } from './useSignIn';
 const SignIn = () => {
   const {
     disableEmailPassword,
+    enablePasskey,
     email,
     form,
     handleBackFromSent,
@@ -59,6 +60,7 @@ const SignIn = () => {
   return (
     <SignInEmailStep
       disableEmailPassword={disableEmailPassword}
+      enablePasskey={enablePasskey}
       form={form as any}
       isSocialOnly={isSocialOnly}
       lastAuthProvider={lastAuthProvider}

@@ -1,4 +1,4 @@
-import { message } from '@lobehub/ui';
+import { toast } from '@lobehub/ui/base-ui';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -33,11 +33,11 @@ export const usePasskeys = () => {
       // better-auth returns errors in the payload; only a thrown error means
       // the browser-side ceremony itself failed.
       if (result?.error) {
-        message.error(result.error.message || t('profile.passkey.addError'));
+        toast.error(result.error.message || t('profile.passkey.addError'));
         return false;
       }
 
-      message.success(t('profile.passkey.addSuccess'));
+      toast.success(t('profile.passkey.addSuccess'));
       await refetch();
       return true;
     } catch (error) {
@@ -49,7 +49,7 @@ export const usePasskeys = () => {
       ) {
         return false;
       }
-      message.error(t('profile.passkey.addError'));
+      toast.error(t('profile.passkey.addError'));
       return false;
     }
   }, [refetch, t]);
@@ -60,11 +60,11 @@ export const usePasskeys = () => {
 
       const result = await passkey.deletePasskey({ id });
       if (result?.error) {
-        message.error(result.error.message || t('profile.passkey.deleteError'));
+        toast.error(result.error.message || t('profile.passkey.deleteError'));
         return false;
       }
 
-      message.success(t('profile.passkey.deleteSuccess'));
+      toast.success(t('profile.passkey.deleteSuccess'));
       await refetch();
       return true;
     },

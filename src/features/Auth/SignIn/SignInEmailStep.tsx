@@ -38,6 +38,7 @@ const getProviderName = (provider: string) =>
 
 export interface SignInEmailStepProps {
   disableEmailPassword?: boolean;
+  enablePasskey?: boolean;
   form: FormInstance<{ email: string }>;
   isSocialOnly: boolean;
   lastAuthProvider?: string | null;
@@ -57,6 +58,7 @@ export interface SignInEmailStepProps {
 
 export const SignInEmailStep = ({
   disableEmailPassword,
+  enablePasskey,
   form,
   isSocialOnly,
   lastAuthProvider,
@@ -149,21 +151,23 @@ export const SignInEmailStep = ({
               button
             );
           })}
-          <Button
-            block
-            icon={<Icon icon={KeyRound} />}
-            loading={passkeyLoading}
-            size="large"
-            styles={{ icon: PROVIDER_ICON_STYLE }}
-            type="fill"
-            onClick={() =>
-              continueWithAgreement(() => {
-                onPasskeySignIn();
-              })
-            }
-          >
-            {t('betterAuth.signin.passkeyButton')}
-          </Button>
+          {enablePasskey && (
+            <Button
+              block
+              icon={<Icon icon={KeyRound} />}
+              loading={passkeyLoading}
+              size="large"
+              styles={{ icon: PROVIDER_ICON_STYLE }}
+              type="fill"
+              onClick={() =>
+                continueWithAgreement(() => {
+                  onPasskeySignIn();
+                })
+              }
+            >
+              {t('betterAuth.signin.passkeyButton')}
+            </Button>
+          )}
           {showEmailForm && divider}
         </Flexbox>
       )}

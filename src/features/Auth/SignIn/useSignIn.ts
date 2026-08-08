@@ -68,6 +68,9 @@ export const useSignIn = () => {
   });
   const serverConfigInit = useAuthServerConfigStore((s) => s.serverConfigInit);
   const oAuthSSOProviders = useAuthServerConfigStore((s) => s.serverConfig.oAuthSSOProviders) || [];
+  // Passkeys need APP_URL to derive the rpID; without it the ceremony fails,
+  // so the entry point is hidden rather than shown and broken.
+  const enablePasskey = useAuthServerConfigStore((s) => s.serverConfig.enablePasskey ?? false);
   const { getAdditionalData, preSocialSigninCheck, ssoProviders } = useBusinessSignin();
 
   useEffect(() => {
@@ -414,6 +417,7 @@ export const useSignIn = () => {
     handleGoToSignup,
     handleResendEmail,
     handleSignIn,
+    enablePasskey,
     handlePasskeySignIn,
     handleSocialSignIn,
     isSocialOnly,

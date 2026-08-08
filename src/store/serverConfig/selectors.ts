@@ -11,6 +11,7 @@ export const serverConfigSelectors = {
   enableGatewayMode: (s: ServerConfigStore) => s.serverConfig.enableGatewayMode || false,
   enableLobehubSkill: (s: ServerConfigStore) => s.serverConfig.enableLobehubSkill || false,
   enableMagicLink: (s: ServerConfigStore) => s.serverConfig.enableMagicLink || false,
+  enablePasskey: (s: ServerConfigStore) => s.serverConfig.enablePasskey,
   enableMarketTrustedClient: (s: ServerConfigStore) =>
     s.serverConfig.enableMarketTrustedClient || false,
   enableUploadFileToServer: (s: ServerConfigStore) => s.serverConfig.enableUploadFileToServer,
