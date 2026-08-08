@@ -237,7 +237,9 @@ export const memberBudgets = pgTable(
      */
     renewalStatus: text('renewal_status').notNull().default('active'),
     reservedMicroUsd: bigint('reserved_micro_usd', { mode: 'number' }).notNull().default(0),
-    settledUsageMicroUsd: bigint('settled_usage_micro_usd', { mode: 'number' }).notNull().default(0),
+    settledUsageMicroUsd: bigint('settled_usage_micro_usd', { mode: 'number' })
+      .notNull()
+      .default(0),
     refundedMicroUsd: bigint('refunded_micro_usd', { mode: 'number' }).notNull().default(0),
     /** Pending period change applied at next renewal boundary. */
     pendingPeriod: text('pending_period'),
@@ -379,7 +381,9 @@ export const aicoRenewalBatches = pgTable(
     batchKey: text('batch_key').notNull(),
     /** pending | funded | failed | settled */
     status: text('status').notNull().default('pending'),
-    grossRequiredMicroUsd: bigint('gross_required_micro_usd', { mode: 'number' }).notNull().default(0),
+    grossRequiredMicroUsd: bigint('gross_required_micro_usd', { mode: 'number' })
+      .notNull()
+      .default(0),
     refundedMicroUsd: bigint('refunded_micro_usd', { mode: 'number' }).notNull().default(0),
     shortfallMicroUsd: bigint('shortfall_micro_usd', { mode: 'number' }).notNull().default(0),
     memberBudgetIds: jsonb('member_budget_ids').$type<string[]>().notNull().default([]),
@@ -600,7 +604,7 @@ export const openrouterModelCatalog = pgTable(
     id: text('id').notNull().primaryKey(),
     displayName: text('display_name'),
     description: text('description'),
-    enabled: boolean('enabled').notNull().default(true),
+    enabled: boolean('enabled').notNull().default(false),
     type: varchar('type', { length: 20 }).notNull().default('chat'),
     contextWindowTokens: integer('context_window_tokens'),
     pricing: jsonb('pricing'),
@@ -631,6 +635,29 @@ export const openrouterModelSyncState = pgTable('openrouter_model_sync_state', {
 
 export type OpenrouterModelSyncStateItem = typeof openrouterModelSyncState.$inferSelect;
 export type NewOpenrouterModelSyncState = typeof openrouterModelSyncState.$inferInsert;
+
+/** Append-only history of OpenRouter catalog sync runs (added/removed model ids). */
+export const openrouterModelSyncRuns = pgTable(
+  'openrouter_model_sync_runs',
+  {
+    id: text('id')
+      .$defaultFn(() => idGenerator('orSyncRuns', 12))
+      .notNull()
+      .primaryKey(),
+    status: text('status').notNull(),
+    triggeredBy: text('triggered_by'),
+    modelCount: integer('model_count').notNull().default(0),
+    addedModelIds: jsonb('added_model_ids').$type<string[]>().notNull().default([]),
+    removedModelIds: jsonb('removed_model_ids').$type<string[]>().notNull().default([]),
+    error: text('error'),
+    syncedAt: timestamptz('synced_at').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index('openrouter_model_sync_runs_synced_at_idx').on(t.syncedAt)],
+);
+
+export type OpenrouterModelSyncRunItem = typeof openrouterModelSyncRuns.$inferSelect;
+export type NewOpenrouterModelSyncRun = typeof openrouterModelSyncRuns.$inferInsert;
 
 /** Master OpenRouter monitoring snapshot (never fabricate zero when unknown). */
 export const aicoMasterMonitorState = pgTable('aico_master_monitor_state', {

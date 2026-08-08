@@ -1,4 +1,3 @@
-import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -25,41 +24,82 @@ describe('OpenRouterModelCatalogModel', () => {
     await expect(catalog.count()).resolves.toBe(0);
   });
 
-  it('replaces catalog and preserves enabled flags on re-sync', async () => {
+  it('enables only the newest 4 chat models per openai/anthropic/google on sync', async () => {
     await catalog.replaceCatalog({
       models: [
+        { displayName: 'GPT old', id: 'openai/gpt-old', releasedAt: '2024-01-01', type: 'chat' },
+        { displayName: 'GPT 1', id: 'openai/gpt-1', releasedAt: '2024-06-01', type: 'chat' },
+        { displayName: 'GPT 2', id: 'openai/gpt-2', releasedAt: '2025-01-01', type: 'chat' },
+        { displayName: 'GPT 3', id: 'openai/gpt-3', releasedAt: '2025-06-01', type: 'chat' },
+        { displayName: 'GPT 4', id: 'openai/gpt-4', releasedAt: '2025-12-01', type: 'chat' },
         {
-          abilities: { functionCall: true },
-          displayName: 'GPT-4o',
-          id: 'openai/gpt-4o',
+          displayName: 'Claude',
+          id: 'anthropic/claude-1',
+          releasedAt: '2025-01-01',
           type: 'chat',
         },
         {
-          displayName: 'Claude',
-          id: 'anthropic/claude-sonnet-4',
+          displayName: 'Gemini',
+          id: 'google/gemini-1',
+          releasedAt: '2025-01-01',
           type: 'chat',
+        },
+        {
+          displayName: 'DeepSeek',
+          id: 'deepseek/deepseek-chat',
+          releasedAt: '2026-01-01',
+          type: 'chat',
+        },
+        {
+          displayName: 'DALL-E',
+          id: 'openai/dall-e',
+          releasedAt: '2026-01-01',
+          type: 'image',
         },
       ],
       triggeredBy: 'manual:admin',
     });
 
-    await db
-      .update(openrouterModelCatalog)
-      .set({ enabled: false })
-      .where(eq(openrouterModelCatalog.id, 'openai/gpt-4o'));
+    const rows = await catalog.listAsProviderModels();
+    const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
+
+    expect(byId['openai/gpt-4'].enabled).toBe(true);
+    expect(byId['openai/gpt-3'].enabled).toBe(true);
+    expect(byId['openai/gpt-2'].enabled).toBe(true);
+    expect(byId['openai/gpt-1'].enabled).toBe(true);
+    expect(byId['openai/gpt-old'].enabled).toBe(false);
+    expect(byId['anthropic/claude-1'].enabled).toBe(true);
+    expect(byId['google/gemini-1'].enabled).toBe(true);
+    expect(byId['deepseek/deepseek-chat'].enabled).toBe(false);
+    expect(byId['openai/dall-e'].enabled).toBe(false);
+
+    const status = await catalog.getSyncStatus();
+    expect(status).toMatchObject({
+      lastStatus: 'success',
+      lastTriggeredBy: 'manual:admin',
+      modelCount: 9,
+    });
+  });
+
+  it('recomputes enabled flags on re-sync instead of preserving sticky true', async () => {
+    await catalog.replaceCatalog({
+      models: [
+        { displayName: 'GPT-A', id: 'openai/gpt-a', releasedAt: '2025-01-01', type: 'chat' },
+        { displayName: 'Claude', id: 'anthropic/claude-a', releasedAt: '2025-01-01', type: 'chat' },
+      ],
+      triggeredBy: 'manual:admin',
+    });
 
     await catalog.replaceCatalog({
       models: [
         {
-          displayName: 'GPT-4o refreshed',
-          id: 'openai/gpt-4o',
+          displayName: 'GPT-A refreshed',
+          id: 'openai/gpt-a',
+          releasedAt: '2024-01-01',
           type: 'chat',
         },
-        {
-          displayName: 'New model',
-          id: 'google/gemini-2.5-pro',
-          type: 'chat',
-        },
+        { displayName: 'GPT-B', id: 'openai/gpt-b', releasedAt: '2026-01-01', type: 'chat' },
+        { displayName: 'Gemini', id: 'google/gemini-b', releasedAt: '2025-06-01', type: 'chat' },
       ],
       triggeredBy: 'cron',
     });
@@ -67,23 +107,24 @@ describe('OpenRouterModelCatalogModel', () => {
     const rows = await catalog.listAsProviderModels();
     const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
 
-    expect(byId['openai/gpt-4o'].enabled).toBe(false);
-    expect(byId['openai/gpt-4o'].displayName).toBe('GPT-4o refreshed');
-    expect(byId['google/gemini-2.5-pro'].enabled).toBe(true);
-    expect(byId['anthropic/claude-sonnet-4']).toBeUndefined();
+    expect(byId['openai/gpt-a'].enabled).toBe(true);
+    expect(byId['openai/gpt-a'].displayName).toBe('GPT-A refreshed');
+    expect(byId['openai/gpt-b'].enabled).toBe(true);
+    expect(byId['google/gemini-b'].enabled).toBe(true);
+    expect(byId['anthropic/claude-a']).toBeUndefined();
 
     const status = await catalog.getSyncStatus();
     expect(status).toMatchObject({
       lastStatus: 'success',
       lastTriggeredBy: 'cron',
-      modelCount: 2,
+      modelCount: 3,
     });
     expect(status.lastSyncedAt).toBeTruthy();
   });
 
   it('records sync errors without clearing prior success metadata', async () => {
     await catalog.replaceCatalog({
-      models: [{ displayName: 'X', id: 'x/y', type: 'chat' }],
+      models: [{ displayName: 'X', id: 'openai/x', type: 'chat' }],
       triggeredBy: 'cron',
     });
 
@@ -99,5 +140,34 @@ describe('OpenRouterModelCatalogModel', () => {
       modelCount: 1,
     });
     expect(afterError.lastSyncedAt).toBeTruthy();
+  });
+
+  it('reseeds default enabled flags from existing rows', async () => {
+    const now = new Date();
+    await db.insert(openrouterModelCatalog).values([
+      {
+        enabled: true,
+        id: 'deepseek/old',
+        payload: {},
+        releasedAt: '2026-01-01',
+        syncedAt: now,
+        type: 'chat',
+      },
+      {
+        enabled: false,
+        id: 'openai/new',
+        payload: {},
+        releasedAt: '2025-12-01',
+        syncedAt: now,
+        type: 'chat',
+      },
+    ]);
+
+    await expect(catalog.reseedDefaultEnabledFlags()).resolves.toBe(1);
+
+    const rows = await catalog.listAsProviderModels();
+    const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
+    expect(byId['openai/new'].enabled).toBe(true);
+    expect(byId['deepseek/old'].enabled).toBe(false);
   });
 });

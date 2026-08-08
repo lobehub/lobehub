@@ -56,7 +56,7 @@ export class AicoChatGuard {
       const me = members.find((m) => m.userId === userId && m.status === 'active');
       if (!me) continue;
       const allowed = await this.orgModel.getAllowedModelsForMember(me.id);
-      if (allowed && !allowed.includes(modelId)) {
+      if (!allowed || allowed.length === 0 || !allowed.includes(modelId)) {
         throw new AicoChatGuardError(`MODEL_NOT_ALLOWED:${modelId}`, ChatErrorType.BadRequest);
       }
     }

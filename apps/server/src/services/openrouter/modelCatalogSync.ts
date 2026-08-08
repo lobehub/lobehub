@@ -3,6 +3,7 @@ import type { ChatModelCard } from '@lobechat/types';
 import type { ModelAbilities } from 'model-bank';
 
 import {
+  type OpenRouterCatalogSyncRun,
   type OpenRouterCatalogSyncStatus,
   OpenRouterModelCatalogModel,
 } from '@/database/models/openrouterModelCatalog';
@@ -31,9 +32,29 @@ export class OpenRouterModelCatalogSyncService {
     return this.catalog.getSyncStatus();
   };
 
+  listHistory = async (limit = 20): Promise<OpenRouterCatalogSyncRun[]> => {
+    return this.catalog.listSyncRuns(limit);
+  };
+
+  /**
+   * If the catalog is empty (first setup), pull OpenRouter once.
+   * Returns whether a sync was attempted.
+   */
+  ensureInitialCatalog = async (): Promise<{
+    synced: boolean;
+    status: OpenRouterCatalogSyncStatus;
+  }> => {
+    const count = await this.catalog.count();
+    if (count > 0) {
+      return { status: await this.catalog.getSyncStatus(), synced: false };
+    }
+    const status = await this.sync('bootstrap');
+    return { status, synced: true };
+  };
+
   /**
    * Fetch the live OpenRouter catalog and persist it for the managed Aico provider.
-   * @param triggeredBy `cron` or `manual:<userId>`
+   * @param triggeredBy `cron` | `bootstrap` | `manual:<userId>`
    */
   sync = async (triggeredBy: string): Promise<OpenRouterCatalogSyncStatus> => {
     try {
@@ -46,7 +67,6 @@ export class OpenRouterModelCatalogSyncService {
           description: model.description,
           displayName: model.displayName,
           id: model.id,
-          // Image-tab `:image` clones need parameters restored from payload.
           parameters: model.parameters,
           pricing: model.pricing,
           releasedAt: model.releasedAt,

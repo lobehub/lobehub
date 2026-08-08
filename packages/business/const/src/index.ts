@@ -3,6 +3,7 @@ import { BRANDING_PROVIDER } from './branding';
 export * from './aicoErrors';
 export * from './branding';
 export * from './llm';
+export * from './openrouterDefaultModels';
 export * from './url';
 
 export const ENABLE_BUSINESS_FEATURES = false;

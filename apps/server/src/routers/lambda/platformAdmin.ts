@@ -497,6 +497,12 @@ export const platformAdminRouter = router({
     return ctx.modelCatalogSync.getStatus();
   }),
 
+  listOpenRouterModelSyncHistory: platformProcedure
+    .input(z.object({ limit: z.number().int().min(1).max(50).optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      return ctx.modelCatalogSync.listHistory(input?.limit ?? 20);
+    }),
+
   syncOpenRouterModels: platformProcedure.mutation(async ({ ctx }) => {
     const status = await ctx.modelCatalogSync.sync(`manual:${ctx.userId}`);
     if (status.lastStatus !== 'success') {
