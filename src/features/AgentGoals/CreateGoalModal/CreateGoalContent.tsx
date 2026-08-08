@@ -4,7 +4,7 @@ import type { CreateGoalParams, GoalCriterionDraft } from '@lobechat/builtin-too
 import { openCriterionEditModal } from '@lobechat/builtin-tool-task/client';
 import { DEFAULT_GOAL_MAX_ROUNDS } from '@lobechat/const/verify';
 import { useEditor } from '@lobehub/editor/react';
-import { ActionIcon, Block, Flexbox, Icon, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Button, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { InputNumber } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -15,6 +15,7 @@ import {
   Pencil,
   PencilLine,
   Plus,
+  ShieldCheck,
   Trash2,
   X,
 } from 'lucide-react';
@@ -52,14 +53,16 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   body: css`
     overflow-y: auto;
+
     min-height: 0;
+    max-height: min(70vh, 680px);
     padding-block: 8px 24px;
     padding-inline: 24px;
   `,
   criteriaList: css`
     overflow: hidden;
     overflow-y: auto;
-    max-height: 240px;
+    max-height: 320px;
     padding: 0;
   `,
   criterion: css`
@@ -73,6 +76,13 @@ const styles = createStaticStyles(({ css }) => ({
 
     &:hover {
       background: ${cssVar.colorFillQuaternary};
+    }
+  `,
+  createBlank: css`
+    color: ${cssVar.colorTextTertiary};
+
+    &:hover {
+      color: ${cssVar.colorTextSecondary};
     }
   `,
   criterionIndex: css`
@@ -395,7 +405,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
   }, []);
 
   return (
-    <Flexbox height={step === 'review' ? 'min(86vh, 800px)' : undefined} onKeyDown={handleKeyDown}>
+    <Flexbox onKeyDown={handleKeyDown}>
       <Flexbox horizontal className={styles.head}>
         <Flexbox flex={1} gap={6}>
           {step === 'review' && (
@@ -446,14 +456,8 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
       </Flexbox>
 
       {step === 'review' && (
-        <Flexbox className={styles.body} flex={1}>
+        <Flexbox className={styles.body}>
           <Flexbox className={styles.reviewSection} gap={10}>
-            <Flexbox horizontal align={'center'} gap={8}>
-              <Icon color={cssVar.colorTextTertiary} icon={Paperclip} size={16} />
-              <Text fontSize={13} weight={600}>
-                {t('createGoal.contextLabel')}
-              </Text>
-            </Flexbox>
             <Flexbox className={styles.instructionEditor}>
               <EditorCanvas
                 disabled={!canCreate}
@@ -471,7 +475,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
           <Flexbox className={styles.reviewSection} gap={10}>
             <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
               <Flexbox horizontal align={'center'} gap={8}>
-                <Icon color={cssVar.colorTextTertiary} icon={CircleDashed} size={16} />
+                <Icon color={cssVar.colorTextTertiary} icon={ShieldCheck} size={16} />
                 <Text fontSize={13} weight={600}>
                   {t('createGoal.criteriaTitle')}
                 </Text>
@@ -483,7 +487,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
                 {t('createGoal.addCriterion')}
               </Button>
             </Flexbox>
-            <Block className={styles.criteriaList} variant={'outlined'}>
+            <Flexbox className={styles.criteriaList}>
               {plan.criteria.map((criterion, index) => (
                 <Flexbox
                   horizontal
@@ -533,7 +537,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
                   />
                 </Flexbox>
               ))}
-            </Block>
+            </Flexbox>
           </Flexbox>
 
           <Flexbox className={styles.reviewSection} gap={10}>
@@ -614,6 +618,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
         <Flexbox horizontal align={'center'} gap={4}>
           {step === 'describe' && (
             <Button
+              className={styles.createBlank}
               disabled={!canCreate || isCreating}
               icon={PencilLine}
               size={'small'}

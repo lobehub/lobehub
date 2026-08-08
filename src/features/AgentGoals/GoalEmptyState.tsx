@@ -4,19 +4,22 @@ import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
+  CalendarClockIcon,
   CheckIcon,
   CircleCheckBigIcon,
   InfinityIcon,
+  Layers3Icon,
   PlayIcon,
   PlusIcon,
   RotateCcwIcon,
+  TablePropertiesIcon,
   TargetIcon,
   XIcon,
 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { GoalExampleSeed } from './goalExamples';
+import type { GoalExampleKey, GoalExampleSeed } from './goalExamples';
 import { buildGoalExampleSeed, GOAL_EXAMPLE_KEYS } from './goalExamples';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -44,6 +47,10 @@ const styles = createStaticStyles(({ css }) => ({
       grid-template-columns: minmax(0, 1fr);
     }
   `,
+  exampleIcon: css`
+    flex: none;
+    color: ${cssVar.colorTextTertiary};
+  `,
   hero: css`
     isolation: isolate;
     position: relative;
@@ -56,90 +63,41 @@ const styles = createStaticStyles(({ css }) => ({
     text-align: center;
   `,
   heroIcon: css`
-    position: relative;
-
     display: flex;
     align-items: center;
     justify-content: center;
 
-    width: 48px;
-    height: 48px;
-    border-radius: 14px;
+    width: 104px;
+    height: 72px;
 
-    color: ${cssVar.colorText};
+    color: ${cssVar.colorPrimary};
 
-    background: ${cssVar.colorBgContainer};
-    box-shadow:
-      0 0 0 1px ${cssVar.colorBorderSecondary},
-      0 8px 28px ${cssVar.colorFillSecondary};
+    filter: drop-shadow(0 0 8px ${cssVar.colorPrimary});
 
-    &::before {
-      content: '';
-
-      position: absolute;
-      z-index: -1;
-      inset: -2px;
-
-      border-radius: 16px;
-
-      background: conic-gradient(
-        from 0deg,
-        transparent 0deg,
-        ${cssVar.colorPrimary} 70deg,
-        ${cssVar.colorInfo} 120deg,
-        transparent 180deg
-      );
-      filter: blur(6px);
-
-      animation: goal-icon-flow 4s linear infinite;
-    }
+    animation: goal-icon-flow 3.2s ${cssVar.motionEaseInOut} infinite;
 
     @keyframes goal-icon-flow {
-      to {
-        transform: rotate(360deg);
+      0%,
+      100% {
+        transform: scale(0.96);
+        color: ${cssVar.colorPrimary};
+        filter: drop-shadow(0 0 6px ${cssVar.colorPrimary});
       }
-    }
 
-    @media (prefers-reduced-motion: reduce) {
-      &::before {
-        animation: none;
-      }
-    }
-  `,
-  heroInner: css`
-    position: relative;
-    z-index: 1;
-  `,
-  heroPattern: css`
-    pointer-events: none;
-
-    position: absolute;
-    z-index: 0;
-    inset-block-start: 0;
-    inset-inline: 50%;
-    transform: translateX(-50%);
-
-    width: min(760px, 100%);
-    height: 220px;
-
-    opacity: 0.48;
-    background-image: radial-gradient(circle, ${cssVar.colorTextQuaternary} 1px, transparent 1.5px);
-    background-position: 0 0;
-    background-size: 18px 18px;
-
-    animation: goal-pattern-flow 8s linear infinite;
-
-    mask-image: radial-gradient(ellipse 62% 72% at 50% 25%, #000 15%, transparent 78%);
-
-    @keyframes goal-pattern-flow {
-      to {
-        background-position: 36px 18px;
+      50% {
+        transform: scale(1.04);
+        color: ${cssVar.colorInfo};
+        filter: drop-shadow(0 0 18px ${cssVar.colorInfo});
       }
     }
 
     @media (prefers-reduced-motion: reduce) {
       animation: none;
     }
+  `,
+  heroInner: css`
+    position: relative;
+    z-index: 1;
   `,
   heroLead: css`
     max-width: 560px;
@@ -209,6 +167,12 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
+const EXAMPLE_ICONS: Record<GoalExampleKey, typeof TargetIcon> = {
+  backlog: TablePropertiesIcon,
+  digest: CalendarClockIcon,
+  metric: Layers3Icon,
+};
+
 interface StepProps {
   desc: string;
   icon: typeof TargetIcon;
@@ -253,10 +217,9 @@ const GoalEmptyState = memo<GoalEmptyStateProps>(({ onCreate }) => {
   return (
     <Block padding={0} variant={'borderless'}>
       <Flexbox align={'center'} className={styles.hero}>
-        <div className={styles.heroPattern} />
         <Flexbox align={'center'} className={styles.heroInner} gap={16}>
           <div className={styles.heroIcon}>
-            <Icon icon={InfinityIcon} size={24} />
+            <Icon icon={InfinityIcon} size={64} />
           </div>
           <Flexbox align={'center'} gap={8}>
             <Text fontSize={20} weight={600}>
@@ -331,9 +294,12 @@ const GoalEmptyState = memo<GoalEmptyStateProps>(({ onCreate }) => {
                   onCreate(seed);
                 }}
               >
-                <Text fontSize={11} type={'secondary'}>
-                  {t(`goalEmpty.examples.${key}.tag` as never)}
-                </Text>
+                <Flexbox horizontal align={'center'} justify={'space-between'}>
+                  <Text fontSize={11} type={'secondary'}>
+                    {t(`goalEmpty.examples.${key}.tag` as never)}
+                  </Text>
+                  <Icon className={styles.exampleIcon} icon={EXAMPLE_ICONS[key]} size={16} />
+                </Flexbox>
                 <Text fontSize={13} weight={500}>
                   {seed.title}
                 </Text>
