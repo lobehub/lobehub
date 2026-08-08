@@ -2,7 +2,7 @@
 
 import { DEFAULT_PROVIDER } from '@lobechat/business-const';
 import { Flexbox, SearchBar, Text } from '@lobehub/ui';
-import { Button, Switch, createModal } from '@lobehub/ui/base-ui';
+import { Button, createModal, Switch } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { t } from 'i18next';
 import { type AiProviderModelListItem } from 'model-bank';
@@ -25,6 +25,7 @@ const styles = createStaticStyles(({ css }) => ({
   list: css`
     overflow: auto;
     flex: 1;
+
     min-height: 0;
     max-height: min(60vh, 480px);
     margin-block-start: 12px;

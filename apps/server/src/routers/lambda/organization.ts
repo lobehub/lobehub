@@ -178,6 +178,23 @@ export const organizationRouter = router({
     return ctx.organizationModel.listForUser(ctx.userId, { includeSuspended: true });
   }),
 
+  /**
+   * Models the current user may use when spending from their org wallet.
+   * Personal wallet callers should ignore this (unrestricted managed catalog).
+   * Empty array = no models granted for the member's team.
+   */
+  getMyAllowedModels: orgProcedure
+    .input(z.object({ organizationId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      const members = await ctx.organizationModel.listMembers(input.organizationId);
+      const me = members.find((m) => m.userId === ctx.userId && m.status === 'active');
+      if (!me) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'ORG_MEMBERSHIP_REQUIRED' });
+      }
+      const allowed = await ctx.organizationModel.getAllowedModelsForMember(me.id);
+      return { modelIds: allowed ?? [] };
+    }),
+
   listMembers: orgProcedure
     .input(z.object({ orgId: z.string().min(1) }))
     .query(async ({ ctx, input }) => {

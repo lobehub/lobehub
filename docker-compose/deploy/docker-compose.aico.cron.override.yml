@@ -1,0 +1,31 @@
+# Optional daily OpenRouter model catalog sync for self-hosted Aico.
+#
+# Requires CRON_SECRET (same value as the app) and APP_URL / internal URL.
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.aico.override.yml \
+#     -f docker-compose.aico.cron.override.yml up -d
+
+services:
+  openrouter-model-sync:
+    image: curlimages/curl:8.12.1
+    restart: unless-stopped
+    env_file:
+      - ../../.env
+      - .env
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - |
+        set -eu
+        echo "openrouter-model-sync: waiting for lobe…"
+        sleep 45
+        while true; do
+          TARGET="$${INTERNAL_APP_URL:-$${APP_URL:-http://lobe:3210}}"
+          echo "$$(date -u +%Y-%m-%dT%H:%M:%SZ) syncing OpenRouter catalog via $$TARGET"
+          curl -fsS -X GET \
+            -H "Authorization: Bearer $${CRON_SECRET}" \
+            "$$TARGET/api/aico/cron/sync-openrouter-models" \
+            || echo "sync failed (will retry in 24h)"
+          sleep 86400
+        done
+    depends_on:
+      - lobe

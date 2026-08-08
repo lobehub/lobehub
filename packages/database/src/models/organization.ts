@@ -1017,13 +1017,13 @@ export class OrganizationModel {
 
   /**
    * Allowed models for a member via their team.
-   * Empty allow-list means all models are allowed.
+   * Empty allow-list means no models (fail-closed on org wallet).
+   * `null` means the member has no team — also deny on org wallet.
    */
   getAllowedModelsForMember = async (orgMemberId: string): Promise<string[] | null> => {
     const team = await this.getMemberTeam(orgMemberId);
     if (!team) return null;
     const rules = await this.getTeamModelAccess(team.id);
-    if (rules.length === 0) return null;
     return rules.map((r) => r.modelId);
   };
 

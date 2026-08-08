@@ -37,6 +37,7 @@ const prefixes = {
   organizationTeamMembers: 'otmm',
   organizationTeams: 'oteam',
   organizations: 'org',
+  orSyncRuns: 'orsr',
   platformAdmins: 'padm',
   plugins: 'plg',
   renewalBatches: 'rnw',

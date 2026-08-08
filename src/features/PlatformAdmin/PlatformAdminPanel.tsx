@@ -76,6 +76,10 @@ export const PlatformAdminPanel = () => {
     'aico-openrouter-model-sync',
     () => lambdaClient.platformAdmin.getOpenRouterModelSyncStatus.query(),
   );
+  const { data: modelSyncHistory, mutate: mutateModelSyncHistory } = useClientDataSWR(
+    'aico-openrouter-model-sync-history',
+    () => lambdaClient.platformAdmin.listOpenRouterModelSyncHistory.query({ limit: 15 }),
+  );
 
   useEffect(() => {
     if (trialConfig) {
@@ -428,7 +432,7 @@ export const PlatformAdminPanel = () => {
                 try {
                   await lambdaClient.platformAdmin.syncOpenRouterModels.mutate();
                   toast.success(t('platform.modelsSynced'));
-                  await mutateModelSync();
+                  await Promise.all([mutateModelSync(), mutateModelSyncHistory()]);
                 } catch (err) {
                   toastAicoError(err, t, 'platform.modelsSyncFailed');
                 } finally {
@@ -438,6 +442,67 @@ export const PlatformAdminPanel = () => {
             >
               {t('platform.modelsFetchNow')}
             </Button>
+            <Flexbox gap={8}>
+              <Text strong>{t('platform.modelsHistory')}</Text>
+              {(modelSyncHistory || []).length === 0 ? (
+                <Text type="secondary">{t('platform.modelsHistoryEmpty')}</Text>
+              ) : (
+                (modelSyncHistory || []).map((run) => (
+                  <Block className={aicoPanelStyles.section} key={run.id} variant="outlined">
+                    <Flexbox gap={8}>
+                      <Flexbox
+                        horizontal
+                        align="center"
+                        gap={8}
+                        justify="space-between"
+                        wrap="wrap"
+                      >
+                        <Text>
+                          {new Date(run.syncedAt).toLocaleString()} · {run.status}
+                          {run.triggeredBy ? ` · ${run.triggeredBy}` : ''}
+                        </Text>
+                        <Text type="secondary">{run.modelCount}</Text>
+                      </Flexbox>
+                      {run.error ? <Text type="danger">{run.error}</Text> : null}
+                      {run.addedModelIds.length === 0 && run.removedModelIds.length === 0 ? (
+                        <Text type="secondary">{t('platform.modelsNoDiff')}</Text>
+                      ) : (
+                        <Flexbox gap={8}>
+                          {run.addedModelIds.length > 0 ? (
+                            <Flexbox gap={4}>
+                              <Text strong>
+                                {t('platform.modelsAdded', { count: run.addedModelIds.length })}
+                              </Text>
+                              <Flexbox horizontal gap={4} wrap="wrap">
+                                {run.addedModelIds.slice(0, 40).map((id) => (
+                                  <Tag color="success" key={`a-${run.id}-${id}`}>
+                                    {id}
+                                  </Tag>
+                                ))}
+                              </Flexbox>
+                            </Flexbox>
+                          ) : null}
+                          {run.removedModelIds.length > 0 ? (
+                            <Flexbox gap={4}>
+                              <Text strong>
+                                {t('platform.modelsRemoved', { count: run.removedModelIds.length })}
+                              </Text>
+                              <Flexbox horizontal gap={4} wrap="wrap">
+                                {run.removedModelIds.slice(0, 40).map((id) => (
+                                  <Tag color="warning" key={`r-${run.id}-${id}`}>
+                                    {id}
+                                  </Tag>
+                                ))}
+                              </Flexbox>
+                            </Flexbox>
+                          ) : null}
+                        </Flexbox>
+                      )}
+                    </Flexbox>
+                  </Block>
+                ))
+              )}
+            </Flexbox>
           </Flexbox>
         </Block>
       )}
