@@ -27,13 +27,16 @@ UserRoutes.get(
   describeRoute({ summary: 'Get current authenticated user', tags: ['users'] }),
   requireAuth,
   // Deliberately reachable by every authenticated caller, including restricted
-  // API keys that hold no `user:read` — please do not add a scope gate here.
-  // It returns only the caller's OWN identity (their user row and their own
-  // roles), so it discloses nothing the key holder is not already, and it is
-  // how `lh login` resolves a userId from a freshly minted key
-  // (`apps/cli/src/auth/apiKey.ts`). Gating it strands the holder of a valid
-  // key outside the product with a scope error. Same contract as GitHub's
-  // `/user`. See LOBE-12934.
+  // API keys holding no `user:read` — please do not add a scope gate here.
+  // This is how `lh login` resolves a userId from a freshly minted key
+  // (`apps/cli/src/auth/apiKey.ts`); gating the route strands the holder of a
+  // valid key outside the product with a scope error, same reason GitHub keeps
+  // `/user` open to any token.
+  //
+  // Reachability is not disclosure: the payload is scoped inside
+  // `UserController.getCurrentUser` — a key without `user:read` receives only
+  // `{ id }`, and `messageCount` additionally needs `chat:read`. Widen there,
+  // under a scope check, rather than by gating the route. See LOBE-12934.
   async (c) => {
     const userController = new UserController();
     return await userController.getCurrentUser(c);
