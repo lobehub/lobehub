@@ -19,6 +19,11 @@ const styles = createStaticStyles(({ css }) => ({
     flex: 1;
     gap: 16px;
     min-height: 0;
+
+    @media (width <= 640px) {
+      flex-direction: column;
+      gap: 12px;
+    }
   `,
   regionIndex: css`
     flex: none;
@@ -44,6 +49,12 @@ const styles = createStaticStyles(({ css }) => ({
 
     width: 320px;
     min-width: 0;
+
+    @media (width <= 640px) {
+      flex: 0 1 auto;
+      width: 100%;
+      max-height: 36%;
+    }
   `,
   thumb: css`
     cursor: pointer;
