@@ -10,12 +10,14 @@ import { changeEmail } from '@/libs/better-auth/auth-client';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
+import { isProfileChangeEmailEnabled } from './isProfileChangeEmailEnabled';
 import ProfileRow from './ProfileRow';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/;
 
 const EmailRow = () => {
   const { t } = useTranslation('auth');
+  const allowChangeEmail = isProfileChangeEmailEnabled();
   const email = useUserStore(userProfileSelectors.email);
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
@@ -118,6 +120,7 @@ const EmailRow = () => {
       anchor={'profile-email'}
       label={t('profile.email')}
       action={
+        allowChangeEmail &&
         !isEditing && (
           <Text style={{ cursor: 'pointer', fontSize: 13 }} onClick={handleStartEdit}>
             {t('profile.updateEmail')}
@@ -125,7 +128,9 @@ const EmailRow = () => {
         )
       }
     >
-      <AnimatePresence mode="wait">{isEditing ? editingContent : displayContent}</AnimatePresence>
+      <AnimatePresence mode="wait">
+        {allowChangeEmail && isEditing ? editingContent : displayContent}
+      </AnimatePresence>
     </ProfileRow>
   );
 };

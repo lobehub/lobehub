@@ -204,7 +204,9 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
   },
   {
     anchor: 'profile-email',
-    keywords: ['email', 'email address', 'update email', 'change email'],
+    // Change-email UI is hidden for Aico/Panachat (`isCustomBranding`); keep
+    // discoverability for the read-only email row only.
+    keywords: ['email', 'email address'],
     labelKey: 'profile.email',
     ns: 'auth',
     tab: SettingsTabs.Profile,
