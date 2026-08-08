@@ -1,5 +1,7 @@
 import type { Context } from 'hono';
 
+import { hasApiKeyScope, isFullAccessApiKey } from '@/const/apiKeyScope';
+
 import { BaseController } from '../common/base.controller';
 import { UserService } from '../services';
 import type {
@@ -19,10 +21,27 @@ export class UserController extends BaseController {
    * @param c Hono Context
    * @returns User public information response
    */
+  /**
+   * `/me` is open to every authenticated caller so a key can resolve its own
+   * identity, but `messageCount` is chat-usage metadata rather than identity.
+   * A restricted key gets it only with `chat:read`.
+   *
+   * Omitted rather than rejected: identity resolution must not start failing
+   * because of a query parameter, which is the trap this endpoint just came
+   * out of (LOBE-12934).
+   */
+  private canReadChatCounts(c: Context): boolean {
+    if (c.get('authType') !== 'apikey') return true;
+
+    const scopes = c.get('apiKeyScopes') as string[] | null | undefined;
+    return isFullAccessApiKey(scopes) || hasApiKeyScope(scopes, 'chat:read');
+  }
+
   async getCurrentUser(c: Context): Promise<Response> {
     try {
       const includeCountQuery = c.req.query('includeCount');
-      const includeCount = includeCountQuery !== '0' && includeCountQuery !== 'false';
+      const countRequested = includeCountQuery !== '0' && includeCountQuery !== 'false';
+      const includeCount = countRequested && this.canReadChatCounts(c);
 
       // Get database connection and create service instance
       const db = await this.getDatabase();

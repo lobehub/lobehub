@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 // the route module pulls in the db graph (via `requirePermission`) and the
 // better-auth graph (via `requireAuth`) at import time; this test is only
-// about which scope gates the route declares
+// about which gates the route itself declares
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: vi.fn() }));
 vi.mock('@/database/models/rbac', () => ({ RbacModel: class {} }));
 vi.mock('../middleware/auth', () => ({
@@ -36,7 +36,7 @@ describe('GET /users/me', () => {
     });
     app.route('/', UserRoutes);
 
-    return app.request('/me?includeCount=0');
+    return app.request('/me');
   };
 
   it('is reachable by a restricted API key that holds no user scope', async () => {
