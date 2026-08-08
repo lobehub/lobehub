@@ -67,6 +67,7 @@ const renderFooter = async ({
   hideGitHub = true,
   serverConfigInit = true,
 }: RenderFooterOptions = {}) => {
+  cleanup();
   vi.resetModules();
   analyticsTrack.mockReset();
   vi.stubGlobal('localStorage', {
@@ -166,6 +167,7 @@ const renderFooter = async ({
         showEvalEntry: false,
         showSettingsEntry: true,
       },
+      showDownloads: false,
       topNavItems: [],
       userPanel: {
         showDataImporter: false,
@@ -231,17 +233,14 @@ afterEach(() => {
 });
 
 describe('Footer help menu tracking', () => {
-  it('shows Get App immediately before GitHub on web', async () => {
+  it('does not show Get App when downloads are hidden', async () => {
     const user = userEvent.setup();
     await renderFooter({ hideGitHub: false });
 
     await user.click(screen.getByRole('button', { name: 'Help' }));
 
-    const getApp = await screen.findByRole('link', { name: 'Get App' });
-    const github = screen.getByRole('link', { name: 'GitHub' });
-
-    expect(getApp).toHaveAttribute('href', '/downloads');
-    expect(getApp.compareDocumentPosition(github) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Get App' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'GitHub' })).toBeInTheDocument();
   }, 20000);
 
   it('does not show Get App in desktop builds', async () => {

@@ -294,10 +294,9 @@ export const mobileRoutes: RouteObject[] = [
     children: [
       ...sharedMainAreaChildren,
 
-      // Downloads page (personal-only — never mirrored under /:workspaceSlug)
+      // Downloads page temporarily redirected (Aico hides this surface for now)
       {
-        element: dynamicElement(() => import('@/routes/(main)/downloads'), 'Mobile > Downloads'),
-        errorElement: <ErrorBoundary />,
+        element: redirectElement('/'),
         path: 'downloads',
       },
 

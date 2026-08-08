@@ -62,4 +62,11 @@ describe('useNavLayout', () => {
 
     expect(memoryItem?.hidden).toBe(true);
   });
+
+  it('keeps Downloads / Get App hidden by default', async () => {
+    const { useNavLayout } = await import('./useNavLayout');
+    const { result } = renderHook(() => useNavLayout());
+
+    expect(result.current.showDownloads).toBe(false);
+  });
 });

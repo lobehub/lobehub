@@ -2,7 +2,6 @@
 
 import {
   BrainCircuit,
-  Download,
   FilePenIcon,
   Image,
   LibraryBigIcon,
@@ -793,11 +792,9 @@ export const sharedMainAreaChildren: RouteObject[] = [
 const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): RouteObject[] => [
   ...sharedMainAreaChildren,
 
-  // Downloads page (personal-only — never mirrored under /:workspaceSlug)
+  // Downloads page temporarily redirected (Aico hides this surface for now)
   {
-    element: dynamicElement(() => import('@/routes/(main)/downloads'), 'Desktop > Downloads'),
-    errorElement: <ErrorBoundary />,
-    handle: { meta: routeMeta({ icon: Download, titleKey: 'navigation.downloads' }) },
+    element: redirectElement('/'),
     path: 'downloads',
   },
 

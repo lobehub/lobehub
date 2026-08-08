@@ -58,6 +58,8 @@ describe('useMenu', () => {
       expect(mainItems?.some((item) => item?.key === 'setting')).toBe(true);
       // 'memory' is gated behind the showMemory nav-layout flag (defaults off)
       expect(mainItems?.some((item) => item?.key === 'memory')).toBe(false);
+      // Downloads / Get App is gated behind showDownloads (defaults off for Aico)
+      expect(mainItems?.some((item) => item?.key === 'get-app')).toBe(false);
       // 'logout' is shown when isLoginWithAuth is true
       expect(logoutItems.some((item) => item?.key === 'logout')).toBe(true);
     });
