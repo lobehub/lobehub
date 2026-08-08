@@ -6,8 +6,8 @@ import { PlusIcon } from 'lucide-react';
 import { type FC, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { styles } from '../../styles';
-import { openEnableModelsModal } from '../EnableModelsModal';
+import { styles } from '../styles';
+import { openEnableModelsModal } from './EnableModelsModal';
 
 interface FooterProps {
   onOpenChange?: (open: boolean) => void;
