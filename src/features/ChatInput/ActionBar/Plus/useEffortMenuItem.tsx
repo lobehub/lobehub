@@ -1,5 +1,5 @@
 import { Icon } from '@lobehub/ui';
-import { css, cx } from 'antd-style';
+import { css, cssVar, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { CheckIcon, ChevronRight, GaugeIcon } from 'lucide-react';
 import type { AiModelReasoningConfig } from 'model-bank';
@@ -23,6 +23,15 @@ const activeLabel = css`
   width: 100%;
 
   color: inherit;
+`;
+
+const currentValue = css`
+  overflow: hidden;
+
+  font-size: 12px;
+  color: ${cssVar.colorTextSecondary};
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `;
 
 /**
@@ -112,6 +121,15 @@ export const useEffortMenuItem = (): ActionDropdownMenuItems => {
       ...modeChildren,
     ];
 
+    // Current value shown on the collapsed row (Codex-style): effort level,
+    // plus the reasoning mode when the model exposes both.
+    const currentText = [
+      effortKey && effortValue ? t(`reasoningEffort.levels.${effortValue}`) : undefined,
+      hasReasoningMode ? t(`reasoningEffort.mode.${modeValue}`) : undefined,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+
     return [
       {
         children,
@@ -120,7 +138,12 @@ export const useEffortMenuItem = (): ActionDropdownMenuItems => {
         extra: <Icon className="lobe-submenu-chevron" icon={ChevronRight} size={16} />,
         icon: GaugeIcon,
         key: 'effort',
-        label: t('reasoningEffort.title'),
+        label: (
+          <div className={cx(activeLabel)}>
+            <span>{t('reasoningEffort.title')}</span>
+            {currentText && <span className={cx(currentValue)}>{currentText}</span>}
+          </div>
+        ),
       } as ActionDropdownMenuItems[number],
     ];
   }, [
