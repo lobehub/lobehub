@@ -12,6 +12,8 @@
   "features.claudeCodeSdk.title": "Claude Code SDKランタイム",
   "features.codexAppServer.desc": "CodexセッションをワンショットCLIプロセスではなく、ローカルのアプリサーバーを通じて実行します。トークンストリーミングとネイティブターン制御を可能にします。",
   "features.codexAppServer.title": "Codexアプリサーバーランタイム",
+  "features.desktopSplitView.desc": "2つのデスクトップタブを並べて表示し、独立したナビゲーションとサイズ変更可能な仕切りを備えています。",
+  "features.desktopSplitView.title": "タブ分割ビュー",
   "features.groupChat.desc": "複数のAIアシスタントによるグループチャット機能を有効にします。",
   "features.groupChat.title": "グループチャット（マルチアシスタント）",
   "features.heteroSessionImport.desc": "トピックリストメニューに「ローカルエージェントセッションのインポート」エントリを追加します: ローカルのClaude Code / Codex CLIトランスクリプトをスキャンしてトピックとしてインポートし、再インポート時には増分同期を行います。",

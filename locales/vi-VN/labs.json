@@ -12,6 +12,8 @@
   "features.claudeCodeSdk.title": "Thời gian chạy Claude Code SDK",
   "features.codexAppServer.desc": "Chạy các phiên Codex thông qua máy chủ ứng dụng cục bộ thay vì các quy trình CLI một lần. Cho phép truyền tải token và kiểm soát lượt tự nhiên.",
   "features.codexAppServer.title": "Thời gian chạy Máy chủ Ứng dụng Codex",
+  "features.desktopSplitView.desc": "Hiển thị hai tab trên màn hình máy tính cạnh nhau, với khả năng điều hướng độc lập và thanh chia có thể điều chỉnh kích thước.",
+  "features.desktopSplitView.title": "Chế độ Xem Tab Chia",
   "features.groupChat.desc": "Kích hoạt phối hợp trò chuyện nhóm với nhiều tác nhân.",
   "features.groupChat.title": "Trò Chuyện Nhóm (Đa Tác Nhân)",
   "features.heteroSessionImport.desc": "Thêm mục \"Nhập phiên làm việc của đại lý cục bộ\" vào menu danh sách chủ đề: quét các bản ghi Claude Code / Codex CLI cục bộ và nhập chúng dưới dạng chủ đề, với đồng bộ hóa gia tăng khi nhập lại.",

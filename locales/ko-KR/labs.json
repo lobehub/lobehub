@@ -12,6 +12,8 @@
   "features.claudeCodeSdk.title": "Claude Code SDK 런타임",
   "features.codexAppServer.desc": "Codex 세션을 단발성 CLI 프로세스 대신 로컬 앱 서버를 통해 실행합니다. 토큰 스트리밍과 네이티브 턴 제어를 활성화합니다.",
   "features.codexAppServer.title": "Codex 앱 서버 런타임",
+  "features.desktopSplitView.desc": "두 개의 데스크탑 탭을 나란히 표시하며, 독립적인 탐색과 크기 조정이 가능한 구분선을 제공합니다.",
+  "features.desktopSplitView.title": "탭 분할 보기",
   "features.groupChat.desc": "다중 도우미 그룹 채팅 조정 기능을 활성화합니다.",
   "features.groupChat.title": "그룹 채팅 (다중 도우미)",
   "features.heteroSessionImport.desc": "주제 목록 메뉴에 \"로컬 에이전트 세션 가져오기\" 항목 추가: 로컬 Claude Code / Codex CLI 대화 기록을 스캔하여 주제로 가져오고, 다시 가져올 때 점진적으로 동기화합니다.",

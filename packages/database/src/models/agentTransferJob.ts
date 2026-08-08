@@ -150,6 +150,8 @@ export interface AgentTransferJobProgress {
   id: string;
   status: 'pending' | 'completed';
   totalTopics: number;
+  /** Job kind (`transfer` | `copy`) — the UI words its progress hints by it. */
+  type: string;
 }
 
 /**
@@ -271,6 +273,7 @@ export class AgentTransferJobModel {
         id: agentHistoryJobs.id,
         status: agentHistoryJobs.status,
         totalTopics: agentHistoryJobs.totalTopics,
+        type: agentHistoryJobs.type,
       })
       .from(agentHistoryJobAgents)
       .innerJoin(agentHistoryJobs, eq(agentHistoryJobs.id, agentHistoryJobAgents.jobId))

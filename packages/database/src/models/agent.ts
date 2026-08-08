@@ -56,6 +56,7 @@ import type { LobeChatDatabase, Transaction } from '../type';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { normalizeInboxAgentMeta } from '../utils/inboxAgent';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+import { AGENT_COPY_IN_PROGRESS, AgentCopyJobModel } from './agentCopyJob';
 import {
   AGENT_TRANSFER_IN_PROGRESS,
   AgentTransferJobModel,
@@ -940,6 +941,23 @@ export class AgentModel {
    */
   delete = async (agentId: string) => {
     return this.db.transaction(async (trx) => {
+      // Lock the agent row BEFORE consulting the pending-copy guard — same
+      // lock-then-guard order as transferAgents. A concurrent copy enqueue
+      // locks the same source rows, so the guard here cannot run in the window
+      // where the enqueue's job row exists but is not yet committed.
+      await trx
+        .select({ id: agents.id })
+        .from(agents)
+        .where(and(eq(agents.id, agentId), this.ownership()))
+        .for('update');
+
+      // A pending copy job still reads this agent's topics — deleting it would
+      // cascade them away and the copy would silently complete with empty
+      // conversations. Surface the in-progress state instead.
+      if (await AgentCopyJobModel.hasPendingCopyJobForSourceAgents(trx, [agentId])) {
+        throw new Error(AGENT_COPY_IN_PROGRESS);
+      }
+
       // 1. Get associated session IDs
       const links = await trx
         .select({ sessionId: agentsToSessions.sessionId })
@@ -1868,6 +1886,14 @@ export class AgentModel {
       // race-free against a concurrent transfer's own job insert.
       if (await AgentTransferJobModel.hasPendingJobForAgents(trx, agentIds)) {
         throw new Error(AGENT_TRANSFER_IN_PROGRESS);
+      }
+
+      // 1b. A pending copy job reads from these agents' topics by id — moving
+      // them to another scope would make it drain empty topics. Copy jobs
+      // register only their TARGET agents in the junction, so the source side
+      // needs its own payload-based guard.
+      if (await AgentCopyJobModel.hasPendingCopyJobForSourceAgents(trx, agentIds)) {
+        throw new Error(AGENT_COPY_IN_PROGRESS);
       }
 
       // 2. Resolve slug conflicts in the target scope with a single query:

@@ -326,6 +326,7 @@ class AgentService {
     jobId: string;
     pendingTopicIds: string[];
     totalTopics: number;
+    type: string;
   } | null> => {
     return lambdaClient.agent.getTransferJobStatus.query({ agentId, topicIds });
   };

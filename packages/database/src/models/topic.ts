@@ -44,6 +44,8 @@ import {
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { sanitizeBm25Query } from '../utils/bm25';
+import { COPIED_TOPIC_USAGE_RESET } from '../utils/copiedTranscript';
+import { markCopiedMessageMetadata } from '../utils/copyMessagesInDatabase';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
@@ -1029,6 +1031,7 @@ export class TopicModel {
             { userId: this.userId, workspaceId: this.workspaceId },
             {
               ...originalTopic,
+              ...COPIED_TOPIC_USAGE_RESET,
               clientId: null,
               id: this.genId(),
               title: newTitle || originalTopic?.title,
@@ -1090,6 +1093,10 @@ export class TopicModel {
             ...message,
             clientId: null,
             id: newId,
+            // A duplicate consumed no tokens: mark it so usage reports do not
+            // count the source's generation twice (the figures themselves stay
+            // — they are what the transcript records).
+            metadata: markCopiedMessageMetadata(message.metadata),
             parentId: newParentId,
             tools: newTools,
             topicId: duplicatedTopic.id,

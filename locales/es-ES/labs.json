@@ -12,6 +12,8 @@
   "features.claudeCodeSdk.title": "Entorno de Ejecución del SDK de Claude Code",
   "features.codexAppServer.desc": "Ejecuta sesiones de Codex a través del servidor de aplicaciones local en lugar de procesos CLI de una sola ejecución. Permite la transmisión de tokens y el control nativo de turnos.",
   "features.codexAppServer.title": "Entorno de Ejecución del Servidor de Aplicaciones Codex",
+  "features.desktopSplitView.desc": "Muestra dos pestañas de escritorio lado a lado, con navegación independiente y un divisor ajustable.",
+  "features.desktopSplitView.title": "Vista Dividida de Pestañas",
   "features.groupChat.desc": "Activa la coordinación de chat grupal con múltiples agentes.",
   "features.groupChat.title": "Chat Grupal (Multiagente)",
   "features.heteroSessionImport.desc": "Agrega una entrada \"Importar sesiones de agentes locales\" al menú de la lista de temas: escanea las transcripciones locales de Claude Code / Codex CLI y las importa como temas, con sincronización incremental al volver a importar.",

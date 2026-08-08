@@ -120,6 +120,7 @@
   "stt.responseError": "Dienstanfrage fehlgeschlagen. Bitte Konfiguration prüfen.",
   "supervisor.decisionFailed": "Der Gruppen-Host funktioniert nicht. Bitte Host-Konfiguration prüfen.",
   "testConnectionFailed": "Verbindungstest fehlgeschlagen: {{error}}",
+  "transfer.copyInProgress": "Eine vorherige Kopie dieses Agenten dupliziert noch seine Historie. Versuchen Sie es erneut, sobald der Vorgang abgeschlossen ist.",
   "transfer.noPermission": "Sie haben keine Berechtigung, diese Ressource zu verschieben.",
   "transfer.ownerOnly": "Nur Workspace-Besitzer können Ressourcen übertragen, die von anderen Mitgliedern erstellt wurden.",
   "transfer.resourceNotFound": "Diese Ressource existiert nicht mehr oder Sie haben keinen Zugriff mehr darauf. Aktualisieren Sie die Seite und versuchen Sie es erneut.",

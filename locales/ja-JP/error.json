@@ -120,6 +120,7 @@
   "stt.responseError": "リクエストが失敗しました。設定を確認してから再試行してください",
   "supervisor.decisionFailed": "グループホストの実行に失敗しました。ホスト設定（モデル、API キーと API アドレス）を確認してから再試行してください",
   "testConnectionFailed": "接続テストに失敗しました：{{error}}",
+  "transfer.copyInProgress": "このエージェントの以前のコピーがまだ履歴を複製中です。完了するまで再試行してください。",
   "transfer.noPermission": "このリソースを移動する権限がありません。",
   "transfer.ownerOnly": "ワークスペースの所有者のみ、他のメンバーが作成したリソースを移動できます。",
   "transfer.resourceNotFound": "このリソースは存在しないか、アクセス権がありません。再読み込みしてもう一度お試しください。",

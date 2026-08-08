@@ -1582,11 +1582,15 @@ export default {
   'transferMigration.agentBanner.desc':
     'New conversations are unaffected; older ones light up one by one as they finish. Opening a pending conversation moves it to the front.',
   'transferMigration.agentBadge': 'Migrating history · {{completed}}/{{total}}',
+  'transferMigration.agentBadgeCopy': 'Copying history · {{completed}}/{{total}}',
   'transferMigration.topicPending.title': 'This conversation is migrating',
+  'transferMigration.topicPendingCopy.title': 'This conversation is copying',
   'transferMigration.topicPending.desc':
     'We are prioritizing it — its history will appear here in a few seconds, no action needed.',
   'transferMigration.inputDisabledHint':
     'You can continue this conversation once its history finishes migrating',
+  'transferMigration.inputDisabledHintCopy':
+    'You can continue this conversation once its history finishes copying',
   'thread.subagentReadOnlyHint':
     'SubAgent conversations are read-only — execution is driven by the parent agent.',
   'terminalPanel.close': 'Close terminal panel',

@@ -1,4 +1,8 @@
-import { AgentTransferJobModel, type LobeChatDatabase } from '@lobechat/database';
+import {
+  AgentTransferJobModel,
+  drainAgentHistoryJob,
+  type LobeChatDatabase,
+} from '@lobechat/database';
 
 /**
  * Default in-process driver for agent-transfer backfill jobs.
@@ -25,7 +29,8 @@ const running = new Set<string>();
 
 const drainWithRetry = async (db: LobeChatDatabase, jobId: string): Promise<void> => {
   try {
-    await AgentTransferJobModel.drain(db, jobId);
+    // Type-dispatching drain: the same runner serves transfer and copy jobs.
+    await drainAgentHistoryJob(db, jobId);
   } catch (error) {
     // Keep the job pending and retry forever — the job row stays visible as
     // "migrating" instead of silently dying, per the transfer design.

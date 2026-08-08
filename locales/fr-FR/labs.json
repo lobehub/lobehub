@@ -12,6 +12,8 @@
   "features.claudeCodeSdk.title": "Runtime SDK Claude Code",
   "features.codexAppServer.desc": "Exécutez des sessions Codex via le serveur d'application local au lieu de processus CLI ponctuels. Permet le streaming de jetons et le contrôle natif des tours.",
   "features.codexAppServer.title": "Runtime du serveur d'application Codex",
+  "features.desktopSplitView.desc": "Affichez deux onglets de bureau côte à côte, avec une navigation indépendante et un séparateur redimensionnable.",
+  "features.desktopSplitView.title": "Vue en onglets divisés",
   "features.groupChat.desc": "Activez la coordination de discussions de groupe multi-agents.",
   "features.groupChat.title": "Discussion de groupe (multi-agents)",
   "features.heteroSessionImport.desc": "Ajoutez une entrée \"Importer les sessions d'agent local\" au menu de la liste des sujets : analysez les transcriptions locales de Claude Code / Codex CLI et importez-les comme sujets, avec une synchronisation incrémentielle lors de la réimportation.",
