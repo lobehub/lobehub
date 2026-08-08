@@ -29,9 +29,14 @@ export type { AgentProfileTab } from './tabOptions';
  * three headers can't drift.
  */
 export const AGENT_PROFILE_TABS_CENTER_STYLE: CSSProperties = {
-  insetBlockStart: '50%',
-  insetInlineStart: '50%',
+  // Physical `left`/`top`, not `inset-inline-start`: the paired transform below
+  // is physical (always shifts left/up), so a logical anchor would resolve to
+  // `right: 50%` under an RTL locale while the transform still pulls left —
+  // landing the switcher far left of center. Physical anchor + physical
+  // transform compose correctly in both LTR and RTL.
+  left: '50%',
   position: 'absolute',
+  top: '50%',
   // Both axes: an absolutely-positioned flex child no longer inherits the row's
   // vertical centering, so center it explicitly rather than trusting top:auto.
   transform: 'translate(-50%, -50%)',
