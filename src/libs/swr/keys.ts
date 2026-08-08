@@ -192,18 +192,19 @@ export const agentLabelKeys = {
 };
 
 // ---- agent builder (opening-suggestion chips) ---------------------------
-// Kept off `CACHE_TIERS` on purpose — these are ephemeral LLM-generated chips.
-// `contextSummary` is intentionally NOT part of the key so config autosaves for
-// the same target don't refetch; `nonce` bumps on manual refresh.
+// Persisted to the localStorage tier (see `CACHE_TIERS.local`) so revisits skip
+// the LLM generation instead of paying a skeleton + a generateJSON call every
+// page load. `contextSummary` is intentionally NOT part of the key so config
+// autosaves for the same target don't refetch; manual refresh revalidates the
+// same key in place (see `useBuilderSuggestions`).
 export const agentBuilderKeys = {
   suggestions: def(
     'agentBuilder:suggestions',
-    (mode: string, builderAgentId: string, targetId: string | undefined, nonce: number) => [
+    (mode: string, builderAgentId: string, targetId: string | undefined) => [
       'agentBuilder:suggestions',
       mode,
       builderAgentId,
       targetId,
-      nonce,
     ],
   ),
 };
