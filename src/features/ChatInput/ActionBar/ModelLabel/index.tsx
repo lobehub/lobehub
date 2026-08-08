@@ -4,6 +4,10 @@ import { ChevronDownIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
+import {
+  formatBrandedModelId,
+  isBrandedOpenRouterModelId,
+} from '@/components/Branding/brandedModelId';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
@@ -66,7 +70,9 @@ const ModelLabel = memo(() => {
   const provider = topicModel?.model ? topicModel.provider : agentProvider;
 
   const enabledModel = useAiInfraStore(aiModelSelectors.getEnabledModelById(model, provider));
-  const displayName = enabledModel?.displayName || model;
+  const displayName = isBrandedOpenRouterModelId(model)
+    ? formatBrandedModelId(model)
+    : enabledModel?.displayName || model;
   const lockTooltip = useModelLockTooltip(displayName, selectionLockReason);
 
   const handleModelChange = useCallback(

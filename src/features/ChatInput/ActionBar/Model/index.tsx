@@ -3,6 +3,10 @@ import { createStaticStyles, cx } from 'antd-style';
 import { memo, useCallback } from 'react';
 
 import { BrandedModelIcon } from '@/components/Branding/BrandedModelIcon';
+import {
+  formatBrandedModelId,
+  isBrandedOpenRouterModelId,
+} from '@/components/Branding/brandedModelId';
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useChatStore } from '@/store/chat';
@@ -70,7 +74,9 @@ const ModelSwitch = memo(() => {
   const provider = topicModel?.model ? topicModel.provider : agentProvider;
 
   const enabledModel = useAiInfraStore(aiModelSelectors.getEnabledModelById(model, provider));
-  const displayName = enabledModel?.displayName || model;
+  const displayName = isBrandedOpenRouterModelId(model)
+    ? formatBrandedModelId(model)
+    : enabledModel?.displayName || model;
   const lockTooltip = useModelLockTooltip(displayName, selectionLockReason);
 
   const handleModelChange = useCallback(

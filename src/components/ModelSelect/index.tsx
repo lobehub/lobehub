@@ -21,6 +21,10 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { BrandedModelIcon } from '@/components/Branding/BrandedModelIcon';
+import {
+  formatBrandedModelId,
+  isBrandedOpenRouterModelId,
+} from '@/components/Branding/brandedModelId';
 import { ProductLogo } from '@/components/Branding/ProductLogo';
 import { isCustomBranding } from '@/const/version';
 import { type AiProviderSourceType } from '@/types/aiProvider';
@@ -275,7 +279,9 @@ export const ModelItemRender = memo<ModelItemRenderProps>(
     ...rest
   }) => {
     const { mobile } = useResponsive();
-    const displayNameOrId = displayName || id;
+    const displayNameOrId = isBrandedOpenRouterModelId(id)
+      ? formatBrandedModelId(id)
+      : displayName || id;
 
     return (
       <Flexbox

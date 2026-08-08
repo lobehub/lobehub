@@ -6,7 +6,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     contextWindowTokens: 2_000_000,
     description:
       'Based on context length, topic, and complexity, your request is routed to Llama 3 70B Instruct, Claude 3.5 Sonnet (self-moderated), or GPT-4o.',
-    displayName: 'Auto (best for prompt)',
+    displayName: 'Auto',
     enabled: true,
     id: 'openrouter/auto',
     type: 'chat',

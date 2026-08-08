@@ -69,7 +69,7 @@ describe('OpenRouterModelCatalogSyncService', () => {
         }),
         expect.objectContaining({
           displayName: 'Auto',
-          enabled: false,
+          enabled: true,
           id: 'openrouter/auto',
           type: 'chat',
         }),
