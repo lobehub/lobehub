@@ -113,13 +113,28 @@ export const useEffortMenuItem = (): ActionDropdownMenuItems => {
         }))
       : [];
 
-    const children: ActionDropdownMenuItems = [
-      ...effortChildren,
-      ...(effortChildren.length > 0 && modeChildren.length > 0
-        ? [{ type: 'divider' as const }]
-        : []),
-      ...modeChildren,
-    ];
+    // When the model exposes both params, wrap each list in a labeled group so
+    // users can tell "effort level" and "reasoning mode" are two independent
+    // settings (each carries its own check mark). A single-param submenu stays
+    // flat — the parent row already names it.
+    const children: ActionDropdownMenuItems =
+      effortChildren.length > 0 && modeChildren.length > 0
+        ? [
+            {
+              children: effortChildren,
+              key: 'effort-level-group',
+              label: t('reasoningEffort.title'),
+              type: 'group' as const,
+            },
+            { type: 'divider' as const },
+            {
+              children: modeChildren,
+              key: 'effort-mode-group',
+              label: t('extendParams.reasoningMode.title'),
+              type: 'group' as const,
+            },
+          ]
+        : [...effortChildren, ...modeChildren];
 
     // Current value shown on the collapsed row (Codex-style): effort level,
     // plus the reasoning mode when the model exposes both.
