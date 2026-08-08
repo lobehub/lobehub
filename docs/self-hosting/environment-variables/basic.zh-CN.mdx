@@ -49,18 +49,28 @@ LobeHub 在部署时提供了一些额外的配置项，你可以使用环境变
 
 `DEFAULT_AGENT_CONFIG` 用于配置 LobeHub 默认助理的默认配置。它支持多种数据类型和结构，包括键值对、嵌套字段、数组值等。下表详细说明了 `DEFAULT_AGENT_CONFIG` 环境变量的配置项、示例以及相应解释：
 
-| 配置项类型 | 示例                                                                                                                | 解释                                             |
-| ----- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| 基本键值对 | `model=gpt-4`                                                                                                     | 设置模型为 `gpt-4`。                                 |
-| 嵌套字段  | `tts.sttLocale=en-US`                                                                                             | 设置文本到语音服务的语言区域为 `en-US`。                       |
-| 数组    | `plugins=search-engine,lobe-image-designer`                                                                       | 启用 `search-engine` 和 `lobe-image-designer` 插件。 |
-| 中文逗号  | `plugins=search-engine，lobe-image-designer`                                                                       | 同上，演示支持中文逗号分隔。                                 |
-| 多个配置项 | `model=glm-4;provider=zhipu`                                                                                      | 设置模型为 `glm-4` 且模型服务商为 `zhipu`。                 |
-| 数字值   | `params.max_tokens=300`, `chatConfig.historyCount=5`                                                              | 设置最大令牌数为 `300`，设置历史消息条数为 5。                    |
-| 布尔值   | `chatConfig.enableHistoryCount=true`,`chatConfig.enableCompressThreshold=true`, `chatConfig.enableStreaming=true` | 启用历史消息数量限制，历史长度压缩阈值，流式输出。                      |
-| 特殊字符  | `inputTemplate="Hello; I am a bot;"`                                                                              | 设置输入模板为 `Hello; I am a bot;`。                  |
-| 错误处理  | `model=gpt-4;maxToken`                                                                                            | 忽略无效条目 `maxToken`，仅解析出 `model=gpt-4`。          |
-| 值覆盖   | `model=gpt-4;model=gpt-4o`                                                                                        | 如果键重复，使用最后一次出现的值，此处 `model` 的值为 `gpt-4o`。      |
+| 配置项类型 | 示例 | 解释 |
+| --- | --- | --- |
+| 基本键值对 | `model=gpt-4` | 设置模型为 `gpt-4`。 |
+| 嵌套字段 | `tts.sttLocale=en-US` | 设置文本到语音服务的语言区域为 `en-US`。 |
+| 数组 | `plugins=search-engine,lobe-image-designer` | 启用 `search-engine` 和 `lobe-image-designer` 插件。 |
+| 中文逗号 | `plugins=search-engine，lobe-image-designer` | 同上，演示支持中文逗号分隔。 |
+| 多个配置项 | `model=glm-4;provider=zhipu` | 设置模型为 `glm-4` 且模型服务商为 `zhipu`。 |
+| 数字值 | `params.max_tokens=300`, `chatConfig.historyCount=5` | 设置最大令牌数为 `300`，设置历史消息条数为 5。 |
+| 布尔值 | `chatConfig.enableHistoryCount=true`,`chatConfig.enableCompressThreshold=true`, `chatConfig.enableStreaming=true` | 启用历史消息数量限制，历史长度压缩阈值，流式输出。 |
+| 特殊字符 | `inputTemplate="Hello; I am a bot;"` | 设置输入模板为 `Hello; I am a bot;`。 |
+| 错误处理 | `model=gpt-4;maxToken` | 忽略无效条目 `maxToken`，仅解析出 `model=gpt-4`。 |
+| 值覆盖 | `model=gpt-4;model=gpt-4o` | 如果键重复，使用最后一次出现的值，此处 `model` 的值为 `gpt-4o`。 |
+
+如需为默认助理提供回退服务商和模型，请同时配置这两个字段。服务商的值应使用 LobeHub 内部的 provider ID：
+
+```env
+DEFAULT_AGENT_CONFIG='provider=xiaomimimo;model=mimo-v2.5-pro'
+```
+
+此值会最先作为初始默认配置合并。用户的默认设置和 Agent 已持久化的配置具有更高优先级，因此修改该环境变量不会覆盖已经指定服务商或模型的现有 Agent。只有在没有保存更具体的选择时，才会使用此回退配置。
+
+此配置适用于任意受支持的模型服务商。请确保对应的服务端模型服务商已经启用（例如设置 `XIAOMIMIMO_API_KEY`），并且所选模型没有被对应的 `*_MODEL_LIST` 配置排除。`DEFAULT_AGENT_CONFIG` 不会校验服务商或模型是否可用，因此不可用的回退配置无法正常发起对话请求。
 
 相关阅读：
 
@@ -80,25 +90,25 @@ LobeHub 在部署时提供了一些额外的配置项，你可以使用环境变
 
 配置项说明：
 
-| 配置项  | 格式                                              | 解释                                  |
-| ---- | ----------------------------------------------- | ----------------------------------- |
-| 默认设置 | `default=ollama/deepseek-v3`                    | 为所有系统助手设置默认模型为 ollama 的 deepseek-v3 |
-| 特定设置 | `topic=openai/gpt-4`                            | 为主题生成设置特定的供应商和模型                    |
-| 混合配置 | `default=ollama/deepseek-v3,topic=openai/gpt-4` | 先为所有助手设置默认值，然后针对特定助手进行覆盖            |
+| 配置项 | 格式 | 解释 |
+| --- | --- | --- |
+| 默认设置 | `default=ollama/deepseek-v3` | 为所有系统助手设置默认模型为 ollama 的 deepseek-v3 |
+| 特定设置 | `topic=openai/gpt-4` | 为主题生成设置特定的供应商和模型 |
+| 混合配置 | `default=ollama/deepseek-v3,topic=openai/gpt-4` | 先为所有助手设置默认值，然后针对特定助手进行覆盖 |
 
 可配置的系统助手及其作用：
 
-| 系统助手   | 键名                | 作用描述                             |
-| ------ | ----------------- | -------------------------------- |
-| 主题生成   | `topic`           | 根据聊天内容自动生成主题名称和摘要                |
-| 翻译     | `translation`     | 文本翻译使用的助手                        |
-| 元数据生成  | `agentMeta`       | 为助手生成描述性信息和元数据                   |
-| 历史记录压缩 | `historyCompress` | 压缩和整理长对话的历史记录，优化上下文管理            |
-| 分支对话   | `thread`          | 自动生成分支对话的标题                      |
-| 图片生成命名 | `generationTopic` | AI 图片自动命名话题                      |
+| 系统助手     | 键名              | 作用描述                                         |
+| ------------ | ----------------- | ------------------------------------------------ |
+| 主题生成     | `topic`           | 根据聊天内容自动生成主题名称和摘要               |
+| 翻译         | `translation`     | 文本翻译使用的助手                               |
+| 元数据生成   | `agentMeta`       | 为助手生成描述性信息和元数据                     |
+| 历史记录压缩 | `historyCompress` | 压缩和整理长对话的历史记录，优化上下文管理       |
+| 分支对话     | `thread`          | 自动生成分支对话的标题                           |
+| 图片生成命名 | `generationTopic` | AI 图片自动命名话题                              |
 | 输入自动补全 | `inputCompletion` | 输入自动补全建议（类似 GitHub Copilot 幽灵文本） |
-| 提示词重写  | `promptRewrite`   | 生成前优化提示词                         |
-| 图片生成命名 | `generationTopic` | AI 图片自动命名话题                      |
+| 提示词重写   | `promptRewrite`   | 生成前优化提示词                                 |
+| 图片生成命名 | `generationTopic` | AI 图片自动命名话题                              |
 
 ### `FEATURE_FLAGS`
 
