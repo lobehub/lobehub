@@ -6,7 +6,7 @@ import { getAllScopePermissions, getScopePermissions } from '@/utils/rbac';
 import { zValidator } from '../common/validator';
 import { UserController } from '../controllers';
 import { requireAuth } from '../middleware/auth';
-import { requireAnyPermission, requireApiKeyScope } from '../middleware/permission-check';
+import { requireAnyPermission } from '../middleware/permission-check';
 import {
   CreateUserRequestSchema,
   UpdateUserRequestSchema,
@@ -26,8 +26,14 @@ UserRoutes.get(
   '/me',
   describeRoute({ summary: 'Get current authenticated user', tags: ['users'] }),
   requireAuth,
-  // no RBAC permission, but restricted API keys still need the user domain
-  requireApiKeyScope('user:read'),
+  // Deliberately reachable by every authenticated caller, including restricted
+  // API keys that hold no `user:read` — please do not add a scope gate here.
+  // It returns only the caller's OWN identity (their user row and their own
+  // roles), so it discloses nothing the key holder is not already, and it is
+  // how `lh login` resolves a userId from a freshly minted key
+  // (`apps/cli/src/auth/apiKey.ts`). Gating it strands the holder of a valid
+  // key outside the product with a scope error. Same contract as GitHub's
+  // `/user`. See LOBE-12934.
   async (c) => {
     const userController = new UserController();
     return await userController.getCurrentUser(c);
