@@ -12,6 +12,7 @@ import type { EnabledProviderWithModels } from '@/types/aiProvider';
 import { DEFAULT_WIDTH, ENABLE_RESIZING, MAX_WIDTH, MIN_WIDTH } from '../const';
 import { usePanelSize } from '../hooks/usePanelSize';
 import { usePanelState } from '../hooks/usePanelState';
+import { Footer } from './Footer';
 import { List } from './List';
 import type { PricingMode } from './ModelDetailPanel';
 import { Toolbar } from './Toolbar';
@@ -64,6 +65,7 @@ export const PanelContent: FC<PanelContentProps> = ({
         onModelChange={onModelChangeProp}
         onOpenChange={onOpenChange}
       />
+      <Footer onOpenChange={onOpenChange} />
     </>
   );
 
