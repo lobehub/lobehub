@@ -31,6 +31,7 @@ const isServerDB = process.env.TEST_SERVER_DB === '1';
 beforeEach(async () => {
   // Clean up
   await serverDB.delete(users);
+  delete process.env.AGENT_COPY_SYNC_MESSAGE_THRESHOLD;
 
   // Create test users
   await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
@@ -2007,6 +2008,13 @@ describe('AgentGroupRepository', () => {
         userId,
         workspaceId,
       });
+
+      // This case exercises the SYNCHRONOUS copy's batching, so the fast/slow
+      // threshold is lifted above the seeded volume — otherwise a history this
+      // large would be deferred to a copy job and nothing would be inserted
+      // inline (the async path has its own coverage in
+      // `__tests__/groupHistoryJob.test.ts`).
+      process.env.AGENT_COPY_SYNC_MESSAGE_THRESHOLD = '100000';
 
       // 2401 rows × 31 `messages` columns ≈ 74k bind parameters — above the
       // 65,535 cap, so the pre-fix unbatched INSERT provably fails here.

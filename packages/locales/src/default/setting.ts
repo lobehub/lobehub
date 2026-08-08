@@ -35,8 +35,15 @@ export default {
     'You may not need to delete your account — you can change your email or link more sign-in methods in <0>Profile Settings</0>.',
   'accountDeletion.divert.bug':
     'Sorry about that! Come tell us in our <0>Discord</0> community and we’ll follow up.',
+  'accountDeletion.blockedByAgentMigration':
+    'Deletion is paused: an agent is still migrating its conversation history. It will retry automatically once the migration finishes.',
+  'accountDeletion.blockedByOwnedWorkspaces':
+    'Deletion is paused: you still own a workspace with other members. Transfer ownership or delete the workspace, and it will retry automatically.',
+  'accountDeletion.blockedRetrying':
+    'Deletion could not be completed yet and will retry automatically.',
   'accountDeletion.pendingDesc': 'Your account is scheduled for deletion',
   'accountDeletion.pendingMessage': 'Your account will be deleted in {{hours}} hours',
+  'accountDeletion.processingMessage': 'Your account is being deleted…',
   'accountDeletion.reasonLabel': 'Why are you leaving?',
   'accountDeletion.reasonOption.account_issue':
     'Account issues (duplicate account / changing email)',
@@ -2384,6 +2391,8 @@ When I am ___, I need ___
   'workspace.general.copyTargetLabel': 'Copy to',
   'workspace.general.transferTargetLabel': 'Move to',
   'workspace.general.transferAgentGroups.modal.back': 'Back',
+  'workspace.general.transferAgentGroups.modal.backgroundMigration':
+    'Chat history is large, so it keeps migrating in the background. The agent group is ready to use now; older conversations light up one by one as they finish.',
   'workspace.general.transferAgentGroups.modal.continue': 'Continue',
   'workspace.general.transferAgentGroups.modal.done': 'Done',
   'workspace.general.transferAgentGroups.modal.failed': 'Failed to transfer agent groups',
@@ -2441,6 +2450,8 @@ When I am ___, I need ___
   'workspace.general.copyLobeAI.modal.title': 'Copy Agents',
   'workspace.general.copyLobeAI.modal.untitledAgent': 'Untitled Agent',
   'workspace.general.copyAgentGroups.modal.back': 'Back',
+  'workspace.general.copyAgentGroups.modal.backgroundCopy':
+    'Chat history is large, so it keeps copying in the background. The agent group is ready to use now; conversations light up one by one as they finish.',
   'workspace.general.copyAgentGroups.modal.continue': 'Continue',
   'workspace.general.copyAgentGroups.modal.copyOptions.config.desc':
     'Required. Copies group metadata, members, member roles, and Agent profiles.',

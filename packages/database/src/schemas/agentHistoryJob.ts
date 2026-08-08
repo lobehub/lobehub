@@ -32,16 +32,16 @@ export interface AgentHistoryJobPayload {
   group?: { newGroupId: string; sourceGroupId: string };
 }
 
-/**
- * `copy` queue-row payload. Required for the same reason as above: the drain
- * treats a unit missing any coordinate as unrecoverable and drops it, so a
- * row that exists at all must be complete.
- */
+/** `copy` queue-row payload. */
 export interface AgentHistoryJobTopicPayload {
-  /** Agent owning the target topic shell. */
-  newAgentId: string;
-  /** Agent the source topic belongs to. */
-  sourceAgentId: string;
+  /**
+   * Agent owning the target topic shell. Agent copies always carry it; group
+   * copies leave it out — a group topic's agent remap is the job-level
+   * `agents` map, not one pair.
+   */
+  newAgentId?: string;
+  /** Agent the source topic belongs to. Absent for group copies, same reason. */
+  sourceAgentId?: string;
   /** Topic to copy messages/threads from. */
   sourceTopicId: string;
 }

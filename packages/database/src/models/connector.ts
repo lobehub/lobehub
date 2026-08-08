@@ -73,9 +73,13 @@ export class ConnectorModel {
    * rows are candidates.
    */
   private scopePredicate = (agentId?: string) => {
-    const mountedBy = sql`${userConnectors.metadata} ->> 'mountedByAgentId'`;
+    // COALESCE'd to a sentinel rather than null-tested: `->> … IS NULL` in a
+    // WHERE clause is one bm25 index on `user_connectors` away from taking every
+    // caller down at plan time. See the note on `TopicModel`. `''` is a safe
+    // sentinel — a mount reference is always a real agent id, never empty.
+    const mountedBy = sql`COALESCE(${userConnectors.metadata} ->> 'mountedByAgentId', '')`;
     if (!agentId) {
-      return and(this.ownership(), isNull(userConnectors.agentId), sql`${mountedBy} IS NULL`);
+      return and(this.ownership(), isNull(userConnectors.agentId), sql`${mountedBy} = ''`);
     }
     return and(
       this.ownership(),
@@ -83,7 +87,7 @@ export class ConnectorModel {
         eq(userConnectors.agentId, agentId),
         and(
           isNull(userConnectors.agentId),
-          or(sql`${mountedBy} = ${agentId}`, sql`${mountedBy} IS NULL`),
+          or(sql`${mountedBy} = ${agentId}`, sql`${mountedBy} = ''`),
         ),
       ),
     );

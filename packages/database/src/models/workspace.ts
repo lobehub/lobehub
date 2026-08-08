@@ -97,10 +97,11 @@ export class WorkspaceModel {
   };
 
   delete = async (id: string) => {
-    // See UserModel.deleteUser: while an agent-transfer backfill still points
+    // See UserModel.deleteUser: while an agent-TRANSFER backfill still points
     // at this workspace (as source or target), unmigrated message snapshots
     // would be cascade-deleted with it. Reject and let the caller retry after
-    // the job drains.
+    // the job drains. Pending `copy` jobs do not block — see
+    // `isPendingTransfer` in agentTransferJob.ts.
     if (await AgentTransferJobModel.hasPendingJobTouchingWorkspace(this.db, id)) {
       throw new Error(AGENT_TRANSFER_PENDING_OWNER_DELETE);
     }

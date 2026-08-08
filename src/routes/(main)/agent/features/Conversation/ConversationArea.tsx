@@ -120,7 +120,7 @@ const Conversation = memo(() => {
   // could not assemble the missing context anyway. Opening it jumps it to the
   // front of the backfill queue, so the wait is typically a few seconds.
   const { job: migrationJob, topicPending } = useTopicMigrationPending(
-    context.agentId,
+    { agentId: context.agentId },
     context.topicId,
   );
 
