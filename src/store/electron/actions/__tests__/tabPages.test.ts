@@ -229,6 +229,16 @@ describe('tabPages actions', () => {
       expect(result.current.activeTabId).toBe('/third');
     });
 
+    it('collapses split view when switching from the titlebar tab strip', () => {
+      const result = seed();
+      act(() => result.current.openTabInSplitView('/right'));
+
+      act(() => result.current.switchTab('/left'));
+
+      expect(result.current.activeTabId).toBe('/left');
+      expect(result.current.splitView).toBeNull();
+    });
+
     it('collapses to the remaining pane when one visible tab closes', () => {
       const result = seed();
       act(() => result.current.openTabInSplitView('/right'));

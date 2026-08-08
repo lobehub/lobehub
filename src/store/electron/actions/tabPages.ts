@@ -75,6 +75,22 @@ export class TabPagesActionImpl {
     this.#persist();
   };
 
+  switchTab = (id: string): void => {
+    const { tabs } = this.#get();
+    if (!tabs.some((t) => t.id === id)) return;
+
+    this.#set(
+      {
+        activeTabId: id,
+        splitView: null,
+        tabs: this.#touch(tabs, id),
+      },
+      false,
+      'switchTab',
+    );
+    this.#persist();
+  };
+
   addTab = (url: string, cached?: DynamicRouteMeta, activate = true): string => {
     this.#ensureScopeForUrl(url);
     const { tabs } = this.#get();
