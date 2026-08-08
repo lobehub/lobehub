@@ -11,6 +11,8 @@ const useAicoBillingChatGate = vi.fn(() => ({
   trialActive: false,
   trialAvailable: false,
 }));
+const useFundsBlockedSoundEnabled = vi.fn(() => false);
+const syncFundsBlockedSoundFlagFromUrl = vi.fn();
 
 vi.mock('./playFundsBlockedSound', () => ({
   playFundsBlockedSound: (...args: unknown[]) => playFundsBlockedSound(...args),
@@ -20,9 +22,20 @@ vi.mock('./useAicoBillingChatGate', () => ({
   useAicoBillingChatGate: () => useAicoBillingChatGate(),
 }));
 
+vi.mock('./fundsBlockedSoundFlag', async () => {
+  const actual = await vi.importActual('./fundsBlockedSoundFlag');
+  return {
+    ...(actual as Record<string, unknown>),
+    syncFundsBlockedSoundFlagFromUrl: (...args: unknown[]) =>
+      syncFundsBlockedSoundFlagFromUrl(...args),
+    useFundsBlockedSoundEnabled: () => useFundsBlockedSoundEnabled(),
+  };
+});
+
 describe('useFundsBlockedComposerCue', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useFundsBlockedSoundEnabled.mockReturnValue(false);
     useAicoBillingChatGate.mockReturnValue({
       blocked: false,
       blockReason: null,
@@ -33,6 +46,7 @@ describe('useFundsBlockedComposerCue', () => {
   });
 
   it('forwards content changes without playing when not blocked', () => {
+    useFundsBlockedSoundEnabled.mockReturnValue(true);
     const onChange = vi.fn();
     const { result } = renderHook(() => useFundsBlockedComposerCue());
 
@@ -44,7 +58,7 @@ describe('useFundsBlockedComposerCue', () => {
     expect(playFundsBlockedSound).not.toHaveBeenCalled();
   });
 
-  it('plays when blocked and the user adds characters', () => {
+  it('does not play when blocked but the hidden flag is off', () => {
     useAicoBillingChatGate.mockReturnValue({
       blocked: true,
       blockReason: 'PERSONAL_FUNDS_UNAVAILABLE',
@@ -52,6 +66,27 @@ describe('useFundsBlockedComposerCue', () => {
       trialActive: false,
       trialAvailable: false,
     });
+    useFundsBlockedSoundEnabled.mockReturnValue(false);
+    const onChange = vi.fn();
+    const { result } = renderHook(() => useFundsBlockedComposerCue());
+
+    act(() => {
+      result.current.onMarkdownContentChange(onChange)('hi');
+    });
+
+    expect(playFundsBlockedSound).not.toHaveBeenCalled();
+    expect(onChange).toHaveBeenCalledWith('hi');
+  });
+
+  it('plays when blocked, flag unlocked, and the user adds characters', () => {
+    useAicoBillingChatGate.mockReturnValue({
+      blocked: true,
+      blockReason: 'PERSONAL_FUNDS_UNAVAILABLE',
+      showTrialCta: false,
+      trialActive: false,
+      trialAvailable: false,
+    });
+    useFundsBlockedSoundEnabled.mockReturnValue(true);
     const onChange = vi.fn();
     const { result } = renderHook(() => useFundsBlockedComposerCue());
 
@@ -74,6 +109,7 @@ describe('useFundsBlockedComposerCue', () => {
       trialActive: false,
       trialAvailable: false,
     });
+    useFundsBlockedSoundEnabled.mockReturnValue(true);
     const onChange = vi.fn();
     const { result } = renderHook(() => useFundsBlockedComposerCue());
 
@@ -90,5 +126,10 @@ describe('useFundsBlockedComposerCue', () => {
     });
 
     expect(playFundsBlockedSound).not.toHaveBeenCalled();
+  });
+
+  it('syncs the URL flag on mount', () => {
+    renderHook(() => useFundsBlockedComposerCue());
+    expect(syncFundsBlockedSoundFlagFromUrl).toHaveBeenCalledTimes(1);
   });
 });

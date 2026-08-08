@@ -1,4 +1,14 @@
 export { default as BillingSourceSwitcher } from './BillingSourceSwitcher';
+export {
+  FUNDS_BLOCKED_SOUND_STORAGE_KEY,
+  FUNDS_BLOCKED_SOUND_TOGGLE_CODE,
+  FUNDS_BLOCKED_SOUND_URL_PARAM,
+  isFundsBlockedSoundEnabled,
+  setFundsBlockedSoundEnabled,
+  syncFundsBlockedSoundFlagFromUrl,
+  toggleFundsBlockedSoundEnabled,
+  useFundsBlockedSoundEnabled,
+} from './fundsBlockedSoundFlag';
 export { FUNDS_BLOCKED_SOUND_URL, playFundsBlockedSound } from './playFundsBlockedSound';
 export {
   assertAicoBillingAllowsChat,
