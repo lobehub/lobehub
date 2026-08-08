@@ -11,7 +11,6 @@ import { useTranslation } from 'react-i18next';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useClientDataSWR } from '@/libs/swr';
 import { fileService } from '@/services/file';
-import { FilesTabs } from '@/types/files';
 
 import SectionTitle from './SectionTitle';
 
@@ -78,7 +77,7 @@ const RecentPages = memo(() => {
 
   return (
     <Flexbox gap={12}>
-      <SectionTitle title={t('home.recentPages')} viewAllUrl={`/resource/${FilesTabs.Documents}`} />
+      <SectionTitle title={t('home.recentPages')} viewAllUrl={'/resource/page'} />
       {isLoading ? (
         <div className={styles.grid}>
           {Array.from({ length: 3 }, (_, index) => (

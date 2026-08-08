@@ -6,10 +6,14 @@ import { parseAsStringEnum, useQueryState } from '@/hooks/useQueryParam';
 import { FilesTabs } from '@/types/files';
 
 /**
- * Categories whose content is visual first — they open in the gallery
+ * Categories whose content is media first — they open in the gallery
  * (masonry) view unless the URL explicitly asks for another one.
  */
-const GALLERY_FIRST_CATEGORIES = new Set<FilesTabs>([FilesTabs.Images, FilesTabs.Videos]);
+const GALLERY_FIRST_CATEGORIES = new Set<FilesTabs>([
+  FilesTabs.Audios,
+  FilesTabs.Images,
+  FilesTabs.Videos,
+]);
 
 /**
  * Hook to manage view mode with URL query sync

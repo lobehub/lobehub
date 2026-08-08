@@ -8,10 +8,11 @@ import { useTranslation } from 'react-i18next';
 import NavHeader from '@/features/NavHeader';
 import AddButton from '@/features/ResourceManager/components/Header/AddButton';
 
+import FrequentLibraries from './FrequentLibraries';
 import Libraries from './Libraries';
-import QuickActions from './QuickActions';
 import RecentFiles from './RecentFiles';
 import RecentPages from './RecentPages';
+import RecentWorks from './RecentWorks';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   content: css`
@@ -45,9 +46,9 @@ const getGreetingKey = () => {
 };
 
 /**
- * The library-style landing page of /resource: greeting, quick actions,
- * recent files / pages and libraries — instead of the flat all-files table
- * (which now lives at /resource/all).
+ * The library-style landing page of /resource: greeting, quick library
+ * access, then works → recent pages → libraries → recent files — instead of
+ * the flat all-files table (which now lives at /resource/all).
  */
 const ResourceHomeDashboard = memo(() => {
   const { t } = useTranslation('file');
@@ -65,10 +66,11 @@ const ResourceHomeDashboard = memo(() => {
             <h1 className={styles.greeting}>{t(getGreetingKey())}</h1>
             <span className={styles.subtitle}>{t('home.subtitle')}</span>
           </Flexbox>
-          <QuickActions />
-          <RecentFiles />
+          <FrequentLibraries />
+          <RecentWorks />
           <RecentPages />
           <Libraries />
+          <RecentFiles />
         </Flexbox>
       </div>
     </Flexbox>

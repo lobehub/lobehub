@@ -21,10 +21,12 @@ import { type FileListItem } from '@/types/files';
 import { useFileItemClick } from '../../hooks/useFileItemClick';
 import DropdownMenu from '../../ItemDropdown/DropdownMenu';
 import { useFileItemDropdown } from '../../ItemDropdown/useFileItemDropdown';
+import AudioFileItem from './AudioFileItem';
 import DefaultFileItem from './DefaultFileItem';
 import ImageFileItem from './ImageFileItem';
 import MarkdownFileItem from './MarkdownFileItem';
 import NoteFileItem from './NoteFileItem';
+import VideoFileItem from './VideoFileItem';
 
 // Image file types
 const IMAGE_TYPES = new Set([
@@ -226,15 +228,17 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
     // Memoize computed values that don't change
     const computedValues = useMemo(
       () => ({
+        isAudio: !!fileType?.startsWith('audio'),
         isFolder: fileType === CUSTOM_FOLDER_FILE_TYPE,
         isImage: fileType && IMAGE_TYPES.has(fileType),
         isMarkdown: isMarkdownFile(name, fileType),
         isPage: isCustomPage(fileType, name),
+        isVideo: !!fileType?.startsWith('video'),
       }),
       [fileType, name],
     );
 
-    const { isImage, isMarkdown, isPage, isFolder } = computedValues;
+    const { isAudio, isImage, isMarkdown, isPage, isFolder, isVideo } = computedValues;
 
     // Use shared click handler hook
     const handleItemClick = useFileItemClick({
@@ -435,12 +439,18 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
         <div
           className={cx(
             styles.content,
-            !isImage && !isMarkdown && !isPage && styles.contentWithPadding,
+            !isImage && !isMarkdown && !isPage && !isVideo && !isAudio && styles.contentWithPadding,
           )}
           onClick={handleItemClick}
         >
           {(() => {
             switch (true) {
+              case isVideo && !!url: {
+                return <VideoFileItem isInView={isInView} name={name} size={size} url={url} />;
+              }
+              case isAudio && !!url: {
+                return <AudioFileItem isInView={isInView} name={name} size={size} url={url} />;
+              }
               case isImage && !!url: {
                 return (
                   <ImageFileItem

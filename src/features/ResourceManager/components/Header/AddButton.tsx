@@ -70,8 +70,8 @@ const AddButton = () => {
 
   const handleOpenPageEditor = useCallback(async () => {
     // Navigate to "All" category first if not already there. The home
-    // dashboard surfaces the new page via its own recent list, so stay put.
-    if (category !== FilesTabs.All && category !== FilesTabs.Home) {
+    // dashboard and the Pages category both surface the new page, so stay put.
+    if (category !== FilesTabs.All && category !== FilesTabs.Home && category !== FilesTabs.Pages) {
       setCategory(FilesTabs.All);
     }
 

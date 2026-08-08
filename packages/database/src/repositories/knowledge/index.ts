@@ -6,7 +6,7 @@ import { DocumentModel } from '../../models/document';
 import { FileModel } from '../../models/file';
 import { DOCUMENT_FOLDER_TYPE, documents, files, knowledgeBaseFiles, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { buildFileTypeCategoryFilter } from '../../utils/fileTypeCategory';
+import { buildDocumentCategoryFilter, buildFileCategoryFilter } from '../../utils/fileTypeCategory';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
 export interface KnowledgeItem {
@@ -485,11 +485,12 @@ export class KnowledgeRepo {
 
     // Category filter
     if (category && category !== FilesTabs.All) {
-      const categoryFilter = buildFileTypeCategoryFilter(
-        sql.raw('f.file_type'),
-        category as FilesTabs,
-      );
-      if (categoryFilter) whereConditions.push(categoryFilter);
+      const categoryFilter = buildFileCategoryFilter(sql.raw('f.file_type'), category as FilesTabs);
+      if (categoryFilter === 'none') {
+        whereConditions.push(sql`false`);
+      } else if (categoryFilter !== 'all') {
+        whereConditions.push(categoryFilter);
+      }
     }
 
     // Knowledge base filter
@@ -517,11 +518,15 @@ export class KnowledgeRepo {
 
       // Category filter
       if (category && category !== FilesTabs.All && category !== FilesTabs.Home) {
-        const categoryFilter = buildFileTypeCategoryFilter(
+        const categoryFilter = buildFileCategoryFilter(
           sql.raw('f.file_type'),
           category as FilesTabs,
         );
-        if (categoryFilter) kbWhereConditions.push(categoryFilter);
+        if (categoryFilter === 'none') {
+          kbWhereConditions.push(sql`false`);
+        } else if (categoryFilter !== 'all') {
+          kbWhereConditions.push(categoryFilter);
+        }
       }
 
       if (visibility === 'private') {
@@ -652,17 +657,13 @@ export class KnowledgeRepo {
       );
     }
 
-    // Category filter - match documents by fileType. The Files category means
-    // raw uploaded data files, which never live in the documents table — treat
-    // it like the other excluded categories below.
+    // Category filter — document rows only surface under All and Pages; every
+    // file-oriented category (Documents included) excludes the table entirely.
     if (category && category !== FilesTabs.All) {
-      const categoryFilter =
-        category === FilesTabs.Files
-          ? undefined
-          : buildFileTypeCategoryFilter(documents.fileType, category as FilesTabs);
-      if (categoryFilter) {
+      const categoryFilter = buildDocumentCategoryFilter(documents.fileType, category as FilesTabs);
+      if (categoryFilter !== 'all' && categoryFilter !== 'none') {
         whereConditions.push(categoryFilter);
-      } else {
+      } else if (categoryFilter === 'none') {
         // Exclude documents from other categories (Images, Videos, Audios, Websites)
         return sql`
           SELECT
@@ -723,15 +724,15 @@ export class KnowledgeRepo {
         kbWhereConditions.push(sql`(d.visibility = 'public' OR d.visibility IS NULL)`);
       }
 
-      // Category filter (Files never matches document rows — see above)
+      // Category filter (document rows only surface under All / Pages — see above)
       if (category && category !== FilesTabs.All) {
-        const categoryFilter =
-          category === FilesTabs.Files
-            ? undefined
-            : buildFileTypeCategoryFilter(sql.raw('d.file_type'), category as FilesTabs);
-        if (categoryFilter) {
+        const categoryFilter = buildDocumentCategoryFilter(
+          sql.raw('d.file_type'),
+          category as FilesTabs,
+        );
+        if (categoryFilter !== 'all' && categoryFilter !== 'none') {
           kbWhereConditions.push(categoryFilter);
-        } else {
+        } else if (categoryFilter === 'none') {
           // Exclude documents from other categories (Images, Videos, Audios, Websites).
           // Keep the NULL placeholder column set aligned with the other UNION
           // branches so PostgreSQL doesn't complain about mismatched arity.

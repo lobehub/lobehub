@@ -21,7 +21,16 @@ const styles = createStaticStyles(({ css }) => ({
     margin: 7px;
     border-radius: 11px;
 
-    background: ${cssVar.colorFillQuaternary};
+    /* A white top highlight keeps the flat fill from reading dull — barely
+       visible on light backgrounds, a gentle lift in dark mode. */
+    background:
+      radial-gradient(
+        140% 100% at 50% 0%,
+        color-mix(in srgb, #fff 9%, transparent) 0%,
+        transparent 60%
+      ),
+      ${cssVar.colorFillQuaternary};
+    box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 14%, transparent);
   `,
   coverBadge: css`
     position: absolute;

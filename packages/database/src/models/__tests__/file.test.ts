@@ -1288,12 +1288,9 @@ describe('FileModel', () => {
       expect(result[0].id).toBe('page-file');
     });
 
-    it('should handle Pages category (should use text/html like Websites)', async () => {
-      // FilesTabs.Pages is not explicitly handled in switch, falls to default
-      // which returns empty string, so it won't filter by file type
+    it('should handle Pages category (derived pages never live in the files table)', async () => {
       const result = await fileModel.query({ category: FilesTabs.Pages });
-      // Should return all files since default case returns empty string
-      expect(result.length).toBeGreaterThan(0);
+      expect(result).toHaveLength(0);
     });
 
     it('should handle unknown file category', async () => {

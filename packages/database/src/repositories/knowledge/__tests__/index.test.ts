@@ -270,21 +270,35 @@ describe('KnowledgeRepo', () => {
       expect(result.every((item) => item.fileType.startsWith('audio'))).toBe(true);
     });
 
-    it('should filter by category - Documents includes text, pdf and notes but no media/folders', async () => {
+    it('should filter by category - Documents includes uploaded text/pdf files only', async () => {
       const result = await knowledgeRepo.query({ category: FilesTabs.Documents });
 
       const fileTypes = result.map((item) => item.fileType);
-      // text/* files and derived notes are document-type resources
+      // uploaded text/* and office/pdf files are document files
       expect(fileTypes).toContain('text/plain');
       expect(fileTypes).toContain('application/pdf');
-      expect(fileTypes).toContain('custom/note');
-      // media and folders are not
+      // derived notes/pages belong to the Pages category, media stays out too
+      expect(result.every((item) => item.sourceType === 'file')).toBe(true);
       expect(
         result.every(
           (item) =>
-            !/^(?:audio|image|video)/.test(item.fileType) && item.fileType !== 'custom/folder',
+            !/^(?:audio|image|video|custom)/.test(item.fileType) &&
+            item.fileType !== 'custom/folder',
         ),
       ).toBe(true);
+    });
+
+    it('should filter by category - Pages returns derived notes only', async () => {
+      const result = await knowledgeRepo.query({ category: FilesTabs.Pages });
+
+      const fileTypes = result.map((item) => item.fileType);
+      // derived notes/pages surface here
+      expect(fileTypes).toContain('custom/note');
+      // uploaded files (text, pdf, media, raw data) never do
+      expect(result.every((item) => item.sourceType === 'document')).toBe(true);
+      expect(fileTypes).not.toContain('text/plain');
+      expect(fileTypes).not.toContain('application/pdf');
+      expect(fileTypes).not.toContain('custom/folder');
     });
 
     it('should filter by category - Files returns raw data files only', async () => {

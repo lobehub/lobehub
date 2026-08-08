@@ -13,6 +13,7 @@ import {
   ne,
   notExists,
   or,
+  sql,
   sum,
 } from 'drizzle-orm';
 import type { PgTransaction } from 'drizzle-orm/pg-core';
@@ -35,7 +36,7 @@ import {
   users,
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
-import { buildFileTypeCategoryFilter } from '../utils/fileTypeCategory';
+import { buildFileCategoryFilter } from '../utils/fileTypeCategory';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 /**
@@ -343,8 +344,10 @@ export class FileModel {
       visibility ? eq(files.visibility, visibility) : undefined,
     );
     if (category && category !== FilesTabs.All && category !== FilesTabs.Home) {
-      const categoryFilter = buildFileTypeCategoryFilter(files.fileType, category as FilesTabs);
-      if (categoryFilter) {
+      const categoryFilter = buildFileCategoryFilter(files.fileType, category as FilesTabs);
+      if (categoryFilter === 'none') {
+        whereClause = and(whereClause, sql`false`);
+      } else if (categoryFilter !== 'all') {
         whereClause = and(whereClause, categoryFilter);
       }
     }

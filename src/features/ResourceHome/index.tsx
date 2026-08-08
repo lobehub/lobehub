@@ -13,15 +13,27 @@ import { FilesTabs } from '@/types/files';
 
 import HomeDashboard from './Home';
 
-/** Categories that own a path segment: /resource/all, /resource/documents, … */
-export const PATH_CATEGORIES = new Set<string>([
-  FilesTabs.All,
-  FilesTabs.Audios,
-  FilesTabs.Documents,
-  FilesTabs.Files,
-  FilesTabs.Images,
-  FilesTabs.Videos,
-]);
+/**
+ * Path segment → category for routes that own one: /resource/all,
+ * /resource/page (derived pages/notes), /resource/documents, …
+ */
+export const CATEGORY_BY_SEGMENT: Record<string, FilesTabs> = {
+  all: FilesTabs.All,
+  audios: FilesTabs.Audios,
+  documents: FilesTabs.Documents,
+  files: FilesTabs.Files,
+  images: FilesTabs.Images,
+  page: FilesTabs.Pages,
+  videos: FilesTabs.Videos,
+};
+
+const SEGMENT_BY_CATEGORY = Object.fromEntries(
+  Object.entries(CATEGORY_BY_SEGMENT).map(([segment, category]) => [category, segment]),
+);
+
+/** Canonical path for a category, e.g. /resource/page for Pages. */
+export const resourceCategoryPath = (category: FilesTabs): string =>
+  SEGMENT_BY_CATEGORY[category] ? `/resource/${SEGMENT_BY_CATEGORY[category]}` : '/resource';
 
 /** Path segment of the cross-topic Work gallery: /resource/works */
 export const WORKS_PATH_SEGMENT = 'works';
@@ -37,14 +49,15 @@ const ResourceHomePage = memo(() => {
   ]);
 
   const pathCategory = params.category;
-  const isValidPathCategory = !!pathCategory && PATH_CATEGORIES.has(pathCategory);
+  const segmentCategory = pathCategory ? CATEGORY_BY_SEGMENT[pathCategory] : undefined;
+  const isValidPathCategory = segmentCategory !== undefined;
   // The Work gallery owns its own path segment; `?works=<key>` narrows it
   // (task / document / linear / github), defaulting to the combined view.
   const isWorksPath = pathCategory === WORKS_PATH_SEGMENT;
   const worksKey = isWorksPath ? (parseWorkGalleryKey(searchParams.get('works')) ?? 'all') : null;
   // The bare /resource route is the library home dashboard; explorer views
   // live under /resource/<category> (the all-files list at /resource/all).
-  const categoryParam = isValidPathCategory ? (pathCategory as FilesTabs) : FilesTabs.Home;
+  const categoryParam = segmentCategory ?? FilesTabs.Home;
 
   // Legacy URLs used `?category=<x>` / `?works=<key>` on the bare /resource
   // route; canonical forms are now /resource/<x> and /resource/works.
@@ -61,10 +74,7 @@ const ResourceHomePage = memo(() => {
       return;
     }
     if (legacyCategory) {
-      const target = PATH_CATEGORIES.has(legacyCategory)
-        ? `/resource/${legacyCategory}`
-        : '/resource';
-      navigate(target, { replace: true });
+      navigate(resourceCategoryPath(legacyCategory as FilesTabs), { replace: true });
       return;
     }
     if (isInvalidPath) navigate('/resource', { replace: true });

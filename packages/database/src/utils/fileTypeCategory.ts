@@ -24,14 +24,21 @@ const DOCUMENT_APPLICATION_PREFIXES = [
 const MEDIA_PREFIXES = ['audio', 'image', 'video'];
 
 /**
- * Document-like resources: any `text/*` file, synthetic documents
- * (`custom/document`, `custom/note`, … — everything but folders), and
- * office / pdf style `application/*` types.
+ * Category filter outcome for one storage table:
+ * - a SQL condition to apply,
+ * - `'all'` — the category does not constrain this table (no condition),
+ * - `'none'` — the category can never match rows of this table.
  */
-const documentCondition = (column: SQLWrapper): SQL => {
+export type CategoryFilterResult = SQL | 'all' | 'none';
+
+/**
+ * Uploaded document files: any `text/*` file plus office / pdf style
+ * `application/*` types. Derived pages/notes are NOT documents — they live in
+ * the documents table and belong to the Pages category.
+ */
+const documentFileCondition = (column: SQLWrapper): SQL => {
   const orConditions = [
     sql`${column} ILIKE ${'text/%'}`,
-    sql`(${column} ILIKE ${'custom/%'} AND ${column} != ${'custom/folder'})`,
     ...DOCUMENT_APPLICATION_PREFIXES.map((prefix) => sql`${column} ILIKE ${`${prefix}%`}`),
   ];
   return sql`(${sql.join(orConditions, sql` OR `)})`;
@@ -43,7 +50,7 @@ const documentCondition = (column: SQLWrapper): SQL => {
  */
 const rawFileCondition = (column: SQLWrapper): SQL => {
   const andConditions = [
-    sql`NOT ${documentCondition(column)}`,
+    sql`NOT ${documentFileCondition(column)}`,
     ...MEDIA_PREFIXES.map((prefix) => sql`${column} NOT ILIKE ${`${prefix}%`}`),
     sql`${column} NOT ILIKE ${'custom/%'}`,
   ];
@@ -51,30 +58,31 @@ const rawFileCondition = (column: SQLWrapper): SQL => {
 };
 
 /**
- * Build the `file_type` condition for a resource category.
+ * Category filter for the `files` table (uploaded files).
  *
  * `column` is the `file_type` column to match against — either a drizzle
  * column or a raw aliased reference (e.g. `sql.raw('f.file_type')`).
- *
- * Returns `undefined` when the category does not constrain the file type
- * (All / Home / unknown values).
  */
-export const buildFileTypeCategoryFilter = (
+export const buildFileCategoryFilter = (
   column: SQLWrapper,
   category: FilesTabs,
-): SQL | undefined => {
+): CategoryFilterResult => {
   switch (category) {
     case FilesTabs.Audios: {
       return sql`${column} ILIKE ${'audio%'}`;
     }
     case FilesTabs.Documents: {
-      return documentCondition(column);
+      return documentFileCondition(column);
     }
     case FilesTabs.Files: {
       return rawFileCondition(column);
     }
     case FilesTabs.Images: {
       return sql`${column} ILIKE ${'image%'}`;
+    }
+    case FilesTabs.Pages: {
+      // Pages are derived documents; uploaded files never qualify.
+      return 'none';
     }
     case FilesTabs.Videos: {
       return sql`${column} ILIKE ${'video%'}`;
@@ -83,7 +91,31 @@ export const buildFileTypeCategoryFilter = (
       return sql`${column} ILIKE ${'text/html%'}`;
     }
     default: {
-      return undefined;
+      return 'all';
+    }
+  }
+};
+
+/**
+ * Category filter for the `documents` table (derived pages / notes).
+ *
+ * Only the Pages category (and the unconstrained All view) surfaces document
+ * rows; every file-oriented category excludes the table entirely.
+ */
+export const buildDocumentCategoryFilter = (
+  column: SQLWrapper,
+  category: FilesTabs,
+): CategoryFilterResult => {
+  switch (category) {
+    case FilesTabs.All:
+    case FilesTabs.Home: {
+      return 'all';
+    }
+    case FilesTabs.Pages: {
+      return sql`(${column} ILIKE ${'custom/%'} AND ${column} != ${'custom/folder'})`;
+    }
+    default: {
+      return 'none';
     }
   }
 };

@@ -126,24 +126,24 @@ describe('KnowledgeRepo', () => {
       expect(uploadedPdf).toBeUndefined();
     });
 
-    it('should include documents with sourceType="api" in Documents category', async () => {
+    it('should exclude document-table rows from Documents category (files only)', async () => {
       const results = await knowledgeRepo.query({ category: FilesTabs.Documents });
 
-      // Should include API PDF (application/pdf with sourceType='api')
-      const apiPdf = results.find((item) => item.name === 'api-pdf.pdf');
-      expect(apiPdf).toBeDefined();
-      expect(apiPdf?.sourceType).toBe('document');
-      expect(apiPdf?.fileType).toBe('application/pdf');
+      // Documents means uploaded document FILES; derived document rows stay out
+      expect(results.find((item) => item.name === 'api-pdf.pdf')).toBeUndefined();
+      expect(results.find((item) => item.name === 'web-doc.txt')).toBeUndefined();
+      expect(results.every((item) => item.sourceType === 'file')).toBe(true);
     });
 
-    it('should include documents with sourceType="web" in Documents category', async () => {
-      const results = await knowledgeRepo.query({ category: FilesTabs.Documents });
+    it('should surface custom/* document rows under the Pages category', async () => {
+      const results = await knowledgeRepo.query({ category: FilesTabs.Pages });
 
-      // Should include web document (custom/other with sourceType='web')
+      // custom/other derived doc belongs to Pages
       const webDoc = results.find((item) => item.name === 'web-doc.txt');
       expect(webDoc).toBeDefined();
       expect(webDoc?.sourceType).toBe('document');
-      expect(webDoc?.fileType).toBe('custom/other');
+      // uploaded files never surface under Pages
+      expect(results.every((item) => item.sourceType === 'document')).toBe(true);
     });
 
     it('should include files from files table in Documents category', async () => {
@@ -180,18 +180,14 @@ describe('KnowledgeRepo', () => {
       expect(regularFile).toBeDefined();
     });
 
-    it('should apply both filters together in Documents category', async () => {
+    it('should keep the Documents category free of document-table rows', async () => {
       const results = await knowledgeRepo.query({ category: FilesTabs.Documents });
 
-      // Count documents with sourceType='document'
       const documentTypeItems = results.filter((item) => item.sourceType === 'document');
+      expect(documentTypeItems).toHaveLength(0);
 
-      // Should have exactly 2 documents (api-pdf and web-doc)
-      // Excluded: uploaded-pdf (sourceType='file') and editor-doc (fileType='custom/document')
-      expect(documentTypeItems).toHaveLength(2);
-
-      const names = documentTypeItems.map((item) => item.name).sort();
-      expect(names).toEqual(['api-pdf.pdf', 'web-doc.txt']);
+      // the uploaded pdf file from the files table is still there
+      expect(results.find((item) => item.name === 'regular-pdf-file.pdf')).toBeDefined();
     });
   });
 
