@@ -26,6 +26,11 @@ export interface NavLayout {
     showEvalEntry: boolean;
     showSettingsEntry: boolean;
   };
+  /**
+   * When false, hide Downloads / Get App entry points and treat `/downloads`
+   * as unavailable in product surfaces (route still redirects separately).
+   */
+  showDownloads: boolean;
   topNavItems: NavItem[];
   userPanel: {
     showDataImporter: boolean;
@@ -123,5 +128,12 @@ export const useNavLayout = (): NavLayout => {
     [],
   );
 
-  return { bottomMenuItems, footer, topNavItems, userPanel };
+  return {
+    bottomMenuItems,
+    footer,
+    // Temporarily hide Downloads / Get App for Aico until the surface is ready.
+    showDownloads: false,
+    topNavItems,
+    userPanel,
+  };
 };

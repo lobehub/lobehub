@@ -103,7 +103,7 @@ const collectMenuKeys = (items: FooterMenuItems): string[] =>
 const Footer = memo(() => {
   const { t } = useTranslation('common');
   const { analytics } = useAnalytics();
-  const { footer } = useNavLayout();
+  const { footer, showDownloads } = useNavLayout();
   const hasActiveWorkspace = useHasActiveWorkspace();
   const settingLabelKey = hasActiveWorkspace ? 'userPanel.workspaceSetting' : 'userPanel.setting';
   const activeNavKey = useActiveNavKey();
@@ -287,7 +287,7 @@ const Footer = memo(() => {
         label: t('changelog'),
         onClick: handleOpenChangelogModal,
       },
-      ...(!isDesktop && footer.layout === 'compact'
+      ...(!isDesktop && showDownloads && footer.layout === 'compact'
         ? [
             {
               icon: <Icon icon={Download} />,
@@ -349,6 +349,7 @@ const Footer = memo(() => {
     footer.layout,
     footer.hideGitHub,
     footer.showEvalEntry,
+    showDownloads,
     enableBusinessFeatures,
     handleOpenChangelogModal,
     handleOpenFeedbackModal,
