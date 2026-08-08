@@ -245,7 +245,7 @@
   "createGoal.roundBudgetUncappedHint": "It keeps going until the goal is reached — watch the cost.",
   "createGoal.roundsUnit": "rounds",
   "createGoal.submit": "Create goal",
-  "createGoal.titlePlaceholder": "The outcome you want",
+  "createGoal.titlePlaceholder": "Goal title",
   "createModal.createBlank": "Start Blank",
   "createModal.groupPlaceholder": "Describe what this Group should do...",
   "createModal.groupTitle": "What should this Group do?",

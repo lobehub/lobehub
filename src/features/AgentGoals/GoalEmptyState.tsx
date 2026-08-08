@@ -172,7 +172,7 @@ const GoalEmptyState = memo<GoalEmptyStateProps>(({ onCreate }) => {
   const { t } = useTranslation('chat');
 
   return (
-    <Block padding={0} variant={'outlined'}>
+    <Block padding={0} variant={'borderless'}>
       <Flexbox align={'center'} className={styles.hero} gap={16}>
         <div className={styles.heroIcon}>
           <Icon icon={InfinityIcon} size={24} />

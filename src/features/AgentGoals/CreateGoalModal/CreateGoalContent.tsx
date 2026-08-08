@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   CircleDollarSign,
   Paperclip,
+  PencilLine,
   Plus,
   RotateCcw,
   Trash2,
@@ -96,9 +97,13 @@ const styles = createStaticStyles(({ css }) => ({
     padding-inline: 24px;
   `,
   inputShell: css`
+    overflow: hidden;
+
+    min-height: 180px;
     padding: 1px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
+
     background: ${cssVar.colorBgElevated};
   `,
   inputShellLoading: css`
@@ -139,7 +144,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   title: css`
     width: 100%;
-    padding-block: 4px;
+    padding-block: 4px 8px;
     border: none;
 
     font-family: inherit;
@@ -150,12 +155,6 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: transparent;
     outline: none;
-  `,
-  titleDescribe: css`
-    padding-block: 10px;
-    padding-inline: 12px;
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgElevated};
   `,
 }));
 
@@ -257,6 +256,21 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     setStep('preparing');
     prepareTimerRef.current = setTimeout(() => setStep('review'), 700);
   }, [canCreate, initialRequirement, plan.instruction, plan.name]);
+
+  const handleCreateBlank = useCallback(() => {
+    if (!canCreate) return;
+    const instruction = instructionRef.current.trim() || plan.instruction.trim();
+    setPlan((current) => ({
+      ...current,
+      criteria:
+        current.criteria.length > 0
+          ? current.criteria
+          : [{ onFail: 'auto_repair', required: true, title: '', verifierType: 'agent' }],
+      instruction,
+    }));
+    instructionRef.current = instruction;
+    setStep('review');
+  }, [canCreate, plan.instruction]);
 
   const updateCriterion = useCallback((index: number, value: string) => {
     setPlan((current) => ({
@@ -370,25 +384,33 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
               </Text>
             </Flexbox>
           )}
-          {step === 'review' ? (
-            <Text fontSize={20} weight={600}>
-              {plan.name}
-            </Text>
-          ) : (
-            <div
-              className={`${styles.inputShell} ${step === 'preparing' ? styles.inputShellLoading : ''}`}
-            >
-              <input
-                autoFocus={canCreate}
-                className={`${styles.title} ${styles.titleDescribe}`}
-                disabled={!canCreate || step === 'preparing'}
-                placeholder={t('createGoal.titlePlaceholder')}
-                value={plan.name}
-                onChange={(e) => setPlan((current) => ({ ...current, name: e.target.value }))}
-              />
-            </div>
+          <input
+            autoFocus={canCreate}
+            className={styles.title}
+            disabled={!canCreate || step === 'preparing'}
+            placeholder={t('createGoal.titlePlaceholder')}
+            value={plan.name}
+            onChange={(e) => setPlan((current) => ({ ...current, name: e.target.value }))}
+          />
+          {step !== 'review' && (
+            <>
+              <div
+                className={`${styles.inputShell} ${step === 'preparing' ? styles.inputShellLoading : ''}`}
+              >
+                <EditorCanvas
+                  disabled={!canCreate || step === 'preparing'}
+                  editor={editor}
+                  editorData={{ content: plan.instruction }}
+                  entityId={'create-goal-description'}
+                  floatingToolbar={false}
+                  placeholder={t('createGoal.instructionPlaceholder')}
+                  style={{ fontSize: 14, minHeight: 178, padding: 12 }}
+                  onContentChange={handleContentChange}
+                />
+              </div>
+              <Text type={'secondary'}>{t('createGoal.describeHint')}</Text>
+            </>
           )}
-          {step !== 'review' && <Text type={'secondary'}>{t('createGoal.describeHint')}</Text>}
         </Flexbox>
         <ActionIcon icon={X} style={{ flexShrink: 0 }} onClick={close} />
       </Flexbox>
@@ -536,27 +558,41 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
           )}
         </Flexbox>
 
-        <Button
-          loading={isCreating || step === 'preparing'}
-          shape={'round'}
-          size={'small'}
-          title={canCreate ? undefined : reason}
-          type={'primary'}
-          disabled={
-            !canCreate ||
-            isCreating ||
-            step === 'preparing' ||
-            !plan.name.trim() ||
-            (step === 'review' && plan.criteria.every((criterion) => !criterion.title.trim()))
-          }
-          onClick={step === 'describe' ? handleNext : handleSubmit}
-        >
-          {step === 'preparing'
-            ? t('createGoal.preparing')
-            : step === 'describe'
-              ? t('createGoal.next')
-              : t('createGoal.submit')}
-        </Button>
+        <Flexbox horizontal align={'center'} gap={4}>
+          {step === 'describe' && (
+            <Button
+              disabled={!canCreate || isCreating}
+              icon={PencilLine}
+              size={'small'}
+              title={canCreate ? undefined : reason}
+              type={'text'}
+              onClick={handleCreateBlank}
+            >
+              {t('createModal.createBlank')}
+            </Button>
+          )}
+          <Button
+            loading={isCreating || step === 'preparing'}
+            shape={'round'}
+            size={'small'}
+            title={canCreate ? undefined : reason}
+            type={'primary'}
+            disabled={
+              !canCreate ||
+              isCreating ||
+              step === 'preparing' ||
+              !plan.name.trim() ||
+              (step === 'review' && plan.criteria.every((criterion) => !criterion.title.trim()))
+            }
+            onClick={step === 'describe' ? handleNext : handleSubmit}
+          >
+            {step === 'preparing'
+              ? t('createGoal.preparing')
+              : step === 'describe'
+                ? t('createGoal.next')
+                : t('createGoal.submit')}
+          </Button>
+        </Flexbox>
       </Flexbox>
     </Flexbox>
   );

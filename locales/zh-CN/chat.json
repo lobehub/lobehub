@@ -245,7 +245,7 @@
   "createGoal.roundBudgetUncappedHint": "会一直跑到达成为止，注意花费。",
   "createGoal.roundsUnit": "轮",
   "createGoal.submit": "创建目标",
-  "createGoal.titlePlaceholder": "你想要的结果",
+  "createGoal.titlePlaceholder": "目标标题",
   "createModal.createBlank": "从空白开始",
   "createModal.groupPlaceholder": "描述这个群组要完成什么…",
   "createModal.groupTitle": "这个群组要做什么？",

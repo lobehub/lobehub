@@ -1462,7 +1462,7 @@ export default {
   'createGoal.roundBudgetUncappedHint':
     'It keeps going until the goal is reached — watch the cost.',
   'createGoal.submit': 'Create goal',
-  'createGoal.titlePlaceholder': 'The outcome you want',
+  'createGoal.titlePlaceholder': 'Goal title',
   'createTask.assignee': 'Assignee',
   'createTask.collapse': 'Hide input',
   'createTask.createFailed': 'Failed to create task',
