@@ -1206,7 +1206,11 @@ export class AiAgentService {
    */
   async execAgent(params: InternalExecAgentParams): Promise<ExecAgentResult> {
     const topicId = params.appContext?.topicId;
-    if (!topicId) return this.execAgentWithReservation(params);
+    // Thread runs are isolated under an explicit parent message and do not
+    // advance the topic's main spine. They may start while their parent
+    // operation owns `runningOperation` (for example callAgent/callSubAgent),
+    // so making them wait for the topic-start claim deadlocks the child start.
+    if (!topicId || params.appContext?.threadId) return this.execAgentWithReservation(params);
 
     const reservationId = params.topicStartReservationId ?? `agent-start-${nanoid()}`;
     const reserved = await acquireTopicStartReservation({
