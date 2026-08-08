@@ -6,8 +6,8 @@ interface EmailSupportCopy {
 }
 
 const DEFAULT_SUPPORT_COPY = {
-  contactSupport: 'Contact support',
-  joinDiscord: 'Join Discord',
+  contactSupport: 'تماس با پشتیبانی',
+  joinDiscord: 'عضویت در Discord',
 } satisfies Required<EmailSupportCopy>;
 
 const escapeHtml = (value: string) =>
