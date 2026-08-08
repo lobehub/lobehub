@@ -12,6 +12,7 @@ const modelMocks = vi.hoisted(() => ({
   findRunByOperation: vi.fn(),
   findRunById: vi.fn(),
   findResultById: vi.fn(),
+  generateCriteria: vi.fn(),
   getFullFileUrl: vi.fn(),
   getServerDB: vi.fn(async () => ({})),
   updateRun: vi.fn(),
@@ -50,7 +51,9 @@ vi.mock('@/server/services/verify', async (importOriginal) => ({
   ...(await importOriginal<typeof VerifyServiceModule>()),
   VerifyExecutorService: class VerifyExecutorService {},
   VerifyFeedbackService: class VerifyFeedbackService {},
-  VerifyPlanGeneratorService: class VerifyPlanGeneratorService {},
+  VerifyPlanGeneratorService: class VerifyPlanGeneratorService {
+    generateCriteria = modelMocks.generateCriteria;
+  },
   VerifyReporterService: class VerifyReporterService {},
 }));
 
@@ -81,6 +84,31 @@ describe('verifyRouter', () => {
           getFullFileUrl: modelMocks.getFullFileUrl,
         }) as any,
     );
+  });
+
+  describe('generateCriteria', () => {
+    it('preserves InvalidProviderAPIKey as an actionable client error', async () => {
+      modelMocks.generateCriteria.mockRejectedValueOnce({ errorType: 'InvalidProviderAPIKey' });
+
+      await expect(
+        createCaller().generateCriteria({
+          goal: 'Ship a responsive task board',
+          modelConfig: { model: 'claude-sonnet-4-6', provider: 'anthropic' },
+        }),
+      ).rejects.toMatchObject({ code: 'UNAUTHORIZED', message: 'InvalidProviderAPIKey' });
+    });
+
+    it('does not rewrite unrelated generation failures', async () => {
+      const providerError = new Error('Provider timed out');
+      modelMocks.generateCriteria.mockRejectedValueOnce(providerError);
+
+      await expect(
+        createCaller().generateCriteria({
+          goal: 'Ship a responsive task board',
+          modelConfig: { model: 'claude-sonnet-4-6', provider: 'anthropic' },
+        }),
+      ).rejects.toThrow('Provider timed out');
+    });
   });
 
   describe('ingestResult', () => {
