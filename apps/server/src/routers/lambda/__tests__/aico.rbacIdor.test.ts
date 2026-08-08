@@ -3,6 +3,9 @@
  * Maps: AICO-P1-001, AICO-P1-002, AICO-P1-014, AICO-P1-023, AICO-P1-026, AICO-P1-027
  */
 // @vitest-environment node
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+
 import type { LobeChatDatabase } from '@lobechat/database';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -13,7 +16,6 @@ import { platformAdminRouter } from '../platformAdmin';
 import { createTestContext } from './integration/setup';
 
 process.env.KEY_VAULTS_SECRET = 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=';
-process.env.AICO_ALLOW_MOCK_TOPUP = '1';
 
 let testDB: LobeChatDatabase;
 vi.mock('@/database/core/db-adaptor', () => ({
@@ -112,35 +114,14 @@ afterEach(async () => {
 });
 
 describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
-  it('AICO-P1-001: mockTopup is production-forbidden even with allow flag', async () => {
-    const prev = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'production';
-    process.env.AICO_ALLOW_MOCK_TOPUP = '1';
-    try {
-      const caller = aicoBillingRouter.createCaller(createTestContext(strangerId));
-      await expect(caller.mockTopup({ amountToman: 100_000 })).rejects.toMatchObject({
-        message: 'MOCK_TOPUP_DISABLED',
-      });
-    } finally {
-      process.env.NODE_ENV = prev;
-      process.env.AICO_ALLOW_MOCK_TOPUP = '1';
-    }
+  it('AICO-P1-001: mockTopup procedure is removed (platform-admin manual credit only)', () => {
+    const src = readFileSync(path.join(__dirname, '../aicoBilling.ts'), 'utf8');
+    expect(src).not.toMatch(/\bmockTopup\b/);
   });
 
-  it('AICO-P1-002: mockOrgTopup is production-forbidden even with allow flag', async () => {
-    const prev = process.env.NODE_ENV;
-    const orgCaller = organizationRouter.createCaller(createTestContext(ownerId));
-    const created = await orgCaller.create({ name: 'RBAC Org' });
-    process.env.NODE_ENV = 'production';
-    process.env.AICO_ALLOW_MOCK_TOPUP = '1';
-    try {
-      await expect(
-        orgCaller.mockOrgTopup({ amountToman: 100_000, orgId: created.id }),
-      ).rejects.toMatchObject({ message: 'MOCK_TOPUP_DISABLED' });
-    } finally {
-      process.env.NODE_ENV = prev;
-      process.env.AICO_ALLOW_MOCK_TOPUP = '1';
-    }
+  it('AICO-P1-002: mockOrgTopup procedure is removed (platform-admin manual credit only)', () => {
+    const src = readFileSync(path.join(__dirname, '../organization.ts'), 'utf8');
+    expect(src).not.toMatch(/\bmockOrgTopup\b/);
   });
 
   it('member cannot listMembers / getOrgWallet / allocate (IDOR deny)', async () => {
@@ -207,9 +188,6 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
         orgMemberId: 'x',
         to: '2026-01-31',
       }),
-    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
-    await expect(
-      strangerCaller.mockOrgTopup({ amountToman: 1000, orgId: created.id }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 
@@ -307,15 +285,19 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
   });
 
   it('platform admin listUserWallets and listOrganizations include publicCode', async () => {
+    const platformCaller = platformAdminRouter.createCaller(createTestContext(platformId));
+    await platformCaller.addManualUserCredit({
+      amountToman: 50_000,
+      description: 'seed for publicCode',
+      userId: strangerId,
+    });
     const strangerCaller = aicoBillingRouter.createCaller(createTestContext(strangerId));
-    await strangerCaller.mockTopup({ amountToman: 50_000 });
     // Public code is assigned lazily on first wallet view.
     await strangerCaller.getMyWallet();
 
     const ownerCaller = organizationRouter.createCaller(createTestContext(ownerId));
     await ownerCaller.create({ name: 'PublicCode Org' });
 
-    const platformCaller = platformAdminRouter.createCaller(createTestContext(platformId));
     const wallets = await platformCaller.listUserWallets();
     const strangerWallet = wallets.find((w: any) => w.userId === strangerId);
     expect(strangerWallet?.publicCode).toMatch(/^USR/);

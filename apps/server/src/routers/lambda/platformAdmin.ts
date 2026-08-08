@@ -209,7 +209,7 @@ export const platformAdminRouter = router({
           userId,
         });
 
-        // Same as mock topup: ensure the user can spend the new balance.
+        // Ensure the user can spend the new balance via a managed key.
         const keyService = new AicoOpenRouterKeyService(ctx.serverDB);
         await keyService.ensureUserKey(userId);
 

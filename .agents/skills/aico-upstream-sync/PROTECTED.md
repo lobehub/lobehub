@@ -109,15 +109,15 @@ git show ":2:$file" | rg -i 'aico|AicoManaged|isManagedAico|BRANDING_|OPENROUTER
 
 Env / branding invariants:
 
-| Variable / symbol                            | Role                                     |
-| -------------------------------------------- | ---------------------------------------- |
-| `BRANDING_NAME`                              | UI + metadata name (default `Aico`)      |
-| `BRANDING_PROVIDER`                          | Managed provider id (default `official`) |
-| `ORG_NAME` / cloud name                      | Legal / cloud labeling                   |
-| `OPENROUTER_MANAGEMENT_API_KEY`              | Server-only key minting                  |
-| `AICO_OPENROUTER_MOCK`                       | Non-prod mock only                       |
-| `AICO_TOMAN_PER_USD`                         | FX fallback                              |
-| `AICO_ALLOW_TRIAL` / `AICO_ALLOW_MOCK_TOPUP` | Gated features                           |
+| Variable / symbol               | Role                                     |
+| ------------------------------- | ---------------------------------------- |
+| `BRANDING_NAME`                 | UI + metadata name (default `Aico`)      |
+| `BRANDING_PROVIDER`             | Managed provider id (default `official`) |
+| `ORG_NAME` / cloud name         | Legal / cloud labeling                   |
+| `OPENROUTER_MANAGEMENT_API_KEY` | Server-only key minting                  |
+| `AICO_OPENROUTER_MOCK`          | Non-prod mock only                       |
+| `AICO_TOMAN_PER_USD`            | FX fallback                              |
+| `AICO_ALLOW_TRIAL`              | Trial gate (non-prod)                    |
 
 ## After resolving a protected file
 

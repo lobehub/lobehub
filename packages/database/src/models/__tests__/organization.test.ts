@@ -222,15 +222,15 @@ describe('OrganizationModel', () => {
 });
 
 describe('AicoBillingModel', () => {
-  it('mock topup credits user wallet', async () => {
-    const { wallet, transaction } = await billingModel.mockTopupUser({
+  it('manual credit credits user wallet', async () => {
+    const { wallet, transaction } = await billingModel.manualCreditUser({
       amountMicroUsd: 20_000_000,
       amountToman: 100_000,
       createdByUserId: ownerId,
       fxRateTomanPerUsd: 5000,
       userId: ownerId,
     });
-    expect(transaction.type).toBe('topup');
+    expect(transaction.type).toBe('manual_credit');
     expect(wallet.balanceToman).toBe(100_000);
     expect(Number(wallet.balanceMicroUsd)).toBe(20_000_000);
   });

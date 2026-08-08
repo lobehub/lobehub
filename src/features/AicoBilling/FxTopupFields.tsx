@@ -37,6 +37,7 @@ const previewTomanFromUsd = (usd: number | undefined, rate: number | undefined):
 
 interface FxTopupFieldsProps {
   chargeField: FxTopupChargeField;
+  disabled?: boolean;
   form: FormInstance<FxTopupFormValues>;
   fxRate?: number;
   fxSource?: string;
@@ -49,6 +50,7 @@ interface FxTopupFieldsProps {
 
 export const FxTopupFields = ({
   chargeField,
+  disabled = false,
   form,
   fxRate,
   fxSource,
@@ -70,6 +72,7 @@ export const FxTopupFields = ({
       </Text>
       <Form.Item label={t(tomanLabelKey)} name="amountToman">
         <InputNumber
+          disabled={disabled}
           min={tomanMin}
           step={1000}
           style={{ width: '100%' }}
@@ -83,6 +86,7 @@ export const FxTopupFields = ({
       </Form.Item>
       <Form.Item label={t(usdLabelKey)} name="amountUsd">
         <InputNumber
+          disabled={disabled}
           min={usdMin}
           step={0.5}
           style={{ width: '100%' }}

@@ -59,16 +59,16 @@ describe('Phase 3 Journey 1 — B2C lifecycle (release invariants)', () => {
     ).rejects.toThrow(/TRIAL_ALREADY_USED/);
   });
 
-  it('mock top-up credits wallet and writes ledger (test-mode path exists)', async () => {
-    const { wallet, transaction } = await billing.mockTopupUser({
+  it('manual credit credits wallet and writes ledger', async () => {
+    const { wallet, transaction } = await billing.manualCreditUser({
+      amountMicroUsd: 1_000_000,
       amountToman: 50_000,
-      amountUsd: 1,
       createdByUserId: P3.b2cVerified,
-      fxRate: 50_000,
+      fxRateTomanPerUsd: 50_000,
       userId: P3.b2cVerified,
     });
-    expect(Number(wallet.balanceUsd)).toBe(1);
-    expect(transaction.type).toBe('topup');
+    expect(Number(wallet.balanceMicroUsd)).toBe(1_000_000);
+    expect(transaction.type).toBe('manual_credit');
     const txs = await db.query.walletTransactions.findMany({
       where: eq(walletTransactions.userId, P3.b2cVerified),
     });

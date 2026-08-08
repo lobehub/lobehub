@@ -15,11 +15,6 @@ import { appEnv } from '@/envs/app';
 import { normalizeIranianPhoneNumber } from '@/libs/better-auth/phone';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { assertMockTopupAllowed } from '@/server/services/aico/mockTopupGate';
-import {
-  resolveTopupAmount,
-  topupAmountInputSchema,
-} from '@/server/services/aico/resolveTopupAmount';
 import { EmailService } from '@/server/services/email';
 import { AicoOpenRouterKeyService } from '@/server/services/openrouter/keyService';
 import { SmsService } from '@/server/services/sms';
@@ -405,36 +400,6 @@ export const organizationRouter = router({
         balanceToman: tomanString(org.walletBalanceToman ?? 0),
         balanceUsd: microUsdToDecimalString(org.walletBalanceMicroUsd ?? 0),
         status: org.status,
-      };
-    }),
-
-  mockOrgTopup: orgProcedure
-    .input(
-      topupAmountInputSchema.extend({
-        orgId: z.string().min(1),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      await requireOrgManager(ctx.organizationModel, ctx.userId, input.orgId);
-      assertMockTopupAllowed();
-
-      const { amountMicroUsd, amountToman, fxRateTomanPerUsd } = await resolveTopupAmount(input);
-      const result = await ctx.organizationModel.addManualCredit({
-        amountMicroUsd,
-        amountToman,
-        createdByUserId: ctx.userId,
-        description: 'Mock org topup',
-        fxRateTomanPerUsd,
-        orgId: input.orgId,
-        type: 'topup',
-      });
-      return {
-        amountMicroUsd: String(amountMicroUsd),
-        amountUsd: microUsdToDecimalString(amountMicroUsd),
-        balanceMicroUsd: String(result.organization.walletBalanceMicroUsd ?? 0),
-        balanceToman: tomanString(result.organization.walletBalanceToman ?? 0),
-        balanceUsd: microUsdToDecimalString(result.organization.walletBalanceMicroUsd ?? 0),
-        fxRate: String(fxRateTomanPerUsd),
       };
     }),
 

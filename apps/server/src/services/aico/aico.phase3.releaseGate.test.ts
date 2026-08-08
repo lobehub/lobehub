@@ -24,7 +24,6 @@ import {
 import { tomanToUsd } from '@/envs/aico';
 
 import { createTestContext } from '../../routers/lambda/__tests__/integration/setup';
-import { aicoBillingRouter } from '../../routers/lambda/aicoBilling';
 import { organizationRouter } from '../../routers/lambda/organization';
 import { AicoOpenRouterKeyService } from '../openrouter/keyService';
 import type { OpenRouterManagementClient } from '../openrouter/management';
@@ -193,22 +192,12 @@ describe('Phase 3 Env C — unsafe production configuration (fail-closed)', () =
     expect(() => tomanToUsd(1000, -1)).toThrow(/Invalid FX/);
   });
 
-  it('AICO-P3-ENV-C: mockTopup must be forbidden in production even when allowlisted', async () => {
-    const prevNode = process.env.NODE_ENV;
-    const prevAllow = process.env.AICO_ALLOW_MOCK_TOPUP;
-    try {
-      (process.env as any).NODE_ENV = 'production';
-      process.env.AICO_ALLOW_MOCK_TOPUP = '1';
-
-      const caller = aicoBillingRouter.createCaller(createTestContext(strangerId));
-      await expect(caller.mockTopup({ amountToman: 100_000 })).rejects.toMatchObject({
-        code: 'FORBIDDEN',
-        message: 'MOCK_TOPUP_DISABLED',
-      });
-    } finally {
-      (process.env as any).NODE_ENV = prevNode;
-      process.env.AICO_ALLOW_MOCK_TOPUP = prevAllow;
-    }
+  it('AICO-P3-ENV-C: mockTopup procedure must be removed', () => {
+    const src = readFileSync(
+      join(REPO_ROOT, 'apps/server/src/routers/lambda/aicoBilling.ts'),
+      'utf8',
+    );
+    expect(src).not.toMatch(/\bmockTopup\b/);
   });
 });
 
@@ -220,27 +209,27 @@ describe('Phase 3 Journey 4 — external-service partial failure', () => {
     client.mode = 'timeout';
     const keys = new AicoOpenRouterKeyService(testDB, client);
 
-    await billing.mockTopupUser({
+    await billing.manualCreditUser({
+      amountMicroUsd: 10_000_000,
       amountToman: 50_000,
-      amountUsd: 10,
       createdByUserId: ownerId,
-      fxRate: 5000,
+      fxRateTomanPerUsd: 5000,
       userId: ownerId,
     });
     await expect(keys.ensureUserKey(ownerId)).rejects.toThrow(/timeout/i);
     const wallet = await billing.getOrCreateUserWallet(ownerId);
-    expect(Number(wallet.balanceUsd)).toBe(10);
+    expect(Number(wallet.balanceMicroUsd) / 1_000_000).toBe(10);
     expect(wallet.openrouterKeyId).toBeNull();
     expect(client.keys.size).toBe(0);
   });
 
   it('OR http401: no key provisioned; wallet unchanged after failed ensure', async () => {
     const billing = new AicoBillingModel(testDB);
-    await billing.mockTopupUser({
+    await billing.manualCreditUser({
+      amountMicroUsd: 10_000_000,
       amountToman: 50_000,
-      amountUsd: 10,
       createdByUserId: ownerId,
-      fxRate: 5000,
+      fxRateTomanPerUsd: 5000,
       userId: ownerId,
     });
     const client = new ControllableOR();
@@ -252,11 +241,11 @@ describe('Phase 3 Journey 4 — external-service partial failure', () => {
 
   it('OR http429 rate limit: recoverable without inventing keys', async () => {
     const billing = new AicoBillingModel(testDB);
-    await billing.mockTopupUser({
+    await billing.manualCreditUser({
+      amountMicroUsd: 10_000_000,
       amountToman: 50_000,
-      amountUsd: 10,
       createdByUserId: ownerId,
-      fxRate: 5000,
+      fxRateTomanPerUsd: 5000,
       userId: ownerId,
     });
     const client = new ControllableOR();
@@ -271,11 +260,11 @@ describe('Phase 3 Journey 4 — external-service partial failure', () => {
 
   it('malformed OR response must not persist spendable key', async () => {
     const billing = new AicoBillingModel(testDB);
-    await billing.mockTopupUser({
+    await billing.manualCreditUser({
+      amountMicroUsd: 10_000_000,
       amountToman: 50_000,
-      amountUsd: 10,
       createdByUserId: ownerId,
-      fxRate: 5000,
+      fxRateTomanPerUsd: 5000,
       userId: ownerId,
     });
     const client = new ControllableOR();
@@ -339,11 +328,11 @@ describe('Phase 3 Journey 7 — operational recovery probes', () => {
     const billing = new AicoBillingModel(testDB);
     const client = new ControllableOR();
     const keys = new AicoOpenRouterKeyService(testDB, client);
-    await billing.mockTopupUser({
+    await billing.manualCreditUser({
+      amountMicroUsd: 10_000_000,
       amountToman: 50_000,
-      amountUsd: 10,
       createdByUserId: ownerId,
-      fxRate: 5000,
+      fxRateTomanPerUsd: 5000,
       userId: ownerId,
     });
     await keys.ensureUserKey(ownerId);
@@ -362,11 +351,11 @@ describe('Phase 3 Journey 7 — operational recovery probes', () => {
     const billing = new AicoBillingModel(testDB);
     const client = new ControllableOR();
     const keys = new AicoOpenRouterKeyService(testDB, client);
-    await billing.mockTopupUser({
+    await billing.manualCreditUser({
+      amountMicroUsd: 5_000_000,
       amountToman: 50_000,
-      amountUsd: 5,
       createdByUserId: ownerId,
-      fxRate: 10_000,
+      fxRateTomanPerUsd: 10_000,
       userId: ownerId,
     });
     const result = await keys.ensureUserKey(ownerId);
@@ -396,14 +385,12 @@ describe('Phase 3 UI / route / secret static probes', () => {
     expect(twin.includes('PlatformAdminPage') || twin.includes('platform')).toBe(true);
   });
 
-  it('AICO-P3-UI: wallet mock top-up UI must be production-gated in source', () => {
+  it('AICO-P3-UI: wallet must not expose mock top-up UI', () => {
     const wallet = readFileSync(join(REPO_ROOT, 'src/features/AicoWallet/index.tsx'), 'utf8');
-    const gated =
-      wallet.includes('AICO_ALLOW_MOCK_TOPUP') ||
-      wallet.includes('NODE_ENV') ||
-      wallet.includes('isProduction') ||
-      wallet.includes('mockTopupEnabled');
-    expect(gated).toBe(true);
+    expect(wallet).not.toMatch(/mockTopup/i);
+    expect(wallet).toMatch(/manualCreditHint/);
+    expect(wallet).toMatch(/onlineTopupTitle/);
+    expect(wallet).toMatch(/disabled/);
   });
 
   it('client wallet feature must not embed management API key env names as readable secrets', () => {
@@ -438,9 +425,6 @@ describe('Phase 3 Journey 3 — tRPC IDOR (attacker)', () => {
     await expect(stranger.getOrgWallet({ orgId: created.id })).rejects.toMatchObject({
       code: 'FORBIDDEN',
     });
-    await expect(
-      stranger.mockOrgTopup({ amountToman: 1000, orgId: created.id }),
-    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     await expect(
       stranger.allocateMemberCredit({
         amountUsd: 1,

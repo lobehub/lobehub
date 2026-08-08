@@ -36,7 +36,6 @@ export const AICO_ERROR_CODES = [
   'DEFAULT_TEAM_MISSING',
   // Keys / ops
   'MANAGED_KEY_UNAVAILABLE',
-  'MOCK_TOPUP_DISABLED',
   'PERSONAL_FUNDS_UNAVAILABLE',
   'PERSONAL_WALLET_INACTIVE',
   'MEMBER_BUDGET_UNFUNDED',
@@ -77,7 +76,6 @@ export const AICO_ERROR_MESSAGES_FA: Record<AicoErrorCode, string> = {
     'تمدید سهمیه عضویت در حال انجام یا ناموفق است؛ فعلاً نمی‌توانید چت کنید.',
   MEMBER_BUDGET_UNFUNDED: 'سهمیه سازمانی انتخاب‌شده موجودی ندارد.',
   MEMBER_NOT_FOUND: 'عضو یافت نشد.',
-  MOCK_TOPUP_DISABLED: 'شارژ آزمایشی در این محیط غیرفعال است.',
   MODEL_NOT_ALLOWED: 'دسترسی به این مدل برای شما فعال نیست.',
   ORG_NOT_ACTIVE: 'سازمان غیرفعال یا معلق است.',
   ORG_NOT_FOUND: 'سازمان یافت نشد.',

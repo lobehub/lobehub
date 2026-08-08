@@ -17,7 +17,6 @@ import {
   type FxTopupChargeField,
   FxTopupFields,
   type FxTopupFormValues,
-  resolveFxTopupPayload,
 } from '@/features/AicoBilling/FxTopupFields';
 import { aicoPanelStyles } from '@/features/AicoPanels';
 import { presentInviteLink } from '@/features/OrgAdmin/InviteLinkModal';
@@ -834,35 +833,20 @@ export const OrgAdminMembers = () => {
             <Flexbox gap={16}>
               <Flexbox horizontal align="center" gap={8}>
                 <Building2Icon size={18} />
-                <Text strong>{t('org.topupTitle')}</Text>
+                <Text strong>{t('org.walletTitle')}</Text>
               </Flexbox>
               <Text>
                 {t('org.walletUsd')}: <Text strong>{usd(wallet?.balanceUsd)}</Text>
               </Text>
-              <Form
-                form={topupForm}
-                layout="vertical"
-                onFinish={async (values) => {
-                  if (!selectedOrgId) return;
-                  const payload = resolveFxTopupPayload(values, topupChargeField);
-                  if (!payload) return;
-                  setBusy(true);
-                  try {
-                    await lambdaClient.organization.mockOrgTopup.mutate({
-                      ...payload,
-                      orgId: selectedOrgId,
-                    });
-                    toast.success(t('org.topupSuccess'));
-                    topupForm.resetFields();
-                    await refreshAll();
-                  } catch (err) {
-                    toastAicoError(err, t, 'org.topupFailed');
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-              >
+              <Flexbox horizontal align="center" gap={8}>
+                <Text strong>{t('org.onlineTopupTitle')}</Text>
+                <Tag>{t('wallet.onlineTopupSoon')}</Tag>
+              </Flexbox>
+              <Text type="secondary">{t('org.onlineTopupDisabledHint')}</Text>
+              <Text type="secondary">{t('org.walletManualHint')}</Text>
+              <Form form={topupForm} layout="vertical">
                 <FxTopupFields
+                  disabled
                   chargeField={topupChargeField}
                   form={topupForm}
                   fxRate={fx?.tomanPerUsd}
@@ -871,8 +855,8 @@ export const OrgAdminMembers = () => {
                   usdLabelKey="org.amountUsd"
                   onChargeFieldChange={setTopupChargeField}
                 />
-                <Button htmlType="submit" loading={busy} type="primary">
-                  {t('org.topupSubmit')}
+                <Button disabled type="primary">
+                  {t('org.onlineTopupSubmit')}
                 </Button>
               </Form>
             </Flexbox>

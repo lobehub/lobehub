@@ -73,7 +73,7 @@ describe('getUserRemaining', () => {
     const client = new ControllableOpenRouterClient();
     const keys = new AicoOpenRouterKeyService(db, client);
 
-    await billing.mockTopupUser({
+    await billing.manualCreditUser({
       amountMicroUsd: 10_000_000,
       amountToman: 50_000,
       createdByUserId: userId,
@@ -98,7 +98,7 @@ describe('getUserRemaining', () => {
     const client = new ControllableOpenRouterClient();
     const keys = new AicoOpenRouterKeyService(db, client);
 
-    await billing.mockTopupUser({
+    await billing.manualCreditUser({
       amountMicroUsd: 10_000_000,
       amountToman: 50_000,
       createdByUserId: userId,
@@ -116,7 +116,7 @@ describe('getUserRemaining', () => {
     const client = new ControllableOpenRouterClient();
     const keys = new AicoOpenRouterKeyService(db, client);
 
-    await billing.mockTopupUser({
+    await billing.manualCreditUser({
       amountMicroUsd: 3_000_000,
       amountToman: 15_000,
       createdByUserId: userId,
