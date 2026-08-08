@@ -778,6 +778,7 @@
   "messageAction.interruptedHint": "接下来需要做什么？",
   "messageAction.reaction": "添加表情",
   "messageAction.regenerate": "重新生成",
+  "messageAction.regenerateAlreadyRunning": "该消息正在重新生成中。",
   "messageAction.select": "多选",
   "messageForward.bar.cancel": "取消",
   "messageForward.bar.delete": "删除",

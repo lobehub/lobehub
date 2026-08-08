@@ -20,6 +20,7 @@ import AgentCouncilMessage from './AgentCouncil';
 import AssistantMessage from './Assistant';
 import AssistantGroupMessage from './AssistantGroup';
 import type { WorkflowExpandLevelDefault } from './AssistantGroup/components/WorkflowCollapse';
+import PendingRetryTurn from './components/PendingRetryTurn';
 import TextSelectionActionLayer from './components/TextSelectionActionLayer';
 import CompressedGroupMessage from './CompressedGroup';
 import GroupTasksMessage from './GroupTasks';
@@ -133,7 +134,15 @@ const MessageItem = memo<MessageItemProps>(
     const renderContent = useCallback(() => {
       switch (role) {
         case 'user': {
-          return <UserMessage disableEditing={disableEditing} id={id} index={index} />;
+          return (
+            <>
+              <UserMessage disableEditing={disableEditing} id={id} index={index} />
+              {/* A retry deletes the failed reply before its replacement exists.
+                  The user turn outlives that window, so it carries the pending
+                  state the deleted reply no longer can. */}
+              <PendingRetryTurn userMessageId={id} />
+            </>
+          );
         }
 
         case 'assistant': {

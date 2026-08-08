@@ -279,9 +279,17 @@ const regenerateUserMessageFromSource = async (
   const { context, displayMessages, hooks, readDbMessages } = source;
   const chatStore = useChatStore.getState();
 
-  // Check if already regenerating via operation system
-  const isRegenerating = operationSelectors.isMessageProcessing(messageId)(chatStore);
-  if (isRegenerating) return;
+  // Block a genuine double-regenerate, and ONLY that. The guard used to be
+  // `isMessageProcessing`, i.e. "this message has any running operation at all" —
+  // so an unrelated op that outlived its run (a translate, a never-settled
+  // gateway regenerate whose WS dropped non-terminally) permanently and silently
+  // killed retry for that turn. Narrowing to the regenerate op keeps the
+  // duplicate-click protection without letting any stray op wedge the turn, and
+  // the toast means the refusal is never invisible again.
+  if (operationSelectors.isMessageRegenerating(messageId)(chatStore)) {
+    toast.info(t('messageAction.regenerateAlreadyRunning', { ns: 'chat' }));
+    return;
+  }
 
   // Find the message in the captured conversation messages. The source remains
   // bound to the initiating context even if StoreUpdater reuses this store for
@@ -458,14 +466,20 @@ export interface GenerationAction {
   clearTranslate: (messageId: string) => Promise<void>;
 
   /**
-   * Continue generation from a message
+   * Continue generation from a message.
+   *
+   * Resolves `true` only when a generation actually started. Every bail-out
+   * (message gone, no longer a group, no block to continue from) resolves
+   * `false` so a caller that already mutated history can recover instead of
+   * silently leaving the turn dead — see {@link retryFailedAssistantStep}.
    */
-  continueGeneration: (displayMessageId: string) => Promise<void>;
+  continueGeneration: (displayMessageId: string) => Promise<boolean>;
 
   /**
-   * Continue generation from a specific block
+   * Continue generation from a specific block. Resolves `true` only when a
+   * generation actually started; see {@link continueGeneration}.
    */
-  continueGenerationMessage: (displayMessageId: string, messageId: string) => Promise<void>;
+  continueGenerationMessage: (displayMessageId: string, messageId: string) => Promise<boolean>;
 
   /**
    * Resume a heterogeneous (CC / Codex) run whose LAST step died on a status
@@ -551,6 +565,21 @@ export interface GenerationAction {
    * fresh auto-retry budget is granted (used when a human retries manually).
    */
   resetHeteroOverloadRetry: (scopeId: string) => void;
+
+  /**
+   * Retry the failed step of an assistant turn, from the error card rendered on
+   * that step.
+   *
+   * Guarantees a terminal outcome: either a continuation actually starts, or the
+   * whole turn is regenerated. The previous call site deleted the failed block
+   * and then *hoped* `continueGeneration` still found a group to continue — when
+   * it didn't (single-step turn, or a turn that stops parsing as a group once the
+   * block is gone) the user was left with a deleted answer and nothing running.
+   *
+   * @param groupMessageId - the assistantGroup id (the turn)
+   * @param blockId - the child block that carries the error
+   */
+  retryFailedAssistantStep: (groupMessageId: string, blockId: string) => Promise<void>;
 
   /**
    * Save TTS metadata for a message
@@ -670,12 +699,12 @@ export const generationSlice: StateCreator<
 
     // Find the message
     const message = displayMessages.find((m) => m.id === groupMessageId);
-    if (!message) return;
+    if (!message) return false;
 
     // If it's an assistantGroup, find the last child's ID as blockId
     let lastBlockId: string | undefined;
 
-    if (message.role !== 'assistantGroup') return;
+    if (message.role !== 'assistantGroup') return false;
 
     if (message.children && message.children.length > 0) {
       const lastChild = message.children.at(-1);
@@ -685,9 +714,9 @@ export const generationSlice: StateCreator<
       }
     }
 
-    if (!lastBlockId) return;
+    if (!lastBlockId) return false;
 
-    await get().continueGenerationMessage(groupMessageId, lastBlockId);
+    return get().continueGenerationMessage(groupMessageId, lastBlockId);
   },
 
   continueGenerationMessage: async (displayMessageId: string, dbMessageId: string) => {
@@ -696,12 +725,12 @@ export const generationSlice: StateCreator<
 
     // Find the message (blockId refers to the assistant message to continue from)
     const message = displayMessages.find((m) => m.id === displayMessageId);
-    if (!message) return;
+    if (!message) return false;
 
     // ===== Hook: onBeforeContinue =====
     if (hooks.onBeforeContinue) {
       const shouldProceed = await hooks.onBeforeContinue(displayMessageId);
-      if (shouldProceed === false) return;
+      if (shouldProceed === false) return false;
     }
 
     const { agencyConfig, workspaceScoped } = getEffectiveAgencyConfig(context.agentId);
@@ -717,7 +746,7 @@ export const generationSlice: StateCreator<
     // — each prompt is a fresh user turn from their perspective. Bail out
     // rather than synthesize a fake "please continue" turn that would pollute
     // the session and confuse the model. The button is a no-op in this mode.
-    if (runtimeType === 'hetero') return;
+    if (runtimeType === 'hetero') return false;
 
     // Claude 4.6+/5 removed assistant prefill: a payload ending with an
     // assistant turn is rejected (400), and the model runtime strips trailing
@@ -728,7 +757,7 @@ export const generationSlice: StateCreator<
     const continueModel = getEffectiveConversationModel(context);
     if (continueModel && shouldDropUnsupportedClaudeAssistantPrefill(continueModel)) {
       toast.warning(t('messageAction.continueGenerationUnsupported', { ns: 'chat' }));
-      return;
+      return false;
     }
 
     // Create continue operation with ConversationStore context (includes groupId)
@@ -752,7 +781,7 @@ export const generationSlice: StateCreator<
             ),
           parentMessageId: dbMessageId,
         });
-        return;
+        return true;
       }
 
       // ── Client mode: run agent locally ──
@@ -767,6 +796,8 @@ export const generationSlice: StateCreator<
       settleGenerationEntry(chatStore, operationId, () =>
         hooks.onContinueComplete?.(displayMessageId),
       );
+
+      return true;
     } catch (error) {
       chatStore.failOperation(operationId, {
         message: error instanceof Error ? error.message : String(error),
@@ -1076,6 +1107,47 @@ export const generationSlice: StateCreator<
     const next = { ...current };
     delete next[scopeId];
     set({ heteroOverloadRetryAttempts: next }, false, 'resetHeteroOverloadRetry');
+  },
+
+  retryFailedAssistantStep: async (groupMessageId: string, blockId: string) => {
+    const { displayMessages } = get();
+
+    const group = displayMessages.find((m) => m.id === groupMessageId);
+    const erroredBlock = group?.children?.find((child) => child.id === blockId);
+
+    // A hetero status error (rate limit, upstream overload, auth, missing CLI)
+    // means the run died but its CLI session survives — that path resumes the
+    // session and already owns its own whole-turn fallback.
+    if (isHeterogeneousAgentStatusGuideError(erroredBlock?.error?.body)) {
+      await get().continueHeteroAfterError(groupMessageId);
+      return;
+    }
+
+    // Captured BEFORE any mutation: once the failed block is gone the turn may
+    // stop resolving as a group, and the parent user message is the only anchor
+    // left to regenerate from.
+    const parentUserId = group?.parentId;
+
+    // Nothing to continue from — the failed block IS the whole turn, so deleting
+    // it would destroy the group and leave `continueGeneration` with nothing to
+    // find. Replace the turn outright instead of deleting speculatively.
+    const hasEarlierSteps = (group?.children?.length ?? 0) > 1;
+    if (!hasEarlierSteps) {
+      await get().delAndRegenerateMessage(groupMessageId);
+      return;
+    }
+
+    await get().deleteDBMessage(blockId);
+
+    if (await get().continueGeneration(groupMessageId)) return;
+
+    // Continue turned out to be impossible after all (the turn stopped parsing
+    // as a group once the block was removed, the runtime has no continue
+    // primitive, ...). The failed block is already gone, so the only honest
+    // outcome left is replacing the whole turn — never a silent no-op.
+    const groupStillExists = get().displayMessages.some((m) => m.id === groupMessageId);
+    if (groupStillExists) await get().delAndRegenerateMessage(groupMessageId);
+    else if (parentUserId) await get().regenerateUserMessage(parentUserId);
   },
 
   regenerateAssistantMessage: async (messageId: string) => {

@@ -11,6 +11,7 @@ import ContentBlock from './ContentBlock';
 const continueGenerationMock = vi.fn();
 const deleteDBMessageMock = vi.fn();
 const continueHeteroAfterErrorMock = vi.fn();
+const retryFailedAssistantStepMock = vi.fn();
 const navigateMock = vi.fn();
 let isInReasoningMock = false;
 
@@ -131,6 +132,7 @@ vi.mock('../../../store', () => ({
       continueGeneration: continueGenerationMock,
       continueHeteroAfterError: continueHeteroAfterErrorMock,
       deleteDBMessage: deleteDBMessageMock,
+      retryFailedAssistantStep: retryFailedAssistantStepMock,
       heteroOverloadRetryAttempts: {},
       internal_beginHeteroOverloadWait: vi.fn(),
       internal_endHeteroOverloadWait: vi.fn(),
@@ -146,11 +148,12 @@ describe('AssistantGroup ContentBlock', () => {
     continueGenerationMock.mockClear();
     deleteDBMessageMock.mockClear();
     continueHeteroAfterErrorMock.mockClear();
+    retryFailedAssistantStepMock.mockClear();
     navigateMock.mockClear();
     isInReasoningMock = false;
   });
 
-  it('resumes the run (not the no-op continueGeneration) when retrying a heterogeneous error in a group', () => {
+  it('delegates a retry to the store instead of hand-rolling delete + continue', () => {
     render(
       <ContentBlock
         assistantId="assistant-1"
@@ -173,10 +176,13 @@ describe('AssistantGroup ContentBlock', () => {
 
     screen.getByRole('button', { name: 'guide-retry' }).click();
 
-    // Retrying a grouped hetero turn resumes it from the GROUP id — dropping only
-    // the failed step and picking the CLI session back up — instead of calling
-    // continueGeneration, which is a no-op for hetero runtimes.
-    expect(continueHeteroAfterErrorMock).toHaveBeenCalledWith('assistant-1');
+    // The component must not decide anything itself. It used to delete the failed
+    // block and then call `continueGeneration`, which could silently find nothing
+    // to continue and leave the turn deleted with nothing running. The store owns
+    // the routing (hetero resume / continue in place / replace the turn) because
+    // only it can guarantee a terminal outcome.
+    expect(retryFailedAssistantStepMock).toHaveBeenCalledWith('assistant-1', 'block-1');
+    expect(deleteDBMessageMock).not.toHaveBeenCalled();
     expect(continueGenerationMock).not.toHaveBeenCalled();
   });
 

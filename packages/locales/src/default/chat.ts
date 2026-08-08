@@ -594,6 +594,7 @@ export default {
     'The current model doesn’t support continuing an assistant message. Try regenerating instead.',
   'messageAction.copyOperationId': 'Copy Operation ID',
   'messageAction.delAndRegenerate': 'Delete and Regenerate',
+  'messageAction.regenerateAlreadyRunning': 'This message is already being regenerated.',
   'messageAction.interrupted': 'Interrupted',
   'messageAction.interruptedHint': 'What should I do instead?',
   'messageAction.deleteDisabledByThreads': 'This message has a subtopic and can’t be deleted',
