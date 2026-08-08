@@ -19,7 +19,11 @@ const PERSONAL_SCOPE = 'personal';
 const projectScopeKey = (workspaceId: string | null) => workspaceId ?? PERSONAL_SCOPE;
 
 interface ProjectStore {
-  createProject: (input: { identifier: string; name: string }) => Promise<ProjectListItem>;
+  createProject: (input: {
+    identifier: string;
+    name: string;
+    slug?: string;
+  }) => Promise<ProjectListItem>;
   projectDetails: Record<string, Record<string, ProjectDetail>>;
   projectLists: Record<string, ProjectListItem[]>;
   refreshProjectList: () => Promise<void>;

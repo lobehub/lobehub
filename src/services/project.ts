@@ -33,6 +33,7 @@ class ProjectService {
     description?: string;
     identifier: string;
     name: string;
+    slug?: string;
     visibility?: ProjectVisibility;
   }) => lambdaClient.project.create.mutate(params);
 
