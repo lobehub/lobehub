@@ -9,9 +9,9 @@ import { useTranslation } from 'react-i18next';
 
 import ImperativeModal from '@/components/ImperativeModal';
 import { usePermission } from '@/hooks/usePermission';
-import { useSessionStore } from '@/store/session';
-import { sessionGroupSelectors } from '@/store/session/selectors';
-import { type SessionGroupItem } from '@/types/session';
+import { useHomeStore } from '@/store/home';
+import { homeAgentListSelectors } from '@/store/home/selectors';
+import { type SessionGroupItemBase } from '@/types/session';
 
 import GroupItem from './GroupItem';
 
@@ -32,12 +32,15 @@ const ConfigGroupModal = memo<ModalProps>(({ open, onCancel }) => {
   const { t } = useTranslation('chat');
   const { allowed: canCreate, reason: createReason } = usePermission('create_content');
   const { allowed: canEdit } = usePermission('edit_own_content');
-  const sessionGroupItems = useSessionStore(sessionGroupSelectors.sessionGroupItems, isEqual);
-  const [addSessionGroup, updateSessionGroupSort] = useSessionStore((s) => [
-    s.addSessionGroup,
-    s.updateSessionGroupSort,
-  ]);
+  const agentGroups = useHomeStore(homeAgentListSelectors.agentGroups, isEqual);
+  const [addGroup, updateGroupSort] = useHomeStore((s) => [s.addGroup, s.updateGroupSort]);
   const [loading, setLoading] = useState(false);
+
+  const items: SessionGroupItemBase[] = agentGroups.map((g) => ({
+    children: g.items,
+    id: g.id,
+    name: g.name,
+  }));
 
   return (
     <ImperativeModal
@@ -50,8 +53,8 @@ const ConfigGroupModal = memo<ModalProps>(({ open, onCancel }) => {
     >
       <Flexbox>
         <SortableList
-          items={sessionGroupItems}
-          renderItem={(item: SessionGroupItem) => (
+          items={items}
+          renderItem={(item: SessionGroupItemBase) => (
             <SortableList.Item
               horizontal
               align={'center'}
@@ -63,9 +66,9 @@ const ConfigGroupModal = memo<ModalProps>(({ open, onCancel }) => {
               <GroupItem {...item} disabled={!canEdit} />
             </SortableList.Item>
           )}
-          onChange={(items: SessionGroupItem[]) => {
+          onChange={(newItems: SessionGroupItemBase[]) => {
             if (!canEdit) return;
-            updateSessionGroupSort(items);
+            updateGroupSort(newItems);
           }}
         />
         <Button
@@ -77,7 +80,7 @@ const ConfigGroupModal = memo<ModalProps>(({ open, onCancel }) => {
           onClick={async () => {
             if (!canCreate) return;
             setLoading(true);
-            await addSessionGroup(t('sessionGroup.newGroup'));
+            await addGroup(t('sessionGroup.newGroup'));
             setLoading(false);
           }}
         >

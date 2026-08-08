@@ -32,6 +32,14 @@ export class AgentListActionImpl {
     this.#set({ allAgentsDrawerOpen: false }, false, n('closeAllAgentsDrawer'));
   };
 
+  updateAgentSearchKeywords = (keyword: string): void => {
+    this.#set(
+      { agentSearchKeywords: keyword, isAgentSearching: !!keyword },
+      false,
+      n('updateAgentSearchKeywords'),
+    );
+  };
+
   openAllAgentsDrawer = (): void => {
     this.#set({ allAgentsDrawerOpen: true }, false, n('openAllAgentsDrawer'));
   };
@@ -78,9 +86,11 @@ export class AgentListActionImpl {
 
   useSearchAgents = (keyword?: string): SWRResponse<SidebarAgentItem[]> => {
     return useClientDataSWR<SidebarAgentItem[]>(agentConfigKeys.search(keyword), async () => {
+      const trimmed = keyword?.trim();
+      if (!trimmed) return [];
       if (!keyword) return [];
 
-      return homeService.searchAgents(keyword);
+      return homeService.searchAgents(trimmed);
     });
   };
 }

@@ -20,47 +20,36 @@ import { isDesktop } from '@/const/index';
 import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
-import { useSessionStore } from '@/store/session';
-import { sessionHelpers } from '@/store/session/helpers';
-import { sessionGroupSelectors, sessionSelectors } from '@/store/session/selectors';
-import { SessionDefaultGroup } from '@/types/index';
+import { homeAgentListSelectors } from '@/store/home/selectors';
 import { isForbiddenError, isOwnerOnlyForbiddenError } from '@/utils/forbiddenError';
 
 interface ActionProps {
   group: string | undefined;
   id: string;
   openCreateGroupModal: () => void;
-  parentType: 'agent' | 'group';
   setOpen: (open: boolean) => void;
 }
 
-const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType, setOpen }) => {
+const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, setOpen }) => {
   const { t } = useTranslation('chat');
   const { allowed: canCreate, reason: createReason } = usePermission('create_content');
   const { allowed: canEdit, reason: editReason } = usePermission('edit_own_content');
 
   const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);
 
-  const sessionCustomGroups = useSessionStore(sessionGroupSelectors.sessionGroupItems, isEqual);
-  const [pin, removeSession, pinSession, sessionType, duplicateSession, updateSessionGroup] =
-    useSessionStore((s) => {
-      const session = sessionSelectors.getSessionById(id)(s);
-      return [
-        sessionHelpers.getSessionPinned(session),
-        s.removeSession,
-        s.pinSession,
-        session.type,
-        s.duplicateSession,
-        s.updateSessionGroupId,
-      ];
-    });
+  // Reuse agentGroups for the move-to-group dropdown
+  const customAgentGroups = useHomeStore(homeAgentListSelectors.agentGroups, isEqual);
 
-  const [pinAgentGroup, removeAgentGroup] = useHomeStore((s) => [
-    s.pinAgentGroup,
-    s.removeAgentGroup,
+  const [pinAgent, duplicateAgent, removeAgent, updateAgentGroup] = useHomeStore((s) => [
+    s.pinAgent,
+    s.duplicateAgent,
+    s.removeAgent,
+    s.updateAgentGroup,
   ]);
 
-  const isDefault = group === SessionDefaultGroup.Default;
+  const item = useHomeStore((s) => homeAgentListSelectors.getAgentById(id)(s));
+  const pinned = item?.pinned ?? false;
+  const isDefault = group === undefined || group === 'default';
 
   const items = useMemo(
     () =>
@@ -68,17 +57,13 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
         [
           {
             disabled: !canEdit,
-            icon: <Icon icon={pin ? PinOff : Pin} />,
+            icon: <Icon icon={pinned ? PinOff : Pin} />,
             key: 'pin',
-            label: t(pin ? 'pinOff' : 'pin'),
+            label: t(pinned ? 'pinOff' : 'pin'),
             title: editReason,
             onClick: () => {
               if (!canEdit) return;
-              if (parentType === 'group') {
-                pinAgentGroup(id, !pin);
-              } else {
-                pinSession(id, !pin);
-              }
+              pinAgent(id, !pinned);
             },
           },
           {
@@ -90,8 +75,7 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
             onClick: ({ domEvent }) => {
               domEvent.stopPropagation();
               if (!canCreate) return;
-
-              duplicateSession(id);
+              duplicateAgent(id);
             },
           },
           ...(isDesktop
@@ -112,7 +96,7 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
           },
           {
             children: [
-              ...sessionCustomGroups.map(({ id: groupId, name }) => ({
+              ...customAgentGroups.map(({ id: groupId, name }) => ({
                 disabled: !canEdit,
                 icon: group === groupId ? <Icon icon={Check} /> : <div />,
                 key: groupId,
@@ -120,7 +104,7 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
                 title: editReason,
                 onClick: () => {
                   if (!canEdit) return;
-                  updateSessionGroup(id, groupId);
+                  updateAgentGroup(id, groupId);
                 },
               })),
               {
@@ -131,7 +115,7 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
                 title: editReason,
                 onClick: () => {
                   if (!canEdit) return;
-                  updateSessionGroup(id, SessionDefaultGroup.Default);
+                  updateAgentGroup(id, null);
                 },
               },
               {
@@ -173,13 +157,8 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
                 okButtonProps: { danger: true },
                 onOk: async () => {
                   try {
-                    if (parentType === 'group') {
-                      await removeAgentGroup(id);
-                      toast.success(t('confirmRemoveGroupSuccess'));
-                    } else {
-                      await removeSession(id);
-                      toast.success(t('confirmRemoveSessionSuccess'));
-                    }
+                    await removeAgent(id);
+                    toast.success(t('confirmRemoveSessionSuccess'));
                   } catch (error) {
                     toast.error(
                       isOwnerOnlyForbiddenError(error)
@@ -190,10 +169,7 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
                     );
                   }
                 },
-                title:
-                  sessionType === 'group'
-                    ? t('confirmRemoveChatGroupItemAlert')
-                    : t('confirmRemoveSessionItemAlert'),
+                title: t('confirmRemoveSessionItemAlert'),
               });
             },
           },
@@ -203,23 +179,19 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
       canCreate,
       canEdit,
       createReason,
-      duplicateSession,
+      customAgentGroups,
+      duplicateAgent,
       editReason,
       group,
       id,
       isDefault,
       openAgentInNewWindow,
       openCreateGroupModal,
-      parentType,
-      pin,
-      pinAgentGroup,
-      pinSession,
-      removeAgentGroup,
-      removeSession,
-      sessionCustomGroups,
-      sessionType,
+      pinAgent,
+      pinned,
+      removeAgent,
       t,
-      updateSessionGroup,
+      updateAgentGroup,
     ],
   );
 
