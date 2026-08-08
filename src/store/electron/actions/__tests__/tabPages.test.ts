@@ -248,6 +248,64 @@ describe('tabPages actions', () => {
       expect(result.current.activeTabId).toBe('/left');
     });
 
+    it('removes the duplicated pane and refocuses the source when the split closes', () => {
+      const result = seed();
+      let duplicateId: string | null = null;
+      act(() => {
+        duplicateId = result.current.openTabInSplitView('/left');
+      });
+
+      act(() => result.current.closeSplitView());
+
+      expect(result.current.splitView).toBeNull();
+      expect(result.current.activeTabId).toBe('/left');
+      expect(result.current.tabs.some((t) => t.id === duplicateId)).toBe(false);
+    });
+
+    it('redirects a titlebar switch on the duplicate back to its source tab', () => {
+      const result = seed();
+      let duplicateId: string | null = null;
+      act(() => {
+        duplicateId = result.current.openTabInSplitView('/left');
+      });
+
+      act(() => result.current.switchTab(duplicateId!));
+
+      expect(result.current.splitView).toBeNull();
+      expect(result.current.activeTabId).toBe('/left');
+      expect(result.current.tabs).toHaveLength(3);
+    });
+
+    it('keeps the duplicate as the only remaining tab when its source closes', () => {
+      const result = seed();
+      let duplicateId: string | null = null;
+      act(() => {
+        duplicateId = result.current.openTabInSplitView('/left');
+      });
+
+      act(() => result.current.removeTab('/left'));
+
+      expect(result.current.splitView).toBeNull();
+      expect(result.current.activeTabId).toBe(duplicateId);
+      expect(result.current.tabs.some((t) => t.id === duplicateId)).toBe(true);
+    });
+
+    it('drops the duplicate when another tab takes its pane', () => {
+      const result = seed();
+      let duplicateId: string | null = null;
+      act(() => {
+        duplicateId = result.current.openTabInSplitView('/left');
+      });
+      // the duplicate pane holds focus, so activating a third tab replaces that pane
+      act(() => result.current.activateTab('/third'));
+
+      expect(result.current.splitView).toMatchObject({
+        primaryTabId: '/left',
+        secondaryTabId: '/third',
+      });
+      expect(result.current.tabs.some((t) => t.id === duplicateId)).toBe(false);
+    });
+
     it('clamps the divider ratio to usable pane widths', () => {
       const result = seed();
       act(() => result.current.openTabInSplitView('/right'));
