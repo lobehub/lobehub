@@ -47,6 +47,9 @@ export const getLLMConfig = () => {
       ENABLED_VOLCENGINECODINGPLAN: z.boolean(),
       VOLCENGINECODINGPLAN_API_KEY: z.string().optional(),
 
+      ENABLED_VOLCENGINEAGENTPLAN: z.boolean(),
+      VOLCENGINEAGENTPLAN_API_KEY: z.string().optional(),
+
       ENABLED_PERPLEXITY: z.boolean(),
       PERPLEXITY_API_KEY: z.string().optional(),
 
@@ -323,6 +326,9 @@ export const getLLMConfig = () => {
 
       ENABLED_VOLCENGINECODINGPLAN: !!process.env.VOLCENGINECODINGPLAN_API_KEY,
       VOLCENGINECODINGPLAN_API_KEY: process.env.VOLCENGINECODINGPLAN_API_KEY,
+
+      ENABLED_VOLCENGINEAGENTPLAN: !!process.env.VOLCENGINEAGENTPLAN_API_KEY,
+      VOLCENGINEAGENTPLAN_API_KEY: process.env.VOLCENGINEAGENTPLAN_API_KEY,
 
       ENABLED_GROQ: !!process.env.GROQ_API_KEY,
       GROQ_API_KEY: process.env.GROQ_API_KEY,

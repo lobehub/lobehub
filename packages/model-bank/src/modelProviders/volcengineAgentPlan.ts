@@ -29,7 +29,7 @@ const VolcengineAgentPlan: ModelProviderCard = {
     showDeployName: true,
     showModelFetcher: false,
   },
-  url: 'https://www.volcengine.com/activity/codingplan',
+  url: 'https://www.volcengine.com/activity/agentplan',
 };
 
 export default VolcengineAgentPlan;

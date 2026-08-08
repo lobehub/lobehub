@@ -83,6 +83,9 @@ export const getServerGlobalConfig = async () => {
     volcenginecodingplan: {
       withDeploymentName: true,
     },
+    volcengineagentplan: {
+      withDeploymentName: true,
+    },
   };
 
   // In business feature mode, keep the built-in provider as the only default-enabled
