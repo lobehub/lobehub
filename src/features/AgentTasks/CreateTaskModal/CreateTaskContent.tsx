@@ -28,8 +28,6 @@ import { useAgentVisibility } from '../shared/useAgentVisibility';
 
 export interface CreateTaskContentProps {
   agentId?: string;
-  /** Create a persistent goal root backed by the existing task + verify config. */
-  goal?: boolean;
   /**
    * Locks the assignee to `agentId` and hides the agent picker. Used on the
    * agent-scoped task list where every task belongs to that agent.
@@ -44,7 +42,7 @@ export interface CreateTaskContentProps {
 }
 
 const CreateTaskContent = memo<CreateTaskContentProps>(
-  ({ agentId, goal = false, lockAssignee, onCreated, showInlineToggle = true }) => {
+  ({ agentId, lockAssignee, onCreated, showInlineToggle = true }) => {
     const { t } = useTranslation('chat');
     const { close } = useModalContext();
     const { allowed: canCreateTask, reason } = usePermission('create_content');
@@ -104,16 +102,6 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
       try {
         const result = await createTask({
           assigneeAgentId,
-          config: goal
-            ? {
-                goal: { maxIterations: 10 },
-                verify: {
-                  enabled: true,
-                  maxIterations: 10,
-                  requirement: instruction || title.trim(),
-                },
-              }
-            : undefined,
           editorData: editorJson,
           instruction: instruction || title.trim(),
           name: title.trim() || undefined,
@@ -139,7 +127,6 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
       close,
       createTask,
       editor,
-      goal,
       onCreated,
       priority,
       t,

@@ -1414,6 +1414,22 @@ export default {
   'taskDetail.publishToWorkspace.errorPrivateAgent':
     'This task is assigned to a private agent. Reassign to a workspace agent, or publish the agent first.',
 
+  'createGoal.createFailed': 'Failed to create goal',
+  'createGoal.instructionPlaceholder':
+    'Add any context the agent needs — scope, constraints, where to look…',
+  'createGoal.requirementHint': 'Judged at the end of every round',
+  'createGoal.requirementLabel': 'What counts as done',
+  'createGoal.requirementPlaceholder':
+    'Write it so it can be ticked off: what has to exist, where the boundary is, what makes it pass.',
+  'createGoal.roundBudget.rounds': '{{count}} rounds',
+  'createGoal.roundBudget.uncapped': 'No cap',
+  'createGoal.roundBudgetHint':
+    'If it runs out without reaching the goal, it stops and waits for you.',
+  'createGoal.roundBudgetLabel': 'Round budget',
+  'createGoal.roundBudgetUncappedHint':
+    'It keeps going until the goal is reached — watch the cost.',
+  'createGoal.submit': 'Create goal',
+  'createGoal.titlePlaceholder': 'The outcome you want',
   'createTask.assignee': 'Assignee',
   'createTask.collapse': 'Hide input',
   'createTask.createFailed': 'Failed to create task',
@@ -1430,10 +1446,47 @@ export default {
   'createTask.visibility.privateAgentLocked': 'Private agents can only run private tasks.',
   'createTask.visibility.private': 'Private',
   'createTask.visibility.workspace': 'Workspace',
+  'goalEmpty.create': 'Create your first goal',
+  'goalEmpty.examples.backlog.requirement':
+    'Every P0 has a linked fix and a verification record; a closing note is left before it is closed.',
+  'goalEmpty.examples.backlog.tag': 'One-off outcome',
+  'goalEmpty.examples.backlog.title': 'Clear every P0 issue in the project',
+  'goalEmpty.examples.digest.requirement':
+    'Covers the 5 named products; each entry carries a release date, a one-line summary and the source link.',
+  'goalEmpty.examples.digest.tag': 'Recurring delivery',
+  'goalEmpty.examples.digest.title': 'Ship a weekly digest of what competitors released',
+  'goalEmpty.examples.metric.requirement':
+    'Coverage reaches 80% or higher, no newly skipped cases, and the suite passes.',
+  'goalEmpty.examples.metric.tag': 'Measurable target',
+  'goalEmpty.examples.metric.title': 'Raise test coverage of the core module to 80%',
+  'goalEmpty.examples.requirementPrefix': 'Done when: {{requirement}}',
+  'goalEmpty.examplesHint': 'Click to prefill',
+  'goalEmpty.examplesTitle': 'Start from an example',
+  'goalEmpty.howTitle': 'What happens after you create one',
+  'goalEmpty.judge.bad':
+    '“Keep an eye on competitors” — that is an activity, not an outcome. The agent can never tell when it is done.',
+  'goalEmpty.judge.good':
+    '“Ship a weekly digest covering 5 named products, each with a source link” — a deliverable, a boundary, a verdict.',
+  'goalEmpty.lead':
+    'A goal is not an instruction — it is an agreement on what counts as done. Write the outcome down and the agent works at it round after round, checking itself against that bar every time.',
+  'goalEmpty.loop':
+    'Not passed? It carries this round’s verdict into the next one and keeps going, until the goal is reached or the round budget runs out. Rounds and cost stay visible, and you can pause at any time.',
+  'goalEmpty.step1.desc':
+    'Write down the outcome and how it will be judged. The more checkable it is, the less the agent drifts.',
+  'goalEmpty.step1.title': 'Set the outcome and the bar',
+  'goalEmpty.step2.desc':
+    'Each round is one full agent run; its output, time and cost all hang off this goal.',
+  'goalEmpty.step2.title': 'The agent runs a round on its own',
+  'goalEmpty.step3.desc':
+    'Every check is judged one by one. All passed means achieved; anything needing your call stops at pending acceptance.',
+  'goalEmpty.step3.title': 'Acceptance runs every round',
+  'goalEmpty.title': 'Let the agent chase one outcome until it lands',
   'goalList.acceptanceProgress': '{{passed}}/{{total}} passed',
   'goalList.agentRuns': '{{count}} runs',
   'goalList.empty': 'No goals yet',
-  'goalList.loadError': 'Could not load goals.',
+  'goalList.loadError': 'Could not load goals',
+  'goalList.loadErrorDescription':
+    'The service is temporarily unavailable. Your goals are not lost.',
   'goalList.retry': 'Retry',
   'goalList.roundProgress': 'Round {{current}}/{{total}}',
   'goalList.status.achieved': 'Achieved',
@@ -1498,8 +1551,6 @@ export default {
   'goalPage.description':
     'Track what this agent is pursuing and how close each goal is to acceptance.',
   'goalPage.create': 'Create goal',
-  'goalPage.emptyDescription': 'Goals created for this agent will appear here with their progress.',
-  'goalPage.emptyTitle': 'No goals yet',
   'goalPage.filteredEmptyDescription': 'Switch to All to review completed or canceled goals.',
   'goalPage.filteredEmptyTitle': 'No open goals',
   'goalPage.filter.active': 'In progress',
