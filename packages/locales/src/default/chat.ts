@@ -1428,6 +1428,41 @@ export default {
   'taskDetail.publishToWorkspace.errorPrivateAgent':
     'This task is assigned to a private agent. Reassign to a workspace agent, or publish the agent first.',
 
+  'createGoal.addCriterion': 'Add criterion',
+  'createGoal.costBudgetHint':
+    'Stops once total spend reaches this amount; leave blank for no cap.',
+  'createGoal.costBudgetLabel': 'Cost budget',
+  'createGoal.costBudgetPlaceholder': 'No cap',
+  'createGoal.createFailed': 'Failed to create goal',
+  'createGoal.back': 'Back',
+  'createGoal.contextLabel': 'Context for the Agent',
+  'createGoal.contextHint': 'Add constraints, source material, or anything the Agent should know',
+  'createGoal.criterionPlaceholder': 'Describe a result that can be clearly checked',
+  'createGoal.criteriaHint': 'Review and edit these before the goal starts',
+  'createGoal.criteriaTitle': 'What counts as done',
+  'createGoal.describeHint': 'Describe the outcome first, then complete its execution plan.',
+  'createGoal.generateFailed': 'Could not draft acceptance criteria. Try again.',
+  'createGoal.instructionPlaceholder':
+    'Add any context the agent needs — scope, constraints, where to look…',
+  'createGoal.next': 'Next',
+  'createGoal.preparing': 'Preparing plan…',
+  'createGoal.regenerate': 'Draft again',
+  'createGoal.removeCriterion': 'Remove criterion',
+  'createGoal.reviewStep': 'Step 2 of 2 · Complete the execution plan',
+  'createGoal.requirementHint': 'Judged at the end of every round',
+  'createGoal.requirementLabel': 'What counts as done',
+  'createGoal.requirementPlaceholder':
+    'Write it so it can be ticked off: what has to exist, where the boundary is, what makes it pass.',
+  'createGoal.roundBudget.rounds': '{{count}} rounds',
+  'createGoal.roundBudget.uncapped': 'No cap',
+  'createGoal.roundBudgetHint':
+    'If it runs out without reaching the goal, it stops and waits for you.',
+  'createGoal.roundBudgetLabel': 'Round budget',
+  'createGoal.roundsUnit': 'rounds',
+  'createGoal.roundBudgetUncappedHint':
+    'It keeps going until the goal is reached — watch the cost.',
+  'createGoal.submit': 'Create goal',
+  'createGoal.titlePlaceholder': 'The outcome you want',
   'createTask.assignee': 'Assignee',
   'createTask.collapse': 'Hide input',
   'createTask.createFailed': 'Failed to create task',
@@ -1444,10 +1479,49 @@ export default {
   'createTask.visibility.privateAgentLocked': 'Private agents can only run private tasks.',
   'createTask.visibility.private': 'Private',
   'createTask.visibility.workspace': 'Workspace',
+  'goalEmpty.create': 'Create your first goal',
+  'goalEmpty.examples.backlog.requirement':
+    'Tag each item with a type and priority, dedupe into one table, and list the 10 most frequent issues.',
+  'goalEmpty.examples.backlog.tag': 'One-off cleanup',
+  'goalEmpty.examples.backlog.title':
+    "Turn this quarter's user feedback into one categorized table",
+  'goalEmpty.examples.digest.requirement':
+    'At least 5 notable developments, each with a date, a one-line summary and a source link, compiled into a ready-to-read brief.',
+  'goalEmpty.examples.digest.tag': 'Recurring delivery',
+  'goalEmpty.examples.digest.title':
+    "Give me last week's AI industry highlights every Monday morning",
+  'goalEmpty.examples.metric.requirement':
+    'At least 20 ideas, each with a headline, an angle and a target reader, deduped and excluding anything already published.',
+  'goalEmpty.examples.metric.tag': 'Reach a target count',
+  'goalEmpty.examples.metric.title': 'Build up 20 workable article ideas for the newsletter',
+  'goalEmpty.examples.requirementPrefix': 'Done when: {{requirement}}',
+  'goalEmpty.examplesHint': 'Click to prefill',
+  'goalEmpty.examplesTitle': 'Start from an example',
+  'goalEmpty.howTitle': 'What happens after you create one',
+  'goalEmpty.judge.bad':
+    '“Keep an eye on competitors” — that is an activity, not an outcome. The agent can never tell when it is done.',
+  'goalEmpty.judge.good':
+    '“Ship a weekly digest covering 5 named products, each with a source link” — a deliverable, a boundary, a verdict.',
+  'goalEmpty.lead':
+    "Spell out the outcome you want and what counts as done. The agent takes it from there — working round after round, checking each attempt against your bar until it's actually met.",
+  'goalEmpty.loop':
+    'Not passed? It carries this round’s verdict into the next one and keeps going, until the goal is reached or the round budget runs out. Rounds and cost stay visible, and you can pause at any time.',
+  'goalEmpty.step1.desc':
+    'Write down the outcome and how it will be judged. The more checkable it is, the less the agent drifts.',
+  'goalEmpty.step1.title': 'Set the outcome and the bar',
+  'goalEmpty.step2.desc':
+    'Each round is one full agent run; its output, time and cost all hang off this goal.',
+  'goalEmpty.step2.title': 'The agent runs a round on its own',
+  'goalEmpty.step3.desc':
+    'Every check is judged one by one. All passed means achieved; anything needing your call stops at pending acceptance.',
+  'goalEmpty.step3.title': 'Acceptance runs every round',
+  'goalEmpty.title': 'Chase goals without limits',
   'goalList.acceptanceProgress': '{{passed}}/{{total}} passed',
   'goalList.agentRuns': '{{count}} runs',
   'goalList.empty': 'No goals yet',
-  'goalList.loadError': 'Could not load goals.',
+  'goalList.loadError': 'Could not load goals',
+  'goalList.loadErrorDescription':
+    'The service is temporarily unavailable. Your goals are not lost.',
   'goalList.retry': 'Retry',
   'goalList.roundProgress': 'Round {{current}}/{{total}}',
   'goalList.status.achieved': 'Achieved',
@@ -1512,8 +1586,6 @@ export default {
   'goalPage.description':
     'Track what this agent is pursuing and how close each goal is to acceptance.',
   'goalPage.create': 'Create goal',
-  'goalPage.emptyDescription': 'Goals created for this agent will appear here with their progress.',
-  'goalPage.emptyTitle': 'No goals yet',
   'goalPage.filteredEmptyDescription': 'Switch to All to review completed or canceled goals.',
   'goalPage.filteredEmptyTitle': 'No open goals',
   'goalPage.filter.active': 'In progress',
