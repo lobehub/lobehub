@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { eq } from 'drizzle-orm';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import { ChatGroupModel } from '../../models/chatGroup';
@@ -1621,6 +1621,48 @@ describe('AgentGroupRepository', () => {
       expect(comment.workspaceId).toBe(targetWorkspaceId);
       expect(comment.updatedAt).toEqual(originalCommentUpdatedAt);
       expect(mention.workspaceId).toBe(targetWorkspaceId);
+    });
+
+    it('aborts when the group leaves the source scope before the lock is taken', async () => {
+      // The scope check runs outside the transaction. A racing transfer small
+      // enough to take the fast path leaves no pending job behind, so the
+      // guards cannot catch it — only re-asserting the scope inside the lock
+      // can. Simulate that window: the pre-read reports the group as in-scope,
+      // but the committed row already belongs to someone else.
+      const raceTargetWorkspaceId = 'agent-group-race-ws';
+      await serverDB.insert(workspaces).values({
+        id: raceTargetWorkspaceId,
+        name: 'Race Target Workspace',
+        primaryOwnerId: userId,
+        slug: 'agent-group-race-ws',
+      });
+      await serverDB.insert(chatGroups).values({
+        id: 'moved-group',
+        title: 'Moved Group',
+        userId: otherUserId,
+      });
+
+      const staleRead = vi
+        .spyOn(serverDB.query.chatGroups, 'findFirst')
+        .mockResolvedValueOnce({ id: 'moved-group', title: 'Moved Group', userId } as never);
+
+      try {
+        const result = await agentGroupRepo.transferToWorkspace(
+          'moved-group',
+          raceTargetWorkspaceId,
+          userId,
+        );
+        expect(result).toBeNull();
+      } finally {
+        staleRead.mockRestore();
+      }
+
+      // Untouched: no second transfer ran off the stale state.
+      const group = await serverDB.query.chatGroups.findFirst({
+        where: (cg, { eq }) => eq(cg.id, 'moved-group'),
+      });
+      expect(group!.userId).toBe(otherUserId);
+      expect(group!.workspaceId).toBeNull();
     });
 
     it('flags teammate-authored comments as foreign transfer rows', async () => {

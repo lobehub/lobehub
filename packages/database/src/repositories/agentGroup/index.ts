@@ -910,11 +910,19 @@ export class AgentGroupRepository {
       // Lock the group row first: it is the one serialization point every
       // group-level operation shares, including for a group whose roster is
       // empty (where the member-agent locks below are a no-op).
-      await trx
+      //
+      // The lock re-asserts the source scope rather than matching by id alone,
+      // for the same reason as the copy path below: the scope check above ran
+      // outside this transaction, and a racing transfer small enough to take
+      // the fast path leaves no pending job behind for the guards to catch —
+      // it just moves the group away. An id-only lock would let the loser wake
+      // up and transfer it a second time from stale topic state.
+      const [lockedSource] = await trx
         .select({ id: chatGroups.id })
         .from(chatGroups)
-        .where(eq(chatGroups.id, groupId))
+        .where(and(eq(chatGroups.id, groupId), this.groupOwnership()))
         .for('update');
+      if (!lockedSource) return null;
 
       const memberRows = await trx
         .select({ agentId: chatGroupsAgents.agentId })
