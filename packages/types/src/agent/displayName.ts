@@ -45,20 +45,17 @@ export function agentDisplayName(
 }
 
 /**
- * Resolve the supporting label shown beside an agent's primary name.
+ * Resolve the supporting label shown beside an agent's primary name: its role.
  *
- * Runtime-backed agents can supply `preferredLabel` (for example "Hermes")
- * because their persisted title may instead contain an internal platform
- * profile name such as "default". Regular agents show their role only when a
- * personal name is present. A label matching the primary name is suppressed.
+ * Only an agent with a personal name has one — an agent without a name already
+ * renders its title as the primary label, so repeating it would be noise. This
+ * is deliberately uniform across every kind of agent, including runtime-backed
+ * (heterogeneous) ones: they show their own role rather than their runtime.
  */
 export const agentSecondaryDisplayName = (
   agent: AgentNameFields | null | undefined,
-  preferredLabel?: string | null,
 ): string | undefined => {
-  const primaryLabel = agentDisplayName(agent);
-  const role = firstNonBlank(agent?.name) ? agent?.title : undefined;
-  const secondaryLabel = firstNonBlank(preferredLabel, role);
+  const role = firstNonBlank(agent?.name) ? firstNonBlank(agent?.title) : undefined;
 
-  return secondaryLabel === primaryLabel ? undefined : secondaryLabel;
+  return role === agentDisplayName(agent) ? undefined : role;
 };

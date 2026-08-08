@@ -31,18 +31,24 @@ describe('agentDisplayName', () => {
 });
 
 describe('agentSecondaryDisplayName', () => {
-  it('prefers a runtime label over a platform profile title', () => {
-    expect(agentSecondaryDisplayName({ name: '陆令言', title: 'default' }, 'Hermes')).toBe(
-      'Hermes',
-    );
-    expect(agentSecondaryDisplayName({ name: '燕来', title: 'Pi' }, 'Pi')).toBe('Pi');
-  });
-
-  it('keeps regular roles and suppresses labels that duplicate the primary name', () => {
+  it('shows the role of a named agent', () => {
     expect(agentSecondaryDisplayName({ name: 'Alice', title: 'Health Assistant' })).toBe(
       'Health Assistant',
     );
-    expect(agentSecondaryDisplayName({ title: 'Pi' }, 'Pi')).toBeUndefined();
+  });
+
+  it('treats a heterogeneous agent like any other — its role, not its runtime', () => {
+    expect(agentSecondaryDisplayName({ name: '陆令言', title: 'default' })).toBe('default');
+  });
+
+  it('shows nothing when the title is already the primary label', () => {
     expect(agentSecondaryDisplayName({ title: 'Health Assistant' })).toBeUndefined();
+    expect(agentSecondaryDisplayName({ name: '  ', title: 'Pi' })).toBeUndefined();
+  });
+
+  it('treats a blank role as absent', () => {
+    expect(agentSecondaryDisplayName({ name: 'Alice', title: '   ' })).toBeUndefined();
+    expect(agentSecondaryDisplayName({ name: 'Alice' })).toBeUndefined();
+    expect(agentSecondaryDisplayName(null)).toBeUndefined();
   });
 });
