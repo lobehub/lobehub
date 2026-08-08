@@ -1931,6 +1931,7 @@ table projects {
   name varchar(255) [not null]
   description text
   avatar text
+  coordinator_agent_id text [not null]
   status text [not null, default: 'backlog']
   user_id text [not null]
   workspace_id text
@@ -1952,6 +1953,7 @@ table projects {
     workspace_id [name: 'projects_workspace_id_idx']
     (workspace_id, visibility, user_id) [name: 'projects_workspace_visibility_idx']
     (status, updated_at) [name: 'projects_status_updated_at_idx']
+    coordinator_agent_id [name: 'projects_coordinator_agent_id_unique', unique]
     
   }
 }

@@ -1,3 +1,4 @@
+import { createProjectCoordinatorAgentConfig } from '@lobechat/builtin-agents';
 import type { ProjectStatus, ProjectVisibility } from '@lobechat/types';
 import { and, asc, desc, eq, inArray, isNull, max, sql } from 'drizzle-orm';
 
@@ -12,6 +13,7 @@ import {
 import { tasks } from '../schemas/task';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+import { AgentModel } from './agent';
 
 export interface CreateProjectInput {
   avatar?: string;
@@ -65,24 +67,64 @@ export class ProjectModel {
       throw new Error('Project identifier must be between 3 and 6 characters');
     }
 
-    const [project] = await this.db
-      .insert(projects)
-      .values(
-        buildWorkspacePayload(
-          { userId: this.userId, workspaceId: this.workspaceId },
-          { ...input, identifier },
-        ),
-      )
-      .returning();
-    return project;
+    return this.db.transaction(async (tx) => {
+      const coordinatorConfig = createProjectCoordinatorAgentConfig({
+        avatar: input.avatar,
+        description: input.description,
+        identifier,
+        name: input.name,
+      });
+      const coordinator = await new AgentModel(
+        tx as LobeChatDatabase,
+        this.userId,
+        this.workspaceId,
+      ).create({
+        ...coordinatorConfig,
+        visibility: input.visibility,
+        virtual: true,
+      });
+
+      const [project] = await tx
+        .insert(projects)
+        .values(
+          buildWorkspacePayload(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            { ...input, coordinatorAgentId: coordinator.id, identifier },
+          ),
+        )
+        .returning();
+
+      await tx.insert(projectAgents).values({
+        addedByUserId: this.userId,
+        agentId: coordinator.id,
+        projectId: project.id,
+        responsibility: 'Coordinates project conversations, work, and resources',
+        role: 'coordinator',
+        workspaceId: this.workspaceId ?? null,
+      });
+
+      return project;
+    });
   }
 
   async delete(id: string) {
-    const [deleted] = await this.db
-      .delete(projects)
-      .where(and(eq(projects.id, id), this.manageable()))
-      .returning();
-    return deleted ?? null;
+    return this.db.transaction(async (tx) => {
+      const [project] = await tx
+        .select({ coordinatorAgentId: projects.coordinatorAgentId })
+        .from(projects)
+        .where(and(eq(projects.id, id), this.manageable()))
+        .limit(1);
+      if (!project) return null;
+
+      const [deleted] = await tx
+        .delete(projects)
+        .where(and(eq(projects.id, id), this.manageable()))
+        .returning();
+      await new AgentModel(tx as LobeChatDatabase, this.userId, this.workspaceId).delete(
+        project.coordinatorAgentId,
+      );
+      return deleted ?? null;
+    });
   }
 
   async findById(id: string) {
@@ -201,7 +243,11 @@ export class ProjectModel {
   }
 
   async removeAgent(projectId: string, agentId: string) {
-    if (!(await this.findManageableById(projectId))) return false;
+    const project = await this.findManageableById(projectId);
+    if (!project) return false;
+    if (project.coordinatorAgentId === agentId) {
+      throw new Error('The project coordinator cannot be removed');
+    }
     const deleted = await this.db
       .delete(projectAgents)
       .where(and(eq(projectAgents.projectId, projectId), eq(projectAgents.agentId, agentId)))

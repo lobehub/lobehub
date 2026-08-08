@@ -973,6 +973,13 @@
       "when": 1786166809665,
       "tag": "0138_agent_history_job_groups",
       "breakpoints": true
+    },
+    {
+      "idx": 139,
+      "version": "7",
+      "when": 1786316226126,
+      "tag": "0139_projects_add_coordinator_agent",
+      "breakpoints": true
     }
   ],
   "version": "6"
