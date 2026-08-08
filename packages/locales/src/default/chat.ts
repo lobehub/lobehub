@@ -1414,6 +1414,10 @@ export default {
   'taskDetail.publishToWorkspace.errorPrivateAgent':
     'This task is assigned to a private agent. Reassign to a workspace agent, or publish the agent first.',
 
+  'createGoal.costBudgetHint':
+    'Stops once total spend reaches this amount; leave blank for no cap.',
+  'createGoal.costBudgetLabel': 'Cost budget',
+  'createGoal.costBudgetPlaceholder': 'No cap',
   'createGoal.createFailed': 'Failed to create goal',
   'createGoal.instructionPlaceholder':
     'Add any context the agent needs — scope, constraints, where to look…',
@@ -1448,17 +1452,19 @@ export default {
   'createTask.visibility.workspace': 'Workspace',
   'goalEmpty.create': 'Create your first goal',
   'goalEmpty.examples.backlog.requirement':
-    'Every P0 has a linked fix and a verification record; a closing note is left before it is closed.',
-  'goalEmpty.examples.backlog.tag': 'One-off outcome',
-  'goalEmpty.examples.backlog.title': 'Clear every P0 issue in the project',
+    'Tag each item with a type and priority, dedupe into one table, and list the 10 most frequent issues.',
+  'goalEmpty.examples.backlog.tag': 'One-off cleanup',
+  'goalEmpty.examples.backlog.title':
+    "Turn this quarter's user feedback into one categorized table",
   'goalEmpty.examples.digest.requirement':
-    'Covers the 5 named products; each entry carries a release date, a one-line summary and the source link.',
+    'At least 5 notable developments, each with a date, a one-line summary and a source link, compiled into a ready-to-read brief.',
   'goalEmpty.examples.digest.tag': 'Recurring delivery',
-  'goalEmpty.examples.digest.title': 'Ship a weekly digest of what competitors released',
+  'goalEmpty.examples.digest.title':
+    "Give me last week's AI industry highlights every Monday morning",
   'goalEmpty.examples.metric.requirement':
-    'Coverage reaches 80% or higher, no newly skipped cases, and the suite passes.',
-  'goalEmpty.examples.metric.tag': 'Measurable target',
-  'goalEmpty.examples.metric.title': 'Raise test coverage of the core module to 80%',
+    'At least 20 ideas, each with a headline, an angle and a target reader, deduped and excluding anything already published.',
+  'goalEmpty.examples.metric.tag': 'Reach a target count',
+  'goalEmpty.examples.metric.title': 'Build up 20 workable article ideas for the newsletter',
   'goalEmpty.examples.requirementPrefix': 'Done when: {{requirement}}',
   'goalEmpty.examplesHint': 'Click to prefill',
   'goalEmpty.examplesTitle': 'Start from an example',
@@ -1468,7 +1474,7 @@ export default {
   'goalEmpty.judge.good':
     '“Ship a weekly digest covering 5 named products, each with a source link” — a deliverable, a boundary, a verdict.',
   'goalEmpty.lead':
-    'A goal is not an instruction — it is an agreement on what counts as done. Write the outcome down and the agent works at it round after round, checking itself against that bar every time.',
+    "Spell out the outcome you want and what counts as done. The agent takes it from there — working round after round, checking each attempt against your bar until it's actually met.",
   'goalEmpty.loop':
     'Not passed? It carries this round’s verdict into the next one and keeps going, until the goal is reached or the round budget runs out. Rounds and cost stay visible, and you can pause at any time.',
   'goalEmpty.step1.desc':

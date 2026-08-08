@@ -16,6 +16,11 @@ export type GoalTaskConfig = {
 };
 
 export interface BuildGoalTaskConfigParams {
+  /**
+   * Total USD budget across all rounds and their verify runs. `null`/`undefined`
+   * = uncapped (the user left it blank); a number is clamped to be non-negative.
+   */
+  costBudget?: number | null;
   /** What the user typed as the goal itself; the acceptance fallback. */
   instruction: string;
   /** "What counts as done" — the source the acceptance criteria are generated from. */
@@ -34,10 +39,12 @@ export interface BuildGoalTaskConfigParams {
  * inside every round — up to 100 agent runs for one goal.
  *
  * - `goal.maxIterations`   — outer loop, rounds. User-facing ("轮次预算").
+ * - `goal.maxTotalCost`    — outer loop, total USD across all rounds. User-facing ("成本预算").
  * - `verify.maxIterations` — inner loop, repair re-runs within one round.
  *   Not user-facing; pinned to the platform default.
  */
 export const buildGoalTaskConfig = ({
+  costBudget,
   instruction,
   requirement,
   roundBudget,
@@ -54,6 +61,9 @@ export const buildGoalTaskConfig = ({
           : typeof roundBudget === 'number'
             ? Math.min(GOAL_MAX_ROUNDS_RANGE.max, Math.max(GOAL_MAX_ROUNDS_RANGE.min, roundBudget))
             : DEFAULT_GOAL_MAX_ROUNDS,
+      // No cap unless the user set a positive number; the loop reads `null` as
+      // uncapped, so an empty / non-positive input maps back to `null`.
+      maxTotalCost: typeof costBudget === 'number' && costBudget > 0 ? costBudget : null,
     },
     verify: {
       enabled: true,

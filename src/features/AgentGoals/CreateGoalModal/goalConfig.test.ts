@@ -31,6 +31,23 @@ describe('buildGoalTaskConfig', () => {
     expect(buildGoalTaskConfig({ instruction: 'x', roundBudget: 99 }).goal.maxIterations).toBe(10);
   });
 
+  it('writes a positive cost budget and leaves it independent of the round budget', () => {
+    const config = buildGoalTaskConfig({ instruction: 'x', roundBudget: 5, costBudget: 2.5 });
+
+    expect(config.goal.maxTotalCost).toBe(2.5);
+    expect(config.goal.maxIterations).toBe(5);
+  });
+
+  it('maps a blank or non-positive cost budget to uncapped (null)', () => {
+    // The goal loop reads `null` as "no cap"; an empty or 0 input must not become a
+    // 0-dollar budget that would stop the goal before its first run.
+    expect(buildGoalTaskConfig({ instruction: 'x' }).goal.maxTotalCost).toBeNull();
+    expect(buildGoalTaskConfig({ instruction: 'x', costBudget: 0 }).goal.maxTotalCost).toBeNull();
+    expect(
+      buildGoalTaskConfig({ instruction: 'x', costBudget: null }).goal.maxTotalCost,
+    ).toBeNull();
+  });
+
   it('uses the acceptance requirement when given', () => {
     const config = buildGoalTaskConfig({
       instruction: 'clear the P0 backlog',

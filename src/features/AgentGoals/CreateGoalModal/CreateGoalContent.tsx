@@ -4,6 +4,7 @@ import { DEFAULT_GOAL_MAX_ROUNDS } from '@lobechat/const/verify';
 import { useEditor } from '@lobehub/editor/react';
 import { ActionIcon, Flexbox, Text, TextArea } from '@lobehub/ui';
 import { Button, Select, toast, useModalContext } from '@lobehub/ui/base-ui';
+import { InputNumber } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Paperclip, X } from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
@@ -23,6 +24,11 @@ import { useTaskStore } from '@/store/task';
 import { buildGoalTaskConfig } from './goalConfig';
 
 const styles = createStaticStyles(({ css }) => ({
+  budgetLabel: css`
+    flex: none;
+    width: 68px;
+    white-space: nowrap;
+  `,
   field: css`
     padding-inline: 24px;
   `,
@@ -88,6 +94,8 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
   const [roundBudget, setRoundBudget] = useState<string>(
     String(initialRoundBudget ?? DEFAULT_GOAL_MAX_ROUNDS),
   );
+  // Empty = uncapped; the goal loop reads a null cost budget as "no limit".
+  const [costBudget, setCostBudget] = useState<number | null>(null);
   // Default to private in workspace mode so sharing is opt-in; personal mode
   // ignores the field and hides the chip.
   const [visibility, setVisibility] = useState<'private' | 'public'>('private');
@@ -120,6 +128,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
       const result = await createTask({
         assigneeAgentId: agentId,
         config: buildGoalTaskConfig({
+          costBudget,
           instruction,
           requirement,
           roundBudget: roundBudget === 'uncapped' ? null : Number(roundBudget),
@@ -145,6 +154,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     agentId,
     canCreate,
     close,
+    costBudget,
     createTask,
     editor,
     onCreated,
@@ -210,28 +220,51 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
         />
       </Flexbox>
 
-      <Flexbox horizontal align={'center'} className={styles.field} gap={12} wrap={'wrap'}>
-        <Text fontSize={13} style={{ whiteSpace: 'nowrap' }} weight={500}>
-          {t('createGoal.roundBudgetLabel')}
-        </Text>
-        <Select
-          disabled={!canCreate}
-          size={'small'}
-          value={roundBudget}
-          options={ROUND_BUDGETS.map((rounds) => ({
-            label:
-              rounds === null
-                ? t('createGoal.roundBudget.uncapped')
-                : t('createGoal.roundBudget.rounds', { count: rounds }),
-            value: rounds === null ? 'uncapped' : String(rounds),
-          }))}
-          onChange={setRoundBudget}
-        />
-        <Text fontSize={12} type={'secondary'}>
-          {roundBudget === 'uncapped'
-            ? t('createGoal.roundBudgetUncappedHint')
-            : t('createGoal.roundBudgetHint')}
-        </Text>
+      <Flexbox className={styles.field} gap={12}>
+        <Flexbox horizontal align={'center'} gap={12} wrap={'wrap'}>
+          <Text className={styles.budgetLabel} fontSize={13} weight={500}>
+            {t('createGoal.roundBudgetLabel')}
+          </Text>
+          <Select
+            disabled={!canCreate}
+            size={'small'}
+            value={roundBudget}
+            options={ROUND_BUDGETS.map((rounds) => ({
+              label:
+                rounds === null
+                  ? t('createGoal.roundBudget.uncapped')
+                  : t('createGoal.roundBudget.rounds', { count: rounds }),
+              value: rounds === null ? 'uncapped' : String(rounds),
+            }))}
+            onChange={setRoundBudget}
+          />
+          <Text fontSize={12} type={'secondary'}>
+            {roundBudget === 'uncapped'
+              ? t('createGoal.roundBudgetUncappedHint')
+              : t('createGoal.roundBudgetHint')}
+          </Text>
+        </Flexbox>
+
+        <Flexbox horizontal align={'center'} gap={12} wrap={'wrap'}>
+          <Text className={styles.budgetLabel} fontSize={13} weight={500}>
+            {t('createGoal.costBudgetLabel')}
+          </Text>
+          <InputNumber
+            controls={false}
+            disabled={!canCreate}
+            min={0}
+            placeholder={t('createGoal.costBudgetPlaceholder')}
+            prefix={'$'}
+            size={'small'}
+            style={{ width: 120 }}
+            value={costBudget}
+            variant={'filled'}
+            onChange={(value) => setCostBudget(typeof value === 'number' ? value : null)}
+          />
+          <Text fontSize={12} type={'secondary'}>
+            {t('createGoal.costBudgetHint')}
+          </Text>
+        </Flexbox>
       </Flexbox>
 
       <Flexbox horizontal align={'center'} className={styles.footer} justify={'space-between'}>

@@ -123,7 +123,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId }) => {
       <NavHeader
         left={<AgentBreadcrumb agentId={agentId} title={t('goalList.title')} />}
         right={
-          <Button icon={PlusIcon} size={'small'} onClick={() => openCreateGoal()}>
+          <Button icon={PlusIcon} size={'small'} type={'fill'} onClick={() => openCreateGoal()}>
             {t('goalPage.create')}
           </Button>
         }

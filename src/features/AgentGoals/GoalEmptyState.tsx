@@ -4,7 +4,6 @@ import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
-  ArrowRightIcon,
   CheckIcon,
   CircleCheckBigIcon,
   PlayIcon,
@@ -73,10 +72,15 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorFillQuaternary};
   `,
   loopBack: css`
-    padding-block: 8px;
+    padding-block: 10px;
     padding-inline: 12px;
     border: 1px dashed ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
+  `,
+  loopIcon: css`
+    flex: none;
+    margin-block-start: 1px;
+    color: ${cssVar.colorTextQuaternary};
   `,
   section: css`
     padding-block: 24px;
@@ -84,19 +88,18 @@ const styles = createStaticStyles(({ css }) => ({
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   step: css`
+    min-width: 0;
+    height: 100%;
     padding-block: 14px;
     padding-inline: 16px;
     border-radius: ${cssVar.borderRadius};
+
     background: ${cssVar.colorFillQuaternary};
   `,
-  stepArrow: css`
-    align-self: center;
-    color: ${cssVar.colorTextQuaternary};
-
-    @media (width <= 860px) {
-      transform: rotate(90deg);
-      justify-self: center;
-    }
+  stepHead: css`
+    /* Reserve a stable header height so the descriptions below start on the same
+       line across all three cards, even if one title wraps. */
+    min-height: 20px;
   `,
   stepIndex: css`
     display: flex;
@@ -116,8 +119,8 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   steps: css`
     display: grid;
-    grid-template-columns: 1fr auto 1fr auto 1fr;
-    gap: 4px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
     align-items: stretch;
 
     @media (width <= 860px) {
@@ -135,9 +138,9 @@ interface StepProps {
 
 const Step = memo<StepProps>(({ desc, icon, index, title }) => (
   <Flexbox className={styles.step} gap={8}>
-    <Flexbox horizontal align={'center'} gap={8}>
+    <Flexbox horizontal align={'center'} className={styles.stepHead} gap={8}>
       <span className={styles.stepIndex}>{index}</span>
-      <Icon icon={icon} size={14} />
+      <Icon icon={icon} size={14} style={{ flexShrink: 0 }} />
       <Text fontSize={13} weight={600}>
         {title}
       </Text>
@@ -149,14 +152,6 @@ const Step = memo<StepProps>(({ desc, icon, index, title }) => (
 ));
 
 Step.displayName = 'GoalEmptyStateStep';
-
-const StepArrow = memo(() => (
-  <Flexbox className={styles.stepArrow}>
-    <Icon icon={ArrowRightIcon} size={14} />
-  </Flexbox>
-));
-
-StepArrow.displayName = 'GoalEmptyStateStepArrow';
 
 interface GoalEmptyStateProps {
   onCreate: (seed?: GoalExampleSeed) => void;
@@ -205,14 +200,12 @@ const GoalEmptyState = memo<GoalEmptyStateProps>(({ onCreate }) => {
             index={1}
             title={t('goalEmpty.step1.title')}
           />
-          <StepArrow />
           <Step
             desc={t('goalEmpty.step2.desc')}
             icon={PlayIcon}
             index={2}
             title={t('goalEmpty.step2.title')}
           />
-          <StepArrow />
           <Step
             desc={t('goalEmpty.step3.desc')}
             icon={CircleCheckBigIcon}
@@ -220,8 +213,8 @@ const GoalEmptyState = memo<GoalEmptyStateProps>(({ onCreate }) => {
             title={t('goalEmpty.step3.title')}
           />
         </div>
-        <Flexbox horizontal align={'center'} className={styles.loopBack} gap={8}>
-          <Icon color={cssVar.colorTextQuaternary} icon={RotateCcwIcon} size={13} />
+        <Flexbox horizontal align={'flex-start'} className={styles.loopBack} gap={8}>
+          <Icon className={styles.loopIcon} icon={RotateCcwIcon} size={13} />
           <Text fontSize={12} style={{ lineHeight: 1.6 }} type={'secondary'}>
             {t('goalEmpty.loop')}
           </Text>
