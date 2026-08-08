@@ -633,33 +633,68 @@ export class AgentGroupRepository {
     const { virtualAgents } = await this.checkAgentsBeforeRemoval(groupId, agentIds);
     const virtualAgentIds = virtualAgents.map((a) => a.id);
 
-    // 2. Remove all agents from the group (batch delete from junction table).
-    // Scope by the caller's ownership so a client-supplied groupId can only touch
-    // the caller's own junction rows — never another user's group membership (IDOR).
-    const removed = await this.db
-      .delete(chatGroupsAgents)
-      .where(
-        and(
-          eq(chatGroupsAgents.chatGroupId, groupId),
-          inArray(chatGroupsAgents.agentId, agentIds),
-          this.groupAgentOwnership(),
-        ),
-      )
-      .returning({ agentId: chatGroupsAgents.agentId });
+    return this.db.transaction(async (trx) => {
+      // Lock-then-guard, same order as `transferToWorkspace`: take the member
+      // rows before consulting the job tables so a concurrent enqueue cannot
+      // slip its job row in after the guard reads and before the delete lands.
+      await trx
+        .select({ id: agents.id })
+        .from(agents)
+        .where(and(inArray(agents.id, agentIds), this.agentOwnership()))
+        .orderBy(asc(agents.id))
+        .for('update');
 
-    // 3. Delete virtual agents if requested
-    // Note: Virtual agents are standalone (no associated sessions), so we can delete them directly
-    // The messages sent by these agents in the group chat will remain (orphaned agentId reference)
-    if (deleteVirtualAgents && virtualAgentIds.length > 0) {
-      await this.db
-        .delete(agents)
-        .where(and(this.agentOwnership(), inArray(agents.id, virtualAgentIds)));
-    }
+      // An unfinished backfill maps message rows onto these agent ids. Both
+      // junctions record the TARGET side, so this catches removing an agent a
+      // pending copy is still writing into — its drain would insert
+      // `messages.agent_id` against a row this delete just cascaded away, and
+      // the FK violation would retry forever, stranding the conversations as
+      // pending. The group guard additionally covers an empty roster, which
+      // registers no agent rows at all.
+      if (
+        (await AgentTransferJobModel.hasPendingJobForAgents(trx, agentIds)) ||
+        (await AgentTransferJobModel.hasPendingJobForGroups(trx, [groupId]))
+      ) {
+        throw new Error(AGENT_TRANSFER_IN_PROGRESS);
+      }
+      // Copy jobs register only their TARGET side above; guard the source too,
+      // or deleting a virtual member would cascade away the very messages a
+      // pending copy is still reading from.
+      if (
+        (await AgentCopyJobModel.hasPendingCopyJobForSourceAgents(trx, agentIds)) ||
+        (await AgentCopyJobModel.hasPendingCopyJobForSourceGroups(trx, [groupId]))
+      ) {
+        throw new Error(AGENT_COPY_IN_PROGRESS);
+      }
 
-    return {
-      deletedVirtualAgentIds: deleteVirtualAgents ? virtualAgentIds : [],
-      removedFromGroup: removed.length,
-    };
+      // 2. Remove all agents from the group (batch delete from junction table).
+      // Scope by the caller's ownership so a client-supplied groupId can only touch
+      // the caller's own junction rows — never another user's group membership (IDOR).
+      const removed = await trx
+        .delete(chatGroupsAgents)
+        .where(
+          and(
+            eq(chatGroupsAgents.chatGroupId, groupId),
+            inArray(chatGroupsAgents.agentId, agentIds),
+            this.groupAgentOwnership(),
+          ),
+        )
+        .returning({ agentId: chatGroupsAgents.agentId });
+
+      // 3. Delete virtual agents if requested
+      // Note: Virtual agents are standalone (no associated sessions), so we can delete them directly
+      // The messages sent by these agents in the group chat will remain (orphaned agentId reference)
+      if (deleteVirtualAgents && virtualAgentIds.length > 0) {
+        await trx
+          .delete(agents)
+          .where(and(this.agentOwnership(), inArray(agents.id, virtualAgentIds)));
+      }
+
+      return {
+        deletedVirtualAgentIds: deleteVirtualAgents ? virtualAgentIds : [],
+        removedFromGroup: removed.length,
+      };
+    });
   }
 
   /**

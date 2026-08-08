@@ -202,9 +202,15 @@ const Conversation = memo(() => {
       <ThreadHydration />
       <ChatMiniMap />
       <ForwardMessageDispatcher />
-      <Suspense>
-        <MessageFromUrl />
-      </Suspense>
+      {/* Held back while the topic is still migrating: the composer above is
+          already disabled, and letting `?message=` through would send into the
+          not-yet-migrated history this screen is waiting for. The param stays
+          in the URL, so the send fires once the backfill lands. */}
+      {!topicPending && (
+        <Suspense>
+          <MessageFromUrl />
+        </Suspense>
+      )}
     </ConversationProvider>
   );
 });

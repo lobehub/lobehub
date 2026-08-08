@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import { AGENT_TRANSFER_IN_PROGRESS } from '../../models/agentTransferJob';
 import { ChatGroupModel } from '../../models/chatGroup';
 import {
   TOPIC_COMMENT_TOPIC_NOT_FOUND,
@@ -11,6 +12,7 @@ import {
   TopicCommentModel,
 } from '../../models/topicComment';
 import { agents } from '../../schemas/agent';
+import { agentHistoryJobAgents, agentHistoryJobs } from '../../schemas/agentHistoryJob';
 import { chatGroups, chatGroupsAgents } from '../../schemas/chatGroup';
 import { messagePlugins, messages } from '../../schemas/message';
 import { threads, topics } from '../../schemas/topic';
@@ -914,6 +916,43 @@ describe('AgentGroupRepository', () => {
           and(eq(a.userId, userId), inArray(a.id, ['remove-virtual', 'remove-virtual-2'])),
       });
       expect(virtualAgents).toHaveLength(0);
+    });
+
+    it('refuses to remove a member a pending copy job is still writing into', async () => {
+      // The copy junction records the TARGET agent. Deleting that agent now
+      // cascades the row the drain is about to reference, so its next message
+      // insert violates `messages.agent_id` and the job retries forever —
+      // leaving the copied conversations stranded as pending.
+      const [job] = await serverDB
+        .insert(agentHistoryJobs)
+        .values({
+          agentIds: ['remove-virtual'],
+          payload: { agents: [{ newAgentId: 'remove-virtual', sourceAgentId: 'keep-agent' }] },
+          sessionIds: [],
+          sourceUserId: userId,
+          status: 'pending',
+          targetUserId: userId,
+          totalTopics: 1,
+          type: 'copy',
+        })
+        .returning({ id: agentHistoryJobs.id });
+      await serverDB
+        .insert(agentHistoryJobAgents)
+        .values({ agentId: 'remove-virtual', jobId: job.id });
+
+      await expect(
+        agentGroupRepo.removeAgentsFromGroup('remove-group', ['remove-virtual']),
+      ).rejects.toThrow(AGENT_TRANSFER_IN_PROGRESS);
+
+      // Nothing was removed or deleted — the guard aborted the whole transaction.
+      const stillLinked = await serverDB.query.chatGroupsAgents.findMany({
+        where: (cga, { eq }) => eq(cga.chatGroupId, 'remove-group'),
+      });
+      expect(stillLinked).toHaveLength(3);
+      const stillAlive = await serverDB.query.agents.findFirst({
+        where: (a, { eq }) => eq(a.id, 'remove-virtual'),
+      });
+      expect(stillAlive).toBeDefined();
     });
   });
 

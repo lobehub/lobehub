@@ -652,11 +652,29 @@ export const agentGroupRouter = router({
           workspaceId: ctx.workspaceId,
         });
       }
-      return ctx.agentGroupRepo.removeAgentsFromGroup(
-        input.groupId,
-        input.agentIds,
-        input.deleteVirtualAgents,
-      );
+      try {
+        return await ctx.agentGroupRepo.removeAgentsFromGroup(
+          input.groupId,
+          input.agentIds,
+          input.deleteVirtualAgents,
+        );
+      } catch (error) {
+        // A backfill still maps these agents' message rows — removing a member
+        // now would strand the job on a dangling `messages.agent_id`.
+        if (error instanceof Error && error.message === AGENT_TRANSFER_IN_PROGRESS) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: "A previous transfer of this group's agents is still migrating history",
+          });
+        }
+        if (error instanceof Error && error.message === AGENT_COPY_IN_PROGRESS) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'A previous copy of this agent is still duplicating its history',
+          });
+        }
+        throw error;
+      }
     }),
 
   transferGroup: agentGroupProcedureWrite
