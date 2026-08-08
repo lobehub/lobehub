@@ -33,9 +33,54 @@ describe('UserController.getCurrentUser', () => {
     } as unknown as Context;
   };
 
+  const FULL_PROFILE = {
+    email: 'someone@example.com',
+    fullName: 'Someone',
+    id: 'user-1',
+    messageCount: 42,
+    phone: '+100000000',
+    preference: { language: 'zh-CN' },
+    roles: [{ id: 'role-1', name: 'admin' }],
+  };
+
+  const bodyOf = async (res: Response) => (await res.json()).data;
+
   beforeEach(() => {
     getCurrentUser.mockReset();
-    getCurrentUser.mockResolvedValue({ id: 'user-1' });
+    getCurrentUser.mockResolvedValue(FULL_PROFILE);
+  });
+
+  describe('profile projection', () => {
+    it('narrows the response to the id for a key without user:read', async () => {
+      const res = await new UserController().getCurrentUser(
+        contextFor({ authType: 'apikey', scopes: ['model:invoke'] }),
+      );
+
+      await expect(bodyOf(res)).resolves.toEqual({ id: 'user-1' });
+    });
+
+    it('returns the full profile to a key holding user:read', async () => {
+      const res = await new UserController().getCurrentUser(
+        contextFor({ authType: 'apikey', scopes: ['user:read'] }),
+      );
+
+      await expect(bodyOf(res)).resolves.toMatchObject({
+        email: FULL_PROFILE.email,
+        roles: FULL_PROFILE.roles,
+      });
+    });
+
+    it('returns the full profile to full-access keys and session callers', async () => {
+      for (const auth of [
+        { authType: 'apikey', scopes: ['*'] },
+        { authType: 'apikey', scopes: null },
+        { authType: 'oidc' },
+      ]) {
+        const res = await new UserController().getCurrentUser(contextFor(auth));
+
+        await expect(bodyOf(res)).resolves.toMatchObject({ email: FULL_PROFILE.email });
+      }
+    });
   });
 
   it('withholds the count from a restricted key without chat:read, without failing', async () => {
