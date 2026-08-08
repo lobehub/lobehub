@@ -287,6 +287,7 @@
   "platform.userId": "用户钱包",
   "platform.userIdPlaceholder": "从 B2C 钱包选择（若已填邮箱可留空）",
   "provider.managed.desc": "模型由 {{brandName}} 提供。用量从你的钱包或组织额度扣费，无需配置 API Key。",
+  "provider.managed.orgModelsTip": "在此启用或禁用模型仅影响你的个人钱包。组织钱包可用的模型由组织管理员设置——如需更改请联系管理员。",
   "wallet.amountToman": "金额（toman）",
   "wallet.amountUsd": "金额（USD）",
   "wallet.balanceToman": "已支付（toman）",

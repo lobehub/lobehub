@@ -297,6 +297,8 @@ export default {
 
   'provider.managed.desc':
     'Models are provided by {{brandName}}. Usage is billed from your wallet or organization credit — no API key setup is required.',
+  'provider.managed.orgModelsTip':
+    'Enabling or disabling models here only affects your personal wallet. Models available on your organization wallet are set by your org manager — contact them to change that list.',
 
   'billing.organization': 'Organization',
   'billing.personal': 'Personal',

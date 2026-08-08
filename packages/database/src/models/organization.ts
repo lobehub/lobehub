@@ -39,6 +39,13 @@ const INVITE_TTL_MS = 72 * 60 * 60 * 1000;
 export const DEFAULT_TEAM_NAME = 'Unspecified';
 export const DEFAULT_TEAM_SLUG = 'unspecified';
 
+/** Cheap OpenRouter chat models granted to new Unspecified teams by default. */
+export const DEFAULT_TEAM_MODEL_IDS = [
+  'openai/gpt-4o-mini',
+  'google/gemini-2.0-flash-001',
+  'deepseek/deepseek-chat-v3-0324',
+] as const;
+
 const slugify = (name: string): string => {
   const base = name
     .trim()
@@ -47,6 +54,34 @@ const slugify = (name: string): string => {
     .replaceAll(/(^-|-$)/g, '')
     .slice(0, 48);
   return base || randomSlug(2);
+};
+
+type OrgDbLike = Pick<LobeChatDatabase, 'insert' | 'query'>;
+
+/**
+ * Seeds cheap default models onto a team only when it has zero team-scoped rules.
+ * Idempotent — never overwrites a manager-customized allow-list.
+ */
+export const seedDefaultTeamModels = async (
+  db: OrgDbLike,
+  params: { orgId: string; teamId: string },
+) => {
+  const existing = await db.query.modelAccessRules.findMany({
+    where: and(eq(modelAccessRules.teamId, params.teamId), eq(modelAccessRules.scope, 'team')),
+  });
+  if (existing.length > 0) return existing;
+
+  return db
+    .insert(modelAccessRules)
+    .values(
+      DEFAULT_TEAM_MODEL_IDS.map((modelId) => ({
+        modelId,
+        orgId: params.orgId,
+        scope: 'team' as const,
+        teamId: params.teamId,
+      })),
+    )
+    .returning();
 };
 
 /** Postgres unique_violation. */
@@ -211,6 +246,8 @@ export class OrganizationModel {
           orgMemberId: ownerMember.id,
           teamId: defaultTeam.id,
         });
+
+        await seedDefaultTeamModels(tx, { orgId: org.id, teamId: defaultTeam.id });
 
         return org;
       });

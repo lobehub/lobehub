@@ -1,12 +1,13 @@
 'use client';
 
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { Flexbox, Text } from '@lobehub/ui';
+import { Alert, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ProductLogo } from '@/components/Branding/ProductLogo';
+import { useAicoBillingSources } from '@/features/AicoBilling/useAicoBillingSources';
 
 const styles = createStaticStyles(({ css }) => ({
   card: css`
@@ -26,18 +27,32 @@ const styles = createStaticStyles(({ css }) => ({
  */
 const AicoManagedProviderHeader = memo(() => {
   const { t } = useTranslation('aico');
+  const { data: billingSources } = useAicoBillingSources();
+  const hasOrgMembership = (billingSources?.sources ?? []).some(
+    (source) => source.source === 'organization',
+  );
 
   return (
-    <Flexbox className={styles.card} gap={8}>
-      <Flexbox horizontal align={'center'} gap={10}>
-        <ProductLogo size={28} type={'flat'} />
-        <Text strong style={{ fontSize: 18 }}>
-          {BRANDING_NAME}
+    <Flexbox gap={12}>
+      <Flexbox className={styles.card} gap={8}>
+        <Flexbox horizontal align={'center'} gap={10}>
+          <ProductLogo size={28} type={'flat'} />
+          <Text strong style={{ fontSize: 18 }}>
+            {BRANDING_NAME}
+          </Text>
+        </Flexbox>
+        <Text className={styles.desc} fontSize={13}>
+          {t('provider.managed.desc', { brandName: BRANDING_NAME })}
         </Text>
       </Flexbox>
-      <Text className={styles.desc} fontSize={13}>
-        {t('provider.managed.desc', { brandName: BRANDING_NAME })}
-      </Text>
+      {hasOrgMembership && (
+        <Alert
+          showIcon
+          closable={false}
+          description={t('provider.managed.orgModelsTip')}
+          type={'info'}
+        />
+      )}
     </Flexbox>
   );
 });
