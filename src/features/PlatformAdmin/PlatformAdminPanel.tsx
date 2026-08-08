@@ -3,13 +3,7 @@
 import { Block, Flexbox, Tag, Text } from '@lobehub/ui';
 import { Button, Select, Switch, Tabs, toast } from '@lobehub/ui/base-ui';
 import { Form, Input, InputNumber, Table } from 'antd';
-import {
-  Building2Icon,
-  CircleDollarSignIcon,
-  RefreshCwIcon,
-  ShieldIcon,
-  WalletIcon,
-} from 'lucide-react';
+import { Building2Icon, DollarSignIcon, RefreshCwIcon, ShieldIcon, WalletIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -49,6 +43,7 @@ export const PlatformAdminPanel = () => {
     maxRequests?: number | null;
     trialBudgetUsd?: number;
   }>();
+  const [deactivateForm] = Form.useForm<{ reason: string; userId: string }>();
   const [busy, setBusy] = useState(false);
 
   const { data, error, isLoading, mutate } = useClientDataSWR('aico-platform-orgs', () =>
@@ -129,7 +124,7 @@ export const PlatformAdminPanel = () => {
         <StatisticCard
           title={t('platform.usdCredited')}
           statistic={{
-            prefix: <CircleDollarSignIcon size={16} />,
+            prefix: <DollarSignIcon size={16} />,
             value: usd(financials?.totalUsdCredited),
           }}
         />
@@ -617,21 +612,66 @@ export const PlatformAdminPanel = () => {
                     render: (v: boolean) => (v ? '✓' : '—'),
                   },
                   {
+                    dataIndex: 'banned',
+                    title: t('platform.columns.status'),
+                    render: (banned: boolean, row) =>
+                      banned ? (
+                        <Tag color="error" title={row.banReason || undefined}>
+                          {t('platform.userBanned')}
+                        </Tag>
+                      ) : (
+                        <Tag>{t('platform.userActive')}</Tag>
+                      ),
+                  },
+                  {
                     key: 'actions',
                     title: t('platform.columns.actions'),
                     render: (_, row) => (
-                      <Button
-                        size="small"
-                        onClick={() => {
-                          userCreditForm.setFieldsValue({
-                            email: undefined,
-                            userId: row.userId,
-                          });
-                          setTab('credits');
-                        }}
-                      >
-                        {t('platform.creditUserAction')}
-                      </Button>
+                      <Flexbox horizontal gap={4}>
+                        <Button
+                          size="small"
+                          onClick={() => {
+                            userCreditForm.setFieldsValue({
+                              email: undefined,
+                              userId: row.userId,
+                            });
+                            setTab('credits');
+                          }}
+                        >
+                          {t('platform.creditUserAction')}
+                        </Button>
+                        {row.banned ? (
+                          <Button
+                            size="small"
+                            onClick={async () => {
+                              setBusy(true);
+                              try {
+                                await lambdaClient.platformAdmin.reactivateUser.mutate({
+                                  userId: row.userId,
+                                });
+                                toast.success(t('platform.reactivateSuccess'));
+                                await mutateUserWallets();
+                              } catch (err) {
+                                toastAicoError(err, t, 'platform.reactivateSuccess');
+                              } finally {
+                                setBusy(false);
+                              }
+                            }}
+                          >
+                            {t('platform.reactivateUser')}
+                          </Button>
+                        ) : (
+                          <Button
+                            size="small"
+                            onClick={() => {
+                              deactivateForm.setFieldsValue({ reason: '', userId: row.userId });
+                              setTab('credits');
+                            }}
+                          >
+                            {t('platform.deactivateUser')}
+                          </Button>
+                        )}
+                      </Flexbox>
                     ),
                   },
                 ]}
@@ -643,6 +683,59 @@ export const PlatformAdminPanel = () => {
 
       {tab === 'credits' && (
         <Flexbox gap={16}>
+          <Block className={aicoPanelStyles.section} variant="outlined">
+            <Flexbox gap={16}>
+              <Text strong>{t('platform.deactivateUser')}</Text>
+              <Form
+                form={deactivateForm}
+                layout="vertical"
+                onFinish={async (values) => {
+                  if (!window.confirm(t('platform.deactivateConfirm'))) return;
+                  setBusy(true);
+                  try {
+                    await lambdaClient.platformAdmin.deactivateUser.mutate({
+                      reason: values.reason,
+                      userId: values.userId,
+                    });
+                    toast.success(t('platform.deactivateSuccess'));
+                    deactivateForm.resetFields();
+                    await mutateUserWallets();
+                  } catch (err) {
+                    toastAicoError(err, t, 'platform.deactivateConfirm');
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                <Form.Item
+                  label={t('platform.columns.userId')}
+                  name="userId"
+                  rules={[{ required: true }]}
+                >
+                  <Select
+                    allowClear
+                    showSearch
+                    style={{ width: '100%' }}
+                    options={(userWallets || []).map((w) => ({
+                      label: `${w.email || w.username || w.userId}${w.banned ? ` (${t('platform.userBanned')})` : ''}`,
+                      value: w.userId,
+                    }))}
+                  />
+                </Form.Item>
+                <Form.Item
+                  label={t('platform.deactivateReason')}
+                  name="reason"
+                  rules={[{ message: t('platform.deactivateReasonRequired'), required: true }]}
+                >
+                  <Input.TextArea rows={2} />
+                </Form.Item>
+                <Button danger htmlType="submit" loading={busy}>
+                  {t('platform.deactivateUser')}
+                </Button>
+              </Form>
+            </Flexbox>
+          </Block>
+
           <Block className={aicoPanelStyles.section} variant="outlined">
             <Flexbox gap={16}>
               <Text strong>{t('platform.manualCredit')}</Text>

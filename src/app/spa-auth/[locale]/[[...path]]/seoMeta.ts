@@ -60,6 +60,7 @@ export async function buildSeoMeta(locale: string, pathname: string): Promise<st
   const lng = normalizeLocale(locale);
   const { title, description, canonicalPath } = await buildAuthSeoEntry(lng, pathname);
   const ogUrl = canonicalPath ? urlJoin(OFFICIAL_URL, canonicalPath) : OFFICIAL_URL;
+  const ogImage = urlJoin(OFFICIAL_URL, OG_URL);
 
   const metas = [
     `<title>${title}</title>`,
@@ -68,13 +69,13 @@ export async function buildSeoMeta(locale: string, pathname: string): Promise<st
     `<meta property="og:description" content="${description}" />`,
     `<meta property="og:type" content="website" />`,
     `<meta property="og:url" content="${ogUrl}" />`,
-    `<meta property="og:image" content="${OG_URL}" />`,
+    `<meta property="og:image" content="${ogImage}" />`,
     `<meta property="og:site_name" content="${BRANDING_NAME}" />`,
     `<meta property="og:locale" content="${lng}" />`,
     `<meta name="twitter:card" content="summary_large_image" />`,
     `<meta name="twitter:title" content="${title}" />`,
     `<meta name="twitter:description" content="${description}" />`,
-    `<meta name="twitter:image" content="${OG_URL}" />`,
+    `<meta name="twitter:image" content="${ogImage}" />`,
     `<meta name="twitter:site" content="${isCustomORG ? `@${ORG_NAME}` : '@lobehub'}" />`,
   ];
 

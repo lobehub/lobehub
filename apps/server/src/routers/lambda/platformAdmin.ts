@@ -4,12 +4,13 @@ import { z } from 'zod';
 
 import { AicoBillingModel } from '@/database/models/aicoBilling';
 import { OrganizationModel } from '@/database/models/organization';
-import { users } from '@/database/schemas';
+import { session, users, userWallets } from '@/database/schemas';
 import {
   microUsdToDecimalString,
   tomanString,
   usdDecimalStringToMicro,
 } from '@/database/utils/aicoMoney';
+import { revokeOIDCArtifactsByUserId } from '@/libs/oidc-provider/access-control';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getTomanPerUsd } from '@/server/services/aico/fxService';
@@ -411,6 +412,8 @@ export const platformAdminRouter = router({
         balanceMicroUsd: String(w.balanceMicroUsd ?? 0),
         balanceToman: tomanString(w.balanceToman ?? 0),
         balanceUsd: microUsdToDecimalString(w.balanceMicroUsd ?? 0),
+        banReason: identity?.banReason ?? null,
+        banned: Boolean(identity?.banned),
         email: identity?.email ?? null,
         hasManagedKey: Boolean(w.openrouterKeyId),
         isActive: w.isActive,
@@ -420,6 +423,75 @@ export const platformAdminRouter = router({
       };
     });
   }),
+
+  deactivateUser: platformProcedure
+    .input(
+      z.object({
+        reason: z.string().trim().min(1).max(500),
+        userId: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (input.userId === ctx.userId) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Cannot deactivate yourself' });
+      }
+
+      const [user] = await ctx.serverDB
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.id, input.userId))
+        .limit(1);
+      if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found' });
+
+      await ctx.serverDB
+        .update(users)
+        .set({
+          banExpires: null,
+          banReason: input.reason,
+          banned: true,
+        })
+        .where(eq(users.id, input.userId));
+
+      await ctx.serverDB.delete(session).where(eq(session.userId, input.userId));
+      await revokeOIDCArtifactsByUserId(ctx.serverDB, input.userId);
+
+      await ctx.serverDB
+        .update(userWallets)
+        .set({ isActive: false })
+        .where(eq(userWallets.userId, input.userId));
+
+      const keyService = new AicoOpenRouterKeyService(ctx.serverDB);
+      await keyService.disableUserKey(input.userId);
+
+      return { ok: true as const };
+    }),
+
+  reactivateUser: platformProcedure
+    .input(z.object({ userId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const [user] = await ctx.serverDB
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.id, input.userId))
+        .limit(1);
+      if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found' });
+
+      await ctx.serverDB
+        .update(users)
+        .set({
+          banExpires: null,
+          banReason: null,
+          banned: false,
+        })
+        .where(eq(users.id, input.userId));
+
+      await ctx.serverDB
+        .update(userWallets)
+        .set({ isActive: true })
+        .where(eq(userWallets.userId, input.userId));
+
+      return { ok: true as const };
+    }),
 
   getOpenRouterModelSyncStatus: platformProcedure.query(async ({ ctx }) => {
     return ctx.modelCatalogSync.getStatus();

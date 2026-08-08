@@ -6,7 +6,7 @@ import { type ModelPerformance, type ModelUsage } from '@lobechat/types';
 import { Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { CircleDollarSignIcon } from 'lucide-react';
+import { CoinsIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -120,7 +120,7 @@ const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
         )}
         {!isShowCredit && !!usage?.cost && usage.cost >= MIN_DISPLAY_COST && (
           <Center horizontal gap={2}>
-            <Icon icon={CircleDollarSignIcon} />
+            <Icon icon={CoinsIcon} />
             {formatCost(usage.cost)}
           </Center>
         )}

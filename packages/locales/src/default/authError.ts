@@ -37,7 +37,10 @@ export default {
   'codes.USER_ALREADY_EXISTS': 'User already exists',
   'codes.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL': 'Email is already in use, please try another one',
   'codes.USER_ALREADY_HAS_PASSWORD': 'This account already has a password set',
-  'codes.USER_BANNED': 'This user has been banned',
+  'codes.BANNED_USER':
+    'Your account has been deactivated. Please contact support if you believe this is an error.',
+  'codes.USER_BANNED':
+    'Your account has been deactivated. Please contact support if you believe this is an error.',
   'codes.USER_EMAIL_NOT_FOUND': 'Email not found',
   'codes.USER_NOT_FOUND': 'User not found',
   'title': 'Authentication Error',
