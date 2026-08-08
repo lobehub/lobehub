@@ -586,6 +586,15 @@ export class OrganizationModel {
     });
   };
 
+  getInviteById = async (params: { inviteId: string; orgId: string }) => {
+    return this.db.query.organizationInvites.findFirst({
+      where: and(
+        eq(organizationInvites.id, params.inviteId),
+        eq(organizationInvites.orgId, params.orgId),
+      ),
+    });
+  };
+
   listPendingInvites = async (orgId: string) => {
     return this.db.query.organizationInvites.findMany({
       where: and(eq(organizationInvites.orgId, orgId), eq(organizationInvites.status, 'pending')),

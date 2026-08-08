@@ -98,6 +98,8 @@
   "org.invite.role": "Rôle",
   "org.invite.sent": "Invitation créée — partagez ce lien",
   "org.invite.shareLink": "Invitation créée. Copiez ce lien pour le partager manuellement (Telegram, WhatsApp, etc.). Un envoi par e-mail/SMS a peut-être aussi été tenté.",
+  "org.invite.showLink": "Afficher le lien",
+  "org.invite.showLinkFailed": "Échec du chargement du lien d'invitation",
   "org.invite.submit": "Envoyer l'invitation",
   "org.invite.title": "Inviter un membre",
   "org.invite.type": "Inviter par",

@@ -98,6 +98,8 @@
   "org.invite.role": "نقش",
   "org.invite.sent": "دعوت ایجاد شد — این لینک را به اشتراک بگذارید",
   "org.invite.shareLink": "دعوت ایجاد شد. این لینک را کپی کنید تا دستی ارسال کنید (تلگرام، واتساپ و …). ممکن است ایمیل/پیامک هم ارسال شده باشد.",
+  "org.invite.showLink": "نمایش لینک",
+  "org.invite.showLinkFailed": "بارگذاری لینک دعوت ناموفق بود",
   "org.invite.submit": "ارسال دعوت‌نامه",
   "org.invite.title": "دعوت عضو",
   "org.invite.type": "دعوت از طریق",

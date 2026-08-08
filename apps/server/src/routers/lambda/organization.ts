@@ -376,7 +376,39 @@ export const organizationRouter = router({
       await requireOrgManager(ctx.organizationModel, ctx.userId, input.orgId);
       const revoked = await ctx.organizationModel.revokeInvite(input);
       if (!revoked) throw new TRPCError({ code: 'NOT_FOUND', message: 'Invite not found' });
-      return revoked;
+      // Never return the raw token — managers already have getInviteLink for URL recovery.
+      return {
+        expiresAt: revoked.expiresAt.toISOString(),
+        id: revoked.id,
+        identifierType: revoked.identifierType,
+        identifierValue: revoked.identifierValue,
+        role: revoked.role,
+        status: revoked.status,
+      };
+    }),
+
+  /**
+   * On-demand invite URL for org managers (AICO-92).
+   * Keeps listMembers token-free (AICO-P1-026) while allowing recovery after the
+   * one-shot post-invite modal is closed.
+   */
+  getInviteLink: orgProcedure
+    .input(z.object({ inviteId: z.string().min(1), orgId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      await requireOrgManager(ctx.organizationModel, ctx.userId, input.orgId);
+      const invite = await ctx.organizationModel.getInviteById(input);
+      if (!invite) throw new TRPCError({ code: 'NOT_FOUND', message: 'Invite not found' });
+      if (invite.status !== 'pending') {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invite is not pending' });
+      }
+      if (invite.expiresAt.getTime() < Date.now()) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invite expired' });
+      }
+      return {
+        expiresAt: invite.expiresAt.toISOString(),
+        id: invite.id,
+        inviteUrl: `${appEnv.APP_URL}/invite/${invite.token}`,
+      };
     }),
 
   getInvitePreview: orgProcedure
