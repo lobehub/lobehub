@@ -1,17 +1,14 @@
-export type OrgRole = 'owner' | 'manager' | 'member';
-
 /**
- * Resolve the caller's role within an organization.
+ * Aico org / platform role helpers.
  *
- * Stub until org membership tables land — always returns `null` so callers can
- * wire permission gates now and swap in the real lookup later.
+ * Re-exports the real implementations from `auth/orgRole` so callers never
+ * accidentally wire the historical stub that always returned null/false
+ * (TENANT-005).
  */
-export const getCurrentOrgRole = async (_userId: string, _orgId: string): Promise<OrgRole | null> =>
-  null;
-
-/**
- * Whether the user is a platform-level administrator.
- *
- * Stub until the platform-admin table lands — always returns `false`.
- */
-export const isPlatformAdmin = async (_userId: string): Promise<boolean> => false;
+export {
+  getCurrentOrgRole,
+  isPlatformAdmin,
+  type OrgRole,
+  requiresPhoneVerification,
+  type RequiresPhoneVerificationInput,
+} from '@/server/services/auth/orgRole';

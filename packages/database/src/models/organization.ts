@@ -592,6 +592,31 @@ export class OrganizationModel {
     return (row?.role as OrgMemberRole) ?? null;
   };
 
+  /** Tenant-safe member lookup — always join resource id with org id. */
+  getMemberInOrg = async (params: { orgId: string; orgMemberId: string }) => {
+    return this.db.query.organizationMembers.findFirst({
+      where: and(
+        eq(organizationMembers.id, params.orgMemberId),
+        eq(organizationMembers.orgId, params.orgId),
+      ),
+    });
+  };
+
+  /**
+   * Budget load gated by org membership + denormalized orgId (TENANT-003).
+   * Returns null when the member is not in the org or has no budget row.
+   */
+  getMemberBudgetForOrg = async (params: { orgId: string; orgMemberId: string }) => {
+    const member = await this.getMemberInOrg(params);
+    if (!member) return null;
+    return this.db.query.memberBudgets.findFirst({
+      where: and(
+        eq(memberBudgets.orgMemberId, params.orgMemberId),
+        eq(memberBudgets.orgId, params.orgId),
+      ),
+    });
+  };
+
   listMembers = async (orgId: string) => {
     return this.db.query.organizationMembers.findMany({
       where: eq(organizationMembers.orgId, orgId),
@@ -657,7 +682,12 @@ export class OrganizationModel {
     const [updated] = await this.db
       .update(organizationMembers)
       .set({ role: params.role })
-      .where(eq(organizationMembers.id, params.memberId))
+      .where(
+        and(
+          eq(organizationMembers.id, params.memberId),
+          eq(organizationMembers.orgId, params.orgId),
+        ),
+      )
       .returning();
     return updated;
   };
@@ -682,7 +712,12 @@ export class OrganizationModel {
     const [updated] = await this.db
       .update(organizationMembers)
       .set({ status: 'revocation_pending' })
-      .where(eq(organizationMembers.id, params.memberId))
+      .where(
+        and(
+          eq(organizationMembers.id, params.memberId),
+          eq(organizationMembers.orgId, params.orgId),
+        ),
+      )
       .returning();
     return updated;
   };
@@ -1132,7 +1167,10 @@ export class OrganizationModel {
       const window = computePeriodWindow(params.period);
       const openrouterLimitReset = periodToOpenRouterLimitReset(params.period);
       const existing = await tx.query.memberBudgets.findFirst({
-        where: eq(memberBudgets.orgMemberId, params.orgMemberId),
+        where: and(
+          eq(memberBudgets.orgMemberId, params.orgMemberId),
+          eq(memberBudgets.orgId, params.orgId),
+        ),
       });
 
       let budget: MemberBudgetItem;
@@ -1144,6 +1182,7 @@ export class OrganizationModel {
             currentPeriodStart: window.start,
             nextRenewalAt: window.nextRenewalAt,
             openrouterLimitReset,
+            orgId: params.orgId,
             orgMemberId: params.orgMemberId,
             period: params.period,
             periodAmountMicroUsd: params.periodAmountMicroUsd,
@@ -1229,7 +1268,10 @@ export class OrganizationModel {
       if (!member) throw new Error('MEMBER_NOT_FOUND');
 
       const existingBudget = await tx.query.memberBudgets.findFirst({
-        where: eq(memberBudgets.orgMemberId, params.orgMemberId),
+        where: and(
+          eq(memberBudgets.orgMemberId, params.orgMemberId),
+          eq(memberBudgets.orgId, params.orgId),
+        ),
       });
 
       let budget: MemberBudgetItem | null = null;

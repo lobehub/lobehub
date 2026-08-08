@@ -213,11 +213,13 @@ export class AicoOpenRouterKeyService {
   /**
    * Authoritative settlement helpers for removal / period close.
    * Returns micro-USD usage/remaining from OpenRouter (floored).
+   * Requires orgId so a foreign orgMemberId cannot disable another tenant's key.
    */
-  reclaimMemberKey = async (
-    orgMemberId: string,
-  ): Promise<{ remainingMicroUsd: number; usageMicroUsd: number } | null> => {
-    const budget = await this.orgModel.getMemberBudget(orgMemberId);
+  reclaimMemberKey = async (params: {
+    orgId: string;
+    orgMemberId: string;
+  }): Promise<{ remainingMicroUsd: number; usageMicroUsd: number } | null> => {
+    const budget = await this.orgModel.getMemberBudgetForOrg(params);
     if (!budget?.openrouterKeyId) return null;
 
     const info = await this.client.getKey(budget.openrouterKeyId);

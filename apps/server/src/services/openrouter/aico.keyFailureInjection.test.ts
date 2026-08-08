@@ -216,9 +216,11 @@ describe('Aico OpenRouter failure injection (Phase 2)', () => {
     // Insert zero budget directly
     await db.insert(memberBudgets).values({
       isActive: true,
-      limitUsd: 0,
+      orgId: org.id,
       orgMemberId: ownerMember.id,
       period: 'total',
+      periodAmountMicroUsd: 0,
+      reservedMicroUsd: 0,
     });
 
     const client = new ControllableOpenRouterClient();
@@ -292,9 +294,11 @@ describe('Aico OpenRouter failure injection (Phase 2)', () => {
 
     await db.insert(memberBudgets).values({
       isActive: true,
-      limitUsd: 20,
+      orgId: org.id,
       orgMemberId: ownerMember.id,
       period: 'total',
+      periodAmountMicroUsd: 20_000_000,
+      reservedMicroUsd: 20_000_000,
     });
     await keys.ensureMemberKey(ownerMember.id);
     const budget = await orgModel.getMemberBudget(ownerMember.id);
@@ -304,13 +308,19 @@ describe('Aico OpenRouter failure injection (Phase 2)', () => {
     key.usage = 8;
     key.limitRemaining = 12;
 
-    const reclaimed = await keys.reclaimMemberKey(ownerMember.id);
-    expect(reclaimed).toEqual({ remainingUsd: 12, usageUsd: 8 });
+    const reclaimed = await keys.reclaimMemberKey({
+      orgId: org.id,
+      orgMemberId: ownerMember.id,
+    });
+    expect(reclaimed).toEqual({ remainingMicroUsd: 12_000_000, usageMicroUsd: 8_000_000 });
     expect(client.keys.get(keyHash).disabled).toBe(true);
 
     // Reclaiming again after disable must not throw or double-count.
-    const reclaimedAgain = await keys.reclaimMemberKey(ownerMember.id);
-    expect(reclaimedAgain?.remainingUsd).toBe(12);
+    const reclaimedAgain = await keys.reclaimMemberKey({
+      orgId: org.id,
+      orgMemberId: ownerMember.id,
+    });
+    expect(reclaimedAgain?.remainingMicroUsd).toBe(12_000_000);
   });
 
   it('disableAllOrgMemberKeys disables every member key in the org (suspend safety)', async () => {
@@ -324,9 +334,11 @@ describe('Aico OpenRouter failure injection (Phase 2)', () => {
     const keys = new AicoOpenRouterKeyService(db, client);
     await db.insert(memberBudgets).values({
       isActive: true,
-      limitUsd: 10,
+      orgId: org.id,
       orgMemberId: ownerMember.id,
       period: 'total',
+      periodAmountMicroUsd: 10_000_000,
+      reservedMicroUsd: 10_000_000,
     });
     await keys.ensureMemberKey(ownerMember.id);
     const budget = await orgModel.getMemberBudget(ownerMember.id);
@@ -345,7 +357,10 @@ describe('Aico OpenRouter failure injection (Phase 2)', () => {
     const client = new ControllableOpenRouterClient();
     const keys = new AicoOpenRouterKeyService(db, client);
 
-    const reclaimed = await keys.reclaimMemberKey(members[0].id);
+    const reclaimed = await keys.reclaimMemberKey({
+      orgId: org.id,
+      orgMemberId: members[0].id,
+    });
     expect(reclaimed).toBeNull();
   });
 

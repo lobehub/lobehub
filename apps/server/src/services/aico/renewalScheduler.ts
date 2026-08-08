@@ -37,13 +37,13 @@ export interface OrgRenewalResult {
 }
 
 interface DueBudget {
-  memberId: string;
-  nextRenewalAt: Date;
-  orgId: string;
   budgetId: string;
   currentPeriod: BudgetPeriod;
+  memberId: string;
   nextPeriod: BudgetPeriod;
   nextPeriodAmountMicroUsd: number;
+  nextRenewalAt: Date;
+  orgId: string;
   reservedMicroUsd: number;
 }
 
@@ -202,9 +202,7 @@ const renewOrg = async (params: {
       refunds.set(b.memberId, Number(unused));
     }
   } catch (error) {
-    return failBatch(
-      `SETTLEMENT_FAILED:${error instanceof Error ? error.message : String(error)}`,
-    );
+    return failBatch(`SETTLEMENT_FAILED:${error instanceof Error ? error.message : String(error)}`);
   }
 
   const refundedMicroUsd = [...refunds.values()].reduce((sum, v) => sum + v, 0);
@@ -424,7 +422,10 @@ const runOutboxAction = async (params: {
 
     case 'reclaim_member': {
       if (!row.orgMemberId || !row.orgId) throw new Error('ORG_MEMBER_ID_REQUIRED');
-      const reclaimed = await keyService.reclaimMemberKey(row.orgMemberId);
+      const reclaimed = await keyService.reclaimMemberKey({
+        orgId: row.orgId,
+        orgMemberId: row.orgMemberId,
+      });
       const createdByUserId =
         typeof row.payload?.createdByUserId === 'string' ? row.payload.createdByUserId : null;
       await orgModel.reclaimMemberRemainingCredit({
