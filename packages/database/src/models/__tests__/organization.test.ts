@@ -19,6 +19,7 @@ import { users } from '../../schemas/user';
 import type { LobeChatDatabase } from '../../type';
 import { AicoBillingModel, fingerprintPhone } from '../aicoBilling';
 import { DEFAULT_TEAM_NAME, OrganizationModel } from '../organization';
+import { eq } from 'drizzle-orm';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 const orgModel = new OrganizationModel(serverDB);
@@ -332,5 +333,58 @@ describe('AicoBillingModel', () => {
         to: day,
       }),
     ).rejects.toThrow('MEMBER_NOT_FOUND');
+  });
+
+  it('softDeleteOrganization tombstones org, frees members, and rejects bad preconditions', async () => {
+    const org = await orgModel.createOrganization({ name: 'Doomed Co', ownerUserId: ownerId });
+    const invite = await orgModel.createInvite({
+      identifierType: 'email',
+      identifierValue: 'member@example.com',
+      invitedByUserId: ownerId,
+      orgId: org.id,
+      role: 'member',
+    });
+
+    await expect(
+      orgModel.softDeleteOrganization({ confirmName: 'Wrong Name', orgId: org.id }),
+    ).rejects.toThrow('ORG_NAME_MISMATCH');
+
+    // Non-zero wallet blocks delete
+    await serverDB
+      .update(organizations)
+      .set({ walletBalanceMicroUsd: 1_000_000 })
+      .where(eq(organizations.id, org.id));
+    await expect(
+      orgModel.softDeleteOrganization({ confirmName: 'Doomed Co', orgId: org.id }),
+    ).rejects.toThrow('ORG_WALLET_NOT_EMPTY');
+
+    await serverDB
+      .update(organizations)
+      .set({ walletBalanceMicroUsd: 0 })
+      .where(eq(organizations.id, org.id));
+
+    const result = await orgModel.softDeleteOrganization({
+      confirmName: 'Doomed Co',
+      orgId: org.id,
+    });
+    expect(result.organization.status).toBe('deleted');
+    expect(result.organization.slug).toContain('-deleted-');
+
+    const members = await orgModel.listMembers(org.id);
+    expect(members.every((m) => m.status === 'left')).toBe(true);
+
+    const pending = await orgModel.listPendingInvites(org.id);
+    expect(pending.find((i) => i.id === invite.id)).toBeUndefined();
+
+    const mine = await orgModel.listForUser(ownerId, { includeSuspended: true });
+    expect(mine.find((o) => o.id === org.id)).toBeUndefined();
+
+    // Owner can create a new org after leaving the deleted one
+    const next = await orgModel.createOrganization({ name: 'Phoenix Co', ownerUserId: ownerId });
+    expect(next.id).not.toBe(org.id);
+
+    await expect(
+      orgModel.softDeleteOrganization({ confirmName: 'Doomed Co', orgId: org.id }),
+    ).rejects.toThrow('ORG_ALREADY_DELETED');
   });
 });

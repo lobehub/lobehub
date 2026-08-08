@@ -88,6 +88,37 @@ const requireOrgManager = async (
   throw new TRPCError({ code: 'FORBIDDEN', message: 'Not an organization manager' });
 };
 
+/** Owner-only gate — platform admins cannot soft-delete orgs via this path. */
+const requireOrgOwner = async (
+  model: OrganizationModel,
+  userId: string,
+  orgId: string,
+): Promise<void> => {
+  const role = await model.getMemberRole(userId, orgId);
+  if (role === 'owner') return;
+  throw new TRPCError({ code: 'FORBIDDEN', message: 'Only the organization owner can delete it' });
+};
+
+const mapOrgDeleteError = (error: unknown): never => {
+  const message = error instanceof Error ? error.message : 'ORG_DELETE_FAILED';
+  if (message === 'ORG_NOT_FOUND') {
+    throw new TRPCError({ code: 'NOT_FOUND', message });
+  }
+  if (
+    message === 'ORG_NAME_MISMATCH' ||
+    message === 'ORG_WALLET_NOT_EMPTY' ||
+    message === 'ORG_HAS_PENDING_RENEWAL' ||
+    message === 'ORG_ALREADY_DELETED'
+  ) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message });
+  }
+  throw new TRPCError({
+    cause: error,
+    code: 'INTERNAL_SERVER_ERROR',
+    message: 'ORG_DELETE_FAILED',
+  });
+};
+
 const mapInviteError = (error: unknown): never => {
   const message = error instanceof Error ? error.message : 'INVITE_FAILED';
   const code =
@@ -731,6 +762,55 @@ export const organizationRouter = router({
       } catch (error) {
         throw mapOrgDateRangeError(error);
       }
+    }),
+
+  /**
+   * Soft-delete organization (owner only). Requires typing the exact org name
+   * and a zero wallet balance. Preserves financial history; disables keys.
+   */
+  deleteOrganization: orgProcedure
+    .input(
+      z.object({
+        confirmName: z.string().min(1).max(120),
+        orgId: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await requireOrgOwner(ctx.organizationModel, ctx.userId, input.orgId);
+
+      let result: Awaited<ReturnType<OrganizationModel['softDeleteOrganization']>>;
+      try {
+        result = await ctx.organizationModel.softDeleteOrganization({
+          confirmName: input.confirmName,
+          orgId: input.orgId,
+        });
+      } catch (error) {
+        return mapOrgDeleteError(error);
+      }
+
+      // Fail closed: members must lose OpenRouter access immediately.
+      const keyService = new AicoOpenRouterKeyService(ctx.serverDB);
+      await keyService.disableAllOrgMemberKeys(input.orgId);
+
+      for (const member of result.membersToReclaim) {
+        await ctx.serverDB.insert(aicoKeyOutbox).values({
+          action: 'reclaim_member',
+          nextAttemptAt: new Date(),
+          openrouterKeyId: member.openrouterKeyId,
+          orgId: input.orgId,
+          orgMemberId: member.memberId,
+          payload: { createdByUserId: ctx.userId, reason: 'org_deleted' },
+          status: 'pending',
+          userId: member.userId,
+        });
+      }
+
+      return {
+        id: result.organization.id,
+        name: result.organization.name,
+        slug: result.organization.slug,
+        status: result.organization.status,
+      };
     }),
 });
 

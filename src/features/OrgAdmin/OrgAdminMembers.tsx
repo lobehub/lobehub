@@ -43,6 +43,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorBgContainer};
   `,
+  dangerCard: css`
+    padding: 16px;
+    border: 1px solid ${cssVar.colorErrorBorder};
+    border-radius: ${cssVar.borderRadiusLG};
+    background: ${cssVar.colorErrorBg};
+  `,
 }));
 
 type InviteForm = {
@@ -72,12 +78,14 @@ export const OrgAdminMembers = () => {
     Boolean(userProfileSelectors.userProfile(s)?.phoneNumberVerified),
   );
   const [form] = Form.useForm<InviteForm>();
+  const inviteType = Form.useWatch('identifierType', form) ?? 'email';
   const [teamForm] = Form.useForm<{ name: string }>();
   const [topupForm] = Form.useForm<FxTopupFormValues>();
   const [topupChargeField, setTopupChargeField] = useState<FxTopupChargeField>('toman');
   const [allocForm] = Form.useForm<{ amountUsd: number; orgMemberId: string }>();
   const [modelsForm] = Form.useForm<{ modelIds: string; teamId: string }>();
   const [upgradeForm] = Form.useForm<{ name: string }>();
+  const [deleteConfirmName, setDeleteConfirmName] = useState('');
   const [inviting, setInviting] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -231,6 +239,25 @@ export const OrgAdminMembers = () => {
     }
   };
 
+  const handleDeleteOrganization = async () => {
+    if (!selectedOrgId) return;
+    setBusy(true);
+    try {
+      await lambdaClient.organization.deleteOrganization.mutate({
+        confirmName: deleteConfirmName,
+        orgId: selectedOrgId,
+      });
+      toast.success(t('org.danger.deleted'));
+      setDeleteConfirmName('');
+      await mutateMine();
+      navigate('/org', { replace: true });
+    } catch (error) {
+      toastAicoError(error, t, 'org.danger.failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (loadingMine) return <Text type="secondary">{t('org.loading')}</Text>;
 
   if (manageable.length === 0) {
@@ -294,6 +321,7 @@ export const OrgAdminMembers = () => {
   }
 
   const currentOrg = manageable.find((o) => o.id === selectedOrgId);
+  const isOwner = currentOrg?.myRole === 'owner';
 
   return (
     <Flexbox className={styles.page} gap={20}>
@@ -315,6 +343,7 @@ export const OrgAdminMembers = () => {
               }))}
               onChange={(value) => {
                 setSelectedOrgId(value);
+                setDeleteConfirmName('');
                 navigate(`/org/${value}/members`);
               }}
             />
@@ -355,6 +384,7 @@ export const OrgAdminMembers = () => {
             { key: 'members', label: t('org.tabs.members') },
             { key: 'teams', label: t('org.tabs.teams') },
             { key: 'wallet', label: t('org.tabs.wallet') },
+            ...(isOwner ? [{ key: 'settings', label: t('org.tabs.settings') }] : []),
           ]}
           onChange={setTab}
         />
@@ -473,15 +503,29 @@ export const OrgAdminMembers = () => {
                         { label: t('org.invite.email'), value: 'email' },
                         { label: t('org.invite.phone'), value: 'phone' },
                       ]}
+                      onChange={() => {
+                        form.setFieldValue('identifierValue', undefined);
+                      }}
                     />
                   </Form.Item>
                   <Form.Item
-                    label={t('org.invite.value')}
+                    label={
+                      inviteType === 'phone' ? t('org.invite.phone') : t('org.invite.email')
+                    }
                     name="identifierValue"
                     rules={[{ required: true }]}
                     style={{ flex: 1, minWidth: 220 }}
                   >
-                    <Input placeholder={t('org.invite.valuePlaceholder')} />
+                    <Input
+                      autoComplete={inviteType === 'phone' ? 'tel' : 'email'}
+                      inputMode={inviteType === 'phone' ? 'tel' : 'email'}
+                      placeholder={
+                        inviteType === 'phone'
+                          ? t('org.invite.phonePlaceholder')
+                          : t('org.invite.emailPlaceholder')
+                      }
+                      type={inviteType === 'phone' ? 'tel' : 'email'}
+                    />
                   </Form.Item>
                   <Form.Item
                     label={t('org.invite.role')}
@@ -918,6 +962,29 @@ export const OrgAdminMembers = () => {
               )}
             </Flexbox>
           </Block>
+        </Flexbox>
+      )}
+
+      {tab === 'settings' && isOwner && currentOrg && (
+        <Flexbox gap={16}>
+          <Flexbox className={styles.dangerCard} gap={12}>
+            <Text strong>{t('org.danger.title')}</Text>
+            <Text type="secondary">{t('org.danger.warning')}</Text>
+            <Text type="secondary">{t('org.danger.confirmLabel')}</Text>
+            <Input
+              placeholder={t('org.danger.confirmPlaceholder', { name: currentOrg.name })}
+              value={deleteConfirmName}
+              onChange={(e) => setDeleteConfirmName(e.target.value)}
+            />
+            <Button
+              danger
+              disabled={deleteConfirmName !== currentOrg.name}
+              loading={busy}
+              onClick={() => void handleDeleteOrganization()}
+            >
+              {t('org.danger.delete')}
+            </Button>
+          </Flexbox>
         </Flexbox>
       )}
 

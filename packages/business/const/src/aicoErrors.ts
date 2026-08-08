@@ -22,8 +22,13 @@ export const AICO_ERROR_CODES = [
   'TRIAL_FAILED',
   // Org / wallet / invite
   'ALREADY_HAS_ORGANIZATION',
+  'USER_ALREADY_IN_ORGANIZATION',
   'ORG_NOT_FOUND',
   'ORG_NOT_ACTIVE',
+  'ORG_ALREADY_DELETED',
+  'ORG_NAME_MISMATCH',
+  'ORG_WALLET_NOT_EMPTY',
+  'ORG_HAS_PENDING_RENEWAL',
   'INSUFFICIENT_ORG_BALANCE',
   'MEMBER_NOT_FOUND',
   'BUDGET_NOT_FOUND',
@@ -62,6 +67,7 @@ export const AICO_ERROR_ALIASES: Partial<Record<AicoErrorCode, AicoErrorCode>> =
  */
 export const AICO_ERROR_MESSAGES_FA: Record<AicoErrorCode, string> = {
   ALREADY_HAS_ORGANIZATION: 'شما از قبل یک سازمان دارید.',
+  USER_ALREADY_IN_ORGANIZATION: 'شما از قبل عضو سازمان دیگری هستید و نمی‌توانید به این سازمان بپیوندید.',
   BUDGET_EXCEEDED: 'سهمیه‌ی شما تمام شده است.',
   BUDGET_NOT_FOUND: 'سهمیه یافت نشد.',
   CANNOT_DELETE_DEFAULT_TEAM: 'تیم پیش‌فرض را نمی‌توان حذف کرد.',
@@ -79,9 +85,13 @@ export const AICO_ERROR_MESSAGES_FA: Record<AicoErrorCode, string> = {
   MEMBER_NOT_FOUND: 'عضو یافت نشد.',
   MOCK_TOPUP_DISABLED: 'شارژ آزمایشی در این محیط غیرفعال است.',
   MODEL_NOT_ALLOWED: 'دسترسی به این مدل برای شما فعال نیست.',
+  ORG_ALREADY_DELETED: 'این سازمان قبلاً حذف شده است.',
+  ORG_HAS_PENDING_RENEWAL: 'تا وقتی تمدید سهمیه در جریان است نمی‌توان سازمان را حذف کرد.',
+  ORG_NAME_MISMATCH: 'نام سازمان با تأیید شما مطابقت ندارد.',
   ORG_NOT_ACTIVE: 'سازمان غیرفعال یا معلق است.',
   ORG_NOT_FOUND: 'سازمان یافت نشد.',
   ORG_WALLET_EMPTY: 'موجودی کیف پول سازمان کافی نیست.',
+  ORG_WALLET_NOT_EMPTY: 'برای حذف سازمان، ابتدا موجودی کیف پول را به صفر برسانید.',
   PERSONAL_FUNDS_UNAVAILABLE:
     'موجودی کیف پول شخصی کافی نیست. لطفاً شارژ کنید یا دوره آزمایشی را فعال کنید.',
   PERSONAL_WALLET_INACTIVE: 'کیف پول شخصی شما غیرفعال است.',

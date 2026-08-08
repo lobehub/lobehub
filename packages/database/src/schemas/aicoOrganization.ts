@@ -41,7 +41,7 @@ export const organizations = pgTable(
     walletBalanceMicroUsd: bigint('wallet_balance_micro_usd', { mode: 'number' })
       .notNull()
       .default(0),
-    /** active | suspended */
+    /** active | suspended | deleted */
     status: text('status').notNull().default('active'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),

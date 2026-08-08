@@ -5,6 +5,8 @@ export default {
 
   // Standard Aico error codes (server throws the code; UI shows this copy)
   'errors.ALREADY_HAS_ORGANIZATION': 'You already have an organization.',
+  'errors.USER_ALREADY_IN_ORGANIZATION':
+    'You are already a member of another organization and cannot join this one.',
   'errors.BUDGET_EXCEEDED': 'Your quota has been used up.',
   'errors.BUDGET_NOT_FOUND': 'Budget not found.',
   'errors.CANNOT_DELETE_DEFAULT_TEAM': 'The default team cannot be deleted.',
@@ -25,9 +27,15 @@ export default {
   'errors.MEMBER_NOT_FOUND': 'Member not found.',
   'errors.MOCK_TOPUP_DISABLED': 'Mock topup is disabled in this environment.',
   'errors.MODEL_NOT_ALLOWED': 'You do not have access to this model.',
+  'errors.ORG_ALREADY_DELETED': 'This organization has already been deleted.',
+  'errors.ORG_HAS_PENDING_RENEWAL':
+    'Cannot delete the organization while a budget renewal is in progress.',
+  'errors.ORG_NAME_MISMATCH': 'The organization name does not match your confirmation.',
   'errors.ORG_NOT_ACTIVE': 'This organization is inactive or suspended.',
   'errors.ORG_NOT_FOUND': 'Organization not found.',
   'errors.ORG_WALLET_EMPTY': 'Organization wallet balance is insufficient.',
+  'errors.ORG_WALLET_NOT_EMPTY':
+    'Drain the organization wallet to zero before deleting the organization.',
   'errors.PERSONAL_FUNDS_UNAVAILABLE':
     'Your personal wallet has no remaining credit. Top up or start a free trial.',
   'errors.PERSONAL_WALLET_INACTIVE': 'Your personal wallet is inactive.',
@@ -79,6 +87,14 @@ export default {
   'org.companyName': 'Company name',
   'org.companyNamePlaceholder': 'Acme AI',
   'org.delete': 'Delete',
+  'org.danger.confirmLabel': 'Type the organization name to confirm',
+  'org.danger.confirmPlaceholder': '{{name}}',
+  'org.danger.delete': 'Delete this organization',
+  'org.danger.deleted': 'Organization deleted',
+  'org.danger.failed': 'Could not delete organization',
+  'org.danger.title': 'Danger zone',
+  'org.danger.warning':
+    'Deleting an organization is permanent. All members lose access. Drain the wallet to $0 first. Financial history is retained for audit.',
   'org.emptyDesc': 'Create a company account to invite members and allocate credits.',
   'org.emptyTitle': 'No organization yet',
   'org.invite.copyLink': 'Copy link',
@@ -98,6 +114,8 @@ export default {
   'org.invite.type': 'Invite by',
   'org.invite.value': 'Email or phone',
   'org.invite.valuePlaceholder': 'name@example.com or 0912…',
+  'org.invite.emailPlaceholder': 'name@example.com',
+  'org.invite.phonePlaceholder': '0912…',
   'org.linkPlatform': 'Platform admin',
   'org.linkWallet': 'My wallet',
   'org.loading': 'Loading…',
@@ -126,6 +144,7 @@ export default {
   'org.subtitle': 'Wallet, teams, invites, and member usage.',
   'org.tabs.members': 'Members',
   'org.tabs.overview': 'Overview',
+  'org.tabs.settings': 'Settings',
   'org.tabs.teams': 'Teams',
   'org.tabs.wallet': 'Wallet',
   'org.team': 'Team',
