@@ -5,15 +5,19 @@ import {
   type AgentArtworkStyle,
   DEFAULT_AGENT_ARTWORK_STYLE,
 } from '@lobechat/prompts';
-import { ActionIcon, Alert, Avatar, Center, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Center, Flexbox, Text, Tooltip } from '@lobehub/ui';
 import { Button, type DropdownItem, DropdownMenu, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { Check, ImageIcon, MoreHorizontal, Trash2, UploadIcon, WandSparkles } from 'lucide-react';
+import { Check, MoreHorizontal, Trash2, UploadIcon, WandSparkles } from 'lucide-react';
 import { memo, useCallback, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import EmojiPicker from '@/components/EmojiPicker';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
+import {
+  openAgentArtworkStudio,
+  styleReferencesForArtworkStyle,
+} from '@/features/AgentArtworkStudio';
 import { useAgentStore } from '@/store/agent';
 import { agentArtworkSelectors } from '@/store/agent/selectors';
 import { useAiInfraStore } from '@/store/aiInfra';
@@ -84,11 +88,6 @@ const styles = createStaticStyles(({ css }) => ({
       opacity: 1;
     }
   `,
-  avatarPicker: css`
-    .ant-tabs-tab:has([id$='-tab-generate']) {
-      order: -1;
-    }
-  `,
   compactBackground: css`
     height: 80px;
   `,
@@ -105,16 +104,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   emptyBackgroundHint: css`
     color: ${cssVar.colorTextSecondary};
-  `,
-  generatedPreview: css`
-    position: relative;
-
-    overflow: hidden;
-
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorFillQuaternary};
   `,
   generationFeedback: css`
     position: absolute;
@@ -139,9 +128,17 @@ const styles = createStaticStyles(({ css }) => ({
   generationTitle: css`
     font-weight: 500;
   `,
-  previewGenerationFeedback: css`
-    inset: 1px;
-    border-radius: calc(${cssVar.borderRadiusLG} - 1px);
+  studioBadge: css`
+    position: absolute;
+    z-index: 5;
+    inset-block-end: -6px;
+    inset-inline-end: -6px;
+
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadius};
+
+    background: ${cssVar.colorBgElevated};
+    box-shadow: ${cssVar.boxShadowTertiary};
   `,
   visuallyHiddenInput: css`
     pointer-events: none;
@@ -254,6 +251,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
             name,
             referenceImageUrl: kind === 'background' ? avatar : backgroundUrl,
             style,
+            styleReferenceImageUrls: styleReferencesForArtworkStyle(style),
             systemRole,
             title,
           });
@@ -449,97 +447,31 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
             loading={avatarUploading}
             locale={locale}
             open={canEdit ? undefined : false}
-            popupClassName={`${styles.avatarPicker} agent-avatar-artwork-picker`}
             popupProps={{ placement: 'bottomLeft' }}
             shape={'square'}
             size={72}
             value={avatar || undefined}
-            customTabs={
-              canGenerate
-                ? [
-                    {
-                      label: (
-                        <Tooltip title={t('settingAgent.artwork.avatar.image')}>
-                          <Icon icon={ImageIcon} size={{ size: 20, strokeWidth: 2.5 }} />
-                        </Tooltip>
-                      ),
-                      render: () => (
-                        <Flexbox gap={16} padding={20} width={348}>
-                          <Center className={styles.generatedPreview} height={156}>
-                            <Avatar avatar={avatar || undefined} shape={'square'} size={112} />
-                            {generating === 'avatar' ? (
-                              <Center
-                                className={`${styles.generationFeedback} ${styles.previewGenerationFeedback}`}
-                              >
-                                <Flexbox align={'center'} gap={10}>
-                                  <NeuralNetworkLoading size={32} />
-                                  <Flexbox align={'center'} gap={4}>
-                                    <Text className={styles.generationTitle}>
-                                      {t('settingAgent.artwork.avatar.generating')}
-                                    </Text>
-                                    <Text className={styles.generationHint}>
-                                      {t('settingAgent.artwork.generatingHint')}
-                                    </Text>
-                                    <Button
-                                      className={styles.generationActions}
-                                      size={'small'}
-                                      type={'fill'}
-                                      onClick={() => void cancelAgentArtworkGeneration(agentId)}
-                                    >
-                                      {t('settingAgent.artwork.cancel')}
-                                    </Button>
-                                  </Flexbox>
-                                </Flexbox>
-                              </Center>
-                            ) : null}
-                          </Center>
-                          {generating !== 'avatar' ? (
-                            <Flexbox horizontal gap={8}>
-                              <Button
-                                icon={WandSparkles}
-                                style={{ flex: 1 }}
-                                onClick={() => void generateArtwork('avatar', artworkStyle)}
-                              >
-                                {t('settingAgent.artwork.avatar.generateAction')}
-                              </Button>
-                              <DropdownMenu items={() => buildStyleItems('avatar')}>
-                                <Button
-                                  aria-label={t('settingAgent.artwork.styleMenu')}
-                                  icon={MoreHorizontal}
-                                />
-                              </DropdownMenu>
-                            </Flexbox>
-                          ) : null}
-                          {generationError === 'avatar' ? (
-                            <Alert
-                              showIcon
-                              title={t('settingAgent.artwork.generateFailed')}
-                              type={'error'}
-                            />
-                          ) : null}
-                        </Flexbox>
-                      ),
-                      value: 'generate',
-                    },
-                  ]
-                : undefined
-            }
             onChange={(value) => onAvatarChange(value)}
             onDelete={() => onAvatarChange(null)}
             onUpload={(file) => upload('avatar', file)}
-            onOpenChange={(open) => {
-              if (!open || !canGenerate) return;
-
-              requestAnimationFrame(() => {
-                const tabs = document.querySelectorAll('.agent-avatar-artwork-picker [role="tab"]');
-                (tabs.item(tabs.length - 1) as HTMLElement | null)?.click();
-              });
-            }}
           />
           {generating === 'avatar' ? (
             <Center className={styles.avatarGenerating}>
               <NeuralNetworkLoading size={28} />
             </Center>
+          ) : null}
+          {/* The always-visible corner badge is the avatar-workshop entry; the
+              picker behind the avatar itself stays a plain emoji / upload
+              picker. */}
+          {canEdit ? (
+            <Tooltip title={t('settingAgent.artwork.studio.open')}>
+              <ActionIcon
+                className={styles.studioBadge}
+                icon={WandSparkles}
+                size={'small'}
+                onClick={() => openAgentArtworkStudio(agentId)}
+              />
+            </Tooltip>
           ) : null}
         </div>
         <input

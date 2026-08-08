@@ -3,6 +3,7 @@ import { escapeXmlAttr, escapeXmlContent } from '../search/xmlEscape';
 export type AgentArtworkKind = 'avatar' | 'background';
 
 export const AGENT_ARTWORK_STYLES = [
+  'lobe',
   'editorial',
   'geometric',
   'clay',
@@ -13,10 +14,11 @@ export const AGENT_ARTWORK_STYLES = [
 
 export type AgentArtworkStyle = (typeof AGENT_ARTWORK_STYLES)[number];
 
-export const DEFAULT_AGENT_ARTWORK_STYLE: AgentArtworkStyle = 'editorial';
+export const DEFAULT_AGENT_ARTWORK_STYLE: AgentArtworkStyle = 'lobe';
 
 const STYLE_DIRECTIONS: Record<AgentArtworkStyle, string> = {
   clay: 'Render it as a soft 3D clay-style scene with rounded forms, matte materials, gentle studio lighting, and warm pastel colors.',
+  lobe: 'Render it as a soft 3D render with rounded, inflated clay-like forms, playful proportions, oversized friendly details, smooth matte materials with gentle subsurface glow, soft studio lighting, and one bold saturated dominant color filling the frame.',
   editorial:
     'Render it as polished editorial illustration with a calm premium color palette and high contrast.',
   geometric:
@@ -43,6 +45,13 @@ export interface AgentArtworkPromptInput {
   name?: string | null;
   referenceImageUrl?: string | null;
   style?: AgentArtworkStyle | null;
+  /**
+   * Attached images that define the target rendering style (not the subject).
+   * When present they win over `referenceImageUrl`: mixing "copy this style"
+   * and "continue this identity system" wording in one prompt makes the model
+   * blend the two references unpredictably.
+   */
+  styleReferenceImageUrls?: string[] | null;
   systemRole?: string | null;
   title?: string | null;
 }
@@ -77,11 +86,19 @@ export const buildAgentArtworkPrompt = (input: AgentArtworkPromptInput): string 
   });
   const styleDirection = STYLE_DIRECTIONS[input.style ?? DEFAULT_AGENT_ARTWORK_STYLE];
 
+  const styleReferenceCount =
+    input.styleReferenceImageUrls?.filter((url) => url.trim()).length ?? 0;
+  const styleReferenceDirection =
+    styleReferenceCount > 0
+      ? `\n\nThe attached ${styleReferenceCount === 1 ? 'image is a style reference' : 'images are style references'}. Match ${styleReferenceCount === 1 ? 'its' : 'their'} rendering technique, material treatment, lighting, color saturation, and level of finish exactly. Do not copy ${styleReferenceCount === 1 ? 'its' : 'their'} subjects, characters, or compositions — invent a new subject from the agent described above.`
+      : '';
+  const counterpartReferenceUrl = styleReferenceCount > 0 ? undefined : input.referenceImageUrl;
+
   if (input.kind === 'avatar') {
     // The reference paragraph preserves palette / materials / motifs but not the
     // rendering style itself — the user may regenerate with a different preset,
     // and the style direction above must stay authoritative.
-    const referenceDirection = input.referenceImageUrl?.trim()
+    const referenceDirection = counterpartReferenceUrl?.trim()
       ? `\n\nUse the attached existing profile background as the visual source of truth. Preserve its dominant color palette, materials, lighting, atmosphere, and recurring motifs while distilling them into a single avatar subject. The avatar must feel designed as part of the same identity system, not merely depict a related topic.`
       : '';
 
@@ -89,10 +106,10 @@ export const buildAgentArtworkPrompt = (input: AgentArtworkPromptInput): string 
 
 ${agentContext}
 
-Translate the agent's identity, purpose, and personality into one coherent visual concept. Use a single centered subject with a simple silhouette. ${styleDirection} ${MOTIF_DIRECTION} Fill the entire square canvas edge to edge with the artwork: use a full-bleed composition with no white background, no white matte, no empty margin, no padding, no frame, and no border. No words, no letters, and no logo. The result must remain clear as a small app avatar.${referenceDirection}`;
+Translate the agent's identity, purpose, and personality into one coherent visual concept. Use a single centered subject with a simple silhouette. ${styleDirection} ${MOTIF_DIRECTION} Fill the entire square canvas edge to edge with the artwork: use a full-bleed composition with no white background, no white matte, no empty margin, no padding, no frame, and no border. No words, no letters, and no logo. The result must remain clear as a small app avatar.${styleReferenceDirection}${referenceDirection}`;
   }
 
-  const referenceDirection = input.referenceImageUrl?.trim()
+  const referenceDirection = counterpartReferenceUrl?.trim()
     ? `\n\nUse the attached existing avatar as the visual source of truth. Preserve its dominant color palette, materials, lighting, atmosphere, and recurring motifs, then expand that visual world into a wide environment. Do not enlarge, repeat, or place the avatar itself in the cover. The cover and avatar must feel designed as one identity system.`
     : '';
 
@@ -100,5 +117,5 @@ Translate the agent's identity, purpose, and personality into one coherent visua
 
 ${agentContext}
 
-Translate the agent's identity, purpose, and personality into an abstract environment. ${styleDirection} ${MOTIF_DIRECTION} Use generous negative space and a balanced composition. Do not use a person portrait, words, letters, a logo, or a border.${referenceDirection}`;
+Translate the agent's identity, purpose, and personality into an abstract environment. ${styleDirection} ${MOTIF_DIRECTION} Use generous negative space and a balanced composition. Do not use a person portrait, words, letters, a logo, or a border.${styleReferenceDirection}${referenceDirection}`;
 };

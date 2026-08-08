@@ -54,10 +54,43 @@ describe('buildAgentArtworkPrompt', () => {
     expect(prompt).toContain('same identity system');
   });
 
-  it('defaults to the editorial style direction', () => {
+  it('defaults to the lobe mascot style direction', () => {
     const prompt = buildAgentArtworkPrompt({ id: 'agent-1', kind: 'avatar' });
 
-    expect(prompt).toContain('polished editorial illustration');
+    expect(prompt).toContain('one bold saturated dominant color filling the frame');
+  });
+
+  it('describes attached style references and forbids copying their subjects', () => {
+    const prompt = buildAgentArtworkPrompt({
+      id: 'agent-1',
+      kind: 'avatar',
+      styleReferenceImageUrls: ['https://example.com/ref-a.webp', 'https://example.com/ref-b.webp'],
+    });
+
+    expect(prompt).toContain('The attached images are style references');
+    expect(prompt).toContain('Do not copy their subjects, characters, or compositions');
+  });
+
+  it('uses singular wording for a single style reference', () => {
+    const prompt = buildAgentArtworkPrompt({
+      id: 'agent-1',
+      kind: 'background',
+      styleReferenceImageUrls: ['https://example.com/ref-a.webp'],
+    });
+
+    expect(prompt).toContain('The attached image is a style reference');
+  });
+
+  it('lets style references suppress the counterpart artwork reference', () => {
+    const prompt = buildAgentArtworkPrompt({
+      id: 'agent-1',
+      kind: 'avatar',
+      referenceImageUrl: 'https://example.com/background.png',
+      styleReferenceImageUrls: ['https://example.com/ref-a.webp'],
+    });
+
+    expect(prompt).toContain('The attached image is a style reference');
+    expect(prompt).not.toContain('attached existing profile background');
   });
 
   it('renders a distinct direction for every style preset', () => {
