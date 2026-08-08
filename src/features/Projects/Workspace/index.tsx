@@ -17,7 +17,7 @@ import {
   getProjectTasksPath,
 } from '@/features/Projects/Layout/navigation';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useProjectStore } from '@/store/project';
+import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
@@ -55,7 +55,7 @@ const ProjectWorkspace = memo(() => {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useWorkspaceAwareNavigate();
   const enabled = useUserStore(labPreferSelectors.enableProjects);
-  const detail = useProjectStore((s) => (projectId ? s.projectDetails[projectId] : undefined));
+  const detail = useCurrentProjectDetail(projectId);
   const { error, isLoading, mutate } = useProjectStore((s) => s.useFetchProjectDetail)(projectId);
 
   if (!enabled) {

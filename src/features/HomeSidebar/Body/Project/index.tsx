@@ -10,7 +10,7 @@ import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { openCreateProjectModal } from '@/features/Projects/CreateProjectModal';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useProjectStore } from '@/store/project';
+import { useCurrentProjectList, useProjectStore } from '@/store/project';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
@@ -22,7 +22,7 @@ const Project = memo<ProjectProps>(({ itemKey }) => {
   const { t } = useTranslation('project');
   const enabled = useUserStore(labPreferSelectors.enableProjects);
   const navigate = useWorkspaceAwareNavigate();
-  const projects = useProjectStore((s) => s.projectList);
+  const projects = useCurrentProjectList();
   const { error, isLoading, mutate } = useProjectStore((s) => s.useFetchProjectList)(enabled);
 
   if (!enabled) return null;

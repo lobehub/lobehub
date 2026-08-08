@@ -13,7 +13,7 @@ import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import { projectService } from '@/services/project';
-import { useProjectStore } from '@/store/project';
+import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
 
 import { getProjectAcceptanceActions, type ProjectAcceptanceAction } from './actions';
 import { openRejectProjectModal } from './RejectModal';
@@ -40,7 +40,7 @@ const ProjectAcceptance = memo(() => {
   const { t } = useTranslation('project');
   const { projectId } = useActiveRouteParams<{ projectId: string }>();
   const id = projectId ?? '';
-  const detail = useProjectStore((s) => s.projectDetails[id]);
+  const detail = useCurrentProjectDetail(id);
   const detailSWR = useProjectStore((s) => s.useFetchProjectDetail)(projectId);
   const [loadingAction, setLoadingAction] = useState<ProjectAcceptanceAction>();
 

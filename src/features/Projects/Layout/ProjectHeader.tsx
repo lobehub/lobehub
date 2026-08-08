@@ -11,7 +11,7 @@ import NavItem from '@/features/NavPanel/components/NavItem';
 import SideBarHeaderLayout from '@/features/NavPanel/SideBarHeaderLayout';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import type { ProjectDetail } from '@/store/project';
-import { useProjectStore } from '@/store/project';
+import { useCurrentProjectList, useProjectStore } from '@/store/project';
 
 const styles = createStaticStyles(({ css }) => ({
   chevron: css`
@@ -44,7 +44,7 @@ const ProjectHeader = memo<ProjectHeaderProps>(({ project }) => {
   const { t } = useTranslation('project');
   const navigate = useWorkspaceAwareNavigate();
   const [open, setOpen] = useState(false);
-  const projects = useProjectStore((s) => s.projectList);
+  const projects = useCurrentProjectList();
   useProjectStore((s) => s.useFetchProjectList)(true);
 
   const handleSelect = (projectId: string) => {

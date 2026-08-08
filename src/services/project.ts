@@ -2,12 +2,29 @@ import type { ProjectStatus, ProjectVisibility } from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
+const PROJECT_PAGE_SIZE = 100;
+
 class ProjectService {
   acceptCompletion = async (id: string, comment?: string) =>
     lambdaClient.project.acceptCompletion.mutate({ comment, id });
 
-  list = async (params: { limit?: number; offset?: number; statuses?: ProjectStatus[] } = {}) =>
-    lambdaClient.project.list.query({ limit: 50, offset: 0, ...params });
+  listAll = async (params: { statuses?: ProjectStatus[] } = {}) => {
+    const projects = [];
+    let offset = 0;
+    let response;
+
+    do {
+      response = await lambdaClient.project.list.query({
+        limit: PROJECT_PAGE_SIZE,
+        offset,
+        ...params,
+      });
+      projects.push(...response.data);
+      offset += response.data.length;
+    } while (response.data.length === PROJECT_PAGE_SIZE);
+
+    return { ...response, data: projects };
+  };
 
   detail = async (id: string) => lambdaClient.project.detail.query({ id });
 

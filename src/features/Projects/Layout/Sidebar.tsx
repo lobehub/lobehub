@@ -22,7 +22,7 @@ import { NavPanelPortal } from '@/features/NavPanel/NavPanelPortal';
 import SideBarLayout from '@/features/NavPanel/SideBarLayout';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
-import { useProjectStore } from '@/store/project';
+import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
 
 import {
   getProjectAcceptancePath,
@@ -37,7 +37,7 @@ const ProjectSidebarContent = memo(() => {
   const { id, projectId } = useActiveRouteParams<{ id?: string; projectId: string }>();
   const navigate = useWorkspaceAwareNavigate();
   const { pathname } = useLocation();
-  const detail = useProjectStore((s) => (projectId ? s.projectDetails[projectId] : undefined));
+  const detail = useCurrentProjectDetail(projectId);
   const detailSWR = useProjectStore((s) => s.useFetchProjectDetail)(projectId);
   const projectLibraries = detail?.knowledgeBases ?? [];
   const projectAgentItems = useMemo(
