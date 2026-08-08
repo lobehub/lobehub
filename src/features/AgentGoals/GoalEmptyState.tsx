@@ -45,11 +45,19 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
   hero: css`
+    isolation: isolate;
+    position: relative;
+
+    overflow: hidden;
+
     padding-block: 40px 32px;
     padding-inline: 40px;
+
     text-align: center;
   `,
   heroIcon: css`
+    position: relative;
+
     display: flex;
     align-items: center;
     justify-content: center;
@@ -58,9 +66,80 @@ const styles = createStaticStyles(({ css }) => ({
     height: 48px;
     border-radius: 14px;
 
-    color: ${cssVar.colorTextSecondary};
+    color: ${cssVar.colorText};
 
-    background: ${cssVar.colorFillTertiary};
+    background: ${cssVar.colorBgContainer};
+    box-shadow:
+      0 0 0 1px ${cssVar.colorBorderSecondary},
+      0 8px 28px ${cssVar.colorFillSecondary};
+
+    &::before {
+      content: '';
+
+      position: absolute;
+      z-index: -1;
+      inset: -2px;
+
+      border-radius: 16px;
+
+      background: conic-gradient(
+        from 0deg,
+        transparent 0deg,
+        ${cssVar.colorPrimary} 70deg,
+        ${cssVar.colorInfo} 120deg,
+        transparent 180deg
+      );
+      filter: blur(6px);
+
+      animation: goal-icon-flow 4s linear infinite;
+    }
+
+    @keyframes goal-icon-flow {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      &::before {
+        animation: none;
+      }
+    }
+  `,
+  heroInner: css`
+    position: relative;
+    z-index: 1;
+  `,
+  heroPattern: css`
+    pointer-events: none;
+
+    position: absolute;
+    z-index: 0;
+    inset-block-start: 0;
+    inset-inline: 50%;
+    transform: translateX(-50%);
+
+    width: min(760px, 100%);
+    height: 220px;
+
+    opacity: 0.48;
+    background-image: radial-gradient(circle, ${cssVar.colorTextQuaternary} 1px, transparent 1.5px);
+    background-position: 0 0;
+    background-size: 18px 18px;
+
+    animation: goal-pattern-flow 8s linear infinite;
+
+    mask-image: radial-gradient(ellipse 62% 72% at 50% 25%, #000 15%, transparent 78%);
+
+    @keyframes goal-pattern-flow {
+      to {
+        background-position: 36px 18px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+    }
   `,
   heroLead: css`
     max-width: 560px;
@@ -173,21 +252,24 @@ const GoalEmptyState = memo<GoalEmptyStateProps>(({ onCreate }) => {
 
   return (
     <Block padding={0} variant={'borderless'}>
-      <Flexbox align={'center'} className={styles.hero} gap={16}>
-        <div className={styles.heroIcon}>
-          <Icon icon={InfinityIcon} size={24} />
-        </div>
-        <Flexbox align={'center'} gap={8}>
-          <Text fontSize={20} weight={600}>
-            {t('goalEmpty.title')}
-          </Text>
-          <Text className={styles.heroLead} fontSize={14} type={'secondary'}>
-            {t('goalEmpty.lead')}
-          </Text>
+      <Flexbox align={'center'} className={styles.hero}>
+        <div className={styles.heroPattern} />
+        <Flexbox align={'center'} className={styles.heroInner} gap={16}>
+          <div className={styles.heroIcon}>
+            <Icon icon={InfinityIcon} size={24} />
+          </div>
+          <Flexbox align={'center'} gap={8}>
+            <Text fontSize={20} weight={600}>
+              {t('goalEmpty.title')}
+            </Text>
+            <Text className={styles.heroLead} fontSize={14} type={'secondary'}>
+              {t('goalEmpty.lead')}
+            </Text>
+          </Flexbox>
+          <Button icon={PlusIcon} type={'primary'} onClick={() => onCreate()}>
+            {t('goalEmpty.create')}
+          </Button>
         </Flexbox>
-        <Button icon={PlusIcon} type={'primary'} onClick={() => onCreate()}>
-          {t('goalEmpty.create')}
-        </Button>
       </Flexbox>
 
       <Flexbox className={styles.section} gap={14}>

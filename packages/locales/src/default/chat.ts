@@ -1440,7 +1440,8 @@ export default {
   'createGoal.contextHint': 'Add constraints, source material, or anything the Agent should know',
   'createGoal.criterionPlaceholder': 'Describe a result that can be clearly checked',
   'createGoal.criteriaHint': 'Review and edit these before the goal starts',
-  'createGoal.criteriaTitle': 'What counts as done',
+  'createGoal.criteriaTitle': 'Acceptance criteria',
+  'createGoal.describeTitle': 'What outcome do you want?',
   'createGoal.describeHint': 'Describe the outcome first, then complete its execution plan.',
   'createGoal.generateFailed': 'Could not draft acceptance criteria. Try again.',
   'createGoal.instructionPlaceholder':

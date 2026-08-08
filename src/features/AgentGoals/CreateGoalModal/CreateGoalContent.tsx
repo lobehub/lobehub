@@ -34,10 +34,21 @@ import { verifyService } from '@/services/verify';
 import { useTaskStore } from '@/store/task';
 
 import { buildGoalTaskConfig } from './goalConfig';
+import { deriveGoalTitle } from './goalTitle';
 
 const styles = createStaticStyles(({ css }) => ({
   budgetField: css`
+    display: grid;
+    grid-template-columns: 96px 144px minmax(0, 1fr);
+    gap: 12px;
+    align-items: center;
+
     min-width: 0;
+
+    @media (width <= 640px) {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 6px;
+    }
   `,
   body: css`
     overflow-y: auto;
@@ -80,12 +91,8 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   inputShell: css`
     overflow: hidden;
-
-    min-height: 180px;
-    padding: 1px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
+    min-height: 208px;
+    border-block: 1px solid ${cssVar.colorBorderSecondary};
     background: ${cssVar.colorBgElevated};
   `,
   inputShellLoading: css`
@@ -118,9 +125,6 @@ const styles = createStaticStyles(({ css }) => ({
     min-height: 112px;
     padding-block: 10px;
     padding-inline: 12px;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorFillQuaternary};
   `,
   optional: css`
     flex: none;
@@ -155,6 +159,14 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: transparent;
     outline: none;
+  `,
+  titleStatic: css`
+    padding-block: 4px 8px;
+
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: ${cssVar.colorText};
   `,
 }));
 
@@ -235,7 +247,8 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
   }, [editor]);
 
   const handleNext = useCallback(() => {
-    if (!canCreate || !plan.name.trim()) return;
+    const instruction = instructionRef.current.trim() || plan.instruction.trim();
+    if (!canCreate || !instruction) return;
     const seededCriterion = initialRequirement?.trim();
     setPlan((current) => ({
       ...current,
@@ -250,12 +263,13 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
                 verifierType: 'agent',
               },
             ],
-      instruction: current.instruction.trim() || current.name.trim(),
+      instruction,
+      name: current.name.trim() || deriveGoalTitle(instruction),
     }));
-    instructionRef.current = plan.instruction.trim() || plan.name.trim();
+    instructionRef.current = instruction;
     setStep('preparing');
     prepareTimerRef.current = setTimeout(() => setStep('review'), 700);
-  }, [canCreate, initialRequirement, plan.instruction, plan.name]);
+  }, [canCreate, initialRequirement, plan.instruction]);
 
   const handleCreateBlank = useCallback(() => {
     if (!canCreate) return;
@@ -397,14 +411,17 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
               </Text>
             </Flexbox>
           )}
-          <input
-            autoFocus={canCreate}
-            className={styles.title}
-            disabled={!canCreate || step === 'preparing'}
-            placeholder={t('createGoal.titlePlaceholder')}
-            value={plan.name}
-            onChange={(e) => setPlan((current) => ({ ...current, name: e.target.value }))}
-          />
+          {step === 'review' ? (
+            <input
+              className={styles.title}
+              disabled={!canCreate}
+              placeholder={t('createGoal.titlePlaceholder')}
+              value={plan.name}
+              onChange={(e) => setPlan((current) => ({ ...current, name: e.target.value }))}
+            />
+          ) : (
+            <div className={styles.titleStatic}>{t('createGoal.describeTitle')}</div>
+          )}
           {step !== 'review' && (
             <>
               <div
@@ -417,7 +434,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
                   entityId={'create-goal-description'}
                   floatingToolbar={false}
                   placeholder={t('createGoal.instructionPlaceholder')}
-                  style={{ fontSize: 14, minHeight: 178, padding: 12 }}
+                  style={{ fontSize: 14, minHeight: 206, padding: 16 }}
                   onContentChange={handleContentChange}
                 />
               </div>
@@ -435,9 +452,6 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
               <Icon color={cssVar.colorTextTertiary} icon={Paperclip} size={16} />
               <Text fontSize={13} weight={600}>
                 {t('createGoal.contextLabel')}
-              </Text>
-              <Text className={styles.sectionHint} fontSize={12}>
-                {t('createGoal.contextHint')}
               </Text>
             </Flexbox>
             <Flexbox className={styles.instructionEditor}>
@@ -526,8 +540,8 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
             <Text fontSize={13} weight={600}>
               {t('createGoal.budgetTitle')}
             </Text>
-            <Flexbox horizontal gap={24} wrap={'wrap'}>
-              <Flexbox className={styles.budgetField} flex={1} gap={6}>
+            <Flexbox gap={12}>
+              <div className={styles.budgetField}>
                 <Text fontSize={12} type={'secondary'}>
                   {t('createGoal.roundBudgetLabel')}
                 </Text>
@@ -535,7 +549,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
                   disabled={!canCreate}
                   min={2}
                   size={'small'}
-                  style={{ width: 144 }}
+                  style={{ width: '100%' }}
                   suffix={t('createGoal.roundsUnit')}
                   value={plan.maxIterations ?? undefined}
                   variant={'filled'}
@@ -544,9 +558,9 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
                 <Text className={styles.sectionHint} fontSize={12}>
                   {t('createGoal.roundBudgetHint')}
                 </Text>
-              </Flexbox>
+              </div>
 
-              <Flexbox className={styles.budgetField} flex={1} gap={6}>
+              <div className={styles.budgetField}>
                 <Text fontSize={12} type={'secondary'}>
                   {t('createGoal.costBudgetLabel')}
                 </Text>
@@ -557,7 +571,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
                   placeholder={t('createGoal.costBudgetPlaceholder')}
                   prefix={'$'}
                   size={'small'}
-                  style={{ width: 144 }}
+                  style={{ width: '100%' }}
                   value={plan.maxTotalCost}
                   variant={'filled'}
                   onChange={(value) => setPlan((current) => ({ ...current, maxTotalCost: value }))}
@@ -565,7 +579,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
                 <Text className={styles.sectionHint} fontSize={12}>
                   {t('createGoal.costBudgetHint')}
                 </Text>
-              </Flexbox>
+              </div>
             </Flexbox>
           </Flexbox>
         </Flexbox>
@@ -620,8 +634,9 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
               !canCreate ||
               isCreating ||
               step === 'preparing' ||
-              !plan.name.trim() ||
-              (step === 'review' && plan.criteria.every((criterion) => !criterion.title.trim()))
+              (step === 'describe'
+                ? !plan.instruction.trim()
+                : !plan.name.trim() || plan.criteria.every((criterion) => !criterion.title.trim()))
             }
             onClick={step === 'describe' ? handleNext : handleSubmit}
           >
