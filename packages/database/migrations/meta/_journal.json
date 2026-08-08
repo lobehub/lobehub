@@ -959,6 +959,13 @@
       "when": 1786138599832,
       "tag": "0136_projects_add_identifier",
       "breakpoints": true
+    },
+    {
+      "idx": 137,
+      "version": "7",
+      "when": 1786151567302,
+      "tag": "0137_agent_history_jobs_payload",
+      "breakpoints": true
     }
   ],
   "version": "6"

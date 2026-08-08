@@ -14,6 +14,20 @@ import { timestamps, timestamptz } from './_helpers';
 import { agents } from './agent';
 import { topics } from './topic';
 
+export interface AgentHistoryJobPayload {
+  /** `copy` jobs: agents duplicated by this job. */
+  agents?: { newAgentId: string; sourceAgentId: string }[];
+}
+
+export interface AgentHistoryJobTopicPayload {
+  /** `copy` rows: agent owning the target topic shell. */
+  newAgentId?: string;
+  /** `copy` rows: agent the source topic belongs to. */
+  sourceAgentId?: string;
+  /** `copy` rows: topic to copy messages/threads from. */
+  sourceTopicId?: string;
+}
+
 /**
  * Async bulk jobs over an agent's conversation history.
  *
@@ -52,8 +66,15 @@ export const agentHistoryJobs = pgTable(
       .notNull()
       .default('pending'),
 
-    /** Job discriminator; only `transfer` exists today (see header doc). */
+    /** Job discriminator: `transfer` (scope rewrite) or `copy` (history fork). */
     type: text('type').notNull().default('transfer'),
+
+    /**
+     * Type-specific job data. `transfer` jobs keep it null; `copy` jobs store
+     * the source→target agent id map the per-topic copy resolves against
+     * (`{ agents: [{ sourceAgentId, newAgentId }] }`).
+     */
+    payload: jsonb('payload').$type<AgentHistoryJobPayload>(),
 
     /** Batch snapshot for observability; guards use the junction table below. */
     agentIds: jsonb('agent_ids').$type<string[]>().notNull(),
@@ -142,6 +163,15 @@ export const agentHistoryJobTopics = pgTable(
 
     priority: boolean('priority').notNull().default(false),
     activityAt: timestamptz('activity_at').notNull(),
+
+    /**
+     * Type-specific queue-row data. `transfer` rows keep it null (`topic_id`
+     * alone identifies the work). `copy` rows point at an already-created
+     * target topic shell, so `topic_id` is the NEW topic (what status polls
+     * and gray-out UI key on) and the payload records where to copy from:
+     * `{ sourceTopicId, sourceAgentId, newAgentId }`.
+     */
+    payload: jsonb('payload').$type<AgentHistoryJobTopicPayload>(),
   },
   (t) => [
     uniqueIndex('agent_history_job_topics_job_id_topic_id_unique').on(t.jobId, t.topicId),

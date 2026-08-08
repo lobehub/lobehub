@@ -352,6 +352,7 @@ table agent_history_job_topics {
   topic_id text [not null]
   priority boolean [not null, default: false]
   activity_at "timestamp with time zone" [not null]
+  payload jsonb
 
   indexes {
     (job_id, topic_id) [name: 'agent_history_job_topics_job_id_topic_id_unique', unique]
@@ -364,6 +365,7 @@ table agent_history_jobs {
   id text [pk, not null]
   status text [not null, default: 'pending']
   type text [not null, default: 'transfer']
+  payload jsonb
   agent_ids jsonb [not null]
   session_ids jsonb [not null]
   group_ids jsonb [not null, default: `[]`]
@@ -1939,7 +1941,7 @@ table projects {
     workspace_id [name: 'projects_workspace_id_idx']
     (workspace_id, visibility, user_id) [name: 'projects_workspace_visibility_idx']
     (status, updated_at) [name: 'projects_status_updated_at_idx']
-
+    
   }
 }
 
