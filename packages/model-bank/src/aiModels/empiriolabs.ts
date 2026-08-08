@@ -24,22 +24,6 @@ const empiriolabsChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
-      reasoning: true,
-    },
-    description:
-      'Open-source LLM specialized in formal theorem proving in Lean 4, built on a recursive theorem-proving pipeline.',
-    displayName: 'DeepSeek Prover V2',
-    id: 'deepseek-prover-v2',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
       functionCall: true,
       reasoning: true,
     },
@@ -546,11 +530,31 @@ const empiriolabsChatModels: AIChatModelCard[] = [
       reasoning: true,
       vision: true,
     },
-    contextWindowTokens: 1_000_000,
+    contextWindowTokens: 1_048_576,
     description:
-      'Meta frontier reasoning model with a 1M token context, image and video understanding, built-in web search with cited sources, and tool calling.',
+      'Meta frontier reasoning model with a 1,048,576-token context plus image, video, audio, and PDF understanding, web search, and tool calling.',
     displayName: 'Muse Spark 1.1',
     id: 'muse-spark-1-1',
+    maxOutput: 131_072,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 1.25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 4.25, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_048_576,
+    description:
+      "Meta's updated frontier reasoning model with a 1,048,576-token context, image, video, audio, and PDF understanding, web search, and tool calling.",
+    displayName: 'Muse Spark 1.2',
+    id: 'muse-spark-1-2',
     maxOutput: 131_072,
     pricing: {
       units: [
@@ -1297,15 +1301,20 @@ export const flux2Klein4bParamsSchema: ModelParamsSchema = {
   steps: { default: 4, max: 12, min: 1 },
 };
 
+export const gptImage2ParamsSchema: ModelParamsSchema = {
+  imageUrl: { default: null },
+  prompt: { default: '' },
+  quality: { default: 'medium', enum: ['low', 'medium', 'high'] },
+  size: { default: '1024x1024', enum: ['1024x1024', '1536x1024', '1024x1536'] },
+};
+
 export const hunyuanImage3ParamsSchema: ModelParamsSchema = {
-  cfg: { default: 7.5, max: 20, min: 1, step: 0.5 },
+  aspectRatio: {
+    default: '1:1',
+    enum: ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '5:4', '4:5', '21:9', '9:21'],
+  },
   prompt: { default: '' },
   seed: { default: null },
-  size: {
-    default: '1024x1024',
-    enum: ['1024x1024', '768x1024', '1024x768', '1024x1536', '1536x1024', '512x512'],
-  },
-  steps: { default: 28, max: 50, min: 10 },
 };
 
 export const janusProDeepseekParamsSchema: ModelParamsSchema = {
@@ -1321,6 +1330,32 @@ export const qwenImage20ParamsSchema: ModelParamsSchema = {
   imageUrl: { default: null },
   prompt: { default: '' },
   promptExtend: { default: true },
+  seed: { default: null },
+  watermark: { default: false },
+};
+
+export const qwenImage30ParamsSchema: ModelParamsSchema = {
+  aspectRatio: {
+    default: '1:1',
+    enum: ['auto', '1:1', '16:9', '9:16', '3:2', '2:3', '4:3', '3:4', '5:4', '4:5'],
+  },
+  imageUrl: { default: null },
+  prompt: { default: '' },
+  promptExtend: { default: true },
+  resolution: { default: '1K', enum: ['auto', '1K', '2K'] },
+  seed: { default: null },
+  watermark: { default: false },
+};
+
+export const qwenImage30ProParamsSchema: ModelParamsSchema = {
+  aspectRatio: {
+    default: '1:1',
+    enum: ['auto', '1:1', '16:9', '9:16', '3:2', '2:3', '4:3', '3:4', '5:4', '4:5'],
+  },
+  imageUrl: { default: null },
+  prompt: { default: '' },
+  promptExtend: { default: true },
+  resolution: { default: '1K', enum: ['auto', '1K', '2K'] },
   seed: { default: null },
   watermark: { default: false },
 };
@@ -1357,6 +1392,31 @@ export const stepImageEdit2ParamsSchema: ModelParamsSchema = {
     enum: ['1024x1024', '768x1360', '896x1184', '1360x768', '1184x896'],
   },
   steps: { default: 8, max: 50, min: 1 },
+};
+
+export const wan21ImageParamsSchema: ModelParamsSchema = {
+  aspectRatio: { default: '1:1', enum: ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3'] },
+  prompt: { default: '' },
+  promptExtend: { default: true },
+  seed: { default: null },
+  watermark: { default: false },
+};
+
+export const wan22ImageParamsSchema: ModelParamsSchema = {
+  aspectRatio: { default: '1:1', enum: ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3'] },
+  prompt: { default: '' },
+  promptExtend: { default: true },
+  seed: { default: null },
+  watermark: { default: false },
+};
+
+export const wan25ImageParamsSchema: ModelParamsSchema = {
+  aspectRatio: { default: '1:1', enum: ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3'] },
+  imageUrl: { default: null },
+  prompt: { default: '' },
+  promptExtend: { default: true },
+  seed: { default: null },
+  watermark: { default: false },
 };
 
 export const wan27ImageParamsSchema: ModelParamsSchema = {
@@ -1400,6 +1460,19 @@ const empiriolabsImageModels: AIImageModelCard[] = [
   },
   {
     description:
+      "OpenAI's flagship image model with strong prompt fidelity, crisp text rendering, and instruction-based editing across up to 16 reference images.",
+    displayName: 'GPT Image 2',
+    enabled: true,
+    id: 'gpt-image-2',
+    organization: 'OpenAI',
+    parameters: gptImage2ParamsSchema,
+    pricing: {
+      units: [{ name: 'imageGeneration', rate: 0.012, strategy: 'fixed', unit: 'image' }],
+    },
+    type: 'image',
+  },
+  {
+    description:
       'Open-source text-to-image model on a multimodal Mixture-of-Experts architecture with photorealistic detail and strong multilingual text rendering.',
     displayName: 'Hunyuan Image 3',
     enabled: true,
@@ -1433,7 +1506,33 @@ const empiriolabsImageModels: AIImageModelCard[] = [
     organization: 'Alibaba',
     parameters: qwenImage20ParamsSchema,
     pricing: {
-      units: [{ name: 'imageGeneration', rate: 0.0322, strategy: 'fixed', unit: 'image' }],
+      units: [{ name: 'imageGeneration', rate: 0.035, strategy: 'fixed', unit: 'image' }],
+    },
+    type: 'image',
+  },
+  {
+    description:
+      'Fast Qwen image model for text-to-image and multi-image editing, with strong layouts, multilingual text, and controllable 1K or 2K output.',
+    displayName: 'Qwen Image 3.0',
+    enabled: true,
+    id: 'qwen-image-3-0',
+    organization: 'Alibaba',
+    parameters: qwenImage30ParamsSchema,
+    pricing: {
+      units: [{ name: 'imageGeneration', rate: 0.03, strategy: 'fixed', unit: 'image' }],
+    },
+    type: 'image',
+  },
+  {
+    description:
+      'Premium Qwen image model for dense layouts, 10px multilingual text, photorealistic detail, and multi-image editing with up to six outputs.',
+    displayName: 'Qwen Image 3.0 Pro',
+    enabled: true,
+    id: 'qwen-image-3-0-pro',
+    organization: 'Alibaba',
+    parameters: qwenImage30ProParamsSchema,
+    pricing: {
+      units: [{ name: 'imageGeneration', rate: 0.04, strategy: 'fixed', unit: 'image' }],
     },
     type: 'image',
   },
@@ -1473,6 +1572,45 @@ const empiriolabsImageModels: AIImageModelCard[] = [
     parameters: stepImageEdit2ParamsSchema,
     pricing: {
       units: [{ name: 'imageGeneration', rate: 0.003, strategy: 'fixed', unit: 'image' }],
+    },
+    type: 'image',
+  },
+  {
+    description:
+      "Alibaba's Wan 2.1 text-to-image model with turbo and plus tiers and up to 1440x1440 output at low per-image pricing.",
+    displayName: 'Wan2.1 Image',
+    enabled: true,
+    id: 'wan2-1-image',
+    organization: 'Alibaba',
+    parameters: wan21ImageParamsSchema,
+    pricing: {
+      units: [{ name: 'imageGeneration', rate: 0.025, strategy: 'fixed', unit: 'image' }],
+    },
+    type: 'image',
+  },
+  {
+    description:
+      "Alibaba's Wan 2.2 text-to-image model with plus and flash tiers and up to 1440x1440 output at low per-image pricing.",
+    displayName: 'Wan2.2 Image',
+    enabled: true,
+    id: 'wan2-2-image',
+    organization: 'Alibaba',
+    parameters: wan22ImageParamsSchema,
+    pricing: {
+      units: [{ name: 'imageGeneration', rate: 0.05, strategy: 'fixed', unit: 'image' }],
+    },
+    type: 'image',
+  },
+  {
+    description:
+      "Alibaba's Wan 2.5 image model with text-to-image and multi-reference editing of up to 3 images at about 1.7 megapixels.",
+    displayName: 'Wan2.5 Image',
+    enabled: true,
+    id: 'wan2-5-image',
+    organization: 'Alibaba',
+    parameters: wan25ImageParamsSchema,
+    pricing: {
+      units: [{ name: 'imageGeneration', rate: 0.03, strategy: 'fixed', unit: 'image' }],
     },
     type: 'image',
   },
@@ -1635,6 +1773,24 @@ const empiriolabsVideoModels: AIVideoModelCard[] = [
   },
   {
     description:
+      "Kuaishou's Kling 3.0 video generator with text-to-video, first and last frame image-to-video, native audio, and 720p, 1080p, or 4K output.",
+    displayName: 'Kling V3',
+    enabled: true,
+    id: 'kling-v3',
+    organization: 'Kuaishou',
+    parameters: {
+      aspectRatio: { default: '16:9', enum: ['16:9', '9:16', '1:1'] },
+      duration: { default: 5, max: 15, min: 3 },
+      imageUrl: { default: null },
+      prompt: { default: '' },
+    },
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.168, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
       'Generates 4 to 15 second clips at up to 2K with native stereo audio, following text, image, video, and audio references in one request.',
     displayName: 'MiniMax H3',
     enabled: true,
@@ -1652,7 +1808,7 @@ const empiriolabsVideoModels: AIVideoModelCard[] = [
       resolution: { default: '768p', enum: ['768p', '2k'] },
     },
     pricing: {
-      units: [{ name: 'videoGeneration', rate: 0.16, strategy: 'fixed', unit: 'second' }],
+      units: [{ name: 'videoGeneration', rate: 0.18, strategy: 'fixed', unit: 'second' }],
     },
     type: 'video',
   },
@@ -1793,6 +1949,30 @@ const empiriolabsVideoModels: AIVideoModelCard[] = [
   },
   {
     description:
+      'Long-form video model for coherent clips up to 30 seconds, with up to 50 reference images, videos, and audio clips, native audio, editing, and extension.',
+    displayName: 'Seedance 2.5',
+    enabled: true,
+    id: 'seedance-2-5',
+    organization: 'ByteDance',
+    parameters: {
+      aspectRatio: {
+        default: 'adaptive',
+        enum: ['adaptive', '16:9', '9:16', '1:1', '4:3', '3:4', '21:9'],
+      },
+      duration: { default: 5, max: 30, min: 4 },
+      endImageUrl: { default: null },
+      generateAudio: { default: true },
+      imageUrl: { default: null },
+      prompt: { default: '' },
+      resolution: { default: '720p', enum: ['480p', '720p'] },
+    },
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.462, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
       'Stable Video Infinity 2.0 Pro on WAN 2.2: extends still images into theoretically infinite-length video while keeping consistent character IDs.',
     displayName: 'SVI 2.0 Pro',
     enabled: true,
@@ -1805,6 +1985,68 @@ const empiriolabsVideoModels: AIVideoModelCard[] = [
     },
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.057, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      "Alibaba's Wan 2.1 video model with turbo and plus tiers for text-to-video, image-to-video, and first and last frame clips at 480p or 720p.",
+    displayName: 'Wan 2.1',
+    enabled: true,
+    id: 'wan-2-1',
+    organization: 'Alibaba',
+    parameters: {
+      aspectRatio: { default: '16:9', enum: ['16:9', '9:16', '1:1', '4:3', '3:4'] },
+      duration: { default: 5, max: 5, min: 3 },
+      imageUrl: { default: null },
+      prompt: { default: '' },
+      promptExtend: { default: true },
+      resolution: { default: '720p', enum: ['480p', '720p'] },
+      seed: { default: null },
+    },
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.036, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      "Alibaba's Wan 2.2 video family with standard and flash tiers, first and last frame interpolation, and 480p to 1080p output at low cost.",
+    displayName: 'Wan 2.2',
+    enabled: true,
+    id: 'wan-2-2',
+    organization: 'Alibaba',
+    parameters: {
+      aspectRatio: { default: '16:9', enum: ['16:9', '9:16', '1:1', '4:3', '3:4'] },
+      imageUrl: { default: null },
+      prompt: { default: '' },
+      promptExtend: { default: true },
+      resolution: { default: '1080p', enum: ['480p', '720p', '1080p'] },
+      seed: { default: null },
+    },
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.1, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      "Alibaba's Wan 2.5 video model with text-to-video and image-to-video, native audio, optional custom audio tracks, and 480p to 1080p output.",
+    displayName: 'Wan 2.5',
+    enabled: true,
+    id: 'wan-2-5',
+    organization: 'Alibaba',
+    parameters: {
+      aspectRatio: { default: '16:9', enum: ['16:9', '9:16', '1:1', '4:3', '3:4'] },
+      duration: { default: 5, max: 10, min: 5 },
+      imageUrl: { default: null },
+      prompt: { default: '' },
+      promptExtend: { default: true },
+      resolution: { default: '1080p', enum: ['480p', '720p', '1080p'] },
+      seed: { default: null },
+    },
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.15, strategy: 'fixed', unit: 'second' }],
     },
     type: 'video',
   },
@@ -1826,7 +2068,7 @@ const empiriolabsVideoModels: AIVideoModelCard[] = [
       seed: { default: null },
     },
     pricing: {
-      units: [{ name: 'videoGeneration', rate: 0.138, strategy: 'fixed', unit: 'second' }],
+      units: [{ name: 'videoGeneration', rate: 0.15, strategy: 'fixed', unit: 'second' }],
     },
     type: 'video',
   },
