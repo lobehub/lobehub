@@ -18,6 +18,7 @@ import WorkPreview from './WorkPreview';
 const styles = createStaticStyles(({ css }) => ({
   agentAvatar: css`
     align-self: flex-start;
+    margin-block-start: 2px;
   `,
   agentName: css`
     overflow: hidden;
