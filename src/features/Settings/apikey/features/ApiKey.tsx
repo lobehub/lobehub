@@ -2,12 +2,11 @@
 
 import { isDesktop } from '@lobechat/const';
 import { Center, Empty, Flexbox, Text } from '@lobehub/ui';
-import { Button, Switch, toast } from '@lobehub/ui/base-ui';
+import { Button, toast } from '@lobehub/ui/base-ui';
 import { useMutation } from '@tanstack/react-query';
-import { Popconfirm } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { BookOpen, Trash } from 'lucide-react';
-import { type FC } from 'react';
+import { BookOpen, ChevronRight } from 'lucide-react';
+import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
@@ -23,7 +22,8 @@ import { electronSyncSelectors } from '@/store/electron/selectors';
 import { type ApiKeyItem, type CreateApiKeyParams, type UpdateApiKeyParams } from '@/types/apiKey';
 import { isForbiddenError } from '@/utils/forbiddenError';
 
-import { ApiKeyDisplay, createApiKeyModal, EditableCell } from './index';
+import ApiKeyDetail from './ApiKeyDetail';
+import { ApiKeyDisplay, createApiKeyModal } from './index';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -31,6 +31,17 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-block: 16px;
     border-radius: ${cssVar.borderRadius};
     background: ${cssVar.colorBgContainer};
+  `,
+  /* Always visible, not reveal-on-hover: the row's only job besides browsing is
+     to lead into the detail drawer, and a marker you must hover to discover
+     doesn't advertise that. Quiet by default, darker under the cursor. */
+  enterIcon: css`
+    color: ${cssVar.colorTextQuaternary};
+    transition: color 0.2s ease;
+
+    tr:hover & {
+      color: ${cssVar.colorText};
+    }
   `,
   header: css`
     display: flex;
@@ -40,6 +51,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     padding-block-end: 16px;
     padding-inline: 24px;
+  `,
+  /* The name doubles as the entry point into the detail drawer. */
+  nameLink: css`
+    font-weight: 500;
+
+    tr:hover & {
+      color: ${cssVar.colorLink};
+    }
   `,
 }));
 
@@ -69,6 +88,11 @@ const ApiKey: FC = () => {
   const { data, isLoading, mutate } = useClientDataSWR<ApiKeyItem[]>(apiKeyKeys.list(), () =>
     lambdaClient.apiKey.getApiKeys.query(),
   );
+
+  // Detail drawer holds only the id; the item is re-derived from SWR data so
+  // in-drawer edits (rename / toggle) reflect immediately after revalidation.
+  const [detailId, setDetailId] = useState<string>();
+  const detailApiKey = detailId ? data?.find((item) => item.id === detailId) : undefined;
 
   const notifyMutationError = (error: unknown) => {
     toast.error(
@@ -115,46 +139,33 @@ const ApiKey: FC = () => {
     {
       key: 'name',
       listSlot: 'title',
-      render: (apiKey) => {
-        const canManage = checkManageable(apiKey.userId);
-        return (
-          <span title={canManage ? undefined : manageTooltip}>
-            <EditableCell
-              disabled={!canEdit || !canManage}
-              placeholder={t('apikey.display.enterPlaceholder')}
-              type="text"
-              value={apiKey.name}
-              onSubmit={(name) => {
-                if (!canEdit || !canManage) return;
-                if (!name || name === apiKey.name) {
-                  return;
-                }
-
-                updateMutation.mutate({ id: apiKey.id!, params: { name: name as string } });
-              }}
-            />
-          </span>
-        );
-      },
+      // The name is the affordance into the detail drawer — styled as a link so
+      // the row reads as navigable rather than inert.
+      render: (apiKey) => <span className={styles.nameLink}>{apiKey.name}</span>,
       title: t('apikey.list.columns.name'),
     },
     {
       key: 'key',
-      render: (apiKey) =>
+      render: (apiKey) => (
         // Plaintext is returned only for the caller's own keys; other members'
         // rows are masked (owners can manage them but never see the secret).
-        apiKey.isMine === false ? (
-          <span style={{ opacity: 0.5 }}>{`lb-${'*'.repeat(12)}`}</span>
-        ) : apiKey.keyDecryptionFailed ? (
-          <span title={t('apikey.display.unavailableDescription')}>
-            {t('apikey.display.unavailable')}
-          </span>
-        ) : (
-          <ApiKeyDisplay apiKey={apiKey.key} />
-        ),
+        <span onClick={(e) => e.stopPropagation()}>
+          {apiKey.isMine === false ? (
+            <span style={{ opacity: 0.5 }}>{`sk-lh-${'*'.repeat(12)}`}</span>
+          ) : apiKey.keyDecryptionFailed ? (
+            <span title={t('apikey.display.unavailableDescription')}>
+              {t('apikey.display.unavailable')}
+            </span>
+          ) : (
+            <ApiKeyDisplay apiKey={apiKey.key} />
+          )}
+        </span>
+      ),
       title: t('apikey.list.columns.key'),
       width: 230,
     },
+    // Scopes are deliberately absent from the list: the column could only ever
+    // truncate, and the detail drawer (row click) shows the full grant list.
     ...(activeWorkspaceId
       ? [
           {
@@ -166,52 +177,8 @@ const ApiKey: FC = () => {
         ]
       : []),
     {
-      key: 'enabled',
-      listSlot: 'extra',
-      render: (apiKey: ApiKeyItem) => {
-        const canManage = checkManageable(apiKey.userId);
-        return (
-          <span style={{ display: 'inline-flex' }} title={canManage ? undefined : manageTooltip}>
-            <Switch
-              checked={!!apiKey.enabled}
-              disabled={!canEdit || !canManage}
-              onChange={(checked) => {
-                if (!canEdit || !canManage) return;
-                updateMutation.mutate({ id: apiKey.id!, params: { enabled: checked } });
-              }}
-            />
-          </span>
-        );
-      },
-      title: t('apikey.list.columns.status'),
-      width: 100,
-    },
-    {
       key: 'expiresAt',
-      render: (apiKey) => {
-        const canManage = checkManageable(apiKey.userId);
-        return (
-          <span title={canManage ? undefined : manageTooltip}>
-            <EditableCell
-              disabled={!canEdit || !canManage}
-              placeholder={t('apikey.display.neverExpires')}
-              type="date"
-              value={apiKey.expiresAt?.toLocaleString() || t('apikey.display.neverExpires')}
-              onSubmit={(expiresAt) => {
-                if (!canEdit || !canManage) return;
-                if (expiresAt === apiKey.expiresAt) {
-                  return;
-                }
-
-                updateMutation.mutate({
-                  id: apiKey.id!,
-                  params: { expiresAt: expiresAt ? new Date(expiresAt as string) : null },
-                });
-              }}
-            />
-          </span>
-        );
-      },
+      render: (apiKey) => apiKey.expiresAt?.toLocaleString() || t('apikey.display.neverExpires'),
       title: t('apikey.list.columns.expiresAt'),
       width: 170,
     },
@@ -221,42 +188,13 @@ const ApiKey: FC = () => {
         apiKey.lastUsedAt?.toLocaleString() || t('apikey.display.neverUsed'),
       title: t('apikey.list.columns.lastUsedAt'),
     },
+    // Every management action (rename, expiry, enable/disable, delete) lives in
+    // the detail drawer: the list browses, the drawer owns one key's surface.
     {
-      key: 'action',
-      listSlot: 'actions',
-      render: (apiKey: ApiKeyItem) => {
-        const canManage = checkManageable(apiKey.userId);
-        return (
-          <Popconfirm
-            cancelText={t('apikey.list.actions.deleteConfirm.actions.cancel')}
-            description={t('apikey.list.actions.deleteConfirm.content')}
-            okButtonProps={{ disabled: !canEdit || !canManage }}
-            okText={t('apikey.list.actions.deleteConfirm.actions.ok')}
-            title={t('apikey.list.actions.deleteConfirm.title')}
-            onConfirm={async () => {
-              if (!canEdit || !canManage) return;
-              await deleteMutation.mutateAsync(apiKey.id!);
-            }}
-          >
-            <Button
-              disabled={!canEdit || !canManage}
-              icon={Trash}
-              size="small"
-              style={{ verticalAlign: 'middle' }}
-              type="text"
-              title={
-                canEdit && canManage
-                  ? t('apikey.list.actions.delete')
-                  : canEdit
-                    ? manageTooltip
-                    : reason
-              }
-            />
-          </Popconfirm>
-        );
-      },
-      title: t('apikey.list.columns.actions'),
-      width: 100,
+      key: 'enter',
+      render: () => <ChevronRight className={styles.enterIcon} size={16} />,
+      title: '',
+      width: 40,
     },
   ];
 
@@ -290,6 +228,19 @@ const ApiKey: FC = () => {
             <Empty description={t('apikey.list.empty')} />
           </Center>
         }
+        onRowClick={(apiKey) => setDetailId(apiKey.id)}
+      />
+      <ApiKeyDetail
+        apiKey={detailApiKey}
+        canManage={canEdit && (detailApiKey ? checkManageable(detailApiKey.userId) : false)}
+        manageTooltip={canEdit ? manageTooltip : (reason ?? manageTooltip)}
+        open={!!detailApiKey}
+        onClose={() => setDetailId(undefined)}
+        onUpdate={(id, params) => updateMutation.mutate({ id, params })}
+        onDelete={async (id) => {
+          await deleteMutation.mutateAsync(id);
+          setDetailId(undefined);
+        }}
       />
     </div>
   );

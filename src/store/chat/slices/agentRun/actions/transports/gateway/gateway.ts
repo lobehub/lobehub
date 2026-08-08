@@ -572,6 +572,9 @@ export class GatewayActionImpl {
         clientIds,
         appContext: {
           agentDocumentId: executionContext.agentDocumentId,
+          ...(messageContext.agentId !== executionContext.agentId && {
+            conversationAgentId: messageContext.agentId,
+          }),
           defaultTaskAssigneeAgentId: executionContext.defaultTaskAssigneeAgentId,
           documentId: executionContext.documentId,
           // When AgentBuilder runs, context.agentId is the builtin builder agent.

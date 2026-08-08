@@ -99,6 +99,7 @@ const AgentSelectorAction = memo<AgentSelectorActionProps>(({ onAgentChange }) =
       {agentsWithBuiltin.map((agent) => (
         <AgentItem
           active={agent.id === agentId}
+          agent={agent}
           agentId={agent.id}
           agentTitle={agentDisplayName(agent, t('untitledAgent', { ns: 'chat' }))}
           avatar={agent.avatar}

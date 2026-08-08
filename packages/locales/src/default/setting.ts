@@ -5,6 +5,8 @@ export default {
   'agentImport.description':
     'Create an independent copy in a Workspace. The original Agent stays in your personal account.',
   'agentImport.failed': 'Failed to copy agent.',
+  'agentImport.backgroundCopy':
+    'Chat history is large — it keeps copying in the background, and conversations light up one by one as they finish.',
   'agentImport.modal.configIncluded': 'Agent configuration is copied by default.',
   'agentImport.modal.confirm': 'Copy',
   'agentImport.modal.includeHistory': 'Copy topics and messages',
@@ -2434,6 +2436,8 @@ When I am ___, I need ___
   'workspace.general.copyLobeAI.modal.selectTarget':
     'You can copy to personal or workspaces that have permission to create an agent.',
   'workspace.general.copyLobeAI.modal.success': '{{count}} agent(s) copied',
+  'workspace.general.copyLobeAI.modal.backgroundCopy':
+    'Chat history is large, so it keeps copying in the background. The agents are ready to use now; conversations light up one by one as they finish.',
   'workspace.general.copyLobeAI.modal.title': 'Copy Agents',
   'workspace.general.copyLobeAI.modal.untitledAgent': 'Untitled Agent',
   'workspace.general.copyAgentGroups.modal.back': 'Back',

@@ -28,7 +28,12 @@ describe('Project Router Integration', () => {
   });
 
   it('serves the complete project management and human review flow', async () => {
-    const created = await caller.create({ name: 'Apollo', visibility: 'private' });
+    const created = await caller.create({
+      identifier: 'apollo',
+      name: 'Apollo',
+      visibility: 'private',
+    });
+    expect(created.data.identifier).toBe('APOLLO');
     await caller.updateStatus({ id: created.data.id, status: 'active' });
 
     const [agent] = await serverDB.insert(agents).values({ title: 'Lead', userId }).returning();
@@ -62,8 +67,8 @@ describe('Project Router Integration', () => {
   });
 
   it('rejects cross-project task dependencies', async () => {
-    const first = await caller.create({ name: 'First' });
-    const second = await caller.create({ name: 'Second' });
+    const first = await caller.create({ identifier: 'FIRST', name: 'First' });
+    const second = await caller.create({ identifier: 'SECOND', name: 'Second' });
     const taskCaller = taskRouter.createCaller(createTestContext(userId));
     const firstTask = await taskCaller.create({ instruction: 'First', projectId: first.data.id });
     const secondTask = await taskCaller.create({
@@ -74,5 +79,11 @@ describe('Project Router Integration', () => {
     await expect(
       taskCaller.addDependency({ dependsOnId: secondTask.data.id, taskId: firstTask.data.id }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+
+  it('requires a valid project identifier', async () => {
+    await expect(caller.create({ identifier: 'not-valid!', name: 'Invalid' })).rejects.toThrow(
+      'Invalid project identifier',
+    );
   });
 });

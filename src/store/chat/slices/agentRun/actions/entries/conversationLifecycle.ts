@@ -1,10 +1,5 @@
 // Disable the auto sort key eslint rule to make the code more logic and readable
-import type { CallAgentParams, CallAgentState } from '@lobechat/builtin-tool-agent-management';
-import {
-  AgentManagementApiName,
-  AgentManagementIdentifier,
-  createCallAgentManifest,
-} from '@lobechat/builtin-tool-agent-management';
+import { createCallAgentManifest } from '@lobechat/builtin-tool-agent-management';
 import { isDesktop, isHeterogeneousAgentModelId, LOADING_FLAT } from '@lobechat/const';
 import { formatSelectedSkillsContext, formatSelectedToolsContext } from '@lobechat/context-engine';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
@@ -12,7 +7,6 @@ import { chainCompressContext } from '@lobechat/prompts';
 import type {
   ChatImageItem,
   ChatThreadType,
-  ChatToolPayload,
   ChatTopicMetadata,
   ChatVideoItem,
   ConversationContext,
@@ -39,13 +33,14 @@ import {
 import { resolveExecutionTarget, resolveWorkspaceScoped } from '@/helpers/executionTarget';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 import { agentService } from '@/services/agent';
+import { aiAgentService } from '@/services/aiAgent';
 import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
 import { resolveSelectedSkillsWithContent } from '@/services/chat/mecha/skillPreload';
 import { resolveSelectedToolsWithContent } from '@/services/chat/mecha/toolPreload';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
-import { getAgentStoreState, useAgentStore } from '@/store/agent';
+import { getAgentStoreState } from '@/store/agent';
 import {
   agentByIdSelectors,
   agentSelectors,
@@ -59,7 +54,7 @@ import {
   topicSelectors,
 } from '@/store/chat/selectors';
 import { selectRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
-import { dispatchNonHeteroSubAgent } from '@/store/chat/slices/agentRun/actions/dispatch/nonHeteroSubAgentDispatcher';
+import { executeDirectMention } from '@/store/chat/slices/agentRun/actions/dispatch/directMentionExecutor';
 import { buildRunLifecycle } from '@/store/chat/slices/agentRun/actions/lifecycle/buildRunLifecycle';
 import type { RunScope } from '@/store/chat/slices/agentRun/actions/lifecycle/types';
 import { resolveHeteroResume } from '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume';
@@ -90,9 +85,10 @@ import { getUserStoreState } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 import { useUserMemoryStore } from '@/store/userMemory';
 import { markdownToTxt } from '@/utils/markdownToTxt';
+import { aggregateSubagentMetrics } from '@/utils/subagentMetrics';
 
 import { materializeLocalSystemToolSnapshots } from '../transports/client/localSystemToolSnapshots';
-import type { CommandSendOverrides, SingleAgentMentionDirectRoute } from './commandBus';
+import type { CommandSendOverrides } from './commandBus';
 import {
   hasNonActionContent,
   injectReferTopicNode,
@@ -274,7 +270,7 @@ export class ConversationLifecycleActionImpl {
     let editorData = inputEditorData;
     const { executeClientAgent, mainInputEditor } = this.#get();
     const targetInputEditor = inputEditor ?? mainInputEditor;
-    const { agentId } = context;
+    const ownerAgentId = context.agentId;
     const selectedSkills = parseSelectedSkillsFromEditorData(editorData);
     const selectedTools = parseSelectedToolsFromEditorData(editorData);
     const mentionedAgents = parseMentionedAgentsFromEditorData(editorData);
@@ -296,13 +292,29 @@ export class ConversationLifecycleActionImpl {
           }
         : undefined;
 
-    if (!agentId) {
+    if (!ownerAgentId) {
       onPreflightFailure?.();
       return;
     }
 
-    const agentState = getAgentStoreState();
-    const agentConfig = agentSelectors.getAgentConfigById(agentId)(agentState);
+    // A single explicit @Agent is an execution route, not a supervisor turn.
+    // Keep the current conversation as the owner, but resolve runtime/config
+    // from the mentioned agent so Lobe AI is never invoked for this message.
+    const directMentionRoute = !context.groupId
+      ? parseSingleAgentMentionDirectRoute(editorData)
+      : undefined;
+    const agentId = directMentionRoute?.agent.id ?? ownerAgentId;
+
+    let agentState = getAgentStoreState();
+    let agentConfig = agentSelectors.getAgentConfigById(agentId)(agentState);
+    if (directMentionRoute && !agentConfig) {
+      const targetAgentConfig = await agentService.getAgentConfigById(agentId);
+      if (!targetAgentConfig) throw new Error(`Mentioned agent not found: ${agentId}`);
+
+      agentState.internal_dispatchAgentMap(agentId, targetAgentConfig);
+      agentState = getAgentStoreState();
+      agentConfig = agentSelectors.getAgentConfigById(agentId)(agentState);
+    }
     const agent = agentByIdSelectors.getAgentById(agentId)(agentState);
     const currentUserId = userProfileSelectors.userId(getUserStoreState());
     const isAuthor = !!currentUserId && agent?.userId === currentUserId;
@@ -398,9 +410,6 @@ export class ConversationLifecycleActionImpl {
       isGroupSupervisor = group?.supervisorAgentId === agentId;
     }
     // In non-group context, @agent mentions make the current agent act as supervisor
-    const directMentionRoute = !context.groupId
-      ? parseSingleAgentMentionDirectRoute(editorData)
-      : undefined;
     const hasMentionedAgents =
       !context.groupId && !directMentionRoute && mentionedAgents.length > 0;
 
@@ -447,6 +456,7 @@ export class ConversationLifecycleActionImpl {
 
     const operationContext = {
       ...context,
+      agentId: ownerAgentId,
       ...(isCreatingNewThread && { threadId: undefined }),
       // Only set the supervisor markers for actual group supervisors — NOT for
       // @agent mentions. These drive group-specific UI rendering (SupervisorMessage
@@ -686,7 +696,7 @@ export class ConversationLifecycleActionImpl {
       {
         content: LOADING_FLAT,
         role: 'assistant',
-        agentId: operationContext.agentId,
+        agentId,
         // if there is topicId, then add topicId to message
         topicId: operationContext.topicId ?? undefined,
         threadId: operationContext.threadId ?? undefined,
@@ -996,6 +1006,7 @@ export class ConversationLifecycleActionImpl {
             // provider up front; the adapter backfills the actual model later
             // if the CLI reports it.
             newAssistantMessage: {
+              agentId: directMentionRoute ? agentId : undefined,
               id: tempAssistantId,
               provider: heterogeneousProvider.type,
             },
@@ -1112,6 +1123,38 @@ export class ConversationLifecycleActionImpl {
         });
       }
 
+      let directMentionThreadId: string | undefined;
+      let heteroExecutionAssistantId = heteroData.assistantMessageId;
+      let heteroExecutionContext = heteroContext;
+
+      if (directMentionRoute) {
+        if (!heteroTopicId) throw new Error('Direct mention requires a persisted topic');
+
+        const task = await aiAgentService.createClientTaskThread({
+          agentId,
+          assistantMessage: { provider: heterogeneousProvider.type },
+          instruction: message,
+          parentMessageId: heteroData.assistantMessageId,
+          title: message.slice(0, 50),
+          topicId: heteroTopicId,
+        });
+        if (!task.assistantMessageId) {
+          throw new Error('Direct mention thread is missing an assistant placeholder');
+        }
+
+        directMentionThreadId = task.threadId;
+        heteroExecutionAssistantId = task.assistantMessageId;
+        heteroExecutionContext = {
+          ...heteroContext,
+          agentId,
+          scope: 'sub_agent',
+          subAgentId: agentId,
+          threadId: task.threadId,
+        };
+        this.#get().replaceMessages(task.threadMessages, { context: heteroExecutionContext });
+        void this.#get().refreshThreads();
+      }
+
       // No temp-message cleanup: the optimistic rows were created under the very
       // ids the server just persisted, so `replaceMessages` above already
       // reconciled them in place. Deleting them here would delete the real ones.
@@ -1149,7 +1192,7 @@ export class ConversationLifecycleActionImpl {
 
       // Start heterogeneous agent execution
       const { operationId: heteroOpId } = this.#get().startOperation({
-        context: heteroContext,
+        context: heteroExecutionContext,
         label: 'Heterogeneous Agent Execution',
         metadata: { heterogeneousType: heterogeneousProvider.type },
         parentOperationId: operationId,
@@ -1157,6 +1200,7 @@ export class ConversationLifecycleActionImpl {
       });
 
       this.#get().associateMessageWithOperation(heteroData.assistantMessageId, heteroOpId);
+      this.#get().associateMessageWithOperation(heteroExecutionAssistantId, heteroOpId);
 
       try {
         const { executeHeterogeneousAgent } =
@@ -1194,8 +1238,8 @@ export class ConversationLifecycleActionImpl {
         }
 
         await executeHeterogeneousAgent(() => this.#get(), {
-          assistantMessageId: heteroData.assistantMessageId,
-          context: heteroContext,
+          assistantMessageId: heteroExecutionAssistantId,
+          context: heteroExecutionContext,
           contextSelections: effectiveContextSelections,
           heterogeneousProvider,
           imageList: persistedImageList?.length ? persistedImageList : undefined,
@@ -1206,6 +1250,37 @@ export class ConversationLifecycleActionImpl {
           workingDirectory,
           workingDirectoryConfig,
         });
+
+        if (directMentionThreadId) {
+          const threadMessages =
+            this.#get().dbMessagesMap[messageMapKey(heteroExecutionContext)] || [];
+          const metrics = aggregateSubagentMetrics(threadMessages);
+          const resultContent =
+            threadMessages.findLast((item) => item.role === 'assistant')?.content || '';
+          await aiAgentService.updateClientTaskThreadStatus({
+            completionReason: 'done',
+            metadata: {
+              totalMessages: threadMessages.length,
+              totalTokens: metrics.totalTokens,
+              totalToolCalls: metrics.toolCalls,
+            },
+            resultContent,
+            threadId: directMentionThreadId,
+          });
+          // updateClientTaskThreadStatus owns the durable source-message
+          // projection. Mirror that result into the persisted Topic bucket
+          // without issuing a second write whose returned message list can race
+          // and restore the original loading placeholder.
+          this.#get().internal_dispatchMessage(
+            {
+              id: heteroData.assistantMessageId,
+              type: 'updateMessage',
+              value: { content: resultContent },
+            },
+            { context: heteroContext },
+          );
+          void this.#get().refreshThreads();
+        }
       } catch (e) {
         console.error('[HeterogeneousAgent] Execution failed:', e);
         this.#get().failOperation(heteroOpId, {
@@ -1221,14 +1296,6 @@ export class ConversationLifecycleActionImpl {
     }
 
     // ── Gateway mode: skip sendMessageInServer, let execAgentTask handle everything ──
-    // A single-agent @mention (`directMentionRoute`) is the exception: the current
-    // agent acts as a pure deterministic router and never runs an LLM turn itself, so
-    // there is nothing to execute on the gateway. We let it fall through to the client
-    // message-persistence path below, where `#executeDirectMentionRoute` emits the
-    // callAgent tool call and dispatches the *target* agent via
-    // `dispatchNonHeteroSubAgent` — which re-selects the runtime and runs the target on
-    // the gateway when gateway mode is enabled. Routing the supervisor through the
-    // gateway here would drop the mention entirely (execAgentTask carries no mention data).
     if (runtimeType === 'gateway' && !directMentionRoute) {
       try {
         // Pass `sendMessage` as `parentOperationId` so executeGatewayAgent
@@ -1268,8 +1335,8 @@ export class ConversationLifecycleActionImpl {
           // them (multi-mention). Mirrors the client runtime's `initialContext`
           // injection: the server enables the callAgent tool and injects the
           // mentioned-agents delegation context so the supervisor calls them.
-          // Omit when empty (single-mention takes the client path above and never
-          // reaches here). Non-group only — group @member mentions are handled by
+          // Omit when empty (single-mention executes the target directly and does
+          // not need supervisor delegation context). Non-group only — group @member mentions are handled by
           // the group orchestration path, not agent-management delegation.
           mentionedAgents: hasMentionedAgents ? mentionedAgents : undefined,
           // Pass temp message IDs so the UI doesn't show a blank loading
@@ -1409,6 +1476,7 @@ export class ConversationLifecycleActionImpl {
           // Pass groupId for group chat scenarios
           groupId: operationContext.groupId ?? undefined,
           newAssistantMessage: {
+            agentId: directMentionRoute ? agentId : undefined,
             id: tempAssistantId,
             // Pass isSupervisor metadata for group orchestration
             metadata: operationContext.isSupervisor
@@ -1665,14 +1733,17 @@ export class ConversationLifecycleActionImpl {
     {
       try {
         if (directMentionRoute) {
-          await this.#executeDirectMentionRoute({
-            assistantMessageId: data.assistantMessageId,
-            context: execContext,
-            directMentionRoute,
-            inPortalThread: !!data.createdThreadId,
-            instruction: message,
-            parentOperationId: operationId,
-          });
+          await executeDirectMention(
+            {
+              context: execContext,
+              instruction: message,
+              parentOperationId: operationId,
+              runtimeType: runtimeType === 'gateway' ? 'gateway' : 'client',
+              sourceMessageId: data.assistantMessageId,
+              targetAgentId: agentId,
+            },
+            this.#get,
+          );
         } else {
           const displayMessages = displayMessageSelectors.getDisplayMessagesByKey(
             messageMapKey(execContext),
@@ -1740,169 +1811,6 @@ export class ConversationLifecycleActionImpl {
       userMessageId: data.userMessageId,
     };
   };
-
-  async #executeDirectMentionRoute({
-    assistantMessageId,
-    context,
-    inPortalThread,
-    directMentionRoute,
-    instruction,
-    parentOperationId,
-  }: {
-    assistantMessageId: string;
-    context: ConversationContext;
-    inPortalThread?: boolean;
-    directMentionRoute: SingleAgentMentionDirectRoute;
-    instruction: string;
-    parentOperationId: string;
-  }): Promise<void> {
-    const targetAgentId = directMentionRoute.agent.id;
-    const callAgentParams: CallAgentParams = {
-      agentId: targetAgentId,
-      instruction,
-    };
-    const toolPayload: ChatToolPayload = {
-      apiName: AgentManagementApiName.callAgent,
-      arguments: JSON.stringify(callAgentParams),
-      id: `call_agent_${nanoid()}`,
-      identifier: AgentManagementIdentifier,
-      source: 'builtin',
-      type: 'builtin',
-    };
-    const callAgentState: CallAgentState = {
-      agentId: targetAgentId,
-      instruction,
-      mode: 'speak',
-    };
-    const toolResultContent = `Called agent "${targetAgentId}" to respond.`;
-
-    const { operationId } = this.#get().startOperation({
-      context: { ...context, messageId: assistantMessageId },
-      label: 'Direct Agent Mention',
-      metadata: {
-        apiName: AgentManagementApiName.callAgent,
-        targetAgentId,
-        tool_call_id: toolPayload.id,
-      },
-      parentOperationId,
-      type: 'toolCalling',
-    });
-
-    try {
-      this.#get().internal_dispatchMessage(
-        {
-          id: assistantMessageId,
-          type: 'updateMessage',
-          value: { content: '' },
-        },
-        { operationId },
-      );
-      await this.#get().optimisticUpdateMessageContent(
-        assistantMessageId,
-        '',
-        { tools: [toolPayload] },
-        { operationId },
-      );
-
-      const toolMessage = await this.#get().optimisticCreateMessage(
-        {
-          agentId: context.agentId!,
-          content: toolResultContent,
-          groupId: context.groupId,
-          parentId: assistantMessageId,
-          plugin: toolPayload,
-          pluginState: callAgentState,
-          role: 'tool',
-          threadId: context.threadId,
-          tool_call_id: toolPayload.id,
-          topicId: context.topicId ?? undefined,
-        },
-        { operationId },
-      );
-
-      if (!toolMessage) {
-        throw new Error(
-          `[directMentionRoute] Failed to create callAgent tool message for agentId: ${targetAgentId}`,
-        );
-      }
-
-      const preloadError = await this.#preloadDirectMentionAgentConfig(targetAgentId);
-      if (preloadError) {
-        await this.#get().optimisticUpdateMessageContent(toolMessage.id, preloadError, undefined, {
-          operationId,
-        });
-        this.#get().completeOperation(operationId);
-        return;
-      }
-
-      const currentMessages = dbMessageSelectors.getDbMessagesByKey(messageMapKey(context))(
-        this.#get(),
-      );
-      const trimmedInstruction = instruction.trim();
-      const now = Date.now();
-      const messagesWithInstruction = trimmedInstruction
-        ? [
-            ...currentMessages,
-            {
-              content: `<speaker name="Supervisor" />\n${instruction}`,
-              createdAt: now,
-              id: `virtual_speak_instruction_${now}`,
-              role: 'user' as const,
-              updatedAt: now,
-            },
-          ]
-        : currentMessages;
-
-      // Sub-agent dispatch inherits the parent's runtime selection — a
-      // gateway/hetero parent must keep its sub-agents on the same path.
-      // Runtime routing is fully delegated to dispatchNonHeteroSubAgent ().
-      const parentAgentConfig = context.agentId
-        ? agentSelectors.getAgentConfigById(context.agentId)(getAgentStoreState())
-        : undefined;
-
-      await dispatchNonHeteroSubAgent(
-        { kind: 'mention', targetAgentId, instruction, parentMessageId: toolMessage.id },
-        {
-          conversationContext: context,
-          boundDeviceId: parentAgentConfig?.agencyConfig?.boundDeviceId,
-          heterogeneousProvider: parentAgentConfig?.agencyConfig?.heterogeneousProvider,
-          inPortalThread,
-          isGatewayMode: this.#get().isGatewayModeEnabled(context.agentId),
-          isWorkspaceAgent: context.agentId
-            ? agentByIdSelectors.isWorkspaceAgentById(context.agentId)(getAgentStoreState())
-            : false,
-          messages: messagesWithInstruction,
-          parentOperationId: operationId,
-        },
-        this.#get(),
-      );
-
-      this.#get().completeOperation(operationId);
-    } catch (error) {
-      this.#get().failOperation(operationId, {
-        type: 'DirectMentionRouteError',
-        message: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
-  }
-
-  async #preloadDirectMentionAgentConfig(agentId: string): Promise<string | undefined> {
-    const targetAgentExists = useAgentStore.getState().agentMap[agentId];
-    if (targetAgentExists) return;
-
-    try {
-      const config = await agentService.getAgentConfigById(agentId);
-      if (!config) {
-        return `Agent "${agentId}" not found in your workspace. Please check the agent ID and try again.`;
-      }
-
-      useAgentStore.getState().internal_dispatchAgentMap(agentId, config);
-    } catch (error) {
-      console.error('[directMentionRoute] Failed to load agent config:', error);
-      return `Failed to load agent "${agentId}": ${(error as Error).message}`;
-    }
-  }
 
   /**
    * Execute context compression for /compact command.

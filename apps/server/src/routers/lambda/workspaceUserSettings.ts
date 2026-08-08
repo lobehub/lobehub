@@ -1,3 +1,4 @@
+import { hasApiKeyScope, isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import type { WorkspaceUserPreference } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -82,6 +83,20 @@ export const workspaceUserSettingsRouter = router({
       // under the same role gate as `home.updateAgentSessionGroupId`.
       const legacyAssignments = (input as Partial<WorkspaceUserPreference>).sidebarGroupAssignments;
       if (legacyAssignments && Object.keys(legacyAssignments).length > 0) {
+        // the legacy move path writes agent/chat-group organization — a
+        // restricted key needs `agent:write` beyond the namespace's
+        // `workspace:write`, matching `home.updateAgentSessionGroupId`
+        if (
+          ctx.apiKeyScopes !== undefined &&
+          !isFullAccessApiKey(ctx.apiKeyScopes) &&
+          !hasApiKeyScope(ctx.apiKeyScopes, 'agent:write')
+        ) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message:
+              "This API key cannot move sidebar agents ('sidebarGroupAssignments'): missing required scope 'agent:write'.",
+          });
+        }
         const canOrganize = await hasWorkspaceScopedPermission({
           action: 'AGENT_UPDATE',
           db: ctx.serverDB,

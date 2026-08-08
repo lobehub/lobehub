@@ -57,6 +57,7 @@ import { ChatInputAction } from '../components/ChatInputAction';
 import { useControls as useKnowledgeControls } from '../Knowledge/useControls';
 import { useMemoryEnabled } from '../Memory/useMemoryEnabled';
 import { useControls as useToolsControls } from '../Tools/useControls';
+import { useEffortMenuItem } from './useEffortMenuItem';
 
 const hotArea = css`
   &::before {
@@ -399,6 +400,8 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     [updateAgentChatConfig],
   );
 
+  const effortItem = useEffortMenuItem();
+
   const handleToggleParams = useCallback(() => {
     close();
     if (isParamsPanelActive) {
@@ -658,6 +661,10 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
       },
       // Agent Gateway directly below the formatting toolbar.
       ...gatewayItem,
+      // Reasoning intensity — a personal per-model preference, so it is NOT
+      // gated on canConfigureResource; hidden only when the model has no
+      // reasoning extend params (the hook returns []).
+      ...effortItem,
       // Advanced parameter settings — only when resources can be configured.
       ...(canConfigureResource
         ? [
@@ -742,6 +749,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     activeSearchOption,
     activeTopicId,
     canConfigureResource,
+    effortItem,
     enableTopicAcceptance,
     tVerify,
     canUploadImage,

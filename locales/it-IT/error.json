@@ -120,6 +120,7 @@
   "stt.responseError": "Richiesta al servizio fallita. Verifica la configurazione o riprova.",
   "supervisor.decisionFailed": "L'host del gruppo non è operativo. Verifica la configurazione del modello, della chiave API e dell'endpoint.",
   "testConnectionFailed": "Connessione di test fallita: {{error}}",
+  "transfer.copyInProgress": "Una copia precedente di questo agente sta ancora duplicando la sua cronologia. Riprova una volta completata.",
   "transfer.noPermission": "Non hai l'autorizzazione per spostare questa risorsa.",
   "transfer.ownerOnly": "Solo i proprietari dello spazio di lavoro possono trasferire risorse create da altri membri.",
   "transfer.resourceNotFound": "Questa risorsa non esiste più o non hai più accesso. Aggiorna e riprova.",

@@ -1,4 +1,3 @@
-import { getHeterogeneousTypeLabel } from '@lobechat/heterogeneous-agents';
 import type { SidebarAgentItem } from '@lobechat/types';
 import { agentDisplayName, agentSecondaryDisplayName } from '@lobechat/types';
 import { ActionIcon, Icon } from '@lobehub/ui';
@@ -99,11 +98,9 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate }) 
 
   // Name-first label with fallback (see agentDisplayName)
   const displayTitle = agentDisplayName(item, t('untitledAgent'));
-  // A heterogeneous agent's persisted title may be a platform profile name
-  // (Hermes commonly reports "default"), not the runtime users need to identify.
-  // Prefer the runtime label; regular agents still show their role beside their name.
-  const runtimeTag = getHeterogeneousTypeLabel(item.heterogeneousType);
-  const roleTag = agentSecondaryDisplayName(item, runtimeTag);
+  // The role shown beside the name — same rule for every agent, heterogeneous
+  // ones included (see agentSecondaryDisplayName).
+  const roleTag = agentSecondaryDisplayName(item);
 
   const agentUrl = usePreservedAgentUrl(id);
 

@@ -1,7 +1,6 @@
 'use client';
 
 import { AGENT_CHAT_URL, DEFAULT_AVATAR, GROUP_CHAT_URL } from '@lobechat/const';
-import { getHeterogeneousTypeLabel } from '@lobechat/heterogeneous-agents';
 import type { SidebarAgentItem } from '@lobechat/types';
 import { agentDisplayName, agentSecondaryDisplayName } from '@lobechat/types';
 import {
@@ -113,8 +112,7 @@ const AgentRow = memo<AgentRowProps>(
     const { id, type, updatedAt } = item;
     // Groups have no personal name, so this resolves to their title.
     const displayTitle = agentDisplayName(item, t('agentViewAll.untitled'));
-    const runtimeTag = getHeterogeneousTypeLabel(item.heterogeneousType);
-    const roleTag = agentSecondaryDisplayName(item, runtimeTag);
+    const roleTag = agentSecondaryDisplayName(item);
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
 
     // Right-click support (Task-List-style): the hook-bearing menu mounts on

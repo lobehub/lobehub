@@ -4,6 +4,7 @@ import { TRPCClientError } from '@trpc/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { agentService } from '@/services/agent';
+import { aiAgentService } from '@/services/aiAgent';
 import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
 import * as skillPreload from '@/services/chat/mecha/skillPreload';
@@ -2766,9 +2767,9 @@ describe('ConversationLifecycle actions', () => {
       it('should directly call a single leading @agent in non-group chat', async () => {
         const { result } = renderHook(() => useChatStore());
         const targetAgentId = 'agent-direct-target';
-        const toolMessageId = 'tool-call-agent-result';
+        const toolMessageId = 'unused-tool-call-agent-result';
         const message = '@Agent B hello';
-        const createdThreadId = 'thread-created-by-send';
+        const createdThreadId = 'thread-direct-mention';
 
         const userMessage = createMockMessage({
           id: TEST_IDS.USER_MESSAGE_ID,
@@ -2783,11 +2784,25 @@ describe('ConversationLifecycle actions', () => {
         });
 
         vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
-          createdThreadId,
           messages: [userMessage, assistantMessage],
-          topics: [],
+          topicId: TEST_IDS.TOPIC_ID,
           assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
           userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+        vi.spyOn(aiAgentService, 'createClientTaskThread').mockResolvedValue({
+          messages: [userMessage, assistantMessage],
+          startedAt: new Date().toISOString(),
+          success: true,
+          threadId: createdThreadId,
+          threadMessages: [
+            createMockMessage({ id: 'thread-user', role: 'user', threadId: createdThreadId }),
+          ],
+          userMessageId: 'thread-user',
+        } as any);
+        vi.spyOn(aiAgentService, 'updateClientTaskThreadStatus').mockResolvedValue({
+          status: 'completed',
+          success: true,
+          threadId: createdThreadId,
         } as any);
 
         (messageService.updateMessage as any).mockImplementation(
@@ -2830,71 +2845,161 @@ describe('ConversationLifecycle actions', () => {
                 type: 'root',
               },
             } as any,
-            context: createTestContext(),
+            context: { ...createTestContext(), topicId: TEST_IDS.TOPIC_ID },
           });
         });
 
-        expect(agentService.getAgentConfigById).toHaveBeenCalledWith(targetAgentId);
-        expect(messageService.updateMessage).toHaveBeenCalledWith(
-          TEST_IDS.ASSISTANT_MESSAGE_ID,
-          expect.objectContaining({
-            content: '',
-            tools: [
-              expect.objectContaining({
-                apiName: 'callAgent',
-                identifier: 'lobe-agent-management',
-              }),
-            ],
-          }),
-          expect.objectContaining({ agentId: TEST_IDS.SESSION_ID }),
-        );
-        expect(messageService.createMessage).toHaveBeenCalledWith(
+        expect(messageService.createMessage).not.toHaveBeenCalled();
+        expect(aiChatService.sendMessageInServer).toHaveBeenCalledWith(
           expect.objectContaining({
             agentId: TEST_IDS.SESSION_ID,
-            content: `Called agent "${targetAgentId}" to respond.`,
-            parentId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-            plugin: expect.objectContaining({
-              apiName: 'callAgent',
-              identifier: 'lobe-agent-management',
-            }),
-            pluginState: {
-              agentId: targetAgentId,
-              instruction: message,
-              mode: 'speak',
-            },
-            role: 'tool',
+            newAssistantMessage: expect.objectContaining({ agentId: targetAgentId }),
           }),
+          expect.any(AbortController),
         );
 
         const execCall = (result.current.executeClientAgent as any).mock.calls[0]?.[0];
         expect(execCall).toEqual(
           expect.objectContaining({
             context: expect.objectContaining({
-              agentId: TEST_IDS.SESSION_ID,
+              agentId: targetAgentId,
               scope: 'sub_agent',
               subAgentId: targetAgentId,
+              threadId: createdThreadId,
             }),
             inPortalThread: true,
-            parentMessageId: toolMessageId,
-            parentMessageType: 'tool',
+            isSubAgent: true,
+            parentMessageId: 'thread-user',
+            parentMessageType: 'user',
           }),
         );
         expect(execCall.initialContext).toBeUndefined();
-        expect(execCall.messages).toEqual(
-          expect.arrayContaining([
-            expect.objectContaining({ id: toolMessageId, role: 'tool' }),
-            expect.objectContaining({
-              content: expect.stringContaining(message),
-              role: 'user',
+        expect(execCall.messages).toEqual(expect.any(Array));
+      });
+
+      it('should isolate a direct mention executed by a local heterogeneous agent', async () => {
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              heterogeneousProvider: { command: 'codex', type: 'codex' },
+            },
+          },
+        });
+
+        const targetAgentId = 'agent-direct-codex';
+        const threadId = 'thread-direct-codex';
+        const threadAssistantId = 'thread-assistant-codex';
+        const message = '@Codex inspect this';
+        const userMessage = createMockMessage({
+          content: message,
+          id: TEST_IDS.USER_MESSAGE_ID,
+          role: 'user',
+        });
+        const sourceAssistant = createMockMessage({
+          agentId: targetAgentId,
+          content: '',
+          id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          role: 'assistant',
+        });
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          messages: [userMessage, sourceAssistant],
+          topicId: TEST_IDS.TOPIC_ID,
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+        const createTaskSpy = vi.spyOn(aiAgentService, 'createClientTaskThread').mockResolvedValue({
+          assistantMessageId: threadAssistantId,
+          messages: [userMessage, sourceAssistant],
+          startedAt: new Date().toISOString(),
+          success: true,
+          threadId,
+          threadMessages: [
+            createMockMessage({ id: 'thread-user-codex', role: 'user', threadId }),
+            createMockMessage({ id: threadAssistantId, role: 'assistant', threadId }),
+          ],
+          userMessageId: 'thread-user-codex',
+        } as any);
+        const updateTaskSpy = vi
+          .spyOn(aiAgentService, 'updateClientTaskThreadStatus')
+          .mockResolvedValue({
+            status: 'completed',
+            success: true,
+            threadId,
+          } as any);
+        executeHeterogeneousAgentMock.mockResolvedValue(undefined);
+
+        const { result } = renderHook(() => useChatStore());
+        const dispatchSpy = vi.spyOn(useChatStore.getState(), 'internal_dispatchMessage');
+        await act(async () => {
+          await result.current.sendMessage({
+            context: { ...createTestContext(), topicId: TEST_IDS.TOPIC_ID },
+            editorData: {
+              root: {
+                children: [
+                  {
+                    children: [
+                      {
+                        label: 'Codex',
+                        metadata: { id: targetAgentId, type: 'agent' },
+                        type: 'mention',
+                      },
+                      { text: ' inspect this', type: 'text' },
+                    ],
+                    type: 'paragraph',
+                  },
+                ],
+                type: 'root',
+              },
+            } as any,
+            message,
+          });
+        });
+
+        expect(createTaskSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            agentId: targetAgentId,
+            assistantMessage: { provider: 'codex' },
+            parentMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            topicId: TEST_IDS.TOPIC_ID,
+          }),
+        );
+        expect(executeHeterogeneousAgentMock).toHaveBeenCalledWith(
+          expect.any(Function),
+          expect.objectContaining({
+            assistantMessageId: threadAssistantId,
+            context: expect.objectContaining({
+              agentId: targetAgentId,
+              scope: 'sub_agent',
+              subAgentId: targetAgentId,
+              threadId,
             }),
-          ]),
+          }),
+        );
+        expect(updateTaskSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ completionReason: 'done', threadId }),
+        );
+        expect(dispatchSpy).toHaveBeenCalledWith(
+          {
+            id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            type: 'updateMessage',
+            value: { content: TEST_CONTENT.USER_MESSAGE },
+          },
+          {
+            context: expect.objectContaining({
+              agentId: TEST_IDS.SESSION_ID,
+              isNew: false,
+              topicId: TEST_IDS.TOPIC_ID,
+            }),
+          },
         );
       });
 
       it('should route a single leading @agent through the gateway when gateway mode is enabled', async () => {
         const { result } = renderHook(() => useChatStore());
         const targetAgentId = 'agent-direct-target';
-        const toolMessageId = 'tool-call-agent-result';
+        const toolMessageId = 'unused-tool-call-agent-result';
         const message = '@Agent B hello';
 
         const userMessage = createMockMessage({
@@ -2909,17 +3014,26 @@ describe('ConversationLifecycle actions', () => {
           tools: [],
         });
 
-        // sendMessageInServer must still run: directMention deliberately uses the
-        // client message-persistence path even under gateway mode (the supervisor
-        // is a pure router and never executes an LLM turn on the gateway).
+        // A direct mention runs the target on the gateway, which owns persistence.
         const sendMessageInServerSpy = vi
           .spyOn(aiChatService, 'sendMessageInServer')
           .mockResolvedValue({
             messages: [userMessage, assistantMessage],
-            topics: [],
+            topicId: TEST_IDS.TOPIC_ID,
             assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
             userMessageId: TEST_IDS.USER_MESSAGE_ID,
           } as any);
+        vi.spyOn(aiAgentService, 'execSubAgentTask').mockResolvedValue({
+          assistantMessageId: 'thread-assistant',
+          operationId: 'op-gw-sub',
+          success: true,
+          threadId: 'thread-gateway',
+        });
+        vi.spyOn(aiAgentService, 'getSubAgentTaskStatus').mockResolvedValue({
+          result: 'Gateway result',
+          status: 'completed',
+          taskDetail: undefined,
+        } as any);
 
         (messageService.updateMessage as any).mockImplementation(
           async (_id: string, value: any) => {
@@ -2966,36 +3080,20 @@ describe('ConversationLifecycle actions', () => {
                 type: 'root',
               },
             } as any,
-            context: createTestContext(),
+            context: { ...createTestContext(), topicId: TEST_IDS.TOPIC_ID },
           });
         });
 
-        // Messages were persisted client-side (we did NOT take the supervisor
-        // gateway early-return, which skips sendMessageInServer entirely).
         expect(sendMessageInServerSpy).toHaveBeenCalled();
-        // The callAgent tool call was still emitted on the supervisor message.
-        expect(messageService.updateMessage).toHaveBeenCalledWith(
-          TEST_IDS.ASSISTANT_MESSAGE_ID,
-          expect.objectContaining({
-            tools: [
-              expect.objectContaining({
-                apiName: 'callAgent',
-                identifier: 'lobe-agent-management',
-              }),
-            ],
-          }),
-          expect.objectContaining({ agentId: TEST_IDS.SESSION_ID }),
-        );
+        expect(messageService.createMessage).not.toHaveBeenCalled();
         // The TARGET agent runs on the gateway, not the client.
         expect(result.current.executeClientAgent).not.toHaveBeenCalled();
-        expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+        expect(executeGatewayAgentSpy).not.toHaveBeenCalled();
+        expect(aiAgentService.execSubAgentTask).toHaveBeenCalledWith(
           expect.objectContaining({
-            context: expect.objectContaining({
-              agentId: targetAgentId,
-              scope: 'sub_agent',
-              subAgentId: targetAgentId,
-            }),
-            message,
+            agentId: targetAgentId,
+            parentMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            topicId: TEST_IDS.TOPIC_ID,
           }),
         );
       });
@@ -3118,8 +3216,8 @@ describe('ConversationLifecycle actions', () => {
           });
         });
 
-        // Multi-mention keeps the supervisor on the gateway (unlike single-mention,
-        // which falls through to the client path). The mentioned agents are
+        // Multi-mention keeps the supervisor on the gateway; single-mention runs
+        // the target directly. The mentioned agents are
         // forwarded so the server enables callAgent + injects the delegation context.
         expect(result.current.executeClientAgent).not.toHaveBeenCalled();
         expect(executeGatewayAgentSpy).toHaveBeenCalledWith(

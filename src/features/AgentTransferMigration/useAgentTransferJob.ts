@@ -26,6 +26,8 @@ export interface AgentTransferJobStatus {
   jobId: string;
   pendingTopicIds: string[];
   totalTopics: number;
+  /** Job kind (`transfer` | `copy`) — progress hints are worded by it. */
+  type: string;
 }
 
 /**

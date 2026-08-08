@@ -17,10 +17,15 @@ import { MessageModel } from '@/database/models/message';
 import { SessionModel } from '@/database/models/session';
 import { UserModel } from '@/database/models/user';
 import { serverDB } from '@/database/server';
+import { router } from '@/libs/trpc/lambda';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { UnderstandingWorkflowUnavailableError } from '@/server/workflows/onboardingUnderstanding';
 
 import { userRouter } from '../user';
+
+// mounts userRouter under its production namespace so the apiKeyScopeGuard
+// derives the real `user.*` path for API-key-authenticated calls
+const namespacedRouter = router({ user: userRouter });
 
 const mockAfterTasks = vi.hoisted((): Promise<void>[] => []);
 const mockUnderstandingService = vi.hoisted(() => ({
@@ -621,6 +626,67 @@ describe('userRouter', () => {
       await userRouter.createCaller({ ...mockCtx }).updateSettings(mockSettings);
 
       expect(mockGateKeeper.encrypt).toHaveBeenCalledWith(JSON.stringify(mockSettings.keyVaults));
+    });
+
+    it('rejects keyVaults updates from restricted keys without model:write', async () => {
+      await expect(
+        namespacedRouter
+          .createCaller({ ...mockCtx, apiKeyScopes: ['user:write'] })
+          .user.updateSettings({ keyVaults: { openai: { key: 'stolen' } } }),
+      ).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: expect.stringContaining('model:write'),
+      });
+    });
+
+    it('rejects market token updates from restricted keys without model:write', async () => {
+      await expect(
+        namespacedRouter
+          .createCaller({ ...mockCtx, apiKeyScopes: ['user:write'] })
+          .user.updateSettings({ market: { accessToken: 'x' } } as any),
+      ).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: expect.stringContaining('model:write'),
+      });
+    });
+
+    it('rejects keyVaults clears (null) from restricted keys without model:write', async () => {
+      await expect(
+        namespacedRouter
+          .createCaller({ ...mockCtx, apiKeyScopes: ['user:write'] })
+          .user.updateSettings({ keyVaults: null } as any),
+      ).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: expect.stringContaining('model:write'),
+      });
+    });
+
+    it('does not touch stored keyVaults when the field is omitted', async () => {
+      const updateSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
+      vi.mocked(UserModel).mockImplementation(() => ({ updateSetting }) as any);
+
+      await userRouter.createCaller({ ...mockCtx }).updateSettings({
+        general: { language: 'en-US' },
+      } as any);
+
+      expect(updateSetting.mock.calls[0][0]).not.toHaveProperty('keyVaults');
+    });
+
+    it('allows keyVaults updates from restricted keys holding model:write', async () => {
+      const mockGateKeeper = { encrypt: vi.fn().mockResolvedValue('encrypted') };
+      vi.mocked(KeyVaultsGateKeeper.initWithEnvKey).mockResolvedValue(mockGateKeeper as any);
+      vi.mocked(UserModel).mockImplementation(
+        () =>
+          ({
+            updateSetting: vi.fn().mockResolvedValue({ rowCount: 1 }),
+          }) as any,
+      );
+
+      await namespacedRouter
+        .createCaller({ ...mockCtx, apiKeyScopes: ['user:write', 'model:write'] })
+        .user.updateSettings({ keyVaults: { openai: { key: 'mine' } } });
+
+      expect(mockGateKeeper.encrypt).toHaveBeenCalled();
     });
 
     it('should update settings without key vaults', async () => {

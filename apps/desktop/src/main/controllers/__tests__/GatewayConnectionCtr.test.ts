@@ -313,6 +313,7 @@ describe('GatewayConnectionCtr', () => {
 
   afterEach(() => {
     ctr.disconnect();
+    vi.unstubAllEnvs();
     vi.useRealTimers();
   });
 
@@ -1058,6 +1059,49 @@ describe('GatewayConnectionCtr', () => {
       expect(messageArg).toContain('hello');
       expect(messageArg).toContain('lh notify');
     });
+
+    it.each([
+      {
+        environmentAgentId: 'ops-default',
+        expectedAgentId: 'researcher',
+        platformAgentId: ' researcher ',
+      },
+      {
+        environmentAgentId: 'ops-default',
+        expectedAgentId: 'ops-default',
+        platformAgentId: undefined,
+      },
+      {
+        environmentAgentId: 'ops-default',
+        expectedAgentId: 'ops-default',
+        platformAgentId: '   ',
+      },
+      { environmentAgentId: '', expectedAgentId: 'main', platformAgentId: undefined },
+    ])(
+      'selects OpenClaw agent $expectedAgentId from platform config before environment fallback',
+      async ({ environmentAgentId, expectedAgentId, platformAgentId }) => {
+        vi.stubEnv('OPENCLAW_AGENT_ID', environmentAgentId);
+        spawnMock.mockReturnValue(makeMockChild());
+
+        const client = await connectAndOpen();
+        client.simulateToolCallRequest(
+          'runHeteroTask',
+          {
+            agentType: 'openclaw',
+            operationId: 'op-agent-selection',
+            platformAgentId,
+            prompt: 'hello',
+            taskId: 'task-agent-selection',
+            topicId: 'topic-agent-selection',
+          },
+          'req-agent-selection',
+        );
+        await vi.advanceTimersByTimeAsync(0);
+
+        const [, spawnArgs] = spawnMock.mock.calls[0] as [string, string[]];
+        expect(spawnArgs[spawnArgs.indexOf('--agent') + 1]).toBe(expectedAgentId);
+      },
+    );
 
     it('kills an existing concurrent openclaw process for the same topicId before spawning', async () => {
       const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);

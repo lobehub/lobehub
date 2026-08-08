@@ -202,6 +202,21 @@ export type VerifyEvidenceCapturedBy = (typeof verifyEvidenceCapturedBy)[number]
 export const DEFAULT_MAX_REPAIR_ROUNDS = 3;
 
 /**
+ * Round budget applied when the user left a goal's round cap untouched.
+ *
+ * A goal has *two* independent budgets and they must never be written from one
+ * value: this one caps the outer loop (how many task topics the goal may spawn,
+ * `tasks.config.goal.maxIterations`), while {@link DEFAULT_MAX_REPAIR_ROUNDS}
+ * caps the inner auto-repair loop *within* a single round
+ * (`tasks.config.verify.maxIterations`). Their product is the worst-case number
+ * of agent runs a goal can pay for.
+ */
+export const DEFAULT_GOAL_MAX_ROUNDS = 3;
+
+/** Bounds the round budget a goal may be created with. */
+export const GOAL_MAX_ROUNDS_RANGE = { max: 10, min: 2 } as const;
+
+/**
  * The LobeHub conversation an ingested report was authored in. Lets the report
  * link back to (and later resume) the agent session that produced it. Lives here
  * because the CLI authors it (from the child env the runtime echoes in) before

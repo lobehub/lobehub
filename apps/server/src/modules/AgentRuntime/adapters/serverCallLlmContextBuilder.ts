@@ -317,7 +317,24 @@ export const buildServerCallLlmContext = async ({
   let credsListStr = '';
   if (ctx.userId) {
     try {
-      const marketService = new MarketService({ userInfo: { userId: ctx.userId } });
+      // Read market accessToken from DB so the server-side runtime can
+      // authenticate with the Market API instead of falling back to an
+      // anonymous trustedClientToken (which 401s on creds endpoints).
+      let marketAccessToken: string | undefined;
+      if (ctx.serverDB) {
+        try {
+          const userModel = new UserModel(ctx.serverDB, ctx.userId);
+          const settings = await userModel.getUserSettings();
+          marketAccessToken = (settings?.market as any)?.accessToken;
+        } catch {
+          // non-fatal — MarketService will fall back to trustedClientToken
+        }
+      }
+
+      const marketService = new MarketService({
+        accessToken: marketAccessToken,
+        userInfo: { userId: ctx.userId },
+      });
       // Inside a workspace, the agent must only see the workspace's shared
       // organization credentials — personal creds are not visible here.
       const credsResult = ctx.workspaceId

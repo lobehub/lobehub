@@ -12,6 +12,8 @@
   "features.claudeCodeSdk.title": "Środowisko wykonawcze Claude Code SDK",
   "features.codexAppServer.desc": "Uruchamiaj sesje Codex za pośrednictwem lokalnego serwera aplikacji zamiast jednorazowych procesów CLI. Umożliwia strumieniowanie tokenów i natywną kontrolę tur.",
   "features.codexAppServer.title": "Środowisko wykonawcze serwera aplikacji Codex",
+  "features.desktopSplitView.desc": "Wyświetl dwa zakładki pulpitu obok siebie, z niezależną nawigacją i regulowanym dzielnikiem.",
+  "features.desktopSplitView.title": "Widok Podzielonych Zakładek",
   "features.groupChat.desc": "Włącz koordynację czatu grupowego z wieloma agentami.",
   "features.groupChat.title": "Czat Grupowy (Wielu Agentów)",
   "features.heteroSessionImport.desc": "Dodaj opcję „Importuj sesje lokalnego agenta” do menu listy tematów: skanuj lokalne transkrypcje Claude Code / Codex CLI i importuj je jako tematy, z możliwością incrementalnej synchronizacji przy ponownym imporcie.",

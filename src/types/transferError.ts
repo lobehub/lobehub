@@ -1,4 +1,5 @@
 export const TransferErrorCode = {
+  CopyInProgress: 'COPY_IN_PROGRESS',
   FileStorageLimitExceeded: 'FILE_STORAGE_LIMIT_EXCEEDED',
   NoPermission: 'NO_PERMISSION',
   OwnerOnly: 'OWNER_ONLY',

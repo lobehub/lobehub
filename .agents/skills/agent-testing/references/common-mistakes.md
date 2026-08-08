@@ -102,7 +102,7 @@ one-line probe could have checked.
 ## M5 — Attaching a stale "before" screenshot as a passed case's evidence (unlabeled)
 
 **Wrong approach**: putting BOTH the "after" and a stale "before" screenshot into the
-same `cases[].evidence` array, unlabeled. The verify page renders every evidence
+same `cases[].evidence` array, unlabeled. The acceptance page renders every evidence
 image with its filename as a heading, so the user opens the stale shots and concludes
 the fix didn't land.
 
@@ -146,7 +146,7 @@ logic bug.
 
 ---
 
-## M7 — Embedding a local-path screenshot in the chat reply
+## M7 — Exposing working-artifact paths in the chat reply
 
 **Wrong approach**: ending the final reply with an inline image embed or link
 pointing at the local report dir, believing it will render as a picture in chat.
@@ -159,12 +159,12 @@ never inside the message.
 **What it breaks**: the reply looks like it has evidence but shows nothing — the user
 gets a broken box and has to go find the acceptance link anyway.
 
-**Correct approach**: put NO images and NO local-file links in the chat reply. The
+**Correct approach**: put NO images and NO local paths or local-file links in the
+chat reply. The
 published `/acceptance/<id>` page already renders every screenshot inline (append
 `?r=<roundIndex>` for this round's fixed snapshot) — that URL is the only visual
-deliverable; never link the raw `/verify/<id>` page. Describe key visual outcomes in
-prose; mention the local report dir as a plain string (not a markdown link) if a
-reference is useful.
+deliverable. Describe key visual outcomes in prose without exposing the working
+artifact location or any internal run-page path.
 
 ---
 
@@ -597,3 +597,29 @@ ingest, read the command's warnings as failures, not noise: a dropped-field warn
 means the round published incomplete and needs a corrected re-ingest, the same as a
 skipped evidence upload. And when a reviewer reports that something rendered wrong,
 suspect your own metadata shape before the renderer.
+
+---
+
+## M29 — Using a full-page browser screenshot for an Electron window
+
+**Wrong approach**: capturing Electron evidence with `agent-browser screenshot --full` and publishing it because the target UI is technically visible in the
+top-left corner.
+
+**Why it's wrong**: Electron renderers can expose a document or layout canvas much
+larger than the visible `BrowserWindow`. Full-page capture follows that document
+extent instead of the application viewport, producing a giant image dominated by
+empty or black space. Acceptance preserves the source aspect ratio, so the actual
+UI becomes tiny and the evidence is practically unreadable even though the capture
+command succeeded.
+
+**What it breaks**: reviewers cannot judge spacing, hierarchy, icon placement, or
+interaction state without zooming into a small corner; otherwise valid visual
+evidence looks like a product rendering defect.
+
+**Correct approach**: for Electron, capture the visible renderer viewport without
+`--full`, or use the project Electron/CDP window-capture helper (and OS window
+capture when browser capture cannot represent the native surface). Open the saved
+image before publishing and reject it if the application occupies only a small
+fraction of the frame or if unexplained black margins dominate the canvas. Crop by
+capturing the correct window or viewport, not by post-processing evidence to hide
+unverified state.

@@ -2,6 +2,7 @@ import { CredsIdentifier, type ICredsService } from '@lobechat/builtin-tool-cred
 import { CredsExecutionRuntime } from '@lobechat/builtin-tool-creds/executionRuntime';
 import debug from 'debug';
 
+import { UserModel } from '@/database/models/user';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import { MarketService } from '@/server/services/market';
 
@@ -183,7 +184,20 @@ export const credsRuntime: ServerRuntimeRegistration = {
       context.workspaceId,
     );
 
+    // Read market accessToken from DB so server-side creds runtime can authenticate.
+    let accessToken: string | undefined;
+    if (context.serverDB) {
+      try {
+        const userModel = new UserModel(context.serverDB, context.userId);
+        const settings = await userModel.getUserSettings();
+        accessToken = (settings?.market as any)?.accessToken;
+      } catch {
+        // non-fatal — MarketService will fall back to trustedClientToken
+      }
+    }
+
     const marketService = new MarketService({
+      accessToken,
       userInfo: { userId: context.userId, workspaceId: context.workspaceId },
     });
     const credsService = new ServerCredsService(marketService, context.workspaceId);

@@ -3,6 +3,7 @@ import {
   resolveSubAgentChatConfig,
   resolveSubAgentModel,
 } from '@lobechat/const';
+import { resolveEffectiveReasoningChatConfig } from '@lobechat/model-runtime/utils/modelExtendParams';
 import { Flexbox, Icon, SliderWithInput, TextArea } from '@lobehub/ui';
 import { Select, Switch } from '@lobehub/ui/base-ui';
 import { Form as AntdForm } from 'antd';
@@ -10,6 +11,7 @@ import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { debounce } from 'es-toolkit/compat';
 import isEqual from 'fast-deep-equal';
 import { ChevronDown, ChevronUp } from 'lucide-react';
+import { MODEL_REASONING_EXTEND_PARAMS } from 'model-bank';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -418,6 +420,8 @@ const PARAM_CONFIG = {
 
 const PARAM_ORDER: ParamKey[] = ['temperature', 'top_p', 'frequency_penalty', 'presence_penalty'];
 
+const REASONING_PARAMS_SET = new Set<string>(MODEL_REASONING_EXTEND_PARAMS);
+
 const ADVANCED_OPEN_STORAGE_KEY = 'lobehub-chat-input-params-advanced-open';
 const MODEL_CONFIG_OPEN_STORAGE_KEY = 'lobehub-chat-input-params-model-config-open';
 
@@ -533,7 +537,21 @@ const Controls = memo<ControlsProps>(({ setUpdating, updating, variant = 'popove
     (s) => agentByIdSelectors.getAgentConfigById(agentId)(s) || DEFAULT_AGENT_CONFIG,
     isEqual,
   );
-  const { disabledParams, hasModelConfig, model, provider } = useParamsModelConfig(agentId);
+  const { disabledParams, model, provider } = useParamsModelConfig(agentId);
+  const modelExtendParamsList = useAiInfraStore(
+    aiModelSelectors.modelExtendParams(model, provider),
+    isEqual,
+  );
+  // Reasoning fields are user-level model-instance settings now (edited via
+  // the ChatInput Effort control); only non-reasoning params warrant this section
+  const hasModelConfig = (modelExtendParamsList ?? []).some(
+    (param) => !REASONING_PARAMS_SET.has(param),
+  );
+  // Same reason: hide the legacy Advanced raw `params.reasoning_effort` for
+  // those models — the send path strips it in favor of the instance config
+  const hasReasoningExtendParams = (modelExtendParamsList ?? []).some((param) =>
+    REASONING_PARAMS_SET.has(param),
+  );
   const enableAgentMode = useAgentStore(agentByIdSelectors.getAgentEnableModeById(agentId));
   const [form] = AntdForm.useForm();
   const [advancedOpen, setAdvancedOpen] = useState(() => getStoredOpen(ADVANCED_OPEN_STORAGE_KEY));
@@ -628,12 +646,41 @@ const Controls = memo<ControlsProps>(({ setUpdating, updating, variant = 'popove
   const subAgentModelValue = config.agencyConfig?.subagent?.model
     ? resolveSubAgentModel(config.agencyConfig.subagent)
     : undefined;
-  // Effective sub-agent chatConfig: the parent's chatConfig with the
-  // `agencyConfig.subagent.chatConfig` overrides merged on top — the exact
-  // config the sub-agent run uses, so the controls below are WYSIWYG.
+  const rawSubAgentChatConfig = config.agencyConfig?.subagent?.chatConfig;
+  const subAgentHasReasoningParams = useAiInfraStore(
+    aiModelSelectors.isModelHasReasoningExtendParams(
+      subAgentModelValue?.model || '',
+      subAgentModelValue?.provider || '',
+    ),
+  );
+  const subAgentModelReasoningConfig = useAiInfraStore(
+    aiModelSelectors.modelReasoningConfig(
+      subAgentModelValue?.model || '',
+      subAgentModelValue?.provider || '',
+    ),
+    isEqual,
+  );
+  // Warm the overridden sub-agent model's saved reasoning defaults —
+  // ReasoningConfigLoader only fetches the main effective model
+  const useFetchAiModelReasoningConfig = useAiInfraStore((s) => s.useFetchAiModelReasoningConfig);
+  useFetchAiModelReasoningConfig(
+    subAgentHasReasoningParams ? subAgentModelValue?.model : undefined,
+    subAgentHasReasoningParams ? subAgentModelValue?.provider : undefined,
+  );
+  // Effective sub-agent chatConfig, built the same way the run does
+  // (resolveModelExtendParams / serverCallLlmContextHints): merged parent
+  // config with the migrated reasoning fields stripped ← model-instance
+  // defaults ← explicit sub-agent overrides. Without the same sanitizing, a
+  // legacy parent `chatConfig.reasoningEffort` would show a value the run
+  // ignores, so the controls below stay WYSIWYG.
   const subAgentChatConfig = useMemo(
-    () => resolveSubAgentChatConfig(config.chatConfig, config.agencyConfig?.subagent?.chatConfig),
-    [config.chatConfig, config.agencyConfig?.subagent?.chatConfig],
+    () =>
+      resolveEffectiveReasoningChatConfig({
+        agentChatConfig: resolveSubAgentChatConfig(config.chatConfig, rawSubAgentChatConfig) ?? {},
+        modelReasoningConfig: subAgentModelReasoningConfig,
+        subAgentReasoningOverrides: rawSubAgentChatConfig,
+      }),
+    [config.chatConfig, rawSubAgentChatConfig, subAgentModelReasoningConfig],
   );
   const subAgentHasModelConfig = useAiInfraStore(
     aiModelSelectors.isModelHasExtendParams(
@@ -944,6 +991,7 @@ const Controls = memo<ControlsProps>(({ setUpdating, updating, variant = 'popove
               {modelConfigOpen && (
                 <div className={styles.modelConfigSection}>
                   <ControlsForm
+                    hideReasoningParams
                     disabled={!canCreate}
                     model={model}
                     provider={provider}
@@ -1031,44 +1079,51 @@ const Controls = memo<ControlsProps>(({ setUpdating, updating, variant = 'popove
                       />
                     )}
                   </ControlRow>
-                  <ControlRow
-                    tag="reasoning_effort"
-                    title={t('settingModel.reasoningEffort.title')}
-                    tooltip={t('settingModel.reasoningEffort.desc')}
-                    action={
-                      <Switch
-                        checked={Boolean(enableReasoningEffort)}
-                        size={'small'}
-                        onChange={(checked) => {
-                          if (checked && typeof reasoningEffortValue !== 'string') {
-                            form.setFieldValue(['params', 'reasoning_effort'], 'medium');
+                  {!hasReasoningExtendParams && (
+                    <ControlRow
+                      tag="reasoning_effort"
+                      title={t('settingModel.reasoningEffort.title')}
+                      tooltip={t('settingModel.reasoningEffort.desc')}
+                      action={
+                        <Switch
+                          checked={Boolean(enableReasoningEffort)}
+                          size={'small'}
+                          onChange={(checked) => {
+                            if (checked && typeof reasoningEffortValue !== 'string') {
+                              form.setFieldValue(['params', 'reasoning_effort'], 'medium');
+                            }
+                            handleFieldChange(['chatConfig', 'enableReasoningEffort'], checked);
+                          }}
+                        />
+                      }
+                    >
+                      {enableReasoningEffort && (
+                        <Select
+                          size={'small'}
+                          style={{ width: '100%' }}
+                          options={[
+                            { label: t('settingModel.reasoningEffort.options.low'), value: 'low' },
+                            {
+                              label: t('settingModel.reasoningEffort.options.medium'),
+                              value: 'medium',
+                            },
+                            {
+                              label: t('settingModel.reasoningEffort.options.high'),
+                              value: 'high',
+                            },
+                          ]}
+                          value={
+                            typeof reasoningEffortValue === 'string'
+                              ? reasoningEffortValue
+                              : 'medium'
                           }
-                          handleFieldChange(['chatConfig', 'enableReasoningEffort'], checked);
-                        }}
-                      />
-                    }
-                  >
-                    {enableReasoningEffort && (
-                      <Select
-                        size={'small'}
-                        style={{ width: '100%' }}
-                        options={[
-                          { label: t('settingModel.reasoningEffort.options.low'), value: 'low' },
-                          {
-                            label: t('settingModel.reasoningEffort.options.medium'),
-                            value: 'medium',
-                          },
-                          { label: t('settingModel.reasoningEffort.options.high'), value: 'high' },
-                        ]}
-                        value={
-                          typeof reasoningEffortValue === 'string' ? reasoningEffortValue : 'medium'
-                        }
-                        onChange={(value) => {
-                          handleFieldChange(['params', 'reasoning_effort'], value);
-                        }}
-                      />
-                    )}
-                  </ControlRow>
+                          onChange={(value) => {
+                            handleFieldChange(['params', 'reasoning_effort'], value);
+                          }}
+                        />
+                      )}
+                    </ControlRow>
+                  )}
                 </div>
               )}
             </>

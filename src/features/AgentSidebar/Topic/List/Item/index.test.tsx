@@ -109,8 +109,7 @@ vi.mock('@/routes/(main)/agent/channel/const', () => ({
   getPlatformIcon: () => null,
 }));
 vi.mock('@/store/agent', () => ({
-  // `agentMap` is read by `agentSelectors.isCurrentAgentHeterogeneous` →
-  // `currentAgentConfig`, which would otherwise throw on `undefined.agentMap`.
+  // `agentMap` is read by `agentSelectors.currentAgentVisibility`.
   useAgentStore: (
     selector: (state: { activeAgentId: string; agentMap: Record<string, unknown> }) => unknown,
   ) => selector({ activeAgentId: 'agt_test', agentMap: {} }),
@@ -254,7 +253,20 @@ describe('TopicItem active state', () => {
     render(<TopicItem id="tpc_test" status="running" title="Topic" />);
 
     expect(screen.queryByTestId('ring-loading')).not.toBeInTheDocument();
-    expect(screen.getByTestId('topic-item-icon')).toHaveAttribute('data-icon', 'Hash');
+    expect(screen.queryByTestId('topic-item-icon')).not.toBeInTheDocument();
+  });
+
+  it('keeps idle topics iconless', () => {
+    useTopicNavigationMock.mockReturnValue({
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: false,
+      navigateToTopic: vi.fn(),
+      routeTopicId: undefined,
+    });
+
+    render(<TopicItem id="tpc_test" title="Topic" />);
+
+    expect(screen.queryByTestId('topic-item-icon')).not.toBeInTheDocument();
   });
 
   it('prefetches messages when a topic is an unread completion', async () => {
@@ -364,7 +376,6 @@ describe('TopicItem active state', () => {
 
   it.each([
     ['scheduled', 'Clock'],
-    ['paused', 'CirclePause'],
     ['completed', 'CircleCheck'],
   ] as const)('keeps the %s status above linked pull request metadata', (status, icon) => {
     topicMetaCardMock.value = { pullRequest: { state: 'open' } };

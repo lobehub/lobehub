@@ -63,6 +63,7 @@ export interface RunHeteroTaskParams {
   agentType: RemoteHeterogeneousAgentType;
   cwd?: string;
   operationId: string;
+  platformAgentId?: string;
   prompt: string;
   taskId: string;
   topicId: string;
@@ -163,7 +164,17 @@ function buildNotifyProtocol(lhPath: string, topicId: string): string {
 }
 
 export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string> {
-  const { agentId, agentType, cwd, operationId, prompt, taskId, topicId, workspaceId } = params;
+  const {
+    agentId,
+    agentType,
+    cwd,
+    operationId,
+    platformAgentId,
+    prompt,
+    taskId,
+    topicId,
+    workspaceId,
+  } = params;
   const workDir = cwd || process.cwd();
   const lhPath = resolveLhPath();
   // Propagate workspace scope into the spawned child so its own `lh notify`
@@ -177,7 +188,7 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
     // openclaw agent --local is one-shot: each invocation processes one message and exits.
     // The --session-id links turns into the same conversation history on disk.
     // Requires the `openclaw` binary to be on PATH with Node >=22.19.
-    const openclawAgent = process.env.OPENCLAW_AGENT_ID ?? 'main';
+    const openclawAgent = platformAgentId?.trim() || process.env.OPENCLAW_AGENT_ID || 'main';
 
     // Always inject the notify protocol so openclaw knows how to report results
     // back to the LobeHub UI — even if the previous turn failed and the session

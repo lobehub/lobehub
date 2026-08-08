@@ -34,6 +34,26 @@ vi.mock('@lobehub/ui/base-ui', () => {
     Button: ({ children, ...props }: ButtonHTMLAttributes<HTMLButtonElement>) => (
       <button {...props}>{children}</button>
     ),
+    Drawer: ({
+      children,
+      onClose,
+      open,
+      title,
+    }: {
+      children?: ReactNode;
+      onClose?: () => void;
+      open?: boolean;
+      title?: ReactNode;
+    }) =>
+      open ? (
+        <div role="dialog">
+          <div>{title}</div>
+          <button type="button" onClick={onClose}>
+            close-drawer
+          </button>
+          {children}
+        </div>
+      ) : null,
     Switch: ({
       checked,
       disabled,
@@ -145,6 +165,11 @@ beforeEach(() => {
   hoisted.trpc.deleteApiKey.mockResolvedValue({});
 });
 
+const openDetail = async (name: string) => {
+  fireEvent.click(screen.getByText(name).closest('tr')!);
+  return screen.findByRole('dialog');
+};
+
 describe('ApiKey', () => {
   it('shows loading, then empty state when the first fetch returns no keys', async () => {
     let resolveList!: (items: ApiKeyItem[]) => void;
@@ -170,7 +195,8 @@ describe('ApiKey', () => {
 
     expect(await screen.findByText('My Key')).toBeInTheDocument();
     expect(screen.getByText('lb-plain-secret')).toBeInTheDocument();
-    expect(screen.getByRole('switch')).toBeChecked();
+    // management controls live in the drawer, not on the row
+    expect(screen.queryByRole('switch')).toBeNull();
   });
 
   it('creates a key through the modal and refreshes the list', async () => {
@@ -194,7 +220,8 @@ describe('ApiKey', () => {
     renderPage();
     await screen.findByText('My Key');
 
-    fireEvent.click(screen.getByRole('button', { name: 'edit-text' }));
+    const dialog = await openDetail('My Key');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'edit-text' }));
 
     await waitFor(() =>
       expect(hoisted.trpc.updateApiKey).toHaveBeenCalledWith({
@@ -205,11 +232,12 @@ describe('ApiKey', () => {
     await waitFor(() => expect(hoisted.trpc.getApiKeys).toHaveBeenCalledTimes(2));
   });
 
-  it('toggles a key off and refreshes the list', async () => {
+  it('toggles a key off from the detail drawer and refreshes the list', async () => {
     renderPage();
     await screen.findByText('My Key');
 
-    fireEvent.click(screen.getByRole('switch'));
+    const dialog = await openDetail('My Key');
+    fireEvent.click(within(dialog).getByRole('switch'));
 
     await waitFor(() =>
       expect(hoisted.trpc.updateApiKey).toHaveBeenCalledWith({
@@ -220,11 +248,12 @@ describe('ApiKey', () => {
     await waitFor(() => expect(hoisted.trpc.getApiKeys).toHaveBeenCalledTimes(2));
   });
 
-  it('deletes a key after Popconfirm confirmation and refreshes the list', async () => {
+  it('deletes a key from the detail drawer after Popconfirm confirmation', async () => {
     renderPage();
     await screen.findByText('My Key');
 
-    fireEvent.click(screen.getByRole('button', { name: 'apikey.list.actions.delete' }));
+    const dialog = await openDetail('My Key');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'apikey.list.actions.delete' }));
 
     await screen.findByText('apikey.list.actions.deleteConfirm.title');
     fireEvent.click(
@@ -240,7 +269,8 @@ describe('ApiKey', () => {
     renderPage();
     await screen.findByText('My Key');
 
-    fireEvent.click(screen.getByRole('switch'));
+    const dialog = await openDetail('My Key');
+    fireEvent.click(within(dialog).getByRole('switch'));
 
     await waitFor(() => expect(hoisted.toast.error).toHaveBeenCalledWith('manageOnlyCreator'));
     expect(hoisted.trpc.getApiKeys).toHaveBeenCalledTimes(1);
@@ -251,7 +281,8 @@ describe('ApiKey', () => {
     renderPage();
     await screen.findByText('My Key');
 
-    fireEvent.click(screen.getByRole('switch'));
+    const dialog = await openDetail('My Key');
+    fireEvent.click(within(dialog).getByRole('switch'));
 
     await waitFor(() => expect(hoisted.toast.error).toHaveBeenCalledWith('operationFailed'));
     expect(hoisted.trpc.getApiKeys).toHaveBeenCalledTimes(1);
@@ -264,10 +295,15 @@ describe('ApiKey', () => {
     await screen.findByText('My Key');
 
     expect(screen.getByRole('button', { name: 'apikey.list.actions.create' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'edit-text' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'edit-date' })).toBeDisabled();
-    expect(screen.getByRole('switch')).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'no-permission' })).toBeDisabled();
+
+    // the drawer carries the whole management surface, so it must be gated
+    const dialog = await openDetail('My Key');
+    expect(within(dialog).getByRole('button', { name: 'edit-text' })).toBeDisabled();
+    expect(within(dialog).getByRole('button', { name: 'edit-date' })).toBeDisabled();
+    expect(within(dialog).getByRole('switch')).toBeDisabled();
+    expect(
+      within(dialog).getByRole('button', { name: 'apikey.list.actions.delete' }),
+    ).toBeDisabled();
   });
 
   it('allows a workspace admin to manage another member key while keeping its secret masked', async () => {
@@ -280,17 +316,20 @@ describe('ApiKey', () => {
     await screen.findByText('Other Key');
 
     const otherRow = screen.getByText('Other Key').closest('tr')!;
-    expect(within(otherRow).getByText(`lb-${'*'.repeat(12)}`)).toBeInTheDocument();
-    expect(within(otherRow).getByRole('button', { name: 'edit-text' })).toBeEnabled();
-    expect(within(otherRow).getByRole('switch')).toBeEnabled();
+    expect(within(otherRow).getByText(`sk-lh-${'*'.repeat(12)}`)).toBeInTheDocument();
+
+    // an admin can manage another member's key from its drawer
+    const dialog = await openDetail('Other Key');
+    expect(within(dialog).getByRole('button', { name: 'edit-text' })).toBeEnabled();
+    expect(within(dialog).getByRole('switch')).toBeEnabled();
     expect(
-      within(otherRow).getByRole('button', { name: 'apikey.list.actions.delete' }),
+      within(dialog).getByRole('button', { name: 'apikey.list.actions.delete' }),
     ).toBeEnabled();
+    // ...but its secret stays masked there too
+    expect(within(dialog).getByText(`sk-lh-${'*'.repeat(12)}`)).toBeInTheDocument();
 
     const mineRow = screen.getByText('My Key').closest('tr')!;
     expect(within(mineRow).getByText('lb-plain-secret')).toBeInTheDocument();
-    expect(within(mineRow).getByRole('button', { name: 'edit-text' })).toBeEnabled();
-    expect(within(mineRow).getByRole('switch')).toBeEnabled();
   });
 
   it('disables create and row actions for workspace members without settings permission', async () => {
@@ -300,10 +339,13 @@ describe('ApiKey', () => {
     await screen.findByText('My Key');
 
     expect(screen.getByRole('button', { name: 'apikey.list.actions.create' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'edit-text' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'edit-date' })).toBeDisabled();
-    expect(screen.getByRole('switch')).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'manageOnlyCreator' })).toBeDisabled();
+
+    const dialog = await openDetail('My Key');
+    expect(within(dialog).getByRole('button', { name: 'edit-text' })).toBeDisabled();
+    expect(within(dialog).getByRole('switch')).toBeDisabled();
+    expect(
+      within(dialog).getByRole('button', { name: 'apikey.list.actions.delete' }),
+    ).toBeDisabled();
   });
 
   it('shows the unavailable copy with tooltip when key decryption failed', async () => {
@@ -332,5 +374,84 @@ describe('ApiKey', () => {
     await screen.findByText('My Key');
 
     expect(screen.queryByRole('columnheader', { name: 'apikey.list.columns.creator' })).toBeNull();
+  });
+
+  it('keeps scopes out of the list — they live in the detail drawer', async () => {
+    hoisted.trpc.getApiKeys.mockResolvedValue([makeItem({ scopes: ['agent:read'] })]);
+    renderPage();
+    await screen.findByText('My Key');
+
+    expect(screen.queryByRole('columnheader', { name: 'apikey.list.columns.scopes' })).toBeNull();
+    expect(screen.getByText('My Key').closest('tr')!.textContent).not.toContain(
+      'apikey.scopes.groups.agent',
+    );
+  });
+
+  it('opens the detail drawer on row click listing only the granted scopes', async () => {
+    hoisted.trpc.getApiKeys.mockResolvedValue([
+      makeItem({ scopes: ['model:read', 'model:invoke', 'agent:read'] }),
+    ]);
+    renderPage();
+    await screen.findByText('My Key');
+
+    fireEvent.click(screen.getByText('My Key').closest('tr')!);
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('apikey.detail.title')).toBeInTheDocument();
+    // one row per granted domain, actions collapsed — ungranted domains absent
+    expect(within(dialog).getByText('apikey.scopes.groups.agent')).toBeInTheDocument();
+    expect(within(dialog).getByText('apikey.scopes.groups.model')).toBeInTheDocument();
+    expect(within(dialog).queryByText('apikey.scopes.groups.chat')).toBeNull();
+    expect(within(dialog).queryByText('apikey.scopes.groups.file')).toBeNull();
+    // the model row collapses read + invoke onto one line (the `t` mock echoes
+    // keys, so the join/separator appear as their key names)
+    expect(dialog.textContent).toContain(
+      [
+        'apikey.scopes.groups.model',
+        'apikey.scopes.grantJoin',
+        'apikey.scopes.read',
+        'apikey.scopes.separator',
+        'apikey.scopes.invoke',
+      ].join(''),
+    );
+    // read-only: no editable scope controls in the detail view
+    expect(within(dialog).queryAllByRole('checkbox')).toHaveLength(0);
+  });
+
+  it('shows the full-access copy instead of the grant list for a full-access key', async () => {
+    renderPage();
+    await screen.findByText('My Key');
+
+    fireEvent.click(screen.getByText('My Key').closest('tr')!);
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('apikey.scopes.fullAccess')).toBeInTheDocument();
+    expect(within(dialog).queryByText('apikey.scopes.groups.agent')).toBeNull();
+  });
+
+  it('does not open the drawer when clicking inside the key cell', async () => {
+    renderPage();
+    await screen.findByText('My Key');
+
+    // the key cell keeps its own reveal/copy controls, so it must not navigate
+    fireEvent.click(screen.getByText('lb-plain-secret'));
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('deletes from the drawer and closes it', async () => {
+    renderPage();
+    await screen.findByText('My Key');
+
+    const dialog = await openDetail('My Key');
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'apikey.list.actions.delete' }));
+    await screen.findByText('apikey.list.actions.deleteConfirm.title');
+    fireEvent.click(
+      screen.getByRole('button', { name: 'apikey.list.actions.deleteConfirm.actions.ok' }),
+    );
+
+    await waitFor(() => expect(hoisted.trpc.deleteApiKey).toHaveBeenCalledWith({ id: 'key-1' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 });

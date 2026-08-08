@@ -5,22 +5,7 @@ import path from 'node:path';
 
 import type { DeviceControlDeps } from '@lobechat/device-control';
 import type { AgentRunRequestMessage, GatewayMcpParams } from '@lobechat/device-gateway-client';
-import type {
-  EditLocalFileParams,
-  GatewayConnectionStatus,
-  GetCommandOutputParams,
-  GlobFilesParams,
-  GrepContentParams,
-  KillCommandParams,
-  ListLocalFileParams,
-  LocalReadFileParams,
-  LocalReadFilesParams,
-  LocalSearchFilesParams,
-  MoveLocalFilesParams,
-  RenameLocalFileParams,
-  RunCommandParams,
-  WriteLocalFileParams,
-} from '@lobechat/electron-client-ipc';
+import type { GatewayConnectionStatus } from '@lobechat/electron-client-ipc';
 import { resolveRemotePlatformCommand } from '@lobechat/heterogeneous-agents/scanHost';
 import { type ILocalSystemService, LocalSystemExecutionRuntime } from '@lobechat/tool-runtime';
 import { execa } from 'execa';
@@ -113,22 +98,6 @@ interface BuiltinServerRuntimeOutput {
 }
 
 /**
- * Legacy API name aliases used by older gateway versions. Normalized to the
- * current `LocalSystemApiEnum` names before dispatch. `renameLocalFile` is
- * intentionally absent — it has no equivalent on the new surface and is
- * handled by a dedicated branch below.
- */
-const LEGACY_API_ALIASES: Record<string, string> = {
-  editLocalFile: 'editFile',
-  globLocalFiles: 'globFiles',
-  listLocalFiles: 'listFiles',
-  moveLocalFiles: 'moveFiles',
-  readLocalFile: 'readFile',
-  searchLocalFiles: 'searchFiles',
-  writeLocalFile: 'writeFile',
-};
-
-/**
  * Parse a JSON string, returning `undefined` on failure. Used to surface the
  * structured shape of platform-agent tool results (which return pre-stringified
  * JSON) as `state` for the renderer, without crashing on malformed input.
@@ -139,22 +108,6 @@ const safeJsonParse = (input: string): unknown => {
   } catch {
     return undefined;
   }
-};
-
-/**
- * Resolve a relative path against a scope (CWD). Mirrors the renderer-side
- * `resolveArgsWithScope` helper in `@lobechat/builtin-tool-local-system` — kept
- * here as a small inline copy to avoid pulling the renderer-side `./client`
- * subpath (which transitively requires React + antd) into the main process.
- */
-const resolveArgsWithScope = <T extends { scope?: string }>(args: T, pathField: string): T => {
-  const scope = args.scope;
-  const bag = args as Record<PropertyKey, unknown>;
-  const currentPath = typeof bag[pathField] === 'string' ? (bag[pathField] as string) : undefined;
-  if (!scope) return args;
-  if (!currentPath) return { ...args, [pathField]: scope };
-  if (path.isAbsolute(currentPath)) return args;
-  return { ...args, [pathField]: path.join(scope, currentPath) };
 };
 
 /**
@@ -448,125 +401,20 @@ export default class GatewayConnectionCtr extends ControllerModule {
       };
     }
 
-    const runtime = this.getLocalSystemRuntime();
-    const normalized = LEGACY_API_ALIASES[apiName] ?? apiName;
+    // Local-system tools: one dispatch through the shared runtime entry, which
+    // owns legacy alias normalization and IPC field mapping. The server runtime
+    // already stripped any model-supplied `cwd` and injected the device-bound
+    // `cwd`/`scope` into `args` (see its `WORKING_DIR_ARG` map), so the values
+    // here are server-controlled — `trustArgsCwd` lets them ride through to the
+    // IPC layer instead of being dropped like the previous per-tool switch did.
+    const localSystemOutput = await this.getLocalSystemRuntime().executeToolCall(
+      apiName,
+      (args ?? {}) as Record<string, unknown>,
+      { trustArgsCwd: true },
+    );
+    if (localSystemOutput) return localSystemOutput;
 
-    // Each case narrows `args` to its IPC param type — the manifest guarantees
-    // the gateway sends params matching the apiName. The `as never` casts on
-    // runtime calls are legitimate widenings: the runtime's typed signatures
-    // (e.g. `ListFilesParams`) are narrower than what the IPC layer accepts
-    // (`limit`, `run_in_background`, etc.), and the same casts exist in the
-    // renderer-side `LocalSystemExecutor`.
-    switch (normalized) {
-      case 'listFiles': {
-        const p = args as ListLocalFileParams;
-        return runtime.listFiles({
-          directoryPath: p.path,
-          limit: p.limit,
-          sortBy: p.sortBy,
-          sortOrder: p.sortOrder,
-        } as never);
-      }
-
-      case 'readFile': {
-        const p = args as LocalReadFileParams;
-        return runtime.readFile({
-          endLine: p.loc?.[1],
-          path: p.path,
-          startLine: p.loc?.[0],
-        });
-      }
-
-      case 'readFiles': {
-        return runtime.readFiles(args as LocalReadFilesParams);
-      }
-
-      case 'searchFiles': {
-        const resolved = resolveArgsWithScope(args as LocalSearchFilesParams, 'directory');
-        return runtime.searchFiles({
-          ...resolved,
-          directory: resolved.directory || '',
-        });
-      }
-
-      case 'moveFiles': {
-        const p = args as MoveLocalFilesParams;
-        return runtime.moveFiles({
-          operations: p.items?.map((item) => ({
-            destination: item.newPath,
-            source: item.oldPath,
-          })),
-        });
-      }
-
-      case 'writeFile': {
-        return runtime.writeFile(args as WriteLocalFileParams);
-      }
-
-      case 'editFile': {
-        const p = args as EditLocalFileParams;
-        return runtime.editFile({
-          all: p.replace_all,
-          path: p.file_path,
-          replace: p.new_string,
-          search: p.old_string,
-        });
-      }
-
-      case 'runCommand': {
-        // ComputerRuntime's RunCommandState reads `args.background`; the manifest
-        // exposes `run_in_background`. Without this normalize the state would
-        // always show foreground even for background commands.
-        const p = args as RunCommandParams;
-        return runtime.runCommand({
-          ...p,
-          background: p.run_in_background,
-        } as never);
-      }
-
-      case 'getCommandOutput': {
-        const p = args as GetCommandOutputParams;
-        return runtime.getCommandOutput({
-          commandId: p.shell_id,
-          filter: p.filter,
-        } as never);
-      }
-
-      case 'killCommand': {
-        const p = args as KillCommandParams;
-        return runtime.killCommand({
-          commandId: p.shell_id,
-        });
-      }
-
-      case 'grepContent': {
-        const resolved = resolveArgsWithScope(args as GrepContentParams, 'path');
-        return runtime.grepContent(resolved as never);
-      }
-
-      case 'globFiles': {
-        const p = args as GlobFilesParams;
-        return runtime.globFiles({
-          directory: p.scope,
-          pattern: p.pattern,
-        });
-      }
-
-      case 'renameLocalFile': {
-        // ComputerRuntime has no public rename method — new surface uses
-        // `moveFiles`. Legacy gateway versions may still emit this name, so we
-        // call the IPC handler directly and wrap the raw result into the
-        // BuiltinServerRuntimeOutput shape so `state` still flows downstream.
-        const raw = await this.localFileCtr.handleRenameFile(args as RenameLocalFileParams);
-        return {
-          content: raw.success
-            ? `Renamed to ${raw.newPath}`
-            : `Rename failed: ${raw.error ?? 'unknown error'}`,
-          state: raw,
-          success: raw.success,
-        };
-      }
-
+    switch (apiName) {
       // ─── Platform agent tools (openclaw / hermes) ───
       // These don't go through LocalSystemExecutionRuntime — they return raw
       // domain payloads that we envelope into BuiltinServerRuntimeOutput here.
@@ -600,6 +448,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
             agentType: string;
             cwd?: string;
             operationId: string;
+            platformAgentId?: string;
             prompt: string;
             taskId: string;
             topicId: string;
@@ -840,12 +689,23 @@ export default class GatewayConnectionCtr extends ControllerModule {
     agentType: string;
     cwd?: string;
     operationId: string;
+    platformAgentId?: string;
     prompt: string;
     taskId: string;
     topicId: string;
     workspaceId?: string;
   }): Promise<string> {
-    const { agentId, agentType, cwd, operationId, prompt, taskId, topicId, workspaceId } = args;
+    const {
+      agentId,
+      agentType,
+      cwd,
+      operationId,
+      platformAgentId,
+      prompt,
+      taskId,
+      topicId,
+      workspaceId,
+    } = args;
     const workDir = cwd || process.cwd();
 
     const [serverUrl, accessToken] = await Promise.all([
@@ -871,7 +731,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
       }
       if (commandStatus.resolvedPathEnv) childEnv.PATH = commandStatus.resolvedPathEnv;
       const lhPath = this.resolveLhPath();
-      const openclawAgent = process.env['OPENCLAW_AGENT_ID'] ?? 'main';
+      const openclawAgent = platformAgentId?.trim() || process.env['OPENCLAW_AGENT_ID'] || 'main';
 
       // Always inject the notify protocol so openclaw knows how to report results
       // back to the LobeHub UI — even if the previous turn failed and the session

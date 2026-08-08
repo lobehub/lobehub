@@ -52,8 +52,8 @@ const formatDuration = (ms: number): string => {
 // The run's last message (`content`) is the raw assistant output — markdown, and
 // often long. Render it as rich text, but keep it a bounded preview in the feed:
 // the shared collapse clamps it with a fade and offers "show more", while the
-// whole card still opens the run drawer for deeper reading. `pointerEvents: none`
-// keeps every click inside markdown falling through to the card.
+// run drawer remains available from the explicit overflow action. The preview
+// itself is reading content, not an unlabeled navigation target.
 const RUN_CONTENT_MAX_HEIGHT = 160;
 
 const RunContent = memo<{ content: string }>(({ content }) => (
@@ -201,13 +201,11 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) =>
 
   return (
     <Block
-      clickable={!!activity.id}
       gap={8}
       paddingBlock={8}
       paddingInline={8}
       style={{ borderRadius: cssVar.borderRadiusLG }}
       variant={'outlined'}
-      onClick={activity.id ? handleOpen : undefined}
     >
       <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
         <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0, overflow: 'hidden' }}>

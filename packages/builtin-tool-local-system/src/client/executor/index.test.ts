@@ -187,6 +187,7 @@ describe('LocalSystemExecutor', () => {
       expect(searchFilesMock).toHaveBeenCalledWith({
         keywords: 'test',
         directory: '/home/user/project',
+        limit: 100,
       });
     });
 
@@ -202,6 +203,7 @@ describe('LocalSystemExecutor', () => {
         keywords: 'test',
         scope: '.',
         directory: '/home/user/project',
+        limit: 100,
       });
     });
 
@@ -217,6 +219,7 @@ describe('LocalSystemExecutor', () => {
         keywords: 'test',
         scope: '/explicit/path',
         directory: '/explicit/path',
+        limit: 100,
       });
     });
   });

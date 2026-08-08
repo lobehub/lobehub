@@ -120,6 +120,7 @@
   "stt.responseError": "Yêu cầu dịch vụ thất bại, vui lòng kiểm tra cấu hình hoặc thử lại",
   "supervisor.decisionFailed": "Chủ nhóm không thể hoạt động. Vui lòng kiểm tra cấu hình để đảm bảo mô hình, API Key và endpoint chính xác.",
   "testConnectionFailed": "Kết nối thử thất bại: {{error}}",
+  "transfer.copyInProgress": "Một bản sao trước đó của tác nhân này vẫn đang sao chép lịch sử của nó. Vui lòng thử lại sau khi quá trình hoàn tất.",
   "transfer.noPermission": "Bạn không có quyền di chuyển tài nguyên này.",
   "transfer.ownerOnly": "Chỉ chủ sở hữu không gian làm việc mới có thể chuyển tài nguyên do thành viên khác tạo ra.",
   "transfer.resourceNotFound": "Tài nguyên này không còn tồn tại hoặc bạn không còn quyền truy cập. Vui lòng làm mới và thử lại.",

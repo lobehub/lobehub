@@ -12,6 +12,7 @@ import {
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentModel } from '@/database/models/agent';
+import { AGENT_COPY_IN_PROGRESS } from '@/database/models/agentCopyJob';
 import {
   AGENT_TRANSFER_IN_PROGRESS,
   AgentTransferJobModel,
@@ -716,7 +717,19 @@ export const agentRouter = router({
           });
         }
       }
-      const result = await ctx.agentModel.delete(input.agentId);
+      let result;
+      try {
+        result = await ctx.agentModel.delete(input.agentId);
+      } catch (error) {
+        if (error instanceof Error && error.message === AGENT_COPY_IN_PROGRESS) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.CopyInProgress } },
+            code: 'CONFLICT',
+            message: 'A previous copy of this agent is still duplicating its history',
+          });
+        }
+        throw error;
+      }
       if (ctx.workspaceId) {
         await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).removeAll(
           'agent',
@@ -813,6 +826,8 @@ export const agentRouter = router({
         jobId: job.id,
         pendingTopicIds,
         totalTopics: job.totalTopics,
+        // `transfer` vs `copy` — the client words its progress hints by it.
+        type: job.type,
       };
     }),
 
@@ -939,6 +954,13 @@ export const agentRouter = router({
             cause: { data: { code: TransferErrorCode.OwnerOnly } },
             code: 'FORBIDDEN',
             message: "Only workspace owners can transfer an agent carrying others' conversations",
+          });
+        }
+        if (error instanceof Error && error.message === AGENT_COPY_IN_PROGRESS) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.CopyInProgress } },
+            code: 'CONFLICT',
+            message: 'A previous copy of this agent is still duplicating its history',
           });
         }
         if (error instanceof Error && error.message === AGENT_TRANSFER_IN_PROGRESS) {
@@ -1086,6 +1108,13 @@ export const agentRouter = router({
             cause: { data: { code: TransferErrorCode.OwnerOnly } },
             code: 'FORBIDDEN',
             message: "Only workspace owners can transfer agents carrying others' conversations",
+          });
+        }
+        if (error instanceof Error && error.message === AGENT_COPY_IN_PROGRESS) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.CopyInProgress } },
+            code: 'CONFLICT',
+            message: 'A previous copy of this agent is still duplicating its history',
           });
         }
         if (error instanceof Error && error.message === AGENT_TRANSFER_IN_PROGRESS) {

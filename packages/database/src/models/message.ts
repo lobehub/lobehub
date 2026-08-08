@@ -77,6 +77,7 @@ import {
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { sanitizeBm25Query } from '../utils/bm25';
+import { notCopiedTranscript } from '../utils/copiedTranscript';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
@@ -447,6 +448,9 @@ export class MessageModel {
         () => this.buildThreadQueryCondition(threadId),
         { hasThreadId: true },
       );
+      // A topic thread may contain replies from delegated agents. When the topic is known,
+      // scope the complete thread to it instead of filtering those replies by the parent agent.
+      const threadScopeCondition = topicId ? this.matchTopic(topicId) : agentCondition;
       const messageItems = await this.queryWithWhere({
         current,
         includeFileWorks,
@@ -454,8 +458,8 @@ export class MessageModel {
         postProcessUrl: options.postProcessUrl,
         skipWorks,
         timing,
-        // Thread queries optionally add agent/session scope if provided
-        where: agentCondition ? and(agentCondition, threadCondition) : threadCondition,
+        topicId: topicId ?? undefined,
+        where: threadScopeCondition ? and(threadScopeCondition, threadCondition) : threadCondition,
       });
       logTiming(timing, 'db.message.query:done', {
         messageCount: messageItems.length,
@@ -2037,7 +2041,7 @@ export class MessageModel {
         id: messages.model,
       })
       .from(messages)
-      .where(and(this.ownership(), isNotNull(messages.model)))
+      .where(and(this.ownership(), isNotNull(messages.model), notCopiedTranscript()))
       .having(({ count }) => gt(count, 0))
       .groupBy(messages.model)
       .orderBy(desc(sql`count`), asc(messages.model))
@@ -2125,6 +2129,7 @@ export class MessageModel {
         genWhere([
           this.ownership(),
           eq(messages.role, 'assistant'),
+          notCopiedTranscript(),
           genRangeWhere(
             [startDate.format('YYYY-MM-DD'), endDate.add(1, 'day').format('YYYY-MM-DD')],
             messages.createdAt,

@@ -1,4 +1,4 @@
-import { PROJECT_STATUSES, PROJECT_VISIBILITIES } from '@lobechat/types';
+import { PROJECT_IDENTIFIER_REGEX, PROJECT_STATUSES, PROJECT_VISIBILITIES } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -19,6 +19,11 @@ const projectProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
 
 const projectWriteProcedure = projectProcedure.use(withScopedPermission('agent:update'));
 const idInput = z.object({ id: z.string() });
+const projectIdentifierInput = z
+  .string()
+  .trim()
+  .transform((value) => value.toUpperCase())
+  .pipe(z.string().regex(PROJECT_IDENTIFIER_REGEX, 'Invalid project identifier'));
 
 function requireResult<T>(result: T | null, message = 'Project not found'): T {
   if (!result) throw new TRPCError({ code: 'NOT_FOUND', message });
@@ -96,6 +101,7 @@ export const projectRouter = router({
       z.object({
         avatar: z.string().optional(),
         description: z.string().optional(),
+        identifier: projectIdentifierInput,
         name: z.string().min(1).max(255),
         slug: z.string().max(100).optional(),
         visibility: z.enum(PROJECT_VISIBILITIES).optional(),

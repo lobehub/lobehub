@@ -36,7 +36,7 @@ export const useTopicMigrationPending = (agentId?: string | null, topicId?: stri
  */
 export const TopicMigrationPlaceholder = memo<MigrationBannerProps>(({ agentId, topicId }) => {
   const { t } = useTranslation('chat');
-  const { mutate } = useAgentTransferJob(agentId);
+  const { data, mutate } = useAgentTransferJob(agentId);
   const refreshMessages = useChatStore((s) => s.refreshMessages);
   // Tracks WHICH topic was prioritized (not just whether one was): switching
   // straight from one pending topic to another reuses this component, and the
@@ -75,7 +75,11 @@ export const TopicMigrationPlaceholder = memo<MigrationBannerProps>(({ agentId, 
     <Flexbox align={'center'} flex={1} gap={12} justify={'center'} padding={24}>
       <Icon spin color={cssVar.colorTextDescription} icon={Loader2} size={20} />
       <Text type={'secondary'} weight={500}>
-        {t('transferMigration.topicPending.title')}
+        {t(
+          data?.type === 'copy'
+            ? 'transferMigration.topicPendingCopy.title'
+            : 'transferMigration.topicPending.title',
+        )}
       </Text>
       <Text fontSize={12} style={{ maxWidth: 420, textAlign: 'center' }} type={'secondary'}>
         {t('transferMigration.topicPending.desc')}
@@ -100,7 +104,11 @@ const chipStyles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorText};
     white-space: nowrap;
 
-    background: ${cssVar.colorFillTertiary};
+    /* Solid surface under the translucent fill: the chip also renders as a
+       floating overlay on top of chat content, where a bare alpha fill would
+       let the text underneath bleed through. */
+    background-color: ${cssVar.colorBgElevated};
+    background-image: linear-gradient(${cssVar.colorFillTertiary}, ${cssVar.colorFillTertiary});
   `,
 }));
 
@@ -121,10 +129,15 @@ export const AgentMigrationBadge = memo<{ agentId: string }>(({ agentId }) => {
       <Flexbox horizontal align={'center'} className={chipStyles.chip} gap={6}>
         <Icon spin color={cssVar.colorWarning} icon={Loader2} size={12} />
         <span>
-          {t('transferMigration.agentBadge', {
-            completed: data.completedTopics,
-            total: data.totalTopics,
-          })}
+          {t(
+            data.type === 'copy'
+              ? 'transferMigration.agentBadgeCopy'
+              : 'transferMigration.agentBadge',
+            {
+              completed: data.completedTopics,
+              total: data.totalTopics,
+            },
+          )}
         </span>
       </Flexbox>
     </Tooltip>

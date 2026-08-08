@@ -26,7 +26,11 @@ import { describe, expect, it } from 'vitest';
  */
 const FORBIDDEN = /(?:->>?|#>>?)[^\n]*?\b(?:IS\s+(?:NOT\s+)?NULL|IS\s+DISTINCT\s+FROM)\b/i;
 
-const MODELS_DIR = path.join(import.meta.dirname, '..');
+// Every directory whose queries can reach production. `models` is where the
+// two known casualties lived, but a predicate is just as lethal when it is
+// hoisted into a shared util or a repository — this guard follows the code.
+const SRC_DIR = path.join(import.meta.dirname, '..', '..');
+const SCANNED_DIRS = ['models', 'repositories', 'utils'].map((dir) => path.join(SRC_DIR, dir));
 
 const sourceFiles = (dir: string): string[] =>
   readdirSync(dir).flatMap((entry) => {
@@ -37,8 +41,8 @@ const sourceFiles = (dir: string): string[] =>
   });
 
 describe('jsonb null tests in WHERE clauses', () => {
-  it('are absent from every model — they take the production engine down', () => {
-    const offenders = sourceFiles(MODELS_DIR).flatMap((file) =>
+  it('are absent from every query source — they take the production engine down', () => {
+    const offenders = SCANNED_DIRS.flatMap(sourceFiles).flatMap((file) =>
       readFileSync(file, 'utf8')
         .split('\n')
         .map((line, index) => ({ file, line: line.trim(), lineNo: index + 1 }))
@@ -46,7 +50,7 @@ describe('jsonb null tests in WHERE clauses', () => {
         .filter(
           ({ line }) => FORBIDDEN.test(line) && !line.startsWith('*') && !line.startsWith('//'),
         )
-        .map(({ file, line, lineNo }) => `${file.split('/models/')[1]}:${lineNo}  ${line}`),
+        .map(({ file, line, lineNo }) => `${path.relative(SRC_DIR, file)}:${lineNo}  ${line}`),
     );
 
     expect(offenders).toEqual([]);

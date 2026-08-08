@@ -132,6 +132,8 @@ interface OperationState {
    * after the event's XADD succeeds.
    */
   publishedKeys: Set<string>;
+  /** Isolation thread that owns this heterogeneous run, when applicable. */
+  threadId: string | undefined;
   /**
    * Run-global DB index for every tool message in the topic, keyed by
    * `tool_call_id`. Main and subagent reducers keep only their per-turn maps;
@@ -426,14 +428,15 @@ export class HeterogeneousPersistenceHandler {
       throw new Error(`runningOperation on topic ${topicId} is missing assistantMessageId`);
     }
 
+    const baseAssistantMessage = await this.deps.messageModel.findById(baseAssistantMessageId);
+
     if (seedAssistantMessageId) {
-      const seededMsg = await this.deps.messageModel.findById(seedAssistantMessageId);
-      if (!seededMsg) {
+      if (!baseAssistantMessage) {
         throw new Error(
           `Seeded assistantMessageId ${seedAssistantMessageId} was not found for topic ${topicId}`,
         );
       }
-      if (seededMsg.topicId !== topicId) {
+      if (baseAssistantMessage.topicId !== topicId) {
         throw new Error(
           `Seeded assistantMessageId ${seedAssistantMessageId} does not belong to topic ${topicId}`,
         );
@@ -453,7 +456,13 @@ export class HeterogeneousPersistenceHandler {
         : baseAssistantMessageId;
 
     state = {
-      agentId: topic?.agentId ?? null,
+      // A direct @Agent run keeps the topic under the conversation owner while
+      // the seeded assistant belongs to the executing target Agent. Every
+      // follow-up step and tool row must inherit the assistant author, not the
+      // topic owner, or the post-tool answer appears to switch back to Lobe AI.
+      // Legacy/finish-only callers may not have a readable assistant row; keep
+      // the historical topic-owner fallback for those paths.
+      agentId: baseAssistantMessage?.agentId ?? topic?.agentId ?? null,
       // Left undefined until the run's own stream_start reports it (or a cold
       // replica recovers it from a stamped message). NOT seeded from
       // topic.metadata.heteroSessionId: that holds the id we ASKED CC to resume,
@@ -466,6 +475,7 @@ export class HeterogeneousPersistenceHandler {
       processedKeys: new Set(),
       publishedKeys: new Set(),
       toolMsgIdByCallId: new Map(),
+      threadId: running.threadId ?? undefined,
       topicId,
     };
     await this.refreshToolMessageIndex(state);
@@ -628,14 +638,17 @@ export class HeterogeneousPersistenceHandler {
     // Recover the chain spine from the DB. The next normal
     // turn parents off the run's latest main-thread message that is neither a
     // tool nor a TOOLLESS signal callback (a tools-bearing signal turn is
-    // main-chain — see `getLastMainThreadSpineMessageId`); reading it straight
+    // main-chain — see `getLatestSpineMessageId`); reading it straight
     // from the DB (independent of
     // `currentAssistantId`, which can regress to the seed placeholder on a cold
     // / non-sticky replica — see the multi-replica caveat on the class) keeps
     // consecutive cold-replica steps chained linearly instead of forking onto a
     // stale node. Signal turns still anchor off `lastToolMsgIdEver`, which is
     // maintained in-memory across the run's tool batches.
-    const spineId = await this.deps.messageModel.getLastMainThreadSpineMessageId?.(state.topicId);
+    const spineId = await this.deps.messageModel.getLatestSpineMessageId({
+      threadId: state.threadId ?? null,
+      topicId: state.topicId,
+    });
     if (spineId) state.main.lastSpineMessageId = spineId;
   }
 
@@ -907,6 +920,7 @@ export class HeterogeneousPersistenceHandler {
             parentId: intent.parentId,
             provider: intent.provider,
             role: 'assistant',
+            threadId: state.threadId,
             topicId: intent.topicId ?? state.topicId,
           } as any,
           intent.messageId,
@@ -965,7 +979,7 @@ export class HeterogeneousPersistenceHandler {
                 type: tool.payload.type,
               },
               role: 'tool',
-              threadId: null,
+              threadId: state.threadId,
               tool_call_id: tool.payload.id,
               topicId: state.topicId,
             } as any,

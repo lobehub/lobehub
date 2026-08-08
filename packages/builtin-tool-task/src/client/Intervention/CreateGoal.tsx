@@ -34,6 +34,12 @@ const styles = createStaticStyles(({ css }) => ({
     &:hover {
       background: ${cssVar.colorFillQuaternary};
     }
+
+    /* Kept after :hover so specificity stays ascending for stylelint — the
+      secondary border is too faint to read on the dark elevated surface. */
+    html[data-theme='dark'] & + & {
+      border-block-start-color: ${cssVar.colorBorder};
+    }
   `,
   header: css`
     position: sticky;
@@ -45,9 +51,9 @@ const styles = createStaticStyles(({ css }) => ({
       positions identical — the title simply never moves. */
     inset-block-start: -8px;
 
-    padding-block: 4px 2px;
+    padding-block: 8px 4px;
 
-    background: ${cssVar.colorBgContainer};
+    background: ${cssVar.colorBgElevated};
   `,
   instructionEditor: css`
     padding-block: 8px;
@@ -67,6 +73,7 @@ const styles = createStaticStyles(({ css }) => ({
   list: css`
     overflow: hidden;
     padding: 0;
+    background: transparent;
   `,
   criterionTitle: css`
     font-size: 13px;

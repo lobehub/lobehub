@@ -119,7 +119,10 @@ const Conversation = memo(() => {
   // of an empty (not-yet-migrated) history, and blocks sending — the server
   // could not assemble the missing context anyway. Opening it jumps it to the
   // front of the backfill queue, so the wait is typically a few seconds.
-  const { topicPending } = useTopicMigrationPending(context.agentId, context.topicId);
+  const { job: migrationJob, topicPending } = useTopicMigrationPending(
+    context.agentId,
+    context.topicId,
+  );
 
   const hooks = useMemo(
     () => mergeConversationHooks(businessAnalyticsHooks, chatFollowUpHooks),
@@ -186,7 +189,11 @@ const Conversation = memo(() => {
       {topicPending && (
         <Flexbox horizontal align={'center'} justify={'center'} paddingBlock={6} paddingInline={16}>
           <span style={{ color: cssVar.colorTextDescription, fontSize: 12, textAlign: 'center' }}>
-            {t('transferMigration.inputDisabledHint')}
+            {t(
+              migrationJob?.type === 'copy'
+                ? 'transferMigration.inputDisabledHintCopy'
+                : 'transferMigration.inputDisabledHint',
+            )}
           </span>
         </Flexbox>
       )}

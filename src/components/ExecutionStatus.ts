@@ -7,7 +7,6 @@ import {
   CircleCheck,
   CircleDashed,
   CircleDot,
-  CirclePause,
   CircleSlash,
   CircleX,
   Clock,
@@ -36,7 +35,6 @@ const VISUALS = {
   completed: { color: cssVar.colorSuccess, icon: CircleCheck },
   failed: { color: cssVar.colorError, icon: CircleX },
   idle: { color: cssVar.colorTextTertiary, icon: Circle },
-  paused: { color: cssVar.colorTextDescription, icon: CirclePause },
   running: { color: cssVar.colorWarning, icon: CircleDot },
   scheduled: { color: cssVar.colorWarning, icon: Clock },
   waitingForHuman: { color: cssVar.colorInfo, icon: HandIcon },
@@ -64,7 +62,6 @@ export const TOPIC_STATUS_VISUALS: Record<ChatTopicStatus, ExecutionStatusVisual
   // like a failed task run — the warning triangle reads that way, the circled X
   // reads as "closed/rejected".
   failed: { ...VISUALS.failed, icon: TriangleAlert },
-  paused: VISUALS.paused,
   running: VISUALS.running,
   scheduled: VISUALS.scheduled,
   // `unread` rows render a custom ripple dot; this is the fallback glyph.

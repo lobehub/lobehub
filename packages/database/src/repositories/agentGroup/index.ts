@@ -3,6 +3,7 @@ import type { AgentGroupDetail, AgentGroupMember, AgentPluginEntry } from '@lobe
 import { cleanObject } from '@lobechat/utils';
 import { and, asc, eq, inArray, ne, not, sql } from 'drizzle-orm';
 
+import { AGENT_COPY_IN_PROGRESS, AgentCopyJobModel } from '../../models/agentCopyJob';
 import {
   AGENT_TRANSFER_IN_PROGRESS,
   AgentTransferJobModel,
@@ -26,7 +27,6 @@ import {
   agents,
   chatGroups,
   chatGroupsAgents,
-  messagePlugins,
   messages,
   sessionGroups,
   threads,
@@ -34,6 +34,8 @@ import {
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { insertInBatches, splitCrossBatchSelfReferences } from '../../utils/batchInsert';
+import { COPIED_TOPIC_USAGE_RESET } from '../../utils/copiedTranscript';
+import { copyMessagesInDatabase, type IdPair } from '../../utils/copyMessagesInDatabase';
 import { idGenerator } from '../../utils/idGenerator';
 import { normalizeInboxAgentMeta } from '../../utils/inboxAgent';
 import { buildWorkspaceWhere } from '../../utils/workspace';
@@ -119,8 +121,6 @@ export class AgentGroupRepository {
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, threads);
   private messageOwnership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messages);
-  private messagePluginOwnership = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messagePlugins);
 
   private buildCopiedAgent = (
     source: AgentItem | undefined,
@@ -153,23 +153,6 @@ export class AgentGroupRepository {
     workspaceId: targetWorkspaceId,
   });
 
-  private remapToolIds = (tools: unknown, toolIdMap: Map<string, string>) => {
-    if (!Array.isArray(tools)) return tools;
-
-    return tools.map((tool) => {
-      if (!tool || typeof tool !== 'object') return tool;
-
-      const toolRecord = tool as Record<PropertyKey, unknown>;
-      const toolId = toolRecord.id;
-      if (typeof toolId !== 'string') return tool;
-
-      return {
-        ...toolRecord,
-        id: toolIdMap.get(toolId) ?? toolId,
-      };
-    });
-  };
-
   private copyGroupConversationHistory = async ({
     agentIdMap,
     executor,
@@ -187,11 +170,6 @@ export class AgentGroupRepository {
   }) => {
     const mapAgentId = (agentId?: null | string) =>
       agentId ? (agentIdMap.get(agentId) ?? null) : null;
-    const mapTargetId = (targetId?: null | string) => {
-      if (!targetId || targetId === 'user') return targetId ?? null;
-
-      return agentIdMap.get(targetId) ?? null;
-    };
 
     const sourceTopics = await executor.query.topics.findMany({
       orderBy: (topic, { asc }) => [asc(topic.createdAt)],
@@ -212,32 +190,22 @@ export class AgentGroupRepository {
       sourceThreads.map((thread) => [thread.id, idGenerator('threads', 16)]),
     );
 
-    const sourceMessages = await executor.query.messages.findMany({
-      orderBy: (message, { asc }) => [asc(message.createdAt)],
-      where: and(this.messageOwnership(), inArray(messages.topicId, sourceTopicIds)),
-    });
+    // Message bodies never leave the database — only the ids are fetched to
+    // build the remap tables consumed by the in-database copy below (threads
+    // also need the complete message map for `sourceMessageId`).
+    const messageIdPairs: IdPair[] = (
+      await executor.query.messages.findMany({
+        columns: { id: true },
+        where: and(this.messageOwnership(), inArray(messages.topicId, sourceTopicIds)),
+      })
+    ).map(({ id }) => [id, idGenerator('messages')]);
 
-    const messageIdMap = new Map(
-      sourceMessages.map((message) => [message.id, idGenerator('messages')]),
-    );
-
-    const toolIdMap = new Map<string, string>();
-    for (const message of sourceMessages) {
-      if (!Array.isArray(message.tools)) continue;
-
-      for (const tool of message.tools) {
-        if (!tool || typeof tool !== 'object') continue;
-
-        const toolId = (tool as Record<PropertyKey, unknown>).id;
-        if (typeof toolId === 'string') {
-          toolIdMap.set(toolId, `toolu_${idGenerator('messages')}`);
-        }
-      }
-    }
+    const messageIdMap = new Map(messageIdPairs);
 
     await insertInBatches(
       sourceTopics.map((topic) => ({
         ...topic,
+        ...COPIED_TOPIC_USAGE_RESET,
         agentId: mapAgentId(topic.agentId),
         clientId: null,
         groupId: newGroupId,
@@ -277,67 +245,22 @@ export class AgentGroupRepository {
       }
     }
 
-    if (sourceMessages.length === 0) return;
-
-    const sourceMessageIds = sourceMessages.map((message) => message.id);
-    const sourcePlugins = await executor.query.messagePlugins.findMany({
-      where: and(this.messagePluginOwnership(), inArray(messagePlugins.id, sourceMessageIds)),
+    // `agent_id` remaps through the group-member map (unknown → NULL);
+    // `target_id` keeps the literal 'user' and remaps agent targets the same way.
+    await copyMessagesInDatabase({
+      agentIdExpr: sql`_amap.new_id`,
+      agentIdPairs: [...agentIdMap.entries()],
+      executor,
+      groupId: newGroupId,
+      messageIdPairs,
+      childScope: (table) =>
+        buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, table),
+      targetIdExpr: sql`case when ${messages.targetId} = 'user' then ${messages.targetId} else _amap_target.new_id end`,
+      targetUserId,
+      targetWorkspaceId,
+      threadIdPairs: [...threadIdMap.entries()],
+      topicIdPairs: [...topicIdMap.entries()],
     });
-
-    const messageRows = sourceMessages.map((message) => {
-      const newMessageId = messageIdMap.get(message.id)!;
-      const newTopicId = message.topicId ? (topicIdMap.get(message.topicId) ?? null) : null;
-
-      return {
-        ...message,
-        agentId: mapAgentId(message.agentId),
-        clientId: null,
-        groupId: newGroupId,
-        id: newMessageId,
-        messageGroupId: null,
-        parentId: message.parentId ? (messageIdMap.get(message.parentId) ?? null) : null,
-        quotaId: message.quotaId ? (messageIdMap.get(message.quotaId) ?? null) : null,
-        sessionId: null,
-        targetId: mapTargetId(message.targetId),
-        threadId: message.threadId ? (threadIdMap.get(message.threadId) ?? null) : null,
-        tools: this.remapToolIds(message.tools, toolIdMap),
-        topicId: newTopicId,
-        userId: targetUserId,
-        workspaceId: targetWorkspaceId,
-      };
-    });
-
-    const { fixups: messageFixups, rows: messageInsertRows } = splitCrossBatchSelfReferences(
-      messageRows,
-      ['parentId', 'quotaId'],
-    );
-
-    await insertInBatches(messageInsertRows, (batch) => executor.insert(messages).values(batch));
-
-    for (const fixup of messageFixups) {
-      await executor.update(messages).set(fixup.patch).where(eq(messages.id, fixup.id));
-    }
-
-    if (sourcePlugins.length > 0) {
-      await insertInBatches(
-        sourcePlugins
-          .map((plugin) => {
-            const newMessageId = messageIdMap.get(plugin.id);
-            if (!newMessageId) return;
-
-            return {
-              ...plugin,
-              clientId: null,
-              id: newMessageId,
-              toolCallId: plugin.toolCallId ? (toolIdMap.get(plugin.toolCallId) ?? null) : null,
-              userId: targetUserId,
-              workspaceId: targetWorkspaceId,
-            };
-          })
-          .filter((plugin) => !!plugin),
-        (batch) => executor.insert(messagePlugins).values(batch),
-      );
-    }
   };
 
   /**
@@ -951,6 +874,12 @@ export class AgentGroupRepository {
       }
       if (await AgentTransferJobModel.hasPendingJobForAgents(trx, agentIds)) {
         throw new Error(AGENT_TRANSFER_IN_PROGRESS);
+      }
+      // Copy jobs register only their TARGET agents in the junction; guard the
+      // source side too, or a transfer would move the topics a pending copy is
+      // still reading from.
+      if (await AgentCopyJobModel.hasPendingCopyJobForSourceAgents(trx, agentIds)) {
+        throw new Error(AGENT_COPY_IN_PROGRESS);
       }
 
       const ownershipUpdate = {

@@ -120,6 +120,7 @@
   "stt.responseError": "Falha na solicitação do serviço. Verifique a configuração ou tente novamente.",
   "supervisor.decisionFailed": "O host do grupo não está funcionando. Verifique se o modelo, API Key e endpoint estão corretos.",
   "testConnectionFailed": "Falha no teste de conexão: {{error}}",
+  "transfer.copyInProgress": "Uma cópia anterior deste agente ainda está duplicando seu histórico. Tente novamente quando terminar.",
   "transfer.noPermission": "Você não tem permissão para mover este recurso.",
   "transfer.ownerOnly": "Somente os proprietários do espaço de trabalho podem transferir recursos criados por outros membros.",
   "transfer.resourceNotFound": "Este recurso não existe mais ou você não tem mais acesso. Atualize a página e tente novamente.",

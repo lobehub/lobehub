@@ -135,6 +135,13 @@ export interface ResolvedAgentConfig {
   plugins: string[];
   /** The agent's slug (if builtin) */
   slug?: string;
+  /**
+   * The raw sub-agent chatConfig override (`agencyConfig.subagent.chatConfig`).
+   * `chatConfig` above already has it merged in for non-migrated fields; this
+   * copy lets the model-params resolver re-apply the user's explicit sub-agent
+   * reasoning choices on top of the model-instance defaults.
+   */
+  subAgentChatConfigOverride?: Partial<LobeAgentChatConfig>;
   /** Pre-generated tools array (populated by internal_createAgentState, undefined means tools disabled) */
   tools?: ChatCompletionTool[];
 }

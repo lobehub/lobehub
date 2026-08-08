@@ -230,6 +230,26 @@ and intermediate flex sizing can hide the intended inner scrollbars.
 independent scroll regions to navigation and detail, and verify scroll ownership with
 DOM measurements as well as visual evidence.
 
+### L-D7 — Treating a route-driven Segmented's selected segment as a clickable affordance
+
+**Wrong approach:** put a `Segmented` in a page header, have `onChange` write the URL, and
+then rely on clicking the already-selected segment to reach that section's own index route —
+typically to get back to a list from a `:param` detail route nested under it. Removing the
+breadcrumb's section link on the strength of that assumption is the usual companion move.
+
+**Why it fails:** `Segmented` fires only on a _change_, so the active segment dispatches
+nothing. On the detail route the segment is still highlighted, so it reads as the obvious way
+back while being completely inert — the click is silent, the URL does not move, and nothing
+errors. A grouped route family makes this easy to miss, because the switcher works perfectly
+on every sibling index route and fails only one level deeper.
+
+**Correct approach:** treat a route-driven Segmented as a switcher between sibling sections,
+never as navigation _within_ the selected section. Whenever a section owns deeper routes,
+keep a separate ancestor affordance for them — the breadcrumb's section link is the natural
+one. Where that link would otherwise duplicate the segment's own label, render it only on the
+deeper routes and let the segment name the section on the index route. Verify the deepest
+route of every section, not just the index: an index-only pass cannot see this failure.
+
 ## Environment safety
 
 ### L-S0 — Concluding a dependency moved from the root manifest alone
@@ -355,6 +375,70 @@ process restart is trustworthy.
 the served bundle carries it — fetch the relevant `/node_modules/.vite/deps/*` chunk
 from the dev server and grep for a marker of the fix — or restart the dev server
 process outright and re-verify.
+
+---
+
+## Cross-agent dispatch envelopes are not visible user turns
+
+**Wrong approach**: treat every persisted `role: user` row as a user-authored
+message when building the visible conversation list.
+
+**Why it's wrong**: `callAgent` persists a synthetic user envelope beneath the
+caller assistant so the target Agent has an isolated execution context. When
+that envelope is rendered, the original prompt appears twice even though the
+target Agent produced only one reply.
+
+**What it breaks**: users see a duplicate prompt bubble and cannot tell whether
+the delegation ran once or twice; acceptance screenshots become misleading.
+
+**Correct approach**: stamp synthetic envelopes with explicit dispatch metadata
+when they are persisted, keep them in the context tree, and let the presentation
+layer hide only rows declared `visibility: internal`. Continue traversal through
+the envelope so the target assistant reply remains independently visible.
+Never infer authorship from agent-id differences or a parent tool call: a real
+cross-Agent user follow-up can have the same tree shape.
+
+## A terminal Claude Code reply is not evidence of live streaming
+
+**Wrong approach**: ask a device-executed Claude Code agent for a one-token fixed
+marker, record until the process exits, and treat the eventual assistant text or
+a refreshed screenshot as proof that the reply streamed into the open Topic.
+
+**Why it's wrong**: `lh hetero exec` can run Claude Code without
+`--include-partial-messages`. In that mode the adapter receives only the final
+assistant snapshot, so the UI may show an empty target-Agent shell for the whole
+run and acquire the text only during terminal reconciliation. A short fixed
+marker also has no observable intermediate state even when partial framing works.
+
+**What it breaks**: the acceptance proves persistence and refresh recovery but
+does not prove the user sees the answer arrive live; a GIF of an empty shell is
+mistaken for streaming evidence.
+
+**Correct approach**: enable Claude Code partial messages on the device/sandbox
+CLI spawn path. Verify with a multi-part response and timestamped DOM/store
+samples before any reload, then attach a GIF whose frames visibly progress and
+whose final frame contains the complete answer. Check persistence separately by
+refreshing only after the live-stream assertion has passed.
+
+## A text-only direct mention does not prove tool-call ownership
+
+**Wrong approach**: verify a leading single-Agent mention only with a plain-text
+response, then conclude that the direct-routing message tree is correct for all
+target-Agent runs.
+
+**Why it's wrong**: tool-capable runs add assistant tool-call chunks and
+tool-result messages. Those nodes can accidentally inherit the owner Agent,
+create a synthetic target-user envelope, or resume the owner after the tool
+result even when the initial text response looked correct.
+
+**What it breaks**: the simple happy path passes while real coding Agents either
+lose their tool output, render it under the wrong Agent, or invoke Lobe AI for
+the final answer.
+
+**Correct approach**: exercise a deterministic real tool call through the same
+gateway/device route, then assert the complete persisted tree: original owner
+user, target assistant/tool call, tool result, and target final response. Also
+assert there is no owner assistant, `callAgent`, or synthetic target-user row.
 
 ## Historical source
 

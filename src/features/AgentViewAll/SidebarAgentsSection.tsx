@@ -1,7 +1,6 @@
 'use client';
 
 import { AGENT_CHAT_URL, GROUP_CHAT_URL } from '@lobechat/const';
-import { getHeterogeneousTypeLabel } from '@lobechat/heterogeneous-agents';
 import type { SidebarAgentItem } from '@lobechat/types';
 import { agentDisplayName, agentSecondaryDisplayName } from '@lobechat/types';
 import { Block, ContextMenuTrigger, Flexbox, Icon, type MenuProps, Tag, Text } from '@lobehub/ui';
@@ -106,8 +105,7 @@ const SidebarMiniCard = memo<SidebarMiniCardProps>(({ item, onToggleSidebar }) =
   const { description, id, type } = item;
   // Groups have no personal name, so this resolves to their title.
   const displayTitle = agentDisplayName(item, t('agentViewAll.untitled'));
-  const runtimeTag = getHeterogeneousTypeLabel(item.heterogeneousType);
-  const roleTag = agentSecondaryDisplayName(item, runtimeTag);
+  const roleTag = agentSecondaryDisplayName(item);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
 
   const [menuActivated, setMenuActivated] = useState(false);

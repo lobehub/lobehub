@@ -350,6 +350,11 @@ export const aiModelKeys = {
     offset,
   ]),
   list: def('aiModel:list', (provider: string | undefined) => ['aiModel:list', provider]),
+  reasoningConfig: def('aiModel:reasoningConfig', (provider: string, model: string) => [
+    'aiModel:reasoningConfig',
+    provider,
+    model,
+  ]),
 };
 
 // ---- image generation ---------------------------------------------------

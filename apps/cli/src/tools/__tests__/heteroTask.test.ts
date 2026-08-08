@@ -103,6 +103,7 @@ describe('runHeteroTask (openclaw)', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 
@@ -127,6 +128,43 @@ describe('runHeteroTask (openclaw)', () => {
     expect(messageArg).toContain('lh notify');
     expect(messageArg).toContain('MSG_ID');
   });
+
+  it.each([
+    {
+      environmentAgentId: 'ops-default',
+      expectedAgentId: 'researcher',
+      platformAgentId: ' researcher ',
+    },
+    {
+      environmentAgentId: 'ops-default',
+      expectedAgentId: 'ops-default',
+      platformAgentId: undefined,
+    },
+    {
+      environmentAgentId: 'ops-default',
+      expectedAgentId: 'ops-default',
+      platformAgentId: '   ',
+    },
+    { environmentAgentId: '', expectedAgentId: 'main', platformAgentId: undefined },
+  ])(
+    'selects OpenClaw agent $expectedAgentId from platform config before environment fallback',
+    async ({ environmentAgentId, expectedAgentId, platformAgentId }) => {
+      vi.stubEnv('OPENCLAW_AGENT_ID', environmentAgentId);
+      spawnMock.mockReturnValue(makeMockChild());
+
+      await runHeteroTask({
+        agentType: 'openclaw',
+        operationId: 'op-agent-selection',
+        platformAgentId,
+        prompt: 'hello',
+        taskId: 'task-agent-selection',
+        topicId: 'topic-agent-selection',
+      });
+
+      const [, spawnArgs] = spawnMock.mock.calls[0] as [string, string[]];
+      expect(spawnArgs[spawnArgs.indexOf('--agent') + 1]).toBe(expectedAgentId);
+    },
+  );
 
   it('always injects protocol even on the second turn of the same session', async () => {
     const child1 = makeMockChild(1111);

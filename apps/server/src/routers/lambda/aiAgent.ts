@@ -1,4 +1,6 @@
 import { type AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import { LOADING_FLAT } from '@lobechat/const';
+import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { parse } from '@lobechat/conversation-flow';
 import type { TaskCurrentActivity, TaskStatusResult } from '@lobechat/types';
 import {
@@ -20,6 +22,7 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { MessageModel } from '@/database/models/message';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
+import { UserModel } from '@/database/models/user';
 import { agentOperations, topics } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { heteroAuthedProcedure, router } from '@/libs/trpc/lambda';
@@ -199,6 +202,7 @@ const ExecAgentSchema = z
     /** Application context for message storage */
     appContext: z
       .object({
+        conversationAgentId: z.string().optional(),
         defaultTaskAssigneeAgentId: z.string().optional(),
         documentId: z.string().nullish(),
         /** The agent being edited when scope is 'agent_builder' (not the builder builtin itself). */
@@ -443,6 +447,8 @@ const ExecSubAgentTaskSchema = z.object({
 const CreateClientTaskThreadSchema = z.object({
   /** The Agent ID to execute the task */
   agentId: z.string(),
+  /** Optional assistant placeholder for transports that stream into an existing row. */
+  assistantMessage: z.object({ provider: z.string() }).optional(),
   /** The Group ID (optional, only for Group mode) */
   groupId: z.string().optional(),
   /** Initial user message content (task instruction) */
@@ -630,12 +636,28 @@ const aiAgentProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
   const { ctx } = opts;
   const wsId = ctx.workspaceId ?? undefined;
 
+  // Read market accessToken from user_settings.market so server-side agent runtime
+  // can authenticate with the Market API for creds operations.
+  let marketAccessToken: string | undefined;
+  try {
+    const userModel = new UserModel(ctx.serverDB!, ctx.userId);
+    const settings = await userModel.getUserSettings();
+    marketAccessToken = (settings?.market as any)?.accessToken;
+  } catch {
+    // non-fatal — MarketService will fall back to trustedClientToken
+  }
+
   return opts.next({
     ctx: {
       agentRuntimeService: new AgentRuntimeService(ctx.serverDB, ctx.userId, {
         workspaceId: wsId,
       }),
-      aiAgentService: new AiAgentService(ctx.serverDB, ctx.userId, { workspaceId: wsId }),
+      aiAgentService: new AiAgentService(ctx.serverDB, ctx.userId, {
+        marketAccessToken,
+        withholdGatewayToken:
+          ctx.apiKeyScopes !== undefined && !isFullAccessApiKey(ctx.apiKeyScopes),
+        workspaceId: wsId,
+      }),
       aiChatService: new AiChatService(ctx.serverDB, ctx.userId, wsId),
       heterogeneousAgentService: new HeterogeneousAgentService(ctx.serverDB, ctx.userId, {
         workspaceId: wsId,
@@ -779,7 +801,8 @@ export const aiAgentRouter = router({
   createClientTaskThread: aiAgentWriteProcedure
     .input(CreateClientTaskThreadSchema)
     .mutation(async ({ input, ctx }) => {
-      const { agentId, groupId, instruction, parentMessageId, title, topicId } = input;
+      const { agentId, assistantMessage, groupId, instruction, parentMessageId, title, topicId } =
+        input;
 
       log('createClientTaskThread: agentId=%s, groupId=%s', agentId, groupId);
 
@@ -834,6 +857,19 @@ export const aiAgentRouter = router({
 
         log('createClientTaskThread: created user message %s', userMessage.id);
 
+        const assistantMessageRecord = assistantMessage
+          ? await ctx.messageModel.create({
+              agentId,
+              content: LOADING_FLAT,
+              groupId,
+              parentId: userMessage.id,
+              provider: assistantMessage.provider,
+              role: 'assistant',
+              threadId: thread.id,
+              topicId,
+            })
+          : undefined;
+
         // 3. Query thread messages and main chat messages in parallel
         const messageQueryOptions = {
           postProcessUrl: createUiMessageFileUrlResolver(),
@@ -854,6 +890,7 @@ export const aiAgentRouter = router({
 
         // 4. Return Thread, userMessageId, threadMessages and messages
         return {
+          assistantMessageId: assistantMessageRecord?.id,
           messages,
           startedAt,
           success: true,

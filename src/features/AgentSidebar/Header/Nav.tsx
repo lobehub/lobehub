@@ -2,13 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { BotPromptIcon } from '@lobehub/ui/icons';
-import {
-  MessageSquarePlusIcon,
-  MessagesSquareIcon,
-  RadioTowerIcon,
-  SearchIcon,
-  TargetIcon,
-} from 'lucide-react';
+import { MessageSquarePlusIcon, MessagesSquareIcon, SearchIcon, TargetIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
@@ -21,8 +15,6 @@ import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useActionSWR } from '@/libs/swr';
 import { topicActionKeys } from '@/libs/swr/keys';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
@@ -36,9 +28,14 @@ const Nav = memo(() => {
   const params = useActiveRouteParams();
   const agentId = params.aid;
   const { pathname } = useActiveLocation();
-  const isProfileActive = pathname.includes('/profile');
+  // The profile entry now owns a group of sub-views — profile / channels /
+  // statistics — switched by a Segmented in the page header, so all three keep
+  // this entry lit instead of leaving the sidebar with nothing selected.
+  const isProfileActive =
+    pathname.includes('/profile') ||
+    pathname.includes('/channel') ||
+    pathname.endsWith('/statistics');
   const isGoalsActive = pathname.endsWith('/goals');
-  const isChannelActive = pathname.includes('/channel');
   // Topic IDs are prefixed `topics_`, so /agent/:aid/topics_abc would also match
   // pathname.includes('/topics') — anchor to end to avoid that false positive.
   const isTopicsActive = pathname.endsWith('/topics');
@@ -48,15 +45,7 @@ const Nav = memo(() => {
   const { canEditResource, isAccessResolved } = useResourceAccess('agent', agentId);
   const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
-  const heterogeneousProviderType = useAgentStore(
-    agentSelectors.currentAgentHeterogeneousProviderType,
-  );
   const hideProfile = !isAgentEditable || !isAccessResolved || !canEditContent || !canEditResource;
-  const supportsMessageChannels =
-    !heterogeneousProviderType ||
-    heterogeneousProviderType === 'claude-code' ||
-    heterogeneousProviderType === 'codex';
-  const hideChannel = hideProfile || !supportsMessageChannels;
   const switchTopic = useChatStore((s) => s.switchTopic);
   const [openNewTopicOrSaveTopic] = useChatStore((s) => [s.openNewTopicOrSaveTopic]);
   const isNewTopicSendInFlight = useChatStore(topicSelectors.isNewTopicSendInFlight);
@@ -117,17 +106,6 @@ const Nav = memo(() => {
           onClick={() => {
             switchTopic(null, { skipRefreshMessage: true });
             router.push(urlJoin('/agent', agentId!, 'goals'));
-          }}
-        />
-      )}
-      {!hideChannel && (
-        <NavItem
-          active={isChannelActive}
-          icon={RadioTowerIcon}
-          title={t('tab.integration')}
-          onClick={() => {
-            switchTopic(null, { skipRefreshMessage: true });
-            router.push(urlJoin('/agent', agentId!, 'channel'));
           }}
         />
       )}

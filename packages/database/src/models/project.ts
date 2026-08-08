@@ -16,6 +16,7 @@ import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 export interface CreateProjectInput {
   avatar?: string;
   description?: string;
+  identifier: string;
   name: string;
   slug?: string;
   visibility?: ProjectVisibility;
@@ -59,9 +60,19 @@ export class ProjectModel {
   }
 
   async create(input: CreateProjectInput) {
+    const identifier = input.identifier.trim().toUpperCase();
+    if (identifier.length < 3 || identifier.length > 6) {
+      throw new Error('Project identifier must be between 3 and 6 characters');
+    }
+
     const [project] = await this.db
       .insert(projects)
-      .values(buildWorkspacePayload({ userId: this.userId, workspaceId: this.workspaceId }, input))
+      .values(
+        buildWorkspacePayload(
+          { userId: this.userId, workspaceId: this.workspaceId },
+          { ...input, identifier },
+        ),
+      )
       .returning();
     return project;
   }

@@ -33,6 +33,8 @@ export const projects = pgTable(
       .$defaultFn(() => idGenerator('projects'))
       .notNull(),
     slug: varchar('slug', { length: 100 }).$defaultFn(() => randomSlug(3)),
+    /** Human-readable task prefix within the project scope, for example LOBE. */
+    identifier: varchar('identifier', { length: 6 }).notNull(),
     name: varchar('name', { length: 255 }).notNull(),
     description: text('description'),
     avatar: text('avatar'),
@@ -64,6 +66,12 @@ export const projects = pgTable(
       .where(sql`${t.workspaceId} IS NULL`),
     uniqueIndex('projects_slug_workspace_id_unique')
       .on(t.workspaceId, t.slug)
+      .where(sql`${t.workspaceId} IS NOT NULL`),
+    uniqueIndex('projects_identifier_user_id_unique')
+      .on(t.identifier, t.userId)
+      .where(sql`${t.workspaceId} IS NULL`),
+    uniqueIndex('projects_identifier_workspace_id_unique')
+      .on(t.workspaceId, t.identifier)
       .where(sql`${t.workspaceId} IS NOT NULL`),
     index('projects_user_id_idx').on(t.userId),
     index('projects_workspace_id_idx').on(t.workspaceId),

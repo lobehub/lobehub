@@ -20,6 +20,7 @@ interface ApiKeyCacheEntry {
   apiKeyId: string;
   apiKeyName: string;
   expiresAt: Date | null;
+  scopes: string[] | null;
   timestamp: number;
   userId: string;
   workspaceId?: string | null;
@@ -69,6 +70,8 @@ export const userAuthMiddleware = async (c: Context, next: Next) => {
   let authType: string | null = null;
   let authData: any = null;
   let apiKeyWorkspaceId: string | null | undefined;
+  // capability scopes of the API key (`null` = full-access key)
+  let apiKeyScopes: string[] | null = null;
 
   // Try Bearer token authentication - check format first to determine type
   if (bearerToken) {
@@ -95,6 +98,7 @@ export const userAuthMiddleware = async (c: Context, next: Next) => {
           authType = 'apikey';
           authData = { apiKeyId: cachedEntry.apiKeyId, apiKeyName: cachedEntry.apiKeyName };
           apiKeyWorkspaceId = cachedEntry.workspaceId;
+          apiKeyScopes = cachedEntry.scopes;
 
           log(
             'API Key authentication successful (from cache), userId: %s, apiKeyId: %d',
@@ -138,12 +142,14 @@ export const userAuthMiddleware = async (c: Context, next: Next) => {
                 authType = 'apikey';
                 authData = { apiKeyId: apiKeyRecord.id, apiKeyName: apiKeyRecord.name };
                 apiKeyWorkspaceId = apiKeyRecord.workspaceId;
+                apiKeyScopes = apiKeyRecord.scopes ?? null;
 
                 // Cache the validated API Key
                 apiKeyCache.set(bearerToken, {
                   apiKeyId: apiKeyRecord.id,
                   apiKeyName: apiKeyRecord.name,
                   expiresAt: apiKeyRecord.expiresAt,
+                  scopes: apiKeyRecord.scopes ?? null,
                   timestamp: now,
                   userId: apiKeyRecord.userId,
                   workspaceId: apiKeyRecord.workspaceId,
@@ -207,6 +213,8 @@ export const userAuthMiddleware = async (c: Context, next: Next) => {
     c.set('authData', authData);
     c.set('authorizationHeader', authorizationHeader);
     c.set('apiKeyWorkspaceId', authType === 'apikey' ? (apiKeyWorkspaceId ?? null) : undefined);
+    // `undefined` = not API-key auth; `null` = full-access key
+    c.set('apiKeyScopes', authType === 'apikey' ? apiKeyScopes : undefined);
 
     log('Authentication successful - userId: %s, authType: %s', userId, authType);
   } else {
