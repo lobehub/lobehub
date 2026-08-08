@@ -29,10 +29,6 @@ const styles = createStaticStyles(({ css }) => ({
     border: 0;
 
     background: transparent;
-
-    &[data-popup-open] {
-      background: ${cssVar.colorFillTertiary};
-    }
   `,
 }));
 
