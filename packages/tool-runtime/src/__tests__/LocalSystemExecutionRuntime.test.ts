@@ -308,16 +308,14 @@ describe('LocalSystemExecutionRuntime.executeToolCall — working directory anch
   );
 
   it('drops a model-supplied cwd from grepContent when the caller did not vouch for it', async () => {
-    const service = createService({
-      grepContent: vi.fn().mockResolvedValue({ matches: [], success: true, total_matches: 0 }),
-    });
-    const runtime = new LocalSystemExecutionRuntime(service);
+    const grepContent = vi.fn().mockResolvedValue({ matches: [], success: true, total_matches: 0 });
+    const runtime = new LocalSystemExecutionRuntime(createService({ grepContent }));
 
     await runtime.executeToolCall('grepContent', { cwd: '/etc', pattern: 'root', scope: '.' });
 
     // `cwd` outranks `path` as the search root downstream, so the model's value
     // must not survive — the audited relative scope is what remains.
-    const forwarded = service.grepContent.mock.calls[0][0];
+    const forwarded = grepContent.mock.calls[0][0];
     expect(forwarded.cwd).not.toBe('/etc');
     expect(forwarded.path).not.toBe('/etc');
   });
