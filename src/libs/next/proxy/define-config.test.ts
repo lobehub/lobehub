@@ -4,6 +4,8 @@
 import { NextRequest } from 'next/server';
 import { describe, expect, it, vi } from 'vitest';
 
+import { DEFAULT_LANG } from '@/utils/server/routeVariants';
+
 import { defineConfig } from './define-config';
 
 vi.mock('@/auth', () => ({
@@ -28,18 +30,18 @@ describe('defineConfig locale path-traversal hardening', () => {
     expect(new URL(rewrite!).pathname).toBe('/spa-auth/ja-JP/signin');
   });
 
-  it('falls back to en-US for a traversal locale (plain)', async () => {
+  it('falls back to DEFAULT_LANG for a traversal locale (plain)', async () => {
     const rewrite = await run('http://localhost:3010/signin?hl=../../api/dev/x');
     const { pathname } = new URL(rewrite!);
     expect(pathname.startsWith('/spa-auth/')).toBe(true);
-    expect(pathname).toBe('/spa-auth/en-US/signin');
+    expect(pathname).toBe(`/spa-auth/${DEFAULT_LANG}/signin`);
   });
 
-  it('falls back to en-US for a traversal locale (percent-encoded)', async () => {
+  it('falls back to DEFAULT_LANG for a traversal locale (percent-encoded)', async () => {
     const rewrite = await run('http://localhost:3010/signin?hl=..%2F..%2Fapi%2Fdev%2Fx');
     const { pathname } = new URL(rewrite!);
     expect(pathname.startsWith('/spa-auth/')).toBe(true);
-    expect(pathname).toBe('/spa-auth/en-US/signin');
+    expect(pathname).toBe(`/spa-auth/${DEFAULT_LANG}/signin`);
   });
 
   it('does not treat workspace slugs beginning with an auth route as auth SPA pages', async () => {

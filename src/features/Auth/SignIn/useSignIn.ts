@@ -80,7 +80,6 @@ export const useSignIn = () => {
   const { t } = useTranslation('auth');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const enableMagicLink = useAuthServerConfigStore((s) => s.serverConfig.enableMagicLink || false);
   const disableEmailPassword = useAuthServerConfigStore(
     (s) => s.serverConfig.disableEmailPassword || false,
   );
@@ -223,18 +222,11 @@ export const useSignIn = () => {
       }
 
       setEmail(targetEmail);
-      if (data.hasPassword) {
-        setStep('password');
-        return;
-      }
-
-      if (enableMagicLink) {
-        await handleSendMagicLink(targetEmail);
-        return;
-      }
-
-      // User has no password and magic link is disabled, they can only sign in via social
-      setIsSocialOnly(true);
+      // AUTH-001: check-user no longer returns hasPassword. Always offer the password
+      // step for existing accounts; social SSO remains on the email step (back).
+      // Magic-link auto-branch removed — it required an auth-method oracle.
+      setStep('password');
+      setIsSocialOnly(false);
     } catch (error) {
       console.error('Error checking user:', error);
       toast.error(t('betterAuth.signin.error'));

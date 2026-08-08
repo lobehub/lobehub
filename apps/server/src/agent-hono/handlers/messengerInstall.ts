@@ -45,7 +45,11 @@ export async function messengerInstall(c: Context): Promise<Response> {
   // 2. Session check — unauth users get bounced through sign-in and back.
   let session: Awaited<ReturnType<typeof auth.api.getSession>>;
   try {
-    session = await auth.api.getSession({ headers: req.headers });
+    // AUTH-002: skip cookie cache so logout / password-reset revoke is honored immediately
+    session = await auth.api.getSession({
+      headers: req.headers,
+      query: { disableCookieCache: true },
+    });
   } catch (error) {
     log('install: getSession failed: %O', error);
     session = null;

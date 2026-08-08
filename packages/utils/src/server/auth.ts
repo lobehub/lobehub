@@ -6,8 +6,10 @@ export const getUserAuth = async () => {
   const currentHeaders = await headers();
   const requestHeaders = Object.fromEntries(currentHeaders.entries());
 
+  // AUTH-002: skip cookie cache so logout / password-reset revoke is honored immediately
   const session = await auth.api.getSession({
     headers: requestHeaders,
+    query: { disableCookieCache: true },
   });
 
   const userId = session?.user?.id;

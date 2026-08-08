@@ -46,8 +46,7 @@ const getOIDCClientDebugInfo = (token?: string | null): OIDCClientDebugInfo => {
   try {
     const normalizedPayload = payload.replaceAll('-', '+').replaceAll('_', '/');
     const decodedPayload = JSON.parse(Buffer.from(normalizedPayload, 'base64').toString('utf8')) as
-      | Record<string, unknown>
-      | undefined;
+      Record<string, unknown> | undefined;
 
     const clientId =
       typeof decodedPayload?.client_id === 'string' ? decodedPayload.client_id : undefined;
@@ -92,8 +91,10 @@ export const checkAuth =
         await assertOIDCUserActive(serverDB, userId);
       } else {
         // Better Auth session authentication (web)
+        // AUTH-002: skip cookie cache so logout / password-reset revoke is honored immediately
         const session = await auth.api.getSession({
           headers: req.headers,
+          query: { disableCookieCache: true },
         });
 
         if (!session?.user?.id) {

@@ -1,23 +1,40 @@
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { type NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
-import { account } from '@/database/schemas/betterAuth';
 import { users } from '@/database/schemas/user';
 import { serverDB } from '@/database/server';
 
+import { consumeCheckUserRateLimit } from './rateLimit';
+
 export interface CheckUserResponseData {
   exists: boolean;
-  hasPassword?: boolean;
 }
 
+const clientKeyFromRequest = (req: NextRequest): string => {
+  const forwarded = req.headers.get('x-forwarded-for');
+  if (forwarded) {
+    const first = forwarded.split(',')[0]?.trim();
+    if (first) return first;
+  }
+  return req.headers.get('x-real-ip')?.trim() || 'anonymous';
+};
+
 /**
- * Check if a user exists by email
- * @param req - POST request with { email: string }
- * @returns { exists: boolean, emailVerified?: boolean }
+ * Check if a user exists by email.
+ *
+ * AUTH-001: Do not disclose `hasPassword` / auth methods. Rate-limit by client IP.
  */
 export async function POST(req: NextRequest) {
   try {
+    const clientKey = clientKeyFromRequest(req);
+    if (!consumeCheckUserRateLimit(clientKey)) {
+      return NextResponse.json(
+        { error: 'Too many requests', exists: false },
+        { status: 429, headers: { 'Retry-After': '60' } },
+      );
+    }
+
     const body = await req.json();
     const { email } = body;
 
@@ -25,10 +42,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Email is required', exists: false }, { status: 400 });
     }
 
-    // Query database for user with this email
     const [user] = await serverDB
       .select({
-        emailVerified: users.emailVerified,
         id: users.id,
       })
       .from(users)
@@ -36,25 +51,11 @@ export async function POST(req: NextRequest) {
       .limit(1);
 
     if (!user) {
-      return NextResponse.json({ exists: false });
+      return NextResponse.json({ exists: false } satisfies CheckUserResponseData);
     }
 
-    const accounts = await serverDB
-      .select({
-        password: account.password,
-        providerId: account.providerId,
-      })
-      .from(account)
-      .where(and(eq(account.userId, user.id)));
-    const hasPassword = accounts.some(
-      (a) =>
-        a.providerId === 'credential' && typeof a.password === 'string' && a.password.length > 0,
-    );
-
-    return NextResponse.json({
-      exists: true,
-      hasPassword,
-    } satisfies CheckUserResponseData);
+    // Intentionally omit hasPassword / emailVerified — auth-method oracle (AUTH-001).
+    return NextResponse.json({ exists: true } satisfies CheckUserResponseData);
   } catch (error) {
     console.error('Error checking user existence:', error);
     return NextResponse.json({ error: 'Internal server error', exists: false }, { status: 500 });

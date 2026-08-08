@@ -121,8 +121,14 @@ describe('checkAuth', () => {
   });
 
   it('should return error response when no session is available', async () => {
+    const { auth } = await import('@/auth');
+
     await checkAuth(mockHandler)(mockRequest, mockOptions);
 
+    expect(auth.api.getSession).toHaveBeenCalledWith({
+      headers: mockRequest.headers,
+      query: { disableCookieCache: true },
+    });
     expect(AgentRuntimeError.createError).toHaveBeenCalledWith(ChatErrorType.Unauthorized);
     expect(createErrorResponse).toHaveBeenCalledWith(ChatErrorType.Unauthorized, {
       error: { errorType: ChatErrorType.Unauthorized },

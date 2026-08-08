@@ -12,8 +12,10 @@ export const getSessionUser = async (): Promise<TrustedClientUserInfo | undefine
     // Dynamic import to avoid validator ESM/CJS issue during sitemap generation
     const { auth } = await import('@/auth');
     const headersList = await headers();
+    // AUTH-002: skip cookie cache so logout / password-reset revoke is honored immediately
     const session = await auth.api.getSession({
       headers: headersList,
+      query: { disableCookieCache: true },
     });
 
     if (!session?.user?.id || !session?.user?.email) {
