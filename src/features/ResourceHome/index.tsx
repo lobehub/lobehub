@@ -48,7 +48,10 @@ const ResourceHomePage = memo(() => {
     s.setLibraryId,
   ]);
 
-  const pathCategory = params.category;
+  // /resource/page is a static route (no :category param) — recover the
+  // segment from the pathname there.
+  const pathCategory =
+    params.category ?? (/\/resource\/page\/?$/.test(location.pathname) ? 'page' : undefined);
   const segmentCategory = pathCategory ? CATEGORY_BY_SEGMENT[pathCategory] : undefined;
   const isValidPathCategory = segmentCategory !== undefined;
   // The Work gallery owns its own path segment; `?works=<key>` narrows it

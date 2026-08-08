@@ -74,8 +74,9 @@ const VideoFileItem = memo<VideoFileItemProps>(({ isInView, name, size, url }) =
   <>
     <div className={styles.videoWrapper}>
       {isInView && url && (
-        // preload="metadata" paints the first frame without downloading the file
-        <video muted playsInline preload={'metadata'} src={url} />
+        // The #t=0.001 media fragment forces a seek so the browser actually
+        // paints the first frame; bare preload="metadata" may stay blank.
+        <video muted playsInline preload={'metadata'} src={`${url}#t=0.001`} />
       )}
       <div className={styles.playBadge}>
         <Icon icon={PlayIcon} size={20} />
