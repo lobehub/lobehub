@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import debug from 'debug';
 import type { Context, Next } from 'hono';
 import { HTTPException } from 'hono/http-exception';
@@ -26,7 +27,15 @@ interface ApiKeyCacheEntry {
   workspaceId?: string | null;
 }
 
-// In-memory cache for API Key validation results
+/**
+ * Hash API Key for safe caching
+ * Uses SHA-256 to avoid storing raw keys in memory
+ */
+const hashApiKey = (key: string): string => {
+  return crypto.createHash('sha256').update(key).digest('hex');
+};
+
+// In-memory cache for API Key validation results (keyed by hash, not raw key)
 const apiKeyCache = new Map<string, ApiKeyCacheEntry>();
 
 /**
@@ -37,7 +46,7 @@ const cleanupApiKeyCache = () => {
   for (const [key, entry] of apiKeyCache.entries()) {
     if (now - entry.timestamp > API_KEY_CACHE_TTL) {
       apiKeyCache.delete(key);
-      log('Removed expired API Key from cache: %s', key.slice(0, 10) + '...');
+      log('Removed expired API Key from cache');
     }
   }
 };
@@ -75,7 +84,7 @@ export const userAuthMiddleware = async (c: Context, next: Next) => {
 
   // Try Bearer token authentication - check format first to determine type
   if (bearerToken) {
-    log('Bearer token received: %s...', bearerToken.slice(0, 10));
+    log('Bearer token received: %s', bearerToken ? 'present' : 'absent');
 
     // Check if bearerToken matches API Key format (sk-lh-{16 alphanumeric chars})
     const isApiKeyFormat = validateApiKeyFormat(bearerToken);
@@ -85,8 +94,9 @@ export const userAuthMiddleware = async (c: Context, next: Next) => {
       // Try API Key authentication
       log('Bearer token matches API Key format, attempting API Key authentication');
 
-      // Check cache first
-      const cachedEntry = apiKeyCache.get(bearerToken);
+      // Check cache first (using hashed key)
+      const cacheKey = hashApiKey(bearerToken);
+      const cachedEntry = apiKeyCache.get(cacheKey);
       const now = Date.now();
 
       if (cachedEntry && now - cachedEntry.timestamp < API_KEY_CACHE_TTL) {
@@ -107,7 +117,7 @@ export const userAuthMiddleware = async (c: Context, next: Next) => {
           );
         } else {
           log('Cached API Key is expired, removing from cache');
-          apiKeyCache.delete(bearerToken);
+          apiKeyCache.delete(cacheKey);
         }
       } else {
         // Cache miss or expired, query database
@@ -144,8 +154,8 @@ export const userAuthMiddleware = async (c: Context, next: Next) => {
                 apiKeyWorkspaceId = apiKeyRecord.workspaceId;
                 apiKeyScopes = apiKeyRecord.scopes ?? null;
 
-                // Cache the validated API Key
-                apiKeyCache.set(bearerToken, {
+                // Cache the validated API Key (using hashed key)
+                apiKeyCache.set(cacheKey, {
                   apiKeyId: apiKeyRecord.id,
                   apiKeyName: apiKeyRecord.name,
                   expiresAt: apiKeyRecord.expiresAt,
