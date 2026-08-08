@@ -12,7 +12,7 @@ export const TaskManifest: BuiltinToolManifest = {
     // ==================== Task CRUD ====================
     {
       description:
-        'Create and immediately start a goal-driven task with an editable acceptance plan. Use this only when the user explicitly starts their request with /goal. The call pauses for confirmation; after approval it creates the task, persists the acceptance criteria, enables bounded automatic repair, and runs the current agent in a task topic.',
+        'Create and immediately start a goal-driven task with an editable acceptance plan. Use this only when the user explicitly starts their request with /goal. The call pauses for confirmation; after approval it creates the task, persists the acceptance criteria, enables bounded automatic repair, and runs the current agent in a separate task topic. Once it succeeds, do not execute or reproduce the work in the current conversation; the live result card is the progress and result entry point.',
       humanIntervention: 'required',
       name: TaskApiName.createGoal,
       parameters: {
@@ -54,7 +54,6 @@ export const TaskManifest: BuiltinToolManifest = {
         type: 'object',
       },
       renderDisplayControl: 'expand',
-      work: { action: 'create', resourceType: 'task' },
     },
     {
       description:

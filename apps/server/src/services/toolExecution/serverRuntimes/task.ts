@@ -306,7 +306,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
         const runTopicId = (run as { topicId?: string }).topicId;
 
         return {
-          content: `Goal task ${created.identifier} created and started with ${drafts.length} acceptance criteria.`,
+          content: `Goal task ${created.identifier} created and started with ${drafts.length} acceptance criteria. Execution continues in its separate task topic; do not perform or reproduce the task in this conversation.`,
           state: {
             identifier: created.identifier,
             name: args.name,
