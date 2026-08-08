@@ -34,8 +34,9 @@ vi.mock('@/server/services/sms', () => ({
   },
 }));
 
-const { disableAllOrgMemberKeysMock } = vi.hoisted(() => ({
+const { disableAllOrgMemberKeysMock, reclaimMemberKeyMock } = vi.hoisted(() => ({
   disableAllOrgMemberKeysMock: vi.fn().mockResolvedValue([]),
+  reclaimMemberKeyMock: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('@/server/services/openrouter/keyService', () => ({
@@ -45,12 +46,13 @@ vi.mock('@/server/services/openrouter/keyService', () => ({
     disableMemberKey = vi.fn().mockResolvedValue(null);
     disableAllOrgMemberKeys = disableAllOrgMemberKeysMock;
     getUserRemaining = vi.fn().mockRejectedValue(new Error('not mocked'));
-    reclaimMemberKey = vi.fn().mockResolvedValue(null);
+    reclaimMemberKey = reclaimMemberKeyMock;
     syncMemberUsage = vi.fn().mockResolvedValue(null);
   },
 }));
 
 const ownerId = 'p2-rbac-owner';
+const ownerBId = 'p2-rbac-owner-b';
 const memberId = 'p2-rbac-member';
 const strangerId = 'p2-rbac-stranger';
 const platformId = 'p2-rbac-platform';
@@ -90,6 +92,8 @@ const cleanup = async () => {
 
 beforeEach(async () => {
   disableAllOrgMemberKeysMock.mockClear();
+  reclaimMemberKeyMock.mockClear();
+  reclaimMemberKeyMock.mockResolvedValue(null);
   testDB = await getTestDB();
   await cleanup();
   const { users } = await import('@/database/schemas');
@@ -98,6 +102,12 @@ beforeEach(async () => {
       email: 'owner@rbac.test',
       id: ownerId,
       phone: '+989120000001',
+      phoneNumberVerified: true,
+    },
+    {
+      email: 'owner-b@rbac.test',
+      id: ownerBId,
+      phone: '+989120000002',
       phoneNumberVerified: true,
     },
     { email: 'member@rbac.test', id: memberId },
@@ -231,6 +241,61 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
       to: today,
     });
     expect(memberChart).toHaveLength(1);
+  });
+
+  it('TENANT-001/002: Org A manager cannot read or revoke Org B member budget by orgMemberId swap', async () => {
+    const ownerA = organizationRouter.createCaller(createTestContext(ownerId));
+    const ownerB = organizationRouter.createCaller(createTestContext(ownerBId));
+
+    const orgA = await ownerA.create({ name: 'Tenant Org A' });
+    const orgB = await ownerB.create({ name: 'Tenant Org B' });
+
+    await ownerB.mockOrgTopup({ amountToman: 1_000_000, orgId: orgB.id });
+
+    const invite = await ownerB.inviteMember({
+      identifierType: 'email',
+      identifierValue: 'member@rbac.test',
+      orgId: orgB.id,
+      role: 'member',
+    });
+    const memberCaller = organizationRouter.createCaller(createTestContext(memberId));
+    const token = invite.inviteUrl.split('/invite/').at(-1)!;
+    await memberCaller.acceptInvite({ token });
+
+    const membersB = await ownerB.listMembers({ orgId: orgB.id });
+    const orgBMember = membersB.members.find((m) => m.userId === memberId);
+    expect(orgBMember).toBeTruthy();
+
+    await ownerB.allocateMemberCredit({
+      amountUsd: '1.000000',
+      orgId: orgB.id,
+      orgMemberId: orgBMember!.id,
+      period: 'total',
+    });
+
+    // Same-org read still works for Org B owner.
+    const ownBudget = await ownerB.getMemberBudget({
+      orgId: orgB.id,
+      orgMemberId: orgBMember!.id,
+    });
+    expect(ownBudget).toBeTruthy();
+    expect(ownBudget!.periodAmountUsd).toBe('1.000000');
+
+    // Cross-tenant read: Org A manager + Org B orgMemberId must not disclose budget.
+    const leaked = await ownerA.getMemberBudget({
+      orgId: orgA.id,
+      orgMemberId: orgBMember!.id,
+    });
+    expect(leaked).toBeNull();
+
+    // Cross-tenant write: must fail before OpenRouter reclaim is attempted.
+    reclaimMemberKeyMock.mockClear();
+    reclaimMemberKeyMock.mockResolvedValue({ remainingMicroUsd: 500_000, usageMicroUsd: 0 });
+
+    await expect(
+      ownerA.revokeMemberBudget({ orgId: orgA.id, orgMemberId: orgBMember!.id }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND', message: 'Member not found' });
+    expect(reclaimMemberKeyMock).not.toHaveBeenCalled();
   });
 
   it('non-platform user cannot call platformAdmin mutations', async () => {

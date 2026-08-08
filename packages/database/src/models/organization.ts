@@ -592,6 +592,26 @@ export class OrganizationModel {
     return (row?.role as OrgMemberRole) ?? null;
   };
 
+  /** Tenant-safe member lookup — always join resource id with org id. */
+  getMemberInOrg = async (params: { orgId: string; orgMemberId: string }) => {
+    return this.db.query.organizationMembers.findFirst({
+      where: and(
+        eq(organizationMembers.id, params.orgMemberId),
+        eq(organizationMembers.orgId, params.orgId),
+      ),
+    });
+  };
+
+  /**
+   * Budget load gated by org membership. Returns null when the member is not
+   * in the org or has no budget row (no cross-tenant oracle beyond null).
+   */
+  getMemberBudgetForOrg = async (params: { orgId: string; orgMemberId: string }) => {
+    const member = await this.getMemberInOrg(params);
+    if (!member) return null;
+    return this.getMemberBudget(params.orgMemberId);
+  };
+
   listMembers = async (orgId: string) => {
     return this.db.query.organizationMembers.findMany({
       where: eq(organizationMembers.orgId, orgId),
@@ -657,7 +677,12 @@ export class OrganizationModel {
     const [updated] = await this.db
       .update(organizationMembers)
       .set({ role: params.role })
-      .where(eq(organizationMembers.id, params.memberId))
+      .where(
+        and(
+          eq(organizationMembers.id, params.memberId),
+          eq(organizationMembers.orgId, params.orgId),
+        ),
+      )
       .returning();
     return updated;
   };
@@ -682,7 +707,12 @@ export class OrganizationModel {
     const [updated] = await this.db
       .update(organizationMembers)
       .set({ status: 'revocation_pending' })
-      .where(eq(organizationMembers.id, params.memberId))
+      .where(
+        and(
+          eq(organizationMembers.id, params.memberId),
+          eq(organizationMembers.orgId, params.orgId),
+        ),
+      )
       .returning();
     return updated;
   };

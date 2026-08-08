@@ -114,6 +114,15 @@ const mapOrgDeleteError = (error: unknown): never => {
   });
 };
 
+/** Reject cross-tenant orgMemberId before any budget/key side effect. */
+const requireMemberInOrg = async (model: OrganizationModel, orgId: string, orgMemberId: string) => {
+  const member = await model.getMemberInOrg({ orgId, orgMemberId });
+  if (!member) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Member not found' });
+  }
+  return member;
+};
+
 const mapInviteError = (error: unknown): never => {
   const message = error instanceof Error ? error.message : 'INVITE_FAILED';
   const code =
@@ -391,6 +400,8 @@ export const organizationRouter = router({
     .input(z.object({ orgId: z.string().min(1), orgMemberId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       await requireOrgManager(ctx.organizationModel, ctx.userId, input.orgId);
+      // TENANT-001: prove orgMemberId ∈ orgId before any OpenRouter disable.
+      await requireMemberInOrg(ctx.organizationModel, input.orgId, input.orgMemberId);
 
       const keyService = new AicoOpenRouterKeyService(ctx.serverDB);
       const reclaimed = await keyService.reclaimMemberKey(input.orgMemberId);
@@ -682,7 +693,11 @@ export const organizationRouter = router({
     .input(z.object({ orgId: z.string().min(1), orgMemberId: z.string().min(1) }))
     .query(async ({ ctx, input }) => {
       await requireOrgManager(ctx.organizationModel, ctx.userId, input.orgId);
-      const budget = await ctx.organizationModel.getMemberBudget(input.orgMemberId);
+      // TENANT-002: never load budget by orgMemberId alone across tenants.
+      const budget = await ctx.organizationModel.getMemberBudgetForOrg({
+        orgId: input.orgId,
+        orgMemberId: input.orgMemberId,
+      });
       if (!budget) return null;
       return {
         currentPeriodEnd: budget.currentPeriodEnd?.toISOString() ?? null,
