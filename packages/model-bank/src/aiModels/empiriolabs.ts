@@ -1347,19 +1347,6 @@ export const qwenImage30ParamsSchema: ModelParamsSchema = {
   watermark: { default: false },
 };
 
-export const qwenImage30ProParamsSchema: ModelParamsSchema = {
-  aspectRatio: {
-    default: '1:1',
-    enum: ['auto', '1:1', '16:9', '9:16', '3:2', '2:3', '4:3', '3:4', '5:4', '4:5'],
-  },
-  imageUrl: { default: null },
-  prompt: { default: '' },
-  promptExtend: { default: true },
-  resolution: { default: '1K', enum: ['auto', '1K', '2K'] },
-  seed: { default: null },
-  watermark: { default: false },
-};
-
 export const seedream50LiteParamsSchema: ModelParamsSchema = {
   aspectRatio: {
     default: 'auto',
@@ -1378,7 +1365,7 @@ export const seedream50ProParamsSchema: ModelParamsSchema = {
   },
   imageUrl: { default: null },
   prompt: { default: '' },
-  quality: { default: '2K', enum: ['1K', '2K'] },
+  quality: { default: '2K', enum: ['1K', '1.5K', '2K'] },
   watermark: { default: false },
 };
 
@@ -1512,7 +1499,7 @@ const empiriolabsImageModels: AIImageModelCard[] = [
   },
   {
     description:
-      'Fast Qwen image model for text-to-image and multi-image editing, with strong layouts, multilingual text, and controllable 1K or 2K output.',
+      'Qwen image generation and editing with Base and Pro variants, multilingual typography, multi-image references, and controllable 1K or 2K output.',
     displayName: 'Qwen Image 3.0',
     enabled: true,
     id: 'qwen-image-3-0',
@@ -1520,19 +1507,6 @@ const empiriolabsImageModels: AIImageModelCard[] = [
     parameters: qwenImage30ParamsSchema,
     pricing: {
       units: [{ name: 'imageGeneration', rate: 0.03, strategy: 'fixed', unit: 'image' }],
-    },
-    type: 'image',
-  },
-  {
-    description:
-      'Premium Qwen image model for dense layouts, 10px multilingual text, photorealistic detail, and multi-image editing with up to six outputs.',
-    displayName: 'Qwen Image 3.0 Pro',
-    enabled: true,
-    id: 'qwen-image-3-0-pro',
-    organization: 'Alibaba',
-    parameters: qwenImage30ProParamsSchema,
-    pricing: {
-      units: [{ name: 'imageGeneration', rate: 0.04, strategy: 'fixed', unit: 'image' }],
     },
     type: 'image',
   },
@@ -1551,14 +1525,14 @@ const empiriolabsImageModels: AIImageModelCard[] = [
   },
   {
     description:
-      'Premium Seedream image model for detailed text-to-image, single-image edits, and multi-reference fusion with 1K and 2K output.',
+      'Premium Seedream image model for detailed text-to-image, single-image edits, and multi-reference fusion with 1K, 1.5K, and 2K output.',
     displayName: 'Seedream 5.0 Pro',
     enabled: true,
     id: 'seedream-5-0-pro',
     organization: 'ByteDance',
     parameters: seedream50ProParamsSchema,
     pricing: {
-      units: [{ name: 'imageGeneration', rate: 0.075, strategy: 'fixed', unit: 'image' }],
+      units: [{ name: 'imageGeneration', rate: 0, strategy: 'fixed', unit: 'image' }],
     },
     type: 'image',
   },
