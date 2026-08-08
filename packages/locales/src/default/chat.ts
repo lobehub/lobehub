@@ -1422,6 +1422,8 @@ export default {
   'createGoal.createFailed': 'Failed to create goal',
   'createGoal.back': 'Back',
   'createGoal.contextLabel': 'Context for the Agent',
+  'createGoal.contextHint': 'Add constraints, source material, or anything the Agent should know',
+  'createGoal.criterionPlaceholder': 'Describe a result that can be clearly checked',
   'createGoal.criteriaHint': 'Review and edit these before the goal starts',
   'createGoal.criteriaTitle': 'What counts as done',
   'createGoal.describeHint': 'Describe the outcome first, then complete its execution plan.',
@@ -1431,6 +1433,7 @@ export default {
   'createGoal.next': 'Next',
   'createGoal.regenerate': 'Draft again',
   'createGoal.removeCriterion': 'Remove criterion',
+  'createGoal.reviewStep': 'Step 2 of 2 · Complete the execution plan',
   'createGoal.requirementHint': 'Judged at the end of every round',
   'createGoal.requirementLabel': 'What counts as done',
   'createGoal.requirementPlaceholder':

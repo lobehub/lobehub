@@ -18,5 +18,5 @@ export const createGoalModal = (props?: CreateGoalContentProps): ModalInstance =
       },
     },
     title: null,
-    width: 'min(80%, 640px)',
+    width: 'min(88vw, 720px)',
   });

@@ -3,11 +3,20 @@
 import type { CreateGoalParams, GoalCriterionDraft } from '@lobechat/builtin-tool-task';
 import { DEFAULT_GOAL_MAX_ROUNDS } from '@lobechat/const/verify';
 import { useEditor } from '@lobehub/editor/react';
-import { ActionIcon, Block, Flexbox, Text, TextArea } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, Input, Text } from '@lobehub/ui';
 import { Button, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { InputNumber } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ArrowLeft, Paperclip, Plus, Trash2, X } from 'lucide-react';
+import {
+  ArrowLeft,
+  CheckCircle2,
+  CircleDollarSign,
+  Paperclip,
+  Plus,
+  RotateCcw,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -26,32 +35,56 @@ import { useTaskStore } from '@/store/task';
 import { buildGoalTaskConfig } from './goalConfig';
 
 const styles = createStaticStyles(({ css }) => ({
-  budgetLabel: css`
-    flex: none;
-    width: 68px;
-    white-space: nowrap;
-  `,
-  budgetHint: css`
+  budgetCard: css`
     min-width: 0;
+    padding: 16px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadius};
+
+    background: ${cssVar.colorFillQuaternary};
   `,
-  budgetRow: css`
-    min-width: 0;
+  budgetGrid: css`
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+
+    @media (width <= 640px) {
+      grid-template-columns: minmax(0, 1fr);
+    }
   `,
   body: css`
     overflow-y: auto;
     min-height: 0;
-    padding-block-end: 16px;
-  `,
-  field: css`
+    padding-block: 8px 24px;
     padding-inline: 24px;
   `,
   criteriaList: css`
     overflow-y: auto;
-    max-height: 280px;
+    max-height: 240px;
   `,
   criterion: css`
-    padding-block: 10px;
-    padding-inline: 12px;
+    padding-block: 8px;
+    padding-inline: 10px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadius};
+
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  criterionIndex: css`
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+
+    width: 24px;
+    height: 24px;
+    border-radius: ${cssVar.borderRadiusSM};
+
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: 12px;
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorFillSecondary};
   `,
   footer: css`
     padding-block: 8px;
@@ -59,8 +92,17 @@ const styles = createStaticStyles(({ css }) => ({
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   head: css`
-    padding-block: 16px 0;
+    padding-block: 16px 8px;
     padding-inline: 24px;
+  `,
+  section: css`
+    padding: 16px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+  `,
+  sectionIcon: css`
+    flex: none;
+    color: ${cssVar.colorTextSecondary};
   `,
   title: css`
     width: 100%;
@@ -75,6 +117,9 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: transparent;
     outline: none;
+  `,
+  titleReview: css`
+    font-size: 18px;
   `,
 }));
 
@@ -268,18 +313,21 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
       <Flexbox horizontal className={styles.head}>
         <Flexbox flex={1} gap={6}>
           {step === 'review' && (
-            <Button
-              icon={ArrowLeft}
-              size={'small'}
-              type={'text'}
-              onClick={() => setStep('describe')}
-            >
-              {t('createGoal.back')}
-            </Button>
+            <Flexbox horizontal align={'center'} gap={8}>
+              <ActionIcon
+                icon={ArrowLeft}
+                size={'small'}
+                title={t('createGoal.back')}
+                onClick={() => setStep('describe')}
+              />
+              <Text fontSize={12} type={'secondary'}>
+                {t('createGoal.reviewStep')}
+              </Text>
+            </Flexbox>
           )}
           <input
             autoFocus={canCreate}
-            className={styles.title}
+            className={`${styles.title} ${step === 'review' ? styles.titleReview : ''}`}
             disabled={!canCreate}
             placeholder={t('createGoal.titlePlaceholder')}
             value={plan.name}
@@ -291,46 +339,64 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
       </Flexbox>
 
       {step === 'review' && (
-        <Flexbox className={styles.body} flex={1} gap={16}>
-          <Flexbox className={styles.field} gap={8}>
+        <Flexbox className={styles.body} flex={1} gap={12}>
+          <Flexbox className={styles.section} gap={12}>
             <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
-              <Flexbox gap={2}>
-                <Text fontSize={13} weight={500}>
-                  {t('createGoal.criteriaTitle')}
-                </Text>
-                <Text fontSize={12} type={'secondary'}>
-                  {t('createGoal.criteriaHint')}
-                </Text>
+              <Flexbox horizontal align={'flex-start'} gap={10}>
+                <Icon className={styles.sectionIcon} icon={CheckCircle2} size={18} />
+                <Flexbox gap={2}>
+                  <Text fontSize={14} weight={600}>
+                    {t('createGoal.criteriaTitle')}
+                  </Text>
+                  <Text fontSize={12} type={'secondary'}>
+                    {t('createGoal.criteriaHint')}
+                  </Text>
+                </Flexbox>
               </Flexbox>
-              <Button icon={Plus} size={'small'} onClick={addCriterion}>
+              <Button icon={Plus} size={'small'} type={'text'} onClick={addCriterion}>
                 {t('createGoal.addCriterion')}
               </Button>
             </Flexbox>
             <Flexbox className={styles.criteriaList} gap={8}>
               {plan.criteria.map((criterion, index) => (
-                <Block className={styles.criterion} key={index} variant={'outlined'}>
-                  <Flexbox horizontal align={'flex-start'} gap={8}>
-                    <TextArea
-                      autoSize={{ maxRows: 3, minRows: 1 }}
-                      disabled={!canCreate}
-                      value={criterion.title}
-                      onChange={(e) => updateCriterion(index, e.target.value)}
-                    />
-                    <ActionIcon
-                      icon={Trash2}
-                      title={t('createGoal.removeCriterion')}
-                      onClick={() => removeCriterion(index)}
-                    />
-                  </Flexbox>
-                </Block>
+                <Flexbox
+                  horizontal
+                  align={'center'}
+                  className={styles.criterion}
+                  gap={8}
+                  key={index}
+                >
+                  <span className={styles.criterionIndex}>C{index + 1}</span>
+                  <Input
+                    disabled={!canCreate}
+                    placeholder={t('createGoal.criterionPlaceholder')}
+                    value={criterion.title}
+                    variant={'borderless'}
+                    onChange={(e) => updateCriterion(index, e.target.value)}
+                  />
+                  <ActionIcon
+                    icon={Trash2}
+                    size={'small'}
+                    title={t('createGoal.removeCriterion')}
+                    onClick={() => removeCriterion(index)}
+                  />
+                </Flexbox>
               ))}
             </Flexbox>
           </Flexbox>
 
-          <Flexbox className={styles.field} gap={6}>
-            <Text fontSize={13} weight={500}>
-              {t('createGoal.contextLabel')}
-            </Text>
+          <Flexbox className={styles.section} gap={12}>
+            <Flexbox horizontal align={'flex-start'} gap={10}>
+              <Icon className={styles.sectionIcon} icon={Paperclip} size={18} />
+              <Flexbox gap={2}>
+                <Text fontSize={14} weight={600}>
+                  {t('createGoal.contextLabel')}
+                </Text>
+                <Text fontSize={12} type={'secondary'}>
+                  {t('createGoal.contextHint')}
+                </Text>
+              </Flexbox>
+            </Flexbox>
             <EditorCanvas
               disabled={!canCreate}
               editor={editor}
@@ -342,47 +408,49 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
               onContentChange={handleContentChange}
             />
           </Flexbox>
-          <Flexbox className={styles.field} gap={12}>
-            <Flexbox horizontal align={'center'} className={styles.budgetRow} gap={12}>
-              <Text className={styles.budgetLabel} fontSize={13} weight={500}>
-                {t('createGoal.roundBudgetLabel')}
-              </Text>
+          <div className={styles.budgetGrid}>
+            <Flexbox className={styles.budgetCard} gap={12}>
+              <Flexbox horizontal align={'center'} gap={8}>
+                <Icon className={styles.sectionIcon} icon={RotateCcw} size={16} />
+                <Text fontSize={14} weight={600}>
+                  {t('createGoal.roundBudgetLabel')}
+                </Text>
+              </Flexbox>
               <InputNumber
                 disabled={!canCreate}
                 min={2}
-                size={'small'}
-                style={{ width: 120 }}
                 suffix={t('createGoal.roundsUnit')}
                 value={plan.maxIterations ?? undefined}
                 variant={'filled'}
                 onChange={(value) => setPlan((current) => ({ ...current, maxIterations: value }))}
               />
-              <Text ellipsis className={styles.budgetHint} fontSize={12} type={'secondary'}>
+              <Text fontSize={12} type={'secondary'}>
                 {t('createGoal.roundBudgetHint')}
               </Text>
             </Flexbox>
 
-            <Flexbox horizontal align={'center'} className={styles.budgetRow} gap={12}>
-              <Text className={styles.budgetLabel} fontSize={13} weight={500}>
-                {t('createGoal.costBudgetLabel')}
-              </Text>
+            <Flexbox className={styles.budgetCard} gap={12}>
+              <Flexbox horizontal align={'center'} gap={8}>
+                <Icon className={styles.sectionIcon} icon={CircleDollarSign} size={16} />
+                <Text fontSize={14} weight={600}>
+                  {t('createGoal.costBudgetLabel')}
+                </Text>
+              </Flexbox>
               <InputNumber
                 controls={false}
                 disabled={!canCreate}
                 min={0}
                 placeholder={t('createGoal.costBudgetPlaceholder')}
                 prefix={'$'}
-                size={'small'}
-                style={{ width: 120 }}
                 value={plan.maxTotalCost}
                 variant={'filled'}
                 onChange={(value) => setPlan((current) => ({ ...current, maxTotalCost: value }))}
               />
-              <Text ellipsis className={styles.budgetHint} fontSize={12} type={'secondary'}>
+              <Text fontSize={12} type={'secondary'}>
                 {t('createGoal.costBudgetHint')}
               </Text>
             </Flexbox>
-          </Flexbox>
+          </div>
         </Flexbox>
       )}
 
