@@ -14,18 +14,24 @@ import { timestamps, timestamptz } from './_helpers';
 import { agents } from './agent';
 import { topics } from './topic';
 
+/**
+ * `copy`-job payload. Fields are required: the column itself is nullable, and
+ * NULL is what encodes "this job type carries no payload" — so a payload that
+ * exists at all must be complete.
+ */
 export interface AgentHistoryJobPayload {
-  /** `copy` jobs: agents duplicated by this job. */
-  agents?: { newAgentId: string; sourceAgentId: string }[];
+  /** Agents duplicated by this job, for guards that only need the id map. */
+  agents: { newAgentId: string; sourceAgentId: string }[];
 }
 
+/** `copy` queue-row payload. Required for the same reason as above. */
 export interface AgentHistoryJobTopicPayload {
-  /** `copy` rows: agent owning the target topic shell. */
-  newAgentId?: string;
-  /** `copy` rows: agent the source topic belongs to. */
-  sourceAgentId?: string;
-  /** `copy` rows: topic to copy messages/threads from. */
-  sourceTopicId?: string;
+  /** Agent owning the target topic shell. */
+  newAgentId: string;
+  /** Agent the source topic belongs to. */
+  sourceAgentId: string;
+  /** Topic to copy messages/threads from. */
+  sourceTopicId: string;
 }
 
 /**
@@ -33,9 +39,9 @@ export interface AgentHistoryJobTopicPayload {
  *
  * Tables are named generically (`agent_history_jobs`) with a `type`
  * discriminator because the per-topic queue shape is reusable beyond scope
- * transfer — e.g. a future async "copy with history". Today `transfer` is the
- * only kind; the business layer keeps transfer-specific naming until a second
- * kind actually lands.
+ * transfer — `copy` (async "copy with history") is the second kind, landing on
+ * top of this schema. Drivers must route a drain unit by `type`; the business
+ * layer keeps transfer-specific naming for the transfer half.
  *
  * A transfer moves agents/sessions/topics synchronously (small tables), but a
  * heavy agent's `messages` (and message child tables) are too expensive to
@@ -66,13 +72,22 @@ export const agentHistoryJobs = pgTable(
       .notNull()
       .default('pending'),
 
-    /** Job discriminator: `transfer` (scope rewrite) or `copy` (history fork). */
-    type: text('type').notNull().default('transfer'),
+    /**
+     * Job discriminator: `transfer` (scope rewrite) or `copy` (history fork).
+     * Enumerated so every drain path has to acknowledge both kinds — a driver
+     * that runs transfer logic over a `copy` job would delete its queue rows
+     * and report success against untouched history.
+     */
+    type: text('type', { enum: ['transfer', 'copy'] })
+      .notNull()
+      .default('transfer'),
 
     /**
      * Type-specific job data. `transfer` jobs keep it null; `copy` jobs store
-     * the source→target agent id map the per-topic copy resolves against
-     * (`{ agents: [{ sourceAgentId, newAgentId }] }`).
+     * the source→target agent id map (`{ agents: [{ sourceAgentId, newAgentId }] }`)
+     * so guards can answer "is a copy still reading this source agent?" without
+     * joining the queue. The per-topic copy resolves its own coordinates from
+     * the queue row's payload, not from here.
      */
     payload: jsonb('payload').$type<AgentHistoryJobPayload>(),
 
