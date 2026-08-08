@@ -231,6 +231,7 @@
   "createGoal.generateFailed": "没能起草验收标准，请重试。",
   "createGoal.instructionPlaceholder": "补充 Agent 需要的背景 —— 范围、约束、从哪里入手……",
   "createGoal.next": "下一步",
+  "createGoal.preparing": "正在准备计划…",
   "createGoal.regenerate": "重新起草",
   "createGoal.removeCriterion": "删除这条标准",
   "createGoal.requirementHint": "每一轮结束都会照这个判定",

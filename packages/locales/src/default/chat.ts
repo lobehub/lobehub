@@ -1431,6 +1431,7 @@ export default {
   'createGoal.instructionPlaceholder':
     'Add any context the agent needs — scope, constraints, where to look…',
   'createGoal.next': 'Next',
+  'createGoal.preparing': 'Preparing plan…',
   'createGoal.regenerate': 'Draft again',
   'createGoal.removeCriterion': 'Remove criterion',
   'createGoal.reviewStep': 'Step 2 of 2 · Complete the execution plan',

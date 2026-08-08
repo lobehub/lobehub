@@ -231,6 +231,7 @@
   "createGoal.generateFailed": "Could not draft acceptance criteria. Try again.",
   "createGoal.instructionPlaceholder": "Add any context the agent needs — scope, constraints, where to look…",
   "createGoal.next": "Next",
+  "createGoal.preparing": "Preparing plan…",
   "createGoal.regenerate": "Draft again",
   "createGoal.removeCriterion": "Remove criterion",
   "createGoal.requirementHint": "Judged at the end of every round",
