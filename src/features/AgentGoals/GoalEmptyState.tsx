@@ -6,6 +6,7 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import {
   CheckIcon,
   CircleCheckBigIcon,
+  InfinityIcon,
   PlayIcon,
   PlusIcon,
   RotateCcwIcon,
@@ -174,7 +175,7 @@ const GoalEmptyState = memo<GoalEmptyStateProps>(({ onCreate }) => {
     <Block padding={0} variant={'outlined'}>
       <Flexbox align={'center'} className={styles.hero} gap={16}>
         <div className={styles.heroIcon}>
-          <Icon icon={TargetIcon} size={24} />
+          <Icon icon={InfinityIcon} size={24} />
         </div>
         <Flexbox align={'center'} gap={8}>
           <Text fontSize={20} weight={600}>

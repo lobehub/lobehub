@@ -16,6 +16,8 @@ export {
   ViewTaskInspector,
 } from './Inspector';
 export { TaskInterventions } from './Intervention';
+export type { CreateGoalPlanEditorProps } from './Intervention/CreateGoal';
+export { CreateGoalPlanEditor } from './Intervention/CreateGoal';
 
 // Render components (read-only snapshots)
 export {

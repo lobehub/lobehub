@@ -391,7 +391,7 @@
   "goalEmpty.step2.title": "Agent 自主跑一轮",
   "goalEmpty.step3.desc": "逐条判定验收检查项。全部通过即「已达成」；需要你拍板的会停在「待验收」。",
   "goalEmpty.step3.title": "每轮自动验收",
-  "goalEmpty.title": "让 Agent 持续推进目标",
+  "goalEmpty.title": "追逐目标，永无止境",
   "goalList.acceptanceProgress": "已通过 {{passed}}/{{total}}",
   "goalList.agentRuns": "{{count}} 次运行",
   "goalList.empty": "暂无目标",
