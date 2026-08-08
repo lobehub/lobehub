@@ -32,7 +32,19 @@ export interface AskUserFormApi {
   handleEscapeTextChange: (value: string) => void;
   handleSkip: () => void;
   handleSubmit: () => void;
-  handleToggle: (q: AskUserQuestionItem, label: string) => void;
+  handleToggle: (
+    q: AskUserQuestionItem,
+    label: string,
+    options?: {
+      /**
+       * Allow the single-select "select-to-submit" fast path for this toggle.
+       * Only keyboard-driven picks (digits / Enter) opt in — a mouse click is
+       * too easy to land by accident to fire a submit on its own, so clicks
+       * just select and leave submission to the explicit Submit button/Enter.
+       */
+      submitOnComplete?: boolean;
+    },
+  ) => void;
   isMulti: boolean;
   isSubmitDisabled: boolean;
   picks: Record<string, string | string[]>;
@@ -109,7 +121,7 @@ export const useAskUserForm = ({
   );
 
   const handleToggle = useCallback(
-    (q: AskUserQuestionItem, label: string) => {
+    (q: AskUserQuestionItem, label: string, options?: { submitOnComplete?: boolean }) => {
       let nextPicks: Record<string, string | string[]>;
       if (q.multiSelect) {
         const current = (picks[q.question] as string[] | undefined) ?? [];
@@ -137,13 +149,15 @@ export const useAskUserForm = ({
 
       if (!q.multiSelect) {
         // Codex-style select-to-submit: the pick that completes the form sends
-        // it right away — no extra Submit press for single-select flows. Gated
-        // on the question having been unanswered so revisiting an already
-        // answered question only updates the pick and never fires a surprise
-        // submit while the user is reviewing.
+        // it right away — no extra Submit press for single-select flows. Two
+        // gates: the caller must opt in via `submitOnComplete` (keyboard picks
+        // only — a stray mouse click must never submit on its own), and the
+        // question must have been unanswered so revisiting an already answered
+        // question only updates the pick and never fires a surprise submit
+        // while the user is reviewing.
         const wasUnanswered = !isQuestionAnswered(q, picks, custom);
         const allAnswered = questions.every((qq) => isQuestionAnswered(qq, nextPicks, nextCustom));
-        if (wasUnanswered && allAnswered) {
+        if (options?.submitOnComplete && wasUnanswered && allAnswered) {
           void submitWith(buildSubmitPayload(questions, nextPicks, nextCustom));
           return;
         }

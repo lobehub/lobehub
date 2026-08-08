@@ -46,11 +46,35 @@ const setup = (args: AskUserQuestionArgs, persistedDraft?: unknown) => {
 };
 
 describe('useAskUserForm select-to-submit', () => {
-  it('submits immediately when a single-select pick completes the form', () => {
+  it('submits immediately when a keyboard single-select pick completes the form', () => {
+    const { hook, onInteractionAction } = setup(singleQuestionArgs);
+
+    act(() => {
+      hook.result.current.handleToggle(singleQuestionArgs.questions[0], 'Full', {
+        submitOnComplete: true,
+      });
+    });
+
+    expect(onInteractionAction).toHaveBeenCalledExactlyOnceWith({
+      payload: { 'How broad?': 'Full' },
+      type: 'submit',
+    });
+  });
+
+  it('never submits on a plain (mouse-click) toggle, even when it completes the form', () => {
+    // Regression: clicking an option must only select it — accidental clicks
+    // were submitting the whole form when select-to-submit applied to clicks.
     const { hook, onInteractionAction } = setup(singleQuestionArgs);
 
     act(() => {
       hook.result.current.handleToggle(singleQuestionArgs.questions[0], 'Full');
+    });
+
+    expect(onInteractionAction).not.toHaveBeenCalled();
+    expect(hook.result.current.picks['How broad?']).toBe('Full');
+
+    act(() => {
+      hook.result.current.handleSubmit();
     });
 
     expect(onInteractionAction).toHaveBeenCalledExactlyOnceWith({
@@ -63,14 +87,18 @@ describe('useAskUserForm select-to-submit', () => {
     const { hook, onInteractionAction } = setup(twoQuestionArgs);
 
     act(() => {
-      hook.result.current.handleToggle(twoQuestionArgs.questions[0], 'Narrow');
+      hook.result.current.handleToggle(twoQuestionArgs.questions[0], 'Narrow', {
+        submitOnComplete: true,
+      });
     });
 
     expect(onInteractionAction).not.toHaveBeenCalled();
     expect(hook.result.current.activeTab).toBe('1');
 
     act(() => {
-      hook.result.current.handleToggle(twoQuestionArgs.questions[1], 'Auto');
+      hook.result.current.handleToggle(twoQuestionArgs.questions[1], 'Auto', {
+        submitOnComplete: true,
+      });
     });
 
     expect(onInteractionAction).toHaveBeenCalledExactlyOnceWith({
@@ -87,7 +115,9 @@ describe('useAskUserForm select-to-submit', () => {
     });
 
     act(() => {
-      hook.result.current.handleToggle(twoQuestionArgs.questions[0], 'Full');
+      hook.result.current.handleToggle(twoQuestionArgs.questions[0], 'Full', {
+        submitOnComplete: true,
+      });
     });
 
     expect(onInteractionAction).not.toHaveBeenCalled();
@@ -108,7 +138,7 @@ describe('useAskUserForm select-to-submit', () => {
     const { hook, onInteractionAction } = setup(args);
 
     act(() => {
-      hook.result.current.handleToggle(args.questions[0], 'Narrow');
+      hook.result.current.handleToggle(args.questions[0], 'Narrow', { submitOnComplete: true });
     });
 
     expect(onInteractionAction).not.toHaveBeenCalled();
