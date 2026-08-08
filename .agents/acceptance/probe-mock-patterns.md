@@ -680,6 +680,21 @@ Keep that command session open for the run. Confirm the CDP endpoint, project
 process path, `app-probe.sh ready`, renderer auth, server auth, and a raw-CDP
 screenshot before collecting evidence.
 
+### A backgrounded `init-dev-env.sh dev` looks dead while the server is alive on a dynamic port
+
+**Situation:** starting the dev server from a harness-managed background command in a
+worktree, then waiting for readiness.
+
+**Doesn't work:** trusting the background task's captured output (it can stay 0 bytes
+while the detached process tree lives on), or polling the default port. Worktrees
+allocate dynamic ports, so probing `localhost:3010` waits forever while the server is
+already up elsewhere; a retry then fails with "an owned dev server is already running".
+
+**Works:** treat `.records/runtime/` as the source of truth — it records `PID`,
+`SERVER_PORT` and `SPA_PORT` for the owned instance. Read the port from there and poll
+that. For a long-lived start prefer a detached `screen -dmS <name> … >> .records/logs/x.log`
+so the log lands in a stable file; `stop-dev` still stops the recorded PID tree either way.
+
 ### Cold SWR cache: clearing then reloading is undone by the outgoing page
 
 **Situation:** forcing a first-load / skeleton state for anything backed by the
