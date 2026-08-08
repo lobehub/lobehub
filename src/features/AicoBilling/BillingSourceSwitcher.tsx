@@ -89,7 +89,7 @@ const BillingSourceSwitcher = memo(() => {
       const remaining = formatRemainingUsd(source.remainingUsd);
 
       return {
-        icon: selected ? CheckIcon : WalletIcon,
+        icon: WalletIcon,
         key: source.source === 'personal' ? 'personal' : `org:${source.organizationId}`,
         label: (
           <div className={styles.row}>

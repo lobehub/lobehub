@@ -4,6 +4,7 @@ import { memo, type ReactNode, useMemo } from 'react';
 
 import {
   getBusinessChatInputSendAreaPrefix,
+  useBusinessChatInputAlerts,
   useBusinessChatInputSendDisabled,
 } from '@/business/client/hooks/useBusinessChatInputSendAreaPrefix';
 import { useFundsBlockedComposerCue } from '@/features/AicoBilling';
@@ -52,6 +53,7 @@ const HomeEditorInput = memo<HomeEditorInputProps>(
     send,
   }) => {
     const billingSendDisabled = useBusinessChatInputSendDisabled();
+    const businessAlerts = useBusinessChatInputAlerts();
     const { onMarkdownContentChange: withFundsBlockedCue } = useFundsBlockedComposerCue();
     const handleMarkdownContentChange = useMemo(
       () => withFundsBlockedCue(onValueChange),
@@ -97,25 +99,28 @@ const HomeEditorInput = memo<HomeEditorInputProps>(
         onMarkdownContentChange={handleMarkdownContentChange}
         onSend={send}
       >
-        <DesktopChatInput
-          actionBarStyle={actionBarStyle}
-          dropdownPlacement="bottomLeft"
-          initialContent={initialValue}
-          inputContainerProps={inputContainerProps}
-          placeholder={placeholder}
-          sendAreaPrefix={getBusinessChatInputSendAreaPrefix()}
-          showControlBar={false}
-          leftContent={
-            <Flexbox horizontal align={'center'} gap={2}>
-              <ModeSelect value={mode} onChange={onModeChange} />
-              {mode !== 'chat' ? null : isAgentConfigLoading ? (
-                <ActionIcon disabled icon={PlusIcon} size={'small'} />
-              ) : (
-                <ActionBar disableCollapse dropdownPlacement="bottomLeft" />
-              )}
-            </Flexbox>
-          }
-        />
+        <Flexbox gap={0}>
+          {businessAlerts}
+          <DesktopChatInput
+            actionBarStyle={actionBarStyle}
+            dropdownPlacement="bottomLeft"
+            initialContent={initialValue}
+            inputContainerProps={inputContainerProps}
+            placeholder={placeholder}
+            sendAreaPrefix={getBusinessChatInputSendAreaPrefix()}
+            showControlBar={false}
+            leftContent={
+              <Flexbox horizontal align={'center'} gap={2}>
+                <ModeSelect value={mode} onChange={onModeChange} />
+                {mode !== 'chat' ? null : isAgentConfigLoading ? (
+                  <ActionIcon disabled icon={PlusIcon} size={'small'} />
+                ) : (
+                  <ActionBar disableCollapse dropdownPlacement="bottomLeft" />
+                )}
+              </Flexbox>
+            }
+          />
+        </Flexbox>
       </ChatInputProvider>
     );
   },

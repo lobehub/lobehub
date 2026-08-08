@@ -332,6 +332,52 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
     expect(listed.invites.every((i: any) => !('token' in i))).toBe(true);
   });
 
+  it('AICO-92: getInviteLink reveals URL to managers; denies members/strangers; rejects revoked', async () => {
+    const ownerCaller = organizationRouter.createCaller(createTestContext(ownerId));
+    const created = await ownerCaller.create({ name: 'Reveal Link Org' });
+    const invite = await ownerCaller.inviteMember({
+      identifierType: 'email',
+      identifierValue: 'reveal@rbac.test',
+      orgId: created.id,
+    });
+
+    const revealed = await ownerCaller.getInviteLink({
+      inviteId: invite.id,
+      orgId: created.id,
+    });
+    expect(revealed.inviteUrl).toBe(invite.inviteUrl);
+    expect(revealed.id).toBe(invite.id);
+    expect((revealed as { token?: string }).token).toBeUndefined();
+
+    // Accept as member so they become an org member without manager rights.
+    const memberInvite = await ownerCaller.inviteMember({
+      identifierType: 'email',
+      identifierValue: 'member@rbac.test',
+      orgId: created.id,
+    });
+    const memberCaller = organizationRouter.createCaller(createTestContext(memberId));
+    await memberCaller.acceptInvite({
+      token: memberInvite.inviteUrl.split('/invite/').at(-1)!,
+    });
+    await expect(
+      memberCaller.getInviteLink({ inviteId: invite.id, orgId: created.id }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    const strangerCaller = organizationRouter.createCaller(createTestContext(strangerId));
+    await expect(
+      strangerCaller.getInviteLink({ inviteId: invite.id, orgId: created.id }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    const revoked = await ownerCaller.revokeInvite({
+      inviteId: invite.id,
+      orgId: created.id,
+    });
+    expect((revoked as { token?: string }).token).toBeUndefined();
+    await expect(
+      ownerCaller.getInviteLink({ inviteId: invite.id, orgId: created.id }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST', message: 'Invite is not pending' });
+  });
+
   it('AICO-P1-018: getMyWallet returns string balances (micro-USD serialization)', async () => {
     const caller = aicoBillingRouter.createCaller(createTestContext(strangerId));
     const wallet = await caller.getMyWallet();

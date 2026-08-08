@@ -727,23 +727,43 @@ export const OrgAdminMembers = () => {
                   { dataIndex: 'identifierValue', title: t('org.columns.value') },
                   { dataIndex: 'role', title: t('org.columns.role') },
                   {
-                    key: 'revoke',
+                    key: 'actions',
                     title: t('org.columns.actions'),
                     render: (_, row) => (
-                      <Button
-                        size="small"
-                        type="text"
-                        onClick={async () => {
-                          if (!selectedOrgId) return;
-                          await lambdaClient.organization.revokeInvite.mutate({
-                            inviteId: row.id,
-                            orgId: selectedOrgId,
-                          });
-                          await mutate();
-                        }}
-                      >
-                        {t('org.revoke')}
-                      </Button>
+                      <Flexbox horizontal gap={4}>
+                        <Button
+                          size="small"
+                          type="text"
+                          onClick={async () => {
+                            if (!selectedOrgId) return;
+                            try {
+                              const result = await lambdaClient.organization.getInviteLink.query({
+                                inviteId: row.id,
+                                orgId: selectedOrgId,
+                              });
+                              presentInviteLink(result.inviteUrl);
+                            } catch (error) {
+                              toastAicoError(error, t, 'org.invite.showLinkFailed');
+                            }
+                          }}
+                        >
+                          {t('org.invite.showLink')}
+                        </Button>
+                        <Button
+                          size="small"
+                          type="text"
+                          onClick={async () => {
+                            if (!selectedOrgId) return;
+                            await lambdaClient.organization.revokeInvite.mutate({
+                              inviteId: row.id,
+                              orgId: selectedOrgId,
+                            });
+                            await mutate();
+                          }}
+                        >
+                          {t('org.revoke')}
+                        </Button>
+                      </Flexbox>
                     ),
                   },
                 ]}

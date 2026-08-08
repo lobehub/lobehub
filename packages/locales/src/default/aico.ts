@@ -108,6 +108,8 @@ export default {
   'org.invite.sent': 'Invite created — share this link',
   'org.invite.shareLink':
     'Invitation created. Copy this link to share manually (Telegram, WhatsApp, etc.). Delivery by email/SMS may also have been attempted.',
+  'org.invite.showLink': 'Show link',
+  'org.invite.showLinkFailed': 'Failed to load invite link',
   'org.invite.submit': 'Send invite',
   'org.invite.title': 'Invite member',
   'org.invite.type': 'Invite by',

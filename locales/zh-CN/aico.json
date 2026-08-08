@@ -109,6 +109,8 @@
   "org.invite.role": "角色",
   "org.invite.sent": "邀请已创建 — 请分享此链接",
   "org.invite.shareLink": "邀请已创建。可复制此链接手动分享（Telegram、WhatsApp 等）。系统也可能已尝试通过邮件/短信发送。",
+  "org.invite.showLink": "显示链接",
+  "org.invite.showLinkFailed": "加载邀请链接失败",
   "org.invite.submit": "发送邀请",
   "org.invite.title": "邀请成员",
   "org.invite.type": "邀请方式",
