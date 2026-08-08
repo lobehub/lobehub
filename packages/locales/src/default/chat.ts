@@ -1341,6 +1341,7 @@ export default {
   'taskDetail.latestActivity.untitledTopic': 'Untitled topic',
   'taskDetail.cancelSchedule': 'Cancel schedule',
   'taskDetail.nextRunCountdown': 'Next run in {{countdown}}',
+  'taskDetail.nextRunCountdownDays': 'Next run in {{days}}d {{hours}}h',
   'taskDetail.pauseTask': 'Pause task',
   'taskDetail.rerunTask': 'Re-run task',
   'taskDetail.runNow': 'Run now',
