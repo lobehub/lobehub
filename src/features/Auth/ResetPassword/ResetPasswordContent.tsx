@@ -40,8 +40,17 @@ export const ResetPasswordContent = ({
         name="newPassword"
         rules={[
           { message: t('betterAuth.errors.passwordRequired'), required: true },
-          { message: t('betterAuth.errors.passwordMinLength'), min: 8 },
+          { message: t('betterAuth.errors.passwordMinLength'), min: 10 },
           { max: 64, message: t('betterAuth.errors.passwordMaxLength') },
+          {
+            message: t('betterAuth.errors.passwordFormat'),
+            validator: (_, value) => {
+              if (!value) return Promise.resolve();
+              const hasLetter = /[a-z]/i.test(value);
+              const hasNumber = /\d/.test(value);
+              return hasLetter && hasNumber ? Promise.resolve() : Promise.reject();
+            },
+          },
         ]}
       >
         <InputPassword

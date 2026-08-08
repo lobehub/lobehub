@@ -159,7 +159,7 @@ const BetterAuthSignUpForm = () => {
           name="password"
           rules={[
             { message: t('betterAuth.errors.passwordRequired'), required: true },
-            { message: t('betterAuth.errors.passwordMinLength'), min: 8 },
+            { message: t('betterAuth.errors.passwordMinLength'), min: 10 },
             { max: 64, message: t('betterAuth.errors.passwordMaxLength') },
             {
               message: t('betterAuth.errors.passwordFormat'),

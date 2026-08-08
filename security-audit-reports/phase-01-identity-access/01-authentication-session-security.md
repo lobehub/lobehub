@@ -9,7 +9,7 @@
 | **Plane**             | [AICO-102](https://plane.panafor.com/panaforai/browse/AICO-102)                         |
 | **Date**              | 2026-08-08                                                                              |
 | **Method**            | Static review + practical Vitest attack/control suites (defensive; no exploit payloads) |
-| **Retest**            | AUTH-001 / AUTH-002 Fixed and regression-tested in this pass                            |
+| **Retest**            | AUTH-001…005 closed in this pass (AUTH-004 Accepted Risk); MON-001/005 Fixed            |
 
 ---
 
@@ -19,14 +19,18 @@ Aico authentication is built on **Better Auth** (`src/libs/better-auth/define-co
 
 **Core controls (Pass):** scrypt password hashing (bcrypt verify for Clerk migrations), 6-digit OTP / 300s TTL / 3 attempts / single-use, production rate limits on sign-in / OTP / password reset, HttpOnly + Secure (HTTPS) + SameSite=Lax cookies, `revokeSessionsOnPasswordReset: true`, OAuth trusted-origin + `sanitizeRedirectPath`, phone gates for org create / convertToManagement / trial.
 
-**This pass closed the two Medium findings:**
+**This pass closed auth findings:**
 
 | ID           | Fix                                                                                                                                                 |
 | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **AUTH-001** | `/api/auth/check-user` no longer returns `hasPassword`; IP sliding-window rate limit (10/60s); sign-in always uses password step for existing users |
 | **AUTH-002** | Server `getSession` calls use `query: { disableCookieCache: true }` on TRPC, chat middleware, proxy, utils auth, trusted-client, messenger install  |
+| **AUTH-003** | `minPasswordLength: 10` + server `passwordPolicy` (letter + digit) on sign-up / change / reset                                                      |
+| **AUTH-005** | `forceChangePasswordRevoke` plugin always sets `revokeOtherSessions: true` on `/change-password`                                                    |
+| **MON-001**  | Debug SMS no longer `console.info`s OTPs; `AUTH_SMS_DEBUG_OTP` ignored in production                                                                |
+| **MON-005**  | OTP send failure logs redact phone to last 4 digits                                                                                                 |
 
-**Remaining:** AUTH-003 (Low, length-only password policy), AUTH-004 (Medium, Accepted Risk — email verification off by default), AUTH-005 (Low, `changePassword` revoke opt-in; UI uses reset which does revoke). MON-002/003 still Open (auth abuse alerting).
+**Remaining:** AUTH-004 (Medium, Accepted Risk — email verification off by default). MON-002/003 still Open (auth abuse alerting; owned by monitoring phase).
 
 **Verdict:** No open Critical/High in auth/session scope. Mediums either Fixed or Accepted Risk. Suitable for pilot from an auth-control perspective pending product acceptance of AUTH-004 and monitoring gaps (MON-002/003).
 
@@ -36,7 +40,7 @@ Aico authentication is built on **Better Auth** (`src/libs/better-auth/define-co
 
 | #   | Check                                  | Result                  | Evidence                                                                                               |
 | --- | -------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------ |
-| 1   | Password policy                        | Partial                 | `minPasswordLength: 8`, `maxPasswordLength: 64` — AUTH-003                                             |
+| 1   | Password policy                        | Pass                    | `minPasswordLength: 10` + letter/digit server policy — AUTH-003 Fixed                                  |
 | 2   | Password hashing                       | Pass                    | Better Auth scrypt + bcrypt verify for `$2a$`/`$2b$`                                                   |
 | 3   | OTP expiration                         | Pass                    | `OTP_EXPIRES_IN = 300` — `auth.security.controls.test.ts`                                              |
 | 4   | OTP invalidate after use               | Pass                    | Better Auth phone/email OTP delete-on-success                                                          |
@@ -50,7 +54,7 @@ Aico authentication is built on **Better Auth** (`src/libs/better-auth/define-co
 | 12  | Session fixation                       | Pass                    | Fresh session on sign-in; logout deletes server session                                                |
 | 13  | Session hijacking mitigations          | Pass                    | Cookie flags + AUTH-002 Fixed (no cookie-cache auth window on APIs)                                    |
 | 14  | Logout invalidates session             | Pass                    | DB delete + `disableCookieCache` on sensitive `getSession`                                             |
-| 15  | Password change invalidates sessions   | Partial                 | Reset revokes all; direct `changePassword` — AUTH-005                                                  |
+| 15  | Password change invalidates sessions   | Pass                    | Reset revokes all; `/change-password` forced revoke — AUTH-005 Fixed                                   |
 | 16  | Cookies HttpOnly / Secure / SameSite   | Pass                    | Better Auth defaults                                                                                   |
 | 17  | OAuth redirect abuse                   | Pass                    | `trustedOrigins` + `sanitizeRedirectPath` tests                                                        |
 | 18  | Account linking takeover               | Pass (caveats)          | BA local email verify for link; `allowDifferentEmails: true` for logged-in link                        |
@@ -153,9 +157,9 @@ Aico authentication is built on **Better Auth** (`src/libs/better-auth/define-co
 
 - **Severity:** Low
 
-- **Status:** Open
+- **Status:** Fixed
 
-- **Affected Component:** `define-config.ts`; signup/reset forms
+- **Affected Component:** `define-config.ts`; `plugins/password-policy.ts`; signup/reset forms
 
 - **Description:** Length-only policy; weak passwords accepted server-side.
 
@@ -165,9 +169,9 @@ Aico authentication is built on **Better Auth** (`src/libs/better-auth/define-co
 
 - **Impact:** Higher success rate for slow/distributed password guessing.
 
-- **Recommendation:** Add complexity or HIBP/zxcvbn blocklist; optionally raise minimum length.
+- **Recommendation / Fix:** Raised `minPasswordLength` to 10; added `passwordPolicy` plugin requiring letter + digit on sign-up / change-password / reset-password; UI validators aligned.
 
-- **Retest Result:** N/A
+- **Retest Result:** Pass — `password-policy.test.ts`, `auth.security.controls.test.ts`
 
 ---
 
@@ -206,11 +210,11 @@ Aico authentication is built on **Better Auth** (`src/libs/better-auth/define-co
 
 - **Severity:** Low
 
-- **Status:** Open
+- **Status:** Fixed
 
-- **Affected Component:** Better Auth change-password API; profile UI uses `requestPasswordReset` (which does revoke)
+- **Affected Component:** `plugins/force-change-password-revoke.ts`; Better Auth change-password API
 
-- **Description:** Reset path revokes sessions. Direct change-password is opt-in for revoke. Stock UI uses reset.
+- **Description:** Reset path revokes sessions. Direct change-password was opt-in for revoke.
 
 - **Attack Scenario:** Custom client calls `changePassword` without revoke flag; other device sessions remain.
 
@@ -218,9 +222,9 @@ Aico authentication is built on **Better Auth** (`src/libs/better-auth/define-co
 
 - **Impact:** Latent footgun; low exploitability via stock UI.
 
-- **Recommendation:** Force `revokeOtherSessions` in a hook/wrapper for any change-password client.
+- **Recommendation / Fix:** `forceChangePasswordRevoke` before-hook always injects `revokeOtherSessions: true`.
 
-- **Retest Result:** N/A
+- **Retest Result:** Pass — `force-change-password-revoke.test.ts`
 
 ---
 
@@ -260,13 +264,13 @@ Aico authentication is built on **Better Auth** (`src/libs/better-auth/define-co
 | Critical | 0     | —                                                      |
 | High     | 0     | —                                                      |
 | Medium   | 3     | AUTH-001 Fixed; AUTH-002 Fixed; AUTH-004 Accepted Risk |
-| Low      | 2     | AUTH-003 Open; AUTH-005 Open                           |
+| Low      | 2     | AUTH-003 Fixed; AUTH-005 Fixed                         |
 
-| Status        | Findings           |
-| ------------- | ------------------ |
-| Fixed         | AUTH-001, AUTH-002 |
-| Accepted Risk | AUTH-004           |
-| Open          | AUTH-003, AUTH-005 |
+| Status        | Findings                                                 |
+| ------------- | -------------------------------------------------------- |
+| Fixed         | AUTH-001, AUTH-002, AUTH-003, AUTH-005, MON-001, MON-005 |
+| Accepted Risk | AUTH-004                                                 |
+| Open          | — (auth scope); MON-002/003 monitoring                   |
 
 ---
 

@@ -56,7 +56,7 @@ export default {
   'betterAuth.errors.loginFailed': 'Sign in failed, please check your email and password',
   'betterAuth.errors.passwordFormat': 'Password must contain both letters and numbers',
   'betterAuth.errors.passwordMaxLength': 'Password must not exceed 64 characters',
-  'betterAuth.errors.passwordMinLength': 'Password must be at least 8 characters',
+  'betterAuth.errors.passwordMinLength': 'Password must be at least 10 characters',
   'betterAuth.errors.passwordMismatch': 'The passwords do not match',
   'betterAuth.errors.passwordRequired': 'Please enter your password',
   'betterAuth.errors.usernameNotRegistered': 'This username is not registered',

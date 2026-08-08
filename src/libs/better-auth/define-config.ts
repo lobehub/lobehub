@@ -23,6 +23,8 @@ import {
 import { isValidIranianPhoneNumber, normalizeIranianPhoneNumber } from '@/libs/better-auth/phone';
 import { aicoBanMessage } from '@/libs/better-auth/plugins/aico-ban-message';
 import { emailWhitelist } from '@/libs/better-auth/plugins/email-whitelist';
+import { forceChangePasswordRevoke } from '@/libs/better-auth/plugins/force-change-password-revoke';
+import { PASSWORD_MIN_LENGTH, passwordPolicy } from '@/libs/better-auth/plugins/password-policy';
 import { phoneLoginGate } from '@/libs/better-auth/plugins/phone-login-gate';
 import { initBetterAuthSSOProviders } from '@/libs/better-auth/sso';
 import { createSecondaryStorage, getTrustedOrigins } from '@/libs/better-auth/utils/config';
@@ -129,7 +131,7 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
       disableSignUp: authEnv.AUTH_DISABLE_EMAIL_PASSWORD,
       enabled: !authEnv.AUTH_DISABLE_EMAIL_PASSWORD,
       maxPasswordLength: 64,
-      minPasswordLength: 8,
+      minPasswordLength: PASSWORD_MIN_LENGTH,
       requireEmailVerification: authEnv.AUTH_EMAIL_VERIFICATION,
       revokeSessionsOnPasswordReset: true,
 
@@ -303,6 +305,8 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
       ...customOptions.plugins,
       emailWhitelist(),
       phoneLoginGate(),
+      passwordPolicy(),
+      forceChangePasswordRevoke(),
       expo(),
       aicoBanMessage(),
       admin({
@@ -356,7 +360,9 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
           try {
             await smsService.sendOtp(phone, code);
           } catch (error) {
-            console.error('[sms] failed to send OTP', { phone, error });
+            // Redact phone PII for log aggregators (MON-005) — keep last 4 digits only
+            const phoneFingerprint = phone.length > 4 ? `***${phone.slice(-4)}` : '***';
+            console.error('[sms] failed to send OTP', { phone: phoneFingerprint, error });
             throw error;
           }
         },

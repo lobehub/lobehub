@@ -4,7 +4,8 @@ import { DebugSmsService } from './impls/debug';
 
 /**
  * SMS service — Kavenegar when `KAVENEGAR_API_KEY` is set, otherwise debug logger.
- * When `AUTH_SMS_DEBUG_OTP=1`, also mirrors OTP to the debug impl (local QA).
+ * When `AUTH_SMS_DEBUG_OTP=1` in non-production, also mirrors OTP to the debug impl (local QA).
+ * The mirror is ignored in production even if the env flag is set (MON-001).
  */
 export class SmsService {
   private smsImpl: SmsServiceImpl;
@@ -12,8 +13,10 @@ export class SmsService {
 
   constructor(implType?: SmsImplType) {
     this.smsImpl = createSmsServiceImpl(implType);
+    const isProduction = process.env.NODE_ENV === 'production';
     const debugOtp =
-      process.env.AUTH_SMS_DEBUG_OTP === '1' || process.env.AUTH_SMS_DEBUG_OTP === 'true';
+      !isProduction &&
+      (process.env.AUTH_SMS_DEBUG_OTP === '1' || process.env.AUTH_SMS_DEBUG_OTP === 'true');
     this.debugMirror = debugOtp ? new DebugSmsService() : null;
   }
 

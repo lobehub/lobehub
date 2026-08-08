@@ -83,6 +83,15 @@ vi.mock('@/libs/better-auth/plugins/email-whitelist', () => ({
   emailWhitelist: vi.fn(() => ({ id: 'email-whitelist' })),
 }));
 
+vi.mock('@/libs/better-auth/plugins/force-change-password-revoke', () => ({
+  forceChangePasswordRevoke: vi.fn(() => ({ id: 'aico-force-change-password-revoke' })),
+}));
+
+vi.mock('@/libs/better-auth/plugins/password-policy', () => ({
+  PASSWORD_MIN_LENGTH: 10,
+  passwordPolicy: vi.fn(() => ({ id: 'aico-password-policy' })),
+}));
+
 vi.mock('@/libs/better-auth/plugins/phone-login-gate', () => ({
   phoneLoginGate: vi.fn(() => ({ id: 'phone-login-gate' })),
 }));
