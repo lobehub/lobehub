@@ -1,7 +1,9 @@
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import {
+  modelAccessRules,
   organizationInvites,
   organizationMembers,
   organizations,
@@ -18,8 +20,7 @@ import {
 import { users } from '../../schemas/user';
 import type { LobeChatDatabase } from '../../type';
 import { AicoBillingModel, fingerprintPhone } from '../aicoBilling';
-import { DEFAULT_TEAM_NAME, OrganizationModel } from '../organization';
-import { eq } from 'drizzle-orm';
+import { DEFAULT_TEAM_MODEL_IDS, DEFAULT_TEAM_NAME, OrganizationModel } from '../organization';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 const orgModel = new OrganizationModel(serverDB);
@@ -36,6 +37,7 @@ beforeEach(async () => {
   await serverDB.delete(usageLogs);
   await serverDB.delete(userWallets);
   await serverDB.delete(walletTransactions);
+  await serverDB.delete(modelAccessRules);
   await serverDB.delete(organizationTeamMembers);
   await serverDB.delete(organizationTeams);
   await serverDB.delete(organizationInvites);
@@ -57,6 +59,7 @@ afterEach(async () => {
   await serverDB.delete(usageLogs);
   await serverDB.delete(userWallets);
   await serverDB.delete(walletTransactions);
+  await serverDB.delete(modelAccessRules);
   await serverDB.delete(organizationTeamMembers);
   await serverDB.delete(organizationTeams);
   await serverDB.delete(organizationInvites);
@@ -83,6 +86,9 @@ describe('OrganizationModel', () => {
     const members = await orgModel.listMembers(org.id);
     const team = await orgModel.getMemberTeam(members[0].id);
     expect(team?.id).toBe(teams[0].id);
+
+    const allowed = await orgModel.getAllowedModelsForMember(members[0].id);
+    expect(allowed?.slice().sort()).toEqual([...DEFAULT_TEAM_MODEL_IDS].sort());
   });
 
   it('platform admin helpers', async () => {

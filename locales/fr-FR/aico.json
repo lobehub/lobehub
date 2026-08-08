@@ -287,6 +287,7 @@
   "platform.userId": "Portefeuille utilisateur",
   "platform.userIdPlaceholder": "Sélectionner parmi les portefeuilles B2C (optionnel si e-mail renseigné)",
   "provider.managed.desc": "Les modèles sont fournis par {{brandName}}. L'usage est facturé sur votre portefeuille ou le crédit de l'organisation — aucune configuration de clé API n'est requise.",
+  "provider.managed.orgModelsTip": "Activer ou désactiver des modèles ici n'affecte que votre portefeuille personnel. Les modèles du portefeuille organisationnel sont définis par le responsable de l'organisation — contactez-le pour modifier cette liste.",
   "wallet.amountToman": "Montant (toman)",
   "wallet.amountUsd": "Montant (USD)",
   "wallet.balanceToman": "Versé (toman)",

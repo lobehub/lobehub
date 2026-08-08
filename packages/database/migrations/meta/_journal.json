@@ -980,6 +980,13 @@
       "when": 1786200000000,
       "tag": "0139_aico_pin_openrouter_auto",
       "breakpoints": true
+    },
+    {
+      "idx": 140,
+      "version": "7",
+      "when": 1786250000000,
+      "tag": "0140_aico_seed_default_team_models",
+      "breakpoints": true
     }
   ],
   "version": "6"
