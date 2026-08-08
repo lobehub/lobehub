@@ -438,4 +438,40 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
       code: 'FORBIDDEN',
     });
   });
+
+  it('only owner can soft-delete organization; admin and stranger are forbidden', async () => {
+    const ownerCaller = organizationRouter.createCaller(createTestContext(ownerId));
+    const created = await ownerCaller.create({ name: 'Delete Me Co' });
+
+    const platformCaller = platformAdminRouter.createCaller(createTestContext(platformId));
+    await platformCaller.assignManager({
+      orgId: created.id,
+      role: 'admin',
+      userId: memberId,
+    });
+
+    const adminCaller = organizationRouter.createCaller(createTestContext(memberId));
+    await expect(
+      adminCaller.deleteOrganization({ confirmName: 'Delete Me Co', orgId: created.id }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    const strangerCaller = organizationRouter.createCaller(createTestContext(strangerId));
+    await expect(
+      strangerCaller.deleteOrganization({ confirmName: 'Delete Me Co', orgId: created.id }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    await expect(
+      ownerCaller.deleteOrganization({ confirmName: 'Wrong', orgId: created.id }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST', message: 'ORG_NAME_MISMATCH' });
+
+    const deleted = await ownerCaller.deleteOrganization({
+      confirmName: 'Delete Me Co',
+      orgId: created.id,
+    });
+    expect(deleted.status).toBe('deleted');
+    expect(disableAllOrgMemberKeysMock).toHaveBeenCalledWith(created.id);
+
+    const mine = await ownerCaller.getMine();
+    expect(mine.find((o) => o.id === created.id)).toBeUndefined();
+  });
 });

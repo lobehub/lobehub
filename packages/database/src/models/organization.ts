@@ -1,6 +1,7 @@
 import { and, count, desc, eq, gte, ilike, inArray, lte, ne, or, sql } from 'drizzle-orm';
 
 import {
+  aicoRenewalBatches,
   aicoUserPublicIds,
   type MemberBudgetItem,
   memberBudgets,
@@ -31,6 +32,7 @@ import { randomSlug } from '../utils/idGenerator';
 export type OrgMemberRole = 'owner' | 'admin' | 'member';
 export type OrgInviteRole = 'admin' | 'member';
 export type OrgMemberStatus = 'invited' | 'active' | 'disabled' | 'revocation_pending' | 'left';
+export type OrgStatus = 'active' | 'suspended' | 'deleted';
 export type InviteIdentifierType = 'email' | 'phone' | 'public_user_id';
 
 const INVITE_TTL_MS = 72 * 60 * 60 * 1000;
@@ -246,6 +248,8 @@ export class OrganizationModel {
       .map((m, i) => {
         const org = orgs[i];
         if (!org) return null;
+        // Soft-deleted orgs never appear in membership lookups.
+        if (org.status === 'deleted') return null;
         if (!options.includeSuspended && org.status === 'suspended') return null;
         return { ...org, myRole: m.role as OrgMemberRole };
       })
@@ -307,13 +311,126 @@ export class OrganizationModel {
     return Number(row?.total ?? 0);
   };
 
-  setOrganizationStatus = async (orgId: string, status: 'active' | 'suspended') => {
+  setOrganizationStatus = async (orgId: string, status: OrgStatus) => {
+    const existing = await this.getById(orgId);
+    if (!existing) return undefined;
+    if (existing.status === 'deleted' && status !== 'deleted') {
+      throw new Error('ORG_ALREADY_DELETED');
+    }
     const [row] = await this.db
       .update(organizations)
       .set({ status })
       .where(eq(organizations.id, orgId))
       .returning();
     return row;
+  };
+
+  /**
+   * Soft-deletes an organization (tombstone). Does **not** hard-delete the row —
+   * wallet_transactions / usage history must be retained.
+   *
+   * Preconditions: confirmName matches, wallet balance is 0, no pending renewal
+   * batch, no member budget stuck in `renewal_pending`.
+   *
+   * Side effects inside the transaction: revoke pending invites, mark all
+   * active/revocation_pending members as `left`, suffix the slug, set
+   * `status: 'deleted'`. Caller should disable OpenRouter keys / enqueue reclaim.
+   */
+  softDeleteOrganization = async (params: {
+    confirmName: string;
+    orgId: string;
+  }): Promise<{
+    membersToReclaim: Array<{
+      memberId: string;
+      openrouterKeyId: string | null;
+      userId: string;
+    }>;
+    organization: OrganizationItem;
+  }> => {
+    return this.db.transaction(async (tx) => {
+      const org = await tx.query.organizations.findFirst({
+        where: eq(organizations.id, params.orgId),
+      });
+      if (!org) throw new Error('ORG_NOT_FOUND');
+      if (org.status === 'deleted') throw new Error('ORG_ALREADY_DELETED');
+      if (org.name !== params.confirmName) throw new Error('ORG_NAME_MISMATCH');
+      if (Number(org.walletBalanceMicroUsd) !== 0) throw new Error('ORG_WALLET_NOT_EMPTY');
+
+      const pendingBatch = await tx.query.aicoRenewalBatches.findFirst({
+        where: and(
+          eq(aicoRenewalBatches.orgId, params.orgId),
+          inArray(aicoRenewalBatches.status, ['pending', 'funded']),
+        ),
+      });
+      if (pendingBatch) throw new Error('ORG_HAS_PENDING_RENEWAL');
+
+      const members = await tx.query.organizationMembers.findMany({
+        where: and(
+          eq(organizationMembers.orgId, params.orgId),
+          inArray(organizationMembers.status, ['active', 'revocation_pending']),
+        ),
+      });
+
+      const memberIds = members.map((m) => m.id);
+      if (memberIds.length > 0) {
+        const budgets = await tx.query.memberBudgets.findMany({
+          where: inArray(memberBudgets.orgMemberId, memberIds),
+        });
+        if (budgets.some((b) => b.renewalStatus === 'renewal_pending')) {
+          throw new Error('ORG_HAS_PENDING_RENEWAL');
+        }
+      }
+
+      await tx
+        .update(organizationInvites)
+        .set({ status: 'revoked' })
+        .where(
+          and(
+            eq(organizationInvites.orgId, params.orgId),
+            eq(organizationInvites.status, 'pending'),
+          ),
+        );
+
+      const leftAt = new Date();
+      if (memberIds.length > 0) {
+        await tx
+          .update(organizationMembers)
+          .set({ leftAt, status: 'left' })
+          .where(inArray(organizationMembers.id, memberIds));
+      }
+
+      const freedSlug = `${org.slug}-deleted-${org.id.slice(-8)}`;
+      const [organization] = await tx
+        .update(organizations)
+        .set({ slug: freedSlug, status: 'deleted' })
+        .where(eq(organizations.id, params.orgId))
+        .returning();
+      if (!organization) throw new Error('ORG_NOT_FOUND');
+
+      const membersToReclaim: Array<{
+        memberId: string;
+        openrouterKeyId: string | null;
+        userId: string;
+      }> = [];
+      if (memberIds.length > 0) {
+        const budgets = await tx.query.memberBudgets.findMany({
+          where: inArray(memberBudgets.orgMemberId, memberIds),
+        });
+        const budgetByMember = new Map(budgets.map((b) => [b.orgMemberId, b]));
+        for (const m of members) {
+          const budget = budgetByMember.get(m.id);
+          if (budget?.openrouterKeyId || Number(budget?.reservedMicroUsd ?? 0) > 0) {
+            membersToReclaim.push({
+              memberId: m.id,
+              openrouterKeyId: budget?.openrouterKeyId ?? null,
+              userId: m.userId,
+            });
+          }
+        }
+      }
+
+      return { membersToReclaim, organization };
+    });
   };
 
   assignManager = async (params: {

@@ -33,6 +33,14 @@ describe('Aico error catalog', () => {
     expect(resolveAicoErrorCode('not-a-code')).toBeUndefined();
   });
 
+  it('resolves USER_ALREADY_IN_ORGANIZATION for invite/create conflicts', () => {
+    expect(isAicoErrorCode('USER_ALREADY_IN_ORGANIZATION')).toBe(true);
+    expect(resolveAicoErrorCode('USER_ALREADY_IN_ORGANIZATION')).toBe(
+      'USER_ALREADY_IN_ORGANIZATION',
+    );
+    expect(AICO_ERROR_MESSAGES_FA.USER_ALREADY_IN_ORGANIZATION).toContain('سازمان دیگری');
+  });
+
   it('includes personal funds codes with Persian defaults', () => {
     expect(AICO_ERROR_MESSAGES_FA.PERSONAL_FUNDS_UNAVAILABLE).toBe(
       'موجودی کیف پول شخصی کافی نیست. لطفاً شارژ کنید یا دوره آزمایشی را فعال کنید.',

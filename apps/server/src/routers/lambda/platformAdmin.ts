@@ -114,23 +114,41 @@ export const platformAdminRouter = router({
   suspendOrganization: platformProcedure
     .input(z.object({ orgId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const row = await ctx.organizationModel.setOrganizationStatus(input.orgId, 'suspended');
-      if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: 'Organization not found' });
+      try {
+        const row = await ctx.organizationModel.setOrganizationStatus(input.orgId, 'suspended');
+        if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: 'Organization not found' });
 
-      // Fail closed: a suspended org's members must lose OpenRouter access immediately,
-      // not just at the next usage-sync poll.
-      const keyService = new AicoOpenRouterKeyService(ctx.serverDB);
-      await keyService.disableAllOrgMemberKeys(input.orgId);
+        // Fail closed: a suspended org's members must lose OpenRouter access immediately,
+        // not just at the next usage-sync poll.
+        const keyService = new AicoOpenRouterKeyService(ctx.serverDB);
+        await keyService.disableAllOrgMemberKeys(input.orgId);
 
-      return row;
+        return row;
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        const message = error instanceof Error ? error.message : 'SUSPEND_FAILED';
+        if (message === 'ORG_ALREADY_DELETED') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message });
+        }
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message });
+      }
     }),
 
   activateOrganization: platformProcedure
     .input(z.object({ orgId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const row = await ctx.organizationModel.setOrganizationStatus(input.orgId, 'active');
-      if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: 'Organization not found' });
-      return row;
+      try {
+        const row = await ctx.organizationModel.setOrganizationStatus(input.orgId, 'active');
+        if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: 'Organization not found' });
+        return row;
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        const message = error instanceof Error ? error.message : 'ACTIVATE_FAILED';
+        if (message === 'ORG_ALREADY_DELETED') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message });
+        }
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message });
+      }
     }),
 
   addManualCredit: platformProcedure
