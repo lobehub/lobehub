@@ -57,7 +57,12 @@ const styles = createStaticStyles(({ css }) => ({
     min-height: 0;
     max-height: min(70vh, 680px);
     padding-block: 8px 24px;
-    padding-inline: 24px;
+    padding-inline: 16px;
+  `,
+  close: css`
+    position: absolute;
+    inset-block-start: 14px;
+    inset-inline-end: 14px;
   `,
   criteriaList: css`
     overflow: hidden;
@@ -88,8 +93,9 @@ const styles = createStaticStyles(({ css }) => ({
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   head: css`
+    position: relative;
     padding-block: 16px 8px;
-    padding-inline: 24px;
+    padding-inline: 16px;
   `,
   inputShell: css`
     overflow: hidden;
@@ -124,9 +130,16 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
   instructionEditor: css`
-    min-height: 112px;
-    padding-block: 10px;
+    min-height: 36px;
+    padding-block: 0 4px;
     padding-inline: 12px;
+
+    /* EditorCanvas reserves space for its document footer by default. The
+       compact review summary has no footer, so keeping that space turns a
+       one-line instruction into a conspicuous empty band. */
+    & > div > div > div {
+      padding-block-end: 0 !important;
+    }
   `,
   optional: css`
     flex: none;
@@ -140,13 +153,19 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   reviewSection: css`
     padding-block: 16px;
+
+    &:first-child {
+      padding-block: 0 4px;
+    }
   `,
   sectionHint: css`
     color: ${cssVar.colorTextSecondary};
   `,
   title: css`
+    box-sizing: border-box;
     width: 100%;
     padding-block: 4px 8px;
+    padding-inline-end: 40px;
     border: none;
 
     font-family: inherit;
@@ -160,6 +179,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   titleStatic: css`
     padding-block: 4px 8px;
+    padding-inline-end: 40px;
 
     font-size: 20px;
     font-weight: 600;
@@ -440,7 +460,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
             </>
           )}
         </Flexbox>
-        <ActionIcon icon={X} style={{ flexShrink: 0 }} onClick={close} />
+        <ActionIcon className={styles.close} icon={X} onClick={close} />
       </Flexbox>
 
       {step === 'review' && (
@@ -454,7 +474,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
                 entityId={'create-goal-instruction'}
                 floatingToolbar={false}
                 placeholder={t('createGoal.instructionPlaceholder')}
-                style={{ fontSize: 13, minHeight: 92 }}
+                style={{ fontSize: 13, minHeight: 32 }}
                 onContentChange={handleContentChange}
               />
             </Flexbox>
