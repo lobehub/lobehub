@@ -2,7 +2,13 @@
 
 import type { SidebarAgentItem } from '@lobechat/types';
 import { Accordion, AccordionItem, Flexbox, Text } from '@lobehub/ui';
-import { BookOpenIcon, LayoutDashboardIcon, ListTodoIcon } from 'lucide-react';
+import {
+  BadgeCheckIcon,
+  BookOpenIcon,
+  LayoutDashboardIcon,
+  ListTodoIcon,
+  TargetIcon,
+} from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router';
@@ -18,7 +24,12 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import { useProjectStore } from '@/store/project';
 
-import { getProjectLibraryPath, getProjectTasksPath } from './navigation';
+import {
+  getProjectAcceptancePath,
+  getProjectGoalsPath,
+  getProjectLibraryPath,
+  getProjectTasksPath,
+} from './navigation';
 import ProjectHeader from './ProjectHeader';
 
 const ProjectSidebarContent = memo(() => {
@@ -52,6 +63,8 @@ const ProjectSidebarContent = memo(() => {
   );
   const projectRootPath = `/project/${projectId}`;
   const projectTasksPath = getProjectTasksPath(projectId!);
+  const projectGoalsPath = getProjectGoalsPath(projectId!);
+  const projectAcceptancePath = getProjectAcceptancePath(projectId!);
 
   const header = <ProjectHeader project={detail?.project} />;
 
@@ -79,6 +92,18 @@ const ProjectSidebarContent = memo(() => {
             icon={ListTodoIcon}
             title={t('sections.tasks')}
             onClick={() => navigate(projectTasksPath)}
+          />
+          <NavItem
+            active={pathname === projectGoalsPath}
+            icon={TargetIcon}
+            title={t('sections.goals')}
+            onClick={() => navigate(projectGoalsPath)}
+          />
+          <NavItem
+            active={pathname === projectAcceptancePath}
+            icon={BadgeCheckIcon}
+            title={t('sections.acceptance')}
+            onClick={() => navigate(projectAcceptancePath)}
           />
           <Accordion defaultExpandedKeys={['agents', 'libraries']} gap={4}>
             <AccordionItem

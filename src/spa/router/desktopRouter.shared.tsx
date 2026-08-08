@@ -835,6 +835,21 @@ export const sharedMainAreaChildren: RouteObject[] = [
         handle: { meta: tasksRouteMeta },
         path: 'tasks',
       },
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/project/[projectId]/goals'),
+          'Desktop > Project Goals',
+        ),
+        handle: { meta: goalsRouteMeta },
+        path: 'goals',
+      },
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/project/[projectId]/acceptance'),
+          'Desktop > Project Acceptance',
+        ),
+        path: 'acceptance',
+      },
     ],
     element: dynamicLayout(
       () => import('@/routes/(main)/project/_layout'),

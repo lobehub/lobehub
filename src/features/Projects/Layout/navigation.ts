@@ -4,3 +4,7 @@ export const getProjectLibraryPath = (projectId: string, libraryId: string) =>
   `/project/${projectId}/library/${libraryId}`;
 
 export const getProjectTasksPath = (projectId: string) => `/project/${projectId}/tasks`;
+
+export const getProjectGoalsPath = (projectId: string) => `/project/${projectId}/goals`;
+
+export const getProjectAcceptancePath = (projectId: string) => `/project/${projectId}/acceptance`;
