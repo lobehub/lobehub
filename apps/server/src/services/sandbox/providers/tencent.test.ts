@@ -1,0 +1,239 @@
+// @vitest-environment node
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const mocks = vi.hoisted(() => ({
+  env: {
+    TENCENT_SANDBOX_API_BASE: undefined as string | undefined,
+    TENCENT_SANDBOX_API_TOKEN: 'test-token' as string | undefined,
+    TENCENT_SANDBOX_MODE: 'persistent' as string,
+    TENCENT_SANDBOX_PROJECT_ID: 'makers-test' as string | undefined,
+    TENCENT_SANDBOX_REGION: undefined as string | undefined,
+    TENCENT_SANDBOX_TIMEOUT_SEC: undefined as number | undefined,
+  },
+  sandbox: {
+    commands: { connect: vi.fn(), kill: vi.fn(), run: vi.fn() },
+    files: { read: vi.fn(), write: vi.fn() },
+    runCode: vi.fn(),
+  },
+}));
+
+vi.mock('@/envs/sandbox', () => ({ sandboxEnv: mocks.env }));
+vi.mock('@e2b/code-interpreter', () => ({ Sandbox: vi.fn(() => mocks.sandbox) }));
+
+const options = { marketService: {} as never, topicId: 'topic-1', userId: 'user-1' };
+
+const calls = { acquire: 0, release: 0, update: 0 };
+/** Seconds until the acquired instance expires; drives the renewal path. */
+let expiresInSec = 300;
+
+const installFetch = () => {
+  calls.acquire = 0;
+  calls.release = 0;
+  calls.update = 0;
+
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      const action = url.split('/').pop() as keyof typeof calls;
+      calls[action] += 1;
+
+      return {
+        json: async () => ({
+          Code: 0,
+          Data: {
+            InstanceExpiresAt: new Date(Date.now() + expiresInSec * 1000).toISOString(),
+            InstanceId: `instance-${calls.acquire}`,
+            SandboxDomain: 'ap-beijing.tencentags.com',
+            Token: 'sit_test',
+          },
+        }),
+        ok: true,
+      };
+    }),
+  );
+};
+
+const load = async () => {
+  vi.resetModules();
+  const { TencentSandboxProvider, __clearSandboxInstances } = await import('./tencent');
+  __clearSandboxInstances();
+
+  return new TencentSandboxProvider(options);
+};
+
+/** Decodes the base64 argument blob the shared Python helpers receive. */
+const scriptArgs = (command: string) => {
+  const encoded = /main\('([^']+)'\)/.exec(command)?.[1];
+
+  return JSON.parse(Buffer.from(encoded!, 'base64').toString());
+};
+
+const okCommand = (stdout = '') => ({ exitCode: 0, stderr: '', stdout });
+
+describe('TencentSandboxProvider', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.env.TENCENT_SANDBOX_API_TOKEN = 'test-token';
+    mocks.env.TENCENT_SANDBOX_PROJECT_ID = 'makers-test';
+    mocks.env.TENCENT_SANDBOX_MODE = 'persistent';
+    expiresInSec = 300;
+    installFetch();
+  });
+
+  it('fails fast when credentials are missing', async () => {
+    mocks.env.TENCENT_SANDBOX_API_TOKEN = undefined;
+
+    const result = await (await load()).callTool('executeCode', { code: 'print(1)' });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toContain('TENCENT_SANDBOX_API_TOKEN');
+    expect(calls.acquire).toBe(0);
+  });
+
+  it('runs code and returns stdout', async () => {
+    mocks.sandbox.runCode.mockResolvedValue({
+      logs: { stderr: [], stdout: ['42\n'] },
+      results: [],
+    });
+
+    const result = await (await load()).callTool('executeCode', { code: 'print(42)' });
+
+    expect(result.success).toBe(true);
+    expect(result.result).toMatchObject({ stdout: '42\n', success: true });
+  });
+
+  // The runtime falls back to the outer envelope when the command result has no
+  // `success`, which would report a failed install as a successful one.
+  it('marks a nonzero command exit as a failed command', async () => {
+    mocks.sandbox.commands.run.mockResolvedValue({
+      exitCode: 1,
+      stderr: 'boom',
+      stdout: '',
+    });
+
+    const result = await (await load()).callTool('runCommand', { command: 'false' });
+
+    expect(result.success).toBe(true);
+    expect(result.result).toMatchObject({ exitCode: 1, success: false });
+  });
+
+  it('returns the identifier the runtime uses for background commands', async () => {
+    mocks.sandbox.commands.run.mockResolvedValue({ pid: 4321 });
+
+    const result = await (
+      await load()
+    ).callTool('runCommand', {
+      background: true,
+      command: 'sleep 60',
+    });
+
+    expect(result.result).toMatchObject({ commandId: '4321', shell_id: '4321' });
+  });
+
+  it('forwards the requested command timeout', async () => {
+    mocks.sandbox.commands.run.mockResolvedValue(okCommand());
+
+    await (await load()).callTool('runCommand', { command: 'sleep 1', timeout: 5000 });
+
+    expect(mocks.sandbox.commands.run).toHaveBeenCalledWith(
+      'sleep 1',
+      expect.objectContaining({ timeoutMs: 5000 }),
+    );
+  });
+
+  it('looks up background commands by commandId', async () => {
+    const wait = vi.fn().mockResolvedValue({ exitCode: 0, stderr: '', stdout: 'done' });
+    mocks.sandbox.commands.connect.mockResolvedValue({ wait });
+
+    const result = await (await load()).callTool('getCommandOutput', { commandId: '4321' });
+
+    expect(mocks.sandbox.commands.connect).toHaveBeenCalledWith(4321);
+    expect(result.result).toMatchObject({ stdout: 'done', success: true });
+  });
+
+  // The shared tool contract uses `directoryPath`, not `path`.
+  it('passes file tool arguments through to the shared script unchanged', async () => {
+    mocks.sandbox.commands.run.mockResolvedValue(
+      okCommand(JSON.stringify({ files: [{ isDirectory: false, name: 'a.txt' }], totalCount: 1 })),
+    );
+
+    const result = await (await load()).callTool('listLocalFiles', { directoryPath: '/mnt/data' });
+
+    const [command] = mocks.sandbox.commands.run.mock.calls[0];
+    expect(scriptArgs(command)).toEqual({ directoryPath: '/mnt/data' });
+    expect(result.result).toMatchObject({ files: [{ isDirectory: false, name: 'a.txt' }] });
+  });
+
+  it('surfaces a script-reported failure as a failed call', async () => {
+    mocks.sandbox.commands.run.mockResolvedValue(
+      okCommand(JSON.stringify({ error: 'search text not found', success: false })),
+    );
+
+    const result = await (
+      await load()
+    ).callTool('editLocalFile', {
+      path: '/a.txt',
+      replace: 'b',
+      search: 'a',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toBe('search text not found');
+  });
+
+  // File bootstrapping issues a command before the requested tool runs; both
+  // must land in the same container.
+  it('reuses one instance across calls in every mode', async () => {
+    for (const mode of ['persistent', 'on-demand']) {
+      mocks.env.TENCENT_SANDBOX_MODE = mode;
+      installFetch();
+      mocks.sandbox.commands.run.mockResolvedValue(okCommand());
+
+      const provider = await load();
+      await provider.callTool('runCommand', { command: 'echo 1' });
+      await provider.callTool('runCommand', { command: 'echo 2' });
+
+      expect(calls.acquire, mode).toBe(1);
+      expect(calls.release, mode).toBe(0);
+    }
+  });
+
+  it('renews a persistent instance that is close to expiring', async () => {
+    expiresInSec = 10;
+    mocks.sandbox.commands.run.mockResolvedValue(okCommand());
+
+    const provider = await load();
+    await provider.callTool('runCommand', { command: 'echo 1' });
+    await provider.callTool('runCommand', { command: 'echo 2' });
+
+    expect(calls.update).toBe(1);
+    expect(calls.acquire).toBe(1);
+  });
+
+  it('lets an on-demand instance lapse instead of renewing it', async () => {
+    mocks.env.TENCENT_SANDBOX_MODE = 'on-demand';
+    expiresInSec = 10;
+    mocks.sandbox.commands.run.mockResolvedValue(okCommand());
+
+    const provider = await load();
+    await provider.callTool('runCommand', { command: 'echo 1' });
+    await provider.callTool('runCommand', { command: 'echo 2' });
+
+    expect(calls.update).toBe(0);
+    expect(calls.release).toBe(1);
+    expect(calls.acquire).toBe(2);
+  });
+
+  it('reports unsupported tools as a failed call', async () => {
+    const result = await (await load()).callTool('notARealTool', {});
+
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toContain('notARealTool');
+  });
+
+  it('reports capabilities that match the configured mode', async () => {
+    mocks.env.TENCENT_SANDBOX_MODE = 'on-demand';
+
+    expect((await load()).capabilities.persistentSession).toBe(false);
+  });
+});
